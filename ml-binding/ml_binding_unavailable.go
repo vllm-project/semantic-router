@@ -39,6 +39,12 @@ func (*KMeansSelector) Close() {}
 // Select selects the best model for a query embedding.
 func (*KMeansSelector) Select([]float64) (string, error) { return "", errUnavailable }
 
+// Score writes one score per candidate and returns the nearest cluster id.
+func (*KMeansSelector) Score([]float64, []float64) (int, error) { return 0, errUnavailable }
+
+// Candidates returns the trained candidate set in score order.
+func (*KMeansSelector) Candidates() ([]string, error) { return nil, errUnavailable }
+
 // IsTrained returns whether the model has been loaded.
 func (*KMeansSelector) IsTrained() bool { return false }
 

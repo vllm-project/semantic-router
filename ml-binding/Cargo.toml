@@ -19,7 +19,11 @@ ndarray = "0.15"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+# float_roundtrip parses centroids and scores to the exact f64 Python wrote.
+serde_json = { version = "1.0", features = ["float_roundtrip"] }
+
+# Artifact ids, matching the trainer's hashlib.blake2b digests
+blake2 = "0.10"
 
 # Pin noisy_float to version compatible with Rust 1.75
 noisy_float = "=0.2.0"
