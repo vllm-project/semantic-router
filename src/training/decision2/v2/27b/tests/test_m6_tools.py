@@ -48,7 +48,11 @@ class M6LaunchTest(unittest.TestCase):
 
     def test_m6_allocation(self):
         with mock.patch.dict(os.environ, {"DEV2_27B_ALLOC": "m6"}, clear=True):
-            self.assertEqual(sorted(launch.allowed_gpus("b")), [0, 1, 5])
+            self.assertEqual(sorted(launch.allowed_gpus("b")), list(range(8)))
+            for gpu in (5, 6, 7):
+                self.assertEqual(
+                    launch.allowed_gpus("b")[gpu], launch.NODE_GPUS["b"][gpu]
+                )
             self.assertEqual(sorted(launch.allowed_gpus("a")), [1, 2, 3, 4, 5, 6, 7])
             self.assertEqual(sorted(launch.allowed_gpus("c")), [1, 2, 3, 4, 5, 6, 7])
             self.assertEqual(launch.allowed_gpus("a")[2], launch.NODE_GPUS["a"][2])
