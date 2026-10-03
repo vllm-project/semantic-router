@@ -2,6 +2,16 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-03 01:30Z (09:30 UTC+8), M10 continuation (owner e28aa509)
+
+- **Formal R3 of `HLR4-a80`** (node A GPU0, 00:30–00:44Z): exit 0; the choice, no-UL and score types are all OK (no
+  collapsed type). GPU0 went back to 4B at 00:48Z (COORDINATION 08:48). `HLR4-a60`'s formal runs only if it leads.
+- **Index:** `HLR4-a80` scored at 01:15Z; its bootstraps and gate vs KIB4-a40 are running on node B (CPU). `HLR4-a60`
+  is on GPU2 / 3 / 5 / 7 (gate waiter armed); `KIB4H-a40` follows, then `KIB4-lrhh-a80`.
+- **Release note:** Nox-4B is now `ce1bdc9d` (COORDINATION 09:00), so `index_m10c.sh` must take the 4B point from
+  that release's input.
+- **GPU-h (continuation):** ≈ 37.3.
+
 ## 2026-10-03 00:40Z (08:40 UTC+8), M10 continuation (owner e28aa509)
 
 - **All half-LR seeds finished ≈ 00:03–00:05Z** (an hour before the estimate), with no failure: KIB4H s1 / s2 (BEST
