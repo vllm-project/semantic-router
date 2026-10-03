@@ -11,9 +11,10 @@
 #   --bench --gpu N    runtime_bench.py on the first 400 typed-final prompts, old then new, two untimed passes
 #                      (the fast path captures a shape's HIP graph on its second use) then one timed; compare
 #   --profile --gpu N  profile_request.py on the same 400 prompts, old then new: per-step milliseconds
-#   --switch           (with any mode; 0.6B 0.8B 2B 27B) the shared-context switch revision: the old side is the
-#                      current main (Kai, Eos, Sol: their phase A revisions; Vega: the 27B release) with the image,
-#                      spec and autotune cache of the release that built it; the new side is this mirror's runtime
+#   --switch           (with any mode; 0.6B 0.8B 2B 9B 27B) the shared-context switch revision: the old side is the
+#                      current main (Kai, Eos, Sol: their phase A revisions; Lux: the 9B M10 release f3122c7c; Vega:
+#                      the 27B release) with the image, spec and autotune cache of the release that built it; the new
+#                      side is this mirror's runtime
 # Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/fast.sh <tier> <mode> [--gpu N] [--switch]
 # Work: /data/dev2/runs/runtime-a/<tier>/ or <tier>-switch/ (the newest preview is used by --parity and --bench).
 # Lease: /data/dev2/leases/gpuN.lock/owner.runtime-a (a co-tenant entry; status set to idle on exit).
@@ -66,8 +67,9 @@ if [[ -n "$switch" ]]; then
     0.6B) release_of dev2-ra-0.6B-20261002T112747Z ;;
     0.8B) release_of dev2-ra-0.8B-20261002T122005Z ;;
     2B) release_of dev2-ra-2B-20261002T114630Z ;;
+    9B) release_of dev2-9b-m10-KIB4-a40-release-20261002T151423Z ;;
     27B) ;;
-    *) echo "--switch: tier must be one of 0.6B 0.8B 2B 27B" >&2; exit 2 ;;
+    *) echo "--switch: tier must be one of 0.6B 0.8B 2B 9B 27B" >&2; exit 2 ;;
   esac
 fi
 name=Decision-2.0-$codename-$tier REPO=vllm-sr/$name STAGE=dev2-release-staging-ra$key

@@ -67,6 +67,63 @@ ARMS = {
     # 9B: KIB4's TRAIN with the IB4 rows x3; KIB4's construction with a new x60 cut seed (af-prep9b.sh).
     "KIB4W3": ("9b", "KIB4W3", []),
     "KIB4R": ("9b", "KIB4R", []),
+    # Batch 3 (amendment 5). 4B: 4b-SDMLIB4's TRAIN with the IB4 rows x2; the same TRAIN for two epochs.
+    "4b-SDMLIB4W2": ("4b", "4b-SDMLIB4W2", []),
+    "4b-SDMLIB4-e2": ("4b", "4b-SDMLIB4", ["--epochs", "2"]),
+    # 9B: KIB4's construction with a second new x60 cut seed.
+    "KIB4R2": ("9b", "KIB4R2", []),
+    # Amendment 7: the S17-base counterparts (two epochs; IB4 rows x2).
+    "4b-LHS17IB4-e2": ("4b", "4b-LHS17IB4", ["--epochs", "2"]),
+    "4b-LHS17IB4W2": ("4b", "4b-LHS17IB4W2", []),
+    # Amendment 8 (4B wave 7): UP weights (kept released rows x1.5, IB rows x1) on the IB4-family TRAINs.
+    "4b-SDMLIB4-UP": ("4b", "4b-SDMLIB4-UP", []),
+    "4b-LHS17IB4-UP": ("4b", "4b-LHS17IB4-UP", []),
+    "4b-LHS17ML-UP": ("4b", "4b-LHS17ML-UP", []),
+    "4b-LHS17IB4X-UP": ("4b", "4b-LHS17IB4X-UP", []),
+    # Amendment 9 (standing backlog). 4B: UP x2 on two IB4 TRAINs; UP x1.5 on the factory's wave-2 TRAINs.
+    "4b-SDMLIB4-UP2": ("4b", "4b-SDMLIB4-UP2", []),
+    "4b-LHS17IB4-UP2": ("4b", "4b-LHS17IB4-UP2", []),
+    "4b-LHS17IB4ML-UP": ("4b", "4b-LHS17IB4ML-UP", []),
+    "4b-LHS23IB4-UP": ("4b", "4b-LHS23IB4-UP", []),
+    # 9B: half backbone LR on KIB4; IB4 x2 on the KIB4R re-cut; two epochs of KIB4.
+    "KIB4-lrh": ("9b", "KIB4", ["--backbone-lr", "5e-6"]),
+    "KIB4R-W2": ("9b", "KIB4R-W2", []),
+    "KIB4-e2": ("9b", "KIB4", ["--epochs", "2"]),
+    # Amendment 10 (lower LR first). 4B half / quarter LoRA and head LR; SDML's TRAIN at half LR.
+    "4b-LHS17ML-lrh": ("4b", "4b-LHS17ML", ["--lora-lr", "5e-5", "--head-lr", "5e-5"]),
+    "4b-LHS17IB4X-lrh": (
+        "4b",
+        "4b-LHS17IB4X",
+        ["--lora-lr", "5e-5", "--head-lr", "5e-5"],
+    ),
+    "4b-SDML-lrh": ("4b", "4b-SDML", ["--lora-lr", "5e-5", "--head-lr", "5e-5"]),
+    "4b-LHS17IB4-lrq": (
+        "4b",
+        "4b-LHS17IB4",
+        ["--lora-lr", "2.5e-5", "--head-lr", "2.5e-5"],
+    ),
+    # 9B: backbone and head LR both halved / quartered.
+    "KIB4-lrhh": ("9b", "KIB4", ["--backbone-lr", "5e-6", "--head-lr", "5e-5"]),
+    "KIB4-lrq": ("9b", "KIB4", ["--backbone-lr", "2.5e-6", "--head-lr", "2.5e-5"]),
+    # Amendment 11 (the 9B owner's backlog): M10's KX TRAIN at half backbone / head LR.
+    "KXH": ("9b", "KX", ["--backbone-lr", "5e-6", "--head-lr", "5e-5"]),
+    # Amendment 12 (the 4B owner continues the 4B line): quarter LR on three more arms; an eighth LR on 4b-LHS17IB4.
+    "4b-SDMLIB4-lrq": (
+        "4b",
+        "4b-SDMLIB4",
+        ["--lora-lr", "2.5e-5", "--head-lr", "2.5e-5"],
+    ),
+    "4b-LHS17IB4X-lrq": (
+        "4b",
+        "4b-LHS17IB4X",
+        ["--lora-lr", "2.5e-5", "--head-lr", "2.5e-5"],
+    ),
+    "4b-SDML-lrq": ("4b", "4b-SDML", ["--lora-lr", "2.5e-5", "--head-lr", "2.5e-5"]),
+    "4b-LHS17IB4-lre": (
+        "4b",
+        "4b-LHS17IB4",
+        ["--lora-lr", "1.25e-5", "--head-lr", "1.25e-5"],
+    ),
 }
 
 

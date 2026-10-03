@@ -1,0 +1,26 @@
+{
+  "schema": "dev2-runtime-diff/1",
+  "mode": "switch",
+  "repo": "vllm-sr/Decision-2.0-Lux-9B",
+  "released": "f3122c7c8abd302326c22220aac4095eb1799f37",
+  "new": "214ffa4322bc1bce3215c1bd5de6168402c76969",
+  "files": {
+    "released": 43,
+    "new": 44
+  },
+  "changed_runtime_files": [
+    "decision2/api.py",
+    "decision2/qwen.py",
+    "decision2/shared_ctx.py"
+  ],
+  "changed_card_files": [
+    "MODEL_MANIFEST.json",
+    "README.md"
+  ],
+  "changed_hub_managed_files": [],
+  "changed_other_files": [],
+  "weight_files": 10,
+  "weight_bytes": 17926620224,
+  "weights_byte_identical": true,
+  "ok": true
+}

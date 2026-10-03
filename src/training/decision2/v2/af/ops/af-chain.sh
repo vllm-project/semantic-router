@@ -11,20 +11,21 @@
 # A failed preflight stops its arm (no rerun, no replacement seed). Markers:
 # /data/dev2/runs/af/<size>/status/<run>.{DONE,FAILED,STOPPED}.
 #
-# usage: AF_NODE=a|b|c|f [AF_PREWARM=1] af-chain.sh launch|run <mirror-dir> <gpu> <ARM:sN:SEED>...
+# usage: AF_NODE=a|b|c|f [AF_SIZE=9b] [AF_CAP=<GPU-h>] [AF_PREWARM=1] af-chain.sh launch|run <mirror-dir> <gpu> <ARM:sN:SEED>...
 set -u
 MODE=$1 SRC=$2 GPU=$3
 shift 3
 ITEMS=("$@")
 NODE=${AF_NODE:?set AF_NODE}
-case $NODE:${AF_SIZE:-} in  # node gates: prereg, raised by amendment 4 (+30 GPU-h, COORDINATION 2026-10-03 00:00)
-  a:*) SIZE=9b CACHE=9b-train CAP=4.5 GATE=26 ;;
-  c:*) SIZE=4b CACHE=4b-train CAP=2.5 GATE=17 ;;
+case $NODE:${AF_SIZE:-} in  # node gates: prereg, raised by amendments 4, 5, 7, 8, 9 and 12 (COORDINATION 2026-10-03 00:00-10:00)
+  a:*) SIZE=9b CACHE=9b-train CAP=4.5 GATE=32 ;;
+  c:*) SIZE=4b CACHE=4b-train CAP=2.5 GATE=56 ;;
   f:*) SIZE=4b CACHE=4b-train CAP=2.5 GATE=9 ;;
-  b:9b) SIZE=9b CACHE=9b-train CAP=4.5 GATE=15 ;;
+  b:9b) SIZE=9b CACHE=9b-train CAP=4.5 GATE=28 ;;
   b:*) SIZE=4b CACHE=4b-train CAP=2.5 GATE=4 ;;
   *) echo "unknown node $NODE" >&2; exit 2 ;;
 esac
+CAP=${AF_CAP:-$CAP}  # amendment 5: a preregistered per-arm seed cap (two-epoch arms)
 M=/data/dev2/runs/af/$SIZE
 C=$M/chains ST=$M/status
 OPS=/data/dev2/src/$SRC/src/training/decision2/v2/af/ops
@@ -33,7 +34,7 @@ TAG=$NODE$GPU-$(date -u +%H%M%S)
 
 if [ "$MODE" = launch ]; then
   [ ${#ITEMS[@]} -gt 0 ] || { echo "no items" >&2; exit 2; }
-  AF_NODE=$NODE AF_SIZE=${AF_SIZE:-} AF_PREWARM=${AF_PREWARM:-0} setsid nohup flock "$C/gpu$GPU.flock" bash "$0" run "$SRC" "$GPU" \
+  AF_NODE=$NODE AF_SIZE=${AF_SIZE:-} AF_CAP=${AF_CAP:-} AF_PREWARM=${AF_PREWARM:-0} setsid nohup flock "$C/gpu$GPU.flock" bash "$0" run "$SRC" "$GPU" \
     "${ITEMS[@]}" > "$M/logs/chain-$TAG.log" 2>&1 < /dev/null &
   echo $! > "$C/chain-$TAG.pid"
   echo "$(date -u +%FT%TZ) chain $TAG (${ITEMS[*]}) launched from $SRC (pid $(cat "$C/chain-$TAG.pid"))" \

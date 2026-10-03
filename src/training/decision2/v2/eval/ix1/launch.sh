@@ -74,6 +74,9 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [X9-LRHxM50]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-LRHxM50-re876fbe"
   [X9-ML0]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-ML0-re876fbe"
   [X9-IBxIB2-10]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-IBxIB2-10-re876fbe"
+  [X9-IBLRH]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-IBLRH-re876fbe"
+  [X9-IBLRHxM50]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-IBLRHxM50-re876fbe"
+  [X9-LRHALL]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-LRHALL-re876fbe"
   [M5-L128]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/fix2/M5-L128-95d61175-re876fbe"
   [DEV2.0-27B-budget]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/fix2/DEV2.0-27B-4e89288d-re876fbe"
   [DEV2.0-4B-LH]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/DEV2.0-4B-13d42143"
@@ -122,14 +125,17 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [IS-K-a12IB]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/index-sweep/K-a12IB-68fed4cb-re51f9881"
 )
 for _m10 in KUP-a33 KUP-a25 KUP-a40 KIBM-a33 KIBM-a25 KIBM-a40 KSW-a33 KSW-a25 KSW-a40 KIB4-a33 KIB4-a25 KIB4-a40 KX-a33 KX-a25 KX-a40 \
-  X{1..6}-a33 X{1..6}-a25 X{1..6}-a40 KIB4P-a33 KIB4P-a25 KIB4P-a40 KXP-a33 KXP-a25 KXP-a40; do  # 9B M10 BF16 release copies (X: amendment 5 cross-arm points)
+  X{1..6}-a33 X{1..6}-a25 X{1..6}-a40 KIB4P-a33 KIB4P-a25 KIB4P-a40 KXP-a33 KXP-a25 KXP-a40 \
+  X7-a40 X8-a40 Y1 Y2 KIB4W2-a40 KIB4L2-a40 KF-a50 KFxKIB-a40 KIB4W3-a40 KIB4R-a40 KIB4-a50 KIB4Q-a50 KIB4H-a40 KIB4H-a33 \
+  KIB4-lrhh-a40 KIB4-lrh-a40 HLR4-a50 HLR4-a60 HLR4-a80 HLR4-a100 LRX6-a50 LRX6-a60 LRX6-a80 LRX6-a100 \
+  KIB4-lrhh-a80 KIB4-lrh-a50 KIB4-lrh-a60 KIB4-lrh-a80 KIB4-lrh-a100 KIB4H-a60 KIB4H-a80 KIB4H-a100; do  # 9B M10 BF16 release copies (X: amendment 5 cross-arm points; X7 / X8 / Y: amendment 7; KIB4W2 / KIB4L2: amendment 8; KF / KFxKIB / KIB4W3 / KIB4R: amendment 9; KIB4-a50 / KIB4Q-a50: amendment 10; KIB4H: amendment 12; half-LR points: amendment 13)
   DIAGNOSTIC[M10-$_m10-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/9b-m10/$_m10-bf16-re51f9881"
 done
 unset _m10
-for _af in 4b-LHS17IB4-lrh 4b-LHS17IB4ML 4b-LHS23IB4 4b-LHS17IB4-s45 4b-SDMLIB4-s45 4b-LHS17UP-s34 4b-AFxALL 4b-AFxALL2 4b-AFxALL3 4b-XALLx 4b-XALLU2 4b-LRHxXALL-m50 4b-SDMLIB4-lrh 4b-LRHxALL 4b-LHS17IB4-lrq 4b-LHS17ML-lrh 4b-LHS17IB4X-lrh 4b-SDML-lrh 4b-LRHxALL-L2 4b-LRHxQ 4b-LRHxXALL-m75 4b-LRQxLRH 4b-SDMLIB4-UP 4b-LHS17IB4-UP 4b-SDMLIB4W2 4b-LRH2 4b-LRHxTOP3 4b-LRHxALL7 4b-LHS17SD-lrh 4b-LHS17UP-lrh 4b-LRQxALL 4b-SDMLIB4-lrq 4b-LHS17ML-lrq 4b-LHS17IB4X-lrq ; do  # arm factory 4B BF16 release copies (4B owner: 4b-XALLx, 4b-XALLU2, wave 7 low-LR points and amendments 2-4)
+for _af in 4b-LHS17IB4-lrh 4b-LHS17IB4ML 4b-LHS23IB4 4b-LHS17IB4-s45 4b-SDMLIB4-s45 4b-LHS17UP-s34 4b-AFxALL 4b-AFxALL2 4b-AFxALL3 4b-XALLx 4b-XALLU2 4b-LRHxXALL-m50 4b-SDMLIB4-lrh 4b-LRHxALL 4b-LHS17IB4-lrq 4b-LHS17ML-lrh 4b-LHS17IB4X-lrh 4b-SDML-lrh 4b-LRHxALL-L2 4b-LRHxQ 4b-LRHxXALL-m75 4b-LRQxLRH 4b-SDMLIB4-UP 4b-LHS17IB4-UP 4b-SDMLIB4W2 4b-LRH2 4b-LRHxTOP3 4b-LRHxALL7 4b-LHS17SD-lrh 4b-LHS17UP-lrh 4b-LRQxALL 4b-SDMLIB4-lrq 4b-LHS17ML-lrq 4b-LHS17IB4X-lrq 4b-LRQxLRHxALL 4b-SDML-lrq 4b-LHS17IB4-lre ; do  # arm factory 4B BF16 release copies (4B owner: 4b-XALLx, 4b-XALLU2, wave 7 low-LR points and amendments 2-6)
   DIAGNOSTIC[AF-$_af-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/af/AF-$_af-bf16-r13d42143"
 done
-for _af in KIB4W2-a40 KIB4L2-a40 KIB4Q-a40 KF-a33 KF-a40 KF-a50 KFxKIB-a40 KFxKIB-a50 KFxKIB2-a40 KF2-a40 KF2-a50 ; do  # arm factory 9B BF16 release copies
+for _af in KIB4W2-a40 KIB4L2-a40 KIB4Q-a40 KF-a33 KF-a40 KF-a50 KFxKIB-a40 KFxKIB-a50 KFxKIB2-a40 KF2-a40 KF2-a50 KIB4-a50 KIB4Q-a50 KIB4Q-a60 KF-a60 ; do  # arm factory 9B BF16 release copies
   DIAGNOSTIC[AF-$_af-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/af/AF-$_af-bf16-re51f9881"
 done
 unset _af

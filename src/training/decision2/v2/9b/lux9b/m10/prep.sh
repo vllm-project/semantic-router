@@ -8,6 +8,8 @@
 # flags as container paths); an arm already in the lock is never changed.
 #   prep.sh kx    KX TRAIN (amendment 4): IB1-r3 minus `sentfin` + IB2 + IB3-r2 + IB4 p1 matched, then the ML block
 #   prep.sh kx-lock <mirror-dir> TRAIN_SHA TEACHER_SHA   (node A) lock the copied KX files
+#   prep.sh alias-lock <mirror-dir> NEW OLD   (amendment 12) lock arm NEW on arm OLD's files and data flags, every file
+#                 re-hashed against OLD's entry (a recipe-only variant such as KIB4H, KIB4 at half learning rates)
 # usage: M10_NODE=b prep.sh kup|kibm|kib4|kx <mirror-dir>
 set -euo pipefail
 MODE=$1 SRC=$2
@@ -46,11 +48,38 @@ os.replace(tmp, lock_path)
 print(json.dumps(lock["arms"][arm]))
 EOF
 }
-if [ "$MODE" != kx-lock ]; then
+if [ "$MODE" != kx-lock ] && [ "$MODE" != alias-lock ]; then
   check "$I/data/x60/train.jsonl" a66131b1165513128e5a51af78587c4ddefcc836773e724c4514a592e33fc0e0
   check "$I/data/x60/teacher.jsonl" cdcd99c1550d35531df0982ae85116fe3ea5035bc9a09c1ef7b5b3063a32f2c9
 fi
 case $MODE in
+  alias-lock)
+    NEW=${3:?NEW} OLD=${4:?OLD}
+    python3 - "$LOCK" "$M" "$NEW" "$OLD" << 'EOF2'
+import hashlib, json, os, sys
+lock_path, m, new, old = sys.argv[1:]
+def sha(p):
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for b in iter(lambda: f.read(1 << 23), b""):
+            h.update(b)
+    return h.hexdigest()
+lock = json.load(open(lock_path))
+if new in lock["arms"]:
+    sys.exit(f"{new} is already in the lock")
+entry = lock["arms"][old]
+for rel, want in entry["files"].items():
+    if sha(f"{m}/{rel}") != want:
+        sys.exit(f"{rel} differs from {old}'s lock entry")
+lock["arms"][new] = {"args": entry["args"], "files": entry["files"], "alias_of": old}
+tmp = lock_path + ".tmp"
+with open(tmp, "w") as f:
+    json.dump(lock, f, indent=2)
+os.replace(tmp, lock_path)
+print(json.dumps(lock["arms"][new]))
+EOF2
+    log "arm $NEW locked on $OLD's files and data flags (alias-lock)"
+    ;;
   kup)
     check "$I/data/kib/train.jsonl" 2cd09292580450a74adcc9f1df006f49e171fbf1e1fa96467a205576ee8493dc
     check "$I/data/kib/teacher.jsonl" 7e3f8bf7e46793cb35bcd3ca0064ff25f8463b2f75b4bad439a67f468029d65d

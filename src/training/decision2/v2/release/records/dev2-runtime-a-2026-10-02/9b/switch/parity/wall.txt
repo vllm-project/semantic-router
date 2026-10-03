@@ -1,0 +1,4 @@
+cache /data/dev2/runs/runtime-a/triton/9B-parity-old-20261003T015055Z from /data/dev2/runs/release/triton/dev2-9b-m10-KIB4-a40-release-20261002T151423Z files=4881 digest=5828abb8d4d13831bb6b919bd305c678a50b5f74aa7cfd345aa934d342ed0b8f
+old exit=1 wall_seconds=326.8 cache_files=4881
+cache /data/dev2/runs/runtime-a/triton/9B-parity-new-20261003T015055Z from /data/dev2/runs/runtime-a/triton/9B-parity-old-20261003T015055Z files=4881 digest=b0c01ff967f0e3e033d5bc66781651e6f246136f948c1bbad70687e73f5730d1
+new exit=1 wall_seconds=321.8 cache_files=4881

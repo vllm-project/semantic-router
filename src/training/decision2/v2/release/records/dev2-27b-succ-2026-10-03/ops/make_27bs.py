@@ -170,6 +170,25 @@ ARMS = {  # members: allowed member counts; every member is a rank-128 seed
         "seeds": f"{M50}, M9-IB1ML s5 (/ s6), M9-IB12ML s5 (/ s6)",
         "weights": "each arm 1/4, its seeds uniform within it",
     },
+    "X9-IBLRH": {
+        "members": (2,),
+        "mixes": ("a20ib1",),
+        "seeds": f"M9-IB-lrh s5 / s6 (the released recipe M6-IB at {HALF})",
+        "weights": "1/2 per seed",
+    },
+    "X9-IBLRHxM50": {
+        "members": (6,),
+        "mixes": ("a20ib1", "a20ib12"),
+        "seeds": f"M9-IB-lrh s5 / s6 (the released recipe M6-IB at {HALF}) and {M50}",
+        "weights": "1/6 per seed (each arm 1/3)",
+    },
+    "X9-LRHALL": {
+        "members": (7, 8),
+        "mixes": ("a20ib1", "a20ib12", "a20ib14ml", "a20ib124ml"),
+        "seeds": "M9-IB-lrh s5 / s6, M9-IB2-lrh s5 / s6, M9-IB14ML-lrh s5 / s6 and M9-IB124ML-lrh s5 / s6 (four "
+        f"recipes at {HALF})",
+        "weights": "each arm 1/4, its seeds uniform within it",
+    },
     "X9-IBxIB2-10": {
         "members": (10,),
         "mixes": ("a20ib1", "a20ib12"),
@@ -215,7 +234,7 @@ def paths(arm: str) -> dict:
         "checkpoint": f"{M6}/{arm}/checkpoint",
         "mlx": f"{M6}/mlx-diag/{arm}",
         "gates": f"{GATES}/{arm}",
-        "exposure": f"{GATES}/overlap/exposure-m6-a20ib12.json",
+        "exposure": f"{GATES}/overlap/exposure-m6-{'a20ib1' if a['mixes'] == ('a20ib1',) else 'a20ib12'}.json",
         "mlx_paired": f"{GATES}/mlx/{arm}-vs-{CURRENT_ARM}.json",
     }
 

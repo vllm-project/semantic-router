@@ -1,0 +1,88 @@
+{
+  "checked": 8,
+  "failed": [],
+  "links": [
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "8f0ceae33ab2bd861a34bf21a86dd580b421d79367b16c76ff489a36416f92d4",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/banner.png"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://huggingface.co/collections/vllm-sr/decision-20-6ab7cf7bdfb506bf8269cb00"
+    },
+    {
+      "image": false,
+      "kind": "external",
+      "ok": true,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://github.com/vllm-project/semantic-router"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "6ed6a446ec7f97170f259545e4ff7269335768c136e6bd5a3c33ac5594c8d2e8",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/jevarena.png"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "eb97275fb1b7019d7f98a5dad1dbc3344793ecb763556194c2eaa34adc4d3773",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/jevarena-types.png"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "4107012b592fc7fe8423b145f732b92dd82dfd3caf605821975cf09561fb13da",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/index-pareto.png"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "78067b2d89311a2b1e9f94d6fa66679d8e691a332d94bafb3f3faba705dedc5c",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/index-areas.png"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a",
+      "source": "README.md",
+      "status": 200,
+      "target": "LICENSE"
+    }
+  ],
+  "passed": true,
+  "rendered_page": {
+    "bytes": 184551,
+    "charts_referenced": true,
+    "status": 200,
+    "title_present": true
+  },
+  "repo": "vllm-sr/Decision-2.0-Lux-9B",
+  "revision": "214ffa4322bc1bce3215c1bd5de6168402c76969",
+  "schema": "dev2-hub-links/1",
+  "utc": "2026-10-03T02:37:05.051868+00:00"
+}
