@@ -269,7 +269,7 @@ def _execute_serve(
 
 
 @click.command(help=SERVE_HELP + ENGINE_HELP)
-@click.argument("model", required=False)
+@click.argument("model", nargs=-1, required=False)
 @click.option(
     "--config",
     default="config.yaml",
@@ -408,11 +408,19 @@ def _execute_serve(
         "Repeat for multiple names; NAME=value is rejected."
     ),
 )
-@click.option("--revision", default=None, help="Engine mode: 40-hex revision of MODEL.")
+@click.option(
+    "--models",
+    "models_file",
+    default=None,
+    help="Engine mode: YAML file listing the models to serve, each with its own name, revision, device and profile.",
+)
+@click.option(
+    "--revision", default=None, help="Engine mode: 40-hex revision of a single MODEL."
+)
 @click.option(
     "--device",
     default=None,
-    help="Engine mode: auto (default), cpu, cuda[:N] or rocm[:N].",
+    help="Engine mode: auto (default), cpu, cuda[:N], rocm[:N], xpu[:N] or mps.",
 )
 @click.option(
     "--host", default=None, help="Engine mode: TCP bind address (default 127.0.0.1)."
@@ -425,7 +433,7 @@ def _execute_serve(
 )
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
 def serve(
-    model: str | None,
+    model: tuple[str, ...],
     config: str,
     replace_active_config: bool,
     image: str | None,
@@ -446,6 +454,7 @@ def serve(
     runtime: str | None,
     recipe_env_names: tuple[str, ...],
     startup_timeout: int | None,
+    models_file: str | None,
     revision: str | None,
     device: str | None,
     host: str | None,
@@ -453,10 +462,11 @@ def serve(
     uds: str | None,
 ) -> None:
     ctx = click.get_current_context()
-    if model is not None:
+    if model or models_file:
         run_engine_mode(
             ctx,
             model,
+            models_file=models_file,
             revision=revision,
             device=device,
             host=host,
