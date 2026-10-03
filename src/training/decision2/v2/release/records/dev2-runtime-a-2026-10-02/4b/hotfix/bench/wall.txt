@@ -1,0 +1,4 @@
+cache /data/dev2/runs/runtime-a/triton/4B-bench-old-20261003T045751Z from /data/dev2/runs/release/triton/dev2-4b-lrhxall-release-20261003T003955Z files=1783 digest=9f8e5930a708d6fee682d80b118a95b4dcead8c22c0c2a642d498ceee6b76142
+old exit=0 wall_seconds=62.5 cache_files=1783
+cache /data/dev2/runs/runtime-a/triton/4B-bench-new-20261003T045751Z from /data/dev2/runs/runtime-a/triton/4B-bench-old-20261003T045751Z files=1783 digest=e636ffeda341953c041e47aa1d52a3bff4fda10c3a9cf72f7adbb7b877456f09
+new exit=0 wall_seconds=61.4 cache_files=1831
