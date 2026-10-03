@@ -68,7 +68,7 @@ func responseCacheEmbeddingIdentity(cfg *config.RouterConfig, backend cache.Cach
 		return "", nil
 	}
 	identity, err := initialize(settings)
-	if settings.ModelType == "bert" && errors.Is(err, embedding.ErrIdentityUnsupported) {
+	if errors.Is(err, embedding.ErrIdentityUnsupported) {
 		return "", nil
 	}
 	if err != nil {
