@@ -115,7 +115,7 @@ def test_tampered_and_linked_files_are_refused(qwen_package, tmp_path):
     with pytest.raises(PackageError, match="link"):
         pkg.verify(copy, None)
     os.remove(copy / "tokenizer.json")
-    with pytest.raises(PackageError, match="missing"):
+    with pytest.raises(PackageError, match="miss"):
         pkg.verify(copy, None)
 
 

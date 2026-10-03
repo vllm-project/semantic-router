@@ -227,21 +227,32 @@ class ForwardOutput:
 
 @dataclass
 class EncoderBatch:
-    """Padded rows for a bidirectional encoder.
+    """Rows for a bidirectional encoder: padded, or packed back to back.
 
-    ``layers`` are the hidden-state exits the readout needs: 1-based layer
-    indices, 0 for the embedding output, empty for the last layer only.
-    ``graph_inputs`` are extra named inputs for an engine that runs a graph
-    with heads baked in, and ``outputs`` the graph outputs the readout reads.
+    Padded: ``input_ids`` and ``attention_mask`` are ``[rows, tokens]`` and
+    hidden states come back as ``[rows, tokens, hidden]``. Packed: ``lengths``
+    (host-known) splits ``input_ids`` ``[N]`` into rows, ``attention_mask`` is
+    unused, and hidden states come back as ``[N, hidden]``, so no position is
+    padding. ``layers`` are the hidden-state exits the readout needs: 1-based layer
+    indices, 0 for the embedding output, empty for the last layer only. An
+    intermediate exit is the raw residual stream and the last layer is
+    final-normalized (the Transformers ``hidden_states`` convention), unless
+    ``normalize_exits`` asks for the final norm at every exit. One forward
+    serves every requested exit. ``graph`` names the ``ModelSpec.graphs``
+    entry an engine that runs graphs executes, ``graph_inputs`` are extra named
+    inputs for it, and ``outputs`` the graph outputs the readout reads.
     ``branch`` runs one of the backbone's branches (``BackboneSpec.branches``)
     instead of its own layer stack.
     """
 
     input_ids: torch.Tensor
-    attention_mask: torch.Tensor
+    attention_mask: torch.Tensor | None
     layers: tuple[int, ...] = ()
+    normalize_exits: bool = False
+    graph: str = "default"
     graph_inputs: dict[str, torch.Tensor] = field(default_factory=dict)
     outputs: tuple[str, ...] = ()
+    lengths: list[int] | None = None
     branch: str | None = None
 
 
