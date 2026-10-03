@@ -3,7 +3,9 @@
 A local directory is used as is. A Hub repository is always resolved to a
 40-hex commit: ``--revision`` when given, else the built-in table's pinned
 revision; any other repository without ``--revision`` is refused. Only the
-files the package manifest lists are downloaded. Tokens come from the
+files a built-in entry pins, or else the files the package manifest lists,
+are downloaded; a package with neither gets its pointer files only, and its
+family fetches what it loads (``ModelFamily.fetch``). Tokens come from the
 environment or the Hugging Face token file, never from arguments.
 """
 
@@ -76,7 +78,7 @@ def download(
     cache_dir: str | Path | None = None,
     offline: bool = False,
 ) -> Path:
-    """Fetch the pointer and manifest, then exactly the files the manifest lists."""
+    """Fetch a built-in entry's pinned files, else the pointer and the files its manifest lists."""
     from huggingface_hub import snapshot_download
 
     common = {
@@ -85,18 +87,54 @@ def download(
         "cache_dir": str(cache_dir) if cache_dir else None,
         "local_files_only": offline,
     }
+    known = builtin.lookup(repo_id)
+    if known is not None and known.revision == revision and known.files:
+        root = Path(snapshot_download(allow_patterns=sorted(known.files), **common))
+        if root.name != revision:
+            raise PackageError(
+                f"{repo_id}: the Hub resolved {root.name}, not {revision}"
+            )
+        return root
     root = Path(snapshot_download(allow_patterns=list(POINTER_FILES), **common))
     if root.name != revision:
         raise PackageError(f"{repo_id}: the Hub resolved {root.name}, not {revision}")
     manifest_path = root / "MODEL_MANIFEST.json"
     if not manifest_path.is_file():
-        raise PackageError(f"{repo_id}@{revision} has no MODEL_MANIFEST.json")
+        return root
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     files = manifest.get("files_sha256") if isinstance(manifest, dict) else None
     if not isinstance(files, dict) or not files:
         raise PackageError(f"{repo_id}@{revision}: MODEL_MANIFEST.json lists no files")
     root = Path(snapshot_download(allow_patterns=sorted(files), **common))
     return root
+
+
+def fetch(
+    ref: PackageRef,
+    patterns: list[str],
+    *,
+    cache_dir: str | Path | None = None,
+    offline: bool = False,
+) -> PackageRef:
+    """Download more files of a resolved Hub package (a family's inventory); local packages are complete."""
+    if ref.repo_id is None or ref.revision is None or not patterns:
+        return ref
+    from huggingface_hub import snapshot_download
+
+    root = Path(
+        snapshot_download(
+            repo_id=ref.repo_id,
+            revision=ref.revision,
+            allow_patterns=sorted(set(patterns)),
+            cache_dir=str(cache_dir) if cache_dir else None,
+            local_files_only=offline,
+        )
+    )
+    if root.name != ref.revision:
+        raise PackageError(
+            f"{ref.repo_id}: the Hub resolved {root.name}, not {ref.revision}"
+        )
+    return PackageRef(root=root, repo_id=ref.repo_id, revision=ref.revision)
 
 
 def download_base(
