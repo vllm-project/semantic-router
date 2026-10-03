@@ -1,0 +1,6 @@
+{
+ "path": "/data/dev2/runs/release/triton/runtime-a-4b-rae",
+ "digest": "5948dc67d6a5c69bc95dff491dbfeca5f8373d1f446c03856f1cf2681fae1f45",
+ "files": 1831,
+ "from": "the new-side autotune cache of fast.sh 4B --parity --evict 20261003T075850Z (all four scored panels through the eviction-fix runtime of fbedfded8 on the current main; it started from that release's autotune cache after the old runtime ran the same panels), frozen read-only on node A"
+}
