@@ -1,0 +1,13 @@
+{
+ "failed_kernel_calls": {
+  "add_rmsnorm": 9672,
+  "attn_prep": 0,
+  "gated_rmsnorm": 0,
+  "gdn_prep": 0,
+  "sigmoid_gate": 0,
+  "silu_mul": 0
+ },
+ "package": "/data/dev2/runs/runtime-a/0.8B-hotfix/preview-20261003T053540Z/new/dev2-release-staging-ra0p8b",
+ "schema": "dev2-fallback-parity/1",
+ "total": 9672
+}

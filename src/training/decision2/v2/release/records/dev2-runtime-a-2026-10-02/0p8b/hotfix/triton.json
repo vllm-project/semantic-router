@@ -1,0 +1,6 @@
+{
+ "path": "/data/dev2/runs/release/triton/runtime-a-0p8b-rah",
+ "digest": "1c716a28e76c8525babd332fbc7ce95f1b06f7204a63d3b83191f5d84a3f3331",
+ "files": 1228,
+ "from": "the new-side autotune cache of fast.sh 0.8B --parity --hotfix 20261003T053950Z (all four scored panels through the hotfix runtime of 3c8cd1a84 on the Eos switch revision ad0aa724 (node D, copied to node A); it started from that release's autotune cache after the old runtime ran the same panels), frozen read-only on node A"
+}

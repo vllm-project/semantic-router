@@ -1,0 +1,6 @@
+{
+ "path": "/data/dev2/runs/release/triton/runtime-a-0p6b-rah",
+ "digest": "48606d547c1372ad9abde125e8c2cbb88ba0093c5965f83e55584d9747f6e862",
+ "files": 89,
+ "from": "the new-side autotune cache of fast.sh 0.6B --parity --hotfix 20261003T053914Z (all four scored panels through the hotfix runtime of 3c8cd1a84 on the Kai switch revision 881bee41 (node A); it started from that release's autotune cache after the old runtime ran the same panels), frozen read-only on node A"
+}

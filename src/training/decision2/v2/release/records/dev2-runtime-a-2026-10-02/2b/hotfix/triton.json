@@ -1,0 +1,6 @@
+{
+ "path": "/data/dev2/runs/release/triton/runtime-a-2b-rah",
+ "digest": "d1e0f4cda6842e5581b5b5339313921bc7e59661391dd660251431f3b6014f50",
+ "files": 1228,
+ "from": "the new-side autotune cache of fast.sh 2B --parity --hotfix 20261003T053956Z (all four scored panels through the hotfix runtime of 3c8cd1a84 on the Sol switch revision 4b75b521 (node D, copied to node A); it started from that release's autotune cache after the old runtime ran the same panels), frozen read-only on node A"
+}
