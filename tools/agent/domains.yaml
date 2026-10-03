@@ -758,6 +758,7 @@ images:
     publish_paths:
       - src/vllm-sr/**
       - src/semantic-router/**
+      - src/model-runtime/**
       - config/**
       - candle-binding/**
       - tools/docker/Dockerfile.vllm-sr

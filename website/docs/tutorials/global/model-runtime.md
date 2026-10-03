@@ -62,6 +62,13 @@ reports ready, decision signals are unknown and decision selectors fall back.
 `VLLM_SR_RUNTIME_COMMAND` overrides the command, `VLLM_SR_RUNTIME_CACHE_DIR`
 sets the model cache and `VLLM_SR_RUNTIME_DIR` the socket directory.
 
+The `vllm-sr` image ships the runtime with CPU PyTorch, so managed CPU
+deployments work out of the box, and downloaded models persist under
+`/app/models/model-runtime`. For a GPU, start the runtime with a GPU build of
+PyTorch (`vllm-sr serve <model> --device rocm:0`, or the runtime image built
+from `src/model-runtime/Dockerfile` with a GPU wheel) and attach to it with
+`endpoint`.
+
 Run an engine on its own:
 
 ```bash
