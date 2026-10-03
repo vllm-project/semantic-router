@@ -30,9 +30,9 @@
 #   pull     node D -> node C through node B (transfer keys; the workstation link is too slow): merged/ results,
 #            compare, port, receipt and kit index (SHA-256 equal on both sides)
 #   import   SD only: node D's runs/DEV2.0-4B-LHA10SD/merged -> node C (results SHA-256 = its receipt's)
-#   boot     node C, CPU, detached: family_delta vs DEV2.0-4B-LH; the paired bootstrap (v2.eval.ix1.paired_boot,
-#            2,000 replicates, seed 20261002) full panel -> runs/NAME/4bif-boot-full-vs-lh.json and transfer-only
-#            (--exclude HoVer When2Call iSarcasmEval GSM8K BPoMP) -> runs/NAME/4bif-boot-transfer-vs-lh.json
+#   boot     node C, CPU, detached: family_delta vs the reference run (IX4B_REF; default DEV2.0-4B-LH); the paired bootstrap (v2.eval.ix1.paired_boot,
+#            2,000 replicates, seed 20261002) full panel -> runs/NAME/4bif-boot-full-vs-$VS.json and transfer-only
+#            (--exclude HoVer When2Call iSarcasmEval GSM8K BPoMP) -> runs/NAME/4bif-boot-transfer-vs-$VS.json
 #   fetch    node C -> the local private folder (mode 700): parity, receipt, compare, port, kit index, family delta
 #            and both bootstraps
 #   release  NODE: the owner files launch.sh wrote for NAME -> released (no NAME container running)
@@ -75,7 +75,10 @@ MD=/data/dev2/models/ix1/dec-4bif
 BASEPKG=/data/dev2/models/ix1/DEV2.0-4B-13d42143
 PKG=$MD/$NAME-r13d42143 CK=$MD/$NAME-ckpt FSRC=$MD/src/$CAND-fp32
 LOADED=4208383488
-REF=DEV2.0-4B-LH
+# The reference run: the released LH, or (IX4B_REF) a later release's own Index run, e.g. DEV2.0-4B-LHA10SD-bf16 for
+# the successors of the M13 release; outputs carry its suffix (vs-lh | vs-sdb).
+REF=${IX4B_REF:-DEV2.0-4B-LH}
+case "$REF" in DEV2.0-4B-LH) VS=lh ;; DEV2.0-4B-LHA10SD-bf16) VS=sdb ;; *) echo "bad IX4B_REF $REF" >&2; exit 2 ;; esac
 KEY="-i /root/.ssh/d2_temp_cd -o BatchMode=yes -o ConnectTimeout=30"
 EXCLUDE="HoVer When2Call iSarcasmEval GSM8K BPoMP"
 LOCAL=${IX4B_LOCAL:-$HOME/code/decision2-program/private/4b-indexfirst}/$NAME
@@ -233,25 +236,25 @@ EOF
   boot)
     mirror_on c
     on c "test -f $R/runs/$NAME/merged/results.jsonl && test -f $R/runs/$REF/merged/results.jsonl" || { echo "missing results" >&2; exit 3; }
-    on c "test ! -e $R/runs/$NAME/4bif-boot-full-vs-lh.json && test ! -e $R/logs/4bif-boot-$NAME.started" || { echo "boot of $NAME already started" >&2; exit 3; }
+    on c "test ! -e $R/runs/$NAME/4bif-boot-full-vs-$VS.json && test ! -e $R/logs/4bif-boot-$NAME-vs-$VS.started" || { echo "boot of $NAME already started" >&2; exit 3; }
     on c "cd $S && PYTHONPATH=$S python3 -m v2.eval.ix1.family_delta --base $REF=$R/runs/$REF/merged/compare.json \
-      --new $NAME=$R/runs/$NAME/merged/compare.json --out $R/runs/$NAME/family-delta-vs-lh.json > /dev/null"
+      --new $NAME=$R/runs/$NAME/merged/compare.json --out $R/runs/$NAME/family-delta-vs-$VS.json > /dev/null"
     boot="cd $R/.. && CUDA_VISIBLE_DEVICES= HIP_VISIBLE_DEVICES= ROCR_VISIBLE_DEVICES= PYTHONPATH=$S:$R/../kit-19ad28ec nice -n 10 \
       venv/bin/python -m v2.eval.ix1.paired_boot --suite-dir suite-0.2 --base $R/runs/$REF/merged/results.jsonl \
       --new $R/runs/$NAME/merged/results.jsonl --external $R/../external/index021-frontier-gap-2026-10-01.json \
-      --replicates 2000 --seed 20261002 --workers 20"
-    on c "umask 077; date -u +%FT%TZ > $R/logs/4bif-boot-$NAME.started; \
-      setsid nohup bash -c '$boot --out $R/runs/$NAME/4bif-boot-full-vs-lh.json; echo \$? > $R/logs/4bif-boot-full-$NAME.exit' \
-        > $R/logs/4bif-boot-full-$NAME.log 2>&1 < /dev/null & \
-      setsid nohup bash -c '$boot --exclude $EXCLUDE --out $R/runs/$NAME/4bif-boot-transfer-vs-lh.json; echo \$? > $R/logs/4bif-boot-transfer-$NAME.exit' \
-        > $R/logs/4bif-boot-transfer-$NAME.log 2>&1 < /dev/null &"
+      --replicates 2000 --seed 20261002"
+    on c "umask 077; date -u +%FT%TZ > $R/logs/4bif-boot-$NAME-vs-$VS.started; \
+      setsid nohup bash -c '$boot --workers ${BOOT_WORKERS:-40} --out $R/runs/$NAME/4bif-boot-full-vs-$VS.json; echo \$? > $R/logs/4bif-boot-full-$NAME-vs-$VS.exit' \
+        > $R/logs/4bif-boot-full-$NAME-vs-$VS.log 2>&1 < /dev/null & \
+      setsid nohup bash -c '$boot --workers 24 --exclude $EXCLUDE --out $R/runs/$NAME/4bif-boot-transfer-vs-$VS.json; echo \$? > $R/logs/4bif-boot-transfer-$NAME-vs-$VS.exit' \
+        > $R/logs/4bif-boot-transfer-$NAME-vs-$VS.log 2>&1 < /dev/null &"
     echo "$(date -u +%FT%TZ) $NAME bootstraps started on node C (CPU)" ;;
   fetch)
-    on c "test \"\$(cat $R/logs/4bif-boot-full-$NAME.exit)\" = 0 && test \"\$(cat $R/logs/4bif-boot-transfer-$NAME.exit)\" = 0" ||
+    on c "test \"\$(cat $R/logs/4bif-boot-full-$NAME-vs-$VS.exit)\" = 0 && test \"\$(cat $R/logs/4bif-boot-transfer-$NAME-vs-$VS.exit)\" = 0" ||
       { echo "bootstraps of $NAME not finished with exit 0" >&2; exit 3; }
     (umask 077 && mkdir -p "$LOCAL")
-    for f in merged/compare.json merged/receipt.json merged/port.json merged/kit/index.json family-delta-vs-lh.json \
-      4bif-boot-full-vs-lh.json 4bif-boot-transfer-vs-lh.json; do
+    for f in merged/compare.json merged/receipt.json merged/port.json merged/kit/index.json family-delta-vs-$VS.json \
+      4bif-boot-full-vs-$VS.json 4bif-boot-transfer-vs-$VS.json; do
       out=$(basename "$f"); [ "$f" = merged/kit/index.json ] && out=kit-index.json
       on c "cat $R/runs/$NAME/$f" > "$LOCAL/$out"
     done

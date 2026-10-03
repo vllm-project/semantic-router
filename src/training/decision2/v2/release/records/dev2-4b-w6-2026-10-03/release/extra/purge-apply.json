@@ -1,0 +1,107 @@
+{
+  "after": {
+    "commits": 18,
+    "heads": {
+      "branch:main": "c60d3b5ca7d71a36669392bc4fb94a1596df6739"
+    },
+    "lfs_objects": 27,
+    "main_lfs_served": {
+      "assets/banner.png": 206,
+      "assets/index-areas.png": 206,
+      "assets/index-pareto.png": 206,
+      "assets/jevarena-types.png": 206,
+      "backbone/model-00001-of-00005.safetensors": 206,
+      "backbone/model-00002-of-00005.safetensors": 206,
+      "backbone/model-00003-of-00005.safetensors": 206,
+      "backbone/model-00004-of-00005.safetensors": 206,
+      "backbone/model-00005-of-00005.safetensors": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "backbone/model-00001-of-00005.safetensors": 403,
+      "backbone/model-00002-of-00005.safetensors": 403,
+      "backbone/model-00003-of-00005.safetensors": 403,
+      "backbone/model-00004-of-00005.safetensors": 403,
+      "backbone/model-00005-of-00005.safetensors": 403,
+      "decision_head.safetensors": 403
+    }
+  },
+  "before": {
+    "commits": 18,
+    "heads": {
+      "branch:main": "c60d3b5ca7d71a36669392bc4fb94a1596df6739"
+    },
+    "lfs_objects": 33,
+    "main_lfs_served": {
+      "assets/banner.png": 206,
+      "assets/index-areas.png": 206,
+      "assets/index-pareto.png": 206,
+      "assets/jevarena-types.png": 206,
+      "backbone/model-00001-of-00005.safetensors": 206,
+      "backbone/model-00002-of-00005.safetensors": 206,
+      "backbone/model-00003-of-00005.safetensors": 206,
+      "backbone/model-00004-of-00005.safetensors": 206,
+      "backbone/model-00005-of-00005.safetensors": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "backbone/model-00001-of-00005.safetensors": 206,
+      "backbone/model-00002-of-00005.safetensors": 206,
+      "backbone/model-00003-of-00005.safetensors": 206,
+      "backbone/model-00004-of-00005.safetensors": 206,
+      "backbone/model-00005-of-00005.safetensors": 206,
+      "decision_head.safetensors": 206
+    }
+  },
+  "checks": {
+    "commits_unchanged": true,
+    "exactly_targets_gone": true,
+    "main_still_served": true,
+    "old_weights_not_served": true,
+    "refs_unchanged": true
+  },
+  "mode": "apply",
+  "new_revision": "c60d3b5ca7d71a36669392bc4fb94a1596df6739",
+  "node_copy": "/data/dev2/runs/release/dev2-4b-xall-release-20261002T153027Z/package/Decision-2.0-Nox-4B",
+  "old_revision": "d55528d1635fc474061ec59e31a7c722d3e7ab95",
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Nox-4B",
+  "rewrite_history": false,
+  "schema": "dev2-release-purge-superseded/1",
+  "target_bytes": 9695398936,
+  "targets": {
+    "257901d4c9aa8067cc104d2510ba35fa521400ecf5c7c7a1013ff72f9b8d7221": {
+      "bytes": 1990469200,
+      "node_copy_sha256": "257901d4c9aa8067cc104d2510ba35fa521400ecf5c7c7a1013ff72f9b8d7221",
+      "path": "backbone/model-00003-of-00005.safetensors"
+    },
+    "27bdd6c9b80e3cacb086e3f987e764089b1befa96ab20541411e4c32022c5382": {
+      "bytes": 1964101896,
+      "node_copy_sha256": "27bdd6c9b80e3cacb086e3f987e764089b1befa96ab20541411e4c32022c5382",
+      "path": "backbone/model-00004-of-00005.safetensors"
+    },
+    "6d753735a9781e4dc5eebc410686814c42368220a60be0979da03b900ffa2c6b": {
+      "bytes": 10529624,
+      "node_copy_sha256": "6d753735a9781e4dc5eebc410686814c42368220a60be0979da03b900ffa2c6b",
+      "path": "decision_head.safetensors"
+    },
+    "8483c724255a79cb30344ca444b0f2197e9b1efb95454b37ebc13a7124723daa": {
+      "bytes": 488124128,
+      "node_copy_sha256": "8483c724255a79cb30344ca444b0f2197e9b1efb95454b37ebc13a7124723daa",
+      "path": "backbone/model-00005-of-00005.safetensors"
+    },
+    "c57af990bb5a0a053f670b373b15309248ce4cd08dd1f412aabb1128e82357dc": {
+      "bytes": 1974414912,
+      "node_copy_sha256": "c57af990bb5a0a053f670b373b15309248ce4cd08dd1f412aabb1128e82357dc",
+      "path": "backbone/model-00002-of-00005.safetensors"
+    },
+    "c7e77cb35db82bf3e7cffa44824f61592979ae87ecedc3c34850e6c7fd629885": {
+      "bytes": 3267759176,
+      "node_copy_sha256": "c7e77cb35db82bf3e7cffa44824f61592979ae87ecedc3c34850e6c7fd629885",
+      "path": "backbone/model-00001-of-00005.safetensors"
+    }
+  },
+  "utc": "2026-10-02T21:56:39.481470+00:00"
+}

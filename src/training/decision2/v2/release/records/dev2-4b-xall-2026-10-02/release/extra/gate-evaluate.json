@@ -1,0 +1,50 @@
+{
+  "passed": true,
+  "decision": {
+    "sha256": "95903cb6b4ffcef4ce1160605d6f7cabfdb6b7f0d162ca93cf33b38cafc878f9",
+    "status": "final"
+  },
+  "items": {
+    "1_successor_IF1_index_gain": {
+      "passed": true,
+      "evidence": "private Index paired bootstrap fc45b9b257f3 (2000 replicates over 138645 cases) of these weights (48e8c023d0f4) minus the current revision's (991a8fb855f2): 95% lower bound > 0: yes"
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "passed": true,
+      "evidence": "types choice OK, noul OK, score OK"
+    },
+    "1_successor_IF3_index_audit": {
+      "passed": true,
+      "evidence": "row-level Index audit f084fb1131de of 120226 Index rows: 4b-LHA10SDML 77099 training lines, 0 item rows, 114 familiar-text rows; 4b-LHS17IB4 89299 training lines, 0 item rows, 90 familiar-text rows; 4b-LHS17IB4X 86663 training lines, 0 item rows, 90 familiar-text rows; 4b-LHS17ML 75340 training lines, 0 item rows, 90 familiar-text rows; 4b-LHS17SD 71088 training lines, 0 item rows, 90 familiar-text rows; 4b-SDMLIB4 95310 training lines, 0 item rows, 114 familiar-text rows; planted control 200 / 200"
+    },
+    "1_successor_references": {
+      "passed": true,
+      "reference": true,
+      "evidence": "references only under the Index-first rule (user 2026-10-02 09:55): v3: v3 66.720 vs current 65.684: +1.04 [-1.75, +2.95] (below its former bar); human transfer: human transfer delta 95% [-0.025, +0.046] (clears its former bar); mlx-diag: mlx-diag card-eligible macro +0.0185 [+0.0097, +0.0276] (clears its former bar); tier gates: own 1.0 low +5.81; v3 66.720 vs 90% of Decider 4B 61.882; H vs Decider 4B [-0.085, +0.061]; own 1.0 low > 0 ok, v3 >= 55.693 ok, H vs Decider 4B upper >= 0 ok, no type collapsed ok (clears its former bar); overlap exposure: not run; public 231: public 231 176 vs 174 (+2; McNemar p 0.774) (clears its former bar); C1 post-key: not run"
+    },
+    "2_regressions_disclosed": {
+      "passed": true,
+      "evidence": "6 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included"
+    },
+    "3_download_hash_parameters": {
+      "passed": true,
+      "evidence": "tree 38 files re-hashed; loaded 4208383488"
+    },
+    "4_native_examples": {
+      "passed": true,
+      "evidence": "examples and the card's Python block reproduced from the download"
+    },
+    "5_output_consistency": {
+      "passed": true,
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run"
+    },
+    "6_card_design": {
+      "passed": true,
+      "evidence": "Hub card apache-2.0 / problems []"
+    },
+    "7_transformers_remote_code": {
+      "passed": true,
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518"
+    }
+  }
+}

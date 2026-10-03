@@ -1,0 +1,256 @@
+{
+  "answers_sha256": "7e6c977802b064e94e874c7b4a9e39ec1c446edb0411157f890054a40b3de0e0",
+  "checks": {
+    "multilingual": {
+      "passed": true,
+      "problems": []
+    },
+    "null-description": {
+      "passed": true,
+      "problems": []
+    },
+    "over-budget": {
+      "passed": true,
+      "problems": []
+    },
+    "policy-check": {
+      "passed": true,
+      "problems": []
+    },
+    "structured-state": {
+      "passed": true,
+      "problems": []
+    },
+    "support-routing": {
+      "passed": true,
+      "problems": []
+    }
+  },
+  "device": "cuda:0",
+  "load_seconds": 22.71660407097079,
+  "loaded_parameters": 4208383488,
+  "mode": "run",
+  "model_name": "Decision-2.0-Nox-4B",
+  "outputs": [
+    {
+      "id": "support-routing",
+      "input_sha256": "d97b537c37ddf12ca4117ff655a31fa14afbfd968729bc2b512beadca6054f88",
+      "latency_ms": 7209.966395050287,
+      "response": {
+        "answers": {
+          "receipt": {
+            "noul": 0.9893633502043948,
+            "type": "noul"
+          },
+          "route": {
+            "choice": "returns",
+            "confidence": 0.9605144763461686,
+            "probabilities": {
+              "billing": 0.0017909393557624927,
+              "returns": 0.9934363270840231,
+              "technical": 0.004772733560214457
+            },
+            "type": "choice"
+          },
+          "urgency": {
+            "confidence": 0.500031162020824,
+            "legend": {
+              "0": "Routine",
+              "1": "Soon",
+              "2": "Today"
+            },
+            "probabilities": {
+              "0": 0.02977468297261695,
+              "1": 0.14854733249250096,
+              "2": 0.8216779845348822
+            },
+            "score": 1.7919033015622654,
+            "type": "score"
+          }
+        },
+        "model": "Decision-2.0-Nox-4B",
+        "usage": {
+          "input_tokens": 317,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "structured-state",
+      "input_sha256": "b8557ad323a641d6ea898abb86818d9e13d91e0d327bb0dabc8fe696c840d829",
+      "latency_ms": 61.060318956151605,
+      "response": {
+        "answers": {
+          "escalate": {
+            "noul": 0.7690236128273252,
+            "type": "noul"
+          },
+          "severity": {
+            "confidence": 0.08031431720548776,
+            "legend": {
+              "0": "Minor",
+              "1": "Moderate",
+              "2": "Major",
+              "3": "Critical",
+              "4": "Full outage"
+            },
+            "probabilities": {
+              "0": 0.07780514413767721,
+              "1": 0.15157688448965073,
+              "2": 0.1996650959457547,
+              "3": 0.1774629638494462,
+              "4": 0.39348991157747115
+            },
+            "score": 2.6572556142393835,
+            "type": "score"
+          }
+        },
+        "model": "Decision-2.0-Nox-4B",
+        "usage": {
+          "input_tokens": 283,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "policy-check",
+      "input_sha256": "af52e9c0442937e0032aca068ae665a0abe8a64c60de0cbe69de386d569ce7c0",
+      "latency_ms": 27.843493968248367,
+      "response": {
+        "answers": {
+          "action": {
+            "choice": "decline",
+            "confidence": 0.9445167997763774,
+            "probabilities": {
+              "approve": 0.0021301320942105945,
+              "decline": 0.9900467633881362,
+              "escalate": 0.007823104517653074
+            },
+            "type": "choice"
+          },
+          "eligible": {
+            "noul": 0.008379220074811676,
+            "type": "noul"
+          }
+        },
+        "model": "Decision-2.0-Nox-4B",
+        "usage": {
+          "input_tokens": 236,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "multilingual",
+      "input_sha256": "28be6206986889181cc9bf19c4ad593721955ecdffc1c03da97e1be473bf496a",
+      "latency_ms": 61.830994905903935,
+      "response": {
+        "answers": {
+          "queue": {
+            "choice": "hardware",
+            "confidence": 0.9692678013884677,
+            "probabilities": {
+              "account": 0.00030653438353287166,
+              "hardware": 0.99478797929987,
+              "shipping": 0.0049054863165971345
+            },
+            "type": "choice"
+          }
+        },
+        "model": "Decision-2.0-Nox-4B",
+        "usage": {
+          "input_tokens": 112,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "null-description",
+      "input_sha256": "78429233af527c450bc84b2757198df46d011c93dad94bed70d567637c953928",
+      "latency_ms": 27.200646931305528,
+      "response": {
+        "answers": {
+          "intent": {
+            "choice": "cancel",
+            "confidence": 0.7400285153637642,
+            "probabilities": {
+              "cancel": 0.9245872117925391,
+              "pause": 0.07049214453873108,
+              "upgrade": 0.004920643668729731
+            },
+            "type": "choice"
+          }
+        },
+        "model": "Decision-2.0-Nox-4B",
+        "usage": {
+          "input_tokens": 99,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "over-budget",
+      "input_sha256": "9022743d7cdc7a9aab2c39bd872384a75af79f16f7974461f12219ad7ae47fb9",
+      "latency_ms": 57.06479004584253,
+      "response": {
+        "answers": {
+          "tone": {
+            "error": "max_length_exceeded",
+            "type": "score"
+          },
+          "weather": {
+            "error": "max_length_exceeded",
+            "type": "noul"
+          }
+        },
+        "model": "Decision-2.0-Nox-4B",
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0
+        }
+      }
+    }
+  ],
+  "package_manifest_sha256": "35eba1817fc7f45183deba0cad0b12c0cad84177dd4937e4a6fd5c83019b0469",
+  "passed": true,
+  "profile": "qwen-full",
+  "runtime": {
+    "fp32_master": false,
+    "hip": "7.2.53211",
+    "kernels": {
+      "causal_conv1d": "1.7.0",
+      "fla_path": "/opt/decision-fla/fla",
+      "flash_linear_attention": "0.5.2",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
+      "triton": "3.7.1+gitf0b55c07",
+      "triton_cache_autotuning": "1",
+      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-4b-4bif-S17-release-20261002T052059Z"
+    },
+    "numpy": "2.3.5",
+    "parameter_dtypes": {
+      "bfloat16": 3569090560,
+      "float32": 639292928
+    },
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "residency": {
+      "linear_bf16": 248,
+      "linear_fp32": 0
+    },
+    "safetensors": "0.8.0",
+    "sites": [
+      "/opt/decision-fla"
+    ],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-release-examples/1"
+}
