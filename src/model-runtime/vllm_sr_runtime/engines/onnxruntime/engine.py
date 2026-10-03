@@ -46,7 +46,6 @@ NUMPY_TYPES = {
     "tensor(double)": np.float64,
     "tensor(bool)": np.bool_,
 }
-TOKEN_INPUTS = ("input_ids", "attention_mask", "position_ids", "token_type_ids")
 
 
 @dataclass(frozen=True)
