@@ -79,6 +79,8 @@ func TestDecisionPluginActivationMatchesEveryRuntimeGetter(t *testing.T) {
 					want = decision.GetPromptCacheConfig().Enabled
 				case *ShadowDispatchPluginConfig:
 					want = decision.GetShadowDispatchConfig().Enabled
+				case *MaskingPluginConfig:
+					want = decision.GetMaskingConfig().Enabled
 				default:
 					t.Fatalf("new plugin %q requires a runtime activation contract assertion", entry.Type)
 				}

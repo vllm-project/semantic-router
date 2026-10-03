@@ -118,6 +118,7 @@ var decisionPluginRegistry = []decisionPluginRegistryEntry{
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginContextCompression, DisplayName: "Context Compression", Description: "Compress selected context before provider dispatch."}, NewPayload: func() interface{} { return &ContextCompressionPluginConfig{} }},
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginPromptCache, DisplayName: "Prompt Cache", Description: "Add bounded Anthropic prompt-cache markers after route selection."}, NewPayload: func() interface{} { return &PromptCachePluginConfig{} }},
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginShadowDispatch, DisplayName: "Shadow Dispatch", Description: "Send a bounded asynchronous copy to a secondary model."}, NewPayload: func() interface{} { return &ShadowDispatchPluginConfig{} }},
+	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginMasking, DisplayName: "Masking", Description: "Replace detected PII in the provider-bound request with placeholders."}, NewPayload: func() interface{} { return &MaskingPluginConfig{} }},
 }
 
 // AlgorithmExecution identifies the runtime path for a decision algorithm.

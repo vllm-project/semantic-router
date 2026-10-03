@@ -33,6 +33,7 @@ ASSET_LABELS = {
     "deploy/kubernetes/istio/": "Istio Gateway",
     "deploy/kubernetes/jailbreak-onerror/": "Jailbreak error-handling demo",
     "deploy/kubernetes/llm-d/": "llm-d",
+    "deploy/kubernetes/masking/": "PII masking demo",
     "deploy/kubernetes/provider-mocker/": "Provider mocker and optional tiny-model smoke",
     "deploy/kubernetes/llmd-base/": "llm-d",
     "deploy/kubernetes/observability/": "Observability demo",

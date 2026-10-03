@@ -18,6 +18,7 @@ import (
 	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
 	localclassifierbackend "github.com/vllm-project/semantic-router/e2e/profiles/local-classifier-backend"
 	looper "github.com/vllm-project/semantic-router/e2e/profiles/looper"
+	masking "github.com/vllm-project/semantic-router/e2e/profiles/masking"
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
@@ -111,6 +112,7 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
 	register("llm-d", func() framework.Profile { return llmd.NewProfile() }, framework.ProfileCapabilities{})
+	register("masking", func() framework.Profile { return masking.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"route-action",
 		func() framework.Profile { return routeaction.NewProfile() },
