@@ -291,6 +291,7 @@ ENV ORT_DYLIB_PATH=/usr/local/lib/python3.10/dist-packages/onnxruntime/capi/libo
 ARG TORCH_ROCM=torch==2.12.0
 ARG TORCH_ROCM_INDEX=https://download.pytorch.org/whl/rocm7.1
 RUN python3 -m venv /opt/vllm-sr-runtime && \
+    /opt/vllm-sr-runtime/bin/pip install --no-cache-dir --upgrade pip && \
     /opt/vllm-sr-runtime/bin/pip install --no-cache-dir \
       --index-url "$TORCH_ROCM_INDEX" "$TORCH_ROCM" && \
     /opt/vllm-sr-runtime/bin/pip install --no-cache-dir fla-core==0.5.2
