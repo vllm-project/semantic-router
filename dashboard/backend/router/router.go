@@ -73,6 +73,7 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	registerSRBenchRoutes(mux, cfg)
 	SetupMCP(mux, cfg, wf, openClawHandler)
 	registerMLPipelineRoutes(mux, cfg, wf)
+	setupTrainingRoutes(mux, cfg, wf)
 	registerOpenClawRoutes(mux, cfg, openClawHandler)
 	registerProxyRoutes(mux, cfg, authSvc, setupResolver, recipeStore)
 
@@ -80,7 +81,7 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	mux.HandleFallback("/", handlers.StaticFileServer(cfg.StaticDir))
 	mux.Seal()
 	return &Server{
-		Handler:       wrapWithAuth(mux, authSvc, mux),
+		Handler:       handlers.TrainingErrorEnvelope(wrapWithAuth(mux, authSvc, mux)),
 		routePolicies: mux,
 		Close: func() error {
 			var projectionClose error

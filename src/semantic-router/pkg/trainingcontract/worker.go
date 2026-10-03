@@ -9,7 +9,7 @@ type WorkerRequest struct {
 	TaskID        string            `json:"task_id" jsonschema:"pattern=^[a-z]+_[a-zA-Z0-9-]+$"`
 	Executor      Component         `json:"executor"`
 	Trainer       Component         `json:"trainer"`
-	Parameters    map[string]any    `json:"parameters,omitempty"`
+	Parameters    Parameters        `json:"parameters,omitempty"`
 	Snapshot      DataSnapshot      `json:"snapshot"`
 	Inputs        []ArtifactVariant `json:"inputs,omitempty"`
 }
