@@ -21,6 +21,12 @@ from typing import Any
 from ..plugins.base import Batch, Job, LoadedModel, Profile, RenderedItem
 from ..scheduler.planner import micro_batches, padded
 
+MIN_SHARED_PREFIX = 4
+# Break-even shared tokens (with graphs, without): dense Qwen3, then hybrids up to a hidden size, then wider.
+DENSE_BREAK_EVEN = (3072, 1024)
+HYBRID_BREAK_EVENS = ((1024, 6144, 2048), (2048, 3072, 1536), (3072, 1536, 1024))
+WIDE_BREAK_EVEN = 512
+
 
 @dataclass(frozen=True)
 class SharePolicy:
@@ -37,7 +43,7 @@ def shared_prefix(items: list[RenderedItem], align: int = 1) -> int:
     ids = [item.ids for item in items]
     low, high = min(ids), max(ids)
     common = next(
-        (i for i, (a, b) in enumerate(zip(low, high)) if a != b),
+        (i for i, (a, b) in enumerate(zip(low, high, strict=False)) if a != b),
         min(len(low), len(high)),
     )
     limit = min(min(item.gather) for item in items)
@@ -54,14 +60,11 @@ def auto_shared_tokens(config: dict[str, Any], graphs: bool) -> int:
     """
     hidden = config.get("hidden_size", 0)
     if "linear_attention" not in set(config.get("layer_types") or ()):
-        return 3072 if graphs else 1024
-    if hidden <= 1024:
-        return 6144 if graphs else 2048
-    if hidden <= 2048:
-        return 3072 if graphs else 1536
-    if hidden <= 3072:
-        return 1536 if graphs else 1024
-    return 512
+        return DENSE_BREAK_EVEN[0] if graphs else DENSE_BREAK_EVEN[1]
+    for largest, with_graphs, without in HYBRID_BREAK_EVENS:
+        if hidden <= largest:
+            return with_graphs if graphs else without
+    return WIDE_BREAK_EVEN
 
 
 class SharedContextProfile(Profile):
@@ -92,7 +95,9 @@ class SharedContextProfile(Profile):
         if len(items) < self.policy.min_questions:
             return 0
         prefix = shared_prefix(items, self.policy.align)
-        if prefix < 4 or (len(items) - 1) * prefix < (self.threshold or 0):
+        if prefix < MIN_SHARED_PREFIX or (len(items) - 1) * prefix < (
+            self.threshold or 0
+        ):
             return 0
         packed = prefix + sum(len(item.ids) - prefix for item in items)
         if token_budget is not None and padded(packed) > token_budget:

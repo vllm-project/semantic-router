@@ -1,3 +1,4 @@
+# ruff: noqa: N803, N806 -- Triton constexpr parameters and shapes are upper case
 """Fused Triton kernels for the element-wise ops of Qwen3.5 and Qwen3 decoder layers (ROCm gfx942).
 
 Each kernel computes exactly what the eager decoder layer computes under BF16
@@ -32,6 +33,8 @@ import torch
 import triton
 import triton.language as tl
 from triton.language.extra import libdevice
+
+ROWS_PER_PROGRAM = {128: 16, 256: 8}
 
 EXACT = {"enable_fp_fusion": False}
 
@@ -286,7 +289,7 @@ def _gdn_prep_kernel(
         s = tl.load(a_ptr + row * NV + hv, mask=tmask, other=0.0).to(
             tl.float32
         ) + tl.load(dtb_ptr + hv)
-        sp = tl.where(s > 20.0, s, libdevice.log1p(libdevice.exp(s)))
+        sp = tl.where(s > 20.0, s, libdevice.log1p(libdevice.exp(s)))  # noqa: PLR2004
         g = -libdevice.exp(tl.load(alog_ptr + hv)) * sp
         tl.store(g_ptr + row * NV + hv, g, mask=tmask)
 
@@ -412,7 +415,7 @@ def _head_prep_kernel(
     wp = w_ptr
     dst = dst_ptr + (((b * NH + hid) * T + t) * D)[:, None]
     x = tl.load(src + d[None, :], mask=rmask, other=0.0).to(tl.float32)
-    if D == 256:
+    if D == 256:  # noqa: PLR2004, SIM108
         sumsq = sumsq_256(x, R)
     else:
         sumsq = sumsq_128(x, R)
@@ -468,7 +471,7 @@ def attn_prep(
     q = torch.empty(B, heads, T, head_dim, dtype=torch.bfloat16, device=dev)
     k = torch.empty(B, kv_heads, T, head_dim, dtype=torch.bfloat16, device=dev)
     rot = cos.shape[-1]
-    rows = 16 if head_dim == 128 else 8
+    rows = ROWS_PER_PROGRAM[head_dim]
     for src, weight, dst, count, width in (
         (q_proj_out, q_norm_w1, q, heads, 2 * head_dim if gated else head_dim),
         (k_proj_out, k_norm_w1, k, kv_heads, head_dim),

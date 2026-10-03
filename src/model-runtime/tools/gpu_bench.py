@@ -25,12 +25,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import many_questions  # noqa: E402
-from gpu_parity import load, system_one  # noqa: E402
-from vllm_sr_runtime.profiles.batching import BatchingProfile  # noqa: E402
-from vllm_sr_runtime.profiles.exact import ExactProfile  # noqa: E402
-from vllm_sr_runtime.profiles.shared_context import SharedContextProfile  # noqa: E402
-from vllm_sr_runtime.scheduler.scheduler import Scheduler, SchedulerLimits  # noqa: E402
+import many_questions
+from gpu_parity import load, system_one
+from vllm_sr_runtime.profiles.batching import BatchingProfile
+from vllm_sr_runtime.profiles.exact import ExactProfile
+from vllm_sr_runtime.profiles.shared_context import SharedContextProfile
+from vllm_sr_runtime.scheduler.scheduler import Scheduler, SchedulerLimits
 
 
 def percentile(values: list[float], q: float) -> float:
@@ -69,7 +69,8 @@ def main() -> int:
 
     model = load(args)
     exact = ExactProfile()
-    prompts = [json.loads(line) for line in open(args.prompts, encoding="utf-8")]
+    with open(args.prompts, encoding="utf-8") as stream:
+        prompts = [json.loads(line) for line in stream]
     result: dict = {
         "schema": "model-runtime-gpu-bench/1",
         "model": model.info.id,
@@ -144,7 +145,7 @@ def main() -> int:
         scheduler.start()
         per = {}
         for concurrency in [int(c) for c in args.concurrency.split(",")]:
-            for warm in (True, False):
+            for _ in range(2):
                 latencies = []
                 torch.cuda.synchronize()
                 started = time.perf_counter()

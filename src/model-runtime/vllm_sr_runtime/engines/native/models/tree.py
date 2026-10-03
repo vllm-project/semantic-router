@@ -47,14 +47,14 @@ class Tree:
             starts.append(starts[-1] + length)
         index = torch.empty((len(lengths), width), dtype=torch.long)
         valid = torch.zeros((len(lengths), width), dtype=torch.bool)
-        for row, (start, length) in enumerate(zip(starts, lengths)):
+        for row, (start, length) in enumerate(zip(starts, lengths, strict=True)):
             index[row, :length] = torch.arange(start, start + length)
             index[row, length:] = start + length - 1
             valid[row, :length] = True
         self.index = index.to(device)
         # Index (not mask) gathers: a boolean mask would sync the host on every use.
         self.flat = valid.reshape(-1).nonzero().squeeze(1).to(device)
-        ends = [start + length for start, length in zip(starts, lengths)]
+        ends = [start + length for start, length in zip(starts, lengths, strict=True)]
         self.cu_seqlens_cpu = torch.tensor([0, *ends], dtype=torch.long)
         self.cu_seqlens = self.cu_seqlens_cpu.to(device)
         self.positions = torch.cat(

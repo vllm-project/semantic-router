@@ -26,6 +26,8 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+NOUL_TIE = 0.5
+SCORE_TIE = 1e-8
 sys.path.insert(0, str(ROOT))
 
 from vllm_sr_runtime.accel.cpu import CPUAccelerator  # noqa: E402
@@ -58,13 +60,18 @@ def category(answer: Any) -> tuple:
         return ("invalid", answer.get("error") if isinstance(answer, dict) else None)
     if answer.get("type") == "noul" or "noul" in answer:
         value = answer.get("noul")
-        return ("noul", None if value is None or value == 0.5 else value > 0.5)
+        return (
+            "noul",
+            None if value is None or value == NOUL_TIE else value > NOUL_TIE,
+        )
     if "choice" in answer:
         return ("choice", answer["choice"])
     probabilities = answer.get("probabilities") or {}
     if probabilities:
         best = max(probabilities.values())
-        winners = sorted(k for k, v in probabilities.items() if abs(v - best) <= 1e-8)
+        winners = sorted(
+            k for k, v in probabilities.items() if abs(v - best) <= SCORE_TIE
+        )
         return ("score", winners[0] if len(winners) == 1 else None)
     return ("score", None)
 
@@ -110,7 +117,7 @@ def system_one(
             values = model.run(items, shared_prefix=batch.shared_prefix)
         else:
             values = model.run(items)
-        for index, value in zip(indices, values):
+        for index, value in zip(indices, values, strict=True):
             logits[index] = value
     answers = dict(plan.errors)
     for index, item in enumerate(plan.items):
@@ -158,9 +165,8 @@ def main() -> int:
     panels = {}
     for spec in args.panel:
         name, prompts_path, count = spec.split(":")
-        prompts = [json.loads(line) for line in open(prompts_path, encoding="utf-8")][
-            : int(count)
-        ]
+        with open(prompts_path, encoding="utf-8") as stream:
+            prompts = [json.loads(line) for line in stream][: int(count)]
         totals = {
             "prompts": 0,
             "identical_prompts": 0,

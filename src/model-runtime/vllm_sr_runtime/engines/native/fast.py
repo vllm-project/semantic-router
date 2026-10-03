@@ -53,6 +53,9 @@ MAX_GRAPHS = 512
 MAX_GRAPH_OUTPUT_BYTES = 4 << 30
 CAPTURE_AFTER = 2
 MASK_ALIGN = 16
+QWEN3_HEAD_DIM = 128
+QWEN3_5_HEAD_DIM = 256
+GATED_DELTA_HEAD_DIM = 128
 
 
 # ---------------------------------------------------------------------------
@@ -79,12 +82,12 @@ def fused_unavailable(backbone: nn.Module, kernels: KernelSet) -> str | None:
         "no attention bias": not config.get("attention_bias", False),
     }
     if model_type == "qwen3":
-        checks["128-wide attention heads"] = head == 128
+        checks["128-wide attention heads"] = head == QWEN3_HEAD_DIM
     else:
-        checks["256-wide attention heads"] = head == 256
+        checks["256-wide attention heads"] = head == QWEN3_5_HEAD_DIM
         checks["128-wide gated-delta heads"] = (
-            config["linear_key_head_dim"] == 128
-            and config["linear_value_head_dim"] == 128
+            config["linear_key_head_dim"] == GATED_DELTA_HEAD_DIM
+            and config["linear_value_head_dim"] == GATED_DELTA_HEAD_DIM
         )
     failed = [name for name, ok in checks.items() if not ok]
     return "needs " + ", ".join(failed) if failed else None
