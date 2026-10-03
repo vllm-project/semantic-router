@@ -1,0 +1,121 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "Decision-2.0-Lux-9B",
+  "repo_id": "vllm-sr/Decision-2.0-Lux-9B",
+  "name_basis": "base",
+  "name_base_model": "Qwen/Qwen3.5-9B",
+  "identity": {
+    "model_sha256": "0ece5faa210173f443f353474b419fd913a253b06645da3e8370c2db0e1c3339"
+  },
+  "report_sha256": "6143caba38a49a04fbae6770d2a836d5821ec99dc7db5100a1e6c61444d9a200",
+  "paired_sha256": "4bce815ce276ce6b758c866e3b2cb0aa3098f78df0c25752c43a529e1ba1339e",
+  "gate_profile": "successor",
+  "rule": "index-first",
+  "current_revision": "f77b41f5c1a98974548d929c03e7bce008f71bd0",
+  "evidence_sha256": {
+    "current_decision": "0b092b4ec335db826f83034436ad63c2e27e1aaa82126dcb0f92e43a745b84d4",
+    "current_gate": "c89524587ae955376eac98979c8aedf6c5e1d8242ce4dc4e4568c9c9953181b6",
+    "exposure_1": "14e7c0ca5ecf9c396a464af55784bd466a71774c186672dcb9a7c46dbb598ff5",
+    "exposure_2": "9fd9d3dbec72bb4f035ebcc72d152063b8a1f6c61648c97f5a21d18a9d814a7d",
+    "index_first_audit": "da12b2ac091dce98e7bffcf0f10e1fdabf80709e251e198303b190b8e40fe881",
+    "index_first_base_receipt": "aee534c3a3074f03b608ab008d88888eebe111f03f9d1207e11ba0649a8a22e9",
+    "index_first_bootstrap": "dcea4c3efe65749808a5418cbc7fb00ead75ee7c47876bf4de182c6305f42bbd",
+    "index_first_receipt": "94551cd997620f5d569654cf1b0b1927de9ab0a8806fe787c9d88bc20122d0b2",
+    "mlx_paired": "873f5f4bec9db23a452691737b36788665fa541c6d1dfbbe11ae8cef5e9e7b22",
+    "paired": "df19a5b659deb2ffa8d8a8a5fb349d6434cb216f8de0d323e41cc1a163251b5f",
+    "public231": "30be9f22445787a2708a414e1cb1a6a273d5fc0a64054f6b7451cd556568a5fd",
+    "tier_paired": "a2077d2bf385568f82ca1517e26303d8967a175f943649a4e257b762e33dac81",
+    "types": "b7ac2c4d47a861ed5af3078db423aa01344cd71d90fd4d03df53065b311e0b24"
+  },
+  "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): the CAL698 per-type temperatures of the formal run (calibration cbbcbaf2) are not shipped; undoing them changes 0 answers on every scored panel and mlx-diag",
+  "action": "Runtime-only revision of the public repository vllm-sr/Decision-2.0-Lux-9B: the package runtime decision2/*.py comes from commit 9cffe606c (the phase A fast path), which adds the opt-in shared-context switch decision2/shared_ctx.py (share_context, off by default). Weights, tokenizer, configs, the vendored training/model sources, calibration, any Score offsets, the banner and the charts are byte-identical to the released revision f3122c7c8abd302326c22220aac4095eb1799f37; README.md states the new median latency and MODEL_MANIFEST.json the new runtime hashes and the runtime sentences. The collection is not changed.",
+  "rationale": "The release judgement of the superseded final decision ba0e0bee… stands unchanged: the same identity 0ece5faa, scored report, paired comparison, calibration and licence decision. Only the package runtime changes, and with the switch off (the default) it computes the same values bit for bit: every prompt of the four scored panels (typed-final 1,600, css15 6,547, public231 231, mlx-diag 2,275) answered through the released package and through this package on the released weights gave 0 answer changes and 0.0 drift; 400 single requests: p50 18.46 -> 18.41 ms, p95 18.60 -> 18.78 ms, all bit-identical. release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link; then the downloaded package must pass the Index harness's 86-request parity gate (the kit runner against the package's own entry point; the phase A revisions of Kai, Eos and Sol pass it with 0.0 drift).",
+  "approved_package": {
+    "identity": "0ece5faa210173f443f353474b419fd913a253b06645da3e8370c2db0e1c3339",
+    "fp32_identity": "b6984475a3804714d1018b4ba18c2dc28ffa48d8bc293d26211f620bdd062ee3",
+    "loaded_parameters": 7940895744,
+    "profile": "qwen-full (BF16 storage of the Linear projections)",
+    "temperature": 1,
+    "max_input_tokens": 16384,
+    "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+  },
+  "licence_decision": "apache-2.0: own weights; Decision 1.0 Lux-9B @bd45a30a (direct weight origin, interpolated) and the Qwen/Qwen3.5-9B @c2022362 text backbone and tokenizer are Apache-2.0; the IB1-r3 / IB2 / IB3-r2 / IB4 phase-1 training rows are licence-clean (release-safe data records; IB4 phase 1 C1 recheck r3 PASS); the package keeps the Apache-2.0 LICENSE (product card: no NOTICE, attributions or evaluation/ files).",
+  "supersedes": {
+    "final_sha256": "ba0e0beebcf88881e3962b84744a4162d02b278ffec175954b72fb0f713e7662",
+    "released_as": "vllm-sr/Decision-2.0-Lux-9B@f3122c7c8abd302326c22220aac4095eb1799f37",
+    "released_manifest_sha256": "d0a407c7af291ee473ea516abebeb03968fd4a6b63cf0128e550dfcd5132d7c8",
+    "released_gate_sha256": "8817732f9585a4e8c833eab4db12f6307b96f68d123b5742638b8902d105cc0b",
+    "card_revision": null,
+    "earlier": {
+      "revision": "f77b41f5c1a98974548d929c03e7bce008f71bd0",
+      "final_sha256": "0b092b4ec335db826f83034436ad63c2e27e1aaa82126dcb0f92e43a745b84d4",
+      "gate_sha256": "c89524587ae955376eac98979c8aedf6c5e1d8242ce4dc4e4568c9c9953181b6",
+      "manifest_sha256": "f5a37c42140106a663d27493d2a2ce993ee5511ccb138f7c79efdfef11e9df55",
+      "weights_identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb"
+    }
+  },
+  "disclosures": [
+    "successor items 1 and 4 of the former rule are references under the Index-first rule (v3 not significantly above the current revision; card-eligible mlx-diag below it)",
+    "the training rows include IB families matched to Index benchmark families (HoVer, When2Call, iSarcasmEval (IB4 isarc2 is in-distribution), GSM8K, RAGTruth-style, FinEntity-style) and the BPoMP format; the internal records report the transfer-only Index delta without HoVer, When2Call, iSarcasmEval, GSM8K and BPoMP (private values)",
+    "Index contamination audit of the training rows: KIB4 (151039 lines) 0 item rows, 196 familiar-text rows",
+    "the overlap-exposure references cover the x60 and IB1 / IB2 rows; the IB3-r2 / IB4 rows are covered by their own release-safe records and by the row-level Index audit",
+    "card.speed is the current revision's bench receipt (same architecture, runtime and shapes)"
+  ],
+  "prepared_by": "Decision 2.0 9B owner e28aa509 (M10 continuation, Lux-9B publisher; worktree vllm-sr-dev2-9b-m10) with the runtime phase A tooling of this record",
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: COORDINATION 2026-10-03 02:38 and 03:18 UTC+8 (the shared-context switch ships opt-in, default off, in runtime-only revisions with the phase A parity rollout; the user's 01:27 instruction 'same strategy as when private' covers the public repositories); COORDINATION 2026-10-03 08:30 UTC+8 (the Lux switch revision is the 9B owner's when no 9B release is under way by 10:00)",
+  "decided_utc": "2026-10-03T00:30:00Z",
+  "previous_rationale": "Index-first rule (user 2026-10-02 09:55 UTC+8). IF1: the private Index paired bootstrap of these exact weights minus the current revision's has a 95% lower bound > 0 (2,000 replicates; values in private files only; evidence_sha256.index_first_bootstrap); the highest measured 9B M10 candidate (directive 2026-10-02 12:30 UTC+8). R3: types choice OK, noul OK, score OK. IF3: row-level Index audit, planted control 200 / 200; KIB4 0 item rows. References (not release blockers): post-key v3 68.077 vs 68.024, +0.05 [-1.62, +1.41]; human transfer -0.037 to +0.007; card-eligible mlx-diag -0.0151 [-0.0235, -0.0068]; vs adopted Lux 1.0 +2.27 [+0.25, +3.91]; public 231 179 vs 182 (McNemar p 0.375); C1 post-key not run.",
+  "runtime_revision": {
+    "kind": "shared-context-switch-runtime",
+    "runtime_commit": "9cffe606ce89e19974c7def780a48b64583039ac",
+    "spec": "v2/release/specs/dev2-9b-ras.json",
+    "spec_sha256": "a832e1f9a6bb2ad15ad24d591e5a5f3545224b6fb0fd8d1a7569211c32206328",
+    "parity": {
+      "compare": "v2/release/records/dev2-runtime-a-2026-10-02/9b/switch/parity/answers-compare.json",
+      "sha256": "caf997235acafc488e398bc84755da8457fd0602882e426c8bb02f7154a2aed8",
+      "panels": {
+        "css15": [
+          6547,
+          6547,
+          0
+        ],
+        "mlx-diag": [
+          2275,
+          2275,
+          0
+        ],
+        "public231": [
+          231,
+          231,
+          0
+        ],
+        "typed-final": [
+          1600,
+          1600,
+          0
+        ]
+      },
+      "max_abs_drift": 0.0
+    },
+    "bench": {
+      "compare": "v2/release/records/dev2-runtime-a-2026-10-02/9b/switch/bench/compare.json",
+      "sha256": "6116e8da3f54ba7a1651cc620e9a1285341d0e9fe148503e3a15026a59da0754",
+      "items": 400,
+      "bit_identical_items": 400,
+      "p50_ms": [
+        18.462464911863208,
+        18.408703850582242
+      ],
+      "p95_ms": [
+        18.603644100949168,
+        18.783492036163807
+      ],
+      "request_peak_gib": [
+        17.323641777038574,
+        17.323641777038574
+      ]
+    }
+  }
+}
