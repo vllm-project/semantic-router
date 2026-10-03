@@ -10,7 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
 func TestOwnedEmbeddingSkipsUnusedCatalogArtifacts(t *testing.T) {
@@ -53,7 +53,7 @@ func TestOwnedRemoteEmbeddingIndependentReferencesAndFailedCandidate(t *testing.
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": data})
 	}))
 	defer server.Close()
-	runtime := native.New(binding.NewPool())
+	runtime := serving.New(nil, binding.NewPool())
 	makeConfig := func(model string) *config.RouterConfig {
 		cfg := &config.RouterConfig{}
 		cfg.EmbeddingConfig.ModelType = "remote"
