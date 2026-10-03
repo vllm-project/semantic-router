@@ -81,6 +81,11 @@ ignore = [
   "PLC0415",  # aiohttp is an optional dependency used only in HTTP mode
 ]
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
+# The model runtime keeps the PyTorch `F` convention and imports heavy optional
+# modules (uvicorn, safetensors, huggingface_hub, tokenizers) where they are used,
+# so the API, registry and CLI stay importable without them.
+"src/model-runtime/**/*.py" = ["N812", "PLC0415"]
+"src/model-runtime/tests/*.py" = ["N812", "PLC0415", "PLR2004"]
 "bench/grounded_fusion/test_*.py" = ["PLR2004"]
 "src/training/model_classifier/modality_routing_classifier/test_*.py" = ["PLR2004"]
 "src/training/model_classifier/modality_routing_classifier/label_audit/test_*.py" = ["PLR2004"]

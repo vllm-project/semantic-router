@@ -426,6 +426,14 @@ domains:
         - e2e/testing/vllm-sr-cli/**
         - tools/make/docker.mk
 
+  model-runtime:
+    owner: model-runtime
+    paths:
+      - src/model-runtime/**
+      - tools/make/model-runtime.mk
+    checks: [make model-runtime-test]
+    verifications: []
+
   fleet-sim:
     owner: fleet-sim
     paths: [src/fleet-sim/**]
