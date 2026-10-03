@@ -561,6 +561,15 @@ class LoadedModel(ABC):
         """Most padded tokens one forward may hold; None when nothing limits it."""
         return None
 
+    def shared_context(self, items: list[Any], token_budget: int | None) -> int | None:
+        """How a job's items share context on the shared-context path.
+
+        A positive value runs them through ``run(items, shared_prefix=value)``,
+        0 runs them exactly, and None lets the profile find the common token
+        prefix of decision items itself.
+        """
+        return None
+
     def close(self) -> None:
         self.engine_model.close()
 

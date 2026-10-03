@@ -78,6 +78,7 @@ class SharedContextProfile(Profile):
     def __init__(self, policy: SharePolicy | None = None):
         self.policy = policy or SharePolicy()
         self.threshold = self.policy.min_shared_tokens
+        self.model: LoadedModel | None = None
 
     def available(self, model: LoadedModel) -> str | None:
         engine = model.engine_model
@@ -85,6 +86,7 @@ class SharedContextProfile(Profile):
             return "the loaded engine model has no shared-context forward"
         if self.policy.mode != "tree" or self.policy.tau > 0:
             return "only tree mode with tau 0 is implemented"
+        self.model = model
         if self.threshold is None:
             spec = getattr(model, "spec", None)
             config = spec.backbone.config if spec is not None else {}
@@ -95,6 +97,9 @@ class SharedContextProfile(Profile):
 
     def share(self, items: list[RenderedItem], token_budget: int | None) -> int:
         """The prefix this job shares, or 0 when it runs exactly."""
+        decided = self.model.shared_context(items, token_budget) if self.model else None
+        if decided is not None:
+            return decided
         if len(items) < self.policy.min_questions:
             return 0
         prefix = shared_prefix(items, self.policy.align)
