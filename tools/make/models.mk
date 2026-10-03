@@ -88,6 +88,14 @@ verify-image-routing-calibration: download-models-image-calibration ## Verify sh
 
 .PHONY: download-models-image-calibration verify-image-routing-calibration
 
+test-models: download-models-image-calibration ## Run the published-model contract through the model runtime
+	@"$(AGENT_PYTHON)" tools/ci/run_model_tests.py \
+		--models-dir "$(MODEL_TEST_MODELS_DIR)" \
+		--omni "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts/vela-1.0-omni-nano" \
+		--output "$(MODEL_TEST_REPORT_DIR)"
+
+.PHONY: test-models
+
 download-mmbert-lora: ## Download mmBERT LoRA adapters for Python fine-tuning
 	@echo "📦 Downloading mmBERT LoRA adapters from Hugging Face..."
 	@mkdir -p $(MODELS_DIR)
