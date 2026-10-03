@@ -92,3 +92,18 @@ COORDINATION 07:55: 27B #7 claimed node A GPU5–7 for M9 half-LR seeds when the
 - If node C GPUs are granted when the 4B owner's current reads end (≈ 03:45Z), the remaining wave-1 reads run there
   in parallel (packages copied B → C, SHA-256 lists equal).
 - The budget is unchanged: four wave-1 reads.
+
+## Revision 2 (2026-10-03 ≈01:40Z, disclosed: written AFTER the `HLR4-a80` read)
+
+- **What was read** (values private): `M10-HLR4-a80-bf16` fails IF1. Its point is level with KIB4-a40. Most
+  benchmarks rose, among them HoVer, BPoMP, MuSR, iSarcasmEval, FinEntity and VAST. RAGTruth fell by about 21 points,
+  which costs about the whole gain at RAGTruth's board weight.
+- **What that shows, with the earlier reads:** every measured point that is not built from KIB4 s1 / s2 alone loses
+  RAGTruth against KIB4-a40 by 7–26 points. That covers KIB4-a50, KIB4W2, KIB4R, KIB4L2, AF-KF, X5, X7, X8 and now
+  HLR4-a80. KIB4-a33, the same two seeds at α 1/3, keeps it. RAGTruth's high score therefore looks tied to KIB4
+  s1 / s2's own seeds, and KIB4H was trained on exactly those seeds (amendment 12).
+- **Change:** `KIB4-lrhh-a80` (seeds 21 / 22) is dropped before it was read. It is replaced by **`KIB4H-a80`** =
+  `[KIB4H × 4, LUX]`, KIB4H at the step amendment 13 argued matches the released point's. The order of the remaining
+  reads becomes `HLR4-a60` (running), `KIB4H-a80`, `KIB4H-a40`. This is still four wave-1 reads, so the budget is
+  unchanged.
+- Wave 2's rules stay as written. `LRX6` keeps its condition, and the factory's `KIB4-lrh` remains unread.

@@ -49,6 +49,7 @@ case $NAME in
   X7-a40 | X8-a40 | Y1 | Y2) ;;
   HLR4 | HLR4-a50 | HLR4-a60 | HLR4-a80 | HLR4-a100 | LRX6-a50 | LRX6-a60 | LRX6-a80 | LRX6-a100) ;;
   KIB4-lrhh-a80 | KIB4-lrh-a50 | KIB4-lrh-a60 | KIB4-lrh-a80 | KIB4-lrh-a100) ;;
+  KIB4H-a60 | KIB4H-a80 | KIB4H-a100) ;;
   *) echo "NAME is X7-a40, X8-a40, Y1, Y2 (amendment 7) or an amendment-13 point" >&2; exit 2 ;;
 esac
 (( ${#MEMBERS[@]} >= 2 )) || { echo "at least two members" >&2; exit 2; }
