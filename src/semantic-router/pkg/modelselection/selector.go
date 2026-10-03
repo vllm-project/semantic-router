@@ -119,8 +119,10 @@ func NewSelector(cfg *config.MLModelSelectionConfig) (Selector, error) {
 		selector = NewSVMSelector()
 	case "mlp":
 		selector = NewMLPSelector()
+	case "hiershrink":
+		selector = NewHierShrinkSelector()
 	default:
-		return nil, fmt.Errorf("unknown model selection algorithm: %s (supported: knn, kmeans, svm, mlp)", cfg.Type)
+		return nil, fmt.Errorf("unknown model selection algorithm: %s (supported: knn, kmeans, svm, mlp, hiershrink)", cfg.Type)
 	}
 	if cfg.ModelsPath == "" {
 		return selector, nil

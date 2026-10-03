@@ -107,7 +107,7 @@ config:
           - model: mistral-7b
             use_reasoning: false
       - name: health_decision
-        description: Health and medical queries - uses KMeans
+        description: Health and medical queries - uses HierShrink
         priority: 100
         rules:
           operator: AND
@@ -115,7 +115,7 @@ config:
             - type: domain
               name: health
         algorithm:
-          type: kmeans
+          type: hiershrink
         modelRefs:
           - model: llama-3.2-1b
             use_reasoning: false
@@ -307,6 +307,8 @@ config:
           mlp:
             device: cpu
             pretrained_path: /tmp/ml-models/mlp_model.json
+          hiershrink:
+            pretrained_path: /tmp/ml-models/hiershrink_model.json
       strategy: priority
     services:
       observability:

@@ -115,15 +115,15 @@
     "query": "What are the symptoms of diabetes mellitus?",
     "decision": "health_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Medical symptoms - KMeans/health",
-    "algorithm": "kmeans"
+    "description": "Medical symptoms - HierShrink/health",
+    "algorithm": "hiershrink"
   },
   {
     "query": "What is the treatment for hypertension?",
     "decision": "health_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Medical treatment - KMeans/health",
-    "algorithm": "kmeans"
+    "description": "Medical treatment - HierShrink/health",
+    "algorithm": "hiershrink"
   },
   {
     "query": "What is the Pythagorean theorem?",
