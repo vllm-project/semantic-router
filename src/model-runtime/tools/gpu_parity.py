@@ -40,7 +40,10 @@ from vllm_sr_runtime.plugins.base import (  # noqa: E402
     RegistryOptions,
 )
 from vllm_sr_runtime.profiles.exact import ExactProfile  # noqa: E402
-from vllm_sr_runtime.profiles.shared_context import SharedContextProfile  # noqa: E402
+from vllm_sr_runtime.profiles.shared_context import (  # noqa: E402
+    SharedContextProfile,
+    SharePolicy,
+)
 
 ACCELERATORS = {"cpu": CPUAccelerator, "cuda": CUDAAccelerator, "rocm": ROCmAccelerator}
 PROFILES = {"exact": ExactProfile, "shared_context": SharedContextProfile}
@@ -130,6 +133,9 @@ def main() -> int:
     parser.add_argument("--device", default="rocm:0")
     parser.add_argument("--base-path")
     parser.add_argument("--profile", default="exact", choices=sorted(PROFILES))
+    parser.add_argument(
+        "--share-policy", default="{}", help="shared_context SharePolicy fields as JSON"
+    )
     parser.add_argument("--no-graphs", action="store_true")
     parser.add_argument("--no-fused", action="store_true")
     args = parser.parse_args()
@@ -140,7 +146,10 @@ def main() -> int:
             released[(row["panel"], row["id"])] = row["answers"]
     started = time.perf_counter()
     model = load(args)
-    profile = PROFILES[args.profile]()
+    if args.profile == "shared_context":
+        profile = SharedContextProfile(SharePolicy(**json.loads(args.share_policy)))
+    else:
+        profile = PROFILES[args.profile]()
     unavailable = profile.available(model)
     if unavailable:
         raise SystemExit(f"profile {args.profile} is unavailable: {unavailable}")
