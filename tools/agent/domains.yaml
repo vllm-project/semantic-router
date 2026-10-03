@@ -412,7 +412,7 @@ domains:
     escalation:
       verifications: [local.cli]
       paths:
-        - src/vllm-sr/Dockerfile*
+        - tools/docker/Dockerfile.extproc
         - src/vllm-sr/cli/core.py
         - src/vllm-sr/cli/commands/runtime*.py
         - src/vllm-sr/cli/container_*.py
@@ -720,30 +720,25 @@ images:
       - dashboard/**/Dockerfile*
       - tools/docker/Dockerfile.dashboard
     publish_paths: [dashboard/**]
+  # The router images are targets of tools/docker/Dockerfile.extproc.
   extproc:
     pr_paths: [tools/docker/Dockerfile.extproc]
     publish_paths:
       - src/semantic-router/**
+      - src/model-runtime/**
       - config/**
-      - candle-binding/**
+      - tools/models/vela_omni/**
       - tools/docker/Dockerfile.extproc
+      - .dockerignore
   extproc-rocm:
-    pr_paths: [tools/docker/Dockerfile.extproc-rocm]
+    pr_paths: [tools/docker/Dockerfile.extproc]
     publish_paths:
       - src/semantic-router/**
+      - src/model-runtime/**
       - config/**
-      - candle-binding/**
-      - ml-binding/**
-      - nlp-binding/**
-      - onnx-binding/**
-      - openvino-binding/**
-      - tools/docker/Dockerfile.extproc-rocm
-      - tools/docker/check-native-abi.sh
-      - tools/docker/entrypoint.sh
-      - tools/make/**
-      - Makefile
+      - tools/models/vela_omni/**
+      - tools/docker/Dockerfile.extproc
       - .dockerignore
-      - tools/agent/domains.yaml
   operator:
     pr_paths: [deploy/operator/Dockerfile*]
     publish_paths: [deploy/operator/**]
@@ -752,37 +747,36 @@ images:
     publish_paths: [deploy/operator/**]
   vllm-sr:
     pr_paths:
-      - src/vllm-sr/Dockerfile
-      - tools/docker/Dockerfile.vllm-sr
+      - tools/docker/Dockerfile.extproc
       - .github/workflows/build-artifacts.yml
     publish_paths:
-      - src/vllm-sr/**
       - src/semantic-router/**
       - src/model-runtime/**
       - config/**
-      - candle-binding/**
-      - tools/docker/Dockerfile.vllm-sr
-  vllm-sr-cuda:
-    pr_paths:
-      - src/vllm-sr/Dockerfile.cuda
-      - tools/docker/*cuda*
-    publish_paths:
-      - src/vllm-sr/Dockerfile.cuda
-      - tools/docker/*cuda*
-  vllm-sr-rocm:
-    pr_paths: [src/vllm-sr/Dockerfile.rocm]
-    publish_paths:
-      - src/vllm-sr/**
-      - src/semantic-router/**
-      - config/**
-      - candle-binding/**
-      - ml-binding/**
-      - nlp-binding/**
-      - onnx-binding/**
-      - openvino-binding/**
-      - tools/docker/check-native-abi.sh
+      - tools/models/vela_omni/**
+      - tools/docker/Dockerfile.extproc
       - .dockerignore
-      - tools/agent/domains.yaml
+      - src/vllm-sr/**
+  vllm-sr-cuda:
+    pr_paths: [tools/docker/Dockerfile.extproc]
+    publish_paths:
+      - src/semantic-router/**
+      - src/model-runtime/**
+      - config/**
+      - tools/models/vela_omni/**
+      - tools/docker/Dockerfile.extproc
+      - .dockerignore
+      - src/vllm-sr/**
+  vllm-sr-rocm:
+    pr_paths: [tools/docker/Dockerfile.extproc]
+    publish_paths:
+      - src/semantic-router/**
+      - src/model-runtime/**
+      - config/**
+      - tools/models/vela_omni/**
+      - tools/docker/Dockerfile.extproc
+      - .dockerignore
+      - src/vllm-sr/**
   provider-mocker:
     verification_paths:
       - tools/test/services/provider-mocker/**
