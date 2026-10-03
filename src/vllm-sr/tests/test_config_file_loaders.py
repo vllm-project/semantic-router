@@ -83,6 +83,39 @@ def test_parse_user_config_rejects_empty_file(tmp_path: Path) -> None:
         parse_user_config(str(config_path))
 
 
+@pytest.mark.parametrize(
+    "handoff, expected",
+    [
+        (True, "global.router.handoff"),
+        ({"enabled": "true"}, "global.router.handoff.enabled"),
+        ({"enabled": True, "future": False}, "global.router.handoff.future"),
+    ],
+)
+def test_parse_user_config_rejects_invalid_handoff_config(
+    tmp_path: Path, handoff, expected: str
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["global"] = {"router": {"handoff": handoff}}
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError, match=expected):
+        parse_user_config(str(config_path))
+
+
+def test_parse_user_config_accepts_handoff_feature_gate(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["global"] = {"router": {"handoff": {"enabled": True}}}
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    parsed = parse_user_config(str(config_path))
+
+    assert parsed.global_["router"]["handoff"]["enabled"] is True
+
+
 def test_parse_user_config_accepts_entrypoints_and_recipes(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)

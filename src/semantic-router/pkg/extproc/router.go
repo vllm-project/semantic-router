@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -16,6 +17,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/handoff"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -108,6 +110,8 @@ type OpenAIRouter struct {
 	generation              *routerGeneration
 	lookupTableCancel       func()
 	routerSessionStateStore *sessiontelemetry.RouterSessionStateStoreSlot
+	handoffNow              func() time.Time
+	handoffLedger           *handoff.Ledger // nil uses the process-wide ledger
 
 	// WorkflowStateService owns the shared workflow tool-state store so that
 	// pause/resume works across independent HTTP requests without leaking

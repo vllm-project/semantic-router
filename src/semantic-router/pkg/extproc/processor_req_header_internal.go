@@ -58,8 +58,12 @@ func looperInternalHeadersForRemoval() []string {
 	return append([]string(nil), looperInternalContextHeaders...)
 }
 
+func requestHeadersForRemoval() []string {
+	return append(looperInternalHeadersForRemoval(), headers.VSRHandoffEnvelope)
+}
+
 func buildLooperInternalHeaderRemovalMutation() *ext_proc.HeaderMutation {
 	return &ext_proc.HeaderMutation{
-		RemoveHeaders: looperInternalHeadersForRemoval(),
+		RemoveHeaders: requestHeadersForRemoval(),
 	}
 }

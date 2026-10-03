@@ -69,7 +69,7 @@ func (r *OpenAIRouter) handleSkipProcessingResponseHeaders(
 	if v != nil && v.ResponseHeaders != nil && v.ResponseHeaders.Headers != nil {
 		ctx.IsStreamingResponse = isStreamingContentType(v.ResponseHeaders.Headers)
 	}
-	return buildResponseHeadersContinueResponse(nil, ctx.IsStreamingResponse)
+	return buildResponseHeadersContinueResponse(buildHandoffReceiptHeaderMutation(ctx), ctx.IsStreamingResponse)
 }
 
 func (r *OpenAIRouter) handleSkipProcessingResponseBody(

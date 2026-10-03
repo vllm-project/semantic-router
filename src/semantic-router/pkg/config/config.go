@@ -240,6 +240,7 @@ type RouterOptions struct {
 	MaxStreamedBodyBytes      int64                `yaml:"max_streamed_body_bytes,omitempty"`
 	StreamedBodyTimeoutSec    int                  `yaml:"streamed_body_timeout_sec,omitempty"`
 	SkipProcessing            SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+	Handoff                   HandoffConfig        `yaml:"handoff,omitempty"`
 }
 
 // SkipProcessingConfig gates the x-vsr-skip-processing request header.

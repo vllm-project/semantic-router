@@ -106,6 +106,8 @@ type RequestContext struct {
 	StreamedBody          *StreamedBodyHandler
 	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
 	SkipProcessing        bool // true only when the configured opt-out header is valid
+	// HandoffReceipt is set only when the handoff carrier was present.
+	HandoffReceipt handoffReceipt
 
 	// Request header reply held until a full-duplex body is routed.
 	fullDuplexHold *fullDuplexHeaderHold

@@ -598,6 +598,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         },
         routerStructuredField(key, 'streamed_body'),
         routerStructuredField(key, 'skip_processing'),
+        routerStructuredField(key, 'handoff'),
       ]
     case 'learning':
       return [

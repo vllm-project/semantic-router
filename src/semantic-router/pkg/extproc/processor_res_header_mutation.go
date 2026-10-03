@@ -297,6 +297,7 @@ func buildResponseHeaderMutation(
 	}
 
 	builder := newResponseHeaderMutationBuilder()
+	builder.addHandoffReceipt(ctx)
 
 	// The keystone headers, protocol markers, and protocol warnings ride on
 	// every non-cache-hit response (success or 4xx/5xx). Cache-hit responses
@@ -332,6 +333,22 @@ func buildResponseHeaderMutation(
 		addDecisionDetailHeaders(builder, ctx)
 		addMatchedSignalHeaders(builder, ctx)
 	}
+	return builder.mutation()
+}
+
+func (builder *responseHeaderMutationBuilder) addHandoffReceipt(ctx *RequestContext) {
+	if ctx == nil || ctx.HandoffReceipt.Status == "" {
+		return
+	}
+	builder.addString(headers.VSRHandoffVersion, ctx.HandoffReceipt.Version)
+	builder.addString(headers.VSRHandoffID, ctx.HandoffReceipt.ID)
+	builder.addString(headers.VSRHandoffStatus, ctx.HandoffReceipt.Status)
+	builder.addString(headers.VSRHandoffReason, ctx.HandoffReceipt.Reason)
+}
+
+func buildHandoffReceiptHeaderMutation(ctx *RequestContext) *ext_proc.HeaderMutation {
+	builder := newResponseHeaderMutationBuilder()
+	builder.addHandoffReceipt(ctx)
 	return builder.mutation()
 }
 

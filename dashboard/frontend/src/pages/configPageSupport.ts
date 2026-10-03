@@ -783,6 +783,7 @@ export interface RouterCoreConfig {
   clear_route_cache?: boolean
   streamed_body?: StreamedBodyConfig
   skip_processing?: { enabled?: boolean }
+  handoff?: { enabled?: boolean }
   model_selection?: ModelSelectionConfig
   learning?: RouterLearningConfig
 }
