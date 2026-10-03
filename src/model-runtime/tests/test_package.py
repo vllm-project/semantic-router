@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import sys
 
 import pytest
@@ -60,6 +61,40 @@ def test_links_are_refused(package_copy):
     (package_copy / "link.json").symlink_to(package_copy / "config.json")
     with pytest.raises(PackageError, match="link"):
         verify(package_copy)
+
+
+def hub_snapshot(package, cache):
+    """Lay ``package`` out as a Xet-backed Hub cache: snapshot -> repo blob -> shared store."""
+    repository = cache / "models--vllm-sr--Decision-2.0-Tiny"
+    snapshot = repository / "snapshots" / ("a" * 40)
+    for index, source in enumerate(
+        sorted(p for p in package.rglob("*") if p.is_file())
+    ):
+        shared = cache / "blobs" / f"{index:02d}" / f"content-{index}"
+        shared.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, shared)
+        blob = repository / "blobs" / f"etag-{index}"
+        blob.parent.mkdir(parents=True, exist_ok=True)
+        blob.symlink_to(os.path.relpath(shared, blob.parent))
+        target = snapshot / source.relative_to(package)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.symlink_to(os.path.relpath(blob, target.parent))
+    return snapshot
+
+
+def test_hub_cache_links_resolve_inside_the_cache(qwen3_package, tmp_path):
+    snapshot = hub_snapshot(qwen3_package, tmp_path / "hub")
+    assert verify(snapshot).model_name == "Decision-2.0-Tiny-Qwen3"
+
+
+def test_hub_cache_links_must_not_leave_the_cache(qwen3_package, tmp_path):
+    snapshot = hub_snapshot(qwen3_package, tmp_path / "hub")
+    outside = tmp_path / "outside.md"
+    outside.write_text((snapshot / "README.md").read_text())
+    (snapshot / "README.md").unlink()
+    (snapshot / "README.md").symlink_to(outside)
+    with pytest.raises(PackageError, match="link"):
+        verify(snapshot)
 
 
 def test_hub_added_gitattributes_is_ignored(package_copy):

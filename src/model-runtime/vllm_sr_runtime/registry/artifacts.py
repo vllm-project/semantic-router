@@ -16,6 +16,7 @@ from typing import Any
 from ..errors import PackageError
 
 HUB_ADDED = (".gitattributes",)
+HUB_REPOSITORY_PREFIXES = ("models--", "datasets--", "spaces--")
 MAX_SAFETENSORS_HEADER = 256 << 20
 HEADER_LENGTH_BYTES = 8
 MIN_SAFETENSORS_HEADER = 2
@@ -65,7 +66,8 @@ def inventory(root: Path, *, ignore_hub_added: bool = True) -> dict[str, str]:
     """SHA-256 of every regular file under ``root``; links and unsafe names are refused.
 
     A Hub snapshot is a tree of links into the blob store, so links are
-    followed only when they resolve inside the cache that holds ``root``.
+    followed only when they resolve inside the Hugging Face cache that holds
+    ``root``.
     """
     root = Path(root)
     if not root.is_dir():
@@ -88,13 +90,20 @@ def inventory(root: Path, *, ignore_hub_added: bool = True) -> dict[str, str]:
 
 
 def _snapshot_store(root: Path) -> Path | None:
-    """The cache repository directory when ``root`` is a Hub snapshot, else None."""
+    """The Hugging Face cache directory when ``root`` is a Hub snapshot, else None.
+
+    Snapshot files link into their repository's ``blobs/``, and Xet-backed
+    caches link those blobs on into a store shared by every repository in the
+    cache, so a link may resolve anywhere under the cache directory.
+    """
     resolved = root.resolve()
+    repository = resolved.parent.parent
     if (
         resolved.parent.name == "snapshots"
-        and (resolved.parent.parent / "blobs").is_dir()
+        and (repository / "blobs").is_dir()
+        and repository.name.startswith(HUB_REPOSITORY_PREFIXES)
     ):
-        return resolved.parent.parent
+        return repository.parent
     return None
 
 
