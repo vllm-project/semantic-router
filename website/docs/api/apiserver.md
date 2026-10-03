@@ -156,7 +156,6 @@ curl -sS http://localhost:8080/api/v1/diagnostics/classify/intent \
 | `POST` | `/api/v1/diagnostics/classify/combined` | Run intent, PII, and security classification |
 | `POST` | `/api/v1/diagnostics/classify/batch` | Run a selected classifier over a batch |
 | `POST` | `/api/v1/routing/preview` | Evaluate all configured signals |
-| `POST` | `/api/v1/diagnostics/nli` | Evaluate a premise/hypothesis pair |
 | `POST` | `/api/v1/diagnostics/embeddings` | Generate configured text or image embeddings |
 | `POST` | `/api/v1/diagnostics/similarity` | Compare a text pair |
 | `POST` | `/api/v1/diagnostics/similarity/batch` | Run batch similarity matching |
@@ -212,14 +211,14 @@ PII keep their prepared scan geometry; Hazard keeps its operating-point
 thresholds and policy digest. The shared Vela Encoder is an artifact used by
 task bindings, so it does not need a separate inference endpoint.
 
-The convenience classification, embedding, NLI, and similarity endpoints also
+The convenience classification, embedding, and similarity endpoints also
 accept an optional `recipe`. Omitting it retains their default-recipe behavior;
 a supplied recipe is resolved explicitly. The typed model endpoints are the
 preferred way to verify exactly which loaded model produced a result. Rerank
 batches obey `global.services.api.batch_classification.max_batch_size` (100 pairs when
 unset). Typed calls share their prepared resource's admission gate and have a
-two-minute request deadline; native inference retains its lease until it
-actually returns, even after cancellation. Actual coverage follows active configuration: discovering a task does not load it.
+two-minute request deadline; a model call retains its lease until the model
+runtime answers, even after cancellation. Actual coverage follows active configuration: discovering a task does not load it.
 
 ## Inspect models and metrics
 
