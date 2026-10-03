@@ -97,8 +97,10 @@ class DtypePolicy:
     (released runtimes that load the backbone in BF16); CPU keeps ``weights``.
     ``reduced_gpu`` / ``reduced_cpu`` consent to a reduced-precision copy of
     the backbone's linear layers when the configured profile asks for one
-    (``EngineOptions.reduced_precision``): ``"bfloat16"`` on GPUs, ``"int8"``
-    (dynamic) or ``"bfloat16"`` on CPUs; None keeps FP32. A family consents only
+    (``EngineOptions.reduced_precision``): ``"bfloat16"`` on GPUs; on CPUs
+    ``"bfloat16"`` (only where ``DeviceInfo.bf16``), ``"float32-packed"``
+    (oneDNN's pre-packed FP32 linear) or ``"int8"`` (dynamic); None keeps the
+    exact weights. A family consents only
     where its records show at least 99% label agreement with the exact path
     (embeddings: cosine of at least 0.999).
     """
@@ -179,6 +181,8 @@ class ModelSpec:
 
 @dataclass(frozen=True)
 class DeviceInfo:
+    """One device an accelerator offers. ``bf16``: the device computes BF16 natively."""
+
     accelerator: str
     index: int | None
     name: str
@@ -316,6 +320,8 @@ class EngineModel(ABC):
     device: torch.device
     device_info: DeviceInfo
     hidden_states: ClassVar[bool] = True
+    # Set at load when every encoder forward returns each row the same alone or in any batch.
+    batch_invariant: bool = False
 
     @abstractmethod
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
@@ -334,6 +340,10 @@ class EngineModel(ABC):
 
     def memory_bytes(self) -> int:
         return 0
+
+    def place(self, module: torch.nn.Module) -> torch.nn.Module:
+        """A family's own module (a head) on this device, laid out as the backbone is."""
+        return module.to(self.device)
 
     def autocast(self) -> AbstractContextManager[Any]:
         from contextlib import nullcontext

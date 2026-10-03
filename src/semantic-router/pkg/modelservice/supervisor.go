@@ -31,7 +31,6 @@ type supervisor struct {
 	command     []string
 	env         []string
 	socket      string
-	cpus        []int
 	onExit      func(err error, ran time.Duration)
 
 	mu      sync.Mutex
@@ -92,14 +91,14 @@ func (s *supervisor) runOnce(ctx context.Context) error {
 		return err
 	}
 	cmd.Stderr = cmd.Stdout
-	if err := startPinned(cmd, s.cpus); err != nil {
+	if err := cmd.Start(); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	s.running = cmd.Process
 	s.mu.Unlock()
 	logging.ComponentEvent("model_runtime", "runtime_process_started", map[string]interface{}{
-		"process": s.process, "deployments": s.deployments, "pid": cmd.Process.Pid, "cpus": len(s.cpus),
+		"process": s.process, "deployments": s.deployments, "pid": cmd.Process.Pid,
 	})
 	go s.forwardLogs(stdout)
 	done := make(chan error, 1)

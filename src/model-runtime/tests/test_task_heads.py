@@ -5,11 +5,16 @@ from __future__ import annotations
 import pytest
 import torch
 from starlette.testclient import TestClient
+from vllm_sr_runtime.accel import onednn
 from vllm_sr_runtime.api.app import create_app
 from vllm_sr_runtime.config import ModelConfig, ServeConfig
 from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.families.task_heads.family import TaskHeadsFamily
-from vllm_sr_runtime.plugins.base import PackageRef
+from vllm_sr_runtime.families.task_heads.family import (
+    TaskHeadsFamily,
+    batch_invariant,
+)
+from vllm_sr_runtime.heads.task import identical
+from vllm_sr_runtime.plugins.base import PackageRef, SurfaceRequest
 from vllm_sr_runtime.registry import builtin
 from vllm_sr_runtime.registry.tables.common import BuiltinModel
 from vllm_sr_runtime.runtime import Runtime
@@ -273,6 +278,90 @@ def test_one_forward_reads_every_repeat_and_bundled_task(monkeypatch, client, ru
     ).json()
     assert [r["status"] for r in bundle["results"]] == [200, 200]
     assert len(calls) == 1 and len(calls[0]) == 2
+
+
+@pytest.mark.parametrize("profile", ["shared_context", "batching", "max_speed"])
+def test_approximate_profiles_serve_every_head(packages, profile):
+    models = tuple(
+        ModelConfig(model=str(path), name=name, device="cpu", profile=profile)
+        for name, path in packages.items()
+    )
+    runtime = Runtime(ServeConfig(models=models, result_cache_entries=0))
+    runtime.start(background=False)
+    try:
+        client = TestClient(create_app(runtime))
+        for name in packages:
+            inputs = [GROUNDED] if name == "grounded" else [TEXT, LONG[:200]]
+            exact = classify(client, name, inputs, profile="exact")["results"]
+            approximate = classify(client, name, inputs)["results"]
+            for left, right in zip(exact, approximate, strict=True):
+                values = "scores" if name == "scores" else "probabilities"
+                if values in left:
+                    torch.testing.assert_close(
+                        torch.tensor(left[values]),
+                        torch.tensor(right[values]),
+                        rtol=0,
+                        atol=0.05,
+                    )
+    finally:
+        runtime.stop()
+
+
+def test_cpu_rows_are_bit_identical_alone_and_inside_other_requests_batches(runtime):
+    if not onednn.available():
+        pytest.skip("oneDNN's packed linear needs an x86 CPU")
+    texts = ["Hi", TEXT, LONG[:300], LONG[:120], LONG]
+    for name in ("sequence", "safety", "scores", "token", "grounded"):
+        model = served(runtime, name).model
+        if torch.version.hip is None and torch.version.cuda is None:
+            assert model.batch_invariant, name
+        if not model.batch_invariant:
+            continue
+        inputs = (
+            [GROUNDED, {**GROUNDED, "answer": "It opened in 1889."}]
+            if name == "grounded"
+            else texts
+        )
+        plans = [
+            model.plan_surface(
+                "classify",
+                SurfaceRequest(
+                    "classify",
+                    {"model": name, "input": [value]},
+                    None,
+                    "exact",
+                    False,
+                    0.0,
+                ),
+            )
+            for value in inputs
+        ]
+        alone = [model.run(plan.items) for plan in plans]
+        mixed = [item for plan in reversed(plans) for item in plan.items]
+        together = model.run(mixed)
+        position = 0
+        for expected in reversed(alone):
+            for value in expected:
+                assert identical(together[position], value), name
+                position += 1
+
+
+def test_a_model_whose_rows_change_with_the_batch_is_not_batch_invariant(
+    runtime, monkeypatch
+):
+    model = served(runtime, "sequence").model
+    head = model.heads[model.primary]
+    readout = head.readout
+    monkeypatch.setattr(
+        head,
+        "readout",
+        lambda rows, sequences: [
+            tuple(value + 1e-7 * len(sequences) for value in values)
+            for values in readout(rows, sequences)
+        ],
+    )
+    vocab = model.engine_model.backbone.config["vocab_size"]
+    assert not batch_invariant(model, vocab)
 
 
 def test_the_result_cache_answers_repeated_inputs(monkeypatch, packages):

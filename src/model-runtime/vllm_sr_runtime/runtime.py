@@ -45,6 +45,7 @@ from .plugins.base import (
     UnsupportedSurfaceError,
     VerifiedPackage,
 )
+from .registry import builtin
 from .registry.resolve import resolve
 from .scheduler.scheduler import Scheduler, SchedulerLimits
 from .supervision.metrics import RuntimeMetrics
@@ -54,11 +55,20 @@ log = logging.getLogger("vllm_sr_runtime")
 AUTO_ENGINE = "auto"
 
 
-def choose_engine(name: str, spec: ModelSpec, device: DeviceInfo) -> tuple[str, Any]:
-    """The named engine, or for ``auto`` the first that runs the spec on the device, native first."""
+def choose_engine(
+    name: str, spec: ModelSpec, device: DeviceInfo, preferred: str | None = None
+) -> tuple[str, Any]:
+    """The named engine, or for ``auto`` the first that runs the spec on the device.
+
+    ``auto`` tries ``preferred`` (the built-in table's engine for the device
+    class) first, then native, then every other engine by name.
+    """
     candidates = [name]
     if name == AUTO_ENGINE:
-        candidates = sorted(registry.names("engines"), key=lambda n: (n != "native", n))
+        order = {preferred: 0, "native": 1}
+        candidates = sorted(
+            registry.names("engines"), key=lambda n: (order.get(n, 2), n)
+        )
     reasons = []
     for candidate in candidates:
         engine = registry.instantiate("engines", candidate)
@@ -232,7 +242,13 @@ class ServedModel:
         choices = family.kernel_choices(package, placement.device)
         if choices:
             pin_kernel_choices(choices)
-        self.engine, engine = choose_engine(config.engine, spec, placement.device)
+        known = builtin.lookup(package.ref.repo_id or "")
+        preferred = None
+        if known is not None and known.revision == package.ref.revision:
+            preferred = known.engines.get(placement.device.accelerator)
+        self.engine, engine = choose_engine(
+            config.engine, spec, placement.device, preferred
+        )
         profiles = self._profiles()
         default = profiles[config.profile]
         engine_options = default.engine_options(EngineOptions(threads=process.threads))

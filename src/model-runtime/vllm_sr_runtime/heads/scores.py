@@ -14,6 +14,7 @@ from typing import Any
 
 import torch
 
+from ..accel.kernels import rowwise
 from .sequence import SequenceHead
 
 COMPARISONS = {
@@ -91,7 +92,7 @@ class ScoresHead(SequenceHead):
         return card
 
     def activate(self, logits: torch.Tensor) -> torch.Tensor:
-        return torch.sigmoid(logits)
+        return rowwise(torch.sigmoid, logits)
 
     def annotate(self, out: dict[str, Any], reduced: Sequence[float]) -> None:
         if self.operating_point is not None:

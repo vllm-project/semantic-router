@@ -66,7 +66,7 @@ The first requests of each panel; public231 in full.
 | Eos-0.8B | 831 (200 / 200 / 231 / 200) | identical | identical |
 | Sol-2B | 831 (200 / 200 / 231 / 200) | identical | identical |
 | Nox-4B | 531 (100 / 100 / 231 / 100) | identical | identical |
-| Lux-9B | 531 (100 / 100 / 231 / 100) | identical | pending |
+| Lux-9B | 531 (100 / 100 / 231 / 100) | identical | identical |
 
 `51b6bd721` has the same `decision1` runtime code as `d5b985e43`.
 

@@ -171,6 +171,8 @@ class Decision1Family(ModelFamily):
                 for branch in vela.BRANCH.values()
                 if branch is not None
             }
+            known = builtin.by_identity(package.model_sha256)
+            reduced = known.reduced if known else {}
             return ModelSpec(
                 name=package.model_name,
                 backbone=BackboneSpec(
@@ -179,7 +181,12 @@ class Decision1Family(ModelFamily):
                     weight_files=weights,
                     branches=branches,
                 ),
-                dtype=DtypePolicy(autocast=None, bf16_resident=False),
+                dtype=DtypePolicy(
+                    autocast=None,
+                    bf16_resident=False,
+                    reduced_gpu=reduced.get("gpu"),
+                    reduced_cpu=reduced.get("cpu"),
+                ),
                 max_input_tokens=package.max_input_tokens,
                 encoder=True,
                 kernel_variants={"sdpa": "additive_masks"},

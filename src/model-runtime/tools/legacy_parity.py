@@ -32,7 +32,7 @@ import statistics
 import subprocess
 import sys
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -43,6 +43,13 @@ GO_TEST = "zz_legacy_parity_dump_test.go"
 PARTIAL = "provider truncated its input"
 CPU_THRESHOLDS = {"probability": 1e-3, "near_tie": 1e-3, "label": 1.0, "spans": 0.995}
 ROCM_THRESHOLDS = {"probability": 0.02, "near_tie": 1e-3, "label": 0.995, "spans": 0.98}
+# A reduced copy (max_speed) against exact: 99% agreement, near ties counted, |Δp| reported.
+REDUCED_THRESHOLDS = {
+    "probability": math.inf,
+    "near_tie": 0.0,
+    "label": 0.99,
+    "spans": 0.99,
+}
 
 # job: (repo, mode, deployment max_tokens, overflow, window, (provider, device, graph head))
 Job = tuple[str, str, int, str, tuple[int, int] | None, tuple[str, str, str]]
@@ -909,8 +916,13 @@ def percentile(values: list[int], q: float) -> float:
 
 
 def compare_job(
-    spec: dict[str, Any], legacy: dict, runtime: dict, thresholds: dict[str, float]
+    spec: dict[str, Any],
+    legacy: dict,
+    runtime: dict,
+    thresholds: dict[str, float],
+    baseline: Callable[..., dict[str, Any]] = legacy_values,
 ) -> dict[str, Any]:
+    """One job's agreement and latency; ``baseline`` reads the ``legacy`` side's results."""
     inputs = {item["id"]: item for item in spec["Inputs"]}
     kind = KIND[spec["Mode"]]
     disagreements: list[dict[str, Any]] = []
@@ -927,7 +939,7 @@ def compare_job(
         latency_runtime += right.get("latency_ns", [])[1:] or right.get(
             "latency_ns", []
         )
-        legacy_error = left.get("error")
+        legacy_error = left.get("error") or (left.get("result") or {}).get("error")
         runtime_error = right.get("result", {}).get("error")
         if legacy_error and PARTIAL in legacy_error and left.get("result"):
             # The facade reports a truncated token scan as partial, with its spans.
@@ -947,7 +959,7 @@ def compare_job(
                 )
             continue
         compared += 1
-        a = legacy_values(spec, item, left["result"])
+        a = baseline(spec, item, left["result"])
         b = runtime_values(spec, right["result"])
         if (
             "windows" in a
@@ -1069,13 +1081,20 @@ def throughput(load: dict[str, Any] | None) -> dict[str, float] | None:
 def run_compare(args: argparse.Namespace) -> None:
     legacy, legacy_loads = read_lines(args.legacy)
     runtime, runtime_loads = read_lines(args.runtime)
-    specs = json.loads(
-        Path(args.legacy).with_suffix(".jobs.json").read_text(encoding="utf-8")
-    )
-    thresholds = ROCM_THRESHOLDS if args.device_class == "rocm" else CPU_THRESHOLDS
+    jobs_file = args.jobs or Path(args.legacy).with_suffix(".jobs.json")
+    specs = json.loads(Path(jobs_file).read_text(encoding="utf-8"))
+    if args.baseline == "runtime":
+        thresholds = REDUCED_THRESHOLDS
+
+        def baseline(spec: dict[str, Any], _: Any, result: Any) -> dict[str, Any]:
+            return runtime_values(spec, result)
+
+    else:
+        thresholds = ROCM_THRESHOLDS if args.device_class == "rocm" else CPU_THRESHOLDS
+        baseline = legacy_values
     jobs = []
     for spec in specs:
-        report = compare_job(spec, legacy, runtime, thresholds)
+        report = compare_job(spec, legacy, runtime, thresholds, baseline)
         report["throughput"] = {
             "legacy": throughput(legacy_loads.get(spec["Job"])),
             "runtime": throughput(runtime_loads.get(spec["Job"])),
@@ -1083,6 +1102,7 @@ def run_compare(args: argparse.Namespace) -> None:
         jobs.append(report)
     record = {
         "format": "vela1-legacy-parity/1",
+        "baseline": args.baseline,
         "device_class": args.device_class,
         "thresholds": thresholds,
         "inputs_sha256": hashlib.sha256(
@@ -1181,7 +1201,16 @@ def main(argv: Iterable[str] | None = None) -> int:
     ab_parser.add_argument("--seconds", type=float, default=20.0)
     ab_parser.add_argument("--out", required=True)
     compare = commands.add_parser("compare")
-    compare.add_argument("--legacy", required=True)
+    compare.add_argument("--legacy", required=True, help="the baseline's results")
+    compare.add_argument(
+        "--baseline",
+        choices=("legacy", "runtime"),
+        default="legacy",
+        help="runtime: --legacy is another runtime run (a reduced copy against exact)",
+    )
+    compare.add_argument(
+        "--jobs", help="job specs (default: the baseline's .jobs.json)"
+    )
     compare.add_argument("--runtime", required=True)
     compare.add_argument("--record", required=True)
     compare.add_argument("--device-class", choices=("cpu", "rocm"), default="cpu")
