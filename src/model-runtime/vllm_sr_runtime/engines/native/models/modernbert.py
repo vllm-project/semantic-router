@@ -16,7 +16,7 @@ Two layouts run the same layers (``Layout``):
   call, then gathers the real rows back. Padded positions never reach the next
   layer, so no padding waste and no fully masked row can leak into real rows.
 
-``encode`` returns the final-normed hidden states at any requested layer exits.
+``encode`` returns the hidden states at any requested layer exits in one pass.
 """
 
 from __future__ import annotations
@@ -407,24 +407,51 @@ class ModernBertBackbone(nn.Module):
     def num_layers(self) -> int:
         return len(self.layers)
 
-    def encode(
-        self, input_ids: torch.Tensor, layout: Layout, exits: Sequence[int] = ()
-    ) -> dict[int, torch.Tensor]:
-        """``{exit: final_norm(hidden after exit layers)}``; the last layer when ``exits`` is empty.
+    def packed(
+        self, lengths: Sequence[int], device, width: int | None = None
+    ) -> Layout:
+        """The layout of rows of ``lengths`` packed back to back (see ``packed_layout``)."""
+        return packed_layout(lengths, self.window, device, width)
 
+    def padded(
+        self, attention_mask: torch.Tensor | None, rows: int, width: int, device
+    ) -> Layout:
+        """The layout of padded ``[rows, width]`` rows (see ``padded_layout``)."""
+        return padded_layout(attention_mask, rows, width, self.window, device)
+
+    def encode(
+        self,
+        input_ids: torch.Tensor,
+        layout: Layout,
+        exits: Sequence[int] = (),
+        normalize_exits: bool = False,
+    ) -> dict[int, torch.Tensor]:
+        """Hidden states by exit in one pass; the last layer only when ``exits`` is empty.
+
+        Exit 0 is the embedding output and exit ``k`` the residual stream after
+        ``k`` layers. The last layer is final-normed (Transformers' output);
+        intermediate exits are too only with ``normalize_exits``.
         ``input_ids`` is ``[N]`` for a packed layout, ``[rows, width]`` for a padded one.
         """
         assert self.kernels is not None, "bind kernels before running the backbone"
         exits = tuple(exits) or (self.num_layers,)
-        if not all(1 <= layer <= self.num_layers for layer in exits):
-            raise ValueError(f"layer exits must lie in 1..{self.num_layers}: {exits}")
+        if not all(0 <= layer <= self.num_layers for layer in exits):
+            raise ValueError(f"layer exits must lie in 0..{self.num_layers}: {exits}")
+
+        def exit_state(count: int, hidden: torch.Tensor) -> torch.Tensor:
+            if count == self.num_layers or normalize_exits:
+                return self.final_norm(hidden)
+            return hidden
+
         hidden_states = self.embeddings(input_ids)
-        rotary = self.rotary_emb(hidden_states, layout.width)
         out: dict[int, torch.Tensor] = {}
+        if 0 in exits:
+            out[0] = exit_state(0, hidden_states)
+        rotary = self.rotary_emb(hidden_states, layout.width)
         for count, layer in enumerate(self.layers[: max(exits)], start=1):
             hidden_states = layer(hidden_states, rotary, layout, self.kernels)
             if count in exits:
-                out[count] = self.final_norm(hidden_states)
+                out[count] = exit_state(count, hidden_states)
         return out
 
     def forward(
@@ -432,7 +459,5 @@ class ModernBertBackbone(nn.Module):
     ) -> torch.Tensor:
         """Padded ``[B, T]`` rows to ``[B, T, hidden]`` final hidden states (Transformers' contract)."""
         rows, width = input_ids.shape
-        layout = padded_layout(
-            attention_mask, rows, width, self.window, input_ids.device
-        )
+        layout = self.padded(attention_mask, rows, width, input_ids.device)
         return self.encode(input_ids, layout)[self.num_layers]

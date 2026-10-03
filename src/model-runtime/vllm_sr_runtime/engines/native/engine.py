@@ -11,6 +11,8 @@ from torch import nn
 from ...plugins.base import (
     Accelerator,
     DeviceInfo,
+    EncoderBatch,
+    EncoderOutput,
     Engine,
     EngineModel,
     EngineOptions,
@@ -50,7 +52,7 @@ class NativeEngineModel(EngineModel):
         self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
-        if self.device.type == "cuda":
+        if self.device.type == "cuda" and not spec.encoder:
             self._install_fast()
 
     def _install_fast(self) -> None:
@@ -146,6 +148,27 @@ class NativeEngineModel(EngineModel):
             queried = hidden[rows, query]
         return ForwardOutput(gathered=gathered, query=queried)
 
+    def encode(self, batch: EncoderBatch) -> EncoderOutput:
+        """Hidden states at the batch's exits; packed rows stay packed, padded rows padded."""
+        backbone = self.backbone
+        if not hasattr(backbone, "encode"):
+            raise NotImplementedError(
+                f"the native {backbone.model_type!r} backbone is not an encoder"
+            )
+        input_ids = batch.input_ids.to(self.device)
+        if batch.lengths is not None:
+            if sum(batch.lengths) != input_ids.numel():
+                raise ValueError("packed lengths do not cover the input IDs")
+            layout = backbone.packed(batch.lengths, self.device)
+        else:
+            rows, width = input_ids.shape
+            layout = backbone.padded(batch.attention_mask, rows, width, self.device)
+        with torch.inference_mode(), self.autocast():
+            hidden = backbone.encode(
+                input_ids, layout, batch.layers, batch.normalize_exits
+            )
+        return EncoderOutput(hidden=hidden)
+
     def parameter_count(self) -> int:
         return sum(parameter.numel() for parameter in self.backbone.parameters())
 
@@ -165,7 +188,8 @@ class NativeEngine(Engine):
     def descriptor(cls) -> dict[str, Any]:
         return {
             "architectures": sorted(models.ARCHITECTURES),
-            "outputs": ["gathered"],
+            "outputs": ["gathered", "hidden"],
+            "encoder_layouts": ["padded", "packed"],
             "shared_context": True,
             "lora": "peft-unmerged",
         }
