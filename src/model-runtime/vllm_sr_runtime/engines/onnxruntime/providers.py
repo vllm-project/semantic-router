@@ -130,13 +130,13 @@ def session_options(
     options = ort.SessionOptions()
     options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
     options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-    options.inter_op_num_threads = 1
     options.log_severity_level = 3
     size = cpu_threads(threads)
     if not choice.gpu and shared_pool(size):
         options.use_per_session_threads = False
     else:
         options.intra_op_num_threads = size
+        options.inter_op_num_threads = 1
     if spinning is not None:
         options.add_session_config_entry(
             "session.intra_op.allow_spinning", "1" if spinning else "0"

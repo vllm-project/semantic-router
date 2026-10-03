@@ -123,9 +123,10 @@ def test_gpu_sessions_never_fall_back_to_the_cpu():
     cpu = providers.session_options(
         providers.ProviderChoice("CPUExecutionProvider"), 2, False
     )
-    assert cpu.inter_op_num_threads == 1
     assert cpu.get_session_config_entry("session.intra_op.allow_spinning") == "0"
-    assert cpu.use_per_session_threads is False or cpu.intra_op_num_threads == 2
+    assert cpu.use_per_session_threads is False or (
+        cpu.intra_op_num_threads == 2 and cpu.inter_op_num_threads == 1
+    )
 
 
 def test_unsupported_specs_say_why(tmp_path):
