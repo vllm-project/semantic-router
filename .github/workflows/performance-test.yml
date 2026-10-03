@@ -19,6 +19,9 @@ jobs:
     name: Production Benchmarks
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      HF_HUB_DISABLE_XET: "1"
+      VLLM_SR_RUNTIME_CACHE_DIR: ${{ github.workspace }}/.cache/model-runtime
 
     steps:
       - name: Check out the repo
@@ -40,26 +43,28 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-perf-go-
 
-      - name: Cache Models
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pinned runtime models
         uses: actions/cache@v4
         with:
-          path: |
-            models/
-          key: ${{ runner.os }}-models-v1-${{ hashFiles('src/semantic-router/pkg/config/registry.go', 'src/semantic-router/pkg/config/canonical_defaults.go') }}
+          path: .cache/model-runtime
+          key: ${{ runner.os }}-perf-runtime-models-${{ hashFiles('src/semantic-router/pkg/config/registry.go', 'src/semantic-router/pkg/config/canonical_defaults.go', 'src/model-runtime/vllm_sr_runtime/registry/**') }}
           restore-keys: |
-            ${{ runner.os }}-models-v1-
+            ${{ runner.os }}-perf-runtime-models-
         continue-on-error: true
 
-      - name: Install HuggingFace CLI
-        run: |
-          pip install -U "huggingface_hub[cli]" hf_transfer
+      - name: Install the model runtime
+        run: make harness-venv-install model-runtime-install
 
       - name: Test benchmark measurement and ownership contracts
         run: make perf-test-unit perf-test-benchmark-contracts
 
-      - name: Measure baseline with identical Vela artifacts
+      - name: Measure the base revision with the same pinned models
         env:
-          HF_HUB_DISABLE_XET: "1"
           PERF_BASE_REF: ${{ inputs.base-ref || 'HEAD^' }}
         run: make perf-model-baseline PERF_BASE_REF="$PERF_BASE_REF"
 
@@ -87,8 +92,8 @@ jobs:
             --parse-bench=../reports/bench-output.txt \
             --output=../reports/current.json
 
-      # Model benchmarks use the measured base implementation with identical
-      # artifacts; other components retain their committed baselines. Numeric
+      # Model benchmarks use the measured base implementation with the same
+      # pinned models; other components retain their committed baselines. Numeric
       # regressions are advisory; invalid or incomplete comparisons still fail.
       - name: Compare against baseline and report regressions
         id: comparison
