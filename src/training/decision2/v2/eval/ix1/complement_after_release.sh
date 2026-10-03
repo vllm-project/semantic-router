@@ -2,15 +2,16 @@
 # Start a sharded complement run (launch.sh run) once the listed GPUs are released by their owner.
 #
 # Usage: complement_after_release.sh --gpus "N ..." --src DIR --model NAME --rows-dir DIR --cache DIR
-#                                    [--deadline-hours H]
+#                                    [--only "K ..."] [--deadline-hours H]
 #
 # Runs in the foreground (start it with nohup). Waits until every listed GPU's lease owner file says
 # status=released (key=value or JSON) and the GPU is idle (use <= 5 %, VRAM <= 2 GiB), then writes eval-ix1 leases for them
-# (launch.sh only takes eval-ix1 leases) and runs launch.sh run into $BASE/submit/runs/<model>. Gives up at
-# the deadline (default 6 h) or when $BASE/submit/STOP-wait exists.
+# (launch.sh only takes eval-ix1 leases) and runs launch.sh run into $BASE/submit/runs/<model> (with --only,
+# just those shards on their listed GPUs). Gives up at the deadline (default 6 h) or when
+# $BASE/submit/STOP-wait exists.
 set -euo pipefail
 BASE=/data/dev2/private/eval/index021
-gpus="" src="" model="" rows_dir="" cache="" deadline_hours=6
+gpus="" src="" model="" rows_dir="" cache="" only="" deadline_hours=6
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gpus) gpus="$2"; shift 2 ;;
@@ -18,13 +19,18 @@ while [[ $# -gt 0 ]]; do
     --model) model="$2"; shift 2 ;;
     --rows-dir) rows_dir="$2"; shift 2 ;;
     --cache) cache="$2"; shift 2 ;;
+    --only) only="$2"; shift 2 ;;
     --deadline-hours) deadline_hours="$2"; shift 2 ;;
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
 done
 [[ -n "$gpus" && -f "$src/.dev2-mirror.json" && -n "$model" && -f "$rows_dir/panel.json" && -d "$cache" ]] \
-  || { sed -n '2,10p' "$0" >&2; exit 2; }
-read -r -a gpu_list <<< "$gpus"
+  || { sed -n '2,11p' "$0" >&2; exit 2; }
+read -r -a all_gpus <<< "$gpus"
+gpu_list=()
+for k in "${!all_gpus[@]}"; do
+  [[ -z "$only" || " $only " == *" $k "* ]] && gpu_list+=("${all_gpus[$k]}")
+done
 deadline=$(( $(date +%s) + deadline_hours * 3600 ))
 
 ready() {  # gpu
@@ -52,7 +58,7 @@ for g in "${gpu_list[@]}"; do
 done
 echo "$(date -u +%FT%TZ) gpus released and idle; starting $model"
 bash "$src/src/training/decision2/v2/eval/ix1/launch.sh" run --src "$src" --model "$model" --gpus "$gpus" \
-  --run "$BASE/submit/runs/$model" --rows-dir "$rows_dir" --cache "$cache"
+  --run "$BASE/submit/runs/$model" --rows-dir "$rows_dir" --cache "$cache" ${only:+--only "$only"}
 for g in "${gpu_list[@]}"; do
   printf 'note=index-submit complement of %s (board submission worker)\n' "$model" >> "/data/dev2/leases/gpu$g.lock/owner"
 done
