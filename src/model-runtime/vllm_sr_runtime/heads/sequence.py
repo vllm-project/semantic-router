@@ -21,7 +21,7 @@ from ..text.windows import (
     reduce_max,
     truncate,
 )
-from .task import ClassifierHead, HeadOptions, Item, Prepared, Rows, TaskHead, cache_key
+from .task import ClassifierHead, HeadOptions, Prepared, Rows, TaskHead
 
 POOLING = ("cls", "mean")
 
@@ -77,10 +77,6 @@ class SequenceHead(TaskHead):
             "reduction": "max",
         }
 
-    def to(self, device: torch.device) -> SequenceHead:
-        self.classifier = self.classifier.to(device)
-        return self
-
     def prepare(self, value: Any, options: HeadOptions, identity: str) -> Prepared:
         encoded = encode(self.tokenizer, self.envelope, text_input(value))
         tokens = encoded.tokens
@@ -92,25 +88,14 @@ class SequenceHead(TaskHead):
             windows = plan_windows(len(encoded.content), self.envelope, size, overlap)
             ids = [encoded.framed(w.start, w.end) for w in windows]
             usage["windows"] = len(windows)
-            return Prepared(self._items(ids, identity), usage, windows)
+            return Prepared(self.items(ids, identity), usage, windows)
         if tokens <= options.max_tokens:
-            return Prepared(self._items([encoded.framed()], identity), usage)
+            return Prepared(self.items([encoded.framed()], identity), usage)
         if options.overflow != "truncate":
             raise InputTooLongError(tokens, options.max_tokens)
         ids = truncate(encoded, options.max_tokens)
         usage.update(processed_tokens=len(ids), truncated=True)
-        return Prepared(self._items([ids], identity), usage)
-
-    def _items(self, rows: Sequence[Sequence[int]], identity: str) -> list[Item]:
-        return [
-            Item(
-                tuple(ids),
-                self.name,
-                self.layer,
-                cache_key(identity, self.name, self.layer, ids),
-            )
-            for ids in rows
-        ]
+        return Prepared(self.items([ids], identity), usage)
 
     def activate(self, logits: torch.Tensor) -> torch.Tensor:
         return torch.softmax(logits, dim=-1)

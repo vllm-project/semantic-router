@@ -40,7 +40,7 @@ func TestBuildRouterDoesNotLoadEmbeddingForIdleOrExactOnlyCache(t *testing.T) {
 			router := components.buildRouter()
 			t.Cleanup(func() { require.NoError(t, router.Close()) })
 			require.False(t, components.embeddings.Ready())
-			require.Empty(t, components.modelRuntime.PreparedBindings())
+			require.Empty(t, components.serving.PreparedBindings())
 			require.Equal(t, mode == "exact", components.semanticCache.IsEnabled())
 			require.Empty(t, components.semanticCacheIdentity)
 		})
@@ -87,7 +87,7 @@ func TestBuildRouterOwnsGlobalEmbeddingAPIWithoutRoutingDemand(t *testing.T) {
 	vector, err := provider.Embed(context.Background(), "hello")
 	require.NoError(t, err)
 	require.Equal(t, []float32{1, 0}, vector)
-	bindings := components.modelRuntime.PreparedBindings()
+	bindings := components.serving.PreparedBindings()
 	require.Len(t, bindings, 1)
 	require.Equal(t, "api.embedding", bindings[0].Identity.Name)
 }

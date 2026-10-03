@@ -266,10 +266,22 @@ MPS backend and run the pure-torch references; they are marked unvalidated.
 | `exact` (default) | exact | The released numerics: Decision 2.0 as in Phase 1; Decision 1.0 as its bundled runtime; encoders in FP32 on every device, one request's rows as one padded batch |
 | `shared_context` | approximate | Runs a multi-question request's shared state once (decision families) |
 | `batching` | approximate | Coalesces rows from concurrent requests into shared padded batches within a bounded window |
-| `max_speed` | approximate | Numerics-changing kernels and dtypes on top of the above (for encoders: BF16 or FP16 on GPUs) |
+| `max_speed` | approximate | Numerics-changing kernels and dtypes on top of the above |
 
 A request may select `exact` at any time and another profile only if the
 server enabled it for that model.
+
+When `max_speed` is a deployment's configured profile, an encoder also loads
+a reduced-precision copy of its linear layers next to the FP32 weights, which
+`exact` keeps using: BF16 on GPUs, with FP32 norms, softmax and heads (the
+Decision 2.0 GPU policy), and dynamic int8 on CPU where that measures faster
+than FP32. `max_speed` requests run the copy. A family consents to a copy
+(`DtypePolicy.reduced_gpu` / `reduced_cpu`) only where its records show at
+least 99% label agreement with `exact` (embeddings: cosine of at least
+0.999); faster alone is not enough. Golden readiness always runs `exact`;
+each family records the accuracy (label agreement, max |Δp| or embedding
+cosine against `exact`) and the latency of its reduced path. `vllm-sr config
+migrate` maps the legacy `precision: fp16` to `max_speed`.
 
 ### 5.5 Third-party plugins
 
@@ -722,8 +734,11 @@ It opens a request bundle in the context (`modelservice.WithBundle`) and every
 goroutine joins it (`Join`); a runtime call made through `modelservice`
 (`Decide`, `Classify`, `Embed`, `Rerank`) parks in the bundle, and the bundle
 flushes one `/v1/bundle` call per runtime process when every joined goroutine
-has parked or finished (or after a 2 ms window), then hands each caller its
-own result. Calls outside a bundle go directly to their surface. The response
+has parked or finished (or 2 ms after the first call parked), then hands each
+caller its own result. Work that fans out inside one signal (one call per
+piece or per rule) joins through `Fan`, so it parks as several participants.
+Only model-backed signals join; keyword and heuristic signals never delay a
+flush. Calls outside a bundle go directly to their surface. The response
 stage (hallucination, response guard) opens its own bundle. Each call carries
 the smallest consumer timeout as its context deadline and `options.deadline_ms`.
 
@@ -754,9 +769,20 @@ the smallest consumer timeout as its context deadline and `options.deadline_ms`.
 
 `pkg/modelservice` owns the generated client, transports for UDS and TCP with
 keep-alive pools, request bundles, process groups, per-deployment state
-(`starting`, `ready`, `unavailable`), the supervisor and metrics: latency and
-outcomes per deployment and surface, unknown results by reason, bundle sizes,
-readiness and restarts.
+(`starting`, `ready`, `unavailable`), the supervisor and metrics
+(`vsr_model_runtime_*`: requests and latency per deployment and surface,
+result-cache outcomes, bundle sizes and waits, unknown answers by reason,
+readiness and restarts). A per-deployment LRU of classify and decision
+results (`VLLM_SR_RUNTIME_RESULT_CACHE` entries, default 4,096, cleared when
+readiness changes) answers repeated requests without a round trip; the
+runtime's own item cache serves every router and deduplicates items inside a
+bundle.
+
+`pkg/modelruntime/serving` is the facade the router's consumers use: typed
+readouts (`Sequence`, `Scores`, `Tokens`, `Grounded` and their windowed
+forms), operating points from the model card (thresholds, window, `max`
+reduction), code-point spans converted to byte offsets once, and responses
+checked against the prepared head's labels.
 
 ### 13.6 Configuration migration
 
@@ -939,6 +965,12 @@ Later: a serving option for the graph cap (1,024 is 1–5% faster under
 Index-like traffic); kernel choices for other device classes; more `max_speed`
 kernels; a `vllm` engine (pooling runner plus the family readouts) and a
 `llamacpp` engine; CUDA validation on CUDA hardware.
+
+Router `decision` signals ask Choice, Noul and Score questions, which every
+decision family answers, Vela 2.0 included. Set and Span answers are served
+on `/v1/decisions` to any client; signal rules over them (a label of a Set,
+a span label present) are later work, together with Vela 2.0 presets as
+drop-in task bindings (`pii`, `halu`, `relevance`).
 
 ## 20. Risks
 

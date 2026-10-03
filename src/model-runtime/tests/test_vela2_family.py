@@ -190,6 +190,51 @@ def test_decoder_shared_context_path_runs_one_parts_pass(models, monkeypatch) ->
             np.testing.assert_allclose(a, b, atol=1e-4)
 
 
+@pytest.mark.parametrize("name", ["encoder", "decoder"])
+def test_shared_context_profile_packs_only_decoder_trees(models, name) -> None:
+    from vllm_sr_runtime.plugins.base import Job
+    from vllm_sr_runtime.profiles.shared_context import SharedContextProfile
+
+    model = models[name]
+    profile = SharedContextProfile()
+    assert profile.available(model) is None
+    plan = model.plan(GOLDEN_STATE, GOLDEN_QUESTIONS)
+    job = Job(items=plan.items, deadline=None, enqueued=0.0, profile=profile.name)
+    batches = profile.plan([job], model.forward_token_budget())
+    assert [b.shared_prefix for b in batches] == ([1] if name == "decoder" else [0])
+    surface = SurfacePlan("decisions", plan.items, plan.input_tokens, plan)
+    assert model.finish_surface(
+        surface, model.run_approximate(plan.items)
+    ) == model.finish_surface(surface, model.run(plan.items, shared_prefix=1))
+
+
+def test_packed_encoder_batches_match_padded_ones(models) -> None:
+    model = models["encoder"]
+    plans = [
+        model.plan(GOLDEN_STATE | {"request": text}, GOLDEN_QUESTIONS)
+        for text in ("Short note.", "A much longer request about billing. " * 12)
+    ]
+    items = [item for plan in plans for item in plan.items]
+
+    def arrays(results):
+        return [
+            array
+            for logits, block in results
+            for array in [*logits, *([] if block is None else [block])]
+        ]
+
+    padded, packed = arrays(model.run(items)), arrays(model.run_approximate(items))
+    assert len(padded) == len(packed)
+    for a, b in zip(padded, packed, strict=True):
+        np.testing.assert_allclose(b, a, atol=1e-5, rtol=1e-5)
+    single = model.plan(GOLDEN_STATE, {"domain": GOLDEN_QUESTIONS["domain"]}).items
+    assert len(single) == 1
+    for a, b in zip(
+        arrays(model.run(single)), arrays(model.run_approximate(single)), strict=True
+    ):
+        assert np.array_equal(a, b)
+
+
 @pytest.mark.parametrize("layout", ["rows", "packed"])
 def test_tree_blocks_equal_their_full_sequences(models, layout) -> None:
     engine_model = models["decoder"].engine_model

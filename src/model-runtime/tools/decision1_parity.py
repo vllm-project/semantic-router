@@ -34,12 +34,11 @@ sys.path.insert(0, str(ROOT))
 
 from vllm_sr_runtime.accel.autotune import pin_kernel_choices  # noqa: E402
 from vllm_sr_runtime.registry import builtin  # noqa: E402
+from vllm_sr_runtime.registry.artifacts import (  # noqa: E402
+    canonical_json as canonical,
+)
 
 DEVICE_CLASS = "rocm:gfx942"
-
-
-def canonical(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def panels(specs: list[str]) -> list[tuple[str, dict[str, Any]]]:

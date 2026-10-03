@@ -16,7 +16,6 @@ from ...errors import (
 )
 from ...plugins.base import (
     BackboneSpec,
-    DeviceInfo,
     DtypePolicy,
     EngineModel,
     ForwardBatch,
@@ -255,14 +254,6 @@ class Decision2Family(ModelFamily):
         return [
             {"state": GOLDEN_STATE, "questions": GOLDEN_QUESTIONS, "expected": expected}
         ]
-
-    def kernel_choices(
-        self, package: VerifiedPackage, device: DeviceInfo
-    ) -> dict[str, Any]:
-        known = builtin.by_identity(package.model_sha256)
-        if known is None or not device.arch:
-            return {}
-        return known.kernel_choices.get(f"{device.accelerator}:{device.arch}", {})
 
 
 def _model_type(config: dict[str, Any], declared: str) -> str:

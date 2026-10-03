@@ -28,12 +28,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import torch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from embed_corpus import embed_scenarios, rerank_scenarios  # noqa: E402
 from vllm_sr_runtime.accel.cpu import CPUAccelerator  # noqa: E402
 from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
 from vllm_sr_runtime.engines.native.engine import NativeEngine  # noqa: E402
@@ -46,11 +46,6 @@ from vllm_sr_runtime.plugins.base import (  # noqa: E402
     PackageRef,
     RegistryOptions,
 )
-
-EMBED_LENGTHS = (16, 64, 256, 1024)
-RERANK_DOCUMENTS = (10, 50)
-BATCH = 32
-SPECIAL_IDS = 8
 
 
 def load(args: argparse.Namespace) -> Any:
@@ -69,21 +64,12 @@ def load(args: argparse.Namespace) -> Any:
     reason = engine.supports(spec, device)
     if reason:
         raise SystemExit(reason)
-    engine_options = EngineOptions(
-        threads=args.threads, graphs=False, fused_kernels=False
-    )
     model = family.load(
-        package, spec, engine.load(spec, accelerator, device, engine_options)
+        package,
+        spec,
+        engine.load(spec, accelerator, device, EngineOptions(threads=args.threads)),
     )
     return model, int(package.details["package"].config["vocab_size"])
-
-
-def rows_of(lengths: list[int], vocab: int, seed: int) -> list[tuple[int, ...]]:
-    rng = np.random.default_rng(seed)
-    return [
-        (2, *rng.integers(SPECIAL_IDS, vocab, length - 2).tolist(), 1)
-        for length in lengths
-    ]
 
 
 def timed(
@@ -125,40 +111,24 @@ def main() -> int:
     scenarios: dict[str, Any] = {}
     if "embeddings" in model.planners:
         head = planner.heads[planner.info.layers[-1]]
-
-        def items(rows: list[tuple[int, ...]]) -> list[Item]:
-            return [Item(ids, head.name, head.layer) for ids in rows]
-
-        for length in EMBED_LENGTHS:
-            scenarios[f"single/{length}"] = timed(
-                model,
-                items(rows_of([length], vocab, length)),
-                args.warmup,
-                args.iterations,
-            )
-        lengths = np.random.default_rng(7).integers(16, 257, BATCH).tolist()
-        batch = timed(
-            model,
-            items(rows_of(lengths, vocab, 7)),
-            args.warmup,
-            max(args.iterations // 3, 5),
-        )
-        batch["items_per_s"] = round(BATCH / batch["mean_ms"] * 1000, 1)
-        scenarios[f"batch/{BATCH}x16-256"] = batch
+        rows = embed_scenarios(vocab)
         served = list(planner.info.layers)
     else:
         head = planner.heads[planner.layout.default]
-        query = rows_of([12], vocab, 1)[0][:-1]
-        for count in RERANK_DOCUMENTS:
-            lengths = np.random.default_rng(count).integers(64, 193, count).tolist()
-            pairs = [
-                Item(query + doc[1:], head.name, head.layer)
-                for doc in rows_of(lengths, vocab, count)
-            ]
-            result = timed(model, pairs, args.warmup, max(args.iterations // 3, 5))
-            result["pairs_per_s"] = round(count / result["mean_ms"] * 1000, 1)
-            scenarios[f"query+{count}docs"] = result
+        rows = rerank_scenarios(vocab)
         served = [list(exit) for exit in planner.info.exits]
+    for name, scenario in rows.items():
+        items = [Item(ids, head.name, head.layer) for ids in scenario]
+        many = len(items) > 1
+        result = timed(
+            model,
+            items,
+            args.warmup,
+            max(args.iterations // 3, 5) if many else args.iterations,
+        )
+        if many:
+            result["items_per_s"] = round(len(items) / result["mean_ms"] * 1000, 1)
+        scenarios[name] = result
     record = {
         "package": args.package.name,
         "model": model.info.id,

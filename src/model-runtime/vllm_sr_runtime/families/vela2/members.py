@@ -62,6 +62,15 @@ def load_prefixed(
     module.load_state_dict(state, strict=True)
 
 
+def _unpack(tokens: torch.Tensor, lengths: list[int]) -> torch.Tensor:
+    """Packed ``[N, H]`` hidden states as right-padded ``[rows, width, H]`` rows (zeros past each length)."""
+    width = max(lengths)
+    valid = torch.arange(width)[None, :] < torch.tensor(lengths)[:, None]
+    rows = tokens.new_zeros(len(lengths), width, tokens.shape[-1])
+    rows[valid.to(tokens.device)] = tokens
+    return rows
+
+
 def _pad(rows: list[list[int]], pad: int) -> tuple[torch.Tensor, torch.Tensor]:
     width = max(len(row) for row in rows)
     ids = torch.full((len(rows), width), pad, dtype=torch.long)
@@ -120,11 +129,21 @@ class EncoderMember:
         return items, groups
 
     def _encode(
-        self, items: list[EncoderSequence]
+        self, items: list[EncoderSequence], packed: bool = False
     ) -> tuple[EncoderOutput, dict[str, np.ndarray]]:
-        """One padded batch through the engine, asking for the graph outputs (graph engines return them)."""
-        input_ids, attention_mask = _pad([item.ids for item in items], self.layout.pad)
+        """One batch through the engine: padded, asking for the graph outputs (graph engines return
+        them), or packed back to back (hidden states only)."""
         indices = batch_indices(items)
+        if packed:
+            ids = torch.tensor(
+                [i for item in items for i in item.ids], dtype=torch.long
+            )
+            lengths = [len(item.ids) for item in items]
+            return (
+                self.engine_model.encode(EncoderBatch(ids, None, lengths=lengths)),
+                indices,
+            )
+        input_ids, attention_mask = _pad([item.ids for item in items], self.layout.pad)
         return (
             self.engine_model.encode(
                 EncoderBatch(
@@ -157,12 +176,18 @@ class EncoderMember:
             groups.append(current)
         return groups
 
-    def run(self, items: list[EncoderSequence]) -> list[Any]:
-        """Each sequence's (option logits, word x label block), batched and padded as the packages do."""
+    def run(self, items: list[EncoderSequence], packed: bool = False) -> list[Any]:
+        """Each sequence's (option logits, word x label block), batched and padded as the packages do.
+
+        ``packed`` (approximate batches, hidden-state engines) packs each batch's
+        sequences back to back, so no projection runs on padding; a batch of one
+        sequence is the padded batch.
+        """
+        packed = packed and not self.graph
         results: list[Any] = [None] * len(items)
         for group in self.batches(items):
             batch = [items[index] for index in group]
-            output, indices = self._encode(batch)
+            output, indices = self._encode(batch, packed)
             if self.graph:
                 option_logits, span_logits = (
                     output.outputs[name] for name in GRAPH_OUTPUTS
@@ -170,6 +195,8 @@ class EncoderMember:
             else:
                 hidden = output.hidden[max(output.hidden)]
                 device = hidden.device
+                if packed:
+                    hidden = _unpack(hidden, [len(item.ids) for item in batch])
                 with torch.inference_mode():
                     option_logits, span_logits = self.readout(
                         hidden,

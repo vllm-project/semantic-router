@@ -3,7 +3,14 @@ from importlib import metadata
 import pytest
 from vllm_sr_runtime.accel.kernels import Kernel, KernelSet, reference_kernels
 from vllm_sr_runtime.plugins import registry
-from vllm_sr_runtime.plugins.base import Accelerator, Engine, ModelFamily, Profile
+from vllm_sr_runtime.plugins.base import (
+    Accelerator,
+    DtypePolicy,
+    Engine,
+    EngineOptions,
+    ModelFamily,
+    Profile,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -36,6 +43,23 @@ def test_profiles_declare_their_numerics():
     assert {numerics[name] for name in ("shared_context", "batching", "max_speed")} == {
         "approximate"
     }
+
+
+def test_only_max_speed_asks_for_reduced_precision():
+    base = EngineOptions()
+    asks = {
+        name: registry.instantiate("profiles", name)
+        .engine_options(base)
+        .reduced_precision
+        for name in ("exact", "shared_context", "batching", "max_speed")
+    }
+    assert asks == {
+        "exact": False,
+        "shared_context": False,
+        "batching": False,
+        "max_speed": True,
+    }
+    assert DtypePolicy().reduced_gpu is None and DtypePolicy().reduced_cpu is None
 
 
 def test_third_party_entry_points_are_loaded(monkeypatch):
