@@ -182,3 +182,38 @@ func TestEmbeddingAPIAutoMediaExplicitRecipeHTTP(t *testing.T) {
 		}
 	}
 }
+
+// A ready deployment that prepared the requested model reports a media input it
+// cannot encode as a client error. Answering readiness before media selection
+// must not turn an unsupported input on an available model into a 503.
+func TestEmbeddingAPIUnsupportedMediaOnReadyDeploymentStaysBadRequest(t *testing.T) {
+	fp, _ := embedding.NewFuncProvider("synthetic", 2, func(context.Context, string) ([]float32, error) { return []float32{1, 0}, nil })
+	// A text-only encoder prepared under the catalog's name advertises no media
+	// capability, so the name alone must not be read as readiness.
+	prepared := embedding.NewSet(map[string]embedding.Provider{"multimodal": fp}, "multimodal")
+	cfg := &config.RouterConfig{}
+	cfg.EmbeddingConfig.ModelType = "multimodal"
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"vision": {Provider: "ort", Device: "cpu", Artifact: t.TempDir()}}
+	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "vision", Contract: "embedding.v1", Adapter: "vela_omni"}}
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{Embeddings: prepared})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := services.NewRecipeClassificationService(classifiers, cfg)
+	t.Cleanup(func() { _ = service.Close() })
+	api := &ClassificationAPIServer{config: cfg, classificationSvc: service}
+	for _, tc := range []struct {
+		name, body, code string
+	}{
+		{"image", `{"recipe":"default","model":"multimodal","images":["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQABAA0w0e0GAAAAAElFTkSuQmCC"]}`, "INVALID_IMAGE"},
+		{"audio", `{"recipe":"default","model":"multimodal","audios":["` + apiAudioFixture() + `"]}`, "INVALID_AUDIO"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			api.handleEmbeddings(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/embeddings", strings.NewReader(tc.body)))
+			if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), tc.code) {
+				t.Fatalf("unsupported media reported as %d: %s", recorder.Code, recorder.Body.String())
+			}
+		})
+	}
+}

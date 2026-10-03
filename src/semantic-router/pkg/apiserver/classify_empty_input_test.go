@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -59,5 +60,54 @@ func TestClassifyNonEmptyInputStillOK(t *testing.T) {
 	s.handlePIIDetection(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 for non-empty input, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestWriteClassificationError(t *testing.T) {
+	s := &ClassificationAPIServer{}
+
+	tests := []struct {
+		name           string
+		err            error
+		expectedStatus int
+		expectedCode   string
+	}{
+		{
+			name:           "model not ready",
+			err:            services.ErrModelNotReady,
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedCode:   "CLASSIFIER_NOT_READY",
+		},
+		{
+			name: "wrapped model not ready",
+			err: fmt.Errorf(
+				"PII detection failed: %w",
+				services.ErrModelNotReady,
+			),
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedCode:   "CLASSIFIER_NOT_READY",
+		},
+		{
+			name:           "generic runtime error",
+			err:            fmt.Errorf("inference runtime failure"),
+			expectedStatus: http.StatusInternalServerError,
+			expectedCode:   "CLASSIFICATION_ERROR",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+
+			s.writeClassificationError(rr, tc.err)
+
+			if rr.Code != tc.expectedStatus {
+				t.Fatalf("expected %d, got %d", tc.expectedStatus, rr.Code)
+			}
+
+			if !strings.Contains(rr.Body.String(), tc.expectedCode) {
+				t.Fatalf("expected %q, got: %s", tc.expectedCode, rr.Body.String())
+			}
+		})
 	}
 }

@@ -22,6 +22,7 @@ import (
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
+	nomodel "github.com/vllm-project/semantic-router/e2e/profiles/no-model"
 	piiremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/pii-remote-backend"
 	preferencerouting "github.com/vllm-project/semantic-router/e2e/profiles/preference-routing"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
@@ -130,6 +131,7 @@ func init() {
 		RouterBuildArgs: map[string]string{"VELA_OMNI_VARIANTS": "nano mini"},
 	})
 	register("multimodal-routing", func() framework.Profile { return multimodalrouting.NewProfile() }, framework.ProfileCapabilities{})
+	register("no-model", func() framework.Profile { return nomodel.NewProfile() }, framework.ProfileCapabilities{})
 	register("production-stack", func() framework.Profile { return productionstack.NewProfile() }, framework.ProfileCapabilities{})
 	register("rag-hybrid-search", func() framework.Profile { return raghybridsearch.NewProfile() }, framework.ProfileCapabilities{})
 	register(

@@ -4,13 +4,19 @@ package apiserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 func TestValidateEmbeddingRequestRequiresTextsOrImages(t *testing.T) {
@@ -116,6 +122,43 @@ func TestClassifyEmbeddingErrorMapsInternalFailureTo500(t *testing.T) {
 	}
 }
 
+func TestClassifyEmbeddingErrorMapsModelNotReadyTo503(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantText   string
+		wantCode   string
+		wantStatus int
+	}{
+		{
+			name:       "services sentinel",
+			err:        services.ErrModelNotReady,
+			wantText:   services.ErrModelNotReady.Error(),
+			wantCode:   "EMBEDDING_NOT_READY",
+			wantStatus: http.StatusServiceUnavailable,
+		},
+		{
+			name:       "candle sentinel",
+			err:        candle_binding.ErrEmbeddingModelNotReady,
+			wantText:   candle_binding.ErrEmbeddingModelNotReady.Error(),
+			wantCode:   "EMBEDDING_NOT_READY",
+			wantStatus: http.StatusServiceUnavailable,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			status, code, message := classifyEmbeddingError(tc.err)
+			if status != tc.wantStatus || code != tc.wantCode {
+				t.Fatalf("expected %d %q, got %d %q", tc.wantStatus, tc.wantCode, status, code)
+			}
+			if !strings.Contains(message, tc.wantText) {
+				t.Fatalf("expected message to include %q, got %q", tc.wantText, message)
+			}
+		})
+	}
+}
+
 func TestValidateEmbeddingRequestRejectsTooManyImages(t *testing.T) {
 	images := make([]string, maxImagesPerRequest+1)
 	for i := range images {
@@ -158,65 +201,6 @@ func TestNormalizeBatchSimilarityLimitCapsTopKAtCandidateCount(t *testing.T) {
 	}
 }
 
-func TestValidateSimilarityRequest(t *testing.T) {
-	cases := []struct {
-		name     string
-		req      SimilarityRequest
-		wantOK   bool
-		wantCode string
-	}{
-		{"valid", SimilarityRequest{Text1: "a", Text2: "b", Dimension: defaultEmbeddingDimension}, true, ""},
-		{"empty_text1", SimilarityRequest{Text1: "", Text2: "b", Dimension: defaultEmbeddingDimension}, false, "INVALID_INPUT"},
-		{"whitespace_text2", SimilarityRequest{Text1: "a", Text2: "   ", Dimension: defaultEmbeddingDimension}, false, "INVALID_INPUT"},
-		{"bad_dimension", SimilarityRequest{Text1: "a", Text2: "b", Dimension: -1}, false, "INVALID_DIMENSION"},
-		{"dimension_64_allowed", SimilarityRequest{Text1: "a", Text2: "b", Dimension: 64}, true, ""},
-		{"quality_priority_too_high", SimilarityRequest{Text1: "a", Text2: "b", Dimension: defaultEmbeddingDimension, QualityPriority: 1.5}, false, "INVALID_PARAMETER"},
-		{"latency_priority_negative", SimilarityRequest{Text1: "a", Text2: "b", Dimension: defaultEmbeddingDimension, LatencyPriority: -0.1}, false, "INVALID_PARAMETER"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			code, _, ok := validateSimilarityRequest(tc.req)
-			if ok != tc.wantOK {
-				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
-			}
-			if code != tc.wantCode {
-				t.Fatalf("code = %q, want %q", code, tc.wantCode)
-			}
-		})
-	}
-}
-
-func TestValidateBatchSimilarityRequestRejectsBlankAndOutOfRange(t *testing.T) {
-	base := func() BatchSimilarityRequest {
-		return BatchSimilarityRequest{Query: "q", Candidates: []string{"a", "b"}, Dimension: defaultEmbeddingDimension}
-	}
-	cases := []struct {
-		name     string
-		mutate   func(*BatchSimilarityRequest)
-		wantOK   bool
-		wantCode string
-	}{
-		{"valid", func(*BatchSimilarityRequest) {}, true, ""},
-		{"whitespace_query", func(r *BatchSimilarityRequest) { r.Query = "  " }, false, "INVALID_INPUT"},
-		{"blank_candidate", func(r *BatchSimilarityRequest) { r.Candidates = []string{"a", " "} }, false, "INVALID_INPUT"},
-		{"quality_priority_too_high", func(r *BatchSimilarityRequest) { r.QualityPriority = 2 }, false, "INVALID_PARAMETER"},
-		{"latency_priority_negative", func(r *BatchSimilarityRequest) { r.LatencyPriority = -1 }, false, "INVALID_PARAMETER"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			req := base()
-			tc.mutate(&req)
-			code, _, ok := validateBatchSimilarityRequest(req)
-			if ok != tc.wantOK {
-				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
-			}
-			if code != tc.wantCode {
-				t.Fatalf("code = %q, want %q", code, tc.wantCode)
-			}
-		})
-	}
-}
-
 func TestValidateBatchSimilarityRequestRejectsNegativeTopK(t *testing.T) {
 	req := BatchSimilarityRequest{
 		Query:      "query",
@@ -231,6 +215,421 @@ func TestValidateBatchSimilarityRequestRejectsNegativeTopK(t *testing.T) {
 	}
 	if code != "INVALID_INPUT" || message != "top_k cannot be negative" {
 		t.Fatalf("unexpected validation error %q: %q", code, message)
+	}
+}
+
+// --- Embedding readiness tests using embedding.Set fakes -------------------
+
+// fakeProvider returns a stub embedding.Provider with the given backend name.
+func fakeProvider(backend string) embedding.Provider {
+	p, _ := embedding.NewFuncProvider(backend, 768, func(_ context.Context, _ string) ([]float32, error) {
+		return make([]float32, 768), nil
+	})
+	return p
+}
+
+// fakeMediaProvider returns a prepared provider that advertises every input
+// modality, standing in for a generation that prepared an image/audio encoder.
+func fakeMediaProvider() embedding.Provider {
+	fp, _ := embedding.NewFuncProvider("synthetic", 2, func(context.Context, string) ([]float32, error) {
+		return []float32{1, 0}, nil
+	})
+	return &apiMediaProvider{FuncProvider: fp}
+}
+
+// A zero-value server acquires a nil embedding set. Every handler must
+// surface 503 EMBEDDING_NOT_READY rather than a 500 or protocol error. Media
+// inputs reach that answer too: an unprepared generation has no image or audio
+// model, which is an unavailable model, not an unsupported input.
+func TestEmbeddingEndpointsReturn503WhenNotReady(t *testing.T) {
+	s := &ClassificationAPIServer{}
+
+	tests := []struct {
+		name    string
+		path    string
+		body    string
+		handler func(http.ResponseWriter, *http.Request)
+	}{
+		{
+			"embeddings",
+			"/api/v1/embeddings",
+			`{"texts":["hi"]}`,
+			s.handleEmbeddings,
+		},
+		{
+			"embeddings with image",
+			"/api/v1/embeddings",
+			`{"texts":["hi"],"images":["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQABAA0w0e0GAAAAAElFTkSuQmCC"]}`,
+			s.handleEmbeddings,
+		},
+		{
+			"embeddings with audio",
+			"/api/v1/embeddings",
+			`{"audios":["` + apiAudioFixture() + `"]}`,
+			s.handleEmbeddings,
+		},
+		{
+			"embeddings with named audio model",
+			"/api/v1/embeddings",
+			`{"model":"multimodal","audios":["` + apiAudioFixture() + `"]}`,
+			s.handleEmbeddings,
+		},
+		{
+			"similarity",
+			"/api/v1/similarity",
+			`{"text1":"hello","text2":"world"}`,
+			s.handleSimilarity,
+		},
+		{
+			"batch similarity",
+			"/api/v1/similarity/batch",
+			`{"query":"hello","candidates":["world"]}`,
+			s.handleBatchSimilarity,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			tc.handler(rr, req)
+
+			if rr.Code != http.StatusServiceUnavailable {
+				t.Fatalf("expected 503, got %d: %s", rr.Code, rr.Body.String())
+			}
+			if !strings.Contains(rr.Body.String(), "EMBEDDING_NOT_READY") {
+				t.Fatalf("expected EMBEDDING_NOT_READY, got: %s", rr.Body.String())
+			}
+		})
+	}
+}
+
+func TestEmbeddingEndpointsValidateShapeBeforeAvailability(t *testing.T) {
+	api := newRecipeEmbeddingAPIServer(t, "multimodal", embedding.NewSet(nil, ""))
+
+	tests := []struct {
+		name    string
+		path    string
+		body    string
+		handler func(http.ResponseWriter, *http.Request)
+	}{
+		{"malformed image", "/api/v1/embeddings", `{"recipe":"default","images":["data:image/png;base64,!!!!"]}`, api.handleEmbeddings},
+		{"unsafe image url", "/api/v1/embeddings", `{"recipe":"default","images":["https://example.com/cat.png"]}`, api.handleEmbeddings},
+		{"malformed audio", "/api/v1/embeddings", `{"recipe":"default","audios":["data:audio/wav;base64,YQ=="]}`, api.handleEmbeddings},
+		{"negative dimension", "/api/v1/embeddings", `{"recipe":"default","texts":["hi"],"dimension":-1}`, api.handleEmbeddings},
+		{"negative target_layer", "/api/v1/embeddings", `{"recipe":"default","texts":["hi"],"target_layer":-1}`, api.handleEmbeddings},
+		{"target_layer too large", "/api/v1/embeddings", `{"recipe":"default","texts":["hi"],"target_layer":2147483648}`, api.handleEmbeddings},
+		{"no inputs", "/api/v1/embeddings", `{"recipe":"default"}`, api.handleEmbeddings},
+		{"similarity negative dimension", "/api/v1/similarity", `{"recipe":"default","text1":"hello","text2":"world","dimension":-1}`, api.handleSimilarity},
+		{"similarity negative target_layer", "/api/v1/similarity", `{"recipe":"default","text1":"hello","text2":"world","target_layer":-1}`, api.handleSimilarity},
+		{"similarity target_layer too large", "/api/v1/similarity", `{"recipe":"default","text1":"hello","text2":"world","target_layer":2147483648}`, api.handleSimilarity},
+		{"similarity missing text", "/api/v1/similarity", `{"recipe":"default","text1":"hello"}`, api.handleSimilarity},
+		{"batch similarity empty candidates", "/api/v1/similarity/batch", `{"recipe":"default","query":"hello","candidates":[]}`, api.handleBatchSimilarity},
+		{"batch similarity negative target_layer", "/api/v1/similarity/batch", `{"recipe":"default","query":"hello","candidates":["world"],"target_layer":-1}`, api.handleBatchSimilarity},
+		{"batch similarity target_layer too large", "/api/v1/similarity/batch", `{"recipe":"default","query":"hello","candidates":["world"],"target_layer":2147483648}`, api.handleBatchSimilarity},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			tc.handler(rr, req)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for a malformed request, got %d: %s", rr.Code, rr.Body.String())
+			}
+			if strings.Contains(rr.Body.String(), "EMBEDDING_NOT_READY") {
+				t.Fatalf("an invalid request was reported as retryable readiness: %s", rr.Body.String())
+			}
+		})
+	}
+}
+
+// TestEmbeddingEndpointsValidateShapeBeforeAvailabilityUnprepared tests the
+// unprepared-service case: a zero-value server (no runtime acquired) must still
+// reject malformed requests with 400, not 503 EMBEDDING_NOT_READY. This covers
+// the regression where the runtime-error path was checked before shape validation.
+func TestEmbeddingEndpointsValidateShapeBeforeAvailabilityUnprepared(t *testing.T) {
+	s := &ClassificationAPIServer{}
+
+	tests := []struct {
+		name    string
+		path    string
+		body    string
+		handler func(http.ResponseWriter, *http.Request)
+	}{
+		{"embeddings negative target_layer", "/api/v1/embeddings", `{"texts":["hi"],"target_layer":-1}`, s.handleEmbeddings},
+		{"embeddings malformed image", "/api/v1/embeddings", `{"images":["data:image/png;base64,!!!!"]}`, s.handleEmbeddings},
+		{"embeddings unsafe image url", "/api/v1/embeddings", `{"images":["https://example.com/cat.png"]}`, s.handleEmbeddings},
+		{"embeddings negative dimension", "/api/v1/embeddings", `{"texts":["hi"],"dimension":-1}`, s.handleEmbeddings},
+		{"embeddings target_layer too large", "/api/v1/embeddings", `{"texts":["hi"],"target_layer":2147483648}`, s.handleEmbeddings},
+		{"embeddings no inputs", "/api/v1/embeddings", `{}`, s.handleEmbeddings},
+		{"similarity negative target_layer", "/api/v1/similarity", `{"text1":"hello","text2":"world","target_layer":-1}`, s.handleSimilarity},
+		{"similarity negative dimension", "/api/v1/similarity", `{"text1":"hello","text2":"world","dimension":-1}`, s.handleSimilarity},
+		{"similarity target_layer too large", "/api/v1/similarity", `{"text1":"hello","text2":"world","target_layer":2147483648}`, s.handleSimilarity},
+		{"similarity missing text", "/api/v1/similarity", `{"text1":"hello"}`, s.handleSimilarity},
+		{"batch similarity negative target_layer", "/api/v1/similarity/batch", `{"query":"hello","candidates":["world"],"target_layer":-1}`, s.handleBatchSimilarity},
+		{"batch similarity target_layer too large", "/api/v1/similarity/batch", `{"query":"hello","candidates":["world"],"target_layer":2147483648}`, s.handleBatchSimilarity},
+		{"batch similarity empty candidates", "/api/v1/similarity/batch", `{"query":"hello","candidates":[]}`, s.handleBatchSimilarity},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			tc.handler(rr, req)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for a malformed request, got %d: %s", rr.Code, rr.Body.String())
+			}
+			if strings.Contains(rr.Body.String(), "EMBEDDING_NOT_READY") {
+				t.Fatalf("an invalid request was reported as retryable readiness: %s", rr.Body.String())
+			}
+		})
+	}
+}
+
+// The same deployment still answers 503 for media it could serve if it had
+// prepared a model, so validation ordering must not turn availability into a
+// client error.
+func TestEmbeddingEndpointsReportUnavailableMediaAs503(t *testing.T) {
+	api := newRecipeEmbeddingAPIServer(t, "multimodal", embedding.NewSet(nil, ""))
+
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{"text", `{"recipe":"default","texts":["hi"]}`},
+		{"image", `{"recipe":"default","images":["data:image/png;base64,aGVsbG8="]}`},
+		{"audio", `{"recipe":"default","audios":["` + apiAudioFixture() + `"]}`},
+		{"named model", `{"recipe":"default","model":"multimodal","audios":["` + apiAudioFixture() + `"]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			api.handleEmbeddings(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/embeddings", strings.NewReader(tc.body)))
+			if recorder.Code != http.StatusServiceUnavailable || !strings.Contains(recorder.Body.String(), "EMBEDDING_NOT_READY") {
+				t.Fatalf("expected 503 EMBEDDING_NOT_READY for valid unavailable media, got %d: %s", recorder.Code, recorder.Body.String())
+			}
+		})
+	}
+}
+
+// apiWidthProvider is a prepared text encoder advertising exactly one output
+// width, standing in for a model whose native dimensionality is not 768.
+type apiWidthProvider struct {
+	*embedding.FuncProvider
+	width int
+}
+
+func (p *apiWidthProvider) EmbeddingInfo() embedding.ModelInfo {
+	return embedding.ModelInfo{Dimension: p.width, Dimensions: []int{p.width}, Modalities: []string{"text"}}
+}
+
+func apiWidthProviderOf(width int) embedding.Provider {
+	fp, _ := embedding.NewFuncProvider("synthetic", width, func(_ context.Context, text string) ([]float32, error) {
+		var sum float32
+		for _, b := range []byte(text) {
+			sum += float32(b)
+		}
+		vector := make([]float32, width)
+		for i := range vector {
+			vector[i] = float32((i%7)+1) * sum / float32(width)
+		}
+		return vector, nil
+	})
+	return &apiWidthProvider{FuncProvider: fp, width: width}
+}
+
+// An omitted dimension is the provider's own output width, not a router-chosen
+// constant, so a prepared encoder advertising only 384 still scores a request
+// that names it. Inventing 768 here answered 400 ErrCapability instead of a score.
+func TestSimilarityDefaultsToProviderNativeDimension(t *testing.T) {
+	const width = 384
+	prepared := embedding.NewSet(map[string]embedding.Provider{"multimodal": apiWidthProviderOf(width)}, "multimodal")
+	api := newRecipeEmbeddingAPIServer(t, "multimodal", prepared)
+
+	recorder := httptest.NewRecorder()
+	api.handleSimilarity(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/similarity",
+		strings.NewReader(`{"recipe":"default","model":"multimodal","text1":"hello","text2":"world"}`)))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("an omitted dimension was rejected: HTTP %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var response SimilarityResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Recipe != "default" || response.ModelUsed != "multimodal" {
+		t.Fatalf("wrong recipe or model: %+v", response)
+	}
+	if response.Similarity <= 0 || response.Similarity > 1 {
+		t.Fatalf("expected a cosine score in (0, 1], got %v", response.Similarity)
+	}
+
+	// Only the router's invented default is gone: a width the provider does not
+	// advertise is still the client's error.
+	recorder = httptest.NewRecorder()
+	api.handleSimilarity(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/similarity",
+		strings.NewReader(`{"recipe":"default","model":"multimodal","text1":"hello","text2":"world","dimension":768}`)))
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for an unsupported dimension, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+// newRecipeEmbeddingAPIServer serves one recipe from an already prepared
+// generation, so a handler answers from the providers that generation owns.
+func newRecipeEmbeddingAPIServer(t *testing.T, modelType string, prepared *embedding.Set) *ClassificationAPIServer {
+	t.Helper()
+	cfg := &config.RouterConfig{}
+	cfg.EmbeddingConfig.ModelType = modelType
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"vision": {Provider: "ort", Device: "cpu", Artifact: t.TempDir()}}
+	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "vision", Contract: "embedding.v1", Adapter: "vela_omni"}}
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{Embeddings: prepared})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := services.NewRecipeClassificationService(classifiers, cfg)
+	t.Cleanup(func() { _ = service.Close() })
+	return &ClassificationAPIServer{config: cfg, classificationSvc: service}
+}
+
+func TestCheckEmbeddingReadinessNilSetReturnsNotReady(t *testing.T) {
+	err := checkEmbeddingReadiness(nil, EmbeddingRequest{Texts: []string{"hello"}})
+	if err == nil {
+		t.Fatal("expected nil embedding set to return not-ready for text request")
+	}
+	if !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected ErrEmbeddingModelNotReady, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessEmptyTextReturnsNil(t *testing.T) {
+	if err := checkEmbeddingReadiness(nil, EmbeddingRequest{}); err != nil {
+		t.Fatalf("expected nil error for empty request, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessAutoTextWithTextModelPrepared(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+	if err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "auto", Texts: []string{"hi"}}); err != nil {
+		t.Fatalf("expected auto text to pass when qwen3 is prepared, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessAutoTextRejectsMultimodalOnlySet(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"multimodal": fakeProvider("candle")}, "qwen3")
+	err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "auto", Texts: []string{"hi"}})
+	if err == nil {
+		t.Fatal("expected auto text to be rejected when only multimodal is prepared")
+	}
+}
+
+func TestCheckEmbeddingReadinessExplicitFamilyMustBePresent(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"gemma": fakeProvider("candle")}, "gemma")
+	if err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "gemma", Texts: []string{"hi"}}); err != nil {
+		t.Fatalf("expected gemma text to pass when gemma is prepared, got %v", err)
+	}
+	if err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "qwen3", Texts: []string{"hi"}}); err == nil {
+		t.Fatal("expected qwen3 text to be rejected when only gemma is prepared")
+	}
+}
+
+func TestCheckEmbeddingReadinessAutoTextRejectsBertOnlySet(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"bert": fakeProvider("candle")}, "qwen3")
+	err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "auto", Texts: []string{"hi"}})
+	if err == nil {
+		t.Fatal("expected auto text to be rejected when only bert is prepared (auto cannot select bert)")
+	}
+	if !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected ErrEmbeddingModelNotReady, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessMultimodalTextPassesWithMultimodalPrepared(t *testing.T) {
+	set := embedding.NewSet(map[string]embedding.Provider{"multimodal": fakeProvider("candle")}, "qwen3")
+	if err := checkEmbeddingReadiness(set, EmbeddingRequest{Model: "multimodal", Texts: []string{"hi"}}); err != nil {
+		t.Fatalf("expected multimodal text to pass when multimodal is prepared, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessImageRequestRequiresPreparedImageModel(t *testing.T) {
+	images := []string{"data:image/png;base64,aGVsbG8="}
+	textOnly := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+	if err := checkEmbeddingReadiness(textOnly, EmbeddingRequest{Images: images}); !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected image request to be not ready without an image model, got %v", err)
+	}
+	both := embedding.NewSet(map[string]embedding.Provider{
+		"qwen3":      fakeProvider("candle"),
+		"multimodal": fakeMediaProvider(),
+	}, "qwen3")
+	if err := checkEmbeddingReadiness(both, EmbeddingRequest{Images: images}); err != nil {
+		t.Fatalf("expected image request to be ready when a prepared model advertises images, got %v", err)
+	}
+}
+
+// Readiness follows the generation's own advertised capabilities, not the
+// catalog's "multimodal" alias, so a scoped deployment answers for the model it
+// prepared and a text-only generation is still never asked to encode an image.
+func TestCheckEmbeddingReadinessImageFollowsPreparedCapabilities(t *testing.T) {
+	scoped := embedding.NewSet(map[string]embedding.Provider{"mmbert": fakeMediaProvider()}, "mmbert")
+	images := []string{"data:image/png;base64,aGVsbG8="}
+	if err := checkEmbeddingReadiness(scoped, EmbeddingRequest{Model: "mmbert", Texts: []string{"hi"}, Images: images}); err != nil {
+		t.Fatalf("expected a selected scoped model to serve images, got %v", err)
+	}
+	if err := checkEmbeddingReadiness(scoped, EmbeddingRequest{Texts: []string{"hi"}, Images: images}); err != nil {
+		t.Fatalf("expected an image-capable generation to serve an auto request, got %v", err)
+	}
+	textOnly := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+	if err := checkEmbeddingReadiness(textOnly, EmbeddingRequest{Texts: []string{"hi"}, Images: images}); !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected an auto image request to be not ready for a text-only generation, got %v", err)
+	}
+}
+
+// Audio is an embedding input like text and image, so an audio-only request
+// needs a prepared audio model whether or not it names one.
+func TestCheckEmbeddingReadinessAudioRequiresPreparedAudioModel(t *testing.T) {
+	audios := []string{apiAudioFixture()}
+	if err := checkEmbeddingReadiness(nil, EmbeddingRequest{Audios: audios}); !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected audio-only request to be not ready without a prepared set, got %v", err)
+	}
+	textOnly := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+	if err := checkEmbeddingReadiness(textOnly, EmbeddingRequest{Audios: audios}); !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected audio request to be not ready for a text-only generation, got %v", err)
+	}
+	if err := checkEmbeddingReadiness(textOnly, EmbeddingRequest{Model: "multimodal", Audios: audios}); !errors.Is(err, candle_binding.ErrEmbeddingModelNotReady) {
+		t.Fatalf("expected an unprepared model name to be not ready for audio, got %v", err)
+	}
+	omni := embedding.NewSet(map[string]embedding.Provider{"mmbert": fakeMediaProvider()}, "mmbert")
+	if err := checkEmbeddingReadiness(omni, EmbeddingRequest{Audios: audios}); err != nil {
+		t.Fatalf("expected a prepared audio model to serve audio, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessMixedRequestNeedsBothFamilies(t *testing.T) {
+	textOnly := embedding.NewSet(map[string]embedding.Provider{"qwen3": fakeProvider("candle")}, "qwen3")
+	mixed := EmbeddingRequest{
+		Texts:  []string{"hello"},
+		Images: []string{"data:image/png;base64,aGVsbG8="},
+	}
+	if err := checkEmbeddingReadiness(textOnly, mixed); err == nil {
+		t.Fatal("expected mixed request to be rejected when multimodal is not prepared")
+	}
+	imageOnly := embedding.NewSet(map[string]embedding.Provider{"multimodal": fakeMediaProvider()}, "qwen3")
+	if err := checkEmbeddingReadiness(imageOnly, mixed); err == nil {
+		t.Fatal("expected mixed request to be rejected when no text model is prepared")
+	}
+	both := embedding.NewSet(map[string]embedding.Provider{
+		"qwen3":      fakeProvider("candle"),
+		"multimodal": fakeMediaProvider(),
+	}, "qwen3")
+	if err := checkEmbeddingReadiness(both, mixed); err != nil {
+		t.Fatalf("expected mixed request to pass when both are prepared, got %v", err)
 	}
 }
 

@@ -5,22 +5,29 @@ import (
 	"strings"
 )
 
-// ErrEmptyText is returned when a classification request carries no text,
-// messages, metadata, or other evaluable envelope facts. Whitespace-only raw
-// text remains valid for text_bytes evaluation.
+// ErrEmptyText is returned by classification services when the request text is
+// empty or whitespace-only. Handlers map it to HTTP 400 (client error) rather
+// than 500, matching the documented OpenAPI contract and sibling endpoints.
 var ErrEmptyText = errors.New("text cannot be empty")
 
-// ErrUnknownRoutingModel is returned when eval requests a model that is not an
-// auto alias or configured entrypoint.
+// ErrInvalidRequestFacts is returned when request metadata or other extracted
+// facts violate the classification request contract. Handlers map it to HTTP
+// 400 (client error).
+var ErrInvalidRequestFacts = errors.New("invalid request facts")
+
+// ErrUnknownRoutingModel is returned when a request names no configured
+// routing entrypoint. Handlers map it to HTTP 400 (client error).
 var ErrUnknownRoutingModel = errors.New("unknown routing model")
+
+// ErrModelNotReady is returned by classification services when the underlying
+// model has not been loaded (init failed or was skipped). Handlers map it to
+// HTTP 503 (service unavailable) so callers can distinguish a not-ready condition
+// from a genuine runtime/inference failure (500).
+var ErrModelNotReady = errors.New("model not ready")
 
 // ErrClassifierUnavailable is returned when the signal classifier has not
 // been prepared for evaluation yet.
 var ErrClassifierUnavailable = errors.New("signal classifier is unavailable")
-
-// ErrInvalidRequestFacts is returned when metadata or request-envelope facts
-// exceed the bounded classification API contract.
-var ErrInvalidRequestFacts = errors.New("invalid request facts")
 
 var (
 	ErrConfigHashMismatch    = errors.New("active runtime config does not match the evaluation manifest")
