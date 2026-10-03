@@ -15,16 +15,14 @@ func classificationAvailabilityForService(service classificationService) classif
 	}
 
 	availability := classifierModelAvailability{
-		core:                   service.HasClassifier(),
-		factCheck:              service.HasFactCheckClassifier(),
-		hallucination:          service.HasHallucinationDetector(),
-		hallucinationExplainer: service.HasHallucinationExplainer(),
-		feedback:               service.HasFeedbackDetector(),
+		core:          service.HasClassifier(),
+		factCheck:     service.HasFactCheckClassifier(),
+		hallucination: service.HasHallucinationDetector(),
+		feedback:      service.HasFeedbackDetector(),
 	}
 	if inventory, ok := service.(classificationInventoryReadinessService); ok {
 		availability.factCheck = inventory.HasAnyFactCheckClassifier()
 		availability.hallucination = inventory.HasAnyHallucinationDetector()
-		availability.hallucinationExplainer = inventory.HasAnyHallucinationExplainer()
 		availability.feedback = inventory.HasAnyFeedbackDetector()
 	}
 	return availability
@@ -187,7 +185,6 @@ func buildHallucinationModels(
 		metadata["min_span_length"] = fmt.Sprintf("%d", hallucinationModel.MinSpanLength)
 		metadata["min_span_confidence"] = fmt.Sprintf("%.2f", hallucinationModel.MinSpanConfidence)
 		metadata["context_window_size"] = fmt.Sprintf("%d", hallucinationModel.ContextWindowSize)
-		metadata["nli_filtering_enabled"] = fmt.Sprintf("%t", hallucinationModel.EnableNLIFiltering)
 		metadata["use_cpu"] = fmt.Sprintf("%t", hallucinationModel.UseCPU)
 	}
 	models = append(models, ModelInfo{
@@ -197,23 +194,6 @@ func buildHallucinationModels(
 		ModelPath: hallucinationModel.ModelID,
 		Metadata:  metadata,
 	})
-
-	nliModel := cfg.HallucinationMitigation.NLIModel
-	if cfg.NeedsLocalHallucinationNLIForAPI() ||
-		cfg.NeedsLocalHallucinationNLIForRouting() ||
-		cfg.NeedsLocalNLIForSemanticCache() {
-		models = append(models, ModelInfo{
-			Name:      "hallucination_explainer",
-			Type:      "nli_explainer",
-			Loaded:    availability.hallucinationExplainer,
-			ModelPath: nliModel.ModelID,
-			Metadata: map[string]string{
-				"model_type": "modernbert_nli",
-				"threshold":  fmt.Sprintf("%.2f", nliModel.Threshold),
-				"use_cpu":    fmt.Sprintf("%t", nliModel.UseCPU),
-			},
-		})
-	}
 
 	return models
 }
@@ -272,7 +252,6 @@ func (s *ClassificationAPIServer) getPlaceholderModelsInfo(runtimeState *startup
 		placeholderModelInfo("jailbreak_classifier", "security_detection"),
 		placeholderModelInfo("fact_check_classifier", "fact_check_classification"),
 		placeholderModelInfo("hallucination_detector", "hallucination_detection"),
-		placeholderModelInfo("hallucination_explainer", "nli_explainer"),
 		placeholderModelInfo("feedback_detector", "feedback_detection"),
 	}
 

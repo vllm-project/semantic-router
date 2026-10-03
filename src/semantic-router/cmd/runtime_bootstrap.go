@@ -397,10 +397,10 @@ func initializeRuntimeDependencies(
 		EmbeddingProvider: startupEmbeddingProviderStatus(embeddingState),
 	}, "Failed to write runtime dependency startup status")
 
+	startModelRuntimeManager(cfg, shutdownHooks, runtimeRegistry)
 	if err := initializeVectorStoreIfEnabled(cfg, shutdownHooks, runtimeRegistry); err != nil {
 		return embeddingState, err
 	}
-	startModelRuntimeManager(cfg, shutdownHooks, runtimeRegistry)
 	return embeddingState, nil
 }
 
