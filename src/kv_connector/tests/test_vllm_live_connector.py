@@ -18,6 +18,20 @@ from src.training.kv_mapper.artifact import CompatibilitySpec, Manifest, write_a
 
 @unittest.skipUnless(importlib.util.find_spec("vllm"), "vLLM is not installed")
 class LiveConnectorTests(unittest.TestCase):
+    def test_offline_snapshot_model_identity(self) -> None:
+        from src.kv_connector.vllm_connector import _model_name
+
+        revision = "a" * 40
+        snapshot = f"/cache/models--Qwen--Qwen3-32B/snapshots/{revision}"
+        self.assertEqual(
+            _model_name(SimpleNamespace(model=snapshot, revision=revision)),
+            "Qwen/Qwen3-32B",
+        )
+        self.assertEqual(
+            _model_name(SimpleNamespace(model=snapshot, revision="b" * 40)),
+            snapshot,
+        )
+
     def test_source_export_target_load_and_failed_load_recompute_signal(self) -> None:
         from vllm.config.kv_transfer import KVTransferConfig
         from vllm.distributed.kv_transfer.kv_connector.v1.base import KVConnectorRole

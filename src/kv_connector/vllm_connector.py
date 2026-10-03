@@ -85,6 +85,21 @@ def _precision(dtype: Any) -> str:
     return aliases[value]
 
 
+def _model_name(model: Any) -> str:
+    """Recover a pinned Hugging Face ID when vLLM loads its offline snapshot."""
+    name = str(model.model)
+    path = Path(name)
+    if (
+        path.parent.name == "snapshots"
+        and path.name == str(model.revision)
+        and path.parent.parent.name.startswith("models--")
+    ):
+        parts = path.parent.parent.name.removeprefix("models--").split("--")
+        if len(parts) == 2 and all(parts):
+            return "/".join(parts)
+    return name
+
+
 def _rope_theta(hf_config: Any) -> float:
     """Accept only the unscaled Qwen3 RoPE used by the mapper."""
     scaling = getattr(hf_config, "rope_scaling", None)
@@ -130,7 +145,7 @@ def _deployment(
     return CompatibilitySpec(
         source_model=str(extra["source_model"]),
         source_revision=str(extra["source_revision"]),
-        target_model=str(model.model),
+        target_model=_model_name(model),
         target_revision=str(model.revision),
         variant=manifest.compatibility.variant,
         precision=_precision(model.dtype),
@@ -183,7 +198,7 @@ class KVMapperConnector(KVConnectorBase_V1):
                 if self._ttl_seconds <= 0:
                     raise ValueError("snapshot TTL must be positive")
                 rope_theta = _rope_theta(model.hf_config)
-                self._source_identity = str(model.model), revision
+                self._source_identity = _model_name(model), revision
                 self._source_rope_theta = rope_theta
             except (AttributeError, TypeError, ValueError) as exc:
                 logger.warning("Source snapshot disabled: %s", exc)
