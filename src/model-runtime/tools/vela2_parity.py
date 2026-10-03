@@ -581,6 +581,18 @@ def main() -> int:
             reference_rows(engine, module, state, questions), runtime_rows(plan)
         )
         records.append(record)
+        print(
+            json.dumps(
+                {
+                    "id": record["id"],
+                    "decisions": record["decision_changes"],
+                    "max": record["max_abs_diff"],
+                    "rendering": record["rendering"],
+                    "ms": [round(1000 * (t1 - t0)), round(1000 * (t2 - t1))],
+                }
+            ),
+            flush=True,
+        )
         if args.answers:
             answers_out.append(
                 {"id": request["id"], "reference": reference, "runtime": ours}
