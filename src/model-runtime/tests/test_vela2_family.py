@@ -190,6 +190,20 @@ def test_decoder_shared_context_path_runs_one_parts_pass(models, monkeypatch) ->
             np.testing.assert_allclose(a, b, atol=1e-4)
 
 
+@pytest.mark.parametrize("name", ["encoder", "decoder"])
+def test_shared_context_profile_packs_only_decoder_trees(models, name) -> None:
+    from vllm_sr_runtime.plugins.base import Job
+    from vllm_sr_runtime.profiles.shared_context import SharedContextProfile
+
+    model = models[name]
+    profile = SharedContextProfile()
+    assert profile.available(model) is None
+    plan = model.plan(GOLDEN_STATE, GOLDEN_QUESTIONS)
+    job = Job(items=plan.items, deadline=None, enqueued=0.0, profile=profile.name)
+    batches = profile.plan([job], model.forward_token_budget())
+    assert [b.shared_prefix for b in batches] == ([1] if name == "decoder" else [0])
+
+
 @pytest.mark.parametrize("layout", ["rows", "packed"])
 def test_tree_blocks_equal_their_full_sequences(models, layout) -> None:
     engine_model = models["decoder"].engine_model

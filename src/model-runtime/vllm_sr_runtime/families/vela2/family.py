@@ -300,6 +300,10 @@ class Vela2Model(LoadedModel):
             mapping=mapping,
         )
 
+    def shared_context(self, items: list[Any], token_budget: int | None) -> int:
+        """The 4B / 9B trees always pack on the shared-context path; the 0.3B has one exact path."""
+        return 1 if isinstance(self.member, DecoderMember) and items else 0
+
     def run(self, items: list[Any], shared_prefix: int = 0) -> list[Any]:
         """One forward per batch; ``shared_prefix`` > 0 (shared-context path) packs the 4B / 9B trees."""
         if isinstance(self.member, DecoderMember):
