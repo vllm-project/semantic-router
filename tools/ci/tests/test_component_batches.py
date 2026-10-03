@@ -26,10 +26,10 @@ SHA = "a" * 40
 
 
 class ComponentBatchTests(unittest.TestCase):
-    def test_eight_contracts_use_eight_workers_without_changing_selection(self):
+    def test_nine_contracts_use_nine_workers_without_changing_selection(self):
         full = make_plan([], source_sha=SHA, full=True)
         batches = full["component_batches"]
-        self.assertEqual(len(batches), 8)
+        self.assertEqual(len(batches), 9)
         self.assertTrue(all(len(batch["verifications"]) == 1 for batch in batches))
         rows = [row for batch in batches for row in batch["verifications"]]
         selected = [row for row in full["verifications"] if row["executor"] == "tools"]

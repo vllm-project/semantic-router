@@ -219,6 +219,16 @@ verifications:
     workflow: .github/workflows/test-tools.yml
     target: test-training-contracts
     inventory: training-contracts-and-tiny-model-cpu-inference
+  onnx-artifacts:
+    display_name: ONNX Artifacts
+    activity: test
+    boundary: [integration]
+    executor: tools
+    category: components
+    worker: model
+    workflow: .github/workflows/test-tools.yml
+    target: onnx-artifact-test
+    inventory: external-onnx-weight-packing-cpu-inference
   mock-provider:
     display_name: Provider Simulator
     activity: test
@@ -284,6 +294,7 @@ full_cpu:
     - cli-unit
     - fleet-sim
     - training
+    - onnx-artifacts
     - mock-provider
     - learning-tools
     - harness-tools
