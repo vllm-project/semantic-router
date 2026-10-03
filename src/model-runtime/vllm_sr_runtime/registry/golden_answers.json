@@ -31,6 +31,37 @@
           "noul": 0.6180576311150715,
           "type": "noul"
         }
+      },
+      "rocm": {
+        "difficulty": {
+          "confidence": 0.08045341506481662,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.32369504059948123,
+            "1": 0.5069628898868043,
+            "2": 0.16934206951371444
+          },
+          "score": 0.8456470289142332,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.8053478267392244,
+          "probabilities": {
+            "code": 0.9500851021162913,
+            "math": 0.0047027792917772645,
+            "other": 0.04521211859193134
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.6173675492098062,
+          "type": "noul"
+        }
       }
     },
     "revision": "ad0aa724c924f7c4194be94b1b8441caf2d61c01"
@@ -65,6 +96,37 @@
         },
         "reasoning": {
           "noul": 0.4999572038651558,
+          "type": "noul"
+        }
+      },
+      "rocm": {
+        "difficulty": {
+          "confidence": 0.0025869952047217204,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.3557591907219444,
+            "1": 0.345665925913892,
+            "2": 0.2985748833641635
+          },
+          "score": 0.942815692642219,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.6664567253276055,
+          "probabilities": {
+            "code": 0.907319802763164,
+            "math": 0.029188651169433314,
+            "other": 0.06349154606740272
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.4901382600994055,
           "type": "noul"
         }
       }
@@ -103,6 +165,37 @@
           "noul": 0.48219021937124484,
           "type": "noul"
         }
+      },
+      "rocm": {
+        "difficulty": {
+          "confidence": 0.2371304303170434,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.3731440074943378,
+            "1": 0.5755792793914033,
+            "2": 0.05127671311425893
+          },
+          "score": 0.6781327056199211,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.8830511906183858,
+          "probabilities": {
+            "code": 0.976304590665023,
+            "math": 0.011204942706112738,
+            "other": 0.012490466628864284
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.4791278610790117,
+          "type": "noul"
+        }
       }
     },
     "revision": "214ffa4322bc1bce3215c1bd5de6168402c76969"
@@ -137,6 +230,37 @@
         },
         "reasoning": {
           "noul": 0.5652491920141833,
+          "type": "noul"
+        }
+      },
+      "rocm": {
+        "difficulty": {
+          "confidence": 0.1406609695077169,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.4544082457674271,
+            "1": 0.44875724215156143,
+            "2": 0.09683451208101151
+          },
+          "score": 0.6424262663135845,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.7668439461572987,
+          "probabilities": {
+            "code": 0.9435668409991756,
+            "math": 0.027782803437944648,
+            "other": 0.028650355562879638
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.568275252781411,
           "type": "noul"
         }
       }
@@ -175,6 +299,37 @@
           "noul": 0.45681670238065425,
           "type": "noul"
         }
+      },
+      "rocm": {
+        "difficulty": {
+          "confidence": 0.23700500053833018,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.41730163816563676,
+            "1": 0.5375497362709339,
+            "2": 0.045148625563429294
+          },
+          "score": 0.6278469873977925,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.8189925247780474,
+          "probabilities": {
+            "code": 0.9589069558803878,
+            "math": 0.015967801954179732,
+            "other": 0.025125242165432507
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.4601530257060124,
+          "type": "noul"
+        }
       }
     },
     "revision": "4b75b52114583b4519001492e8dfb0926c89cfe1"
@@ -209,6 +364,37 @@
         },
         "reasoning": {
           "noul": 0.6855986059751719,
+          "type": "noul"
+        }
+      },
+      "rocm": {
+        "difficulty": {
+          "confidence": 0.1446870938976601,
+          "legend": {
+            "0": "Trivial",
+            "1": "Moderate",
+            "2": "Hard"
+          },
+          "probabilities": {
+            "0": 0.27220384976209466,
+            "1": 0.5892750314320462,
+            "2": 0.1385211188058591
+          },
+          "score": 0.8663172690437644,
+          "type": "score"
+        },
+        "domain": {
+          "choice": "code",
+          "confidence": 0.5948002681338611,
+          "probabilities": {
+            "code": 0.8818215519141743,
+            "math": 0.05759974045895799,
+            "other": 0.060578707626867644
+          },
+          "type": "choice"
+        },
+        "reasoning": {
+          "noul": 0.6846852855545106,
           "type": "noul"
         }
       }
