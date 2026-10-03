@@ -2320,7 +2320,8 @@ class ModelBinding(BaseModel):
 
     deployment: str
     contract: str
-    adapter: str
+    # Required except on model_runtime deployments, whose card names the head.
+    adapter: str = ""
     head: Optional[str] = None
     mapping_path: Optional[str] = None
     pair_scorer: Optional[PairScorerSelection] = None

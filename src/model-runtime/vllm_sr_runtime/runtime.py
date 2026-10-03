@@ -32,9 +32,11 @@ from .plugins import registry
 from .plugins.base import (
     DEADLINE,
     SURFACES,
+    DeviceInfo,
     EngineOptions,
     LoadedModel,
     ModelFamily,
+    ModelSpec,
     Profile,
     RegistryOptions,
     RequestPlan,
@@ -49,6 +51,23 @@ from .supervision.metrics import RuntimeMetrics
 from .supervision.readiness import STATES, GoldenResult, Health, golden_check
 
 log = logging.getLogger("vllm_sr_runtime")
+AUTO_ENGINE = "auto"
+
+
+def choose_engine(name: str, spec: ModelSpec, device: DeviceInfo) -> tuple[str, Any]:
+    """The named engine, or for ``auto`` the first that runs the spec on the device, native first."""
+    candidates = [name]
+    if name == AUTO_ENGINE:
+        candidates = sorted(registry.names("engines"), key=lambda n: (n != "native", n))
+    reasons = []
+    for candidate in candidates:
+        engine = registry.instantiate("engines", candidate)
+        reason = engine.supports(spec, device)
+        if reason is None:
+            return candidate, engine
+        reasons.append(f"{candidate}: {reason}")
+    raise RuntimeError(f"no engine can run {spec.name}: {'; '.join(reasons)}")
+
 
 __all__ = ["DEADLINE", "ParsedRequest", "Runtime", "ServedModel", "with_overrides"]
 
@@ -155,6 +174,7 @@ class ServedModel:
         self.package: VerifiedPackage | None = None
         self.model: LoadedModel | None = None
         self.placement: Placement | None = None
+        self.engine = config.engine
         self.profiles: dict[str, Profile] = {}
         self.scheduler: Scheduler | None = None
         self.cache = ResultCache(runtime.config.result_cache_entries)
@@ -212,12 +232,7 @@ class ServedModel:
         choices = family.kernel_choices(package, placement.device)
         if choices:
             pin_kernel_choices(choices)
-        engine = registry.instantiate("engines", config.engine)
-        reason = engine.supports(spec, placement.device)
-        if reason:
-            raise RuntimeError(
-                f"engine {config.engine!r} cannot run {spec.name}: {reason}"
-            )
+        self.engine, engine = choose_engine(config.engine, spec, placement.device)
         profiles = self._profiles()
         default = profiles[config.profile]
         engine_options = default.engine_options(EngineOptions(threads=process.threads))
@@ -273,7 +288,7 @@ class ServedModel:
             model=self.label,
             revision=model.info.revision or "local",
             family=family.name,
-            engine=config.engine,
+            engine=self.engine,
             accelerator=placement.accelerator.name,
             device=placement.device.label,
             profile=config.profile,
@@ -378,7 +393,7 @@ class ServedModel:
             "model_sha256": self.model.info.model_sha256,
             "profile": profile_name,
             "numerics": profile.numerics if profile else "exact",
-            "engine": self.config.engine,
+            "engine": self.engine,
             "accelerator": self.placement.accelerator.name,
             "device": self.placement.device.label,
             "queue_ms": round(queue_ms, 3),
@@ -454,7 +469,7 @@ class ServedModel:
                 }
                 for name, profile in self.profiles.items()
             ],
-            "engine": self.config.engine,
+            "engine": self.engine,
             "accelerator": self.placement.accelerator.name,
             "accelerator_validated": bool(self.placement.accelerator.validated),
             "device": self.placement.device.label,

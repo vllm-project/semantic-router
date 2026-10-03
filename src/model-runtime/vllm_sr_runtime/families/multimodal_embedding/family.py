@@ -16,9 +16,7 @@ import importlib.util
 import io
 import json
 import math
-import os
 import wave
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -42,21 +40,16 @@ from ...plugins.base import (
     UnsupportedSurfaceError,
     VerifiedPackage,
 )
+from ...registry.resolve import PREPARED_DIR_ENV, prepared_bundle
 from ...registry.tables import omni as pins
 from . import bundle as bundles
 from .processors import AudioFeatures, AudioProcessor, ImageProcessor, TextProcessor
 
-PREPARED_DIR_ENV = "VLLM_SR_RUNTIME_PREPARED_DIR"
-DEFAULT_PREPARED_DIR = "/opt/router-model-artifacts"
 UNIT_NORM_TOLERANCE = 0.005
 # Import name -> distribution of the multimodal extra.
 EXTRA = {"onnxruntime": "onnxruntime", "PIL": "Pillow"}
 GOLDEN_TEXT = "Route this request to the model that answers it best."
 LATE_TONE_SECONDS = 0.3
-
-
-def prepared_dir() -> Path:
-    return Path(os.environ.get(PREPARED_DIR_ENV, DEFAULT_PREPARED_DIR))
 
 
 def golden_image() -> bytes:
@@ -113,7 +106,7 @@ class MultimodalEmbeddingFamily(ModelFamily):
         pinned = pins.lookup(package.repo_id or "")
         if pinned is None:
             raise PackageError(f"{package.repo_id} has no prepared Omni bundle")
-        root = prepared_dir() / pins.bundle_name(pinned)
+        root = prepared_bundle(pinned)
         if not bundles.is_bundle(root):
             raise PackageError(
                 f"no prepared bundle at {root}: build it with tools/models/vela_omni "

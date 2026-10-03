@@ -18,7 +18,7 @@ from vllm_sr_runtime.engines.native.engine import NativeEngine
 from vllm_sr_runtime.engines.native.weights import cast_parameters, load_backbone
 from vllm_sr_runtime.families.decision1 import package as pkg
 from vllm_sr_runtime.families.decision1.family import Decision1Family
-from vllm_sr_runtime.heads.typed import TypeHeadLayer
+from vllm_sr_runtime.heads.typed import TypeHeadLayer, TypeReadout
 from vllm_sr_runtime.plugins.base import EncoderBatch, EngineOptions, PackageRef
 from vllm_sr_runtime.testing.decision1 import write_package
 from vllm_sr_runtime.testing.fixtures import modernbert_config, random_backbone, save
@@ -181,6 +181,20 @@ def test_type_head_layer_is_the_reference_encoder_layer():
             assert torch.equal(layer(hidden, key_padding), expected)
     finally:
         torch.backends.mha.set_fastpath_enabled(fastpath)
+
+
+def test_type_readout_runs_in_fp32_on_reduced_precision_hidden_states():
+    torch.manual_seed(0)
+    readout = TypeReadout(32, 4, 1).eval()
+    hidden = torch.randn(2, 6, 32)
+    padding = torch.zeros(2, 6, dtype=torch.bool)
+    padding[1, 4:] = True
+    markers = torch.tensor([[1, 3], [0, 2]])
+    with torch.inference_mode():
+        full = readout("choice", hidden, padding, markers)
+        reduced = readout("choice", hidden.bfloat16(), padding, markers)
+    assert full.dtype == reduced.dtype == torch.float32
+    assert torch.allclose(full, reduced, atol=0.05)
 
 
 def test_fp64_convolution_falls_back_off_its_shapes():

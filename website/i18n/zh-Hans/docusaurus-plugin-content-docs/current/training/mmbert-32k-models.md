@@ -11,7 +11,7 @@ translation:
 
 使用 Vela Embedding 高效找到相关文档，再用 Vela Reranker 改善少量候选的排序。两者均从共享的 [Vela Encoder](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M)适配而来，并支持选择编码器深度和输出维度。
 
-直接使用已发布模型，请参阅[嵌入和重排序](../installation/runtime/embeddings.md)。
+直接使用已发布模型，请参阅[嵌入和重排序](model-runtime/guides/embeddings.md)。
 
 ## Embedding：双编码器 {#embedding-model-bi-encoder}
 
@@ -81,7 +81,7 @@ Embedding 需要覆盖检索、相似度和多语言迁移。Reranker 使用固�
 
 ## 部署结果 {#deploy-the-result}
 
-通过[本地模型绑定](../installation/runtime/in-process.md)选择 checkpoint 和引擎，再通过[路由预览](../installation/runtime/lifecycle-diagnostics.md)检查深度、维度和输入预算。ONNX 部署需要从同一组训练权重导出的图。
+通过[本地模型绑定](model-runtime/deploy.md)选择 checkpoint 和引擎，再通过[路由预览](model-runtime/troubleshooting.md)检查深度、维度和输入预算。ONNX 部署需要从同一组训练权重导出的图。
 
 ## 早期 mmBERT 流程 {#earlier-mmbert-workflows}
 

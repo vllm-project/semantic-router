@@ -132,8 +132,12 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-To run supported Router-side local embeddings and classifiers on CUDA, use
-`--platform nvidia`. A stable CLI selects the matching published release image
+The Router's own models (classifiers, embeddings, decision models) run in the
+[model runtime](../model-runtime/overview.md). To run them on CUDA, use
+`--platform nvidia`: the CUDA image ships the runtime with the CUDA build of
+PyTorch, and deployments with `device: auto` or `device: cuda:0` use the GPU.
+CUDA support works but is not yet validated; measure it on your hardware.
+A stable CLI selects the matching published release image
 (for example, CLI `0.4.0` uses `vllm-sr-cuda:v0.4.0`). Development CLI builds
 use `:latest` unless an image is specified explicitly:
 
@@ -210,7 +214,8 @@ with `libcuda.so.1: cannot open shared object file`.
 Confirm that `--platform nvidia` selected the `vllm-sr-cuda` image and that
 `VLLM_SR_NVIDIA_PRESERVE_CPU` is not enabled. Check the generated runtime
 configuration and startup logs, not only the source recipe. A recipe without a
-local signal model has nothing to move to CUDA.
+local signal model has nothing to move to CUDA. `GET /v1/models` on a runtime,
+or the Dashboard's model inventory, shows the device each model runs on.
 
 ### vLLM or the Router runs out of GPU memory
 
