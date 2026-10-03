@@ -25,6 +25,9 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateInputModalityContracts(cfg); err != nil {
 		return err
 	}
+	if err := validateDecisionSignalContracts(cfg); err != nil {
+		return err
+	}
 	if err := validateDecisionModelContracts(cfg); err != nil {
 		return err
 	}
@@ -81,11 +84,17 @@ func validateDecisionLeafNode(
 	decisionName string,
 	node *RuleNode,
 ) error {
-	if node.Label != "" && !strings.EqualFold(node.Type, SignalTypeClassifier) {
-		return fmt.Errorf("decision '%s': label is only supported on classifier conditions", decisionName)
+	labelled := strings.EqualFold(node.Type, SignalTypeClassifier) || strings.EqualFold(node.Type, SignalTypeDecision)
+	if node.Label != "" && !labelled {
+		return fmt.Errorf("decision '%s': label is only supported on classifier and decision conditions", decisionName)
 	}
 	if strings.EqualFold(node.Type, SignalTypeClassifier) {
 		if err := validateClassifierDecisionLeaf(cfg, decisionName, node); err != nil {
+			return err
+		}
+	}
+	if strings.EqualFold(node.Type, SignalTypeDecision) {
+		if err := validateDecisionModelLeaf(cfg, decisionName, node); err != nil {
 			return err
 		}
 	}
@@ -105,9 +114,9 @@ func validateDecisionLeafNode(
 			node.Name,
 		)
 	}
-	if node.OnError != "" && !strings.EqualFold(node.Type, SignalTypeClassifier) {
+	if node.OnError != "" && !labelled {
 		return fmt.Errorf(
-			"decision '%s': condition %s(%q) on_error is only supported for classifier conditions",
+			"decision '%s': condition %s(%q) on_error is only supported for classifier and decision conditions",
 			decisionName,
 			node.Type,
 			node.Name,
@@ -683,6 +692,8 @@ func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRe
 		return validateDecisionWorkflowsAlgorithm(decisionName, modelRefs, algorithm.Workflows)
 	case "prompt":
 		return validatePromptAlgorithmConfig(decisionName, modelRefs, algorithm)
+	case DecisionAlgorithmDecision:
+		return validateDecisionSelectorConfig(decisionName, modelRefs, algorithm)
 	case "multi_factor":
 		return validateDecisionMultiFactorAlgorithm(decisionName, algorithm.MultiFactor)
 	}
