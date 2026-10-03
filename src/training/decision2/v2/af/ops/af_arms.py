@@ -105,6 +105,8 @@ ARMS = {
     # 9B: backbone and head LR both halved / quartered.
     "KIB4-lrhh": ("9b", "KIB4", ["--backbone-lr", "5e-6", "--head-lr", "5e-5"]),
     "KIB4-lrq": ("9b", "KIB4", ["--backbone-lr", "2.5e-6", "--head-lr", "2.5e-5"]),
+    # Amendment 11 (the 9B owner's backlog): M10's KX TRAIN at half backbone / head LR.
+    "KXH": ("9b", "KX", ["--backbone-lr", "5e-6", "--head-lr", "5e-5"]),
 }
 
 
