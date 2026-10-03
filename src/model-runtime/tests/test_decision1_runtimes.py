@@ -416,8 +416,13 @@ def test_approximate_batches_run_each_stack_over_its_own_rows(packages, runtimes
     exact, approximate = model.run(batch), model.run_approximate(batch)
     for row, value in zip(exact, approximate, strict=True):
         assert value == pytest.approx(row, abs=1e-4)
-    single = [item for item in batch if item.task_type == batch[0].task_type]
-    assert model.run_approximate(single) == model.run(single)
+    shuffled = list(reversed(plan.items))
+    for row, value in zip(
+        model.run_approximate(shuffled),
+        [model.run([i])[0] for i in shuffled],
+        strict=True,
+    ):
+        assert row == pytest.approx(value, abs=1e-4)
 
 
 def test_batching_profile_serves_the_encoder(packages):

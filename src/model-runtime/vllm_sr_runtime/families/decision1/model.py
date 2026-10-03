@@ -171,20 +171,38 @@ class VelaDecisionModel(Decision1Model):
             ]
 
     def run_approximate(self, items: list[RenderedItem]) -> list[list[float] | None]:
-        """Each question type's layer stack over that type's rows only, padded to their longest.
+        """Each question type's layer stack over that type's rows only, packed without padding.
 
-        The released runtime runs every type's stack over the whole batch;
-        rows of other types are wasted work but change GEMM shapes, so this
-        is for approximate profiles (up to three times fewer row passes on a
-        mixed request).
+        The released runtime runs every type's stack over the whole padded
+        batch; rows of other types and padding are wasted work, but dropping
+        them changes GEMM and attention shapes, so this is for approximate
+        profiles: up to three times fewer row passes on a mixed request and no
+        padding across coalesced requests.
         """
         results: list[list[float] | None] = [None] * len(items)
-        for kind in KINDS:
-            rows = [slot for slot, item in enumerate(items) if item.task_type == kind]
-            if rows:
-                answers = self.run([items[slot] for slot in rows])
-                for slot, value in zip(rows, answers, strict=True):
-                    results[slot] = value
+        with torch.inference_mode():
+            for kind in KINDS:
+                rows = [
+                    slot for slot, item in enumerate(items) if item.task_type == kind
+                ]
+                if not rows:
+                    continue
+                group = [items[slot] for slot in rows]
+                scores = vela.packed_marker_logits(
+                    self.engine_model.encode,
+                    self.readout,
+                    kind,
+                    group,
+                    self.engine_model.device,
+                    self.exit_layer,
+                )
+                finite = bool(torch.isfinite(scores).all())
+                for position, (slot, item) in enumerate(zip(rows, group, strict=True)):
+                    results[slot] = (
+                        scores[position, : len(item.keys)].softmax(-1).cpu().tolist()
+                        if finite
+                        else None
+                    )
         return results
 
 
