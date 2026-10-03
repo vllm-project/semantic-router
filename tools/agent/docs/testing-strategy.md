@@ -183,12 +183,9 @@ It does not replace deployed image extraction and routing tests. Reference-model
 parity and maximum-context qualifications that require explicit inputs remain
 separately declared; a shorter input acceptance test cannot qualify full context.
 
-```bash
-make download-models-perf
-```
-
-Product startup and `make download-models` instead provision models referenced
-by the active configuration. They are not the full test inventory. A pre-existing local model
+Benchmarks and model contracts let the runtime download each pinned model on
+first start. Product startup and `make download-models` instead provision models
+referenced by the active configuration. They are not the full test inventory. A pre-existing local model
 cache does not activate optional inference during ordinary core tests.
 
 A build identity includes its source revision, platform, and build inputs.
