@@ -87,6 +87,10 @@ class VllmConnectorTests(unittest.TestCase):
             connector = cls(config, KVConnectorRole.SCHEDULER, None)
             self.assertIsNotNone(connector.artifact)
             self.assertEqual(connector.get_num_new_matched_tokens(None, 0), (0, False))
+            config.model_config.hf_config.num_hidden_layers = 2
+            wrong_layers = cls(config, KVConnectorRole.SCHEDULER, None)
+            self.assertIsNone(wrong_layers.artifact)
+            config.model_config.hf_config.num_hidden_layers = 1
             extra["artifact_path"] = str(path / "missing")
             missing = cls(config, KVConnectorRole.SCHEDULER, None)
             self.assertIsNone(missing.artifact)
