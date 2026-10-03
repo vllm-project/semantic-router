@@ -24,7 +24,7 @@ func bindMemoryEmbedding(cfg *config.RouterConfig, sets ...*embedding.Set) (*con
 		if err != nil {
 			return embedding.ContentIdentity{}, err
 		}
-		return embedding.ResolveNamespaceIdentity(provider, settings)
+		return embedding.ResolveProviderIdentity(provider, settings)
 	})
 	if err == nil && len(sets) > 0 {
 		warnUnboundRemoteMemoryEmbedding(bound, sets[0])

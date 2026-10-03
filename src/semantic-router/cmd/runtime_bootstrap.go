@@ -397,6 +397,7 @@ func initializeRuntimeDependencies(
 		EmbeddingProvider: startupEmbeddingProviderStatus(embeddingState),
 	}, "Failed to write runtime dependency startup status")
 
+	// Vector store ingestion embeds through the managed model runtime.
 	startModelRuntimeManager(cfg, shutdownHooks, runtimeRegistry)
 	if err := initializeVectorStoreIfEnabled(cfg, shutdownHooks, runtimeRegistry); err != nil {
 		return embeddingState, err
@@ -487,7 +488,7 @@ func initializeVectorStoreIfEnabled(
 	if err := cfg.VectorStore.Validate(); err != nil {
 		return fmt.Errorf("invalid vector store configuration: %w", err)
 	}
-	vectorStoreRuntime, err := routerruntime.NewVectorStoreRuntime(cfg, runtimeRegistry.ModelPool())
+	vectorStoreRuntime, err := routerruntime.NewVectorStoreRuntime(cfg, modelservice.DefaultManager(), runtimeRegistry.ModelPool())
 	if err != nil {
 		return fmt.Errorf("create vector store runtime: %w", err)
 	}
