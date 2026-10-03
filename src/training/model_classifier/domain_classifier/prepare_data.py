@@ -131,7 +131,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sources", type=Path, required=True)
     parser.add_argument("--legacy-datasets", type=Path, required=True)
-    parser.add_argument("--annotations", type=Path, required=True)
+    parser.add_argument("--annotations", type=Path)
     parser.add_argument("--contract", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -228,7 +228,8 @@ def main():
             continue
         counts[key] += 1
         splits[split].append({**row, "split": split})
-    for line in args.annotations.read_text().split("\n"):
+    annotations = args.annotations.read_text() if args.annotations else ""
+    for line in annotations.split("\n"):
         if not line.strip():
             continue
         row = json.loads(line)
@@ -248,7 +249,11 @@ def main():
         "historical_exposure_not_guaranteed": True,
         "subject_mapping": SUBJECT_GROUPS,
         "unmapped_subject_policy": "other",
-        "annotations_sha256": hashlib.sha256(args.annotations.read_bytes()).hexdigest(),
+        "annotations_sha256": (
+            hashlib.sha256(args.annotations.read_bytes()).hexdigest()
+            if args.annotations
+            else None
+        ),
         "source_group_rows": dict(
             Counter(row["source"] for rows in splits.values() for row in rows)
         ),
