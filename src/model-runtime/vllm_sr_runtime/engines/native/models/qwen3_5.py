@@ -249,8 +249,13 @@ class Qwen3_5Backbone(nn.Module):
         self.kernels: KernelSet | None = None
 
     def forward(
-        self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor | None,
+        masks: dict[str, torch.Tensor | None] | None = None,
     ) -> torch.Tensor:
+        """``masks`` (``{"full", "linear"}``, built from host-known padding) replaces the masks derived
+        from ``attention_mask``, which read the mask back to the host."""
         assert self.kernels is not None, "bind kernels before running the backbone"
         hidden_states = self.embed_tokens(input_ids)
         batch, length = hidden_states.shape[:2]
@@ -260,8 +265,11 @@ class Qwen3_5Backbone(nn.Module):
             .expand(4, batch, -1)
         )
         rope_positions = position_ids[1:]
-        full_mask = causal_mask(attention_mask, length)
-        linear_mask = recurrent_mask(attention_mask, length)
+        if masks is None:
+            full_mask = causal_mask(attention_mask, length)
+            linear_mask = recurrent_mask(attention_mask, length)
+        else:
+            full_mask, linear_mask = masks["full"], masks["linear"]
         rotary = self.rotary_emb(hidden_states, rope_positions)
         for layer in self.layers:
             hidden_states = layer(

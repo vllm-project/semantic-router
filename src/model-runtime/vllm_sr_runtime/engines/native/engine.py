@@ -18,7 +18,7 @@ from ...plugins.base import (
     ForwardOutput,
     ModelSpec,
 )
-from . import models
+from . import fast, models
 from .models.lora import attach
 from .weights import keep_linear_bf16, load_adapter, load_backbone
 
@@ -43,6 +43,33 @@ class NativeEngineModel(EngineModel):
         self.kernels = accelerator.kernels(device_info)
         self.kernels.allow_approximate = not options.exact_kernels_only
         backbone.kernels = self.kernels
+        self.fast: dict[str, Any] = {}
+        self.masks: fast.Masks | None = None
+        self.graphs: fast.Graphs | None = None
+        if self.device.type == "cuda":
+            self._install_fast()
+
+    def _install_fast(self) -> None:
+        """The exact GPU fast path (``fast.py``): fused layers, lean LoRA, host masks and graphs."""
+        options, backbone = self.options, self.backbone
+        if options.fused_kernels:
+            reason = fast.fused_unavailable(backbone, self.kernels)
+            self.fast["fused_layers"] = 0 if reason else fast.install_fused(backbone)
+            if reason:
+                self.fast["fused_skipped"] = reason
+        if self.spec.backbone.lora is not None and self.residency is not None:
+            self.fast["lora"] = fast.install_lean_lora(backbone)
+        if options.fused_kernels or options.graphs:
+            self.masks = fast.Masks()
+        if options.graphs:
+            self.graphs = fast.Graphs(backbone, self.masks)
+
+    def receipt(self) -> dict[str, Any]:
+        """What runs this model: kernels, fast-path pieces and graph statistics."""
+        out: dict[str, Any] = {"kernels": self.kernels.describe(), **self.fast}
+        if self.graphs is not None:
+            out["graphs"] = self.graphs.receipt()
+        return out
 
     def autocast(self) -> AbstractContextManager[Any]:
         if self.device.type == "cpu":
@@ -57,7 +84,17 @@ class NativeEngineModel(EngineModel):
         gather = batch.gather.to(self.device)
         query = batch.query.to(self.device)
         with torch.inference_mode(), self.autocast():
-            hidden = self.backbone(input_ids, attention_mask)
+            if self.graphs is not None:
+                hidden = self.graphs(input_ids, attention_mask, batch.lengths)
+            elif self.masks is not None:
+                padded = any(n != input_ids.shape[1] for n in batch.lengths)
+                hidden = self.backbone(
+                    input_ids,
+                    attention_mask,
+                    masks=self.masks.build(attention_mask, padded),
+                )
+            else:
+                hidden = self.backbone(input_ids, attention_mask)
             rows = torch.arange(hidden.shape[0], device=hidden.device)
             gathered = hidden[rows[:, None], gather]
             queried = hidden[rows, query]

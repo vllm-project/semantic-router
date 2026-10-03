@@ -187,6 +187,7 @@ def main() -> int:
         "model_sha256": model.info.model_sha256,
         "device": engine.device_info.name,
         "kernels": engine.kernels.describe(),
+        "fast_path": engine.receipt() if hasattr(engine, "receipt") else None,
         "options": {"graphs": not args.no_graphs, "fused_kernels": not args.no_fused},
         "load_seconds": load_seconds,
         "panels": panels,
