@@ -92,19 +92,101 @@ def compare(
     return checked, matched
 
 
+def flatten(surface: str, response: dict[str, Any]) -> dict[str, float]:
+    """Comparable numbers of a classify, embeddings or rerank response, by stable key."""
+    values: dict[str, float] = {}
+    if surface == "classify":
+        for result in response.get("results", []):
+            index = result.get("index")
+            for name in ("probabilities", "scores"):
+                for position, value in enumerate(result.get(name) or []):
+                    values[f"{index}.{name}.{position}"] = float(value)
+            for position, span in enumerate(result.get("spans") or []):
+                key = f"{index}.span.{position}.{span['label']}.{span['start']}.{span['end']}"
+                values[key] = float(span["probability"])
+    elif surface == "embeddings":
+        for item in response.get("data", []):
+            for position, value in enumerate(item.get("embedding") or []):
+                values[f"{item['index']}.{position}"] = float(value)
+    elif surface == "rerank":
+        for result in response.get("results", []):
+            values[f"{result['index']}.logit"] = float(result["logit"])
+    return values
+
+
+def _surface_golden(
+    run_surface: Any, golden: dict[str, Any], device_class: str
+) -> tuple[GoldenResult | None, int, int]:
+    first = run_surface(golden["surface"], golden["body"])
+    second = run_surface(golden["surface"], golden["body"])
+    if first != second:
+        return (
+            GoldenResult(
+                status="failed", detail="golden answers are not deterministic"
+            ),
+            0,
+            0,
+        )
+    if not first or not all(math.isfinite(value) for value in first.values()):
+        return (
+            GoldenResult(status="failed", detail="golden answers are malformed"),
+            0,
+            0,
+        )
+    reference = (golden.get("expected") or {}).get(device_class)
+    if not reference:
+        return None, 0, 0
+    tolerance = CPU_TOLERANCE if device_class == "cpu" else GPU_TOLERANCE
+    checked = len(reference)
+    matched = sum(
+        key in first and abs(first[key] - float(value)) <= tolerance
+        for key, value in reference.items()
+    )
+    if set(first) != set(reference):
+        matched = min(matched, checked - 1)
+    return None, checked, matched
+
+
 def golden_check(
     run: Any,
     goldens: list[dict[str, Any]],
     device_class: str,
+    run_surface: Any = None,
 ) -> GoldenResult:
     """Run each golden request twice; require determinism, well-formed answers and the reference when known.
 
-    ``run(state, questions)`` returns the answers dict. References are keyed
-    by device class (``cpu``, ``rocm``, ``cuda``); answers must match within
+    ``run(state, questions)`` returns the answers dict of a decisions golden.
+    A golden with a ``surface`` and a ``body`` runs through
+    ``run_surface(surface, body)``, which returns the response's comparable
+    numbers (``LoadedModel.golden_values``). References are keyed by device
+    class (``cpu``, ``rocm``, ``cuda``); answers must match within
     ``CPU_TOLERANCE`` on CPUs and ``GPU_TOLERANCE`` on GPUs.
     """
     result = GoldenResult(status="unverified")
     for golden in goldens:
+        if "surface" in golden:
+            if run_surface is None:
+                return GoldenResult(
+                    status="failed", detail="no runner for surface goldens"
+                )
+            failure, checked, matched = _surface_golden(
+                run_surface, golden, device_class
+            )
+            if failure is not None:
+                return failure
+            if checked:
+                result.checked += checked
+                result.matched += matched
+                result.reference = device_class
+                if matched != checked:
+                    return GoldenResult(
+                        status="failed",
+                        checked=result.checked,
+                        matched=result.matched,
+                        reference=device_class,
+                        detail="golden answers differ from the reference",
+                    )
+            continue
         first = run(golden["state"], golden["questions"])
         second = run(golden["state"], golden["questions"])
         if first != second:

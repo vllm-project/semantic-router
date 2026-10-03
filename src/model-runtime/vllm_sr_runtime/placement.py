@@ -10,7 +10,7 @@ from .plugins import registry
 from .plugins.base import Accelerator, DeviceInfo, ModelSpec
 
 DEVICE = re.compile(r"(?P<kind>auto|cpu|cuda|rocm|xpu|mps)(?::(?P<index>\d+))?\Z")
-AUTO_ORDER = ("rocm", "cuda")
+AUTO_ORDER = ("rocm", "cuda")  # validated GPUs; xpu and mps only when named
 BYTES_PER_PARAMETER = 4
 ACTIVATION_RESERVE = 2 << 30
 
@@ -26,7 +26,7 @@ def parse_device(value: str) -> tuple[str, int | None]:
     match = DEVICE.fullmatch(value.strip().lower())
     if not match:
         raise PlacementError(
-            f"--device must be auto, cpu, cuda[:N] or rocm[:N]; got {value!r}"
+            f"--device must be auto, cpu, cuda[:N], rocm[:N], xpu[:N] or mps; got {value!r}"
         )
     index = match["index"]
     return match["kind"], int(index) if index is not None else None
@@ -65,7 +65,7 @@ def place(
         if index is not None:
             devices = [d for d in devices if d.index == index]
         for info in devices:
-            if name != "cpu" and not info.bf16:
+            if name != "cpu" and spec.dtype.autocast == "bfloat16" and not info.bf16:
                 reasons.append(f"{info.label}: no BF16 support")
                 continue
             if (
