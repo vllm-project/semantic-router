@@ -28,10 +28,6 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 		Milvus:              semanticCacheCfg.Milvus,
 		Qdrant:              semanticCacheCfg.Qdrant,
 		EmbeddingModel:      detectSemanticCacheEmbeddingModel(cfg),
-		PolarityGuard: cache.PolarityGuardOptions{
-			UseNLI:                 semanticCacheCfg.PolarityGuard.UsesNLI(),
-			ContradictionThreshold: semanticCacheCfg.PolarityGuard.EffectiveContradictionThreshold(),
-		},
 	}
 
 	if cacheConfig.BackendType == "" {
@@ -49,7 +45,7 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 	if semanticNeeded {
 		var err error
 		cacheConfig, identity, err = cache.PrepareEmbeddingNamespace(cacheConfig, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-			return embedding.ResolveNamespaceIdentity(cacheConfig.EmbeddingProvider, settings)
+			return embedding.ResolveProviderIdentity(cacheConfig.EmbeddingProvider, settings)
 		})
 		if err != nil {
 			return nil, "", fmt.Errorf("bind semantic cache embedding: %w", err)
