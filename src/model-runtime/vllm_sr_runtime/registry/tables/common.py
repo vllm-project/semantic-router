@@ -24,6 +24,8 @@ class BuiltinModel:
     ``public``, ``gated`` or ``private`` (a token with access is needed).
     A ``prepared`` entry is served from a bundle prepared from ``revision``
     (``registry.resolve.prepared_bundle``), which resolves without the Hub.
+    ``engines`` names the engine ``auto`` tries first per device class
+    (``{"cpu": "onnxruntime"}``), where the performance records show it faster.
     """
 
     repo_id: str
@@ -38,6 +40,7 @@ class BuiltinModel:
     files: Mapping[str, str] = field(default_factory=dict)
     access: str = "public"
     prepared: bool = False
+    engines: Mapping[str, str] = field(default_factory=dict)
     golden_answers: dict[str, Any] = field(default_factory=dict)
     kernel_choices: dict[str, Any] = field(default_factory=dict)
 
