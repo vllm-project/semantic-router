@@ -129,10 +129,14 @@ func classifyOne(model Model, head Head, input item, options api.ClassifyOptions
 	}
 	count := len(windows)
 	usage.Windows = &count
-	result := api.ClassifyResult{Input: usage, Windows: &windows}
+	result := api.ClassifyResult{Input: usage}
 	if head.Kind == "token" {
+		// Like the runtime's token heads: one merged span set and a window
+		// count, no per-window values.
 		slices.SortFunc(spans, func(a, b api.Span) int { return a.Start - b.Start })
 		result.Spans = &spans
+	} else {
+		result.Windows = &windows
 	}
 	if values, ok := reduced["scores"]; ok {
 		result.Scores = &values

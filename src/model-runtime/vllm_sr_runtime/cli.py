@@ -6,7 +6,9 @@ import argparse
 import json
 import logging
 import os
+import pwd
 import sys
+import tempfile
 from collections.abc import Sequence
 
 from .accel.autotune import AUTOTUNE_ENV
@@ -264,7 +266,30 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def default_identity() -> None:
+    """Defaults for a uid with no passwd entry (OpenShift, the router images).
+
+    PyTorch's compile caches name the user (``getpass.getuser``) and live under
+    ``HOME``; without a passwd entry, ``USER`` or a writable ``HOME`` the first
+    model load fails. Set variables are kept.
+    """
+    try:
+        pwd.getpwuid(os.getuid())
+        return
+    except KeyError:
+        pass
+    scratch = tempfile.gettempdir()
+    os.environ.setdefault("USER", "vllm-sr-runtime")
+    home = os.environ.get("HOME")
+    if not home or not os.access(home, os.W_OK):
+        os.environ["HOME"] = scratch
+    os.environ.setdefault(
+        "TORCHINDUCTOR_CACHE_DIR", os.path.join(scratch, "torchinductor")
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    default_identity()
     args = build_parser().parse_args(argv)
     if args.command == "serve":
         logging.basicConfig(
