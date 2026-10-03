@@ -57,7 +57,7 @@ export default function RootWrapper(props: React.ComponentProps<typeof Root>): R
   const localeNeutralPath = stripLocalePrefix(pathname)
   const canonicalUrl = toAbsoluteUrl(base, pathname)
   const englishUrl = toAbsoluteUrl(base, localeNeutralPath)
-  const chineseUrl = toAbsoluteUrl(base, localeNeutralPath === '/' ? '/zh-Hans' : `/zh-Hans${localeNeutralPath}`)
+  const chineseUrl = toAbsoluteUrl(base, localeNeutralPath === '/' ? '/zh-hans' : `/zh-hans${localeNeutralPath}`)
   const routeState = useMemo(() => resolveRouteState(pathname), [pathname])
 
   useEffect(() => {
