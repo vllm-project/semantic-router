@@ -8,6 +8,11 @@
         --complement <complement run> --out <public dir>/runs/<name>
     # after ``decision_index score`` of both: identical outputs, or the same Index (--index-only)
     python3 -m v2.eval.ix1.submission compare --a <scored dir> --b <scored dir> [--index-only]
+    # release spot check: a stratified sample re-run on the released revision vs the stored answers
+    PYTHONPATH=<decision2>:<kit-87d4650b> python3 -m v2.eval.ix1.submission sample \
+        --suite-dir <suite-0.2> --per-benchmark N --out <private dir>/spot.jsonl.gz
+    python3 -m v2.eval.ix1.submission spotcheck --stored <merged results.jsonl> \
+        --check <re-run results.jsonl> --out <release-spotcheck.json>
 
 ``merge`` refuses unless the stored results are byte-identical to their IX1 receipt, the two result
 sets are disjoint, together they hold exactly the edition's scoreable run IDs, no final record is an
@@ -106,6 +111,79 @@ def combine(
         "engine": engines.pop(),
     }
     return rows, accounting
+
+
+def spot_sample(
+    rows: Iterable[dict[str, Any]], per_benchmark: int
+) -> list[dict[str, Any]]:
+    """The first ``per_benchmark`` rows of every benchmark in sha256(run_id) order."""
+    by: dict[int, list[tuple[str, dict[str, Any]]]] = collections.defaultdict(list)
+    for row in rows:
+        e = row["_evaluation"]
+        by[e["catalog_id"]].append(
+            (hashlib.sha256(e["run_id"].encode()).hexdigest(), row)
+        )
+    out = []
+    for catalog in sorted(by):
+        out.extend(
+            row for _, row in sorted(by[catalog], key=lambda t: t[0])[:per_benchmark]
+        )
+    return out
+
+
+def spot_compare(
+    stored: dict[str, dict[str, Any]], check: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    """Agreement of re-run requests with their stored results: status, chosen key, |dp|."""
+    missing = sorted(set(check) - set(stored))
+    if missing:
+        raise ValueError(f"{len(missing)} re-run requests have no stored result")
+    mismatched: list[str] = []
+    statuses: collections.Counter = collections.Counter()
+    per_benchmark: dict[str, list[int]] = collections.defaultdict(lambda: [0, 0])
+    max_dp = 0.0
+    questions = 0
+    for run_id, b in sorted(check.items()):
+        a = stored[run_id]
+        statuses[b["status"]] += 1
+        cell = per_benchmark[str(a.get("catalog_id"))]
+        cell[0] += 1
+        same = a["status"] == b["status"] and b["status"] in ("ok", "unsupported")
+        if same and b["status"] == "ok":
+            left, right = a["response"]["answers"], b["response"]["answers"]
+            same = set(left) == set(right)
+            for key in left if same else ():
+                x, y = left[key], right[key]
+                questions += 1
+                if x.get("type") != y.get("type") or x.get("choice") != y.get("choice"):
+                    same = False
+                    break
+                if x["type"] == "noul":
+                    max_dp = max(max_dp, abs(x["noul"] - y["noul"]))
+                    continue
+                if set(x["probabilities"]) != set(y["probabilities"]):
+                    same = False
+                    break
+                for option, p in x["probabilities"].items():
+                    max_dp = max(max_dp, abs(p - y["probabilities"][option]))
+        if not same:
+            mismatched.append(run_id)
+            cell[1] += 1
+    return {
+        "requests": len(check),
+        "statuses": dict(sorted(statuses.items())),
+        "questions_compared": questions,
+        "status_or_choice_mismatches": len(mismatched),
+        "mismatched_run_ids": mismatched[:50],
+        "max_abs_dp": max_dp,
+        "per_benchmark_requests_mismatches": {
+            k: v
+            for k, v in sorted(
+                per_benchmark.items(),
+                key=lambda kv: int(kv[0]) if kv[0].isdigit() else -1,
+            )
+        },
+    }
 
 
 def public_row(record: dict[str, Any]) -> dict[str, Any]:
@@ -360,6 +438,68 @@ def cmd_public(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_sample(args: argparse.Namespace) -> None:
+    from decision_index.suite.io import Suite
+
+    from v2.eval.ix1.panel import census, gold_free, sha_file, write_rows
+
+    suite = Suite(args.suite_dir, EDITION)
+    suite.verify(strict=True)
+    rows = spot_sample(suite.rows(apply_exclusions=True), args.per_benchmark)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    write_rows(args.out, (gold_free(r) for r in rows))
+    report = {
+        "schema": "spot-sample/1",
+        "edition": EDITION,
+        "per_benchmark": args.per_benchmark,
+        "file_sha256": sha_file(args.out),
+        **census(rows),
+    }
+    args.out.with_suffix(".json").write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n"
+    )
+    print(json.dumps({k: report[k] for k in ("rows", "run_ids_sha256")}))
+
+
+def cmd_spotcheck(args: argparse.Namespace) -> None:
+    stored = _records(_read_lines(args.stored))
+    check = {}
+    for path in args.check:
+        records, _ = final_records(_read_lines(path))
+        check.update(records)
+    env = json.loads((args.check[0].parent / "environment.json").read_text())
+    report = {
+        "schema": "release-spotcheck/1",
+        "rerun_model_source": {
+            k: env["model_source"].get(k)
+            for k in (
+                "model_id",
+                "revision",
+                "package_manifest_sha256",
+                "model_sha256",
+                "base",
+            )
+        },
+        "tolerance_note": "A request agrees when its status, every question's chosen key and option set are equal; "
+        "max_abs_dp is the largest probability difference over every option and Noul answer.",
+        **spot_compare(stored, check),
+    }
+    args.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    print(
+        json.dumps(
+            {
+                k: report[k]
+                for k in (
+                    "requests",
+                    "statuses",
+                    "status_or_choice_mismatches",
+                    "max_abs_dp",
+                )
+            }
+        )
+    )
+
+
 def cmd_compare(args: argparse.Namespace) -> None:
     ok = True
     report = {}
@@ -402,6 +542,24 @@ def main() -> None:
     )
     p.add_argument("--out", type=Path, required=True)
     p.set_defaults(func=cmd_public)
+    s = sub.add_parser("sample")
+    s.add_argument("--suite-dir", type=Path, required=True)
+    s.add_argument("--per-benchmark", type=int, required=True)
+    s.add_argument("--out", type=Path, required=True)
+    s.set_defaults(func=cmd_sample)
+    k = sub.add_parser("spotcheck")
+    k.add_argument(
+        "--stored", type=Path, required=True, help="the merged results.jsonl"
+    )
+    k.add_argument(
+        "--check",
+        type=Path,
+        nargs="+",
+        required=True,
+        help="re-run results.jsonl files",
+    )
+    k.add_argument("--out", type=Path, required=True)
+    k.set_defaults(func=cmd_spotcheck)
     c = sub.add_parser("compare")
     c.add_argument("--a", type=Path, required=True)
     c.add_argument("--b", type=Path, required=True)

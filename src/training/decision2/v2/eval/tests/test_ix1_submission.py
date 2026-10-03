@@ -147,6 +147,54 @@ class PublicTests(unittest.TestCase):
         b["benchmarks"]["1"]["raw"] = 0.6
         self.assertNotEqual(submission.index_view(a), submission.index_view(b))
 
+    def test_spot_sample_is_stratified_and_deterministic(self) -> None:
+        rows = [_row(f"a{i}", 1) for i in range(5)] + [_row("b0", 24)]
+        first = submission.spot_sample(rows, 2)
+        self.assertEqual(len(first), 3)
+        self.assertEqual(
+            sorted(r["_evaluation"]["catalog_id"] for r in first), [1, 1, 24]
+        )
+        self.assertEqual(first, submission.spot_sample(list(reversed(rows)), 2))
+
+    def test_spot_compare_counts_choice_status_and_drift(self) -> None:
+        def ok(p: float, choice: str = "a") -> dict:
+            return {
+                "run_id": "r",
+                "catalog_id": 1,
+                "status": "ok",
+                "response": {
+                    "answers": {
+                        "q": {
+                            "type": "choice",
+                            "choice": choice,
+                            "probabilities": {"a": p, "b": 1 - p},
+                        },
+                        "n": {"type": "noul", "noul": 0.25},
+                    }
+                },
+            }
+
+        same = submission.spot_compare({"r": ok(0.7)}, {"r": ok(0.7000004)})
+        self.assertEqual(same["status_or_choice_mismatches"], 0)
+        self.assertAlmostEqual(same["max_abs_dp"], 4e-7)
+        flip = submission.spot_compare({"r": ok(0.7)}, {"r": ok(0.3, "b")})
+        self.assertEqual(flip["status_or_choice_mismatches"], 1)
+        refused = {"run_id": "r", "catalog_id": 1, "status": "unsupported"}
+        self.assertEqual(
+            submission.spot_compare({"r": ok(0.7)}, {"r": refused})[
+                "status_or_choice_mismatches"
+            ],
+            1,
+        )
+        self.assertEqual(
+            submission.spot_compare({"r": refused}, {"r": refused})[
+                "status_or_choice_mismatches"
+            ],
+            0,
+        )
+        with self.assertRaises(ValueError):
+            submission.spot_compare({}, {"r": ok(0.7)})
+
     def test_clean_drops_volatile_keys(self) -> None:
         self.assertEqual(
             submission.clean({"generated_utc": 1, "x": [{"out": 2, "y": 3}]}),
