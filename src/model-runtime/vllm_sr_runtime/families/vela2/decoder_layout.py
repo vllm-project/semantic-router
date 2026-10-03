@@ -12,10 +12,10 @@ in the repeat. A longer target is read in windows of at most 1,800 tokens
 word logits are averaged over the windows that cover a word.
 
 Every block attends to the parts and to itself only, so a question's answer
-does not depend on the other blocks of its tree: trees with the same parts
-are merged, and all of a request's questions (span questions included) share
-one parts pass whenever no part had to be cut. Every piece is tokenized on
-its own and the IDs are concatenated, as the packages do.
+does not depend on the other blocks of its tree. The trees are the packages':
+one per row (a span block that windows replace still runs, unread) and one per
+window. Every piece is tokenized on its own and the IDs are concatenated, as
+the packages do.
 """
 
 from __future__ import annotations
@@ -85,6 +85,7 @@ class Block:
     word_offsets: np.ndarray = field(default_factory=lambda: np.zeros((0, 2), np.int32))
     word_index: np.ndarray = field(default_factory=lambda: np.zeros(0, np.int64))
     alias: dict[str, str] | None = None
+    read: bool = True
 
     @property
     def query(self) -> int:
@@ -97,10 +98,15 @@ class Block:
 
 @dataclass
 class DecoderTree:
-    """Shared parts and the blocks that continue from them (a scheduler work item)."""
+    """Shared parts and the blocks that continue from them (a scheduler work item).
+
+    ``window`` marks a span window's tree, which the packages batch apart from
+    the rows' trees.
+    """
 
     prefix: list[int]
     blocks: list[Block] = field(default_factory=list)
+    window: bool = False
 
     @property
     def ids(self) -> list[int]:
@@ -141,15 +147,15 @@ class DecoderLayout:
     def trees(
         self, rows: list[Row], tokens: Tokens
     ) -> tuple[list[DecoderTree], list[RowTrees | None]]:
-        """The trees of a request, merged by identical parts; a row that cannot fit maps to None."""
-        by_prefix: dict[tuple[int, ...], DecoderTree] = {}
+        """The trees of a request's rows; a row that cannot fit maps to None."""
+        trees: list[DecoderTree] = []
         plans: list[RowTrees | None] = []
         for row in rows:
             try:
-                plans.append(self._row(row, tokens, by_prefix))
+                plans.append(self._row(row, tokens, trees))
             except SchemaTooLongError:
                 plans.append(None)
-        return list(by_prefix.values()), plans
+        return trees, plans
 
     @staticmethod
     def combine(plan: RowTrees, outputs: dict[int, np.ndarray]) -> RawRow:
@@ -188,9 +194,7 @@ class DecoderLayout:
 
     # -- internals -----------------------------------------------------------
 
-    def _row(
-        self, row: Row, tokens: Tokens, by_prefix: dict[tuple[int, ...], DecoderTree]
-    ) -> RowTrees:
+    def _row(self, row: Row, tokens: Tokens, trees: list[DecoderTree]) -> RowTrees:
         span = row.span
         routed = self.dispatcher.route(span) if span is not None else None
         questions = [routed.question if q is span else q for q in row.questions]
@@ -202,9 +206,10 @@ class DecoderLayout:
         )
         target = row.part(span.over) if span is not None else None
         if target is None or len(target.ids) <= self.repeat_limit:
-            self._add(by_prefix, prefix, blocks)
+            trees.append(DecoderTree(prefix, blocks))
             return plan
-        self._add(by_prefix, prefix, plan.blocks)
+        span_block.read = False
+        trees.append(DecoderTree(prefix, [*plan.blocks, span_block]))
         position = row.parts.index(target)
         for start, end in word_windows(
             target.words.first, len(target.ids), self.window, self.stride
@@ -218,19 +223,8 @@ class DecoderLayout:
             window_span.word_index = selected[: len(window_span.words)]
             plan.windows.append(window_span)
             plan.tokens += window_tokens
-            self._add(by_prefix, window_prefix, window_blocks)
+            trees.append(DecoderTree(window_prefix, window_blocks, window=True))
         return plan
-
-    @staticmethod
-    def _add(
-        by_prefix: dict[tuple[int, ...], DecoderTree],
-        prefix: list[int],
-        blocks: list[Block],
-    ) -> None:
-        if blocks:
-            by_prefix.setdefault(tuple(prefix), DecoderTree(prefix)).blocks.extend(
-                blocks
-            )
 
     def _render(
         self,

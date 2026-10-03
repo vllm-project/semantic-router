@@ -301,6 +301,9 @@ class Vela2Model(LoadedModel):
         )
 
     def run(self, items: list[Any], shared_prefix: int = 0) -> list[Any]:
+        """One forward per batch; ``shared_prefix`` > 0 (shared-context path) packs the 4B / 9B trees."""
+        if isinstance(self.member, DecoderMember):
+            return self.member.run(items, packed=shared_prefix > 0)
         return self.member.run(items)
 
     def finish_surface(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:

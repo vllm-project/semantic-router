@@ -32,6 +32,8 @@ GRAPH_OUTPUTS = ("opt_logits", "span_logits")
 INDEX_INPUTS = ("q_index", "opt_index", "unit_index", "ent_index")
 # The 0.3B engine's batching: padded tokens per forward by device class, and rows per forward.
 ENCODER_BUDGET = {"cpu": 16_384, "gpu": 32_768}
+# The 4B / 9B engine's batching: tokens per forward (whole trees), and rows per forward.
+DECODER_BUDGET = 24_576
 MAX_ROWS = 32
 
 
@@ -206,7 +208,14 @@ class EncoderMember:
 
 
 class DecoderMember:
-    """Vela 2.0 4B / 9B: one tree per request, candidate head for options, span heads for spans."""
+    """Vela 2.0 4B / 9B: trees through the engine's tree forward, candidate head and span heads.
+
+    Exact: the packages' trees, batched as they batch them (rows' trees and
+    window trees apart, by token count, under 24,576 tokens and 32 rows) and
+    laid out as their engine lays them out (``layout: rows``). Packed (the
+    shared-context path): trees with the same parts merge into one, so a
+    request's questions share one parts pass, and each runs back to back.
+    """
 
     def __init__(self, package: Vela2Package, engine_model: EngineModel):
         config = package.config
@@ -254,8 +263,62 @@ class DecoderMember:
     ) -> tuple[list[DecoderTree], list[RowTrees | None]]:
         return self.layout.trees(rows, tokens)
 
-    def run(self, items: list[DecoderTree]) -> list[list[np.ndarray]]:
-        return [self._tree(tree) for tree in items]
+    def batches(self, items: list[DecoderTree]) -> list[list[int]]:
+        """The packages' batching of trees: rows' trees and window trees apart, by token count."""
+        groups: list[list[int]] = []
+        for window in (False, True):
+            current: list[int] = []
+            members = [i for i, tree in enumerate(items) if tree.window == window]
+            for index in sorted(members, key=lambda i: len(items[i].ids)):
+                width = max(len(items[i].ids) for i in [*current, index])
+                if current and (
+                    len(current) + 1 > MAX_ROWS
+                    or width * (len(current) + 1) > DECODER_BUDGET
+                ):
+                    groups.append(current)
+                    current = []
+                current.append(index)
+            if current:
+                groups.append(current)
+        return groups
+
+    def run(
+        self, items: list[DecoderTree], packed: bool = False
+    ) -> list[list[np.ndarray | None]]:
+        """Per tree, each block's readout in block order (None for a block nobody reads)."""
+        results: list[list[np.ndarray | None]] = [
+            [None] * len(tree.blocks) for tree in items
+        ]
+        if packed:
+            shared: dict[tuple[int, ...], list[tuple[int, int]]] = {}
+            for t, tree in enumerate(items):
+                for b, block in enumerate(tree.blocks):
+                    if block.read:
+                        shared.setdefault(tuple(tree.prefix), []).append((t, b))
+            forwards = [
+                ([items[members[0][0]].prefix], members, [0] * len(members))
+                for members in shared.values()
+            ]
+        else:
+            forwards = []
+            for group in self.batches(items):
+                members = [(t, b) for t in group for b in range(len(items[t].blocks))]
+                rows = {t: row for row, t in enumerate(group)}
+                prefixes = [items[t].prefix for t in group]
+                forwards.append((prefixes, members, [rows[t] for t, _ in members]))
+        for prefixes, members, owners in forwards:
+            blocks = [items[t].blocks[b] for t, b in members]
+            hidden = self.engine_model.tree(
+                TreeBatch(
+                    prefixes=prefixes,
+                    blocks=[block.ids for block in blocks],
+                    owners=owners,
+                    layout="packed" if packed else "rows",
+                )
+            ).hidden
+            for (t, b), value in zip(members, self._read(blocks, hidden), strict=True):
+                results[t][b] = value
+        return results
 
     def combine(
         self, plans: list[RowTrees | None], items: list[DecoderTree], results: list[Any]
@@ -270,14 +333,12 @@ class DecoderMember:
             for plan in plans
         ]
 
-    def _tree(self, tree: DecoderTree) -> list[np.ndarray]:
-        """The tree's forward (parts once, every block from them), then each block's readout in order."""
-        blocks = tree.blocks
-        hidden = self.engine_model.tree(
-            TreeBatch(tree.prefix, [block.ids for block in blocks])
-        ).hidden
+    def _read(
+        self, blocks: list[Block], hidden: torch.Tensor
+    ) -> list[np.ndarray | None]:
+        """Readouts of one forward's blocks: the candidate head over every question block at once."""
         device = hidden.device
-        results: list[np.ndarray] = [np.zeros(0)] * len(blocks)
+        results: list[np.ndarray | None] = [None] * len(blocks)
         questions = [index for index, block in enumerate(blocks) if not block.is_span]
         with torch.inference_mode():
             if questions:
@@ -301,7 +362,7 @@ class DecoderMember:
                         values = values + self.set_bias
                     results[index] = values.cpu().numpy()
             for index, block in enumerate(blocks):
-                if block.is_span:
+                if block.is_span and block.read:
                     results[index] = self._span(block, hidden[index])
         return results
 
