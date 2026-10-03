@@ -883,6 +883,14 @@ profiles:
       - src/semantic-router/pkg/extproc/req_filter_decision_model_selector.go
       - src/semantic-router/pkg/config/decision_signal.go
       - src/semantic-router/pkg/config/model_runtime_deployment.go
+  model-runtime-real:
+    display_name: Model Runtime Real Models
+    owner: e2e
+    coverage_role: model-runtime-real-kai-and-vela-on-cpu
+    selection: manual
+    paths:
+      - e2e/profiles/model-runtime-real/**
+      - e2e/testcases/model_runtime_real.go
   pii-remote-backend:
     display_name: Remote PII Classifier
     owner: e2e
