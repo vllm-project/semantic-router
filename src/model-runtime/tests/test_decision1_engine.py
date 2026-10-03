@@ -8,9 +8,9 @@ from torch import nn
 from vllm_sr_runtime.accel.cpu import CPUAccelerator
 from vllm_sr_runtime.accel.kernels import (
     ADDITIVE_MASKS,
+    AdditiveMaskSDPA,
     Kernel,
     reference_kernels,
-    sdpa_additive_masks,
     sdpa_ref,
 )
 from vllm_sr_runtime.engines.native import models
@@ -28,12 +28,12 @@ def test_variants_run_only_for_models_that_name_them():
     kernels = reference_kernels("cpu")
     assert kernels.select("sdpa").fn is sdpa_ref
     kernels.use_variants({"sdpa": ADDITIVE_MASKS, "causal_conv1d": "missing"})
-    assert kernels.select("sdpa").fn is sdpa_additive_masks
+    assert isinstance(kernels.select("sdpa").fn, AdditiveMaskSDPA)
     assert kernels.select("causal_conv1d").variant is None
     kernels.register(
         Kernel("sdpa", sdpa_ref, "approximate", exact=False, variant=ADDITIVE_MASKS)
     )
-    assert kernels.select("sdpa").fn is sdpa_additive_masks
+    assert isinstance(kernels.select("sdpa").fn, AdditiveMaskSDPA)
     kernels.allow_approximate = True
     assert kernels.select("sdpa").source == "approximate"
     assert kernels.has("sdpa") and not kernels.has("gdn_prep")
@@ -48,13 +48,22 @@ def test_additive_masks_reproduce_boolean_and_missing_masks():
         ~allowed, torch.finfo(torch.float32).min
     )
     arguments = {"scale": 8**-0.5, "is_causal": False, "enable_gqa": False}
+    sdpa = AdditiveMaskSDPA()
+    for _ in range(2):
+        assert torch.equal(
+            sdpa(query, key, value, allowed, **arguments),
+            sdpa_ref(query, key, value, additive, **arguments),
+        )
+        assert torch.equal(
+            sdpa(query, key, value, None, **arguments),
+            sdpa_ref(query, key, value, torch.zeros(2, 1, 6, 6), **arguments),
+        )
+    assert sdpa.additive(query, key, allowed) is sdpa.additive(query, key, allowed)
+    other = allowed.clone()
+    other[0, :, :, 5:] = False
     assert torch.equal(
-        sdpa_additive_masks(query, key, value, allowed, **arguments),
-        sdpa_ref(query, key, value, additive, **arguments),
-    )
-    assert torch.equal(
-        sdpa_additive_masks(query, key, value, None, **arguments),
-        sdpa_ref(query, key, value, torch.zeros(2, 1, 6, 6), **arguments),
+        sdpa.additive(query, key, other)[0, 0, 0],
+        torch.tensor([0.0] * 5 + [torch.finfo(torch.float32).min]),
     )
 
 

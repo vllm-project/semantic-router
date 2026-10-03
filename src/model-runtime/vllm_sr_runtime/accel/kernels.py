@@ -207,45 +207,79 @@ def sdpa_ref(
 
 
 ADDITIVE_MASKS = "additive_masks"
+MASK_CACHE_ENTRIES = 4
 
 
-def sdpa_additive_masks(
-    query: torch.Tensor,
-    key: torch.Tensor,
-    value: torch.Tensor,
-    attn_mask: torch.Tensor | None,
-    *,
-    scale: float,
-    is_causal: bool,
-    enable_gqa: bool,
-) -> torch.Tensor:
+class AdditiveMaskSDPA:
     """SDPA with an additive float mask on every call, as Transformers 4.57's ModernBERT calls it.
 
     A boolean mask becomes 0 where allowed and the dtype's minimum elsewhere, a
     missing one zeros; on ROCm the inputs are made contiguous first, as that
     code does for the memory-efficient kernel. Both fix which SDPA backend runs.
+    The layers of one forward pass the same mask objects, so each is converted
+    once (one instance per kernel set, which one worker thread uses).
     """
-    if attn_mask is None:
-        attn_mask = query.new_zeros((query.shape[0], 1, query.shape[-2], key.shape[-2]))
-    elif attn_mask.dtype == torch.bool:
-        attn_mask = torch.zeros(
-            attn_mask.shape, dtype=query.dtype, device=query.device
-        ).masked_fill_(attn_mask.logical_not(), torch.finfo(query.dtype).min)
-    if (
-        torch.version.hip is not None
-        and query.is_cuda
-        and torch.backends.cuda.mem_efficient_sdp_enabled()
-    ):
-        query, key, value = query.contiguous(), key.contiguous(), value.contiguous()
-    return sdpa_ref(
-        query,
-        key,
-        value,
-        attn_mask,
-        scale=scale,
-        is_causal=is_causal,
-        enable_gqa=enable_gqa,
-    )
+
+    def __init__(self) -> None:
+        self._masks: list[tuple[object, torch.Tensor]] = []
+
+    def additive(
+        self, query: torch.Tensor, key: torch.Tensor, attn_mask: torch.Tensor | None
+    ) -> torch.Tensor:
+        if attn_mask is not None and attn_mask.dtype != torch.bool:
+            return attn_mask
+        source: object = attn_mask
+        if attn_mask is None:
+            source = (
+                query.shape[0],
+                query.shape[-2],
+                key.shape[-2],
+                query.dtype,
+                query.device,
+            )
+        capturing = query.is_cuda and torch.cuda.is_current_stream_capturing()
+        for cached, mask in self._masks:
+            if not capturing and (
+                cached is source if attn_mask is not None else cached == source
+            ):
+                return mask
+        if attn_mask is None:
+            mask = query.new_zeros((query.shape[0], 1, query.shape[-2], key.shape[-2]))
+        else:
+            mask = torch.zeros(
+                attn_mask.shape, dtype=query.dtype, device=query.device
+            ).masked_fill_(attn_mask.logical_not(), torch.finfo(query.dtype).min)
+        if not capturing:
+            self._masks = [(source, mask), *self._masks[: MASK_CACHE_ENTRIES - 1]]
+        return mask
+
+    def __call__(
+        self,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        attn_mask: torch.Tensor | None,
+        *,
+        scale: float,
+        is_causal: bool,
+        enable_gqa: bool,
+    ) -> torch.Tensor:
+        mask = self.additive(query, key, attn_mask)
+        if (
+            torch.version.hip is not None
+            and query.is_cuda
+            and torch.backends.cuda.mem_efficient_sdp_enabled()
+        ):
+            query, key, value = query.contiguous(), key.contiguous(), value.contiguous()
+        return sdpa_ref(
+            query,
+            key,
+            value,
+            mask,
+            scale=scale,
+            is_causal=is_causal,
+            enable_gqa=enable_gqa,
+        )
 
 
 def _activation(name: str) -> Callable[[torch.Tensor], torch.Tensor]:
@@ -267,7 +301,7 @@ def reference_kernels(device: str) -> KernelSet:
     kernels.register(
         Kernel(
             "sdpa",
-            sdpa_additive_masks,
+            AdditiveMaskSDPA(),
             "torch-reference",
             exact=True,
             variant=ADDITIVE_MASKS,
