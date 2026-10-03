@@ -138,6 +138,10 @@ def test_vllm_sr_image_ships_the_cli_runtime_sync_and_catalog() -> None:
         "COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json "
         "/app/cli/config_schema/router-config-v0.3.schema.json"
     ) in vllm_sr
+    # The script is not executable in git; the entrypoint needs the bit.
+    assert (
+        "COPY --chmod=0755 src/vllm-sr/start-router.sh /app/start-router.sh" in vllm_sr
+    )
     assert 'ENTRYPOINT ["/app/start-router.sh"]' in vllm_sr
     assert 'VOLUME ["/app/models"]' in vllm_sr
 

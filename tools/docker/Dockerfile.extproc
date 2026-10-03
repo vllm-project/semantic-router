@@ -123,7 +123,11 @@ RUN --mount=type=bind,source=src/model-runtime,target=/tmp/model-runtime,rw \
 # mounted model cache, each in an independent layer.
 FROM runtime AS router
 WORKDIR /app
-RUN mkdir -p /app/config /app/models
+# The charts run the router as uid 65532; other uids (OpenShift) have no passwd
+# entry, so Python's getpass and PyTorch's compile caches take USER.
+RUN mkdir -p /app/config /app/models && \
+    useradd --uid 65532 --no-create-home --shell /usr/sbin/nologin vllm-sr
+ENV USER=vllm-sr
 # Models the managed runtime downloads persist in the model volume.
 ENV VLLM_SR_RUNTIME_CACHE_DIR=/app/models/model-runtime
 COPY --link --from=vela-omni /opt/router-model-artifacts/ /opt/router-model-artifacts/
@@ -137,7 +141,7 @@ FROM router AS vllm-sr
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
-COPY src/vllm-sr/start-router.sh /app/start-router.sh
+COPY --chmod=0755 src/vllm-sr/start-router.sh /app/start-router.sh
 VOLUME ["/app/models"]
 ENTRYPOINT ["/app/start-router.sh"]
 CMD ["/app/config.yaml"]
