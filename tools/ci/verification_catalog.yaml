@@ -6,7 +6,6 @@ defaults:
   platform: linux/amd64
   runtime: none
   device: none
-  native: false
   images: []
   services: []
 component_workers:
@@ -37,7 +36,6 @@ verifications:
     executor: generated
     category: quality
     workflow: .github/workflows/check-generated.yml
-    native: true
     inventory: canonical-generated-contracts-v1
   security:
     display_name: Security Checks
@@ -64,8 +62,7 @@ verifications:
     executor: core
     category: components
     workflow: .github/workflows/test-and-build.yml
-    native: true
-    inventory: go-core-native-abi-and-selector-parity
+    inventory: go-core-and-selector-parity
   storage:
     display_name: Storage Integration
     activity: test
@@ -73,7 +70,6 @@ verifications:
     executor: storage
     category: integration
     workflow: .github/workflows/test-storage.yml
-    native: true
     services: [milvus, redis, qdrant, valkey, postgres]
     inventory: required-storage-framework-discovery
   dashboard:
@@ -83,7 +79,6 @@ verifications:
     executor: dashboard
     category: components
     workflow: .github/workflows/dashboard-test.yml
-    native: true
     inventory: dashboard-go-vitest-and-controlled-api-browser
   operator:
     display_name: Kubernetes Operator
@@ -94,7 +89,7 @@ verifications:
     workflow: .github/workflows/operator-ci.yml
     images: [operator, operator-bundle, extproc, provider-mocker]
     services: [kind]
-    runtime: candle
+    runtime: model-runtime
     device: cpu
     inventory: operator-unit-generated-olm-reconcile-and-routed-request
   local.cli:
@@ -107,7 +102,7 @@ verifications:
     suite: cli
     images: [vllm-sr, dashboard, provider-mocker]
     services: [docker, envoy, controlled-backend]
-    runtime: candle
+    runtime: model-runtime
     device: cpu
     inventory: cli-live-lifecycle
   local.memory:
@@ -120,7 +115,7 @@ verifications:
     suite: memory
     images: [vllm-sr, dashboard, provider-mocker]
     services: [docker, envoy, milvus, provider-mocker]
-    runtime: candle
+    runtime: model-runtime
     device: cpu
     inventory: memory-15-required-cases-v1
   recipe-conformance:
@@ -132,80 +127,40 @@ verifications:
     workflow: .github/workflows/recipe-conformance.yml
     images: [vllm-sr]
     services: [docker, envoy, management-api]
-    runtime: candle
+    runtime: model-runtime
     device: cpu
     inventory: maintained-recipe-source-aware-shards
-  native.candle-cpu:
-    display_name: Candle CPU
-    activity: test
-    boundary: [integration]
-    executor: native
-    category: runtime
-    workflow: .github/workflows/test-native.yml
-    platform_id: candle-cpu
-    runtime: candle
-    device: cpu
-    native: true
-    target: test-models
-    inventory: published-vela-v1+multimodal-v1
-  native.candle-riscv64-qemu:
-    display_name: Candle RISC-V (QEMU)
+  platform.image-calibration-cpu:
+    display_name: Image Routing Conformance
     activity: test
     boundary: [unit, integration]
-    executor: native
+    executor: platform
+    category: conformance
+    workflow: .github/workflows/test-platform.yml
+    platform_id: model-runtime-cpu
+    runtime: model-runtime
+    device: cpu
+    target: verify-image-routing-calibration
+    inventory: image-routing-calibration-source-fixtures-and-thresholds
+    evidence: image-calibration
+  platform.router-riscv64-qemu:
+    display_name: Router RISC-V (QEMU)
+    activity: test
+    boundary: [integration]
+    executor: platform
     category: runtime
-    workflow: .github/workflows/test-native.yml
-    platform_id: candle-riscv64-qemu
+    workflow: .github/workflows/test-platform.yml
+    platform_id: router-riscv64-qemu
     platform: linux/riscv64
-    runtime: candle
+    runtime: model-runtime
     device: cpu
     execution:
       mode: qemu-user
       host_platform: linux/amd64
     target: test-riscv-qemu
     evidence: riscv-qemu
-    timeout_minutes: 150
-    inventory: candle-riscv64-parity-owned-fixtures-and-router-smoke-v1
-  native.ort-cpu:
-    display_name: ONNX Runtime CPU
-    activity: test
-    boundary: [integration]
-    executor: native
-    category: runtime
-    workflow: .github/workflows/test-native.yml
-    platform_id: ort-cpu
-    runtime: ort
-    device: cpu
-    native: true
-    target: test-models
-    inventory: published-vela-v1
-  native.image-calibration-cpu:
-    display_name: Image Routing Conformance
-    activity: test
-    boundary: [unit, integration]
-    executor: native
-    category: conformance
-    workflow: .github/workflows/test-native.yml
-    platform_id: ort-cpu
-    runtime: ort
-    device: cpu
-    native: true
-    target: verify-image-routing-calibration
-    inventory: image-routing-calibration-source-fixtures-and-thresholds
-    evidence: image-calibration
-  native.openvino-cpu:
-    display_name: OpenVINO CPU
-    activity: test
-    boundary: [unit, integration]
-    executor: native
-    category: runtime
-    workflow: .github/workflows/test-native.yml
-    platform_id: openvino-cpu
-    runtime: openvino
-    device: cpu
-    native: true
-    target: verify-openvino-binding
-    inventory: owned-openvino-lifetimes-budgets-and-published-vela-v2
+    timeout_minutes: 60
+    inventory: pure-go-riscv64-router-attached-runtime-smoke-v1
   performance:
     display_name: Production Benchmarks
     activity: performance
@@ -213,8 +168,7 @@ verifications:
     executor: performance
     category: performance
     workflow: .github/workflows/performance-test.yml
-    native: true
-    runtime: candle
+    runtime: model-runtime
     device: cpu
     inventory: production-benchmark-and-paired-model-inventory
   cli-package:
@@ -306,31 +260,11 @@ verifications:
     workflow: .github/workflows/test-tools.yml
     target: test-e2e-unit
     inventory: e2e-go-helper-and-profile-discovery
-  onnx-artifacts:
-    display_name: ONNX Artifacts
-    activity: test
-    boundary: [integration]
-    executor: tools
-    category: components
-    worker: model
-    workflow: .github/workflows/test-tools.yml
-    target: onnx-artifact-test
-    inventory: external-onnx-weight-packing-cpu-inference
-  ck-rewrite:
-    display_name: Attention Graph Rewriter
-    activity: test
-    boundary: [unit]
-    executor: tools
-    category: components
-    worker: model
-    workflow: .github/workflows/test-tools.yml
-    target: ck-rewrite-test
-    inventory: attention-graph-rewriter-contracts
 
 # Versioned required inventory, shared by ci/full, nightly and release. A new
 # public PR-CI deployment must be mapped here, not silently treated as a rotation.
 full_cpu:
-  version: 2
+  version: 3
   required:
     - quality
     - generated-contracts
@@ -343,11 +277,8 @@ full_cpu:
     - local.cli
     - local.memory
     - recipe-conformance
-    - native.candle-cpu
-    - native.candle-riscv64-qemu
-    - native.ort-cpu
-    - native.image-calibration-cpu
-    - native.openvino-cpu
+    - platform.image-calibration-cpu
+    - platform.router-riscv64-qemu
     - performance
     - cli-package
     - cli-unit
@@ -357,8 +288,6 @@ full_cpu:
     - learning-tools
     - harness-tools
     - e2e-unit
-    - onnx-artifacts
-    - ck-rewrite
     - e2e.envoy-ai-gateway
     - e2e.local-classifier-backend
     - e2e.dashboard

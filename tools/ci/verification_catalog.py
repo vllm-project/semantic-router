@@ -76,7 +76,7 @@ def verification_records(registry: dict) -> dict[str, dict]:
             "profile": name,
             "images": images,
             "services": ["kind", "gateway", "controlled-backend"],
-            "runtime": profile.get("runtime", "candle"),
+            "runtime": profile.get("runtime", "model-runtime"),
             "device": profile.get("device", "cpu"),
             "resource_class": profile.get("resource_class", "standard"),
             "inventory": f"e2e-profile:{name}",
@@ -125,7 +125,7 @@ def catalog_errors(registry: dict) -> list[str]:
             worker = catalog["component_workers"].get(record.get("worker"))
             if not worker or not worker.get("display_name"):
                 errors.append(f"verification {name} lacks a declared component worker")
-            if record["native"] or record["images"] or record["runtime"] != "none":
+            if record["images"] or record["runtime"] != "none":
                 errors.append(
                     f"verification {name} is incompatible with a lightweight worker"
                 )
@@ -144,9 +144,8 @@ def catalog_errors(registry: dict) -> list[str]:
         if (execution := record.get("execution")) and (
             execution != {"mode": "qemu-user", "host_platform": "linux/amd64"}
             or record["platform"] != "linux/riscv64"
-            or record["runtime"] != "candle"
+            or record["runtime"] != "model-runtime"
             or record["device"] != "cpu"
-            or record["native"]
         ):
             errors.append(
                 f"verification {name} has an invalid emulated target contract"

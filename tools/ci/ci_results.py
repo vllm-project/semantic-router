@@ -115,7 +115,6 @@ def execution_errors(
         or execution.get("host_platform") != producer_platform
         or evidence.get("execution") != execution
         or verification["platform"] != "linux/riscv64"
-        or verification["native"]
     ):
         return ["emulated target, producer platform or artifact contract differs"]
     return []
@@ -145,8 +144,6 @@ def make_receipt(
     errors.extend(execution_errors(verification, evidence, execution_platform))
     artifacts = artifact_records(evidence, environ=environ)
     required = {f"image:{image}" for image in verification["images"]}
-    if verification["native"]:
-        required.add("native:cpu")
     missing = required - {record["id"] for record in artifacts}
     if missing:
         errors.append(f"missing consumed artifact identities: {sorted(missing)}")

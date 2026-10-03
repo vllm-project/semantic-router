@@ -26,10 +26,10 @@ SHA = "a" * 40
 
 
 class ComponentBatchTests(unittest.TestCase):
-    def test_ten_contracts_use_ten_workers_without_changing_selection(self):
+    def test_eight_contracts_use_eight_workers_without_changing_selection(self):
         full = make_plan([], source_sha=SHA, full=True)
         batches = full["component_batches"]
-        self.assertEqual(len(batches), 10)
+        self.assertEqual(len(batches), 8)
         self.assertTrue(all(len(batch["verifications"]) == 1 for batch in batches))
         rows = [row for batch in batches for row in batch["verifications"]]
         selected = [row for row in full["verifications"] if row["executor"] == "tools"]
@@ -41,11 +41,11 @@ class ComponentBatchTests(unittest.TestCase):
             [batch["worker"] for batch in batches], [row["worker"] for row in rows]
         )
         self.assertEqual(json.loads(github_outputs(full)["component_batches"]), batches)
-        partial = make_plan([], source_sha=SHA, requested=("ck-rewrite",))
+        partial = make_plan([], source_sha=SHA, requested=("model-runtime",))
         self.assertEqual(len(partial["component_batches"]), 1)
         self.assertEqual(
             [row["id"] for row in partial["component_batches"][0]["verifications"]],
-            ["ck-rewrite"],
+            ["model-runtime"],
         )
         self.assertNotIn("generated_contracts", full["quality_context"])
         self.assertNotIn("soak", full["quality_context"])
