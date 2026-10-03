@@ -189,9 +189,19 @@ fn chunked_sdpa_impl(
                 scores = scores.broadcast_add(&pad_slice)?;
             }
             if let Some(window) = cfg.window {
-                let band = build_local_band_mask(q_abs_start, blk, kb, kw, window, device)?
-                    .to_dtype(scores.dtype())?;
-                scores = scores.broadcast_add(&band)?;
+                // The band is zero wherever every key in `[ks, ke)` lies within
+                // `window` of every query in `[qa, qa + blk)`, i.e. where the largest
+                // query/key gap in this tile stays inside the window. That is a
+                // property of the indices alone, so the check is integer-only: when
+                // it holds, adding the band is adding zeros and is skipped.
+                let max_gap = (q_abs_start + blk - 1)
+                    .saturating_sub(ks)
+                    .max(ke.saturating_sub(1).saturating_sub(q_abs_start));
+                if max_gap > window {
+                    let band = build_local_band_mask(q_abs_start, blk, kb, kw, window, device)?
+                        .to_dtype(scores.dtype())?;
+                    scores = scores.broadcast_add(&band)?;
+                }
             }
             if cfg.causal {
                 let causal = build_causal_mask(q_abs_start, blk, kb, kw, device)?
