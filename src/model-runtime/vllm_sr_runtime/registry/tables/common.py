@@ -22,6 +22,9 @@ class BuiltinModel:
     them (Decision 1.0, Vela 1.0, Vela 2.0, Omni); the resolver downloads
     exactly these files and the family verifies them. ``access`` is
     ``public``, ``gated`` or ``private`` (a token with access is needed).
+    ``reduced`` maps ``gpu`` / ``cpu`` to the reduced-precision copy the
+    package's records support (``DtypePolicy.reduced_gpu`` / ``reduced_cpu``);
+    a device it does not name gets none.
     """
 
     repo_id: str
@@ -37,6 +40,7 @@ class BuiltinModel:
     access: str = "public"
     golden_answers: dict[str, Any] = field(default_factory=dict)
     kernel_choices: dict[str, Any] = field(default_factory=dict)
+    reduced: Mapping[str, str] = field(default_factory=dict)
 
 
 def with_recorded(
