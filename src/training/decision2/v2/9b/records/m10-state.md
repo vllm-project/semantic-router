@@ -2,6 +2,28 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-03 02:50Z (10:50 UTC+8), M10 continuation (owner e28aa509)
+
+- **RELEASED: Lux-9B `main` = `214ffa4322bc1bce3215c1bd5de6168402c76969`.** It is a runtime-only revision: the phase A
+  runtime plus the opt-in shared-context switch, with the KIB4-a40 weights unchanged (COORDINATION 08:30: the Lux
+  switch is the 9B owner's when no 9B release is under way by 10:00). `ra.sh 9B --switch` (mirror `f7cfd2876`) passed:
+  - parity on the default path 10,653 / 10,653 identical, 0.0 drift; bench 400 bit-identical;
+  - download re-hash and examples, the Hub smoke under Transformers 5.17 / 5.18, readback, gate seal, collection,
+    links 8 / 8, card HTTP, gate evaluate;
+  - the 86-request gate on the download 86 / 86, max |dp| 0.0.
+  `post_checks=ok` at 02:41Z. The record is `dev2-runtime-a-2026-10-02/9b/switch` (`1d952eaa8`).
+- **m10c ops re-pinned** (`c113eee18`): a weights successor now supersedes `214ffa43`, derives from
+  `dev2-9b-ras.json` and takes the switch release's gate and decision as "current". The comparator run and the purge
+  node copy stay KIB4-a40's (same weights).
+- **`M10-HLR4-a60-bf16`: FAIL**, narrowly; the lower bound is just below 0. It is the best 9B point so far. RAGTruth
+  loses less than in HLR4-a80, and the broad gains hold.
+- **Formal R3:** `KIB4H-a80` exit 0, types OK. Its release inputs (`bf16`, `derive`, `paired`, `current`) are staged
+  on node A.
+- **Index:** `KIB4H-a80` is scoring (gate ≈ 03:06Z) and `KIB4H-a40` is on shards. `HLR4-a50` (wave-2 rule 1, FP32
+  `9a3c7e05…`) is staged on node B.
+- **GPU-h (continuation):** ≈ 41 (Index ≈ 32.5 incl. HLR4-a80 / -a60 / KIB4H-a80 / -a40; formals ≈ 1.2; switch
+  evidence and release ≈ 1.2; training 6.8).
+
 ## 2026-10-03 01:55Z (09:55 UTC+8), M10 continuation (owner e28aa509)
 
 - **`M10-HLR4-a80-bf16`: FAIL** vs KIB4-a40. Its point is level with the release. Most benchmarks rose, but RAGTruth
