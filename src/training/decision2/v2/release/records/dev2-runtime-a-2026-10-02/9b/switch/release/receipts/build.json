@@ -1,0 +1,92 @@
+{
+  "builder_commit": "f7cfd287608c113b5f45ac6649a369983cb6bce8",
+  "card": {
+    "assets_receipt_sha256": "25a1281a2d494e02312cec6e5d4317310b526e7e6bfcddbfcba6732fc4406362",
+    "excluded": [],
+    "figures_sha256": {
+      "assets/banner.png": "8f0ceae33ab2bd861a34bf21a86dd580b421d79367b16c76ff489a36416f92d4",
+      "assets/index-areas.png": "78067b2d89311a2b1e9f94d6fa66679d8e691a332d94bafb3f3faba705dedc5c",
+      "assets/index-pareto.png": "4107012b592fc7fe8423b145f732b92dd82dfd3caf605821975cf09561fb13da",
+      "assets/jevarena-types.png": "eb97275fb1b7019d7f98a5dad1dbc3344793ecb763556194c2eaa34adc4d3773",
+      "assets/jevarena.png": "6ed6a446ec7f97170f259545e4ff7269335768c136e6bd5a3c33ac5594c8d2e8"
+    },
+    "index_sha256": "38cd77f44b10539808738b6ea8bc0b84b490afdb126221a63b03d0eb42cc9fd1",
+    "paired": {
+      "ci95": [
+        0.24952936598156444,
+        3.9130520701015565
+      ],
+      "delta": 2.26945037830923,
+      "replicates": 5000,
+      "sha256": "4bce815ce276ce6b758c866e3b2cb0aa3098f78df0c25752c43a529e1ba1339e"
+    },
+    "readme_sha256": "6eb1f152418ea30ef2a46f641a5b00a758805efc3d9a96790e7685d721b54405",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "6143caba38a49a04fbae6770d2a836d5821ec99dc7db5100a1e6c61444d9a200"
+      },
+      {
+        "key": "lux1",
+        "licence": "apache-2.0",
+        "report_sha256": "b4ebe0d24a3756136aa5fe79a1daf614b7509371f76d130c299d536f41add62c"
+      },
+      {
+        "key": "nimble2",
+        "licence": "apache-2.0",
+        "report_sha256": "42636dfa1482ba5d76e9f5ada1186c699b6ab058a762106334911c60d8469cea"
+      }
+    ],
+    "tradeoffs": [
+      "mlx-diag non-English Choice (accuracy): 77.9% versus 78.3%",
+      "mlx-diag non-English Noul (accuracy): 78.3% versus 83.3%",
+      "Transfer: Reddit humour (macro-F1): 56.2% versus 59.2%",
+      "Transfer: Wikipedia power (macro-F1): 55.7% versus 58.4%",
+      "Transfer: Conversations Gone Awry (macro-F1): 53.5% versus 55.2%",
+      "Transfer: TalkLife empathy (macro-F1): 25.2% versus 26.6%",
+      "Transfer: Misinfo Reaction Frames (macro-F1): 77.5% versus 78.4%",
+      "Transfer: Media ideology (macro-F1): 55.2% versus 55.8%",
+      "Transfer: Indian English dialect (macro-F1): 40.6% versus 41.1%",
+      "JevBench public 231 (correct): 179/231 versus 183/231",
+      "JevBench public hard (correct): 64/111 versus 68/111"
+    ]
+  },
+  "ended_utc": "2026-10-03T02:25:21.667778+00:00",
+  "files": 43,
+  "identity": {
+    "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+    "bf16_copy": {
+      "receipt_sha256": "1ddbc353b6c17d079cc67060507bccc3e0b7676ee33d0e6235fee41c82c1790c",
+      "source_model_sha256": "b6984475a3804714d1018b4ba18c2dc28ffa48d8bc293d26211f620bdd062ee3"
+    },
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "0ece5faa210173f443f353474b419fd913a253b06645da3e8370c2db0e1c3339",
+    "readout": "head",
+    "temperature_by_type": null,
+    "text_parameter_count": 7936684544
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "6e8e7f7dbe98cc100ed2d478eec9aba3ae1bc1711ac2ffe323f60512684d913b",
+  "package": "/data/dev2/runs/release/dev2-ras-9B-20261003T022358Z/package/Decision-2.0-Lux-9B",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 7940895744,
+    "packaged": {
+      "backbone": 7936684544,
+      "head": 4211200,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "6c18dd57d5bd2070ac9e4849ed1c76877847924e1dbd3c851e050a2e441fa328",
+    "status": "final"
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 38
+  },
+  "spec_sha256": "a832e1f9a6bb2ad15ad24d591e5a5f3545224b6fb0fd8d1a7569211c32206328",
+  "started_utc": "2026-10-03T02:24:41.947247+00:00"
+}
