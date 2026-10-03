@@ -56,6 +56,29 @@
 - **01:25Z: M9 amendment 3** (`cf8c660f5`): `X9-IBLRH` (M9-IB-lrh s5 / s6, ½ each) and `X9-IBLRHxM50` (+ M50's four,
   ⅙ each), read first (≈ 14:20Z). +30 GPU-h asked. Generic chain **`/tmp/d2w/cand.sh ARM`** (member lists and weights
   for every preregistered candidate except X8-ML; `CAND_PARITY_GPU` / `CAND_INDEX_GPUS` start parity and the run).
+- **Waiters running (workstation, detached):** `score-wait.sh X7-IBxIB2xIB14ML` (log `logs/score-wait-X7.log`;
+  scores with `M6_INDEX_BASE=M6-IBxIB2-m50` once all 8 shards end 0, prints only YES / no for lower bound > 0);
+  `idx-wait.sh M7-IB14ML "d6 d7" "M8-IB14-s4 M8-IB14-s5"` (parity + run when those seeds relay, ≈ 04:50Z);
+  `cand.sh X7-4ARM` with `CAND_PARITY_GPU=d0 CAND_INDEX_GPUS="d0 d1 d2 d3 d4 d5"` (waits for the M7-IB124ML relays,
+  soup with weights 3×6 / 2×3, stage, then waits until those GPUs are idle, parity, run, audit).
+- **Release runbook (a candidate ARM with lower bound > 0 and R3 types OK):**
+  1. `bash v2/27b/m6/m6-stage-a.sh ARM` (workstation; formal run, package, soup, gates node B → node A).
+  2. `bash v2/release/records/dev2-27b-succ-2026-10-03/ops/inputs27bs.sh ARM` (workstation; private Index files → node A
+     `/data/dev2/private/release/27bs/ARM`).
+  3. node A, mirror ≥ `e9dec5c1b`: `ops/index27bs.sh ARM`, then `ops/render27bs.sh ARM`.
+  4. Set `CHOICE = "ARM"` in `make_27bs.py`, commit, push, mirror to node A; there run
+     `PYTHONPATH=<mirror>/src/training/decision2 python3 <mirror>/…/ops/make_27bs.py --arm ARM --decided-utc <UTC> --out
+     /data/dev2/tmp/27bs-ARM`; copy the two outputs into `v2/release/specs/` and the record dir, commit, push, mirror,
+     re-run with `--check`.
+  5. node A: `TF518_DIGEST=93df9002544f8394b572497d97dd2df778e79b63adbcc5624173bcf84de7fffe bash
+     <mirror>/…/ops/release27bs.sh ARM --release --gpu 0` (GPU0 shared lease; Vega `main` must still be `9b067a95`);
+     wait for `post_checks=ok` (upload, download re-hash, Hub smoke 5.17 / 5.18, 86-request parity on the download,
+     card HTTP / links / collection, gate evaluate, purge of 9b067a95's weights).
+  6. 86-request gate on the download (node A, same GPU): `bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/
+     gate86.sh --package <work>/download/Decision-2.0-Vega-27B --repo vllm-sr/Decision-2.0-Vega-27B --revision <new>
+     --gpu 0 --summary <work>/extra/gate86.json --base-path /data/dev2/hf-cache/models--Qwen--Qwen3.8-27B/snapshots/
+     1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0` (IX1's `launch.sh parity` still names the former org).
+  7. Record `dev2-27b-succ-2026-10-03.md`, receipts, integration push, COORDINATION, gist.
 - **Lease note:** launch.py leaves JSON owners (`"track": "27b"`, `"status": "reserved-idle"`); `m6-index.sh`
   parity / run / hold accept only KEY=VALUE `track=27b` + `status=reserved-idle` (or released / eval-ix1). Convert
   before an Index use (as m7b.sh does).
