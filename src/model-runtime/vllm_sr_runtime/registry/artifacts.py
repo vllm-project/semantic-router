@@ -10,6 +10,7 @@ import hashlib
 import json
 import math
 import struct
+from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -85,6 +86,27 @@ def inventory(root: Path, *, ignore_hub_added: bool = True) -> dict[str, str]:
             continue
         if not path.is_file() or not safe_relative(name):
             raise PackageError(f"unsafe package entry: {name}")
+        files[name] = sha256_file(path)
+    return files
+
+
+def named_files(root: Path, names: Iterable[str]) -> dict[str, str]:
+    """SHA-256 of the named files under ``root``, with ``inventory``'s link rules.
+
+    For packages whose family loads a known subset of a repository: other
+    files (a cache shared with other consumers may hold more) are never read.
+    """
+    root = Path(root)
+    store = _snapshot_store(root)
+    files: dict[str, str] = {}
+    for name in sorted(set(names)):
+        path = root / name
+        if not safe_relative(name):
+            raise PackageError(f"unsafe package entry: {name}")
+        if path.is_symlink() and (store is None or not _inside(path.resolve(), store)):
+            raise PackageError(f"package contains a link: {name}")
+        if not path.is_file():
+            raise PackageError(f"package misses {name}")
         files[name] = sha256_file(path)
     return files
 
