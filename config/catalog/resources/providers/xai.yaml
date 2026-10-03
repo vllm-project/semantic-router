@@ -53,3 +53,13 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://docs.x.ai/developers/models
+- catalog: xai/grok-4.7
+  relationship: first_party
+  id: grok-4.7
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://docs.x.ai/developers/models/grok-4.7
