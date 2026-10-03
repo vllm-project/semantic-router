@@ -13,7 +13,7 @@ register through the same entry points as third-party ones
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -351,6 +351,10 @@ class Accelerator(ABC):
 
     def synchronize(self, device: DeviceInfo) -> None:  # noqa: B027 - optional hook
         """Wait for queued device work."""
+
+    def execute(self, device: DeviceInfo, work: Callable[[], Any]) -> Any:
+        """Run device work (loading, forwards, readouts); inline unless the device needs one thread."""
+        return work()
 
 
 # ---------------------------------------------------------------------------
