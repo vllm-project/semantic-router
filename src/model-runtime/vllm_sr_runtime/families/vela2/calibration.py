@@ -25,10 +25,12 @@ SPAN_HEADS = (ROUTER_HEAD, BROAD_HEAD)
 
 
 def sigmoid(values: Any) -> np.ndarray:
+    """Elementwise logistic in float64, as the packages compute probabilities."""
     return 1 / (1 + np.exp(-np.asarray(values, dtype=np.float64)))
 
 
 def softmax(values: Any) -> np.ndarray:
+    """Softmax over a vector in float64."""
     values = np.asarray(values, dtype=np.float64)
     exponentials = np.exp(values - values.max())
     return exponentials / exponentials.sum()

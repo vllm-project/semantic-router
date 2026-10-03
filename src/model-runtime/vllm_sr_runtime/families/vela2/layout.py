@@ -37,6 +37,7 @@ class EncodedPart:
     words: Words | None = None
 
     def window(self, start: int, end: int, words: Words | None) -> EncodedPart:
+        """Tokens ``[start, end)`` of the part, with the words a window reads."""
         offsets = None if self.offsets is None else self.offsets[start:end]
         return EncodedPart(self.role, self.ids[start:end], offsets, words)
 
@@ -132,6 +133,7 @@ class Tokens:
     ids: Callable[[str], list[int]]
 
     def part(self, role: str, text: str, with_words: bool) -> EncodedPart:
+        """A part's token IDs; with ``with_words`` (a span reads it) also its offsets and words."""
         encoding = self.encode(text)
         ids = np.asarray(encoding.ids, np.int32)
         if not with_words:
