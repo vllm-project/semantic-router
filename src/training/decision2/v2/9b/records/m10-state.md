@@ -2,6 +2,33 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-03 00:40Z (08:40 UTC+8), M10 continuation (owner e28aa509)
+
+- **All half-LR seeds finished ≈ 00:03–00:05Z** (an hour before the estimate), with no failure: KIB4H s1 / s2 (BEST
+  checkpoints 1,813 / 2,076) and the factory's `KIB4-lrhh` s1 / s2.
+- **Built on node B** (FP32 model SHA-256, then BF16 identity):
+
+  | Point | FP32 | BF16 |
+  | --- | --- | --- |
+  | `KIB4H-a40` (post chain) | `5d22b60b…` | `a3a77170…` |
+  | `HLR4` (arm soup) | `43fbddcb…` | — |
+  | `HLR4-a80` | `d99cc9f1…` | `51771728…` |
+  | `HLR4-a60` | `0b056425…` | staged |
+  | `KIB4-lrhh-a80` | `699bfd70…` | `112500f8…` |
+
+  KIB4H's arm soup is `82852…`. The factory's arm soup `KIB4-lrhh` (`0bd35ed6…`) is linked as `AF-KIB4-lrhh`.
+- **Read order changed to `HLR4-a80`, `HLR4-a60`, `KIB4H-a40`, `KIB4-lrhh-a80`.** This changes timing only. All
+  points were ready at once, so the read most likely to pass goes first; all four are still read once.
+- **Index:** `HLR4-a80` started on node B GPU2 / 3 / 5 / 7 at 00:21Z. Parity passed, and shards 0–3 run. The other
+  three follow from one chain each.
+- **Formal R3** (`formal.sh` and `release_m10c.sh` now accept node A GPU0, the release GPU; `1e1c26296`, mirrored on
+  A / B / C): `HLR4-a80` on node A GPU0 since 00:30Z, and `HLR4-a60` next. 27B took node A GPU7 first, so it is not
+  used.
+- **Release prep (no upload):** `make_m10c.py` has entries for the four points, with `CHOICE` unset. For `HLR4-a80`,
+  `inputs_m10c.sh bf16` (16 files equal) and `prep_m10c.sh current` (KIB4-a40's gate and decision digests match) are
+  done on node A.
+- **GPU-h (continuation):** ≈ 37 with the four reads, plus ≈ 0.25 per formal.
+
 ## 2026-10-03 00:10Z (08:10 UTC+8), M10 continuation (owner e28aa509)
 
 - **Took over** from 9087b208, whose runtime failed to resume at ≈ 23:39Z (COORDINATION 07:42). KIB4H s1 / s2 are at
