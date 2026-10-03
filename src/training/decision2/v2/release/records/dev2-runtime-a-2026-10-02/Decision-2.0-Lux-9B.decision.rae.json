@@ -1,0 +1,165 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "Decision-2.0-Lux-9B",
+  "repo_id": "vllm-sr/Decision-2.0-Lux-9B",
+  "name_basis": "base",
+  "name_base_model": "Qwen/Qwen3.5-9B",
+  "identity": {
+    "model_sha256": "0ece5faa210173f443f353474b419fd913a253b06645da3e8370c2db0e1c3339"
+  },
+  "report_sha256": "6143caba38a49a04fbae6770d2a836d5821ec99dc7db5100a1e6c61444d9a200",
+  "paired_sha256": "4bce815ce276ce6b758c866e3b2cb0aa3098f78df0c25752c43a529e1ba1339e",
+  "gate_profile": "successor",
+  "rule": "index-first",
+  "current_revision": "f77b41f5c1a98974548d929c03e7bce008f71bd0",
+  "evidence_sha256": {
+    "current_decision": "0b092b4ec335db826f83034436ad63c2e27e1aaa82126dcb0f92e43a745b84d4",
+    "current_gate": "c89524587ae955376eac98979c8aedf6c5e1d8242ce4dc4e4568c9c9953181b6",
+    "exposure_1": "14e7c0ca5ecf9c396a464af55784bd466a71774c186672dcb9a7c46dbb598ff5",
+    "exposure_2": "9fd9d3dbec72bb4f035ebcc72d152063b8a1f6c61648c97f5a21d18a9d814a7d",
+    "index_first_audit": "da12b2ac091dce98e7bffcf0f10e1fdabf80709e251e198303b190b8e40fe881",
+    "index_first_base_receipt": "aee534c3a3074f03b608ab008d88888eebe111f03f9d1207e11ba0649a8a22e9",
+    "index_first_bootstrap": "dcea4c3efe65749808a5418cbc7fb00ead75ee7c47876bf4de182c6305f42bbd",
+    "index_first_receipt": "94551cd997620f5d569654cf1b0b1927de9ab0a8806fe787c9d88bc20122d0b2",
+    "mlx_paired": "873f5f4bec9db23a452691737b36788665fa541c6d1dfbbe11ae8cef5e9e7b22",
+    "paired": "df19a5b659deb2ffa8d8a8a5fb349d6434cb216f8de0d323e41cc1a163251b5f",
+    "public231": "30be9f22445787a2708a414e1cb1a6a273d5fc0a64054f6b7451cd556568a5fd",
+    "tier_paired": "a2077d2bf385568f82ca1517e26303d8967a175f943649a4e257b762e33dac81",
+    "types": "b7ac2c4d47a861ed5af3078db423aa01344cd71d90fd4d03df53065b311e0b24"
+  },
+  "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): the CAL698 per-type temperatures of the formal run (calibration cbbcbaf2) are not shipped; undoing them changes 0 answers on every scored panel and mlx-diag",
+  "action": "Runtime-only revision of the public repository vllm-sr/Decision-2.0-Lux-9B: decision2/fast.py comes from commit fbedfded8, whose HIP graph cache never destroys a captured graph: once 512 graphs or 4 GiB of graph outputs are captured, new input shapes run the eager forward (on ROCm, evicting large graphs from the shared memory pool between large eager batches crashed the GPU process under Index traffic). Weights, tokenizer, configs, the vendored training/model sources, calibration, any Score offsets, the banner and the charts are byte-identical to the released revision 7c6792f7e59dce7a64115bfe750ee636e7a63bd4, and so is README.md; MODEL_MANIFEST.json states the new runtime hashes and the runtime sentences. The collection is not changed.",
+  "rationale": "The release judgement of the superseded final decision 4667de04… stands unchanged: the same identity 0ece5faa, scored report, paired comparison, calibration and licence decision. Only the package runtime changes, and it computes the same values bit for bit: every prompt of the four scored panels (typed-final 1,600, css15 6,547, public231 231, mlx-diag 2,275) answered through the released package and through this package on the released weights gave 0 answer changes and 0.0 drift, and so did this package with its graph cache cut to 8 graphs (every other input shape on the eager forward); 400 single requests: p50 18.39 -> 18.29 ms, p95 18.54 -> 18.44 ms, all bit-identical. release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link; then the downloaded package must pass the Index harness's 86-request parity gate.",
+  "approved_package": {
+    "identity": "0ece5faa210173f443f353474b419fd913a253b06645da3e8370c2db0e1c3339",
+    "fp32_identity": "b6984475a3804714d1018b4ba18c2dc28ffa48d8bc293d26211f620bdd062ee3",
+    "loaded_parameters": 7940895744,
+    "profile": "qwen-full (BF16 storage of the Linear projections)",
+    "temperature": 1,
+    "max_input_tokens": 16384,
+    "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+  },
+  "licence_decision": "apache-2.0: own weights; Decision 1.0 Lux-9B @bd45a30a (direct weight origin, interpolated) and the Qwen/Qwen3.5-9B @c2022362 text backbone and tokenizer are Apache-2.0; the IB1-r3 / IB2 / IB3-r2 / IB4 phase-1 training rows are licence-clean (release-safe data records; IB4 phase 1 C1 recheck r3 PASS); the package keeps the Apache-2.0 LICENSE (product card: no NOTICE, attributions or evaluation/ files).",
+  "supersedes": {
+    "final_sha256": "4667de04ba685b63a91f33883e83c4ac2032c0dcdce2f1662b12ff56b96de504",
+    "released_as": "vllm-sr/Decision-2.0-Lux-9B@7c6792f7e59dce7a64115bfe750ee636e7a63bd4",
+    "released_manifest_sha256": "1fb2edcb3e3d4ea6913a6c9010f66ffe86dbabea7f7f9cd0af58cd0015e215df",
+    "released_gate_sha256": "85a20cc749c341e8ce4a2733b292b52a132ce845ee1a4283421b7ce92f00cf04",
+    "card_revision": null,
+    "earlier": {
+      "final_sha256": "6c18dd57d5bd2070ac9e4849ed1c76877847924e1dbd3c851e050a2e441fa328",
+      "released_as": "vllm-sr/Decision-2.0-Lux-9B@214ffa4322bc1bce3215c1bd5de6168402c76969",
+      "released_manifest_sha256": "6e8e7f7dbe98cc100ed2d478eec9aba3ae1bc1711ac2ffe323f60512684d913b",
+      "released_gate_sha256": "277f24d1fd356f5ca169d09005d2089d8325e4d3905c4368a95d3b2403a9ea50",
+      "card_revision": null,
+      "earlier": {
+        "final_sha256": "ba0e0beebcf88881e3962b84744a4162d02b278ffec175954b72fb0f713e7662",
+        "released_as": "vllm-sr/Decision-2.0-Lux-9B@f3122c7c8abd302326c22220aac4095eb1799f37",
+        "released_manifest_sha256": "d0a407c7af291ee473ea516abebeb03968fd4a6b63cf0128e550dfcd5132d7c8",
+        "released_gate_sha256": "8817732f9585a4e8c833eab4db12f6307b96f68d123b5742638b8902d105cc0b",
+        "card_revision": null,
+        "earlier": {
+          "revision": "f77b41f5c1a98974548d929c03e7bce008f71bd0",
+          "final_sha256": "0b092b4ec335db826f83034436ad63c2e27e1aaa82126dcb0f92e43a745b84d4",
+          "gate_sha256": "c89524587ae955376eac98979c8aedf6c5e1d8242ce4dc4e4568c9c9953181b6",
+          "manifest_sha256": "f5a37c42140106a663d27493d2a2ce993ee5511ccb138f7c79efdfef11e9df55",
+          "weights_identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb"
+        }
+      }
+    }
+  },
+  "disclosures": [
+    "successor items 1 and 4 of the former rule are references under the Index-first rule (v3 not significantly above the current revision; card-eligible mlx-diag below it)",
+    "the training rows include IB families matched to Index benchmark families (HoVer, When2Call, iSarcasmEval (IB4 isarc2 is in-distribution), GSM8K, RAGTruth-style, FinEntity-style) and the BPoMP format; the internal records report the transfer-only Index delta without HoVer, When2Call, iSarcasmEval, GSM8K and BPoMP (private values)",
+    "Index contamination audit of the training rows: KIB4 (151039 lines) 0 item rows, 196 familiar-text rows",
+    "the overlap-exposure references cover the x60 and IB1 / IB2 rows; the IB3-r2 / IB4 rows are covered by their own release-safe records and by the row-level Index audit",
+    "card.speed is the current revision's bench receipt (same architecture, runtime and shapes)"
+  ],
+  "prepared_by": "Decision 2.0 eviction-fix owner 843eb8f6 (worktree vllm-sr-dev2-evict, branch xunzhuo/decision-2-runtime-evict) with the runtime phase A tooling of this record",
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: COORDINATION 2026-10-03 15:30 UTC+8 (the inference owner 885d85cc found that evicting captured HIP graphs crashes the GPU process on ROCm and fixed its native engine by never evicting; the released runtime carries the same eviction, so the eviction-fix owner ports that policy and ships runtime-only revisions of all six repositories through the phase A parity rollout; the user's full-autonomy mandate)",
+  "decided_utc": "2026-10-03T07:30:00Z",
+  "previous_rationale": "The release judgement of the superseded final decision 6c18dd57… stands unchanged: the same identity 0ece5faa, scored report, paired comparison, calibration and licence decision. Only the package runtime changes, and it computes the same values bit for bit: every prompt of the four scored panels (typed-final 1,600, css15 6,547, public231 231, mlx-diag 2,275) answered through the released package and through this package on the released weights gave 0 answer changes and 0.0 drift, and so did this package with every fused kernel made to fail (each decoder layer on its eager fallback); 400 single requests: p50 18.71 -> 18.73 ms, p95 19.12 -> 19.09 ms, all bit-identical. release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link; then the downloaded package must pass the Index harness's 86-request parity gate.",
+  "runtime_revision": {
+    "kind": "no-graph-eviction-runtime",
+    "runtime_commit": "fbedfded8ce33c7c25a99b8fb1f71f733b2c2c44",
+    "spec": "v2/release/specs/dev2-9b-rae.json",
+    "spec_sha256": "2f091365975c78507ab455de4b583744f68efad74bdb59b72e9128902ad2110c",
+    "parity": {
+      "compare": "v2/release/records/dev2-runtime-a-2026-10-02/9b/evict/parity/answers-compare.json",
+      "sha256": "caf997235acafc488e398bc84755da8457fd0602882e426c8bb02f7154a2aed8",
+      "panels": {
+        "css15": [
+          6547,
+          6547,
+          0
+        ],
+        "mlx-diag": [
+          2275,
+          2275,
+          0
+        ],
+        "public231": [
+          231,
+          231,
+          0
+        ],
+        "typed-final": [
+          1600,
+          1600,
+          0
+        ]
+      },
+      "max_abs_drift": 0.0
+    },
+    "bench": {
+      "compare": "v2/release/records/dev2-runtime-a-2026-10-02/9b/evict/bench/compare.json",
+      "sha256": "86b65a333b6e8b7ff666048c66b961ae66b109d3f08386c471be273f565b66c6",
+      "items": 400,
+      "bit_identical_items": 400,
+      "p50_ms": [
+        18.385032890364528,
+        18.293533008545637
+      ],
+      "p95_ms": [
+        18.543811980634928,
+        18.444771179929376
+      ],
+      "request_peak_gib": [
+        17.323641777038574,
+        17.323641777038574
+      ]
+    },
+    "full_cache_parity": {
+      "compare": "v2/release/records/dev2-runtime-a-2026-10-02/9b/evict/parity/answers-compare-fullcache.json",
+      "sha256": "caf997235acafc488e398bc84755da8457fd0602882e426c8bb02f7154a2aed8",
+      "max_graphs": 8,
+      "cache": "v2/release/records/dev2-runtime-a-2026-10-02/9b/evict/parity/full-cache.json",
+      "cache_sha256": "fbf63b888b28ba6e59fbcc5d5b8f739c479fa1cd98f844ee8016e19d631333fd",
+      "panels": {
+        "css15": [
+          6547,
+          6547,
+          0
+        ],
+        "mlx-diag": [
+          2275,
+          2275,
+          0
+        ],
+        "public231": [
+          231,
+          231,
+          0
+        ],
+        "typed-final": [
+          1600,
+          1600,
+          0
+        ]
+      },
+      "max_abs_drift": 0.0
+    }
+  }
+}
