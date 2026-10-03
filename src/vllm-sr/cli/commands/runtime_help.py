@@ -39,6 +39,7 @@ knn        - KNN selector using shared ML model-selection settings
 kmeans     - KMeans selector using shared ML model-selection settings
 svm        - SVM selector using shared ML model-selection settings
 mlp        - MLP selector using shared ML model-selection settings
+hiershrink - HierShrink selector using shared ML model-selection settings
 multi_factor - Quality, latency, cost, and load scoring
 
 Cross-request learning lives under global.router.learning.adaptation and

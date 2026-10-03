@@ -364,6 +364,10 @@ func (f *Factory) CreateAll() *Registry {
 		registry.Register(MethodMLP, mlpAdapter)
 	}
 
+	hierShrinkAdapter := CreateHierShrinkSelector(mlCfg)
+	hierShrinkAdapter.setContextEmbeddingFunc(mlSelectorEmbedding)
+	registry.Register(MethodHierShrink, hierShrinkAdapter)
+
 	// Create RL-Driven selector
 	rlDrivenCfg := f.cfg.RLDriven
 	if rlDrivenCfg == nil {

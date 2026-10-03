@@ -38,11 +38,12 @@ var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
 	"prompt": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.Prompt = c.compilePromptAlgo(fields)
 	},
-	"static": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
-	"knn":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
-	"kmeans": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
-	"mlp":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
-	"svm":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"static":     func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"knn":        func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"kmeans":     func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"mlp":        func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"svm":        func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"hiershrink": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 }
 
 func (c *Compiler) compilePromptAlgo(

@@ -2,7 +2,7 @@
 
 This directory builds query-level model selectors from benchmark records. The
 pipeline embeds each query, appends an optional domain-category feature, and
-exports KNN, KMeans, SVM, or MLP models for the native selection bindings.
+exports KNN, KMeans, SVM, MLP, or HierShrink models for the Router selectors.
 
 Use this pipeline when you have measured the same queries against several
 candidate models and want a learned selector. It does not create trustworthy
@@ -79,6 +79,7 @@ is Qwen3. The exported files are:
 | `kmeans_model.json` | cluster-based selection |
 | `svm_model.json` | support-vector classification |
 | `mlp_model.json` | multilayer perceptron, when PyTorch is available |
+| `hiershrink_model.json` | two-level K-means centroids and scored observations, only with `--algorithm hiershrink` |
 
 The feature vector combines the query embedding with a one-hot category from
 `data_loader.py`. Missing or unknown categories use the loader's fallback; use

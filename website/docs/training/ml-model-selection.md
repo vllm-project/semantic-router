@@ -22,6 +22,7 @@ provider models.
 | [KMeans](/docs/tutorials/algorithm/selection/kmeans) | Maps a request to a learned cluster | The workload forms stable clusters and lookup cost matters |
 | [SVM](/docs/tutorials/algorithm/selection/svm) | Uses a learned decision boundary | Candidate models separate cleanly in feature space |
 | [MLP](/docs/tutorials/algorithm/selection/mlp) | Scores candidates with a neural network | You have enough data for a non-linear selector and can operate its runtime dependency |
+| [HierShrink](/docs/tutorials/algorithm/selection/hiershrink) | Shrinks per-cluster quality toward each model's mean | A candidate has only a few dozen scored queries |
 
 There is no universally best selector. Compare each candidate against simple
 baselines such as a fixed default, random choice, and the best single model on
@@ -129,13 +130,13 @@ python train.py \
 ```
 
 By default the script trains KNN, KMeans, SVM, and MLP artifacts. Use
-`--algorithm knn|kmeans|svm|mlp` to train one selector, or `--skip-mlp` when the
+`--algorithm knn|kmeans|svm|mlp|hiershrink` to train one selector, or `--skip-mlp` when the
 PyTorch dependency is unavailable. Training accepts `cpu`, `cuda`, or `mps`.
 The current Router decision factory runs the loaded MLP artifact on CPU; its
 `device` field is accepted for compatibility but is not wired to selection.
 
 The output directory contains JSON artifacts such as `knn_model.json`,
-`kmeans_model.json`, `svm_model.json`, and `mlp_model.json`. Their contents are
+`kmeans_model.json`, `svm_model.json`, `mlp_model.json`, and `hiershrink_model.json`. Their contents are
 specific to the benchmarked model names, embedding model, and feature layout.
 
 ### 6. Configure the Router

@@ -750,6 +750,7 @@ export interface ModelSelectionConfig {
     kmeans?: { num_clusters?: number; efficiency_weight?: number; pretrained_path?: string }
     svm?: { kernel?: string; gamma?: number; pretrained_path?: string }
     mlp?: { device?: string; pretrained_path?: string }
+    hiershrink?: { pretrained_path?: string }
   }
 }
 

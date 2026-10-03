@@ -6,6 +6,7 @@ const (
 	DecisionAlgorithmAutoMix      = "automix"
 	DecisionAlgorithmConfidence   = "confidence"
 	DecisionAlgorithmFusion       = "fusion"
+	DecisionAlgorithmHierShrink   = "hiershrink"
 	DecisionAlgorithmHybrid       = "hybrid"
 	DecisionAlgorithmKMeans       = "kmeans"
 	DecisionAlgorithmKNN          = "knn"
@@ -155,6 +156,7 @@ var decisionAlgorithmRegistry = []decisionAlgorithmRegistryEntry{
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmAutoMix, DisplayName: "AutoMix", Description: "Optimize a cost-quality escalation policy.", Tier: "experimental", Execution: AlgorithmExecutionSelector, ConfigField: "automix"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.AutoMix != nil }},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmConfidence, DisplayName: "Confidence", Description: "Escalate across candidate models until confidence is sufficient.", Tier: "supported", Execution: AlgorithmExecutionLooper, ConfigField: "confidence"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Confidence != nil }},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmFusion, DisplayName: "Fusion", Description: "Run a parallel panel and synthesize a judged final response.", Tier: "experimental", Execution: AlgorithmExecutionLooper, ConfigField: "fusion"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Fusion != nil }},
+	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmHierShrink, DisplayName: "HierShrink", Description: "Select a model from sparse quality observations shrunk across query clusters.", Tier: "experimental", Execution: AlgorithmExecutionSelector}},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmHybrid, DisplayName: "Hybrid", Description: "Combine experience, similarity, AutoMix, and cost signals.", Tier: "supported", Execution: AlgorithmExecutionSelector, ConfigField: "hybrid"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Hybrid != nil }},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmKMeans, DisplayName: "K-Means", Description: "Select a model with the shared K-Means classifier.", Tier: "experimental", Execution: AlgorithmExecutionSelector}},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmKNN, DisplayName: "KNN", Description: "Select a model with the shared nearest-neighbor classifier.", Tier: "experimental", Execution: AlgorithmExecutionSelector}},

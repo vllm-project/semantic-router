@@ -367,6 +367,11 @@ func (p *Profile) prepareMLModels(ctx context.Context, clusterName string) error
 		p.log("✓ ML models found in %s", sourceDir)
 	}
 
+	if err = writeHierShrinkArtifact(sourceDir); err != nil {
+		return fmt.Errorf("failed to build HierShrink artifact: %w", err)
+	}
+	modelFiles = append(modelFiles, "hiershrink_model.json")
+
 	// Step 1: Copy models to host directory for Linux CI (where hostPath works)
 	// This is the standard approach that works on native Linux
 	hostDir := cluster.MLModelsHostPath()

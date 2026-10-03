@@ -108,7 +108,7 @@ func TestSupportedLooperAlgorithmTypes(t *testing.T) {
 
 func TestDecisionAlgorithmCatalog_PublicAlgorithmSurface(t *testing.T) {
 	publicTypes := []string{
-		"automix", "confidence", "fusion", "hybrid", "kmeans",
+		"automix", "confidence", "fusion", "hiershrink", "hybrid", "kmeans",
 		"knn", "latency_aware", "mlp", "multi_factor", "ratings",
 		"remom", "router_dc", "static", "svm",
 	}
@@ -175,6 +175,7 @@ func TestGetAlgorithmTier(t *testing.T) {
 		{"kmeans", "experimental"},
 		{"svm", "experimental"},
 		{"mlp", "experimental"},
+		{"hiershrink", "experimental"},
 	}
 
 	for _, tt := range tests {

@@ -29,7 +29,7 @@ type ModelSelectionCase struct {
 	ExpectedModels []string `json:"expected_models"` // List of valid models for this query
 	Description    string   `json:"description"`
 	// Algorithm specifies which model selection algorithm is expected to be used
-	// Supported: "knn", "kmeans", "svm", "mlp"
+	// Supported: "knn", "kmeans", "svm", "mlp", "hiershrink"
 	Algorithm string `json:"algorithm,omitempty"`
 	// ExpectEfficient indicates if the test expects an efficiency-optimized selection (KMeans)
 	// When true, expects faster/cheaper model; when false, expects higher quality model
@@ -250,11 +250,12 @@ func getDefaultModelSelectionCases() []ModelSelectionCase {
 	// Models configured in values.yaml matching training data
 	mlModels := []string{"llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"}
 
-	// 20 test cases covering all 4 ML algorithms with DIVERSE decision types:
+	// 20 test cases covering all 5 ML algorithms with DIVERSE decision types:
 	// - MLP: math_decision (3 cases), code_decision (2 cases) - diverse domains
 	// - SVM: physics_decision (3 cases), business_decision (2 cases) - diverse domains
 	// - KNN: science_decision (3 cases), law_decision (2 cases) - diverse domains
-	// - KMeans: health_decision (3 cases), engineering_decision (2 cases) - diverse domains
+	// - HierShrink: health_decision (3 cases)
+	// - KMeans: engineering_decision (2 cases)
 
 	return []ModelSelectionCase{
 		// =================================================================
@@ -375,28 +376,28 @@ func getDefaultModelSelectionCases() []ModelSelectionCase {
 		},
 
 		// =================================================================
-		// KMeans ALGORITHM: health_decision + engineering_decision (5 cases total)
+		// HierShrink ALGORITHM: health_decision (3 cases); KMeans: engineering_decision (2 cases)
 		// =================================================================
 		{
 			Query:          "What are the symptoms of diabetes mellitus?",
 			Decision:       "health_decision",
 			ExpectedModels: mlModels,
-			Description:    "Medical symptoms - KMeans/health",
-			Algorithm:      "kmeans",
+			Description:    "Medical symptoms - HierShrink/health",
+			Algorithm:      "hiershrink",
 		},
 		{
 			Query:          "How does the human cardiovascular system work?",
 			Decision:       "health_decision",
 			ExpectedModels: mlModels,
-			Description:    "Human anatomy - KMeans/health",
-			Algorithm:      "kmeans",
+			Description:    "Human anatomy - HierShrink/health",
+			Algorithm:      "hiershrink",
 		},
 		{
 			Query:          "What causes high blood pressure in humans?",
 			Decision:       "health_decision",
 			ExpectedModels: mlModels,
-			Description:    "Health condition - KMeans/health",
-			Algorithm:      "kmeans",
+			Description:    "Health condition - HierShrink/health",
+			Algorithm:      "hiershrink",
 		},
 		{
 			Query:          "What is the difference between AC and DC electrical current?",

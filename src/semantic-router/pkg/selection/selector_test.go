@@ -509,7 +509,7 @@ func TestFactory_CreateAll_IncludesMLSelectors(t *testing.T) {
 	registry := factory.CreateAll()
 
 	// Test that ML selectors are registered
-	mlMethods := []SelectionMethod{MethodKNN, MethodKMeans, MethodSVM}
+	mlMethods := []SelectionMethod{MethodKNN, MethodKMeans, MethodSVM, MethodHierShrink}
 	for _, method := range mlMethods {
 		selector, ok := registry.Get(method)
 		if !ok {

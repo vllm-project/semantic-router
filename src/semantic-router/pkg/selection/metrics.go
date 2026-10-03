@@ -30,7 +30,7 @@ import (
 // See: https://github.com/vllm-project/semantic-router/issues/1093
 var (
 	// ModelSelectionTotal tracks the total number of model selections
-	// Labels: method (elo/router_dc/automix/hybrid/static/knn/kmeans/svm/mlp/rl_driven/gmtrouter/latency_aware/multi_factor/session_aware), model, decision
+	// Labels: method (elo/router_dc/automix/hybrid/static/knn/kmeans/svm/mlp/hiershrink/rl_driven/gmtrouter/latency_aware/multi_factor/session_aware), model, decision
 	ModelSelectionTotal *prometheus.CounterVec
 
 	// ModelSelectionDuration tracks the duration of model selection operations
@@ -380,6 +380,7 @@ func preInitializeMetrics() {
 		"kmeans",
 		"svm",
 		"mlp",
+		"hiershrink",
 		"rl_driven",
 		"gmtrouter",
 		"latency_aware",

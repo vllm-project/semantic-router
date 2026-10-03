@@ -95,6 +95,7 @@ same final validation but are not replaced by another model.
 | `kmeans` | experimental | Route through learned traffic clusters | Trained selector artifact and embeddings | [KMeans](./selection/kmeans) |
 | `svm` | experimental | Apply a learned decision boundary | Trained selector artifact and embeddings | [SVM](./selection/svm) |
 | `mlp` | experimental | Apply a learned nonlinear classifier | Trained selector artifact | [MLP](./selection/mlp) |
+| `hiershrink` | experimental | Shrink sparse per-cluster quality toward each model's mean | Centroid artifact with scored observations | [HierShrink](./selection/hiershrink) |
 
 ### Looper Algorithms
 

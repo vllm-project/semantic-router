@@ -88,6 +88,7 @@
             "automix",
             "confidence",
             "fusion",
+            "hiershrink",
             "hybrid",
             "kmeans",
             "knn",
@@ -3450,6 +3451,15 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "MLHierShrinkConfig": {
+      "properties": {
+        "pretrained_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "MLKMeansConfig": {
       "properties": {
         "num_clusters": {
@@ -3526,6 +3536,9 @@
         },
         "mlp": {
           "$ref": "#/$defs/MLMLPConfig"
+        },
+        "hiershrink": {
+          "$ref": "#/$defs/MLHierShrinkConfig"
         }
       },
       "additionalProperties": false,
@@ -7498,6 +7511,13 @@
         "execution": "looper",
         "config_field": "fusion",
         "schema_ref": "#/$defs/FusionAlgorithmConfig"
+      },
+      {
+        "type": "hiershrink",
+        "display_name": "HierShrink",
+        "description": "Select a model from sparse quality observations shrunk across query clusters.",
+        "tier": "experimental",
+        "execution": "selector"
       },
       {
         "type": "hybrid",

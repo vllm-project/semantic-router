@@ -31,6 +31,7 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 		"automix":       filepath.Join("selection", "automix.yaml"),
 		"confidence":    filepath.Join("looper", "confidence.yaml"),
 		"fusion":        filepath.Join("looper", "fusion.yaml"),
+		"hiershrink":    filepath.Join("selection", "hiershrink.yaml"),
 		"hybrid":        filepath.Join("selection", "hybrid.yaml"),
 		"kmeans":        filepath.Join("selection", "kmeans.yaml"),
 		"knn":           filepath.Join("selection", "knn.yaml"),

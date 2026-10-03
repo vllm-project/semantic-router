@@ -466,7 +466,7 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     Validates both looper algorithms (confidence, ratings, remom, fusion,
     workflows)
     and selection algorithms (static, router_dc, automix, hybrid,
-    knn, kmeans, svm, mlp, multi_factor, latency_aware, prompt).
+    knn, kmeans, svm, mlp, hiershrink, multi_factor, latency_aware, prompt).
 
     Args:
         config: User configuration

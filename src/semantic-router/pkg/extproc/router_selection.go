@@ -334,18 +334,20 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 		mlCfg.KNN.PretrainedPath == "" &&
 		mlCfg.KMeans.PretrainedPath == "" &&
 		mlCfg.SVM.PretrainedPath == "" &&
-		mlCfg.MLP.PretrainedPath == "" {
+		mlCfg.MLP.PretrainedPath == "" &&
+		mlCfg.HierShrink.PretrainedPath == "" {
 		return nil
 	}
 
 	logging.ComponentEvent("extproc", "ml_model_selection_enabled", map[string]interface{}{
-		"models_path":       mlCfg.ModelsPath,
-		"model_type":        mlCfg.ModelType,
-		"embedding_dim":     mlCfg.EmbeddingDim,
-		"knn_pretrained":    mlCfg.KNN.PretrainedPath != "",
-		"kmeans_pretrained": mlCfg.KMeans.PretrainedPath != "",
-		"svm_pretrained":    mlCfg.SVM.PretrainedPath != "",
-		"mlp_pretrained":    mlCfg.MLP.PretrainedPath != "",
+		"models_path":           mlCfg.ModelsPath,
+		"model_type":            mlCfg.ModelType,
+		"embedding_dim":         mlCfg.EmbeddingDim,
+		"knn_pretrained":        mlCfg.KNN.PretrainedPath != "",
+		"kmeans_pretrained":     mlCfg.KMeans.PretrainedPath != "",
+		"svm_pretrained":        mlCfg.SVM.PretrainedPath != "",
+		"mlp_pretrained":        mlCfg.MLP.PretrainedPath != "",
+		"hiershrink_pretrained": mlCfg.HierShrink.PretrainedPath != "",
 	})
 	return &selection.MLSelectorConfig{
 		ModelsPath:   mlCfg.ModelsPath,
@@ -368,6 +370,9 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 		MLP: &selection.MLPConfig{
 			Device:         mlCfg.MLP.Device,
 			PretrainedPath: mlCfg.MLP.PretrainedPath,
+		},
+		HierShrink: &selection.HierShrinkConfig{
+			PretrainedPath: mlCfg.HierShrink.PretrainedPath,
 		},
 	}
 }

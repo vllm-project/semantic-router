@@ -147,6 +147,7 @@ const sidebars: SidebarsConfig = {
               label: 'Selection',
               items: [
                 'tutorials/algorithm/selection/automix',
+                'tutorials/algorithm/selection/hiershrink',
                 'tutorials/algorithm/selection/hybrid',
                 'tutorials/algorithm/selection/kmeans',
                 'tutorials/algorithm/selection/knn',

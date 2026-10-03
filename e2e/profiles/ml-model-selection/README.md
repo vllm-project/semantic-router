@@ -1,7 +1,7 @@
 # ML model-selection E2E profile
 
 This profile verifies that the Router can load serialized KNN, K-Means, SVM,
-and MLP selector artifacts and use them after a domain decision matches. It
+MLP, and HierShrink selector artifacts and use them after a domain decision matches. It
 deploys mock inference backends and an Envoy AI Gateway path, then runs:
 
 - `model-selection`;
@@ -29,6 +29,9 @@ Python package manager and downloads
 access, package-install permission, disk space, and trust in that artifact
 source. Pre-populate the cache in a controlled environment when those runtime
 downloads are not acceptable.
+
+Setup then writes `hiershrink_model.json` from the KNN observations and the
+K-Means centroids. Both HierShrink levels use the K-Means centroids.
 
 The artifacts are copied into the Kind environment and mounted at
 `/tmp/ml-models`. Paths in [`values.yaml`](values.yaml) must match that mount.

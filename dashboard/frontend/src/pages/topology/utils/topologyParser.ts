@@ -200,6 +200,7 @@ function extractDecisionAlgorithm(
     kmeans: algorithm.kmeans,
     svm: algorithm.svm,
     mlp: algorithm.mlp,
+    hiershrink: algorithm.hiershrink,
     multi_factor: algorithm.multi_factor,
     prompt: algorithm.prompt,
   }

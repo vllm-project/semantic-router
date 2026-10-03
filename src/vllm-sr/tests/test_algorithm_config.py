@@ -55,6 +55,7 @@ class TestAlgorithmConfigTypes:
             "kmeans",
             "svm",
             "mlp",
+            "hiershrink",
             "multi_factor",
             "latency_aware",
         ]

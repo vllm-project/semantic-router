@@ -84,7 +84,7 @@ func TestExperimentalAlgorithms_Tier(t *testing.T) {
 }
 
 func TestMLAdapterAlgorithms_Tier(t *testing.T) {
-	methods := []SelectionMethod{MethodKNN, MethodKMeans, MethodSVM, MethodMLP}
+	methods := []SelectionMethod{MethodKNN, MethodKMeans, MethodSVM, MethodMLP, MethodHierShrink}
 
 	for _, method := range methods {
 		t.Run(string(method), func(t *testing.T) {
