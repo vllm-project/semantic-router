@@ -1,0 +1,3516 @@
+{
+  "sklearn_version": "1.9.1",
+  "cases": [
+    {
+      "name": "blobs",
+      "artifact": {
+        "algorithm": "kmeans",
+        "format_version": 2,
+        "trained": true,
+        "target_contract": "selector.model-choice/v1",
+        "objective": {
+          "id": "937e3622d5660e22",
+          "version": 1,
+          "weights": {
+            "quality": 0.9,
+            "latency": 0.1,
+            "cost": 0.0
+          },
+          "latency_scale_ms": 10000.0,
+          "cost_scale": 1.0
+        },
+        "candidate_set": {
+          "id": "c06b436c80438781",
+          "models": [
+            "model-0",
+            "model-1",
+            "model-2"
+          ]
+        },
+        "feature": {
+          "snapshot_id": "a3cab23490bff4b4",
+          "dim": 3,
+          "normalization": "none"
+        },
+        "training_snapshot_id": "925f870344760ab0",
+        "clustering": {
+          "init": "k-means++",
+          "algorithm": "lloyd",
+          "dtype": "float64",
+          "seed": 42,
+          "n_init": 10,
+          "max_iter": 300,
+          "tol": 0.0001,
+          "library_versions": {
+            "scikit-learn": "1.9.1",
+            "numpy": "2.5.3"
+          },
+          "requested_k": 3,
+          "effective_k": 3,
+          "train_queries": 45
+        },
+        "distance": "squared_l2",
+        "tie_break": "lowest_index",
+        "num_clusters": 3,
+        "centroids": [
+          [
+            -0.0071928709436281935,
+            -0.11511694055012756,
+            4.17758346114719
+          ],
+          [
+            3.9770754606010907,
+            -0.17564742014916712,
+            -0.08731481497646865
+          ],
+          [
+            0.24565602801435693,
+            3.9955333053640674,
+            -0.040110218420695176
+          ]
+        ],
+        "cluster_sizes": [
+          15,
+          15,
+          15
+        ],
+        "scores": [
+          [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.9021658986175113
+          ],
+          [
+            0.9095024875621894,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          [
+            0.8195024875621892,
+            0.905693779904306,
+            0.8796658986175113
+          ]
+        ],
+        "support": [
+          [
+            1,
+            2,
+            15
+          ],
+          [
+            15,
+            0,
+            1
+          ],
+          [
+            2,
+            15,
+            0
+          ]
+        ],
+        "fallback": {
+          "min_support": 3,
+          "global_scores": [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          "global_support": [
+            18,
+            17,
+            16
+          ]
+        },
+        "cluster_models": [
+          "model-2",
+          "model-0",
+          "model-1"
+        ],
+        "model_names": [
+          "model-0",
+          "model-1",
+          "model-2"
+        ],
+        "feature_dim": 3
+      },
+      "queries": [
+        {
+          "vector": [
+            -0.11977397684140507,
+            -3.7732101627657464,
+            7.722069569891236
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-1": 0.8527526034337178,
+            "model-2": 0.9021658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            -0.11977397684140507,
+            -3.7732101627657464,
+            7.722069569891236
+          ],
+          "candidates": [
+            "model-0",
+            "model-1"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-1": 0.8527526034337178
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            -0.11977397684140507,
+            -3.7732101627657464,
+            7.722069569891236
+          ],
+          "candidates": [
+            "model-0",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "model-0": 0.8195024875621892
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            1.445393928575787,
+            1.9306398736066654,
+            -0.6237800397433206
+          ],
+          "candidates": null,
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-1": 0.905693779904306,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            1.445393928575787,
+            1.9306398736066654,
+            -0.6237800397433206
+          ],
+          "candidates": [
+            "model-0",
+            "model-2"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            1.445393928575787,
+            1.9306398736066654,
+            -0.6237800397433206
+          ],
+          "candidates": [
+            "model-0",
+            "not-trained"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            0.17486125386421522,
+            1.010227909096399,
+            0.5853212696313832
+          ],
+          "candidates": null,
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-1": 0.905693779904306,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            0.17486125386421522,
+            1.010227909096399,
+            0.5853212696313832
+          ],
+          "candidates": [
+            "model-0",
+            "model-2"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            0.17486125386421522,
+            1.010227909096399,
+            0.5853212696313832
+          ],
+          "candidates": [
+            "model-0",
+            "not-trained"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            -1.8279434585283925,
+            1.8440411664449796,
+            1.4712093529343135
+          ],
+          "candidates": null,
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-1": 0.905693779904306,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            -1.8279434585283925,
+            1.8440411664449796,
+            1.4712093529343135
+          ],
+          "candidates": [
+            "model-0",
+            "model-2"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            -1.8279434585283925,
+            1.8440411664449796,
+            1.4712093529343135
+          ],
+          "candidates": [
+            "model-0",
+            "not-trained"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            -0.3547931656488908,
+            -2.1577297905987844,
+            -2.638099098570261
+          ],
+          "candidates": null,
+          "cluster_id": 1,
+          "scores": {
+            "model-0": 0.9095024875621894,
+            "model-1": 0.8527526034337178,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            -0.3547931656488908,
+            -2.1577297905987844,
+            -2.638099098570261
+          ],
+          "candidates": [
+            "model-1",
+            "model-2"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "model-1": 0.8527526034337178,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            -0.3547931656488908,
+            -2.1577297905987844,
+            -2.638099098570261
+          ],
+          "candidates": [
+            "model-1",
+            "not-trained"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "model-1": 0.8527526034337178
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            -3.0240849943561763,
+            0.8298871757688906,
+            -1.0527196431484374
+          ],
+          "candidates": null,
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-1": 0.905693779904306,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            -3.0240849943561763,
+            0.8298871757688906,
+            -1.0527196431484374
+          ],
+          "candidates": [
+            "model-0",
+            "model-2"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            -3.0240849943561763,
+            0.8298871757688906,
+            -1.0527196431484374
+          ],
+          "candidates": [
+            "model-0",
+            "not-trained"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            2.6131816937249464,
+            -2.663334536270849,
+            2.1772507377622254
+          ],
+          "candidates": null,
+          "cluster_id": 1,
+          "scores": {
+            "model-0": 0.9095024875621894,
+            "model-1": 0.8527526034337178,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            2.6131816937249464,
+            -2.663334536270849,
+            2.1772507377622254
+          ],
+          "candidates": [
+            "model-1",
+            "model-2"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "model-1": 0.8527526034337178,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            2.6131816937249464,
+            -2.663334536270849,
+            2.1772507377622254
+          ],
+          "candidates": [
+            "model-1",
+            "not-trained"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "model-1": 0.8527526034337178
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            0.08071072856263076,
+            -1.7066406064249806,
+            3.1336834270105745
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-1": 0.8527526034337178,
+            "model-2": 0.9021658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            0.08071072856263076,
+            -1.7066406064249806,
+            3.1336834270105745
+          ],
+          "candidates": [
+            "model-0",
+            "model-1"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-1": 0.8527526034337178
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            0.08071072856263076,
+            -1.7066406064249806,
+            3.1336834270105745
+          ],
+          "candidates": [
+            "model-0",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "model-0": 0.8195024875621892
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            -0.0071928709436281935,
+            -0.11511694055012756,
+            4.17758346114719
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-1": 0.8527526034337178,
+            "model-2": 0.9021658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            -0.0071928709436281935,
+            -0.11511694055012756,
+            4.17758346114719
+          ],
+          "candidates": [
+            "model-0",
+            "model-1"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-1": 0.8527526034337178
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            -0.0071928709436281935,
+            -0.11511694055012756,
+            4.17758346114719
+          ],
+          "candidates": [
+            "model-0",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "model-0": 0.8195024875621892
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            3.9770754606010907,
+            -0.17564742014916712,
+            -0.08731481497646865
+          ],
+          "candidates": null,
+          "cluster_id": 1,
+          "scores": {
+            "model-0": 0.9095024875621894,
+            "model-1": 0.8527526034337178,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            3.9770754606010907,
+            -0.17564742014916712,
+            -0.08731481497646865
+          ],
+          "candidates": [
+            "model-1",
+            "model-2"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "model-1": 0.8527526034337178,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            3.9770754606010907,
+            -0.17564742014916712,
+            -0.08731481497646865
+          ],
+          "candidates": [
+            "model-1",
+            "not-trained"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "model-1": 0.8527526034337178
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            0.24565602801435693,
+            3.9955333053640674,
+            -0.040110218420695176
+          ],
+          "candidates": null,
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-1": 0.905693779904306,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            0.24565602801435693,
+            3.9955333053640674,
+            -0.040110218420695176
+          ],
+          "candidates": [
+            "model-0",
+            "model-2"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            0.24565602801435693,
+            3.9955333053640674,
+            -0.040110218420695176
+          ],
+          "candidates": [
+            "model-0",
+            "not-trained"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidates": null,
+          "cluster_id": 1,
+          "scores": {
+            "model-0": 0.9095024875621894,
+            "model-1": 0.8527526034337178,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidates": [
+            "model-1",
+            "model-2"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "model-1": 0.8527526034337178,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidates": [
+            "model-1",
+            "not-trained"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "model-1": 0.8527526034337178
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            4.159347986905589,
+            -0.22512933496701001,
+            0.23553397749937807
+          ],
+          "candidates": null,
+          "cluster_id": 1,
+          "scores": {
+            "model-0": 0.9095024875621894,
+            "model-1": 0.8527526034337178,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            4.159347986905589,
+            -0.22512933496701001,
+            0.23553397749937807
+          ],
+          "candidates": [
+            "model-1",
+            "model-2"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "model-1": 0.8527526034337178,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            4.159347986905589,
+            -0.22512933496701001,
+            0.23553397749937807
+          ],
+          "candidates": [
+            "model-1",
+            "not-trained"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "model-1": 0.8527526034337178
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            -0.03915047498127815,
+            4.247920882244668,
+            0.7347328604743889
+          ],
+          "candidates": null,
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-1": 0.905693779904306,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            -0.03915047498127815,
+            4.247920882244668,
+            0.7347328604743889
+          ],
+          "candidates": [
+            "model-0",
+            "model-2"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            -0.03915047498127815,
+            4.247920882244668,
+            0.7347328604743889
+          ],
+          "candidates": [
+            "model-0",
+            "not-trained"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "model-0": 0.8195024875621892
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            0.40673051146649497,
+            -0.5827072978776637,
+            4.105435709664481
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-1": 0.8527526034337178,
+            "model-2": 0.9021658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            0.40673051146649497,
+            -0.5827072978776637,
+            4.105435709664481
+          ],
+          "candidates": [
+            "model-0",
+            "model-1"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "model-0": 0.8195024875621892,
+            "model-1": 0.8527526034337178
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            0.40673051146649497,
+            -0.5827072978776637,
+            4.105435709664481
+          ],
+          "candidates": [
+            "model-0",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "model-0": 0.8195024875621892
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            4.222488876232071,
+            -0.3091161465245025,
+            -0.19219561099924576
+          ],
+          "candidates": null,
+          "cluster_id": 1,
+          "scores": {
+            "model-0": 0.9095024875621894,
+            "model-1": 0.8527526034337178,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-0"
+        },
+        {
+          "vector": [
+            4.222488876232071,
+            -0.3091161465245025,
+            -0.19219561099924576
+          ],
+          "candidates": [
+            "model-1",
+            "model-2"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "model-1": 0.8527526034337178,
+            "model-2": 0.8796658986175113
+          },
+          "model": "model-2"
+        },
+        {
+          "vector": [
+            4.222488876232071,
+            -0.3091161465245025,
+            -0.19219561099924576
+          ],
+          "candidates": [
+            "model-1",
+            "not-trained"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "model-1": 0.8527526034337178
+          },
+          "model": "model-1"
+        },
+        {
+          "vector": [
+            -0.11977397684140507,
+            -3.7732101627657464,
+            7.722069569891236
+          ],
+          "candidates": [
+            "not-trained"
+          ],
+          "error": "no_eligible_candidate"
+        },
+        {
+          "vector": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidates": null,
+          "error": "invalid_query"
+        }
+      ]
+    },
+    {
+      "name": "k_above_unique",
+      "artifact": {
+        "algorithm": "kmeans",
+        "format_version": 2,
+        "trained": true,
+        "target_contract": "selector.model-choice/v1",
+        "objective": {
+          "id": "937e3622d5660e22",
+          "version": 1,
+          "weights": {
+            "quality": 0.9,
+            "latency": 0.1,
+            "cost": 0.0
+          },
+          "latency_scale_ms": 10000.0,
+          "cost_scale": 1.0
+        },
+        "candidate_set": {
+          "id": "08b1e8b75c8635d3",
+          "models": [
+            "a",
+            "b"
+          ]
+        },
+        "feature": {
+          "snapshot_id": "8267557b55e334fc",
+          "dim": 2,
+          "normalization": "none"
+        },
+        "training_snapshot_id": "c6a9bc10a8e2bd26",
+        "clustering": {
+          "init": "k-means++",
+          "algorithm": "lloyd",
+          "dtype": "float64",
+          "seed": 42,
+          "n_init": 10,
+          "max_iter": 300,
+          "tol": 0.0001,
+          "library_versions": {
+            "scikit-learn": "1.9.1",
+            "numpy": "2.5.3"
+          },
+          "requested_k": 8,
+          "effective_k": 3,
+          "train_queries": 3
+        },
+        "distance": "squared_l2",
+        "tie_break": "lowest_index",
+        "num_clusters": 3,
+        "centroids": [
+          [
+            0.0,
+            1.0
+          ],
+          [
+            1.0,
+            1.0
+          ],
+          [
+            1.0,
+            0.0
+          ]
+        ],
+        "cluster_sizes": [
+          1,
+          1,
+          1
+        ],
+        "scores": [
+          [
+            0.549009900990099,
+            0.549009900990099
+          ],
+          [
+            0.8190099009900991,
+            0.2790099009900991
+          ],
+          [
+            0.27900990099009904,
+            0.8190099009900991
+          ]
+        ],
+        "support": [
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "fallback": {
+          "min_support": 1,
+          "global_scores": [
+            0.549009900990099,
+            0.549009900990099
+          ],
+          "global_support": [
+            3,
+            3
+          ]
+        },
+        "cluster_models": [
+          "a",
+          "a",
+          "b"
+        ],
+        "model_names": [
+          "a",
+          "b"
+        ],
+        "feature_dim": 2
+      },
+      "queries": [
+        {
+          "vector": [
+            0.4520394011151702,
+            2.3706903187996278
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "a": 0.549009900990099,
+            "b": 0.549009900990099
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            0.4520394011151702,
+            2.3706903187996278
+          ],
+          "candidates": [
+            "b"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "b": 0.549009900990099
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            0.4520394011151702,
+            2.3706903187996278
+          ],
+          "candidates": [
+            "b",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "b": 0.549009900990099
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            3.273175832447079,
+            1.483487470690312
+          ],
+          "candidates": null,
+          "cluster_id": 1,
+          "scores": {
+            "a": 0.8190099009900991,
+            "b": 0.2790099009900991
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            3.273175832447079,
+            1.483487470690312
+          ],
+          "candidates": [
+            "b"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "b": 0.2790099009900991
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            3.273175832447079,
+            1.483487470690312
+          ],
+          "candidates": [
+            "b",
+            "not-trained"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "b": 0.2790099009900991
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            -1.461676991134867,
+            0.5573863583455563
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "a": 0.549009900990099,
+            "b": 0.549009900990099
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            -1.461676991134867,
+            0.5573863583455563
+          ],
+          "candidates": [
+            "b"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "b": 0.549009900990099
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            -1.461676991134867,
+            0.5573863583455563
+          ],
+          "candidates": [
+            "b",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "b": 0.549009900990099
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            3.0134156514752357,
+            -1.8702567835369497
+          ],
+          "candidates": null,
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904,
+            "b": 0.8190099009900991
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            3.0134156514752357,
+            -1.8702567835369497
+          ],
+          "candidates": [
+            "a"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            3.0134156514752357,
+            -1.8702567835369497
+          ],
+          "candidates": [
+            "a",
+            "not-trained"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            1.6371603317701044,
+            -0.5870762795247123
+          ],
+          "candidates": null,
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904,
+            "b": 0.8190099009900991
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            1.6371603317701044,
+            -0.5870762795247123
+          ],
+          "candidates": [
+            "a"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            1.6371603317701044,
+            -0.5870762795247123
+          ],
+          "candidates": [
+            "a",
+            "not-trained"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            -1.445314424587994,
+            -1.6853760460909308
+          ],
+          "candidates": null,
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904,
+            "b": 0.8190099009900991
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            -1.445314424587994,
+            -1.6853760460909308
+          ],
+          "candidates": [
+            "a"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            -1.445314424587994,
+            -1.6853760460909308
+          ],
+          "candidates": [
+            "a",
+            "not-trained"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            -3.2437191852160496,
+            -0.7942708800729819
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "a": 0.549009900990099,
+            "b": 0.549009900990099
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            -3.2437191852160496,
+            -0.7942708800729819
+          ],
+          "candidates": [
+            "b"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "b": 0.549009900990099
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            -3.2437191852160496,
+            -0.7942708800729819
+          ],
+          "candidates": [
+            "b",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "b": 0.549009900990099
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            1.1368457674874635,
+            -5.930849586637154
+          ],
+          "candidates": null,
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904,
+            "b": 0.8190099009900991
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            1.1368457674874635,
+            -5.930849586637154
+          ],
+          "candidates": [
+            "a"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            1.1368457674874635,
+            -5.930849586637154
+          ],
+          "candidates": [
+            "a",
+            "not-trained"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            0.0,
+            1.0
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "a": 0.549009900990099,
+            "b": 0.549009900990099
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            0.0,
+            1.0
+          ],
+          "candidates": [
+            "b"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "b": 0.549009900990099
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            0.0,
+            1.0
+          ],
+          "candidates": [
+            "b",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "b": 0.549009900990099
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            1.0,
+            1.0
+          ],
+          "candidates": null,
+          "cluster_id": 1,
+          "scores": {
+            "a": 0.8190099009900991,
+            "b": 0.2790099009900991
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            1.0,
+            1.0
+          ],
+          "candidates": [
+            "b"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "b": 0.2790099009900991
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            1.0,
+            1.0
+          ],
+          "candidates": [
+            "b",
+            "not-trained"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "b": 0.2790099009900991
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": null,
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904,
+            "b": 0.8190099009900991
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": [
+            "a"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": [
+            "a",
+            "not-trained"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            0.0,
+            0.0
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "a": 0.549009900990099,
+            "b": 0.549009900990099
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            0.0,
+            0.0
+          ],
+          "candidates": [
+            "b"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "b": 0.549009900990099
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            0.0,
+            0.0
+          ],
+          "candidates": [
+            "b",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "b": 0.549009900990099
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": null,
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904,
+            "b": 0.8190099009900991
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": [
+            "a"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": [
+            "a",
+            "not-trained"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": null,
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904,
+            "b": 0.8190099009900991
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": [
+            "a"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": [
+            "a",
+            "not-trained"
+          ],
+          "cluster_id": 2,
+          "scores": {
+            "a": 0.27900990099009904
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            0.0,
+            1.0
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "a": 0.549009900990099,
+            "b": 0.549009900990099
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            0.0,
+            1.0
+          ],
+          "candidates": [
+            "b"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "b": 0.549009900990099
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            0.0,
+            1.0
+          ],
+          "candidates": [
+            "b",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "b": 0.549009900990099
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            0.0,
+            1.0
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "a": 0.549009900990099,
+            "b": 0.549009900990099
+          },
+          "model": "a"
+        },
+        {
+          "vector": [
+            0.0,
+            1.0
+          ],
+          "candidates": [
+            "b"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "b": 0.549009900990099
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            0.0,
+            1.0
+          ],
+          "candidates": [
+            "b",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "b": 0.549009900990099
+          },
+          "model": "b"
+        },
+        {
+          "vector": [
+            0.4520394011151702,
+            2.3706903187996278
+          ],
+          "candidates": [
+            "not-trained"
+          ],
+          "error": "no_eligible_candidate"
+        },
+        {
+          "vector": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidates": null,
+          "error": "invalid_query"
+        }
+      ]
+    },
+    {
+      "name": "equidistant",
+      "artifact": {
+        "algorithm": "kmeans",
+        "format_version": 2,
+        "trained": true,
+        "target_contract": "selector.model-choice/v1",
+        "objective": {
+          "id": "937e3622d5660e22",
+          "version": 1,
+          "weights": {
+            "quality": 0.9,
+            "latency": 0.1,
+            "cost": 0.0
+          },
+          "latency_scale_ms": 10000.0,
+          "cost_scale": 1.0
+        },
+        "candidate_set": {
+          "id": "7d0ff5adc21ab6ce",
+          "models": [
+            "left",
+            "right"
+          ]
+        },
+        "feature": {
+          "snapshot_id": "eecc4d8da78b0e4d",
+          "dim": 2,
+          "normalization": "none"
+        },
+        "training_snapshot_id": "433df4df74387a7b",
+        "clustering": {
+          "init": "k-means++",
+          "algorithm": "lloyd",
+          "dtype": "float64",
+          "seed": 42,
+          "n_init": 10,
+          "max_iter": 300,
+          "tol": 0.0001,
+          "library_versions": {
+            "scikit-learn": "1.9.1",
+            "numpy": "2.5.3"
+          },
+          "requested_k": 2,
+          "effective_k": 2,
+          "train_queries": 6
+        },
+        "distance": "squared_l2",
+        "tie_break": "lowest_index",
+        "num_clusters": 2,
+        "centroids": [
+          [
+            -1.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ]
+        ],
+        "cluster_sizes": [
+          3,
+          3
+        ],
+        "scores": [
+          [
+            0.909009900990099,
+            0.18900990099009904
+          ],
+          [
+            0.18900990099009904,
+            0.909009900990099
+          ]
+        ],
+        "support": [
+          [
+            3,
+            3
+          ],
+          [
+            3,
+            3
+          ]
+        ],
+        "fallback": {
+          "min_support": 1,
+          "global_scores": [
+            0.549009900990099,
+            0.549009900990099
+          ],
+          "global_support": [
+            6,
+            6
+          ]
+        },
+        "cluster_models": [
+          "left",
+          "right"
+        ],
+        "model_names": [
+          "left",
+          "right"
+        ],
+        "feature_dim": 2
+      },
+      "queries": [
+        {
+          "vector": [
+            -1.1998952109002965,
+            0.6219817303535246
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "left": 0.909009900990099,
+            "right": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            -1.1998952109002965,
+            0.6219817303535246
+          ],
+          "candidates": [
+            "right"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -1.1998952109002965,
+            0.6219817303535246
+          ],
+          "candidates": [
+            "right",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -1.1930408405558461,
+            2.2119490650976323
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "left": 0.909009900990099,
+            "right": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            -1.1930408405558461,
+            2.2119490650976323
+          ],
+          "candidates": [
+            "right"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -1.1930408405558461,
+            2.2119490650976323
+          ],
+          "candidates": [
+            "right",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -2.4323140543066035,
+            2.0990179656298444
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "left": 0.909009900990099,
+            "right": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            -2.4323140543066035,
+            2.0990179656298444
+          ],
+          "candidates": [
+            "right"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -2.4323140543066035,
+            2.0990179656298444
+          ],
+          "candidates": [
+            "right",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            2.373079879864325,
+            1.1233526651513082
+          ],
+          "candidates": null,
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904,
+            "right": 0.909009900990099
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            2.373079879864325,
+            1.1233526651513082
+          ],
+          "candidates": [
+            "left"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            2.373079879864325,
+            1.1233526651513082
+          ],
+          "candidates": [
+            "left",
+            "not-trained"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            -2.2538802923739616,
+            5.207185815243935
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "left": 0.909009900990099,
+            "right": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            -2.2538802923739616,
+            5.207185815243935
+          ],
+          "candidates": [
+            "right"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -2.2538802923739616,
+            5.207185815243935
+          ],
+          "candidates": [
+            "right",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -0.7958230924383785,
+            1.4629031316776637
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "left": 0.909009900990099,
+            "right": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            -0.7958230924383785,
+            1.4629031316776637
+          ],
+          "candidates": [
+            "right"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -0.7958230924383785,
+            1.4629031316776637
+          ],
+          "candidates": [
+            "right",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -2.964643935631938,
+            -2.166527991907582
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "left": 0.909009900990099,
+            "right": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            -2.964643935631938,
+            -2.166527991907582
+          ],
+          "candidates": [
+            "right"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -2.964643935631938,
+            -2.166527991907582
+          ],
+          "candidates": [
+            "right",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            1.0897503962444568,
+            -4.201802324316462
+          ],
+          "candidates": null,
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904,
+            "right": 0.909009900990099
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            1.0897503962444568,
+            -4.201802324316462
+          ],
+          "candidates": [
+            "left"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            1.0897503962444568,
+            -4.201802324316462
+          ],
+          "candidates": [
+            "left",
+            "not-trained"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            -1.0,
+            0.0
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "left": 0.909009900990099,
+            "right": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            -1.0,
+            0.0
+          ],
+          "candidates": [
+            "right"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -1.0,
+            0.0
+          ],
+          "candidates": [
+            "right",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": null,
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904,
+            "right": 0.909009900990099
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": [
+            "left"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": [
+            "left",
+            "not-trained"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            0.0,
+            0.0
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "left": 0.909009900990099,
+            "right": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            0.0,
+            0.0
+          ],
+          "candidates": [
+            "right"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            0.0,
+            0.0
+          ],
+          "candidates": [
+            "right",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -1.0,
+            0.0
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "left": 0.909009900990099,
+            "right": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            -1.0,
+            0.0
+          ],
+          "candidates": [
+            "right"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -1.0,
+            0.0
+          ],
+          "candidates": [
+            "right",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -1.0,
+            0.0
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "left": 0.909009900990099,
+            "right": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            -1.0,
+            0.0
+          ],
+          "candidates": [
+            "right"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -1.0,
+            0.0
+          ],
+          "candidates": [
+            "right",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": null,
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904,
+            "right": 0.909009900990099
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": [
+            "left"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": [
+            "left",
+            "not-trained"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": null,
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904,
+            "right": 0.909009900990099
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": [
+            "left"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            1.0,
+            0.0
+          ],
+          "candidates": [
+            "left",
+            "not-trained"
+          ],
+          "cluster_id": 1,
+          "scores": {
+            "left": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            0.0,
+            0.5
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "left": 0.909009900990099,
+            "right": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            0.0,
+            0.5
+          ],
+          "candidates": [
+            "right"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            0.0,
+            0.5
+          ],
+          "candidates": [
+            "right",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            0.0,
+            -3.0
+          ],
+          "candidates": null,
+          "cluster_id": 0,
+          "scores": {
+            "left": 0.909009900990099,
+            "right": 0.18900990099009904
+          },
+          "model": "left"
+        },
+        {
+          "vector": [
+            0.0,
+            -3.0
+          ],
+          "candidates": [
+            "right"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            0.0,
+            -3.0
+          ],
+          "candidates": [
+            "right",
+            "not-trained"
+          ],
+          "cluster_id": 0,
+          "scores": {
+            "right": 0.18900990099009904
+          },
+          "model": "right"
+        },
+        {
+          "vector": [
+            -1.1998952109002965,
+            0.6219817303535246
+          ],
+          "candidates": [
+            "not-trained"
+          ],
+          "error": "no_eligible_candidate"
+        },
+        {
+          "vector": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidates": null,
+          "error": "invalid_query"
+        }
+      ]
+    }
+  ],
+  "artifact_rejects": [
+    {
+      "reason": "format_version",
+      "artifact": {
+        "algorithm": "kmeans",
+        "format_version": 3,
+        "trained": true,
+        "target_contract": "selector.model-choice/v1",
+        "objective": {
+          "id": "937e3622d5660e22",
+          "version": 1,
+          "weights": {
+            "quality": 0.9,
+            "latency": 0.1,
+            "cost": 0.0
+          },
+          "latency_scale_ms": 10000.0,
+          "cost_scale": 1.0
+        },
+        "candidate_set": {
+          "id": "c06b436c80438781",
+          "models": [
+            "model-0",
+            "model-1",
+            "model-2"
+          ]
+        },
+        "feature": {
+          "snapshot_id": "a3cab23490bff4b4",
+          "dim": 3,
+          "normalization": "none"
+        },
+        "training_snapshot_id": "925f870344760ab0",
+        "clustering": {
+          "init": "k-means++",
+          "algorithm": "lloyd",
+          "dtype": "float64",
+          "seed": 42,
+          "n_init": 10,
+          "max_iter": 300,
+          "tol": 0.0001,
+          "library_versions": {
+            "scikit-learn": "1.9.1",
+            "numpy": "2.5.3"
+          },
+          "requested_k": 3,
+          "effective_k": 3,
+          "train_queries": 45
+        },
+        "distance": "squared_l2",
+        "tie_break": "lowest_index",
+        "num_clusters": 3,
+        "centroids": [
+          [
+            -0.0071928709436281935,
+            -0.11511694055012756,
+            4.17758346114719
+          ],
+          [
+            3.9770754606010907,
+            -0.17564742014916712,
+            -0.08731481497646865
+          ],
+          [
+            0.24565602801435693,
+            3.9955333053640674,
+            -0.040110218420695176
+          ]
+        ],
+        "cluster_sizes": [
+          15,
+          15,
+          15
+        ],
+        "scores": [
+          [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.9021658986175113
+          ],
+          [
+            0.9095024875621894,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          [
+            0.8195024875621892,
+            0.905693779904306,
+            0.8796658986175113
+          ]
+        ],
+        "support": [
+          [
+            1,
+            2,
+            15
+          ],
+          [
+            15,
+            0,
+            1
+          ],
+          [
+            2,
+            15,
+            0
+          ]
+        ],
+        "fallback": {
+          "min_support": 3,
+          "global_scores": [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          "global_support": [
+            18,
+            17,
+            16
+          ]
+        },
+        "cluster_models": [
+          "model-2",
+          "model-0",
+          "model-1"
+        ],
+        "model_names": [
+          "model-0",
+          "model-1",
+          "model-2"
+        ],
+        "feature_dim": 3
+      }
+    },
+    {
+      "reason": "feature_dim",
+      "artifact": {
+        "algorithm": "kmeans",
+        "format_version": 2,
+        "trained": true,
+        "target_contract": "selector.model-choice/v1",
+        "objective": {
+          "id": "937e3622d5660e22",
+          "version": 1,
+          "weights": {
+            "quality": 0.9,
+            "latency": 0.1,
+            "cost": 0.0
+          },
+          "latency_scale_ms": 10000.0,
+          "cost_scale": 1.0
+        },
+        "candidate_set": {
+          "id": "c06b436c80438781",
+          "models": [
+            "model-0",
+            "model-1",
+            "model-2"
+          ]
+        },
+        "feature": {
+          "snapshot_id": "a3cab23490bff4b4",
+          "dim": 4,
+          "normalization": "none"
+        },
+        "training_snapshot_id": "925f870344760ab0",
+        "clustering": {
+          "init": "k-means++",
+          "algorithm": "lloyd",
+          "dtype": "float64",
+          "seed": 42,
+          "n_init": 10,
+          "max_iter": 300,
+          "tol": 0.0001,
+          "library_versions": {
+            "scikit-learn": "1.9.1",
+            "numpy": "2.5.3"
+          },
+          "requested_k": 3,
+          "effective_k": 3,
+          "train_queries": 45
+        },
+        "distance": "squared_l2",
+        "tie_break": "lowest_index",
+        "num_clusters": 3,
+        "centroids": [
+          [
+            -0.0071928709436281935,
+            -0.11511694055012756,
+            4.17758346114719
+          ],
+          [
+            3.9770754606010907,
+            -0.17564742014916712,
+            -0.08731481497646865
+          ],
+          [
+            0.24565602801435693,
+            3.9955333053640674,
+            -0.040110218420695176
+          ]
+        ],
+        "cluster_sizes": [
+          15,
+          15,
+          15
+        ],
+        "scores": [
+          [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.9021658986175113
+          ],
+          [
+            0.9095024875621894,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          [
+            0.8195024875621892,
+            0.905693779904306,
+            0.8796658986175113
+          ]
+        ],
+        "support": [
+          [
+            1,
+            2,
+            15
+          ],
+          [
+            15,
+            0,
+            1
+          ],
+          [
+            2,
+            15,
+            0
+          ]
+        ],
+        "fallback": {
+          "min_support": 3,
+          "global_scores": [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          "global_support": [
+            18,
+            17,
+            16
+          ]
+        },
+        "cluster_models": [
+          "model-2",
+          "model-0",
+          "model-1"
+        ],
+        "model_names": [
+          "model-0",
+          "model-1",
+          "model-2"
+        ],
+        "feature_dim": 3
+      }
+    },
+    {
+      "reason": "candidate_set_id",
+      "artifact": {
+        "algorithm": "kmeans",
+        "format_version": 2,
+        "trained": true,
+        "target_contract": "selector.model-choice/v1",
+        "objective": {
+          "id": "937e3622d5660e22",
+          "version": 1,
+          "weights": {
+            "quality": 0.9,
+            "latency": 0.1,
+            "cost": 0.0
+          },
+          "latency_scale_ms": 10000.0,
+          "cost_scale": 1.0
+        },
+        "candidate_set": {
+          "id": "0000000000000000",
+          "models": [
+            "model-0",
+            "model-1",
+            "model-2"
+          ]
+        },
+        "feature": {
+          "snapshot_id": "a3cab23490bff4b4",
+          "dim": 3,
+          "normalization": "none"
+        },
+        "training_snapshot_id": "925f870344760ab0",
+        "clustering": {
+          "init": "k-means++",
+          "algorithm": "lloyd",
+          "dtype": "float64",
+          "seed": 42,
+          "n_init": 10,
+          "max_iter": 300,
+          "tol": 0.0001,
+          "library_versions": {
+            "scikit-learn": "1.9.1",
+            "numpy": "2.5.3"
+          },
+          "requested_k": 3,
+          "effective_k": 3,
+          "train_queries": 45
+        },
+        "distance": "squared_l2",
+        "tie_break": "lowest_index",
+        "num_clusters": 3,
+        "centroids": [
+          [
+            -0.0071928709436281935,
+            -0.11511694055012756,
+            4.17758346114719
+          ],
+          [
+            3.9770754606010907,
+            -0.17564742014916712,
+            -0.08731481497646865
+          ],
+          [
+            0.24565602801435693,
+            3.9955333053640674,
+            -0.040110218420695176
+          ]
+        ],
+        "cluster_sizes": [
+          15,
+          15,
+          15
+        ],
+        "scores": [
+          [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.9021658986175113
+          ],
+          [
+            0.9095024875621894,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          [
+            0.8195024875621892,
+            0.905693779904306,
+            0.8796658986175113
+          ]
+        ],
+        "support": [
+          [
+            1,
+            2,
+            15
+          ],
+          [
+            15,
+            0,
+            1
+          ],
+          [
+            2,
+            15,
+            0
+          ]
+        ],
+        "fallback": {
+          "min_support": 3,
+          "global_scores": [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          "global_support": [
+            18,
+            17,
+            16
+          ]
+        },
+        "cluster_models": [
+          "model-2",
+          "model-0",
+          "model-1"
+        ],
+        "model_names": [
+          "model-0",
+          "model-1",
+          "model-2"
+        ],
+        "feature_dim": 3
+      }
+    },
+    {
+      "reason": "objective_id",
+      "artifact": {
+        "algorithm": "kmeans",
+        "format_version": 2,
+        "trained": true,
+        "target_contract": "selector.model-choice/v1",
+        "objective": {
+          "id": "0000000000000000",
+          "version": 1,
+          "weights": {
+            "quality": 0.9,
+            "latency": 0.1,
+            "cost": 0.0
+          },
+          "latency_scale_ms": 10000.0,
+          "cost_scale": 1.0
+        },
+        "candidate_set": {
+          "id": "c06b436c80438781",
+          "models": [
+            "model-0",
+            "model-1",
+            "model-2"
+          ]
+        },
+        "feature": {
+          "snapshot_id": "a3cab23490bff4b4",
+          "dim": 3,
+          "normalization": "none"
+        },
+        "training_snapshot_id": "925f870344760ab0",
+        "clustering": {
+          "init": "k-means++",
+          "algorithm": "lloyd",
+          "dtype": "float64",
+          "seed": 42,
+          "n_init": 10,
+          "max_iter": 300,
+          "tol": 0.0001,
+          "library_versions": {
+            "scikit-learn": "1.9.1",
+            "numpy": "2.5.3"
+          },
+          "requested_k": 3,
+          "effective_k": 3,
+          "train_queries": 45
+        },
+        "distance": "squared_l2",
+        "tie_break": "lowest_index",
+        "num_clusters": 3,
+        "centroids": [
+          [
+            -0.0071928709436281935,
+            -0.11511694055012756,
+            4.17758346114719
+          ],
+          [
+            3.9770754606010907,
+            -0.17564742014916712,
+            -0.08731481497646865
+          ],
+          [
+            0.24565602801435693,
+            3.9955333053640674,
+            -0.040110218420695176
+          ]
+        ],
+        "cluster_sizes": [
+          15,
+          15,
+          15
+        ],
+        "scores": [
+          [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.9021658986175113
+          ],
+          [
+            0.9095024875621894,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          [
+            0.8195024875621892,
+            0.905693779904306,
+            0.8796658986175113
+          ]
+        ],
+        "support": [
+          [
+            1,
+            2,
+            15
+          ],
+          [
+            15,
+            0,
+            1
+          ],
+          [
+            2,
+            15,
+            0
+          ]
+        ],
+        "fallback": {
+          "min_support": 3,
+          "global_scores": [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          "global_support": [
+            18,
+            17,
+            16
+          ]
+        },
+        "cluster_models": [
+          "model-2",
+          "model-0",
+          "model-1"
+        ],
+        "model_names": [
+          "model-0",
+          "model-1",
+          "model-2"
+        ],
+        "feature_dim": 3
+      }
+    },
+    {
+      "reason": "cluster_models",
+      "artifact": {
+        "algorithm": "kmeans",
+        "format_version": 2,
+        "trained": true,
+        "target_contract": "selector.model-choice/v1",
+        "objective": {
+          "id": "937e3622d5660e22",
+          "version": 1,
+          "weights": {
+            "quality": 0.9,
+            "latency": 0.1,
+            "cost": 0.0
+          },
+          "latency_scale_ms": 10000.0,
+          "cost_scale": 1.0
+        },
+        "candidate_set": {
+          "id": "c06b436c80438781",
+          "models": [
+            "model-0",
+            "model-1",
+            "model-2"
+          ]
+        },
+        "feature": {
+          "snapshot_id": "a3cab23490bff4b4",
+          "dim": 3,
+          "normalization": "none"
+        },
+        "training_snapshot_id": "925f870344760ab0",
+        "clustering": {
+          "init": "k-means++",
+          "algorithm": "lloyd",
+          "dtype": "float64",
+          "seed": 42,
+          "n_init": 10,
+          "max_iter": 300,
+          "tol": 0.0001,
+          "library_versions": {
+            "scikit-learn": "1.9.1",
+            "numpy": "2.5.3"
+          },
+          "requested_k": 3,
+          "effective_k": 3,
+          "train_queries": 45
+        },
+        "distance": "squared_l2",
+        "tie_break": "lowest_index",
+        "num_clusters": 3,
+        "centroids": [
+          [
+            -0.0071928709436281935,
+            -0.11511694055012756,
+            4.17758346114719
+          ],
+          [
+            3.9770754606010907,
+            -0.17564742014916712,
+            -0.08731481497646865
+          ],
+          [
+            0.24565602801435693,
+            3.9955333053640674,
+            -0.040110218420695176
+          ]
+        ],
+        "cluster_sizes": [
+          15,
+          15,
+          15
+        ],
+        "scores": [
+          [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.9021658986175113
+          ],
+          [
+            0.9095024875621894,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          [
+            0.8195024875621892,
+            0.905693779904306,
+            0.8796658986175113
+          ]
+        ],
+        "support": [
+          [
+            1,
+            2,
+            15
+          ],
+          [
+            15,
+            0,
+            1
+          ],
+          [
+            2,
+            15,
+            0
+          ]
+        ],
+        "fallback": {
+          "min_support": 3,
+          "global_scores": [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          "global_support": [
+            18,
+            17,
+            16
+          ]
+        },
+        "cluster_models": [
+          "model-0",
+          "model-0",
+          "model-1"
+        ],
+        "model_names": [
+          "model-0",
+          "model-1",
+          "model-2"
+        ],
+        "feature_dim": 3
+      }
+    },
+    {
+      "reason": "fallback_cell",
+      "artifact": {
+        "algorithm": "kmeans",
+        "format_version": 2,
+        "trained": true,
+        "target_contract": "selector.model-choice/v1",
+        "objective": {
+          "id": "937e3622d5660e22",
+          "version": 1,
+          "weights": {
+            "quality": 0.9,
+            "latency": 0.1,
+            "cost": 0.0
+          },
+          "latency_scale_ms": 10000.0,
+          "cost_scale": 1.0
+        },
+        "candidate_set": {
+          "id": "c06b436c80438781",
+          "models": [
+            "model-0",
+            "model-1",
+            "model-2"
+          ]
+        },
+        "feature": {
+          "snapshot_id": "a3cab23490bff4b4",
+          "dim": 3,
+          "normalization": "none"
+        },
+        "training_snapshot_id": "925f870344760ab0",
+        "clustering": {
+          "init": "k-means++",
+          "algorithm": "lloyd",
+          "dtype": "float64",
+          "seed": 42,
+          "n_init": 10,
+          "max_iter": 300,
+          "tol": 0.0001,
+          "library_versions": {
+            "scikit-learn": "1.9.1",
+            "numpy": "2.5.3"
+          },
+          "requested_k": 3,
+          "effective_k": 3,
+          "train_queries": 45
+        },
+        "distance": "squared_l2",
+        "tie_break": "lowest_index",
+        "num_clusters": 3,
+        "centroids": [
+          [
+            -0.0071928709436281935,
+            -0.11511694055012756,
+            4.17758346114719
+          ],
+          [
+            3.9770754606010907,
+            -0.17564742014916712,
+            -0.08731481497646865
+          ],
+          [
+            0.24565602801435693,
+            3.9955333053640674,
+            -0.040110218420695176
+          ]
+        ],
+        "cluster_sizes": [
+          15,
+          15,
+          15
+        ],
+        "scores": [
+          [
+            1.3195024875621892,
+            0.8527526034337178,
+            0.9021658986175113
+          ],
+          [
+            0.9095024875621894,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          [
+            0.8195024875621892,
+            0.905693779904306,
+            0.8796658986175113
+          ]
+        ],
+        "support": [
+          [
+            1,
+            2,
+            15
+          ],
+          [
+            15,
+            0,
+            1
+          ],
+          [
+            2,
+            15,
+            0
+          ]
+        ],
+        "fallback": {
+          "min_support": 3,
+          "global_scores": [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          "global_support": [
+            18,
+            17,
+            16
+          ]
+        },
+        "cluster_models": [
+          "model-2",
+          "model-0",
+          "model-1"
+        ],
+        "model_names": [
+          "model-0",
+          "model-1",
+          "model-2"
+        ],
+        "feature_dim": 3
+      }
+    },
+    {
+      "reason": "distance",
+      "artifact": {
+        "algorithm": "kmeans",
+        "format_version": 2,
+        "trained": true,
+        "target_contract": "selector.model-choice/v1",
+        "objective": {
+          "id": "937e3622d5660e22",
+          "version": 1,
+          "weights": {
+            "quality": 0.9,
+            "latency": 0.1,
+            "cost": 0.0
+          },
+          "latency_scale_ms": 10000.0,
+          "cost_scale": 1.0
+        },
+        "candidate_set": {
+          "id": "c06b436c80438781",
+          "models": [
+            "model-0",
+            "model-1",
+            "model-2"
+          ]
+        },
+        "feature": {
+          "snapshot_id": "a3cab23490bff4b4",
+          "dim": 3,
+          "normalization": "none"
+        },
+        "training_snapshot_id": "925f870344760ab0",
+        "clustering": {
+          "init": "k-means++",
+          "algorithm": "lloyd",
+          "dtype": "float64",
+          "seed": 42,
+          "n_init": 10,
+          "max_iter": 300,
+          "tol": 0.0001,
+          "library_versions": {
+            "scikit-learn": "1.9.1",
+            "numpy": "2.5.3"
+          },
+          "requested_k": 3,
+          "effective_k": 3,
+          "train_queries": 45
+        },
+        "distance": "cosine",
+        "tie_break": "lowest_index",
+        "num_clusters": 3,
+        "centroids": [
+          [
+            -0.0071928709436281935,
+            -0.11511694055012756,
+            4.17758346114719
+          ],
+          [
+            3.9770754606010907,
+            -0.17564742014916712,
+            -0.08731481497646865
+          ],
+          [
+            0.24565602801435693,
+            3.9955333053640674,
+            -0.040110218420695176
+          ]
+        ],
+        "cluster_sizes": [
+          15,
+          15,
+          15
+        ],
+        "scores": [
+          [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.9021658986175113
+          ],
+          [
+            0.9095024875621894,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          [
+            0.8195024875621892,
+            0.905693779904306,
+            0.8796658986175113
+          ]
+        ],
+        "support": [
+          [
+            1,
+            2,
+            15
+          ],
+          [
+            15,
+            0,
+            1
+          ],
+          [
+            2,
+            15,
+            0
+          ]
+        ],
+        "fallback": {
+          "min_support": 3,
+          "global_scores": [
+            0.8195024875621892,
+            0.8527526034337178,
+            0.8796658986175113
+          ],
+          "global_support": [
+            18,
+            17,
+            16
+          ]
+        },
+        "cluster_models": [
+          "model-2",
+          "model-0",
+          "model-1"
+        ],
+        "model_names": [
+          "model-0",
+          "model-1",
+          "model-2"
+        ],
+        "feature_dim": 3
+      }
+    }
+  ]
+}

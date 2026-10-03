@@ -18,13 +18,13 @@ from tools.ci.native_artifact import prepare_ml_library
 
 TRAINING = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TRAINING))
-from models import KNNModel, SVMModel, TrainingSample  # noqa: E402
+from models import KMeansModel, KNNModel, SVMModel, TrainingSample  # noqa: E402
 
 
 @pytest.fixture(scope="session")
 def native():
     lib = ctypes.CDLL(str(prepare_ml_library()))
-    for algorithm in ("knn", "svm"):
+    for algorithm in ("knn", "svm", "kmeans"):
         load = getattr(lib, f"ml_{algorithm}_from_json")
         load.argtypes = [ctypes.c_char_p]
         load.restype = ctypes.c_void_p
@@ -176,6 +176,31 @@ def test_knn_train_export_native_parity(native, tmp_path, k):
     assert [restored.predict(query) for query in queries] == expected
     del artifact["format_version"]
     assert native_predictions(native, "knn", artifact, queries) == expected
+
+
+@pytest.mark.parametrize("n_clusters", [1, 3, 200])
+def test_kmeans_v2_export_loads_in_the_current_runtime(native, tmp_path, n_clusters):
+    """The v1 runtime reads only centroids and cluster_models; both must agree."""
+    train_queries = samples_for_classes(3)[:30]
+    samples = [
+        TrainingSample(
+            s.feature_vector, f"model-{j}", (i * j % 7) / 7, s.latency_ms, f"q{i}"
+        )
+        for i, s in enumerate(train_queries)
+        for j in range(3)
+    ]
+    model = KMeansModel(n_clusters=n_clusters)
+    model.train(samples)
+    path = tmp_path / "kmeans.json"
+    model.save(path)
+    artifact = json.loads(path.read_text())
+    assert artifact["format_version"] == 2  # noqa: PLR2004 - artifact schema version
+    assert artifact["num_clusters"] == model.effective_k <= len(train_queries)
+    queries = np.vstack(
+        [np.random.default_rng(11).normal(size=(100, 7)), model.centroids]
+    )
+    expected = [model.predict(query) for query in queries]
+    assert native_predictions(native, "kmeans", artifact, queries) == expected
 
 
 def test_knn_latency_regression(native, tmp_path):
