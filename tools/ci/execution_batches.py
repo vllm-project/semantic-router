@@ -13,7 +13,7 @@ IMAGE_PRODUCERS = {
     "image-local": ("vllm-sr",),
     "image-dashboard": ("dashboard",),
     "image-operator": ("operator", "operator-bundle"),
-    "image-fixtures": ("provider-mocker",),
+    "image-fixtures": ("provider-mocker", "model-runtime"),
     "image-distribution": (
         "extproc-rocm",
         "vllm-sr-cuda",
@@ -57,7 +57,10 @@ def dispatch_job(record: dict) -> str:
         images = set(record["images"])
         if images == {"extproc"}:
             return "e2e-router"
-        if images == {"extproc", "provider-mocker"}:
+        if images in (
+            {"extproc", "provider-mocker"},
+            {"extproc", "provider-mocker", "model-runtime"},
+        ):
             return "e2e-fixtures"
         if images == {"extproc", "dashboard"}:
             return "e2e-dashboard"
