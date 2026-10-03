@@ -172,3 +172,27 @@ def test_fast_path_equals_eager(case):
                 assert torch.equal(want, got), (case, lengths)
     stats = graphs.receipt()
     assert stats["failed"] == 0 and stats["replays"] > 0
+
+
+def test_attention_prep_above_2gib():
+    """A q projection above 2 GiB (9 x 16,384 tokens at Nox-4B's widths) runs fused, without the eager fallback."""
+    accelerator, device = _device()
+    config = qwen3_5(1, 2560, 32, 16)
+    config["layer_types"] = ["full_attention"]
+    reference = build(config, 7, False, accelerator, device)
+    fused = copy.deepcopy(reference)
+    fused.kernels = reference.kernels
+    assert fast.install_fused(fused) == 1
+    lengths = [16384] * 9
+    assert (
+        sum(lengths) * 2 * config["num_attention_heads"] * config["head_dim"] * 2
+        > 2 << 30
+    )
+    ids, mask = batch(
+        lengths, torch.Generator().manual_seed(11), accelerator.torch_device(device)
+    )
+    with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+        want = reference(ids, mask)
+        got = fused(ids, mask, masks=fast.Masks().build(mask, False))
+    assert not fused.layers[0]._fused_failed
+    assert torch.equal(want, got)
