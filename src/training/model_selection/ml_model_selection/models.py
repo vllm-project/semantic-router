@@ -684,7 +684,7 @@ class MLPModel:
             }
 
     def save(self, path: str) -> None:
-        """Save model to JSON format compatible with Rust/Candle inference."""
+        """Save model to the JSON format the router's Go selectors load."""
         if self.model is None:
             raise ValueError("Model not trained")
 

@@ -18,37 +18,15 @@ from ci_results import make_receipt  # noqa: E402
 SHA = "a" * 40
 
 
-def go_events(names):
-    rows = [{"Action": "start", "Package": "candle-binding"}]
-    for name in names:
-        rows.extend(
-            {"Action": action, "Package": "candle-binding", "Test": name}
-            for action in ("run", "pass")
-        )
-    return [*rows, {"Action": "pass", "Package": "candle-binding"}]
-
-
-def write_events(path, rows):
-    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
-
-
 def router_report():
     bodies = {
         "health": "healthy",
         "ready": "ready",
         "classify": {"classification": {"category": "biology"}},
-        "preview": {
-            "metrics": {
-                "domain": {
-                    "confidence_available": True,
-                    "confidence": 0.92,
-                    "execution_time_ms": 10.3,
-                }
-            }
-        },
     }
     return {
         "source_sha": SHA,
+        "runtime": {"results": [{"index": 0, "label": "biology"}]},
         "responses": [
             {"path": name, "http_status": 200, "body": body}
             for name, body in bodies.items()
@@ -57,79 +35,6 @@ def router_report():
 
 
 class RISCVTests(unittest.TestCase):
-    def test_go_requires_each_discovered_test_and_complete_process(self):
-        names = {"TestOwnedA", "TestUtilityFunctions"}
-        rows = go_events(sorted(names))
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "go.jsonl"
-            write_events(path, rows)
-            self.assertEqual(len(riscv.go_cases(path, names, "target")), 2)
-            for candidate in (
-                rows[:-1],
-                rows[3:],
-                rows + rows,
-                [],
-                [
-                    (
-                        {**row, "Action": "skip"}
-                        if row.get("Test") == "TestOwnedA" and row["Action"] == "pass"
-                        else row
-                    )
-                    for row in rows
-                ],
-                [
-                    (
-                        {**row, "Action": "fail"}
-                        if "Test" not in row and row["Action"] == "pass"
-                        else row
-                    )
-                    for row in rows
-                ],
-            ):
-                write_events(path, candidate)
-                with self.subTest(candidate=candidate), self.assertRaises(ValueError):
-                    riscv.go_cases(path, names, "target")
-
-    def test_go_keeps_parallel_subtests_and_rejects_orphans(self):
-        rows = [
-            {"Test": "TestOwnedA", "Action": "run"},
-            {"Test": "TestOwnedA/sub", "Action": "run"},
-            {"Test": "TestOwnedA/sub", "Action": "pass"},
-            {"Test": "TestOwnedA", "Action": "pass"},
-            {"Action": "pass"},
-        ]
-        rows = [{"Package": "binding", **row} for row in rows]
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "go.jsonl"
-            write_events(path, rows)
-            self.assertEqual(len(riscv.go_cases(path, {"TestOwnedA"}, "target")), 2)
-            write_events(path, rows[1:])
-            with self.assertRaises(ValueError):
-                riscv.go_cases(path, {"TestOwnedA"}, "target")
-
-    def test_rust_requires_both_real_cases_and_no_ignored_tests(self):
-        with tempfile.TemporaryDirectory() as folder:
-            directory = Path(folder)
-            (directory / "rust-required.txt").write_text(
-                "\n".join(riscv.RUST_TESTS) + "\n"
-            )
-            (directory / "rust-list.txt").write_text(
-                "\n".join(name + ": test" for name in riscv.RUST_TESTS)
-            )
-            for index, name in enumerate(riscv.RUST_TESTS):
-                (directory / f"rust-{index}.log").write_text(
-                    f"running 1 test\ntest {name} ... output\n ok\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out;\n"
-                )
-            self.assertEqual(len(riscv.rust_cases(directory)), 2)
-            path = directory / "rust-0.log"
-            path.write_text(
-                path.read_text().replace(
-                    "1 passed; 0 failed; 0 ignored", "0 passed; 0 failed; 1 ignored"
-                )
-            )
-            with self.assertRaises(ValueError):
-                riscv.rust_cases(directory)
-
     def test_elf_must_be_actual_riscv_target(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as folder:
             path = Path(folder) / "binary"
@@ -146,18 +51,17 @@ class RISCVTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 riscv.target_binary(path)
 
-    def test_router_receipt_requires_actual_nonplaceholder_inference(self):
+    def test_router_classification_must_be_the_runtime_answer(self):
         report = router_report()
-        self.assertEqual(len(riscv.router_cases(report, SHA)), 4)
+        self.assertEqual(len(riscv.router_cases(report, SHA)), 3)
         for mutation in (
             "source",
             "placeholder",
             "failed",
             "missing",
             "fallback",
-            "unscored",
-            "nan",
-            "zero-latency",
+            "disagrees",
+            "no-runtime",
         ):
             candidate = copy.deepcopy(report)
             if mutation == "source":
@@ -172,64 +76,20 @@ class RISCVTests(unittest.TestCase):
                 candidate["responses"].pop()
             elif mutation == "fallback":
                 candidate["responses"][2]["body"] = {
-                    "classification": {
-                        "category": "default-route",
-                        "confidence_available": False,
-                    },
+                    "classification": {"category": "default-route"},
                     "routing_decision": "default-route",
-                    "signal_errors": {"domain:general": "model_inference_failed"},
+                    "signal_errors": {"domain:biology": "model_inference_failed"},
                 }
-            elif mutation == "unscored":
-                candidate["responses"][3]["body"]["metrics"]["domain"][
-                    "confidence_available"
-                ] = False
-            elif mutation == "nan":
-                candidate["responses"][3]["body"]["metrics"]["domain"]["confidence"] = (
-                    float("nan")
-                )
+            elif mutation == "disagrees":
+                candidate["runtime"]["results"][0]["label"] = "other"
             else:
-                candidate["responses"][3]["body"]["metrics"]["domain"][
-                    "execution_time_ms"
-                ] = 0
+                candidate.pop("runtime")
             with self.subTest(mutation=mutation), self.assertRaises(ValueError):
                 riscv.router_cases(candidate, SHA)
 
-    def test_complete_adapter_consumes_every_framework_report(self):
+    def test_adapter_reports_the_emulated_router_and_its_binary(self):
         with tempfile.TemporaryDirectory() as folder:
             directory = Path(folder)
-            model = {
-                "name": "Domain",
-                "repo_id": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
-                "revision": SHA,
-                "path": "/models/candle/" + SHA,
-            }
-            (directory / "models.json").write_text(
-                json.dumps({"provider": "candle", "models": [model]})
-            )
-            minimal = {"TestOwnedA", "TestNewRegexProvider", "TestUtilityFunctions"}
-            (directory / "minimal-pattern.txt").write_text(
-                "^Test(Owned.*|NewRegexProvider|RegexProvider_.*|UtilityFunctions)$"
-            )
-            excluded = "TestOwnedNativeMaintainedHallucinationWithoutLabelMetadata"
-            (directory / "minimal-skip.txt").write_text("^" + excluded + "$")
-            (directory / "binding-list.txt").write_text(
-                "\n".join(sorted(minimal | {excluded}))
-            )
-            for filename, names in (
-                ("host-parity.jsonl", {"TestCandleClassifierParity"}),
-                ("qemu-ffi.jsonl", {"TestNativeClassifierFFIIsLinked"}),
-                ("qemu-parity.jsonl", {"TestCandleClassifierParity"}),
-                ("qemu-minimal.jsonl", minimal),
-            ):
-                write_events(directory / filename, go_events(sorted(names)))
-            (directory / "rust-required.txt").write_text("\n".join(riscv.RUST_TESTS))
-            (directory / "rust-list.txt").write_text(
-                "\n".join(name + ": test" for name in riscv.RUST_TESTS)
-            )
-            for index, name in enumerate(riscv.RUST_TESTS):
-                (directory / f"rust-{index}.log").write_text(
-                    f"running 1 test\ntest {name} ... ok\ntest result: ok. 1 passed; 0 failed; 0 ignored;\n"
-                )
             (directory / "router.json").write_text(json.dumps(router_report()))
             with (
                 patch.object(
@@ -248,20 +108,24 @@ class RISCVTests(unittest.TestCase):
                 ) as binary,
             ):
                 result = riscv.evidence(directory)
-            self.assertEqual(len(result["cases"]), 12)
-            self.assertEqual(len(result["expected_cases"]), 12)
-            self.assertEqual(binary.call_count, 3)
-            self.assertEqual(result["models"], [model])
+            self.assertEqual(
+                result["expected_cases"],
+                ["router:health", "router:ready", "router:classify"],
+            )
+            binary.assert_called_once_with(ROOT / riscv.ROUTER_BINARY)
+            self.assertEqual(result["runtime"], "model-runtime")
             self.assertEqual(
                 result["execution"],
                 {"mode": "qemu-user", "host_platform": "linux/amd64"},
             )
 
-    def test_emulated_receipt_cannot_claim_native_host_or_shared_libraries(self):
-        plan = make_plan([], source_sha=SHA, requested=("native.candle-riscv64-qemu",))
+    def test_emulated_receipt_cannot_claim_native_host_or_artifacts(self):
+        plan = make_plan(
+            [], source_sha=SHA, requested=("platform.router-riscv64-qemu",)
+        )
         verification = plan["verifications"][0]
         evidence = {
-            "runtime": "candle",
+            "runtime": "model-runtime",
             "device": "cpu",
             "platform": "linux/riscv64",
             "execution": verification["execution"],
@@ -285,7 +149,7 @@ class RISCVTests(unittest.TestCase):
             elif mutation == "target":
                 candidate["platform"] = "linux/amd64"
             else:
-                candidate["artifacts"] = [{"id": "native:cpu", "sha256": "b" * 64}]
+                candidate["artifacts"] = [{"id": "image:extproc", "sha256": "b" * 64}]
             with self.subTest(mutation=mutation):
                 self.assertFalse(evaluate_gate(plan, [candidate]).passed)
         for producer in ("linux/riscv64", "linux/arm64"):

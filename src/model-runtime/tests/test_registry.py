@@ -201,3 +201,45 @@ def test_named_files_hash_only_what_a_family_loads(tmp_path):
     (tmp_path / "linked.json").symlink_to(outside)
     with pytest.raises(PackageError, match="link"):
         named_files(tmp_path, ["linked.json"])
+
+
+def test_downloads_retry_transient_hub_failures_only(monkeypatch, tmp_path):
+    import huggingface_hub
+    from huggingface_hub.errors import LocalEntryNotFoundError
+    from vllm_sr_runtime.registry import resolve as resolver
+
+    revision = "f" * 40
+    failures = [LocalEntryNotFoundError("Temporary failure in name resolution")] * 2
+    calls = []
+
+    def snapshot_download(**kwargs):
+        calls.append(kwargs["revision"])
+        if failures:
+            raise failures.pop()
+        root = tmp_path / revision
+        root.mkdir(exist_ok=True)
+        return str(root)
+
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", snapshot_download)
+    monkeypatch.setattr(resolver.time, "sleep", lambda seconds: None)
+    assert resolver.download("acme/encoder", revision).name == revision
+    assert len(calls) == 3
+
+    class ForbiddenError(Exception):
+        response = type("Response", (), {"status_code": 403})()
+
+    def refused(**kwargs):
+        calls.append(kwargs["revision"])
+        raise ForbiddenError("gated")
+
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", refused)
+    calls.clear()
+    with pytest.raises(ForbiddenError):
+        resolver.download("acme/encoder", revision)
+    assert len(calls) == 1
+    failures.append(LocalEntryNotFoundError("not in the cache"))
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", snapshot_download)
+    calls.clear()
+    with pytest.raises(LocalEntryNotFoundError):
+        resolver.download("acme/encoder", revision, offline=True)
+    assert len(calls) == 1
