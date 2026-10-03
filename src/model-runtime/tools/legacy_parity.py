@@ -34,6 +34,7 @@ import sys
 import threading
 import time
 from collections.abc import Iterable
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
@@ -620,7 +621,7 @@ def run_runtime(args: argparse.Namespace) -> None:
 
     def call(body: dict[str, Any]) -> dict[str, Any]:
         status, out = loop.run_until_complete(runtime.call("classify", body))
-        if status != 200:
+        if status != HTTPStatus.OK:
             raise RuntimeError(json.dumps(out))
         return out
 
@@ -736,7 +737,7 @@ def run_ab(args: argparse.Namespace) -> None:
             runtime.call("classify", runtime_body(spec, item))
         )
         elapsed = time.perf_counter_ns() - start
-        return elapsed if status == 200 else -1
+        return elapsed if status == HTTPStatus.OK else -1
 
     for spec in specs:
         for _ in range(3):
