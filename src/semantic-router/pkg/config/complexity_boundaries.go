@@ -86,7 +86,7 @@ func (r ComplexityRule) EffectiveBoundaries() (ComplexityBoundaries, error) {
 			"complexity rule %q states two directions at once: use hard_above with easy_below, or hard_below with easy_above",
 			r.Name)
 	case higher:
-		if r.Threshold != 0 {
+		if r.thresholdDeclared() {
 			return ComplexityBoundaries{}, fmt.Errorf(
 				"complexity rule %q sets both threshold and an explicit boundary pair; keep one", r.Name)
 		}
@@ -102,7 +102,7 @@ func (r ComplexityRule) EffectiveBoundaries() (ComplexityBoundaries, error) {
 		}
 		return ComplexityBoundaries{HardAt: *r.HardAbove, EasyAt: *r.EasyBelow, HigherIsHarder: true}, nil
 	case lower:
-		if r.Threshold != 0 {
+		if r.thresholdDeclared() {
 			return ComplexityBoundaries{}, fmt.Errorf(
 				"complexity rule %q sets both threshold and an explicit boundary pair; keep one", r.Name)
 		}
