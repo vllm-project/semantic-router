@@ -51,13 +51,6 @@ docker-build-extproc-rocm:
 	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc-rocm -t $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG) .
 
 
-# Build openvino-binding Docker image (OpenVINO inference backend, x86_64 only)
-docker-build-openvino-binding: ## Build openvino-binding Docker image
-docker-build-openvino-binding:
-	@$(LOG_TARGET)
-	@echo "Building openvino-binding Docker image (x86_64 only)..."
-	@$(CONTAINER_RUNTIME) build -f openvino-binding/Dockerfile -t $(DOCKER_REGISTRY)/openvino-binding:$(DOCKER_TAG) .
-
 # One shared deterministic backend; publishing is handled by its scoped CI job.
 docker-build-provider-mocker: ## Build the provider mocker, or reuse an explicitly supplied image
 	@$(LOG_TARGET)
