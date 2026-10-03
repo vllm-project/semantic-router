@@ -379,6 +379,7 @@ func (p *PostgresStore) UpdateLifecycle(
 		return err
 	}
 	defer release()
+	reason = sanitizePostgresText(reason)
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`
 		UPDATE %s
@@ -414,6 +415,7 @@ func (p *PostgresStore) AttachRequest(ctx context.Context, id string, body strin
 		return err
 	}
 	defer release()
+	body = sanitizePostgresText(body)
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`
 		UPDATE %s
@@ -453,6 +455,7 @@ func (p *PostgresStore) AttachResponse(ctx context.Context, id string, body stri
 		return err
 	}
 	defer release()
+	body = sanitizePostgresText(body)
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`
 		UPDATE %s
