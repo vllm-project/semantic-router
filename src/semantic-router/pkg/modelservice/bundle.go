@@ -60,6 +60,11 @@ func bundleFrom(ctx context.Context) *Bundle {
 	return bundle
 }
 
+// InBundle reports whether runtime calls made with ctx park in a bundle.
+func InBundle(ctx context.Context) bool {
+	return bundleFrom(ctx) != nil
+}
+
 // Join adds a participant to the context's bundle; call leave when it has
 // finished. Without a bundle both are no-ops.
 func Join(ctx context.Context) (leave func()) {
