@@ -437,11 +437,13 @@ type RequestContext struct {
 	ImmediateResponseEncoded bool
 
 	// RAG (Retrieval-Augmented Generation) tracking
-	RAGRetrievedContext string  // Retrieved context from RAG plugin
-	RAGBackend          string  // Backend used for retrieval ("milvus", "external_api", "mcp", "hybrid")
-	RAGSimilarityScore  float32 // Best similarity score from retrieval
-	RAGRetrievalLatency float64 // Retrieval latency in seconds
-	RAGToolCallIDs      map[string]struct{}
+	RAGRetrievedContext    string  // Retrieved context from RAG plugin
+	RAGBackend             string  // Backend used for retrieval ("milvus", "external_api", "mcp", "hybrid")
+	RAGSimilarityScore     float32 // Best similarity score from retrieval
+	RAGRetrievalLatency    float64 // Retrieval latency in seconds
+	RAGResultCount         int     // Number of documents returned by retrieval when RAGResultCountReported is true
+	RAGResultCountReported bool    // Whether the selected RAG backend reported a result count, including zero
+	RAGToolCallIDs         map[string]struct{}
 
 	// Memory retrieval tracking
 	// Stores formatted memory context to be injected after system prompt
