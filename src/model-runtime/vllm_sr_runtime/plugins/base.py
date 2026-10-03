@@ -320,6 +320,8 @@ class EngineModel(ABC):
     device: torch.device
     device_info: DeviceInfo
     hidden_states: ClassVar[bool] = True
+    # Set at load when every encoder forward returns each row the same alone or in any batch.
+    batch_invariant: bool = False
 
     @abstractmethod
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
@@ -338,6 +340,10 @@ class EngineModel(ABC):
 
     def memory_bytes(self) -> int:
         return 0
+
+    def place(self, module: torch.nn.Module) -> torch.nn.Module:
+        """A family's own module (a head) on this device, laid out as the backbone is."""
+        return module.to(self.device)
 
     def autocast(self) -> AbstractContextManager[Any]:
         from contextlib import nullcontext

@@ -7,7 +7,7 @@ error; tensors outside ``prefix`` (for example a vision tower) are ignored.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 
 import torch
@@ -107,6 +107,18 @@ def cast_parameters(module: nn.Module, dtype: torch.dtype) -> None:
     """Hold every parameter in ``dtype``; buffers such as rotary frequencies keep theirs, as Transformers loads."""
     for parameter in module.parameters():
         parameter.data = parameter.data.to(dtype)
+
+
+def lay_out_linears(
+    module: nn.Module, make: Callable[[nn.Linear], nn.Module]
+) -> nn.Module:
+    """Every ``nn.Linear`` inside ``module`` replaced in place by ``make(linear)``."""
+    for name, child in module.named_children():
+        if isinstance(child, nn.Linear):
+            setattr(module, name, make(child))
+        else:
+            lay_out_linears(child, make)
+    return module
 
 
 def keep_linear_bf16(module: nn.Module) -> dict[str, int]:
