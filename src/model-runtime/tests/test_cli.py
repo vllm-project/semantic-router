@@ -1,4 +1,7 @@
+import os
+
 import pytest
+from vllm_sr_runtime import cli
 from vllm_sr_runtime.cli import build_parser, config_from_args, main
 
 
@@ -131,3 +134,28 @@ def test_malformed_models_files_are_refused(tmp_path, content, message):
 def test_conflicting_model_arguments_are_refused(argv):
     with pytest.raises(SystemExit):
         config_from_args(build_parser().parse_args(argv))
+
+
+def test_a_uid_without_a_passwd_entry_gets_a_user_home_and_compile_cache(
+    monkeypatch, tmp_path
+):
+    def missing(uid):
+        raise KeyError(f"getpwuid(): uid not found: {uid}")
+
+    monkeypatch.setattr(cli.pwd, "getpwuid", missing)
+    monkeypatch.setattr(cli.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.delenv("USER", raising=False)
+    monkeypatch.delenv("TORCHINDUCTOR_CACHE_DIR", raising=False)
+    monkeypatch.setenv("HOME", "/")
+    cli.default_identity()
+    assert os.environ["USER"] == "vllm-sr-runtime"
+    assert os.environ["HOME"] == str(tmp_path)
+    assert os.environ["TORCHINDUCTOR_CACHE_DIR"] == str(tmp_path / "torchinductor")
+
+
+def test_a_known_uid_keeps_its_environment(monkeypatch):
+    monkeypatch.setattr(cli.pwd, "getpwuid", lambda uid: object())
+    monkeypatch.delenv("TORCHINDUCTOR_CACHE_DIR", raising=False)
+    monkeypatch.setenv("HOME", "/")
+    cli.default_identity()
+    assert os.environ["HOME"] == "/" and "TORCHINDUCTOR_CACHE_DIR" not in os.environ

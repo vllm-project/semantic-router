@@ -146,8 +146,7 @@ class Scheduler:
                 return []
             window = self.limits.batch_window_ms / 1000.0
             if window > 0 and any(
-                self.profiles[p.job.profile].numerics == "approximate"
-                for p in self._queue
+                self.profiles[p.job.profile].coalesces for p in self._queue
             ):
                 deadline = time.monotonic() + window
                 while (
