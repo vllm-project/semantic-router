@@ -31,10 +31,8 @@ import random
 import statistics
 import subprocess
 import sys
-import threading
 import time
 from collections.abc import Iterable
-from functools import partial
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -604,18 +602,26 @@ def runtime_body(spec: dict[str, Any], item: dict[str, str]) -> dict[str, Any]:
     return {"model": spec["Job"], "input": [value], "options": options}
 
 
-def run_runtime(args: argparse.Namespace) -> None:
+async def runtime_call(runtime: Any, body: dict[str, Any]) -> tuple[int, Any]:
+    """One request as the HTTP server makes it: with its encoded size (small ones plan inline)."""
+    return await runtime.call("classify", body, len(json.dumps(body)))
+
+
+def with_profile(body: dict[str, Any], profile: str) -> dict[str, Any]:
+    return {**body, "options": {**body["options"], "profile": profile}}
+
+
+def serve_runtime(
+    args: argparse.Namespace, specs: list[dict[str, Any]], device: str
+) -> Any:
+    """A started in-process runtime serving every job's model, result cache off."""
     sys.path.insert(0, str(REPO / "src" / "model-runtime"))
     from vllm_sr_runtime.config import ModelConfig, ServeConfig
     from vllm_sr_runtime.runtime import Runtime
 
-    specs = job_specs(args)
     models = tuple(
         ModelConfig(
-            model=spec["Repo"],
-            name=spec["Job"],
-            device=args.device,
-            profile=args.profile,
+            model=spec["Repo"], name=spec["Job"], device=device, profile=args.profile
         )
         for spec in specs
     )
@@ -629,18 +635,23 @@ def run_runtime(args: argparse.Namespace) -> None:
         )
     )
     runtime.start(background=False)
-    loop = asyncio.new_event_loop()
+    return runtime
 
-    def call(body: dict[str, Any]) -> dict[str, Any]:
-        status, out = loop.run_until_complete(runtime.call("classify", body))
+
+def run_runtime(args: argparse.Namespace) -> None:
+    specs = job_specs(args)
+    runtime = serve_runtime(args, specs, args.device)
+
+    async def call(body: dict[str, Any]) -> dict[str, Any]:
+        status, out = await runtime_call(runtime, body)
         if status != HTTPStatus.OK:
             raise RuntimeError(json.dumps(out))
         return out
 
-    with open(args.out, "w", encoding="utf-8") as stream:
+    async def measure(stream: Any) -> None:
         for spec in specs:
             for _ in range(3):
-                call(runtime_body(spec, spec["Inputs"][0]))
+                await call(runtime_body(spec, spec["Inputs"][0]))
             for item in spec["Inputs"]:
                 line: dict[str, Any] = {
                     "job": spec["Job"],
@@ -649,44 +660,43 @@ def run_runtime(args: argparse.Namespace) -> None:
                 }
                 for repeat in range(max(args.repeats, 1)):
                     start = time.perf_counter_ns()
-                    out = call(runtime_body(spec, item))
+                    out = await call(runtime_body(spec, item))
                     line["latency_ns"].append(time.perf_counter_ns() - start)
                     if repeat == 0:
                         line["result"] = out["results"][0]
                 stream.write(json.dumps(line) + "\n")
             if args.concurrency:
-                stream.write(json.dumps(runtime_load(runtime, spec, args)) + "\n")
-    loop.close()
+                load = await runtime_load(runtime, spec, args)
+                stream.write(json.dumps(load) + "\n")
+
+    with open(args.out, "w", encoding="utf-8") as stream:
+        asyncio.run(measure(stream))
     runtime.stop()
 
 
-def runtime_load(
-    runtime: Any, spec: dict[str, Any], args: argparse.Namespace
+async def runtime_load(
+    runtime: Any,
+    spec: dict[str, Any],
+    args: argparse.Namespace,
+    profile: str | None = None,
 ) -> dict[str, Any]:
+    """``args.concurrency`` callers for ``args.seconds``: concurrent requests on one event loop."""
     deadline = time.monotonic() + args.seconds
     latencies: list[int] = []
-    lock = threading.Lock()
 
-    def worker(index: int) -> None:
-        loop = asyncio.new_event_loop()
+    async def caller(index: int) -> None:
         position = index
         while time.monotonic() < deadline:
-            item = spec["Inputs"][position % len(spec["Inputs"])]
+            body = runtime_body(spec, spec["Inputs"][position % len(spec["Inputs"])])
             start = time.perf_counter_ns()
-            loop.run_until_complete(runtime.call("classify", runtime_body(spec, item)))
-            with lock:
-                latencies.append(time.perf_counter_ns() - start)
+            await runtime_call(
+                runtime, with_profile(body, profile) if profile else body
+            )
+            latencies.append(time.perf_counter_ns() - start)
             position += args.concurrency
-        loop.close()
 
     began = time.monotonic()
-    threads = [
-        threading.Thread(target=worker, args=(i,)) for i in range(args.concurrency)
-    ]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+    await asyncio.gather(*(caller(index) for index in range(args.concurrency)))
     return {
         "job": spec["Job"],
         "concurrency": args.concurrency,
@@ -697,16 +707,15 @@ def runtime_load(
 
 
 def run_ab(args: argparse.Namespace) -> None:
-    """Alternate one legacy and one runtime call per input, on the same cores, round after round.
+    """Alternate legacy and runtime work on the same cores, round after round.
 
-    Both sides then see the same moment's contention on a shared host; the
-    order flips every round. The legacy side is the ``build-legacy`` binary in
-    serve mode, the runtime side this process.
+    Both sides then see the same moment's contention on a shared host. Per
+    input, one legacy call and one runtime ``exact`` call alternate (the order
+    flips every round); with ``--concurrency``, load windows of the legacy
+    facade, the runtime's ``exact`` profile and the models' profile rotate.
+    The legacy side is the ``build-legacy`` binary in serve mode, the runtime
+    side this process.
     """
-    sys.path.insert(0, str(REPO / "src" / "model-runtime"))
-    from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.runtime import Runtime
-
     jobs = Path(args.binary).with_suffix(".jobs.json")
     specs = json.loads(jobs.read_text(encoding="utf-8"))
     legacy = subprocess.Popen(
@@ -721,76 +730,62 @@ def run_ab(args: argparse.Namespace) -> None:
     while legacy.stdout.readline().strip() != "READY":
         if legacy.poll() is not None:
             raise SystemExit("the legacy binary exited before it was ready")
-    models = tuple(
-        ModelConfig(
-            model=spec["Repo"], name=spec["Job"], device="cpu", profile=args.profile
-        )
-        for spec in specs
-    )
-    runtime = Runtime(
-        ServeConfig(
-            models=models,
-            threads=args.threads,
-            result_cache_entries=0,
-            cache_dir=args.cache,
-            offline=True,
-        )
-    )
-    runtime.start(background=False)
-    loop = asyncio.new_event_loop()
+    runtime = serve_runtime(args, specs, "cpu")
+    sides = ["legacy", "exact", *([args.profile] if args.profile != "exact" else [])]
 
     def call_legacy(spec: dict[str, Any], item: dict[str, str]) -> int:
         legacy.stdin.write(f"call\t{spec['Job']}\t{item['id']}\n")
         return int(legacy.stdout.readline())
 
-    def load_legacy(spec: dict[str, Any]) -> dict[str, Any]:
-        legacy.stdin.write(f"load\t{spec['Job']}\t{args.concurrency}\t{args.seconds}\n")
-        return json.loads(legacy.stdout.readline())
-
-    def call_runtime(spec: dict[str, Any], item: dict[str, str]) -> int:
+    async def call_runtime(spec: dict[str, Any], item: dict[str, str]) -> int:
+        body = with_profile(runtime_body(spec, item), "exact")
         start = time.perf_counter_ns()
-        status, _ = loop.run_until_complete(
-            runtime.call("classify", runtime_body(spec, item))
-        )
+        status, _ = await runtime_call(runtime, body)
         elapsed = time.perf_counter_ns() - start
         return elapsed if status == HTTPStatus.OK else -1
 
-    for spec in specs:
-        for _ in range(3):
-            call_runtime(spec, spec["Inputs"][0])
-    report: dict[str, Any] = {}
-    for round_index in range(args.rounds):
+    async def load(side: str, spec: dict[str, Any]) -> dict[str, Any]:
+        if side != "legacy":
+            return await runtime_load(runtime, spec, args, side)
+        legacy.stdin.write(f"load\t{spec['Job']}\t{args.concurrency}\t{args.seconds}\n")
+        return json.loads(legacy.stdout.readline())
+
+    async def measure() -> dict[str, Any]:
         for spec in specs:
-            entry = report.setdefault(
-                spec["Job"], {"legacy": [], "runtime": [], "ratio": []}
-            )
-            for item in spec["Inputs"]:
-                sides = [("legacy", call_legacy), ("runtime", call_runtime)]
-                if round_index % 2:
-                    sides.reverse()
-                measured = {name: call(spec, item) for name, call in sides}
-                if measured["legacy"] < 0 or measured["runtime"] < 0:
-                    continue
-                entry["legacy"].append(measured["legacy"])
-                entry["runtime"].append(measured["runtime"])
-                entry["ratio"].append(measured["legacy"] / measured["runtime"])
-    for round_index in range(args.rounds if args.concurrency else 0):
-        for spec in specs:
-            loads = [
-                ("legacy", load_legacy),
-                ("runtime", partial(runtime_load, runtime, args=args)),
-            ]
-            if round_index % 2:
-                loads.reverse()
-            entry = report[spec["Job"]].setdefault(
-                "throughput", {"legacy": [], "runtime": []}
-            )
-            for name, load in loads:
-                window = load(spec)
-                entry[name].append(window["calls"] / window["seconds"])
+            for _ in range(3):
+                await call_runtime(spec, spec["Inputs"][0])
+        report: dict[str, Any] = {}
+        for round_index in range(args.rounds):
+            for spec in specs:
+                entry = report.setdefault(
+                    spec["Job"], {"legacy": [], "runtime": [], "ratio": []}
+                )
+                for item in spec["Inputs"]:
+                    if round_index % 2:
+                        runtime_ns = await call_runtime(spec, item)
+                        legacy_ns = call_legacy(spec, item)
+                    else:
+                        legacy_ns = call_legacy(spec, item)
+                        runtime_ns = await call_runtime(spec, item)
+                    if legacy_ns < 0 or runtime_ns < 0:
+                        continue
+                    entry["legacy"].append(legacy_ns)
+                    entry["runtime"].append(runtime_ns)
+                    entry["ratio"].append(legacy_ns / runtime_ns)
+        for round_index in range(args.rounds if args.concurrency else 0):
+            shift = round_index % len(sides)
+            for spec in specs:
+                rates = report[spec["Job"]].setdefault("throughput", {})
+                for side in sides[shift:] + sides[:shift]:
+                    window = await load(side, spec)
+                    rates.setdefault(side, []).append(
+                        window["calls"] / window["seconds"]
+                    )
+        return report
+
+    report = asyncio.run(measure())
     legacy.stdin.close()
     legacy.wait()
-    loop.close()
     runtime.stop()
     summary = {
         job: {
@@ -815,11 +810,12 @@ def run_ab(args: argparse.Namespace) -> None:
     }
     Path(args.out).write_text(json.dumps(summary, indent=1) + "\n", encoding="utf-8")
     for job, row in summary.items():
-        rates = row["throughput_per_s"]
-        load = f" tput {rates['legacy']:.1f}->{rates['runtime']:.1f}/s" if rates else ""
+        rates = " ".join(
+            f"{side} {rate:.1f}/s" for side, rate in row["throughput_per_s"].items()
+        )
         print(
             f"{job:13s} pairs={row['pairs']:4d} p50 {row['legacy_ms']['p50']:.2f}->{row['runtime_ms']['p50']:.2f} ms "
-            f"p95 {row['legacy_ms']['p95']:.2f}->{row['runtime_ms']['p95']:.2f} ms speedup x{row['median_speedup']:.2f}{load}"
+            f"p95 {row['legacy_ms']['p95']:.2f}->{row['runtime_ms']['p95']:.2f} ms speedup x{row['median_speedup']:.2f} {rates}"
         )
 
 
@@ -1173,7 +1169,11 @@ def main(argv: Iterable[str] | None = None) -> int:
     ab_parser.add_argument("--libs")
     ab_parser.add_argument("--cache", required=True)
     ab_parser.add_argument("--threads", type=int)
-    ab_parser.add_argument("--profile", default="exact")
+    ab_parser.add_argument(
+        "--profile",
+        default="batching",
+        help="the models' profile (exact is always measured)",
+    )
     ab_parser.add_argument("--rounds", type=int, default=2)
     ab_parser.add_argument(
         "--concurrency", type=int, default=0, help="callers per load window (0: none)"
