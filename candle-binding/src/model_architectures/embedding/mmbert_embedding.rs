@@ -24,7 +24,7 @@
 //! - Legacy RoPE theta: 160000 (direct theta, not itself YaRN)
 //!
 //! ## References
-//! - Model: https://huggingface.co/llm-semantic-router/mmbert-embed-32k-2d-matryoshka
+//! - Model: https://huggingface.co/vllm-sr/mmbert-embed-32k-2d-matryoshka
 //! - Base: https://huggingface.co/jhu-clsp/mmBERT-base
 //! - Paper: YaRN: Efficient Context Window Extension of Large Language Models
 
