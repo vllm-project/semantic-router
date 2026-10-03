@@ -42,7 +42,7 @@ def test_served_vela_download_uses_the_router_pin_not_hub_head(tmp_path, monkeyp
     args = argparse.Namespace(
         artifact_manifest=None, artifact_dir=None, artifact_repo=None
     )
-    measured = resolve_measured_artifact(args, served)
+    measured = resolve_measured_artifact(args, served, lambda repo: None)
     assert measured.revision == VELA_RELEASE_REVISIONS[repo]
     assert calls[0][:2] == (repo, VELA_RELEASE_REVISIONS[repo])
 
@@ -97,14 +97,43 @@ def artifact_manifest(tmp_path, directory, repo=REPO):
     return write_manifest(manifest, tmp_path / "artifact.manifest.yaml")
 
 
-def resolve(manifest, artifact_dir=None, artifact_repo=None):
+def resolve(manifest, artifact_dir=None, artifact_repo=None, validate_repo=None):
     args = argparse.Namespace(
         config=pathlib.Path("config/config.yaml"),
         artifact_dir=artifact_dir,
         artifact_manifest=manifest,
         artifact_repo=artifact_repo,
     )
-    return resolve_measured_artifact(args, served_artifact())
+    return resolve_measured_artifact(
+        args, served_artifact(), validate_repo or (lambda repo: None)
+    )
+
+
+def refuse(repo):
+    raise BaselineError(f"{repo} refused")
+
+
+def test_a_refused_artifact_is_never_downloaded(monkeypatch):
+    monkeypatch.setattr(baseline_artifact, "resolve_hf_revision", lambda _: REVISION)
+    monkeypatch.setattr(
+        baseline_artifact,
+        "download_artifact",
+        lambda *args: pytest.fail("must refuse before downloading"),
+    )
+    with pytest.raises(BaselineError, match=f"{REPO} refused"):
+        resolve(None, validate_repo=refuse)
+
+
+def test_a_refused_local_artifact_is_never_read(tmp_path, monkeypatch):
+    directory = artifact_dir(tmp_path, "local")
+    manifest = artifact_manifest(tmp_path, directory)
+    monkeypatch.setattr(
+        baseline_artifact,
+        "verify_artifact_bytes",
+        lambda *args: pytest.fail("must refuse before reading the bytes"),
+    )
+    with pytest.raises(BaselineError, match=f"{REPO} refused"):
+        resolve(manifest, artifact_dir=directory, validate_repo=refuse)
 
 
 def test_a_local_artifact_matching_its_manifest_is_measured(tmp_path):

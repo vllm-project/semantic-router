@@ -86,7 +86,8 @@ def test_dev_install_refreshes_cached_catalog_and_keeps_dependency_cache(
     thread.start()
     try:
         install_root = tmp_path / "install"
-        venv.EnvBuilder(with_pip=True).create(install_root / "venv")
+        # Preserve shared-library lookup for standalone macOS Python.
+        venv.EnvBuilder(with_pip=True, symlinks=True).create(install_root / "venv")
         python = install_root / "venv" / "bin" / "python"
         config = tmp_path / "pip.conf"
         config.write_text(
