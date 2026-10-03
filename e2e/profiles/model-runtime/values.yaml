@@ -234,6 +234,13 @@ config:
       strategy: priority
     model_catalog:
       kbs: []
+      embeddings:
+        semantic:
+          embedding_config:
+            # The fixture embedder is 4 layers deep; zero selects its full
+            # depth and width instead of Vela Embedding's layer 22.
+            target_layer: 0
+            target_dimension: 0
       deployments:
         # Managed: the "decisions" process group.
         decision-fixture:
