@@ -10,7 +10,9 @@ Single requests: every prompt once as one request, sequentially, after an
 untimed warm-up pass (GPU graphs captured, caches filled); p50, p95 and mean
 latency and the sequential rate. The bundled runtime is a library that answers
 one request at a time, so its sequential rate is its throughput. ``native``
-also measures throughput through the scheduler with C concurrent requests per
+measures the request end to end through ``Runtime.call`` (``single``) and
+through the model's planning and scheduler alone (``single_scheduler``, no API
+layer), and throughput through the scheduler with C concurrent requests per
 wave. ``--router QUESTIONS.json`` replaces each prompt's questions with the
 router signals a Route-style ``QUESTIONS.json`` declares (explicit questions,
 so every Decision 1.0 model can answer them). On a GPU both sides pin the
@@ -133,14 +135,21 @@ def run_native(args: argparse.Namespace) -> dict[str, Any]:
         if any(status != 200 for status, _ in results):
             raise RuntimeError("a concurrent request failed")
 
+    served = runtime.primary
+
+    def scheduled(body: dict[str, Any]) -> None:
+        plan = served.model.plan(body["state"], body["questions"])
+        served.submit_items(plan.items, None, args.profile).result()
+
     try:
         bodies = requests(args)
         timed(call, bodies[: args.warmup])
         result = {
             "side": "native",
             "profile": args.profile,
-            "fast_path": getattr(runtime.primary.model.engine_model, "fast", None),
+            "fast_path": getattr(served.model.engine_model, "fast", None),
             "single": summary(timed(call, bodies)),
+            "single_scheduler": summary(timed(scheduled, bodies)),
             "throughput": {},
         }
         for concurrency in args.concurrency:

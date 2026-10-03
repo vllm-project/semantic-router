@@ -9,7 +9,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
@@ -94,7 +93,7 @@ func (s *ClassificationService) AcquireModelDiagnostics(recipe string) (ModelDia
 	if err != nil {
 		return ModelDiagnostics{}, func() {}, err
 	}
-	diagnostics := ModelDiagnostics{Tasks: classifier.ModelDiagnosticRuntime(), Embeddings: classifier.EmbeddingDiagnosticRuntime()}
+	diagnostics := ModelDiagnostics{Tasks: classifier.ModelDiagnosticRuntime()}
 	if diagnostics.Tasks == nil {
 		release()
 		return ModelDiagnostics{}, func() {}, binding.ErrNotPrepared
@@ -102,19 +101,13 @@ func (s *ClassificationService) AcquireModelDiagnostics(recipe string) (ModelDia
 	return diagnostics, release, nil
 }
 
-// ModelDiagnostics holds one recipe's prepared bindings: classify bindings on
-// the model runtime, and embedding and relevance bindings on the native
-// runtime that still serves them.
+// ModelDiagnostics holds one recipe's prepared bindings on its model runtime:
+// classify, embedding and relevance bindings.
 type ModelDiagnostics struct {
-	Tasks      *serving.Runtime
-	Embeddings *native.Runtime
+	Tasks *serving.Runtime
 }
 
-// PreparedBindings lists both runtimes' ready bindings.
+// PreparedBindings lists the runtime's ready bindings.
 func (d ModelDiagnostics) PreparedBindings() []binding.PreparedBinding {
-	prepared := d.Tasks.PreparedBindings()
-	if d.Embeddings != nil {
-		prepared = append(prepared, d.Embeddings.PreparedBindings()...)
-	}
-	return prepared
+	return d.Tasks.PreparedBindings()
 }

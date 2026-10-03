@@ -42,20 +42,43 @@ GO_TEST = "zz_legacy_parity_dump_test.go"
 CPU_THRESHOLDS = {"probability": 1e-3, "near_tie": 1e-3, "label": 1.0, "spans": 0.995}
 ROCM_THRESHOLDS = {"probability": 0.02, "near_tie": 1e-3, "label": 0.995, "spans": 0.98}
 
-# job: (repo, mode, deployment max_tokens, overflow, window)
-JOBS: dict[str, tuple[str, str, int, str, tuple[int, int] | None]] = {
-    "domain": ("Domain", "sequence", 512, "truncate", None),
-    "guard": ("Guard", "sequence_windows", 8192, "window", (512, 255)),
-    "safety": ("Safety", "sequence", 512, "truncate", None),
-    "shield": ("Shield", "sequence", 512, "truncate", None),
-    "factcheck": ("FactCheck", "sequence", 512, "truncate", None),
-    "feedback": ("Feedback", "sequence", 512, "truncate", None),
-    "modality": ("Modality", "sequence", 512, "truncate", None),
-    "hazard": ("Hazard", "operating_point", 32768, "reject", None),
-    "pii": ("PII", "token_windows", 32768, "window", (512, 255)),
-    "pii_truncate": ("PII", "tokens", 512, "truncate", None),
-    "halu": ("Halu", "grounded", 8192, "truncate", None),
+# job: (repo, mode, deployment max_tokens, overflow, window, (provider, device, graph head))
+Job = tuple[str, str, int, str, tuple[int, int] | None, tuple[str, str, str]]
+CANDLE = ("candle", "cpu", "")
+MIGRAPHX = ("ort", "migraphx:0", "")
+# The router's CPU defaults (candle).
+CPU_JOBS: dict[str, Job] = {
+    "domain": ("Domain", "sequence", 512, "truncate", None, CANDLE),
+    "guard": ("Guard", "sequence_windows", 8192, "window", (512, 255), CANDLE),
+    "safety": ("Safety", "sequence", 512, "truncate", None, CANDLE),
+    "shield": ("Shield", "sequence", 512, "truncate", None, CANDLE),
+    "factcheck": ("FactCheck", "sequence", 512, "truncate", None, CANDLE),
+    "feedback": ("Feedback", "sequence", 512, "truncate", None, CANDLE),
+    "modality": ("Modality", "sequence", 512, "truncate", None, CANDLE),
+    "hazard": ("Hazard", "operating_point", 32768, "reject", None, CANDLE),
+    "pii": ("PII", "token_windows", 32768, "window", (512, 255), CANDLE),
+    "pii_truncate": ("PII", "tokens", 512, "truncate", None, CANDLE),
+    "halu": ("Halu", "grounded", 8192, "truncate", None, CANDLE),
 }
+# config/recipes/vela-amd: ORT on MIGraphX (Guard on the ROCm EP with its 8K graph), fixed 8K sessions.
+AMD_JOBS: dict[str, Job] = {
+    "domain": ("Domain", "sequence", 8192, "reject", None, MIGRAPHX),
+    "guard": (
+        "Guard",
+        "sequence",
+        8192,
+        "reject",
+        None,
+        ("ort", "rocm:0", "onnx/model_rocm_8k.onnx"),
+    ),
+    "safety": ("Safety", "sequence", 8192, "reject", None, MIGRAPHX),
+    "factcheck": ("FactCheck", "sequence", 8192, "reject", None, MIGRAPHX),
+    "feedback": ("Feedback", "sequence", 8192, "reject", None, MIGRAPHX),
+    "modality": ("Modality", "sequence", 8192, "reject", None, MIGRAPHX),
+    "hazard": ("Hazard", "operating_point", 32768, "reject", None, MIGRAPHX),
+    "pii": ("PII", "tokens", 8192, "reject", None, MIGRAPHX),
+}
+RECIPES = {"cpu": CPU_JOBS, "amd": AMD_JOBS}
 REVISIONS = {
     "Domain": "f6354f54adcf38770f635ad903be2b00577f6c11",
     "Guard": "087f9e401012df839c83717b746967ac7aebfa3e",
@@ -152,8 +175,8 @@ def corpus(seed: int = 0) -> list[dict[str, Any]]:
     return items
 
 
-def inputs_for(job: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    grounded = JOBS[job][1] == "grounded"
+def inputs_for(mode: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grounded = mode == "grounded"
     return [item for item in items if ("answer" in item) == grounded]
 
 
@@ -182,6 +205,7 @@ import (
 
 type parityJob struct {
 	Job, Path, Revision, Mode, Overflow string
+	Provider, Device, Head, CacheDir    string
 	MaxTokens, WindowSize, WindowOverlap  int
 	Labels                                []string
 	Inputs                                []map[string]string
@@ -288,10 +312,11 @@ func paritySpec(job parityJob, contract string) config.ResolvedModelBinding {
 	}
 	return config.ResolvedModelBinding{
 		Recipe: "parity", Name: job.Job,
-		Binding: config.ModelBinding{Deployment: job.Job, Adapter: adapter, Contract: contract},
+		Binding: config.ModelBinding{Deployment: job.Job, Adapter: adapter, Contract: contract, Head: job.Head},
 		Deployment: config.ModelDeployment{
-			Artifact: job.Path, Revision: job.Revision, Provider: "candle", Device: "cpu", Precision: "native",
-			Input: config.ModelInputBudget{MaxTokens: job.MaxTokens, Overflow: job.Overflow},
+			Artifact: job.Path, Revision: job.Revision, Provider: job.Provider, Device: job.Device, Precision: "native",
+			CompilationCacheDir: job.CacheDir,
+			Input:               config.ModelInputBudget{MaxTokens: job.MaxTokens, Overflow: job.Overflow},
 		},
 	}
 }
@@ -386,23 +411,33 @@ def flat_copy(source: Path, target: Path) -> Path:
 
 def job_specs(args: argparse.Namespace) -> list[dict[str, Any]]:
     items = corpus(args.seed)
+    table = RECIPES[args.recipe]
     specs = []
-    for job in args.jobs.split(","):
-        name, mode, max_tokens, overflow, window = JOBS[job]
+    for job in args.jobs.split(",") if args.jobs else table:
+        name, mode, max_tokens, overflow, window, execution = table[job]
         path = snapshot(Path(args.cache), name)
         if getattr(args, "flat", None):
             path = flat_copy(path, Path(args.flat) / f"{name}-{REVISIONS[name][:12]}")
         config = json.loads((path / "config.json").read_text(encoding="utf-8"))
         labels = [config["id2label"][str(i)] for i in range(len(config["id2label"]))]
-        selected = inputs_for(job, items)
+        selected = inputs_for(mode, items)
         if args.limit:
             selected = selected[: args.limit]
         specs.append(
             {
                 "Job": job,
+                "Repo": f"vllm-sr/Vela-1.0-Encoder-307M-{name}",
                 "Path": str(path),
                 "Revision": REVISIONS[name],
                 "Mode": mode,
+                "Provider": execution[0],
+                "Device": execution[1],
+                "Head": execution[2],
+                "CacheDir": (
+                    (getattr(args, "compile_cache", "") or "")
+                    if execution[1].startswith("migraphx:")
+                    else ""
+                ),
                 "Overflow": overflow,
                 "MaxTokens": max_tokens,
                 "WindowSize": window[0] if window else 0,
@@ -424,7 +459,8 @@ def run_legacy(args: argparse.Namespace) -> None:
     (package / GO_TEST).write_text(GO_TEMPLATE, encoding="utf-8")
     jobs = Path(args.out).with_suffix(".jobs.json")
     jobs.write_text(json.dumps(job_specs(args)), encoding="utf-8")
-    libraries = [
+    libraries = [Path(p) for p in args.libs.split(":")] if args.libs else []
+    libraries += [
         tree / name / "target" / "release"
         for name in ("candle-binding", "ml-binding", "nlp-binding", "onnx-binding")
     ]
@@ -434,7 +470,9 @@ def run_legacy(args: argparse.Namespace) -> None:
         "CGO_CFLAGS": f"-I{tree / 'candle-binding'}",
         "CGO_LDFLAGS": " ".join(f"-L{p}" for p in libraries)
         + " -lcandle_semantic_router -lml_semantic_router -lnlp_binding",
-        "LD_LIBRARY_PATH": ":".join(str(p) for p in libraries),
+        "LD_LIBRARY_PATH": ":".join(
+            [*(str(p) for p in libraries), os.environ.get("LD_LIBRARY_PATH", "")]
+        ),
         "LEGACY_PARITY_JOBS": str(jobs),
         "LEGACY_PARITY_OUT": str(Path(args.out).resolve()),
     }
@@ -483,7 +521,7 @@ def run_runtime(args: argparse.Namespace) -> None:
     specs = job_specs(args)
     models = tuple(
         ModelConfig(
-            model=f"vllm-sr/Vela-1.0-Encoder-307M-{JOBS[spec['Job']][0]}",
+            model=spec["Repo"],
             name=spec["Job"],
             device=args.device,
             profile=args.profile,
@@ -766,7 +804,7 @@ def compare_job(
     )
     return {
         "job": spec["Job"],
-        "model": f"vllm-sr/Vela-1.0-Encoder-307M-{JOBS[spec['Job']][0]}",
+        "model": spec["Repo"],
         "revision": spec["Revision"],
         "mode": spec["Mode"],
         "options": {
@@ -863,7 +901,12 @@ def main(argv: Iterable[str] | None = None) -> int:
         sub.add_argument(
             "--cache", required=True, help="HF cache holding the pinned snapshots"
         )
-        sub.add_argument("--jobs", default=",".join(JOBS))
+        sub.add_argument("--recipe", choices=sorted(RECIPES), default="cpu")
+        sub.add_argument(
+            "--jobs",
+            default="",
+            help="comma-separated (default: every job of the recipe)",
+        )
         sub.add_argument("--out", required=True)
         sub.add_argument("--repeats", type=int, default=1)
         sub.add_argument("--concurrency", type=int, default=0)
@@ -880,6 +923,11 @@ def main(argv: Iterable[str] | None = None) -> int:
                 required=True,
                 help="where to link the snapshots as plain model directories",
             )
+            sub.add_argument(
+                "--libs",
+                help="binding library directories to link first (a GPU image's)",
+            )
+            sub.add_argument("--compile-cache", help="ORT compilation cache directory")
         else:
             sub.add_argument("--device", default="cpu")
             sub.add_argument("--profile", default="exact")

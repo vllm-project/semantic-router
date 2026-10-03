@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-import torch
 
 from ..text.windows import (
     Encoded,
@@ -29,7 +28,14 @@ from ..text.windows import (
     plan_windows,
 )
 from .sequence import text_input
-from .task import ClassifierHead, HeadOptions, Item, Prepared, Rows, TaskHead, cache_key
+from .task import (
+    ClassifierHead,
+    HeadOptions,
+    Prepared,
+    Rows,
+    TaskHead,
+    token_probabilities,
+)
 
 # Rust's char::is_whitespace (Unicode White_Space); Python's isspace also strips U+001C-U+001F.
 WHITESPACE = "".join(
@@ -172,10 +178,6 @@ class TokenHead(TaskHead):
             "reduction": "span_union",
         }
 
-    def to(self, device: torch.device) -> TokenHead:
-        self.classifier = self.classifier.to(device)
-        return self
-
     def prepare(self, value: Any, options: HeadOptions, identity: str) -> Prepared:
         encoded = encode(self.tokenizer, self.envelope, text_input(value))
         tokens = encoded.tokens
@@ -187,36 +189,16 @@ class TokenHead(TaskHead):
             usage["windows"] = len(windows)
             ids = [encoded.framed(w.start, w.end) for w in windows]
             state = TokenState(encoded, windows, options.return_tokens)
-            return Prepared(self._items(ids, identity), usage, state)
+            return Prepared(self.items(ids, identity), usage, state)
         if tokens > options.max_tokens and options.overflow != "truncate":
             raise InputTooLongError(tokens, options.max_tokens)
         read, cut = fit_prefix(self.tokenizer, encoded, options.max_tokens)
         usage.update(processed_tokens=read.tokens, truncated=cut)
         state = TokenState(read, None, options.return_tokens)
-        return Prepared(self._items([read.framed()], identity), usage, state)
-
-    def _items(self, rows: Sequence[Sequence[int]], identity: str) -> list[Item]:
-        return [
-            Item(
-                tuple(ids),
-                self.name,
-                self.layer,
-                cache_key(identity, self.name, self.layer, ids),
-            )
-            for ids in rows
-        ]
+        return Prepared(self.items([read.framed()], identity), usage, state)
 
     def readout(self, rows: Rows, sequences: Sequence[int]) -> list[Any]:
-        logits = self.classifier(rows.tokens(sequences, self.layer).float())
-        probabilities = torch.softmax(logits, dim=-1).cpu().numpy()
-        out, start = [], 0
-        for sequence in sequences:
-            length = rows.lengths[sequence]
-            values = probabilities[start : start + length]
-            values.flags.writeable = False
-            out.append(values)
-            start += length
-        return out
+        return token_probabilities(self.classifier, rows, sequences, self.layer)
 
     def result(self, prepared: Prepared, values: Sequence[Any]) -> dict[str, Any]:
         state: TokenState = prepared.state

@@ -18,10 +18,16 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-import torch
 
 from ..text.windows import InputTooLongError
-from .task import ClassifierHead, HeadOptions, Item, Prepared, Rows, TaskHead, cache_key
+from .task import (
+    ClassifierHead,
+    HeadOptions,
+    Prepared,
+    Rows,
+    TaskHead,
+    token_probabilities,
+)
 from .token import token_rows
 
 PROMPT_FIELDS = {"question", "context"}
@@ -200,10 +206,6 @@ class GroundedHead(TaskHead):
             "reduction": None,
         }
 
-    def to(self, device: torch.device) -> GroundedHead:
-        self.classifier = self.classifier.to(device)
-        return self
-
     def prepare(self, value: Any, options: HeadOptions, identity: str) -> Prepared:
         context, question, answer = grounded_input(value)
         prompt = self.policy.prompt.format(question=question, context=context)
@@ -232,25 +234,10 @@ class GroundedHead(TaskHead):
             threshold,
             options.return_tokens,
         )
-        item = Item(
-            tuple(ids),
-            self.name,
-            self.layer,
-            cache_key(identity, self.name, self.layer, ids),
-        )
-        return Prepared([item], usage, state)
+        return Prepared(self.items([ids], identity), usage, state)
 
     def readout(self, rows: Rows, sequences: Sequence[int]) -> list[Any]:
-        logits = self.classifier(rows.tokens(sequences, self.layer).float())
-        probabilities = torch.softmax(logits, dim=-1).cpu().numpy()
-        out, start = [], 0
-        for sequence in sequences:
-            length = rows.lengths[sequence]
-            values = probabilities[start : start + length]
-            values.flags.writeable = False
-            out.append(values)
-            start += length
-        return out
+        return token_probabilities(self.classifier, rows, sequences, self.layer)
 
     def result(self, prepared: Prepared, values: Sequence[Any]) -> dict[str, Any]:
         state: GroundedState = prepared.state

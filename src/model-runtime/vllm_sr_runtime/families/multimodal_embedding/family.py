@@ -12,6 +12,7 @@ a Hub ID resolves to the bundle prepared from its pinned revision
 from __future__ import annotations
 
 import base64
+import importlib.util
 import io
 import json
 import math
@@ -48,6 +49,8 @@ from .processors import AudioFeatures, AudioProcessor, ImageProcessor, TextProce
 PREPARED_DIR_ENV = "VLLM_SR_RUNTIME_PREPARED_DIR"
 DEFAULT_PREPARED_DIR = "/opt/router-model-artifacts"
 UNIT_NORM_TOLERANCE = 0.005
+# Import name -> distribution of the multimodal extra.
+EXTRA = {"onnxruntime": "onnxruntime", "PIL": "Pillow"}
 GOLDEN_TEXT = "Route this request to the model that answers it best."
 LATE_TONE_SECONDS = 0.3
 
@@ -148,6 +151,16 @@ class MultimodalEmbeddingFamily(ModelFamily):
         )
 
     def describe(self, package: VerifiedPackage) -> ModelSpec:
+        missing = [
+            name
+            for module, name in EXTRA.items()
+            if importlib.util.find_spec(module) is None
+        ]
+        if missing:
+            raise RuntimeError(
+                f"Omni bundles need {' and '.join(missing)}: "
+                "pip install 'vllm-sr-runtime[multimodal]'"
+            )
         verified: bundles.OmniBundle = package.details["bundle"]
         return ModelSpec(
             name=package.model_name,

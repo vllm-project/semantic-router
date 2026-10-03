@@ -288,3 +288,18 @@ def test_native_engine_encodes_packed_and_padded_batches(tmp_path):
         start += length
     with pytest.raises(ValueError, match="packed lengths"):
         model.encode(EncoderBatch(ids[0], None, lengths=[4]))
+
+
+@pytest.mark.parametrize("lengths", [[40], [37, 9, 22], [64, 64]])
+def test_local_layers_in_query_blocks_match_the_dense_band(lengths):
+    backbone, _ = native(CONFIGS["yarn"], seed=10)
+    ids, mask = batch(lengths, seed=7)
+    flat = ids[mask.bool()]
+    dense = packed_layout(lengths, backbone.window, "cpu", band_from=1 << 20)
+    blocked = packed_layout(lengths, backbone.window, "cpu", band_from=1, block=8)
+    assert dense.band is None and blocked.band is not None
+    assert blocked.masks[SLIDING] is None
+    with torch.inference_mode():
+        expected = backbone.encode(flat, dense)[backbone.num_layers]
+        actual = backbone.encode(flat, blocked)[backbone.num_layers]
+    torch.testing.assert_close(actual, expected, rtol=0, atol=1e-5)

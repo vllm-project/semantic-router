@@ -12,7 +12,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
 func TestSelectionUsesPreparedProviderForEveryLocalBackend(t *testing.T) {
@@ -71,7 +70,7 @@ func TestSelectionEmbeddingRuntimeUsesRequestedRemoteConfig(t *testing.T) {
 	}
 	cfg.ModelSelection.Enabled = true
 	cfg.ModelSelection.ML.ModelsPath = "test-model-selection"
-	prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, native.New(nil))
+	prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
