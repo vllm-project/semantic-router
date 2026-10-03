@@ -2,6 +2,22 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-03 01:55Z (09:55 UTC+8), M10 continuation (owner e28aa509)
+
+- **`M10-HLR4-a80-bf16`: FAIL** vs KIB4-a40. Its point is level with the release. Most benchmarks rose, but RAGTruth
+  fell by about 21 points, which costs the whole gain. Every measured point not built from KIB4 s1 / s2 alone has
+  lost RAGTruth against KIB4-a40, while KIB4-a33 kept it.
+- **Amendment 13 revision 2** (`3faa9913f`, disclosed as written after that read): `KIB4H-a80` (`[KIB4H × 4, LUX]`,
+  FP32 `4dea07dc…`) replaces `KIB4-lrhh-a80`. Reads: `HLR4-a60` (shards ending), `KIB4H-a80` (chain started 01:47Z),
+  `KIB4H-a40`. The orchestrator was restarted for this order on mirror `3faa9913f`.
+- **Release path ships the switch:** integration `ef27d8885` is merged (`aa0ae6146`), and the m10c spec's
+  `runtime_source` is that mirror (`d5367b595`).
+- **Lux runtime-only switch revision** (COORDINATION 08:30 gives it to the 9B owner if no release is under way by
+  10:00): runtime-a's tooling gained a 9B switch tier on `f3122c7c` (`c5c281e98`). The node A preview is OK: the
+  manifest changes only the runtime files and README. Parity and bench run on node A GPU0. The upload waits for
+  `KIB4H-a80`'s gate; a weights release carries the switch if it passes.
+- **GPU-h (continuation):** ≈ 37.6, plus `KIB4H-a80` / `KIB4H-a40` ≈ 5.4 and the switch evidence ≈ 0.4.
+
 ## 2026-10-03 01:30Z (09:30 UTC+8), M10 continuation (owner e28aa509)
 
 - **Formal R3 of `HLR4-a80`** (node A GPU0, 00:30–00:44Z): exit 0; the choice, no-UL and score types are all OK (no
