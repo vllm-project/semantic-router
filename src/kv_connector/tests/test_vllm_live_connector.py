@@ -154,6 +154,21 @@ class LiveConnectorTests(unittest.TestCase):
                 lora_request=None,
             )
             self.assertEqual(target.get_num_new_matched_tokens(request, 0), (4, False))
+            wrong_theta_config = config(
+                "target",
+                target_rev,
+                "kv_consumer",
+                {
+                    **target_config.kv_transfer_config.kv_connector_extra_config,
+                    "source_rope_theta": 2_000_000,
+                },
+            )
+            wrong_theta = KVMapperConnector(
+                wrong_theta_config, KVConnectorRole.SCHEDULER, None
+            )
+            self.assertEqual(
+                wrong_theta.get_num_new_matched_tokens(request, 0), (0, False)
+            )
             target.update_state_after_alloc(request, None, 4)
             target_new = SimpleNamespace(req_id="target-request", block_ids=([1, 2],))
             target_output = SimpleNamespace(scheduled_new_reqs=[target_new])
@@ -182,6 +197,31 @@ class LiveConnectorTests(unittest.TestCase):
             target_worker.start_load_kv(None)
             self.assertEqual(target_worker.get_block_ids_with_load_errors(), {1, 2})
             self.assertEqual(target_worker.get_block_ids_with_load_errors(), set())
+
+            snapshot_file.write_bytes(b"corrupt")
+            corrupt_request = SimpleNamespace(
+                **{**request.__dict__, "request_id": "corrupt-request"}
+            )
+            self.assertEqual(
+                target.get_num_new_matched_tokens(corrupt_request, 0), (0, False)
+            )
+
+    def test_rejects_scaled_rope_before_cache_reuse(self) -> None:
+        from src.kv_connector.vllm_connector import _rope_theta
+
+        with self.assertRaisesRegex(ValueError, "scaled RoPE"):
+            _rope_theta(
+                SimpleNamespace(
+                    rope_theta=1_000_000,
+                    rope_scaling={"rope_type": "yarn", "factor": 4},
+                )
+            )
+        with self.assertRaisesRegex(ValueError, "scaled RoPE"):
+            _rope_theta(
+                SimpleNamespace(
+                    rope_parameters={"rope_type": "dynamic", "rope_theta": 1_000_000}
+                )
+            )
 
 
 if __name__ == "__main__":

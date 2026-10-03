@@ -92,6 +92,7 @@ def run(
         source_revision=compat.source_revision,
         token_ids=tuple(prefix),
         layers=source_layers,
+        rope_theta=rope_theta,
         expires_at=time.time() + 1200,
     )
     width = compat.num_kv_heads * compat.head_dim

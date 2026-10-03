@@ -25,7 +25,9 @@ def _slots(
     return ids[positions // block_size], positions % block_size
 
 
-def _cache_layout(cache: torch.Tensor, heads: int, head_dim: int) -> str:
+def _cache_layout(
+    cache: torch.Tensor, heads: int, head_dim: int, layout: str | None = None
+) -> str:
     """Recognize the connector's legacy view or vLLM's LBNHC layer view."""
     legacy = (
         cache.ndim in (4, 5)
@@ -35,6 +37,14 @@ def _cache_layout(cache: torch.Tensor, heads: int, head_dim: int) -> str:
     lbnhc = (
         cache.ndim == 4 and cache.shape[1] == heads and cache.shape[3] == 2 * head_dim
     )
+    if layout is not None:
+        if layout == "legacy" and legacy:
+            return layout
+        if layout == "lbnhc" and lbnhc:
+            return layout
+        raise ValueError("paged-cache shape differs from requested layout")
+    if legacy and lbnhc:
+        raise ValueError("paged-cache layout is ambiguous; specify the layout")
     if legacy:
         return "legacy"
     if lbnhc:
@@ -49,10 +59,11 @@ def extract_prefix(
     *,
     heads: int,
     head_dim: int,
+    layout: str | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Return K and V as [tokens, heads, head_dim]."""
     block_size = cache.shape[2]
-    layout = _cache_layout(cache, heads, head_dim)
+    layout = _cache_layout(cache, heads, head_dim, layout)
     blocks, offsets = _slots(block_ids, num_tokens, block_size, cache.shape[0])
     block_indices, token_offsets = blocks.to(cache.device), offsets.to(cache.device)
     if layout == "lbnhc":
@@ -69,6 +80,8 @@ def inject_prefix(
     block_ids: list[int],
     keys: torch.Tensor,
     values: torch.Tensor,
+    *,
+    layout: str | None = None,
 ) -> None:
     """Write mapped K/V into allocated cache blocks after all checks pass."""
     if keys.shape != values.shape or keys.ndim != _KV_TENSOR_RANK:
@@ -76,7 +89,7 @@ def inject_prefix(
     if keys.dtype != cache.dtype or values.dtype != cache.dtype:
         raise ValueError("mapped KV dtype differs from paged cache")
     block_size = cache.shape[2]
-    layout = _cache_layout(cache, keys.shape[1], keys.shape[2])
+    layout = _cache_layout(cache, keys.shape[1], keys.shape[2], layout)
     blocks, offsets = _slots(block_ids, keys.shape[0], block_size, cache.shape[0])
     if layout == "lbnhc":
         stacked = torch.cat((keys, values), dim=-1)
@@ -97,10 +110,11 @@ def validate_prefix_destination(
     heads: int,
     head_dim: int,
     dtype: torch.dtype,
+    layout: str | None = None,
 ) -> None:
     """Check a destination before any mapped layer is written."""
     if cache.dtype != dtype:
         raise ValueError("mapped KV dtype differs from paged cache")
     block_size = cache.shape[2]
-    _cache_layout(cache, heads, head_dim)
+    _cache_layout(cache, heads, head_dim, layout)
     _slots(block_ids, num_tokens, block_size, cache.shape[0])
