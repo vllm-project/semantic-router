@@ -102,10 +102,11 @@ identical across the release, hotfix and no-eviction revisions.
 
 Before FLA is imported, the runtime writes them as FLA config files and sets
 `FLA_CACHE_MODE=full`. A recorded key matches exactly. Any other key, for
-example a batch with more rows than the release saw, takes the kernel's entry
-of the same structure, or its first entry. No configuration depends on timing,
-so a pinned process tunes nothing (0 autotune entries) and loads faster (Eos
-22 s instead of 38 s cold). Choices apply only when the installed FLA is the
+example a batch with more rows than the release saw, takes the first entry
+that differs from it only in numbers, else the kernel's first entry. No
+configuration depends on timing, so a pinned process tunes nothing (0
+autotune entries) and loads faster (Eos 22 s instead of 38 s cold). Choices
+apply only when the installed FLA is the
 recorded version (0.5.2); otherwise FLA keeps its per-process tuning. Kai
 (dense) has no autotuned kernels.
 
@@ -129,6 +130,9 @@ choices, at `678ae6fe5`.
 
 - Each process started with an empty autotune cache. The two revisions answer
   bit-identically on the two GPUs.
+- Readiness was checked again at `4b8b4dc01` against the committed references,
+  in twelve fresh processes with the GPUs swapped: every one matched 3 / 3, bit
+  for bit.
 - The first recording, with a fresh process's tuning, differed by up to 0.0021
   (Sol, Nox and Vega). That is within the 0.02 tolerance. The references are
   now the pinned, released numerics, so a pinned process matches them bit for
@@ -138,6 +142,104 @@ choices, at `678ae6fe5`.
 - Other ROCm architectures have no pinned choices. They tune per process, use
   the fused-kernel-free path, and are checked against the same references at
   the 0.02 tolerance; this record does not cover them.
+
+## Graph-size cap under Index-like traffic
+
+Graphs are captured only up to `MAX_GRAPH_TOKENS` padded tokens (4,096), and
+at most 512 of them. Index-like traffic forms many shapes that rarely repeat,
+so the question is what the cap does once the cache is full
+(`tools/graph_cap_bench.py`; Eos at `4b8b4dc01`, Kai and the repeat at
+`2fce4fec1`, the same bench).
+
+- **Traffic:** 8,943 requests in stream order, on the exact profile, each
+  asking 1–8 questions (mean 2.6) about one css15 or hs1-dev state, which
+  runs from a few dozen tokens to the input limit. That is 22,875 questions.
+- **Runs:** Eos-0.8B and Kai-0.6B, one process per cap, the caps split
+  between GPU0 and GPU1.
+
+Eos-0.8B:
+
+| Cap (padded tokens) | Requests/s | p50 / p95 / p99 (ms) | Graphs captured | Replays | Eager | Refused (cache full) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 (no graphs) | 49.7 | 15.9 / 33.3 / 75.6 | 0 | 0 | 8,939 | 0 |
+| 1,024 | 63.0 | 7.7 / 49.8 / 76.1 | 345 | 5,540 | 3,399 | 0 |
+| 2,048 | 60.9 | 7.8 / 55.4 / 77.6 | 512, full by request 8,000 | 6,565 | 2,374 | 230 |
+| **4,096 (default)** | **61.4** | **7.7 / 53.7 / 80.8** | **512, full by request 7,000** | **6,626** | **2,313** | **663** |
+| 8,192 | 60.3 | 7.7 / 55.2 / 86.3 | 512, full by request 7,000 | 6,639 | 2,300 | 800 |
+| 16,384 | 61.0 | 7.7 / 53.7 / 84.6 | 512, full by request 7,000 | 6,636 | 2,303 | 842 |
+
+Kai-0.6B:
+
+| Cap (padded tokens) | Requests/s | p50 / p95 / p99 (ms) | Graphs captured | Replays | Eager | Refused (cache full) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 (no graphs) | 63.8 | 10.4 / 34.6 / 89.9 | 0 | 0 | 8,928 | 0 |
+| 1,024 | 75.1 | 6.2 / 36.8 / 89.3 | 347 | 5,640 | 3,288 | 0 |
+| **4,096 (default)** | **71.8** | **6.2 / 43.0 / 91.6** | **512, full by request 7,000** | **6,758** | **2,170** | **554** |
+| 16,384 | 71.8 | 6.2 / 42.9 / 96.2 | 512, full by request 7,000 | 6,761 | 2,167 | 737 |
+
+A paired repeat at `2fce4fec1` ran 1,024 and 4,096 at the same time on the two
+GPUs, swapped against the first round:
+
+| Model | Cap 1,024: requests/s, p95 / p99 (ms) | Cap 4,096: requests/s, p95 / p99 (ms) | 1,024 against 4,096 (first round) |
+| --- | --- | --- | --- |
+| Kai-0.6B | 74.3, 37.4 / 89.4 | 72.1, 43.1 / 91.0 | +3.1% (+4.6%) |
+| Eos-0.8B | 62.1, 51.2 / 76.5 | 61.6, 53.4 / 81.1 | +0.8% (+2.6%) |
+
+- **Answers:** every cap answers bit-identically (one digest over every
+  answer). Replays include each capture's own forward, so replays plus eager
+  forwards is the number of forwards.
+- **Graphs pay** 13–27% on this traffic, mostly through the many small
+  requests (p50 halves on Eos).
+- **A full cache is harmless.** Caps from 2,048 up fill the 512 graphs by
+  about request 7,000 and then refuse captures. Throughput does not drop
+  afterwards, because the frequent shapes were captured first.
+- **A smaller cap is slightly better here.** At 1,024 the cache never fills,
+  and the forwards that would capture large, rarely repeated shapes run
+  eagerly instead. That is 1–5% more requests/s and a lower p95 on both
+  models, in both rounds. Above 4,096 nothing changes but the tail.
+- **Decision:** the default stays at 4,096. The gain is small and specific to
+  traffic whose large shapes do not repeat. Where they do repeat, a graph
+  between 1,024 and 4,096 tokens saves about 5–6% per replay (performance
+  record: Kai 5% at 2,700 tokens, Eos 6% at 2,800), which a 1,024 cap would
+  give up. The cap is a constant (`MAX_GRAPH_TOKENS`); making it a serving
+  option is the way to tune it per deployment.
+
+## Batch-shape buckets under concurrency
+
+`batching` merges concurrent requests' questions into padded batches whose
+shapes (rows, padded length) depend on the traffic, so a graph is replayed
+only when a later batch has the same shape. Buckets pad each batch up to a
+coarser shape, rows to a power of two and length to a multiple of 64, so
+shapes repeat more often; the padding is extra compute
+(`tools/bucket_bench.py`, at `4b8b4dc01` and `2fce4fec1`).
+
+- **Traffic:** 4,106 single-question prompts (typed-final, mlx-diag,
+  public231) that never repeat. The first 512 warm up and the remaining 3,594
+  are timed, in waves of C concurrent requests through the scheduler.
+- **Runs:** Eos-0.8B, one process per run. "Graphable only" buckets a batch
+  only when the bucketed shape stays within the 4,096-token graph cap.
+
+| C | `batching` (req/s) | Buckets | Buckets, graphable only | Forwards replayed: `batching` → buckets |
+| --- | --- | --- | --- | --- |
+| 4 | 260.4 | 277.3 (+6.5%) | 270.0 (+3.7%) | 847 / 899 → 871 / 899 |
+| 16 | 378.3 | 360.9 (−4.6%) | 379.0 (±0) | 1 / 225 → 4 / 225 |
+| 64 | 420.1 | 407.0 (−3.1%) | — | 0 / 60 → 0 / 60 |
+
+A forward that captures a graph runs on it, so it counts as replayed.
+
+The exact profile does 154.6 requests/s at C = 16 (one request per forward).
+
+- **Accuracy:** every variant changes as many decisions against the exact
+  path as `batching` does, 6–11 of 3,594 requests, with median |Δp| 4·10⁻⁵.
+  That is the batching profile's known rounding noise; buckets add none.
+- **Where buckets help:** at C = 4, batches are small enough to be graphed, and
+  buckets turn 25 captures and 52 eager forwards into 6 and 28.
+- **Where they cost:** from C = 16, almost every batch is above the graph cap.
+  It runs eagerly either way, so bucketing only adds padding, unless it is
+  limited to graphable batches.
+- **Decision:** no change. The gain is at most a few percent, at low
+  concurrency only. `batching` at low concurrency already replays most
+  forwards, because its row count is the concurrency.
 
 ## Reproduce
 
@@ -149,4 +251,9 @@ python3 tools/kernel_choices.py vllm-sr/Decision-2.0-Eos-0.8B --autotune-cache R
 python3 tools/cross_process.py answer vllm-sr/Decision-2.0-Eos-0.8B --revision REV --device rocm:0 \
   --autotune-cache DIR --panel NAME:PROMPTS.jsonl:COUNT ... --answers A.jsonl --receipt A.json
 python3 tools/cross_process.py compare REFERENCE.jsonl A.jsonl B.jsonl --output compare.json
+python3 tools/graph_cap_bench.py --package PACKAGE_DIR --cap 4096 --output cap.json \
+  --stream css15:CSS15.prompts.jsonl:6547 --stream hs1-dev:HS1_DEV.prompts.jsonl:2396
+python3 tools/bucket_bench.py --package PACKAGE_DIR --mode buckets --concurrency 4 [--graphable-only] \
+  --prompts typed-final:TYPED_FINAL.prompts.jsonl:1600 --prompts mlx-diag:MLX_DIAG.prompts.jsonl:2275 \
+  --prompts public231:PUBLIC231.prompts.jsonl:231 --output buckets.json --answers buckets.jsonl
 ```
