@@ -1,0 +1,2 @@
+v2/release/specs/dev2-27b-rah.json 1bcde1db169f9c8266ee0f10d9b005d17245a12abf7e048912b82f636e2f7543
+v2/release/records/dev2-runtime-a-2026-10-02/Decision-2.0-Vega-27B.decision.rah.json f14e0e6860f82cf0fa51418aaffc8c15dd5b724f417c36c0ca5808eea1243b70

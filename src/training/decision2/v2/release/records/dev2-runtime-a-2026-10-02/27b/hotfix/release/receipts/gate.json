@@ -1,0 +1,76 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: COORDINATION 2026-10-03 12:03 UTC+8 (the ROCm hotfix owner fixes the _attn_prep_kernel compile failure the Index submission's release spot check found, adds a byte-identical eager fallback for fused kernels and ships runtime-only revisions through the phase A parity rollout; the user's 11:34 instruction makes the Jev Decision Index submission the top priority)",
+  "decision": "release",
+  "decision_sha256": "f14e0e6860f82cf0fa51418aaffc8c15dd5b724f417c36c0ca5808eea1243b70",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_IF1_index_gain": {
+      "evidence": "private Index paired bootstrap 81bddc52d072 (2000 replicates over 138645 cases) of these weights (584697310502) minus the current revision's (e50fb4c13048): 95% lower bound > 0: yes",
+      "passed": true
+    },
+    "1_successor_IF3_index_audit": {
+      "evidence": "row-level Index audit 791c6574184c of 120226 Index rows: a20ib1 81294 training lines, 0 item rows, 2 familiar-text rows; a20ib12 105812 training lines, 0 item rows, 2 familiar-text rows; planted control 200 / 200",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_references": {
+      "evidence": "references only under the Index-first rule (user 2026-10-02 09:55): v3: v3 74.006 vs current 73.160: +0.85 [-0.94, +2.47] (below its former bar); human transfer: human transfer delta 95% [-0.029, +0.023] (clears its former bar); mlx-diag: mlx-diag card-eligible macro -0.0019 [-0.0101, +0.0061] (clears its former bar); tier gates: no Decision 1.0 at this size; v3 74.006 vs 90% of AutoJev-27B 72.133; H vs AutoJev-27B [-0.036, +0.064]; v3 >= 64.919 ok, H vs AutoJev-27B upper >= 0 ok, no type collapsed ok (clears its former bar); overlap exposure: 1 training files, 0 exposed groups (clears its former bar); public 231: public 231 203 vs 198 (+5; McNemar p 0.180) (clears its former bar); C1 post-key: not run",
+      "passed": true,
+      "reference": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "7 results below AutoJev-27B (no Decision 1.0 at this size) listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 34 files re-hashed; loaded 29365153792",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "88f5b7ac88ab4278ba089fda63261a05730648b32ecc68c6a7ba27b67f090a57",
+  "model_name": "Decision-2.0-Vega-27B",
+  "receipts_sha256": {
+    "automap-card-pre": "225fa5aae4e4e23932e2e3b9a1bea6c130408d86e8eb7b2026d273ae99c962c2",
+    "automap-hub": "d435938bf863260cab80bf7e0a092a0805f5a69cb4cdcfed97c14e42112fcb14",
+    "automap-hub-tf518": "ecfa790ce7944ced67ae0ff4d318645bbe4b61a64ddedc58ae765966e1f1fefd",
+    "automap-post": "fd690bed3848a69b422359f30fe3462a66e0db717e284ac1821519a954a4ea80",
+    "automap-pre": "59307ff38baeab80b2e730cea04fda6560a20ffcc3302c3cd2c6355549979fc0",
+    "card-post": "84539889787b7c281387b471f2e26117c20cf55a0e9416c4a02d9c89e59bc6af",
+    "card-pre": "cf48c42484114487f84798deff643accc9624ef0f9333cb3578cc19bc58c31cd",
+    "download": "4b6921b256cc334c466a357efa8982ad9aad7867b6a83af82c79d4cfdfa9dda7",
+    "post": "b660dfed7a6f7026cbb0f3caa1cd65f14611d0504d1a51b0a8fc20c6e12d63b8",
+    "readback": "66974929667d74e4bddf85a5371d0a6c2895461ddfaeaa2e9eabb855c6dc8a87",
+    "repeat-post": "05f58648104a152e3e445702ba2cad4a5704c800ed07f92489a32154e3642471",
+    "repeat-pre": "114ba8b8fce5a889d2134e875d29d0abc1926c44b62e580c1a862ba39f5d2b0d",
+    "tree": "708d9a299f4b747a7bf71b45647fdd739a999c5d2720ada311a60eda3a7da2f7",
+    "upload": "d3d209fedbceafcaa29a986a34168c21e86090cb869b5707571f64009a7072d2"
+  },
+  "repo_id": "vllm-sr/Decision-2.0-Vega-27B",
+  "revision": "477e90f537eb5bd62e90d5e5361c7b654e69cf45",
+  "rule": "index-first",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "e9591a86c2ba07b1496da1206e5277e68044dfd443e5205f241b82974b0aef6b",
+    "revision": "e60bd8e346110b3348b6e5a25c07329d350c4b21"
+  },
+  "utc": "2026-10-03T06:25:57.779695+00:00"
+}

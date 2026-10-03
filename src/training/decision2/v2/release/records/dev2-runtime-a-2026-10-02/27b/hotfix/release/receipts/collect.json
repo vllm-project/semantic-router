@@ -1,0 +1,21 @@
+{
+  "collection": {
+    "items": [
+      "vllm-sr/Decision-2.0-Vega-27B",
+      "vllm-sr/Decision-2.0-Lux-9B",
+      "vllm-sr/Decision-2.0-Nox-4B",
+      "vllm-sr/Decision-2.0-Sol-2B",
+      "vllm-sr/Decision-2.0-Eos-0.8B",
+      "vllm-sr/Decision-2.0-Kai-0.6B"
+    ],
+    "private": false,
+    "slug": "vllm-sr/decision-20-6ab7cf7bdfb506bf8269cb00",
+    "title": "🎲 Decision 2.0"
+  },
+  "gate_sha256": "0c9a878995f68a9d449166ab90fb501aeeaacff9ac3997a546b2370384e11344",
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Vega-27B",
+  "revision": "477e90f537eb5bd62e90d5e5361c7b654e69cf45",
+  "schema": "dev2-hub-collect/1",
+  "utc": "2026-10-03T06:25:58.089420+00:00"
+}

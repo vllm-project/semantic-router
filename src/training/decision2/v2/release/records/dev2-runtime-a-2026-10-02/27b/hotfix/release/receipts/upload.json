@@ -1,0 +1,12 @@
+{
+  "bytes": 14983456995,
+  "commit_url": "https://huggingface.co/vllm-sr/Decision-2.0-Vega-27B/commit/477e90f537eb5bd62e90d5e5361c7b654e69cf45",
+  "files": 34,
+  "manifest_sha256": "88f5b7ac88ab4278ba089fda63261a05730648b32ecc68c6a7ba27b67f090a57",
+  "private": false,
+  "repo": "vllm-sr/Decision-2.0-Vega-27B",
+  "revision": "477e90f537eb5bd62e90d5e5361c7b654e69cf45",
+  "schema": "dev2-hub-upload/1",
+  "seconds": 11.311797014903277,
+  "utc": "2026-10-03T06:05:46.819085+00:00"
+}

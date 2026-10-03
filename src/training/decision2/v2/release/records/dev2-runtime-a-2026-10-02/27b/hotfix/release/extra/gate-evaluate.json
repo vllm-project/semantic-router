@@ -1,0 +1,50 @@
+{
+  "passed": true,
+  "decision": {
+    "sha256": "f14e0e6860f82cf0fa51418aaffc8c15dd5b724f417c36c0ca5808eea1243b70",
+    "status": "final"
+  },
+  "items": {
+    "1_successor_IF1_index_gain": {
+      "passed": true,
+      "evidence": "private Index paired bootstrap 81bddc52d072 (2000 replicates over 138645 cases) of these weights (584697310502) minus the current revision's (e50fb4c13048): 95% lower bound > 0: yes"
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "passed": true,
+      "evidence": "types choice OK, noul OK, score OK"
+    },
+    "1_successor_IF3_index_audit": {
+      "passed": true,
+      "evidence": "row-level Index audit 791c6574184c of 120226 Index rows: a20ib1 81294 training lines, 0 item rows, 2 familiar-text rows; a20ib12 105812 training lines, 0 item rows, 2 familiar-text rows; planted control 200 / 200"
+    },
+    "1_successor_references": {
+      "passed": true,
+      "reference": true,
+      "evidence": "references only under the Index-first rule (user 2026-10-02 09:55): v3: v3 74.006 vs current 73.160: +0.85 [-0.94, +2.47] (below its former bar); human transfer: human transfer delta 95% [-0.029, +0.023] (clears its former bar); mlx-diag: mlx-diag card-eligible macro -0.0019 [-0.0101, +0.0061] (clears its former bar); tier gates: no Decision 1.0 at this size; v3 74.006 vs 90% of AutoJev-27B 72.133; H vs AutoJev-27B [-0.036, +0.064]; v3 >= 64.919 ok, H vs AutoJev-27B upper >= 0 ok, no type collapsed ok (clears its former bar); overlap exposure: 1 training files, 0 exposed groups (clears its former bar); public 231: public 231 203 vs 198 (+5; McNemar p 0.180) (clears its former bar); C1 post-key: not run"
+    },
+    "2_regressions_disclosed": {
+      "passed": true,
+      "evidence": "7 results below AutoJev-27B (no Decision 1.0 at this size) listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included"
+    },
+    "3_download_hash_parameters": {
+      "passed": true,
+      "evidence": "tree 34 files re-hashed; loaded 29365153792"
+    },
+    "4_native_examples": {
+      "passed": true,
+      "evidence": "examples and the card's Python block reproduced from the download"
+    },
+    "5_output_consistency": {
+      "passed": true,
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run"
+    },
+    "6_card_design": {
+      "passed": true,
+      "evidence": "Hub card apache-2.0 / problems []"
+    },
+    "7_transformers_remote_code": {
+      "passed": true,
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518"
+    }
+  }
+}

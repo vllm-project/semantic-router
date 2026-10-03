@@ -183,7 +183,7 @@ the bench is recorded in each decision. `ra.sh --hotfix` accepts exactly `decisi
 | --- | --- | --- | --- | --- | --- |
 | Decision-2.0-Nox-4B | `ce1bdc9d` | `7fc0023a8c51ffaf0f4d4a8f1eb1fb54fa2451cc` | 10,653 / 10,653, 0.0 | 13.94 → 13.72 ms | 86 / 86, 0.0 |
 | Decision-2.0-Lux-9B | `214ffa43` | `7c6792f7e59dce7a64115bfe750ee636e7a63bd4` | 10,653 / 10,653, 0.0 | 18.71 → 18.73 ms | 86 / 86, 0.0 |
-| Decision-2.0-Vega-27B | `9b067a95` | `477e90f537eb5bd62e90d5e5361c7b654e69cf45` | 10,653 / 10,653, 0.0 | 74.67 → 74.54 ms | see below |
+| Decision-2.0-Vega-27B | `9b067a95` | `477e90f537eb5bd62e90d5e5361c7b654e69cf45` | 10,653 / 10,653, 0.0 | 74.67 → 74.54 ms | 86 / 86, 0.0 |
 | Decision-2.0-Eos-0.8B | `ad0aa724` | `34e2db970f2f49ef431237aa3218e0688a1fe992` | 10,653 / 10,653, 0.0 | 6.12 → 6.16 ms | 86 / 86, 0.0 |
 | Decision-2.0-Sol-2B | `4b75b521` | `23cbe9f96dde4a7e1e6a238d576128bf73c5b09e` | 10,653 / 10,653, 0.0 | 7.55 → 7.61 ms | 86 / 86, 0.0 |
 | Decision-2.0-Kai-0.6B | `881bee41` | `d06cf74b1304c6454b9de6e0adb8eaad5ac719fa` | 10,653 / 10,653, 0.0 | 4.91 → 4.95 ms | 86 / 86, 0.0 |
@@ -200,13 +200,17 @@ gate seal, collection order, card HTTP, links 8 / 8, `gate evaluate`. Frozen cac
   (its 5 formerly failing requests byte-identical to the stored answers; 2 near-tie flips elsewhere).
 - Release spot checks of the downloads (2,160 requests, `v2.eval.ix1.submission spotcheck` + `repin.py spotcheck`):
   Nox `7fc0023a` 2,160 `ok`, 0 flips, max |Δp| 0.0143; Lux `7c6792f7` 0 flips, 0.0249; Eos `34e2db97` 6 near-tie
-  flips, 0.0153; Sol `23cbe9f9` 0 flips, 0.0141; Vega `5c85c127` (PR pin before the fix) 0 flips, 0.0103.
+  flips, 0.0153; Sol `23cbe9f9` 0 flips, 0.0141; Vega `477e90f5` 1 near-tie flip, 0.0103; Vega `5c85c127` (the PR
+  pin before the fix) 0 flips, 0.0103.
 - The 60 heaviest Index requests (questions × longest row): the released Eos `ad0aa724` and Sol `4b75b521` each
-  error on `reversechain_query_51`; the fixed Nox, Lux, Eos and Sol return 59 `ok` and 1 over the input limit.
+  error on `reversechain_query_51`; the fixed Nox, Lux, Eos and Sol return 59 `ok` and 1 over the input limit, and
+  the fixed Vega 60 `ok`.
 
 **Index submission.** Dataset `vllm-sr/decision-2.0-decision-index` and PR
 https://github.com/apolinario/decision-index/pull/48 pin the fixed revisions once each passes the spot check
-(`v2/eval/ix1/repin.py` recomputes `weights-vs-release.json` for the new revision; `publish_dataset.py --update`).
+(`v2/eval/ix1/repin.py` recomputes `weights-vs-release.json` for the new revision; `publish_dataset.py --update`):
+dataset commits `0fac8ed9` (Nox, Lux) and `bf87c73e` (Vega, Sol, Eos); PR head `64768747`. Kai stays pinned at
+`881bee41`, which never reached the bound on the Index.
 
 Shared-module changes (called out): `runtime/fast.py`, `runtime/fast_kernels.py`, `tests/gpu_fast_path.py`; the ops
 above; `v2/eval/ix1/launch.sh` entries, `repin.py`, `publish_dataset.py --update`. The opt-in shared-context switch is

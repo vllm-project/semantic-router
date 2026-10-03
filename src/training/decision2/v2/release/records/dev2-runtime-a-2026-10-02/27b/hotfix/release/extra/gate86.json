@@ -1,0 +1,20 @@
+{
+ "kit_revision": "87d4650b",
+ "package_manifest_sha256": "88f5b7ac88ab4278ba089fda63261a05730648b32ecc68c6a7ba27b67f090a57",
+ "parity": {
+  "max_abs_dp": 0.0,
+  "mismatched_requests": 0,
+  "pass": true,
+  "questions_compared": 419,
+  "requests": 86,
+  "schema": "ix1-parity/1",
+  "statuses": {
+   "ok": 86
+  },
+  "tolerance": 0.0001
+ },
+ "repo": "vllm-sr/Decision-2.0-Vega-27B",
+ "revision": "477e90f537eb5bd62e90d5e5361c7b654e69cf45",
+ "rows": "compat-86",
+ "schema": "dev2-runtime-a-gate86/1"
+}
