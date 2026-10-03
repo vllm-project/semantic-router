@@ -19,7 +19,6 @@ class RawSpan:
     offsets: np.ndarray
     logits: np.ndarray
     head: str = "router"
-    head_reason: str | None = None
     alias: dict[str, str] | None = None
 
 

@@ -153,6 +153,18 @@ def test_decoder_questions_do_not_depend_on_each_other(models) -> None:
             )
 
 
+def test_decoder_answers_a_halu_alias_with_the_callers_label(models) -> None:
+    question = {
+        "type": "span",
+        "instructions": "Which spans are unsupported?",
+        "criteria": {"Hallucinated": "a claim the context does not support"},
+        "threshold": 0.0,
+    }
+    response = ask(models["decoder"], GOLDEN_STATE, {"h": question})
+    assert response["span_heads"] == {"h": "router"}
+    assert {span["label"] for span in response["spans"]["h"]} == {"Hallucinated"}
+
+
 def test_decoder_runs_all_span_questions_in_one_parts_pass(models) -> None:
     model = models["decoder"]
     state = {"request": "Tom Baker wrote", "answer": "Adults may take 6 grams."}

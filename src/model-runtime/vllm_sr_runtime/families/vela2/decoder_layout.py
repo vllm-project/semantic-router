@@ -181,7 +181,9 @@ class DecoderLayout:
             )
             offsets = np.asarray(words.offsets)
             raw.windows = len(plan.windows)
-        raw.span = RawSpan(span.question.names, offsets, logits, span.head, span.alias)
+        raw.span = RawSpan(
+            span.question.names, offsets, logits, head=span.head, alias=span.alias
+        )
         return raw
 
     # -- internals -----------------------------------------------------------
