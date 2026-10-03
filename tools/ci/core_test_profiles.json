@@ -17,24 +17,10 @@
     },
     {
       "package": "./pkg/classification",
-      "test": "TestAutoDiscoverModels_RealModels",
-      "source": "src/semantic-router/pkg/classification/model_discovery_test.go",
-      "profile": "legacy-discovery-fixtures",
-      "reason": "Explicit legacy checkpoint directory compatibility probe; artifact discovery unit contracts remain required."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestAutoInitializeUnifiedClassifier",
-      "source": "src/semantic-router/pkg/classification/model_discovery_test.go",
-      "profile": "legacy-discovery-fixtures",
-      "reason": "Explicit legacy checkpoint directory compatibility probe; artifact discovery unit contracts remain required."
-    },
-    {
-      "package": "./pkg/classification",
       "test": "TestClassifyPIIWithDetails_RealModelFindsPIIPastTheWindow",
       "source": "src/semantic-router/pkg/classification/classifier_pii_long_text_realmodel_test.go",
-      "profile": "native",
-      "reason": "Executed once by the strict pinned published-model runtime inventory."
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela PII package through a managed model_runtime deployment (VLLM_SR_PII_MODEL); each published-model test must pass without skipping."
     },
     {
       "package": "./pkg/classification",
@@ -54,176 +40,57 @@
       "package": "./pkg/classification",
       "test": "TestFactCheckEmptyInputRealModel",
       "source": "src/semantic-router/pkg/classification/fact_check_classifier_test.go",
-      "profile": "native",
-      "reason": "Executed once by the strict pinned published-model runtime inventory."
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela FactCheck package through a managed model_runtime deployment (VLLM_SR_FACTCHECK_MODEL); each published-model test must pass without skipping."
     },
     {
       "package": "./pkg/classification",
       "test": "TestFactCheckPolicyRealModel",
       "source": "src/semantic-router/pkg/classification/fact_check_classifier_test.go",
-      "profile": "native",
-      "reason": "Executed once by the strict pinned published-model runtime inventory."
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela FactCheck package through a managed model_runtime deployment (VLLM_SR_FACTCHECK_MODEL); each published-model test must pass without skipping."
     },
     {
       "package": "./pkg/classification",
       "test": "TestFeedbackForcedAbstentionPreservesPredictionRealModel",
       "source": "src/semantic-router/pkg/classification/feedback_detector_realmodel_test.go",
-      "profile": "native",
-      "reason": "Executed once by the strict pinned published-model runtime inventory."
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela Feedback package through a managed model_runtime deployment (VLLM_SR_FEEDBACK_MODEL); each published-model test must pass without skipping."
     },
     {
       "package": "./pkg/classification",
       "test": "TestFeedbackPredictionAndAbstentionRealModel",
       "source": "src/semantic-router/pkg/classification/feedback_detector_realmodel_test.go",
-      "profile": "native",
-      "reason": "Executed once by the strict pinned published-model runtime inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_CombinedSignalsMoreReliable",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_ContextRequired",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_EmptyAnswerOK",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_EnhancedDetection",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_InitializationRequired",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_LongAnswerTailIsScanned",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_window_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_LongAnswerTailIsScannedWithNLI",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_window_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_LongContextReachesAnswer",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_window_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_NLIClassification",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_NLI_FiltersFalsePositives",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_NLI_ProvidesExplainability",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_OpenAIPipeline_GroundedResponse",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_OpenAIPipeline_HallucinatedResponse",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_OpenAIPipeline_MultipleToolResults",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestHallucinationDetector_SetNLIConfig",
-      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestIntentClassificationLoRAAutoDetection",
-      "source": "src/semantic-router/pkg/classification/lora_auto_detection_test.go",
-      "profile": "legacy-lora-checkpoints",
-      "reason": "Optional legacy LoRA artifact probe; no compatible LoRA checkpoint in the maintained Vela inventory."
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela Feedback package through a managed model_runtime deployment (VLLM_SR_FEEDBACK_MODEL); each published-model test must pass without skipping."
     },
     {
       "package": "./pkg/classification",
       "test": "TestJailbreakDistributionRealModel",
       "source": "src/semantic-router/pkg/classification/classifier_jailbreak_risk_realmodel_test.go",
-      "profile": "native",
-      "reason": "Executed once by the strict pinned published-model runtime inventory."
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela Guard package through a managed model_runtime deployment (VLLM_SR_JAILBREAK_MODEL); each published-model test must pass without skipping."
     },
     {
       "package": "./pkg/classification",
       "test": "TestJailbreakRiskRealModelContract",
       "source": "src/semantic-router/pkg/classification/classifier_jailbreak_risk_realmodel_test.go",
-      "profile": "native",
-      "reason": "Executed once by the strict pinned published-model runtime inventory."
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela Guard package through a managed model_runtime deployment (VLLM_SR_JAILBREAK_MODEL); each published-model test must pass without skipping."
     },
     {
       "package": "./pkg/classification",
       "test": "TestLocalClassifierMaintainedCPU",
       "source": "src/semantic-router/pkg/classification/generic_classifier_local_test.go",
-      "profile": "native",
-      "reason": "Executed once by the strict pinned published-model runtime inventory."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestPIIAlreadyHasAutoDetection",
-      "source": "src/semantic-router/pkg/classification/lora_auto_detection_test.go",
-      "profile": "legacy-lora-checkpoints",
-      "reason": "Optional legacy LoRA artifact probe; no compatible LoRA checkpoint in the maintained Vela inventory."
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela Domain package through a managed model_runtime deployment (VLLM_SR_DOMAIN_MODEL); each published-model test must pass without skipping."
     },
     {
       "package": "./pkg/classification",
       "test": "TestUnifiedClassifierPublishedModels",
       "source": "src/semantic-router/pkg/classification/unified_classifier_integration_test.go",
-      "profile": "native",
-      "reason": "Executed once by the strict pinned published-model runtime inventory."
+      "profile": "model-runtime",
+      "reason": "Serves the published Vela Domain, PII and Guard package through a managed model_runtime deployment (VLLM_SR_DOMAIN_MODEL, VLLM_SR_PII_MODEL, VLLM_SR_JAILBREAK_MODEL); each published-model test must pass without skipping."
     },
     {
       "package": "./pkg/extproc",
@@ -349,24 +216,6 @@
     "model-artifacts": "Optional checkpoint-specific compatibility probes; selected model integrations run in the explicit published-model/local-stack profiles."
   },
   "race": [
-    {
-      "package": "./pkg/classification",
-      "test": "TestNativeMappingCandidateKeepsPreviousModel",
-      "source": "src/semantic-router/pkg/classification/native_labels_integration_test.go",
-      "reason": "Preserve the owned CPU tiny-tensor concurrency contract from test-owned-native; execute once with the race detector."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestTwoLocalRulesOwnNativeModelsInOneRecipe",
-      "source": "src/semantic-router/pkg/classification/native_labels_integration_test.go",
-      "reason": "Preserve the owned CPU tiny-tensor concurrency contract from test-owned-native; execute once with the race detector."
-    },
-    {
-      "package": "./pkg/classification",
-      "test": "TestLegacyStartupUsesProjectedNativeMapping",
-      "source": "src/semantic-router/pkg/classification/native_labels_integration_test.go",
-      "reason": "Preserve the owned CPU tiny-tensor concurrency contract from test-owned-native; execute once with the race detector."
-    },
     {
       "package": "./pkg/modelruntime/native",
       "test": "TestORTEmbeddingPreparesEveryAdvertisedLayerBeforePublication",

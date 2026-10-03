@@ -155,18 +155,18 @@ func (r *Runtime) count(surface string) {
 func (r *Runtime) health(w http.ResponseWriter, _ *http.Request) {
 	r.mu.Lock()
 	models := make(map[string]api.ModelHealth, len(r.models))
-	allReady := true
+	everyReady := true
 	for id := range r.models {
 		status := api.ModelHealthStatus("ready")
 		if !r.ready[id] {
-			status, allReady = api.ModelHealthStatus("loading"), false
+			status, everyReady = api.ModelHealthStatus("loading"), false
 		}
 		models[id] = api.ModelHealth{Status: status}
 	}
 	r.mu.Unlock()
 	health := api.Health{Status: api.HealthStatus("ready"), Models: &models}
 	status := http.StatusOK
-	if !allReady {
+	if !everyReady {
 		health.Status, status = api.HealthStatus("degraded"), http.StatusServiceUnavailable
 	}
 	write(w, status, health, nil)
