@@ -391,7 +391,10 @@ Before any model code runs, the family verifies the package:
   `{"decision_format": "vllm-sr-decision", "format_version": 2, "package_schema": "dev2-package/1"}`;
 - `MODEL_MANIFEST.json` lists every packaged file with its SHA-256; the
   on-disk inventory must equal it exactly (no extra, missing or linked files;
-  Hub-added `.gitattributes` and cache metadata are ignored);
+  Hub-added `.gitattributes` and cache metadata are ignored). In a Hugging
+  Face cache, a snapshot's links may resolve anywhere inside that cache: the
+  repository's `blobs/` and, with Xet storage, the cache-wide store. Links
+  that leave the cache are refused;
 - the parameter count in each safetensors header equals the manifest;
 - the model identity (`identity.model_sha256` over the scored model files and,
   for an adapter, the pinned base) equals the manifest and, for a built-in
@@ -539,10 +542,16 @@ States: `starting` → `loading` (resolve, verify, load, identity) → `warming`
 (warm-up and golden answers) → `ready`, or `failed` with a reason. Readiness
 is gated on golden answers: every built-in model revision carries golden
 questions (Choice, Noul and Score) with reference answers per device class.
-On a matching device class the answers must equal the reference (bit for bit
-on CPU, within the published tolerance on GPUs); without a reference the
-runtime checks determinism and well-formed answers and reports
-`golden: unverified`. A device error during serving marks the runtime
+On a matching device class the answers must match the reference within a
+published tolerance: 1e-3 on CPU, where FP32 kernels round differently across
+instruction sets, and 0.02 on GPUs. Without a reference the runtime checks
+determinism and well-formed answers and reports `golden: unverified`.
+References are recorded with `tools/golden_answers.py` on the released
+packages and stored in `registry/golden_answers.json`, keyed by the pinned
+revision. FLA's gated-delta kernels autotune per process, so on a GPU the
+Qwen3.5 sizes repeat bit for bit only across processes that share one
+autotune cache: `--autotune-cache DIR` (or `VLLM_SR_RUNTIME_AUTOTUNE_CACHE`)
+points Triton's persisted autotuning at `DIR` before FLA is imported. A device error during serving marks the runtime
 `degraded`; the model worker exits the process so the supervisor restarts it
 with a clean device context.
 
@@ -738,6 +747,14 @@ drifts from `openapi.yaml`. CI builds the runtime image as a provider fixture
 for the E2E profile.
 
 ## 16. Phases 2–4
+
+Phase 1 follow-ups, measured before they become defaults:
+
+- ROCm golden answers recorded with a shared autotune cache;
+- batch-shape buckets, so that graphs and batched forwards reuse a small set of
+  padded shapes;
+- more `max_speed` kernels, each with an accuracy record against `exact`;
+- a `vllm` engine investigation: pooling runner plus the family's readout.
 
 | Phase | Work | What the Phase 1 interfaces already provide |
 | --- | --- | --- |
