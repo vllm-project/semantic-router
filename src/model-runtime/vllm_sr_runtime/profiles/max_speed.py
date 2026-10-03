@@ -31,7 +31,7 @@ class MaxSpeedProfile(BatchingProfile):
         self.trees = False
 
     def engine_options(self, base: EngineOptions) -> EngineOptions:
-        return replace(base, exact_kernels_only=False)
+        return replace(base, exact_kernels_only=False, reduced_precision=True)
 
     def available(self, model: LoadedModel) -> str | None:
         self.trees = self.shared.available(model) is None
