@@ -49,5 +49,5 @@ def test_long_decimal_token_count_reaches_normal_validation(field):
     data = safe_load_router_config(document)
     value = data["routing"]["signals"]["context"][0][field]
     assert value == scalar
-    with pytest.raises(ValueError, match="^invalid token count format:"):
+    with pytest.raises(ValueError, match=r"^invalid token count format:"):
         parse_token_count(value)
