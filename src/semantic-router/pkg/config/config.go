@@ -82,6 +82,9 @@ const (
 	// (/v1/images/generations), used to sink responses hosted image_generation
 	// requests to diffusion backends.
 	APIFormatImages = "images"
+	// APIFormatSpeech selects the OpenAI Speech API dialect (/v1/audio/speech)
+	// used by text-to-speech backends.
+	APIFormatSpeech = "speech"
 )
 
 // ClientProtocol* identifies the inbound wire format; distinct from APIFormat (upstream backend).

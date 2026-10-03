@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func (r *OpenAIRouter) semanticCacheEnabledForRequest(ctx *RequestContext) bool {
@@ -11,6 +12,11 @@ func (r *OpenAIRouter) semanticCacheEnabledForRequest(ctx *RequestContext) bool 
 		return true
 	}
 	if requestBypassesRouting(ctx) {
+		return false
+	}
+	// Speech responses are audio bytes that bypass the neutral response, so
+	// they can neither be stored nor replayed as a cached response.
+	if ctx != nil && ctx.SourceFormat == llmprotocol.OpenAISpeechV1 {
 		return false
 	}
 	if responseCacheScope(ctx) != "global" &&

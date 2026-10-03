@@ -55,7 +55,9 @@ func providerEndpointScheme(cfg *config.RouterConfig, backendName string, profil
 // providerEndpointPath mirrors primary dispatch for router-initiated provider calls.
 func providerEndpointPath(profile *config.ProviderProfile, format llmprotocol.WireFormat) string {
 	path := requestWirePath(format)
-	if profile == nil {
+	// Profiles resolve create paths from the protocol catalog, which has no
+	// Speech API entry; the fallback would be the chat path.
+	if profile == nil || format == llmprotocol.OpenAISpeechV1 {
 		return path
 	}
 	if configured, err := profile.ResolveCreatePath(requestWireProtocol(format)); err == nil && configured != "" {

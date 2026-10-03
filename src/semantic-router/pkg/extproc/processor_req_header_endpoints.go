@@ -156,6 +156,8 @@ func detectSourceFormat(path string, ctx *RequestContext) {
 		ctx.SourceFormat = llmprotocol.OpenAIResponsesV1
 	case isAzureResponsesCollection(path):
 		ctx.SourceFormat = llmprotocol.OpenAIResponsesV1
+	case strings.HasPrefix(path, "/v1/audio/speech"):
+		ctx.SourceFormat = llmprotocol.OpenAISpeechV1
 	default:
 		ctx.SourceFormat = llmprotocol.OpenAIChatV1
 	}
