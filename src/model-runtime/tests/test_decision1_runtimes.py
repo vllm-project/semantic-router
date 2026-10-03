@@ -437,6 +437,25 @@ def test_model_info(runtimes):
     )
 
 
+def test_only_approximate_batches_ask_for_the_reduced_copy(runtimes, monkeypatch):
+    model = model_of(runtimes["vela"])
+    plan = model.plan(STATE, MANY)
+    batch = [plan.items[index] for index in model.exact_batches(plan.items)[0]]
+    encode, asked = model.engine_model.encode, []
+
+    def recording(encoder_batch):
+        asked.append(encoder_batch.reduced)
+        return encode(encoder_batch)
+
+    monkeypatch.setattr(model.engine_model, "encode", recording)
+    model.run(batch)
+    exact = asked[:]
+    asked.clear()
+    model.run_approximate(batch)
+    assert exact and not any(exact)
+    assert asked and all(asked)
+
+
 def test_approximate_batches_run_each_stack_over_its_own_rows(packages, runtimes):
     model = model_of(runtimes["vela"])
     plan = model.plan(STATE, MANY)
