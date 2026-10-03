@@ -14,6 +14,8 @@ def apply_handoff(
     artifact: MapperArtifact,
     snapshot: SourceSnapshot,
     *,
+    namespace: str,
+    cache_id: str,
     mapper_id: str,
     target_prompt_ids: list[int],
     target_caches: dict[int, torch.Tensor],
@@ -27,6 +29,8 @@ def apply_handoff(
     checked before writing so ordinary validation failures leave caches alone.
     """
     compat = artifact.manifest.compatibility
+    if snapshot.namespace != namespace or snapshot.cache_id != cache_id:
+        raise ValueError("source snapshot scope or cache ID mismatch")
     if mapper_id != artifact.manifest.mapper_id:
         raise ValueError("mapper ID mismatch")
     if (

@@ -85,6 +85,8 @@ class HandoffTests(unittest.TestCase):
         count = apply_handoff(
             self.artifact,
             loaded,
+            namespace="tenant-a",
+            cache_id="session-1",
             mapper_id="mapper-1",
             target_prompt_ids=[1, 2, 3, 4, 5],
             target_caches={0: cache},
@@ -123,6 +125,8 @@ class HandoffTests(unittest.TestCase):
         kwargs = dict(
             artifact=self.artifact,
             snapshot=self.snapshot,
+            namespace="tenant-a",
+            cache_id="session-1",
             mapper_id="mapper-1",
             target_prompt_ids=[1, 2, 3, 4, 5],
             target_caches={0: cache},
@@ -132,6 +136,10 @@ class HandoffTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "mapper ID"):
             apply_handoff(**{**kwargs, "mapper_id": "wrong"})
+        with self.assertRaisesRegex(ValueError, "scope"):
+            apply_handoff(**{**kwargs, "namespace": "tenant-b"})
+        with self.assertRaisesRegex(ValueError, "cache ID"):
+            apply_handoff(**{**kwargs, "cache_id": "another-session"})
         with self.assertRaisesRegex(ValueError, "prompt"):
             apply_handoff(**{**kwargs, "target_prompt_ids": [1, 2, 9, 4, 5]})
         with self.assertRaisesRegex(ValueError, "not enough blocks"):
