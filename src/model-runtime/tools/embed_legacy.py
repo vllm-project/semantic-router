@@ -200,7 +200,7 @@ func embedDumpTask(t *testing.T, runtime *Runtime, job embedDumpJob) (embedDumpC
 	ctx := context.Background()
 	switch job.Mode {
 	case "embedding":
-		provider, err := runtime.Embedding(ctx, embedDumpSpec(job, "", "truncate"), job.Dimension, job.Layer)
+		provider, err := runtime.Embedding(ctx, embedDumpSpec(job, "embedding.v1", "truncate"), job.Dimension, job.Layer)
 		if err != nil {
 			t.Fatal(err)
 		}
