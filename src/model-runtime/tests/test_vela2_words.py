@@ -149,8 +149,8 @@ def _oracle_decode(probs, offs, names, text, thr):
     if cur is not None:
         spans.append(cur)
     out = []
-    for c, s, e, ts in spans:
-        s, e = trim(text, s, e)
+    for c, first, last, ts in spans:
+        s, e = trim(text, first, last)
         if e > s:
             out.append(
                 {

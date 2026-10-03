@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from itertools import pairwise
 
 import numpy as np
 
@@ -191,7 +192,7 @@ def decode_spans(
         label[low + 1 : high][gap] = label[low]
     edges = np.flatnonzero(np.diff(np.concatenate(([-2], label, [-2]))) != 0)
     spans = []
-    for begin, stop in zip(edges[:-1], edges[1:], strict=True):
+    for begin, stop in pairwise(edges):
         value = int(label[begin])
         if value < 0:
             continue
