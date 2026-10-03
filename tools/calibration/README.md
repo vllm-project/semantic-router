@@ -9,6 +9,10 @@ contracts:
   confidence analysis;
 - `image-routing/`: image-routing classifier calibration.
 
+`recipe/signal_labeled_set.py` scores a labeled prompt set, such as
+`bench/data/action_test_data.json`, through the routing preview API and reports
+per-label precision, recall, and a confusion matrix.
+
 The maintained recipe workflow uses
 `recipe/router_calibration_loop.py` and the versioned probe schema in
 `config/schemas/recipe-probes-v1.schema.json`. See the repository's

@@ -54,6 +54,9 @@ type signalRoutingConfig struct {
 	ResultsTitle string
 	// LogLabel names the signal in progress/summary log lines (e.g. "Event").
 	LogLabel string
+	// Model is the request model, which selects the routing recipe. Empty
+	// sends "MoM" to the default recipe.
+	Model string
 }
 
 func runSignalRoutingTest(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, cfg signalRoutingConfig) error {
@@ -133,7 +136,11 @@ func testSingleSignalRouting(ctx context.Context, testCase SignalRoutingCase, lo
 		ShouldMatch:           testCase.ShouldMatch,
 	}
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Query, 30*time.Second)
+	model := cfg.Model
+	if model == "" {
+		model = "MoM"
+	}
+	response, err := sendLocalChatCompletion(ctx, localPort, model, testCase.Query, 30*time.Second)
 	if err != nil {
 		result.Error = err.Error()
 		return result
@@ -148,14 +155,18 @@ func testSingleSignalRouting(ctx context.Context, testCase SignalRoutingCase, lo
 	}
 
 	decision := response.Headers.Get("x-vsr-selected-decision")
-	result.ActualDecision = strings.TrimSuffix(decision, "_decision")
+	result.ActualDecision = decision
 	result.ActualMatchedSignal = response.Headers.Get(cfg.MatchedHeader)
 
 	if testCase.ShouldMatch {
 		result.DecisionCorrect = result.ActualDecision == testCase.ExpectedDecision
 		result.MatchCorrect = result.ActualMatchedSignal == testCase.ExpectedMatchedSignal
 	} else {
-		result.DecisionCorrect = result.ActualDecision != cfg.TargetDecision
+		if testCase.ExpectedDecision != "" {
+			result.DecisionCorrect = result.ActualDecision == testCase.ExpectedDecision
+		} else {
+			result.DecisionCorrect = result.ActualDecision != cfg.TargetDecision
+		}
 		result.MatchCorrect = result.ActualMatchedSignal == ""
 	}
 
