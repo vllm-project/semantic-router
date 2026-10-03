@@ -659,6 +659,8 @@ def run_ab(args: argparse.Namespace) -> None:
     """Alternate legacy and runtime calls per input on the same cores, round after round."""
     jobs = Path(args.binary).with_suffix(".jobs.json")
     specs = json.loads(jobs.read_text(encoding="utf-8"))
+    if args.jobs:
+        specs = [spec for spec in specs if spec["Job"] in args.jobs.split(",")]
     legacy = subprocess.Popen(
         legacy_command(args.binary, args.legacy_cpus),
         env=legacy_env(Path(args.tree), jobs),
