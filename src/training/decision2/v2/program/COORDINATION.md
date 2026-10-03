@@ -205,6 +205,99 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 16:15 — **Eviction-fix owner (843eb8f6): the crash REPRODUCES on a released package.**
+  - **Setup:** Eos-0.8B `34e2db97` (the current `main`, released runtime, default limits) on node B. The Index panel
+    runs in groups of 16, and each group goes through exact, batched and shared-context in one process.
+  - **Result:** shard 2 died at group 164 with `Memory access fault by GPU` (exit 139, a GPU page fault in the
+    kernel log), after 106 evictions with 4.2 GB of retained graph outputs. This is the native engine's signature;
+    its shard 1 died at group 155 after 100 evictions.
+  - **Still running:** the other five old-runtime shards and the two fixed-runtime shards. The fixed runtime holds
+    about 125 graphs and refuses about 3,500 captures, with no eviction and no crash so far.
+  - **Parity:** Kai passes (10,653 / 10,653 at 0.0 on the default path and with the 8-graph cache). The other tiers
+    are running.
+
+- 2026-10-03 16:05 — **Eviction-fix owner (843eb8f6): fix ported and tested; parity, bench and a crash repro are
+  running.**
+  - **Fix `fbedfded8`** (branch `xunzhuo/decision-2-runtime-evict`): `v2/release/runtime/fast.py` gets the native
+    policy of `99208b6d3`. Past 512 graphs or 4 GiB of outputs, new shapes run eagerly, and no graph is ever
+    destroyed.
+    - Tests: a new CPU test `test_graph_cache` (it fails on the old LRU code) and two full-cache cases in
+      `gpu_fast_path`.
+    - Results: `gpu_fast_path` 18 / 18 bit-identical on node A; release suite 250 passed, 2 skipped.
+  - **Tooling `fe9b40874`:** `fast.sh` / `make_fast.py` / `ra.sh` / `ra_diff.py` gain `--evict`. Exactly
+    `decision2/fast.py` may change, and the README must stay byte-identical. The parity's third side is the new
+    package with an 8-graph cache. The hotfix and switch derivations still re-derive byte-identically.
+  - **Previews:** all six differ from `main` only in `decision2/fast.py`.
+  - **Leases:**
+    - node A GPU2–7: parity (3 sides), then bench, one tier per GPU (`owner.runtime-evict`); GPU0–1 stay for
+      `ra.sh`;
+    - node B GPU0–7: the released-runtime repro (≈ 60 min). Eos `34e2db97` runs on the Index panel, groups of 16,
+      exact + batched + shared-context in one process: the old runtime on shards 0–5, the fixed runtime on shards
+      1–2.
+
+- 2026-10-03 16:08 — **Model-runtime lead (54e49843): ack 16:00. Both failures are diagnosed and fixed in local
+  commit `de4e73430`, held until the run finishes; then I push once with any further fixes.**
+  - **Security.** Of the 85 findings, only **one is HIGH**, and HIGH is what blocks (`--fail-on HIGH`):
+    `AST_DYNAMIC_IMPORT` in `src/model-runtime/tests/test_package.py:29` (`__import__("sys").modules`). The fix is a
+    plain `import sys`. `URL_NOT_ALLOWLISTED` and the rest are MEDIUM / LOW baseline findings, in files such as
+    `dashboard/.../ChatComponentErrors.test.tsx` that this PR doesn't touch. Locally, the AST scanner's codebase
+    scan has no HIGH finding and its PR-diff scan is CLEAN.
+  - **Model Runtime component.** The evidence plugin counts every collected case as required. CPU runs now deselect
+    the gpu-marked cases (`make model-runtime-test` uses `-m "not gpu"`: 96 passed, 7 deselected, 0 skipped). The
+    new `make model-runtime-test-gpu` runs them on GPU hosts, and the CPU coverage is unchanged.
+  - **Passed so far:** Plan, Quality / Source, CI Harness, E2E Framework, CLI Package, and the images (model-runtime,
+    dashboard, operator).
+
+- 2026-10-03 16:00 — **Coordinator → model-runtime lead (54e49843): CI on `73e8b0cc1` is running, with 2 failures so
+  far** (run `37106638338`).
+  - **`CI / Quality / Security / Code and Infrastructure Scans`**: step "Scan Pull Request Diff with Trusted AST
+    Scanner", total findings 85 (for example `URL_NOT_ALLOWLISTED`). Find which severities block, then fix the
+    flagged constructs in `src/model-runtime` and the Go changes, or allowlist them properly where the repo's policy
+    allows: Hub URLs, subprocess, network.
+  - **`CI / Tests / Components (Model Runtime) / Execute Contracts`**: "required
+    `tests/test_gpu_fast_path.py::test_attention_prep_above_2gib`: skipped", plus other GPU tests. The component
+    contract treats GPU-only tests as required on CPU runners. Mark them optional or conditional on the GPU
+    capability in the contract, keeping CPU-required coverage intact. The receipts upload then follows.
+  - **Wait for the run to finish** (4 jobs pending), then fix ALL failures in **one** push.
+
+- 2026-10-03 15:35 — **Model-runtime lead (54e49843): PR #4481 head `73e8b0cc1`.** It is 885d85cc's batch
+  (`99208b6d3` no-eviction, `48e12c040` records) plus a merge of `main`. The PR was only BEHIND, with no conflicts,
+  and the bot's `pr/needs-rebase` label tracks that.
+  - **Verified on node A from exact mirrors** (CPU only, cleaned up; no GPU held):
+    - The cgo-linked Go suites `classification`, `selection`, `extproc`, `routerruntime`, `services` and `cmd` all
+      pass. They ran in the extproc image's Go build stage, linked against the native bindings.
+    - The runtime CPU suite passes: 96 passed, 7 GPU skips.
+  - **PR body updated** with the records' summary: exact parity 10,653 / 10,653 for all six, shared context
+    207 / 207, latency, and profile speed-ups and accuracy.
+  - **CI:** the repo's Actions queue is still saturated (org-wide; GitHub reports no incident). I don't push again
+    until this run finishes, unless CI fails. **No more pushes to the PR branch by anyone, please.**
+
+- 2026-10-03 15:30 — **Eviction-fix owner (843eb8f6): STARTED. I am the sole writer of the six model repos until I
+  post "eviction fix done".** No pushes to PR #4481.
+  - **Plan:**
+    - port the native engine's no-eviction policy (`99208b6d3`) into `v2/release/runtime/fast.py`, with a test, on
+      branch `xunzhuo/decision-2-runtime-evict` from integration `93753ee91`;
+    - try to reproduce the crash on a released runtime under eviction pressure, without blocking on it;
+    - ship runtime-only revisions with the phase A hotfix tooling (`ra.sh`, `fast.sh --hotfix`, `ops/gate86.sh`), in
+      the order Eos, Nox, Lux, Vega, Sol, Kai;
+    - write record section 8;
+    - spot-check the new revisions for PR #48, moving pins only on a pass.
+  - **GPUs:** free GPUs only, lease-checked (never node E, node C GPU0 or node F GPU0–1). I post leases as I take them.
+
+- 2026-10-03 15:30 — **The inference owner (885d85cc) ended.** Its work is on model-runtime PR #4481 (`48e12c040`):
+  - the native engine is byte-identical to the released runtime on 10,653 prompts for all six sizes;
+  - `shared_context` is 1.8–3.4× faster at 128 questions;
+  - `batching` gives 1.9–3.6× requests/s at 64 concurrent requests and stays opt-in (the Eos Index CI leans
+    negative);
+  - the graph-eviction crash is fixed in the native engine (no eviction);
+  - FLA autotuning makes Qwen3.5 exactness depend on the process.
+  - **Coordinator decision:** ship the eviction fix to all six HF packages as runtime-only revisions. The owner is
+    **843eb8f6** (Max), the sole writer of the six repos until it posts "eviction fix done", with no pushes to PR
+    #4481.
+  - **Model-runtime lead (54e49843):** you now own the remaining inference follow-ups on the PR: frozen FLA autotune
+    per device class plus golden answers, batch-shape buckets, more `max_speed` kernels with accuracy records, and
+    the optional vLLM investigation. Respect the CI push freeze.
+
 - 2026-10-03 15:25 — **Inference owner (885d85cc): PUSHED `48e12c040` to PR #4481 (fast-forward from
   `d65a6e13e`). It carries the graph-eviction fix and the records. No job or GPU of mine is left running.**
   - **54e49843, the push** (CPU suite 96 passed / 7 GPU skips; ruff and markdown lint clean):
