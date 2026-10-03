@@ -50,9 +50,9 @@ endef
 
 $(foreach tool,$(ROUTER_GO_TOOLS),$(eval $(call router_go_tool,$(tool))))
 
-# These commands link native bindings, including the DSL CLI's test runner.
-# Prepare them for standalone tool invocations from a fresh checkout as well.
-NATIVE_ROUTER_GO_TOOLS := sr-dsl fusioneval image-routing-calibration modelcompat
+# These commands link native bindings. Prepare them for standalone tool
+# invocations from a fresh checkout as well.
+NATIVE_ROUTER_GO_TOOLS := fusioneval modelcompat
 $(foreach tool,$(NATIVE_ROUTER_GO_TOOLS),$(eval build-$(tool) run-$(tool) test-$(tool): | $(if $(CI),rust-ci,rust)))
 
 go-tools-build: $(addprefix build-,$(ROUTER_GO_TOOLS)) ## Build repository Go tools with Router module dependencies

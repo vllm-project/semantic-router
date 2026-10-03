@@ -178,13 +178,15 @@ download-models-image-calibration: ## Prepare the pinned Nano ONNX artifact and 
 		--manifest "$(MODEL_TEST_MANIFEST)"
 
 verify-image-routing-calibration: download-models-image-calibration ## Verify shipped image thresholds and the multimodal profile against source-bound fixtures
-	@python3 tools/ci/image_calibration.py \
+	@VLLM_SR_RUNTIME_COMMAND="$${VLLM_SR_RUNTIME_COMMAND:-$(AGENT_VENV)/bin/vllm-sr-runtime}" \
+		python3 tools/ci/image_calibration.py \
 		--manifest "$(MODEL_TEST_MANIFEST)" --output "$(MODEL_TEST_REPORT_DIR)"
 
 .PHONY: download-models-image-calibration verify-image-routing-calibration
 
 test-models: download-models-image-calibration ## Run the published-model contract through the model runtime
-	@"$(AGENT_PYTHON)" tools/ci/run_model_tests.py \
+	@VLLM_SR_RUNTIME_COMMAND="$${VLLM_SR_RUNTIME_COMMAND:-$(AGENT_VENV)/bin/vllm-sr-runtime}" \
+		"$(AGENT_PYTHON)" tools/ci/run_model_tests.py \
 		--models-dir "$(MODEL_TEST_MODELS_DIR)" \
 		--omni "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts/vela-1.0-omni-nano" \
 		--output "$(MODEL_TEST_REPORT_DIR)"
