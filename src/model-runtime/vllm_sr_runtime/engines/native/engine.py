@@ -64,8 +64,6 @@ class NativeEngineModel(EngineModel):
         options, backbone = self.options, self.backbone
         if options.fused_kernels:
             reason = fast.fused_unavailable(backbone, self.kernels)
-            if self.spec.dtype.gpu_weights:
-                reason = f"the layers stream {self.spec.dtype.gpu_weights} (DtypePolicy.gpu_weights)"
             self.fast["fused_layers"] = 0 if reason else fast.install_fused(backbone)
             if reason:
                 self.fast["fused_skipped"] = reason
