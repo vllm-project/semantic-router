@@ -67,6 +67,37 @@ curl -sf --max-time 60 -o "${REPORT_DIR}/runtime-classify.body" \
   -d "{\"model\":\"${DEPLOYMENT}\",\"input\":\"${PROMPT}\"}" \
   "${RUNTIME_URL}/v1/classify"
 
+# One domain signal and one decision per fixture label: the category the router
+# reports must then be exactly the label the runtime predicted.
+routing_rules=$(python3 - "${REPORT_DIR}/runtime-classify.body" "${work}/domain-mapping.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+labels = json.loads(Path(sys.argv[1]).read_text())["labels"]
+mapping = {
+    "category_to_idx": {label: index for index, label in enumerate(labels)},
+    "idx_to_category": {str(index): label for index, label in enumerate(labels)},
+}
+Path(sys.argv[2]).write_text(json.dumps(mapping))
+print("  signals:\n    domains:")
+for label in labels:
+    name = json.dumps(label)
+    print(f"      - name: {name}")
+    print(f"        description: {json.dumps(label + ' prompts.')}")
+    print(f"        mmlu_categories: [{name}]")
+print("  decisions:")
+for label in labels:
+    name = json.dumps(label)
+    print(f"    - name: {name}")
+    print(f"      description: {json.dumps('Route ' + label + ' prompts.')}")
+    print("      priority: 10")
+    print("      rules:\n        operator: AND\n        conditions:")
+    print(f"          - type: domain\n            name: {name}")
+    print("      modelRefs:\n        - model: riscv-model\n          use_reasoning: false")
+PY
+)
+
 cat >"${REPORT_DIR}/router-config.yaml" <<EOF
 version: v0.3
 listeners:
@@ -90,28 +121,7 @@ routing:
   modelCards:
     - name: riscv-model
       modality: text
-  model_bindings:
-    domain_classifier:
-      deployment: ${DEPLOYMENT}
-      contract: label_distribution.v1
-  signals:
-    domains:
-      - name: biology
-        description: Biology prompts.
-        mmlu_categories: [biology]
-      - name: other
-        description: Everything else.
-        mmlu_categories: [other]
-  decisions:
-    - name: default-route
-      description: Fallback route.
-      priority: 10
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: riscv-model
-          use_reasoning: false
+${routing_rules}
 global:
   router:
     model_selection:
@@ -134,7 +144,18 @@ global:
       ${DEPLOYMENT}:
         provider: model_runtime
         endpoint: ${RUNTIME_URL}
+        artifact: ${work}/domain
         device: cpu
+    bindings:
+      domain_classifier:
+        deployment: ${DEPLOYMENT}
+        contract: label_distribution.v1
+        mapping_path: ${work}/domain-mapping.json
+    modules:
+      classifier:
+        domain:
+          # Random fixture weights: any top label counts.
+          threshold: 0.01
 EOF
 
 echo "Starting the linux/riscv64 router under qemu-user"
