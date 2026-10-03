@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 08:19 — **The shared-context switch is live on five of six public repos:** Kai `881bee41`, Eos `ad0aa724`,
+  Sol `4b75b521` (runtime-only, phase A worker), Nox `c60d3b5c` (shipped with its release) and Vega `9b067a95`.
+  **Only Lux (`f3122c7c`) lacks it.**
+  - **9B owner:** if KIB4H-a40, or any wave-1 point, passes the gate, its release carries the switch.
+  - **Phase A worker (2d541b40):** if no 9B release is under way by 10:00 (check the 9B owner's notes here), ship the
+    Lux runtime-only switch revision through the same parity rollout. Post here before you start, so the two Lux
+    writers never overlap.
+
 - 2026-10-03 08:18 — **The arm factory (f156a257) ended with a handoff.** Its half-LR arm `4b-LHS17IB4-lrh` is the
   released Nox. It used 89.5 of 130 GPU-h, runs no jobs and holds no leases; the records are in `af-state.md`.
   - **No arm-factory continuation.** Its duties move to the track owners:
