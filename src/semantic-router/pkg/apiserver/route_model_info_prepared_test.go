@@ -12,13 +12,13 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-func preparedInventoryService(t *testing.T, runtime *native.Runtime, configs ...*config.RouterConfig) (*config.RouterConfig, *services.ClassificationService) {
+func preparedInventoryService(t *testing.T, runtime *serving.Runtime, configs ...*config.RouterConfig) (*config.RouterConfig, *services.ClassificationService) {
 	t.Helper()
 	cfg := &config.RouterConfig{}
 	if len(configs) > 0 {
@@ -34,7 +34,7 @@ func preparedInventoryService(t *testing.T, runtime *native.Runtime, configs ...
 
 // These controlled typed handles exercise inventory lifecycle and API wiring;
 // provider inference correctness is covered by the native integration tests.
-func prepareInventoryTask(t *testing.T, runtime *native.Runtime, recipe, name, contract, device string) *binding.Resolved[string, string] {
+func prepareInventoryTask(t *testing.T, runtime *serving.Runtime, recipe, name, contract, device string) *binding.Resolved[string, string] {
 	t.Helper()
 	task, err := binding.Register(binding.NewRegistry(runtime.ObserveBinding), contract, func(string) error { return nil }, func(string, string) error { return nil })
 	if err != nil {
@@ -54,7 +54,7 @@ func prepareInventoryTask(t *testing.T, runtime *native.Runtime, recipe, name, c
 }
 
 func TestPreparedInventoryIncludesEveryTaskAndRecipe(t *testing.T) {
-	runtime := native.New(nil)
+	runtime := serving.New(nil, nil)
 	cfg, service := preparedInventoryService(t, runtime)
 	for _, task := range []struct{ name, contract string }{
 		{"domain_classifier", "label_distribution.v1"},
@@ -94,7 +94,7 @@ func TestPreparedInventoryDoesNotInferReadinessFromConstructedClassifier(t *test
 	cfg.PIIModel = config.PIIModel{ModelID: "models/custom-pii", PIIMappingPath: "unused-pii-mapping.json"}
 	cfg.PromptGuard = config.PromptGuardConfig{Enabled: true, ModelID: "models/custom-guard", JailbreakMappingPath: "unused-guard-mapping.json"}
 	cfg.BertModelPath = "models/custom-embedding"
-	cfg, service := preparedInventoryService(t, native.New(nil), cfg)
+	cfg, service := preparedInventoryService(t, serving.New(nil, nil), cfg)
 	if !service.HasClassifier() {
 		t.Fatal("fixture must contain a constructed classifier")
 	}
@@ -110,7 +110,7 @@ func TestPreparedInventoryDoesNotInferReadinessFromConstructedClassifier(t *test
 
 func TestPreparedInventoryUsesPublishedGenerationAndPreservesStartupReadiness(t *testing.T) {
 	pool := binding.NewPool()
-	oldRuntime, nextRuntime := native.New(pool), native.New(pool)
+	oldRuntime, nextRuntime := serving.New(nil, pool), serving.New(nil, pool)
 	oldCfg, oldService := preparedInventoryService(t, oldRuntime)
 	nextCfg, nextService := preparedInventoryService(t, nextRuntime)
 	prepareInventoryTask(t, oldRuntime, "old", "domain_classifier", "label_distribution.v1", "rocm:0")

@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
 var ErrUnknownDiagnosticRecipe = errors.New("diagnostic recipe is not available")
@@ -85,18 +86,35 @@ func (s *ClassificationService) AcquireRecipeService(recipe string) (*Classifica
 
 // AcquireModelDiagnostics requires explicit scope. A normal Router caller also
 // holds the live generation lease until the complete diagnostic operation ends.
-func (s *ClassificationService) AcquireModelDiagnostics(recipe string) (*native.Runtime, func(), error) {
+func (s *ClassificationService) AcquireModelDiagnostics(recipe string) (ModelDiagnostics, func(), error) {
 	if strings.TrimSpace(recipe) == "" {
-		return nil, func() {}, fmt.Errorf("%w: recipe is required", binding.ErrInvalidInput)
+		return ModelDiagnostics{}, func() {}, fmt.Errorf("%w: recipe is required", binding.ErrInvalidInput)
 	}
 	_, classifier, release, err := s.AcquireRecipeRuntimeSnapshot(recipe)
 	if err != nil {
-		return nil, func() {}, err
+		return ModelDiagnostics{}, func() {}, err
 	}
-	runtime := classifier.ModelDiagnosticRuntime()
-	if runtime == nil {
+	diagnostics := ModelDiagnostics{Tasks: classifier.ModelDiagnosticRuntime(), Embeddings: classifier.EmbeddingDiagnosticRuntime()}
+	if diagnostics.Tasks == nil {
 		release()
-		return nil, func() {}, binding.ErrNotPrepared
+		return ModelDiagnostics{}, func() {}, binding.ErrNotPrepared
 	}
-	return runtime, release, nil
+	return diagnostics, release, nil
+}
+
+// ModelDiagnostics holds one recipe's prepared bindings: classify bindings on
+// the model runtime, and embedding and relevance bindings on the native
+// runtime that still serves them.
+type ModelDiagnostics struct {
+	Tasks      *serving.Runtime
+	Embeddings *native.Runtime
+}
+
+// PreparedBindings lists both runtimes' ready bindings.
+func (d ModelDiagnostics) PreparedBindings() []binding.PreparedBinding {
+	prepared := d.Tasks.PreparedBindings()
+	if d.Embeddings != nil {
+		prepared = append(prepared, d.Embeddings.PreparedBindings()...)
+	}
+	return prepared
 }
