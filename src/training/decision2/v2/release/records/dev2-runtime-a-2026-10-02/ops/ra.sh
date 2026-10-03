@@ -24,11 +24,14 @@
 # the attn_prep fix and the eager fallback of fused layers (make_fast.py --kind hotfix: spec dev2-<key>-rah.json,
 # decision .rah.json, evidence <key>/hotfix): exactly decision2/fast.py and decision2/fast_kernels.py change and the
 # README stays byte-identical (card.speed is the current main's).
+# --evict (COORDINATION 2026-10-03 15:30 UTC+8; eviction-fix owner 843eb8f6) releases the runtime-only revision whose
+# HIP graph cache never destroys a captured graph (make_fast.py --kind evict: spec dev2-<key>-rae.json, decision
+# .rae.json, evidence <key>/evict): exactly decision2/fast.py changes and the README stays byte-identical.
 # Node A, GPU0 or GPU1 (the 0.6B track's allocation, where release workers run as recorded co-tenants; with --hotfix
-# any idle node A GPU, training being stopped), under the shared lease owner.runtime-a-release
-# (owner.runtime-hotfix-release with --hotfix; removed on exit).
-# Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/ra.sh <tier> --gpu N [--switch | --hotfix]
-#          [--resume REV | --post-only WORK]
+# or --evict any idle node A GPU, training being stopped), under the shared lease owner.runtime-a-release
+# (owner.runtime-hotfix-release with --hotfix, owner.runtime-evict-release with --evict; removed on exit).
+# Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/ra.sh <tier> --gpu N [--switch | --hotfix |
+#          --evict] [--resume REV | --post-only WORK]
 set -euo pipefail
 tier="${1:-}"
 shift || true
@@ -40,10 +43,11 @@ while [[ $# -gt 0 ]]; do
     --post-only) post_only=$2; shift 2 ;;
     --switch) kind=switch suf=ras ev=/switch; shift ;;
     --hotfix) kind=hotfix suf=rah ev=/hotfix track=runtime-hotfix; shift ;;
+    --evict) kind=evict suf=rae ev=/evict track=runtime-evict; shift ;;
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
 done
-[[ "$gpu" =~ ^[01]$ || ( "$kind" == hotfix && "$gpu" =~ ^[0-7]$ ) ]] || { echo "--gpu 0 or 1" >&2; exit 2; }
+[[ "$gpu" =~ ^[01]$ || ( "$kind" =~ ^(hotfix|evict)$ && "$gpu" =~ ^[0-7]$ ) ]] || { echo "--gpu 0 or 1" >&2; exit 2; }
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 SRC=$(basename "$(cd "$S/../../.." && pwd)")
@@ -73,7 +77,8 @@ case "$tier" in
 esac
 [[ "$(docker image inspect -f '{{.Id}}' "$image")" == "$image" ]] || { echo "image $image is missing" >&2; exit 1; }
 lease=/data/dev2/leases/gpu$gpu.lock
-[[ ! -e "$lease/owner.runtime-a-release" && ! -e "$lease/owner.runtime-hotfix-release" ]] \
+[[ ! -e "$lease/owner.runtime-a-release" && ! -e "$lease/owner.runtime-hotfix-release" \
+   && ! -e "$lease/owner.runtime-evict-release" ]] \
   || { echo "gpu$gpu already runs a phase A release" >&2; exit 1; }
 rocm-smi --showuse --showmeminfo vram --json | python3 "$RENAME_OPS/pick_gpu.py" "$vram" "$gpu" >/dev/null \
   || { echo "GPU$gpu is busy or lacks free VRAM" >&2; exit 1; }
@@ -133,6 +138,8 @@ if kind == "switch":
     runtime, added, required = runtime | added, added | {"decision2/shared_ctx.py"}, {"decision2/shared_ctx.py"}
 if kind == "hotfix":
     runtime, added, required = set(added), set(), set(added)
+if kind == "evict":
+    runtime, added, required = {"decision2/fast.py"}, set(), {"decision2/fast.py"}
 other = [n for n in changed if not (n == "README.md" or (n in runtime and n in fo and n in fn)
                                     or (n in added and n not in fo))]
 same = {k: old[k] == new[k] for k in ("identity", "parameters", "profile", "max_input_tokens")}
@@ -140,7 +147,7 @@ readme_old = open(hf_hub_download(repo, "README.md", revision=revision), encodin
 readme_new = (Path(package) / "README.md").read_text(encoding="utf-8").splitlines()
 lines = [l for l in difflib.unified_diff(readme_old, readme_new, lineterm="", n=0)
          if l[:1] in "+-" and not l.startswith(("+++", "---"))]
-readme_ok = (not lines) if kind == "hotfix" else (bool(lines) or kind == "switch") and all("**Speed:**" in l for l in lines)
+readme_ok = (not lines) if kind in ("hotfix", "evict") else (bool(lines) or kind == "switch") and all("**Speed:**" in l for l in lines)
 ok = not other and all(same.values()) and readme_ok and required <= set(changed)
 json.dump({"changed": changed, "other": other, "equal": same, "readme_diff": lines, "ok": ok},
           open(out, "w"), indent=1)

@@ -1,0 +1,736 @@
+{
+  "cases": {
+    "qwen3-0.6b-dims-failing-kernels/eager": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 39,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 156,
+          "errors": [
+            "RuntimeError: PassManager::run failed (injected)",
+            "RuntimeError: PassManager::run failed (injected)",
+            "RuntimeError: PassManager::run failed (injected)",
+            "RuntimeError: PassManager::run failed (injected)"
+          ],
+          "shapes": 52
+        },
+        "fused_layers": 4,
+        "graphs": "off",
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 0,
+        "shared_cast_linears": 28,
+        "transformers": "5.17.0"
+      },
+      "graphs": false,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 0.19325484102591872
+    },
+    "qwen3-0.6b-dims-failing-kernels/graphs": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 39,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 208,
+          "errors": [
+            "RuntimeError: PassManager::run failed (injected)",
+            "RuntimeError: PassManager::run failed (injected)",
+            "RuntimeError: PassManager::run failed (injected)",
+            "RuntimeError: PassManager::run failed (injected)"
+          ],
+          "shapes": 52
+        },
+        "fused_layers": 4,
+        "graph_stats": {
+          "cached": 13,
+          "captures": 13,
+          "eager": 13,
+          "failed": 0,
+          "full": 0,
+          "replays": 26
+        },
+        "graphs": {
+          "capture_after": 2,
+          "max_graphs": 512,
+          "max_output_bytes": 4294967296,
+          "max_tokens": 65536
+        },
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 0,
+        "shared_cast_linears": 28,
+        "transformers": "5.17.0"
+      },
+      "graphs": true,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 0.30714771803468466
+    },
+    "qwen3-0.6b-dims-full-cache/eager": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 45,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 0,
+          "errors": [],
+          "shapes": 0
+        },
+        "fused_layers": 4,
+        "graphs": "off",
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 0,
+        "shared_cast_linears": 28,
+        "transformers": "5.17.0"
+      },
+      "graphs": false,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 0.19398468593135476
+    },
+    "qwen3-0.6b-dims-full-cache/graphs": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 45,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 0,
+          "errors": [],
+          "shapes": 0
+        },
+        "fused_layers": 4,
+        "graph_stats": {
+          "cached": 2,
+          "captures": 2,
+          "eager": 35,
+          "failed": 0,
+          "full": 22,
+          "replays": 10
+        },
+        "graphs": {
+          "capture_after": 2,
+          "max_graphs": 512,
+          "max_output_bytes": 4294967296,
+          "max_tokens": 65536
+        },
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 0,
+        "shared_cast_linears": 28,
+        "transformers": "5.17.0"
+      },
+      "graphs": true,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 0.19098915089853108
+    },
+    "qwen3-0.6b-dims/eager": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 39,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 0,
+          "errors": [],
+          "shapes": 0
+        },
+        "fused_layers": 4,
+        "graphs": "off",
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 0,
+        "shared_cast_linears": 28,
+        "transformers": "5.17.0"
+      },
+      "graphs": false,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 0.19739841693080962
+    },
+    "qwen3-0.6b-dims/graphs": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 39,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 0,
+          "errors": [],
+          "shapes": 0
+        },
+        "fused_layers": 4,
+        "graph_stats": {
+          "cached": 13,
+          "captures": 13,
+          "eager": 13,
+          "failed": 0,
+          "full": 0,
+          "replays": 26
+        },
+        "graphs": {
+          "capture_after": 2,
+          "max_graphs": 512,
+          "max_output_bytes": 4294967296,
+          "max_tokens": 65536
+        },
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 0,
+        "shared_cast_linears": 28,
+        "transformers": "5.17.0"
+      },
+      "graphs": true,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 5.134689891943708
+    },
+    "qwen3_5-0.8b-dims-failing-kernels/eager": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 39,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 156,
+          "errors": [
+            "RuntimeError: PassManager::run failed (injected)",
+            "RuntimeError: PassManager::run failed (injected)",
+            "RuntimeError: PassManager::run failed (injected)",
+            "RuntimeError: PassManager::run failed (injected)"
+          ],
+          "shapes": 52
+        },
+        "fused_layers": 4,
+        "graphs": "off",
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 11,
+        "shared_cast_linears": 31,
+        "transformers": "5.17.0"
+      },
+      "graphs": false,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 0.30758216488175094
+    },
+    "qwen3_5-0.8b-dims-failing-kernels/graphs": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 39,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 208,
+          "errors": [
+            "RuntimeError: PassManager::run failed (injected)",
+            "RuntimeError: PassManager::run failed (injected)",
+            "RuntimeError: PassManager::run failed (injected)",
+            "RuntimeError: PassManager::run failed (injected)"
+          ],
+          "shapes": 52
+        },
+        "fused_layers": 4,
+        "graph_stats": {
+          "cached": 13,
+          "captures": 13,
+          "eager": 13,
+          "failed": 0,
+          "full": 0,
+          "replays": 26
+        },
+        "graphs": {
+          "capture_after": 2,
+          "max_graphs": 512,
+          "max_output_bytes": 4294967296,
+          "max_tokens": 65536
+        },
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 11,
+        "shared_cast_linears": 31,
+        "transformers": "5.17.0"
+      },
+      "graphs": true,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 0.4219269398599863
+    },
+    "qwen3_5-0.8b-dims-full-cache/eager": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 45,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 0,
+          "errors": [],
+          "shapes": 0
+        },
+        "fused_layers": 4,
+        "graphs": "off",
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 11,
+        "shared_cast_linears": 31,
+        "transformers": "5.17.0"
+      },
+      "graphs": false,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 0.3141189538873732
+    },
+    "qwen3_5-0.8b-dims-full-cache/graphs": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 45,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 0,
+          "errors": [],
+          "shapes": 0
+        },
+        "fused_layers": 4,
+        "graph_stats": {
+          "cached": 2,
+          "captures": 2,
+          "eager": 35,
+          "failed": 0,
+          "full": 22,
+          "replays": 10
+        },
+        "graphs": {
+          "capture_after": 2,
+          "max_graphs": 512,
+          "max_output_bytes": 4294967296,
+          "max_tokens": 65536
+        },
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 11,
+        "shared_cast_linears": 31,
+        "transformers": "5.17.0"
+      },
+      "graphs": true,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 0.30873345909640193
+    },
+    "qwen3_5-0.8b-dims/eager": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 39,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 0,
+          "errors": [],
+          "shapes": 0
+        },
+        "fused_layers": 4,
+        "graphs": "off",
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 11,
+        "shared_cast_linears": 31,
+        "transformers": "5.17.0"
+      },
+      "graphs": false,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 0.30120625998824835
+    },
+    "qwen3_5-0.8b-dims/graphs": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 39,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 0,
+          "errors": [],
+          "shapes": 0
+        },
+        "fused_layers": 4,
+        "graph_stats": {
+          "cached": 13,
+          "captures": 13,
+          "eager": 13,
+          "failed": 0,
+          "full": 0,
+          "replays": 26
+        },
+        "graphs": {
+          "capture_after": 2,
+          "max_graphs": 512,
+          "max_output_bytes": 4294967296,
+          "max_tokens": 65536
+        },
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 11,
+        "shared_cast_linears": 31,
+        "transformers": "5.17.0"
+      },
+      "graphs": true,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 24.174521289067343
+    },
+    "qwen3_5-4b-dims/eager": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 39,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 0,
+          "errors": [],
+          "shapes": 0
+        },
+        "fused_layers": 4,
+        "graphs": "off",
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 11,
+        "shared_cast_linears": 31,
+        "transformers": "5.17.0"
+      },
+      "graphs": false,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 0.3632121079135686
+    },
+    "qwen3_5-4b-dims/graphs": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 39,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 0,
+          "errors": [],
+          "shapes": 0
+        },
+        "fused_layers": 4,
+        "graph_stats": {
+          "cached": 13,
+          "captures": 13,
+          "eager": 13,
+          "failed": 0,
+          "full": 0,
+          "replays": 26
+        },
+        "graphs": {
+          "capture_after": 2,
+          "max_graphs": 512,
+          "max_output_bytes": 4294967296,
+          "max_tokens": 65536
+        },
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 11,
+        "shared_cast_linears": 31,
+        "transformers": "5.17.0"
+      },
+      "graphs": true,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 15.819484516978264
+    },
+    "qwen3_5-4b-heads-long/eager": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 3,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 0,
+          "errors": [],
+          "shapes": 0
+        },
+        "fused_layers": 4,
+        "graphs": "off",
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 11,
+        "shared_cast_linears": 31,
+        "transformers": "5.17.0"
+      },
+      "graphs": false,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 2.2335278049577028
+    },
+    "qwen3_5-4b-heads-long/graphs": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 3,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 0,
+          "errors": [],
+          "shapes": 0
+        },
+        "fused_layers": 4,
+        "graph_stats": {
+          "cached": 0,
+          "captures": 0,
+          "eager": 3,
+          "failed": 0,
+          "full": 0,
+          "replays": 0
+        },
+        "graphs": {
+          "capture_after": 2,
+          "max_graphs": 512,
+          "max_output_bytes": 4294967296,
+          "max_tokens": 65536
+        },
+        "lora": {
+          "lean": 0,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 11,
+        "shared_cast_linears": 31,
+        "transformers": "5.17.0"
+      },
+      "graphs": true,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 8.580045317066833
+    },
+    "qwen3_5-lora/eager": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 39,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 0,
+          "errors": [],
+          "shapes": 0
+        },
+        "fused_layers": 4,
+        "graphs": "off",
+        "lora": {
+          "lean": 31,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 11,
+        "shared_cast_linears": 31,
+        "transformers": "5.17.0"
+      },
+      "graphs": false,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 0.3980514998547733
+    },
+    "qwen3_5-lora/graphs": {
+      "checks": {
+        "bit_identical": true,
+        "fallbacks": true,
+        "full_cache_kept_its_graphs": true,
+        "fused_layers": true,
+        "graphs_replayed": true,
+        "lean_lora_when_adapter": true
+      },
+      "compared": 39,
+      "differences": [],
+      "fast_path": {
+        "fused_fallbacks": {
+          "calls": 0,
+          "errors": [],
+          "shapes": 0
+        },
+        "fused_layers": 4,
+        "graph_stats": {
+          "cached": 13,
+          "captures": 13,
+          "eager": 13,
+          "failed": 0,
+          "full": 0,
+          "replays": 26
+        },
+        "graphs": {
+          "capture_after": 2,
+          "max_graphs": 512,
+          "max_output_bytes": 4294967296,
+          "max_tokens": 65536
+        },
+        "lora": {
+          "lean": 31,
+          "peft": 0
+        },
+        "rmsnorm_plus_one": 11,
+        "shared_cast_linears": 31,
+        "transformers": "5.17.0"
+      },
+      "graphs": true,
+      "installed": true,
+      "layers": 4,
+      "passed": true,
+      "seconds": 0.552698286017403
+    }
+  },
+  "passed": true
+}

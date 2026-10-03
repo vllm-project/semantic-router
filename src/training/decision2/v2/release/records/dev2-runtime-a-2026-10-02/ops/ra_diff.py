@@ -1,6 +1,6 @@
 """Files that differ between a released revision and its phase A runtime-only successor (hf-cli python, node token).
 
-  <hf-cli python> ra_diff.py <repo> <released revision> <new revision> <out.json> [--switch | --hotfix]
+  <hf-cli python> ra_diff.py <repo> <released revision> <new revision> <out.json> [--switch | --hotfix | --evict]
 
 The BF16-resident rollout's runtime_diff.py with the two fast-path modules of the phase A runtime, which the
 successor adds: a runtime-only revision may change decision2/__init__.py, api.py and the profile module, add
@@ -9,7 +9,8 @@ and MODEL_MANIFEST.json; every other file, and every weight file in particular, 
 or git blob id, and nothing is removed. Exits 1 otherwise. With --switch (the opt-in shared-context switch, which
 may follow a phase A revision or carry phase A itself) the fast-path modules may also change, and the successor must
 add decision2/shared_ctx.py. With --hotfix (the attn_prep fix and the eager fallback of fused layers) exactly
-decision2/fast.py and decision2/fast_kernels.py change and no runtime file is added.
+decision2/fast.py and decision2/fast_kernels.py change and no runtime file is added. With --evict (a graph cache
+that never destroys a captured graph) exactly decision2/fast.py changes.
 """
 
 from __future__ import annotations
@@ -29,7 +30,8 @@ RUNTIME_FILES = {
     "decision2/qwen.py",
     "decision2/kai_native.py",
 }
-ADDED_RUNTIME_FILES = {"decision2/fast.py", "decision2/fast_kernels.py"}
+FAST_FILE = "decision2/fast.py"
+ADDED_RUNTIME_FILES = {FAST_FILE, "decision2/fast_kernels.py"}
 SWITCH_FILE = "decision2/shared_ctx.py"
 
 
@@ -78,11 +80,14 @@ def main() -> int:
     repo, released, new, out = sys.argv[1:5]
     switch = sys.argv[5:] == ["--switch"]
     hotfix = sys.argv[5:] == ["--hotfix"]
+    evict = sys.argv[5:] == ["--evict"]
     changeable = RUNTIME_FILES | (ADDED_RUNTIME_FILES if switch else set())
     addable = ADDED_RUNTIME_FILES | ({SWITCH_FILE} if switch else set())
     required = {SWITCH_FILE} if switch else ADDED_RUNTIME_FILES
     if hotfix:
         changeable, addable, required = ADDED_RUNTIME_FILES, set(), ADDED_RUNTIME_FILES
+    if evict:
+        changeable, addable, required = {FAST_FILE}, set(), {FAST_FILE}
     rules = card_rules()
     api = HfApi()
     a, b = files(api, repo, released), files(api, repo, new)
@@ -103,7 +108,11 @@ def main() -> int:
     ) and all(a[n] == b[n] for n in weights)
     receipt = {
         "schema": "dev2-runtime-diff/1",
-        "mode": "hotfix" if hotfix else "switch" if switch else "phase-a",
+        "mode": (
+            "evict"
+            if evict
+            else "hotfix" if hotfix else "switch" if switch else "phase-a"
+        ),
         "repo": repo,
         "released": released,
         "new": new,

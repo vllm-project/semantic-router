@@ -34,6 +34,14 @@ raising (answers-compare-fallback.json, 0 answer changes and 0.0 drift against t
 the current main's: the fix leaves the replayed path unchanged but one launch per attention layer, and the hotfix
 bench (old then new on one GPU) is recorded in the decision. Outputs specs/dev2-<key>-rah.json and
 <name>.decision.rah.json.
+
+``--kind evict`` (COORDINATION 2026-10-03 15:30 UTC+8; eviction-fix owner 843eb8f6): the runtime-only revision with
+the runtime of EVICT_COMMIT on top of the current main of EVICT_TIERS (the hotfix revisions): the HIP graph cache
+never destroys a captured graph; once it is full (512 graphs or 4 GiB of outputs), new input shapes run the eager
+forward. Evidence <key>/evict/{parity,bench}; the parity carries a third side with a graph cache of 8 graphs
+(answers-compare-fullcache.json, 0 answer changes and 0.0 drift against the old side too; full-cache.json shows
+the cache full). card.speed stays the current main's and the bench is recorded in the decision. Outputs
+specs/dev2-<key>-rae.json and <name>.decision.rae.json.
 """
 
 from __future__ import annotations
@@ -62,6 +70,14 @@ HOTFIX_PREPARED_BY = (
     "Decision 2.0 ROCm hotfix owner 490b6f72 (worktree vllm-sr-dev2-runtime-hotfix, branch "
     "xunzhuo/decision-2-runtime-hotfix) with the runtime phase A tooling of this record"
 )
+# The hotfix runtime whose HIP graph cache never destroys a captured graph (fast.py).
+EVICT_COMMIT = "fbedfded8ce33c7c25a99b8fb1f71f733b2c2c44"
+EVICT_WORKER = "eviction-fix owner 843eb8f6"
+EVICT_PREPARED_BY = (
+    "Decision 2.0 eviction-fix owner 843eb8f6 (worktree vllm-sr-dev2-evict, branch "
+    "xunzhuo/decision-2-runtime-evict) with the runtime phase A tooling of this record"
+)
+EVICT_CACHE = 8
 PANELS = {"typed-final": 1600, "css15": 6547, "public231": 231, "mlx-diag": 2275}
 MARKER = " Checked on one GPU"
 DECIDED_BY = (
@@ -188,11 +204,54 @@ HOTFIX_TIERS: dict[str, tuple[str, str, str, str]] = {
         "dev2-ras-27B-20261002T213625Z",
     ),
 }
+# The current main of every repository on 2026-10-03 15:30 UTC+8 (the hotfix revisions) and the release work
+# directory on node A that built and sealed it.
+EVICT_TIERS: dict[str, tuple[str, str, str, str]] = {
+    "0.6B": (
+        "0p6b",
+        "Kai",
+        "d06cf74b1304c6454b9de6e0adb8eaad5ac719fa",
+        "dev2-rah-0.6B-20261003T055703Z",
+    ),
+    "0.8B": (
+        "0p8b",
+        "Eos",
+        "34e2db970f2f49ef431237aa3218e0688a1fe992",
+        "dev2-rah-0.8B-20261003T055607Z",
+    ),
+    "2B": (
+        "2b",
+        "Sol",
+        "23cbe9f96dde4a7e1e6a238d576128bf73c5b09e",
+        "dev2-rah-2B-20261003T055610Z",
+    ),
+    "4B": (
+        "4b",
+        "Nox",
+        "7fc0023a8c51ffaf0f4d4a8f1eb1fb54fa2451cc",
+        "dev2-rah-4B-20261003T050415Z",
+    ),
+    "9B": (
+        "9b",
+        "Lux",
+        "7c6792f7e59dce7a64115bfe750ee636e7a63bd4",
+        "dev2-rah-9B-20261003T051039Z",
+    ),
+    "27B": (
+        "27b",
+        "Vega",
+        "477e90f537eb5bd62e90d5e5361c7b654e69cf45",
+        "dev2-rah-27B-20261003T054541Z",
+    ),
+}
 KINDS = {
     "ra": (TIERS, RUNTIME_COMMIT, "", "ra"),
     "switch": (SWITCH_TIERS, SWITCH_COMMIT, "switch", "ras"),
     "hotfix": (HOTFIX_TIERS, HOTFIX_COMMIT, "hotfix", "rah"),
+    "evict": (EVICT_TIERS, EVICT_COMMIT, "evict", "rae"),
 }
+# The third parity side of a kind: the answers it must give identically to the old side.
+THIRD_SIDE = {"hotfix": "fallback", "evict": "fullcache"}
 
 
 def mirror(commit: str) -> str:
@@ -235,8 +294,11 @@ def sources(tier: str, kind: str = "ra") -> dict:
     parity_path = OUT / key / evidence / "parity" / "answers-compare.json"
     bench_path = OUT / key / evidence / "bench" / "compare.json"
     parity, bench = _json(parity_path), _json(bench_path)
-    fallback_path = parity_path.with_name("answers-compare-fallback.json")
-    fallback = _json(fallback_path) if kind == "hotfix" else None
+    third = THIRD_SIDE.get(kind)
+    fallback_path = parity_path.with_name(f"answers-compare-{third or 'fallback'}.json")
+    fallback = _json(fallback_path) if third else None
+    full_cache_path = parity_path.with_name("full-cache.json")
+    full_cache = _json(full_cache_path) if kind == "evict" else None
     problems = [
         message
         for ok, message in (
@@ -285,7 +347,19 @@ def sources(tier: str, kind: str = "ra") -> dict:
                     }
                     == {panel: (n, n, 0) for panel, n in PANELS.items()}
                 ),
-                "the fallback parity does not cover every scored prompt identically",
+                f"the {third} parity does not cover every scored prompt identically",
+            ),
+            (
+                full_cache is None
+                or (
+                    full_cache["max_graphs"] == EVICT_CACHE
+                    and any(
+                        c["cached"] == EVICT_CACHE and c["full"] > 0
+                        for c in full_cache["caches"]
+                    )
+                    and all("evicted" not in c for c in full_cache["caches"])
+                ),
+                f"the {third} parity did not run with a full cache of {EVICT_CACHE} graphs",
             ),
         )
         if not ok
@@ -309,6 +383,8 @@ def sources(tier: str, kind: str = "ra") -> dict:
         "bench": bench,
         "fallback_path": fallback_path,
         "fallback": fallback,
+        "full_cache_path": full_cache_path,
+        "full_cache": full_cache,
     }
 
 
@@ -344,6 +420,15 @@ HOTFIX_SENTENCE = (
 )
 
 
+EVICT_SENTENCE = (
+    " From this revision the runtime never destroys a captured HIP graph: once its graph cache is full (512 graphs "
+    "or 4 GiB of graph outputs), new input shapes run the eager forward, which gives the same values (on ROCm, "
+    "evicting large graphs under long, varied traffic could crash the GPU process); it was checked with 0 answer "
+    "changes and 0.0 drift on every scored prompt and on mlx-diag (10,653 prompts) against the previous runtime, "
+    f"both with the default cache and with a cache of {EVICT_CACHE} graphs."
+)
+
+
 def phase_a_sentence_added(src: dict) -> bool:
     text = src["spec"]["runtime_equivalence"]
     # Lux's main (9B M10 release) already describes the phase A runtime in its own words.
@@ -359,6 +444,8 @@ def spec_for(src: dict) -> dict:
         return switch_spec_for(src)
     if src["kind"] == "hotfix":
         return hotfix_spec_for(src)
+    if src["kind"] == "evict":
+        return evict_spec_for(src)
     old = src["spec"]
     spec = layout.current_ids({k: v for k, v in old.items() if k != "_release"})
     spec["runtime_source"] = mirror(RUNTIME_COMMIT)
@@ -453,6 +540,37 @@ def hotfix_spec_for(src: dict) -> dict:
             f"remote code are those of the spec that built {spec['repo_id']}@{src['revision'][:8]}. card.speed stays "
             f"that spec's (the hotfix bench, old then new on one GPU: p50 {lat['p50']['old']:.1f} -> "
             f"{lat['p50']['new']:.1f} ms) and runtime_equivalence gains the hotfix sentence."
+        ),
+        "replaces_spec": {
+            "spec": str(src["spec_path"]),
+            "sha256": sha(src["spec_path"]),
+        },
+        "previous": old.get("_release"),
+    }
+    return spec
+
+
+def evict_spec_for(src: dict) -> dict:
+    old = src["spec"]
+    spec = layout.current_ids({k: v for k, v in old.items() if k != "_release"})
+    spec["runtime_source"] = mirror(EVICT_COMMIT)
+    text = spec["runtime_equivalence"]
+    if text.count(MARKER) == 1:
+        spec["runtime_equivalence"] = text.replace(MARKER, EVICT_SENTENCE + MARKER)
+    else:
+        spec["runtime_equivalence"] = text + EVICT_SENTENCE
+    spec["gate_receipt"] = f"{DECISIONS}/{src['name']}.decision.rae.json"
+    lat = src["bench"]["latency_ms"]
+    spec["_release"] = {
+        "runtime_evict": (
+            f"Runtime-only revision (COORDINATION 2026-10-03 15:30 UTC+8; {EVICT_WORKER}): the package runtime "
+            f"comes from commit {EVICT_COMMIT[:9]} (runtime_source): the hotfix runtime whose HIP graph cache "
+            "never destroys a captured graph and runs new input shapes eagerly once it is full (on ROCm, evicting "
+            "large graphs from the shared memory pool between large eager batches crashed the GPU process). "
+            "Weights, tokenizer, configs, the vendored training/model sources, card index, assets and remote code "
+            f"are those of the spec that built {spec['repo_id']}@{src['revision'][:8]}. card.speed stays that "
+            f"spec's (the eviction-fix bench, old then new on one GPU: p50 {lat['p50']['old']:.1f} -> "
+            f"{lat['p50']['new']:.1f} ms) and runtime_equivalence gains the eviction-fix sentence."
         ),
         "replaces_spec": {
             "spec": str(src["spec_path"]),
@@ -655,11 +773,98 @@ def hotfix_decision_for(src: dict, spec_sha: str) -> dict:
     return new
 
 
+def evict_decision_for(src: dict, spec_sha: str) -> dict:
+    old, gate, bench, full = (
+        src["decision"],
+        src["gate"],
+        src["bench"],
+        src["fallback"],
+    )
+    old_sha = sha(src["decision_path"])
+    repo = layout.current_repo(old["repo_id"])
+    lat = bench["latency_ms"]
+    new = copy.deepcopy(old)
+    new.pop("card_revision", None)
+    new.update(
+        {
+            "repo_id": repo,
+            "decided_by": (
+                "coordinator (parent agent), Decision 2.0 program: COORDINATION 2026-10-03 15:30 UTC+8 (the "
+                "inference owner 885d85cc found that evicting captured HIP graphs crashes the GPU process on ROCm "
+                "and fixed its native engine by never evicting; the released runtime carries the same eviction, so "
+                "the eviction-fix owner ports that policy and ships runtime-only revisions of all six repositories "
+                "through the phase A parity rollout; the user's full-autonomy mandate)"
+            ),
+            "prepared_by": EVICT_PREPARED_BY,
+            "decided_utc": "2026-10-03T07:30:00Z",
+            "action": (
+                f"Runtime-only revision of the public repository {repo}: decision2/fast.py comes from commit "
+                f"{EVICT_COMMIT[:9]}, whose HIP graph cache never destroys a captured graph: once 512 graphs or "
+                "4 GiB of graph outputs are captured, new input shapes run the eager forward (on ROCm, evicting "
+                "large graphs from the shared memory pool between large eager batches crashed the GPU process "
+                "under Index traffic). Weights, tokenizer, configs, the vendored training/model sources, "
+                "calibration, any Score offsets, the banner and the charts are byte-identical to the released "
+                f"revision {gate['revision']}, and so is README.md; MODEL_MANIFEST.json states the new runtime "
+                "hashes and the runtime sentences. The collection is not changed."
+            ),
+            "rationale": (
+                f"The release judgement of the superseded final decision {old_sha[:8]}… stands unchanged: the same "
+                f"identity {old['identity']['model_sha256'][:8]}, scored report, paired comparison, calibration and "
+                "licence decision. Only the package runtime changes, and it computes the same values bit for bit: "
+                "every prompt of the four scored panels (typed-final 1,600, css15 6,547, public231 231, mlx-diag "
+                "2,275) answered through the released package and through this package on the released weights gave "
+                f"0 answer changes and 0.0 drift, and so did this package with its graph cache cut to {EVICT_CACHE} "
+                "graphs (every other input shape on the eager forward); 400 single requests: p50 "
+                f"{lat['p50']['old']:.2f} -> {lat['p50']['new']:.2f} ms, p95 {lat['p95']['old']:.2f} -> "
+                f"{lat['p95']['new']:.2f} ms, all bit-identical. release.sh checks the native examples, the card's "
+                "Transformers example before upload, after the real download and from the Hub in fresh environments "
+                "under Transformers 5.17 and 5.18, the card structure and every card link; then the downloaded "
+                "package must pass the Index harness's 86-request parity gate."
+            ),
+            "previous_rationale": old["rationale"],
+            "runtime_revision": {
+                "kind": "no-graph-eviction-runtime",
+                "runtime_commit": EVICT_COMMIT,
+                "spec": f"v2/release/specs/dev2-{src['key']}-rae.json",
+                "spec_sha256": spec_sha,
+                **runtime_evidence(src),
+                "full_cache_parity": {
+                    "compare": src["fallback_path"].as_posix(),
+                    "sha256": sha(src["fallback_path"]),
+                    "max_graphs": EVICT_CACHE,
+                    "cache": src["full_cache_path"].as_posix(),
+                    "cache_sha256": sha(src["full_cache_path"]),
+                    "panels": {
+                        panel: [
+                            p["prompts"],
+                            p["identical_prompts"],
+                            p["category_changes"],
+                        ]
+                        for panel, p in full["panels"].items()
+                    },
+                    "max_abs_drift": full["max_abs_drift"],
+                },
+            },
+            "supersedes": {
+                "final_sha256": old_sha,
+                "released_as": f"{gate['repo_id']}@{gate['revision']}",
+                "released_manifest_sha256": gate["manifest_sha256"],
+                "released_gate_sha256": sha(src["gate_path"]),
+                "card_revision": old.get("card_revision"),
+                "earlier": old.get("supersedes"),
+            },
+        }
+    )
+    return new
+
+
 def decision_for(src: dict, spec_sha: str) -> dict:
     if src["kind"] == "switch":
         return switch_decision_for(src, spec_sha)
     if src["kind"] == "hotfix":
         return hotfix_decision_for(src, spec_sha)
+    if src["kind"] == "evict":
+        return evict_decision_for(src, spec_sha)
     old, gate, bench, parity = src["decision"], src["gate"], src["bench"], src["parity"]
     old_sha = sha(src["decision_path"])
     repo = layout.current_repo(old["repo_id"])
