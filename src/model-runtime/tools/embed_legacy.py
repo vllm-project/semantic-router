@@ -684,6 +684,18 @@ def run_ab(args: argparse.Namespace) -> None:
         status, _ = loop.run_until_complete(runtime.call(surface, body))
         return time.perf_counter_ns() - start if status == 200 else -1
 
+    def pair(
+        spec: dict[str, Any], item: dict[str, Any], legacy_first: bool
+    ) -> tuple[int, int]:
+        """One legacy and one runtime call, ``--gap-ms`` apart (pools that spin after a call settle)."""
+        if legacy_first:
+            legacy_ns = call_legacy(spec, item)
+            time.sleep(args.gap_ms / 1000)
+            return legacy_ns, call_runtime(spec, item)
+        runtime_ns = call_runtime(spec, item)
+        time.sleep(args.gap_ms / 1000)
+        return call_legacy(spec, item), runtime_ns
+
     report: dict[str, Any] = {}
     for spec in specs:
         for _ in range(3):
@@ -694,14 +706,7 @@ def run_ab(args: argparse.Namespace) -> None:
                 spec["Job"], {"legacy": [], "runtime": [], "ratio": []}
             )
             for item in spec["Inputs"]:
-                if round_index % 2:
-                    runtime_ns, legacy_ns = call_runtime(spec, item), call_legacy(
-                        spec, item
-                    )
-                else:
-                    legacy_ns, runtime_ns = call_legacy(spec, item), call_runtime(
-                        spec, item
-                    )
+                legacy_ns, runtime_ns = pair(spec, item, round_index % 2 == 0)
                 if legacy_ns > 0 and runtime_ns > 0:
                     entry["legacy"].append(legacy_ns)
                     entry["runtime"].append(runtime_ns)
@@ -878,6 +883,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     ab.add_argument("--tree", required=True)
     ab.add_argument("--rounds", type=int, default=4)
     ab.add_argument("--legacy-cpus", type=int, default=None)
+    ab.add_argument("--gap-ms", type=float, default=0.0)
     for sub in (runtime, ab):
         sub.add_argument("--device", default="cpu")
         sub.add_argument("--profile", default="exact")
