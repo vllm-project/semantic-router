@@ -107,6 +107,23 @@ ARMS = {
     "KIB4-lrq": ("9b", "KIB4", ["--backbone-lr", "2.5e-6", "--head-lr", "2.5e-5"]),
     # Amendment 11 (the 9B owner's backlog): M10's KX TRAIN at half backbone / head LR.
     "KXH": ("9b", "KX", ["--backbone-lr", "5e-6", "--head-lr", "5e-5"]),
+    # Amendment 12 (the 4B owner continues the 4B line): quarter LR on three more arms; an eighth LR on 4b-LHS17IB4.
+    "4b-SDMLIB4-lrq": (
+        "4b",
+        "4b-SDMLIB4",
+        ["--lora-lr", "2.5e-5", "--head-lr", "2.5e-5"],
+    ),
+    "4b-LHS17IB4X-lrq": (
+        "4b",
+        "4b-LHS17IB4X",
+        ["--lora-lr", "2.5e-5", "--head-lr", "2.5e-5"],
+    ),
+    "4b-SDML-lrq": ("4b", "4b-SDML", ["--lora-lr", "2.5e-5", "--head-lr", "2.5e-5"]),
+    "4b-LHS17IB4-lre": (
+        "4b",
+        "4b-LHS17IB4",
+        ["--lora-lr", "1.25e-5", "--head-lr", "1.25e-5"],
+    ),
 }
 
 
