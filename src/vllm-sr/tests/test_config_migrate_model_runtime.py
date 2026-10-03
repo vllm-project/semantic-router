@@ -296,6 +296,7 @@ def test_system_models_and_module_models_move_to_vela_with_their_label_maps():
                             "enabled": True,
                             "model_id": "models/mom-jailbreak-classifier",
                             "variant": "candle",
+                            "model_type": "candle",
                             "jailbreak_mapping_path": "models/mom-jailbreak-classifier/jailbreak_type_mapping.json",
                         },
                         "feedback_detector": {
@@ -494,6 +495,9 @@ def test_signal_and_plugin_nli_options_and_mlp_devices_are_removed():
         "algorithm": {
             "type": "mlp",
             "mlp": {"device": "cpu", "pretrained_path": "/models/mlp.json"},
+            "fusion": {
+                "grounding": {"enabled": True, "nli_contradiction_penalty": 0.5}
+            },
         },
     }
     migrated, notes = _migrate(
@@ -526,6 +530,10 @@ def test_signal_and_plugin_nli_options_and_mlp_devices_are_removed():
     }
     assert migrated_decision["algorithm"]["mlp"] == {
         "pretrained_path": "/models/mlp.json"
+    }
+    assert migrated_decision["algorithm"]["fusion"]["grounding"] == {
+        "enabled": True,
+        "contradiction_penalty": 0.5,
     }
     assert "routing.decisions[0].algorithm.mlp.device" in _note_paths(notes)
 
@@ -560,7 +568,13 @@ def _removed_values(value, path=""):
                 yield child_path
             if key == "backend" and child in REMOVED_PROVIDERS:
                 yield child_path
-            if key in {"explainer", "hallucination_explainer", "use_nli", "nli"}:
+            if key in {
+                "explainer",
+                "hallucination_explainer",
+                "use_nli",
+                "nli",
+                "nli_contradiction_penalty",
+            }:
                 yield child_path
             yield from _removed_values(child, child_path)
     elif isinstance(value, list):

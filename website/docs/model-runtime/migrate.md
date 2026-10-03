@@ -68,6 +68,7 @@ the router rejects it until you fix it.
 | `embedding_config.backend: candle` or `openvino` | removed |
 | `variant`, `use_modernbert`, `use_mmbert_32k` | removed: the runtime reads the architecture from the model |
 | `mlp.device` on the MLP selection algorithm | removed: the MLP selector runs in the router |
+| `grounding.nli_contradiction_penalty` of the fusion algorithm | `grounding.contradiction_penalty`: grounding now reads the hallucination detector |
 
 ### Model names that changed
 

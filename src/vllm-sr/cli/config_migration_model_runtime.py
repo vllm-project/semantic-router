@@ -291,6 +291,13 @@ def _migrate_modules(catalog: dict[str, Any], notes: MigrationNotes) -> None:
         path = ".".join((base, *keys))
         _replace_module_model(path, module, model_field, mapping_field, notes)
         _drop_local_selectors(path, module, notes)
+    guard = _dict_at(modules, "prompt_guard")
+    if guard is not None and str(guard.get("model_type") or "").lower() == "candle":
+        guard.pop("model_type")
+        notes.changed(
+            base + ".prompt_guard.model_type",
+            "removed; the runtime detects the model architecture from the package",
+        )
     hallucination = _dict_at(modules, "hallucination_mitigation")
     if hallucination is not None:
         _migrate_hallucination(base + ".hallucination_mitigation", hallucination, notes)
@@ -448,6 +455,15 @@ def _migrate_decision(
     if mlp is not None and mlp.pop("device", None) is not None:
         notes.changed(
             path + ".algorithm.mlp.device", "removed; the MLP selector runs in Go"
+        )
+    grounding = _dict_at(decision, "algorithm", "fusion", "grounding")
+    if grounding is not None and "nli_contradiction_penalty" in grounding:
+        penalty = grounding.pop("nli_contradiction_penalty")
+        grounding.setdefault("contradiction_penalty", penalty)
+        notes.changed(
+            path + ".algorithm.fusion.grounding.nli_contradiction_penalty",
+            "-> contradiction_penalty; grounding reads the hallucination detector, "
+            "not an NLI model",
         )
 
 
