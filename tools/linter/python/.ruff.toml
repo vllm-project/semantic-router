@@ -84,6 +84,7 @@ ignore = [
 "bench/grounded_fusion/test_*.py" = ["PLR2004"]
 "src/training/model_classifier/modality_routing_classifier/test_*.py" = ["PLR2004"]
 "src/training/model_classifier/modality_routing_classifier/label_audit/test_*.py" = ["PLR2004"]
+"src/training/model_classifier/modality_routing_classifier/exploration_lfm25_scx/test_*.py" = ["PLR2004"]
 "bench/test_*.py" = ["PLR2004"]
 "bench/reasoning/test_*.py" = ["PLR2004"]
 "bench/agent_crew/test_*.py" = [
@@ -137,6 +138,61 @@ ignore = [
   "PLC0415",
   "PLR2004",
   "SIM118",
+]
+# These training and verification scripts keep their pre-existing local style;
+# the Hugging Face organization rename touches them without restyling them.
+# Correctness rules that are not listed here remain enabled.
+"src/training/model_classifier/hallucination_detection_classifier/finetune.py" = [
+  "F541",
+  "F841",
+  "I001",
+  "PLR2004",
+  "UP015",
+  "UP032",
+  "UP045",
+]
+"src/training/model_classifier/hallucination_detection_classifier/prepare_data.py" = [
+  "F401",
+  "F541",
+  "UP015",
+  "UP045",
+]
+"src/training/model_classifier/user_feedback_classifier/configs/config.py" = [
+  "I001",
+  "PLW0108",
+  "UP006",
+  "UP035",
+  "UP045",
+]
+"src/training/model_classifier/user_feedback_classifier/data_processing/verify_dataset_labels.py" = [
+  "C416",
+  "F401",
+  "F541",
+  "I001",
+  "PLR2004",
+  "PLW0603",
+  "PLW2901",
+  "UP006",
+  "UP035",
+  "UP045",
+]
+"src/training/model_classifier/verify_text_classification_datasets.py" = ["RUF100"]
+"src/training/model_embeddings/cache_embeddings/evaluate_multi_domain.py" = [
+  "F401",
+  "F541",
+  "I001",
+  "PLC0415",
+  "PLR2004",
+  "RUF059",
+  "UP006",
+  "UP035",
+]
+"src/training/model_embeddings/domain_adapted_embeddings/train.py" = [
+  "F541",
+  "RUF013",
+  "RUF059",
+  "UP006",
+  "UP035",
 ]
 "src/vllm-sr/tests/test_hybrid_validator.py" = ["I001"]
 "src/vllm-sr/tests/test_latency_validation.py" = ["I001"]
