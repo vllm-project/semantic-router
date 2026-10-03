@@ -69,6 +69,9 @@ class Block:
     language: str
     title: str
     text: str
+    # "```yaml alternative" marks a fragment that replaces the page's earlier
+    # fragments instead of adding to them.
+    alternative: bool = False
 
     @property
     def where(self) -> str:
@@ -81,9 +84,16 @@ def _blocks(language: str) -> list[Block]:
         for match in FENCE.finditer(page.read_text(encoding="utf-8")):
             if match.group(1) != language:
                 continue
-            title = TITLE.search(match.group(2))
+            meta = match.group(2)
+            title = TITLE.search(meta)
             blocks.append(
-                Block(page, language, title.group(1) if title else "", match.group(3))
+                Block(
+                    page,
+                    language,
+                    title.group(1) if title else "",
+                    match.group(3),
+                    alternative="alternative" in meta.split(),
+                )
             )
     return blocks
 
@@ -172,7 +182,7 @@ def _page_configs() -> list[tuple[str, dict]]:
         if block.page != page:
             page, merged = block.page, {}
         fragment = yaml.safe_load(block.text)
-        if "version" in fragment:
+        if "version" in fragment or block.alternative:
             merged = {}
         merged = _merge(merged, fragment)
         configs.append((f"{block.where}#{index}", copy.deepcopy(merged)))
