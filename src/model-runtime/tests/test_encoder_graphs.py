@@ -58,5 +58,8 @@ def test_graph_replays_are_the_eager_bucket_bit_for_bit():
     flat = ids[mask.bool()]
     with torch.inference_mode():
         outputs = [graphs(flat, lengths, (4,), False)[4] for _ in range(4)]
-    assert graphs.receipt()["captures"] == 1 and graphs.receipt()["replays"] == 2
+        wide = graphs(torch.randint(3, 300, (400,)), [400], (4,), False)[4]
+    assert graphs.receipt()["captures"] == 1 and graphs.receipt()["replays"] == 3
     assert all(torch.equal(outputs[0], value) for value in outputs[1:])
+    assert wide.shape == (400, CONFIGS["yarn"]["hidden_size"])
+    assert graphs.receipt()["packed"] == 1
