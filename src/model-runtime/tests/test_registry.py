@@ -182,3 +182,22 @@ def test_a_hub_package_without_a_manifest_keeps_its_pointer_files(
         ["model.safetensors"],
     )
     assert calls[-1] == ["model.safetensors"] and ref.revision == revision
+
+
+def test_named_files_hash_only_what_a_family_loads(tmp_path):
+    from vllm_sr_runtime.registry.artifacts import named_files, sha256_file
+
+    (tmp_path / "config.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "large.onnx").write_bytes(b"\0" * 64)
+    assert named_files(tmp_path, ["config.json"]) == {
+        "config.json": sha256_file(tmp_path / "config.json")
+    }
+    with pytest.raises(PackageError, match="misses"):
+        named_files(tmp_path, ["model.safetensors"])
+    with pytest.raises(PackageError, match="unsafe"):
+        named_files(tmp_path, ["../config.json"])
+    outside = tmp_path.parent / "outside.json"
+    outside.write_text("{}", encoding="utf-8")
+    (tmp_path / "linked.json").symlink_to(outside)
+    with pytest.raises(PackageError, match="link"):
+        named_files(tmp_path, ["linked.json"])

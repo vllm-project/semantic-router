@@ -91,23 +91,28 @@ def test_padded_rows_match_transformers_bit_for_bit(name):
 
 
 @pytest.mark.reference
-def test_layer_exits_are_the_final_norm_of_each_layer():
+@pytest.mark.parametrize("normalize", [False, True])
+def test_layer_exits_follow_transformers_hidden_states(normalize):
     config = CONFIGS["yarn"]
     backbone, state = native(config)
     model = reference(config, state)
     ids, mask = batch([7, 11])
     layout = padded_layout(mask, 2, 11, backbone.window, "cpu")
     with torch.inference_mode():
-        exits = backbone.encode(ids, layout, exits=(1, 2, 4))
+        exits = backbone.encode(ids, layout, (0, 1, 2, 4), normalize_exits=normalize)
         hidden = model(
             input_ids=ids, attention_mask=mask, output_hidden_states=True
         ).hidden_states
         # Transformers' last captured state is already the final-normed output.
         expected = {
-            layer: hidden[layer] if layer == 4 else model.final_norm(hidden[layer])
-            for layer in (1, 2, 4)
+            layer: (
+                model.final_norm(hidden[layer])
+                if normalize and layer < 4
+                else hidden[layer]
+            )
+            for layer in (0, 1, 2, 4)
         }
-    assert sorted(exits) == [1, 2, 4]
+    assert sorted(exits) == [0, 1, 2, 4]
     for layer, value in exits.items():
         assert torch.equal(value[0, :7], expected[layer][0, :7])
         assert torch.equal(value[1], expected[layer][1])
@@ -232,6 +237,54 @@ def test_layer_exits_outside_the_encoder_are_refused():
     ids, _ = batch([5])
     layout = packed_layout([5], backbone.window, "cpu")
     with pytest.raises(ValueError, match="layer exits"):
-        backbone.encode(ids[0], layout, exits=(0,))
+        backbone.encode(ids[0], layout, exits=(-1,))
     with pytest.raises(ValueError, match="layer exits"):
         backbone.encode(ids[0], layout, exits=(5,))
+
+
+def test_native_engine_encodes_packed_and_padded_batches(tmp_path):
+    from vllm_sr_runtime.accel.cpu import CPUAccelerator
+    from vllm_sr_runtime.engines.native.engine import NativeEngine
+    from vllm_sr_runtime.plugins.base import (
+        BackboneSpec,
+        DtypePolicy,
+        EncoderBatch,
+        EngineOptions,
+        ModelSpec,
+    )
+
+    config = CONFIGS["yarn"]
+    state = random_backbone("modernbert", config, seed=7)
+    save({f"model.{n}": v for n, v in state.items()}, tmp_path / "model.safetensors")
+    backbone, _ = native(config, seed=7)
+    spec = ModelSpec(
+        "tiny",
+        BackboneSpec("modernbert", config, (tmp_path / "model.safetensors",), "model."),
+        DtypePolicy(autocast=None, bf16_resident=False),
+        max_input_tokens=4096,
+        encoder=True,
+    )
+    accelerator = CPUAccelerator()
+    model = NativeEngine().load(
+        spec, accelerator, accelerator.devices()[0], EngineOptions()
+    )
+    lengths = [9, 3, 14]
+    ids, mask = batch(lengths, seed=4)
+    padded = model.encode(EncoderBatch(ids, mask, layers=(2, 4))).hidden
+    packed = model.encode(
+        EncoderBatch(ids[mask.bool()], None, layers=(2, 4), lengths=lengths)
+    ).hidden
+    with torch.inference_mode():
+        assert torch.equal(padded[4], backbone(ids, mask))
+    start = 0
+    for row, length in enumerate(lengths):
+        for layer in (2, 4):
+            torch.testing.assert_close(
+                packed[layer][start : start + length],
+                padded[layer][row, :length],
+                rtol=0,
+                atol=1e-5,
+            )
+        start += length
+    with pytest.raises(ValueError, match="packed lengths"):
+        model.encode(EncoderBatch(ids[0], None, lengths=[4]))
