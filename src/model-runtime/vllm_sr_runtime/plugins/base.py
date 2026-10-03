@@ -226,6 +226,26 @@ class EncoderOutput:
     outputs: dict[str, torch.Tensor] = field(default_factory=dict)
 
 
+@dataclass
+class TreeBatch:
+    """A causal prefix computed once, and blocks that each continue from it.
+
+    The prefix runs as one unpadded causal sequence; every block attends to
+    the prefix and to itself (causally), with positions that continue after
+    the prefix, so a block's states equal those of the sequence prefix + block.
+    """
+
+    prefix: list[int]
+    blocks: list[list[int]]
+
+
+@dataclass
+class TreeOutput:
+    """Final hidden states of every block's tokens, ``[blocks, width, hidden]`` (rows padded at the end)."""
+
+    hidden: torch.Tensor
+
+
 class EngineModel(ABC):
     """A backbone loaded on one device."""
 
@@ -239,6 +259,10 @@ class EngineModel(ABC):
     def encode(self, batch: EncoderBatch) -> EncoderOutput:
         """Run an encoder and return hidden states at the requested exits or graph outputs."""
         raise NotImplementedError(f"{type(self).__name__} has no encoder forward")
+
+    def tree(self, batch: TreeBatch) -> TreeOutput:
+        """Run a prefix once and every block from it (decoder backbones with a tree forward)."""
+        raise NotImplementedError(f"{type(self).__name__} has no tree forward")
 
     @abstractmethod
     def parameter_count(self) -> int: ...
