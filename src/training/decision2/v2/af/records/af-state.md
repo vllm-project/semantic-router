@@ -2,6 +2,186 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-03 00:20Z (08:20 UTC+8) — all factory seeds done; HAND-OFF (continuation needed)
+
+- **Every factory seed has ended; no factory GPU job is running.** Last ones: `4b-LHS17IB4-lrq` s2 (node C GPU1,
+  00:0xZ), `KIB4-lrh` s1 / s2 and `KIB4-lrq` s1 (node A, 00:0xZ), `KIB4-lrhh` s1 / s2 (node B, 00:04–00:05Z).
+- **Low-LR deliveries.** 4B (node F `/data/dev2/runs/af/4b/soup`): `4b-SDMLIB4-lrh` `de1ab06b…`, `4b-LHS17ML-lrh`
+  `a9ab8c81…`, `4b-LHS17IB4X-lrh` `77f3dba1…`, `4b-SDML-lrh` `ff44487d…`; `4b-LHS17IB4-lrq` `f95c15e6…` was built on node
+  C by the 4B owner after the factory's build hit a lease precondition (GPU6 had gone to 27B). 9B
+  (`/data/dev2/runs/af/9b/soup`): node A `KIB4-lrh` `7c27cd54…`, `KIB4-lrh-a40` `7878d03f…`, `KIB4-lrq-a40` `1dd8cc3b…`
+  (one seed); node B `KIB4-lrhh` `0bd35ed6…`, `KIB4-lrhh-a40` `15892170…` → 9B owner e28aa509.
+- **GPU-h (launch receipts, wall clock × one GPU):** training, preflights and merges 84.6 (node A 23.6, node B 21.0,
+  node C 34.6, node F 5.5); Index ≈ 4.8 (`AF-KF-a40` 2.71, the factory's share of `AF-4b-LHS17IB4ML` ≈ 1.9, parity
+  gates). **Total ≈ 89.5 of the 130 GPU-h approved.**
+- **Continuation steps (amendment 11 backlog, ready and locked on node B; mirror `7eb2a7037`):**
+  1. When a node A / B GPU is idle > 20 min and the 4B owner / 27B don't claim it (COORDINATION 04:58 / 05:55 rules),
+     launch `AF_NODE=b AF_SIZE=9b bash <mirror>/…/v2/af/ops/af-chain.sh launch <mirror> <gpu> KIB4-lrhh:s3:25` (then
+     `KIB4-lrhh:s4:26`, `KXH:s1:27`, `KXH:s2:28`; KX is locked on node B only).
+  2. When a pair ends, build its arm soup on node B (CPU, `af-soup.sh`, no α point): `KXH` from its two seeds;
+     `KIB4-lrhh-x4` = `[soup:KIB4-lrhh × 2, soup of s3–s4 × 2]`. Post the names and hashes for the 9B owner.
+  3. Keep a standing backlog of ≥ 4 ready arms (COORDINATION 04:58), commit state every ≤ 30 min, never `pkill` by
+     pattern on shared nodes (stop chains by their recorded process group), lease-check every GPU first.
+
+## 2026-10-02 23:40Z (07:40 UTC+8) — SDML-lrh delivered; last seeds running
+
+- `4b-SDML-lrh` s1 / s2 DONE (23:13 / 23:10Z); soup `ff44487d…` built and copied to node F. `4b-LHS17IB4-lrq` s1 DONE
+  (23:07Z), s2 on node C GPU1 (≈ 00:05Z). Node C GPU5–7 released.
+- 9B: `KIB4-lrh` s1 / s2 and `KIB4-lrq` s1 (node A) and `KIB4-lrhh` s1 / s2 (node B) at ≈ 75% (≈ 00:30Z); their α = .4
+  points and arm soups build automatically for the 9B publisher.
+
+## 2026-10-02 23:05Z (07:05 UTC+8) — low-LR soups delivered as their seeds end
+
+- Built on node C and copied to node F (lists equal), FP32 model SHA-256: `4b-SDMLIB4-lrh` `de1ab06b…`,
+  `4b-LHS17ML-lrh` `a9ab8c81…`, `4b-LHS17IB4X-lrh` `77f3dba1…`; full-LR `4b-SDMLIB4W2` `69c4f53f…`, `4b-SDMLIB4-UP`
+  `4ca2e5f8…`, `4b-LHS17IB4-UP` `7a5b0505…`. `4b-LHS17ML-lrh` s1 / s2 and `4b-LHS17IB4X-lrh` s1 / s2 DONE ≈ 22:35Z;
+  node C GPU2–4 released to the 4B owner.
+- Training: node C GPU5 / 6 `4b-SDML-lrh` s1 / s2, GPU7 / 1 `4b-LHS17IB4-lrq` s1 / s2; node A GPU5–7 `KIB4-lrh` s1 / s2,
+  `KIB4-lrq` s1; node B GPU2 / 3 `KIB4-lrhh` s1 / s2.
+
+## 2026-10-02 22:25Z (06:25 UTC+8) — low-LR soups for the 4B owner; Nox-4B is the factory's arm
+
+- **Nox-4B `c60d3b5c` = `4b-LHS17IB4-lrh`** (the factory's half-LR arm, amendment 4), released by the 4B owner
+  (COORDINATION 06:00 / 06:05; values in its record).
+- Wave 7 UP pairs complete: `4b-SDMLIB4-UP` s1 / s2, `4b-LHS17IB4-UP` s1 / s2; `4b-LHS17ML-UP` s1 only.
+- On the 4B owner's request (06:15) the factory builds the two-seed soups of `4b-SDMLIB4-lrh`, `4b-SDMLIB4W2`,
+  `4b-SDMLIB4-UP`, `4b-LHS17IB4-UP`, `4b-LHS17ML-lrh`, `4b-LHS17IB4X-lrh`, `4b-SDML-lrh`, `4b-LHS17IB4-lrq` on node C
+  (`28b54d6cb`; LoRA merges share node C GPU6 with a factory seed, `AF_MERGE_SHARED=1`) and copies each to node F.
+- 9B: waiting CPU builds of `KIB4-lrh-a40`, `KIB4-lrh`, `KIB4-lrq-a40` (node A) and `KIB4-lrhh-a40`, `KIB4-lrhh`
+  (node B) for the 9B publisher.
+
+## 2026-10-02 21:55Z (05:55 UTC+8) — KIB4R2 done; the factory claims no new GPUs
+
+- `KIB4R2` s1 / s2 DONE 21:28 / 21:30Z (no failure, no cap). Node B built `KIB4R2-a40` `c778fe65…` and the arm soup
+  `KIB4R2` `b484ef18…` → 9B publisher. Node B GPU4 / 6 released; COORDINATION 05:38 routes them and the next idle GPUs
+  to 27B #6.
+
+## 2026-10-02 21:35Z (05:35 UTC+8) — lower-LR arms first (amendment 10)
+
+- The 4B owner's read: `4b-LHS17IB4-lrh` (half LoRA / head LR, factory amendment 4) passes the Nox-4B gate and is
+  being released by the 4B owner (COORDINATION 05:20; values in its record).
+- **Stopped (re-prioritised, not failed; disclosed in the markers):** `4b-SDMLIB4-UP2` s1 / s2, `4b-LHS17IB4-UP2`
+  s1 / s2, `KIB4R-W2` s1 / s2, `KIB4-e2` s1 (each minutes in); not started: `4b-LHS17IB4ML-UP`, `4b-LHS23IB4-UP`,
+  `4b-LHS17IB4X-UP` s1 / s2, `4b-LHS17ML-UP` s2, and `KIB4-lrq` s2 (node B GPU7 went to the 9B publisher's KIB4H).
+- **Training:** node C GPU1–4 `4b-LHS17ML-lrh` s1 / s2, `4b-LHS17IB4X-lrh` s1 / s2 (since 21:27Z); queued on node C:
+  `4b-SDML-lrh` s1 / s2 (GPU5 / 6; lock `4b-SDML` = SDML's TRAIN `fef6b036…` + `teacher-ml` `b95c5e63…`),
+  `4b-LHS17IB4-lrq` s1 / s2 (GPU7 / GPU1). Node A GPU5 / 6 `KIB4-lrh` s1 / s2, GPU7 `KIB4-lrq` s1; node B GPU2 / 3
+  `KIB4-lrhh` s1 / s2; node B GPU4 / 6 `KIB4R2` s1 / s2. Wave-7 UP seeds finishing on node C GPU5–7.
+
+## 2026-10-02 21:25Z (05:25 UTC+8) — backlog (amendment 9) launched on 9 idle GPUs
+
+- Weights locked: `4b-SDMLIB4-UP2` `b4b99b43…`, `4b-LHS17IB4-UP2` `611b59a4…`, `4b-LHS17IB4ML-UP` `e6bf77c4…`,
+  `4b-LHS23IB4-UP` `cfff578d…` (node C); `KIB4R-W2` `47545a04…` (node B). `KIB4-lrh` / `KIB4-e2` reuse the KIB4 lock.
+- Claimed after > 20 min idle (released leases, 0% use; COORDINATION 04:58 rule), 21:21–21:22Z: node C GPU1–4
+  `4b-SDMLIB4-UP2` s1 / s2, `4b-LHS17IB4-UP2` s1 / s2 (then `4b-LHS17IB4ML-UP` s1 / s2, `4b-LHS23IB4-UP` s1 / s2);
+  node A GPU5 / 6 `KIB4-lrh` s1 / s2 (seeds 15 / 16), GPU7 `KIB4-e2` s1 (seed 19, cap 6.0); node B GPU2 / 3
+  `KIB4R-W2` s1 / s2 (seeds 17 / 18).
+- Wave 7: `4b-SDMLIB4W2` s2, `4b-LHS17IB4-UP` s1, `4b-SDMLIB4-UP` s1 DONE (20:41–20:58Z); the rest running / queued.
+- Standing backlog (ready, locked, no preparation): more seeds of `4b-LHS17UP` (s5 / s6), `4b-SDMLIB4-UP` and
+  `4b-LHS17IB4-UP` (s3 / s4), and 9B `KIB4W3` (s3 / s4).
+
+## 2026-10-02 20:15Z (04:15 UTC+8) — running
+
+- Node C: `4b-SDMLIB4-UP` s1 (GPU5), `4b-LHS17IB4-UP` s1 (GPU7), `4b-SDMLIB4W2` s2 (GPU6) in their full runs; the rest
+  of wave 7 is queued. Node B: `KIB4R2` s1 / s2 in their full runs. No failure. Node C GPU1–4 are the 4B owner's.
+
+## 2026-10-02 19:50Z (03:50 UTC+8) — 4B wave 7 (amendment 8, the 4B owner's UP request) scheduled
+
+- UP weights (teacher-target rows ×1.5, IB rows ×1; byte-equal to M17's `4b-LHS17UP` weights on S17's TRAIN) built and
+  locked on node C: `4b-SDMLIB4-UP` `26e84ee3…` (released share of the loss weight .745), `4b-LHS17IB4-UP` `c75dbb98…`
+  (.644), `4b-LHS17ML-UP` `bfa245a2…` (.782), `4b-LHS17IB4X-UP` `debe1c54…` (.659). TRAIN / teacher files unchanged
+  (audited).
+- Node C chains (seeds 20260926 / 20260927): GPU5 `4b-SDMLIB4-UP` s1 → `4b-LHS17ML-UP` s1 → `4b-LHS17IB4X-UP` s1;
+  GPU6 `4b-SDMLIB4W2` s2 → `4b-SDMLIB4-UP` s2 → `4b-LHS17ML-UP` s2; GPU7 `4b-LHS17IB4-UP` s1 → s2 →
+  `4b-LHS17IB4X-UP` s2. End ≈ 00:00–00:30Z.
+- **`4b-SDMLIB4-e2` s1 stopped** at 19:42Z after ≈ 18 min of its full run, to free GPU7 for wave 7 (marker STOPPED;
+  not rerun). Its arm has no artifact.
+
+## 2026-10-02 19:40Z (03:40 UTC+8) — batch-3 4B seeds partly done
+
+- DONE on node C (no failure, no cap): `4b-SDMLIB4-lrh` s1 (GPU7) / s2 (GPU6), 19:25–19:27Z; `4b-SDMLIB4W2` s1 (GPU5),
+  19:32Z. Handed to the 4B owner (COORDINATION 03:38). Training: `4b-SDMLIB4W2` s2 (GPU6, since 19:25Z),
+  `4b-SDMLIB4-e2` s1 (GPU7, since 19:27Z, cap 3.5); node B `KIB4R2` s1 / s2 (GPU4 / 6). Node C GPU5 released.
+- GPU-h so far ≈ 54 (training and merges ≈ 49 from the launch receipts; Index ≈ 4.6: `AF-KF-a40` 2.71 and the
+  factory's share of `AF-4b-LHS17IB4ML`'s shards ≈ 1.9, plus parity gates). Projected end ≈ 64 of 130.
+
+## 2026-10-02 19:10Z (03:10 UTC+8) — batch-2 9B points built; α ladder staged; batch 3 training
+
+- **`AF-KF-a40-bf16` gate (paired bootstrap vs `M10-KIB4-a40-bf16`, 2,000 replicates):** the 95% upper bound is
+  below 0 — significantly below the current Lux release; not a successor (values private).
+- **Node B** (`/data/dev2/runs/af/9b/soup`): `KIB4W3` s1 / s2 and `KIB4R` s1 / s2 DONE 18:53Z (no failure, no cap).
+  Built (CPU): `KIB4W3-a40` `be26e890…`, `KIB4R-a40` `f3c9ba05…` (`[s1, s2, Lux × 3]`), arm soups `KIB4W3` `b2cbbb7b…`,
+  `KIB4R` `5b879bf0…` → 9B publisher (M10 amendment 9 item 4). `KIB4R2` s1 / s2 (seeds 13 / 14) on GPU4 / 6 since
+  18:53Z. Node B GPU2 / GPU3 released at 18:53Z.
+- **Node A α ladder (amendment 6), built and staged** (FP32 → BF16, loaded 7,940,895,744, T = 1): `KIB4-a50`
+  `319ca812…` → `2a8f165c…`; `KF-a50` `2a1c8624…` → `37fa34d8…`; `KIB4Q-a60` `229e0d07…` → `69dee446…`; `KF-a60`
+  `db2cb194…` → `44ae7168…`; `KIB4Q-a50` `7c3bd6cd…` → `c8e32f2b…` (packages `ix1/af/AF-<point>-bf16-re51f9881`).
+- **Node C:** `4b-SDMLIB4-lrh` s1 / s2 (GPU7 / 6) and `4b-SDMLIB4W2` s1 (GPU5) training; `4b-SDMLIB4W2` s2 and
+  `4b-SDMLIB4-e2` queued behind them.
+
+## 2026-10-02 18:35Z (02:35 UTC+8) — amendment 7 not started; node B 9B points queued for M10 amendment 9
+
+- **Amendment 7** (`1e5060c3d`; `4b-LHS17IB4-e2`, `4b-LHS17IB4W2` on node C GPU3–4): **not started**. The 9B publisher
+  had leased those GPUs for its `M10-KIB4W2-a40-bf16` run before the factory's lease check; both chains were cancelled
+  (by their recorded process groups) and the runs marked STOPPED. The `4b-LHS17IB4W2` weights file is built and locked
+  on node C (unused).
+- **Node B soups (CPU, waiting for the seeds; `86777e681`):** `KIB4W3-a40`, `KIB4R-a40` (M10 amendment 9 item 4,
+  `[s1, s2, Lux × 3]`), then the arm soups `KIB4W3`, `KIB4R`, then `KIB4R2-a40` / `KIB4R2`. Node B's Lux member is
+  `9b-KIB4W3-s1`'s zero-step checkpoint, byte-equal to the pinned K-a13IB Lux member list.
+
+## 2026-10-02 18:30Z (02:30 UTC+8) — KF-a40 measured; 9B α ladder (amendment 6); batch 3 running
+
+- **`AF-KF-a40-bf16` measured once** (node A, panel-7, parity PASS, 7 / 7 shards exit 0, 120,224 ok + 2 unsupported
+  rows, 2.71 GPU-h): **not a successor** (below the current Lux release's run; values private). Bootstraps vs
+  `M10-KIB4-a40-bf16` finishing on node A CPU.
+- **Amendment 6** (`6b11fb647`): α ladder for the 9B seed soups, CPU only — `KIB4-a50` (M10's two-seed `KIB4`,
+  imported from node B as `soup/m10-KIB4`, model `2406b058…`, lists equal), `KIB4Q-a50` / `-a60`, `KF-a60`; each
+  built and staged as `AF-<point>-bf16` with `KF-a50` for the 9B publisher (IX1 entries `KIB4-a50`, `KIB4Q-a50`,
+  `KIB4Q-a60`, `KF-a60`, a separate launcher commit).
+- **Batch 3** (amendment 5, `13534c6b2`): `KIB4R2` TRAIN `63d668cf…` / teacher `d0412d31…` (150,902 rows; audit:
+  planted 200 / 200, **0 item rows**, 219 duplicate-class rows, `audit.json` `bfdb24e4…`), locked on node B; its
+  seeds follow `KIB4R` on GPU4 / 6. `4b-SDMLIB4W2` weights (IB4 rows ×2, share .081 → .181 of the loss weight)
+  locked on node C; s1 on GPU5 since 18:14Z; s2 (GPU6) and `4b-SDMLIB4-e2` (GPU7, cap 3.5) queued.
+
+## 2026-10-02 18:20Z (02:20 UTC+8) — HAND-OFF of batches 1–2; new split (COORDINATION 01:47–02:00)
+
+The 4B owner (ff70d16e) builds every 4B soup and runs every 4B Index; the 9B publisher (9087b208) measures the
+factory's 9B arms and soups (M10 amendment 8). The factory only trains arms from now on. Factory scripts that would
+start soups or Index runs were stopped (node F `next-f-2.sh` / `next-f-3.sh`, node A `af-measure.sh`); node F's
+`soups-all.sh` (owner-requested) finished `4b-LHS17UP-x4`, `4b-AFxALL`, `4b-AFxALL2`.
+
+### 9B → 9B publisher (node A, `/data/dev2/runs/af/9b`; Lux member = `9b-KIB4-s4` zero-step, = K-a13IB's)
+
+| Item | Model SHA-256 | Members (BEST checkpoints) |
+| --- | --- | --- |
+| seeds | — | `KIB4` s4 (seed 3) `checkpoint-0002082`, s5 (4) `-0001568`; `KIB4W2` s1 (5) `-0002078`, s2 (6) `-0001824`; `KIB4L2` s1 (7) `-0002081`, s2 (8) `-0001826` (`arms/full/9b-<arm>-s<n>/`) |
+| `KF` | `2c1aae96…` | M10 `KIB4P` × 3 (`159bfda1…`, imported), the six factory seeds |
+| `KF-a40` / `KF-a50` | `f555d2f7…` / `2a1c8624…` | `[KF, KF, Lux × 3]` / `[KF, Lux]` |
+| `KFK`, `KFxKIB-a40` | `0d1dd279…`, `900d4045…` | `[KF, KF, KIB]` (KIB `794ebfd2…`, imported); `[KFK, KFK, Lux × 3]` |
+| `KIB4W2-a40` / `KIB4L2-a40` | `9f467afe…` / `1cacc2c4…` | the arm's two seeds + Lux × 3 |
+| `KIB4Q` | `da595d06…` | M10 `KIB4P` × 3, KIB4 s4, s5 (five-seed KIB4) |
+
+- **Measured by the factory:** only `AF-KF-a40-bf16` (BF16 package `ix1/af/AF-KF-a40-bf16-re51f9881`; node A, panel-7,
+  parity PASS; scoring and the bootstraps vs `M10-KIB4-a40-bf16` follow its last shard). Every other 9B point is
+  unmeasured and staged only as FP32 soups.
+- **Batch-2 9B seeds still training on node B:** `KIB4W3` s1 / s2 (GPU2 / 3), `KIB4R` s1 / s2 (GPU4 / 6); end ≈ 19:40Z.
+
+### 4B → 4B owner (soups on node F `/data/dev2/runs/af/4b/soup`, seed soups also on node C)
+
+| Soup | Model SHA-256 | Members |
+| --- | --- | --- |
+| `4b-LHS17IB4-s45` / `4b-SDMLIB4-s45` / `4b-LHS17UP-s34` | `ce5c1401…` / `16b34cfb…` / `6fa1e8da…` | the factory's two seeds of each |
+| `4b-LHS17IB4-x5` / `4b-SDMLIB4-x5` / `4b-LHS17UP-x4` | `54c5d80e…` / `61a925d7…` / `4422a353…` | M17's x3 (× 3) or two-seed soup (× 2) + the factory's two-seed soup (× 2) |
+| `4b-LHS17IB4-lrh` / `4b-LHS17IB4ML` / `4b-LHS23IB4` | `0b40be94…` / `9cb18a6a…` / `2d0a50bd…` | the arm's two seeds |
+| `4b-AFxALL` / `4b-AFxALL2` | `8f282287…` / `70612d1c…` | amendment 2 (12 / 10 members) |
+
+- Batch-2 4B seeds DONE on node C: `4b-LHS17IB4X` s3 / s4, `4b-LHS17ML` s3 / s4 (the owner builds their `-s34` soups).
+- `4b-SDMLIB4-lrh` s1 / s2 were lost at the node F return (00:35 UTC+8, markers FAILED there, not a preflight
+  failure); re-run on node C GPU7 / GPU6 since 18:08Z (same seeds). A first GPU5 launch overlapped the owner's merge
+  job for ≈ 1 min; it was stopped at its zero-step and its outputs moved to `arms/void/gpu5-overlap-*`.
+- `AF-4b-LHS17IB4ML-bf16` (node F; 6 of 8 shards ended before the return) and `AF-4b-LHS23IB4-bf16` (never started):
+  the owner's.
+
 ## 2026-10-02 16:20Z (00:20 UTC+8) — batch 2 launched (amendment 4; +30 GPU-h, 90 total)
 
 | Node / GPU | Batch-2 seed | Since |
