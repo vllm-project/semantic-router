@@ -9,6 +9,10 @@ from cli.model_runtime_defaults import (
 )
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
+from cli.validator_decision_model import (
+    model_runtime_deployment_error,
+    validate_decision_model_references,
+)
 from cli.validator_pii_window import validate_pii_windows
 
 DEVICE_SELECTOR_PARTS = 2
@@ -89,6 +93,7 @@ def validate_model_runtime_references(config: UserConfig) -> list[ValidationErro
                     )
                 )
     errors.extend(validate_pii_windows(config, deployments))
+    errors.extend(validate_decision_model_references(config, deployments))
     return errors
 
 
@@ -96,6 +101,11 @@ def _binding_error(
     consumer, binding, deployment, profile=None, *, global_default=False
 ):
     provider = deployment.get("provider") or "candle"
+    if provider == "model_runtime":
+        return (
+            "model_runtime deployments serve decision signals and the decision "
+            "algorithm, not task bindings"
+        )
     if binding.operating_point is not None and not consumer.startswith("classifier."):
         return "operating_point is only supported by generic classifier bindings"
     contracts = {
@@ -281,6 +291,10 @@ def _deployment_error(name, deployment, external_names):
     if not name or name.strip() != name:
         return "Deployment name must be non-empty and trimmed"
     provider = deployment.get("provider")
+    if provider == "model_runtime":
+        return model_runtime_deployment_error(deployment)
+    if deployment.get("profile") or deployment.get("endpoint"):
+        return "profile and endpoint apply only to model_runtime deployments"
     if provider in {"candle", "ort"}:
         if not (deployment.get("artifact") or "").strip() or deployment.get(
             "external_model"

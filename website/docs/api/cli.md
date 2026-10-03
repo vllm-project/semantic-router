@@ -1318,7 +1318,7 @@ Probe a real route and assert complete assistant delivery for expected 2xx.
 ## `vllm-sr serve` {#vllm-sr-serve}
 
 ```text
-Usage: vllm-sr serve [OPTIONS]
+Usage: vllm-sr serve [OPTIONS] [MODEL]
 ```
 
 Start vLLM Semantic Router.
@@ -1389,8 +1389,26 @@ vllm-sr serve --platform amd --startup-timeout 7200
 VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform amd
 ```
 
+```text
+ENGINE MODE:
+```
+
+```text
+vllm-sr serve MODEL [--revision SHA] [--device auto|cpu|cuda[:N]|rocm[:N]]
+                    [--host HOST] [--port N | --uds PATH] [--profile PROFILE]
+```
+
+Serves one decision model with the built-in model runtime (POST /v1/decisions,
+/v1/systemone, GET /v1/models, /health, /metrics) instead of starting the
+Router. MODEL is a Hub repository, a built-in model name or a local package
+directory. In engine mode --profile selects the numerics profile: exact
+(default, identical to the released package), shared_context, batching or
+max_speed. Router mode starts managed runtimes itself for model_runtime
+deployments in the config.
+
 | Parameter | Description |
 | --- | --- |
+| `[MODEL]` | Optional argument. Type: text. |
 | `--config TEXT` | Path to the Router configuration.  [default: config.yaml] |
 | `--replace-active-config` | Replace this local Docker stack's active runtime config from --config, discarding Dashboard edits. Default: false. |
 | `--image TEXT` | Docker image to use (default: ghcr.io/vllm-project/semantic-router/vllm-sr:v0.4.0) |
@@ -1407,10 +1425,15 @@ VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform amd
 | `--target TEXT` | Deployment target: docker, k8s (default: docker) |
 | `--namespace TEXT` | Kubernetes namespace (k8s target only) |
 | `--context TEXT` | kubectl / Helm context (k8s target only) |
-| `--profile TEXT` | Deployment profile: dev, prod (k8s target only). Selects values-&lt;profile&gt;.yaml defaults. |
+| `--profile TEXT` | Deployment profile: dev, prod (k8s target only). Selects values-&lt;profile&gt;.yaml defaults. With MODEL: the runtime numerics profile (exact, shared_context, batching, max_speed). |
 | `--chart-dir TEXT` | Path to Helm chart directory (k8s target only) |
 | `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
 | `--recipe-env NAME` | Explicitly bind one host environment variable for the active Recipe. Repeat for multiple names; NAME=value is rejected. May be repeated. |
+| `--revision TEXT` | Engine mode: 40-hex revision of MODEL. |
+| `--device TEXT` | Engine mode: auto (default), cpu, cuda[:N] or rocm[:N]. |
+| `--host TEXT` | Engine mode: TCP bind address (default 127.0.0.1). |
+| `--port INTEGER` | Engine mode: TCP port (default 8100). |
+| `--uds TEXT` | Engine mode: serve on this Unix socket instead. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr status` {#vllm-sr-status}

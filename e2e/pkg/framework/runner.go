@@ -575,6 +575,8 @@ func prebuiltFixtureImage(dockerfile string) string {
 		return os.Getenv("E2E_PREBUILT_PROVIDER_MOCKER_IMAGE")
 	case "dashboard/backend/Dockerfile":
 		return os.Getenv("VLLM_SR_DASHBOARD_IMAGE")
+	case "src/model-runtime/Dockerfile":
+		return os.Getenv("E2E_PREBUILT_MODEL_RUNTIME_IMAGE")
 	default:
 		return ""
 	}
