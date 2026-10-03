@@ -22,7 +22,7 @@ and latency accounting, with same-model and mixed-model results separated.
 ## Task List
 
 - [x] `TTS-01` Validate offline contracts, matrix planning and deterministic fixtures.
-- [ ] `TTS-02` Integrate real algorithm execution, budget enforcement and per-call
+- [x] `TTS-02` Integrate real algorithm execution, budget enforcement and per-call
   accounting.
 - [ ] `TTS-03` Add cached-panel replay, repeated sampling and voting controls.
 - [ ] `TTS-04` Add native scoring, paired reports, CI fixture and reproducible live
@@ -30,8 +30,7 @@ and latency accounting, with same-model and mixed-model results separated.
 
 ## Next Action
 
-Probe per-call evidence availability in the four existing algorithm
-implementations for `TTS-02`.
+Build the cached-panel replay and repeated-sampling controls for `TTS-03`.
 
 ## Operating Rules
 

@@ -55,6 +55,19 @@ type CallOptions struct {
 	Mode         ResponseMode
 	Logprobs     *LogprobsConfig
 
+	// Stage and Role are bounded, request-scoped execution metadata. They are
+	// intentionally separate from DecisionName because benchmark accounting
+	// needs to distinguish generation, verification, judging and synthesis even
+	// when all calls belong to one decision.
+	Stage string
+	Role  string
+
+	// Observer receives one callback before the upstream dispatch and one after
+	// parsing (or a transport/parse failure). When nil, an observer attached to
+	// the context is used. Keeping the hook optional preserves the existing
+	// client API and has no runtime cost for ordinary requests.
+	Observer CallObserver
+
 	// candidateRequest retains admission policy through final wire mutations.
 	// It is request-scoped; a shared Client never stores recipe policy.
 	candidateRequest *Request
