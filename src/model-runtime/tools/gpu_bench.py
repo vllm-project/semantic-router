@@ -6,7 +6,7 @@
 latency     the first --count prompts as single requests on the exact profile, --warmup-passes untimed passes
             (graphs are captured on a shape's second use) then one timed pass: p50 / p95 / mean, requests/s
 many        the public many-question request (``many_questions.py``) at 16, 64 and 128 questions as one request
-            on the exact profile: p50 / p95 of --runs requests
+            on the exact and the shared_context profiles: p50 / p95 of --runs requests
 throughput  the first --throughput-count prompts in waves of C concurrent requests through the scheduler, for
             the exact and the batching profiles: requests/s and the mean request latency per C
 Every request is timed with the device synchronized around it.
@@ -29,6 +29,7 @@ import many_questions  # noqa: E402
 from gpu_parity import load, system_one  # noqa: E402
 from vllm_sr_runtime.profiles.batching import BatchingProfile  # noqa: E402
 from vllm_sr_runtime.profiles.exact import ExactProfile  # noqa: E402
+from vllm_sr_runtime.profiles.shared_context import SharedContextProfile  # noqa: E402
 from vllm_sr_runtime.scheduler.scheduler import Scheduler, SchedulerLimits  # noqa: E402
 
 
@@ -99,14 +100,39 @@ def main() -> int:
     print(json.dumps({"latency": result["latency"]}), flush=True)
 
     request = many_questions.request(128)
+    shared = SharedContextProfile()
+    if shared.available(model):
+        shared = None
     result["many"] = {}
     for n in (16, 64, 128):
         questions = dict(list(request["questions"].items())[:n])
-        for _ in range(5):
-            system_one(model, exact, request["state"], questions)
-        milliseconds = [timed(request["state"], questions)[0] for _ in range(args.runs)]
-        result["many"][str(n)] = {"ms": summary(milliseconds)}
-        print(json.dumps({"many": n, "ms": result["many"][str(n)]["ms"]}), flush=True)
+        entry = {}
+        for name, profile in (("exact", exact), ("shared_context", shared)):
+            if profile is None:
+                continue
+            for _ in range(5):
+                system_one(model, profile, request["state"], questions)
+            milliseconds = [
+                timed(request["state"], questions, profile)[0] for _ in range(args.runs)
+            ]
+            entry[name] = {
+                "ms": summary(milliseconds),
+                "shared_prefix": (
+                    profile.share(
+                        model.plan(request["state"], questions).items,
+                        model.forward_token_budget(),
+                    )
+                    if name == "shared_context"
+                    else 0
+                ),
+            }
+        result["many"][str(n)] = {"ms": entry["exact"]["ms"], **entry}
+        print(
+            json.dumps(
+                {"many": n, **{k: round(v["ms"]["p50"], 2) for k, v in entry.items()}}
+            ),
+            flush=True,
+        )
 
     load_prompts = prompts[: args.throughput_count]
     plans = [model.plan(p["state"], p["questions"]) for p in load_prompts]
