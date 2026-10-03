@@ -205,6 +205,182 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 03:08 — **Coordinator tick: P2–4. Records and idle GPUs.**
+  - **Records:** the performance gate and the parity records are PR blockers (21:17 bar). So far the only committed
+    record is `docs/records/stores-algorithms.md`. **`vela1`, `embed`, `vela2`, `decision1`:** commit your parity +
+    performance records (`src/model-runtime/docs/records/<id>-*.md`, plus raw JSON next to them) as the runs finish,
+    not at IP3. Your COORDINATION numbers (vela1's 3e-5 smoke and Halu 1.59 s → 0.18 s, vela2's 24 / 24 and 60 / 60, …)
+    belong in them.
+  - **GPUs:** all 6 leased GPUs on node B (vela1 GPU0–1, embed GPU2–3, vela2 GPU4–5) read 0% at 02:46 and at 03:07.
+    Run the remaining ROCm parity / benchmark work for the gate on them now, in parallel, or release the leases.
+  - `removal` pushed (`6e7ec372a`); IP1 plan per the lead's 02:59 note.
+
+- 2026-10-04 03:06 — **Model-runtime P2–4 `decision1` (6a8380f8) → lead (23203ab9), `vela1` (f6488e31), `embed`
+  (fd9f7608): CPU dynamic int8 is faster but breaks the Decision 1.0 encoders — "only if faster" needs an accuracy
+  condition too.**
+  - **Measured (node C, 16 cores of a Zen 5 EPYC with AVX-512 VNNI, `torch.ao.quantization.quantize_dynamic` on every
+    `nn.Linear` of the three ModernBERT stacks, heads FP32; 500 requests, interleaved with FP32 in one process):**
+    1.53–1.57× faster at p50 (Kai 83.4 → 53.2 ms), but **36–48 % of decisions change** (Kai 241 / 500, Lex
+    238 / 500, Route 181 / 500), max |Δp| 0.60–0.85, p99 0.47–0.69. Per-tensor 8-bit activations against
+    ModernBERT's activation outliers is the likely cause. I will not give the Decision 1.0 packages an int8 copy
+    unless a variant keeps their decisions; measuring per-channel int8 weights and CPU BF16 autocast (AVX-512 BF16)
+    now, GPU BF16 next on GPU2. **Proposal for §5.4:** a reduced copy must also meet an accuracy floor, for example
+    ≥ 99 % label agreement with exact (embeddings: your cosine ≥ 0.999), else the family loads none. `vela1` /
+    `embed`: your ModernBERT-based heads may behave the same. Also, PyTorch 2.10 warns that
+    `torch.ao.quantization.quantize_dynamic` is deprecated (moving to torchao).
+  - **`vela1`:** I will consume your reduced-copy API for the Vela-encoder branches (choice / score stacks are
+    `BackboneSpec.branches`, so the copy must cover them too); the typed heads already run FP32 on reduced hidden
+    states (`d311c744e`).
+  - **Node C cores:** I added 80–95 for these interleaved CPU measurements (nobody listed it).
+
+- 2026-10-04 03:04 — **Model-runtime P2–4 `vela2` (cedf4b1a) → lead (23203ab9): PUSHED `29a5bd577` (PR head `5fded42f4`
+  merged; runtime suite 380 passed on CPU, GPU tests 7 / 7 on node B MI325X); one `[Harness]` contract commit and engine
+  changes for your review.**
+  - **`[Harness]` `29a5bd577`, API contract:** `Question.head` (span head, `router` | `broad`), `Question.over` also takes
+    a list of fields (untyped like `instructions`, so the Go client needs no union runtime module), and
+    `DecisionResponse.span_heads`. `openapi.gen.go` regenerated with `make model-runtime-client-generate`; router
+    `go build ./...` and `pkg/modelservice` tests pass; no router code reads `Over`.
+  - **Engine (`fast.py`, `engine.py`, `models/forest.py`, `models/qwen3_5.py`), separate commits:** the exact forest
+    forward runs the gfx942 fused kernels (bit-exact; not `gdn_prep`, whose conv differs from the packages'
+    `F.conv1d`); `fast.GraphCache` holds the graph bookkeeping and `Graphs` is a thin subclass (same receipt, same
+    limits); a graph per exact forest shape (`ForestShape`, host values, so the forest forward reads nothing back), up
+    to `MAX_FOREST_GRAPH_TOKENS` 8192. New GPU test: fused forest and its replays equal eager bit for bit.
+  - **Parity (exact):** identical on CPU and ROCm for all three sizes (0.3B 60 / 60 both; 4B 60 / 60 ROCm, 24 / 24 CPU;
+    9B 60 / 60 ROCm, CPU running), with fused kernels, forest graphs and pinned kernel choices. Approximate profiles:
+    answers within 0.017 everywhere; span probabilities up to 0.065 (4B) / 0.119 (9B) on long windowed documents, 1–2
+    span sets changed in 60.
+  - **Performance (ROCm, p50, exact vs engine):** 0.3B 8.1 / 29.4 ms vs 8.7 / 35.0 (32 / 2,048 tokens); 4B 89 / 344 vs
+    156 / 460; 9B 123 / 477 vs 218 / 632. Packed trees (`shared_context` / `batching`) 4B 53–224 ms, 9B 70–313 ms,
+    2–5× the engine's throughput. Vela 1.0 path (seven calls) on CPU: p50 253 → 129 ms, p95 1,446 → 160 ms.
+    `docs/records/vela2-{parity,performance}.md` land with the CPU finals before IP2.
+  - **Suggestion (scheduler):** the 2 ms batch window applies to every approximate profile; `shared_context` plans one
+    request at a time and only pays the wait. Your call.
+  - **`max_speed` (your 02:51):** the 0.3B takes `vela1`'s reduced ModernBERT copy through `run_approximate` once it
+    lands; the 4B / 9B already run BF16 weights, so their faster profile is the packed tree.
+
+- 2026-10-04 03:04 — **Model-runtime P2–4 `e2e-docs` (3b457b58) → `router` (bb9d5719): router-side downloads still run for
+  `model_runtime` consumers — this blocks the Kind `model-runtime` lane.**
+  - Node B, exact mirror `551436917` (contains your `ead65b1ae`), router image + CPU runtime: the fixture profile binds
+    `domain_classifier` / `pii_classifier` / `prompt_guard` to `model_runtime` deployments of local fixture packages
+    and sets `HF_HUB_OFFLINE=1`; the Router exits at start-up with `ensure models are downloaded: failed to download 4
+    out of 4 models: models/Vela-1.0-Encoder-307M-{Domain,Embedding,Guard,PII}` (`cmd/main.go`
+    `ensureKubernetesConfigModels` → `modeldownload.BuildModelSpecs`, which still plans candle / ORT artifacts for the
+    module defaults). With network the same path would download four models the runtime never reads. Please land the
+    "router-side downloads off" item for every `model_runtime` consumer (bound or implicit `@<module>`) first; I re-run
+    the lane as soon as it is on your branch. The attached runtime pod (model-runtime image) runs fine.
+  - Also failing on the PR head, not mine: `tools/ci/tests/test_pr_change_classifier.py::SelectionTests::
+    test_required_classifier_definitions_select_live_models` (`TestJailbreakDistributionRealModel` no longer exists).
+  - Done since 02:38: website build on node B green (`make docs-install`, `docs-generated-check`, translation coverage,
+    `docs-build` for en + zh-Hans, 157 s) after making links between translated and untranslated pages
+    content-root-relative; Quickstart steps 1–3 run on real models on 16 CPU cores: Kai-0.6B ready in 10.8 s,
+    `/v1/decisions` p50 211 ms (n = 20, `kind` = code), Vela Domain ready in 6.2 s, `/v1/classify` p50 17 ms (math);
+    the Quickstart shows that real answer now. Opt-in `model-runtime-real` profile pushed (real Kai-0.6B + implicit
+    Vela defaults in the Router's managed runtime); its node B run is in progress.
+
+- 2026-10-04 03:04 — **Model-runtime P2–4 `stores` (60afd248) → `removal` (00053ab2), `router` (bb9d5719): a
+  `pkg/config` failure on the PR head.** On the PR head (`3381844d5`, node B), three `pkg/config` tests fail:
+  `TestConfigContractDocsStayAligned`, `TestCurrentConfigDocsAvoidRetiredCanonicalExamples` and
+  `TestMaintainedConfigAssetsUseCanonicalV03Contract`. They still read `bench/cpu-vs-gpu/{README.md,
+  config-bench.yaml,config-bench-candle.yaml}`, which `9f2b17e81` (`removal`) deleted. Please drop those paths from
+  the lists in `docs_contract_test.go` and `maintained_asset_contract_test.go`; that is whoever owns the deletion,
+  per the lead's 01:56 rule. Mine at `e2ee0bd2d`: everything passes on node B except this and the known
+  `classification` link.
+
+- 2026-10-04 02:59 — **Model-runtime Phases 2–4 lead (23203ab9): IP1 blocker map on `5fded42f4` (node A, `make check`
+  with scratch patches for codespell and API docs).** Everything in `make check` passes except its harness step:
+  `tools/ci` tests fail on the model-test inventory — rows for tests `router` deleted (`model_discovery_test.go`,
+  `TestJailbreakDistributionRealModel`, …) and `test_model_test_results ... required_candle_owner` after `stores`'
+  `944597c44` moved the cache test off candle. With consumers on `serving` since IP1, the native model lanes cannot
+  pass in CI either: their tests now run through `servingtest.Managed` and skip without a runtime.
+  - **Decision: the model-test conversion lands at IP1, not after IP2.** **`removal` (00053ab2):** please push your
+    `[CI]` / `[Workflows]` / `[Harness]` conversion (platform executor, `platform.models-cpu`, `test-platform.yml`,
+    `run_model_tests.py` without the provider axis, `core_test_profiles.json` reconciled against `5fded42f4`, which has
+    `router` + `stores`) as IP1 commits, together with the runtime in `Dockerfile.extproc`; nothing in it needs the
+    binding directories gone. Run `make harness-check` on top of `5fded42f4` first. Binding deletion and image
+    consolidation stay after IP2.
+  - **`router` (bb9d5719):** then only my 01:56 items 1 (codespell `allReady`) and 3 (`make api-docs-generate`) are
+    yours; leave `tools/ci` to `removal` (send them the replacement test names and the env vars each reads).
+  - **IP1 plan (06:00):** I merge `router`, `removal`, `e2e-docs` as they post `INTEGRATION READY`, run `make check` +
+    `make harness-check` on node A, and take PR #4512 out of draft only when both pass.
+
+- 2026-10-04 02:57 — **Model-runtime P2–4 `removal` → lead (23203ab9), `e2e-docs` (3b457b58): the runtime is in the
+  router images — `da2aab41f`** on `xunzhuo/model-runtime-p24-removal` (= PR head `3381844d5` + one `[Build]` commit;
+  bindings kept until the deletion).
+  - **`tools/docker/Dockerfile.extproc`:** CPU PyTorch 2.10.0 + `/tmp/model-runtime[multimodal]` in their own venv
+    (`/opt/vllm-sr-runtime`), `VLLM_SR_RUNTIME_COMMAND` pointing at it, `VLLM_SR_RUNTIME_CACHE_DIR=/app/models/model-runtime`.
+    **`Dockerfile.extproc-rocm`:** the official ROCm 7.1 PyTorch 2.12.0 wheel + `fla-core` in the same kind of venv; the
+    runtime starts with `env -u LD_LIBRARY_PATH` so it loads PyTorch's own ROCm libraries, not the image's ROCm 7.0 /
+    ORT path the native router needs. **`src/vllm-sr/Dockerfile`:** its existing runtime gets `[multimodal]`.
+  - **Verified on node F (exact mirror, `--no-cache`):** `extproc` builds in 181 s; inside it the runtime writes a
+    `task_heads` fixture, serves it and answers `/v1/classify`. `vllm-sr` and `extproc-rocm` are building now; I post
+    `INTEGRATION READY` when they pass. Interim cost until the deletion: `extproc` 3.37 GB uncompressed / 1.81 GB gzip
+    (legacy 2.29 / 1.51 GB).
+  - **Preview of the end state** (router + `stores` heads, bindings deleted, the one router Dockerfile; node A,
+    `--no-cache`, scratch branch `xunzhuo/model-runtime-p24-removal-preview`, deleted after the record): `extproc` builds
+    in 86 s (legacy 164 s), 2.23 GB / 1.26 GB gzip (legacy 2.29 / 1.51); `vllm-sr` 90 s (107 s), 2.24 / 1.26 GB
+    (2.29 / 1.27). The router binary links only libc / libm / libgcc. GPU images and time-to-ready next.
+
+- 2026-10-04 02:55 — **Model-runtime P2–4 `stores` (60afd248): consumer performance gate passes; PUSHED `d0643ad48`**
+  (merges the PR branch `3381844d5`).
+  - **Consumer latency, legacy candle in process (base `1c6d372ec`) vs serving (`75c1aa5e0`):**
+    - setup: same Vela Embedding / Reranker files, same inputs, same 16 pinned cores on node D; the runtime used the
+      `native` engine (PyTorch 2.14 CPU);
+    - p50 per operation, legacy → serving:
+
+      | Operation | Legacy | Serving |
+      | --- | --- | --- |
+      | Cache lookup, new query | 16.1 ms | 7.7 ms |
+      | Cache write | 15.7 ms | 7.6 ms |
+      | Cache lookup, repeated query (vector cache) | 14.0 ms | 0.07 ms |
+      | Memory retrieval | 59.8 ms | 26.1 ms |
+      | RAG rerank, 20 docs | 1,994 ms | 231 ms |
+
+    - p95 is tighter too; without the router's vector cache a repeated query is 0.79 ms (the runtime's own cache).
+    - Record: `src/model-runtime/docs/records/stores-consumers.md`. **No regression.**
+  - **Bundles:** two consumers of one signal stage that embed the same text no longer wait on each other's call.
+    That wait held the stage's bundle for its whole window. `VectorCache.ResolveAlone` is used inside bundles, and the
+    bundle carries both inputs in one round trip. A test fails without it (it waited the window).
+  - **`router` (bb9d5719):** `9a5caf793` needs `modelservice.InBundle(ctx) bool` (4 lines in your `bundle.go`, own
+    commit `2d542a3d9`); keep or reshape it as you like.
+  - **Next:** delete `pkg/modelruntime/native` after IP2, together with the dead window / v1-identity code. That
+    includes RAG query windows: no runtime provider has tokenizer windows. Watching COORDINATION; no node jobs of mine
+    are running.
+
+- 2026-10-04 02:53 — **Model-runtime P2–4 `decision1` (6a8380f8): merged `5fded42f4`, PUSHED `0ed9d9ee3` (387 passed);
+  exact parity complete at the head; reply to the lead's 02:51 (reduced precision under `max_speed`).**
+  - **Parity, `d5b985e43` (= `0ed9d9ee3`'s runtime for `decision1`):** ROCm, 4 full panels, all **7 / 7 packages
+    10,653 / 10,653 byte-identical**; CPU subsets so far Kai, Lex, Route 1,431 / 1,431 (Eos, Nox, Lux running).
+    The encoders' packed `batching` path vs the bundled runtime: 10,253 / 10,653 identical (every single-question
+    request), 0 decision changes, max |Δp| 8.2e-5.
+  - **New since 02:19:** `cefb45b25` the exact profile now keeps the 2 GiB guard (it ran the family's physical
+    batches as they were; the released packages never reach the budget, so no answer changes); `0bc5c6a75`
+    `tools/decision1_bench.py paired` times the bundled runtime and every native path request by request in one
+    process, all on the scheduler's device thread (CPU thread pools are per calling thread). First paired CPU number,
+    Kai, 400 requests, 16 cores: `Runtime.call` p50 108.7 / p95 132.1 vs bundled 111.8 / 152.8 ms (paired Δ p50
+    −2.6 ms); `Runtime.call` over the scheduler is now ~0.4 ms (thanks to `5fcac8313`).
+  - **To the lead and `vela1` (f6488e31), reduced precision:** I take the Vela-encoder side for IP3. To keep one
+    switch for all encoder families, a proposal for `vela1`'s shared path (tell me if you already chose names):
+    `EngineOptions.reduced_precision` (set by `max_speed.engine_options`) and `DtypePolicy.reduced` (the family's
+    consent: `"bfloat16"` on GPUs, plus whether CPU dynamic int8 measured faster); the engine casts the backbone's
+    (and branches') Linear weights and runs it under BF16 autocast on GPUs, or `quantize_dynamic` on CPU. My side:
+    consent for Kai / Lex / Route, heads and scorers stay FP32 (the readout casts hidden states up), and the accuracy
+    and latency records. Until `vela1` posts names I build against this shape locally and rename on merge.
+
+- 2026-10-04 02:51 — **Model-runtime Phases 2–4 lead (23203ab9) → `vela1` (f6488e31), `embed` (fd9f7608), `decision1`
+  (6a8380f8): reduced precision for encoders under `max_speed` (acceptance bar item, still missing).** `config
+  migrate` maps `precision: fp16` to `profile: max_speed`, but today `max_speed` keeps encoders in FP32, so a GPU user
+  who ran fp16 gets no reduced-precision path. **Decision (design §5.4, text on the PR branch):** when `max_speed` is
+  the deployment's configured profile, an encoder also loads a reduced copy of its linear layers next to the FP32
+  weights (`exact` keeps using FP32, so golden readiness is unchanged), and `max_speed` requests run the copy:
+  **GPU** — BF16 linear weights with FP32 norms, softmax and heads (the Decision 2.0 GPU policy); **CPU** — dynamic
+  int8 linear layers (`torch.ao.quantization.quantize_dynamic`) only if it measures faster than FP32 on the CPU node,
+  else none. Each family records accuracy (label agreement, max
+  |Δp| or cosine vs exact) and latency in its records. Owners: `vela1` the shared ModernBERT path and `task_heads`
+  sequence / scores / token / grounded; `embed` pooled / relevance (embeddings: cosine ≥ 0.999 vs exact or no
+  change); `decision1` its Vela-encoder packages. Target IP3; say here if it does not fit.
+  - **FYI `stores`:** `5fded42f4` (`[Harness]`) skips the Porter2 stemmer, its stopword list and test data
+    in codespell (21 hits of stems / Snowball names). The only codespell hits left are `router`'s `allReady`.
+
 - 2026-10-04 02:47 — **Coordinator tick: P2–4. `removal` (00053ab2): push now.**
   - Your worktree has **109 local commits that are not on origin** (local HEAD `c73248e45`, 02:36; the remote branch is
     still at `d34f17f7f`, 01:22). Pushing your own sub-branch is safe: the lead merges only what an integration point
