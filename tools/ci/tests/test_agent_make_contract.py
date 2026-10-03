@@ -72,46 +72,40 @@ class HarnessMakeContractTests(unittest.TestCase):
         self.assertIn("-m pytest -q src/vllm-sr/tests\n", unit)
         self.assertIn("run_cli_tests.py --verbose", unit)
 
-    def test_cuda_compute_cap_is_optional_and_overrides_reach_the_image_build(
-        self,
-    ) -> None:
+    def test_router_image_platform_selects_the_runtime_accelerator(self) -> None:
         environment = {
             key: value
             for key, value in os.environ.items()
             if key
             not in {
-                "CUDA_COMPUTE_CAP",
+                "VLLM_SR_ACCELERATOR",
+                "VLLM_SR_PLATFORM",
                 "MAKEFLAGS",
                 "MFLAGS",
                 "MAKEOVERRIDES",
                 "MAKEFILES",
             }
         }
-        for arguments, overrides, build_arg in (
-            ((), {}, None),
-            (("CUDA_COMPUTE_CAP=86",), {}, "--build-arg CUDA_COMPUTE_CAP=86"),
-            ((), {"CUDA_COMPUTE_CAP": "86"}, "--build-arg CUDA_COMPUTE_CAP=86"),
+        for arguments, accelerator in (
+            ((), "cpu"),
+            (("VLLM_SR_PLATFORM=amd",), "rocm"),
+            (("VLLM_SR_PLATFORM=nvidia",), "cuda"),
+            (("VLLM_SR_PLATFORM=amd", "VLLM_SR_ACCELERATOR=cpu"), "cpu"),
         ):
-            with self.subTest(arguments=arguments, environment=overrides):
+            with self.subTest(arguments=arguments):
                 result = subprocess.run(
-                    [
-                        "make",
-                        "-n",
-                        "docker-build-vllm-sr-router",
-                        "VLLM_SR_PLATFORM=nvidia",
-                        *arguments,
-                    ],
+                    ["make", "-n", "docker-build-vllm-sr-router", *arguments],
                     cwd=REPO_ROOT,
-                    env=environment | overrides,
+                    env=environment,
                     capture_output=True,
                     text=True,
                     check=True,
                 )
-                self.assertNotIn("CUDA_COMPUTE_CAP", result.stderr)
-                if build_arg is None:
-                    self.assertNotIn("CUDA_COMPUTE_CAP", result.stdout)
-                else:
-                    self.assertIn(build_arg, result.stdout)
+                self.assertIn(
+                    f"--target vllm-sr --build-arg ACCELERATOR={accelerator} "
+                    "-f tools/docker/Dockerfile.extproc",
+                    result.stdout,
+                )
 
     def test_daily_interface_is_small_and_direct(self) -> None:
         for target in ("impact", "check", "verify", "ci-full", "harness-check"):
