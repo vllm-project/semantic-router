@@ -85,6 +85,9 @@ SAFETY = {
 }
 
 
+RELEVANCE = {"relevance": {"preset": "relevance"}}
+
+
 def _questions(rng: random.Random, state_keys: list[str]) -> dict[str, Any]:
     over_user = "request" if "request" in state_keys else None
     pool: dict[str, Any] = {
@@ -170,8 +173,6 @@ def _questions(rng: random.Random, state_keys: list[str]) -> dict[str, Any]:
             pool[name] = {**pool[name], "over": over_user}
     if "answer" in state_keys:
         pool["halu"] = {"preset": "halu"}
-        if "source" in state_keys:
-            pool["relevance"] = {"preset": "relevance", "over": ["request", "source"]}
     names = rng.sample(sorted(pool), rng.randint(2, min(7, len(pool))))
     questions = {name: pool[name] for name in names}
     for name, question in questions.items():
@@ -216,6 +217,12 @@ def generate(count: int, seed: int, scale: float = 1.0) -> list[dict[str, Any]]:
         elif kind == 3:
             span = rng.choice([(12, 40), (100, 130)])
             state = {"request": prompt + " " + DOCUMENT * repeats(*span)}
+        elif kind == 4 and index % 12 == 4:
+            state = {"request": prompt, "source": DOCUMENT}
+            requests.append(
+                {"id": f"g{seed}-{index:04d}", "state": state, "questions": RELEVANCE}
+            )
+            continue
         elif kind == 4:
             state = [prompt, {"lang": "en"}]
         else:
@@ -259,6 +266,79 @@ def load_runtime(package: Path, device: str) -> Any:
     return family.load(verified, spec, engine_model)
 
 
+def expand_presets(engine: Any, questions: dict[str, Any]) -> dict[str, Any]:
+    """System One questions for the engine: ``pii`` / ``halu`` become its span questions with the trained schema."""
+    expanded = {}
+    for name, question in questions.items():
+        preset = question.get("preset")
+        if preset in ("pii", "halu"):
+            schema = engine.cal[f"{preset}_schema"]
+            question = {  # noqa: PLW2901 - the expanded question replaces the preset
+                "type": "span",
+                "instructions": schema["text"],
+                "criteria": dict(schema["labels"]),
+                **{k: v for k, v in question.items() if k in ("over", "threshold")},
+            }
+        expanded[name] = question
+    return expanded
+
+
+def relevance_request(engine: Any, state: dict[str, Any]) -> dict[str, Any]:
+    """The engine's ``score_relevance`` request: the trained schema over the user and context parts."""
+    schema = engine.cal["relevance_schema"]
+    return {
+        "parts": [
+            {"type": "user", "text": state["request"]},
+            {"type": "context", "text": state["source"]},
+        ],
+        "questions": [
+            {
+                "id": "relevance",
+                "type": "score",
+                "text": schema["text"],
+                "options": [
+                    {"name": k, "description": v} for k, v in schema["levels"].items()
+                ],
+                "values": schema["values"],
+                "target_part": ["user", "context"],
+            }
+        ],
+    }
+
+
+def reference_answer(
+    engine: Any, state: Any, questions: dict[str, Any], model: str
+) -> dict[str, Any]:
+    """The package engine's response; presets become what they stand for (its server has none).
+
+    ``pii`` / ``halu`` are its span questions with the trained schema (the question ID keys
+    the threshold rule); ``relevance`` is its ``score_relevance`` request, mapped onto a
+    System One Score answer.
+    """
+    if questions == RELEVANCE:
+        (result,) = engine.predict(relevance_request(engine, state))["answers"]
+        levels = list(engine.cal["relevance_schema"]["levels"].items())
+        probabilities = [float(result["probabilities"][name]) for name, _ in levels]
+        mean = sum(i * p for i, p in enumerate(probabilities))
+        variance = sum(p * (i - mean) ** 2 for i, p in enumerate(probabilities))
+        count = len(probabilities)
+        return {
+            "answers": {
+                "relevance": {
+                    "type": "score",
+                    "score": mean,
+                    "confidence": min(
+                        1.0, max(0.0, 1.0 - variance / ((count * count - 1) / 12))
+                    ),
+                    "legend": {str(i): text for i, (_, text) in enumerate(levels)},
+                    "probabilities": {str(i): p for i, p in enumerate(probabilities)},
+                }
+            }
+        }
+    response = engine.system_one(state, expand_presets(engine, questions), model=model)
+    return {k: v for k, v in response.items() if k != "model"}
+
+
 def answer(
     model: Any, state: Any, questions: dict[str, Any]
 ) -> tuple[dict[str, Any], Any]:
@@ -277,7 +357,12 @@ def reference_rows(
     engine: Any, module: Any, state: Any, questions: dict[str, Any]
 ) -> list[dict[str, Any]]:
     """The reference's rendered sequences per row: ids and read positions, windows included."""
-    request, _ = module.system_one_to_predict(state, questions)
+    if questions == RELEVANCE:
+        request = relevance_request(engine, state)
+    else:
+        request, _ = module.system_one_to_predict(
+            state, expand_presets(engine, questions)
+        )
     parts, generic, _ = engine._to_generic(request)
     spans = [q for q in generic if q["type"] == "span"]
     rest = [q for q in generic if q["type"] != "span"]
@@ -501,8 +586,32 @@ def system_one_view(response: dict[str, Any]) -> dict[str, Any]:
     return {**response, "answers": answers}
 
 
+def contract_view(response: dict[str, Any]) -> dict[str, Any]:
+    """The engine's response with Score legend values as text (the runtime contract types them as strings)."""
+
+    def text(value: Any) -> str:
+        if isinstance(value, str):
+            return value
+        return json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+
+    answers = {
+        key: (
+            {**value, "legend": {k: text(v) for k, v in value["legend"].items()}}
+            if "legend" in value
+            else value
+        )
+        for key, value in response.get("answers", {}).items()
+    }
+    return {**response, "answers": answers}
+
+
 def compare(reference: dict[str, Any], ours: dict[str, Any]) -> dict[str, Any]:
     ours = system_one_view(ours)
+    reference = contract_view(reference)
+    if "usage" not in reference:
+        ours = {"answers": ours["answers"]}
     ref_d, our_d = decisions(reference), decisions(ours)
     changed = sorted(k for k in set(ref_d) | set(our_d) if ref_d.get(k) != our_d.get(k))
     ref_v, our_v = values(reference), values(ours)
@@ -565,7 +674,7 @@ def main() -> int:
         record: dict[str, Any] = {"id": request["id"]}
         try:
             t0 = time.perf_counter()
-            reference = engine.system_one(state, questions, model=model.info.id)
+            reference = reference_answer(engine, state, questions, model.info.id)
             t1 = time.perf_counter()
             ours, plan = answer(model, state, questions)
             t2 = time.perf_counter()
@@ -575,7 +684,6 @@ def main() -> int:
             continue
         timing["reference_s"] += t1 - t0
         timing["runtime_s"] += t2 - t1
-        reference = {k: v for k, v in reference.items() if k != "model"}
         record.update(compare(reference, ours))
         record["rendering"] = rendering_diffs(
             reference_rows(engine, module, state, questions), runtime_rows(plan)
