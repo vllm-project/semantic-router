@@ -30,8 +30,10 @@ also gains the phase A sentence). Evidence <key>/switch/{parity,bench}; outputs 
 the runtime of HOTFIX_COMMIT on top of the current main of HOTFIX_TIERS: ``attn_prep`` launches its kernel once per
 tensor (a query projection above 2 GiB failed to compile on ROCm) and a fused decoder layer whose kernels fail runs
 its eager forward. Evidence <key>/hotfix/{parity,bench}; the parity carries a third side with every fused kernel
-raising (answers-compare-fallback.json, 0 answer changes and 0.0 drift against the old side too). Outputs
-specs/dev2-<key>-rah.json and <name>.decision.rah.json.
+raising (answers-compare-fallback.json, 0 answer changes and 0.0 drift against the old side too). card.speed stays
+the current main's: the fix leaves the replayed path unchanged but one launch per attention layer, and the hotfix
+bench (old then new on one GPU) is recorded in the decision. Outputs specs/dev2-<key>-rah.json and
+<name>.decision.rah.json.
 """
 
 from __future__ import annotations
@@ -434,10 +436,6 @@ def hotfix_spec_for(src: dict) -> dict:
     old = src["spec"]
     spec = layout.current_ids({k: v for k, v in old.items() if k != "_release"})
     spec["runtime_source"] = mirror(HOTFIX_COMMIT)
-    spec["card"]["speed"] = {
-        "evidence": (src["bench_path"].parent / "bench-new.json").as_posix(),
-        "sha256": src["bench"]["new"]["sha256"],
-    }
     text = spec["runtime_equivalence"]
     if text.count(MARKER) == 1:
         spec["runtime_equivalence"] = text.replace(MARKER, HOTFIX_SENTENCE + MARKER)
@@ -452,9 +450,9 @@ def hotfix_spec_for(src: dict) -> dict:
             "kernel once per tensor (Triton's ROCm compiler failed on its query / key pointer branch when only the "
             "query projection exceeded 2 GiB) and fused decoder layers falling back to their eager forward when a "
             "kernel fails. Weights, tokenizer, configs, the vendored training/model sources, card index, assets and "
-            f"remote code are those of the spec that built {spec['repo_id']}@{src['revision'][:8]}. card.speed is "
-            f"the new runtime's bench (p50 {lat['p50']['old']:.1f} -> {lat['p50']['new']:.1f} ms) and "
-            "runtime_equivalence gains the hotfix sentence."
+            f"remote code are those of the spec that built {spec['repo_id']}@{src['revision'][:8]}. card.speed stays "
+            f"that spec's (the hotfix bench, old then new on one GPU: p50 {lat['p50']['old']:.1f} -> "
+            f"{lat['p50']['new']:.1f} ms) and runtime_equivalence gains the hotfix sentence."
         ),
         "replaces_spec": {
             "spec": str(src["spec_path"]),
@@ -605,8 +603,8 @@ def hotfix_decision_for(src: dict, spec_sha: str) -> dict:
                 "a long multi-question input made the query projection exceed 2 GiB) and a decoder layer whose fused "
                 "kernels fail to compile or launch runs its eager forward. Weights, tokenizer, configs, the vendored "
                 "training/model sources, calibration, any Score offsets, the banner and the charts are "
-                f"byte-identical to the released revision {gate['revision']}; README.md states the median latency "
-                "and MODEL_MANIFEST.json the new runtime hashes and the runtime sentences. The collection is not "
+                f"byte-identical to the released revision {gate['revision']}, and so is README.md; "
+                "MODEL_MANIFEST.json states the new runtime hashes and the runtime sentences. The collection is not "
                 "changed."
             ),
             "rationale": (

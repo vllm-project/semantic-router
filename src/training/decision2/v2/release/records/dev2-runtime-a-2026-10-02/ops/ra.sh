@@ -22,8 +22,8 @@
 # <key>/switch): fast.py and fast_kernels.py may change as well as be added, and decision2/shared_ctx.py must be added; the README may also be unchanged (its Speed line rounds to 0.1 ms).
 # --hotfix (COORDINATION 2026-10-03 12:03 UTC+8; ROCm hotfix owner 490b6f72) releases the runtime-only revision with
 # the attn_prep fix and the eager fallback of fused layers (make_fast.py --kind hotfix: spec dev2-<key>-rah.json,
-# decision .rah.json, evidence <key>/hotfix): exactly decision2/fast.py and decision2/fast_kernels.py change, and the
-# README may be unchanged or differ in its Speed line.
+# decision .rah.json, evidence <key>/hotfix): exactly decision2/fast.py and decision2/fast_kernels.py change and the
+# README stays byte-identical (card.speed is the current main's).
 # Node A, GPU0 or GPU1 (the 0.6B track's allocation, where release workers run as recorded co-tenants; with --hotfix
 # any idle node A GPU, training being stopped), under the shared lease owner.runtime-a-release
 # (owner.runtime-hotfix-release with --hotfix; removed on exit).
@@ -140,7 +140,7 @@ readme_old = open(hf_hub_download(repo, "README.md", revision=revision), encodin
 readme_new = (Path(package) / "README.md").read_text(encoding="utf-8").splitlines()
 lines = [l for l in difflib.unified_diff(readme_old, readme_new, lineterm="", n=0)
          if l[:1] in "+-" and not l.startswith(("+++", "---"))]
-readme_ok = (bool(lines) or kind in ("switch", "hotfix")) and all("**Speed:**" in l for l in lines)
+readme_ok = (not lines) if kind == "hotfix" else (bool(lines) or kind == "switch") and all("**Speed:**" in l for l in lines)
 ok = not other and all(same.values()) and readme_ok and required <= set(changed)
 json.dump({"changed": changed, "other": other, "equal": same, "readme_diff": lines, "ok": ok},
           open(out, "w"), indent=1)
