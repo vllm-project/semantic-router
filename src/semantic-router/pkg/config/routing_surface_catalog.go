@@ -12,6 +12,7 @@ const (
 	DecisionAlgorithmLatencyAware = "latency_aware"
 	DecisionAlgorithmMLP          = "mlp"
 	DecisionAlgorithmMultiFactor  = "multi_factor"
+	DecisionAlgorithmRandom       = "random"
 	DecisionAlgorithmRatings      = "ratings"
 	DecisionAlgorithmReMoM        = "remom"
 	DecisionAlgorithmRouterDC     = "router_dc"
@@ -161,6 +162,7 @@ var decisionAlgorithmRegistry = []decisionAlgorithmRegistryEntry{
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmLatencyAware, DisplayName: "Latency Aware", Description: "Select against configured latency percentiles.", Tier: "supported", Execution: AlgorithmExecutionSelector, ConfigField: "latency_aware"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.LatencyAware != nil }},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmMLP, DisplayName: "MLP", Description: "Select a model with the shared neural classifier.", Tier: "experimental", Execution: AlgorithmExecutionSelector}},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmMultiFactor, DisplayName: "Multi Factor", Description: "Score quality, latency, cost, and load under optional SLOs.", Tier: "supported", Execution: AlgorithmExecutionSelector, ConfigField: "multi_factor"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.MultiFactor != nil }},
+	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmRandom, DisplayName: "Random", Description: "Select uniformly from the eligible candidate models.", Tier: "supported", Execution: AlgorithmExecutionSelector}},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmRatings, DisplayName: "Ratings", Description: "Execute a bounded candidate set and return comparable choices.", Tier: "supported", Execution: AlgorithmExecutionLooper, ConfigField: "ratings"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Ratings != nil }},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmReMoM, DisplayName: "ReMoM", Description: "Run multi-round parallel reasoning and synthesis.", Tier: "supported", Execution: AlgorithmExecutionLooper, ConfigField: "remom"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.ReMoM != nil }},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmRouterDC, DisplayName: "RouterDC", Description: "Match the request to candidate descriptions with dual contrastive embeddings.", Tier: "supported", Execution: AlgorithmExecutionSelector, ConfigField: "router_dc"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.RouterDC != nil }},

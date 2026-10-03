@@ -26,6 +26,7 @@ var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
 	"kmeans":        selection.MethodKMeans,
 	"svm":           selection.MethodSVM,
 	"multi_factor":  selection.MethodMultiFactor,
+	"random":        selection.MethodRandom,
 	"mlp":           selection.MethodMLP,
 	"prompt":        selection.MethodPrompt,
 }

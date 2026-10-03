@@ -73,6 +73,14 @@ func testDecisionScopedMultiFactor(
 }
 
 func requestDecisionScopedSelection(ctx context.Context, localPort, query string) (string, string, error) {
+	header, err := requestDecisionScopedHeaders(ctx, localPort, query)
+	if err != nil {
+		return "", "", err
+	}
+	return header.Get("x-vsr-selected-decision"), header.Get("x-vsr-selected-model"), nil
+}
+
+func requestDecisionScopedHeaders(ctx context.Context, localPort, query string) (http.Header, error) {
 	payload, err := json.Marshal(map[string]interface{}{
 		"model": "MoM",
 		"messages": []map[string]string{
@@ -80,7 +88,7 @@ func requestDecisionScopedSelection(ctx context.Context, localPort, query string
 		},
 	})
 	if err != nil {
-		return "", "", fmt.Errorf("marshal chat request: %w", err)
+		return nil, fmt.Errorf("marshal chat request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(
@@ -90,22 +98,22 @@ func requestDecisionScopedSelection(ctx context.Context, localPort, query string
 		bytes.NewReader(payload),
 	)
 	if err != nil {
-		return "", "", fmt.Errorf("create chat request: %w", err)
+		return nil, fmt.Errorf("create chat request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
 	if err != nil {
-		return "", "", fmt.Errorf("send chat request: %w", err)
+		return nil, fmt.Errorf("send chat request: %w", err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", fmt.Errorf("read chat response: %w", err)
+		return nil, fmt.Errorf("read chat response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("chat request returned HTTP %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("chat request returned HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
-	return resp.Header.Get("x-vsr-selected-decision"), resp.Header.Get("x-vsr-selected-model"), nil
+	return resp.Header, nil
 }

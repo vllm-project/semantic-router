@@ -175,6 +175,20 @@ config:
               latency: 0
               cost: 1
               load: 0
+      - name: random_policy_decision
+        description: Uniform random selection among eligible candidates
+        priority: 250
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: random_policy
+        modelRefs:
+          - model: premium-model
+          - model: economy-model
+        algorithm:
+          type: random
+          minimum_candidates: 2
       - name: code_keywords_decision
         description: Code and programming queries (BM25 classified)
         priority: 150
@@ -277,6 +291,11 @@ config:
           operator: OR
           keywords:
             - decision scoped cost policy
+          case_sensitive: false
+        - name: random_policy
+          operator: OR
+          keywords:
+            - decision scoped random policy
           case_sensitive: false
         - name: code_keywords
           operator: OR

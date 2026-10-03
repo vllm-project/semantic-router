@@ -1,0 +1,3 @@
+algorithm:
+  type: random
+  minimum_candidates: 2

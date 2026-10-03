@@ -1361,6 +1361,7 @@ kmeans     - KMeans selector using shared ML model-selection settings
 svm        - SVM selector using shared ML model-selection settings
 mlp        - MLP selector using shared ML model-selection settings
 multi_factor - Quality, latency, cost, and load scoring
+random     - Uniform pick among eligible candidates (no configuration)
 ```
 
 Cross-request learning lives under global.router.learning.adaptation and
@@ -1403,7 +1404,7 @@ VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform amd
 | `--minimal` | Start in minimal mode: only router + envoy, no dashboard or observability (Jaeger, Prometheus, Grafana) Default: false. |
 | `--log-level CHOICE` | Router log level override (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
 | `--platform TEXT` | Platform for local Docker GPU deployments: 'amd' enables ROCm passthrough, 'nvidia' enables NVIDIA GPU passthrough (--gpus all). Serve defaults to the matching GPU image (ROCm / CUDA) unless --image or VLLM_SR_IMAGE is provided. Internal models default to GPU, except AMD semantic embeddings retain their configured use_cpu value (default true). MIGraphX mmBERT embeddings require an explicit model binding and deployment with an input token budget. Set VLLM_SR_&lt;PLATFORM&gt;_PRESERVE_CPU=1 to keep CPU settings. For Kubernetes, configure GPU images and resources through a Helm profile or the operator. |
-| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. |
+| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. |
 | `--target TEXT` | Deployment target: docker, k8s (default: docker) |
 | `--namespace TEXT` | Kubernetes namespace (k8s target only) |
 | `--context TEXT` | kubectl / Helm context (k8s target only) |

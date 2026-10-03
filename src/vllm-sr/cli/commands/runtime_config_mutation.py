@@ -35,6 +35,7 @@ ALGORITHM_OVERRIDE_TYPES = (
     "svm",
     "mlp",
     "multi_factor",
+    "random",
 )
 
 if not set(ALGORITHM_OVERRIDE_TYPES).issubset(_CANONICAL_ALGORITHM_TYPES):
@@ -51,6 +52,7 @@ ALGORITHM_HINTS = {
     "svm": "  Tip: Configure global.router.model_selection.ml.svm for trained SVM routing",
     "mlp": "  Tip: Configure global.router.model_selection.ml.mlp for trained MLP routing",
     "multi_factor": "  Tip: Configure decision.algorithm.multi_factor for SLO-aware scoring",
+    "random": "  Tip: No configuration needed",
 }
 
 ALGORITHM_CONFIG_BLOCKS = tuple(

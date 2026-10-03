@@ -43,6 +43,7 @@ var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
 	"kmeans": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"mlp":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"svm":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"random": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 }
 
 func (c *Compiler) compilePromptAlgo(
