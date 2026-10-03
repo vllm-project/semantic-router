@@ -132,14 +132,14 @@ resolve_embedding_settings() {
     case "$1" in
         Vela-1.0-Encoder-307M-Embedding)
             EMBEDDING_MODEL="Vela-1.0-Encoder-307M-Embedding"
-            EMBEDDING_MODEL_REPO="llm-semantic-router/Vela-1.0-Encoder-307M-Embedding"
+            EMBEDDING_MODEL_REPO="vllm-sr/Vela-1.0-Encoder-307M-Embedding"
             EMBEDDING_MODEL_REVISION="1e57cebf5a7b7fec6e6973f05bbca97c5cca4436"
             EMBEDDING_MODEL_TYPE="mmbert"
             EMBEDDING_MODEL_PATH_KEY="mmbert_model_path"
             ;;
         mom-embedding-ultra|mmbert|mmbert-embedding|mmbert-embed-32k-2d-matryoshka)
             EMBEDDING_MODEL="mmbert-embed-32k-2d-matryoshka"
-            EMBEDDING_MODEL_REPO="llm-semantic-router/mmbert-embed-32k-2d-matryoshka"
+            EMBEDDING_MODEL_REPO="vllm-sr/mmbert-embed-32k-2d-matryoshka"
             EMBEDDING_MODEL_TYPE="mmbert"
             EMBEDDING_MODEL_PATH_KEY="mmbert_model_path"
             ;;

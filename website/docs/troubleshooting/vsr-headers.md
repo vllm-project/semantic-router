@@ -7,11 +7,17 @@ routing observability, replay correlation, and opt-in debugging.
 
 The router splits headers across two surfaces:
 
-- **Default surface** — every non-cache-hit response includes
-  `x-vsr-schema-version` and `x-vsr-response-path`. Successful routed responses
-  can also include the final recipe, decision, confidence, algorithm, model,
-  routing latency, cost, and replay id. Protocol markers appear when translation occurs; protocol
-  warnings appear only when there are warnings.
+- **Default surface** — every routed inference response that is not served from
+  the response cache includes `x-vsr-schema-version` and `x-vsr-response-path`.
+  These routing keystone headers are produced by the routing pipeline, so
+  responses answered by the Router's own handlers instead, such as
+  `GET /v1/models`, omit them. The one management endpoint that does set an
+  `x-vsr-*` header is `POST /api/v1/routing/preview`, which returns
+  `x-vsr-config-hash` on a successful result. Successful routed responses can
+  also include the final recipe, decision, confidence, algorithm, model, routing
+  latency, cost, and replay id — the last only when Router Replay is enabled and
+  the record was persisted. Protocol markers appear when translation occurs;
+  protocol warnings appear only when there are warnings.
 - **Debug surface** — intermediate classification details, matched signals,
   tool-selection metrics, and `x-vsr-retention-*` directives appear inline
   only when the request sets `x-vsr-debug: true`. When replay is enabled, the
@@ -43,7 +49,7 @@ Cache-hit responses can emit cache headers, but they do not re-run routing and t
 | `x-vsr-client-protocol` | Inbound protocol shape seen by the router, for example `openai` or `anthropic`. Emitted only on cross-protocol handling (client protocol differs from upstream), or when `x-vsr-debug` is set. |
 | `x-vsr-upstream-protocol` | Protocol shape sent to the selected upstream backend. Emitted only on cross-protocol handling, or when `x-vsr-debug` is set. |
 | `x-vsr-protocol-warnings` | Comma-separated protocol translation warnings encoded as `severity;reason;field`. Emitted only when warnings exist. |
-| `x-vsr-replay-id` | Opaque router replay record identifier for correlating a response with replay/Insights data. |
+| `x-vsr-replay-id` | Opaque router replay record identifier for correlating a response with replay/Insights data. Emitted only when Router Replay is enabled and the record was persisted. |
 
 ## Response warnings
 
@@ -62,11 +68,11 @@ Router Learning observability, require `x-vsr-debug`.
 | Header | Surface | Description | Example |
 | ------ | ------- | ----------- | ------- |
 | `x-vsr-selected-recipe` | default | Routing isolation scope selected by an entrypoint or auto/looper alias. Omitted for concrete backend passthrough. | `support` |
-| `x-vsr-selected-decision` | default | Final decision selected by the decision engine. | `complex-request` |
+| `x-vsr-selected-decision` | default | Final decision selected by the decision engine. Omitted when no decision matched and the request went to the default model; `x-vsr-response-path` is still `upstream`. | `complex-request` |
 | `x-vsr-selected-confidence` | default | Model-derived score for the selected decision. Absent when the decision rests on policy leaves, aggregates several evidence leaves, or resolves through an error policy. | `0.9100` |
 | `x-vsr-applied-unknown-policy` | default | Decisions whose unknown result was resolved by `rules.on_unknown`, as `decision=policy` pairs. Also set on the `fail_request` 503. | `guarded=no_match` |
 | `x-vsr-selected-algorithm` | default | Model-selection algorithm used after the decision matched. | `static` |
-| `x-vsr-selected-model` | default | Logical model alias selected by the router. | `reasoning-model` |
+| `x-vsr-selected-model` | default | Logical model alias selected by the router. When an auto-routed request matches no decision, this is the default model. | `reasoning-model` |
 | `x-vsr-effective-input-tokens` | default | Actual selected-backend rendered input tokens for the finalized automatic-output dispatch, including its chat template. | `512` |
 | `x-vsr-effective-max-output-tokens` | default | Resolved output token limit sent in that automatic-output dispatch, including reasoning. This is a budget, not consumed tokens. | `261632` |
 | `x-vsr-routing-latency-ms` | default | Time the router spent choosing the model, in milliseconds with sub-millisecond precision. | `0.412` |
@@ -216,6 +222,10 @@ x-vsr-selected-model: reasoning-model
 x-vsr-replay-id: replay_01J...
 ```
 
+`x-vsr-replay-id` appears here only because Router Replay was enabled and the
+record was persisted. With replay disabled, or when persistence fails, the
+response carries the other headers and omits this one.
+
 With `x-vsr-debug: true` on the request, the demoted intermediate details and matched signals are emitted inline as well:
 
 ```http
@@ -236,7 +246,9 @@ x-vsr-replay-id: replay_01J...
 ## Compatibility and interpretation
 
 - Use `x-vsr-schema-version` before parsing optional headers; the current value
-  is `2`.
+  is `2`. Routed inference responses always carry it. Responses answered by the
+  Router's own handlers, such as `GET /v1/models`, never carry this header, so
+  its absence there is expected rather than a contract violation.
 - `x-vsr-matched-projections` is the projection header. The singular form is
   not part of the public contract.
 - Recipe names scope local signal, projection, decision, cache, replay, metric, and learning/session identities. Use `x-vsr-selected-recipe` together with the local decision/signal names when correlating a response with Insights or metrics.
