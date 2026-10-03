@@ -188,6 +188,15 @@ func (m *MemoryStore) GetConversationChain(ctx context.Context, responseID strin
 	return chain, nil
 }
 
+// ListResponsesByConversation returns a conversation's responses in
+// insertion order (oldest first), clamped by ListOptions.Limit only.
+//
+// Known parity divergence (#2814): it does not honor ListOptions.Order,
+// After, or Before, unlike RedisStore's implementation, which defaults to
+// "desc" per the contract documented on ListOptions in interface.go.
+// Bringing this store into line with that contract is out of scope for
+// #2814, which is a Redis-only lookup-performance fix; recorded here rather
+// than left silently inconsistent.
 func (m *MemoryStore) ListResponsesByConversation(ctx context.Context, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error) {
 	if !m.enabled {
 		return nil, ErrStoreDisabled

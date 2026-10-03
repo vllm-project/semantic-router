@@ -49,10 +49,62 @@ tls_enabled: false
 #     pool_size: 10
 
 # Redis Key Schema:
-# sr:response:{response_id}      → JSON blob of StoredResponse
-# sr:conversation:{conv_id}      → JSON blob of StoredConversation
+# sr:response:{response_id}                         → flat JSON StoredResponse (source of truth).
+#                                                      New writes add an internal UUID-v4 field,
+#                                                      _vsr_generation. Legacy JSON without it is
+#                                                      readable. Request-path legacy scans leave
+#                                                      it untouched while index-unaware writers
+#                                                      may still exist. The operator-authorized
+#                                                      finalization sweep upgrades it in place —
+#                                                      preserving content and remaining TTL — and
+#                                                      a post-finalization cascade can upgrade any
+#                                                      residual legacy payload on demand. A
+#                                                      payload that still lacks a generation is
+#                                                      never deleted by CAS; it is upgraded first.
+# sr:conversation:{conv_id}                         → JSON blob of StoredConversation.
+# sr:conversation-index:{base64url(conv_id)}        → sorted set of raw response IDs, scored by
+#                                                      created_at. The escaped brace-delimited
+#                                                      value is a Redis Cluster hash tag, not the
+#                                                      literal conversation ID.
+# sr:conversation-index-gen:{base64url(conv_id)}    → HASH from response ID to _vsr_generation.
+#                                                      It shares the ZSET's hash tag and monotonic
+#                                                      TTL, so Lua atomically updates or
+#                                                      conditionally removes both. ZSET members
+#                                                      stay raw response IDs for cursor ordering.
+#                                                      A member left by a legacy payload has no
+#                                                      field here. That absence is a comparable
+#                                                      witness, but it only authorizes removing a
+#                                                      membership once the completion record
+#                                                      below is set: until then an index-unaware
+#                                                      writer can put a payload back under the
+#                                                      same ID without claiming the member, and
+#                                                      the stale cleanup would orphan it. Before
+#                                                      finalization the remedy for a legacy
+#                                                      member is upgrading its payload, not
+#                                                      removing it, so a membership whose payload
+#                                                      is already gone is deliberately left in
+#                                                      place for the migration window — a short
+#                                                      page beats a lost record.
+# sr:conversation-index-migrated:{conv_id}          → per-conversation proof with value
+#                                                      "v1:empty" or "v1:populated", written only
+#                                                      after a complete legacy scan. Both proof
+#                                                      kinds expire after min(retention TTL,
+#                                                      5 minutes), and ordinary response writes
+#                                                      never refresh them during rolling upgrade.
+# sr:conversation-index-scan-lease:v1               → one renewable, store-wide 30-second lease
+#                                                      serializing all full-keyspace legacy scans;
+#                                                      it is not a per-conversation lock.
+# sr:conversation-index-complete:v1                 → persistent value "v1", set only by the
+#                                                      operator-triggered finalization sweep after
+#                                                      every index-unaware writer is gone. Once set,
+#                                                      reads trust the secondary index and never
+#                                                      run legacy scans again, and witness-less
+#                                                      memberships become safe to clean up.
+#
+# The ZSET is derived state and can be partial until a proof or global completion record says it
+# is exhaustive. All key families use disjoint prefixes so conversation/response JSON scans never
+# attempt to decode a ZSET, HASH, proof, lease, or completion value.
 #
 # Both Response API and Semantic Cache share DB 0 but use different base prefixes:
 # - Response API: sr:*
 # - Semantic Cache: doc:*
-
