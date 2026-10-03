@@ -205,6 +205,39 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 12:10 — **USER (12:09): the ROCm bug does NOT block the Index submission.** The board scores benchmark
+  answers, and the complete stored runs (pre-release runtime, byte-identical weights) stand.
+  - **f38ee089:** add Nox and Lux to the dataset and PR #48 now, and Vega when its complement merges.
+    - Pin each to the revision whose runtime matches the stored run where one exists (Vega `5c85c127`; Lux
+      `f3122c7c` if it predates `attn_prep`). Nox pins `ce1bdc9d`.
+    - Disclose the ROCm fast-path compile issue and the fix in progress.
+  - **The hotfix (490b6f72) continues in parallel.** The PR pins move to the fixed `main`s after their spot checks.
+
+- 2026-10-03 12:12 — **ROCm hotfix owner (490b6f72): STARTED.** Branch `xunzhuo/decision-2-runtime-hotfix` (from
+  integration `c34bc5067`, which carries `ef27d8885`), worktree `vllm-sr-dev2-runtime-hotfix`.
+  - **Plan:** reproduce the `_attn_prep_kernel` `PassManager::run failed` on the 5 Nox rows (node C, IX1 `launch.sh
+    extra`), capture the real call's strides / offsets / alignment, fix it, add an ATen fallback guard (byte-identical),
+    then ship runtime-only revisions Nox → Lux → Vega through the phase A rollout (`ra.sh`, `--switch`, `ops/gate86.sh`).
+  - **I am the sole writer of the Nox / Lux / Vega repos until I post "hotfix done".** 885d85cc: please pause writes.
+  - **GPUs:** I lease-check every GPU and use only free ones on A / B / C / D / F (never E, node C GPU0, node F GPU0–1).
+    **f38ee089 has first call**; tell me here and I yield at once.
+
+- 2026-10-03 12:03 — **Coordinator decisions on the spot-check failures.**
+  - **ROCm hotfix owner: 490b6f72** (Max, TOP priority). It root-causes the `_attn_prep_kernel` compile failure and
+    adds a byte-identical ATen fallback guard, then ships runtime-only revisions of Nox, Lux and Vega through the
+    phase A rollout.
+    - **It is the temporary sole writer of the Nox / Lux / Vega repos** until it posts "hotfix done". 885d85cc
+      pauses repo writes.
+  - **Index submission worker (f38ee089), fast fallback for Vega (and Lux):**
+    - spot-check **Vega@`5c85c127`**, the m50 release before the phase A runtime with the SAME weights as `main`
+      `9b067a95`. If it passes, add Vega pinned to `5c85c127` to PR #48 now, saying in the PR that `main` carries a
+      runtime-only revision and that the fixed `main` follows;
+    - do the same for **Lux@`f3122c7c`** if its runtime predates phase A's `attn_prep`;
+    - Nox has no earlier revision with its weights, so it waits for the hotfix;
+    - when the hotfix revisions land, re-spot-check and switch the pins to the fixed `main`s.
+  - **Maintainer action done:** `/accept` was commented on issue #4479 (model runtime). The acceptance workflow is
+    queued.
+
 - 2026-10-03 12:09 — **Index submission worker (f38ee089): Vega `9b067a95` ALSO fails the release spot check** (same
   `PassManager::run failed`: 5 errors in the first 1,107 sample rows, 3 of them the Nox / Lux rows). Stopped that spot
   run (result decided); node C GPU1–7 leases released. PR #48 and Space PR #38 stay at Kai / Eos / Sol; their text
