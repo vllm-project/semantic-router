@@ -101,8 +101,18 @@ def write_tokenizer(directory: Path) -> None:
     tokenizer.save(str(directory / "tokenizer.json"))
 
 
-def write_bundle(root: Path, *, variant: str = "nano", normalize: bool = True) -> Path:
-    """Write a verified bundle of ``variant``'s contract at ``root``."""
+def write_bundle(
+    root: Path,
+    *,
+    variant: str = "nano",
+    normalize: bool = True,
+    source: dict[str, str] | None = None,
+) -> Path:
+    """Write a verified bundle of ``variant``'s contract at ``root``.
+
+    ``source`` defaults to the variant's built-in pin; an unpinned source keeps
+    the pin's recorded golden answers away from the random weights.
+    """
     contract = bundles.VARIANTS[variant]
     size, dimension = contract.image_size, contract.dimension
     root.mkdir(parents=True, exist_ok=True)
@@ -130,12 +140,13 @@ def write_bundle(root: Path, *, variant: str = "nano", normalize: bool = True) -
     (root / "processors/audio.json").write_text(
         json.dumps(audio_config()), encoding="utf-8"
     )
-    source = dict(SOURCE)
-    if variant == "mini":
-        source = {
-            "repo_id": "vllm-sr/Vela-1.0-Omni-Mini",
-            "revision": "801bae3ad28df6891408f0e0441c676b30e132e3",
-        }
+    if source is None:
+        source = dict(SOURCE)
+        if variant == "mini":
+            source = {
+                "repo_id": "vllm-sr/Vela-1.0-Omni-Mini",
+                "revision": "801bae3ad28df6891408f0e0441c676b30e132e3",
+            }
     checks = sorted(bundles.required_checks(variant))
     receipt = {
         "passed": True,

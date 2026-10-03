@@ -29,14 +29,26 @@ git -C "$ROOT_DIR" worktree add --detach "$BASE_TREE" "$BASE_COMMIT"
 
 if [[ ! -d "$BASE_TREE/src/semantic-router/pkg/modelruntime/serving" ]]; then
   # The base revision runs models in the removed native bindings, so no common
-  # harness can measure both sides. Record the reset instead of a comparison.
-  python3 - "$BASE_COMMIT" "$OUTPUT_DIR/model-baseline.json" <<'PYCODE'
+  # harness can measure both sides. Record the reset instead of a comparison,
+  # citing the records that measured the bindings against the runtime.
+  records=()
+  shopt -s nullglob
+  for record in "$ROOT_DIR"/src/model-runtime/docs/records/{router-,vela1-,embed-,decision1-,stores-algorithms}*; do
+    records+=("${record#"$ROOT_DIR"/}")
+  done
+  shopt -u nullglob
+  if ((${#records[@]} == 0)); then
+    echo "A model baseline reset must cite the legacy-versus-runtime records; none found." >&2
+    exit 1
+  fi
+  python3 - "$BASE_COMMIT" "$OUTPUT_DIR/model-baseline.json" "${records[@]}" <<'PYCODE'
 import json
 import sys
 json.dump(
     {
         "git_commit": sys.argv[1],
         "model_baseline_reset": "base revision predates the model runtime; no common model harness",
+        "legacy_comparison_records": sorted(sys.argv[3:]),
         "benchmarks": {},
     },
     open(sys.argv[2], "w"),

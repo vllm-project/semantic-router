@@ -2,6 +2,7 @@
 
     python3 tools/embed_parity.py omni --bundle DIR --output OUT.json [--threads N]
     python3 tools/embed_parity.py encoder --package DIR --output OUT.json [--threads N] [--device rocm:N]
+    python3 tools/embed_parity.py reduced --package DIR --kind bfloat16 --output OUT.json [--device rocm:N]
 
 ``encoder`` serves an embedder or reranker package (Vela Embedding, Vela
 Reranker, Qwen3-Embedding) through ``TaskHeadsFamily`` on the native engine
@@ -30,9 +31,11 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import statistics
 import struct
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +68,9 @@ MIN_COSINE = 0.99999
 MAX_ABS = 1e-4
 # Design section 17: the GPU bar for embeddings; logits are reported, not gated, on GPUs.
 GPU_MIN_COSINE = 0.9995
+REDUCED_MIN_COSINE = 0.999
+REDUCED_MIN_AGREEMENT = 0.99
+TIE = 1e-3
 CPU = DeviceInfo(accelerator="cpu", index=None, name="cpu")
 
 
@@ -268,10 +274,49 @@ class OmniParity:
         }
 
 
-def serve(model: Any, surface: str, body: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
+def serve(
+    model: Any, surface: str, body: dict[str, Any], reduced: bool = False
+) -> tuple[Any, dict[str, Any]]:
+    """One request through the exact path, or through the reduced copy (``max_speed``)."""
     request = SurfaceRequest(surface, body, None, "exact", False, time.monotonic())
     plan = model.plan_surface(surface, request)
-    return plan, model.finish_surface(plan, model.run(plan.items))
+    run = model.run_approximate if reduced else model.run
+    return plan, model.finish_surface(plan, run(plan.items))
+
+
+def device_info(name: str) -> DeviceInfo:
+    """The device as placement reports it (architecture included, which selects fused kernels)."""
+    if name == "cpu":
+        return CPU
+    from vllm_sr_runtime.accel.rocm import ROCmAccelerator
+
+    return ROCmAccelerator().devices()[int(name.partition(":")[2] or 0)]
+
+
+def load_task_model(
+    package: Path,
+    engine: Any,
+    device: DeviceInfo,
+    threads: int | None,
+    options: dict[str, Any] | None = None,
+    reduced: str | None = None,
+) -> Any:
+    """A ``task_heads`` model on one engine; ``reduced`` consents to that copy kind."""
+    from vllm_sr_runtime.accel.rocm import ROCmAccelerator
+
+    family = TaskHeadsFamily(RegistryOptions(model_options=options or {}))
+    verified = family.verify(PackageRef(package))
+    spec = family.describe(verified)
+    if reduced is not None:
+        field = "reduced_cpu" if device.accelerator == "cpu" else "reduced_gpu"
+        spec = replace(spec, dtype=replace(spec.dtype, **{field: reduced}))
+    accelerator = CPUAccelerator() if device.accelerator == "cpu" else ROCmAccelerator()
+    engine_options = EngineOptions(
+        threads=threads, reduced_precision=reduced is not None
+    )
+    return family.load(
+        verified, spec, engine.load(spec, accelerator, device, engine_options)
+    )
 
 
 class EncoderParity:
@@ -284,13 +329,8 @@ class EncoderParity:
         self.package = package
         self.threads = threads
         self.states: dict[tuple[int, ...], tuple[Any, ...]] = {}
-        self.device = CPU
-        if device != "cpu":
-            accelerator, _, index = device.partition(":")
-            self.device = DeviceInfo(
-                accelerator=accelerator, index=int(index or 0), name=device
-            )
-        self.native = self.load(NativeEngine(), {}, self.device)
+        self.device = device_info(device)
+        self.native = load_task_model(package, NativeEngine(), self.device, threads)
         layout = self.native.planners[next(iter(self.native.planners))].layout
         if isinstance(layout, RelevanceLayout):
             option = {
@@ -302,27 +342,13 @@ class EncoderParity:
             option = {"layers": sorted(layout.graphs)}
         on_cpu = self.device.accelerator == "cpu"
         self.graph = (
-            self.load(OnnxRuntimeEngine(), option, CPU)
+            load_task_model(package, OnnxRuntimeEngine(), CPU, threads, option)
             if layout.graphs and on_cpu
             else None
         )
         self.layout = layout
         self.reference = self.reference_model()
         self.cases: list[dict[str, Any]] = []
-
-    def load(self, engine: Any, options: dict[str, Any], device: DeviceInfo) -> Any:
-        from vllm_sr_runtime.accel.rocm import ROCmAccelerator
-
-        family = TaskHeadsFamily(RegistryOptions(model_options=options))
-        verified = family.verify(PackageRef(self.package))
-        spec = family.describe(verified)
-        accelerator = (
-            CPUAccelerator() if device.accelerator == "cpu" else ROCmAccelerator()
-        )
-        model = engine.load(
-            spec, accelerator, device, EngineOptions(threads=self.threads)
-        )
-        return family.load(verified, spec, model)
 
     def reference_model(self) -> Any:
         import torch
@@ -520,6 +546,118 @@ class EncoderParity:
         }
 
 
+class ReducedParity:
+    """A model's reduced copy (``max_speed``) against its exact path: agreement and latency.
+
+    Embeddings need cosine >= 0.999 per vector, reranking 99 % pairwise order
+    agreement on document pairs whose exact logits differ by more than ``TIE``
+    (design section 5.4's floor), on the corpus of the encoder mode.
+    """
+
+    def __init__(self, package: Path, kind: str, device: str, threads: int | None):
+        import torch
+
+        torch.set_num_threads(threads or torch.get_num_threads())
+        self.kind = kind
+        self.device = device_info(device)
+        self.model = load_task_model(
+            package, NativeEngine(), self.device, threads, reduced=kind
+        )
+        self.cases: list[dict[str, Any]] = []
+
+    def embeddings(self) -> list[dict[str, Any]]:
+        planner = self.model.planners["embeddings"]
+        dims = sorted(
+            {planner.info.dimensions[0], *planner.info.dimensions[-2:]}, reverse=True
+        )
+        for layer in planner.info.layers:
+            for dimension in dims if layer == planner.info.layers[-1] else dims[:1]:
+                body = {"input": texts(), "layer": layer, "dimensions": dimension}
+                vectors = [
+                    [
+                        entry["embedding"]
+                        for entry in serve(self.model, "embeddings", body, r)[1]["data"]
+                    ]
+                    for r in (False, True)
+                ]
+                stats = EncoderParity.rows_compare(vectors[1], vectors[0])
+                self.cases.append(
+                    {
+                        "name": f"embeddings/layer{layer}/dim{dimension}",
+                        "passed": stats["min_cosine"] >= REDUCED_MIN_COSINE,
+                        **stats,
+                    }
+                )
+        return [{"input": text} for text in texts()]
+
+    def rerank(self) -> list[dict[str, Any]]:
+        planner = self.model.planners["rerank"]
+        for exit in planner.info.exits:
+            deltas, agree, pairs = [], 0, 0
+            for query, documents in RERANK:
+                body = {
+                    "query": query,
+                    "documents": documents,
+                    "layer": exit[0],
+                    "dimensions": exit[1],
+                }
+                logits = []
+                for r in (False, True):
+                    results = serve(self.model, "rerank", body, r)[1]["results"]
+                    by_index = {result["index"]: result["logit"] for result in results}
+                    logits.append([by_index[i] for i in range(len(documents))])
+                exact, reduced = logits
+                deltas.append(float(np.abs(np.subtract(exact, reduced)).max()))
+                for i in range(len(documents)):
+                    for j in range(i + 1, len(documents)):
+                        if abs(exact[i] - exact[j]) > TIE:
+                            pairs += 1
+                            agree += (exact[i] - exact[j]) * (
+                                reduced[i] - reduced[j]
+                            ) > 0
+            self.cases.append(
+                {
+                    "name": f"rerank/layer{exit[0]}/dim{exit[1]}",
+                    "passed": agree >= REDUCED_MIN_AGREEMENT * pairs,
+                    "max_logit_delta": max(deltas),
+                    "pair_order_agreement": agree / max(pairs, 1),
+                    "pairs_outside_ties": pairs,
+                }
+            )
+        return [{"query": query, "documents": list(docs)} for query, docs in RERANK]
+
+    def latency(self, surface: str, bodies: list[dict[str, Any]]) -> dict[str, float]:
+        """p50 of one request at a time over the corpus, exact and reduced, three passes each."""
+        medians = {}
+        for name, reduced in (("exact", False), ("reduced", True)):
+            samples = []
+            for _ in range(3):
+                for body in bodies:
+                    started = time.perf_counter()
+                    serve(self.model, surface, body, reduced)
+                    samples.append((time.perf_counter() - started) * 1000)
+            medians[f"{name}_p50_ms"] = round(statistics.median(samples), 3)
+        return medians
+
+    def run(self) -> dict[str, Any]:
+        surface = "embeddings" if "embeddings" in self.model.planners else "rerank"
+        bodies = self.embeddings() if surface == "embeddings" else self.rerank()
+        return {
+            "model": self.model.info.id,
+            "model_sha256": self.model.info.model_sha256,
+            "kind": self.kind,
+            "device": self.device.label,
+            "copy": self.model.engine_model.receipt().get("reduced"),
+            "thresholds": {
+                "min_cosine": REDUCED_MIN_COSINE,
+                "min_pair_order_agreement": REDUCED_MIN_AGREEMENT,
+            },
+            "latency": self.latency(surface, bodies),
+            "passed": all(case["passed"] for case in self.cases),
+            "cases": self.cases,
+        }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -538,9 +676,23 @@ def main() -> int:
     encoder.add_argument("--output", type=Path, required=True)
     encoder.add_argument("--threads", type=int, default=None)
     encoder.add_argument("--device", default="cpu")
+    reduced = commands.add_parser(
+        "reduced", help="an embedder's or reranker's reduced copy vs its exact path"
+    )
+    reduced.add_argument("--package", type=Path, required=True)
+    reduced.add_argument(
+        "--kind", required=True, choices=("bfloat16", "int8", "float32-packed")
+    )
+    reduced.add_argument("--output", type=Path, required=True)
+    reduced.add_argument("--threads", type=int, default=None)
+    reduced.add_argument("--device", default="cpu")
     args = parser.parse_args()
     if args.command == "omni":
         result = OmniParity(args.bundle.resolve(), args.threads).run()
+    elif args.command == "reduced":
+        result = ReducedParity(
+            args.package.resolve(), args.kind, args.device, args.threads
+        ).run()
     else:
         result = EncoderParity(args.package.resolve(), args.threads, args.device).run()
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

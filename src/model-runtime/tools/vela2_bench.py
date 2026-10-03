@@ -229,13 +229,14 @@ def main() -> int:
     parser.add_argument("--concurrency", default="1")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--prompts", type=Path)
+    parser.add_argument("--engine", default="native", help="runtime engine plugin")
     args = parser.parse_args()
     sides = args.sides.split(",")
     lengths = [int(x) for x in args.tokens.split(",")]
     concurrency = [int(x) for x in args.concurrency.split(",")]
     pin_choices(args.package, args.device)
     execute = device_executor(args.device)
-    model = execute(lambda: load_runtime(args.package, args.device))
+    model = execute(lambda: load_runtime(args.package, args.device, args.engine))
     runs: list[dict[str, Any]] = []
     callers: dict[str, Any] = {}
     for side in sides:
@@ -244,16 +245,13 @@ def main() -> int:
                 side, "batching"
             )
             callers[side], _ = runtime_side(model, profile, execute)
-        elif side == "reference-onnx":
-            sys.path.insert(0, str(args.package))
-            import vela2_inference  # type: ignore[import-not-found]
-
-            engine = execute(
-                lambda: vela2_inference.Vela2(str(args.package), backend="onnx")
-            )
-            callers[side] = _reference_caller(engine, execute)
         else:
-            engine, _ = execute(lambda: load_reference(args.package, args.device))
+            backend = "onnx" if side == "reference-onnx" else "torch"
+            engine, _ = execute(
+                lambda backend=backend: load_reference(
+                    args.package, args.device, backend
+                )
+            )
             callers[side] = _reference_caller(engine, execute)
     encode = model.tokens.encode
     if args.prompts:

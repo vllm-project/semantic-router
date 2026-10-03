@@ -62,11 +62,13 @@ def test_a_missing_extra_names_its_install(nano, monkeypatch):
         family.describe(package)
 
 
-def test_the_default_engine_serves_a_bundle_on_onnxruntime(nano):
+def test_the_default_engine_serves_a_bundle_on_onnxruntime(tmp_path):
     from vllm_sr_runtime.config import ModelConfig, ServeConfig
     from vllm_sr_runtime.runtime import Runtime
 
-    served = ModelConfig(model=str(nano), name="omni", device="cpu")
+    source = {"repo_id": "example/omni-fixture", "revision": "0" * 40}
+    bundle = omni.write_bundle(tmp_path / "omni", source=source)
+    served = ModelConfig(model=str(bundle), name="omni", device="cpu")
     runtime = Runtime(ServeConfig(models=(served,)))
     runtime.start(background=False)
     try:
@@ -288,10 +290,16 @@ def test_deadlines_and_non_unit_outputs(tmp_path, model):
     assert body["data"][0]["error"] == "invalid_model_output"
 
 
-def test_golden_request_exercises_every_graph(nano, model):
+def test_golden_request_exercises_every_graph(nano, model, tmp_path):
     family = MultimodalEmbeddingFamily()
     (golden,) = family.golden(family.verify(PackageRef(nano)))
-    assert golden["surface"] == "embeddings" and golden["expected"] == {}
+    assert golden["surface"] == "embeddings"
+    assert (
+        set(golden["expected"]) == {"cpu"} and len(golden["expected"]["cpu"]) == 3 * 384
+    )
+    unpinned = {"repo_id": "example/omni-fixture", "revision": "0" * 40}
+    other = omni.write_bundle(tmp_path / "other", source=unpinned)
+    assert family.golden(family.verify(PackageRef(other)))[0]["expected"] == {}
     plan, body = serve(model, golden["body"])
     assert [item.modality for item in plan.items] == ["text", "image", "audio"]
     values = model.golden_values("embeddings", body)
