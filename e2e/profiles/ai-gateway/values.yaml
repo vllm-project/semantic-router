@@ -1238,8 +1238,6 @@ config:
         eviction_policy: fifo
         embedding_model: mmbert
         # Exercised by the semantic-cache-polarity case.
-        polarity_guard:
-          mode: lexical
       memory:
         embedding_model: mmbert
       vector_store:
