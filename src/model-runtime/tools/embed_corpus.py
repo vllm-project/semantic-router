@@ -8,11 +8,13 @@ in English, Chinese, Spanish, German, Japanese, Russian and Arabic, plus
 rerank sets of one query and eight candidate documents (one or two relevant).
 The performance scenarios use seeded synthetic token rows instead, so every
 engine and the legacy path see identical inputs without a tokenizer.
+Importing it needs only the standard library (the legacy driver runs in a bare
+Python); the synthetic rows load NumPy when called.
 """
 
 from __future__ import annotations
 
-import numpy as np
+from typing import Any
 
 EMBED_LENGTHS = (16, 64, 256, 1024)
 RERANK_DOCUMENTS = (10, 50)
@@ -136,9 +138,15 @@ def texts() -> list[str]:
     return QUERIES + PARAGRAPHS + documents
 
 
+def _rng(seed: int) -> Any:
+    import numpy as np
+
+    return np.random.default_rng(seed)
+
+
 def synthetic_rows(lengths: list[int], vocab: int, seed: int) -> list[tuple[int, ...]]:
     """``<bos> ... <eos>`` rows of random non-special token IDs (Vela's special-token layout)."""
-    rng = np.random.default_rng(seed)
+    rng = _rng(seed)
     return [
         (2, *rng.integers(SPECIAL_IDS, vocab, length - 2).tolist(), 1)
         for length in lengths
@@ -151,7 +159,7 @@ def embed_scenarios(vocab: int) -> dict[str, list[tuple[int, ...]]]:
         f"single/{length}": synthetic_rows([length], vocab, length)
         for length in EMBED_LENGTHS
     }
-    lengths = np.random.default_rng(7).integers(16, 257, BATCH).tolist()
+    lengths = _rng(7).integers(16, 257, BATCH).tolist()
     scenarios[f"batch/{BATCH}x16-256"] = synthetic_rows(lengths, vocab, 7)
     return scenarios
 
@@ -161,7 +169,7 @@ def rerank_scenarios(vocab: int) -> dict[str, list[tuple[int, ...]]]:
     query = synthetic_rows([12], vocab, 1)[0][:-1]
     scenarios = {}
     for count in RERANK_DOCUMENTS:
-        lengths = np.random.default_rng(count).integers(64, 193, count).tolist()
+        lengths = _rng(count).integers(64, 193, count).tolist()
         documents = synthetic_rows(lengths, vocab, count)
         scenarios[f"query+{count}docs"] = [
             query + document[1:] for document in documents
