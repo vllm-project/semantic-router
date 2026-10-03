@@ -121,11 +121,11 @@ type ngramResult struct {
 
 // search returns up to ngramResultLimit corpus entries whose similarity to
 // query is at least the threshold, most similar first; ties keep corpus order.
-func (m *Ngram) search(query string, same []int) []ngramResult {
-	padded := m.pad + query + m.pad
-	length := utf8.RuneCountInString(padded)
+func (m *Ngram) search(text *Text, query string, same []int) []ngramResult {
+	padded := text.ngrams(query, m.arity)
+	length := padded.length
 	var touched []int
-	for _, gram := range countGrams(padded, m.arity) {
+	for _, gram := range padded.grams {
 		for _, posting := range m.grams[gram.text] {
 			if same[posting.entry] == 0 {
 				touched = append(touched, posting.entry)
@@ -186,10 +186,10 @@ func (m *Ngram) Match(text *Text) (Match, bool) {
 		}
 	}
 	for _, word := range text.ngramWords(m.rule.CaseSensitive) {
-		collect(m.search(word, same))
+		collect(m.search(text, word, same))
 	}
 	if len(found) < len(keywords) {
-		collect(m.search(text.input(m.rule.CaseSensitive), same))
+		collect(m.search(text, text.input(m.rule.CaseSensitive), same))
 	}
 	return m.rule.decide(found, similarities)
 }

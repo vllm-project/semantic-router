@@ -121,24 +121,66 @@ var (
 	step1bEndings    = []amongEntry{{"", 3}, {"bb", 2}, {"dd", 2}, {"ff", 2}, {"gg", 2}, {"bl", 1}, {"mm", 2}, {"nn", 2}, {"pp", 2}, {"rr", 2}, {"at", 1}, {"tt", 2}, {"iz", 1}}
 	step1bSuffixes   = []amongEntry{{"ed", 2}, {"eed", 1}, {"ing", 2}, {"edly", 2}, {"eedly", 1}, {"ingly", 2}}
 	step2Suffixes    = []amongEntry{
-		{"anci", 3}, {"enci", 2}, {"ogi", 13}, {"li", 16}, {"bli", 12}, {"abli", 4}, {"alli", 8}, {"fulli", 14},
-		{"lessli", 15}, {"ousli", 10}, {"entli", 5}, {"aliti", 8}, {"biliti", 12}, {"iviti", 11}, {"tional", 1},
-		{"ational", 7}, {"alism", 8}, {"ation", 7}, {"ization", 6}, {"izer", 6}, {"ator", 7}, {"iveness", 11},
-		{"fulness", 9}, {"ousness", 10},
+		{"anci", 3},
+		{"enci", 2},
+		{"ogi", 13},
+		{"li", 16},
+		{"bli", 12},
+		{"abli", 4},
+		{"alli", 8},
+		{"fulli", 14},
+		{"lessli", 15},
+		{"ousli", 10},
+		{"entli", 5},
+		{"aliti", 8},
+		{"biliti", 12},
+		{"iviti", 11},
+		{"tional", 1},
+		{"ational", 7},
+		{"alism", 8},
+		{"ation", 7},
+		{"ization", 6},
+		{"izer", 6},
+		{"ator", 7},
+		{"iveness", 11},
+		{"fulness", 9},
+		{"ousness", 10},
 	}
 	step2Replacements = map[int]string{
 		1: "tion", 2: "ence", 3: "ance", 4: "able", 5: "ent", 6: "ize", 7: "ate", 8: "al", 9: "ful",
 		10: "ous", 11: "ive", 12: "ble", 14: "ful", 15: "less",
 	}
 	step3Suffixes = []amongEntry{
-		{"icate", 4}, {"ative", 6}, {"alize", 3}, {"iciti", 4}, {"ical", 4}, {"tional", 1}, {"ational", 2},
-		{"ful", 5}, {"ness", 5},
+		{"icate", 4},
+		{"ative", 6},
+		{"alize", 3},
+		{"iciti", 4},
+		{"ical", 4},
+		{"tional", 1},
+		{"ational", 2},
+		{"ful", 5},
+		{"ness", 5},
 	}
 	step3Replacements = map[int]string{1: "tion", 2: "ate", 3: "al", 4: "ic"}
 	step4Suffixes     = []amongEntry{
-		{"ic", 1}, {"ance", 1}, {"ence", 1}, {"able", 1}, {"ible", 1}, {"ate", 1}, {"ive", 1}, {"ize", 1},
-		{"iti", 1}, {"al", 1}, {"ism", 1}, {"ion", 2}, {"er", 1}, {"ous", 1}, {"ant", 1}, {"ent", 1},
-		{"ment", 1}, {"ement", 1},
+		{"ic", 1},
+		{"ance", 1},
+		{"ence", 1},
+		{"able", 1},
+		{"ible", 1},
+		{"ate", 1},
+		{"ive", 1},
+		{"ize", 1},
+		{"iti", 1},
+		{"al", 1},
+		{"ism", 1},
+		{"ion", 2},
+		{"er", 1},
+		{"ous", 1},
+		{"ant", 1},
+		{"ent", 1},
+		{"ment", 1},
+		{"ement", 1},
 	}
 	exception2Words = map[string]bool{
 		"succeed": true, "proceed": true, "exceed": true, "canning": true, "inning": true,
@@ -308,7 +350,7 @@ func (s *stemmer) step1b() {
 
 func (s *stemmer) step1c() {
 	s.ket = s.cursor
-	if !(s.hasSuffix("y") || s.hasSuffix("Y")) {
+	if !s.hasSuffix("y") && !s.hasSuffix("Y") {
 		return
 	}
 	s.cursor--

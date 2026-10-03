@@ -11,6 +11,7 @@ package lexical
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // Rule is one keyword rule.
@@ -76,6 +77,19 @@ type Text struct {
 	// [0] case-insensitive, [1] case-sensitive
 	tokens [2]*[]string
 	words  [2]*[]string
+	grams  map[gramsKey]paddedGrams
+}
+
+type gramsKey struct {
+	arity int
+	text  string
+}
+
+// paddedGrams are the distinct n-grams of a space-padded text and the
+// padded text's length in characters.
+type paddedGrams struct {
+	grams  []gramCount
+	length int
 }
 
 // NewText prepares text for matching.
@@ -107,6 +121,23 @@ func (t *Text) bm25Tokens(caseSensitive bool) []string {
 		*slot = &tokens
 	}
 	return **slot
+}
+
+// ngrams returns the n-grams of text padded for arity, computed once per text
+// and arity however many rules search it.
+func (t *Text) ngrams(text string, arity int) paddedGrams {
+	key := gramsKey{arity: arity, text: text}
+	if cached, ok := t.grams[key]; ok {
+		return cached
+	}
+	if t.grams == nil {
+		t.grams = make(map[gramsKey]paddedGrams)
+	}
+	pad := strings.Repeat(" ", arity-1)
+	padded := pad + text + pad
+	computed := paddedGrams{grams: countGrams(padded, arity), length: utf8.RuneCountInString(padded)}
+	t.grams[key] = computed
+	return computed
 }
 
 func (t *Text) ngramWords(caseSensitive bool) []string {
