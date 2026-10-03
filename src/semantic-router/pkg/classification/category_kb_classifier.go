@@ -48,10 +48,6 @@ type KnowledgeBaseClassifier struct {
 	provider    embedding.Provider
 }
 
-func NewKnowledgeBaseClassifier(rule config.KnowledgeBaseConfig, modelType string, baseDir string) (*KnowledgeBaseClassifier, error) {
-	return NewKnowledgeBaseClassifierWithProvider(rule, modelType, baseDir, nil)
-}
-
 func NewKnowledgeBaseClassifierWithProvider(rule config.KnowledgeBaseConfig, modelType string, baseDir string, provider embedding.Provider) (*KnowledgeBaseClassifier, error) {
 	rule = rule.WithDefaults()
 	c := &KnowledgeBaseClassifier{

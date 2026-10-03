@@ -53,7 +53,6 @@ var errorMessages = map[SearchErrorCode]string{
 // ========================
 
 const (
-	maxQueryLength     = 500 // Maximum query length
 	maxResultsLimit    = 10  // Maximum results per request
 	defaultNumResults  = 5   // Default number of results
 	httpTimeout        = 15 * time.Second

@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/observability"
@@ -457,29 +456,6 @@ func Require(permission string, next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		next(w, r)
-	}
-}
-
-func AuditMiddleware(store *Store, action, resource string, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		rw := &auditResponseWriter{ResponseWriter: w}
-		next(rw, r)
-		ac, ok := AuthFromContext(r)
-		uid := ""
-		if ok {
-			uid = ac.UserID
-		}
-		_ = store.AddAuditLog(r.Context(), AuditLog{
-			UserID:     uid,
-			Action:     action,
-			Resource:   resource,
-			Method:     r.Method,
-			Path:       r.URL.Path,
-			IP:         r.RemoteAddr,
-			UserAgent:  r.UserAgent(),
-			StatusCode: rw.statusCodeOr200(),
-			CreatedAt:  time.Now().Unix(),
-		})
 	}
 }
 
