@@ -97,8 +97,10 @@ class DtypePolicy:
     (released runtimes that load the backbone in BF16); CPU keeps ``weights``.
     ``reduced_gpu`` / ``reduced_cpu`` consent to a reduced-precision copy of
     the backbone's linear layers when the configured profile asks for one
-    (``EngineOptions.reduced_precision``): ``"bfloat16"`` on GPUs, ``"int8"``
-    (dynamic) or ``"bfloat16"`` on CPUs; None keeps FP32. A family consents only
+    (``EngineOptions.reduced_precision``): ``"bfloat16"`` on GPUs; on CPUs
+    ``"bfloat16"`` (only where ``DeviceInfo.bf16``), ``"float32-packed"``
+    (oneDNN's pre-packed FP32 linear) or ``"int8"`` (dynamic); None keeps the
+    exact weights. A family consents only
     where its records show at least 99% label agreement with the exact path
     (embeddings: cosine of at least 0.999).
     """
@@ -179,6 +181,8 @@ class ModelSpec:
 
 @dataclass(frozen=True)
 class DeviceInfo:
+    """One device an accelerator offers. ``bf16``: the device computes BF16 natively."""
+
     accelerator: str
     index: int | None
     name: str
@@ -552,12 +556,17 @@ class LoadedModel(ABC):
     ``fuse_bundled_jobs`` lets the ``exact`` profile run the jobs of one
     bundle as one batch, so a family can compute each distinct input once for
     several heads; decision families keep it off because their released
-    numerics batch one request at a time.
+    numerics batch one request at a time. ``batch_invariant``, set at load,
+    says every row's result on this device is the same alone or inside any
+    batch (a test must show it); the ``exact`` profile then runs the jobs of
+    concurrent requests that are queued together in shared batches, without
+    waiting for more.
     """
 
     info: ModelInfo
     engine_model: EngineModel
     fuse_bundled_jobs: ClassVar[bool] = False
+    batch_invariant: bool = False
 
     def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan:
         """Validate and render every question; failures become per-question errors."""

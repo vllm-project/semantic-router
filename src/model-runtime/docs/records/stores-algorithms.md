@@ -73,19 +73,23 @@ use these kernels.
 
 ## Keyword rules (µs per evaluation)
 
+These ran at `c6dd12193` on node D, which has the same CPU model. They
+replace the node B run at `75c1aa5e0`, made before the allocation work
+below.
+
 Each evaluation finds the first match and then all matches. That is two
 binding calls, and two Go passes, each with its own text analysis.
 
-| Scenario | Binding | Go | Speed-up |
-| --- | --- | --- | --- |
-| BM25, 30 rules, long Chinese prompt | 10,271.8 | 584.6 | 17.6× |
-| BM25, 5 rules, long Chinese prompt | 1,723.4 | 378.8 | 4.5× |
-| BM25, 30 rules, short English prompt | 77.68 | 6.94 | 11.2× |
-| BM25, code / medical rules | 9.17 | 5.94 | 1.54× |
-| BM25, 30 rules, long English prompt | 3,328.1 | 180.8 | 18.4× |
-| n-gram, urgent rule, typos | 43.11 | 14.80 | 2.9× |
-| n-gram, code / medical rules | 81.71 | 23.85 | 3.4× |
-| n-gram, 30 rules, long English prompt | 11,531.1 | 1,380.7 | 8.4× |
+| Scenario | Binding | Go | Speed-up | Go allocations |
+| --- | --- | --- | --- | --- |
+| BM25, 30 rules, long Chinese prompt | 10,398.9 | 428.7 | 24.3× | 246 |
+| BM25, 5 rules, long Chinese prompt | 1,755.5 | 195.8 | 9.0× | 246 |
+| BM25, 30 rules, short English prompt | 81.91 | 5.07 | 16.2× | 42 |
+| BM25, code / medical rules | 9.24 | 5.85 | 1.58× | 58 |
+| BM25, 30 rules, long English prompt | 3,378.8 | 100.6 | 33.6× | 64 |
+| n-gram, urgent rule, typos | 43.93 | 14.73 | 3.0× | 176 |
+| n-gram, code / medical rules | 76.02 | 20.73 | 3.7× | 346 |
+| n-gram, 30 rules, long English prompt | 10,389.1 | 1,248.9 | 8.3× | 330 |
 
 Where the speed comes from:
 
@@ -94,5 +98,12 @@ Where the speed comes from:
 - **n-gram:** the text's words and n-grams are computed once and shared by all
   rules of an evaluation.
 - **Both:** ASCII fast paths for lowercasing and word breaking.
+
+Allocations per evaluation (long Chinese prompt: 1,568 → 246; long English:
+710 → 64) came down three ways:
+
+- each distinct word of a text is stemmed once;
+- the Snowball stemmer rewrites its word in one buffer;
+- a BM25 rule that no token reaches allocates nothing.
 
 No keyword or selector scenario is slower than its binding.

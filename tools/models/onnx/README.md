@@ -20,9 +20,9 @@ Transformers 4.57.6, NumPy, ONNX, onnxscript, and ONNX Runtime. The export recei
 records the versions actually used.
 
 ```bash
-python onnx-binding/scripts/export_classifier.py \
+python tools/models/onnx/export_classifier.py \
   --model snapshots/classifier --output exports/classifier --dtype float32
-python onnx-binding/scripts/export_classifier.py \
+python tools/models/onnx/export_classifier.py \
   --model snapshots/classifier --output exports/classifier --dtype float16
 ```
 
@@ -54,18 +54,9 @@ evaluation. `--verify-only` repeats checks for an existing graph; it must still
 match the supplied immutable checkpoint. Receipts contain source/export hashes
 and measured errors. Debug metadata is stripped before publication.
 
-For a validated FP16 encoder with an FP32 head, produce the AMD custom-op graph:
-
-```bash
-python onnx-binding/ort-ck-flash-attn/scripts/rewrite_graph.py \
-  exports/classifier/model_sdpa_fp16.onnx \
-  exports/classifier/model_fa_fp16.onnx --fp32-task-head
-```
-
 Retain the portable FP32 graph, tokenizer and native configuration in the model
-package. Revalidate the rewritten graph against the native reference on AMD,
-including padding and non-aligned lengths, before publishing it. Confirm actual
-GPU execution with runtime profiling; initialization alone is insufficient.
+package: the model runtime's `onnxruntime` engine serves the package's `onnx/`
+graphs, and its native engine serves the same package from the checkpoint.
 
 ## Embeddings and rerankers
 
@@ -82,5 +73,5 @@ optimization. See each model's card for measured choices and defaults.
 
 Run the dependency-light test entry with `make test-training-contracts`. With
 the export dependencies installed, it also executes actual small dynamic graphs
-against native CPU inference. The CK rewrite tests run with
-`make ck-rewrite-test`.
+against native CPU inference. `make onnx-artifact-test` packs shared external
+weights and checks them with real CPU inference.
