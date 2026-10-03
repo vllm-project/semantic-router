@@ -32,7 +32,6 @@ MAX_INPUTS = 2048
 MAX_MEDIA_BYTES = 16 << 20
 NORM_EPSILON = 1e-12
 ENCODINGS = ("float", "base64")
-POOLINGS = ("mean", "cls", "last_token")
 OVERFLOWS = ("reject", "truncate")
 _MEDIA_TYPES = {"image_url": "image", "input_audio": "audio"}
 
@@ -261,10 +260,6 @@ def matryoshka(
     if not normalize:
         return view
     return view / (view.norm(dim=-1, keepdim=True) + NORM_EPSILON)
-
-
-def vectors_to_lists(vectors: torch.Tensor) -> list[list[float]]:
-    return vectors.detach().to("cpu", torch.float32).tolist()
 
 
 def encode_vector(vector: Sequence[float], encoding: str) -> list[float] | str:
