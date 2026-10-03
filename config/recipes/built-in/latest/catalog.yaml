@@ -3667,6 +3667,17 @@ providers:
       status: claimed
       verified_at: '2026-09-24'
       source: https://www.volcengine.com/docs/82379/1330310
+  - catalog: bytedance/seed-2.0-lite
+    relationship: first_party
+    id: doubao-seed-2-0-lite-260428
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://www.volcengine.com/docs/82379/1330310
 - id: writer
   display_name: Writer
   description: Palmyra enterprise models through the Writer chat API.
@@ -5043,6 +5054,51 @@ models:
   - multimodal
   - agentic
   - frontier
+- id: bytedance/seed-2.0-lite
+  display_name: Seed2.0 Lite
+  description: General-purpose Seed2.0 production model that balances output quality and response speed, with image, video,
+    and audio input.
+  kind: physical
+  publisher: ByteDance / Seed
+  presentation:
+    logo: package:bytedance
+    monogram: S
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://seed.bytedance.com/en/seed2
+  family: seed-2.0
+  released_at: '2026-02-14'
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - video
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    - audio
+    output:
+    - text
+  verification:
+    authority: ByteDance Seed Team
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://seed.bytedance.com/en/seed2
+  tags:
+  - proprietary
+  - multimodal
+  - agentic
+  - efficient
 - id: bytedance/seed-oss-36b-instruct
   display_name: Seed OSS 36B Instruct
   description: Open-weight long-context reasoning model for coding, tools, and agentic tasks.
@@ -14931,6 +14987,108 @@ evaluations:
     resolved: 0.469
   status: available
   observed_at: '2026-09-06'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://seed.bytedance.com/en/seed2
+    redistributable: true
+- id: bytedance/seed-2.0-lite-model-card-gpqa-diamond@1.0.0
+  model: bytedance/seed-2.0-lite
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Seed2.0 Lite 0428
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.884
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://seed.bytedance.com/en/seed2
+    redistributable: true
+- id: bytedance/seed-2.0-lite-model-card-supergpqa@1.0.0
+  model: bytedance/seed-2.0-lite
+  benchmark: supergpqa/supergpqa@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Seed2.0 Lite 0428
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.696
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://seed.bytedance.com/en/seed2
+    redistributable: true
+- id: bytedance/seed-2.0-lite-model-card-humanitys-last-exam@1.0.0
+  model: bytedance/seed-2.0-lite
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-no-tools
+  reasoning_effort: unspecified
+  subject:
+    variant: Seed2.0 Lite 0428
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.257
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://seed.bytedance.com/en/seed2
+    redistributable: true
+- id: bytedance/seed-2.0-lite-model-card-beyond-aime@1.0.0
+  model: bytedance/seed-2.0-lite
+  benchmark: bytedance-seed/beyond-aime@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Seed2.0 Lite 0428
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.79
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://seed.bytedance.com/en/seed2
+    redistributable: true
+- id: bytedance/seed-2.0-lite-model-card-swe-bench-pro@1.0.0
+  model: bytedance/seed-2.0-lite
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Seed2.0 Lite 0428
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.466
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://seed.bytedance.com/en/seed2
+    redistributable: true
+- id: bytedance/seed-2.0-lite-model-card-terminal-bench-2.0@1.0.0
+  model: bytedance/seed-2.0-lite
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Seed2.0 Lite 0428
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.433
+  status: available
+  observed_at: '2026-09-23'
   evidence:
     provenance: vendor_claimed
     verification: claimed
