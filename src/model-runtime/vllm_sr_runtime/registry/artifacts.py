@@ -91,23 +91,28 @@ def inventory(root: Path, *, ignore_hub_added: bool = True) -> dict[str, str]:
 
 
 def named_files(root: Path, names: Iterable[str]) -> dict[str, str]:
-    """SHA-256 of the named files under ``root``, with ``inventory``'s link rules.
+    """SHA-256 of each named file under ``root``, for packages whose manifest does not list them.
 
-    For packages whose family loads a known subset of a repository: other
-    files (a cache shared with other consumers may hold more) are never read.
+    Names must be safe relative paths to regular files. As in ``inventory``, a
+    link is followed only inside the Hugging Face cache that holds a Hub
+    snapshot; a local package may hold no links.
     """
     root = Path(root)
+    if not root.is_dir():
+        raise PackageError(f"package root is not a directory: {root}")
+    resolved = root.resolve()
     store = _snapshot_store(root)
     files: dict[str, str] = {}
     for name in sorted(set(names)):
-        path = root / name
         if not safe_relative(name):
-            raise PackageError(f"unsafe package entry: {name}")
-        if path.is_symlink() and (store is None or not _inside(path.resolve(), store)):
+            raise PackageError(f"unsafe package path: {name}")
+        target = (root / name).resolve()
+        linked = target != resolved / name
+        if linked and (store is None or not _inside(target, store)):
             raise PackageError(f"package contains a link: {name}")
-        if not path.is_file():
-            raise PackageError(f"package misses {name}")
-        files[name] = sha256_file(path)
+        if not target.is_file():
+            raise PackageError(f"package file is missing: {name}")
+        files[name] = sha256_file(target)
     return files
 
 

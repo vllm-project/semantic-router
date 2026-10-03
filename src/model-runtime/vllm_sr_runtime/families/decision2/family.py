@@ -42,10 +42,10 @@ from ...systemone import (
     question_options,
     valid_state,
 )
+from ...text.segments import collate, encode
 from ...text.tokenizer import Tokenizer
 from . import package as pkg
 from .answers import apply_score_bias, product_answer
-from .renderer import collate, encode
 
 INT32_MAX = 2**31 - 1
 GOLDEN_STATE = (
