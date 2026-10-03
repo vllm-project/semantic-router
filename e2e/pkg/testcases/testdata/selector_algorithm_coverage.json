@@ -1,0 +1,78 @@
+[
+  {
+    "algorithm": "automix",
+    "tier": "experimental",
+    "status": "planned",
+    "target_profile": "selector-algorithms"
+  },
+  {
+    "algorithm": "hybrid",
+    "tier": "supported",
+    "status": "planned",
+    "target_profile": "selector-algorithms"
+  },
+  {
+    "algorithm": "kmeans",
+    "tier": "experimental",
+    "status": "partial",
+    "profile": "ml-model-selection",
+    "testcase": "model-selection",
+    "prerequisite": "serialized model artifact"
+  },
+  {
+    "algorithm": "knn",
+    "tier": "experimental",
+    "status": "partial",
+    "profile": "ml-model-selection",
+    "testcase": "model-selection",
+    "prerequisite": "serialized model artifact"
+  },
+  {
+    "algorithm": "latency_aware",
+    "tier": "supported",
+    "status": "planned",
+    "target_profile": "selector-algorithms"
+  },
+  {
+    "algorithm": "mlp",
+    "tier": "experimental",
+    "status": "partial",
+    "profile": "ml-model-selection",
+    "testcase": "model-selection",
+    "prerequisite": "serialized model artifact"
+  },
+  {
+    "algorithm": "multi_factor",
+    "tier": "supported",
+    "status": "planned",
+    "target_profile": "selector-algorithms"
+  },
+  {
+    "algorithm": "prompt",
+    "tier": "experimental",
+    "status": "planned",
+    "target_profile": "selector-algorithms",
+    "prerequisite": "deterministic router-model fixture"
+  },
+  {
+    "algorithm": "router_dc",
+    "tier": "supported",
+    "status": "planned",
+    "target_profile": "selector-algorithms"
+  },
+  {
+    "algorithm": "static",
+    "tier": "supported",
+    "status": "covered",
+    "profile": "selector-algorithms",
+    "testcase": "selector-static"
+  },
+  {
+    "algorithm": "svm",
+    "tier": "experimental",
+    "status": "partial",
+    "profile": "ml-model-selection",
+    "testcase": "model-selection",
+    "prerequisite": "serialized model artifact"
+  }
+]
