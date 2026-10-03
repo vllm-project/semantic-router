@@ -1,0 +1,6 @@
+{
+ "path": "/data/dev2/runs/release/triton/runtime-a-9b-rah",
+ "digest": "d669a88554d98c7eb972d460728866dcd55ebbbe7cda468ff3b1d1470d77a462",
+ "files": 4929,
+ "from": "the new-side autotune cache of fast.sh 9B --parity --hotfix 20261003T044136Z on node D (all four scored panels through the hotfix runtime of 3c8cd1a84 on the 9B switch revision 214ffa43; it started from that release's autotune cache after the old runtime ran the same panels), copied to node A and frozen read-only"
+}
