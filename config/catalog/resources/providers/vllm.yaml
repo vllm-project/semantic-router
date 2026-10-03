@@ -574,6 +574,17 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B
+- catalog: microsoft/phi-4-reasoning-plus
+  relationship: self_hosted
+  id: microsoft/Phi-4-reasoning-plus
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-plus/blob/69baf8528e1bcf05f475034d9e5dd32875ed125f/README.md
 - catalog: cohere/tiny-aya-global
   relationship: self_hosted
   id: CohereLabs/tiny-aya-global
