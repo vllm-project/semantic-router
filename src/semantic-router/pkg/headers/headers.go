@@ -68,7 +68,8 @@ const (
 	VSRSelectedRecipe = "x-vsr-selected-recipe"
 
 	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
-	// This is the final routing decision made by the DecisionEngine.
+	// This is the final routing decision made by the DecisionEngine. It is
+	// omitted when no decision matched and the request went to the default model.
 	// Example values: "math_decision", "business_decision", "thinking_decision"
 	VSRSelectedDecision = "x-vsr-selected-decision"
 

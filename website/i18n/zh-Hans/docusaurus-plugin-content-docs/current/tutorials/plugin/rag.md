@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "96399a94b9030d66f46c5d45f9a838defc091153"
+  source_commit: "a40f020886bccb76b38e5e598b37b0b83910bc3b"
   source_file: "docs/tutorials/plugin/rag.md"
   outdated: false
 ---
@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`rag` 在生成前为已匹配路由检索外部上下文。可选择 Milvus 或 Qdrant 进行直接向量存储检索，或使用外部 HTTP API、MCP 工具、OpenAI 文件搜索、Router 的向量存储服务，或主/备混合。
+`rag` 在生成前为已匹配路由检索外部上下文。可选择 Milvus 或 Qdrant 进行直接向量存储检索，或使用外部 HTTP API、OpenAI 文件搜索、Router 的向量存储服务，或主/备混合。在路由器具备 MCP 工具调用器之前，`mcp` 会在启动时被拒绝。
 
 ## 主要优势
 
@@ -36,7 +36,7 @@ translation:
 | `milvus` | 从 Milvus collection 直接检索 | `collection`；可选复用响应缓存连接 |
 | `qdrant` | 从 Qdrant collection 直接检索 | `collection`；可选复用响应缓存连接 |
 | `external_api` | 具有自定义 HTTP 请求契约的服务 | `endpoint`、`request_format` |
-| `mcp` | 作为 MCP 工具暴露的检索 | `server_name`、`tool_name` |
+| `mcp` | 在具备 MCP 工具调用器之前，启动时会被拒绝 | `server_name`、`tool_name` |
 | `openai` | OpenAI 文件搜索 | `vector_store_id`、`api_key` |
 | `vectorstore` | Router 管理的向量存储服务 | `vector_store_id` |
 | `hybrid` | 带可选回退的主后端 | `primary`，以及后端专用嵌套配置 |
