@@ -6,6 +6,7 @@ import base64
 import io
 import json
 import time
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -59,6 +60,22 @@ def test_a_missing_extra_names_its_install(nano, monkeypatch):
         RuntimeError, match=r"Pillow: pip install 'vllm-sr-runtime\[multimodal\]'"
     ):
         family.describe(package)
+
+
+def test_the_default_engine_serves_a_bundle_on_onnxruntime(nano):
+    from vllm_sr_runtime.config import ModelConfig, ServeConfig
+    from vllm_sr_runtime.runtime import Runtime
+
+    served = ModelConfig(model=str(nano), name="omni", device="cpu")
+    runtime = Runtime(ServeConfig(models=(served,)))
+    runtime.start(background=False)
+    try:
+        assert runtime.lookup("omni").card([])["engine"] == "onnxruntime"
+    finally:
+        runtime.stop()
+    native = Runtime(ServeConfig(models=(replace(served, engine="native"),)))
+    with pytest.raises(RuntimeError, match="no engine can run"):
+        native.load()
 
 
 @pytest.fixture(scope="module")
