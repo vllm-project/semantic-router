@@ -237,6 +237,10 @@ class TaskHeadsModel(LoadedModel):
 
     # -- execution --------------------------------------------------------
 
+    def shared_context(self, items: list[Item], token_budget: int | None) -> int:
+        """Encoder heads read whole sequences, so no job shares a prefix (0: run exactly)."""
+        return 0
+
     def run_approximate(self, items: list[Item]) -> list[Any]:
         """``run`` on the engine's reduced copy of the backbone, where it loaded one (``max_speed``)."""
         return self.run(items, reduced=True)
