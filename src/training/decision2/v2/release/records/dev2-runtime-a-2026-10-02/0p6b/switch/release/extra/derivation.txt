@@ -1,0 +1,2 @@
+v2/release/specs/dev2-0p6b-ras.json 0b30675708741610f3e35cde247dee31f68fa39d3c438c1aeba26ffa85b83b18
+v2/release/records/dev2-runtime-a-2026-10-02/Decision-2.0-Kai-0.6B.decision.ras.json f38f9b48e510e1e99ac3ac2ec53ff141c5c49dc4e7f31cbdc3beccd89168f171

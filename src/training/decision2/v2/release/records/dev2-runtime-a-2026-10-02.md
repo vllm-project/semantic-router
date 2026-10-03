@@ -2,13 +2,15 @@
 
 Owner: runtime phase A worker 2d541b40 (`track=runtime-a`), worktree `vllm-sr-dev2-runtime-a`, branch
 `xunzhuo/decision-2-runtime-a`. User approval of phase A 2026-10-02 18:00 UTC+8 (gist `6b59c3be`, COORDINATION
-18:00). Everything stays private. Ops, evidence, specs, decisions and receipts:
+18:00). The six repositories and the collection are public since 2026-10-03 01:25 UTC+8 (user decision); runtime
+revisions on them were allowed again at 02:38 (COORDINATION). Ops, evidence, specs, decisions and receipts:
 [`dev2-runtime-a-2026-10-02/`](dev2-runtime-a-2026-10-02/).
 
 ## Result
 
-**Five repositories carry the phase A runtime as runtime-only revisions; Vega 27B is measured and prepared and is
-held for the 27B model release.** Every size answers all four scored panels (typed-final 1,600, css15 6,547,
+**All six repositories carry the phase A runtime as runtime-only revisions** (Vega 27B since 2026-10-03, together
+with the opt-in shared-context switch; section 5), and Kai, Eos, Sol and Vega also ship the switch (off by default;
+section 6). Every size answers all four scored panels (typed-final 1,600, css15 6,547,
 public231 231, mlx-diag 2,275: 10,653 prompts) identically to the released runtime on the released weights: 0 answer
 changes, 0.0 drift.
 
@@ -19,12 +21,13 @@ changes, 0.0 drift.
 | Decision-2.0-Sol-2B | `951e7f7f` | `6a62b3198f3bcf87259cfc2d72185b4861884394` | 10,653 / 10,653, 0.0 | 21.09 → 7.18 ms | 21.41 → 7.21 ms | 4.57 → 5.07 |
 | Decision-2.0-Nox-4B | `36596d27` | `137e28ceebd52b9611bb72e3645536867e0ec1ec` | 10,653 / 10,653, 0.0 | 27.26 → 12.94 ms | 28.36 → 14.58 ms | 9.25 → 9.74 |
 | Decision-2.0-Lux-9B | `6af07f36` | `f77b41f5c1a98974548d929c03e7bce008f71bd0` | 10,653 / 10,653, 0.0 | 31.76 → 19.48 ms | 32.86 → 19.79 ms | 16.83 → 17.32 |
-| Decision-2.0-Vega-27B | `e60bd8e3` | held (section 5) | 10,653 / 10,653, 0.0 | 109.80 → 69.18 ms | 113.87 → 71.50 ms | 57.36 → 61.49 |
+| Decision-2.0-Vega-27B | `5c85c127` | `9b067a95560284dac8c98ef4130fd5a2c5a92ff9` (section 5) | 10,653 / 10,653, 0.0 | 104.12 → 71.42 ms | 110.07 → 73.80 ms | not measured |
 
 Latency: `runtime_bench.py`, 400 single typed-final requests after 400 warm-up requests (two passes), one MI300X GPU on
 node A, the tier's release image, the old and the new package in turn from the same autotune cache; all 400 answers
 bit-identical between the two runtimes in every bench. The card's Speed line is the new p50 (Kai 4.9 ms, Eos 6.0,
-Sol 7.2, Nox 12.9, Lux 19.5).
+Sol 7.2, Nox 12.9, Lux 19.5, Vega 71.4). Nox and Lux have since been superseded by their publishers' model releases,
+which build on this runtime.
 
 **Kai against the projection.** The phase A gist projected about 5 ms for Kai 0.6B; measured p50 4.89 ms (p95
 6.05 ms), 3.3× faster than the released 15.96 ms. A per-request profile of the new runtime totals 5.28 ms, 4.11 ms of
@@ -94,13 +97,43 @@ its first two attempts stay in `4b/release/extra.before-*`.
 - Shared-module changes (called out): `runtime/fast.py`, `runtime/fast_kernels.py` (new), `decision2/qwen.py` (the
   hook), `tests/gpu_fast_path.py`.
 
-## 5. Vega 27B (held)
+## 5. Vega 27B (released 2026-10-03 on `5c85c127`)
 
-Parity and bench on `e60bd8e3`'s weights pass (table above; 64 layers fused, lean LoRA). `specs/dev2-27b-ra.json` and
-`Decision-2.0-Vega-27B.decision.ra.json` supersede `e60bd8e3`, frozen cache `runtime-a-27b` (`c42bbdfb…`). Not
-published: at 21:20 UTC+8 COORDINATION directed the 27B worker (f5779f55) to release the cross-arm point on top of
-`e60bd8e3`, and a runtime-only revision now would make that release re-derive. Either the 27B release derives from
-`dev2-27b-ra.json` as 9B M10 did, or, after it lands, `ra.sh 27B` publishes a runtime-only revision on top of it
-(re-derived against the new `main`, with a parity run on the new weights).
+First measured on `e60bd8e3`'s weights (p50 109.80 → 69.18 ms, p95 113.87 → 71.50 ms; evidence `27b/e60bd8e3/`) and
+held while the 27B model release ran. That release landed as `5c85c127` with the old runtime; COORDINATION 02:38 /
+03:18 UTC+8 then gave the Vega slot to this worker with the shared-context switch merged in. Parity and bench were
+run again on `5c85c127` through the switch runtime (`27b/switch/`): 10,653 / 10,653 identical, 0.0 drift; 400 bench
+items bit-identical, p50 104.12 → 71.42 ms, p95 110.07 → 73.80 ms; frozen cache `runtime-a-27b-ras` (`b406a73a…`,
+2,788 files). `ra.sh 27B --switch` published `9b067a95` (spec `dev2-27b-ras.json`, decision
+`Decision-2.0-Vega-27B.decision.ras.json`): weights byte-identical, the README's Speed line 93.4 → 71.4 ms, every
+`release.sh` check, examples bit-identical to the superseded package on the same GPU, card HTTP, links, collection,
+and the 86-request gate. The first post-check pass failed only in `ra_diff.py`, whose file listing (shared with the
+rename record) still required a private repository; `ra_diff.py` now checks visibility against `hub.expected_private`
+(`6aabf62d3`) and `--post-only` passed (the first pass is kept as `27b/switch/release/extra.before-*`).
 
-GPU use: about 4–5 GPU-h of the 20 budgeted (parity and bench 1.7 GPU-h; the rest releases, post-checks and tests).
+## 6. Opt-in shared-context switch (`runtime/shared_ctx.py`, `9d90afd10`; COORDINATION 2026-10-03 02:38 / 03:18)
+
+Runtime-only revisions with the runtime of `9cffe606c` (phase A plus `share_context`, off by default) on Kai, Eos and
+Sol's phase A revisions, and on Vega's together with phase A. Same parity rollout: `fast.sh <tier> --switch` (old side:
+current `main` with its release image, spec and autotune cache), `make_fast.py --kind switch` (`specs/dev2-<key>-ras.json`,
+`<name>.decision.ras.json`), `ra.sh <tier> --switch` (`decision2/shared_ctx.py` must be added; the README may be
+unchanged because its Speed line rounds to 0.1 ms). After each upload `ops/gate86.sh` runs the Index harness's
+86-request parity gate on the download: the steps of `v2/eval/ix1/launch.sh parity` (the package's entry point, then
+the kit runner `87d4650b` with the release engine, then `v2.eval.ix1.parity`) with the package's own `vllm-sr`
+repo_id, since `launch.sh` still names the former organization. The phase A revisions of Kai, Eos and Sol passed it
+first (86 / 86, max |dp| 0.0).
+
+| Model | Superseded | New `main` | Parity (default path) | p50 before → after | p95 before → after | 86-request gate |
+| --- | --- | --- | --- | --- | --- | --- |
+| Decision-2.0-Kai-0.6B | `51b7b474` | `881bee413681d80ebeac86afcda8b4138dae516e` | 10,653 / 10,653, 0.0 | 4.86 → 4.88 ms | 6.05 → 6.04 ms | 86 / 86, 0.0 |
+| Decision-2.0-Eos-0.8B | `1d380452` | `ad0aa724c924f7c4194be94b1b8441caf2d61c01` | 10,653 / 10,653, 0.0 | 5.96 → 6.00 ms | 6.84 → 6.89 ms | 86 / 86, 0.0 |
+| Decision-2.0-Sol-2B | `6a62b319` | `4b75b52114583b4519001492e8dfb0926c89cfe1` | 10,653 / 10,653, 0.0 | 7.17 → 7.16 ms | 7.21 → 7.20 ms | 86 / 86, 0.0 |
+| Decision-2.0-Vega-27B | `5c85c127` | `9b067a95560284dac8c98ef4130fd5a2c5a92ff9` | 10,653 / 10,653, 0.0 | 104.12 → 71.42 ms | 110.07 → 73.80 ms | 86 / 86, 0.0 |
+
+All four: weights byte-identical (`ra_diff.py --switch`), post-checks OK, still public, Nox and Lux untouched. Kai,
+Eos and Sol's README is unchanged (only `api.py`, `qwen.py`, the new `shared_ctx.py` and the manifest differ). The
+first Kai and Eos benches ran while Vega's post-checks shared the GPU and are not used; both were repeated alone
+(`<key>/switch/bench/`). Frozen caches `runtime-a-<key>-ras` (`<key>/switch/triton.json`). Receipts:
+`<key>/switch/release/`.
+
+GPU use: about 8 GPU-h of the 20 budgeted (phase A about 5; the switch rollout about 3, most of it Vega).
