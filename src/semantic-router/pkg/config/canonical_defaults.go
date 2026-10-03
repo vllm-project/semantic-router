@@ -255,10 +255,9 @@ func defaultPromptGuardModule() CanonicalPromptGuardModule {
 	return CanonicalPromptGuardModule{
 		ModelRef: "prompt_guard",
 		PromptGuardConfig: PromptGuardConfig{
-			Enabled:              true,
-			Threshold:            0.5,
-			UseCPU:               true,
-			JailbreakMappingPath: "models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json",
+			Enabled:   true,
+			Threshold: 0.5,
+			UseCPU:    true,
 		},
 	}
 }
@@ -268,17 +267,15 @@ func defaultClassifierModule() CanonicalClassifierModule {
 		Domain: CanonicalCategoryModule{
 			ModelRef: "domain_classifier",
 			CategoryModel: CategoryModel{
-				Threshold:           0.5,
-				UseCPU:              true,
-				CategoryMappingPath: "models/Vela-1.0-Encoder-307M-Domain/category_mapping.json",
+				Threshold: 0.5,
+				UseCPU:    true,
 			},
 		},
 		PII: CanonicalPIIModule{
 			ModelRef: "pii_classifier",
 			PIIModel: PIIModel{
-				Threshold:      0.9,
-				UseCPU:         true,
-				PIIMappingPath: "models/Vela-1.0-Encoder-307M-PII/pii_mapping.json",
+				Threshold: 0.9,
+				UseCPU:    true,
 			},
 		},
 		Preference: PreferenceModelConfig{

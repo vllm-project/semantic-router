@@ -140,6 +140,24 @@ func implicitTaskDeploymentsInUse(cfg *RouterConfig, plan *ModelBindingPlan) map
 	return used
 }
 
+// RuntimeServedModelPaths lists the resolved local paths of the built-in
+// models that the scope's module consumers run through implicit model_runtime
+// deployments: the runtime downloads them at their pinned revisions, so the
+// router does not. Any other module model is a local package directory.
+func (c *RouterConfig) RuntimeServedModelPaths() map[string]bool {
+	paths := make(map[string]bool)
+	for _, consumer := range c.implicitConsumers() {
+		module, ok := c.implicitModule(consumer)
+		if !ok {
+			continue
+		}
+		if spec := GetModelByPath(strings.TrimSpace(module.model)); spec != nil && servedBuiltIn(spec) {
+			paths[ResolveModelPath(module.model)] = true
+		}
+	}
+	return paths
+}
+
 // implicitConsumers lists the task consumers a scope's modules and rules may run.
 func (c *RouterConfig) implicitConsumers() []string {
 	consumers := []string{"domain_classifier", "prompt_guard", "pii_classifier", "fact_check_classifier", "feedback_detector", "modality_detector", "hallucination_detector"}

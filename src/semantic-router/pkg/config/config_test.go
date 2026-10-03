@@ -733,7 +733,7 @@ classifier:
 				Expect(cfg.IsPIIClassifierEnabled()).To(BeFalse())
 			})
 
-			It("should return false when mapping path is missing", func() {
+			It("should return true for a local model without a mapping path", func() {
 				configContent := `
 classifier:
   pii_model:
@@ -745,7 +745,8 @@ classifier:
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(cfg.IsPIIClassifierEnabled()).To(BeFalse())
+				// The served model's card supplies the labels.
+				Expect(cfg.IsPIIClassifierEnabled()).To(BeTrue())
 			})
 		})
 

@@ -1078,5 +1078,4 @@ var _ = Describe("validatePromptGuardBackendConfig", func() {
 		}
 		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
 	})
-
 })
