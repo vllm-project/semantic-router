@@ -22,7 +22,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("streaming-keyword-routing", pkgtestcases.TestCase{
-		Description: "Verify keyword routing works identically with streamed request body mode",
+		Description: "Verify every keyword routing case selects its decision when the request body arrives in several streamed chunks",
 		Tags:        []string{"streaming", "routing", "keyword"},
 		Fn:          testStreamingKeywordRouting,
 	})
@@ -79,12 +79,17 @@ func testStreamingKeywordRouting(ctx context.Context, client *kubernetes.Clients
 
 	passed := 0
 	for _, tc := range cases {
-		resp, err := sendNonStreamingRequest(ctx, tc.query, "MoM", localPort)
+		resp, err := sendChunkedChatRequest(ctx, localPort, chatRequestBody(tc.query, "MoM", false), streamedBodyWrites)
 		if err != nil {
 			fmt.Printf("[Streaming] FAIL %s: %v\n", tc.name, err)
 			continue
 		}
+		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			fmt.Printf("[Streaming] FAIL %s: status %d: %s\n", tc.name, resp.StatusCode, truncateString(string(body), 200))
+			continue
+		}
 
 		decision := resp.Header.Get("x-vsr-selected-decision")
 		actualDec := strings.TrimSuffix(decision, "_decision")
@@ -109,8 +114,8 @@ func testStreamingKeywordRouting(ctx context.Context, client *kubernetes.Clients
 		})
 	}
 
-	if passed == 0 {
-		return fmt.Errorf("streaming keyword routing: 0/%d passed", len(cases))
+	if passed != len(cases) {
+		return fmt.Errorf("streaming keyword routing: %d/%d passed", passed, len(cases))
 	}
 	return nil
 }
