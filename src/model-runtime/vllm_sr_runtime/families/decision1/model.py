@@ -170,6 +170,23 @@ class VelaDecisionModel(Decision1Model):
                 for slot, item in enumerate(items)
             ]
 
+    def run_approximate(self, items: list[RenderedItem]) -> list[list[float] | None]:
+        """Each question type's layer stack over that type's rows only, padded to their longest.
+
+        The released runtime runs every type's stack over the whole batch;
+        rows of other types are wasted work but change GEMM shapes, so this
+        is for approximate profiles (up to three times fewer row passes on a
+        mixed request).
+        """
+        results: list[list[float] | None] = [None] * len(items)
+        for kind in KINDS:
+            rows = [slot for slot, item in enumerate(items) if item.task_type == kind]
+            if rows:
+                answers = self.run([items[slot] for slot in rows])
+                for slot, value in zip(rows, answers, strict=True):
+                    results[slot] = value
+        return results
+
 
 class QwenDecisionModel(Decision1Model):
     """Eos, Sol, Nox and Lux: a Qwen3.5 backbone and the shared candidate head (``qwen.py``)."""

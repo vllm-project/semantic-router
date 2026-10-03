@@ -408,6 +408,32 @@ def test_model_info(runtimes):
     )
 
 
+def test_approximate_batches_run_each_stack_over_its_own_rows(packages, runtimes):
+    model = model_of(runtimes["vela"])
+    plan = model.plan(STATE, MANY)
+    batch = [plan.items[index] for index in model.exact_batches(plan.items)[0]]
+    assert len({item.task_type for item in batch}) > 1
+    exact, approximate = model.run(batch), model.run_approximate(batch)
+    for row, value in zip(exact, approximate, strict=True):
+        assert value == pytest.approx(row, abs=1e-4)
+    single = [item for item in batch if item.task_type == batch[0].task_type]
+    assert model.run_approximate(single) == model.run(single)
+
+
+def test_batching_profile_serves_the_encoder(packages):
+    runtime = Runtime(
+        ServeConfig(model=str(packages["vela"]), device="cpu", profile="batching")
+    )
+    runtime.start(background=False)
+    try:
+        exact = decide(runtime, MANY, profile="exact")[1]["answers"]
+        batched = decide(runtime, MANY, profile="batching")[1]["answers"]
+    finally:
+        runtime.stop()
+    assert batched.keys() == exact.keys()
+    assert all(batched[q]["type"] == exact[q]["type"] for q in exact)
+
+
 def test_shared_context_profile_serves_the_decoder(packages):
     runtime = Runtime(
         ServeConfig(model=str(packages["qwen"]), device="cpu", profile="shared_context")
