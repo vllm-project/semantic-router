@@ -10,9 +10,18 @@ test-model-selection-parity: ## Compare Python-trained selectors with the router
 
 .PHONY: test-model-selection-parity
 
+ONNX_ARTIFACT_PYTHON_DEPS ?= onnx==1.22.0 onnxruntime==1.24.2
+
+onnx-artifact-test: harness-venv-install ## Verify external ONNX weight packing with real CPU inference
+	@"$(AGENT_PYTHON)" -c "import onnx, onnxruntime" 2>/dev/null || "$(AGENT_PYTHON)" -m pip install --quiet $(ONNX_ARTIFACT_PYTHON_DEPS)
+	@"$(AGENT_PYTHON)" -m unittest discover -s tools/models/onnx/artifact_tests -p 'test_*.py'
+
+.PHONY: onnx-artifact-test
+
 test-training-contracts: harness-venv-install ## Run dependency-light model training contract tests
 	@"$(AGENT_PYTHON)" -m unittest src.training.control_plane.test_contracts
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s tools/models/onnx/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/mmbert_32k/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/multimodal/small/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/multimodal/large/tests -p 'test_*.py'
