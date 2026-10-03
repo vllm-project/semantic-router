@@ -1,136 +1,187 @@
 #!/usr/bin/env bash
-# Start the linux/riscv64 router under qemu-user and prove /health plus one classify.
+# Run the pure-Go linux/riscv64 router under qemu-user with a model runtime on
+# the host attached, and prove /health, /ready and one Domain classification
+# that the runtime serves through the router.
 set -euo pipefail
 
 REPO_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 cd "${REPO_ROOT}"
-export VLLM_SR_CONFIG_BASE_DIR="${REPO_ROOT}"
 
 ROUTER_BIN=${RISCV_ROUTER_BIN:?}
-CONFIG=${RISCV_ROUTER_CONFIG:?}
 QEMU=${RISCV_QEMU:?}
-SYSROOT=${RISCV_SYSROOT:?}
-LIBDIR=${RISCV_CANDLE_LIBDIR:?}
+RUNTIME=${VLLM_SR_RUNTIME_COMMAND:-vllm-sr-runtime}
+REPORT_DIR=${MODEL_TEST_REPORT_DIR:?}
+RUNTIME_PORT=${RISCV_RUNTIME_PORT:-18100}
 API_PORT=${RISCV_ROUTER_API_PORT:-18080}
 EXTPROC_PORT=${RISCV_ROUTER_EXTPROC_PORT:-15051}
 METRICS_PORT=${RISCV_ROUTER_METRICS_PORT:-19190}
-HEALTH_TIMEOUT=${RISCV_ROUTER_HEALTH_TIMEOUT:-90}
-READY_TIMEOUT=${RISCV_ROUTER_READY_TIMEOUT:-1200}
-CLASSIFY_TIMEOUT=${RISCV_ROUTER_CLASSIFY_TIMEOUT:-600}
+READY_TIMEOUT=${RISCV_ROUTER_READY_TIMEOUT:-600}
+RUNTIME_URL="http://127.0.0.1:${RUNTIME_PORT}"
 API_URL="http://127.0.0.1:${API_PORT}"
-REPORT_DIR=${MODEL_TEST_REPORT_DIR:?}
-MODEL_MANIFEST=${MODEL_TEST_MANIFEST:-${REPORT_DIR}/models.json}
+DEPLOYMENT=riscv-domain
+PROMPT="What is photosynthesis?"
 mkdir -p "${REPORT_DIR}"
-python3 - "${CONFIG}" "${MODEL_MANIFEST}" "${REPORT_DIR}/router-config.yaml" <<'PYCONFIG'
-import json
-import sys
-from pathlib import Path
-import yaml
 
-config = yaml.safe_load(Path(sys.argv[1]).read_text())
-manifest = json.loads(Path(sys.argv[2]).read_text())
-assert manifest["provider"] == "candle" and len(manifest["models"]) == 1
-model = manifest["models"][0]
-assert model["name"] == "Domain"
-domain = config["global"]["model_catalog"]["modules"]["classifier"]["domain"]
-domain["model_id"] = model["path"]
-domain["category_mapping_path"] = str(Path(model["path"]) / "category_mapping.json")
-Path(sys.argv[3]).write_text(yaml.safe_dump(config, sort_keys=False))
-PYCONFIG
-CONFIG="${REPORT_DIR}/router-config.yaml"
-
-log=$(mktemp)
-pid=""
+work=$(mktemp -d)
+pids=()
 cleanup() {
-  if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+  for pid in "${pids[@]}"; do
     kill "${pid}" 2>/dev/null || true
     wait "${pid}" 2>/dev/null || true
-  fi
-  echo "----- router log -----"
-  cat "${log}"
-  rm -f "${log}"
+  done
+  for log in runtime router; do
+    echo "----- ${log} log -----"
+    cat "${REPORT_DIR}/${log}.log" 2>/dev/null || true
+  done
+  rm -rf "${work}"
 }
 trap cleanup EXIT
 
-export LD_LIBRARY_PATH="${LIBDIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-
-echo "Starting RISC-V router under qemu-user on api-port ${API_PORT}"
-"${QEMU}" -L "${SYSROOT}" "${ROUTER_BIN}" \
-  -config="${CONFIG}" \
-  -port="${EXTPROC_PORT}" \
-  -api-port="${API_PORT}" \
-  -metrics-port="${METRICS_PORT}" \
-  -enable-api=true \
-  >"${log}" 2>&1 &
-pid=$!
-
 wait_http() {
-  local path="$1"
-  local seconds="$2"
-  local elapsed=0
-  while (( elapsed < seconds )); do
+  local name="$1" url="$2" seconds="$3" pid="$4" elapsed=0
+  while ((elapsed < seconds)); do
     if ! kill -0 "${pid}" 2>/dev/null; then
-      echo "router process exited before ${path}" >&2
+      echo "${name} exited before ${url} answered" >&2
       return 1
     fi
-    if curl -sf --max-time 5 -o "${REPORT_DIR}${path}.body" \
-      -w '%{http_code}' "${API_URL}${path}" >"${REPORT_DIR}${path}.status"; then
-      echo "${path} ready after ${elapsed}s"
+    if curl -sf --max-time 5 -o "${REPORT_DIR}/${name}.body" \
+      -w '%{http_code}' "${url}" >"${REPORT_DIR}/${name}.status"; then
+      echo "${name} ready after ${elapsed}s"
       return 0
     fi
     sleep 2
     elapsed=$((elapsed + 2))
   done
-  echo "timed out waiting for ${path} after ${seconds}s" >&2
+  echo "timed out waiting for ${url} after ${seconds}s" >&2
   return 1
 }
 
-wait_http /health "${HEALTH_TIMEOUT}"
-wait_http /ready "${READY_TIMEOUT}"
-
-echo "POST /api/v1/diagnostics/classify/intent"
-status=$(curl -sf --max-time "${CLASSIFY_TIMEOUT}" \
-  -o "${REPORT_DIR}/classify.body" -w '%{http_code}' \
+# A tiny random-weight Domain classifier, served on the host CPU.
+"${RUNTIME}" fixture "${work}/domain" --family task_heads --variant sequence
+"${RUNTIME}" serve "${work}/domain" --served-model-name "${DEPLOYMENT}" --device cpu \
+  --host 127.0.0.1 --port "${RUNTIME_PORT}" >"${REPORT_DIR}/runtime.log" 2>&1 &
+pids+=("$!")
+wait_http runtime-health "${RUNTIME_URL}/health" 300 "${pids[0]}"
+curl -sf --max-time 60 -o "${REPORT_DIR}/runtime-classify.body" \
   -H "Content-Type: application/json" \
-  -d '{"text":"What is photosynthesis?"}' \
+  -d "{\"model\":\"${DEPLOYMENT}\",\"input\":\"${PROMPT}\"}" \
+  "${RUNTIME_URL}/v1/classify"
+
+cat >"${REPORT_DIR}/router-config.yaml" <<EOF
+version: v0.3
+listeners:
+  - name: riscv-qemu-http
+    address: 0.0.0.0
+    port: 18888
+    timeout: 60s
+providers:
+  defaults:
+    model: riscv-model
+  models:
+    - name: riscv-model
+      provider_model_id: riscv-model
+      backend_refs:
+        - name: primary
+          provider: vllm
+          weight: 100
+          endpoint: 127.0.0.1:8000/v1
+          protocol: http
+routing:
+  modelCards:
+    - name: riscv-model
+      modality: text
+  model_bindings:
+    domain_classifier:
+      deployment: ${DEPLOYMENT}
+      contract: label_distribution.v1
+  signals:
+    domains:
+      - name: biology
+        description: Biology prompts.
+        mmlu_categories: [biology]
+      - name: other
+        description: Everything else.
+        mmlu_categories: [other]
+  decisions:
+    - name: default-route
+      description: Fallback route.
+      priority: 10
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: riscv-model
+          use_reasoning: false
+global:
+  router:
+    model_selection:
+      enabled: false
+  services:
+    response_api:
+      enabled: false
+    router_replay:
+      enabled: false
+    startup_status:
+      store_backend: file
+    observability:
+      tracing:
+        enabled: false
+  stores:
+    response_cache:
+      enabled: false
+  model_catalog:
+    deployments:
+      ${DEPLOYMENT}:
+        provider: model_runtime
+        endpoint: ${RUNTIME_URL}
+        device: cpu
+EOF
+
+echo "Starting the linux/riscv64 router under qemu-user"
+"${QEMU}" "${ROUTER_BIN}" \
+  -config="${REPORT_DIR}/router-config.yaml" \
+  -port="${EXTPROC_PORT}" \
+  -api-port="${API_PORT}" \
+  -metrics-port="${METRICS_PORT}" \
+  -enable-api=true \
+  >"${REPORT_DIR}/router.log" 2>&1 &
+pids+=("$!")
+wait_http health "${API_URL}/health" 120 "${pids[1]}"
+wait_http ready "${API_URL}/ready" "${READY_TIMEOUT}" "${pids[1]}"
+classify_status=$(curl -sf --max-time 120 -o "${REPORT_DIR}/classify.body" -w '%{http_code}' \
+  -H "Content-Type: application/json" -d "{\"text\":\"${PROMPT}\"}" \
   "${API_URL}/api/v1/diagnostics/classify/intent")
-resp=$(cat "${REPORT_DIR}/classify.body")
-echo "${resp}"
 
-preview_status=$(curl -sf --max-time "${CLASSIFY_TIMEOUT}" \
-  -o "${REPORT_DIR}/preview.body" -w '%{http_code}' \
-  -H "Content-Type: application/json" \
-  -d '{"text":"What is photosynthesis?","model":"vllm-sr/auto"}' \
-  "${API_URL}/api/v1/routing/preview")
-
-python3 - "${resp}" "${REPORT_DIR}" "${status}" "${preview_status}" <<'PY'
+python3 - "${REPORT_DIR}" "${classify_status}" <<'PY'
 import json
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
-data = json.loads(sys.argv[1])
-category = (data.get("classification") or {}).get("category") or ""
-decision = data.get("routing_decision") or ""
-if not category or decision == "placeholder_response" or data.get("signal_errors"):
-    raise SystemExit(
-        f"classify did not use the domain classifier: category={category!r} routing_decision={decision!r}"
-    )
-print(f"classified category={category}")
-directory = Path(sys.argv[2])
+directory = Path(sys.argv[1])
 responses = [
-    {"path": path, "http_status": int((directory / (path + ".status")).read_text()),
-     "body": (directory / (path + ".body")).read_text()}
-    for path in ("health", "ready")
+    {
+        "path": name,
+        "http_status": int((directory / f"{name}.status").read_text()),
+        "body": (directory / f"{name}.body").read_text(),
+    }
+    for name in ("health", "ready")
 ]
-responses.append({"path": "classify", "http_status": int(sys.argv[3]), "body": data})
-responses.append({"path": "preview", "http_status": int(sys.argv[4]), "body": json.loads((directory / "preview.body").read_text())})
+responses.append(
+    {
+        "path": "classify",
+        "http_status": int(sys.argv[2]),
+        "body": json.loads((directory / "classify.body").read_text()),
+    }
+)
 report = {
     "source_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+    "runtime": json.loads((directory / "runtime-classify.body").read_text()),
     "responses": responses,
 }
 (directory / "router.json").write_text(json.dumps(report, indent=2) + "\n")
 sys.path.insert(0, "tools/ci")
 from riscv_evidence import router_cases
+
 router_cases(report, report["source_sha"])
 PY

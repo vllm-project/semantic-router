@@ -210,7 +210,7 @@ def evidence(directory: Path, *, root: Path = ROOT) -> dict:
         *("profile/" + name for name in profile_expected),
     ]
     return {
-        "runtime": "ort",
+        "runtime": "model-runtime",
         "device": "cpu",
         "platform": actual_platform(),
         "cases": cases,
