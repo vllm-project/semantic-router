@@ -42,7 +42,7 @@ questions you write in plain language.
 vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
 ```
 
-The first start downloads the model (about 1.2 GB) into your Hugging Face
+The first start downloads the model (about 1.5 GB) into your Hugging Face
 cache and checks every file against its pinned hash. The model is ready when
 its health check passes. In a second terminal:
 
@@ -75,16 +75,19 @@ option. The answer for `reasoning` is the probability that the answer is yes:
 
 ```json title="Response"
 {
-  "model": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "model": "Decision-2.0-Kai-0.6B",
   "answers": {
-    "kind": {"type": "choice", "choice": "code", "probabilities": {"code": 0.97, "math": 0.02, "chat": 0.01}, "confidence": 0.9},
-    "reasoning": {"type": "noul", "noul": 0.31}
-  }
+    "kind": {"type": "choice", "choice": "code", "probabilities": {"code": 0.504, "math": 0.133, "chat": 0.362}, "confidence": 0.106},
+    "reasoning": {"type": "noul", "noul": 0.519}
+  },
+  "usage": {"input_tokens": 168, "output_tokens": 0}
 }
 ```
 
-Your numbers will differ slightly. `GET /v1/models` shows what is loaded, where
-it runs and whether it passed its self-check.
+The response also carries `meta`: the revision, profile and device that
+answered and how long it took. On 16 CPU cores this request takes about 0.2
+seconds. `GET /v1/models` shows what is loaded, where it runs and whether it
+passed its self-check.
 
 The same command serves classifiers. Stop the server with Ctrl-C and serve the
 Vela Domain classifier instead:

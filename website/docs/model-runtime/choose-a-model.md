@@ -28,8 +28,9 @@ Face revision, so the same name always loads the same files.
 | Embed text, images and audio together | `vllm-sr/Vela-1.0-Omni-Nano` or `-Mini` | 164M / 1.36B | Mini is more accurate and accepts longer text |
 | Ask your own questions in plain language | A decision model (next section) | 0.6B to 27B | |
 
-The task models all run well on a CPU. Most of them read up to 32,768 tokens;
-longer or shorter limits are listed on each model card and in `GET /v1/models`.
+The task models all run well on a CPU: on 16 cores Vela Domain classifies a
+short request in about 17 ms. Most of them read up to 32,768 tokens; longer or
+shorter limits are listed on each model card and in `GET /v1/models`.
 
 ## Decision models
 
@@ -39,7 +40,7 @@ smallest one that is accurate enough for your questions.
 
 | Model | Size | Runs well on | Good for |
 | --- | --- | --- | --- |
-| `vllm-sr/Decision-2.0-Kai-0.6B` | 0.6B | CPU or any GPU | Fast, simple routing questions; the default choice to start with |
+| `vllm-sr/Decision-2.0-Kai-0.6B` | 0.6B | CPU (about 0.2 s for two questions on 16 cores) or any GPU | Fast, simple routing questions; the default choice to start with |
 | `vllm-sr/Decision-2.0-Eos-0.8B` | 0.8B | CPU or any GPU | Slightly harder questions at similar cost |
 | `vllm-sr/Decision-2.0-Sol-2B` | 2B | GPU; CPU for low traffic | Questions that need more judgment |
 | `vllm-sr/Decision-2.0-Nox-4B` | 4B | GPU | Nuanced questions and many options |
