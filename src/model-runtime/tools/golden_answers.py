@@ -1,15 +1,17 @@
 """Print a model's golden answers on this host's device class, or record a family's into its golden file.
 
     python3 tools/golden_answers.py vllm-sr/Decision-2.0-Kai-0.6B --device cpu
-    python3 tools/golden_answers.py vllm-sr/Decision-2.0-Lux-9B --device rocm:0 \\
+    python3 tools/golden_answers.py vllm-sr/Decision-1.0-Lux-9B --device rocm:0 \\
         --autotune-cache /var/cache/vllm-sr-runtime/autotune
     python3 tools/golden_answers.py --family task_heads --device cpu --offline \\
         --record vllm_sr_runtime/registry/golden_answers_vela1.json
 
-Decision 2.0 answers its golden questions; every other family answers its
-golden surface request, recorded as the readiness check compares it
-(``LoadedModel.golden_values``). ``--record`` merges this device class into
-the file's entries, keyed by repository and pinned revision.
+The model is served as ``vllm-sr-runtime serve`` serves it (verification,
+pinned kernel choices, readiness) and answers its family's golden requests on
+the exact profile, recorded as the readiness check compares them: decision
+answers, or a surface response's numbers (``LoadedModel.golden_values``).
+``--record`` merges this device class into the file's entries, keyed by
+repository and pinned revision.
 """
 
 from __future__ import annotations
@@ -20,7 +22,6 @@ from pathlib import Path
 from typing import Any
 
 from vllm_sr_runtime.config import ServeConfig
-from vllm_sr_runtime.families.decision2.family import GOLDEN_QUESTIONS, GOLDEN_STATE
 from vllm_sr_runtime.registry import builtin
 from vllm_sr_runtime.runtime import Runtime
 
@@ -41,22 +42,23 @@ def answers(
     )
     try:
         runtime.load()
-        served = runtime.served[0]
-        assert served.placement is not None and served.model is not None
-        if served.family.name == "decision2":
-            values: Any = served._golden_decisions(GOLDEN_STATE, GOLDEN_QUESTIONS)
-        else:
-            goldens = served.family.golden(served.package)
-            if len(goldens) != 1:
-                raise SystemExit(
-                    f"{model}: expected one golden request, got {len(goldens)}"
+        served = runtime.primary
+        assert served.model is not None and served.placement is not None
+        assert served.family is not None and served.package is not None
+        values: dict[str, Any] = {}
+        for golden in served.family.golden(served.package):
+            if "surface" in golden:
+                values.update(served.golden_surface(golden["surface"], golden["body"]))
+            else:
+                values.update(
+                    served.golden_decisions(golden["state"], golden["questions"])
                 )
-            values = served._golden_surface(goldens[0]["surface"], goldens[0]["body"])
+        info = served.model.info
         return {
-            "model": served.model.info.id,
-            "repo": served.model.info.repo,
-            "revision": served.model.info.revision,
-            "model_sha256": served.model.info.model_sha256,
+            "model": info.id,
+            "repo": info.repo,
+            "revision": info.revision,
+            "model_sha256": info.model_sha256,
             "device": served.placement.device.label,
             "readiness": served.health.golden.describe(),
             "golden_answers": {served.placement.device.accelerator: values},
