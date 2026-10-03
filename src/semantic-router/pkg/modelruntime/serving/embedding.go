@@ -403,7 +403,14 @@ func (p *EmbeddingProvider) embed(ctx context.Context, inputs []modelservice.Emb
 		}
 		keys[i] = embedding.NewVectorKey(p.numerics, options, kind, []byte(content))
 	}
-	return sharedVectors.Resolve(ctx, keys, func(ctx context.Context, missing []int) ([]embedding.Embedded, error) {
+	// Inside a request bundle, waiting on another participant's call would
+	// hold the bundle until its window ends; the bundle carries both calls'
+	// inputs in one round trip instead.
+	resolve := sharedVectors.Resolve
+	if modelservice.InBundle(ctx) {
+		resolve = sharedVectors.ResolveAlone
+	}
+	return resolve(ctx, keys, func(ctx context.Context, missing []int) ([]embedding.Embedded, error) {
 		vectors := make([]embedding.Embedded, 0, len(missing))
 		for start := 0; start < len(missing); {
 			end := len(missing)
