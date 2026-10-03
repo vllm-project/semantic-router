@@ -235,9 +235,15 @@ HUB_REPOSITORIES = {
         )
     },
     "models/Vela-1.0-Encoder-307M": "vllm-sr/Vela-1.0-Encoder-307M",
-    OMNI_NANO: "vllm-sr/Vela-1.0-Omni-Nano",
-    OMNI_MINI: "vllm-sr/Vela-1.0-Omni-Mini",
     QWEN3_EMBEDDING: "Qwen/Qwen3-Embedding-0.6B",
+}
+
+# Omni repositories hold PyTorch source; the runtime serves the verified ONNX
+# bundle that tools/models/vela_omni prepares, which router images ship here.
+PREPARED_BUNDLE_ROOT = "/opt/router-model-artifacts"
+PREPARED_BUNDLES = {
+    OMNI_NANO: f"{PREPARED_BUNDLE_ROOT}/vela-1.0-omni-nano",
+    OMNI_MINI: f"{PREPARED_BUNDLE_ROOT}/vela-1.0-omni-mini",
 }
 
 
@@ -274,15 +280,16 @@ def is_retired_nli(value: object) -> bool:
     return isinstance(value, str) and _normalized(value) in _RETIRED_KEYS
 
 
-def hub_repository(value: object) -> str | None:
-    """The Hub repository of a registry path, after any legacy replacement."""
+def runtime_artifact(value: object) -> str | None:
+    """The model_runtime artifact of a registry path, after any legacy replacement:
+    its Hub repository, or the prepared bundle router images ship."""
     if not isinstance(value, str):
         return None
     path = _normalized(value)
     replacement = _REPLACEMENTS.get(path)
     if replacement is not None:
         path = replacement.target
-    return HUB_REPOSITORIES.get(path)
+    return HUB_REPOSITORIES.get(path) or PREPARED_BUNDLES.get(path)
 
 
 def follow_mapping_path(

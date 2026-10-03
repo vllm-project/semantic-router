@@ -13,11 +13,12 @@ import posixpath
 from typing import Any
 
 from cli.config_migration_legacy_models import (
+    PREPARED_BUNDLE_ROOT,
     Replacement,
     follow_mapping_path,
-    hub_repository,
     is_retired_nli,
     replacement_for,
+    runtime_artifact,
 )
 from cli.config_migration_notes import MigrationNotes
 
@@ -180,17 +181,24 @@ def _migrate_artifact(
     if not isinstance(artifact, str) or not artifact.strip():
         return
     replacement = replacement_for(artifact)
-    hub = hub_repository(artifact)
-    if hub:
-        deployment["artifact"] = hub
+    target = runtime_artifact(artifact)
+    if target:
+        deployment["artifact"] = target
         if replacement is not None:
             deployment.pop("revision", None)
             notes.changed(
-                path + ".artifact", f"{artifact} -> {hub}: {replacement.note}"
+                path + ".artifact", f"{artifact} -> {target}: {replacement.note}"
             )
-        elif hub != artifact:
+        elif target.startswith(PREPARED_BUNDLE_ROOT):
+            deployment.pop("revision", None)
             notes.changed(
-                path + ".artifact", f"{artifact} -> {hub} (its Hub repository)"
+                path + ".artifact",
+                f"{artifact} -> {target} (the prepared bundle router images ship; "
+                "elsewhere prepare it with tools/models/vela_omni/prepare.py)",
+            )
+        elif target != artifact:
+            notes.changed(
+                path + ".artifact", f"{artifact} -> {target} (its Hub repository)"
             )
         return
     if posixpath.isabs(artifact) or _looks_like_hub_repository(artifact):

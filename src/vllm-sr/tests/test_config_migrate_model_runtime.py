@@ -618,3 +618,36 @@ def test_migrate_command_lists_changes_and_actions(tmp_path):
         "deployments"
     ]
     assert deployments["risk"]["provider"] == "model_runtime"
+
+
+def test_omni_deployments_name_the_prepared_bundle_router_images_ship():
+    migrated, notes = _migrate(
+        _config(
+            {
+                "model_catalog": {
+                    "deployments": {
+                        "nano": {
+                            "provider": "ort",
+                            "artifact": "models/vela-1.0-omni-nano",
+                            "device": "cpu",
+                        },
+                        "legacy": {
+                            "provider": "candle",
+                            "artifact": "models/mom-embedding-multimodal",
+                        },
+                    }
+                }
+            }
+        )
+    )
+
+    deployments = _catalog(migrated)["deployments"]
+    assert (
+        deployments["nano"]["artifact"]
+        == "/opt/router-model-artifacts/vela-1.0-omni-nano"
+    )
+    assert deployments["legacy"]["artifact"] == (
+        "/opt/router-model-artifacts/vela-1.0-omni-nano"
+    )
+    assert any("prepare.py" in note.message for note in notes)
+    assert any("re-embedded" in note.message for note in notes)
