@@ -32,6 +32,7 @@ DOCKER_PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/docker-publish.yml
 RELEASE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/release.yml"
 CI_IMAGE_INVENTORY_PATH = REPO_ROOT / "tools/ci/classify_pr_changes.py"
 CI_IMAGE_ARTIFACTS_PATH = REPO_ROOT / "tools/ci/image_artifacts.py"
+CI_IMAGE_CATALOG_PATH = REPO_ROOT / "tools/ci/docker-image-catalog.tsv"
 SIM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/pypi-publish-vllm-sr-sim.yml"
 PUBLISH_CRATE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/publish-crate.yml"
 UPGRADE_ROLLBACK_DOC_PATH = REPO_ROOT / "website/docs/installation/upgrade-rollback.md"
@@ -215,9 +216,26 @@ def parse_release_images() -> tuple[str, ...]:
 
 
 def parse_defined_images() -> set[str]:
-    """Find literal image keys in the canonical artifact builder."""
+    """Find image names in the shared catalog consumed by the artifact builder."""
 
-    module = ast.parse(read_text(CI_IMAGE_ARTIFACTS_PATH))
+    builder = read_text(CI_IMAGE_ARTIFACTS_PATH)
+    if "load_image_catalog" not in builder:
+        return _parse_literal_definitions(builder)
+    images = set()
+    for line in read_text(CI_IMAGE_CATALOG_PATH).splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        image = line.split("\t", 1)[0].strip()
+        if not IMAGE_NAME_RE.fullmatch(image):
+            raise ValueError("could not find canonical image build definitions")
+        images.add(image)
+    if not images:
+        raise ValueError("could not find canonical image build definitions")
+    return images
+
+
+def _parse_literal_definitions(source: str) -> set[str]:
+    module = ast.parse(source)
     for statement in module.body:
         if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
             continue

@@ -14,19 +14,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import provider_mocker_image as mocker
+from docker_image_catalog import load_image_catalog
 
-DUAL = ["linux/amd64", "linux/arm64"]
+# Build inputs come from docker-image-catalog.tsv. Do not duplicate that mapping here.
 DEFINITIONS = {
-    "dashboard": (".", "dashboard/backend/Dockerfile", DUAL),
-    "extproc": (".", "tools/docker/Dockerfile.extproc", DUAL),
-    "extproc-rocm": (".", "tools/docker/Dockerfile.extproc-rocm", ["linux/amd64"]),
-    mocker.IMAGE: (mocker.CONTEXT, mocker.CONTEXT + "/Dockerfile", DUAL),
-    "operator": (".", "deploy/operator/Dockerfile", DUAL),
-    "operator-bundle": ("deploy/operator", "deploy/operator/bundle/Dockerfile", DUAL),
-    "vllm-sr": (".", "src/vllm-sr/Dockerfile", DUAL),
-    "vllm-sr-cuda": (".", "src/vllm-sr/Dockerfile.cuda", ["linux/amd64"]),
-    "vllm-sr-rocm": (".", "src/vllm-sr/Dockerfile.rocm", ["linux/amd64"]),
-    "vllm-sr-sim": (".", "src/fleet-sim/Dockerfile", DUAL),
+    image: (definition.context, definition.dockerfile, list(definition.platforms))
+    for image, definition in load_image_catalog().items()
 }
 IMAGE_ENV = {
     "vllm-sr": ["VLLM_SR_IMAGE", "VLLM_SR_ROUTER_IMAGE"],
