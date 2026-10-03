@@ -24,19 +24,23 @@ writer of Nox / Lux / Vega. No repo was written by this worker.
   - `61e989a2f`: merge of the PR branch; the backbones are mine, plus the lead's named constants.
   - `18c51bdaa`: ruff clean under the repo config.
   - `df51b0d5f`: graphs only up to 4,096 padded tokens; throughput after two warm passes.
-- **Running:**
-  - node F GPU2 / 4 / 3: `bin/perf_chain.sh` with `NATIVE_ONLY=1`, native perf at `df51b0d5f`
-    (Kai / Eos / Sol, Nox / Lux, Vega), into `perf/<tier>-2026...T061*`;
-  - node B GPU0–2: `ixnative.py --profile exact` for Eos, the same-image exact baseline
-    (`results/ixn16-Eos-exact-s*`);
-  - node B CPU: `eos_score.sh`, merge and bootstrap of the native batching / max_speed Eos runs against the
-    stored base (`private-ix/eos-native-*`).
-- **Leases:** node F GPU2–4 and node B GPU0–2 (`owner.runtime-c`); node A all released.
+- **PR branch** `xunzhuo/model-runtime-decision2` (PR #4481; the lead merged the port as `58c8550f6`) is at
+  `48e12c040`. My commits on it:
+  - `f705e2d10`: graph cap of 4,096 padded tokens;
+  - `99208b6d3`: never destroy captured graphs;
+  - `48e12c040`: `docs/records/` (parity, perf, profiles).
+  - Local branch `mr-work` in `vllm-sr-mr-inference`. The old branch
+    `xunzhuo/model-runtime-decision2-inference` is superseded.
+- **Running:** nothing. **Leases:** all released (nodes A, B, F).
 - **Next:**
-  1. Merge the exact baseline; bootstrap batching and max_speed against it; write `docs/records/profiles.md`.
-  2. Finish the perf record from the `df51b0d5f` lanes.
-  3. Commit the records; post "ready" for the lead's merge.
-  4. Report to the coordinator.
+  1. Released runtime: a runtime-only revision for all six that stops graph eviction, on the coordinator's go
+     (HF revisions paused).
+  2. Pin FLA autotune choices per device class (frozen cache or fixed configs), so the Qwen3.5 exact path is
+     reproducible across processes; then golden answers per device class.
+  3. Batching: shape bucketing for graph hits under real concurrency. Measure the Index on more sizes; Eos leans
+     negative with its CI containing 0.
+  4. `max_speed` approximate kernels (merged projections) with their own accuracy record.
+  5. Optional vLLM investigation.
 
 ## Results so far
 
@@ -49,10 +53,17 @@ writer of Nox / Lux / Vega. No repo was written by this worker.
   - panels: Kai typed-final −0.35 pt [−0.65, −0.05]; every other panel and size has a CI containing 0;
   - Kai Index (released-runtime harness, exact sample 900 / 900 equal to the base): the paired bootstrap CI
     contains 0.
-- **Eos Index, base mismatch:** the stored base differs from today's exact path at rounding level. The native
-  exact sample is 667 / 900 identical, single-question requests included (median drift 0.0025, max 0.02),
-  probably a different gated-delta kernel environment. Profiles are therefore compared against a same-image
-  exact baseline.
+- **Eos Index, profiles against exact in one process** (native engine with the fix, all 120,226 requests):
+  - batching changes 999 / 282,335 decisions (0.35%) and max_speed 1,007 (0.36%); no status changes;
+  - the noise floor (each question alone) is 0.30–0.41% on the Index sample;
+  - the bootstraps are in `private-ix/eos-paired-f/boot-*.json`.
+- **Autotune:** FLA's gated-delta kernels autotune per process, so the exact path of the Qwen3.5 sizes is
+  bit-identical only under the same autotune choices. Two processes matched the stored Eos base on 667 and
+  834 / 900 requests at rounding level. Parity runs reuse the release autotune cache.
+- **Graph eviction crash:** large graphs evicted from the shared pool between large eager batches gave GPU memory
+  access faults: 5 / 6 Eos shards; reproduced at group 155. Without eviction there were 0 / 6 crashes over the
+  full Index. Evicting small graphs (8-graph cache, 1,700+ evictions) did not crash. Fix `a16d41f5c`: stop
+  capturing at the limit. The released runtime has the same eviction code; not reproduced there.
 - **Throughput:** batching scales on the GPU (Eos 1.35 ms per row at 64 rows; 710 req/s at 64 concurrent with
   pre-rendered requests). Under independent clients most batch shapes are new, so graphs were rarely replayed and
   captures cost several forwards each. Hence the 4,096-token graph cap, which is bit-identical because graphs and
@@ -70,6 +81,7 @@ writer of Nox / Lux / Vega. No repo was written by this worker.
 | batching bench / fidelity / Index runs (HF harness) | B 0–3 | 2.5 |
 | native parity (eager + fast), shared verification | A 2–6 | 3.5 |
 | perf lanes (released + native, two rounds) | F 2–4 | 2.0 |
-| Eos Index, native batching / max_speed / exact | B 0–3, 6, 7 | 1.5 |
-| GPU tests, row-scaling and contention probes | A 2, F 2 | 0.3 |
-| **Total so far** | | **≈ 18** |
+| Eos Index, native batching / max_speed / exact (four rounds incl. the crash hunt) | B 0–7 | 4.5 |
+| GPU tests, parity re-checks, row-scaling and contention probes | A 2–6, F 2 | 1.0 |
+| perf rerun (clean lane) | F 2–4 | 1.0 |
+| **Total** | | **≈ 23** |
