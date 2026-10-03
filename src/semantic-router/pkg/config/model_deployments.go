@@ -27,6 +27,12 @@ type ModelDeployment struct {
 	// Endpoint attaches a model_runtime deployment to an engine the Router does
 	// not manage (unix:///path, http://host:port or https://host:port).
 	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+	// Process groups managed model_runtime deployments into one runtime
+	// process; without it the Router runs one process per device.
+	Process string `yaml:"process,omitempty" json:"process,omitempty"`
+	// ServedName selects the model on an attached runtime that serves several
+	// (default: the deployment name).
+	ServedName string `yaml:"served_name,omitempty" json:"served_name,omitempty"`
 }
 
 // ModelInputBudget is a deployment restriction, not an advertised model
@@ -156,8 +162,8 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	default:
 		return fmt.Errorf("unsupported provider %q", d.Provider)
 	}
-	if d.Profile != "" || d.Endpoint != "" {
-		return fmt.Errorf("profile and endpoint apply only to model_runtime deployments")
+	if d.Profile != "" || d.Endpoint != "" || d.Process != "" || d.ServedName != "" {
+		return fmt.Errorf("profile, endpoint, process and served_name apply only to model_runtime deployments")
 	}
 	if d.CustomOpsProfile != "" && (d.CustomOpsProfile != "ck_flash_attention" || d.Provider != "ort" || !strings.HasPrefix(d.Device, "rocm:")) {
 		return fmt.Errorf("custom_ops_profile requires ck_flash_attention on an ORT rocm:index deployment")
@@ -264,8 +270,8 @@ func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 }
 
 func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDeployment) error {
-	if deployment.IsModelRuntime() {
-		return fmt.Errorf("model_runtime deployments serve decision signals and the decision algorithm, not task bindings")
+	if deployment.IsModelRuntime() && name == "hallucination_explainer" {
+		return fmt.Errorf("the NLI hallucination explainer is retired and has no model_runtime task")
 	}
 	want := ""
 	if decl.OperatingPoint != nil {
@@ -326,7 +332,7 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 	if decl.Contract != want {
 		return fmt.Errorf("contract must be %q for %s", want, name)
 	}
-	if strings.TrimSpace(decl.Adapter) == "" {
+	if strings.TrimSpace(decl.Adapter) == "" && !deployment.IsModelRuntime() {
 		return fmt.Errorf("adapter is required")
 	}
 	if name == "complexity" && deployment.Provider != "http" {
@@ -347,7 +353,7 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		}
 	}
 	if decl.Adapter == "vela_halu" {
-		if name != "hallucination_detector" || (deployment.Provider != "candle" && deployment.Provider != "ort") {
+		if name != "hallucination_detector" || !deployment.IsLocalTask() {
 			return fmt.Errorf("vela_halu requires a local hallucination_detector binding")
 		}
 		if deployment.Input.MaxTokens > 8192 {
@@ -402,6 +408,9 @@ func validateModelDeploymentContracts(cfg *RouterConfig) error {
 	for _, name := range sortedModelKeys(cfg.ModelDeployments) {
 		if strings.TrimSpace(name) == "" || strings.TrimSpace(name) != name {
 			return fmt.Errorf("model deployment name must be non-empty and trimmed")
+		}
+		if strings.HasPrefix(name, ImplicitDeploymentPrefix) {
+			return fmt.Errorf("global.model_catalog.deployments.%s: names starting with %q are reserved for module defaults", name, ImplicitDeploymentPrefix)
 		}
 		if err := cfg.ModelDeployments[name].WithDefaults().validate(cfg); err != nil {
 			return fmt.Errorf("global.model_catalog.deployments.%s: %w", name, err)

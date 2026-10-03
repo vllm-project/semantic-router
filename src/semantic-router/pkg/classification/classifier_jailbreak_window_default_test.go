@@ -14,7 +14,7 @@ import (
 func TestDefaultJailbreakWindowUsesRegistryBudgetWithoutChangingSource(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
 	original := cfg.PromptGuard
-	models, err := newClassifierModelRuntime(&cfg, nil)
+	models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestDefaultJailbreakWindowRespectsArtifactSelection(t *testing.T) {
 			cfg := config.DefaultGlobalConfig()
 			cfg.PromptGuard.ModelID = test.artifact
 			original := cfg.PromptGuard
-			models, err := newClassifierModelRuntime(&cfg, nil)
+			models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -129,7 +129,7 @@ func TestDefaultJailbreakWindowPreservesAMDDeployment(t *testing.T) {
 	cfg.ModelBindings = map[string]config.ModelBinding{
 		"prompt_guard": {Deployment: "guard-amd", Adapter: "modernbert", Contract: config.RemoteClassifierContractLabelDistribution},
 	}
-	models, err := newClassifierModelRuntime(&cfg, nil)
+	models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func TestDefaultJailbreakWindowPreservesContrastiveInputs(t *testing.T) {
 			if explicit == 0 && len(original) < 2 {
 				t.Fatal("neutral fixture must exercise the original contrastive chunk boundary")
 			}
-			models, err := newClassifierModelRuntime(&cfg, nil)
+			models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -55,7 +55,7 @@ func TestEmbeddingConsumerUsesSelectedRecipeBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer defaultSet.Close()
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{Runtime: runtime, Embeddings: defaultSet})
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{EmbeddingRuntime: runtime, Embeddings: defaultSet})
 	if err != nil {
 		t.Fatal(err)
 	}

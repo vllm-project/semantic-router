@@ -8,7 +8,24 @@ package modelservice
 import (
 	"context"
 	"errors"
+	"os"
+	"time"
 )
+
+// ReadyTimeoutEnv bounds, as a Go duration, how long preparing a binding waits
+// for its deployment to become ready when the caller sets no deadline.
+const ReadyTimeoutEnv = "VLLM_SR_RUNTIME_READY_TIMEOUT"
+
+const defaultReadyTimeout = 10 * time.Minute
+
+// ReadyTimeout is the preparation wait from ReadyTimeoutEnv (default 10 minutes:
+// a first start may download and verify the models).
+func ReadyTimeout() time.Duration {
+	if value, err := time.ParseDuration(os.Getenv(ReadyTimeoutEnv)); err == nil && value > 0 {
+		return value
+	}
+	return defaultReadyTimeout
+}
 
 // Question is one typed question; Choices keep Choice / Noul option order and
 // Levels keep Score level order.

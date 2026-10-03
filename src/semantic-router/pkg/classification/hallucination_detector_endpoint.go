@@ -260,16 +260,6 @@ func (d *EndpointHallucinationDetector) IsInitialized() bool {
 	return d.initialized
 }
 
-// IsNLIInitialized always returns false for the endpoint backend. The endpoint
-// does not ship a local NLI explainer model, and HasHallucinationExplainer /
-// the /classify/nli readiness APIs specifically represent that Candle-only NLI
-// capability. Advertising NLI readiness here would let those APIs report ready
-// while the NLI path fails. The endpoint's own generative explanation still flows
-// through DetectWithNLI independently of this flag.
-func (d *EndpointHallucinationDetector) IsNLIInitialized() bool {
-	return false
-}
-
 func (d *EndpointHallucinationDetector) buildRequestPayload(reqContext, question, answer string) ([]byte, error) {
 	prompt := fmt.Sprintf("User request: %s\n\nExcerpt 1:\n%s\n\nAnswer to verify:\n%s", question, reqContext, answer)
 
@@ -454,7 +444,7 @@ func endpointSpanExplanation(explanation, category, subcategory string) string {
 	}
 }
 
-// DetectWithNLI runs a single structured detection call against the endpoint.
+// classifyGrounded runs a single structured detection call against the endpoint.
 // It fails open by returning an error (not a clean verdict) for any transport,
 // status, read, or parse failure: the response filter already passes traffic
 // through on error and records the detection_error path rather than not_detected.
@@ -486,7 +476,8 @@ func (d *EndpointHallucinationDetector) ClassifyGrounded(ctx context.Context, in
 	return d.handle.Call(ctx, string(d.spec.Recipe), input)
 }
 
-func (d *EndpointHallucinationDetector) DetectWithNLI(ctx context.Context, reqContext, question, answer string) (*EnhancedHallucinationResult, error) {
+// DetectWithExplanations returns the endpoint's spans with its own explanations.
+func (d *EndpointHallucinationDetector) DetectWithExplanations(ctx context.Context, reqContext, question, answer string) (*EnhancedHallucinationResult, error) {
 	if answer == "" {
 		return d.cleanResult(), nil
 	}
@@ -512,7 +503,7 @@ func (d *EndpointHallucinationDetector) cleanResult() *EnhancedHallucinationResu
 }
 
 func (d *EndpointHallucinationDetector) Detect(ctx context.Context, reqContext, question, answer string) (*HallucinationResult, error) {
-	enhanced, err := d.DetectWithNLI(ctx, reqContext, question, answer)
+	enhanced, err := d.DetectWithExplanations(ctx, reqContext, question, answer)
 	if err != nil {
 		return nil, err
 	}
