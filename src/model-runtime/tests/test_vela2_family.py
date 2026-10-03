@@ -202,6 +202,10 @@ def test_shared_context_profile_packs_only_decoder_trees(models, name) -> None:
     job = Job(items=plan.items, deadline=None, enqueued=0.0, profile=profile.name)
     batches = profile.plan([job], model.forward_token_budget())
     assert [b.shared_prefix for b in batches] == ([1] if name == "decoder" else [0])
+    surface = SurfacePlan("decisions", plan.items, plan.input_tokens, plan)
+    assert model.finish_surface(
+        surface, model.run_approximate(plan.items)
+    ) == model.finish_surface(surface, model.run(plan.items, shared_prefix=1))
 
 
 @pytest.mark.parametrize("layout", ["rows", "packed"])

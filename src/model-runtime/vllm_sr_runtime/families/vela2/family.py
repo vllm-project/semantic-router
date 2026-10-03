@@ -19,7 +19,6 @@ from ...errors import DEADLINE_EXCEEDED, MAX_LENGTH_EXCEEDED, PackageError
 from ...plugins.base import (
     DEADLINE,
     BackboneSpec,
-    DeviceInfo,
     DtypePolicy,
     EngineModel,
     LoadedModel,
@@ -239,15 +238,6 @@ class Vela2Family(ModelFamily):
             info, engine_model, details, member, reader, answerer, _tokenizer(details)
         )
 
-    def kernel_choices(
-        self, package: VerifiedPackage, device: DeviceInfo
-    ) -> dict[str, Any]:
-        """The pinned FLA kernel choices of a built-in 4B / 9B backbone on the device's class."""
-        known = builtin.by_identity(package.model_sha256)
-        if known is None or not device.arch:
-            return {}
-        return known.kernel_choices.get(f"{device.accelerator}:{device.arch}", {})
-
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
         known = builtin.by_identity(package.model_sha256)
         expected = dict(known.golden_answers) if known else {}
@@ -319,6 +309,10 @@ class Vela2Model(LoadedModel):
         if isinstance(self.member, DecoderMember):
             return self.member.run(items, packed=shared_prefix > 0)
         return self.member.run(items)
+
+    def run_approximate(self, items: list[Any]) -> list[Any]:
+        """Approximate batches (the batching profile) pack the 4B / 9B trees too."""
+        return self.run(items, shared_prefix=1)
 
     def finish_surface(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:
         state: Vela2Plan = plan.state
