@@ -1,9 +1,11 @@
 // Command e2e-audit emits the runtime-derived E2E execution graph as
 // deterministic JSON on stdout: registered testcases, canonical registered
 // profiles, each profile's resolved GetTestCases selection, the derived
-// drift sets, and the explicit per-profile CI selection overrides with
-// their drift diagnosis. The output is generated audit evidence for issue
-// #2379 and is never committed as a source of truth.
+// drift sets, the explicit per-profile CI selection overrides with their
+// drift diagnosis, and the baseline-suite selection layer (what each profile
+// executes under each suite, computed by the production selector, with its
+// drift diagnosis and the CI dispatch contract). The output is generated
+// audit evidence for issue #2379 and is never committed as a source of truth.
 package main
 
 import (
@@ -13,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
 	"github.com/vllm-project/semantic-router/e2e/pkg/verification"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/all"
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
@@ -28,6 +31,16 @@ type ciOverrideReport struct {
 	OmittedUnrecorded  []string `json:"omitted_unrecorded"`
 	StaleExclusions    []string `json:"stale_exclusions"`
 	Phantom            []string `json:"phantom"`
+}
+
+// effectiveSelectionReport is the audit view of the baseline-suite layer:
+// the derived selection per profile and suite, the drift Gate E enforces for
+// the baseline profile (all empty on a consistent contract), and the suite
+// dispatch the CI workflow declares.
+type effectiveSelectionReport struct {
+	verification.EffectiveSelection
+	BaselineDrift verification.SuiteDrift      `json:"baseline_drift"`
+	CIDispatch    verification.CISuiteDispatch `json:"ci_dispatch"`
 }
 
 func main() {
@@ -74,14 +87,41 @@ func main() {
 		})
 	}
 
+	selection, err := verification.DeriveEffectiveSelection(inventory)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "e2e-audit: %v\n", err)
+		os.Exit(1)
+	}
+	dispatch, err := verification.LoadCISuiteDispatch(workflowPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "e2e-audit: %v\n", err)
+		os.Exit(1)
+	}
+	effectiveBySuite := make(map[string][]string, len(selection.Suites))
+	for _, profile := range selection.Profiles {
+		if profile.Profile != selection.BaselineProfile {
+			continue
+		}
+		for _, suite := range profile.Suites {
+			effectiveBySuite[suite.Suite] = suite.TestCases
+		}
+	}
+	baselineDrift := verification.DiagnoseSuiteDrift(selections[selection.BaselineProfile], effectiveBySuite, testmatrix.BaselineStress)
+
 	output := struct {
 		verification.Inventory
-		Unreachable []string           `json:"registered_but_unreachable"`
-		CIOverrides []ciOverrideReport `json:"ci_overrides"`
+		Unreachable        []string                 `json:"registered_but_unreachable"`
+		CIOverrides        []ciOverrideReport       `json:"ci_overrides"`
+		EffectiveSelection effectiveSelectionReport `json:"effective_selection"`
 	}{
 		Inventory:   inventory,
 		Unreachable: inventory.Unreachable(),
 		CIOverrides: overrideReports,
+		EffectiveSelection: effectiveSelectionReport{
+			EffectiveSelection: selection,
+			BaselineDrift:      baselineDrift,
+			CIDispatch:         dispatch,
+		},
 	}
 
 	encoder := json.NewEncoder(os.Stdout)
