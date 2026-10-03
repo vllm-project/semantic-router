@@ -11,7 +11,7 @@ fed the same token IDs (``tools/embed_corpus.py``): every exit's embedding
 (raw or final-normed intermediate exits per the package contract, Matryoshka
 views of the last one) or every pair scorer's logits and rerank order. With
 ``--device`` the native engine runs on that GPU against the CPU reference
-under the GPU bar (cosine >= 0.9995); the onnxruntime side stays on the CPU.
+under the GPU bar (cosine >= 0.9995); the onnxruntime side is a CPU record.
 
 ``omni`` serves a prepared Vela Omni bundle that kept its goldens
 (``VELA_OMNI_KEEP_GOLDEN=1``) through ``MultimodalEmbeddingFamily`` and the
@@ -300,8 +300,11 @@ class EncoderParity:
             }
         else:
             option = {"layers": sorted(layout.graphs)}
+        on_cpu = self.device.accelerator == "cpu"
         self.graph = (
-            self.load(OnnxRuntimeEngine(), option, CPU) if layout.graphs else None
+            self.load(OnnxRuntimeEngine(), option, CPU)
+            if layout.graphs and on_cpu
+            else None
         )
         self.layout = layout
         self.reference = self.reference_model()
