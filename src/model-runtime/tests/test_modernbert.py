@@ -3,12 +3,14 @@
 import pytest
 import torch
 from vllm_sr_runtime.accel.kernels import reference_kernels
-from vllm_sr_runtime.engines.native import models
+from vllm_sr_runtime.engines.native import encoder, models
 from vllm_sr_runtime.engines.native.models.modernbert import (
+    BAND_FROM,
     FULL,
     SLIDING,
     ModernBertBackbone,
     layer_types,
+    length_groups,
     packed_layout,
     padded_layout,
     rope_frequencies,
@@ -297,9 +299,43 @@ def test_local_layers_in_query_blocks_match_the_dense_band(lengths):
     flat = ids[mask.bool()]
     dense = packed_layout(lengths, backbone.window, "cpu", band_from=1 << 20)
     blocked = packed_layout(lengths, backbone.window, "cpu", band_from=1, block=8)
-    assert dense.band is None and blocked.band is not None
-    assert blocked.masks[SLIDING] is None
+    assert dense.groups[0].band is None and blocked.groups[0].band is not None
+    assert blocked.groups[0].masks[SLIDING] is None
     with torch.inference_mode():
         expected = backbone.encode(flat, dense)[backbone.num_layers]
         actual = backbone.encode(flat, blocked)[backbone.num_layers]
     torch.testing.assert_close(actual, expected, rtol=0, atol=1e-5)
+
+
+def test_length_groups_cut_where_a_grid_pads_too_much():
+    assert length_groups([12, 3, 7]) == [[0, 2, 1]]
+    assert length_groups([2000, 10, 12, 1900]) == [[0, 3], [2, 1]]
+    assert length_groups([1500, 1500, 1500]) == [[0, 1, 2]]
+
+
+@pytest.mark.parametrize("band_from", [BAND_FROM, 1])
+def test_rows_of_very_different_lengths_attend_in_separate_grids(
+    monkeypatch, band_from
+):
+    monkeypatch.setattr(encoder, "LAUNCH_BOUND_TOKENS", 0)
+    backbone, _ = native(CONFIGS["yarn"], seed=11)
+    lengths = [40, 3, 37, 5]
+    ids, mask = batch(lengths, seed=8)
+    flat = ids[mask.bool()]
+    layout = packed_layout(
+        lengths, backbone.window, "cpu", band_from=band_from, block=8
+    )
+    assert [group.rows for group in layout.groups] == [2, 2] and layout.width == 40
+    with torch.inference_mode():
+        grouped = backbone.encode(flat, layout, (0, 2, 4))
+        alone = [
+            backbone.encode(
+                ids[row, :length],
+                packed_layout([length], backbone.window, "cpu"),
+                (0, 2, 4),
+            )
+            for row, length in enumerate(lengths)
+        ]
+    for layer in (0, 2, 4):
+        expected = torch.cat([outputs[layer] for outputs in alone])
+        torch.testing.assert_close(grouped[layer], expected, rtol=0, atol=1e-5)

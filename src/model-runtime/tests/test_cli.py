@@ -146,7 +146,7 @@ def test_a_uid_without_a_passwd_entry_gets_a_user_home_and_compile_cache(
     monkeypatch.setattr(cli.tempfile, "gettempdir", lambda: str(tmp_path))
     monkeypatch.delenv("USER", raising=False)
     monkeypatch.delenv("TORCHINDUCTOR_CACHE_DIR", raising=False)
-    monkeypatch.setenv("HOME", "/")
+    monkeypatch.setenv("HOME", str(tmp_path / "missing"))
     cli.default_identity()
     assert os.environ["USER"] == "vllm-sr-runtime"
     assert os.environ["HOME"] == str(tmp_path)

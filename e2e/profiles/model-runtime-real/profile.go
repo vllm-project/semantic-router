@@ -1,9 +1,8 @@
-// Package decisionruntime provides the e2e profile for the built-in model
-// runtime: the Router attaches to a runtime serving a tiny random-weight
-// Decision 2.0 fixture on CPU, routes on its decision signals, lets it choose
-// among a decision's models, and fails open for a deployment that never
-// answers.
-package decisionruntime
+// Package modelruntimereal provides the opt-in E2E profile that runs real
+// models on CPU through the Router's managed model runtime: Decision 2.0
+// Kai-0.6B and the Vela Domain, PII and Guard defaults, downloaded from the
+// Hugging Face Hub at start-up.
+package modelruntimereal
 
 import (
 	"context"
@@ -14,53 +13,57 @@ import (
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
-const valuesFile = "e2e/profiles/decision-runtime/values.yaml"
+const valuesFile = "e2e/profiles/model-runtime-real/values.yaml"
 
 var resourceManifests = []string{
-	"e2e/profiles/decision-runtime/manifests/decision-runtime.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/backend.yaml",
 	"deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/responses-route.yaml",
 }
 
-// Profile validates Router ↔ model runtime integration end to end.
+// Profile validates the Router with real models in managed runtimes.
 type Profile struct {
 	stack *gatewaystack.Stack
 }
 
+// NewProfile creates the model-runtime-real profile.
 func NewProfile() *Profile {
 	return &Profile{
 		stack: gatewaystack.New(gatewaystack.Config{
-			Name:                     "decision-runtime",
+			Name:                     "model-runtime-real",
 			SemanticRouterValuesFile: valuesFile,
 			ResourceManifests:        resourceManifests,
 			WaitDeployments: []helpers.DeploymentRef{
-				{Namespace: "default", Name: "decision-runtime"},
+				{Namespace: "default", Name: "vllm-llama3-8b-instruct"},
 			},
 		}),
 	}
 }
 
-func (p *Profile) Name() string { return "decision-runtime" }
+// Name returns the profile name.
+func (p *Profile) Name() string { return "model-runtime-real" }
 
+// Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests decision signals and the decision selector against the built-in model runtime"
+	return "Tests real Decision 2.0 Kai-0.6B and Vela Domain, PII and Guard on CPU in the Router's managed model runtime"
 }
 
+// Setup deploys the gateway stack.
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
 	return p.stack.Setup(ctx, opts)
 }
 
+// Teardown removes the gateway stack.
 func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions) error {
 	return p.stack.Teardown(ctx, opts)
 }
 
+// GetTestCases returns the profile's contracts.
 func (p *Profile) GetTestCases() []string {
-	return []string{
-		"decision-runtime-routing",
-	}
+	return []string{"model-runtime-real-routing"}
 }
 
+// GetServiceConfig returns the gateway access configuration.
 func (p *Profile) GetServiceConfig() framework.ServiceConfig {
 	return p.stack.ServiceConfig()
 }

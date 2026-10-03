@@ -37,7 +37,7 @@ class ModelConfig:
     name: str | None = None
     device: str = "auto"
     profile: str = "exact"
-    engine: str = "native"
+    engine: str = "auto"
     family: str | None = None
     memory_budget_gib: float | None = None
     options: Mapping[str, Any] = field(default_factory=dict)
@@ -52,7 +52,7 @@ class ServeConfig:
     port: int = DEFAULT_PORT
     uds: str | None = None
     profile: str = "exact"
-    engine: str = "native"
+    engine: str = "auto"
     family: str | None = None
     served_model_name: str | None = None
     models: tuple[ModelConfig, ...] = ()

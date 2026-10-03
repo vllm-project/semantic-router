@@ -123,7 +123,11 @@ def _entry(data: memoryview) -> tuple[str, str]:
 def _external(
     graph: Path, name: str, data_type: int, dims: list[int], info: dict[str, str]
 ) -> ExternalTensor:
-    """An external initializer whose bytes lie inside a file next to the graph."""
+    """An external initializer whose bytes lie inside a file next to the graph.
+
+    Without ``length`` the tensor runs to the end of the file (ONNX), as in
+    exports that write one file per tensor.
+    """
     location = info.get("location", "")
     relative = PurePosixPath(location)
     if (
@@ -140,14 +144,19 @@ def _external(
             f"{graph.name}: unsupported external tensor type {data_type} for {name!r}"
         )
     dtype = DTYPES[data_type]
-    offset, length = int(info.get("offset", 0)), int(info.get("length", -1))
+    path = graph.parent.joinpath(*relative.parts)
+    offset = int(info.get("offset", 0))
+    if "length" in info:
+        length = int(info["length"])
+    elif path.is_file():
+        length = path.stat().st_size - offset
+    else:
+        raise PackageError(f"{graph.name}: external data file {location!r} is missing")
     if length != math.prod(dims) * np.dtype(dtype).itemsize:
         raise PackageError(
             f"{graph.name}: external data of {name!r} has the wrong length"
         )
-    return ExternalTensor(
-        name, graph.parent.joinpath(*relative.parts), offset, length, dtype, tuple(dims)
-    )
+    return ExternalTensor(name, path, offset, length, dtype, tuple(dims))
 
 
 def _initializer(
