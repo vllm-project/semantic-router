@@ -73,6 +73,12 @@ func TestNewSelector(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name:        "hiershrink selector",
+			cfg:         &config.MLModelSelectionConfig{Type: "hiershrink"},
+			expectName:  "hiershrink",
+			expectError: false,
+		},
+		{
 			name:        "unknown selector type",
 			cfg:         &config.MLModelSelectionConfig{Type: "unknown"},
 			expectName:  "",

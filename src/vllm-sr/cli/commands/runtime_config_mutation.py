@@ -34,6 +34,7 @@ ALGORITHM_OVERRIDE_TYPES = (
     "kmeans",
     "svm",
     "mlp",
+    "hiershrink",
     "multi_factor",
 )
 
@@ -50,6 +51,7 @@ ALGORITHM_HINTS = {
     "kmeans": "  Tip: Configure global.router.model_selection.ml.kmeans for cluster routing",
     "svm": "  Tip: Configure global.router.model_selection.ml.svm for trained SVM routing",
     "mlp": "  Tip: Configure global.router.model_selection.ml.mlp for trained MLP routing",
+    "hiershrink": "  Tip: Configure global.router.model_selection.ml.hiershrink for sparse-observation routing",
     "multi_factor": "  Tip: Configure decision.algorithm.multi_factor for SLO-aware scoring",
 }
 

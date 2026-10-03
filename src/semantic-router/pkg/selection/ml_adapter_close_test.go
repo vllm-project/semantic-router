@@ -87,10 +87,11 @@ func TestMLSelectorAdapter_CloseWithoutCloseableSelector(t *testing.T) {
 
 func TestRegistryClose_ReachesMLAdapters(t *testing.T) {
 	mls := map[SelectionMethod]*countingMLSelector{
-		MethodKNN:    {},
-		MethodKMeans: {},
-		MethodSVM:    {},
-		MethodMLP:    {},
+		MethodKNN:        {},
+		MethodKMeans:     {},
+		MethodSVM:        {},
+		MethodMLP:        {},
+		MethodHierShrink: {},
 	}
 
 	registry := NewRegistry()

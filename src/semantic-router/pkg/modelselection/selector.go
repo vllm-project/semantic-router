@@ -309,8 +309,19 @@ func loadPretrainedSelectorFromPath(algorithmType, modelsPath string) (Selector,
 		})
 		return selector, nil
 
+	case "hiershrink":
+		selector := NewHierShrinkSelector()
+		if err := selector.LoadFromJSON(data); err != nil {
+			return nil, fmt.Errorf("failed to parse HierShrink model: %w", err)
+		}
+		logging.ComponentEvent("modelselection", "selector_loaded", map[string]interface{}{
+			"algorithm":  "hiershrink",
+			"model_path": modelPath,
+		})
+		return selector, nil
+
 	default:
-		return nil, fmt.Errorf("unknown algorithm type: %s (supported: knn, kmeans, svm, mlp)", algorithmType)
+		return nil, fmt.Errorf("unknown algorithm type: %s (supported: knn, kmeans, svm, mlp, hiershrink)", algorithmType)
 	}
 }
 
@@ -345,8 +356,11 @@ func NewEmptySelector(cfg *config.MLModelSelectionConfig) (Selector, error) {
 	case "mlp":
 		return NewMLPSelector(), nil
 
+	case "hiershrink":
+		return NewHierShrinkSelector(), nil
+
 	default:
-		return nil, fmt.Errorf("unknown model selection algorithm: %s (supported: knn, kmeans, svm, mlp)", cfg.Type)
+		return nil, fmt.Errorf("unknown model selection algorithm: %s (supported: knn, kmeans, svm, mlp, hiershrink)", cfg.Type)
 	}
 }
 

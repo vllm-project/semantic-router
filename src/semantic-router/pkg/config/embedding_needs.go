@@ -53,7 +53,7 @@ func EmbeddingModelsNeeded(cfg *RouterConfig, primary string, sharedServices boo
 	for _, decision := range cfg.Decisions {
 		if algorithm := decision.Algorithm; algorithm != nil {
 			switch algorithm.Type {
-			case "knn", "kmeans", "svm", "mlp":
+			case "knn", "kmeans", "svm", "mlp", "hiershrink":
 				needed[mlSelectionEmbeddingModel(cfg.ModelSelection.ML, primary)] = true
 			case "router_dc", "automix", "hybrid":
 				needed[primary] = true
@@ -81,7 +81,7 @@ func mlSelectionEmbeddingModel(ml MLSelectionConfig, primary string) string {
 	// The selector factory uses its default embedding configuration when no
 	// artifact paths are configured. Keep preparation aligned with that choice.
 	if ml.ModelsPath == "" && ml.KNN.PretrainedPath == "" && ml.KMeans.PretrainedPath == "" &&
-		ml.SVM.PretrainedPath == "" && ml.MLP.PretrainedPath == "" {
+		ml.SVM.PretrainedPath == "" && ml.MLP.PretrainedPath == "" && ml.HierShrink.PretrainedPath == "" {
 		return primary
 	}
 	if model := strings.ToLower(strings.TrimSpace(ml.ModelType)); model != "" {

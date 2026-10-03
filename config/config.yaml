@@ -1705,6 +1705,20 @@ routing:
       algorithm:
         type: mlp
 
+    - name: hiershrink_experimental_route
+      description: Experimental HierShrink model selection from sparse observations.
+      priority: 102
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: machine_learning
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+      algorithm:
+        type: hiershrink
+
     - name: image_generation_route
       description: Dedicated image-generation route using the OpenAI image backend.
       priority: 105
@@ -1860,6 +1874,8 @@ global:
         mlp:
           device: cpu
           pretrained_path: models/model-selection/mlp.pt
+        hiershrink:
+          pretrained_path: models/model-selection/hiershrink_model.json
     learning:
       enabled: true
       adaptation:

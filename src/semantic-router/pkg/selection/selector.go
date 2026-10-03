@@ -79,6 +79,8 @@ const (
 	// Reference: FusionFactory (arXiv:2507.10540) query-level fusion via MLP routers
 	MethodMLP SelectionMethod = "mlp"
 
+	MethodHierShrink SelectionMethod = "hiershrink"
+
 	// MethodRLDriven uses reinforcement learning for personalized model selection
 	// Implements Router-R1 reward structure (format, outcome, cost) for RL training
 	// Reference: Router-R1 (arXiv:2506.09033)

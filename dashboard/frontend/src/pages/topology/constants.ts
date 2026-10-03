@@ -147,6 +147,7 @@ const ALGORITHM_ICON_OVERRIDES: Partial<Record<AlgorithmType, string>> = {
   kmeans: 'KM',
   svm: 'SVM',
   mlp: 'MLP',
+  hiershrink: 'HS',
   multi_factor: 'MF',
 }
 
@@ -177,6 +178,7 @@ const ALGORITHM_COLOR_OVERRIDES: Partial<
   kmeans: { background: '#596b5d', border: '#3f5144' },
   svm: { background: '#6d687a', border: '#504a5c' },
   mlp: { background: '#586d7a', border: '#40515d' },
+  hiershrink: { background: '#6a7a5c', border: '#4d5a42' },
   multi_factor: { background: '#4e6f63', border: '#38534a' },
 }
 

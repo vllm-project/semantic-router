@@ -178,6 +178,8 @@ type MLSelectorConfig struct {
 	// MLP configuration (GPU-accelerated via Candle)
 	// Reference: FusionFactory (arXiv:2507.10540)
 	MLP *MLPConfig `yaml:"mlp,omitempty"`
+
+	HierShrink *HierShrinkConfig `yaml:"hiershrink,omitempty"`
 }
 
 // KNNConfig holds KNN-specific configuration.
@@ -204,6 +206,10 @@ type SVMConfig struct {
 // Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
 type MLPConfig struct {
 	Device         string `yaml:"device"` // "cpu", "cuda", or "metal"
+	PretrainedPath string `yaml:"pretrained_path,omitempty"`
+}
+
+type HierShrinkConfig struct {
 	PretrainedPath string `yaml:"pretrained_path,omitempty"`
 }
 
@@ -390,6 +396,25 @@ func CreateMLPSelector(cfg *MLSelectorConfig, embeddingFunc func(string) ([]floa
 	adapter := NewMLSelectorAdapter(mlSelector, MethodMLP)
 	adapter.SetEmbeddingFunc(embeddingFunc)
 	return adapter, nil
+}
+
+func CreateHierShrinkSelector(cfg *MLSelectorConfig) *MLSelectorAdapter {
+	selector := modelselection.NewHierShrinkSelector()
+	if cfg.HierShrink != nil && cfg.HierShrink.PretrainedPath != "" {
+		if err := selector.Load(cfg.HierShrink.PretrainedPath); err != nil {
+			logging.ComponentWarnEvent("selection", "ml_adapter_pretrained_model_load_failed", map[string]interface{}{
+				"algorithm":  "hiershrink",
+				"model_path": cfg.HierShrink.PretrainedPath,
+				"error":      err.Error(),
+			})
+		} else {
+			logging.ComponentEvent("selection", "ml_adapter_pretrained_model_loaded", map[string]interface{}{
+				"algorithm":  "hiershrink",
+				"model_path": cfg.HierShrink.PretrainedPath,
+			})
+		}
+	}
+	return NewMLSelectorAdapter(selector, MethodHierShrink)
 }
 
 // float32ToFloat64 converts a slice of float32 to float64.

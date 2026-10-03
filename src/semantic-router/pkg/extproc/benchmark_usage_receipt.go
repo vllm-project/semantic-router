@@ -37,7 +37,7 @@ func (r *OpenAIRouter) benchmarkUsageScopeKnown(ctx *RequestContext, allowLooper
 		}
 	} else {
 		switch method {
-		case "static", "automix", "hybrid", "router_dc", "knn", "kmeans", "svm", "mlp", "latency_aware", "multi_factor":
+		case "static", "automix", "hybrid", "router_dc", "knn", "kmeans", "svm", "mlp", "hiershrink", "latency_aware", "multi_factor":
 		default:
 			return false
 		}

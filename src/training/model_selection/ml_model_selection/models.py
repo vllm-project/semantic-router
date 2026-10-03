@@ -870,3 +870,64 @@ class MLPModel:
             model.model.eval()
 
         return model
+
+
+class HierShrinkModel:
+    def __init__(
+        self,
+        coarse_clusters: int = 20,
+        fine_clusters: int = 100,
+        cost_weight: float = 0.0,
+    ):
+        self.coarse_clusters = coarse_clusters
+        self.fine_clusters = fine_clusters
+        self.cost_weight = cost_weight
+        self.coarse_centroids = None
+        self.fine_centroids = None
+        self.samples: list[TrainingSample] = []
+
+    def _fit_centroids(self, features: np.ndarray, n_clusters: int) -> np.ndarray:
+        kmeans = SKLearnKMeans(
+            n_clusters=min(n_clusters, len(features)), random_state=42, n_init=10
+        )
+        return kmeans.fit(features).cluster_centers_
+
+    def train(self, samples: list[TrainingSample]) -> None:
+        if not samples or self.cost_weight < 0:
+            raise ValueError(
+                "HierShrink requires samples and a nonnegative cost weight"
+            )
+        features = np.unique(
+            np.asarray([s.feature_vector for s in samples], dtype=np.float64), axis=0
+        )
+        self.coarse_centroids = self._fit_centroids(features, self.coarse_clusters)
+        self.fine_centroids = self._fit_centroids(features, self.fine_clusters)
+        self.samples = samples
+        print(
+            f"HierShrink trained with {len(samples)} samples, "
+            f"{len(self.coarse_centroids)}/{len(self.fine_centroids)} clusters"
+        )
+
+    def save(self, path: str) -> None:
+        if self.fine_centroids is None:
+            raise ValueError("Model not trained")
+        data = {
+            "algorithm": "hiershrink",
+            "trained": True,
+            "coarse_centroids": self.coarse_centroids.tolist(),
+            "fine_centroids": self.fine_centroids.tolist(),
+            "cost_weight": self.cost_weight,
+            "training": [
+                {
+                    "query_embedding": np.asarray(s.feature_vector).tolist(),
+                    "selected_model": s.model_name,
+                    "response_quality": s.quality,
+                    "response_latency_ns": int(s.latency_ms * 1_000_000),
+                    "success": True,
+                }
+                for s in self.samples
+            ],
+        }
+        with open(path, "w") as f:
+            json.dump(data, f, allow_nan=False)
+        print(f"Saved HierShrink model to {path}")

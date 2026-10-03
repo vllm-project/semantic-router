@@ -27,6 +27,7 @@ var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
 	"svm":           selection.MethodSVM,
 	"multi_factor":  selection.MethodMultiFactor,
 	"mlp":           selection.MethodMLP,
+	"hiershrink":    selection.MethodHierShrink,
 	"prompt":        selection.MethodPrompt,
 }
 

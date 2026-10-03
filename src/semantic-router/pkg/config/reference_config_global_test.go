@@ -29,6 +29,7 @@ func assertReferenceConfigRouterSelectionCoverage(t testingT, modelSelection map
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "kmeans"), reflect.TypeOf(MLKMeansConfig{}), "global.router.model_selection.ml.kmeans")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "svm"), reflect.TypeOf(MLSVMConfig{}), "global.router.model_selection.ml.svm")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "mlp"), reflect.TypeOf(MLMLPConfig{}), "global.router.model_selection.ml.mlp")
+	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "hiershrink"), reflect.TypeOf(MLHierShrinkConfig{}), "global.router.model_selection.ml.hiershrink")
 }
 
 func assertReferenceConfigRouterLearningCoverage(t testingT, learning map[string]interface{}) {
