@@ -280,6 +280,26 @@ domains:
     checks: [make test-tiny-model]
     verifications: [harness-tools]
 
+  published-model-tests:
+    owner: model-runtime
+    paths:
+      - src/semantic-router/pkg/classification/*realmodel_test.go
+      - src/semantic-router/pkg/classification/real_model*_test.go
+      - src/semantic-router/pkg/classification/fact_check_classifier_test.go
+      - src/semantic-router/pkg/classification/generic_classifier_local_test.go
+      - src/semantic-router/pkg/classification/unified_classifier_integration_test.go
+      - src/semantic-router/pkg/classification/embedding_classifier_integration_test.go
+      - src/semantic-router/pkg/cache/negation_regression_test.go
+      - src/semantic-router/pkg/cache/omni_storage_integration_test.go
+      - src/semantic-router/pkg/modeldownload/prepared_artifact*.go
+      - src/semantic-router/pkg/modelruntime/serving/servingtest/managed.go
+      - src/model-runtime/vllm_sr_runtime/registry/tables/vela1.py
+      - tools/ci/run_model_tests.py
+      - tools/make/models.mk
+    checks: []
+    verify: [make test-models]
+    verifications: [platform.models-cpu]
+
   riscv-router:
     owner: router-core
     paths:
@@ -579,7 +599,7 @@ domains:
     paths:
       - tools/ci/runtime_evidence.py
     checks: [make harness-check]
-    verifications: [platform.image-calibration-cpu, platform.router-riscv64-qemu, local.cli, local.memory, recipe-conformance]
+    verifications: [platform.models-cpu, platform.image-calibration-cpu, platform.router-riscv64-qemu, local.cli, local.memory, recipe-conformance]
 
   deployment-evidence:
     owner: e2e
