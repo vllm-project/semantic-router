@@ -237,7 +237,13 @@ class TaskHeadsModel(LoadedModel):
 
     # -- execution --------------------------------------------------------
 
-    def run(self, items: list[Item], shared_prefix: int = 0) -> list[Any]:
+    def run_approximate(self, items: list[Item]) -> list[Any]:
+        """``run`` on the engine's reduced copy of the backbone, where it loaded one (``max_speed``)."""
+        return self.run(items, reduced=True)
+
+    def run(
+        self, items: list[Item], shared_prefix: int = 0, reduced: bool = False
+    ) -> list[Any]:
         """One packed forward over the distinct sequences of ``items``; each head reads its rows."""
         if not self.engine_model.hidden_states:
             return self._run_graphs(items)
@@ -258,6 +264,7 @@ class TaskHeadsModel(LoadedModel):
                 layers=layers,
                 normalize_exits=self.normalize_exits,
                 lengths=lengths,
+                reduced=reduced,
             )
         )
         rows = Rows(output.hidden, starts, lengths)
