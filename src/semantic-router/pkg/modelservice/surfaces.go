@@ -1,0 +1,601 @@
+package modelservice
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/binary"
+	"fmt"
+	"math"
+	"net/http"
+	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
+)
+
+// ClassifyInput is one classify input: Text alone, Text with TextPair, or a
+// grounded Answer read against Context (and an optional Question).
+type ClassifyInput struct {
+	Text     string
+	TextPair string
+	Context  string
+	Question string
+	Answer   string
+}
+
+// Window asks for overlapping windows: Tokens includes special tokens,
+// Overlap counts content tokens shared by neighbouring windows.
+type Window struct {
+	Tokens  int
+	Overlap int
+}
+
+// ClassifyRequest runs one head of a model over its inputs.
+type ClassifyRequest struct {
+	Head      string
+	Inputs    []ClassifyInput
+	Overflow  string // "" (the head's default), reject, truncate or window
+	MaxTokens int
+	Window    *Window
+	Threshold *float64
+}
+
+// Span is a labelled span. Start and End are Unicode code points into the
+// text the head read (End exclusive); callers convert them once.
+type Span struct {
+	Label       string
+	Start       int
+	End         int
+	Text        string
+	Probability float64
+}
+
+// InputUsage holds one input's tokenizer facts, including special tokens.
+type InputUsage struct {
+	Tokens          int
+	ProcessedTokens int
+	Truncated       bool
+	Windows         int
+}
+
+// ClassifyWindow is one window of a windowed input, in content-token offsets.
+type ClassifyWindow struct {
+	Start         int
+	End           int
+	Probabilities []float64
+	Scores        []float64
+}
+
+// ClassifyResult is one input's result; Error is set instead of values when
+// this input could not be classified.
+type ClassifyResult struct {
+	Index         int
+	Label         string
+	Probabilities []float64
+	Scores        []float64
+	Selected      []string
+	Spans         []Span
+	Windows       []ClassifyWindow
+	Input         *InputUsage
+	Error         string
+}
+
+// ClassifyResponse holds the results in input order.
+type ClassifyResponse struct {
+	Model       string
+	Head        string
+	Kind        string
+	Labels      []string
+	Results     []ClassifyResult
+	InputTokens int
+	Revision    string
+}
+
+// EmbedInput is one embeddings input: Text, an image data URL, or base64 WAV audio.
+type EmbedInput struct {
+	Text     string
+	ImageURL string
+	AudioWAV string
+}
+
+// EmbedRequest asks for embeddings at an optional dimension and layer exit.
+type EmbedRequest struct {
+	Inputs     []EmbedInput
+	Dimensions int
+	Layer      int
+	InputType  string
+	Overflow   string
+	MaxTokens  int
+}
+
+// Representation identifies an embedding space; vectors of different
+// representations never mix.
+type Representation struct {
+	ModelSHA256 string
+	Layer       int
+	Dimension   int
+	Normalized  bool
+	Modality    string
+}
+
+// EmbedResponse holds one vector per input; Errors[i] is set when input i failed.
+type EmbedResponse struct {
+	Model          string
+	Embeddings     [][]float32
+	Inputs         []*InputUsage
+	Errors         []string
+	Representation *Representation
+	PromptTokens   int
+}
+
+// RerankRequest scores documents against a query at an optional pair-scorer exit.
+type RerankRequest struct {
+	Query      string
+	Documents  []string
+	Layer      int
+	Dimensions int
+	Overflow   string
+	MaxTokens  int
+}
+
+// RerankResult is one document's raw logit and score.
+type RerankResult struct {
+	Index int
+	Logit float64
+	Score float64
+	Input *InputUsage
+	Error string
+}
+
+// RerankResponse holds the results in document order.
+type RerankResponse struct {
+	Model       string
+	Results     []RerankResult
+	InputTokens int
+}
+
+// Classify runs a classify request on model, inside the context's bundle when there is one.
+func (c *Client) Classify(ctx context.Context, model string, request ClassifyRequest) (ClassifyResponse, error) {
+	body, err := encodeClassify(ctx, model, request)
+	if err != nil {
+		return ClassifyResponse{}, err
+	}
+	result, err := c.exchange(ctx, api.BundleTask{Classify: &body})
+	if err != nil {
+		return ClassifyResponse{}, err
+	}
+	if result.Classify == nil {
+		return ClassifyResponse{}, fmt.Errorf("%w: missing classify response body", ErrFailed)
+	}
+	return decodeClassify(*result.Classify), nil
+}
+
+// Embed runs an embeddings request on model, inside the context's bundle when there is one.
+func (c *Client) Embed(ctx context.Context, model string, request EmbedRequest) (EmbedResponse, error) {
+	body, err := encodeEmbed(ctx, model, request)
+	if err != nil {
+		return EmbedResponse{}, err
+	}
+	result, err := c.exchange(ctx, api.BundleTask{Embeddings: &body})
+	if err != nil {
+		return EmbedResponse{}, err
+	}
+	if result.Embeddings == nil {
+		return EmbedResponse{}, fmt.Errorf("%w: missing embeddings response body", ErrFailed)
+	}
+	return decodeEmbed(*result.Embeddings)
+}
+
+// Rerank runs a rerank request on model, inside the context's bundle when there is one.
+func (c *Client) Rerank(ctx context.Context, model string, request RerankRequest) (RerankResponse, error) {
+	body, err := encodeRerank(ctx, model, request)
+	if err != nil {
+		return RerankResponse{}, err
+	}
+	result, err := c.exchange(ctx, api.BundleTask{Rerank: &body})
+	if err != nil {
+		return RerankResponse{}, err
+	}
+	if result.Rerank == nil {
+		return RerankResponse{}, fmt.Errorf("%w: missing rerank response body", ErrFailed)
+	}
+	return decodeRerank(*result.Rerank, len(request.Documents))
+}
+
+// exchange sends one surface task, through the context's bundle when there is
+// one; a non-200 status becomes the package error for it.
+func (c *Client) exchange(ctx context.Context, task api.BundleTask) (api.BundleResult, error) {
+	result, err := c.send(ctx, task)
+	if err != nil {
+		return api.BundleResult{}, err
+	}
+	if statusErr := statusError(result.Status, result.Error); statusErr != nil {
+		return api.BundleResult{}, statusErr
+	}
+	return result, nil
+}
+
+func (c *Client) send(ctx context.Context, task api.BundleTask) (api.BundleResult, error) {
+	if bundle := bundleFrom(ctx); bundle != nil {
+		return bundle.submit(ctx, c, task)
+	}
+	switch {
+	case task.Decisions != nil:
+		response, err := c.api.CreateDecisionsWithResponse(ctx, *task.Decisions)
+		if err != nil {
+			return api.BundleResult{}, transportError(ctx, err)
+		}
+		return api.BundleResult{Status: response.StatusCode(), Decisions: response.JSON200, Error: errorBody(response.JSON400, response.JSON404, response.JSON413, response.JSON422, response.JSON429, response.JSON500, response.JSON503)}, nil
+	case task.Classify != nil:
+		response, err := c.api.CreateClassificationWithResponse(ctx, *task.Classify)
+		if err != nil {
+			return api.BundleResult{}, transportError(ctx, err)
+		}
+		return api.BundleResult{Status: response.StatusCode(), Classify: response.JSON200, Error: errorBody(response.JSON400, response.JSON404, response.JSON413, response.JSON422, response.JSON429, response.JSON500, response.JSON503)}, nil
+	case task.Embeddings != nil:
+		response, err := c.api.CreateEmbeddingsWithResponse(ctx, *task.Embeddings)
+		if err != nil {
+			return api.BundleResult{}, transportError(ctx, err)
+		}
+		return api.BundleResult{Status: response.StatusCode(), Embeddings: response.JSON200, Error: errorBody(response.JSON400, response.JSON404, response.JSON413, response.JSON422, response.JSON429, response.JSON500, response.JSON503)}, nil
+	case task.Rerank != nil:
+		response, err := c.api.CreateRerankWithResponse(ctx, *task.Rerank)
+		if err != nil {
+			return api.BundleResult{}, transportError(ctx, err)
+		}
+		return api.BundleResult{Status: response.StatusCode(), Rerank: response.JSON200, Error: errorBody(response.JSON400, response.JSON404, response.JSON413, response.JSON422, response.JSON429, response.JSON500, response.JSON503)}, nil
+	default:
+		return api.BundleResult{}, fmt.Errorf("%w: a task names no surface", ErrRejected)
+	}
+}
+
+// Bundle sends tasks in one /v1/bundle call and returns their results in task order.
+func (c *Client) Bundle(ctx context.Context, tasks []api.BundleTask) ([]api.BundleResult, error) {
+	response, err := c.api.CreateBundleWithResponse(ctx, api.BundleRequest{Tasks: tasks})
+	if err != nil {
+		return nil, transportError(ctx, err)
+	}
+	if err := statusError(response.StatusCode(), errorBody(response.JSON400, response.JSON413, response.JSON500)); err != nil {
+		return nil, err
+	}
+	if response.JSON200 == nil || len(response.JSON200.Results) != len(tasks) {
+		return nil, fmt.Errorf("%w: bundle response does not match its tasks", ErrFailed)
+	}
+	return response.JSON200.Results, nil
+}
+
+func remainingMillis(ctx context.Context) (*float64, error) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return nil, nil
+	}
+	remaining := float64(time.Until(deadline).Microseconds()) / 1000.0
+	if remaining <= 0 {
+		return nil, context.DeadlineExceeded
+	}
+	return &remaining, nil
+}
+
+func optionalString(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func optionalInt(value int) *int {
+	if value == 0 {
+		return nil
+	}
+	return &value
+}
+
+// classifyItem is the object form of a classify input (ClassifyItem in openapi.yaml).
+type classifyItem struct {
+	Text     *string `json:"text,omitempty"`
+	TextPair *string `json:"text_pair,omitempty"`
+	Context  *string `json:"context,omitempty"`
+	Question *string `json:"question,omitempty"`
+	Answer   *string `json:"answer,omitempty"`
+}
+
+func encodeClassify(ctx context.Context, model string, request ClassifyRequest) (api.ClassifyRequest, error) {
+	if len(request.Inputs) == 0 {
+		return api.ClassifyRequest{}, fmt.Errorf("%w: classify needs at least one input", ErrRejected)
+	}
+	deadline, err := remainingMillis(ctx)
+	if err != nil {
+		return api.ClassifyRequest{}, err
+	}
+	inputs := make([]classifyItem, len(request.Inputs))
+	for index, input := range request.Inputs {
+		inputs[index] = classifyItem{
+			Text: optionalString(input.Text), TextPair: optionalString(input.TextPair),
+			Context: optionalString(input.Context), Question: optionalString(input.Question), Answer: optionalString(input.Answer),
+		}
+	}
+	returnMeta := true
+	options := api.ClassifyOptions{DeadlineMs: deadline, ReturnMeta: &returnMeta, MaxTokens: optionalInt(request.MaxTokens), Threshold: request.Threshold}
+	if request.Overflow != "" {
+		overflow := api.ClassifyOptionsOverflow(request.Overflow)
+		options.Overflow = &overflow
+	}
+	if request.Window != nil {
+		overlap := request.Window.Overlap
+		options.Window = &api.WindowOptions{Tokens: request.Window.Tokens, Overlap: &overlap}
+	}
+	return api.ClassifyRequest{Model: optionalString(model), Head: optionalString(request.Head), Input: inputs, Options: &options}, nil
+}
+
+func encodeEmbed(ctx context.Context, model string, request EmbedRequest) (api.EmbeddingsRequest, error) {
+	if len(request.Inputs) == 0 {
+		return api.EmbeddingsRequest{}, fmt.Errorf("%w: embeddings need at least one input", ErrRejected)
+	}
+	deadline, err := remainingMillis(ctx)
+	if err != nil {
+		return api.EmbeddingsRequest{}, err
+	}
+	inputs := make([]map[string]interface{}, len(request.Inputs))
+	for index, input := range request.Inputs {
+		switch {
+		case input.ImageURL != "":
+			inputs[index] = map[string]interface{}{"type": "image_url", "image_url": map[string]string{"url": input.ImageURL}}
+		case input.AudioWAV != "":
+			inputs[index] = map[string]interface{}{"type": "input_audio", "input_audio": map[string]string{"data": input.AudioWAV, "format": "wav"}}
+		default:
+			inputs[index] = map[string]interface{}{"type": "text", "text": input.Text}
+		}
+	}
+	returnMeta := true
+	options := api.EmbeddingsOptions{DeadlineMs: deadline, ReturnMeta: &returnMeta, MaxTokens: optionalInt(request.MaxTokens)}
+	if request.Overflow != "" {
+		overflow := api.EmbeddingsOptionsOverflow(request.Overflow)
+		options.Overflow = &overflow
+	}
+	encoding := api.EmbeddingsRequestEncodingFormat("base64")
+	body := api.EmbeddingsRequest{
+		Model: optionalString(model), Input: inputs, Dimensions: optionalInt(request.Dimensions),
+		Layer: optionalInt(request.Layer), EncodingFormat: &encoding, Options: &options,
+	}
+	if request.InputType != "" {
+		inputType := api.EmbeddingsRequestInputType(request.InputType)
+		body.InputType = &inputType
+	}
+	return body, nil
+}
+
+func encodeRerank(ctx context.Context, model string, request RerankRequest) (api.RerankRequest, error) {
+	if len(request.Documents) == 0 {
+		return api.RerankRequest{}, fmt.Errorf("%w: rerank needs at least one document", ErrRejected)
+	}
+	deadline, err := remainingMillis(ctx)
+	if err != nil {
+		return api.RerankRequest{}, err
+	}
+	returnMeta := true
+	options := api.EmbeddingsOptions{DeadlineMs: deadline, ReturnMeta: &returnMeta, MaxTokens: optionalInt(request.MaxTokens)}
+	if request.Overflow != "" {
+		overflow := api.EmbeddingsOptionsOverflow(request.Overflow)
+		options.Overflow = &overflow
+	}
+	return api.RerankRequest{
+		Model: optionalString(model), Query: request.Query, Documents: request.Documents,
+		Layer: optionalInt(request.Layer), Dimensions: optionalInt(request.Dimensions), Options: &options,
+	}, nil
+}
+
+func decodeUsage(usage *api.InputUsage) *InputUsage {
+	if usage == nil {
+		return nil
+	}
+	decoded := &InputUsage{Tokens: usage.Tokens, ProcessedTokens: usage.ProcessedTokens, Truncated: usage.Truncated}
+	if usage.Windows != nil {
+		decoded.Windows = *usage.Windows
+	}
+	return decoded
+}
+
+func floats(values *[]float64) []float64 {
+	if values == nil {
+		return nil
+	}
+	return append([]float64(nil), (*values)...)
+}
+
+func finite(values ...[]float64) bool {
+	for _, list := range values {
+		for _, value := range list {
+			if math.IsNaN(value) || math.IsInf(value, 0) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func decodeClassify(body api.ClassifyResponse) ClassifyResponse {
+	decoded := ClassifyResponse{Model: body.Model, Head: body.Head, Kind: string(body.Kind), Labels: body.Labels, InputTokens: body.Usage.InputTokens}
+	if body.Meta != nil && body.Meta.Revision != nil {
+		decoded.Revision = *body.Meta.Revision
+	}
+	for _, result := range body.Results {
+		item := ClassifyResult{Index: result.Index, Probabilities: floats(result.Probabilities), Scores: floats(result.Scores), Input: decodeUsage(result.Input)}
+		if result.Error != nil {
+			item.Error = string(*result.Error)
+			decoded.Results = append(decoded.Results, item)
+			continue
+		}
+		if result.Label != nil {
+			item.Label = *result.Label
+		}
+		if result.Selected != nil {
+			item.Selected = append([]string(nil), (*result.Selected)...)
+		}
+		if result.Spans != nil {
+			for _, span := range *result.Spans {
+				item.Spans = append(item.Spans, Span{Label: span.Label, Start: span.Start, End: span.End, Text: span.Text, Probability: span.Probability})
+			}
+		}
+		if result.Windows != nil {
+			for _, window := range *result.Windows {
+				item.Windows = append(item.Windows, ClassifyWindow{Start: window.Start, End: window.End, Probabilities: floats(window.Probabilities), Scores: floats(window.Scores)})
+			}
+		}
+		valid := finite(item.Probabilities, item.Scores)
+		for _, span := range item.Spans {
+			valid = valid && finite([]float64{span.Probability})
+		}
+		for _, window := range item.Windows {
+			valid = valid && finite(window.Probabilities, window.Scores)
+		}
+		if !valid {
+			item = ClassifyResult{Index: result.Index, Error: "invalid_model_output"}
+		}
+		decoded.Results = append(decoded.Results, item)
+	}
+	return decoded
+}
+
+func decodeEmbed(body api.EmbeddingsResponse) (EmbedResponse, error) {
+	decoded := EmbedResponse{
+		Model:        body.Model,
+		Embeddings:   make([][]float32, len(body.Data)),
+		Inputs:       make([]*InputUsage, len(body.Data)),
+		Errors:       make([]string, len(body.Data)),
+		PromptTokens: body.Usage.PromptTokens,
+	}
+	if body.Meta != nil && body.Meta.Representation != nil {
+		representation := body.Meta.Representation
+		decoded.Representation = &Representation{ModelSHA256: representation.ModelSha256, Layer: representation.Layer, Dimension: representation.Dimension}
+		if representation.Normalized != nil {
+			decoded.Representation.Normalized = *representation.Normalized
+		}
+		if representation.Modality != nil {
+			decoded.Representation.Modality = *representation.Modality
+		}
+	}
+	for _, item := range body.Data {
+		if item.Index < 0 || item.Index >= len(body.Data) {
+			return EmbedResponse{}, fmt.Errorf("%w: embedding index %d is out of range", ErrFailed, item.Index)
+		}
+		decoded.Inputs[item.Index] = decodeUsage(item.Input)
+		if item.Error != nil {
+			decoded.Errors[item.Index] = string(*item.Error)
+			continue
+		}
+		if item.Embedding == nil {
+			return EmbedResponse{}, fmt.Errorf("%w: embedding %d has no vector", ErrFailed, item.Index)
+		}
+		vector, err := decodeVector(*item.Embedding)
+		if err != nil {
+			return EmbedResponse{}, err
+		}
+		decoded.Embeddings[item.Index] = vector
+	}
+	return decoded, nil
+}
+
+// decodeVector reads a float list or a base64 string of little-endian float32 values.
+func decodeVector(value interface{}) ([]float32, error) {
+	switch typed := value.(type) {
+	case string:
+		raw, err := base64.StdEncoding.DecodeString(typed)
+		if err != nil || len(raw)%4 != 0 {
+			return nil, fmt.Errorf("%w: embedding is not base64 float32", ErrFailed)
+		}
+		vector := make([]float32, len(raw)/4)
+		for index := range vector {
+			vector[index] = math.Float32frombits(binary.LittleEndian.Uint32(raw[index*4:]))
+		}
+		return checkVector(vector)
+	case []interface{}:
+		vector := make([]float32, len(typed))
+		for index, element := range typed {
+			number, ok := element.(float64)
+			if !ok {
+				return nil, fmt.Errorf("%w: embedding holds a non-number", ErrFailed)
+			}
+			vector[index] = float32(number)
+		}
+		return checkVector(vector)
+	default:
+		return nil, fmt.Errorf("%w: embedding has an unknown encoding", ErrFailed)
+	}
+}
+
+func checkVector(vector []float32) ([]float32, error) {
+	if len(vector) == 0 {
+		return nil, fmt.Errorf("%w: embedding is empty", ErrFailed)
+	}
+	for _, value := range vector {
+		if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+			return nil, fmt.Errorf("%w: embedding is not finite", ErrFailed)
+		}
+	}
+	return vector, nil
+}
+
+func decodeRerank(body api.RerankResponse, documents int) (RerankResponse, error) {
+	decoded := RerankResponse{Model: body.Model, Results: make([]RerankResult, documents), InputTokens: body.Usage.InputTokens}
+	seen := make([]bool, documents)
+	for _, result := range body.Results {
+		if result.Index < 0 || result.Index >= documents || seen[result.Index] {
+			return RerankResponse{}, fmt.Errorf("%w: rerank result index %d is invalid", ErrFailed, result.Index)
+		}
+		seen[result.Index] = true
+		item := RerankResult{Index: result.Index, Input: decodeUsage(result.Input)}
+		switch {
+		case result.Error != nil:
+			item.Error = string(*result.Error)
+		case result.Logit == nil || !finite([]float64{*result.Logit}):
+			item.Error = "invalid_model_output"
+		default:
+			item.Logit = *result.Logit
+			if result.RelevanceScore != nil {
+				item.Score = *result.RelevanceScore
+			}
+		}
+		decoded.Results[result.Index] = item
+	}
+	for index, ok := range seen {
+		if !ok {
+			return RerankResponse{}, fmt.Errorf("%w: rerank result for document %d is missing", ErrFailed, index)
+		}
+	}
+	return decoded, nil
+}
+
+func errorBody(responses ...*api.Error) *api.ErrorBody {
+	for _, response := range responses {
+		if response != nil {
+			return &response.Error
+		}
+	}
+	return nil
+}
+
+// statusError maps a surface status to the package's errors (nil on 200).
+func statusError(status int, body *api.ErrorBody) error {
+	message := http.StatusText(status)
+	if body != nil {
+		message = fmt.Sprintf("%s (%s)", body.Code, body.Message)
+	}
+	switch status {
+	case http.StatusOK:
+		return nil
+	case http.StatusTooManyRequests:
+		return ErrOverloaded
+	case http.StatusServiceUnavailable:
+		return ErrUnavailable
+	case http.StatusBadRequest, http.StatusNotFound, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity:
+		return fmt.Errorf("%w: %s", ErrRejected, message)
+	default:
+		return fmt.Errorf("%w: %s", ErrFailed, message)
+	}
+}
+
+func transportError(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return fmt.Errorf("%w: %w", ErrFailed, err)
+}
