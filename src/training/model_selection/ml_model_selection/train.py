@@ -13,43 +13,36 @@ Reference:
 """
 
 import argparse
-import os
 import time
 from pathlib import Path
-from typing import Dict, List
 
 import numpy as np
-from tqdm import tqdm
-
 from data_loader import (
-    CATEGORIES,
     RoutingRecord,
-    category_to_onehot,
     create_feature_vector,
     download_data,
-    find_best_model_per_query,
-    get_model_names,
     get_unique_queries,
-    group_by_query,
     load_jsonl,
     print_data_stats,
 )
-from embeddings import EmbeddingGenerator, generate_embeddings_for_queries
+from embeddings import generate_embeddings_for_queries
+
 from models import (
+    TORCH_AVAILABLE,
+    HierShrinkModel,
     KMeansModel,
     KNNModel,
     MLPModel,
     SVMModel,
     TrainingSample,
-    TORCH_AVAILABLE,
 )
 
 
 def create_training_samples(
-    records: List[RoutingRecord],
-    embeddings: Dict[str, np.ndarray],
+    records: list[RoutingRecord],
+    embeddings: dict[str, np.ndarray],
     quality_weight: float = 0.9,
-) -> List[TrainingSample]:
+) -> list[TrainingSample]:
     """
     Create training samples from records and embeddings.
 
@@ -84,19 +77,20 @@ def create_training_samples(
 
 
 def train_models(
-    samples: List[TrainingSample],
+    samples: list[TrainingSample],
     output_dir: Path,
     knn_k: int = 5,
     kmeans_clusters: int = 8,
     svm_kernel: str = "rbf",
     svm_gamma: float = 1.0,
-    mlp_hidden_sizes: List[int] = None,
+    mlp_hidden_sizes: list[int] | None = None,
     mlp_epochs: int = 100,
     mlp_learning_rate: float = 0.001,
     mlp_dropout: float = 0.1,
     device: str = "cpu",
     skip_mlp: bool = False,
     algorithm: str = "all",
+    hiershrink_cost_weight: float = 0.0,
 ) -> None:
     """
     Train models (KNN, KMeans, SVM, MLP).
@@ -126,6 +120,7 @@ def train_models(
     train_kmeans = algorithm in ["all", "kmeans"]
     train_svm = algorithm in ["all", "svm"]
     train_mlp_flag = algorithm in ["all", "mlp"]
+    train_hiershrink = algorithm == "hiershrink"
 
     # Check if MLP is available
     if train_mlp_flag and not TORCH_AVAILABLE:
@@ -145,6 +140,8 @@ def train_models(
         algorithms_to_train.append("SVM")
     if train_mlp_flag:
         algorithms_to_train.append("MLP")
+    if train_hiershrink:
+        algorithms_to_train.append("HierShrink")
 
     num_models = len(algorithms_to_train)
 
@@ -157,7 +154,7 @@ def train_models(
     print("=" * 50)
     print(f"  Samples: {len(samples)}")
     print(f"  Feature dim: {len(samples[0].feature_vector)}")
-    print(f"  Models: {sorted(set(s.model_name for s in samples))}")
+    print(f"  Models: {sorted({s.model_name for s in samples})}")
     print(f"  Algorithms: {', '.join(algorithms_to_train)}")
     print("=" * 50 + "\n")
 
@@ -201,6 +198,13 @@ def train_models(
         mlp.train(samples)
         mlp.save(str(output_dir / "mlp_model.json"))
 
+    if train_hiershrink:
+        step += 1
+        print(f"[{step}/{num_models}] Training HierShrink...")
+        hiershrink = HierShrinkModel(cost_weight=hiershrink_cost_weight)
+        hiershrink.train(samples)
+        hiershrink.save(str(output_dir / "hiershrink_model.json"))
+
     print(f"\n{num_models} model(s) trained and saved to", output_dir)
 
 
@@ -216,14 +220,15 @@ def run_training_pipeline(
     kmeans_clusters: int = 8,
     svm_kernel: str = "rbf",
     svm_gamma: float = 1.0,
-    mlp_hidden_sizes: List[int] = None,
+    mlp_hidden_sizes: list[int] | None = None,
     mlp_epochs: int = 100,
     mlp_learning_rate: float = 0.001,
     mlp_dropout: float = 0.1,
     skip_mlp: bool = False,
     algorithm: str = "all",
+    hiershrink_cost_weight: float = 0.0,
     on_progress=None,
-) -> List[str]:
+) -> list[str]:
     """
     Run the full training pipeline: load data -> embed -> create samples -> train.
 
@@ -265,10 +270,7 @@ def run_training_pipeline(
 
     # Step 1: Load data
     progress(10, "Loading data", "Loading benchmark data")
-    if data_file:
-        data_path = Path(data_file)
-    else:
-        data_path = download_data(cache_dir)
+    data_path = Path(data_file) if data_file else download_data(cache_dir)
 
     records = load_jsonl(data_path)
     print_data_stats(records)
@@ -312,6 +314,7 @@ def run_training_pipeline(
         device=device,
         skip_mlp=skip_mlp,
         algorithm=algorithm,
+        hiershrink_cost_weight=hiershrink_cost_weight,
     )
 
     elapsed = time.time() - start_time
@@ -325,6 +328,7 @@ def run_training_pipeline(
         "kmeans_model.json",
         "svm_model.json",
         "mlp_model.json",
+        "hiershrink_model.json",
     ]:
         model_file = output_path / model_name
         if model_file.exists():
@@ -452,8 +456,14 @@ Examples:
         "--algorithm",
         type=str,
         default="all",
-        choices=["all", "knn", "kmeans", "svm", "mlp"],
-        help="Train specific algorithm: all, knn, kmeans, svm, mlp (default: all)",
+        choices=["all", "knn", "kmeans", "svm", "mlp", "hiershrink"],
+        help="Train specific algorithm: all, knn, kmeans, svm, mlp, hiershrink (default: all; hiershrink trains only when named)",
+    )
+    parser.add_argument(
+        "--hiershrink-cost-weight",
+        type=float,
+        default=0.0,
+        help="Weight of normalized mean latency in HierShrink scores (default: 0.0)",
     )
 
     args = parser.parse_args()
@@ -501,6 +511,7 @@ Examples:
         mlp_dropout=args.mlp_dropout,
         skip_mlp=args.skip_mlp,
         algorithm=args.algorithm,
+        hiershrink_cost_weight=args.hiershrink_cost_weight,
     )
 
 
