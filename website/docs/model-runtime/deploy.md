@@ -84,9 +84,12 @@ can override it under its own `routing.model_bindings`.
 
 ## Group models into processes
 
-By default the router starts one runtime process per device: all CPU models
-share one process, all models on `rocm:0` another. Models in one process share
-the work of a request in one call and use memory efficiently.
+By default the models of one GPU share one runtime process, so all models on
+`rocm:0` answer a request in one call and use memory efficiently. CPU models
+are spread over several processes, one per model up to one per two cores the
+router may use, so a request's models run in parallel; each process runs an
+equal share of the cores as threads. `VLLM_SR_RUNTIME_CPU_PROCESSES` caps the
+number of CPU processes, and `1` keeps every CPU model in one process.
 
 Give a deployment its own `process` name when it should not share a fault
 domain or memory with the others, for example a large decision model:
