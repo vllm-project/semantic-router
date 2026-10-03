@@ -20,24 +20,30 @@
 # --switch (COORDINATION 2026-10-03 02:38 / 03:18 UTC+8) releases the runtime-only revision that carries the opt-in
 # shared-context switch (make_fast.py --kind switch: spec dev2-<key>-ras.json, decision .ras.json, evidence
 # <key>/switch): fast.py and fast_kernels.py may change as well as be added, and decision2/shared_ctx.py must be added; the README may also be unchanged (its Speed line rounds to 0.1 ms).
-# Node A, GPU0 or GPU1 (the 0.6B track's allocation, where release workers run as recorded co-tenants), under the
-# shared lease owner.runtime-a-release (removed on exit).
-# Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/ra.sh <tier> --gpu N [--switch]
+# --hotfix (COORDINATION 2026-10-03 12:03 UTC+8; ROCm hotfix owner 490b6f72) releases the runtime-only revision with
+# the attn_prep fix and the eager fallback of fused layers (make_fast.py --kind hotfix: spec dev2-<key>-rah.json,
+# decision .rah.json, evidence <key>/hotfix): exactly decision2/fast.py and decision2/fast_kernels.py change, and the
+# README may be unchanged or differ in its Speed line.
+# Node A, GPU0 or GPU1 (the 0.6B track's allocation, where release workers run as recorded co-tenants; with --hotfix
+# any idle node A GPU, training being stopped), under the shared lease owner.runtime-a-release
+# (owner.runtime-hotfix-release with --hotfix; removed on exit).
+# Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/ra.sh <tier> --gpu N [--switch | --hotfix]
 #          [--resume REV | --post-only WORK]
 set -euo pipefail
 tier="${1:-}"
 shift || true
-gpu="" resume="" post_only="" kind=ra suf=ra ev=""
+gpu="" resume="" post_only="" kind=ra suf=ra ev="" track=runtime-a
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gpu) gpu=$2; shift 2 ;;
     --resume) resume=$2; shift 2 ;;
     --post-only) post_only=$2; shift 2 ;;
     --switch) kind=switch suf=ras ev=/switch; shift ;;
+    --hotfix) kind=hotfix suf=rah ev=/hotfix track=runtime-hotfix; shift ;;
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
 done
-[[ "$gpu" =~ ^[01]$ ]] || { echo "--gpu 0 or 1" >&2; exit 2; }
+[[ "$gpu" =~ ^[01]$ || ( "$kind" == hotfix && "$gpu" =~ ^[0-7]$ ) ]] || { echo "--gpu 0 or 1" >&2; exit 2; }
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 SRC=$(basename "$(cd "$S/../../.." && pwd)")
@@ -67,10 +73,11 @@ case "$tier" in
 esac
 [[ "$(docker image inspect -f '{{.Id}}' "$image")" == "$image" ]] || { echo "image $image is missing" >&2; exit 1; }
 lease=/data/dev2/leases/gpu$gpu.lock
-[[ ! -e "$lease/owner.runtime-a-release" ]] || { echo "gpu$gpu already runs a phase A release" >&2; exit 1; }
+[[ ! -e "$lease/owner.runtime-a-release" && ! -e "$lease/owner.runtime-hotfix-release" ]] \
+  || { echo "gpu$gpu already runs a phase A release" >&2; exit 1; }
 rocm-smi --showuse --showmeminfo vram --json | python3 "$RENAME_OPS/pick_gpu.py" "$vram" "$gpu" >/dev/null \
   || { echo "GPU$gpu is busy or lacks free VRAM" >&2; exit 1; }
-trap 'rm -f "$lease/owner.runtime-a-release"' EXIT
+trap 'rm -f "$lease/owner.$track-release"' EXIT
 name=Decision-2.0-$codename-$tier REPO=vllm-sr/$name
 SPEC=$S/v2/release/specs/dev2-$key-$suf.json
 export TMPDIR=/data/dev2/tmp PYTHONPATH=$S PYTHONDONTWRITEBYTECODE=1
@@ -124,6 +131,8 @@ added = {"decision2/fast.py", "decision2/fast_kernels.py"}
 required = added
 if kind == "switch":
     runtime, added, required = runtime | added, added | {"decision2/shared_ctx.py"}, {"decision2/shared_ctx.py"}
+if kind == "hotfix":
+    runtime, added, required = set(added), set(), set(added)
 other = [n for n in changed if not (n == "README.md" or (n in runtime and n in fo and n in fn)
                                     or (n in added and n not in fo))]
 same = {k: old[k] == new[k] for k in ("identity", "parameters", "profile", "max_input_tokens")}
@@ -131,7 +140,7 @@ readme_old = open(hf_hub_download(repo, "README.md", revision=revision), encodin
 readme_new = (Path(package) / "README.md").read_text(encoding="utf-8").splitlines()
 lines = [l for l in difflib.unified_diff(readme_old, readme_new, lineterm="", n=0)
          if l[:1] in "+-" and not l.startswith(("+++", "---"))]
-readme_ok = (bool(lines) or kind == "switch") and all("**Speed:**" in l for l in lines)
+readme_ok = (bool(lines) or kind in ("switch", "hotfix")) and all("**Speed:**" in l for l in lines)
 ok = not other and all(same.values()) and readme_ok and required <= set(changed)
 json.dump({"changed": changed, "other": other, "equal": same, "readme_diff": lines, "ok": ok},
           open(out, "w"), indent=1)
@@ -167,7 +176,7 @@ cache_args=(--env TRITON_CACHE_AUTOTUNING=1 --env "TRITON_CACHE_DIR=$TC" --mount
 echo "mirror $SRC tier $tier gpu $gpu work $W cache $TC from $frozen tf518 $(cd "$TF518" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)"
 set -x
 "$S/v2/release/release.sh" --spec "$SPEC" --src "$SRC" --work "$W" --image "$image" \
-  --gpu "$gpu" --track runtime-a --shared-lease runtime-a-release --threads 4 \
+  --gpu "$gpu" --track "$track" --shared-lease "$track-release" --threads 4 \
   "${kernel_args[@]}" "${base_args[@]}" --env HIP_FORCE_DEV_KERNARG=1 "${cache_args[@]}" \
   --upload --collect --already-collected --hub-site "tf518=$TF518" || status=$?
 set +x
@@ -201,7 +210,7 @@ fi
 mkdir -p "$W/extra"
 cp "$X"/*.json "$X/derivation.txt" "$W/extra/"
 cd "$S"
-"$HFPY" "$R/ops/ra_diff.py" "$REPO" "$expected" "$REV" "$W/extra/runtime-diff.json" ${ev:+--switch} || status=1
+"$HFPY" "$R/ops/ra_diff.py" "$REPO" "$expected" "$REV" "$W/extra/runtime-diff.json" ${ev:+--$kind} || status=1
 # The superseded package runs its examples here, on this GPU and image with a copy of the same frozen autotune
 # cache as the new package's pre-upload examples: the superseded release's own receipt came from another GPU,
 # device or autotune cache (Kai's org revision: CPU; Nox's: another GPU and cache), whose kernel configurations
@@ -212,8 +221,8 @@ cp -a "$frozen" "$OTC"
 chmod -R u+w "$OTC"
 "$HFPY" -c 'import sys; from huggingface_hub import snapshot_download; snapshot_download(sys.argv[1], revision=sys.argv[2], local_dir=sys.argv[3])' \
   "$REPO" "$expected" "$old" > /dev/null
-printf 'track=runtime-a\npurpose=superseded examples %s\nstart_utc=%s\nexpected_end_utc=%s\nrun_dir=%s\n' "$REPO" \
-  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(date -u -d '+30 min' +%Y-%m-%dT%H:%M:%SZ)" "$W" > "$lease/owner.runtime-a-release"
+printf 'track=%s\npurpose=superseded examples %s\nstart_utc=%s\nexpected_end_utc=%s\nrun_dir=%s\n' "$track" "$REPO" \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(date -u -d '+30 min' +%Y-%m-%dT%H:%M:%SZ)" "$W" > "$lease/owner.$track-release"
 old_mounts=() old_args=()
 for ((i = 0; i < ${#base_args[@]}; i += 2)); do
   case "${base_args[i]}" in
@@ -243,8 +252,8 @@ gate_base=()
 for ((i = 0; i < ${#base_args[@]}; i += 2)); do
   [[ "${base_args[i]}" != --base-path ]] || gate_base=(--base-path "${base_args[i+1]}")
 done
-printf 'track=runtime-a\npurpose=86-request gate %s\nstart_utc=%s\nexpected_end_utc=%s\nrun_dir=%s\n' "$REPO" \
-  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(date -u -d '+30 min' +%Y-%m-%dT%H:%M:%SZ)" "$W" > "$lease/owner.runtime-a-release"
+printf 'track=%s\npurpose=86-request gate %s\nstart_utc=%s\nexpected_end_utc=%s\nrun_dir=%s\n' "$track" "$REPO" \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(date -u -d '+30 min' +%Y-%m-%dT%H:%M:%SZ)" "$W" > "$lease/owner.$track-release"
 bash "$R/ops/gate86.sh" --package "$W/download/$name" --repo "$REPO" --revision "$REV" --gpu "$gpu" \
   --summary "$W/extra/gate86.json" "${gate_base[@]}" || status=1
 bash "$S/v2/common/hf_headroom.sh" --min-free-gb 0

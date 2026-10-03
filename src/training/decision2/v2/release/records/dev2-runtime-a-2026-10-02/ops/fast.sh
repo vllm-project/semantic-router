@@ -15,20 +15,30 @@
 #                      current main (Kai, Eos, Sol: their phase A revisions; Lux: the 9B M10 release f3122c7c; Vega:
 #                      the 27B release) with the image, spec and autotune cache of the release that built it; the new
 #                      side is this mirror's runtime
-# Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/fast.sh <tier> <mode> [--gpu N] [--switch]
-# Work: /data/dev2/runs/runtime-a/<tier>/ or <tier>-switch/ (the newest preview is used by --parity and --bench).
-# Lease: /data/dev2/leases/gpuN.lock/owner.runtime-a (a co-tenant entry; status set to idle on exit).
+#   --hotfix           (with any mode; every tier) the ROCm hotfix revision (COORDINATION 2026-10-03 12:03 UTC+8, hotfix
+#                      owner 490b6f72): the old side is the current main (Kai, Eos, Sol, Vega: their switch revisions;
+#                      Nox: the 4B release ce1bdc9d; Lux: the 9B switch revision 214ffa43) with the image, spec and
+#                      autotune cache of the release that built it; --parity adds a third side, the new package with
+#                      every fused kernel raising (ops/fallback_parity.py: each layer on the eager fallback), compared
+#                      with the old side at tolerance 0 too (answers-compare-fallback.json)
+# Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/fast.sh <tier> <mode> [--gpu N] [--switch|--hotfix]
+# Work: /data/dev2/runs/runtime-a/<tier>/, <tier>-switch/ or <tier>-hotfix/ (the newest preview is used by --parity
+# and --bench; the preview's directory may be copied to another node at the same path, with the old side's cache).
+# Lease: /data/dev2/leases/gpuN.lock/owner.runtime-a (owner.runtime-hotfix with --hotfix; a co-tenant entry; status set
+# to idle on exit).
 set -euo pipefail
 tier="${1:-}" mode="${2:-}"
 shift 2 || true
-gpu="" switch=""
+gpu="" switch="" hotfix=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gpu) gpu=$2; shift 2 ;;
     --switch) switch=1; shift ;;
+    --hotfix) hotfix=1; shift ;;
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
 done
+[[ -z "$switch" || -z "$hotfix" ]] || { echo "--switch or --hotfix, not both" >&2; exit 2; }
 [[ "$mode" =~ ^--(preview|parity|bench|profile)$ ]] || { echo "mode: --preview|--parity|--bench|--profile" >&2; exit 2; }
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
@@ -72,8 +82,18 @@ if [[ -n "$switch" ]]; then
     *) echo "--switch: tier must be one of 0.6B 0.8B 2B 9B 27B" >&2; exit 2 ;;
   esac
 fi
+if [[ -n "$hotfix" ]]; then
+  case "$tier" in
+    0.6B) release_of dev2-ras-0.6B-20261002T235739Z ;;
+    0.8B) release_of dev2-ras-0.8B-20261003T000237Z ;;
+    2B) release_of dev2-ras-2B-20261003T000946Z ;;
+    4B) release_of dev2-4b-lrhxall-release-20261003T003955Z ;;
+    9B) release_of dev2-ras-9B-20261003T022358Z ;;
+    27B) release_of dev2-ras-27B-20261002T213625Z ;;
+  esac
+fi
 name=Decision-2.0-$codename-$tier REPO=vllm-sr/$name STAGE=dev2-release-staging-ra$key
-T=/data/dev2/runs/runtime-a/$tier${switch:+-switch}
+T=/data/dev2/runs/runtime-a/$tier${switch:+-switch}${hotfix:+-hotfix}
 export TMPDIR=/data/dev2/tmp PYTHONPATH=$S PYTHONDONTWRITEBYTECODE=1
 mkdir -p "$TMPDIR" "$T" /data/dev2/runs/runtime-a/triton
 digest() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-64); }
@@ -127,10 +147,13 @@ OLD=$W0/old/$name NEW=$W0/new/$STAGE
 [[ -f "$OLD/MODEL_MANIFEST.json" && -f "$NEW/MODEL_MANIFEST.json" ]] || { echo "run --preview first" >&2; exit 1; }
 W=$T/${mode#--}-$TS
 mkdir -p "$W/logs" "$W/receipts"
-lease=/data/dev2/leases/gpu$gpu.lock/owner.runtime-a
-printf 'track=runtime-a\nstatus=busy\npurpose=speed-up phase A %s %s (worker 2d541b40; release-worker co-tenant)\nstart_utc=%s\nrun_dir=%s\n' \
-  "$name" "${mode#--}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$W" > "$lease"
-trap 'printf "track=runtime-a\nstatus=idle (last run %s ended %s)\n" "$W" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$lease"' EXIT
+track=runtime-a purpose="speed-up phase A $name ${mode#--} (worker 2d541b40; release-worker co-tenant)"
+[[ -z "$hotfix" ]] || track=runtime-hotfix purpose="ROCm hotfix $name ${mode#--} (worker 490b6f72; yields to the Index submission worker)"
+lease=/data/dev2/leases/gpu$gpu.lock/owner.$track
+mkdir -p "$(dirname "$lease")"
+printf 'track=%s\nstatus=busy\npurpose=%s\nstart_utc=%s\nrun_dir=%s\n' \
+  "$track" "$purpose" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$W" > "$lease"
+trap 'printf "track=%s\nstatus=idle (last run %s ended %s)\n" "$track" "$W" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$lease"' EXIT
 echo "mirror $SRC tier $tier gpu $gpu old $OLD new $NEW work $W"
 if [[ -z "$P" ]]; then
   P=$W/seal-none
@@ -146,9 +169,11 @@ panels=(
 kernel_args=()
 [[ "$kernels" != 1 ]] || kernel_args=(--site /opt/decision-fla --require-kernels)
 source_cache=$frozen
-for side in old new; do
+sides=(old new)
+[[ -z "$hotfix" || "$mode" != --parity ]] || sides+=(fallback)
+for side in "${sides[@]}"; do
   pkg=$OLD
-  [[ "$side" == new ]] && pkg=$NEW
+  [[ "$side" == old ]] || pkg=$NEW
   TC=/data/dev2/runs/runtime-a/triton/$tier-${mode#--}-$side-$TS
   # The new side starts from the old side's cache after its run: both use the same autotuned configurations.
   copy_cache "$source_cache" "$TC"
@@ -161,6 +186,8 @@ for side in old new; do
     args=(examples.py parity --package "$pkg" --device cuda:0 --threads 4 --tolerance 1
           --output "$W/receipts/parity-$side.json" --answers "$W/answers-$side.jsonl")
     for panel in "${panels[@]}"; do args+=(--panel "$panel"); done
+    [[ "$side" != fallback ]] || args=(records/dev2-runtime-a-2026-10-02/ops/fallback_parity.py
+                                       --fallback-receipt "$W/receipts/fallback-kernels.json" "${args[@]:1}")
   elif [[ "$mode" == --profile ]]; then
     args=(records/dev2-runtime-a-2026-10-02/ops/profile_request.py --package "$pkg" --prompts "$G/typed-final.prompts.jsonl"
           --count 400 --output "$W/receipts/profile-$side.json")
@@ -178,10 +205,14 @@ for side in old new; do
     | tee -a "$W/logs/wall.txt"
 done
 if [[ "$mode" == --parity ]]; then
-  python3 "$S/v2/release/examples.py" compare-answers "$W/answers-old.jsonl" "$W/answers-new.jsonl" --tolerance 0 \
-    --output "$W/receipts/answers-compare.json" > /dev/null || true
-  python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(json.dumps({"passed": c["passed"], "max_abs_drift": c["max_abs_drift"], "panels": {k: [v["prompts"], v["identical_prompts"], v["category_changes"], v["missing"], v["max_abs_drift"]] for k, v in c["panels"].items()}}))' \
-    "$W/receipts/answers-compare.json"
+  for side in "${sides[@]:1}"; do
+    out=$W/receipts/answers-compare.json
+    [[ "$side" == new ]] || out=$W/receipts/answers-compare-$side.json
+    python3 "$S/v2/release/examples.py" compare-answers "$W/answers-old.jsonl" "$W/answers-$side.jsonl" --tolerance 0 \
+      --output "$out" > /dev/null || true
+    python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(sys.argv[2], json.dumps({"passed": c["passed"], "max_abs_drift": c["max_abs_drift"], "panels": {k: [v["prompts"], v["identical_prompts"], v["category_changes"], v["missing"], v["max_abs_drift"]] for k, v in c["panels"].items()}}))' \
+      "$out" "$side"
+  done
 elif [[ "$mode" == --profile ]]; then
   tail -n 1 "$W/logs/old.log" "$W/logs/new.log"
 else

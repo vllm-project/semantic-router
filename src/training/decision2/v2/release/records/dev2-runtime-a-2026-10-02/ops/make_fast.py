@@ -1,7 +1,7 @@
 """Specs and decisions of the speed-up phase A runtime (``runtime/fast.py``) for the Decision 2.0 tiers.
 
     python3 make_fast.py preview --base SPEC --runtime-source DIR --key KEY --output OUT
-    python3 make_fast.py release --tiers 0.6B ... [--kind ra|switch] (--out DIR | --check)
+    python3 make_fast.py release --tiers 0.6B ... [--kind ra|switch|hotfix] (--out DIR | --check)
 
 ``preview``: a staging spec that builds the tier's released package with the new
 runtime: the released spec (Hub IDs made current), kind ``staging`` under
@@ -25,6 +25,13 @@ shared-context switch (``runtime/shared_ctx.py``, off by default) with the phase
 top of the current main of SWITCH_TIERS (Kai, Eos, Sol: their phase A revisions; Vega: the 27B release, which
 also gains the phase A sentence). Evidence <key>/switch/{parity,bench}; outputs specs/dev2-<key>-ras.json and
 <name>.decision.ras.json.
+
+``--kind hotfix`` (COORDINATION 2026-10-03 12:03 UTC+8; ROCm hotfix owner 490b6f72): the runtime-only revision with
+the runtime of HOTFIX_COMMIT on top of the current main of HOTFIX_TIERS: ``attn_prep`` launches its kernel once per
+tensor (a query projection above 2 GiB failed to compile on ROCm) and a fused decoder layer whose kernels fail runs
+its eager forward. Evidence <key>/hotfix/{parity,bench}; the parity carries a third side with every fused kernel
+raising (answers-compare-fallback.json, 0 answer changes and 0.0 drift against the old side too). Outputs
+specs/dev2-<key>-rah.json and <name>.decision.rah.json.
 """
 
 from __future__ import annotations
@@ -46,6 +53,13 @@ RELEASES = "/data/dev2/runs/release"
 RUNTIME_COMMIT = "54303117be355595ddf5bb184905be6c6d2ecae9"
 # Phase A with the shared-context switch (9d90afd10) and the integration branch merged.
 SWITCH_COMMIT = "9cffe606ce89e19974c7def780a48b64583039ac"
+# The switch runtime with the attn_prep fix and the eager fallback of fused layers (fast.py, fast_kernels.py).
+HOTFIX_COMMIT = "3c8cd1a84e1cbf9ee8cd3fd44cc0ac4f5f07a987"
+HOTFIX_WORKER = "ROCm hotfix owner 490b6f72"
+HOTFIX_PREPARED_BY = (
+    "Decision 2.0 ROCm hotfix owner 490b6f72 (worktree vllm-sr-dev2-runtime-hotfix, branch "
+    "xunzhuo/decision-2-runtime-hotfix) with the runtime phase A tooling of this record"
+)
 PANELS = {"typed-final": 1600, "css15": 6547, "public231": 231, "mlx-diag": 2275}
 MARKER = " Checked on one GPU"
 DECIDED_BY = (
@@ -132,9 +146,50 @@ SWITCH_TIERS: dict[str, tuple[str, str, str, str]] = {
     ),
     "27B": TIERS["27B"],
 }
+# The current main of every repository on 2026-10-03 12:03 UTC+8 and the release work directory on node A that built
+# and sealed it (Nox: the 4B owner's wave-7 release; the others: this record's switch revisions, Lux the 9B owner's).
+HOTFIX_TIERS: dict[str, tuple[str, str, str, str]] = {
+    "0.6B": (
+        "0p6b",
+        "Kai",
+        "881bee413681d80ebeac86afcda8b4138dae516e",
+        "dev2-ras-0.6B-20261002T235739Z",
+    ),
+    "0.8B": (
+        "0p8b",
+        "Eos",
+        "ad0aa724c924f7c4194be94b1b8441caf2d61c01",
+        "dev2-ras-0.8B-20261003T000237Z",
+    ),
+    "2B": (
+        "2b",
+        "Sol",
+        "4b75b52114583b4519001492e8dfb0926c89cfe1",
+        "dev2-ras-2B-20261003T000946Z",
+    ),
+    "4B": (
+        "4b",
+        "Nox",
+        "ce1bdc9d91333aae2bf496ec48c66e1a913eb0a0",
+        "dev2-4b-lrhxall-release-20261003T003955Z",
+    ),
+    "9B": (
+        "9b",
+        "Lux",
+        "214ffa4322bc1bce3215c1bd5de6168402c76969",
+        "dev2-ras-9B-20261003T022358Z",
+    ),
+    "27B": (
+        "27b",
+        "Vega",
+        "9b067a95560284dac8c98ef4130fd5a2c5a92ff9",
+        "dev2-ras-27B-20261002T213625Z",
+    ),
+}
 KINDS = {
     "ra": (TIERS, RUNTIME_COMMIT, "", "ra"),
     "switch": (SWITCH_TIERS, SWITCH_COMMIT, "switch", "ras"),
+    "hotfix": (HOTFIX_TIERS, HOTFIX_COMMIT, "hotfix", "rah"),
 }
 
 
@@ -178,6 +233,8 @@ def sources(tier: str, kind: str = "ra") -> dict:
     parity_path = OUT / key / evidence / "parity" / "answers-compare.json"
     bench_path = OUT / key / evidence / "bench" / "compare.json"
     parity, bench = _json(parity_path), _json(bench_path)
+    fallback_path = parity_path.with_name("answers-compare-fallback.json")
+    fallback = _json(fallback_path) if kind == "hotfix" else None
     problems = [
         message
         for ok, message in (
@@ -211,6 +268,23 @@ def sources(tier: str, kind: str = "ra") -> dict:
                 sha(bench_path.parent / "bench-new.json") == bench["new"]["sha256"],
                 "bench-new.json is not the compared run",
             ),
+            (
+                fallback is None
+                or (
+                    fallback["passed"] is True
+                    and fallback["max_abs_drift"] == 0.0
+                    and {
+                        panel: (
+                            p["prompts"],
+                            p["identical_prompts"],
+                            p["category_changes"],
+                        )
+                        for panel, p in fallback["panels"].items()
+                    }
+                    == {panel: (n, n, 0) for panel, n in PANELS.items()}
+                ),
+                "the fallback parity does not cover every scored prompt identically",
+            ),
         )
         if not ok
     ]
@@ -231,6 +305,8 @@ def sources(tier: str, kind: str = "ra") -> dict:
         "parity": parity,
         "bench_path": bench_path,
         "bench": bench,
+        "fallback_path": fallback_path,
+        "fallback": fallback,
     }
 
 
@@ -257,6 +333,15 @@ SWITCH_SENTENCE = (
 )
 
 
+HOTFIX_SENTENCE = (
+    " From this revision the fused attention kernel also compiles for very long multi-question inputs on ROCm (a "
+    "query projection above 2 GiB, which returned an error before), and a decoder layer whose fused kernels fail to "
+    "compile or launch runs its eager forward, which gives the same values; it was checked with 0 answer changes and "
+    "0.0 drift on every scored prompt and on mlx-diag (10,653 prompts) against the previous runtime, both with the "
+    "fused kernels and with every fused kernel failing."
+)
+
+
 def phase_a_sentence_added(src: dict) -> bool:
     text = src["spec"]["runtime_equivalence"]
     # Lux's main (9B M10 release) already describes the phase A runtime in its own words.
@@ -270,6 +355,8 @@ def phase_a_sentence_added(src: dict) -> bool:
 def spec_for(src: dict) -> dict:
     if src["kind"] == "switch":
         return switch_spec_for(src)
+    if src["kind"] == "hotfix":
+        return hotfix_spec_for(src)
     old = src["spec"]
     spec = layout.current_ids({k: v for k, v in old.items() if k != "_release"})
     spec["runtime_source"] = mirror(RUNTIME_COMMIT)
@@ -333,6 +420,41 @@ def switch_spec_for(src: dict) -> dict:
             f"{spec['repo_id']}@{src['revision'][:8]}. card.speed is the new runtime's bench (p50 "
             f"{lat['p50']['old']:.1f} -> {lat['p50']['new']:.1f} ms) and runtime_equivalence gains "
             f"{'the phase A and the switch sentences' if phase_a_sentence_added(src) else 'the switch sentence'}."
+        ),
+        "replaces_spec": {
+            "spec": str(src["spec_path"]),
+            "sha256": sha(src["spec_path"]),
+        },
+        "previous": old.get("_release"),
+    }
+    return spec
+
+
+def hotfix_spec_for(src: dict) -> dict:
+    old = src["spec"]
+    spec = layout.current_ids({k: v for k, v in old.items() if k != "_release"})
+    spec["runtime_source"] = mirror(HOTFIX_COMMIT)
+    spec["card"]["speed"] = {
+        "evidence": (src["bench_path"].parent / "bench-new.json").as_posix(),
+        "sha256": src["bench"]["new"]["sha256"],
+    }
+    text = spec["runtime_equivalence"]
+    if text.count(MARKER) == 1:
+        spec["runtime_equivalence"] = text.replace(MARKER, HOTFIX_SENTENCE + MARKER)
+    else:
+        spec["runtime_equivalence"] = text + HOTFIX_SENTENCE
+    spec["gate_receipt"] = f"{DECISIONS}/{src['name']}.decision.rah.json"
+    lat = src["bench"]["latency_ms"]
+    spec["_release"] = {
+        "runtime_hotfix": (
+            f"Runtime-only revision (COORDINATION 2026-10-03 12:03 UTC+8; {HOTFIX_WORKER}): the package runtime "
+            f"comes from commit {HOTFIX_COMMIT[:9]} (runtime_source): the switch runtime with attn_prep launching its "
+            "kernel once per tensor (Triton's ROCm compiler failed on its query / key pointer branch when only the "
+            "query projection exceeded 2 GiB) and fused decoder layers falling back to their eager forward when a "
+            "kernel fails. Weights, tokenizer, configs, the vendored training/model sources, card index, assets and "
+            f"remote code are those of the spec that built {spec['repo_id']}@{src['revision'][:8]}. card.speed is "
+            f"the new runtime's bench (p50 {lat['p50']['old']:.1f} -> {lat['p50']['new']:.1f} ms) and "
+            "runtime_equivalence gains the hotfix sentence."
         ),
         "replaces_spec": {
             "spec": str(src["spec_path"]),
@@ -452,9 +574,94 @@ def switch_decision_for(src: dict, spec_sha: str) -> dict:
     return new
 
 
+def hotfix_decision_for(src: dict, spec_sha: str) -> dict:
+    old, gate, bench, fallback = (
+        src["decision"],
+        src["gate"],
+        src["bench"],
+        src["fallback"],
+    )
+    old_sha = sha(src["decision_path"])
+    repo = layout.current_repo(old["repo_id"])
+    lat = bench["latency_ms"]
+    new = copy.deepcopy(old)
+    new.pop("card_revision", None)
+    new.update(
+        {
+            "repo_id": repo,
+            "decided_by": (
+                "coordinator (parent agent), Decision 2.0 program: COORDINATION 2026-10-03 12:03 UTC+8 (the ROCm "
+                "hotfix owner fixes the _attn_prep_kernel compile failure the Index submission's release spot check "
+                "found, adds a byte-identical eager fallback for fused kernels and ships runtime-only revisions "
+                "through the phase A parity rollout; the user's 11:34 instruction makes the Jev Decision Index "
+                "submission the top priority)"
+            ),
+            "prepared_by": HOTFIX_PREPARED_BY,
+            "decided_utc": "2026-10-03T04:03:00Z",
+            "action": (
+                f"Runtime-only revision of the public repository {repo}: decision2/fast.py and "
+                f"decision2/fast_kernels.py come from commit {HOTFIX_COMMIT[:9]}, in which the fused attention-prep "
+                "kernel runs once per tensor (on ROCm it failed to compile, and the request returned an error, when "
+                "a long multi-question input made the query projection exceed 2 GiB) and a decoder layer whose fused "
+                "kernels fail to compile or launch runs its eager forward. Weights, tokenizer, configs, the vendored "
+                "training/model sources, calibration, any Score offsets, the banner and the charts are "
+                f"byte-identical to the released revision {gate['revision']}; README.md states the median latency "
+                "and MODEL_MANIFEST.json the new runtime hashes and the runtime sentences. The collection is not "
+                "changed."
+            ),
+            "rationale": (
+                f"The release judgement of the superseded final decision {old_sha[:8]}… stands unchanged: the same "
+                f"identity {old['identity']['model_sha256'][:8]}, scored report, paired comparison, calibration and "
+                "licence decision. Only the package runtime changes, and it computes the same values bit for bit: "
+                "every prompt of the four scored panels (typed-final 1,600, css15 6,547, public231 231, mlx-diag "
+                "2,275) answered through the released package and through this package on the released weights gave "
+                "0 answer changes and 0.0 drift, and so did this package with every fused kernel made to fail (each "
+                f"decoder layer on its eager fallback); 400 single requests: p50 {lat['p50']['old']:.2f} -> "
+                f"{lat['p50']['new']:.2f} ms, p95 {lat['p95']['old']:.2f} -> {lat['p95']['new']:.2f} ms, all "
+                "bit-identical. release.sh checks the native examples, the card's Transformers example before "
+                "upload, after the real download and from the Hub in fresh environments under Transformers 5.17 "
+                "and 5.18, the card structure and every card link; then the downloaded package must pass the Index "
+                "harness's 86-request parity gate."
+            ),
+            "previous_rationale": old["rationale"],
+            "runtime_revision": {
+                "kind": "attn-prep-fix-eager-fallback-runtime",
+                "runtime_commit": HOTFIX_COMMIT,
+                "spec": f"v2/release/specs/dev2-{src['key']}-rah.json",
+                "spec_sha256": spec_sha,
+                **runtime_evidence(src),
+                "fallback_parity": {
+                    "compare": src["fallback_path"].as_posix(),
+                    "sha256": sha(src["fallback_path"]),
+                    "panels": {
+                        panel: [
+                            p["prompts"],
+                            p["identical_prompts"],
+                            p["category_changes"],
+                        ]
+                        for panel, p in fallback["panels"].items()
+                    },
+                    "max_abs_drift": fallback["max_abs_drift"],
+                },
+            },
+            "supersedes": {
+                "final_sha256": old_sha,
+                "released_as": f"{gate['repo_id']}@{gate['revision']}",
+                "released_manifest_sha256": gate["manifest_sha256"],
+                "released_gate_sha256": sha(src["gate_path"]),
+                "card_revision": old.get("card_revision"),
+                "earlier": old.get("supersedes"),
+            },
+        }
+    )
+    return new
+
+
 def decision_for(src: dict, spec_sha: str) -> dict:
     if src["kind"] == "switch":
         return switch_decision_for(src, spec_sha)
+    if src["kind"] == "hotfix":
+        return hotfix_decision_for(src, spec_sha)
     old, gate, bench, parity = src["decision"], src["gate"], src["bench"], src["parity"]
     old_sha = sha(src["decision_path"])
     repo = layout.current_repo(old["repo_id"])

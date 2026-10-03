@@ -1,6 +1,6 @@
 """Files that differ between a released revision and its phase A runtime-only successor (hf-cli python, node token).
 
-  <hf-cli python> ra_diff.py <repo> <released revision> <new revision> <out.json> [--switch]
+  <hf-cli python> ra_diff.py <repo> <released revision> <new revision> <out.json> [--switch | --hotfix]
 
 The BF16-resident rollout's runtime_diff.py with the two fast-path modules of the phase A runtime, which the
 successor adds: a runtime-only revision may change decision2/__init__.py, api.py and the profile module, add
@@ -8,7 +8,8 @@ decision2/fast.py and fast_kernels.py (never decision2/_vendor/), change the car
 and MODEL_MANIFEST.json; every other file, and every weight file in particular, must keep its size and LFS SHA-256
 or git blob id, and nothing is removed. Exits 1 otherwise. With --switch (the opt-in shared-context switch, which
 may follow a phase A revision or carry phase A itself) the fast-path modules may also change, and the successor must
-add decision2/shared_ctx.py.
+add decision2/shared_ctx.py. With --hotfix (the attn_prep fix and the eager fallback of fused layers) exactly
+decision2/fast.py and decision2/fast_kernels.py change and no runtime file is added.
 """
 
 from __future__ import annotations
@@ -76,9 +77,12 @@ def files(api: HfApi, repo: str, revision: str) -> dict:
 def main() -> int:
     repo, released, new, out = sys.argv[1:5]
     switch = sys.argv[5:] == ["--switch"]
+    hotfix = sys.argv[5:] == ["--hotfix"]
     changeable = RUNTIME_FILES | (ADDED_RUNTIME_FILES if switch else set())
     addable = ADDED_RUNTIME_FILES | ({SWITCH_FILE} if switch else set())
     required = {SWITCH_FILE} if switch else ADDED_RUNTIME_FILES
+    if hotfix:
+        changeable, addable, required = ADDED_RUNTIME_FILES, set(), ADDED_RUNTIME_FILES
     rules = card_rules()
     api = HfApi()
     a, b = files(api, repo, released), files(api, repo, new)
@@ -99,7 +103,7 @@ def main() -> int:
     ) and all(a[n] == b[n] for n in weights)
     receipt = {
         "schema": "dev2-runtime-diff/1",
-        "mode": "switch" if switch else "phase-a",
+        "mode": "hotfix" if hotfix else "switch" if switch else "phase-a",
         "repo": repo,
         "released": released,
         "new": new,
