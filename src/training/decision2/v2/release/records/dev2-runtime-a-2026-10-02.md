@@ -136,4 +136,4 @@ first Kai and Eos benches ran while Vega's post-checks shared the GPU and are no
 (`<key>/switch/bench/`). Frozen caches `runtime-a-<key>-ras` (`<key>/switch/triton.json`). Receipts:
 `<key>/switch/release/`.
 
-GPU use: about 8 GPU-h of the 20 budgeted (phase A about 5; the switch rollout about 3, most of it Vega).
+GPU use: about 9.5 GPU-h of the 20 budgeted (phase A about 6; the switch rollout about 3.5, most of it Vega).
