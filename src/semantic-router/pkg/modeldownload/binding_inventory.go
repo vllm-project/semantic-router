@@ -98,10 +98,9 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 	active := map[string]bool{
 		"domain_classifier": cfg.NeedsCategoryMappingForRouting(), "pii_classifier": cfg.NeedsPIIMappingForRouting(),
 		"prompt_guard": cfg.NeedsJailbreakMappingForRouting(), "fact_check_classifier": cfg.NeedsFactCheckModelForAPI() || cfg.NeedsFactCheckModelForRouting(),
-		"feedback_detector":       cfg.NeedsFeedbackModelForAPI() || cfg.NeedsFeedbackModelForRouting(),
-		"hallucination_detector":  cfg.NeedsLocalHallucinationModelsForRouting() || cfg.NeedsHallucinationDetectorForDefaultRuntime(),
-		"hallucination_explainer": cfg.NeedsLocalHallucinationNLIForAPI() || cfg.NeedsLocalHallucinationNLIForRouting() || cfg.NeedsLocalNLIForSemanticCache(),
-		"modality_detector":       isModalityClassifierEnabled(cfg), "embedding": needed[primary],
+		"feedback_detector":      cfg.NeedsFeedbackModelForAPI() || cfg.NeedsFeedbackModelForRouting(),
+		"hallucination_detector": cfg.NeedsLocalHallucinationModelsForRouting() || cfg.NeedsHallucinationDetectorForDefaultRuntime(),
+		"modality_detector":      isModalityClassifierEnabled(cfg), "embedding": needed[primary],
 		config.RAGRerankerConsumer: cfg.NeedsRAGReranker(),
 	}
 	for _, rule := range cfg.ClassifierRules {

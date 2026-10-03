@@ -249,7 +249,6 @@ func TestBuildModelSpecsSkipsDisabledHallucinationFeatureModels(t *testing.T) {
 		MoMRegistry: map[string]string{
 			"models/mmbert32k-factcheck-classifier-merged": "vllm-sr/mmbert32k-factcheck-classifier-merged",
 			"models/mom-halugate-detector":                 "vllm-sr/mom-halugate-detector",
-			"models/mom-halugate-explainer":                "vllm-sr/mom-halugate-explainer",
 		},
 		InlineModels: config.InlineModels{
 			HallucinationMitigation: config.HallucinationMitigationConfig{
@@ -259,9 +258,6 @@ func TestBuildModelSpecsSkipsDisabledHallucinationFeatureModels(t *testing.T) {
 				},
 				HallucinationModel: config.HallucinationModelConfig{
 					ModelID: "models/mom-halugate-detector",
-				},
-				NLIModel: config.NLIModelConfig{
-					ModelID: "models/mom-halugate-explainer",
 				},
 			},
 		},
