@@ -1,0 +1,8 @@
+context_tokens,context_k,paper_projected_b200_nmax,measured_b200_nmax,paper_projected_b200_tok_per_w,decode_tok_s,per_gpu_decode_power_w,measured_decode_tok_per_w,measured_8gpu_decode_tok_per_w,window_type,notes
+2048,2,1343,1725,61.4,29486.22,794.99,37.09,4.64,strict_all_overlap,successful_streams=1725 output_len=512
+4096,4,671,872,30.8,21620.98,712.54,30.34,3.79,strict_all_overlap,successful_streams=872 output_len=512
+8192,8,335,439,15.5,13451.24,654.55,20.55,2.57,strict_all_overlap,successful_streams=439 output_len=512
+16384,16,167,220,7.87,7757.27,596.00,13.02,1.63,strict_all_overlap,successful_streams=220 output_len=512
+32768,32,83,110,4.09,4654.67,590.21,7.89,0.99,strict_all_overlap,successful_streams=110 actual_chunks_per_request=492
+65536,64,41,55,2.24,2734.58,636.53,4.30,0.54,strict_all_overlap,successful_streams=55 actual_chunks_per_request=481
+131072,128,20,28,1.30,822.49,723.43,1.14,0.14,strict_all_overlap,successful_streams=28 output_len=2048 actual_mean_chunks_per_request=1019.82
