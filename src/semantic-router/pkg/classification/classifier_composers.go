@@ -203,6 +203,7 @@ func composerLeafMatches(signals *SignalResults) map[string][]string {
 		"kb":             signals.MatchedKBRules,
 		"conversation":   signals.MatchedConversationRules,
 		"input_modality": signals.MatchedInputModalityRules,
+		"decision":       signals.MatchedDecisionRules,
 	}
 }
 

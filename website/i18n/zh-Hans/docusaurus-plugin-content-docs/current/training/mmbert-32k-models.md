@@ -9,7 +9,7 @@ translation:
 
 # 训练 Vela Embedding 和 Reranker {#train-vela-embedding-and-reranker}
 
-使用 Vela Embedding 高效找到相关文档，再用 Vela Reranker 改善少量候选的排序。两者均从共享的 [Vela Encoder](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M)适配而来，并支持选择编码器深度和输出维度。
+使用 Vela Embedding 高效找到相关文档，再用 Vela Reranker 改善少量候选的排序。两者均从共享的 [Vela Encoder](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M)适配而来，并支持选择编码器深度和输出维度。
 
 直接使用已发布模型，请参阅[嵌入和重排序](../installation/runtime/embeddings.md)。
 
