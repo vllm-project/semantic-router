@@ -56,8 +56,9 @@ JOBS: dict[str, tuple[tuple[str, str], str, str, tuple[int, int]]] = {
     "qwen3": (QWEN3, "embedding", "qwen3", (0, 0)),
 }
 MAX_TOKENS = 8192
-CPU_THRESHOLDS = {"min_cosine": 0.99999, "max_logit_delta": 1e-3}
-ROCM_THRESHOLDS = {"min_cosine": 0.9995, "max_logit_delta": 2e-2}
+# Design section 17 (None: not gated); a rerank tie is a legacy logit margin under ``tie``.
+CPU_THRESHOLDS = {"min_cosine": 0.99999, "max_abs": 1e-4, "tie": 1e-3}
+ROCM_THRESHOLDS = {"min_cosine": 0.9995, "max_abs": None, "tie": 2e-2}
 
 GO_TEMPLATE = r"""//go:build !windows && cgo
 
@@ -438,8 +439,13 @@ def load_summary(load: dict[str, Any] | None) -> dict[str, float] | None:
     }
 
 
-def order(logits: list[float]) -> list[int]:
-    return sorted(range(len(logits)), key=lambda i: (-logits[i], i))
+def inversions(old: list[float], new: list[float], tie: float) -> int:
+    """Document pairs the runtime orders against legacy logits more than ``tie`` apart."""
+    return sum(
+        (old[i] - old[j]) * (new[i] - new[j]) < 0 and abs(old[i] - old[j]) > tie
+        for i in range(len(old))
+        for j in range(i + 1, len(old))
+    )
 
 
 def compare_job(
@@ -456,17 +462,14 @@ def compare_job(
     )
     shared = [i for i in legacy if "result" in legacy[i] and "result" in runtime[i]]
     if JOBS[job][1] == "rerank":
-        deltas, identical = [], 0
+        deltas, inverted = [], 0
         for i in shared:
             old = [float(v) for v in legacy[i]["result"]["Scores"]]
             new = runtime[i]["result"]
             deltas.append(float(np.abs(np.subtract(old, new)).max()))
-            identical += order(old) == order(new)
-        values = {
-            "max_logit_delta": max(deltas),
-            "identical_order": f"{identical}/{len(shared)}",
-        }
-        passed = values["max_logit_delta"] <= thresholds["max_logit_delta"]
+            inverted += inversions(old, new, thresholds["tie"])
+        values = {"max_logit_delta": max(deltas), "inversions_outside_ties": inverted}
+        passed = inverted == 0
     else:
         cosines, deltas = [], []
         for i in shared:
@@ -477,7 +480,9 @@ def compare_job(
             )
             deltas.append(float(np.abs(old - new).max()))
         values = {"min_cosine": min(cosines), "max_abs": max(deltas)}
-        passed = values["min_cosine"] >= thresholds["min_cosine"]
+        passed = values["min_cosine"] >= thresholds["min_cosine"] and (
+            thresholds["max_abs"] is None or values["max_abs"] <= thresholds["max_abs"]
+        )
     old_latency = latency(legacy.values())
     new_latency = latency(runtime.values())
     return {
