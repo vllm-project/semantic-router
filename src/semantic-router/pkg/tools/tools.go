@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/openai/openai-go"
 
@@ -39,6 +40,8 @@ type ToolsDatabase struct {
 	modelType           string // Model type to use for embeddings (e.g., "mmbert", "qwen3", "gemma")
 	targetDim           int    // Target dimension for embeddings
 	provider            embedding.Provider
+	// loadedAt is when tool entries last loaded successfully; zero until then.
+	loadedAt time.Time
 }
 
 // ToolsDatabaseOptions holds options for creating a new tools database
@@ -65,6 +68,15 @@ func NewToolsDatabase(options ToolsDatabaseOptions) *ToolsDatabase {
 // IsEnabled returns whether the tools database is enabled
 func (db *ToolsDatabase) IsEnabled() bool {
 	return db.enabled
+}
+
+// LoadedAt returns when tool entries last loaded successfully, or the zero
+// time when no load has succeeded. Callers use it as bounded runtime
+// availability evidence: an enabled flag alone says nothing about a load.
+func (db *ToolsDatabase) LoadedAt() time.Time {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	return db.loadedAt
 }
 
 // LoadToolsFromFile loads tools from a JSON file
@@ -162,6 +174,10 @@ func (db *ToolsDatabase) LoadToolsFromFile(filePath string) error {
 			successCount++
 		}
 	}
+	// A load where every embedding failed is not availability evidence.
+	if successCount > 0 || failedCount == 0 {
+		db.loadedAt = time.Now()
+	}
 
 	logging.ComponentEvent("tools", "tool_database_loaded", map[string]interface{}{
 		"file_path":        filePath,
@@ -192,6 +208,7 @@ func (db *ToolsDatabase) AddTool(tool openai.ChatCompletionToolParam, descriptio
 	defer db.mu.Unlock()
 
 	db.entries = append(db.entries, entry)
+	db.loadedAt = time.Now()
 	logging.ComponentEvent("tools", "tool_added", map[string]interface{}{
 		"tool_name":       tool.Function.Name,
 		"category":        category,
