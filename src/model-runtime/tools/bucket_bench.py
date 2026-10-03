@@ -2,12 +2,13 @@
 
     python3 tools/bucket_bench.py --package DIR --prompts NAME:PROMPTS.jsonl:COUNT ... --mode MODE
         --output OUT.json [--answers OUT.jsonl] [--concurrency 16] [--warmup 512] [--rows-bucket 2]
-        [--length-bucket 64] [--device rocm:0] [--base-path DIR]
+        [--length-bucket 64] [--graphable-only] [--device rocm:0] [--base-path DIR]
 
 MODE is ``exact`` (one request per forward, the reference answers), ``batching`` (the profile as it is)
 or ``buckets``: the batching profile's batches, each padded up to a bucketed shape before its forward,
 rows to the next power of --rows-bucket with copies of the batch's last row and the padded length to a
-multiple of --length-bucket with padding columns. Padding rows and columns never change which rows are
+multiple of --length-bucket with padding columns (with --graphable-only, only when the bucketed shape
+stays within the graph-size cap). Padding rows and columns never change which rows are
 answered, so the shapes a forward sees, and therefore its graphs, repeat across batches; the padding
 compute is the price. The first --warmup prompts are answered once untimed, the rest once, timed, in
 waves of --concurrency requests submitted together through the scheduler (2 ms window). No request
@@ -43,8 +44,10 @@ def bucket_rows(rows: int, base: int) -> int:
     return size
 
 
-def install_buckets(model, rows_base: int, length_step: int, tally: dict) -> None:
-    """Pad every forward up to a bucketed shape: extra rows copy the last row and are dropped afterwards."""
+def install_buckets(
+    model, rows_base: int, length_step: int, graphable_only: bool, tally: dict
+) -> None:
+    """Pad forwards up to a bucketed shape: extra rows copy the last row and are dropped afterwards."""
     import torch
 
     engine = model.engine_model
@@ -55,6 +58,8 @@ def install_buckets(model, rows_base: int, length_step: int, tally: dict) -> Non
         count, length = batch.input_ids.shape
         rows = bucket_rows(count, rows_base)
         width = -(-length // length_step) * length_step
+        if graphable_only and rows * width > engine.graphs.max_tokens:
+            rows, width = count, length
         tally["answered"] += sum(batch.lengths)
         tally["padded"] += rows * width
         if batch.shared_prefix or (rows, width) == (count, length):
@@ -99,6 +104,7 @@ def main() -> int:
     parser.add_argument("--warmup", type=int, default=512)
     parser.add_argument("--rows-bucket", type=int, default=2)
     parser.add_argument("--length-bucket", type=int, default=64)
+    parser.add_argument("--graphable-only", action="store_true")
     parser.add_argument("--device", default="rocm:0")
     parser.add_argument("--base-path")
     args = parser.parse_args()
@@ -116,7 +122,9 @@ def main() -> int:
     model = load(args)
     tally = {"answered": 0, "padded": 0}
     if args.mode == "buckets":
-        install_buckets(model, args.rows_bucket, args.length_bucket, tally)
+        install_buckets(
+            model, args.rows_bucket, args.length_bucket, args.graphable_only, tally
+        )
     profile = ExactProfile() if args.mode == "exact" else BatchingProfile()
     scheduler = Scheduler(
         model,
@@ -172,7 +180,11 @@ def main() -> int:
         "mode": args.mode,
         "concurrency": args.concurrency,
         "buckets": (
-            {"rows": f"powers of {args.rows_bucket}", "length": args.length_bucket}
+            {
+                "rows": f"powers of {args.rows_bucket}",
+                "length": args.length_bucket,
+                "graphable_only": args.graphable_only,
+            }
             if args.mode == "buckets"
             else None
         ),

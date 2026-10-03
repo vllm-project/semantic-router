@@ -54,10 +54,10 @@ def pin_kernel_choices(choices: dict[str, Any]) -> Path | None:
     the FLA version the choices were recorded with and, per kernel, each
     recorded tuning key with its configuration. Every kernel gets an FLA config
     file (``FLA_CACHE_MODE=full``): recorded keys match exactly, and any other
-    key takes the entry of the same structure or the kernel's first entry, so
-    no configuration depends on timing. FLA reads the mode when it is imported,
-    so this must run before FLA is imported. Returns the config directory, or
-    None when the choices do not apply to this process.
+    key takes the first entry that differs from it only in numbers, else the
+    kernel's first entry, so no configuration depends on timing. FLA reads the
+    mode when it is imported, so this must run before FLA is imported. Returns
+    the config directory, or None when the choices do not apply to this process.
     """
     if "fla" in sys.modules:
         log.warning(
