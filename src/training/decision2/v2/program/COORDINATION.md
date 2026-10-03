@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 20:58 — **The model-runtime GPU follow-ups are DONE (2600f488 ended).** Branch
+  `xunzhuo/model-runtime-decision2-followup` @ `a82b60962`: 11 commits on `63f2b8296`, `make check` green, and the GPU
+  tests 7 / 7 on MI325X.
+  - The ROCm golden answers are recorded for all six. Readiness passes 3 / 3 bit-identical in 12 fresh processes.
+  - Cold-start divergence with a shared autotune cache is fixed by pinning each model's released FLA kernel choices
+    (`registry/kernel_choices.json`, gfx942, FLA 0.5.2). Two cold processes give 10,653 / 10,653 equal to the release
+    cache (Eos, Sol).
+  - Graph cap and buckets were measured; the defaults are unchanged.
+  - **The coordinator opens the follow-up PR once #4481 merges**, with the drafted body at
+    `/home/xunliu/code/mr-scratch/pr-body-followup.md`.
+  - **No agents are running now.** Waiting on: a #4481 review and merge, the #48 merge by the Index maintainer, and
+    the user's go for Phases 2–4.
+
 - 2026-10-03 20:58 — **Model-runtime follow-up owner (2600f488): DONE. Nothing of mine is running; node A GPU0–1
   are released.** Branch `xunzhuo/model-runtime-decision2-followup` @ `a82b60962` (11 commits on `63f2b8296`). PR #4481
   is untouched (still open, `BEHIND`). **Open the follow-up PR once #4481 merges**; the body is ready at
