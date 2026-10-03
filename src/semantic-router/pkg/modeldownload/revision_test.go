@@ -60,7 +60,7 @@ func TestDownloadReleasePinDoesNotLeakToCustomRepository(t *testing.T) {
 	original := config.DefaultModelRegistry
 	t.Cleanup(func() { config.DefaultModelRegistry = original })
 	const path = "models/versioned-test-model"
-	const repo = "example/versioned-test-model"
+	const repo = "vllm-sr/versioned-test-model"
 	const revision = "0123456789abcdef0123456789abcdef01234567"
 	config.DefaultModelRegistry = append(append([]config.ModelSpec{}, original...), config.ModelSpec{
 		LocalPath: path, RepoID: repo, Revision: revision,
@@ -71,7 +71,7 @@ func TestDownloadReleasePinDoesNotLeakToCustomRepository(t *testing.T) {
 	cfg.Decisions = []config.Decision{{Name: "domain-route", Rules: config.RuleNode{Type: config.SignalTypeDomain, Name: "billing"}}}
 	cfg.MoMRegistry = map[string]string{path: repo}
 	for _, tc := range []struct{ repo, revision string }{
-		{repo, revision}, {"user/custom-checkpoint", "main"},
+		{repo, revision}, {"llm-semantic-router/versioned-test-model", revision}, {"user/custom-checkpoint", "main"},
 	} {
 		cfg.MoMRegistry[path] = tc.repo
 		specs, err := BuildModelSpecs(cfg)

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -31,7 +32,7 @@ type Service struct {
 }
 
 func New(store *workflowstore.Store, directory string) (*Service, error) {
-	if err := prepareDirectory(directory); err != nil {
+	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return nil, err
 	}
 	return &Service{store: store, directory: directory}, nil
@@ -151,10 +152,7 @@ func (s *Service) CreateSnapshot(ctx context.Context, owner string, spec c.Snaps
 	return v, err
 }
 
-func validate(tx *workflowstore.TrainingTx, owner string, spec c.RunSpec) error {
-	if err := c.ValidateRunSpec(spec); err != nil {
-		return invalid(err)
-	}
+func validateRunResources(tx *workflowstore.TrainingTx, owner string, spec c.RunSpec) error {
 	experiment, err := read[c.Experiment](tx, owner, "experiments", spec.ExperimentID)
 	if err != nil {
 		return err
@@ -173,7 +171,10 @@ func (s *Service) Validate(ctx context.Context, owner string, req c.ValidationRe
 	if req.SchemaVersion != c.Version {
 		return c.ValidationResponse{}, invalid(errors.New("unsupported schema_version"))
 	}
-	err := s.update(ctx, func(tx *workflowstore.TrainingTx) error { return validate(tx, owner, req.Spec) })
+	if err := c.ValidateRunSpec(req.Spec); err != nil {
+		return c.ValidationResponse{}, invalid(err)
+	}
+	err := s.update(ctx, func(tx *workflowstore.TrainingTx) error { return validateRunResources(tx, owner, req.Spec) })
 	return c.ValidationResponse{Valid: err == nil}, err
 }
 
@@ -199,7 +200,7 @@ func (s *Service) Submit(ctx context.Context, owner string, req c.SubmitRunReque
 			g, lookupErr = read[c.RunGraph](tx, owner, "runs", existing.RunID)
 			return lookupErr
 		}
-		if validationErr := validate(tx, owner, req.Spec); validationErr != nil {
+		if validationErr := validateRunResources(tx, owner, req.Spec); validationErr != nil {
 			return validationErr
 		}
 		m := metadata("run")

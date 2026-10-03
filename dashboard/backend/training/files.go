@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 	c "github.com/vllm-project/semantic-router/src/semantic-router/pkg/trainingcontract"
 )
@@ -21,8 +20,6 @@ type ownedFile struct {
 	c.File
 	AttemptID string `json:"attempt_id,omitempty"`
 }
-
-func prepareDirectory(directory string) error { return os.MkdirAll(directory, 0o700) }
 
 // putFile stores immutable bytes before recording their handle. Failed copies and
 // rejected commits remove their bytes. A crash may leave unreferenced bytes, never
@@ -66,10 +63,7 @@ func (s *Service) putFile(ctx context.Context, owner, attempt string, input io.R
 		return c.File{}, err
 	}
 	value := c.File{Handle: handle, Digest: fmt.Sprintf("sha256:%x", digest.Sum(nil)), SizeBytes: size}
-	err = s.store.UpdateTraining(ctx, func(tx *workflowstore.TrainingTx) error {
-		if operationErr := auth.RevalidateContextIfPresent(ctx); operationErr != nil {
-			return operationErr
-		}
+	err = s.update(ctx, func(tx *workflowstore.TrainingTx) error {
 		if operationErr := commit(tx, value); operationErr != nil {
 			return operationErr
 		}

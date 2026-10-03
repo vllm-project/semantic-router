@@ -171,23 +171,20 @@ func outputs(tx *workflowstore.TrainingTx, owner string, g *c.RunGraph, task *c.
 		}
 		out.ArtifactIDs = append(out.ArtifactIDs, artifact.ID)
 	}
-	evaluationInputs := map[string]bool{}
+	evaluationInputs := map[string]c.ArtifactVariant{}
 	if len(result.Evaluations) > 0 {
 		inputs, inputErr := dependencyInputs(tx, owner, g, task)
 		if inputErr != nil {
 			return nil, out, inputErr
 		}
 		for _, variant := range inputs {
-			evaluationInputs[variant.ID] = true
+			evaluationInputs[variant.ID] = variant
 		}
 	}
 	for _, spec := range result.Evaluations {
-		if !evaluationInputs[spec.VariantID] {
+		variant, ok := evaluationInputs[spec.VariantID]
+		if !ok {
 			return reject("evaluation variant must be a published dependency input of this run")
-		}
-		variant, err := read[c.ArtifactVariant](tx, owner, "artifact-variants", spec.VariantID)
-		if err != nil {
-			return nil, out, err
 		}
 		artifact, err := read[c.Artifact](tx, owner, "artifacts", variant.ArtifactID)
 		if err != nil {

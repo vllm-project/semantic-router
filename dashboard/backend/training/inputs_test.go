@@ -120,16 +120,21 @@ func TestDependencyInputsRejectInvalidReferences(t *testing.T) {
 }
 
 func TestDependencyInputsCombineOnlyDirectOutputs(t *testing.T) {
-	for _, withEvaluation := range []bool{false, true} {
-		name := "no evaluation output"
-		if withEvaluation {
-			name = "artifact and evaluation share a variant"
-		}
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range []struct {
+		name              string
+		directArtifact    bool
+		evaluatedVariants []int
+		wantVariants      []int
+	}{
+		{name: "no evaluation output"},
+		{name: "artifact and evaluation share a variant", directArtifact: true, evaluatedVariants: []int{1}, wantVariants: []int{0, 1}},
+		{name: "evaluations share an artifact index", evaluatedVariants: []int{1, 0, 1}, wantVariants: []int{1, 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			s, store := openService(t, t.TempDir())
 			defer func() { _ = store.Close() }()
 			req := seed(t, s, "alice", fixture(t, "selector"))
-			if withEvaluation {
+			if tc.directArtifact {
 				req.Spec.Tasks[2].DependsOn = []string{"train", "evaluate"}
 			}
 			g, err := s.Submit(t.Context(), "alice", req)
@@ -143,9 +148,11 @@ func TestDependencyInputsCombineOnlyDirectOutputs(t *testing.T) {
 			}
 			result := c.WorkerResult{SchemaVersion: c.Version, Status: c.Succeeded}
 			want := []c.ArtifactVariant{}
-			if withEvaluation {
-				result.Evaluations = []c.EvaluationSpec{{VariantID: variants[1].ID, SnapshotID: req.Spec.SnapshotID, Method: c.Component{Name: "accuracy", Version: "v1"}, Metrics: map[string]float64{"accuracy": 0.9}}}
-				want = variants
+			for _, i := range tc.evaluatedVariants {
+				result.Evaluations = append(result.Evaluations, c.EvaluationSpec{VariantID: variants[i].ID, SnapshotID: req.Spec.SnapshotID, Method: c.Component{Name: "accuracy", Version: "v1"}, Metrics: map[string]float64{"accuracy": 0.9}})
+			}
+			for _, i := range tc.wantVariants {
+				want = append(want, variants[i])
 			}
 			if _, operationErr := s.Complete(t.Context(), "alice", g.Run.ID, work.AttemptID, result); operationErr != nil {
 				t.Fatal(operationErr)

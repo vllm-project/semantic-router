@@ -2281,7 +2281,7 @@ pub extern "C" fn detect_hallucinations_with_nli(
 
 // ============================================================================
 // mmBERT-32K Classification Functions (32K context, YaRN RoPE scaling)
-// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+// Reference: https://huggingface.co/vllm-sr/mmbert-32k-yarn
 // ============================================================================
 
 use crate::ffi::init::{

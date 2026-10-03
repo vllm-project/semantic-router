@@ -109,16 +109,15 @@ type OAuthConfig struct {
 	UsePKCE bool `json:"use_pkce,omitempty" yaml:"use_pkce,omitempty"`
 }
 
-// ServerOptions represents advanced options
+// ServerOptions represents advanced options.
+//
+// Older releases persisted reconnect settings (auto_reconnect,
+// reconnect_interval, max_retries) that the dashboard never enforced;
+// loadConfigs decodes stored configs with plain json.Unmarshal, so those
+// legacy keys are ignored and only the timeout survives.
 type ServerOptions struct {
-	// Auto reconnect
-	AutoReconnect bool `json:"auto_reconnect,omitempty" yaml:"auto_reconnect,omitempty"`
-	// Reconnect interval (ms)
-	ReconnectInterval int `json:"reconnect_interval,omitempty" yaml:"reconnect_interval,omitempty"`
 	// Request timeout (ms)
 	Timeout int `json:"timeout,omitempty" yaml:"timeout,omitempty"`
-	// Max retry count
-	MaxRetries int `json:"max_retries,omitempty" yaml:"max_retries,omitempty"`
 }
 
 // ToolDefinition represents MCP tool definition

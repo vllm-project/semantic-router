@@ -17,21 +17,11 @@ func dependencyInputs(tx *workflowstore.TrainingTx, owner string, g *c.RunGraph,
 			dependencies[dep.ID] = true
 		}
 	}
-	inputs := []c.ArtifactVariant{}
-	seen := map[string]bool{}
-	add := func(id string) error {
-		if seen[id] {
-			return nil
-		}
-		variant, err := publishedInputVariant(tx, owner, g, id)
-		if err != nil {
-			return err
-		}
-		seen[id] = true
-		inputs = append(inputs, variant)
-		return nil
-	}
+	artifacts := map[string]c.Artifact{}
 	for _, id := range g.Outputs.ArtifactIDs {
+		if _, ok := artifacts[id]; ok {
+			continue
+		}
 		artifact, err := read[c.Artifact](tx, owner, "artifacts", id)
 		if err != nil {
 			return nil, err
@@ -39,14 +29,65 @@ func dependencyInputs(tx *workflowstore.TrainingTx, owner string, g *c.RunGraph,
 		if artifact.ID != id || artifact.Provenance.RunID != g.Run.ID {
 			return nil, invalid(errors.New("input artifact must belong to this run"))
 		}
+		artifacts[id] = artifact
+	}
+	type variantIndex struct {
+		variants []c.ArtifactVariant
+		ids      map[string]bool
+	}
+	indexes := map[string]variantIndex{}
+	loadIndex := func(artifactID string) (variantIndex, error) {
+		if index, ok := indexes[artifactID]; ok {
+			return index, nil
+		}
+		variants, err := read[[]c.ArtifactVariant](tx, owner, "artifact-variant-index", variantIndexID(artifactID))
+		if err != nil {
+			return variantIndex{}, err
+		}
+		index := variantIndex{variants: variants, ids: map[string]bool{}}
+		for _, variant := range variants {
+			if variant.ArtifactID == artifactID {
+				index.ids[variant.ID] = true
+			}
+		}
+		indexes[artifactID] = index
+		return index, nil
+	}
+	inputs := []c.ArtifactVariant{}
+	seen := map[string]bool{}
+	add := func(id string) error {
+		if seen[id] {
+			return nil
+		}
+		// The index is a publication reference, not a substitute for the owned record.
+		variant, err := read[c.ArtifactVariant](tx, owner, "artifact-variants", id)
+		if err != nil {
+			return err
+		}
+		if _, ok := artifacts[variant.ArtifactID]; variant.ID != id || !ok {
+			return invalid(errors.New("input variant must reference an artifact published by this run"))
+		}
+		index, err := loadIndex(variant.ArtifactID)
+		if err != nil {
+			return err
+		}
+		if !index.ids[id] {
+			return invalid(errors.New("input variant must be published in its artifact's variant index"))
+		}
+		seen[id] = true
+		inputs = append(inputs, variant)
+		return nil
+	}
+	for _, id := range g.Outputs.ArtifactIDs {
+		artifact := artifacts[id]
 		if !dependencies[artifact.Provenance.TaskID] {
 			continue
 		}
-		variants, err := read[[]c.ArtifactVariant](tx, owner, "artifact-variant-index", variantIndexID(id))
+		index, err := loadIndex(id)
 		if err != nil {
 			return nil, err
 		}
-		for _, variant := range variants {
+		for _, variant := range index.variants {
 			if variant.ArtifactID != artifact.ID {
 				return nil, invalid(errors.New("input variant must belong to its published artifact"))
 			}
@@ -70,29 +111,4 @@ func dependencyInputs(tx *workflowstore.TrainingTx, owner string, g *c.RunGraph,
 		}
 	}
 	return inputs, nil
-}
-
-func publishedInputVariant(tx *workflowstore.TrainingTx, owner string, g *c.RunGraph, id string) (c.ArtifactVariant, error) {
-	variant, err := read[c.ArtifactVariant](tx, owner, "artifact-variants", id)
-	if err != nil {
-		return c.ArtifactVariant{}, err
-	}
-	if variant.ID != id || !slices.Contains(g.Outputs.ArtifactIDs, variant.ArtifactID) {
-		return c.ArtifactVariant{}, invalid(errors.New("input variant must reference an artifact published by this run"))
-	}
-	artifact, err := read[c.Artifact](tx, owner, "artifacts", variant.ArtifactID)
-	if err != nil {
-		return c.ArtifactVariant{}, err
-	}
-	if artifact.ID != variant.ArtifactID || artifact.Provenance.RunID != g.Run.ID {
-		return c.ArtifactVariant{}, invalid(errors.New("input artifact must belong to this run"))
-	}
-	variants, err := read[[]c.ArtifactVariant](tx, owner, "artifact-variant-index", variantIndexID(artifact.ID))
-	if err != nil {
-		return c.ArtifactVariant{}, err
-	}
-	if !slices.ContainsFunc(variants, func(v c.ArtifactVariant) bool { return v.ID == id && v.ArtifactID == artifact.ID }) {
-		return c.ArtifactVariant{}, invalid(errors.New("input variant must be published in its artifact's variant index"))
-	}
-	return variant, nil
 }
