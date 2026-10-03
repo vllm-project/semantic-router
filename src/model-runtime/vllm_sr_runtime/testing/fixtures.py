@@ -17,8 +17,9 @@ from typing import Any
 import torch
 
 from ..families.decision2 import package as pkg
-from ..families.decision2.readout import CandidateHead
+from ..heads.candidate import CandidateHead
 from ..registry.artifacts import safetensors_elements, sha256_file
+from ..systemone import MAX_OPTIONS
 
 PAD = "<|endoftext|>"
 CORPUS = [
@@ -186,7 +187,7 @@ def write_package(
         "backbone_model_type": "qwen3" if backbone == "qwen3" else "qwen3_5",
         "prompt_version": pkg.PROMPT_VERSION,
         "head_dim": head_dim,
-        "max_options": pkg.MAX_OPTIONS,
+        "max_options": MAX_OPTIONS,
         "parameter_dtype": "float32",
         "autocast_dtype": "bfloat16",
         "head_compute_dtype": "float32",

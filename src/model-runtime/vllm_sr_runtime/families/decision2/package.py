@@ -25,6 +25,7 @@ from ...registry.artifacts import (
     sha256_file,
     sha256_json,
 )
+from ...systemone import MAX_OPTIONS, MIN_OPTIONS
 
 POINTER = {
     "decision_format": "vllm-sr-decision",
@@ -62,8 +63,6 @@ SOURCE_SUFFIXES = {".json", ".safetensors", ".bin", ".model", ".txt"}
 SCORE_BIAS_FORMAT = "dev2-score-bias-v1"
 CALIBRATION_VERSION = "decision2-per-type-temperature/1"
 TASK_TYPES = ("choice", "noul", "score")
-MIN_OPTIONS = 2
-MAX_OPTIONS = 255
 MIN_INPUT_TOKENS = 16
 MIN_TEMPERATURE, MAX_TEMPERATURE = 0.05, 20.0
 
