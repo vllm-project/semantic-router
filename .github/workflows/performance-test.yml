@@ -3,9 +3,6 @@ name: Performance Tests
 on:
   workflow_call:
     inputs:
-      native-artifact:
-        type: string
-        default: ""
       verification:
         type: string
         default: ""
@@ -34,25 +31,6 @@ jobs:
         with:
           go-version: "1.25"
 
-      # The paired baseline may rebuild its libraries even when HEAD uses the shared artifact.
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.90
-
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            candle-binding/target/
-          key: ${{ runner.os }}-perf-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-perf-cargo-
-
       - name: Cache Go dependencies
         uses: actions/cache@v4
         with:
@@ -72,16 +50,6 @@ jobs:
             ${{ runner.os }}-models-v1-
         continue-on-error: true
 
-      - name: Load shared native libraries
-        if: inputs.native-artifact != ''
-        uses: ./.github/actions/load-native-artifact
-        with:
-          artifact: ${{ inputs.native-artifact }}
-
-      - name: Build Rust library (CPU-only)
-        if: inputs.native-artifact == ''
-        run: make rust-ci
-
       - name: Install HuggingFace CLI
         run: |
           pip install -U "huggingface_hub[cli]" hf_transfer
@@ -100,7 +68,6 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p reports
-          export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release
           make perf-bench-quick 2>&1 | tee reports/bench-output.txt
 
       - name: Run Looper benchmarks
@@ -110,7 +77,6 @@ jobs:
         if: ${{ always() && !cancelled() }}
         run: |
           set -o pipefail
-          export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release
           make perf-bench-looper 2>&1 | tee -a reports/bench-output.txt
 
       - name: Generate current results
