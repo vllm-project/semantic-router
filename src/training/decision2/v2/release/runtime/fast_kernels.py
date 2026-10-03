@@ -14,6 +14,7 @@ the row counts the runtime runs (padded batches are multiples of 8 tokens);
 
 Kernels:
     add_rmsnorm     residual add + RMSNorm (by 1 + w for Qwen3.5, w for Qwen3), BF16 Linear input
+    residual_add    the MLP residual add into the FP32 stream
     silu_mul        SiLU(gate) * up
     gdn_prep        causal conv + SiLU + q / k / v split + beta + g
     gated_rmsnorm   Gated DeltaNet output norm with the SiLU(z) gate
@@ -166,6 +167,29 @@ def add_rmsnorm(
         **EXACT,
     )
     return hidden, out
+
+
+@triton.jit
+def _residual_add_kernel(res_ptr, delta_ptr, out_ptr, N, BLOCK: tl.constexpr):
+    offs = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
+    mask = offs < N
+    x = tl.load(res_ptr + offs, mask=mask, other=0.0)
+    d = tl.load(delta_ptr + offs, mask=mask, other=0.0).to(tl.float32)
+    tl.store(out_ptr + offs, x + d, mask=mask)
+
+
+def residual_add(residual: Any, delta: Any) -> Any:
+    """``residual + delta``: the contiguous FP32 stream plus a contiguous BF16 or FP32 block output.
+
+    One FP32 addition per element, as ATen's type-promoting add computes it (ATen's mixed-dtype
+    kernel runs several times slower at some hidden sizes).
+    """
+    out = torch.empty_like(residual)
+    n = residual.numel()
+    _residual_add_kernel[(triton.cdiv(n, 4096),)](
+        residual, delta, out, n, BLOCK=4096, num_warps=8, **EXACT
+    )
+    return out
 
 
 @triton.jit
@@ -363,6 +387,7 @@ def _attn_prep_kernel(
     sin_ptr,
     qo_ptr,
     ko_ptr,
+    BT,
     T,
     NH,
     NKV,
@@ -373,8 +398,11 @@ def _attn_prep_kernel(
     ROT: tl.constexpr,
     GATED: tl.constexpr,
     ROUND_BEFORE_WEIGHT: tl.constexpr,
+    R: tl.constexpr,
 ):
-    bt = tl.program_id(0).to(tl.int64)
+    # R tokens of one head per program; every row's arithmetic is the one-row order.
+    bt = tl.program_id(0).to(tl.int64) * R + tl.arange(0, R)
+    rmask = (bt < BT)[:, None]
     hid = tl.program_id(1)
     b = bt // T
     t = bt % T
@@ -383,35 +411,37 @@ def _attn_prep_kernel(
     partner = tl.where(d < half, d + half, tl.where(d < ROT, d - half, d))
     QW: tl.constexpr = 2 * D if GATED else D
     if hid < NH:
-        src = qg_ptr + bt * (NH * QW) + hid * QW
+        src = qg_ptr + (bt * (NH * QW) + hid * QW)[:, None]
         wp = qw1_ptr
-        dst = qo_ptr + ((b * NH + hid) * T + t) * D
+        dst = qo_ptr + (((b * NH + hid) * T + t) * D)[:, None]
     else:
-        src = k_ptr + bt * (NKV * D) + (hid - NH) * D
+        src = k_ptr + (bt * (NKV * D) + (hid - NH) * D)[:, None]
         wp = kw1_ptr
-        dst = ko_ptr + ((b * NKV + (hid - NH)) * T + t) * D
-    x = tl.load(src + d).to(tl.float32)
+        dst = ko_ptr + (((b * NKV + (hid - NH)) * T + t) * D)[:, None]
+    x = tl.load(src + d[None, :], mask=rmask, other=0.0).to(tl.float32)
     if D == 256:
-        sumsq = sumsq_256(tl.reshape(x, [1, D]), 1)
+        sumsq = sumsq_256(x, R)
     else:
-        sumsq = sumsq_128(tl.reshape(x, [1, D]), 1)
-    rstd = rsqrt_rn(tl.reshape(sumsq, []) * inv_d + eps)
-    xp = tl.load(src + partner).to(tl.float32)
+        sumsq = sumsq_128(x, R)
+    rstd = rsqrt_rn(sumsq * inv_d + eps)[:, None]
+    xp = tl.load(src + partner[None, :], mask=rmask, other=0.0).to(tl.float32)
+    w = tl.load(wp + d)[None, :]
+    wq = tl.load(wp + partner)[None, :]
     if ROUND_BEFORE_WEIGHT:
         # Qwen3RMSNorm: w * (x * rstd).to(bf16), kept in FP32
-        y = tl.load(wp + d) * (x * rstd).to(tl.bfloat16).to(tl.float32)
-        yp = tl.load(wp + partner) * (xp * rstd).to(tl.bfloat16).to(tl.float32)
+        y = w * (x * rstd).to(tl.bfloat16).to(tl.float32)
+        yp = wq * (xp * rstd).to(tl.bfloat16).to(tl.float32)
     else:
         # Qwen3_5RMSNorm: ((x * rstd) * (1 + w)).to(bf16)
-        y = ((x * rstd) * tl.load(wp + d)).to(tl.bfloat16).to(tl.float32)
-        yp = ((xp * rstd) * tl.load(wp + partner)).to(tl.bfloat16).to(tl.float32)
-    yp = tl.where(d < half, -yp, yp)
-    rot = d < ROT
-    cs = b * cs_bstride + t * ROT + d
-    c = tl.load(cos_ptr + cs, mask=rot, other=1.0)
-    s = tl.load(sin_ptr + cs, mask=rot, other=0.0)
+        y = ((x * rstd) * w).to(tl.bfloat16).to(tl.float32)
+        yp = ((xp * rstd) * wq).to(tl.bfloat16).to(tl.float32)
+    yp = tl.where(d[None, :] < half, -yp, yp)
+    rot = d[None, :] < ROT
+    cs = (b * cs_bstride + t * ROT)[:, None] + d[None, :]
+    c = tl.load(cos_ptr + cs, mask=rot & rmask, other=1.0)
+    s = tl.load(sin_ptr + cs, mask=rot & rmask, other=0.0)
     out = tl.where(rot, (y * c) + (yp * s), y)
-    tl.store(dst + d, out.to(tl.bfloat16))
+    tl.store(dst + d[None, :], out.to(tl.bfloat16), mask=rmask)
 
 
 def attn_prep(
@@ -445,7 +475,8 @@ def attn_prep(
     q = torch.empty(B, heads, T, head_dim, dtype=torch.bfloat16, device=dev)
     k = torch.empty(B, kv_heads, T, head_dim, dtype=torch.bfloat16, device=dev)
     rot = cos.shape[-1]
-    _attn_prep_kernel[(B * T, heads + kv_heads)](
+    rows = 16 if head_dim == 128 else 8
+    _attn_prep_kernel[(triton.cdiv(B * T, rows), heads + kv_heads)](
         q_proj_out,
         k_proj_out,
         q_norm_w1,
@@ -454,6 +485,7 @@ def attn_prep(
         sin,
         q,
         k,
+        B * T,
         T,
         heads,
         kv_heads,
@@ -464,7 +496,8 @@ def attn_prep(
         ROT=rot,
         GATED=gated,
         ROUND_BEFORE_WEIGHT=not zero_centred,
-        num_warps=2,
+        R=rows,
+        num_warps=4,
         **EXACT,
     )
     return q, k

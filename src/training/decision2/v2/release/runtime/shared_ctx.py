@@ -39,7 +39,7 @@ from dataclasses import dataclass, fields
 from functools import partial
 from typing import Any
 
-TESTED_TRANSFORMERS = ("5.17.",)
+TESTED_TRANSFORMERS = ("5.17.", "5.18.")
 SUPPORTED_MODEL_TYPES = ("qwen3", "qwen3_5_text")
 LAYER_TYPES = ("full_attention", "linear_attention")
 FALLBACKS = ("rows", "request")
@@ -424,6 +424,8 @@ class Tree:
             + [torch.arange(prefix, prefix + length) for length in lengths]
         )[None].to(device)
         self.prefix_mask = None
+        # The attention over this tree, for fused decoder layers (fast.py) that receive it as their mask.
+        self.tree_attention = _tree_attention
 
     def rows(self, packed: Any) -> Any:
         """[suffix tokens, ...] -> [questions, width, ...]."""
@@ -624,8 +626,13 @@ def _as_tree(backbone: Any, tree: Any, ids: Any, layer_types: set[str]):
         AttentionInterface.register(TREE_ATTENTION, _tree_attention)
     config = _core(backbone).config
     gdn = [m for m in backbone.modules() if type(m).__name__ == "Qwen3_5GatedDeltaNet"]
-    # Fused decoder-layer forwards (fast.py) read tensor masks only: run the originals.
-    fused = [m for m in backbone.modules() if hasattr(m, "_decision2_fused")]
+    # Fused decoder-layer forwards (fast.py) that take the tree as their mask keep running (the same
+    # operations with the fused kernels); any other runs its original forward.
+    fused = [
+        m
+        for m in backbone.modules()
+        if hasattr(m, "_decision2_fused") and not m._decision2_fused.get("tree")
+    ]
     swapped = [(m, m.__dict__.get("forward")) for m in fused]
 
     def unpack(hidden: Any) -> Any:

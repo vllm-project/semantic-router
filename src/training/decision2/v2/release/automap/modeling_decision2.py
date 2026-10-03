@@ -41,7 +41,15 @@ HUB_OPTIONS = (
     "revision",
     "token",
 )
-RUNTIME_OPTIONS = ("device", "base_path", "threads", "bf16_resident")
+RUNTIME_OPTIONS = (
+    "device",
+    "base_path",
+    "threads",
+    "bf16_resident",
+    "graphs",
+    "kernels",
+    "share_context",
+)
 # Options of Transformers' own weight loader, which this model does not use.
 LOADER_FLAGS = (
     "trust_remote_code",
@@ -335,9 +343,10 @@ class Decision2Model(PreTrainedModel):
 
         Hub options: ``revision``, ``cache_dir``, ``token``, ``local_files_only``, ``force_download``.
         ``device`` or ``device_map`` names one device (default: cuda:0 if a GPU is visible, else CPU).
-        Runtime options pass through: ``threads``, ``bf16_resident`` and, for a base-bound adapter,
-        ``base_path`` (a local copy of the pinned base revision). Numerics are the runtime's, so ``dtype``
-        is only None or "auto".
+        Runtime options pass through: ``threads``, ``bf16_resident``, ``graphs``, ``kernels``,
+        ``share_context`` (the default for requests that do not set it; see ``system_one``) and, for a
+        base-bound adapter, ``base_path`` (a local copy of the pinned base revision). Numerics are the
+        runtime's, so ``dtype`` is only None or "auto".
         """
         if model_args:
             raise TypeError("Decision 2.0 models take no positional model arguments")
@@ -437,18 +446,32 @@ class Decision2Model(PreTrainedModel):
     def manifest(self) -> dict[str, Any]:
         return self._require().manifest
 
-    def system_one(self, *, state: Any, questions: dict[str, Any]) -> dict[str, Any]:
+    def system_one(
+        self, *, state: Any, questions: dict[str, Any], share_context: Any = None
+    ) -> dict[str, Any]:
         """Typed Choice / Noul / Score answers about one state: ``{"model", "answers", "usage"}``.
 
         ``questions`` maps question IDs to ``{"type": "choice" | "noul" | "score", "instructions": ...,
         "criteria": ...}``; over-budget input is answered with ``max_length_exceeded``, never truncated.
+        ``share_context=True`` computes the input the questions share once instead of once per question
+        (much faster for many questions; near-tie answers can differ slightly from the exact path);
+        None keeps the default given to ``from_pretrained`` (off unless set there).
         """
-        return self._require().system_one(state=state, questions=questions)
+        if share_context is None:
+            return self._require().system_one(state=state, questions=questions)
+        return self._require().system_one(
+            state=state, questions=questions, share_context=share_context
+        )
 
     def forward(
-        self, state: Any = None, questions: dict[str, Any] | None = None
+        self,
+        state: Any = None,
+        questions: dict[str, Any] | None = None,
+        share_context: Any = None,
     ) -> dict[str, Any]:
-        return self.system_one(state=state, questions=questions)
+        return self.system_one(
+            state=state, questions=questions, share_context=share_context
+        )
 
     def to(self, *args: Any, **kwargs: Any) -> Decision2Model:
         """Move to another device by loading the package there through the native runtime."""

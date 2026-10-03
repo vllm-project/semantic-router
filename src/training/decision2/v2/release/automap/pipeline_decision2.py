@@ -2,7 +2,8 @@
 
 ``pipeline("decision", model=repo, trust_remote_code=True)`` loads the model with ``AutoModel`` and answers
 ``{"state": ..., "questions": {...}}`` requests (or ``state=..., questions=...`` keywords, or a list of
-requests) with the model's ``system_one`` response. The model batches the questions of one request itself.
+requests) with the model's ``system_one`` response. The model batches the questions of one request itself;
+``share_context=...`` is passed to ``system_one``.
 """
 
 from transformers import Pipeline
@@ -17,12 +18,13 @@ class Decision2Pipeline(Pipeline):
     _load_feature_extractor = False
     _load_video_processor = False
 
-    def _sanitize_parameters(self, **kwargs):
+    def _sanitize_parameters(self, share_context=_UNSET, **kwargs):
         if kwargs:
             raise TypeError(
-                f"The decision pipeline takes no parameters: {sorted(kwargs)}"
+                "The decision pipeline takes only share_context: " f"{sorted(kwargs)}"
             )
-        return {}, {}, {}
+        forward = {} if share_context is _UNSET else {"share_context": share_context}
+        return {}, forward, {}
 
     def __call__(self, inputs=None, *, state=_UNSET, questions=_UNSET, **kwargs):
         if state is not _UNSET or questions is not _UNSET:
@@ -45,9 +47,15 @@ class Decision2Pipeline(Pipeline):
             )
         return {"state": inputs["state"], "questions": inputs["questions"]}
 
-    def _forward(self, model_inputs):
+    def _forward(self, model_inputs, share_context=None):
+        if share_context is None:
+            return self.model.system_one(
+                state=model_inputs["state"], questions=model_inputs["questions"]
+            )
         return self.model.system_one(
-            state=model_inputs["state"], questions=model_inputs["questions"]
+            state=model_inputs["state"],
+            questions=model_inputs["questions"],
+            share_context=share_context,
         )
 
     def postprocess(self, model_outputs):

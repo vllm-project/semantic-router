@@ -42,7 +42,7 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from typing import Any
 
-TESTED_TRANSFORMERS = ("5.17.",)
+TESTED_TRANSFORMERS = ("5.17.", "5.18.")
 MAX_GRAPH_TOKENS = 65536
 MAX_GRAPHS = 512
 MAX_GRAPH_OUTPUT_BYTES = 4 << 30
@@ -248,6 +248,7 @@ def _prepare(layer: Any, torch: Any) -> None:
     with torch.no_grad():
         p: dict[str, Any] = {
             "original": layer.forward,
+            "tree": True,
             "eps": layer.input_layernorm.eps,
             "w1_in": (1.0 + layer.input_layernorm.weight.float()).contiguous(),
             "w1_post": (
@@ -301,10 +302,16 @@ def _fused_forward(kernels: Any, modeling: Any, sdpa: Any, torch: Any) -> Any:
             )
         hidden_states = hidden_states.contiguous()
         _, normed = kernels.add_rmsnorm(hidden_states, None, p["w1_in"], p["eps"])
+        tree = _tree(attention_mask)
         if layer.block_type == "linear_attention":
-            delta = _gated_delta(
-                kernels, modeling, layer.linear_attn, p, normed, attention_mask
-            )
+            if tree is not None:
+                delta = _tree_gated_delta(
+                    kernels, modeling, layer.linear_attn, p, normed, tree
+                )
+            else:
+                delta = _gated_delta(
+                    kernels, modeling, layer.linear_attn, p, normed, attention_mask
+                )
         else:
             delta = _attention(
                 kernels, sdpa, layer.self_attn, p, normed, position_embeddings,
@@ -315,9 +322,93 @@ def _fused_forward(kernels: Any, modeling: Any, sdpa: Any, torch: Any) -> Any:
         )
         mlp = layer.mlp
         act = kernels.silu_mul(mlp.gate_proj(normed), mlp.up_proj(normed))
-        return hidden + mlp.down_proj(act)
+        return _residual(kernels, hidden, mlp.down_proj(act), torch)
 
     return forward
+
+
+def _residual(kernels: Any, hidden: Any, delta: Any, torch: Any) -> Any:
+    """``hidden + delta`` (the MLP residual) through ``residual_add`` where it applies."""
+    if (
+        delta.shape == hidden.shape
+        and delta.dtype in (torch.bfloat16, torch.float32)
+        and delta.is_contiguous()
+        and hidden.is_contiguous()
+    ):
+        return kernels.residual_add(hidden, delta)
+    return hidden + delta
+
+
+def _tree(mask: Any) -> Any:
+    """The packed tree of a shared-context forward (``shared_ctx.Tree``) passed as the mask, else None."""
+    return mask if getattr(mask, "tree_attention", None) is not None else None
+
+
+def _varlen(rule: Any) -> bool:
+    """Whether the gated-delta kernel Transformers bound takes ``cu_seqlens`` (FLA)."""
+    return getattr(_bound(rule) or rule, "__module__", "").startswith("fla")
+
+
+def _tree_gated_delta(
+    kernels: Any, modeling: Any, m: Any, p: dict[str, Any], normed: Any, tree: Any
+) -> Any:
+    """``_gated_delta`` over a shared-context tree: one packed row, no padding.
+
+    The same operations as ``shared_ctx._tree_gated_delta`` with the fused kernels: the prefix runs
+    from a zero state; every suffix runs from the prefix-end state, its convolution window starting
+    with the prefix's last inputs (rows ``[prefix tail | suffix]``, whose first outputs are dropped).
+    """
+    torch = tree.torch
+    _, length, _ = normed.shape
+    pre, n, window = tree.prefix, len(tree.lengths), m.conv_kernel_size
+    mixed = m.in_proj_qkv(normed)
+    z = m.in_proj_z(normed)
+    b = m.in_proj_b(normed)
+    a = m.in_proj_a(normed)
+    args = (p["conv_w"], p["A_log"], p["dt_bias"], m.num_k_heads, m.head_k_dim)
+
+    def rows(x: Any) -> Any:
+        tail = x[:, pre - (window - 1) : pre].expand(n, -1, -1)
+        return torch.cat([tail, tree.rows(x[0, pre:])], dim=1)
+
+    def packed(x: Any) -> Any:
+        return tree.packed(x[:, window - 1 :])[None]
+
+    head = kernels.gdn_prep(
+        mixed[:, :pre].contiguous(), b[:, :pre].contiguous(), a[:, :pre].contiguous(), *args
+    )  # fmt: skip
+    tail = [packed(x) for x in kernels.gdn_prep(rows(mixed), rows(b), rows(a), *args)]
+    (hq, hk, hv, hg, hbeta), (sq, sk, sv, sg, sbeta) = head, tail
+    repeat = m.num_v_heads // m.num_k_heads
+    if repeat > 1:
+        hq, hk, sq, sk = (x.repeat_interleave(repeat, dim=2) for x in (hq, hk, sq, sk))
+    rule = modeling.torch_chunk_gated_delta_rule
+    out_prefix, state = rule(
+        hq, hk, hv, g=hg, beta=hbeta, initial_state=None, output_final_state=True,
+        use_qk_l2norm_in_kernel=True,
+    )  # fmt: skip
+    start = state.expand(n, *state.shape[1:]).contiguous()
+    if _varlen(rule):
+        out_suffix, _ = rule(
+            sq, sk, sv, g=sg, beta=sbeta, initial_state=start, output_final_state=False,
+            use_qk_l2norm_in_kernel=True, cu_seqlens=tree.cu_seqlens,
+            cu_seqlens_cpu=tree.cu_seqlens_cpu,
+        )  # fmt: skip
+    else:
+        out_rows, _ = rule(
+            tree.rows(sq[0]), tree.rows(sk[0]), tree.rows(sv[0]), g=tree.rows(sg[0]),
+            beta=tree.rows(sbeta[0]), initial_state=start, output_final_state=False,
+            use_qk_l2norm_in_kernel=True,
+        )  # fmt: skip
+        out_suffix = tree.packed(out_rows)[None]
+    core = torch.cat([out_prefix, out_suffix], dim=1)
+    out = kernels.gated_rmsnorm(
+        core.reshape(-1, m.head_v_dim).contiguous(),
+        z.reshape(-1, m.head_v_dim).contiguous(),
+        m.norm.weight,
+        m.norm.variance_epsilon,
+    )
+    return m.out_proj(out.reshape(1, length, -1))
 
 
 def _gated_delta(
@@ -372,7 +463,11 @@ def _attention(
         qp, kp, p["qw1"], p["kw1"], cos, sin, heads, kv_heads, hd, m.q_norm.eps
     )
     v = vp.view(B, T, kv_heads, hd).transpose(1, 2)
-    attn, _ = sdpa(m, q, k, v, mask, dropout=0.0, scaling=m.scaling, **kwargs)
+    tree = _tree(mask)
+    if tree is not None:
+        attn, _ = tree.tree_attention(m, q, k, v, tree, scaling=m.scaling)
+    else:
+        attn, _ = sdpa(m, q, k, v, mask, dropout=0.0, scaling=m.scaling, **kwargs)
     gate = qp.view(B, T, heads, 2 * hd)[..., hd:]
     return m.o_proj(kernels.sigmoid_gate(attn, gate))
 
@@ -406,6 +501,7 @@ def _fused_qwen3(backbone: Any, torch: Any, config: Any) -> tuple[int, str | Non
             m = layer.self_attn
             layer._decision2_fused = {
                 "original": layer.forward,
+                "tree": True,
                 "eps": layer.input_layernorm.variance_epsilon,
                 "w_in": layer.input_layernorm.weight.float().contiguous(),
                 "w_post": layer.post_attention_layernorm.weight.float().contiguous(),
@@ -461,18 +557,22 @@ def _qwen3_forward(kernels: Any, sdpa: Any, torch: Any) -> Any:
             m.q_norm.variance_epsilon, gated=False, zero_centred=False,
         )  # fmt: skip
         v = vp.view(B, T, kv_heads, hd).transpose(1, 2)
-        attn, _ = sdpa(
-            m, q, k, v, attention_mask, dropout=0.0, scaling=m.scaling,
-            sliding_window=m.sliding_window, position_ids=position_ids,
-            use_cache=use_cache, **kwargs,
-        )  # fmt: skip
+        tree = _tree(attention_mask)
+        if tree is not None:
+            attn, _ = tree.tree_attention(m, q, k, v, tree, scaling=m.scaling)
+        else:
+            attn, _ = sdpa(
+                m, q, k, v, attention_mask, dropout=0.0, scaling=m.scaling,
+                sliding_window=m.sliding_window, position_ids=position_ids,
+                use_cache=use_cache, **kwargs,
+            )  # fmt: skip
         delta = m.o_proj(attn.reshape(B, T, -1).contiguous())
         hidden, normed = kernels.add_rmsnorm(
             hidden_states, delta.contiguous(), p["w_post"], p["eps"]
         )
         mlp = layer.mlp
         act = kernels.silu_mul(mlp.gate_proj(normed), mlp.up_proj(normed))
-        return hidden + mlp.down_proj(act)
+        return _residual(kernels, hidden, mlp.down_proj(act), torch)
 
     return forward
 
