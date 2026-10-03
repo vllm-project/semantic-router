@@ -101,7 +101,7 @@ class TaskPackage:
             base = tuple(name for name in REQUIRED if (self.root / name).is_file())
             return base + self.layout.files
         if isinstance(self.layout, RelevanceLayout):
-            return REQUIRED + self.layout.files(self.root, [self.layout.default])
+            return REQUIRED + self.layout.files(self.root, self.layout.exits)
         return REQUIRED + (
             (OPERATING_POINT,) if self.operating_point is not None else ()
         )
