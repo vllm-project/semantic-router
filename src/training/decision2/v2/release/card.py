@@ -431,8 +431,15 @@ def citation(facts: dict[str, Any]) -> list[str]:
     ]
 
 
-def transformers_example(repo: str) -> str:
+def transformers_example(repo: str, shared: bool = False) -> str:
     state, questions = _example_arguments()
+    many = (
+        "\n# Many questions about one long input: share_context=True computes the input they share once\n"
+        "# (several times faster at dozens of questions; near-tie answers can differ slightly):\n"
+        "# model.system_one(state=..., questions=..., share_context=True)\n"
+        if shared
+        else ""
+    )
     return (
         "import json\n\n"
         "from transformers import AutoModel\n\n"
@@ -444,6 +451,7 @@ def transformers_example(repo: str) -> str:
         'print(json.dumps(result["answers"], indent=2))\n\n'
         "# Or as a pipeline:\n"
         f'# transformers.pipeline("decision", model="{repo}", trust_remote_code=True)(state=..., questions=...)\n'
+        f"{many}"
     )
 
 
@@ -460,6 +468,11 @@ def _size(name: str) -> str:
 
 def _one(value: float) -> str:
     return f"{value:.1f}"
+
+
+def _ms(value: float) -> str:
+    """Milliseconds at a precision a reader can compare: one decimal below 100, whole above."""
+    return f"{value:.1f}" if value < 100 else f"{value:,.0f}"
 
 
 def highlights(ctx: dict[str, Any]) -> list[str]:
@@ -513,9 +526,14 @@ def highlights(ctx: dict[str, Any]) -> list[str]:
         )
     speed = facts.get("speed")
     if speed:
-        lines.append(
-            f"**Speed:** a median of {_one(speed['median_ms'])} ms per single-question request on a single GPU."
-        )
+        line = f"**Speed:** a median of {_one(speed['median_ms'])} ms per single-question request on a single GPU"
+        shared = facts.get("speed_shared")
+        if shared:
+            line += (
+                f"; {shared['questions']} questions about one input take {_ms(shared['on_ms'])} ms with "
+                f"`share_context=True` instead of {_ms(shared['off_ms'])} ms"
+            )
+        lines.append(line + ".")
     lines.append(
         "**Many questions, one pass:** Choice, Yes / No and Score questions about the same input are "
         "answered together in one forward pass, with a probability for every option."
@@ -596,7 +614,7 @@ def render_readme(ctx: dict[str, Any]) -> str:
         "```",
         "",
         "```python",
-        transformers_example(repo).rstrip("\n"),
+        transformers_example(repo, bool(facts.get("speed_shared"))).rstrip("\n"),
         "```",
         "",
         "## Evaluation",

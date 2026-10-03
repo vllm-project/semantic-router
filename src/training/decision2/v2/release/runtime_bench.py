@@ -4,6 +4,7 @@ Run like ``examples.py`` (isolated interpreter, package read-only, no network):
 
     python -I -B v2/release/runtime_bench.py run --package PKG --prompts PROMPTS.jsonl \
         --count 400 --warmup 20 --output OUT.json [--base-path B] [--site DIR] [--require-kernels]
+    python -I -B v2/release/runtime_bench.py shared --package PKG --output OUT.json [--ns 16,64,128]
     python3 v2/release/runtime_bench.py compare OLD.json NEW.json --output CMP.json
 
 ``run`` loads the package with its vendored runtime on cuda:0 (so an old and a
@@ -17,7 +18,10 @@ after a reset), loaded elements by dtype, and the answers in
 ``OUT.answers.jsonl`` beside the receipt (gold-free prompts; stays on the node)
 with their digest. ``compare`` checks two runs over the same prompts for
 identical answers (release-parity definitions) and reports the latency and
-memory change.
+memory change. ``shared`` times the first N questions of the public many-question
+request (``shared_request.py``) as one request with ``share_context`` off and on
+(``--warmup`` untimed, then ``--runs`` timed requests each) and counts the answers
+the switch changes against the exact path.
 """
 
 from __future__ import annotations
@@ -134,6 +138,81 @@ def run(args: argparse.Namespace, ex: Any) -> dict[str, Any]:
     }
 
 
+def stats(milliseconds: list[float]) -> dict[str, float]:
+    return {
+        "p50": percentile(milliseconds, 0.50),
+        "p95": percentile(milliseconds, 0.95),
+        "mean": sum(milliseconds) / len(milliseconds),
+        "min": min(milliseconds),
+        "max": max(milliseconds),
+    }
+
+
+def shared(args: argparse.Namespace, ex: Any) -> dict[str, Any]:
+    import torch
+
+    path = Path(__file__).resolve().with_name("shared_request.py")
+    spec = importlib.util.spec_from_file_location("dev2_shared_request", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    counts = [int(n) for n in args.ns.split(",")]
+    request = module.request(max(counts))
+    model, load_seconds = ex.load_package(
+        args.package, "cuda:0", args.threads, args.base_path, args.fp32_master
+    )
+    kernels = ex.kernel_runtime(args.require_kernels)
+    per_n = {}
+    for n in counts:
+        questions = dict(list(request["questions"].items())[:n])
+        entry: dict[str, Any] = {}
+        answers = {}
+        for name, share in (("off", False), ("on", True)):
+            for _ in range(args.warmup):
+                model.system_one(
+                    state=request["state"], questions=questions, share_context=share
+                )
+            milliseconds = []
+            for _ in range(args.runs):
+                torch.cuda.synchronize()
+                started = time.perf_counter()
+                response = model.system_one(
+                    state=request["state"], questions=questions, share_context=share
+                )
+                torch.cuda.synchronize()
+                milliseconds.append(1000 * (time.perf_counter() - started))
+            answers[name] = response["answers"]
+            share_stats = dict(getattr(model.backend, "share_stats", None) or {})
+            entry[name] = {
+                "latency_ms": stats(milliseconds),
+                "shared": bool(share and share_stats.get("shared")),
+                "share_stats": share_stats if share else None,
+                "input_tokens": response["usage"]["input_tokens"],
+                "answers_sha256": ex.digest(answers[name]),
+            }
+        entry["on_vs_off"] = ex.compare_answers(answers["on"], answers["off"])
+        per_n[str(n)] = entry
+    fast = getattr(model.backend, "fast", None)
+    return {
+        "schema": SCHEMA,
+        "mode": "shared",
+        "package_manifest_sha256": ex.sha_file(args.package / "MODEL_MANIFEST.json"),
+        "model_name": model.model_name,
+        "device_name": torch.cuda.get_device_name(0),
+        "runtime": {
+            **ex.runtime_versions(),
+            "sites": args.site,
+            "kernels": kernels,
+            "fast_path": fast.receipt() if fast is not None else None,
+        },
+        "load_seconds": load_seconds,
+        "request_sha256": ex.digest(request),
+        "warmup": args.warmup,
+        "runs": args.runs,
+        "per_n": per_n,
+        "passed": True,
+    }
+
+
 def compare(args: argparse.Namespace, ex: Any) -> dict[str, Any]:
     sides = {}
     for name, path in (("old", args.old), ("new", args.new)):
@@ -213,6 +292,17 @@ def main() -> None:
     p.add_argument("--site", action="append", default=[])
     p.add_argument("--require-kernels", action="store_true")
     p.add_argument("--fp32-master", action="store_true")
+    s = sub.add_parser("shared")
+    s.add_argument("--package", type=Path, required=True)
+    s.add_argument("--ns", default="16,64,128")
+    s.add_argument("--warmup", type=int, default=5)
+    s.add_argument("--runs", type=int, default=20)
+    s.add_argument("--output", type=Path, required=True)
+    s.add_argument("--threads", type=int)
+    s.add_argument("--base-path")
+    s.add_argument("--site", action="append", default=[])
+    s.add_argument("--require-kernels", action="store_true")
+    s.add_argument("--fp32-master", action="store_true")
     c = sub.add_parser("compare")
     c.add_argument("old", type=Path)
     c.add_argument("new", type=Path)
@@ -223,7 +313,7 @@ def main() -> None:
             raise ValueError(f"--site needs an existing absolute directory: {site}")
         sys.path.insert(0, site)
     ex = examples_module()
-    result = (run if args.command == "run" else compare)(args, ex)
+    result = {"run": run, "shared": shared, "compare": compare}[args.command](args, ex)
     ex.write_exclusive(args.output, result)
     print(json.dumps({"mode": args.command, "passed": result["passed"]}))
     sys.exit(0 if result["passed"] else 1)

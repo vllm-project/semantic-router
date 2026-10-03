@@ -818,6 +818,32 @@ def card_speed(spec: dict[str, Any]) -> dict[str, Any]:
     return {"median_ms": bench["latency_ms"]["p50"], "requests": bench["count"]}
 
 
+def card_speed_shared(spec: dict[str, Any]) -> dict[str, Any]:
+    """Median time of the many-question request with and without share_context, from a pinned receipt."""
+    item = spec["card"]["speed_shared"]
+    path = _pinned(item, "speed_shared", "evidence")
+    if layout.sha_file(path) != item.get("sha256"):
+        raise ValueError("card.speed_shared evidence differs from its pinned SHA-256")
+    bench = json.loads(path.read_text(encoding="utf-8"))
+    questions = str(item.get("questions", 128))
+    if (
+        bench.get("mode") != "shared"
+        or bench.get("passed") is not True
+        or questions not in bench.get("per_n", {})
+    ):
+        raise ValueError(
+            "card.speed_shared evidence is not a passed shared bench receipt"
+        )
+    entry = bench["per_n"][questions]
+    if not entry["on"]["shared"]:
+        raise ValueError("card.speed_shared: the request did not share its context")
+    return {
+        "questions": int(questions),
+        "off_ms": entry["off"]["latency_ms"]["p50"],
+        "on_ms": entry["on"]["latency_ms"]["p50"],
+    }
+
+
 def write_licences(spec: dict[str, Any], stage: Path, decision: dict[str, Any]) -> None:
     lic = spec["licence"]
     for item in lic.get("files", []):
@@ -1027,6 +1053,11 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "licence": decision,
             "model_sha256": identity["model_sha256"],
             **({"speed": card_speed(spec)} if spec["card"].get("speed") else {}),
+            **(
+                {"speed_shared": card_speed_shared(spec)}
+                if spec["card"].get("speed_shared")
+                else {}
+            ),
             "runtime_requirements": spec.get("runtime_requirements", {}),
             **(
                 {"name_basis": name_basis, "name_base_model": base_model}
