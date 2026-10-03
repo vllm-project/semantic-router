@@ -12,20 +12,24 @@ import (
 // evaluation. Keeping optional values named avoids positional interface{}
 // arguments and makes new signal context additive without changing call order.
 type SignalEvaluationInput struct {
-	Text                   string
-	ContextText            string
-	CurrentUserText        string
-	PriorUserMessages      []string
-	NonUserMessages        []string
-	HasPriorAssistantReply bool
-	Headers                map[string]string
-	ForceEvaluateAll       bool
-	ImageURL               string
-	Audio                  string
-	UncompressedText       string
-	SkipCompressionSignals map[string]bool
-	ConversationFacts      ConversationFacts
-	RequestFacts           RequestFacts
+	// ToolResultTexts contains request-scoped textual tool results for PII
+	// source selection, separate from content-free RequestFacts.
+	ToolResultTexts          []string
+	ToolResultScanIncomplete bool
+	Text                     string
+	ContextText              string
+	CurrentUserText          string
+	PriorUserMessages        []string
+	NonUserMessages          []string
+	HasPriorAssistantReply   bool
+	Headers                  map[string]string
+	ForceEvaluateAll         bool
+	ImageURL                 string
+	Audio                    string
+	UncompressedText         string
+	SkipCompressionSignals   map[string]bool
+	ConversationFacts        ConversationFacts
+	RequestFacts             RequestFacts
 }
 
 // EvaluateAllSignalsWithHeaders evaluates the selected recipe's signals,

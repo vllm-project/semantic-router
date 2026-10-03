@@ -21040,6 +21040,9 @@
                                     "arguments": {
                                       "type": "string"
                                     },
+                                    "content_redacted": {
+                                      "type": "boolean"
+                                    },
                                     "output": {
                                       "type": "string"
                                     },
@@ -21053,6 +21056,9 @@
                                       "type": "string"
                                     },
                                     "source": {
+                                      "type": "string"
+                                    },
+                                    "status": {
                                       "type": "string"
                                     },
                                     "text": {
@@ -25204,6 +25210,9 @@
                               "arguments": {
                                 "type": "string"
                               },
+                              "content_redacted": {
+                                "type": "boolean"
+                              },
                               "output": {
                                 "type": "string"
                               },
@@ -25217,6 +25226,9 @@
                                 "type": "string"
                               },
                               "source": {
+                                "type": "string"
+                              },
+                              "status": {
                                 "type": "string"
                               },
                               "text": {

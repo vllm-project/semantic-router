@@ -112,7 +112,7 @@ func TestFastResponseLiveDecisionAndPreviewNeedNoBackend(t *testing.T) {
 	for _, model := range []string{cfg.DefaultModel, cfg.Decisions[0].ModelRefs[0].Model, "unknown"} {
 		countsBefore[model] = testutil.ToFloat64(metrics.ModelRequests.WithLabelValues(model))
 	}
-	_, response := router.runRequestPreRoutingStages(requestedModel, extractSemanticRequestSignals(request), ctx)
+	_, response := router.runRequestPreRoutingStages(requestedModel, request, extractSemanticRequestSignals(request), ctx)
 	require.NotNil(t, response)
 	immediate := response.GetImmediateResponse()
 	require.NotNil(t, immediate)

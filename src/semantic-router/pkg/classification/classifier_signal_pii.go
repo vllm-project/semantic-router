@@ -2,7 +2,6 @@ package classification
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"sync"
 	"time"
@@ -13,9 +12,8 @@ import (
 )
 
 // PIIClassificationErrorType is the entity type a PII rule reports when its
-// content could not be fully classified and on_error is block: the request is
-// unverified, which under fail-closed reads as a match, mirroring
-// JailbreakClassificationErrorType.
+// content could not be fully classified and on_error is block. It mirrors the
+// fail-closed behavior of the jailbreak classifier.
 const PIIClassificationErrorType = "classification_error"
 
 // cachedPIIResult stores a cached PII token classification result.
@@ -24,42 +22,114 @@ type cachedPIIResult struct {
 	err    error
 }
 
+// cachedPIIContent stores all inference results that were available for one
+// content item. incomplete is distinct from an inference error: it means the
+// request-scoped scan budget stopped before the content was fully inspected.
+type cachedPIIContent struct {
+	results    []cachedPIIResult
+	incomplete bool
+}
+
+// piiCacheKey keeps detector results isolated by the rule source. The same
+// bytes can be selected by a tool-result rule and a legacy prompt/history rule,
+// but those scans have different completeness guarantees: tool results are
+// request-budgeted while legacy content is not.
+type piiCacheKey struct {
+	source  string
+	content string
+}
+
+func piiCacheSource(source string) string {
+	if source == config.PIISourceToolResult {
+		return config.PIISourceToolResult
+	}
+	return "legacy"
+}
+
+const (
+	piiEvaluationIncompleteCode = "pii_evaluation_incomplete"
+	// A tool-result request can contain many independently chunked content
+	// items. Bound the expensive detector fanout per request while preserving
+	// the already-scanned results for conservative on_unknown handling.
+	maxPIIToolResultInferenceCalls = 1024
+)
+
+type piiToolResultScanBudget struct {
+	remainingInferenceCalls int
+}
+
+func (b *piiToolResultScanBudget) consumeInferenceCall() bool {
+	if b.remainingInferenceCalls <= 0 {
+		return false
+	}
+	b.remainingInferenceCalls--
+	return true
+}
+
 func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, piiText string, nonUserMessages []string) {
+	c.evaluatePIISignalWithToolResults(ctx, results, mu, piiText, nonUserMessages, nil, false)
+}
+
+func (c *Classifier) evaluatePIISignalWithToolResults(ctx context.Context, results *SignalResults, mu *sync.Mutex, piiText string, nonUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool) {
 	start := time.Now()
 
-	// Step 1: Collect the union of unique content pieces across all PII rules.
-	contentSeen := make(map[string]struct{})
-	var uniqueContents []string
-	if piiText != "" {
-		contentSeen[piiText] = struct{}{}
-		uniqueContents = append(uniqueContents, piiText)
-	}
+	// Step 1: Collect the union of unique content pieces selected by all PII
+	// rules. A source-scoped rule controls which request content enters the
+	// shared cache; this keeps tool-result scanning opt-in.
+	contentSeen := make(map[piiCacheKey]struct{})
+	var uniqueContents []piiCacheKey
 	for _, rule := range c.Config.PIIRules {
-		if !rule.IncludeHistory {
-			continue
-		}
-		for _, msg := range nonUserMessages {
-			if msg == "" {
+		for _, content := range collectPIIRuleContentsForSource(rule, piiText, nonUserMessages, toolResultTexts) {
+			key := piiCacheKey{source: piiCacheSource(rule.Source), content: content}
+			if _, ok := contentSeen[key]; ok {
 				continue
 			}
-			if _, ok := contentSeen[msg]; !ok {
-				contentSeen[msg] = struct{}{}
-				uniqueContents = append(uniqueContents, msg)
-			}
+			contentSeen[key] = struct{}{}
+			uniqueContents = append(uniqueContents, key)
 		}
 	}
 
 	// Step 2: Run PII token classification exactly once per unique content piece.
-	// Entity types are returned as "LABEL_{class_id}" and translated by PIIMapping.
-	piiCache := make(map[string][]cachedPIIResult, len(uniqueContents))
-	for _, content := range uniqueContents {
-		chunks := c.piiInputs(content)
-		cached := make([]cachedPIIResult, 0, len(chunks))
-		for _, chunk := range chunks {
-			tokenResult, err := c.classifyPIITokens(ctx, chunk)
-			cached = append(cached, cachedPIIResult{tokenResult, err})
+	// Entity types are returned as "LABEL_{class_id}" and translated by
+	// PIIMapping. Tool-result content uses a request-scoped inference budget;
+	// legacy prompt/history content retains its existing behavior.
+	piiCache := make(map[piiCacheKey]cachedPIIContent, len(uniqueContents))
+	toolResultBudget := piiToolResultScanBudget{remainingInferenceCalls: maxPIIToolResultInferenceCalls}
+	for _, key := range uniqueContents {
+		cached := cachedPIIContent{}
+		if key.source == config.PIISourceToolResult {
+			// A configured native long-context/window policy owns the input
+			// geometry. Otherwise tool results can be much larger than the
+			// request text and can contain thousands of blocks, so stream the
+			// bounded chunks without materializing them all first.
+			fullyScanned := true
+			if c.Config.PIIModel.Window != nil || c.hasLongContextClassifier(config.SignalTypePII) {
+				if toolResultBudget.consumeInferenceCall() {
+					tokenResult, err := c.classifyPIITokens(ctx, key.content)
+					cached.results = append(cached.results, cachedPIIResult{tokenResult, err})
+				} else {
+					fullyScanned = false
+				}
+			} else {
+				fullyScanned = forEachUniquePIISignalChunk(key.content, func(chunk string) bool {
+					if !toolResultBudget.consumeInferenceCall() {
+						return false
+					}
+					tokenResult, err := c.classifyPIITokens(ctx, chunk)
+					cached.results = append(cached.results, cachedPIIResult{tokenResult, err})
+					return true
+				})
+			}
+			cached.incomplete = !fullyScanned
+		} else {
+			chunks := c.piiInputs(key.content)
+			cached.results = make([]cachedPIIResult, 0, len(chunks))
+			for _, chunk := range chunks {
+				tokenResult, err := c.classifyPIITokens(ctx, chunk)
+				cached.results = append(cached.results, cachedPIIResult{tokenResult, err})
+			}
 		}
-		piiCache[content] = cached
+		piiCache[key] = cached
 	}
 
 	// Step 3: Evaluate each rule concurrently using the cached token results.
@@ -69,7 +139,7 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 		ruleWg.Add(1)
 		go func() {
 			defer ruleWg.Done()
-			c.evaluatePIIRule(rule, piiText, nonUserMessages, piiCache, start, results, mu)
+			c.evaluatePIIRule(rule, piiText, nonUserMessages, toolResultTexts, toolResultScanIncomplete, piiCache, start, results, mu)
 		}()
 	}
 	ruleWg.Wait()
@@ -85,53 +155,35 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 	logging.Debugf("[Signal Computation] PII signal evaluation completed in %v", elapsed)
 }
 
-// piiRuleInferenceErrorCode reports a bounded code when a chunk the rule reads failed to
-// classify. A declared truncation (ErrTokenSpansTruncated) is not a failure
-// here: the call succeeded and its spans are valid for the part the provider
-// saw, so on_error decides what the unseen remainder means.
-func piiRuleInferenceErrorCode(ruleContents []string, piiCache map[string][]cachedPIIResult) string {
-	code := ""
-	for _, content := range ruleContents {
-		for _, cached := range piiCache[content] {
-			if cached.err != nil && !errors.Is(cached.err, ErrTokenSpansTruncated) {
-				code = mergeSignalErrorCode(code, boundedSignalErrorCode(cached.err, piiEvaluationFailedCode))
-			}
-		}
-	}
-	return code
-}
-
-func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUserMessages []string, piiCache map[string][]cachedPIIResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
-	ruleContents := collectPIIRuleContents(piiText, nonUserMessages, rule.IncludeHistory)
+func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool, piiCache map[piiCacheKey]cachedPIIContent, start time.Time, results *SignalResults, mu *sync.Mutex) {
+	ruleContents := collectPIIRuleContentsForSource(rule, piiText, nonUserMessages, toolResultTexts)
 	if len(ruleContents) == 0 {
+		if rule.Source == config.PIISourceToolResult && toolResultScanIncomplete {
+			c.recordPIIRuleError(rule, piiScanIncomplete, results, mu)
+		}
 		return
 	}
 
-	errorCode := piiRuleInferenceErrorCode(ruleContents, piiCache)
-	inferenceFailed := errorCode != ""
-	if inferenceFailed {
-		// The failure is recorded visibly either way; on_error below decides
-		// whether the rule also fails closed for the content never scored.
-		recordSignalRuleErrors(results, mu, config.SignalTypePII, []string{rule.Name}, errorCode)
+	entityTypes, status, errorCode := c.collectPIIEntityTypes(ruleContents, rule.Name, rule.Source, rule.Threshold, piiCache)
+	if rule.Source == config.PIISourceToolResult && toolResultScanIncomplete && status == piiScanClean {
+		status = piiScanIncomplete
 	}
-
-	entityTypes, failed := c.collectPIIEntityTypes(ruleContents, rule.Name, rule.Threshold, piiCache)
+	if status != piiScanClean {
+		recordedStatus := status
+		// Legacy scans retain the historical failed code for incomplete
+		// coverage, while tool-result scans expose the more precise incomplete
+		// code. A bounded provider error such as input_limit is always preserved.
+		if rule.Source != config.PIISourceToolResult {
+			recordedStatus = piiScanFailed
+		}
+		c.recordPIIRuleErrorCode(rule, recordedStatus, errorCode, results, mu)
+	}
 	deniedEntities := findDeniedEntities(entityTypes, rule.PIITypesAllowed)
 	errorDrivenMatch := false
-	if failed && c.Config.PIIModel.IsBlock() {
-		// Part of the content was never scored (backend error or a declared
-		// truncation). Under on_error: block that is not a clean result.
+	if status != piiScanClean && c.Config.PIIModel.IsBlock() {
 		logging.Errorf("[Signal Computation] PII rule %q: content not fully classified; failing closed", rule.Name)
-		// A denied entity already makes this rule true. Only a match created
-		// by the failure itself is unknown to the decision engine.
 		errorDrivenMatch = len(deniedEntities) == 0
 		deniedEntities = append(deniedEntities, PIIClassificationErrorType)
-		if !inferenceFailed {
-			// A declared truncation is not an inference error, but under block
-			// it still leaves the rule not fully evaluated, and the decision
-			// engine reads unknown from the pair (error, error-driven match).
-			recordSignalRuleErrors(results, mu, config.SignalTypePII, []string{rule.Name}, piiEvaluationFailedCode)
-		}
 	}
 
 	if len(deniedEntities) > 0 {
@@ -144,10 +196,6 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 		results.MatchedPIIRules = append(results.MatchedPIIRules, rule.Name)
 		results.PIIDetected = true
 		if errorDrivenMatch {
-			// Same signal the jailbreak path raises: a match that exists only
-			// because classification failed must not read as a real detection.
-			// decision.evalLeaf turns error plus error-driven match into
-			// unknown, so unknown_policy decides instead of the match.
 			if results.SignalErrorMatches == nil {
 				results.SignalErrorMatches = make(map[string]bool)
 			}
@@ -160,4 +208,33 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 		}
 		mu.Unlock()
 	}
+}
+
+type piiScanStatus string
+
+const (
+	piiScanClean      piiScanStatus = "clean"
+	piiScanIncomplete piiScanStatus = "incomplete"
+	piiScanFailed     piiScanStatus = "error"
+)
+
+func (c *Classifier) recordPIIRuleError(rule config.PIIRule, status piiScanStatus, results *SignalResults, mu *sync.Mutex) {
+	c.recordPIIRuleErrorCode(rule, status, "", results, mu)
+}
+
+func (c *Classifier) recordPIIRuleErrorCode(rule config.PIIRule, status piiScanStatus, errorCode string, results *SignalResults, mu *sync.Mutex) {
+	code := piiEvaluationFailedCode
+	if status == piiScanIncomplete {
+		code = piiEvaluationIncompleteCode
+	}
+	if errorCode == signalInputLimitCode {
+		code = errorCode
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if results.SignalErrors == nil {
+		results.SignalErrors = make(map[string]string)
+	}
+	results.SignalErrors[signalConfidenceKey(config.SignalTypePII, rule.Name)] = code
 }
