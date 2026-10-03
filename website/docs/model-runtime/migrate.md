@@ -23,8 +23,9 @@ You need to migrate if your configuration contains any of these:
 - a binding `head` that names an ONNX or OpenVINO graph file;
 - an older model name such as `models/mom-domain-classifier`,
   `models/mmbert-embed-32k-2d-matryoshka` or `lettucedect`;
-- the NLI explainer (`hallucination_explainer`, `enable_nli_filtering`,
-  `use_nli`, or the `nli` tier of the response-cache polarity guard).
+- the NLI explainer (`hallucination_explainer`, `nli_model`,
+  `enable_nli_filtering`, `use_nli`) or the response cache's `polarity_guard`
+  setting.
 
 The router refuses these settings at startup and tells you to run the
 migration command.
@@ -100,9 +101,9 @@ conditions keep matching what they matched before.
   `include_explanation` on a local detector, `use_nli`). Hallucination checks
   still mark the unsupported spans of an answer; they no longer add an NLI
   verdict per span.
-- **The NLI tier of the response-cache polarity guard.** `nli` and
-  `lexical+nli` become `lexical`. The lexical guard, which catches negations
-  and antonyms, keeps running.
+- **The response cache's `polarity_guard` setting.** Its NLI tier is gone, so
+  there is nothing left to choose: the lexical guard, which catches negations
+  and antonyms, always runs. The migration removes the block.
 - **OpenVINO.** Intel CPUs run models on `cpu`; Intel GPUs can use the
   `xpu` device.
 - **The ONNX Runtime MIGraphX and CK flash-attention paths.** AMD GPUs run
@@ -223,8 +224,6 @@ global:
     response_cache:
       enabled: true
       backend_type: memory
-      polarity_guard:
-        mode: lexical
       embedding_model: mmbert
 ```
 
