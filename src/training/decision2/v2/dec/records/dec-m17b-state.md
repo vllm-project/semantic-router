@@ -5,6 +5,33 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17`. M
 (public since 2026-10-03 01:17 UTC+8). Index values stay private (node private stores and
 `decision2-program/private/m17b/`); this file has none. Times UTC.
 
+## 2026-10-03 01:45Z — Nox-4B `ce1bdc9d` RELEASED (`4b-LRHxALL`); wave 7 continues against it
+
+- **`vllm-sr/Decision-2.0-Nox-4B@ce1bdc9d` is `main` and public.**
+  - It is `4b-LRHxALL`, the uniform soup of four half-LR arm soups.
+  - IF1 vs `c60d3b5c`: lower bound above 0 (values private).
+  - R3 types OK, IF3 audit6, parity 86 / 86; gate evaluate and every fast-path post-check pass
+    (`post_checks=ok` 01:35Z).
+  - The `c60d3b5c` weights are purged (9.70 GB, `rewrite_history=False`).
+  - Record: [`dev2-4b-w7-2026-10-03.md`](../../release/records/dev2-4b-w7-2026-10-03.md).
+- **The next successor is gated against `AF-4b-LRHxALL-bf16`'s run** (amendment 4; results `852e9928…`, pinned
+  as `ix1/af/refs/AF-4b-LRHxALL-bf16` on nodes B and C; node C `ix1/runs` holds the run). Nox's next release record
+  pins `CURRENT` to `ce1bdc9d`:
+  - gate `c350b3be…`, decision `8aee8644…`, manifest `0818bbec…`, weights `31d4ee92…`;
+  - `BASE_SPEC` = `specs/dev2-4b-lrhxall.json`;
+  - `CURRENT_RUN` = `formal/m17/m17-4b-LRHxALL`;
+  - purge node copy = node A `/data/dev2/runs/release/dev2-4b-lrhxall-release-20261003T003955Z/package/Decision-2.0-Nox-4B`.
+- **Amendment 4** (`1f5c8ec73`): every remaining candidate gates against that run, and a conditional quarter-LR
+  cross-arm soup `4b-LRQxALL` is added.
+- **Amendment 5** (`c602f1e11`): `4b-LRHxXALL-m75` is dropped unread, and the rules are read against the
+  single-arm release.
+- **Scored, gate re-bootstraps running** (CPU; `runs/<model>/paired-boot-full-vs-lrhxall.json`):
+  `4b-LRHxALL-L2`, `4b-SDML-lrh` (node C), `4b-LHS17ML-lrh` (node B). Still in shards: `4b-LHS17IB4X-lrh`
+  (node B), `4b-LRH2` (node C GPU2–4), `4b-LHS17IB4-lrq` (node C GPU5 / 6, chain C3c against the new reference).
+- **GPUs:** node C GPU7 went to the Index submission worker (09:38). Node A GPU0's lease is released. I hold node B
+  GPU4 / 6 and node C GPU2–6 until their shards end.
+- **GPU-h:** ≈ 45.
+
 ## 2026-10-03 00:00Z — first wave-7 reads: no successor; amendment 3; five reads on three lanes
 
 Nox-4B stays `c60d3b5c`. Index values are private (`decision2-program/private/m17b/`).
