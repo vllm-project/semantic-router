@@ -29,6 +29,9 @@ PACKAGES = {
     "VLLM_SR_FEEDBACK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
     "VLLM_SR_MMBERT_TEST_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
 }
+# Router consumers read their label mappings from the package directory; the
+# runtime's pinned file list leaves them out.
+ROUTER_FILES = ["*_mapping.json"]
 CLASSIFIER_TESTS = (
     "TestJailbreakDistributionRealModel",
     "TestJailbreakRiskRealModelContract",
@@ -68,14 +71,16 @@ def required_inventory() -> set[tuple[str, str]]:
 def provision(models_dir: Path) -> dict[str, dict]:
     """Copy each pinned package into ``models_dir`` as plain files (the runtime refuses links)."""
     from vllm_sr_runtime.registry.resolve import (  # noqa: PLC0415 - only the model lane installs the runtime
+        fetch,
         resolve,
     )
 
+    cache = models_dir / ".runtime-cache"
     models = {}
     for env, repo in PACKAGES.items():
         target = models_dir / repo.split("/", 1)[1]
-        ref = resolve(repo, cache_dir=models_dir / ".runtime-cache")
-        if not _complete(target, ref.revision):
+        ref = fetch(resolve(repo, cache_dir=cache), ROUTER_FILES, cache_dir=cache)
+        if not _complete(target, ref):
             shutil.rmtree(target, ignore_errors=True)
             shutil.copytree(ref.root, target, symlinks=False)
             (target / ".complete").write_text(ref.revision + "\n")
@@ -88,9 +93,15 @@ def provision(models_dir: Path) -> dict[str, dict]:
     return models
 
 
-def _complete(target: Path, revision: str) -> bool:
+def _complete(target: Path, ref) -> bool:
     marker = target / ".complete"
-    return marker.is_file() and marker.read_text().strip() == revision
+    if not marker.is_file() or marker.read_text().strip() != ref.revision:
+        return False
+    return all(
+        (target / path.relative_to(ref.root)).is_file()
+        for path in ref.root.rglob("*")
+        if path.is_file()
+    )
 
 
 def validate_results(events: list[dict], expected: set[str]) -> dict:
