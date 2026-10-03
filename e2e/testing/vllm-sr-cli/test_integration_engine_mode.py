@@ -4,14 +4,14 @@
 These tests start the real CLI in the current Python environment, which must
 have the model runtime installed (`make model-runtime-install`). They serve
 tiny random-weight packages written by `vllm-sr-runtime fixture`, so no model
-is downloaded, and send the Quickstart's own requests
-(testdata/quickstart_requests.json, checked against the Quickstart page by
-src/vllm-sr/tests/test_docs_model_runtime.py).
+is downloaded, and send the requests the Quickstart page tells readers to send,
+read from the page itself.
 """
 
 import json
 import math
 import os
+import re
 import shutil
 import signal
 import socket
@@ -23,13 +23,27 @@ from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
-TESTDATA = Path(__file__).resolve().parent / "testdata"
+QUICKSTART = (
+    Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
+)
+# A runtime request on the page: the path a curl command calls and its JSON body.
+CURL_REQUEST = re.compile(
+    r"curl[^\n]*?(/v1/(?:decisions|classify|embeddings|rerank|bundle))"
+    r"(?:(?!\ncurl).)*?-d '(\{.*?\})'",
+    re.S,
+)
 READY_TIMEOUT_SECONDS = 180
 STOP_TIMEOUT_SECONDS = 30
 HTTP_TIMEOUT_SECONDS = 60
 HTTP_OK = 200
 HTTP_BAD_REQUEST = 400
 HTTP_UNSUPPORTED = 422
+
+
+def quickstart_requests() -> dict[str, dict]:
+    """The Quickstart's runtime requests, by path."""
+    page = QUICKSTART.read_text(encoding="utf-8")
+    return {path: json.loads(body) for path, body in CURL_REQUEST.findall(page)}
 
 
 def _free_port() -> int:
@@ -112,8 +126,7 @@ class TestEngineMode(unittest.TestCase):
         cls.addClassCleanup(shutil.rmtree, cls.root, ignore_errors=True)
         cls.decision = cls._fixture("decision", "decision2", "qwen3")
         cls.classifier = cls._fixture("classifier", "task_heads", "sequence")
-        requests = json.loads((TESTDATA / "quickstart_requests.json").read_text())
-        cls.requests = {item["path"]: item["body"] for item in requests}
+        cls.requests = quickstart_requests()
 
     @classmethod
     def _fixture(cls, name: str, family: str, variant: str) -> str:
