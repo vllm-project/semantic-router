@@ -84,6 +84,9 @@ SURFACE_OPTIONS = {
     "rerank": {"overflow", "max_tokens"},
 }
 STATE_ORDER = {state: index for index, state in enumerate(STATES)}
+# Requests up to this many encoded bytes are planned on the event loop: their
+# rendering costs less than a hop to a worker thread.
+INLINE_PLAN_BYTES = 16 << 10
 
 
 @dataclass
@@ -843,18 +846,26 @@ class Runtime:
         self.metrics.input_tokens.inc(plan.input_tokens)
         return response
 
-    async def call(self, surface: str, body: Any) -> tuple[int, dict[str, Any]]:
-        """Serve one surface request; returns (HTTP status, body)."""
-        return (await self._serve([(surface, body)]))[0]
+    async def call(
+        self, surface: str, body: Any, size: int | None = None
+    ) -> tuple[int, dict[str, Any]]:
+        """Serve one surface request; returns (HTTP status, body).
 
-    async def bundle(self, body: Any) -> tuple[int, dict[str, Any]]:
+        ``size`` is the request's encoded size: small requests are planned on
+        the event loop, larger ones on a worker thread.
+        """
+        return (await self._serve([(surface, body)], size))[0]
+
+    async def bundle(
+        self, body: Any, size: int | None = None
+    ) -> tuple[int, dict[str, Any]]:
         """Serve every task of a bundle at once; results keep task order."""
         try:
             tasks = self._bundle_tasks(body)
         except RuntimeServiceError as exc:
             return exc.status, exc.body()
         outcomes = await self._serve(
-            [(surface, task_body) for _, surface, task_body in tasks]
+            [(surface, task_body) for _, surface, task_body in tasks], size
         )
         results = []
         for (task_id, surface, _), (status, response) in zip(
@@ -881,17 +892,22 @@ class Runtime:
             return 500, error.body()
 
     async def _serve(
-        self, requests: list[tuple[str, Any]]
+        self, requests: list[tuple[str, Any]], size: int | None = None
     ) -> list[tuple[int, dict[str, Any]]]:
         """Plan every request, run each model's share as one job group, finish in order."""
-        from starlette.concurrency import run_in_threadpool
+        if size is not None and size <= INLINE_PLAN_BYTES:
+            planned = [
+                self._prepare_outcome(surface, body) for surface, body in requests
+            ]
+        else:
+            from starlette.concurrency import run_in_threadpool
 
-        planned = await asyncio.gather(
-            *(
-                run_in_threadpool(self._prepare_outcome, surface, body)
-                for surface, body in requests
+            planned = await asyncio.gather(
+                *(
+                    run_in_threadpool(self._prepare_outcome, surface, body)
+                    for surface, body in requests
+                )
             )
-        )
         outcomes: list[tuple[int, dict[str, Any]] | None] = [None] * len(requests)
         groups: dict[tuple[int, str, float | None], list[tuple[int, Prepared]]] = {}
         for index, prepared in enumerate(planned):
