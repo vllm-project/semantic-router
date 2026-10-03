@@ -43,7 +43,7 @@ func newResponseCacheService(cfg *config.RouterConfig, backend cache.CacheBacken
 	if identity == "" && (cfg == nil || cfg.NeedsSemanticResponseCache()) {
 		var err error
 		identity, err = responseCacheEmbeddingIdentity(cfg, backend, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-			return embedding.ResolveNamespaceIdentity(provider, settings)
+			return embedding.ResolveProviderIdentity(provider, settings)
 		})
 		if err != nil {
 			return nil, err

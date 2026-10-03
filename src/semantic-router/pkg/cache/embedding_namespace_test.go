@@ -143,7 +143,7 @@ func TestCandleBERTCacheOpensVersionedNamespace(t *testing.T) {
 				cfg := namespaceFixture(backend, 384)
 				cfg.EmbeddingModel, cfg.EmbeddingProvider = "bert", provider
 				bound, identity, err := PrepareEmbeddingNamespace(cfg, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-					return embedding.ResolveNamespaceIdentity(provider, settings)
+					return embedding.ResolveProviderIdentity(provider, settings)
 				})
 				if err != nil {
 					t.Fatal(err)

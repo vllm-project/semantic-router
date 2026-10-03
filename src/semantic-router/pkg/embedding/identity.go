@@ -53,12 +53,14 @@ type ContentIdentity struct {
 	Descriptor  RuntimeDescriptor
 }
 
-// RepresentationProvider reports content captured by its owned native instance.
-// It never discovers another instance or initializes global model state.
+// RepresentationProvider reports the identity of the vectors it serves for an
+// output view and a versioned input policy, without running inference.
 type RepresentationProvider interface {
 	RepresentationIdentity(Options, string) (ContentIdentity, error)
 }
 
+// ResolveProviderIdentity isolates persisted vectors (semantic cache, memory,
+// vector stores) by the prepared provider's representation identity.
 func ResolveProviderIdentity(provider Provider, settings ConsumerSettings) (ContentIdentity, error) {
 	if strings.TrimSpace(settings.ModelType) == "" {
 		return ContentIdentity{}, fmt.Errorf("%w: %s", ErrIdentityUnsupported, settings.ModelType)
@@ -78,12 +80,6 @@ func (s *Set) ResolveIdentity(settings ConsumerSettings) (ContentIdentity, error
 	if err != nil {
 		return ContentIdentity{}, err
 	}
-	return ResolveProviderIdentity(provider, settings)
-}
-
-// ResolveNamespaceIdentity isolates persisted memory and cache vectors by the
-// prepared provider's representation identity.
-func ResolveNamespaceIdentity(provider Provider, settings ConsumerSettings) (ContentIdentity, error) {
 	return ResolveProviderIdentity(provider, settings)
 }
 

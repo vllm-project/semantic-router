@@ -59,7 +59,7 @@ func TestResponseCacheKeysOnlyCandleBERTByEncoderVersion(t *testing.T) {
 		backend := cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: true, EmbeddingModel: "bert", EmbeddingProvider: provider})
 		t.Cleanup(func() { _ = backend.Close() })
 		identity, err := responseCacheEmbeddingIdentity(&config.RouterConfig{}, backend, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-			return embedding.ResolveNamespaceIdentity(provider, settings)
+			return embedding.ResolveProviderIdentity(provider, settings)
 		})
 		if err != nil || (identity != "") != keyed {
 			t.Fatalf("%s BERT response cache identity %q, %v", runtime, identity, err)
