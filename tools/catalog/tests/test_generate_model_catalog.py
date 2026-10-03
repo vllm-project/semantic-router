@@ -853,6 +853,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "nvidia/nemotron-3-ultra": "nemotron-ultra",
             "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "nemotron-thinking-toggle",
             "nvidia/nemotron-cascade-2-30b-a3b": "nemotron-thinking-toggle",
+            "nvidia/nemotron-cascade-8b": "nemotron-thinking-toggle",
         }
         self.assertEqual(
             {
