@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 from vllm_sr_runtime.errors import PackageError
 from vllm_sr_runtime.registry import builtin, policy
@@ -77,11 +79,40 @@ def test_licence_policy():
     )
 
 
-def test_every_builtin_model_has_cpu_golden_answers():
+def test_every_builtin_model_has_cpu_and_rocm_golden_answers():
     from vllm_sr_runtime.supervision.readiness import well_formed
 
     for model in builtin.all_models():
-        answers = model.golden_answers.get("cpu")
-        assert answers, model.repo_id
-        assert set(answers) == {"domain", "reasoning", "difficulty"}
-        assert all(well_formed(answer) for answer in answers.values()), model.repo_id
+        for device_class in ("cpu", "rocm"):
+            answers = model.golden_answers.get(device_class)
+            assert answers, (model.repo_id, device_class)
+            assert set(answers) == {"domain", "reasoning", "difficulty"}
+            assert all(
+                well_formed(answer) for answer in answers.values()
+            ), model.repo_id
+
+
+def test_a_later_revision_with_the_same_identity_gets_the_table_references(tmp_path):
+    from vllm_sr_runtime.families.decision2.family import Decision2Family
+    from vllm_sr_runtime.plugins.base import (
+        PackageRef,
+        RegistryOptions,
+        VerifiedPackage,
+    )
+
+    known = builtin.lookup("vllm-sr/Decision-2.0-Eos-0.8B")
+    package = VerifiedPackage(
+        ref=PackageRef(root=tmp_path, repo_id=known.repo_id, revision="b" * 40),
+        family="decision2",
+        model_name="Decision-2.0-Eos-0.8B",
+        manifest={},
+        manifest_sha256="c" * 64,
+        model_sha256=known.model_sha256,
+        max_input_tokens=4096,
+        licence="apache-2.0",
+    )
+    family = Decision2Family(RegistryOptions())
+    (golden,) = family.golden(package)
+    assert golden["expected"] == known.golden_answers
+    (other,) = family.golden(replace(package, model_sha256="d" * 64))
+    assert other["expected"] == {}
