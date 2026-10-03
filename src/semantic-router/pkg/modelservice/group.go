@@ -122,7 +122,7 @@ func (g *group) watch(ctx context.Context) {
 	for {
 		g.refresh(ctx)
 		interval := readyPollInterval
-		if !g.allReady() {
+		if !g.everyReady() {
 			interval = startingPollInterval
 		}
 		select {
@@ -142,7 +142,7 @@ func (g *group) requestProbe() {
 	}
 }
 
-func (g *group) allReady() bool {
+func (g *group) everyReady() bool {
 	for _, served := range g.models {
 		if !served.ready.Load() {
 			return false

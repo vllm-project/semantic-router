@@ -150,19 +150,23 @@ func (l *Lease) Decide(ctx context.Context, deployment string, request Request) 
 	if err != nil {
 		return Response{}, err
 	}
-	key := decideKey(request)
-	if cached, ok := m.served.cache.get(key); ok {
-		cacheTotal.WithLabelValues(deployment, "hit").Inc()
-		return cached.(Response), nil
+	cache := m.served.cache.active()
+	var key cacheKey
+	if cache != nil {
+		key = decideKey(request)
+		if cached, ok := cache.get(key); ok {
+			cacheTotal.WithLabelValues(deployment, "hit").Inc()
+			return cached.(Response), nil
+		}
 	}
 	started := time.Now()
 	request.Model = m.served.name
 	response, err := m.group.client.Decide(ctx, request)
 	l.observe(m, deployment, "decisions", started, err)
-	if err == nil {
+	if err == nil && cache != nil {
 		cacheTotal.WithLabelValues(deployment, "miss").Inc()
 		if complete(response) {
-			m.served.cache.put(key, response)
+			cache.put(key, response)
 		}
 	}
 	return response, err
@@ -174,18 +178,22 @@ func (l *Lease) Classify(ctx context.Context, deployment string, request Classif
 	if err != nil {
 		return ClassifyResponse{}, err
 	}
-	key := classifyKey(request)
-	if cached, ok := m.served.cache.get(key); ok {
-		cacheTotal.WithLabelValues(deployment, "hit").Inc()
-		return cached.(ClassifyResponse), nil
+	cache := m.served.cache.active()
+	var key cacheKey
+	if cache != nil {
+		key = classifyKey(request)
+		if cached, ok := cache.get(key); ok {
+			cacheTotal.WithLabelValues(deployment, "hit").Inc()
+			return cached.(ClassifyResponse), nil
+		}
 	}
 	started := time.Now()
 	response, err := m.group.client.Classify(ctx, m.served.name, request)
 	l.observe(m, deployment, "classify", started, err)
-	if err == nil {
+	if err == nil && cache != nil {
 		cacheTotal.WithLabelValues(deployment, "miss").Inc()
 		if classified(response) {
-			m.served.cache.put(key, response)
+			cache.put(key, response)
 		}
 	}
 	return response, err
