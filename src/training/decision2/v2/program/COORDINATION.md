@@ -205,6 +205,62 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 11:00 — **USER: STOP ALL TRAINING. The focus is now (1) inference optimization and (2) the Jev Decision
+  Index submission.** The user's words: "我觉得所有的训练任务可以停止了 现在的 focus 就是推理优化和提交 index".
+  - **4B owner (2d3664f4), 9B owner (e28aa509), 27B owner (07d87124):**
+    - stop every training job and every candidate Index / gate chain of yours now, including relays, resume loops
+      and launchers;
+    - release your leases, write your final state and handoff section, and **end your run**;
+    - don't launch anything new;
+    - the released versions stay as they are on the Hub.
+    The coordinator is also stopping these jobs directly on the nodes.
+  - **Keep running:** the Index submission worker (f38ee089): complement runs, spot checks, the dataset and the
+    PRs. It gets first call on every GPU.
+  - **Next:** a new inference-optimization worker will be started and posted here.
+
+- 2026-10-03 11:00 — **9B owner (e28aa509): `KIB4H-a80` FAILS** (values private). It is below the release: KIB4's own
+  seeds at half LR also lose RAGTruth at α 4/5, so RAGTruth tracks the step size, not the seeds. On the half-LR
+  ladder RAGTruth recovers as α drops (4/5 → 3/5).
+  - **Next:**
+    - `KIB4H-a40` (amendment 12; gate ≈ 11:50);
+    - then **`HLR4-a50`** (wave-2 rule 1, preregistered; gate ≈ 12:40). Its formal R3 runs now on node A GPU0
+      (≈ 15 min), so a pass goes straight to release.
+    - Wave-2 rule 2 (`LRX6`) does not apply: the factory's `KIB4-lrh` has no read, because no GPU outside node B
+      was free.
+  - **Then the factory hand-off arms** (08:18): `KIB4-lrhh` s3 / s4 and `KXH` s1 / s2 go on node B GPU2 / 3 / 5 / 7
+    when `HLR4-a50`'s shards end (≈ 12:30), and finish ≈ 15:10. They feed an eight-seed cross-arm half-LR soup, the
+    9B analogue of Nox's `4b-LRHxALL`.
+  - **Budget:** ≈ 47 of 60 GPU-h committed (with `KIB4H-a40`, `HLR4-a50` and the formals). **Ask: +12 GPU-h** for a
+    9B weights release plus up to three reads of the eight-seed soups. Training uses the +15 approved at 08:18.
+
+- 2026-10-03 10:50 — **Index submission worker (f38ee089): Lux is submitted at `214ffa43`, and a release spot check
+  runs before the PRs.**
+  - **Lux `214ffa43`** (the 9B owner's runtime-only switch revision, 02:30Z) has the same weights as `f3122c7c`
+    (identity and per-file fingerprint equal). Only `README.md`, `api.py`, `qwen.py` and `shared_ctx.py` changed. The
+    run stays `M10-KIB4-a40-bf16`.
+  - **Why a spot check:** the scored packages ran their pre-release runtime, and the submitted revisions run the
+    newer runtime with the same weights. Earlier runtime updates were checked on our release panels, not on Index-style
+    requests (up to 255 options, 32K tokens).
+  - **What it does:** each released revision is downloaded (all six digest-checked against their manifests) and run
+    on a stratified Index sample, 2,160 requests (50 per benchmark, all 44). Its answers are compared with the stored
+    rows (`submission spotcheck`).
+  - **GPU:** it runs on **node C GPU7 right after the Lux complement** (`spot_chain.sh`, `a5448d46e`), ≈ 30–40 min,
+    ending ≈ 12:30; then the lease is released. Launcher entries `HUB-<model>-<rev8>` are data only (`1f89bbe18`).
+
+- 2026-10-03 10:50 — **Lux-9B RELEASED (runtime-only): `vllm-sr/Decision-2.0-Lux-9B@214ffa43`**, the phase A runtime
+  plus the opt-in shared-context switch (default off), weights unchanged (KIB4-a40, identity `0ece5faa…`).
+  `post_checks=ok` at 02:41Z. 9B owner e28aa509.
+  - **Evidence:** parity on the default path 10,653 / 10,653 identical with 0.0 drift (typed-final, css15,
+    public231, mlx-diag); bench 400 bit-identical (p50 18.5 → 18.4 ms); frozen cache `runtime-a-9b-ras`.
+  - **Post-checks:** download re-hash and examples; Transformers remote code under 5.17 / 5.18 (Hub smoke);
+    readback; gate seal; collection order (public, releases in order); links 8 / 8; card HTTP; gate evaluate; the
+    86-request gate on the download 86 / 86, max |dp| 0.0.
+  - **Record:** `dev2-runtime-a-2026-10-02/9b/switch` (`1d952eaa8`); spec `dev2-9b-ras.json`.
+  - **All six Decision 2.0 repos now carry the switch.** Lux is still public.
+  - **Index submission worker (f38ee089):** Lux `main` is now `214ffa43`, with the same weights as `f3122c7c`, so
+    its IX1 run is still `M10-KIB4-a40-bf16`.
+  - The next Lux weights release supersedes `214ffa43` (m10c ops re-pinned, `c113eee18`).
+
 - 2026-10-03 10:35 — **Index submission worker (f38ee089): Kai, Eos and Sol are complete and checked;** Nox and then
   Lux run on node C GPU7 until ≈ 11:50.
   - **Each run** has a result for all 150,317 scoreable requests (`"complete": true`) and no errors. Its public file
