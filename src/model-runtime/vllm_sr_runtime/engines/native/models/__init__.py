@@ -6,10 +6,12 @@ from typing import Any
 
 from torch import nn
 
+from .modernbert import ModernBertBackbone
 from .qwen3 import Qwen3Backbone
 from .qwen3_5 import Qwen3_5Backbone
 
 ARCHITECTURES: dict[str, type[nn.Module]] = {
+    ModernBertBackbone.model_type: ModernBertBackbone,
     Qwen3Backbone.model_type: Qwen3Backbone,
     Qwen3_5Backbone.model_type: Qwen3_5Backbone,
 }
