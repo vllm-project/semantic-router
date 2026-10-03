@@ -52,6 +52,12 @@ func (v *ValkeyStore) List(context.Context, ListOptions) (*ListResult, error) {
 
 func (v *ValkeyStore) Forget(context.Context, string) error { return errValkeyGlideUnavailable }
 
+func (v *ValkeyStore) supportsAtomicGroupReplacement() bool { return false }
+
+func (v *ValkeyStore) replaceCurrentGroup(context.Context, []memoryVersion, *Memory) (bool, int, error) {
+	return false, 0, errValkeyGlideUnavailable
+}
+
 func (v *ValkeyStore) ForgetByScope(context.Context, MemoryScope) error {
 	return errValkeyGlideUnavailable
 }

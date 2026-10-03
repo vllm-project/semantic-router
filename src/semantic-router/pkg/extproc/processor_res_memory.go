@@ -86,7 +86,7 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 		reservation.Abort(memory.PersistenceOutcome{Status: "skipped", Reason: "memory_info_unavailable", FailOpen: true}, infoErr)
 		return
 	}
-	reservation.Start(memoryPersistenceJob{
+	job := memoryPersistenceJob{
 		extractor:         r.MemoryExtractor,
 		codecs:            r.ProtocolCodecs,
 		sessionID:         sessionID,
@@ -94,7 +94,11 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 		userMessage:       currentUserMessage,
 		assistantResponse: currentAssistantResponse,
 		history:           history,
-	}.run)
+	}
+	if r.memoryConsolidation != nil {
+		job.consolidate = r.memoryConsolidation
+	}
+	reservation.Start(job.run)
 }
 
 // memoryPersistenceJob owns everything the worker needs, so a queued write
@@ -107,6 +111,13 @@ type memoryPersistenceJob struct {
 	userMessage       string
 	assistantResponse string
 	history           []llmprotocol.Message
+	consolidate       memoryConsolidator
+}
+
+// memoryConsolidator merges one user's memories off the response path.
+// A nil implementation is not called.
+type memoryConsolidator interface {
+	Enqueue(userID string)
 }
 
 func (job memoryPersistenceJob) run(jobCtx context.Context) (memory.PersistenceOutcome, error) {
@@ -142,7 +153,15 @@ func (job memoryPersistenceJob) run(jobCtx context.Context) (memory.PersistenceO
 	if storedCount == 0 {
 		return memory.PersistenceOutcome{Status: "skipped", Reason: "no_write"}, nil
 	}
+	enqueueMemoryConsolidation(job.consolidate, job.userID, storedCount, nil)
 	return memory.PersistenceOutcome{}, nil
+}
+
+func enqueueMemoryConsolidation(consolidator memoryConsolidator, userID string, storedCount int, err error) {
+	if consolidator == nil || err != nil || storedCount <= 0 || userID == "" {
+		return
+	}
+	consolidator.Enqueue(userID)
 }
 
 // recordUnscheduledResponseMemoryStore reports the terminal receipt for a

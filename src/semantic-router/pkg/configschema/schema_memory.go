@@ -32,3 +32,20 @@ func setMemoryPersistenceBounds(root *jsonschema.Schema) error {
 	}
 	return nil
 }
+
+func setMemoryConsolidationBounds(root *jsonschema.Schema) error {
+	maximums := map[string]int64{
+		"cooldown_seconds": routerconfig.MaxMemoryPersistenceDurationSeconds,
+		"timeout_seconds":  routerconfig.MaxMemoryPersistenceDurationSeconds,
+		"concurrency":      int64(routerconfig.MaxMemoryPersistenceConcurrency),
+	}
+	for _, property := range []string{"cooldown_seconds", "timeout_seconds", "concurrency"} {
+		field := definitionProperty(root, "MemoryConsolidationConfig", property)
+		if field == nil {
+			return fmt.Errorf("memory consolidation schema is missing %q", property)
+		}
+		field.Minimum = json.Number("0")
+		field.Maximum = json.Number(strconv.FormatInt(maximums[property], 10))
+	}
+	return nil
+}
