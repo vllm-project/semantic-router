@@ -1,0 +1,238 @@
+"""Loaded Decision 1.0 models: one class per runtime over shared System One handling.
+
+``Decision1Model`` owns what both runtimes share: the request rules and
+presets, the bundled runtime's admission rule (one over-long question fails
+every question of the request, nothing is truncated), the physical batches of
+the ``exact`` profile and the answers. A subclass renders a question and runs
+a batch on its engine model.
+"""
+
+from __future__ import annotations
+
+from abc import abstractmethod
+from collections.abc import Callable
+from typing import Any, ClassVar
+
+import torch
+
+from ...errors import INVALID_QUESTION, MAX_LENGTH_EXCEEDED, QuestionError
+from ...heads.candidate import logits
+from ...plugins.base import (
+    EngineModel,
+    ForwardBatch,
+    LoadedModel,
+    ModelInfo,
+    ModelSpec,
+    RenderedItem,
+    RequestPlan,
+)
+from ...systemone import canonical
+from ...text import segments
+from ...text.tokenizer import Tokenizer
+from . import qwen, vela
+from .answers import answer
+from .questions import KINDS, NoulDefaults, Row, check_request, parse
+
+# Gated-delta q / k / v of one forward stay within 2**30 elements (FLA's 32-bit offsets).
+GATED_DELTA_ELEMENTS = 2**30 - 1
+
+
+class Decision1Model(LoadedModel):
+    """A loaded Decision 1.0 model; ``render``, ``physical_batches`` and ``run`` are per runtime."""
+
+    noul_defaults: ClassVar[NoulDefaults]
+    fuse_bundled_jobs: ClassVar[bool] = False
+
+    def __init__(
+        self,
+        info: ModelInfo,
+        engine_model: EngineModel,
+        tokenizer: Tokenizer,
+        presets: dict[str, dict[str, Any]],
+    ):
+        self.info = info
+        self.engine_model = engine_model
+        self.tokenizer = tokenizer
+        self.presets = presets
+
+    @abstractmethod
+    def render(
+        self, row: Row, state: str, tokens: Callable[[str], list[int]]
+    ) -> RenderedItem:
+        """One question's model input; raises ``QuestionError``."""
+
+    @abstractmethod
+    def physical_batches(self, items: list[RenderedItem]) -> list[list[int]]:
+        """How the released runtime splits a request's items into forwards."""
+
+    def tokens(self) -> Callable[[str], list[int]]:
+        """The tokenizer for one request's rendering."""
+        return self.tokenizer.encode
+
+    def exact_batches(self, items: list[RenderedItem]) -> list[list[int]]:
+        """The released physical batches; each stays within the forward token budget."""
+        return self.physical_batches(items)
+
+    def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan:
+        check_request(state, questions)
+        text = state if isinstance(state, str) else canonical(state)
+        rows: list[Row] = []
+        errors: dict[str, dict[str, Any]] = {}
+        for question_id, question in questions.items():
+            try:
+                rows.append(
+                    parse(question_id, question, self.noul_defaults, self.presets)
+                )
+            except QuestionError:
+                kind = question.get("type") if isinstance(question, dict) else None
+                errors[question_id] = {
+                    "type": kind if kind in KINDS else None,
+                    "error": INVALID_QUESTION,
+                }
+        tokens = self.tokens()
+        items: list[RenderedItem] = []
+        for row in rows:
+            try:
+                items.append(self.render(row, text, tokens))
+            except QuestionError as exc:
+                if exc.code != MAX_LENGTH_EXCEEDED:
+                    errors[row.question_id] = {"type": row.kind, "error": exc.code}
+                    continue
+                for failed in rows:
+                    errors[failed.question_id] = {
+                        "type": failed.kind,
+                        "error": MAX_LENGTH_EXCEEDED,
+                    }
+                items = []
+                break
+        return RequestPlan(
+            question_ids=list(questions),
+            items=items,
+            errors=errors,
+            input_tokens=sum(len(item.ids) for item in items),
+        )
+
+    def answer(self, item: RenderedItem, logits: list[float] | None) -> dict[str, Any]:
+        """``logits`` holds the item's candidate probabilities (the runtimes normalize on the device)."""
+        return answer(item.task_type, item.keys, item.descriptions, logits)
+
+
+class VelaDecisionModel(Decision1Model):
+    """Kai, Lex and Route: three ModernBERT layer stacks over one embedding, typed heads (``vela.py``)."""
+
+    noul_defaults = vela.NOUL_DEFAULTS
+
+    def __init__(
+        self,
+        info: ModelInfo,
+        engine_model: EngineModel,
+        tokenizer: Tokenizer,
+        presets: dict[str, dict[str, Any]],
+        *,
+        readout: vela.TypeReadout,
+        special: dict[str, int],
+        exit_layer: int,
+    ):
+        super().__init__(info, engine_model, tokenizer, presets)
+        self.readout = readout.to(engine_model.device)
+        self.special = special
+        self.exit_layer = exit_layer
+
+    def tokens(self) -> Callable[[str], list[int]]:
+        return vela.token_cache(self.tokenizer.encode)
+
+    def render(
+        self, row: Row, state: str, tokens: Callable[[str], list[int]]
+    ) -> RenderedItem:
+        return vela.render(
+            row, state, tokens, self.special, self.info.limits["max_input_tokens"]
+        )
+
+    def physical_batches(self, items: list[RenderedItem]) -> list[list[int]]:
+        return vela.physical_batches(items)
+
+    def run(
+        self, items: list[RenderedItem], shared_prefix: int = 0
+    ) -> list[list[float] | None]:
+        with torch.inference_mode():
+            scores = vela.marker_logits(
+                self.engine_model.encode,
+                self.readout,
+                items,
+                self.special["pad"],
+                self.engine_model.device,
+                self.exit_layer,
+            )
+            if not torch.isfinite(scores).all():
+                return [None] * len(items)
+            return [
+                scores[slot, : len(item.keys)].softmax(-1).cpu().tolist()
+                for slot, item in enumerate(items)
+            ]
+
+
+class QwenDecisionModel(Decision1Model):
+    """Eos, Sol, Nox and Lux: a Qwen3.5 backbone and the shared candidate head (``qwen.py``)."""
+
+    noul_defaults = qwen.NOUL_DEFAULTS
+
+    def __init__(
+        self,
+        info: ModelInfo,
+        engine_model: EngineModel,
+        tokenizer: Tokenizer,
+        presets: dict[str, dict[str, Any]],
+        *,
+        head: torch.nn.Module,
+        temperatures: dict[str, float],
+        null_choice_as_key: bool,
+        spec: ModelSpec,
+    ):
+        super().__init__(info, engine_model, tokenizer, presets)
+        self.head = head.to(engine_model.device)
+        self.temperatures = temperatures
+        self.null_choice_as_key = null_choice_as_key
+        self.spec = spec
+
+    def render(
+        self, row: Row, state: str, tokens: Callable[[str], list[int]]
+    ) -> RenderedItem:
+        return qwen.render(
+            row,
+            state,
+            tokens,
+            self.info.limits["max_input_tokens"],
+            self.null_choice_as_key,
+        )
+
+    def physical_batches(self, items: list[RenderedItem]) -> list[list[int]]:
+        return qwen.physical_batches(items)
+
+    def forward_token_budget(self) -> int | None:
+        """GPU forwards keep the gated-delta q / k / v within FLA's 32-bit offsets (the 2 GiB guard)."""
+        if self.engine_model.device.type == "cpu":
+            return None
+        config = self.spec.backbone.config
+        width = config["linear_num_value_heads"] * max(
+            config["linear_key_head_dim"], config["linear_value_head_dim"]
+        )
+        return GATED_DELTA_ELEMENTS // width
+
+    def run(
+        self, items: list[RenderedItem], shared_prefix: int = 0
+    ) -> list[list[float] | None]:
+        batch = segments.collate(items, self.tokenizer.pad_id, qwen.PAD_MULTIPLE)
+        output = self.engine_model.forward(
+            ForwardBatch(
+                input_ids=batch["input_ids"],
+                attention_mask=batch["attention_mask"],
+                gather=batch["candidate_positions"],
+                query=batch["query_positions"],
+                lengths=[len(item.ids) for item in items],
+                shared_prefix=shared_prefix,
+            )
+        )
+        mask = batch["candidate_mask"].to(output.gathered.device)
+        with torch.inference_mode():
+            scores = logits(self.head, output.gathered, output.query, mask)
+            return qwen.probabilities(scores, items, self.temperatures)
