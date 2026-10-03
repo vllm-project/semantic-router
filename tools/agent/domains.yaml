@@ -298,6 +298,27 @@ domains:
     checks: [make build-router-riscv]
     verifications: [platform.router-riscv64-qemu]
 
+  onnx-artifact-tools:
+    owner: model-runtime
+    paths:
+      - tools/models/onnx/pack_shared_weights.py
+      - tools/models/onnx/artifact_tests/**
+      - tools/models/onnx/onnx_artifacts.py
+    checks: [make onnx-artifact-test]
+    verifications: [onnx-artifacts]
+
+  onnx-export-tools:
+    owner: training
+    paths:
+      - tools/models/onnx/export_*.py
+      - tools/models/onnx/modernbert_inputs.py
+      - tools/models/onnx/model_precision.py
+      - tools/models/onnx/onnx_*.py
+      - tools/models/onnx/tests/**
+      - tools/models/onnx/README.md
+    checks: [make test-training-contracts]
+    verifications: [training]
+
   vllm-sr-cli:
     owner: vllm-sr-cli
     paths:
@@ -551,7 +572,7 @@ domains:
     paths:
       - tools/ci/python_test_evidence.py
     checks: [make harness-check]
-    verifications: [cli-unit, fleet-sim, training, learning-tools, harness-tools]
+    verifications: [cli-unit, fleet-sim, training, learning-tools, harness-tools, onnx-artifacts]
 
   runtime-evidence:
     owner: maintainers
