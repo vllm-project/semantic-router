@@ -181,6 +181,11 @@ def cmd_merge(args: argparse.Namespace) -> None:
     stored_path = args.stored / "merged" / "results.jsonl"
     if _sha_file(stored_path) != receipt["results_sha256"]:
         raise SystemExit("stored results differ from their IX1 receipt")
+    stored_runners = _runner_dirs(args.stored, "shard")
+    if len(stored_runners) != receipt["shards"]:
+        raise SystemExit(
+            f"the stored run has {len(stored_runners)} runner directories, its receipt {receipt['shards']}"
+        )
     stored = _records(_read_lines(stored_path))
     added: dict[str, dict[str, Any]] = {}
     superseded = 0
@@ -197,7 +202,7 @@ def cmd_merge(args: argparse.Namespace) -> None:
                 raise SystemExit(f"{runner.name} answers {run_id} a second time")
             added[run_id] = record
     sources = set()
-    for runner in _runner_dirs(args.stored, "shard") + runners:
+    for runner in stored_runners + runners:
         env = json.loads((runner / "environment.json").read_text())
         sources.add(json.dumps(env["model_source"], sort_keys=True))
     if len(sources) != 1:
@@ -228,7 +233,7 @@ def cmd_merge(args: argparse.Namespace) -> None:
         "model_source": json.loads(sources.pop()),
         "stored": {
             "results_sha256": receipt["results_sha256"],
-            "runners": len(_runner_dirs(args.stored, "shard")),
+            "runners": len(stored_runners),
             "gpu_hours": receipt["gpu_hours"],
         },
         "complement": {
@@ -262,6 +267,14 @@ def cmd_public(args: argparse.Namespace) -> None:
     source = args.merged / "results.jsonl"
     if _sha_file(source) != receipt["results_sha256"]:
         raise SystemExit("merged results differ from their receipt")
+    complement_runners = len(_runner_dirs(args.complement, "shard")) + len(
+        _runner_dirs(args.complement, "extra")
+    )
+    if (
+        len(_runner_dirs(args.stored, "shard")) != receipt["stored"]["runners"]
+        or complement_runners != receipt["complement"]["runners"]
+    ):
+        raise SystemExit("runner directories differ from the merge receipt")
     args.out.mkdir(parents=True, exist_ok=True)
     stripped = 0
     rows = 0
@@ -340,7 +353,7 @@ def cmd_public(args: argparse.Namespace) -> None:
             {
                 "rows": rows,
                 "rows_with_dropped_fields": stripped,
-                "runners": len(written) // 2,
+                "runners": len(list((harness / "runners").iterdir())),
                 "public_results_sha256": public_receipt["public_results_sha256"],
             }
         )
