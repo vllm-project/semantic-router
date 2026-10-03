@@ -122,25 +122,27 @@ src/model-runtime/
       openapi.yaml          # THE contract (served at /openapi.yaml; the Go client is generated from it)
       app.py, server.py     # Starlette routes; uvicorn over TCP or UDS
     errors.py               # error codes shared by API, scheduler and families
-    surfaces.py             # request parsing shared by the classify, embeddings and rerank surfaces
+    systemone.py            # System One request semantics shared by every decisions family
+    text/                   # shared text handling: the package tokenizer, input policies and windows
+    heads/                  # shared readout heads (candidate, sequence, scores, token, pooled, relevance, span)
     plugins/
       base.py               # ModelFamily, LoadedModel, Engine, EngineModel, Accelerator, Profile, specs
       registry.py           # entry-point discovery and selection
     registry/
       resolve.py            # local directory or Hub repo at a pinned 40-hex revision, cache
       artifacts.py          # file inventories and hash verification for packages without a manifest
-      builtin.py            # the first-party model table (aggregates registry/models/*)
-      models/               # one table per family: decision2.py, decision1.py, vela1.py, vela2.py, omni.py
+      builtin.py            # the first-party model table (aggregates registry/tables/*)
+      tables/               # one table per family: decision2.py, decision1.py, vela1.py, vela2.py, omni.py
       golden_answers*.json  # golden references per family, per device class
       kernel_choices.json   # pinned autotuned kernel choices (Decision 2.0)
       policy.py             # licence and access policy, token handling
     scheduler/              # planner, scheduler (one per model)
     placement.py            # device choice and memory budget
     supervision/            # readiness (golden answers), metrics
-    families/
+    families/               # package formats, rendering and answer assembly only
       decision2/            # Decision 2.0 (Phase 1)
       decision1/            # Decision 1.0: vela-encoder and qwen3.5-decision runtimes
-      task_heads/           # HF encoder task models: sequence, scores, token, grounded, pooled, relevance heads
+      task_heads/           # HF encoder task models (Vela 1.0 and compatible ModernBERT models)
       vela2/                # Vela 2.0 schema encoder (0.3B) and Qwen3.5 encoders (4B, 9B); Set and Span
       multimodal_embedding/ # Vela 1.0 Omni: prepared text, image and audio graphs, processors
     engines/
@@ -150,9 +152,14 @@ src/model-runtime/
     profiles/               # exact, shared_context, batching, max_speed
     testing/
       fixtures.py           # tiny random-weight packages for every family, and a tiny tokenizer
+  examples/third_party_plugin/  # a documented out-of-tree family and engine, installed by the tests
   tests/                    # unit, contract, registry, scheduler, server and integration tests
   tools/                    # golden answers, parity drivers (GPU, legacy), benchmarks
 ```
+
+Code shared by more than one family lives in `systemone.py`, `text/`,
+`heads/` and `engines/native/models/`; a family composes those blocks and
+never imports another family.
 
 ## 5. Plugin layers
 
@@ -167,6 +174,11 @@ so the runtime has one discovery path.
 | `vllm_sr_runtime.accelerators` | `Accelerator` | `cpu`, `cuda`, `rocm`, `xpu`, `mps` |
 | `vllm_sr_runtime.profiles` | `Profile` | `exact`, `shared_context`, `batching`, `max_speed` |
 
+Every plugin class has a capability descriptor (`descriptor()`): a family's
+surfaces and package formats, an engine's architectures and outputs, an
+accelerator's validation status, a profile's numerics. `/v1/models` lists
+each active plugin with its distribution, version and descriptor.
+
 ### 5.1 ModelFamily
 
 A family owns the task contract of a model format: how a package is
@@ -180,7 +192,8 @@ class ModelFamily(ABC):
 
     def detect(self, package: PackageRef) -> bool: ...             # cheap: reads the pointer or config only
     def verify(self, package: PackageRef) -> VerifiedPackage: ...  # inventory, hashes, identity; no weights
-    def describe(self, package: VerifiedPackage, options: ModelOptions) -> ModelSpec: ...
+    def fetch(self, package: PackageRef) -> PackageRef: ...         # download what it loads (no manifest)
+    def describe(self, package: VerifiedPackage) -> ModelSpec: ...  # model options: RegistryOptions.model_options
     def load(self, package, spec, engine_model) -> LoadedModel: ...
     def golden(self, package) -> list[GoldenCase]: ...              # per-surface golden requests
 ```
@@ -192,10 +205,16 @@ deadlines and profiles:
 ```python
 class LoadedModel(ABC):
     info: ModelInfo                        # identity, surfaces, heads, limits, licence
-    def plan_surface(self, surface: str, body: dict) -> SurfacePlan: ...  # validate + render; per-item errors
+    fuse_bundled_jobs: ClassVar[bool]      # exact may run one bundle's jobs as one batch
+    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan: ...  # validate + render
     def run(self, items: list[WorkItem], shared_prefix: int = 0) -> list: ...  # one forward + readout
     def finish_surface(self, plan: SurfacePlan, results) -> dict: ...      # the surface response body
 ```
+
+A work item has `ids` (its token IDs) and may have `cache_key`, a content
+hash of everything its result depends on: the runtime then answers a repeated
+item from the model's result cache without a forward. Results are shared with
+the cache, so `finish_surface` never mutates them.
 
 The Phase 1 decision methods (`plan`, `answer`) remain and back
 `plan_surface("decisions", ...)`, so Decision 2.0 is untouched. `ModelInfo`
@@ -218,14 +237,15 @@ class Engine(ABC):
     def load(self, spec, accelerator, device, options) -> EngineModel: ...
 
 class EngineModel(ABC):
-    def forward(self, batch: ForwardBatch) -> ForwardOutput: ...
+    def forward(self, batch: ForwardBatch) -> ForwardOutput: ...   # decoders: gathered rows
+    def encode(self, batch: EncoderBatch) -> EncoderOutput: ...    # encoders: hidden states or graph outputs
 ```
 
-`ForwardBatch` carries padded token IDs and the attention mask, plus what the
-readout needs: gathered positions (decision endpoints and query rows), hidden
-states at named layer exits (encoder heads, pooling, early exits), the
-shared-context prefix, or named graph inputs. `ForwardOutput` returns gathered
-rows, hidden states by layer, or named graph outputs. Readouts stay in the
+`ForwardBatch` carries padded token IDs, the attention mask, the gathered
+positions (decision endpoints and query rows) and the shared-context prefix.
+`EncoderBatch` carries padded token IDs, the mask, the layer exits the readout
+needs and, for engines that run a graph, named graph inputs; `EncoderOutput`
+returns hidden states by layer or named graph outputs. Readouts stay in the
 family: an engine that returns hidden states (native) and one that returns
 graph outputs with heads baked in (ONNX graphs as published) serve the same
 family, and the family records which one it used.
@@ -255,8 +275,11 @@ server enabled it for that model.
 
 A third party ships a normal Python distribution with entry points. The runtime
 loads entry points at startup, refuses duplicate names, and lists every active
-plugin with its distribution and version in `/v1/models`. Plugins run in the
-runtime process; the runtime never executes code from a model package.
+plugin with its distribution, version and descriptor in `/v1/models`. Plugins
+run in the runtime process; the runtime never executes code from a model
+package. `examples/third_party_plugin` is a complete, documented example (a
+keyword family and a counting engine) that the test suite installs through its
+entry points and serves on every surface next to a Decision 2.0 model.
 
 ## 6. API
 
@@ -440,7 +463,7 @@ Before any model code runs, the family verifies the package:
 | `vela2` | `vllm-sr/Vela-2.0-{0.3B, 4B, 9B}` (private preview) | 0.3B `13e85201`, 4B `3aad12f9`, 9B `d799a722` |
 | `multimodal_embedding` | `vllm-sr/Vela-1.0-Omni-{Nano, Mini}` | Nano `2ff2d663`, Mini `801bae3a` (prepared graphs, section 8.5) |
 
-`registry/models/<family>.py` carries the full revisions, file digests, the
+`registry/tables/<family>.py` carries the full revisions, file digests, the
 expected identity and parameter count, and the golden requests; reference
 answers per device class live in `registry/golden_answers*.json`. A new
 revision is a new entry; the runtime never follows a moving branch.
@@ -559,11 +582,16 @@ bundle  -> plan every task -> submit all at once -> await each -> results in tas
 Each model has its own scheduler and worker thread. Validation and rendering
 happen on the request thread, so malformed requests never take queue
 capacity. In `exact`, one request's rows form one padded batch, split only by
-the forward token budget. Deadlines travel with jobs; a job whose deadline has
-passed when the worker picks it up is not run. Admission bounds jobs and
-pending tokens per model and answers 429 at once. On CPU, workers of different
-models share the process's intra-op thread pool (`--threads`); section 17
-records the CPU scheduling measurements.
+the forward token budget. A bundle's tasks for one model are queued at once as
+one job group: decision models still run each task as its own batch (their
+released numerics), and a family that sets `fuse_bundled_jobs` (encoders) runs
+the group as one batch, so one forward serves every head and consumer that
+reads the same input. Repeated cacheable items are answered from the model's
+result cache (`--result-cache-entries`, keyed by profile and content).
+Deadlines travel with jobs; a job whose deadline has passed when the worker
+picks it up is not run. Admission bounds jobs and pending tokens per model and
+answers 429 at once, for a whole group or none of it. On CPU, workers of
+different models share the process's intra-op thread pool (`--threads`).
 
 ## 10. Placement and supervision
 
@@ -690,8 +718,9 @@ from the same cards.
 ### 13.3 Request flow and bundles
 
 The signal stage evaluates signal families in parallel goroutines, as before.
-It opens a request bundle in the context and every goroutine joins it; a
-runtime call made through `modelservice` parks in the bundle, and the bundle
+It opens a request bundle in the context (`modelservice.WithBundle`) and every
+goroutine joins it (`Join`); a runtime call made through `modelservice`
+(`Decide`, `Classify`, `Embed`, `Rerank`) parks in the bundle, and the bundle
 flushes one `/v1/bundle` call per runtime process when every joined goroutine
 has parked or finished (or after a 2 ms window), then hands each caller its
 own result. Calls outside a bundle go directly to their surface. The response
@@ -887,7 +916,20 @@ reference is exactly what the router served. Each record states the commit,
 image, device, inputs and every disagreement. CUDA stays implemented,
 unit-tested and unvalidated.
 
-## 18. Phase 1 follow-ups and later work
+## 18. Performance
+
+Every migrated feature must match or beat the legacy binding's latency (p50,
+p95) and throughput on CPU and on ROCm, measured on the same inputs and
+hardware, with the records in `docs/records/<workstream>-*`. The techniques:
+
+| Where | Technique | Status |
+| --- | --- | --- |
+| Decision models | exact-shape HIP / CUDA graphs with host-built masks, bit-exact fused Triton kernels, lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard | Phase 1; reused by Decision 1.0 (Qwen3.5) and Vela 2.0 4B / 9B |
+| Runtime core | one bundled call per request and process; a bundle's tasks for one model as one job group (one forward for every head reading the same input); per-model content-hash result cache | this scaffold |
+| Encoders | dynamic cross-request batching with length buckets; packed (varlen) sequences without padding waste; graphs per bucket on GPU; fused kernels, bit-exact where possible; an ONNX Runtime CPU engine where it beats PyTorch; opt-in int8 / fp8 profiles with accuracy records; per-hardware kernel selection | encoder workstreams |
+| Router | parallel async dispatch, deadlines, fail-open, bundled calls, caching of bundle results | router workstreams |
+
+## 19. Phase 1 follow-ups and later work
 
 Done: ROCm golden answers and pinned kernel choices for all six Decision 2.0
 models on gfx942, and the graph-cap and batch-shape bucket measurements
@@ -898,7 +940,7 @@ Index-like traffic); kernel choices for other device classes; more `max_speed`
 kernels; a `vllm` engine (pooling runner plus the family readouts) and a
 `llamacpp` engine; CUDA validation on CUDA hardware.
 
-## 19. Risks
+## 20. Risks
 
 | Risk | Mitigation |
 | --- | --- |
