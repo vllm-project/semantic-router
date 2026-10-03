@@ -205,6 +205,77 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 12:09 — **Index submission worker (f38ee089): Vega `9b067a95` ALSO fails the release spot check** (same
+  `PassManager::run failed`: 5 errors in the first 1,107 sample rows, 3 of them the Nox / Lux rows). Stopped that spot
+  run (result decided); node C GPU1–7 leases released. PR #48 and Space PR #38 stay at Kai / Eos / Sol; their text
+  says Nox, Lux and Vega follow once their release checks pass.
+  - Vega's full complement keeps running on node D GPU0–7 (shards 0–1 done, 2–7 about 40–90%), then `submit.sh` on
+    node D, so the verified run is ready. Lux's full run is already verified (46.26).
+  - **To add Nox / Lux / Vega:** a runtime-only Hub revision that fixes the ROCm compile error, then I re-run the
+    2,160-row spot check (about 10 min for 4B / 9B), push to the dataset and to PR #48. Ping me here with the revisions.
+
+- 2026-10-03 12:05 — **Index submission worker (f38ee089) → inference owner (885d85cc) / model-runtime lead (54e49843):
+  the Nox / Lux release error is NOT the autotune cache.** A rerun of the 5 rows with an empty Triton cache fails the
+  same way (`PassManager::run failed` in AMD `make_ttgir`, compiling `_attn_prep_kernel`, called from
+  `fast.py:_attention`). A standalone `attn_prep` call with Nox shapes (16 / 4 heads, D 256, gated, partial RoPE 64;
+  B 1–5, T up to 9,616, T % 16 both ways) compiles fine, so the trigger depends on the real call (likely pointer
+  alignment / divisibility specialization of a view, or another argument). Repro: node C
+  `/data/dev2/private/eval/index021/submit/spot/nox-retry-5.jsonl.gz` with `launch.sh extra --model HUB-Nox-4B-ce1bdc9d
+  --cache <dir with .sha256>`; the stored pre-release runtime answered these rows `ok`. A candidate mitigation is
+  `@triton.jit(do_not_specialize=[...])` or a contiguous copy before the launch, verified on these rows. Node C GPU7
+  lease released.
+
+- 2026-10-03 11:56 — **Model-runtime lead (54e49843): MAINTAINER ACTION NEEDED — accept issue #4479.** The PR's
+  Community check needs a linked `accepted` issue with exactly one `wg/*` owner. I opened
+  https://github.com/vllm-project/semantic-router/issues/4479 ("[Feature] Built-in model runtime, Phase 1: serve
+  Decision 2.0 from vllm-sr", labels `enhancement`, `needs-acceptance`, `wg/router-models-inference-runtime`).
+  **Coordinator:** please have it accepted (`/accept`, i.e. `accepted` replacing `needs-acceptance`). The PR will link it.
+
+- 2026-10-03 11:58 — **Index submission worker (f38ee089): GitHub PR OPEN:
+  https://github.com/apolinario/decision-index/pull/48** (Kai 16.29, Eos 20.15, Sol 29.53; dataset @ `8dcbb7fa`,
+  re-scored from the Hub download: all three MATCH).
+  - **Space PR OPEN (12:00): https://huggingface.co/spaces/multimodalart/jev-decision-index/discussions/38**
+    (one `trained` News entry linking PR #48 and the dataset).
+  - Next: Vega (complement on node D, then spot check); Nox / Lux wait for a runtime fix of the ROCm compile error
+    (11:53 note) or a decision from the coordinator.
+
+- 2026-10-03 11:52 — **Model-runtime lead (54e49843): design doc published.**
+  - In-repo: `src/model-runtime/docs/design.md` on `xunzhuo/model-runtime-decision2` (`9a075f6f7`):
+    https://github.com/vllm-project/semantic-router/blob/9a075f6f7276b4e73a8e97b9b871a43a8019763d/src/model-runtime/docs/design.md
+  - Public gist: https://gist.github.com/Xunzhuo/0daab6d0de1d01f1346ff15970891257
+  - **Inference worker (885d85cc), where your modules go** (design §4–5, §8): `vllm_sr_runtime/families/decision2/`
+    (package, renderer, readout = heads, answers), `engines/native/` with the backbones in `engines/native/models/`
+    (`qwen3.py`, `qwen3_5.py`, `lora.py`; architectures are execution code, Decision 1.0 reuses them; still yours),
+    `accel/{cpu,cuda,rocm}.py` + `accel/kernels.py` (kernel registry; every accelerated kernel declares its pure-torch
+    reference and whether it is bit-exact), `profiles/{exact,shared_context,batching,max_speed}.py`, records in
+    `src/model-runtime/docs/records/`.
+  - **Next:** the interface scaffold with a working CPU reference path (FP32 pure-torch Qwen3 / Qwen3.5 GDN checked
+    against Transformers on tiny fixtures). I post its hash here; port into it from then on. No GPU use by me.
+
+- 2026-10-03 11:53 — **Index submission worker (f38ee089): results dataset PUBLISHED (public, ungated):
+  https://huggingface.co/datasets/vllm-sr/decision-2.0-decision-index @ `8dcbb7fa`** with Kai, Eos and Sol.
+  GitHub PR and Space PR are next (minutes).
+  - **Nox `ce1bdc9d` and Lux `214ffa43` FAIL the release spot check → NOT submitted for now.** Both released
+    revisions return `error` ("PassManager::run failed", Triton ROCm compile of `fast_kernels.attn_prep`) on the same
+    5 of 2,160 sample requests (9,749–22,235 tokens; ToolRet ×2, ContractNLI, BRIGHT ×2). Deterministic: a rerun of
+    the 5 rows alone fails again. The stored rows (pre-release runtime) are `ok` there; Sol / Eos / Kai pass those rows
+    with the identical `fast_kernels.py`, so it is the 4B / 9B shape. Their full runs are complete (Nox 43.77, Lux
+    46.26, public files verified). An empty-cache rerun is testing whether the frozen autotune cache is the cause.
+  - **Inference owner (885d85cc) / model-runtime lead (54e49843):** this looks like a user-facing bug in the released
+    phase A runtime on ROCm (likely Vega too). Repro rows: node C
+    `/data/dev2/private/eval/index021/submit/spot/nox-retry-5.jsonl.gz`, launcher `launch.sh extra ... --model
+    HUB-Nox-4B-ce1bdc9d`. A fixed runtime-only revision would let me re-spot-check and add Nox / Lux to the same PR.
+
+- 2026-10-03 11:42 — **Index submission worker (f38ee089): release spot checks for Kai / Eos / Sol PASS; publishing
+  the 4-model dataset as soon as Nox passes** (Nox spot at 1,252 / 2,160).
+  - Spot check: the Hub revision is re-run on 2,160 stratified scoreable requests and compared with the stored rows.
+    Pass = no status differs and every flipped choice is a near tie (top-two margin ≤ 0.025 in one of the runs).
+  - Kai `881bee41`: 2,160 / 2,160 agree, max Δp 0. Eos `ad0aa724`: 2,157 / 2,160 agree, 3 near-tie flips (margins
+    0.0006–0.009), max Δp 0.012. Sol `4b75b521`: 2,159 / 2,160 agree, 1 near-tie flip (0.344 vs 0.339), max Δp 0.014.
+    The flips are disclosed in the dataset card and PR body.
+  - Lux complement 28,732 / 30,091 (node C GPU7); Vega complement 8 shards on node D GPU0–7; Lux and Vega spot checks
+    running on node C GPU5–6.
+
 - 2026-10-03 11:37 — **USER (11:34): the Jev Index PR is TOP PRIORITY** ("请你加速 index 的 PR 这个优先级非常高 我需要很快的提交
   PR").
   - **The Index submission worker (f38ee089)** now runs everything in parallel on the free GPUs (Lux complement
