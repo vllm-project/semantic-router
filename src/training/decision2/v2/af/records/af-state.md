@@ -2,6 +2,27 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-03 00:20Z (08:20 UTC+8) — all factory seeds done; HAND-OFF (continuation needed)
+
+- **Every factory seed has ended; no factory GPU job is running.** Last ones: `4b-LHS17IB4-lrq` s2 (node C GPU1,
+  00:0xZ), `KIB4-lrh` s1 / s2 and `KIB4-lrq` s1 (node A, 00:0xZ), `KIB4-lrhh` s1 / s2 (node B, 00:04–00:05Z).
+- **Low-LR deliveries.** 4B (node F `/data/dev2/runs/af/4b/soup`): `4b-SDMLIB4-lrh` `de1ab06b…`, `4b-LHS17ML-lrh`
+  `a9ab8c81…`, `4b-LHS17IB4X-lrh` `77f3dba1…`, `4b-SDML-lrh` `ff44487d…`; `4b-LHS17IB4-lrq` `f95c15e6…` was built on node
+  C by the 4B owner after the factory's build hit a lease precondition (GPU6 had gone to 27B). 9B
+  (`/data/dev2/runs/af/9b/soup`): node A `KIB4-lrh` `7c27cd54…`, `KIB4-lrh-a40` `7878d03f…`, `KIB4-lrq-a40` `1dd8cc3b…`
+  (one seed); node B `KIB4-lrhh` `0bd35ed6…`, `KIB4-lrhh-a40` `15892170…` → 9B owner e28aa509.
+- **GPU-h (launch receipts, wall clock × one GPU):** training, preflights and merges 84.6 (node A 23.6, node B 21.0,
+  node C 34.6, node F 5.5); Index ≈ 4.8 (`AF-KF-a40` 2.71, the factory's share of `AF-4b-LHS17IB4ML` ≈ 1.9, parity
+  gates). **Total ≈ 89.5 of the 130 GPU-h approved.**
+- **Continuation steps (amendment 11 backlog, ready and locked on node B; mirror `7eb2a7037`):**
+  1. When a node A / B GPU is idle > 20 min and the 4B owner / 27B don't claim it (COORDINATION 04:58 / 05:55 rules),
+     launch `AF_NODE=b AF_SIZE=9b bash <mirror>/…/v2/af/ops/af-chain.sh launch <mirror> <gpu> KIB4-lrhh:s3:25` (then
+     `KIB4-lrhh:s4:26`, `KXH:s1:27`, `KXH:s2:28`; KX is locked on node B only).
+  2. When a pair ends, build its arm soup on node B (CPU, `af-soup.sh`, no α point): `KXH` from its two seeds;
+     `KIB4-lrhh-x4` = `[soup:KIB4-lrhh × 2, soup of s3–s4 × 2]`. Post the names and hashes for the 9B owner.
+  3. Keep a standing backlog of ≥ 4 ready arms (COORDINATION 04:58), commit state every ≤ 30 min, never `pkill` by
+     pattern on shared nodes (stop chains by their recorded process group), lease-check every GPU first.
+
 ## 2026-10-02 23:40Z (07:40 UTC+8) — SDML-lrh delivered; last seeds running
 
 - `4b-SDML-lrh` s1 / s2 DONE (23:13 / 23:10Z); soup `ff44487d…` built and copied to node F. `4b-LHS17IB4-lrq` s1 DONE
