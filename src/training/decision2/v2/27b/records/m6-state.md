@@ -57,9 +57,13 @@
   ⅙ each), read first (≈ 14:20Z). +30 GPU-h asked. Generic chain **`/tmp/d2w/cand.sh ARM`** (member lists and weights
   for every preregistered candidate except X8-ML; `CAND_PARITY_GPU` / `CAND_INDEX_GPUS` start parity and the run).
 - **01:45Z: M9 amendment 4** (`d5703f30f`): `M9-IB14ML-lrh` / `M9-IB124ML-lrh` s5 / s6 (half LR, M7's mixtures; cap
-  19 / 22; `m8-arm.sh` knows them) and `X9-LRHALL` (four half-LR arms, ¼ each). **Launch only after the +90 GPU-h
-  approval** (COORDINATION 09:40); node F / A first; copy `a20ib14ml` / `a20ib124ml` there (`/tmp/d2w/xfer.sh d f
-  <path>`); then set their node in `cand.sh`'s `src_of` before `cand.sh X9-LRHALL`.
+  19 / 22) and `X9-LRHALL` (four half-LR arms, ¼ each). **Approved +100 GPU-h (M9 350) at COORDINATION 09:38.**
+- **02:20Z: launched on node B** (launcher `f1250bf84`: node B GPU0–7 in the M6 allocation; idle > 20 min after the
+  09:58 assignment): `M9-IB14ML-lrh-s5` GPU4 (pid 1034066), `M9-IB124ML-lrh-s5` GPU6 (pid 1034080); preflights pass.
+  Node B seeds have no relay (cand.sh reads their COMPLETE / BEST on node B; a capped one needs its BEST by hand).
+  **s6 waiters** (`/tmp/d2w/launch-wait.sh`, logs `logs/launch-wait-IB1*ML-lrh-s6.log`): `M9-IB14ML-lrh-s6` on node F
+  GPU4 after M8-IB-s4 (≈ 07:40Z), `M9-IB124ML-lrh-s6` on node F GPU5 after M8-IB2-s4 (≈ 09:15Z), relays included;
+  both mixtures copied to node F (SHA-256 equal). `cand.sh` maps the s5 seeds to node B and the s6 seeds to node F.
 - **Waiters running (workstation, detached):** `score-wait.sh X7-IBxIB2xIB14ML` (log `logs/score-wait-X7.log`;
   scores with `M6_INDEX_BASE=M6-IBxIB2-m50` once all 8 shards end 0, prints only YES / no for lower bound > 0);
   `handover.sh "M8-IB14-s4 M8-IB14-s5" "6 7"` (≈ 04:50Z: released owners on node D GPU6–7 for the Index submission
