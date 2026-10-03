@@ -13,7 +13,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -67,27 +67,22 @@ class EmbeddingRequest:
 
 @dataclass(frozen=True)
 class EmbedItem:
-    """One input ready to run: token IDs (text) or prepared graph inputs (media).
-
-    ``ids`` bound admission and batches (empty for media); ``usage`` is the
-    response's ``input`` object; ``cache_key`` the content hash of everything
-    the vector depends on.
-    """
+    """One media or text input ready to run; ``ids`` bound admission and batches (empty for media)."""
 
     index: int
     modality: str
     ids: list[int]
-    usage: dict[str, Any] | None
     cache_key: str
     features: dict[str, np.ndarray] = field(default_factory=dict)
 
 
 @dataclass
 class EmbeddingPlanState:
-    """What ``finish`` needs: the request and, per input, its item position or its error."""
+    """What ``finish`` needs: the request and, per input, its item position or error, and its usage."""
 
     request: EmbeddingRequest
     slots: list[int | str]
+    usages: list[dict[str, Any] | None]
     representation: dict[str, Any]
 
 
@@ -300,46 +295,62 @@ def representation(
 def plan(
     surface_request: SurfaceRequest,
     request: EmbeddingRequest,
-    items: list[EmbedItem | str],
+    entries: list[tuple[Any, dict[str, Any] | None] | str],
     rep: dict[str, Any],
 ) -> SurfacePlan:
-    """A plan from one item or item error code per input, in input order."""
-    runnable: list[EmbedItem] = []
+    """A plan from one ``(item, usage)`` or item error code per input, in input order.
+
+    Items are whatever the family runs (anything with ``ids`` and ``cache_key``).
+    """
+    runnable: list[Any] = []
     slots: list[int | str] = []
-    for item in items:
-        if isinstance(item, str):
-            slots.append(item)
+    usages: list[dict[str, Any] | None] = []
+    for entry in entries:
+        if isinstance(entry, str):
+            slots.append(entry)
+            usages.append(None)
         else:
+            item, usage = entry
             slots.append(len(runnable))
+            usages.append(usage)
             runnable.append(item)
     tokens = sum(len(item.ids) for item in runnable)
     return SurfacePlan(
         surface_request.surface,
         runnable,
         tokens,
-        EmbeddingPlanState(request, slots, rep),
+        EmbeddingPlanState(request, slots, usages, rep),
     )
 
 
-def finish(plan: SurfacePlan, results: Any) -> dict[str, Any]:
-    """The OpenAI list; failed inputs carry ``error`` in place, and ``meta.representation``."""
+def finish(
+    plan: SurfacePlan,
+    results: Any,
+    view: Callable[[Any], Sequence[float]] | None = None,
+) -> dict[str, Any]:
+    """The OpenAI list: failed inputs carry ``error`` in place, plus ``meta.representation``.
+
+    ``view`` turns an item's result into the requested vector (for example a
+    Matryoshka view of a cached full-width embedding); results are shared with
+    the result cache and never mutated.
+    """
     state: EmbeddingPlanState = plan.state
     data = []
-    for index, slot in enumerate(state.slots):
+    for index, (slot, usage) in enumerate(zip(state.slots, state.usages, strict=True)):
         entry: dict[str, Any] = {"object": "embedding", "index": index}
         if isinstance(slot, str):
             entry["error"] = slot
         else:
             value = DEADLINE if results is DEADLINE else results[slot]
-            item: EmbedItem = plan.items[slot]
             if value is DEADLINE:
                 entry["error"] = DEADLINE_EXCEEDED
             elif value is None:
                 entry["error"] = INVALID_MODEL_OUTPUT
             else:
-                entry["embedding"] = encode_vector(value, state.request.encoding)
-            if item.usage is not None:
-                entry["input"] = dict(item.usage)
+                vector = view(value) if view is not None else value
+                entry["embedding"] = encode_vector(vector, state.request.encoding)
+            if usage is not None:
+                entry["input"] = dict(usage)
         data.append(entry)
     tokens = plan.input_tokens
     return {

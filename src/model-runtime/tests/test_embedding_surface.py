@@ -168,9 +168,9 @@ def test_finish_keeps_input_order_errors_and_representation():
     )
     usage = {"tokens": 3, "processed_tokens": 3, "truncated": False}
     items = [
-        embedding.EmbedItem(0, "text", [0, 3, 1], usage, "k0"),
+        (embedding.EmbedItem(0, "text", [0, 3, 1], "k0"), usage),
         "max_length_exceeded",
-        embedding.EmbedItem(2, "text", [0, 5, 1], usage, "k2"),
+        (embedding.EmbedItem(2, "text", [0, 5, 1], "k2"), usage),
     ]
     rep = embedding.representation("sha", 3, 8, True)
     plan = embedding.plan(request({"input": ["a", "b", "c"]}), parsed, items, rep)

@@ -258,7 +258,7 @@ class OmniModel(LoadedModel):
 
     def _item(
         self, entry: embedding.EmbeddingInput, parsed: embedding.EmbeddingRequest
-    ) -> embedding.EmbedItem | str:
+    ) -> tuple[embedding.EmbedItem, dict[str, Any] | None] | str:
         if entry.error is not None:
             return entry.error
         if entry.modality == "text":
@@ -268,26 +268,26 @@ class OmniModel(LoadedModel):
                 return encoded
             ids, usage = encoded
             key = embedding.content_key(self.info.model_sha256, "text", ids)
-            return embedding.EmbedItem(entry.index, "text", ids, usage, key)
+            return embedding.EmbedItem(entry.index, "text", ids, key), usage
         assert entry.data is not None
         key = embedding.content_key(self.info.model_sha256, entry.modality, entry.data)
         if entry.modality == "image":
             pixels = self.image.pixels(entry.data)
             if isinstance(pixels, str):
                 return pixels
-            return embedding.EmbedItem(
-                entry.index, "image", [], None, key, {"pixel_values": pixels}
+            return (
+                embedding.EmbedItem(
+                    entry.index, "image", [], key, {"pixel_values": pixels}
+                ),
+                None,
             )
         features = self.audio.features(entry.data, entry.media_type)
         if isinstance(features, str):
             return features
-        return embedding.EmbedItem(
-            entry.index,
-            "audio",
-            [],
+        features_by_graph = {"clap": features.clap, "whisper": features.whisper}
+        return (
+            embedding.EmbedItem(entry.index, "audio", [], key, features_by_graph),
             None,
-            key,
-            {"clap": features.clap, "whisper": features.whisper},
         )
 
     def run(self, items: list[Any], shared_prefix: int = 0) -> list[Any]:
