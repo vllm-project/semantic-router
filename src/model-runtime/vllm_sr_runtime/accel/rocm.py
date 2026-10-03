@@ -23,6 +23,7 @@ FUSED = (
     "attn_prep",
     "gated_rmsnorm",
     "sigmoid_gate",
+    "rotary_half",
 )
 FUSED_GATED_DELTA = ("gdn_prep",)
 
