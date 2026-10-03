@@ -44,3 +44,14 @@ With vLLM installed, run the connector integration check separately:
 ```bash
 PYTHONPATH=. python3 -m unittest src.kv_connector.tests.vllm_connector_integration
 ```
+
+On a two-GPU CUDA host, exercise the published mapper geometry and cache write
+path with an explicit artifact directory:
+
+```bash
+PYTHONPATH=. python3 -m src.kv_connector.gpu_probe --artifact /path/to/mapper-artifact
+```
+
+The probe publishes synthetic source KV from GPU 0, loads it through the local
+snapshot store, maps all target layers onto GPU 1, and compares the first
+target layer against a CPU reference. It does not start vLLM or measure TTFT.
