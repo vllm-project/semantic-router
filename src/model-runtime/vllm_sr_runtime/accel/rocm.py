@@ -1,7 +1,8 @@
 """ROCm accelerator (MI300X / MI325X, gfx942). Validated by the parity records.
 
 On gfx942 with Triton installed it adds the fused element-wise kernels of
-``triton_gfx942`` (bit-exact against the eager ops under BF16 autocast). The
+``triton_gfx942`` (bit-exact against the eager ops under BF16 autocast) and
+the ``fp64_accumulate`` convolution variant of ``triton_fp64_conv``. The
 gated-delta prep reproduces causal-conv1d's ROCm build, so it is registered only
 where the convolution and the chunked gated delta rule come from causal-conv1d
 and FLA, as in the released runtime.
@@ -51,4 +52,15 @@ class ROCmAccelerator(GPUAccelerator):
             kernels.register(
                 Kernel(name, getattr(fused, name), "triton-gfx942", exact=True)
             )
+        from .triton_fp64_conv import FP64_ACCUMULATE, fp64_conv
+
+        kernels.register(
+            Kernel(
+                "causal_conv1d",
+                fp64_conv(kernels.select("causal_conv1d").fn),
+                "triton-gfx942-fp64",
+                exact=True,
+                variant=FP64_ACCUMULATE,
+            )
+        )
         return kernels

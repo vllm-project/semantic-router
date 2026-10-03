@@ -10,6 +10,7 @@ from torch import nn
 
 from ...plugins.base import (
     Accelerator,
+    BackboneSpec,
     DeviceInfo,
     EncoderBatch,
     EncoderOutput,
@@ -19,12 +20,15 @@ from ...plugins.base import (
     ForwardBatch,
     ForwardOutput,
     ModelSpec,
+    TreeBatch,
+    TreeOutput,
 )
 from ...scheduler.planner import padded
 from . import fast, models
+from .encoder import EncoderGraphs
 from .models.lora import attach
 from .models.tree import Tree
-from .weights import keep_linear_bf16, load_adapter, load_backbone
+from .weights import cast_parameters, keep_linear_bf16, load_adapter, load_backbone
 
 
 class NativeEngineModel(EngineModel):
@@ -36,8 +40,10 @@ class NativeEngineModel(EngineModel):
         spec: ModelSpec,
         options: EngineOptions,
         residency: dict[str, int] | None,
+        branches: dict[str, nn.Module] | None = None,
     ):
         self.backbone = backbone
+        self.branches = branches or {}
         self.accelerator = accelerator
         self.device_info = device_info
         self.device = accelerator.torch_device(device_info)
@@ -46,12 +52,17 @@ class NativeEngineModel(EngineModel):
         self.residency = residency
         self.kernels = accelerator.kernels(device_info)
         self.kernels.allow_approximate = not options.exact_kernels_only
-        backbone.kernels = self.kernels
+        self.kernels.use_variants(spec.kernel_variants)
+        for module in (backbone, *self.branches.values()):
+            module.kernels = self.kernels
         self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
+        self.encoder_graphs: EncoderGraphs | None = None
         if self.device.type == "cuda" and not spec.encoder:
             self._install_fast()
+        if self.device.type == "cuda" and spec.encoder and options.graphs:
+            self.encoder_graphs = EncoderGraphs(backbone, self.device)
 
     def _install_fast(self) -> None:
         """The exact GPU fast path (``fast.py``): fused layers, lean LoRA, host masks and graphs."""
@@ -73,6 +84,8 @@ class NativeEngineModel(EngineModel):
         out: dict[str, Any] = {"kernels": self.kernels.describe(), **self.fast}
         if self.graphs is not None:
             out["graphs"] = self.graphs.receipt()
+        if self.encoder_graphs is not None:
+            out["encoder_graphs"] = self.encoder_graphs.receipt()
         return out
 
     def autocast(self) -> AbstractContextManager[Any]:
@@ -84,32 +97,85 @@ class NativeEngineModel(EngineModel):
 
     supports_shared_context = True
 
+    def _run_tree(
+        self, prefix: torch.Tensor, suffixes: list[torch.Tensor], padded_exact: bool
+    ) -> torch.Tensor:
+        """The prefix once and every suffix from it, packed in one row; the suffix rows ``[n, width, H]``."""
+        lengths = [len(suffix) for suffix in suffixes]
+        packed = torch.cat([prefix, *suffixes])[None].to(self.device)
+        tree = Tree(
+            len(prefix), lengths, padded(max(lengths)), self.device, padded_exact
+        )
+        hidden = self.backbone.forward_tree(packed, tree)
+        return tree.rows(hidden[0, len(prefix) :])
+
     def _forward_tree(self, batch: ForwardBatch) -> ForwardOutput:
         """The batch as one shared-context tree: its first ``shared_prefix`` tokens computed once."""
         prefix, lengths = batch.shared_prefix, batch.lengths
-        suffix = [length - prefix for length in lengths]
-        width = padded(max(suffix))
         ids = batch.input_ids
-        packed = torch.cat(
-            [ids[0, :prefix]]
-            + [ids[row, prefix:length] for row, length in enumerate(lengths)]
-        )[None].to(self.device)
-        tree = Tree(
-            prefix,
-            suffix,
-            width,
-            self.device,
-            padded_exact=any(length != padded(max(lengths)) for length in lengths),
-        )
         gather = (batch.gather - prefix).clamp(min=0).to(self.device)
         query = (batch.query - prefix).to(self.device)
         with torch.inference_mode(), self.autocast():
-            hidden = self.backbone.forward_tree(packed, tree)
-            rows_hidden = tree.rows(hidden[0, prefix:])
+            rows_hidden = self._run_tree(
+                ids[0, :prefix],
+                [ids[row, prefix:length] for row, length in enumerate(lengths)],
+                padded_exact=any(length != padded(max(lengths)) for length in lengths),
+            )
             rows = torch.arange(rows_hidden.shape[0], device=rows_hidden.device)
             gathered = rows_hidden[rows[:, None], gather]
             queried = rows_hidden[rows, query]
         return ForwardOutput(gathered=gathered, query=queried)
+
+    def tree(self, batch: TreeBatch) -> TreeOutput:
+        method = "forward_forest" if batch.layout == "rows" else "forward_tree"
+        if not hasattr(self.backbone, method):
+            raise NotImplementedError(
+                f"the native {self.spec.backbone.model_type!r} backbone has no {batch.layout} tree forward"
+            )
+        width = max(len(block) for block in batch.blocks)
+        with torch.inference_mode(), self.autocast():
+            if batch.layout == "rows":
+                return TreeOutput(hidden=self._tree_rows(batch))
+            hidden = None
+            for owner, prefix in enumerate(batch.prefixes):
+                members = [i for i, o in enumerate(batch.owners) if o == owner]
+                if not members:
+                    continue
+                rows = self._run_tree(
+                    torch.tensor(prefix, dtype=torch.long),
+                    [torch.tensor(batch.blocks[i], dtype=torch.long) for i in members],
+                    padded_exact=False,
+                )
+                if hidden is None:
+                    hidden = rows.new_zeros((len(batch.blocks), width, rows.shape[-1]))
+                span = min(width, rows.shape[1])
+                hidden[members, :span] = rows[:, :span]
+        return TreeOutput(hidden=hidden)
+
+    def _tree_rows(self, batch: TreeBatch) -> torch.Tensor:
+        """``layout: rows``: left-padded prefix rows and right-padded blocks (``models/forest.py``)."""
+
+        def padded_rows(sequences: list[list[int]], left: bool):
+            width = max(len(sequence) for sequence in sequences)
+            ids = torch.zeros((len(sequences), width), dtype=torch.long)
+            mask = torch.zeros((len(sequences), width), dtype=torch.long)
+            for row, sequence in enumerate(sequences):
+                cut = (
+                    slice(width - len(sequence), width)
+                    if left
+                    else slice(0, len(sequence))
+                )
+                ids[row, cut] = torch.tensor(sequence, dtype=torch.long)
+                mask[row, cut] = 1
+            return ids.to(self.device), mask.to(self.device)
+
+        prefix_ids, prefix_mask = padded_rows(batch.prefixes, left=True)
+        block_ids, block_mask = padded_rows(batch.blocks, left=False)
+        owner = torch.tensor(batch.owners, dtype=torch.long, device=self.device)
+        _, blocks = self.backbone.forward_forest(
+            prefix_ids, prefix_mask, block_ids, block_mask, owner
+        )
+        return blocks
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
@@ -136,34 +202,77 @@ class NativeEngineModel(EngineModel):
         return ForwardOutput(gathered=gathered, query=queried)
 
     def encode(self, batch: EncoderBatch) -> EncoderOutput:
-        """Hidden states at the batch's exits; packed rows stay packed, padded rows padded."""
-        backbone = self.backbone
+        """Hidden states at the batch's exits, through its branch if it names one.
+
+        Packed rows stay packed and padded rows padded.
+        """
+        backbone = (
+            self.backbone if batch.branch is None else self.branches[batch.branch]
+        )
         if not hasattr(backbone, "encode"):
-            raise NotImplementedError(
-                f"the native {backbone.model_type!r} backbone is not an encoder"
-            )
-        input_ids = batch.input_ids.to(self.device)
+            return self._encode_decoder(batch)
+        exits = tuple(batch.layers) or (backbone.num_layers,)
         if batch.lengths is not None:
-            if sum(batch.lengths) != input_ids.numel():
+            if sum(batch.lengths) != batch.input_ids.numel():
                 raise ValueError("packed lengths do not cover the input IDs")
+            if self.encoder_graphs is not None and batch.branch is None:
+                with torch.inference_mode(), self.autocast():
+                    hidden = self.encoder_graphs(
+                        batch.input_ids, batch.lengths, exits, batch.normalize_exits
+                    )
+                return EncoderOutput(hidden=hidden)
+            input_ids = batch.input_ids.to(self.device)
             layout = backbone.packed(batch.lengths, self.device)
         else:
+            input_ids = batch.input_ids.to(self.device)
             rows, width = input_ids.shape
             layout = backbone.padded(batch.attention_mask, rows, width, self.device)
         with torch.inference_mode(), self.autocast():
-            hidden = backbone.encode(
-                input_ids, layout, batch.layers, batch.normalize_exits
-            )
+            hidden = backbone.encode(input_ids, layout, exits, batch.normalize_exits)
         return EncoderOutput(hidden=hidden)
 
+    def _encode_decoder(self, batch: EncoderBatch) -> EncoderOutput:
+        """A decoder's last layer (embedders such as Qwen3-Embedding): right-padded causal rows.
+
+        Causal attention never reads a later position, so padding changes no
+        real token; packed requests come back packed.
+        """
+        last = len(self.backbone.layers)
+        if set(batch.layers) - {last}:
+            raise ValueError(f"a decoder backbone serves its last layer ({last}) only")
+        if batch.lengths is not None:
+            width = max(batch.lengths)
+            mask = torch.arange(width)[None, :] < torch.tensor(batch.lengths)[:, None]
+            input_ids = torch.zeros(mask.shape, dtype=torch.long)
+            input_ids[mask] = batch.input_ids.cpu()
+        else:
+            input_ids, mask = batch.input_ids, batch.attention_mask.bool()
+        with torch.inference_mode(), self.autocast():
+            hidden = self.backbone(
+                input_ids.to(self.device), mask.to(self.device, torch.long)
+            )
+        if batch.lengths is not None:
+            hidden = hidden[mask.to(hidden.device)]
+        return EncoderOutput(hidden={last: hidden})
+
+    def _parameters(self) -> list[nn.Parameter]:
+        """Every parameter once (branches share the backbone's embedding)."""
+        unique = {
+            id(parameter): parameter
+            for module in (self.backbone, *self.branches.values())
+            for parameter in module.parameters()
+        }
+        return list(unique.values())
+
     def parameter_count(self) -> int:
-        return sum(parameter.numel() for parameter in self.backbone.parameters())
+        return sum(parameter.numel() for parameter in self._parameters())
 
     def memory_bytes(self) -> int:
-        return sum(p.numel() * p.element_size() for p in self.backbone.parameters())
+        return sum(p.numel() * p.element_size() for p in self._parameters())
 
     def close(self) -> None:
         self.backbone = None  # type: ignore[assignment]
+        self.branches = {}
         if self.device.type == "cuda":
             torch.cuda.empty_cache()
 
@@ -221,17 +330,49 @@ class NativeEngine(Engine):
                     lora.alpha / lora.rank,
                 )
             load_adapter(backbone, lora.weight_files)
+        branches = {
+            name: load_branch(backbone, backbone_spec, name)
+            for name in backbone_spec.branches
+        }
+        modules = (backbone, *branches.values())
         leftovers = [
-            name for name, parameter in backbone.named_parameters() if parameter.is_meta
+            name
+            for module in modules
+            for name, parameter in module.named_parameters()
+            if parameter.is_meta
         ]
         if leftovers:
             raise ValueError(f"backbone parameters were not loaded: {leftovers[:3]}")
-        backbone = backbone.float()
         target = accelerator.torch_device(device)
         residency = None
-        if target.type != "cpu" and spec.dtype.bf16_resident:
-            residency = keep_linear_bf16(backbone)
-        backbone = backbone.to(target).eval()
+        for module in modules:
+            module.float()
+            if target.type != "cpu" and spec.dtype.gpu_weights:
+                cast_parameters(module, getattr(torch, spec.dtype.gpu_weights))
+            elif target.type != "cpu" and spec.dtype.bf16_resident:
+                residency = keep_linear_bf16(module)
+            module.to(target).eval()
         return NativeEngineModel(
-            backbone, accelerator, device, spec, options, residency
+            backbone, accelerator, device, spec, options, residency, branches
         )
+
+
+def load_branch(backbone: nn.Module, spec: BackboneSpec, name: str) -> nn.Module:
+    """A branch of a branched encoder: its own layer stack and final norm over the backbone's embedding."""
+    branch = spec.branches[name]
+    with torch.device("meta"):
+        view = models.build(spec.model_type, spec.config)
+    holder = nn.Module()
+    holder.layers = view.layers
+    holder.final_norm = view.final_norm
+    load_backbone(
+        holder,
+        branch.weight_files,
+        renames={
+            f"{branch.layers}.": "layers.",
+            f"{branch.final_norm}.": "final_norm.",
+        },
+    )
+    view.embeddings = backbone.embeddings
+    view.rotary_emb = backbone.rotary_emb
+    return view

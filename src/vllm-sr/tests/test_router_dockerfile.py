@@ -110,7 +110,7 @@ def test_runtime_dependencies_come_from_the_runtime_package() -> None:
 
     assert "source=src/model-runtime/pyproject.toml" in runtime
     assert "pip install --no-deps /tmp/model-runtime" in runtime
-    assert "ARG MODEL_RUNTIME_EXTRAS=onnx" in runtime
+    assert "ARG MODEL_RUNTIME_EXTRAS=multimodal" in runtime
     assert "==" not in runtime
 
 

@@ -260,21 +260,21 @@ func TestVectorStoreRejectsStoresOfAnotherRepresentation(t *testing.T) {
 	}
 }
 
-func TestVectorStoreIdentityLeavesOtherBERTProvidersUntouched(t *testing.T) {
+// A provider that cannot state a content identity (a remote endpoint) keeps
+// the configured store namespace, whatever the model is called.
+func TestVectorStoreProvidersWithoutContentIdentityKeepTheirNamespace(t *testing.T) {
 	embed := func(context.Context, string) ([]float32, error) { return []float32{1, 0, 0}, nil }
-	for _, backend := range []string{"ort", config.EmbeddingBackendOpenAICompatible} {
+	for _, backend := range []string{"test", config.EmbeddingBackendOpenAICompatible} {
 		provider, err := embedding.NewFuncProvider(backend, 3, embed)
 		if err != nil {
 			t.Fatal(err)
 		}
-		cfg := &config.VectorStoreConfig{EmbeddingModel: "bert", EmbeddingDimension: 3}
-		identity, err := resolveVectorStoreEmbeddingIdentity(provider, cfg)
-		if err != nil || identity.Fingerprint != "" {
-			t.Fatalf("%s BERT acquired a new namespace: %+v %v", backend, identity, err)
-		}
-		cfg.EmbeddingModel = "mmbert"
-		if _, err = resolveVectorStoreEmbeddingIdentity(provider, cfg); !errors.Is(err, embedding.ErrIdentityUnsupported) {
-			t.Fatalf("%s mmbert bypassed content identity: %v", backend, err)
+		for _, model := range []string{config.DefaultEmbeddingModel, "qwen3"} {
+			cfg := &config.VectorStoreConfig{EmbeddingModel: model, EmbeddingDimension: 3}
+			identity, err := resolveVectorStoreEmbeddingIdentity(provider, cfg)
+			if err != nil || identity.Fingerprint != "" {
+				t.Fatalf("%s %s acquired a new namespace: %+v %v", backend, model, identity, err)
+			}
 		}
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding/vecmath"
 )
 
 // svmModel is an SVM artifact: the exact libsvm one-vs-one parameters
@@ -214,11 +216,11 @@ func (m *svmModel) classify(query []float64) (string, error) {
 
 func (c *ovrClassifier) decision(query []float64, dim int) float64 {
 	if c.weights != nil {
-		return dot(c.weights, query) - c.rho
+		return vecmath.Dot64(c.weights, query) - c.rho
 	}
 	var sum float64
 	for i, alpha := range c.alpha {
-		sum += alpha * math.Exp(-c.gamma*squaredDistance(c.supportVectors[i*dim:(i+1)*dim], query))
+		sum += alpha * math.Exp(-c.gamma*vecmath.SquaredDistance64(c.supportVectors[i*dim:(i+1)*dim], query))
 	}
 	return sum - c.rho
 }
@@ -230,9 +232,9 @@ func (s *svcModel) vote(query []float64, dim int, rbf bool, gamma float64) int {
 	for i := range kernels {
 		vector := s.supportVectors[i*dim : (i+1)*dim]
 		if rbf {
-			kernels[i] = math.Exp(-gamma * squaredDistance(vector, query))
+			kernels[i] = math.Exp(-gamma * vecmath.SquaredDistance64(vector, query))
 		} else {
-			kernels[i] = dot(vector, query)
+			kernels[i] = vecmath.Dot64(vector, query)
 		}
 	}
 	classes := len(s.starts) - 1

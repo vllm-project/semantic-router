@@ -172,9 +172,9 @@ func TestFitsInputSharesTheViewsCall(t *testing.T) {
 	long := strings.Repeat("fits long ", 5)
 	before := len(services.embedCalls())
 	for text, want := range map[string]bool{"fits short query": true, long: false} {
-		fits, err := checker.FitsInput(ctx, text)
-		if err != nil || fits != want {
-			t.Fatalf("FitsInput(%q) = %v, %v", text, fits, err)
+		fits, checkErr := checker.FitsInput(ctx, text)
+		if checkErr != nil || fits != want {
+			t.Fatalf("FitsInput(%q) = %v, %v", text, fits, checkErr)
 		}
 	}
 	vector, err := view.Embed(ctx, long)
