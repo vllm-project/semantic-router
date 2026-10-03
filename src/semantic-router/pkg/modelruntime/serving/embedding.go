@@ -325,7 +325,13 @@ func (p *EmbeddingProvider) EmbedWithOptions(ctx context.Context, text string, o
 // FitsInput reports whether the model reads text whole at the default view.
 // The answer comes with the vector, which the cache keeps for the next call.
 func (p *EmbeddingProvider) FitsInput(ctx context.Context, text string) (bool, error) {
-	embedded, err := p.embed(ctx, []modelservice.EmbedInput{{Text: text}}, p.options)
+	return p.FitsInputWithOptions(ctx, text, p.options)
+}
+
+// FitsInputWithOptions reports whether the model reads text whole, with the
+// vector of another declared view.
+func (p *EmbeddingProvider) FitsInputWithOptions(ctx context.Context, text string, options embedding.Options) (bool, error) {
+	embedded, err := p.embed(ctx, []modelservice.EmbedInput{{Text: text}}, options)
 	if err != nil {
 		return false, err
 	}

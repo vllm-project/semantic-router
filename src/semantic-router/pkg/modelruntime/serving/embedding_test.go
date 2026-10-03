@@ -65,7 +65,7 @@ func (f *embedServices) Embed(_ context.Context, deployment string, request mode
 		vector[1] = float32(dimension)
 		vector[2] = float32(request.Layer)
 		response.Embeddings[i] = vector
-		response.Inputs[i] = &modelservice.InputUsage{Tokens: 4, ProcessedTokens: 4}
+		response.Inputs[i] = &modelservice.InputUsage{Tokens: 4, ProcessedTokens: 4, Truncated: len(strings.Fields(input.Text)) > 8}
 	}
 	return response, nil
 }
@@ -151,6 +151,43 @@ func TestEmbeddingServesViewsBatchesAndCaches(t *testing.T) {
 	again, _ := provider.Embed(ctx, "a")
 	if again[0] != 1 || len(services.embedCalls()) != before+2 {
 		t.Fatalf("cached vector changed or recomputed: %v", again)
+	}
+}
+
+// The semantic cache asks whether a query is read whole through its view;
+// the answer comes from the call that embeds the query next.
+func TestFitsInputSharesTheViewsCall(t *testing.T) {
+	services := &embedServices{cards: map[string]modelservice.ModelCard{"emb-fits": embeddingCard("emb-fits", "text")}}
+	ctx := context.Background()
+	provider, err := New(services, nil).Embedding(ctx, embeddingSpec("emb-fits"), 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer provider.Close()
+	view := embedding.WithOptions(provider, embedding.Options{Dimension: 4, Layer: 6})
+	checker, ok := view.(embedding.InputChecker)
+	if !ok {
+		t.Fatal("an output view does not report input truncation")
+	}
+	long := strings.Repeat("fits long ", 5)
+	before := len(services.embedCalls())
+	for text, want := range map[string]bool{"fits short query": true, long: false} {
+		fits, err := checker.FitsInput(ctx, text)
+		if err != nil || fits != want {
+			t.Fatalf("FitsInput(%q) = %v, %v", text, fits, err)
+		}
+	}
+	vector, err := view.Embed(ctx, long)
+	calls := services.embedCalls()[before:]
+	if err != nil || len(vector) != 4 || len(calls) != 2 || calls[1].Dimensions != 4 || calls[1].Layer != 6 {
+		t.Fatalf("the view's vector was not shared with its truncation check: %v %v %+v", vector, err, calls)
+	}
+	fixed, err := embedding.NewFuncProvider("test", 2, func(context.Context, string) ([]float32, error) { return []float32{1, 0}, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = embedding.WithOptions(fixed, embedding.Options{}).(embedding.InputChecker).FitsInput(ctx, long); !errors.Is(err, binding.ErrCapability) {
+		t.Fatalf("a provider that cannot tell reported %v", err)
 	}
 }
 
