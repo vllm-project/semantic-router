@@ -21,12 +21,12 @@
 >
 > | 尺寸 | 名字 | 当前 `main`（权重来源） |
 > | --- | --- | --- |
-> | 0.6B | `vllm-sr/Decision-2.0-Kai-0.6B` | `d06cf74b`（运行时：阶段 A + 可选共享上下文开关 + ROCm 修复；权重同 2.0 首发；Index 16.29） |
-> | 0.8B | `vllm-sr/Decision-2.0-Eos-0.8B` | `34e2db97`（运行时：阶段 A + 开关 + ROCm 修复；权重 M16 `08b-RA-a75`；20.15） |
-> | 2B | `vllm-sr/Decision-2.0-Sol-2B` | `23cbe9f9`（运行时：阶段 A + 开关 + ROCm 修复；权重 M15 `2b-RASDML`；29.53） |
-> | 4B | `vllm-sr/Decision-2.0-Nox-4B` | `7fc0023a`（ROCm 修复；权重 `4b-LRHxALL`，43.77，同尺寸第 1） |
-> | 9B | `vllm-sr/Decision-2.0-Lux-9B` | `7c6792f7`（ROCm 修复；权重 M10 `KIB4-a40`，46.26） |
-> | 27B | `vllm-sr/Decision-2.0-Vega-27B` | `477e90f5`（ROCm 修复；权重 `M6-IBxIB2-m50`，56.47，全球第 3） |
+> | 0.6B | `vllm-sr/Decision-2.0-Kai-0.6B` | `cd49ea38`（运行时：阶段 A + 可选共享上下文开关 + ROCm 修复 + 图缓存不淘汰修复；权重同 2.0 首发；16.29） |
+> | 0.8B | `vllm-sr/Decision-2.0-Eos-0.8B` | `3594047d`（同上运行时修复；权重 M16 `08b-RA-a75`；20.15） |
+> | 2B | `vllm-sr/Decision-2.0-Sol-2B` | `64235bef`（同上运行时修复；权重 M15 `2b-RASDML`；29.53） |
+> | 4B | `vllm-sr/Decision-2.0-Nox-4B` | `25e8f67d`（同上运行时修复；权重 `4b-LRHxALL`；43.77，同尺寸第 1） |
+> | 9B | `vllm-sr/Decision-2.0-Lux-9B` | `78bf3c03`（同上运行时修复；权重 M10 `KIB4-a40`；46.26） |
+> | 27B | `vllm-sr/Decision-2.0-Vega-27B` | `7aec49ae`（同上运行时修复；权重 `M6-IBxIB2-m50`；56.47，全球第 3） |
 >
 > 下表各行保留了历史上的旧名字和旧版本号，仅作记录。
 

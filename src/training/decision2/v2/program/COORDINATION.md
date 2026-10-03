@@ -205,6 +205,112 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 18:14 — **Eviction fix DONE (843eb8f6 ended).** All six `main`s now run the no-eviction runtime, with weights unchanged:
+  - Kai `cd49ea38`, Eos `3594047d`, Sol `64235bef`, Nox `25e8f67d`, Lux `78bf3c03`, Vega `7aec49ae`;
+  - each passed parity 10,653 / 10,653 (also with an 8-graph cap), bench 400 / 400, the Hub smoke, the 86-request gate, card and links;
+  - the crash reproduced 6 / 6 on the old Eos runtime, and the fixed runtime runs clean.
+  - **PR #48** (head `dc3b997f`) and the dataset (`09ef6f55`) pin all six new revisions; the spot checks pass.
+  - **Integration** is at `831778079`.
+  - **Open:** throughput under Index-like traffic once the graph cache is full. The native engine's 4,096-token graph cap addresses it; that is a performance follow-up.
+
+- 2026-10-03 18:10 — **Eviction-fix owner (843eb8f6): EVICTION FIX DONE. All six repositories carry the
+  no-eviction runtime, and PR #48 and the dataset pin them. I am no longer the sole writer of the six repos.** No
+  job, lease or GPU of mine is left (nodes A, B and C released).
+  - **New `main`s** (runtime-only, weights byte-identical, only `decision2/fast.py` changed, README unchanged; each
+    `post_checks=ok`):
+    - Eos `vllm-sr/Decision-2.0-Eos-0.8B@3594047d69f476f1d01cf84c593e213fc3a4dfe0`
+    - Nox `vllm-sr/Decision-2.0-Nox-4B@25e8f67d1b486c647222df3aac640d2d5d736bbe`
+    - Lux `vllm-sr/Decision-2.0-Lux-9B@78bf3c03d9147aeb30b641edfe0e30ed04887ca5`
+    - Vega `vllm-sr/Decision-2.0-Vega-27B@7aec49ae11a18741706da549ab626b9052795fe7`
+    - Sol `vllm-sr/Decision-2.0-Sol-2B@64235bef55dad29387dd16da7c90e038bf2f0972`
+    - Kai `vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764`
+  - **Evidence per size:**
+    - parity 10,653 / 10,653 at 0.0, on the default path and with the graph cache cut to 8 graphs;
+    - bench 400 / 400 bit-identical (p50 within ±0.1 ms; Vega 71.11 → 71.06 ms);
+    - examples bit-identical to the superseded package on the same GPU;
+    - Hub `trust_remote_code` smoke under 5.17 / 5.18; card HTTP; links 8 / 8; collection; gate evaluate;
+    - 86-request gate 86 / 86 at 0.0.
+  - **Repro:** the released Eos `34e2db97` crashed on 6 of 6 Index shards (`Memory access fault by GPU`). The fixed
+    runtime finished both shards it ran.
+  - **Index:** every new revision passes the 2,160-row spot check: no status change, flips are near ties only, max
+    |Δp| ≤ 0.0143. The 60 heaviest requests give the same statuses as before.
+    - So all six pins moved, Kai's too (from `881bee41`).
+    - Dataset: `vllm-sr/decision-2.0-decision-index` @ `09ef6f55`.
+    - PR: https://github.com/apolinario/decision-index/pull/48 head `dc3b997f` (README and body).
+  - **Code:**
+    - fix `fbedfded8`, tooling `fe9b40874`, record `dev2-runtime-a-2026-10-02.md` section 8 (`e2fe5197a`);
+    - branch `xunzhuo/decision-2-runtime-evict`, merged into integration `831778079`;
+    - PR #4481 untouched.
+
+- 2026-10-03 17:25 — **Model-runtime lead (54e49843): run `37106638338` finished with every test lane GREEN; ONE
+  push now, `63f2b8296`.**
+  - **Passed:**
+    - the `decision-runtime` Kind E2E, in the "Kubernetes Providers / model-runtime" lane, on GitHub runners;
+    - envoy-ai-gateway, Local Stack and Operator;
+    - Router contracts (core Go), all four native CPU contracts, CLI unit, CLI package, CI harness, E2E framework
+      and Quality / Source.
+  - **Failed:** only the three known jobs (Security, the Model Runtime component, Generated Contracts), plus the
+    Gates.
+  - **The push contains** fixes for those three, the Hub cache link fix, `--autotune-cache`, the CPU golden answers,
+    design doc updates, and a merge of the 2 new `main` commits (dashboard only).
+  - **Checked locally before pushing:**
+    - static checks against `origin/main` and the AST PR-diff scan (CLEAN);
+    - config schema, runtime client and docs-generated checks;
+    - runtime suite: 104 passed, 7 GPU deselected;
+    - Go `config`, `dsl`, `modelservice`, `headers` and `decision`.
+  - **No more pushes from anyone until this run finishes.**
+
+- 2026-10-03 17:05 — **Model-runtime lead (54e49843): real-package bug found and fixed; CPU goldens recorded; one
+  GPU requested.** No push yet: the CI run is in its E2E lanes, including `decision-runtime`. All fixes go out in
+  one push after it ends.
+  - **Bug.** Every Hub package was refused at verification ("package contains a link").
+    - **Cause:** current huggingface_hub links a repo's `blobs/` into a cache-wide Xet store. A snapshot's links
+      then resolve outside the repo directory.
+    - **Fix (`981d364ef`):** links may resolve anywhere inside the HF cache that holds the snapshot. The manifest
+      hashes are still checked, and links leaving the cache are still refused. A regression test reproduces the
+      two-level layout.
+    - CI never saw this because the fixtures are local packages.
+  - **CPU golden answers for all six pinned revisions** (`445383bc9`, `registry/golden_answers.json`).
+    - Recorded on node A with pushed code (`73e8b0cc1` image, CPU only), on plain copies of the released packages.
+    - Every package's `model_sha256` matched the built-in table, and all six answer sensibly (domain = code).
+    - This is the first run of the runtime on the real released packages, including Vega with its base.
+    - CPU references compare within 1e-3, because FP32 kernels round differently across AVX2 / AVX-512 / NEON.
+  - **`--autotune-cache` / `VLLM_SR_RUNTIME_AUTOTUNE_CACHE` (`6caae1503`).** It sets Triton's persisted autotuning
+    (`TRITON_CACHE_DIR`, `TRITON_CACHE_AUTOTUNING=1`) before FLA is imported, so processes that share the cache
+    answer the Qwen3.5 sizes identically. `tools/golden_answers.py` records the references.
+  - **GPU request (coordinator):** **1 MI300X / MI325X GPU for about 1 h**, on any node, for:
+    - ROCm golden answers for the six sizes;
+    - checking that two processes sharing one autotune cache answer Eos identically, where separate caches differ.
+    - The allocation table lists none for me, so I take nothing until you assign one. I lease it, pin
+      `HIP_VISIBLE_DEVICES`, and release it at once on request.
+  - **Remaining inference follow-ups** (batch-shape buckets, more `max_speed` kernels, the vLLM investigation) are
+    planned after CI is green. They go into the design doc's Phase plan if they don't fit this PR's CI cycle.
+
+- 2026-10-03 16:40 — **Eviction-fix owner (843eb8f6): Eos and Nox RELEASED; Lux is uploaded; repro final 6 / 6.**
+  - **Eos `vllm-sr/Decision-2.0-Eos-0.8B@3594047d69f476f1d01cf84c593e213fc3a4dfe0`** (supersedes `34e2db97`) and
+    **Nox `vllm-sr/Decision-2.0-Nox-4B@25e8f67d1b486c647222df3aac640d2d5d736bbe`** (supersedes `7fc0023a`): both
+    `post_checks=ok`.
+    - Weights are byte-identical; only `decision2/fast.py` changed, and the README is unchanged.
+    - Parity: 10,653 / 10,653 at 0.0 on the default path and with an 8-graph cache.
+    - Bench: 400 / 400 bit-identical (p50 Eos 5.99 → 5.97 ms, Nox 12.86 → 12.87 ms).
+    - Post-checks: examples bit-identical to the superseded package on the same GPU; Hub smoke 5.17 / 5.18; card
+      HTTP; links 8 / 8; collection; gate evaluate; 86-request gate 86 / 86 at 0.0.
+  - **Lux** is uploaded as `78bf3c03` (post-checks running). Vega's parity is on its third side, then the bench.
+    Sol and Kai have passed parity and bench and are staged; they ship after Vega, in order.
+  - **Repro, final:** the released Eos runtime crashed on **6 of 6** shards (groups 164–599, after 106–1,014
+    evictions, all `Memory access fault by GPU`). The fixed runtime ran 2 of 2 shards to the end: 1,253 groups
+    each, about 20,000 requests × 3 paths, about 125 graphs kept, about 30,000 refused captures, 0 evictions, no
+    crash. Node B is released.
+  - **PR #48 spot checks** of the new revisions run on node C GPU1–7 (Eos on GPU1–4, Nox on GPU5–7; IX1
+    `launch.sh extra`, 4 shards). The pins move only on a pass.
+
+- 2026-10-03 16:20 — **Coordinator → model-runtime lead (54e49843): a third CI failure on `73e8b0cc1`**, for your one
+  push.
+  - **`CI / Quality / Generated / Generated Contracts`:** `website/static/openapi/apiserver/apiserver.openapi.json is
+    stale. Run 'make api-docs-openapi' and commit the result.` (`tools/make/docs.mk:201`, `api-docs-check`).
+  - Run every generator the domain touches (`make api-docs-openapi`, plus any config, schema, docs or harness
+    generators) and fold the outputs into `de4e73430` before pushing.
+
 - 2026-10-03 16:15 — **Eviction-fix owner (843eb8f6): the crash REPRODUCES on a released package.**
   - **Setup:** Eos-0.8B `34e2db97` (the current `main`, released runtime, default limits) on node B. The Index panel
     runs in groups of 16, and each group goes through exact, batched and shared-context in one process.
