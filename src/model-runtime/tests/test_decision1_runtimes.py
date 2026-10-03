@@ -384,12 +384,14 @@ def test_one_over_long_question_fails_every_question(runtimes):
 
 
 def test_presets_answer_like_their_questions(packages, runtimes):
+    # One request each: rows of one batch may round differently on some CPUs.
     presets = pkg.presets(packages["vela"])
-    status, body = decide(
-        runtimes["vela"],
-        {"preset": {"preset": "hazard.weapons"}, "plain": presets["hazard.weapons"]},
-    )
-    assert status == 200 and body["answers"]["preset"] == body["answers"]["plain"]
+    answers = [
+        decide(runtimes["vela"], {"q": question})
+        for question in ({"preset": "hazard.weapons"}, presets["hazard.weapons"])
+    ]
+    assert [status for status, _ in answers] == [200, 200]
+    assert answers[0][1]["answers"] == answers[1][1]["answers"]
     assert model_of(runtimes["vela"]).info.presets == tuple(sorted(presets))
 
 
