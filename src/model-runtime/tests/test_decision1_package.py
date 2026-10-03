@@ -115,7 +115,7 @@ def test_tampered_and_linked_files_are_refused(qwen_package, tmp_path):
     with pytest.raises(PackageError, match="link"):
         pkg.verify(copy, None)
     os.remove(copy / "tokenizer.json")
-    with pytest.raises(PackageError, match="missing"):
+    with pytest.raises(PackageError, match="miss"):
         pkg.verify(copy, None)
 
 
@@ -215,3 +215,14 @@ def test_built_in_table_pins_all_seven_packages():
         assert bool(model.kernel_choices) == decoder
     route = builtin.lookup("Decision-1.0-Route-0.6B")
     assert route.manifest_sha256 and pkg.PRESETS_FILE in route.files
+
+
+def test_golden_references_cover_every_pin_and_device_class():
+    from vllm_sr_runtime.families.decision1.family import GOLDEN_QUESTIONS
+
+    for model in builtin.all_models("decision1"):
+        assert set(model.golden_answers) == {"cpu", "rocm"}, model.repo_id
+        for answers in model.golden_answers.values():
+            presets = {name for name in answers if name.startswith("preset:")}
+            assert set(answers) - presets == set(GOLDEN_QUESTIONS)
+            assert bool(presets) == model.repo_id.endswith("Route-0.6B")

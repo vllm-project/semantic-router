@@ -307,7 +307,10 @@ class TaskHeadsModel(LoadedModel):
         lengths = [len(ids) for ids in sequences]
         if LOGITS in output.outputs:
             return Rows({}, [], lengths, {LOGITS: output.outputs[LOGITS]})
-        hidden = output.outputs["last_hidden_state"][mask.bool()]
+        # Row slices, not a boolean gather: a parallel torch op right after a graph run
+        # contends with the graph engine's spinning threads for the same cores.
+        padded = output.outputs["last_hidden_state"]
+        hidden = torch.cat([padded[row, :length] for row, length in enumerate(lengths)])
         starts = [sum(lengths[:row]) for row in range(len(lengths))]
         return Rows({head.layer: hidden}, starts, lengths)
 

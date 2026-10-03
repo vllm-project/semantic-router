@@ -262,10 +262,10 @@ class ServedModel:
         self.scheduler.start()
         self.health.set("warming", "running the golden check")
         self.health.golden = golden_check(
-            self._golden_decisions,
+            self.golden_decisions,
             family.golden(package),
             placement.device.accelerator,
-            run_surface=self._golden_surface,
+            run_surface=self.golden_surface,
         )
         if self.health.golden.status == "failed":
             raise RuntimeError(self.health.golden.detail or "golden check failed")
@@ -318,9 +318,8 @@ class ServedModel:
                 profiles[self.config.profile] = entry()
         return profiles
 
-    def _golden_decisions(
-        self, state: Any, questions: dict[str, Any]
-    ) -> dict[str, Any]:
+    def golden_decisions(self, state: Any, questions: dict[str, Any]) -> dict[str, Any]:
+        """Answers to a golden decisions request on the exact profile, before readiness."""
         parsed = ParsedRequest(
             state, questions, None, "exact", False, time.monotonic(), self
         )
@@ -328,7 +327,8 @@ class ServedModel:
         results = self.submit_items(plan.items, None, "exact").result()
         return self.assemble(parsed, plan, results, 0.0, 0.0)["answers"]
 
-    def _golden_surface(self, surface: str, body: dict[str, Any]) -> dict[str, float]:
+    def golden_surface(self, surface: str, body: dict[str, Any]) -> dict[str, float]:
+        """The numbers of a golden surface response on the exact profile, before readiness."""
         assert self.model is not None
         request = SurfaceRequest(surface, body, None, "exact", False, time.monotonic())
         plan = self.model.plan_surface(surface, request)
