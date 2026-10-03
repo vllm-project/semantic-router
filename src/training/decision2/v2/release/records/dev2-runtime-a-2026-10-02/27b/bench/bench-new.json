@@ -1,29 +1,29 @@
 {
   "answers_file": "bench-new.answers.jsonl",
-  "answers_sha256": "131342e6ef3afd5276d34b66cc4d19faba7229b05c7863b749c70d78f95e98a5",
+  "answers_sha256": "d1aa080edac79b276ddd96f0a005bbb2e755a088b7c5cb76c3c57a15adb22ac0",
   "count": 400,
   "device_name": "",
   "fp32_master": false,
   "ids_sha256": "eed99a82102f2679efc132c34ef7719cf6d81999e5019c829c87be010452c3c7",
   "input_tokens_mean": 346.2825,
-  "items_per_s": 14.23579545683627,
+  "items_per_s": 13.862385601233658,
   "latency_ms": {
-    "max": 133.70366184972227,
-    "mean": 70.24545997672249,
-    "min": 64.19877707958221,
-    "p50": 69.18272585608065,
-    "p95": 71.5048429556191
+    "max": 121.37496378272772,
+    "mean": 72.13765572290868,
+    "min": 66.0164209548384,
+    "p50": 71.01700198836625,
+    "p95": 74.12434997968376
   },
-  "load_seconds": 147.4032705167774,
+  "load_seconds": 212.63415643805638,
   "memory_gib": {
-    "after_load": 60.856478691101074,
-    "load_peak": 60.90429973602295,
-    "request_peak": 61.49069118499756
+    "after_load": 71.07693767547607,
+    "load_peak": 71.17016887664795,
+    "request_peak": 71.71115016937256
   },
   "mode": "run",
   "model_name": "Decision-2.0-Vega-27B",
-  "package_manifest_sha256": "03d6f16ac9bbb9b269657b64d64b5719d54c3b493df2d6c630b28823cd13d098",
-  "parameter_bytes": 61288923136,
+  "package_manifest_sha256": "517947705e89157b9d0b82b7765cd9ad5af2a51de47b6ac1bffb3308eda8b478",
+  "parameter_bytes": 68759502848,
   "passed": true,
   "profile": "qwen-adapter",
   "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
@@ -66,12 +66,12 @@
       "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
       "triton": "3.7.1+gitf0b55c07",
       "triton_cache_autotuning": "1",
-      "triton_cache_dir": "/data/dev2/runs/runtime-a/triton/27B-bench-new-20261002T132320Z"
+      "triton_cache_dir": "/data/dev2/runs/runtime-a/triton/27B-bench-new-20261002T195638Z"
     },
     "numpy": "2.3.5",
     "parameter_dtypes": {
       "bfloat16": 24350556160,
-      "float32": 3146952704
+      "float32": 5014597632
     },
     "peft": "0.21.0",
     "python": "3.12.13",

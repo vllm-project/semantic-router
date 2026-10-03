@@ -1,0 +1,16 @@
+{
+ "changed": [
+  "decision2/api.py",
+  "decision2/qwen.py",
+  "decision2/shared_ctx.py"
+ ],
+ "other": [],
+ "equal": {
+  "identity": true,
+  "parameters": true,
+  "profile": true,
+  "max_input_tokens": true
+ },
+ "readme_diff": [],
+ "ok": true
+}

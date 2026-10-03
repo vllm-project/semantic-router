@@ -1,0 +1,126 @@
+{
+  "builder_commit": "2ca62eb62f82e26cb408b8c93cc0cb6c81ab7974",
+  "card": {
+    "assets_receipt_sha256": "bf3d6d6452fe20c6c06afeffccccbcff18ce4e9f15f974a01707df19f597f044",
+    "excluded": [],
+    "figures_sha256": {
+      "assets/banner.png": "81d8d71be55d970cf3a0e37a1bf32de943c43ec6e8ceb38967f6dea40949e844",
+      "assets/index-areas.png": "539c8f989571ee2e6bce75009ff384eeb00afb6d19a400bdca3b8b78045ec9bd",
+      "assets/index-pareto.png": "06ff6e95c97d6ac6c90f6c2ab33bbca4415610a3f1f82b55aad42040bd10bbf9",
+      "assets/jevarena-types.png": "928ea3edb7984a7fd545837f421786a997276c59be847d4a9457e2330ae6698b",
+      "assets/jevarena.png": "a26d660196a487cbf1037a6bcff33e2d11b0793c3032ce5df50a3818c88265b2"
+    },
+    "index_sha256": "b1d4e9ef7e82713f564e642c92da19983d4b95d115c1195dc8e14224210eb05c",
+    "paired": {
+      "ci95": [
+        -0.46300322885810874,
+        6.060521519234475
+      ],
+      "delta": 1.87365018195662,
+      "replicates": 5000,
+      "sha256": "341fa28cc1df8cce8d1102f22facb7b8f15f646084ac352582447fa30dbcd241"
+    },
+    "readme_sha256": "13015618463f5d79c06147e07c2b72499780450f385c6f54bb8dcd90c8d54125",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "9bbf6e5e5d4d0dd46fefc71e7d820546ef73ebeb528d39246f6a722af25028e2"
+      },
+      {
+        "key": "autojev27",
+        "licence": "apache-2.0",
+        "report_sha256": "71dbd7fe3e1b73c6a3747d2d66aa151a9e7115e85c3b8adadaede6798547bc2c"
+      },
+      {
+        "key": "eikos27",
+        "licence": "mit",
+        "report_sha256": "a07e6b6bf7d1530c17af13ee4eb2e46e2ac3b32dabec61f071cfe5fd87bcfdf4"
+      },
+      {
+        "key": "jebadiah27",
+        "licence": "apache-2.0",
+        "report_sha256": "27ca2cb2340a202983bfe11e7119bc145fc84da5fe1e447c886badb8a42b2ab3"
+      }
+    ],
+    "tradeoffs": [
+      "Typed Choice (correct): 758/800 versus 800/800",
+      "mlx-diag non-English Choice (accuracy): 80.3% versus 80.6%",
+      "mlx-diag non-English Noul (accuracy): 85.7% versus 88.7%",
+      "Transfer: Media ideology (macro-F1): 58.7% versus 63.3%",
+      "Transfer: Persuasion (macro-F1): 56.7% versus 61.1%",
+      "Transfer: FLUTE figurative language (macro-F1): 85.9% versus 88.6%",
+      "Transfer: Wikipedia politeness (macro-F1): 50.2% versus 52.9%"
+    ]
+  },
+  "ended_utc": "2026-10-02T21:38:10.920028+00:00",
+  "files": 34,
+  "identity": {
+    "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+    "base": {
+      "files_sha256": {
+        "config.json": "191e0af232104ed8b65258cf3fb2b842e288008baca7633c11b82a1ac7203aab",
+        "crc32.txt": "b42dd291f5f98b05807e458f5b47849969a9b3326acbf0c97d28b05826740b83",
+        "generation_config.json": "e70c136c1b78ddc1fb0905bac8e733a4dc448d4f852a5dd75143fffc70be550e",
+        "merges.txt": "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d",
+        "model-00001-of-00018.safetensors": "ba0ce20aae489ad196733da5064bcdf159a1fe84f53336648196e1ebb7751b1c",
+        "model-00002-of-00018.safetensors": "06a148c01bfbe3faa14a5f184a7ff29a706f7ae1c8b2705d2058e26d17a001fb",
+        "model-00003-of-00018.safetensors": "2e1bf62cbcd406eaa64b60d10353e1f0ef4039d0976e56f05cabe953454f9968",
+        "model-00004-of-00018.safetensors": "511e34063187882659753c4d93f3859f93c019fd438d8813071921c81d9a3f1a",
+        "model-00005-of-00018.safetensors": "635cb53446dc74f219740fc59e18b774f877b803b9722e289ca62575a6efa701",
+        "model-00006-of-00018.safetensors": "0bc5214fac607f0e6cc92eec3789d4b8559410ef9fce66621ba8158e8410dae0",
+        "model-00007-of-00018.safetensors": "80b0c49033e9a0d5762562aa12f4acdb7f54da586f3d0110f28c48d91cf07892",
+        "model-00008-of-00018.safetensors": "7192c5b66185d3592927daabee1cc19e6f6e0ce75988ee20e824b624765fda79",
+        "model-00009-of-00018.safetensors": "af3c48cc37af44f3db6ae0579baf019180d48d9c527caa0a1f03ff85813a56d8",
+        "model-00010-of-00018.safetensors": "163490a76f3bea3a40855b7efc04ce6d27afaf1a34f0bbde495b9491f76457c9",
+        "model-00011-of-00018.safetensors": "5f3ae1b948aeee39da77aec558e8236cd65fe4d7cb7686a76bb007acc563c6d8",
+        "model-00012-of-00018.safetensors": "a3de1c7114677a8f5ac5c4892c90e8238ea5c1e2038c80e757dfc87c3902ca55",
+        "model-00013-of-00018.safetensors": "06ab79a41f74c9c5cb734816feb0c7fc364104b227165ee7391231e1155aa02a",
+        "model-00014-of-00018.safetensors": "4138ed94603065ba884bbcadedb04d7718bb40117e85e6f5c6fc5b9c05b7a85b",
+        "model-00015-of-00018.safetensors": "69224e27b9de4e7dbf6fc936c6eaae08447bda3b80a6c31a871ab451173afd22",
+        "model-00016-of-00018.safetensors": "73cb9a1089fb6155cb648609478d6633be8a5c7d9ca5a05bc8925ce8a553cefe",
+        "model-00017-of-00018.safetensors": "beb51f01056142ac4984bd800507b0dd0fd18de57f8e9ef6ea41d1a3598983a8",
+        "model-00018-of-00018.safetensors": "1d3479509e21494658f9b64d317f5ea8e55c4025d28c702d6c4d0b356ce8ea06",
+        "model.safetensors.index.json": "77042094076611b69791a610065f28b7013b8c621795fa86ddccc8bac7d1b9df",
+        "preprocessor_config.json": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+        "tokenizer.json": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3",
+        "tokenizer_config.json": "b11349aafa7cdc6a320767cf7ceb29ed82f7eda5d65e8e0819e76f0ce947bf27",
+        "video_preprocessor_config.json": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+        "vocab.json": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003"
+      },
+      "licence": "apache-2.0",
+      "redistribution": "not redistributed: the package pins the base by repository revision and per-file SHA-256, and it is fetched or supplied at load time",
+      "repo_id": "Qwen/Qwen3.8-27B",
+      "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+      "source_kind": "posttrained"
+    },
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "584697310502cd20e91728e69f724c028b47b95daf3790256dea3e434c48be82",
+    "readout": "head",
+    "temperature_by_type": null,
+    "text_parameter_count": 25624600064
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "0e90656f0e5b2a11a461d4ceb8f3a996c07813b5b643b0548adbc90d2f435414",
+  "package": "/data/dev2/runs/release/dev2-ras-27B-20261002T213625Z/package/Decision-2.0-Vega-27B",
+  "parameters": {
+    "external_base_text": 25624600064,
+    "loaded": 29365153792,
+    "packaged": {
+      "adapter": 3735289856,
+      "head": 5263872,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "fb52e3f63b4ee70d103e9aba6406111933b54ee5572701ea8eaca183036ccf70",
+    "status": "final"
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 29
+  },
+  "spec_sha256": "2132bc0108ed7b4c0e68e3617354a5312c5a4290671a76eb0e50b85e24ea73d3",
+  "started_utc": "2026-10-02T21:37:19.757347+00:00"
+}

@@ -1,0 +1,2 @@
+v2/release/specs/dev2-2b-ras.json 1013c4ca579b9c6f7552c6021bf480874a9cf47d16dd5b7a49a6f54820bd6386
+v2/release/records/dev2-runtime-a-2026-10-02/Decision-2.0-Sol-2B.decision.ras.json 82a8292934ef040d56d04d6a76c56c8d93571a2d055a3bc0c2a53228b4859dff
