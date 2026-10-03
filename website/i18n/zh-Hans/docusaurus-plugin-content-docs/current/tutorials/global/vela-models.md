@@ -106,7 +106,7 @@ global:
           overflow: reject
 ```
 
-其他分类器使用相同的 deployment 与 consumer binding 结构。PII 返回 `token_spans.v1`；Embedding 使用 `mmbert` adapter 和 `embedding.v1`；Reranker 使用 `vela_reranker` 和 `relevance_scores.v1`。Adapter 名表示推理架构，与发布名称独立。完整契约见[进程内推理](/docs/installation/runtime/in-process)。
+其他分类器使用相同的 deployment 与 consumer binding 结构。PII 返回 `token_spans.v1`；Embedding 使用 `mmbert` adapter 和 `embedding.v1`；Reranker 使用 `vela_reranker` 和 `relevance_scores.v1`。Adapter 名表示推理架构，与发布名称独立。完整契约见[进程内推理](/docs/model-runtime/deploy)。
 
 Hazard 使用独立分类契约 `label_scores.v1`，并通过 SHA-256 固定 `operating_point.json`。该策略绑定权重、tokenizer、执行设置、重叠窗口和十二个阈值。Decision 选择标签，不覆盖这些阈值；参考配置包含完整示例。
 

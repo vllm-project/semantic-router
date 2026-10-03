@@ -20,7 +20,7 @@ from vllm_sr_runtime.families.decision1 import package as pkg
 from vllm_sr_runtime.families.decision1 import qwen, vela
 from vllm_sr_runtime.families.decision1.questions import KINDS
 from vllm_sr_runtime.heads.candidate import load_head, logits
-from vllm_sr_runtime.plugins.base import Job
+from vllm_sr_runtime.plugins.base import Job, RenderedItem
 from vllm_sr_runtime.profiles.exact import ExactProfile
 from vllm_sr_runtime.runtime import Runtime
 from vllm_sr_runtime.testing.decision1 import write_package
@@ -130,6 +130,33 @@ def test_qwen_physical_batches_and_padding(runtimes):
     assert model.exact_batches(plan.items) == [list(range(8)), [8, 9, 10]]
     batch = segments.collate(plan.items[:3], model.tokenizer.pad_id, qwen.PAD_MULTIPLE)
     assert batch["input_ids"].shape[1] % 32 == 0
+
+
+def test_qwen_physical_batches_split_only_beyond_the_token_budget():
+    items = [
+        RenderedItem(f"q{i}", "choice", [0] * length, [], 0, [], [])
+        for i, length in enumerate((40, 40, 40, 100, 10, 10, 10, 10, 10))
+    ]
+    assert qwen.physical_batches(items) == [list(range(8)), [8]]
+    assert qwen.physical_batches(items, 1024) == [list(range(8)), [8]]
+    assert qwen.physical_batches(items, 256) == [[0, 1, 2], [3, 4], [5, 6, 7], [8]]
+    with pytest.raises(ValueError, match="exceeds the forward token budget"):
+        qwen.physical_batches(items, 64)
+
+
+def test_qwen_exact_batches_keep_the_forward_token_budget(runtimes, monkeypatch):
+    model = model_of(runtimes["qwen"])
+    plan = model.plan(STATE, MANY)
+
+    def padded(indices):
+        width = max(len(plan.items[index].ids) for index in indices)
+        return len(indices) * -(-width // qwen.PAD_MULTIPLE) * qwen.PAD_MULTIPLE
+
+    budget = 3 * max(padded([index]) for index in range(len(plan.items)))
+    monkeypatch.setattr(model, "forward_token_budget", lambda: budget)
+    batches = model.exact_batches(plan.items)
+    assert [index for batch in batches for index in batch] == list(range(11))
+    assert len(batches) > 2 and all(padded(batch) <= budget for batch in batches)
 
 
 def test_vela_physical_batches_sort_by_type(runtimes):
@@ -408,6 +435,25 @@ def test_model_info(runtimes):
         model_of(runtimes["qwen"]).info.limits["max_input_tokens"]
         == qwen.MAX_INPUT_TOKENS
     )
+
+
+def test_only_approximate_batches_ask_for_the_reduced_copy(runtimes, monkeypatch):
+    model = model_of(runtimes["vela"])
+    plan = model.plan(STATE, MANY)
+    batch = [plan.items[index] for index in model.exact_batches(plan.items)[0]]
+    encode, asked = model.engine_model.encode, []
+
+    def recording(encoder_batch):
+        asked.append(encoder_batch.reduced)
+        return encode(encoder_batch)
+
+    monkeypatch.setattr(model.engine_model, "encode", recording)
+    model.run(batch)
+    exact = asked[:]
+    asked.clear()
+    model.run_approximate(batch)
+    assert exact and not any(exact)
+    assert asked and all(asked)
 
 
 def test_approximate_batches_run_each_stack_over_its_own_rows(packages, runtimes):

@@ -26,6 +26,7 @@ from ...plugins.base import (
 from ...scheduler.planner import padded
 from . import fast, models
 from .encoder import EncoderGraphs
+from .models.forest import ForestShape
 from .models.lora import attach
 from .models.tree import Tree
 from .weights import cast_parameters, keep_linear_bf16, load_adapter, load_backbone
@@ -171,9 +172,15 @@ class NativeEngineModel(EngineModel):
 
         prefix_ids, prefix_mask = padded_rows(batch.prefixes, left=True)
         block_ids, block_mask = padded_rows(batch.blocks, left=False)
+        width = prefix_ids.shape[1]
+        shape = ForestShape(
+            tuple(width - len(prefix) for prefix in batch.prefixes),
+            tuple(len(block) for block in batch.blocks),
+            tuple(batch.owners),
+        )
         owner = torch.tensor(batch.owners, dtype=torch.long, device=self.device)
         _, blocks = self.backbone.forward_forest(
-            prefix_ids, prefix_mask, block_ids, block_mask, owner
+            prefix_ids, prefix_mask, block_ids, block_mask, owner, shape
         )
         return blocks
 

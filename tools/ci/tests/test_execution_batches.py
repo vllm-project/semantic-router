@@ -124,7 +124,7 @@ class ExecutionBatchTests(unittest.TestCase):
         plan = make_plan(
             [],
             source_sha="a" * 40,
-            requested=("e2e.envoy-ai-gateway", "e2e.decision-runtime"),
+            requested=("e2e.envoy-ai-gateway", "e2e.model-runtime"),
         )
         lane = [
             row for row in plan["e2e_batches"] if row["dispatch_job"] == "e2e-fixtures"

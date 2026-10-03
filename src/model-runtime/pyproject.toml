@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vllm-sr-runtime"
-version = "0.1.0"
+version = "0.2.0"
 description = "Built-in model runtime for vLLM Semantic Router: decision, classification, embedding and reranking models behind one HTTP contract"
 readme = "README.md"
 requires-python = ">=3.10"

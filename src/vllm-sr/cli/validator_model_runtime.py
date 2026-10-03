@@ -101,10 +101,11 @@ def _binding_error(
     consumer, binding, deployment, profile=None, *, global_default=False
 ):
     provider = deployment.get("provider") or "candle"
-    if provider == "model_runtime":
+    runtime = provider == "model_runtime"
+    local = runtime or provider in {"candle", "ort"}
+    if runtime and consumer == "hallucination_explainer":
         return (
-            "model_runtime deployments serve decision signals and the decision "
-            "algorithm, not task bindings"
+            "the NLI hallucination explainer is retired and has no model_runtime task"
         )
     if binding.operating_point is not None and not consumer.startswith("classifier."):
         return "operating_point is only supported by generic classifier bindings"
@@ -124,7 +125,9 @@ def _binding_error(
     if binding.pair_scorer is not None and consumer != "rag.reranker":
         return "pair_scorer selection is only supported by rag.reranker"
     if consumer == "rag.reranker":
-        if provider == "http" or binding.adapter != "vela_reranker":
+        if provider == "http" or (
+            binding.adapter != "vela_reranker" and not (runtime and not binding.adapter)
+        ):
             return "Reranker requires a local vela_reranker adapter"
         if binding.mapping_path or (provider == "candle" and binding.head):
             return (
@@ -181,11 +184,11 @@ def _binding_error(
             contracts[consumer] = binding.contract
             if (
                 binding.operating_point is None
-                or provider not in {"candle", "ort"}
+                or not local
                 or (provider == "candle" and binding.head)
                 or rule.type == "llm"
             ):
-                return "Independent scores require operating_point and a complete Candle or qualified ORT artifact"
+                return "Independent scores require an operating_point and a complete local artifact"
             budget = deployment.get("input") or {}
             if (
                 budget.get("max_tokens", 0) <= 0
@@ -194,7 +197,7 @@ def _binding_error(
                 return "operating_point requires an explicit document budget and reject overflow"
             precision = deployment.get("precision") or "native"
             if precision != "native" and (provider != "candle" or precision != "fp32"):
-                return "operating_point requires Candle float32 or qualified ORT native execution"
+                return "operating_point requires the package's own numerics"
         elif binding.operating_point is not None:
             return "operating_point requires label_scores.v1"
         if rule.type == "llm":
@@ -217,7 +220,7 @@ def _binding_error(
         expected = binding.contract
     if binding.contract != expected:
         return f"Contract must be '{expected}' for {consumer}"
-    if not binding.adapter.strip():
+    if not binding.adapter.strip() and not runtime:
         return "Adapter is required"
     if consumer == "complexity" and provider != "http":
         return "Complexity requires an HTTP score or distribution adapter"
@@ -288,8 +291,14 @@ def _deployment_error(name, deployment, external_names):
     provider = deployment.get("provider")
     if provider == "model_runtime":
         return model_runtime_deployment_error(deployment)
-    if deployment.get("profile") or deployment.get("endpoint"):
-        return "profile and endpoint apply only to model_runtime deployments"
+    if any(
+        deployment.get(field)
+        for field in ("profile", "endpoint", "process", "served_name")
+    ):
+        return (
+            "profile, endpoint, process and served_name apply only to "
+            "model_runtime deployments"
+        )
     if provider in {"candle", "ort"}:
         if not (deployment.get("artifact") or "").strip() or deployment.get(
             "external_model"

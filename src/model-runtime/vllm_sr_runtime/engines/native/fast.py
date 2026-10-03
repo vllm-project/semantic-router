@@ -9,7 +9,9 @@ four scored panels), so it belongs to the exact profile:
   which round exactly like the ops they replace. GEMMs, attention and the
   gated-delta kernel are the eager path's. A layer call whose fused kernels
   fail (for example a compiler error on an unusual shape) runs the layer's
-  eager forward instead, and the shape is remembered.
+  eager forward instead, and the shape is remembered. A Qwen3.5 layer's
+  forest forward (``models/forest.py``) fuses the same steps except the
+  gated-delta preparation, whose convolution there is ``F.conv1d``.
 - **Lean LoRA.** An unmerged LoRA layer with a power-of-two scaling multiplies
   its factors in BF16 (the values autocast uses) with the scaling folded into B
   (exact for a power of two): 5 kernels instead of 9, the same products.
@@ -38,6 +40,7 @@ from torch import nn
 
 from ...accel.kernels import KernelSet
 from .models.common import attention
+from .models.forest import Forest, forest_attention, forest_gated_delta
 from .models.lora import LoRALinear
 from .models.tree import suffix_rule
 
@@ -111,6 +114,7 @@ def install_fused(backbone: nn.Module) -> int:
         if type(layer).__name__ == "Qwen3_5Layer":
             layer._fused = _prepare_qwen3_5(layer)
             layer._fused_forward = types.MethodType(_qwen3_5_forward, layer)
+            _install_fused_forest(layer)
         elif type(layer).__name__ == "Qwen3Layer":
             layer._fused = _prepare_qwen3(layer)
             layer._fused_forward = types.MethodType(_qwen3_forward, layer)
@@ -125,6 +129,24 @@ def install_fused(backbone: nn.Module) -> int:
         layer.forward = types.MethodType(forward, layer)
         count += 1
     return count
+
+
+def _install_fused_forest(layer: nn.Module) -> None:
+    """Run the layer's forest forward fused where it applies, eagerly otherwise (as ``run_fused``)."""
+    eager = layer.forward_forest
+    fused = types.MethodType(_qwen3_5_forest, layer)
+
+    def forward_forest(self, prefix, blocks, *args):
+        key = ("forest", tuple(prefix.shape), tuple(blocks.shape))
+        if key in self._fused_failed or not fused_applies(prefix):
+            return eager(prefix, blocks, *args)
+        try:
+            return fused(prefix, blocks, *args)
+        except RuntimeError:
+            self._fused_failed.add(key)
+            return eager(prefix, blocks, *args)
+
+    layer.forward_forest = types.MethodType(forward_forest, layer)
 
 
 def _prepare_qwen3_5(layer: nn.Module) -> dict[str, Any]:
@@ -222,6 +244,69 @@ def _qwen3_5_forward(
     mlp = layer.mlp
     act = kernels("silu_mul")(mlp.gate_proj(normed), mlp.up_proj(normed))
     return _residual(kernels, hidden, mlp.down_proj(act))
+
+
+def _qwen3_5_forest(
+    layer, prefix, blocks, rotary, forest: Forest, kernels: KernelSet
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """``Qwen3_5Layer.forward_forest`` with fused norms, residuals, MLP gates, attention prep and gates."""
+    p = layer._fused
+    prefix, blocks = prefix.contiguous(), blocks.contiguous()
+    normed = [
+        kernels("add_rmsnorm")(x, None, p["w1_in"], p["eps"])[1]
+        for x in (prefix, blocks)
+    ]
+    if layer.kind == "linear_attention":
+        m = layer.linear_attn
+        mixed = forest_gated_delta(
+            m,
+            *normed,
+            forest,
+            kernels,
+            norm=lambda core, z: kernels("gated_rmsnorm")(
+                core.contiguous(),
+                z.contiguous(),
+                m.norm.weight,
+                m.norm.variance_epsilon,
+            ),
+        )
+    else:
+        mixed = forest_attention(
+            layer.self_attn,
+            *normed,
+            *rotary,
+            forest,
+            project=lambda m, h, table: _forest_projection(m, p, h, table, kernels),
+            gate=lambda m, out, gate: m.o_proj(
+                kernels("sigmoid_gate")(out.transpose(1, 2), gate)
+            ),
+        )
+    out = []
+    for stream, delta in zip((prefix, blocks), mixed, strict=True):
+        hidden, normed_post = kernels("add_rmsnorm")(
+            stream, delta.contiguous(), p["w1_post"], p["eps"]
+        )
+        mlp = layer.mlp
+        act = kernels("silu_mul")(mlp.gate_proj(normed_post), mlp.up_proj(normed_post))
+        out.append(_residual(kernels, hidden, mlp.down_proj(act)))
+    return out[0], out[1]
+
+
+def _forest_projection(m, p, h, rotary, kernels: KernelSet):
+    """``forest.project_attention`` through ``attn_prep``; the gate stays a view of the q projection."""
+    rows, length, _ = h.shape
+    hd = m.head_dim
+    qp = m.q_proj(h).contiguous()
+    kp = m.k_proj(h).contiguous()
+    vp = m.v_proj(h)
+    cos, sin = (t.contiguous() for t in rotary)
+    heads = qp.shape[-1] // (2 * hd)
+    kv_heads = kp.shape[-1] // hd
+    q, k = kernels("attn_prep")(
+        qp, kp, p["qw1"], p["kw1"], cos, sin, heads, kv_heads, hd, m.q_norm.eps
+    )
+    v = vp.view(rows, length, kv_heads, hd).transpose(1, 2)
+    return q, k, v, qp.view(rows, length, heads, 2 * hd)[..., hd:]
 
 
 def _tree_gated_delta(m, p, normed, tree, kernels: KernelSet):

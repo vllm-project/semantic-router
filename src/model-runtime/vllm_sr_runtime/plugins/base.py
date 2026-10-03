@@ -552,12 +552,17 @@ class LoadedModel(ABC):
     ``fuse_bundled_jobs`` lets the ``exact`` profile run the jobs of one
     bundle as one batch, so a family can compute each distinct input once for
     several heads; decision families keep it off because their released
-    numerics batch one request at a time.
+    numerics batch one request at a time. ``batch_invariant``, set at load,
+    says every row's result on this device is the same alone or inside any
+    batch (a test must show it); the ``exact`` profile then runs the jobs of
+    concurrent requests that are queued together in shared batches, without
+    waiting for more.
     """
 
     info: ModelInfo
     engine_model: EngineModel
     fuse_bundled_jobs: ClassVar[bool] = False
+    batch_invariant: bool = False
 
     def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan:
         """Validate and render every question; failures become per-question errors."""
