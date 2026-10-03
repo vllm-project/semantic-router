@@ -7,7 +7,7 @@ sidebar_label: Embedding and Reranking
 
 Use Vela Embedding to find relevant documents efficiently, then Vela Reranker
 to improve the order of a smaller candidate set. Both adapt the shared
-[Vela Encoder](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M)
+[Vela Encoder](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M)
 and support a choice of encoder depth and output dimension.
 
 To use the published models without training, follow

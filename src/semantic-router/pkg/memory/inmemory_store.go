@@ -182,30 +182,18 @@ func (s *InMemoryStore) List(ctx context.Context, opts ListOptions) (*ListResult
 		matching = append(matching, mem)
 	}
 
-	// Sort by created_at descending (newest first)
-	sort.Slice(matching, func(i, j int) bool {
-		return matching[i].CreatedAt.After(matching[j].CreatedAt)
-	})
-
-	total := len(matching)
-
-	// Apply limit
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = 20
+	limit, offset, err := normalizeListWindow(opts)
+	if err != nil {
+		return nil, err
 	}
-	if limit > 100 {
-		limit = 100
-	}
-
-	if limit < len(matching) {
-		matching = matching[:limit]
-	}
+	sortMemoriesForList(matching)
+	page := pageMemories(matching, offset, limit)
 
 	return &ListResult{
-		Memories: matching,
-		Total:    total,
+		Memories: page,
+		Total:    len(matching),
 		Limit:    limit,
+		Offset:   offset,
 	}, nil
 }
 

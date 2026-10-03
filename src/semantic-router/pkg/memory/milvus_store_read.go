@@ -3,7 +3,6 @@ package memory
 import (
 	"context"
 	"fmt"
-	"sort"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 
@@ -95,34 +94,24 @@ func (m *MilvusStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 	// Parse results into Memory objects (no project_id filtering — field is not populated)
 	memories := m.parseListResults(queryResult, "")
 
-	// Sort by created_at descending for deterministic results.
-	// Milvus Query does not support server-side ORDER BY, so sorting is done client-side.
-	sort.Slice(memories, func(i, j int) bool {
-		return memories[i].CreatedAt.After(memories[j].CreatedAt)
-	})
-
-	total := len(memories)
-
-	// Apply limit
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = 20
+	// Milvus Query in this SDK has no ORDER BY. The filtered set is sorted here
+	// so offset pages share the same order as the other stores. Total is the
+	// size of this read, not a snapshot token.
+	limit, offset, err := normalizeListWindow(opts)
+	if err != nil {
+		return nil, err
 	}
-	if limit > 100 {
-		limit = 100
-	}
+	sortMemoriesForList(memories)
+	page := pageMemories(memories, offset, limit)
 
-	if limit < len(memories) {
-		memories = memories[:limit]
-	}
-
-	logging.Debugf("MilvusStore.List: found %d total, returning %d (limit=%d)",
-		total, len(memories), limit)
+	logging.Debugf("MilvusStore.List: found %d total, returning %d (limit=%d offset=%d)",
+		len(memories), len(page), limit, offset)
 
 	return &ListResult{
-		Memories: memories,
-		Total:    total,
+		Memories: page,
+		Total:    len(memories),
 		Limit:    limit,
+		Offset:   offset,
 	}, nil
 }
 

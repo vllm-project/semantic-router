@@ -2254,7 +2254,7 @@ pub extern "C" fn get_embedding_batched(
 
 /// Initialize multi-modal embedding model (text + image + audio)
 ///
-/// Model: llm-semantic-router/multi-modal-embed-small
+/// Model: vllm-sr/multi-modal-embed-small
 /// - Text: MiniLM-L6-v2 (22M params, 384-dim)
 /// - Image: SigLIP-base-patch16-512 (86M params, 768→384 projection)
 /// - Audio: Whisper-tiny encoder (8M params, 384-dim)

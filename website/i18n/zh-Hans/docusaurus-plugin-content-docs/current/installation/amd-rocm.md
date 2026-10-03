@@ -179,7 +179,7 @@ curl --fail 'http://localhost:8080/api/v1/routing/preview?trace=true' \
 
 ### 可选的 Domain 和 FactCheck 32K ROCm 部署 {#optional-32k-domain-and-factcheck-on-rocm}
 
-[Vela Domain](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Domain) 和 [Vela FactCheck](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-FactCheck) 提供固定 32K FP32 图 `onnx/model_rocm_32k.onnx`。以下配置已锁定包含该图的模型发布版本。
+[Vela Domain](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Domain) 和 [Vela FactCheck](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-FactCheck) 提供固定 32K FP32 图 `onnx/model_rocm_32k.onnx`。以下配置已锁定包含该图的模型发布版本。
 
 若需启用，在 `vela-amd.yaml` 中用以下片段替换这两个 binding 条目及两个完整的 deployment 条目。下面的 ROCm 条目会替换原 MIGraphX 条目，包括移除其 `compilation_cache_dir` 设置；保留配方的其余配置。
 

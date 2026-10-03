@@ -51,7 +51,7 @@ self_harm, privacy, specialized_advice, misinformation
 ```bash
 python -m src.training.model_classifier.sequence_repair.train \
   --method full --fresh-head \
-  --base /models/vela-base --base-id llm-semantic-router/Vela-1.0-Encoder-307M \
+  --base /models/vela-base --base-id vllm-sr/Vela-1.0-Encoder-307M \
   --base-revision "${VELA_BASE_REVISION:?Set the downloaded revision}" \
   --contract /data/safety/contract.json \
   --train /data/safety/train.jsonl --dev /data/safety/dev.jsonl \
@@ -69,7 +69,7 @@ python -m src.training.model_classifier.sequence_repair.train \
 ```bash
 python -m src.training.model_classifier.safety_classifier.train_vela_hazard \
   --method full --fresh-head \
-  --base /models/vela-base --base-id llm-semantic-router/Vela-1.0-Encoder-307M \
+  --base /models/vela-base --base-id vllm-sr/Vela-1.0-Encoder-307M \
   --base-revision "${VELA_BASE_REVISION:?Set the downloaded revision}" \
   --contract /data/hazard/contract.json \
   --train /data/hazard/train.jsonl --dev /data/hazard/dev.jsonl \
