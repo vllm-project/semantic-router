@@ -1,6 +1,11 @@
 import React, { useMemo } from 'react'
 
-import { getAlgorithmFieldSchema, quoteDSLString, serializeFields } from '@/lib/dslMutations'
+import {
+  formatDslName,
+  getAlgorithmFieldSchema,
+  quoteDSLString,
+  serializeFields,
+} from '@/lib/dslMutations'
 import type { ASTAlgoSpec, ASTModelRef, ASTPluginRef, DSLFieldObject } from '@/types/dsl'
 import type { RouteAlgoInput, RouteModelInput, RoutePluginInput } from '@/lib/dslMutations'
 
@@ -22,7 +27,7 @@ function generateRouteDslPreview(
   const descPart = description.trim()
     ? ` (description = ${quoteDSLString(description.trim())})`
     : ''
-  const lines: string[] = [`ROUTE ${routeName}${descPart} {`]
+  const lines: string[] = [`ROUTE ${formatDslName(routeName)}${descPart} {`]
   lines.push(`  PRIORITY ${priority}`)
   if (whenExpr.trim()) {
     lines.push('')

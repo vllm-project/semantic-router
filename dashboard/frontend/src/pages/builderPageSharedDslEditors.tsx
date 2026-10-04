@@ -7,6 +7,7 @@ import type {
   DSLFieldValue,
 } from "@/types/dsl";
 import {
+  formatDslName,
   getAlgorithmFieldSchema,
   getPluginFieldSchema,
   getSignalFieldSchema,
@@ -23,10 +24,11 @@ function generateSignalDslPreview(
   fields: DSLFieldObject,
 ): string {
   const body = serializeFields(fields);
+  const header = `SIGNAL ${signalType} ${formatDslName(signalName)}`;
   if (!body.trim()) {
-    return `SIGNAL ${signalType} ${signalName} {}`;
+    return `${header} {}`;
   }
-  return `SIGNAL ${signalType} ${signalName} {\n${body}\n}`;
+  return `${header} {\n${body}\n}`;
 }
 
 function generateGlobalDslPreview(fields: DSLFieldObject): string {
