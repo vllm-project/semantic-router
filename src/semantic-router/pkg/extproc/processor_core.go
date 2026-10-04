@@ -233,7 +233,9 @@ func (r *OpenAIRouter) handleProcessRequest(
 	ctx *RequestContext,
 ) error {
 	if protocolConfig := req.GetProtocolConfig(); protocolConfig != nil {
-		ctx.FullDuplexRequestBody = protocolConfig.GetRequestBodyMode() == http_ext.ProcessingMode_FULL_DUPLEX_STREAMED
+		mode := protocolConfig.GetRequestBodyMode()
+		ctx.FullDuplexRequestBody = mode == http_ext.ProcessingMode_FULL_DUPLEX_STREAMED
+		ctx.BufferedRequestBody = mode == http_ext.ProcessingMode_BUFFERED || mode == http_ext.ProcessingMode_BUFFERED_PARTIAL
 	}
 
 	switch v := req.Request.(type) {
