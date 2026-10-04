@@ -456,6 +456,25 @@ def test_a_job_is_answered_as_soon_as_its_own_batches_ran():
         scheduler.stop()
 
 
+def test_cancelled_jobs_are_skipped_and_the_worker_keeps_serving():
+    gate = threading.Event()
+    model = GatedModel(gates={"blocker": gate})
+    scheduler = started(model)
+    try:
+        blocker = scheduler.submit([item("blocker", 8)], deadline=None, profile="exact")
+        assert model.entered.wait(5)
+        left = scheduler.submit([item("left", 8)], deadline=None, profile="exact")
+        assert left.cancel() and blocker.cancel()
+        gate.set()
+        after = scheduler.submit([item("after", 8)], deadline=None, profile="exact")
+        assert after.result(timeout=5) == [[0.0, 8.0]]
+        assert model.calls == [["blocker"], ["after"]]
+        wait_until(lambda: scheduler._pending_jobs == 0)
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
 def test_short_requests_run_between_the_batches_of_a_long_one(monkeypatch):
     monkeypatch.setattr(scheduler_module, "COST_SMOOTHING", 0.0)
     gate = threading.Event()

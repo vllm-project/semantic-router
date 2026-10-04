@@ -632,7 +632,9 @@ waits for the forward in flight, not for the remaining windows of a long one;
 each job is answered as soon as its own batches have run. The order of
 forwards never changes a batch's contents, so answers are unchanged. Deadlines
 travel with jobs; a job whose deadline passes before its next batch runs is
-answered `deadline_exceeded` and its remaining batches are skipped. Admission
+answered `deadline_exceeded` and its remaining batches are skipped. A client
+that disconnects before its answer cancels its jobs the same way; the request
+is counted with status 499 in the metrics. Admission
 bounds, per model, the jobs not yet answered (queued, planned or running) and
 their tokens, and answers 429 at once, for a whole group or none of it. On
 CPU, workers of different models share the process's intra-op thread pool

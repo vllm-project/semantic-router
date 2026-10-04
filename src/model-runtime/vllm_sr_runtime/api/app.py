@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
+from collections.abc import Awaitable
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
@@ -20,6 +22,10 @@ from ..runtime import Runtime
 OPENAPI_PATH = Path(__file__).with_name("openapi.yaml")
 # The contract version (``info.version`` in openapi.yaml), reported to clients.
 API_VERSION = "2.0.0"
+# Recorded for a request whose client disconnected before its answer (nginx's code).
+CLIENT_CLOSED = 499
+
+T = TypeVar("T")
 
 
 class JSON(Response):
@@ -78,7 +84,13 @@ def create_app(runtime: Runtime) -> Starlette:
             status = 200
             try:
                 body, size = await _read_json(request, runtime.config.max_request_bytes)
-                status, response = await runtime.call(surface, body, size)
+                outcome = await until_disconnect(
+                    request, runtime.call(surface, body, size)
+                )
+                if outcome is None:
+                    status = CLIENT_CLOSED
+                    return Response(status_code=CLIENT_CLOSED)
+                status, response = outcome
                 answer = respond(response, status)
                 status = answer.status_code
                 return answer
@@ -95,7 +107,11 @@ def create_app(runtime: Runtime) -> Starlette:
         status = 200
         try:
             body, size = await _read_json(request, runtime.config.max_request_bytes)
-            status, response = await runtime.bundle(body, size)
+            outcome = await until_disconnect(request, runtime.bundle(body, size))
+            if outcome is None:
+                status = CLIENT_CLOSED
+                return Response(status_code=CLIENT_CLOSED)
+            status, response = outcome
             if status == HTTPStatus.OK:
                 return respond_bundle(response)
             return respond(response, status)
@@ -174,6 +190,29 @@ def create_app(runtime: Runtime) -> Starlette:
         ],
         exception_handlers={404: _not_found, 405: _not_allowed},
     )
+
+
+async def until_disconnect(request: Request, work: Awaitable[T]) -> T | None:
+    """``work``'s result, or None once the client disconnects first.
+
+    Then ``work`` is cancelled, which cancels its jobs' futures, so the
+    scheduler skips their batches that have not run yet.
+    """
+    task = asyncio.ensure_future(work)
+    left = asyncio.ensure_future(_disconnected(request))
+    try:
+        await asyncio.wait((task, left), return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        left.cancel()
+        if not task.done():
+            task.cancel()
+    return task.result() if task.done() else None
+
+
+async def _disconnected(request: Request) -> None:
+    """Return when the client disconnects; the body has been read already."""
+    while (await request.receive())["type"] != "http.disconnect":
+        pass
 
 
 async def _read_json(request: Request, limit: int) -> tuple[Any, int]:
