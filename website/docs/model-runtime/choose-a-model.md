@@ -63,10 +63,10 @@ is a private preview and needs a Hugging Face token with access.
 | Hardware | Status | Use |
 | --- | --- | --- |
 | CPU | Validated | Every router image runs models on CPU out of the box. |
-| AMD Instinct MI300X, MI325X | Validated | Install the ROCm build of PyTorch and set `device: rocm:0`. |
-| NVIDIA GPUs | Works, not yet validated | Install the CUDA build of PyTorch and set `device: cuda:0`. |
-| Intel GPUs | Available, not yet validated | `device: xpu:0` with an XPU build of PyTorch. |
-| Apple silicon | Available, not yet validated | `device: mps` on macOS. |
+| AMD Instinct MI300X, MI325X | Validated | Set `device: rocm:0`. `vllm-sr serve --platform amd` and the `extproc-rocm` image ship PyTorch for ROCm. |
+| NVIDIA GPUs | Works, not yet validated | Set `device: cuda:0`. `vllm-sr serve --platform nvidia` ships PyTorch for CUDA. |
+| Intel GPUs | Available, not yet validated | `device: xpu:0`, with the runtime installed next to an XPU build of PyTorch. |
+| Apple silicon | Available, not yet validated | `device: mps`, with the runtime installed on macOS. |
 
 `device: auto` (the default) picks the first validated GPU with enough free
 memory and otherwise the CPU. A GPU you name explicitly must exist, or the
