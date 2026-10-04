@@ -18,6 +18,8 @@ from ..errors import RuntimeServiceError
 from ..runtime import Runtime
 
 OPENAPI_PATH = Path(__file__).with_name("openapi.yaml")
+# The contract version (``info.version`` in openapi.yaml), reported to clients.
+API_VERSION = "2.0.0"
 
 
 class JSON(Response):
@@ -106,11 +108,16 @@ def create_app(runtime: Runtime) -> Starlette:
     async def models(request: Request) -> Response:
         # The first call imports every plugin to describe it; /health must not wait for that.
         return JSON(
-            {"object": "list", "data": await run_in_threadpool(runtime.model_cards)}
+            {
+                "object": "list",
+                "api_version": API_VERSION,
+                "data": await run_in_threadpool(runtime.model_cards),
+            }
         )
 
     async def health(request: Request) -> Response:
         body: dict[str, Any] = {
+            "api_version": API_VERSION,
             "status": runtime.health.state,
             "reason": runtime.health.reason,
             "model": runtime.served_id,
@@ -120,7 +127,14 @@ def create_app(runtime: Runtime) -> Starlette:
         return JSON(body, status_code=200 if runtime.health.ready else 503)
 
     async def live(request: Request) -> Response:
-        return JSON({"status": "alive", "reason": None, "model": runtime.served_id})
+        return JSON(
+            {
+                "api_version": API_VERSION,
+                "status": "alive",
+                "reason": None,
+                "model": runtime.served_id,
+            }
+        )
 
     async def metrics(request: Request) -> Response:
         if runtime.scheduler is not None:
