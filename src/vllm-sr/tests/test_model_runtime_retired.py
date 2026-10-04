@@ -19,6 +19,7 @@ from cli.config_migration import migrate_config_data  # noqa: E402
 from cli.config_migration_notes import MigrationNotes  # noqa: E402
 from cli.model_runtime_retired import (  # noqa: E402
     REMOVED_DEPLOYMENT_FIELDS,
+    REMOVED_EMBEDDING_BACKENDS,
     REMOVED_MODULE_FIELDS,
     REMOVED_PROVIDERS,
     retired_model_fields,
@@ -59,6 +60,9 @@ def _legacy() -> dict:
         "global": {
             "model_catalog": {
                 "system": {"hallucination_explainer": "models/mom-halugate-explainer"},
+                "embeddings": {
+                    "semantic": {"embedding_config": {"backend": "OpenVINO"}}
+                },
                 "deployments": {
                     "candle-domain": {
                         "provider": "candle",
@@ -138,6 +142,7 @@ def test_every_retired_setting_is_found_by_its_path():
             for field in fields
         ),
         f"{modules}.hallucination_mitigation.detector.backend: candle",
+        "global.model_catalog.embeddings.semantic.embedding_config.backend: OpenVINO",
         "global.model_catalog.system.hallucination_explainer",
         "global.stores.response_cache.polarity_guard",
     ]
@@ -174,6 +179,9 @@ def test_the_inventory_is_the_router_parsers():
     providers = re.search(
         r"removedModelProviders\s*=\s*map\[string\]bool\{(.*?)\}", source
     )
+    embedding = re.search(
+        r"removedEmbeddingBackends\s*=\s*map\[string\]bool\{(.*?)\}", source
+    )
     fields = re.search(r"removedDeploymentFields\s*=\s*\[\]string\{(.*?)\}", source)
     modules = re.findall(r"\{\[\]string\{([^}]*)\}, \[\]string\{([^}]*)\}\}", source)
 
@@ -181,6 +189,7 @@ def test_the_inventory_is_the_router_parsers():
         return tuple(re.findall(r'"([^"]+)"', text))
 
     assert providers and set(strings(providers.group(1))) == REMOVED_PROVIDERS
+    assert embedding and set(strings(embedding.group(1))) == REMOVED_EMBEDDING_BACKENDS
     assert fields and strings(fields.group(1)) == REMOVED_DEPLOYMENT_FIELDS
     assert tuple((strings(path), strings(names)) for path, names in modules) == (
         REMOVED_MODULE_FIELDS
