@@ -205,6 +205,71 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 13:34 — **Coordinator watchdog #1.** All 12 agents active (commits or file changes within 30 min).
+  - **`vela1` (d3e74ccf) node B GPU0, `embed` (ceee0cdf) node B GPU2–3:** leased `in-use`, but they have 0 VRAM and
+    0% use, with only CPU tools running. Release them if your next GPU run is more than 20 minutes away. Unchanged at
+    the next tick means I release them.
+  - Node D reasoning teachers are loaded (8× vLLM) and generation has started. No other idle leases.
+  - PR #4512 first run: 25 pass, 8 fail, 2 pending. The lead's 13:40 note covers 6 fixes; open: the `vela_omni` CPU
+    flake and DCO. **Lead:** label notes with `date +%H:%M` (that note was posted before 13:34).
+
+- 2026-10-04 13:32 — **USER (13:31): REMOVE RISC-V SUPPORT ENTIRELY** ("关于 router runtime 请移除 RISC-V 的支持，不要再对它进行支持和兼容了").
+  This changes the scope of PR #4512 and lands at IP2 (16:00).
+  - **Lead (96ccb788) and `removal` (5497de44):** delete everything that exists for RISC-V:
+    - the RISC-V platform lane (the linux/riscv64 router under qemu-user) and its evidence script;
+    - the riscv64 `CGO_ENABLED=0` build targets;
+    - every workflow job, Make target, `tools/ci` / harness / `tools/agent/domains.yaml` entry, image or Dockerfile
+      stage, E2E profile, test and record.
+
+    **Do not fix the lane's PyYAML failure in the first CI run; delete the lane.**
+  - **Also on `main`:** remove the existing RISC-V deployment, CI, images, docs, website pages, examples and build tags.
+    Remove code paths and build constraints that exist only to keep riscv64 compiling. Leave generic pure-Go portability
+    alone.
+  - **Docs (`e2e-docs` b16b8706, lead for the design doc):** drop RISC-V from every supported-platform list and from
+    the hardware matrix.
+  - **Order:**
+    1. `removal` posts an inventory here first: `git grep -i -E "riscv|risc-v"` on the PR head and on `origin/main`.
+    2. It removes all of it.
+    3. `make check` and `make harness-check` pass at IP2.
+
+- 2026-10-04 13:40 — **Model-runtime Phases 2–4 lead (96ccb788): first CI run on `3ca402416` — 7 failures so far, 6
+  fixed on `xunzhuo/model-runtime-p24-ip2` @ `cd73be9d4`. Every workstream: merge it before your IP2 sha.**
+  - **Fixed (separate commits):**
+    - 3 platform lanes (`models-cpu`, `image-calibration-cpu`, `router-riscv64-qemu`): each lane passed, then its
+      `tools/ci` helper ran under the runner's bare `python3` (no PyYAML). `c34ffdbc2` runs them with
+      `$(AGENT_PYTHON)` in `tools/make/models.mk` **and** `build-run-test.mk`; the RISC-V smoke takes `PYTHON`.
+      **`removal`:** your `a20a79db9` / `b2ffca168` do the same for RISC-V only; merge `p24-ip2` and keep one copy
+      (models + image calibration need the `models.mk` half too).
+    - Router Contracts: `check-go-mod-tidy` — the router module still required `ml-binding` / `nlp-binding`, and
+      `perf` three bindings, that nothing imports (`207551389`). **`stores`:** those leave your IP3 tidy list;
+      `candle-binding` / `openvino-binding` stay until `native` goes.
+    - Model Runtime components: the Triton test counted as a skipped required test. My `gpu` marker and
+      **`decision1`**'s `b91b9c8e8` do the same thing; I take yours at the merge.
+    - Production Benchmarks: under the model-baseline reset, `CompareWithBaseline` still demanded a same-checkpoint
+      baseline for every model benchmark. `cd73be9d4` skips them under a reset, with a test (**`removal`'s `perf`**,
+      don't redo it).
+    - Node A `make check` (staging head): ruff B023 / B905 in `router`'s `tools/router_latency.py` (`85133d52f`);
+      the apiserver OpenAPI artifact still listed the retired NLI span fields (`af102b40c`, regenerated).
+  - **Open:** the `vllm-sr` image failed in its `vela-omni-builder` stage: `tools/models/vela_omni`
+    `test_original_qwen_layers_match_with_bounded_attention` was 1.5e-4 off (tolerance 2e-6), while the same 21 tests
+    passed in two other builds of this run and on `main` at `977f53661`. It is a runner-CPU flake in a gate that 5
+    Dockerfiles run; I reproduce it with `ATEN_CPU_CAPABILITY=avx2` and fix it for IP2. The router and ROCm images
+    and the Kind E2E lanes are still running.
+  - **Scheduler (`6472144d8`, design §9; `vela1` 13:25 found the same cause):** each job is answered when its own
+    batches ran; batches run shortest expected finish first (queued time + tokens × measured cost, starvation-free);
+    jobs that arrive between forwards jump in (non-coalescing profiles); expired jobs skip their remaining batches.
+    On a batch-invariant model `exact` shares batches per length class, ≤ 512 padded tokens, identical sequences
+    kept together (the family's dedupe holds). Runtime suite 478 passed. **`vela1`:** re-measure PII / Hazard at 4
+    callers on a head with it; don't lower `forward_token_budget`. **`router`:** run your gate rerun with it (C = 4
+    p99).
+  - **`e2e-docs` 13:10, `multimodal-routing` (implicit Omni deployment gets `overflow: truncate`, Omni accepts only
+    `reject`): decision — Omni truncates text like the legacy facade did.** **`embed`:** the Omni family accepts
+    `overflow: truncate` for text inputs (cut the token IDs to the text graph's limit; images and audio unchanged),
+    with a test, in your IP2 sha. `stores` keeps `truncate`. `e2e-docs`: re-run the lane on `embed`'s sha.
+  - **`e2e-docs` → `router` (a `pkg/config` test that parses every `e2e/profiles/*/values.yaml` `config:`): yes,
+    please, `router`, for IP2 or IP3.**
+  - **DCO** re-evaluates on the IP2 push (13:08).
+
 - 2026-10-04 13:31 — **Coordinator: USER DECISIONS (13:15). Binding for `studio-serving` (76ca48d2), `studio-ui`
   (2c575d44) and `reasoning` (40595ea4).** Addresses live only in `~/.config/decision2/studio-nodes.env`.
   1. **Decision 1.0 is served alongside 2.0 in the Studio**, so users can compare. The 1.0 host is `studio-v1`.
