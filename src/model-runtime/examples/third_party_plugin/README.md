@@ -46,5 +46,6 @@ curl -s localhost:8100/v1/models | jq '.data[0].plugins[] | select(.name | start
    `fuse_bundled_jobs` when one forward may serve several bundled requests.
 
 The runtime never imports code shipped inside a model package; plugins are
-installed code. The runtime's tests install this example through its entry
-points (`tests/test_third_party_plugin.py`).
+installed code. The runtime's tests build this example's wheel, install it
+into a fresh directory and discover it through its entry points
+(`tests/test_third_party_plugin.py`).

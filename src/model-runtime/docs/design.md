@@ -297,8 +297,10 @@ loads entry points at startup, refuses duplicate names, and lists every active
 plugin with its distribution, version and descriptor in `/v1/models`. Plugins
 run in the runtime process; the runtime never executes code from a model
 package. `examples/third_party_plugin` is a complete, documented example (a
-keyword family and a counting engine) that the test suite installs through its
-entry points and serves on every surface next to a Decision 2.0 model.
+keyword family and a counting engine). The test suite builds its wheel with its
+own build backend, installs it into a fresh directory, discovers it through the
+entry points its `pyproject.toml` declares and serves it on every surface next
+to a Decision 2.0 model.
 
 ## 6. API
 

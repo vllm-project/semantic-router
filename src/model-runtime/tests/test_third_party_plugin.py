@@ -1,13 +1,18 @@
 """The out-of-tree example plugin, installed through entry points, in a process serving two models.
 
-It exercises every surface beyond decisions, bundles across models, the
-per-model result cache, bundle fusion and per-model readiness.
+The example's wheel is built by its own build backend and installed into a
+fresh directory, so discovery reads the entry points its ``pyproject.toml``
+declares. The tests exercise every surface beyond decisions, bundles across
+models, the per-model result cache, bundle fusion and per-model readiness.
 """
 
 from __future__ import annotations
 
 import json
-from importlib import metadata
+import shutil
+import subprocess
+import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -21,14 +26,9 @@ from .conftest import QUESTIONS, STATE
 from .test_api_contract import check
 
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "third_party_plugin"
-ENTRY_POINTS = {
-    "vllm_sr_runtime.families": [
-        ("example_keywords", "vllm_sr_example.family:KeywordFamily")
-    ],
-    "vllm_sr_runtime.engines": [
-        ("example_counts", "vllm_sr_example.engine:CountsEngine")
-    ],
-}
+BUILD_WHEEL = (
+    "import setuptools.build_meta as backend, sys; backend.build_wheel(sys.argv[1])"
+)
 KEYWORDS = {
     "format": "vllm-sr-example/1",
     "labels": ["billing", "shipping", "other"],
@@ -40,18 +40,26 @@ KEYWORDS = {
 
 
 @pytest.fixture(scope="module")
-def example_plugin():
+def example_plugin(tmp_path_factory):
+    root = tmp_path_factory.mktemp("example-plugin")
+    source = root / "source"
+    shutil.copytree(
+        EXAMPLE,
+        source,
+        ignore=shutil.ignore_patterns("build", "*.egg-info", "__pycache__"),
+    )
+    subprocess.run(
+        [sys.executable, "-c", BUILD_WHEEL, str(root)],
+        cwd=source,
+        check=True,
+        capture_output=True,
+    )
+    (wheel,) = root.glob("*.whl")
+    site = root / "site"
+    with zipfile.ZipFile(wheel) as archive:
+        archive.extractall(site)
     patch = pytest.MonkeyPatch()
-    patch.syspath_prepend(str(EXAMPLE))
-    original = metadata.entry_points
-
-    def entry_points(**selection):
-        found = list(original(**selection))
-        for name, target in ENTRY_POINTS.get(selection.get("group"), []):
-            found.append(metadata.EntryPoint(name, target, selection["group"]))
-        return found
-
-    patch.setattr(metadata, "entry_points", entry_points)
+    patch.syspath_prepend(str(site))
     registry.discover.cache_clear()
     yield
     patch.undo()
