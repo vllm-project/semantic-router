@@ -110,6 +110,31 @@ what surrounds them:
 - **Mini audio:** its NumPy features for clips of several CLAP windows are
   what remains to profile.
 
+## CPU: ONNX Runtime pools in a process that serves several CPU models
+
+One process serving Vela Embedding on `onnxruntime` and Vela Domain on
+`native`, 16 threads, the same 16 vCPUs: per text length, Domain alone,
+Domain called right after an embedding, and the embedding alone (p50 ms over
+40 calls, 50 ms between calls). Measured at `ebecf9a3a` with each pool
+policy swapped in; the runtime takes the second row from `0b4c563cd`.
+
+| CPU pool policy | Domain alone 16 / 64 / 256 | Domain after embedding | Embedding alone |
+| --- | --- | --- | --- |
+| One shared pool that spins (before `7c21e05a5`) | 9.3 / 16.3 / 34.4 | 21.5 / 33.7 / 66.4 | 16.8 / 25.0 / 58.5 |
+| Own pool per session, spins inside a run, `force_spinning_stop` | 9.5 / 16.7 / 35.0 | 10.0 / 16.7 / 34.6 | 16.4 / 24.7 / 58.5 |
+| Own pool per session that never spins (`7c21e05a5`) | 10.1 / 16.9 / 34.9 | 10.3 / 16.9 / 34.8 | 19.8 / 31.4 / 80.5 |
+| Own pool per session that spins (legacy's policy) | 9.4 / 16.9 / 35.0 | 21.0 / 37.1 / 66.4 | 16.8 / 24.5 / 58.7 |
+
+ONNX Runtime's threads spin for milliseconds after a run, on the cores the
+next model's forward needs. The shared pool can't be told to stop
+(`session.force_spinning_stop` reaches only a session's own pool), so a
+process with more than one CPU model (`EngineOptions.exclusive_cpu` False)
+gives each CPU session its own pool that spins while a run lasts and stops
+when it returns. Never spinning was not enough: Omni Nano text, whose
+forward is a few milliseconds of small parallel sections, took 7.4 ms against
+legacy's 5.1 in the A/B process that serves Nano and Mini. A process with
+one CPU model keeps the shared pool, which Omni's CLAP-then-audio chain needs.
+
 ## CPU: legacy ONNX Runtime execution vs both runtime engines
 
 Synthetic token rows (`tools/embed_corpus.py`), three rounds on the same 16

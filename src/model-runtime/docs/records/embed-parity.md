@@ -59,10 +59,10 @@ The reference is the package loaded by Transformers in FP32 on the CPU with
 (the Embedding contract) or final-normed (the Reranker contract); pooling,
 Matryoshka truncation and L2 as the package configures them. The runtime
 serves the whole corpus as one request. The CPU rows ran the reference over
-one right-padded batch at `c206598f4`, before the `exact` path took oneDNN's
-pre-packed FP32 linears on x86 CPUs (`5a73fc17e`); the packed path's own
-distance from the `F.linear` path is in the reduced-copy table below
-(≤ 1e-6 for embeddings, ≤ 1.5e-5 for logits). The ROCm rows ran each
+one right-padded batch at `ebecf9a3a`: the `exact` path on oneDNN's
+pre-packed FP32 linears, and the Reranker's scorer as a two-output packed
+linear whose second row is zeros (a one-output packed linear changes with
+the batch size, which the load-time batch-invariance probe rejects). The ROCm rows ran each
 reference input alone, at `5a73fc17e` (gfx942 fused rotary, encoder graphs).
 The corpus is `tools/embed_corpus.py`: short queries, paragraphs and long
 documents (to a few thousand tokens) in seven languages, code and JSON, and
@@ -70,13 +70,13 @@ rerank sets of one query with eight documents.
 
 | Model | Device | Engine | Cases | Worst cosine | Max \|Δ\| | Rerank order |
 | --- | --- | --- | --- | --- | --- | --- |
-| Vela Embedding | CPU | native | 6 (exits 3, 6, 11, 22; dims 768, 128, 64) | 0.9999999999998 | 2.7e-7 | |
-| Vela Embedding | CPU | onnxruntime | 6 | 0.9999999999982 | 5.9e-7 | |
+| Vela Embedding | CPU | native | 6 (exits 3, 6, 11, 22; dims 768, 128, 64) | 0.9999999999975 | 8.4e-7 | |
+| Vela Embedding | CPU | onnxruntime | 6 | 0.9999999999986 | 6.4e-7 | |
 | Vela Embedding | ROCm | native | 6 | 0.9999999999886 | 1.5e-6 | |
-| Vela Reranker | CPU | native | 20 pair scorers (layers 3, 6, 11, 22 × dims 768–64) | | 3.8e-6 (logit) | identical |
+| Vela Reranker | CPU | native | 20 pair scorers (layers 3, 6, 11, 22 × dims 768–64) | | 1.8e-5 (logit) | identical |
 | Vela Reranker | CPU | onnxruntime | 20 | | 2.0e-5 (logit) | identical |
 | Vela Reranker | ROCm | native | 20 | | 1.8e-5 (logit) | identical |
-| Qwen3-Embedding | CPU | native | 1 (last token, 1,024-d) | 1.0 | 0.0 | |
+| Qwen3-Embedding | CPU | native | 1 (last token, 1,024-d) | 0.9999999999923 | 7.1e-7 | |
 | Qwen3-Embedding | ROCm | native | 1 | 0.9999999999926 | 6.2e-7 | |
 
 ROCm, whose bar is cosine ≥ 0.9995, stays inside the CPU bar too.
