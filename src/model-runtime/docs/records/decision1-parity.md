@@ -72,10 +72,12 @@ The first requests of each panel; public231 in full.
 
 `51b6bd721` has the same `decision1` runtime code as `d5b985e43`.
 
-**At `89c4388aa`** (per-stack graphs and copies, and the scheduler that answers
-each job when its own batches ran), a spot check on ROCm and CPU: Kai and Eos
-on public231 and the first typed-final requests (400; Eos on CPU 200), every
-answer byte-identical.
+**At `89c4388aa`, `d3d1d7e68` and `69ae2d0c5`** (per-stack graphs and copies,
+the scheduler that answers each job when its own batches ran, the CPU-only
+changes to coalesced batches, and backbone weights copied into process memory
+instead of left as views of the checkpoint's file mapping), a spot check on
+ROCm and CPU: Kai and Eos on public231 and the first typed-final requests (400;
+Eos on CPU 200), every answer byte-identical.
 
 ## What exactness takes
 
@@ -154,6 +156,12 @@ a tolerance rather than bit for bit.
   | Kai-0.6B | 70 / 1,431 | 0 | 1.1e-5 |
   | Lex-0.6B | 56 / 1,431 | 0 | 4.5e-6 |
   | Route-0.6B | 61 / 1,431 | 0 | 3.5e-5 |
+
+  The same counts at `d3d1d7e68`, where on CPUs the type heads read coalesced
+  rows by length group and coalesced batches stay within 1,024 padded tokens.
+  On GPUs `d3d1d7e68` runs approximate batches as `c22bb15cd` does; at
+  `8d45cd2f2`, which also grouped there, `batching` on the four panels matched
+  the `c22bb15cd` row.
 
 - **`shared_context`, decoders, ROCm, `d5b985e43`:** the public many-question
   request (`tools/many_questions.py`) at 64 and 128 questions, 5 requests each
