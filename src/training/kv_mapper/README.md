@@ -173,3 +173,24 @@ PYTHONPATH=. python3 src/training/kv_mapper/distill_run.py \
 ```bash
 PYTHONPATH=. python3 -m unittest src.training.kv_mapper.tests.test_distill
 ```
+
+## KL evaluation
+
+`kl_eval_run.py` measures how close each artifact's mapped cache keeps the
+target to its own cache, on held-out chat (cut before an assistant reply, like
+the stage-2 data) and on plain text (the first tokens of documents from a
+second corpus). For every sample the target's own distribution and the source
+prefill are computed once and each artifact's maps run on them, so artifacts
+are paired by sample. The report gives the mean KL from the target's own
+distribution and the gold-token NLL per artifact, with paired bootstrap
+intervals against the first `--artifact`. On Qwen3-14B to 32B the ridge mapper
+already matches the cold target on HellaSwag, so this is the measure that
+separates mappers there. Needs torch, transformers and datasets.
+
+```bash
+PYTHONPATH=. python3 src/training/kv_mapper/kl_eval_run.py \
+  --artifact v1=/tmp/kv-artifacts/<stage1-mapper-id> \
+  --artifact stage2=/tmp/kv-artifacts/<stage2-mapper-id> \
+  --chat-revision <ultrachat-sha> --text-revision <wikipedia-sha> \
+  --output /tmp/kv-eval/kl.json
+```
