@@ -119,13 +119,6 @@ unexecuted blocks qualification. Manual and experimental environments are
 listed separately. A previous run on another commit cannot fill a missing
 result in the current run.
 
-The platform executor also runs a **RISC-V QEMU** contract: the pure-Go Router
-built for `linux/riscv64` runs under qemu-user on a Linux AMD64 runner, attached
-to a model runtime on the host, and its classification must equal the runtime's
-own answer. Its receipt names both the target and the host. This proves the
-Router's emulated instruction-set path; it does not qualify physical RISC-V
-hardware or its performance, and the riscv64 Router runs no model code.
-
 ## Reproduce the affected boundary
 
 | Contract | Local command | Required evidence |
@@ -135,7 +128,6 @@ hardware or its performance, and the riscv64 Router runs no model code.
 | Dashboard | `make dashboard-check`; `make dashboard-test-wasm`; `make dashboard-test-e2e-evaluation` | Frontend and backend tests, compiled WASM behavior, and browser acceptance. |
 | Model runtime | `make model-runtime-test` | Families, engines, scheduling, the HTTP contract, and golden answers on CPU. |
 | Published models | `make test-models` | Classifier, cache, and Omni real-model tests serving the pinned Vela 1.0 packages through a managed model runtime, without a skip. |
-| RISC-V QEMU | `make test-riscv-qemu` | Target ELF identity, Router health and readiness under emulation, and a classification through an attached host runtime that equals the runtime's answer. |
 | Image-routing conformance | `make verify-image-routing-calibration` | Prepared Nano identity, every authored scored image, prototype provenance, frozen threshold/validation assertions, and multimodal profile package tests. |
 | Local Stack serving contracts | `make vllm-sr-test-integration` | Live `serve`/`stop`, mounts, environment, pull policy, request behavior, and service isolation. |
 | Local Stack memory contracts | `USE_DETERMINISTIC_MEMORY_EMBEDDINGS=0 make memory-test-integration` | Vela embedding, persistent retrieval, injection, user isolation, and persistence failure behavior. |
