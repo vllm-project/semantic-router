@@ -52,10 +52,115 @@ func testModelRuntimeLifecycle(ctx context.Context, client *kubernetes.Clientset
 	if strings.Join(served, ",") != "decision-a,feedback-a" {
 		return fmt.Errorf("the attached runtime serves %v, want decision-a and feedback-a", served)
 	}
+	inventory, err := checkInventory(ctx, session)
+	if err != nil {
+		return fmt.Errorf("model inventory: %w", err)
+	}
 	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{"managed_processes": processes, "attached_models": served})
+		opts.SetDetails(map[string]interface{}{"managed_processes": processes, "attached_models": served, "inventory_states": inventory})
 	}
 	return nil
+}
+
+// mrInventoryDeployment is the part of one GET /api/v1/inventory/model-runtime
+// entry the lifecycle case reads.
+type mrInventoryDeployment struct {
+	Name       string `json:"name"`
+	Managed    bool   `json:"managed"`
+	Process    string `json:"process"`
+	ServedName string `json:"served_name"`
+	Endpoint   string `json:"endpoint"`
+	Ready      bool   `json:"ready"`
+	State      string `json:"state"`
+	Family     string `json:"family"`
+	Heads      []struct {
+		Labels []string `json:"labels"`
+	} `json:"heads"`
+}
+
+// checkInventory requires the Router's model inventory to list every
+// deployment once: managed ones ready in their process group with the card
+// their runtime serves, attached ones by served name and transport only, and
+// the one without a runtime not ready. It returns each deployment's state.
+func checkInventory(ctx context.Context, session *modelRuntimeSession) (map[string]string, error) {
+	var inventory struct {
+		Deployments []mrInventoryDeployment `json:"deployments"`
+		Count       int                     `json:"count"`
+	}
+	if err := session.getAPI(ctx, "/api/v1/inventory/model-runtime", &inventory); err != nil {
+		return nil, err
+	}
+	listed := map[string]mrInventoryDeployment{}
+	for _, deployment := range inventory.Deployments {
+		if _, twice := listed[deployment.Name]; twice {
+			return nil, fmt.Errorf("%s is listed twice", deployment.Name)
+		}
+		listed[deployment.Name] = deployment
+	}
+	want := append(append(append([]string(nil), mrManagedDeployments...), mrAttachedDeployments...), mrOfflineDeployment)
+	if inventory.Count != len(inventory.Deployments) || len(listed) != len(want) {
+		return nil, fmt.Errorf("lists %d deployments (count %d), want %v", len(listed), inventory.Count, want)
+	}
+	states := map[string]string{}
+	for _, name := range want {
+		deployment, ok := listed[name]
+		if !ok {
+			return nil, fmt.Errorf("%s is not listed", name)
+		}
+		states[name] = deployment.State
+		if strings.Contains(deployment.Endpoint, mrSocketDir) {
+			return nil, fmt.Errorf("%s shows its socket path %q", name, deployment.Endpoint)
+		}
+	}
+	for _, name := range mrManagedDeployments {
+		deployment := listed[name]
+		// CPU models run in "cpu" or spread over "cpu-0" …
+		group, wantGroup, wantFamily := strings.SplitN(deployment.Process, "-", 2)[0], mrDeviceProcess, "task_heads"
+		if name == mrDecisionDeployment {
+			group, wantGroup, wantFamily = deployment.Process, mrDecisionsProcess, "decision2"
+		}
+		if !deployment.Managed || !deployment.Ready || group != wantGroup || deployment.Family != wantFamily {
+			return nil, fmt.Errorf("%s is %+v, want a ready managed %s deployment in the %s group", name, deployment, wantFamily, wantGroup)
+		}
+	}
+	if err := checkInventoryLabels(ctx, session, listed[mrDomainDeployment]); err != nil {
+		return nil, err
+	}
+	for name, servedName := range map[string]string{mrAttachedDecisions: "decision-a", mrAttachedFeedback: "feedback-a"} {
+		deployment := listed[name]
+		if deployment.Managed || !deployment.Ready || deployment.ServedName != servedName ||
+			deployment.Endpoint != "http://"+mrAttachedService+"."+modelruntime.RouterNamespace+".svc.cluster.local:8100" {
+			return nil, fmt.Errorf("%s is %+v, want ready, attached as %s by scheme and host", name, deployment, servedName)
+		}
+	}
+	if offline := listed[mrOfflineDeployment]; offline.Managed || offline.Ready {
+		return nil, fmt.Errorf("%s is %+v, want attached and not ready", mrOfflineDeployment, offline)
+	}
+	return states, nil
+}
+
+// checkInventoryLabels requires the inventory to show a classifier's labels as
+// the runtime serving it reports them.
+func checkInventoryLabels(ctx context.Context, session *modelRuntimeSession, deployment mrInventoryDeployment) error {
+	client, _, err := session.managed(ctx, deployment.Name)
+	if err != nil {
+		return err
+	}
+	models, err := client.Models(ctx)
+	if err != nil {
+		return err
+	}
+	for _, card := range models.Data {
+		if card.ID != deployment.Name {
+			continue
+		}
+		if len(card.Heads) == 0 || len(deployment.Heads) != len(card.Heads) ||
+			strings.Join(deployment.Heads[0].Labels, ",") != strings.Join(card.Heads[0].Labels, ",") {
+			return fmt.Errorf("%s heads %+v, the runtime serves %+v", deployment.Name, deployment.Heads, card.Heads)
+		}
+		return nil
+	}
+	return fmt.Errorf("no managed runtime serves %s", deployment.Name)
 }
 
 // checkManagedProcesses requires the "decisions" process group to serve the

@@ -59,7 +59,15 @@ switch to Mini.
 
 ## Check it
 
+Router images include the Omni Nano bundle, so the router needs nothing else.
+The Hugging Face repositories hold the source model, not the files the runtime
+serves, so to call Omni yourself, build its bundle once from the repository
+root and point the runtime at it:
+
 ```bash
+docker buildx build -f tools/models/vela_omni/Dockerfile \
+  --build-arg VELA_OMNI_VARIANTS=nano --output type=local,dest=./omni .
+export VLLM_SR_RUNTIME_PREPARED_DIR="$PWD/omni"
 vllm-sr serve vllm-sr/Vela-1.0-Omni-Nano --device cpu --port 8100
 curl -s localhost:8100/v1/embeddings -H 'content-type: application/json' \
   -d '{"input": [{"type": "text", "text": "a photograph of a passport page"}]}'

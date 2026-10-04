@@ -23,6 +23,8 @@ dependencies = [
   "huggingface_hub>=0.25",
   "starlette>=0.37",
   "uvicorn>=0.30",
+  "uvloop>=0.19; sys_platform != 'win32'",
+  "httptools>=0.6",
   "prometheus_client>=0.20",
   "pyyaml>=6.0",
 ]

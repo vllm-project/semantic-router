@@ -80,6 +80,6 @@ then validate your configuration:
 vllm-sr config validate --config config.yaml
 ```
 
-Use [route preview](../model-runtime/troubleshooting.md) to check
+Use [route preview](model-runtime/troubleshooting.md) to check
 the signal, selected decision, and latency on representative requests before
 deploying the model to traffic.

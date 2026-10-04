@@ -163,6 +163,7 @@ The binding names (`domain_classifier`, `pii_classifier`, `prompt_guard`,
 | `VLLM_SR_RUNTIME_DIR` | a private temporary directory | Where the router puts the processes' Unix sockets and models files. |
 | `VLLM_SR_RUNTIME_CACHE_DIR` | `/app/models/model-runtime` in router images | Hugging Face cache of managed runtimes. |
 | `VLLM_SR_RUNTIME_CPU_PROCESSES` | one per CPU model, at most one per two cores | The most processes CPU models without a `process` are spread over. |
+| `VLLM_SR_RUNTIME_PREPARED_DIR` | `/opt/router-model-artifacts` | Where the runtime finds prepared bundles (Vela Omni) before it looks on the Hub. |
 | `HF_TOKEN` | | Token for gated or private repositories. |
 
 The router talks to managed runtimes only over Unix sockets in a directory only
@@ -188,8 +189,9 @@ status, `vllm_sr_runtime_request_duration_seconds`,
 `vllm_sr_runtime_forward_duration_seconds`, `vllm_sr_runtime_batch_rows`,
 `vllm_sr_runtime_batch_tokens`, `vllm_sr_runtime_bundle_tasks`,
 `vllm_sr_runtime_result_cache_total` by model and outcome,
-`vllm_sr_runtime_queue_depth`, `vllm_sr_runtime_ready` and
-`vllm_sr_runtime_model_info`.
+`vllm_sr_runtime_queue_depth`, `vllm_sr_runtime_ready`,
+`vllm_sr_runtime_model_info` and `vllm_sr_runtime_model_memory_bytes` (the
+bytes a model's loaded weights take, reduced-precision copies included).
 
 ## Security
 

@@ -330,6 +330,60 @@ def test_vllm_sr_commands_parse():
             ) from error
 
 
+def test_translations_in_sync_show_the_english_snippets():
+    """A translated page that claims to be current shows the snippets the tests check."""
+    translated = (
+        DOCS.parent / "i18n" / "zh-Hans" / "docusaurus-plugin-content-docs" / "current"
+    )
+    checked = 0
+    for page in PAGES:
+        translation = translated / page.relative_to(DOCS)
+        if not translation.is_file():
+            continue
+        text = translation.read_text(encoding="utf-8")
+        if re.search(r"^\s*outdated:\s*true\s*$", text, re.M):
+            continue
+        assert FENCE.findall(text) == FENCE.findall(
+            page.read_text(encoding="utf-8")
+        ), translation.relative_to(REPO_ROOT)
+        checked += 1
+    assert checked
+
+
+def test_documented_image_builds_use_dockerfiles_that_exist():
+    builds = [
+        (block.where, dockerfile)
+        for block in _blocks("bash")
+        for dockerfile in re.findall(
+            r"docker (?:buildx )?build\b[^\n]*?-f (\S+)",
+            block.text.replace("\\\n", " "),
+        )
+    ]
+
+    assert builds
+    for where, dockerfile in builds:
+        assert (REPO_ROOT / dockerfile).is_file(), f"{where}: {dockerfile}"
+
+
+def test_documented_environment_variables_are_read_by_the_runtime_or_router():
+    documented = {
+        name
+        for page in PAGES
+        for name in re.findall(r"\bVLLM_SR_RUNTIME_[A-Z_]+\b", page.read_text())
+    }
+    router = REPO_ROOT / "src" / "semantic-router" / "pkg"
+    sources = "\n".join(
+        path.read_text()
+        for path in (
+            *RUNTIME.rglob("*.py"),
+            *(router / "modelservice").glob("*.go"),
+        )
+    )
+
+    assert documented
+    assert sorted(name for name in documented if f'"{name}"' not in sources) == []
+
+
 def test_vllm_sr_runtime_commands_use_real_options():
     source = (RUNTIME / "cli.py").read_text()
     commands = _commands("vllm-sr-runtime")

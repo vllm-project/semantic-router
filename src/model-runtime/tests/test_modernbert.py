@@ -326,7 +326,7 @@ def test_rows_of_very_different_lengths_attend_in_separate_grids(
     layout = packed_layout(
         lengths, backbone.window, "cpu", band_from=band_from, block=8
     )
-    assert [group.rows for group in layout.groups] == [2, 2] and layout.width == 40
+    assert [(group.rows, group.width) for group in layout.groups] == [(2, 40), (2, 5)]
     with torch.inference_mode():
         grouped = backbone.encode(flat, layout, (0, 2, 4))
         alone = [
