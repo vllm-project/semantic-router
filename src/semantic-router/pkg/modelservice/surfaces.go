@@ -40,13 +40,7 @@ type ClassifyRequest struct {
 
 // Span is a labelled span. Start and End are Unicode code points into the
 // text the head read (End exclusive); callers convert them once.
-type Span struct {
-	Label       string
-	Start       int
-	End         int
-	Text        string
-	Probability float64
-}
+type Span = api.Span
 
 // InputUsage holds one input's tokenizer facts, including special tokens.
 type InputUsage struct {
@@ -431,9 +425,7 @@ func decodeClassify(body api.ClassifyResponse) ClassifyResponse {
 			item.Selected = append([]string(nil), (*result.Selected)...)
 		}
 		if result.Spans != nil {
-			for _, span := range *result.Spans {
-				item.Spans = append(item.Spans, Span{Label: span.Label, Start: span.Start, End: span.End, Text: span.Text, Probability: span.Probability})
-			}
+			item.Spans = append([]Span(nil), (*result.Spans)...)
 		}
 		if result.Windows != nil {
 			for _, window := range *result.Windows {
