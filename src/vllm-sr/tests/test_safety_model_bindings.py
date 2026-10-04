@@ -93,5 +93,5 @@ def test_safety_invalid_binding_is_rejected_before_launch(change):
     elif change == "mapping":
         bindings["safety.risk"]["mapping_path"] = "unused.json"
     else:
-        deployment["device"] = "metal"
+        deployment["device"] = "Metal 0"
     assert validate_model_runtime_references(UserConfig.model_validate(document))
