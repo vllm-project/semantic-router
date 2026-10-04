@@ -7,12 +7,44 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// semanticSignalUnitLimit bounds one embedding/classifier forward pass. The
-// request's full text still reaches exact-match, structure, and context signals;
-// semantic signals receive representative head, middle, and tail views so a
-// model with a large context window cannot force internal routing models to
-// allocate against that same unbounded window. Units are quarter-token
-// estimates calibrated on the mmBERT tokenizer.
+// A model call made for a routing signal takes one of three input treatments,
+// chosen by what a missed part of the text would cost.
+//
+//   - Sample. A signal that labels the request as a whole, such as domain,
+//     language, complexity or modality, may read a head, middle and tail view,
+//     which carries the request's purpose and bounds the forward pass.
+//     textForRoutingSignal does this for boundedSemanticSignalTypes.
+//   - Scan. A signal that asks whether something appears anywhere (PII, an
+//     attack, an unsupported claim) must read all of the text, because a
+//     dropped part is a silent miss. Use securitySignalChunkSpans with a budget
+//     below, or a native token window defined by the model's tokenizer.
+//   - Whole text. When the configuration declares a budget above 512 tokens
+//     for the model (hasLongContextClassifier), pass the text unchanged. The
+//     declared budget then governs, and a deployment's overflow policy, reject
+//     by default, decides what happens past it.
+//
+// Never hand a long text to a model that truncates it to its own limit. That
+// answers on a prefix while reporting a verdict for the whole input, which is
+// how #3204, #3333 and #3364 happened.
+//
+// A caller that reports positions also owes offsets into the original text.
+// Take them from securitySignalChunkSpans by adding StartByte to the offset
+// inside the chunk. The de-duplicated chunk helpers merge identical chunks
+// found at different offsets, and searching the text for a chunk maps repeated
+// text to its first occurrence.
+
+// The request's full text still reaches exact-match, structure, and context
+// signals. Budgets are quarter-token units from signalRuneUnits, set to stay at
+// or above the mmBERT token count (TestSignalUnitsUpperBoundMeasuredTokenCounts),
+// against a 512-token forward.
+//
+// semanticSignalUnitLimit is 440 estimated tokens for the three samples, which
+// leaves room for the two omission markers (39 estimated tokens) and the
+// special tokens. PII scans 128-token chunks because local token
+// classification loses entity confidence in long windows. That leaves room for
+// text about four times denser than the estimate before a forward truncates.
+// Jailbreak scans 384-token chunks because detection gains from broader
+// context, which leaves room for about a third more.
 const (
 	semanticSignalUnitLimit     = 440 * 4
 	piiSignalChunkBudget        = 128 * 4
@@ -108,6 +140,12 @@ func securitySignalChunks(text string, budget, overlapRunes int) []string {
 // securitySignalChunkSpans is securitySignalChunks with each chunk's byte
 // offset in text. An entity found at offset e in span s sits at
 // s.StartByte + e in the original text.
+//
+// Each chunk starts overlapRunes before the previous one ends, so any span of
+// at most overlapRunes+1 runes lies inside one chunk, as long as every chunk is
+// at least that long. A longer span can straddle a boundary and reach the model
+// only in parts. At the PII budget a long unbroken run of digits or base64 can
+// produce chunks shorter than the overlap, and the bound does not hold there.
 func securitySignalChunkSpans(text string, budget, overlapRunes int) []signalChunkSpan {
 	runes := []rune(text)
 	if len(runes) == 0 {
