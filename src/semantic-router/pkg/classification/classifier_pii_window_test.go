@@ -131,7 +131,7 @@ func TestDefaultPIIWindowPreservesExplicitPolicies(t *testing.T) {
 		})
 	}
 	cfg := config.DefaultGlobalConfig()
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"pii-amd": {Artifact: config.DefaultSystemModels().PIIClassifier, Provider: "ort", Device: "migraphx:0", Precision: "native", Input: config.ModelInputBudget{MaxTokens: 8192, Overflow: "reject"}}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"pii-amd": {Artifact: config.DefaultSystemModels().PIIClassifier, Provider: config.ModelRuntimeProvider, Device: "rocm:0", Input: config.ModelInputBudget{MaxTokens: 8192, Overflow: "reject"}}}
 	cfg.ModelBindings = map[string]config.ModelBinding{"pii_classifier": {Deployment: "pii-amd", Adapter: "mmbert32k", Contract: config.RemoteClassifierContractTokenSpans}}
 	models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 	if err != nil {

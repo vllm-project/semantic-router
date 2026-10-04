@@ -28,7 +28,7 @@ func TestPromptGuardWindowContract(t *testing.T) {
 func TestPromptGuardWindowAcceptsExplicitLocalBindingWithoutLegacyVariant(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.PromptGuard.Window = &SequenceHeadWindowConfig{Size: 1024, Overlap: 128}
-	cfg.ModelDeployments = map[string]ModelDeployment{"guard": {Provider: "candle", Artifact: "owned", Input: ModelInputBudget{MaxTokens: 2048}}}
+	cfg.ModelDeployments = map[string]ModelDeployment{"guard": {Provider: ModelRuntimeProvider, Artifact: "/models/guard", Input: ModelInputBudget{MaxTokens: 2048}}}
 	cfg.ModelBindings = map[string]ModelBinding{"prompt_guard": {Deployment: "guard", Adapter: "modernbert", Contract: RemoteClassifierContractLabelDistribution}}
 	plan, err := CompileModelBindings(cfg)
 	if err != nil {

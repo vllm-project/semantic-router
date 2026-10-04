@@ -5,7 +5,7 @@ import "testing"
 func TestModelBindingProjectionKeepsCanonicalSourceImmutable(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.CategoryModel.ModelID = "models/default"
-	cfg.ModelDeployments = map[string]ModelDeployment{"private": {Provider: "candle", Artifact: "/mounted/private", Revision: "pin"}}
+	cfg.ModelDeployments = map[string]ModelDeployment{"private": {Provider: ModelRuntimeProvider, Artifact: "/mounted/private"}}
 	cfg.ModelBindings = map[string]ModelBinding{"domain_classifier": {Deployment: "private", Contract: "label_distribution.v1", Adapter: "mmbert32k", MappingPath: "/mounted/maps/domain.json"}}
 	cfg.RoutingScope = "private"
 	plan, err := CompileModelBindings(cfg)
