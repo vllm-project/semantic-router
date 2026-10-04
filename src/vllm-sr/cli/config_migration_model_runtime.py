@@ -29,9 +29,9 @@ from cli.config_migration_paths import (
     dict_at,
     signal_maps,
 )
+from cli.model_runtime_retired import REMOVED_PROVIDERS
 
 MODEL_RUNTIME = "model_runtime"
-REMOVED_PROVIDERS = frozenset({"candle", "ort", "openvino"})
 # Legacy device prefixes and the runtime accelerator that replaces them.
 _DEVICE_PREFIXES = {"cuda": "cuda", "rocm": "rocm", "migraphx": "rocm"}
 _EXECUTION_FIELDS = ("custom_ops_profile", "compilation_cache_dir")
@@ -150,7 +150,7 @@ def _migrate_deployments(catalog: dict[str, Any], notes: MigrationNotes) -> set[
         if not isinstance(deployment, dict):
             continue
         path = f"global.model_catalog.deployments.{name}"
-        provider = deployment.get("provider")
+        provider = str(deployment.get("provider") or "").strip().lower()
         if provider in REMOVED_PROVIDERS:
             device, problem = runtime_device(provider, deployment.get("device"))
             deployment["provider"] = MODEL_RUNTIME
