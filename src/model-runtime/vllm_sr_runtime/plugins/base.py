@@ -574,8 +574,9 @@ class LoadedModel(ABC):
 
     ``device_thread`` False says ``run`` never starts a parallel torch op (an
     ONNX Runtime engine with NumPy readouts): the scheduler then calls it on
-    the model's worker instead of handing each batch to the CPU device thread,
-    which saves a thread wake-up each way.
+    the model's worker, or on the request's planning thread while the model is
+    idle, instead of handing each batch to the CPU device thread, which saves a
+    thread wake-up each way.
     """
 
     info: ModelInfo
