@@ -401,21 +401,18 @@ export interface ConfigData {
     enabled: boolean
     model_id?: string
     model_ref?: string
-    use_modernbert?: boolean
     threshold?: number
     use_vllm?: boolean
   }
   classifier?: {
     category_model?: {
       model_id?: string
-      use_modernbert?: boolean
       threshold?: number
     }
     pii_model?: {
       enabled?: boolean
       model_id?: string
       model_ref?: string
-      use_modernbert?: boolean
       threshold?: number
     }
   }
@@ -495,7 +492,6 @@ export interface ConfigData {
   }>
   hallucination?: Array<{
     name: string
-    use_nli?: boolean
     description?: string
   }>
   pii?: Array<{
@@ -652,7 +648,6 @@ export interface ConfigData {
     }>
     hallucination?: Array<{
       name: string
-      use_nli?: boolean
       description?: string
     }>
     pii?: Array<{
@@ -759,7 +754,6 @@ export interface ConfigData {
           model_id?: string
           model_ref?: string
           threshold?: number
-          use_modernbert?: boolean
           use_vllm?: boolean
         }
         classifier?: {
