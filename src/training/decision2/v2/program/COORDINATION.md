@@ -205,6 +205,130 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 12:50 — **Coordinator (new session 38b1ae72, taking over from cba71646): RESTART AFTER A HOST OUTAGE.
+  Every agent stopped at about 05:40, and the local machine rebooted at 11:27, which wiped `/tmp`. I am resuming
+  every P2–4 agent now.**
+  - **What survived:** every worktree under `/home/xunliu/code/vllm-sr-p24-*` and the lead's
+    `/home/xunliu/code/vllm-sr-phases-2-4` (unpushed commits and dirty files intact), every pushed branch, and the
+    node files under `/data/dev2/runs/mr-p24/`. **Lost:** `/tmp`, including `/tmp/p24-stores-head` (its branch
+    `p24-stores-native-deletion` still exists; `git worktree prune` done). No P2–4 process runs on any node. Node B
+    GPU2–3 still carry `embed`'s `in-use` lease with no process behind it.
+  - **IP1:** the lead's `make check` and `make harness-check` on `3ca402416` both passed on node A (05:09). Under the
+    lead's 04:52 rule I marked #4512 ready at `3ca402416` at 12:48, so the first full CI run is going (about 2.5 h).
+    The DCO failure on the draft is the app failing to fetch more than 250 commits, not a missing sign-off.
+  - **New schedule (UTC+8, today):**
+    - **IP2 16:00.** The lead merges everything `INTEGRATION READY` by 15:30: the late IP1 shas (`router`
+      `bf630c5eb`, `embed` `b44e7ca5e`, `removal` `b04d8293d`), the IP2 items, and fixes for whatever the first CI
+      run reports. The `native` and binding-directory deletions follow IP2 as planned.
+    - **IP3 22:00 = feature complete**, then the final full CI run.
+  - **GPUs:** a new Decision 2.0 Reasoning track takes node D GPU0–7 (vCPUs 0–31 and 128–159), node F GPU2–7
+    (vCPUs 0–95) and node C GPU5–7 (vCPUs 64–95). P2–4 keeps node B, node C GPU1–4 and node A. The 04:22 CPU-range
+    table stays binding.
+  - Label every note with the output of `date +%H:%M`.
+
+- 2026-10-04 05:35 — **Model-runtime P2–4 `embed` (fd9f7608) → `vela1` (f6488e31), lead: pooled / relevance heads opt into your
+  packed-linear exact path (`5a73fc17e`, one line in `task_heads/family.py`); reduced copies need no consent from me.**
+  - **`5a73fc17e`:** `describe()` gives every `task_heads` package `TASK_KERNELS` (was `{}` when `task.layout` is set),
+    per the lead's 03:55 rule ("`embed`'s pooled / relevance heads if their records agree"): my `float32-packed` record
+    has Vela Embedding at cosine 1.0 / max |Δ| 1e-6 and the Reranker at 100 % order / logits ≤ 1.5e-5 from the
+    `F.linear` path, inside design §17's legacy bar (1e-4) with the measured exact-vs-legacy gaps (≤ 6.7e-7 / 2.3e-5);
+    CPU p50 halves (corpus 35.8 → 16.6 ms, 122 → 60 ms). Your invariance probe runs on their heads too; suite 471 passed.
+  - **Reduced copies for `max_speed`:** with packed linears on `exact`, a `float32-packed` copy buys nothing, BF16 fails
+    the floor for the Reranker and is slower per request for the Embedding on the GPU (2.6 → 4.3 ms), int8 fails both
+    — so no `BuiltinModel.reduced` entry for Vela Embedding / Reranker; Qwen3's decoder path loads no copy.
+  - **Running at `5a73fc17e` (node B, my ranges):** values + latency vs the recorded legacy outputs, the interleaved ORT
+    round, the candle and Omni A/Bs (Omni after the shared ORT pool: every job wins p50 / p95 / throughput but Nano
+    audio p50, 157.8 vs 153.9 ms before the preprocessing fix), ROCm side by side + parity. Records follow.
+
+- 2026-10-04 05:35 — **`e2e-docs` (3b457b58): the fixture lane `model-runtime` PASSES 7 / 7 on node A** (exact mirror
+  `71f0eb9cb`; the plain router image built from the same router / runtime trees at `115f88d85` — `removal`'s
+  runtime-in-image, no extra layer; nothing downloaded, `HF_HUB_OFFLINE=1`).
+  - **4 m 23 s** from Kind create to green, 17 / 17 pods running. Cases: lifecycle (managed `cpu` process = domain,
+    embedding, guard, PII, reranker; `decisions` process = decision fixture; attached runtime serves `decision-a`,
+    `feedback-a`), task signals (domain / guard / PII spans / attached feedback equal the runtimes' own answers),
+    embeddings + `rag.reranker` (Router API vector and diagnostic logits equal the runtime's), decision signals +
+    selector, bundles (3 requests → 3 `/v1/bundle`, 9 tasks, 0 single calls), fail-open (3 unknown answers, no
+    match), supervision (decisions runtime killed: back in 3.9 s, 5 requests served meanwhile, device group ready).
+  - **Old lane for comparison:** Phase 1's `decision-runtime` lane on `main` (run of `61aa7eb2d`, GH standard runner)
+    took 17 m 08 s as a job, about 9.5 min of it the profile; my node numbers exclude image builds and are on 32 cores,
+    so the PR's CI run is the fair comparison — I will post it when it exists.
+  - Fixes on the way (all `e2e/**`): label maps shipped with the profile (the Router still plans Hub downloads of the
+    Vela maps for module defaults), the fixture embedder asked for its full depth (the semantic config defaults to
+    layer 22), the planted offline signal error allowed, the domain oracle follows the Router's entropy rule (an
+    uncertain distribution matches every domain at or above the threshold).
+  - Re-running `model-runtime-real` on the plain image now (the earlier green used a run-only passwd layer).
+
+- 2026-10-04 05:30 — **INTEGRATION READY embed `b44e7ca5e`** (supersedes `e22b86761`; merges the PR head `3ca402416` and `vela1`
+  `464b7d816`; runtime suite 471 passed, 14 skipped; ruff clean on every changed file).
+  - **Lead, please merge this one rather than `e22b86761`:** `vela1`'s `464b7d816` and my `fa705fd43` both add the
+    Embedding / Reranker / Qwen3 golden entries to `golden_answers_vela1.json` (identical values, max |Δ| 0.0), and git
+    auto-merges them **without a conflict into duplicate JSON keys**. `96716304e` takes `vela1`'s file (13 entries once).
+  - **Also new:** `c00196082` Omni audio preprocessing builds each resampler kernel once and skips Whisper frames that
+    see only zeros (bit-identical, tested; a 0.75 s clip runs 75 of 3,000 frames); `b44e7ca5e` no per-session pool
+    sizes on shared-pool sessions (ORT warned on every session).
+  - **Next:** re-measure CPU at this head (it now carries `vela1`'s oneDNN packed linears on `exact`): native vs ORT
+    engine vs legacy ORT interleaved, the candle A/B and the Omni A/B; ROCm side by side; then
+    `docs/records/embed-{parity,performance}.md` and `BuiltinModel.reduced` consent (CPU `float32-packed` for Vela
+    Embedding and Reranker) for IP2.
+
+- 2026-10-04 05:24 — **INTEGRATION READY embed `e22b86761`** (`xunzhuo/model-runtime-p24-embed`; PR head `57d00d3ea` merged; runtime
+  suite 464 passed, 14 skipped; the lead's ruff config clean on every changed file). Supersedes `1c6cdee09`.
+  - **New since `1c6cdee09`:** `093a7aca6` tools take GPU devices from `accelerator.devices()` (they had no `arch`, so no
+    gfx942 kernel ran in my earlier GPU numbers); `19a18ab33` GPU `BAND_FROM` 2,048 (in `vela1`'s file); `fa705fd43`
+    CPU + ROCm golden answers for Vela Embedding / Reranker / Qwen3 (appended to `golden_answers_vela1.json`); A/B
+    `--gap-ms` / `--jobs`; **`e22b86761` ONNX Runtime CPU sessions share one process pool** sized to `--threads` or the
+    process's CPU affinity: per-session pools spin after a run, so Omni's CLAP + audio graphs back to back took 124 ms
+    on 16 cores instead of 43 ms; and ORT's default pool size counts the host's 160 CPUs, not the cpuset (the same
+    oversubscription that slowed the legacy facade).
+  - **Results so far:** ROCm all rows beat legacy ORT ROCm + CK FA (p50 and p95; 1,024 tokens 6.52 vs 7.08 ms); CPU vs
+    legacy candle, interleaved A/B, every job 1.5–5.6× (p50, p95, throughput); Omni vs legacy ORT (pools sized to 16):
+    text and images win, audio was 214 vs 157 ms at p50 — fixed by `e22b86761` in-process (pair 124 → 43 ms); the
+    A/B re-run is going now and lands in `docs/records/embed-*` for IP2.
+
+- 2026-10-04 05:20 — **INTEGRATION READY router `bf630c5eb`** (`xunzhuo/model-runtime-p24-router`; merges the PR head
+  `3ca402416`; one conflict, `deploy/helm/testdata/model-runtime-values.yaml`, kept on pinned `model_runtime` releases
+  without `precision`). Node D 64–95, exact mirror, real bindings: `go test ./...` passes on the whole router module;
+  `deploy/operator` tests pass; `dashboard/backend` tests pass except `config/TestDashboardDevLauncherPassesSharedAssetRoot`,
+  which fails only because node D's `/data` is a symlink; `go vet` is clean on router, `dashboard/backend`,
+  `deploy/operator`, `e2e` and `perf`; the dashboard WASM builds; golangci-lint `--new-from-rev 3ca402416` reports
+  0 issues (router module, operator controllers, dashboard handlers).
+  - **Parser flip:** the raw-YAML validator rejects, with the `vllm-sr config migrate` hint, deployments on `candle` /
+    `ort` / `openvino`; `precision`, `custom_ops_profile` and `compilation_cache_dir`; module `variant`, `model_type`,
+    `use_modernbert` and `use_mmbert_32k`; `detector.backend: candle`; the NLI explainer (`explainer`, `nli_model`,
+    `enable_nli_filtering`, `nli_entailment_threshold`, `system.hallucination_explainer`); `use_nli` on rules and
+    plugins (routing and recipes); and `global.stores.response_cache.polarity_guard`. The candle / ort / openvino
+    struct fields stay until `native` is deleted. Implicit defaults (Hazard included) are `model_runtime`, and
+    `precision` on a `model_runtime` deployment is an error. The local hallucination backend is `model_runtime`. A
+    `label_scores.v1` binding on `model_runtime` needs no `operating_point`. In the DSL, `use_nli` is a compile error.
+    The schema is regenerated (TS unchanged).
+  - **Card labels + Router downloads off** (the Kind blocker, lead 04:18 (3)): a local consumer without a mapping file
+    takes its labels from the served card (`serving.Runtime.Labels`); the canonical defaults name no mapping files.
+    The Router no longer downloads built-in module models or the artifacts of explicit `model_runtime` deployments,
+    and it fetches explicit mapping files only, files-only, at the release the runtime serves.
+  - **Hallucination evidence:** span details follow `include_explanation`, and the NLI label fields are gone from the
+    span types (classification, extproc, routerreplay). **Maintained configs:** `config/config.yaml`, the fragments,
+    `multi-objective` and `vela-amd` (every deployment `model_runtime` on `rocm:0`; `recipe.dsl` regenerated).
+  - **Edits in others' files (minimal, separate commits):** `deploy/operator` (the controller stops defaulting the
+    guard variant and mapping path; tests; the `model_runtime` sample serves the pinned Vela PII release),
+    `deploy/helm/testdata`, `dashboard/backend` tests, `pkg/k8s` fixtures, `tools/model-test-assets` (it no longer
+    requires default mapping files), plus the earlier `e2e/profiles/ai-gateway/values.yaml`,
+    `deploy/kubernetes/ai-gateway/…/responses-state.yaml` and `bench/hallucination/config*.yaml`.
+  - **Notices:**
+    - **Operator (`removal` / lead):** the CRD still has `variant`, `use_modernbert` and `use_mmbert_32k`, and its
+      CEL and webhook rules still require `use_mmbert_32k` for PII windows. Conversion now drops those fields. I
+      retire them from the CRD at IP2 unless the owner objects.
+    - **`e2e-docs`:** `config migrate` should drop `polarity_guard`, `variant` / `use_*`, the explainer, `use_nli`
+      and `precision` on `model_runtime`. Mapping paths are optional now. The Python validators in `src/vllm-sr` still
+      accept `candle` / `ort` providers, which the Go parser rejects.
+    - **`stores`:** `extproc` `TestFallbackReplayAuditing` is a pre-existing flake (1 / 100 on the PR head, 2 / 100
+      here): the `memory_persistence_receipt` outcome sometimes lands after the fallback outcome.
+      `embedding_config.backend: candle` in `config/config.yaml` is yours.
+    - **Lead / `vela1`:** the one slower tail in the gate is p99 at concurrency 4 (requests queue behind long-window
+      forwards inside a model's process); that is a runtime scheduler matter.
+  - **IP2 (mine):** inventory `GET /api/v1/inventory/model-runtime`; looper fusion grounding on the Halu head plus
+    `nli_contradiction_penalty` → `contradiction_penalty`; the response-stage bundle; deleting
+    `tools/model-test-assets`; retiring the operator CRD fields; a gate rerun on node B 32–63 at the post-flip head.
+
 - 2026-10-04 05:10 — **Model-runtime P2–4 `stores`: node D 32–63 claimed (untimed)** for the IP2 native-deletion
   checks (build, vet, tests, golangci-lint), pinned with `taskset`, `GOMAXPROCS=32`, `-p 32`. Load 6 at 05:10.
 
