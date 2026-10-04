@@ -82,9 +82,7 @@ def test_the_default_engine_serves_a_bundle_on_onnxruntime(tmp_path):
         native.load()
 
 
-def test_batches_run_on_the_model_worker_not_the_cpu_device_thread(
-    tmp_path, monkeypatch
-):
+def test_batches_never_run_on_the_cpu_device_thread(tmp_path, monkeypatch):
     from vllm_sr_runtime.config import ModelConfig, ServeConfig
     from vllm_sr_runtime.families.multimodal_embedding.family import OmniModel
     from vllm_sr_runtime.runtime import Runtime
@@ -105,11 +103,15 @@ def test_batches_run_on_the_model_worker_not_the_cpu_device_thread(
     try:
         threads.clear()
         body = {"model": "omni", "input": "hello", "options": {"overflow": "reject"}}
-        status, _ = asyncio.run(runtime.call("embeddings", body))
+        inline = asyncio.run(runtime.call("embeddings", body, 64))
+        body["input"] = "hello there"
+        planned_off_loop = asyncio.run(runtime.call("embeddings", body))
     finally:
         runtime.stop()
-    assert status == 200
-    assert threads == ["vllm-sr-runtime-worker"]
+    assert inline[0] == planned_off_loop[0] == 200
+    assert threads[0] == "vllm-sr-runtime-worker"
+    assert threads[1] not in ("vllm-sr-runtime-worker", "vllm-sr-cpu")
+    assert threads[1] != threading.main_thread().name
 
 
 @pytest.fixture(scope="module")
