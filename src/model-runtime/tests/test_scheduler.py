@@ -426,7 +426,10 @@ def test_concurrent_requests_of_different_lengths_share_one_forward_on_a_packed_
     model = GatedModel(gates={"blocker": gate})
     model.batch_invariant = True
     model.packs_rows = True
-    scheduler = started(model)
+    profile = ExactProfile()
+    profile.available(model)
+    scheduler = Scheduler(model, {"exact": profile})
+    scheduler.start()
     try:
         scheduler.submit([item("blocker", 8)], deadline=None, profile="exact")
         assert model.entered.wait(5)
