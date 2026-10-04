@@ -81,11 +81,33 @@ ignore = [
   "PLC0415",  # aiohttp is an optional dependency used only in HTTP mode
 ]
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
+# The model runtime keeps the PyTorch `F` convention and imports heavy optional
+# modules (uvicorn, safetensors, huggingface_hub, tokenizers) where they are used,
+# so the API, registry and CLI stay importable without them.
+"src/model-runtime/**/*.py" = ["N812", "PLC0415"]
+"src/model-runtime/tests/*.py" = ["N812", "PLC0415", "PLR2004"]
+"src/model-runtime/vllm_sr_runtime/engines/native/models/*.py" = ["N801", "N812", "PLC0415"]
+"src/model-runtime/vllm_sr_runtime/accel/triton_*.py" = ["N803", "N806", "N812", "PLC0415", "PLR2004", "SIM108"]
+"src/model-runtime/tools/*.py" = ["N812", "PLC0415", "PLR2004", "SIM115"]
 "bench/grounded_fusion/test_*.py" = ["PLR2004"]
 "src/training/model_classifier/modality_routing_classifier/test_*.py" = ["PLR2004"]
 "src/training/model_classifier/modality_routing_classifier/label_audit/test_*.py" = ["PLR2004"]
+"src/training/model_classifier/modality_routing_classifier/exploration_lfm25_scx/test_*.py" = ["PLR2004"]
 "bench/test_*.py" = ["PLR2004"]
 "bench/reasoning/test_*.py" = ["PLR2004"]
+"bench/agent_crew/test_*.py" = [
+  "PLR2004",  # expected call counts and costs are readable inline
+  "RUF012",   # stub HTTP handler class attributes are per-test state
+]
+"bench/agent_crew/report.py" = [
+  "PLC0415",  # matplotlib is an optional dependency used only by --figures
+]
+# The crew fixture is a pull request with deliberately defective code. Its bugs
+# are what the arms are scored against, so correctness rules must not remove them.
+"bench/agent_crew/fixture/pr/*.py" = [
+  "E722",     # bare except is a seeded defect
+  "SIM105",   # so is the try/except/pass it sits in
+]
 "bench/reasoning/router_reason_bench_multi_dataset.py" = [
   "PLR2004",  # answer-parsing and token thresholds are readable inline
 ]
