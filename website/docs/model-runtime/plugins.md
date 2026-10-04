@@ -26,8 +26,8 @@ sitting:
 It adds a keyword "model" family and the engine that runs it. A package is one
 JSON file that maps labels to keywords; the family answers `/v1/classify`,
 `/v1/embeddings` and `/v1/rerank` from keyword counts. The runtime's test
-suite installs it through its entry points and serves it next to a decision
-model in one process, on every endpoint.
+suite builds and installs its wheel, discovers it through its entry points and
+serves it next to a decision model in one process, on every endpoint.
 
 Try it:
 

@@ -25,7 +25,7 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 		}
 		if strings.HasPrefix(name, "classifier.") {
 			if rule := classifierSignalRuleByName(scoped.ClassifierRules, strings.TrimPrefix(name, "classifier.")); rule != nil {
-				*rule = projectGenericClassifierRule(*rule, spec.Deployment)
+				*rule = projectGenericClassifierRule(*rule, spec.Binding.Deployment, spec.Deployment)
 			}
 			continue
 		}
@@ -33,7 +33,7 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 		if spec.Deployment.Provider == "http" {
 			remote = &RemoteClassifierBackend{Model: spec.Deployment.ExternalModel, Protocol: spec.Binding.Adapter, Contract: spec.Binding.Contract}
 		}
-		artifact := ResolveModelPath(spec.Deployment.Artifact)
+		artifact := ResolveModelPath(spec.Deployment.ServedModel(spec.Binding.Deployment))
 		mapping := spec.Binding.MappingPath
 		switch name {
 		case "domain_classifier":

@@ -25,8 +25,6 @@ export interface VLLMEndpoint {
 
 export interface ModelConfig {
   model_id: string
-  use_modernbert?: boolean
-  use_mmbert_32k?: boolean
   threshold: number
   use_cpu: boolean
   use_contrastive?: boolean
@@ -457,7 +455,6 @@ export interface FactCheckModelModuleConfig {
   model_ref?: string
   threshold?: number
   use_cpu?: boolean
-  use_mmbert_32k?: boolean
 }
 
 export interface HallucinationDetectorModuleConfig {
@@ -468,22 +465,12 @@ export interface HallucinationDetectorModuleConfig {
   min_span_length?: number
   min_span_confidence?: number
   context_window_size?: number
-  enable_nli_filtering?: boolean
-  nli_entailment_threshold?: number
-}
-
-export interface NLIExplainerModuleConfig {
-  model_id?: string
-  model_ref?: string
-  threshold?: number
-  use_cpu?: boolean
 }
 
 export interface HallucinationMitigationConfig {
   enabled?: boolean
   fact_check_model?: FactCheckModelModuleConfig
   hallucination_model?: HallucinationDetectorModuleConfig
-  nli_model?: NLIExplainerModuleConfig
 }
 
 export interface FeedbackDetectorConfig {
@@ -491,12 +478,10 @@ export interface FeedbackDetectorConfig {
   model_id?: string
   threshold?: number
   use_cpu?: boolean
-  use_mmbert_32k?: boolean
-  use_modernbert?: boolean
 }
 
 export interface EmbeddingOptimizationConfig {
-  backend?: 'candle' | 'openvino' | 'openai_compatible'
+  backend?: 'model_runtime' | 'openai_compatible'
   model_type?: string
   preload_embeddings?: boolean
   target_dimension?: number
@@ -711,7 +696,6 @@ export interface CanonicalSystemModels {
   pii_classifier?: string
   fact_check_classifier?: string
   hallucination_detector?: string
-  hallucination_explainer?: string
   feedback_detector?: string
 }
 
@@ -767,7 +751,6 @@ export interface CanonicalHallucinationModuleConfig {
   enabled?: boolean
   fact_check?: FactCheckModelModuleConfig
   detector?: HallucinationDetectorModuleConfig
-  explainer?: NLIExplainerModuleConfig
 }
 
 export interface CanonicalEmbeddingCatalogConfig {

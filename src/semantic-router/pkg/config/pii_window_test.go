@@ -28,7 +28,7 @@ func TestPIIWindowConfigurationPreservesExplicitDocumentBudget(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.PIIModel = base
 	cfg.ModelBindings = map[string]ModelBinding{"pii_classifier": {Deployment: "pii"}}
-	deployment := ModelDeployment{Provider: "ort", Input: ModelInputBudget{MaxTokens: 1024, Overflow: "window"}}
+	deployment := ModelDeployment{Provider: ModelRuntimeProvider, Input: ModelInputBudget{MaxTokens: 1024, Overflow: "window"}}
 	cfg.ModelDeployments = map[string]ModelDeployment{"pii": deployment}
 	if err := ValidatePIIWindow(cfg); err != nil {
 		t.Fatal(err)

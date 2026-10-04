@@ -51,7 +51,7 @@ func TestVectorStorePreparesEmbeddingWithoutRecipeClassifierBindings(t *testing.
 			cfg.ClassifierRules = []config.ClassifierSignalRule{{Name: "risk", Type: "local", Labels: []string{"safe", "unsafe"}}}
 			cfg.SafetyRules = []config.SafetyRule{{Name: "unsafe", Threshold: .5}}
 			cfg.ModelDeployments = map[string]config.ModelDeployment{
-				"classifier": {Provider: "candle", Device: "cpu", Artifact: "/unavailable/recipe-classifier"},
+				"classifier": {Provider: config.ModelRuntimeProvider, Device: "cpu", Artifact: "/unavailable/recipe-classifier"},
 				"embedder":   {Provider: "http", ExternalModel: "embedding-service"},
 			}
 			cfg.ExternalModels = []config.ExternalModelConfig{{Name: "embedding-service", ModelName: "selected", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: server.URL}}}
@@ -64,7 +64,7 @@ func TestVectorStorePreparesEmbeddingWithoutRecipeClassifierBindings(t *testing.
 			}
 			if name == "global embedding" {
 				cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": cfg.ModelBindings["embedding"]}
-				cfg.ModelDeployments["local-override"] = config.ModelDeployment{Provider: "ort", Artifact: "/not-installed/recipe-only"}
+				cfg.ModelDeployments["local-override"] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "/not-installed/recipe-only"}
 				cfg.ModelBindings["embedding"] = config.ModelBinding{Deployment: "local-override", Contract: "embedding.v1", Adapter: "bert"}
 			}
 			if _, err := config.CompileModelBindings(cfg); err != nil {

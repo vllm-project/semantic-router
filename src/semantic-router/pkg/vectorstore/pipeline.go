@@ -25,7 +25,7 @@ import (
 )
 
 // Embedder generates vector embeddings from text. Implementations
-// wrap the actual embedding model (e.g. Candle FFI). Embed takes a
+// wrap the actual embedding model (e.g. a model runtime deployment). Embed takes a
 // context so a cancelled lifecycle or request aborts embedding work at
 // the next checkpoint instead of running to completion.
 type Embedder interface {

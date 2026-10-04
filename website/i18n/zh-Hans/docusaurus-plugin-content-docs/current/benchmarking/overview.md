@@ -18,11 +18,10 @@ title: 基准测试
 
 ## 组件微基准 {#component-microbenchmarks}
 
-`perf/` 包包含分类、决策评估、响应缓存操作、ExtProc 处理和 Looper 家族路径的 Go 基准。它们不需要运行中的 Router，但依赖模型的套件需要原生库和基准模型文件。
+`perf/` 包包含分类、决策评估、响应缓存操作、ExtProc 处理和 Looper 家族路径的 Go 基准。它们不需要运行中的 Router。分类和缓存基准通过模型运行时使用目录中固定版本的 Vela 模型，模型在首次启动时下载；先安装一次模型运行时：
 
 ```bash
-make download-models-perf
-make rust
+make model-runtime-install
 make perf-bench-quick
 ```
 

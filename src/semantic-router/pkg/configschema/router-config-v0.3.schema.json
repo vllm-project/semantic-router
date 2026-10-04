@@ -4208,15 +4208,6 @@
         "device": {
           "type": "string"
         },
-        "precision": {
-          "type": "string"
-        },
-        "custom_ops_profile": {
-          "type": "string"
-        },
-        "compilation_cache_dir": {
-          "type": "string"
-        },
         "input": {
           "$ref": "#/$defs/ModelInputBudget"
         },

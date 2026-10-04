@@ -174,8 +174,8 @@ and hardware alongside any shared result.
 ## Operational notes
 
 - Grounding arms use the router's own backends: the hallucination detector
-  grounds answers in a request's context. The NLI explainer is retired, so panel
-  grounding has no NLI backend and falls back under its `on_error` policy.
+  reads each answer against the request's context, or against every peer answer
+  in `panel` mode.
   `evaluate.py --assert-grounding` stops the router-path run if the on arm lacks
   a grounding trace.
 - `make_configs.py` creates a minimal local routing configuration and disables

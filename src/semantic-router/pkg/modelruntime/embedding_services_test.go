@@ -119,7 +119,8 @@ func TestImplicitEmbeddingSpecResolvesRegistryPackages(t *testing.T) {
 		t.Fatal(err)
 	}
 	if spec.Binding.Deployment != "@embedding.mmbert" || spec.Deployment.Artifact != "vllm-sr/Vela-1.0-Encoder-307M-Embedding" ||
-		len(spec.Deployment.Revision) != 40 || spec.Deployment.Device != "cpu" || spec.Deployment.Input.Overflow != "truncate" {
+		len(spec.Deployment.Revision) != 40 || spec.Deployment.Device != "cpu" || spec.Deployment.Input.Overflow != "truncate" ||
+		spec.Deployment.Profile != "batching" {
 		t.Fatalf("mmbert spec %+v", spec)
 	}
 	cfg.EmbeddingModels.UseCPU = false

@@ -5,8 +5,8 @@ Both configs are identical except ``algorithm.fusion.grounding.enabled``. They:
     fusion decision keyed to it (the harness prepends the sentinel to every prompt),
   - bind the fusion panel/judge to a local Ollama proxy via provider backend_refs,
   - enable hallucination mitigation so the router's hallucination detector, served
-    by the model runtime, backs context grounding. The NLI explainer is retired, so
-    panel grounding has no NLI backend and falls back to plain fusion.
+    by the model runtime, backs grounding: it reads each answer against the
+    context, or against every peer answer in ``panel`` mode.
 
 Usage:
     .venv-bench/bin/python -m bench.grounded_fusion.make_configs \
@@ -102,7 +102,7 @@ def _fusion_decision(grounding_on: bool, policy: str = "weight") -> dict:
                 "judge_prompt_version": "fusion-v1",
                 "grounding": {
                     "enabled": grounding_on,
-                    "reference": "panel",  # DRACO ships no context -> cross-model NLI
+                    "reference": "panel",  # DRACO ships no context -> answers read against peers
                     # policy controls how the score is used. weight (default, no
                     # drop) is the production default; filter (hard-drop below
                     # min_score) is known to hurt on contested factual items and is

@@ -115,24 +115,45 @@ def test_expired_jobs_are_not_run():
         scheduler.stop()
 
 
-def test_admission_refuses_beyond_the_queue_bound():
-    gate = threading.Event()
-    model = FakeModel(gate=gate)
-    scheduler = Scheduler(
-        model, {"exact": ExactProfile()}, SchedulerLimits(max_queue=1)
-    )
-    scheduler.start()
-    try:
-        first = scheduler.submit([item("a", 4)], deadline=None, profile="exact")
-        time.sleep(0.05)  # the worker holds the first job inside run()
-        scheduler.submit([item("b", 4)], deadline=None, profile="exact")
+def wait_until(condition, timeout=5.0):
+    stop = time.monotonic() + timeout
+    while not condition():
+        assert time.monotonic() < stop, "condition not reached"
+        time.sleep(0.001)
+
+
+def test_admission_counts_every_job_until_it_is_answered(monkeypatch):
+    monkeypatch.setattr(scheduler_module, "COST_SMOOTHING", 0.0)
+    first, second = threading.Event(), threading.Event()
+    model = GatedModel(budget=64, gates={"long0": first, "short": second})
+    scheduler = started(model, SchedulerLimits(max_queue=2), token_cost=1e-2)
+
+    def refused():
         with pytest.raises(RuntimeServiceError) as error:
-            scheduler.submit([item("c", 4)], deadline=None, profile="exact")
+            scheduler.submit([item("late", 4)], deadline=None, profile="exact")
         assert error.value.code == "overloaded" and error.value.status == 429
-        gate.set()
-        assert first.result(timeout=5)
+
+    try:
+        long = scheduler.submit(
+            [item("long0", 64), item("long1", 64)], deadline=None, profile="exact"
+        )
+        assert model.entered.wait(5)
+        model.entered.clear()
+        short = scheduler.submit([item("short", 8)], deadline=None, profile="exact")
+        refused()
+        first.set()
+        assert model.entered.wait(5)
+        # "short" runs and "long1" is planned: nothing is queued, both are pending.
+        refused()
+        second.set()
+        short.result(timeout=5)
+        long.result(timeout=5)
+        wait_until(lambda: scheduler._pending_jobs == 0)
+        late = scheduler.submit([item("late", 4)], deadline=None, profile="exact")
+        assert late.result(timeout=5) == [[0.0, 4.0]]
     finally:
-        gate.set()
+        first.set()
+        second.set()
         scheduler.stop()
 
 
@@ -143,13 +164,35 @@ def test_unknown_profile_is_refused():
 
 
 def test_device_faults_fail_the_request_and_are_recorded():
-    scheduler = Scheduler(FakeModel(fail=True), {"exact": ExactProfile()})
+    scheduler = Scheduler(
+        FakeModel(fail=True),
+        {"exact": ExactProfile()},
+        device_fault=lambda error: "device fault" in str(error),
+    )
     scheduler.start()
     try:
         future = scheduler.submit([item("a", 4)], deadline=None, profile="exact")
         with pytest.raises(RuntimeError, match="device fault"):
             future.result(timeout=5)
         assert scheduler.failure is not None
+    finally:
+        scheduler.stop()
+
+
+def test_other_forward_errors_fail_only_their_batch():
+    model = FakeModel(fail=True)
+    scheduler = Scheduler(
+        model, {"exact": ExactProfile()}, device_fault=lambda error: False
+    )
+    scheduler.start()
+    try:
+        failed = scheduler.submit([item("a", 4)], deadline=None, profile="exact")
+        with pytest.raises(RuntimeError):
+            failed.result(timeout=5)
+        model.fail = False
+        served = scheduler.submit([item("b", 4)], deadline=None, profile="exact")
+        assert served.result(timeout=5) == [[0.0, 4.0]]
+        assert scheduler.failure is None
     finally:
         scheduler.stop()
 
@@ -186,7 +229,7 @@ def test_an_idle_scheduler_runs_the_group_on_the_calling_thread():
     scheduler.start()
     try:
         futures = scheduler.run_now(
-            [[item("a", 4)], [item("b", 6)]], deadline=None, profile="exact"
+            [[item("a", 4)], [item("b", 6)]], deadlines=[None, None], profile="exact"
         )
         assert futures is not None and all(future.done() for future in futures)
         assert [future.result() for future in futures] == [
@@ -195,7 +238,7 @@ def test_an_idle_scheduler_runs_the_group_on_the_calling_thread():
         ]
         assert set(model.threads) == {threading.current_thread().name}
         expired = scheduler.run_now(
-            [[item("c", 4)]], deadline=time.monotonic() - 1, profile="exact"
+            [[item("c", 4)]], deadlines=[time.monotonic() - 1], profile="exact"
         )
         assert expired[0].result() is DEADLINE
     finally:
@@ -205,7 +248,7 @@ def test_an_idle_scheduler_runs_the_group_on_the_calling_thread():
 def test_run_now_declines_device_thread_models_and_a_busy_scheduler():
     assert (
         Scheduler(FakeModel(), {"exact": ExactProfile()}).run_now(
-            [[item("a", 4)]], deadline=None, profile="exact"
+            [[item("a", 4)]], deadlines=[None], profile="exact"
         )
         is None
     )
@@ -218,11 +261,13 @@ def test_run_now_declines_device_thread_models_and_a_busy_scheduler():
         while not model.threads:
             time.sleep(0.001)
         assert (
-            scheduler.run_now([[item("b", 4)]], deadline=None, profile="exact") is None
+            scheduler.run_now([[item("b", 4)]], deadlines=[None], profile="exact")
+            is None
         )
         queued = scheduler.submit([item("c", 4)], deadline=None, profile="exact")
         assert (
-            scheduler.run_now([[item("d", 4)]], deadline=None, profile="exact") is None
+            scheduler.run_now([[item("d", 4)]], deadlines=[None], profile="exact")
+            is None
         )
         gate.set()
         assert running.result(timeout=5) and queued.result(timeout=5)
@@ -242,7 +287,7 @@ def test_callers_and_the_worker_never_run_one_model_at_once():
         for round_ in range(60):
             length = 4 + (index * 60 + round_) % 7
             items = [[item(f"{index}-{round_}", length)]]
-            futures = scheduler.run_now(items, deadline=None, profile="exact")
+            futures = scheduler.run_now(items, deadlines=[None], profile="exact")
             if futures is None:
                 futures = [scheduler.submit(items[0], deadline=None, profile="exact")]
             answers.append((length, futures[0].result(timeout=10)))
@@ -457,7 +502,7 @@ def test_a_caller_leaves_its_remaining_batches_to_the_worker_when_work_arrives(
 
     def caller():
         ran["futures"] = scheduler.run_now(
-            [[item("long0", 64), item("long1", 64)]], deadline=None, profile="exact"
+            [[item("long0", 64), item("long1", 64)]], deadlines=[None], profile="exact"
         )
 
     thread = threading.Thread(target=caller, name="caller")
@@ -590,7 +635,7 @@ def test_a_group_is_queued_at_once_and_answered_per_job():
     scheduler.start()
     try:
         first, empty, second = scheduler.submit_group(
-            [[item("a", 4)], [], [item("b", 6)]], deadline=None, profile="exact"
+            [[item("a", 4)], [], [item("b", 6)]], deadlines=[None] * 3, profile="exact"
         )
         assert first.result(timeout=5) == [[0.0, 4.0]]
         assert empty.result(timeout=5) == []
@@ -606,6 +651,6 @@ def test_a_group_beyond_the_queue_bound_is_refused_whole():
     )
     with pytest.raises(RuntimeServiceError) as error:
         scheduler.submit_group(
-            [[item("a", 4)], [item("b", 4)]], deadline=None, profile="exact"
+            [[item("a", 4)], [item("b", 4)]], deadlines=[None, None], profile="exact"
         )
     assert error.value.code == "overloaded"
