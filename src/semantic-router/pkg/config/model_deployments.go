@@ -21,6 +21,12 @@ type ModelDeployment struct {
 	CustomOpsProfile    string           `yaml:"custom_ops_profile,omitempty" json:"custom_ops_profile,omitempty"`
 	CompilationCacheDir string           `yaml:"compilation_cache_dir,omitempty" json:"compilation_cache_dir,omitempty"`
 	Input               ModelInputBudget `yaml:"input,omitempty" json:"input,omitempty"`
+	// Profile selects a model_runtime numerics profile: exact (the default,
+	// byte-identical to the released packages) or an opt-in faster profile.
+	Profile string `yaml:"profile,omitempty" json:"profile,omitempty"`
+	// Endpoint attaches a model_runtime deployment to an engine the Router does
+	// not manage (unix:///path, http://host:port or https://host:port).
+	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
 }
 
 // ModelInputBudget is a deployment restriction, not an advertised model
@@ -74,6 +80,14 @@ func (p *ModelBindingPlan) Lookup(recipe RecipeName, name string) (ResolvedModel
 func (d ModelDeployment) WithDefaults() ModelDeployment {
 	if d.CustomOpsProfile == "none" {
 		d.CustomOpsProfile = ""
+	}
+	if d.Provider == ModelRuntimeProvider {
+		if d.Device == "" {
+			d.Device = "auto"
+		}
+		if d.Profile == "" {
+			d.Profile = "exact"
+		}
 	}
 	if d.Provider != "http" {
 		if d.Device == "" {
@@ -137,8 +151,13 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 		if _, err := findNamedExternalModel(cfg, d.ExternalModel); err != nil {
 			return err
 		}
+	case ModelRuntimeProvider:
+		return d.validateModelRuntime()
 	default:
 		return fmt.Errorf("unsupported provider %q", d.Provider)
+	}
+	if d.Profile != "" || d.Endpoint != "" {
+		return fmt.Errorf("profile and endpoint apply only to model_runtime deployments")
 	}
 	if d.CustomOpsProfile != "" && (d.CustomOpsProfile != "ck_flash_attention" || d.Provider != "ort" || !strings.HasPrefix(d.Device, "rocm:")) {
 		return fmt.Errorf("custom_ops_profile requires ck_flash_attention on an ORT rocm:index deployment")
@@ -245,6 +264,9 @@ func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 }
 
 func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDeployment) error {
+	if deployment.IsModelRuntime() {
+		return fmt.Errorf("model_runtime deployments serve decision signals and the decision algorithm, not task bindings")
+	}
 	want := ""
 	if decl.OperatingPoint != nil {
 		if !strings.HasPrefix(name, "classifier.") {

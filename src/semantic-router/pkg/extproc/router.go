@@ -20,6 +20,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -35,7 +36,9 @@ import (
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
-	rerankers            map[config.RecipeName]modelruntime.PairScorer
+	rerankers map[config.RecipeName]modelruntime.PairScorer
+	// decisionDecider answers decision selectors; nil uses the process-wide model runtime manager.
+	decisionDecider      modelservice.Decider
 	Embeddings           *embedding.Set
 	serviceEmbeddings    *embedding.Set
 	cacheEmbeddings      *embedding.Set
