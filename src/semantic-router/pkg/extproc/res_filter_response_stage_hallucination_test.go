@@ -136,7 +136,7 @@ func newHallucinationSignalRouter(t *testing.T, server *httptest.Server, action 
 // and the warning the plugin's action produces.
 func runHallucinationStage(t *testing.T, router *OpenAIRouter, ctx *RequestContext, answer string) (warning string) {
 	t.Helper()
-	router.evaluateHallucinationSignal(ctx, answer)
+	router.scoreResponseStageSignals(ctx, answer)
 	if response := router.performHallucinationDetectionText(ctx, answer); response != nil {
 		t.Fatalf("the hallucination plugin does not block, got %+v", response)
 	}
@@ -330,7 +330,7 @@ func TestHallucinationSignalReadsTheSelectedRecipeRules(t *testing.T) {
 	}
 	plain.VSRSelectedDecision = &cfg.Recipes[0].Profile.Decisions[0]
 
-	router.evaluateHallucinationSignal(plain, hallucinationAnswer)
+	router.scoreResponseStageSignals(plain, hallucinationAnswer)
 	if len(plain.VSRMatchedHallucination) != 0 || len(plain.VSRSignalConfidences) != 0 || len(plain.VSRSignalErrors) != 0 {
 		t.Fatalf("the default recipe declares no hallucination rule, yet its answer was checked: matched=%v confidences=%v errors=%v",
 			plain.VSRMatchedHallucination, plain.VSRSignalConfidences, plain.VSRSignalErrors)
@@ -355,7 +355,7 @@ func TestHallucinationSignalRecordsReplayOutcome(t *testing.T) {
 		router, ctx := newHallucinationSignalRouter(t, server, "body")
 		recorder := startResponseStageReplay(t, router, ctx)
 
-		router.evaluateHallucinationSignal(ctx, hallucinationAnswer)
+		router.scoreResponseStageSignals(ctx, hallucinationAnswer)
 		router.recordRouterReplayHallucination(ctx)
 
 		outcomes := replayOutcomes(t, recorder, ctx.RouterReplayID)
@@ -375,13 +375,13 @@ func TestHallucinationSignalRecordsReplayOutcome(t *testing.T) {
 		recorder := startResponseStageReplay(t, router, ctx)
 
 		ctx.ToolResultsContext = ""
-		router.evaluateHallucinationSignal(ctx, hallucinationAnswer)
+		router.scoreResponseStageSignals(ctx, hallucinationAnswer)
 		router.recordRouterReplayHallucination(ctx)
 
 		other := &RequestContext{TraceContext: context.Background(), Headers: map[string]string{}, VSRSelectedDecision: ctx.VSRSelectedDecision}
 		other.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName})
 		other.RouterReplayID = ctx.RouterReplayID
-		router.evaluateHallucinationSignal(other, hallucinationAnswer)
+		router.scoreResponseStageSignals(other, hallucinationAnswer)
 		router.recordRouterReplayHallucination(other)
 
 		outcomes := replayOutcomes(t, recorder, ctx.RouterReplayID)
@@ -400,7 +400,7 @@ func TestHallucinationMatchedHeaderIsWrittenInTheBodyPhase(t *testing.T) {
 	router, ctx := newHallucinationSignalRouter(t, server, "header")
 	ctx.Headers[headers.VSRDebug] = "true"
 
-	router.evaluateHallucinationSignal(ctx, hallucinationAnswer)
+	router.scoreResponseStageSignals(ctx, hallucinationAnswer)
 	response := buildResponseBodyContinueResponse(nil, nil)
 	addResponseStageSignalHeaders(ctx, response)
 

@@ -154,7 +154,7 @@ func (r *OpenAIRouter) PreviewHallucination(ctx context.Context, input pluginrun
 		result.DetectionSource = "response_signal"
 	}
 	result.BackendCalls = true
-	evidence, err := r.detectHallucinationEvidence(classifier, request, input.Response)
+	evidence, err := r.detectHallucinationEvidence(request.embeddingContext(), classifier, request, input.Response)
 	if err != nil {
 		result.Reason = "detection_failed"
 		return result, nil

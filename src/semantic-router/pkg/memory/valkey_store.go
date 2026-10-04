@@ -1,5 +1,3 @@
-//go:build !riscv64
-
 package memory
 
 import (

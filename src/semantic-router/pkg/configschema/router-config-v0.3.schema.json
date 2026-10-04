@@ -2839,7 +2839,7 @@
         "min_keep": {
           "type": "integer"
         },
-        "nli_contradiction_penalty": {
+        "contradiction_penalty": {
           "type": "number"
         },
         "on_error": {

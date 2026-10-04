@@ -405,7 +405,7 @@ class TestFusionAlgorithmConfig:
         assert config.grounding.policy == "weight"
         assert config.grounding.min_score == 0.0
         assert config.grounding.min_keep == 1
-        assert config.grounding.nli_contradiction_penalty == 1.0
+        assert config.grounding.contradiction_penalty == 1.0
         assert config.grounding.on_error == "skip"
 
     def test_grounding_bounds_match_go_validator(self):
@@ -419,7 +419,7 @@ class TestFusionAlgorithmConfig:
             FusionAlgorithmConfig(grounding={"min_keep": -1})
         # penalty >= 0
         with pytest.raises(PydanticValidationError):
-            FusionAlgorithmConfig(grounding={"nli_contradiction_penalty": -1})
+            FusionAlgorithmConfig(grounding={"contradiction_penalty": -1})
         # reference enum + on_error enum
         with pytest.raises(PydanticValidationError):
             FusionAlgorithmConfig(grounding={"reference": "elsewhere"})

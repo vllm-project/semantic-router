@@ -11,7 +11,7 @@ func TestCanonicalPIITokenWindowPreserved(t *testing.T) {
 		r := &SemanticRouterReconciler{}
 		module, err := r.convertClassifierModule(&vllmv1alpha1.ClassifierConfig{
 			PIIModel: &vllmv1alpha1.PIIModelConfig{
-				UseMmBERT32K: true, MaxSequenceLength: 32768, Window: window,
+				MaxSequenceLength: 32768, Window: window,
 			},
 		})
 		if err != nil {

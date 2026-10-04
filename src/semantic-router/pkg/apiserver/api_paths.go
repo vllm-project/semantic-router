@@ -21,6 +21,7 @@ const (
 	apiInventoryModelsPath       = apiInventoryPath + "/models"
 	apiInventoryClassifierPath   = apiInventoryPath + "/classifier"
 	apiInventoryEmbeddingModels  = apiInventoryPath + "/embedding-models"
+	apiInventoryModelRuntime     = apiInventoryPath + "/model-runtime"
 	apiObservabilityPath         = apiRootPath + "/observability"
 	apiObservabilityReplaysPath  = apiObservabilityPath + "/replays"
 	apiObservabilityOutcomesPath = apiObservabilityPath + "/outcomes"

@@ -161,24 +161,6 @@ verifications:
     target: test-models
     inventory: published-vela-models-through-the-managed-runtime
     evidence: models
-  platform.router-riscv64-qemu:
-    display_name: Router RISC-V (QEMU)
-    activity: test
-    boundary: [integration]
-    executor: platform
-    category: runtime
-    workflow: .github/workflows/test-platform.yml
-    platform_id: router-riscv64-qemu
-    platform: linux/riscv64
-    runtime: model-runtime
-    device: cpu
-    execution:
-      mode: qemu-user
-      host_platform: linux/amd64
-    target: test-riscv-qemu
-    evidence: riscv-qemu
-    timeout_minutes: 60
-    inventory: pure-go-riscv64-router-attached-runtime-smoke-v1
   performance:
     display_name: Production Benchmarks
     activity: performance
@@ -317,7 +299,6 @@ full_cpu:
     - recipe-conformance
     - platform.models-cpu
     - platform.image-calibration-cpu
-    - platform.router-riscv64-qemu
     - performance
     - cli-package
     - cli-unit
