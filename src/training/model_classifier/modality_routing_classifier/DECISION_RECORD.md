@@ -34,10 +34,11 @@ not build them.
   student-vs-teacher gap becomes significant. The ruling was made on routing
   grounds (§11.4), not to get a particular answer, and would have been the
   same ruling if it had gone the other way.
-- **Still blocking, per the same ruling:** he asked for the human spot-check
-  before this number "goes anywhere." `label_audit/human_review.tsv` is still
-  unlabelled (§11.5). Until it is filled in, read every number against the
-  judged labels as provisional.
+- **Human spot-check done (§11.5):** one reviewer labelled 100 test rows
+  blind. On the rows where the judge and the original disagreed, the human
+  sided with the judge 45 times and with the original 7 times. Estimated
+  error: about 7.8% for the judge's labels, about 12.8% for the originals.
+  One reviewer on a sample of 100, so treat this as rough, not final.
 - **Still open otherwise:** latency (#3856), controls (#3857), the accuracy
   tolerance itself (§9).
 
@@ -182,10 +183,10 @@ Two baselines are reported. The reason is in §4.
     two-sided p = 0.31. Noise.
   - On the judged, strict labels, which is the policy adaamko ruled for in
     the #3198 thread: 19 against 5, p = **0.007**. Significant (§11.3).
-  - **Still provisional.** His ruling also asked for the human spot-check
-    before this number goes anywhere (§11.5), and that is not done yet. Read
-    the significant result as "significant under the adopted policy, pending
-    that check," not as final.
+  - **Human check done, result unchanged in kind.** The one-reviewer check
+    in §11.5 supports the judged labels as better than the originals. The
+    p = 0.007 has not been recomputed on the human-corrected labels, and it
+    should be before anyone treats it as settled.
   - **Training seed noise is not measured.** Each model was trained once,
     before the trainer had a `--seed` option. A gap of 0.79 points is about 6
     rows, and the McNemar test only covers which test rows were sampled, not
@@ -471,10 +472,9 @@ What reviewers have to work with:
 - **Agreement:** 96.44% with the clean baseline.
 - **Direction of the errors:** the candidate over-predicts `BOTH` (§3, §7). It
   is not simply weaker everywhere.
-- **Blocking precondition:** adaamko's ruling that settled the label policy
-  also said the number should not "go anywhere" before the human spot-check
-  (§11.5) confirms the judge. That check is not done. Treat everything above
-  as the shape of the result, not a number to gate on yet.
+- **Human check:** done on 100 test rows (§11.5). It supports the judged
+  labels over the originals. It has one reviewer, so the tolerance should
+  not be set from it alone until a second labeller confirms.
 
 Choices for whoever sets the tolerance:
 
@@ -492,7 +492,9 @@ The candidate does not move forward if any of these hold:
 - No meaningful p99 win is measured once §5 lands.
 - Once §8 lands, it does not clearly beat the controls (lexical, majority
   class, prior-matched random), judged per class and not only on accuracy.
-- The human spot-check (§11.5) does not confirm the judge, once it is done.
+- The human spot-check (§11.5) puts the judge's error near 7.8%. Any tolerance
+  has to be wide enough to absorb a label error of that size, or the check
+  is not meaningful.
 
 ## 11. Label audit
 
@@ -621,7 +623,8 @@ Exact McNemar test on paired correctness, candidate against clean baseline:
 - **The verdict depends on the `BOTH` policy**, which is now decided (§11.4):
   strict. So the operative claim is that the candidate is measurably worse
   than the clean baseline, not that the two are indistinguishable. That
-  claim is still provisional on the human spot-check (§11.5).
+  claim rests on the judged labels, which one human reviewer has checked on
+  100 test rows (§11.5).
 
 To reproduce the tables in §11.2 and §11.3:
 
@@ -678,10 +681,11 @@ What this record does as a result, each one his explicit instruction:
   about the ruling's effect, not as the reason the ruling was made. The
   ruling is justified on routing grounds, in the quote above, and would have
   been made the same way if it had come out the other direction.
-- **Does not treat this number as final yet.** His ruling conditioned on
-  "yes to the human spot-check before the number goes anywhere." That check
-  (§11.5) is not done. Until it is, everything in §3 and §9 that depends on
-  the judged labels is the shape of the result, not a settled gate.
+- **Human check done, not yet a settled gate.** His ruling asked for the
+  spot-check before the number goes anywhere. It is done (§11.5), with one
+  reviewer. Everything in §3 and §9 that depends on the judged labels should
+  still be read as provisional until a second labeller confirms it and the
+  p-value is recomputed on the corrected labels.
 
 ### 11.5 Limits of this audit (read before citing it)
 
@@ -697,16 +701,14 @@ What this record does as a result, each one his explicit instruction:
 - **Clipped text.** The judge saw rows cut at 400 characters (106 test rows and
   87 validation rows are tagged `truncated`). Those judgments reflect what was
   visible.
-- **No human check yet, and this one is a blocking precondition, not just a
-  limitation.** adaamko's ruling in §11.4 was explicit: "yes to the human
-  spot-check before the number goes anywhere." It has not happened.
-  - `label_audit/human_review.tsv` is a blinded sheet of 100 test rows: 56
-    where the judge disagreed with the original label, and 44 where it agreed.
-  - Fill it in, then run `judge_labels.py report --human <file>` to estimate
-    the judge's own error rate.
-  - Until this is done, the p = 0.007 result in §3/§9/§11.3 is the shape of
-    the result under the decided policy, not a number anyone should gate a
-    graduation decision on.
+- **Human check: done for test, one reviewer.** adaamko's ruling in §11.4
+  asked for it before the number goes anywhere. `label_audit/human_review.tsv`
+  holds 100 blind test rows (56 disagreements, 44 agreements), labelled by one
+  reviewer. Run `judge_labels.py report --split test --human
+  human_review.tsv` to reproduce the estimate: the judge's error is about
+  7.8% and the originals' about 12.8%.
+  - Not done: a second labeller, validation rows, and recomputing the p-value
+    on the corrected labels.
 - **The API mode is untested.** `judge_labels.py api` should reproduce the audit
   with an independent model, but it has not been run against the real API (no
   key was available).
