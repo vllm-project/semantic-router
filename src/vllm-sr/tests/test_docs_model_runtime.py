@@ -330,6 +330,40 @@ def test_vllm_sr_commands_parse():
             ) from error
 
 
+def test_documented_image_builds_use_dockerfiles_that_exist():
+    builds = [
+        (block.where, dockerfile)
+        for block in _blocks("bash")
+        for dockerfile in re.findall(
+            r"docker (?:buildx )?build\b[^\n]*?-f (\S+)",
+            block.text.replace("\\\n", " "),
+        )
+    ]
+
+    assert builds
+    for where, dockerfile in builds:
+        assert (REPO_ROOT / dockerfile).is_file(), f"{where}: {dockerfile}"
+
+
+def test_documented_environment_variables_are_read_by_the_runtime_or_router():
+    documented = {
+        name
+        for page in PAGES
+        for name in re.findall(r"\bVLLM_SR_RUNTIME_[A-Z_]+\b", page.read_text())
+    }
+    router = REPO_ROOT / "src" / "semantic-router" / "pkg"
+    sources = "\n".join(
+        path.read_text()
+        for path in (
+            *RUNTIME.rglob("*.py"),
+            *(router / "modelservice").glob("*.go"),
+        )
+    )
+
+    assert documented
+    assert sorted(name for name in documented if f'"{name}"' not in sources) == []
+
+
 def test_vllm_sr_runtime_commands_use_real_options():
     source = (RUNTIME / "cli.py").read_text()
     commands = _commands("vllm-sr-runtime")

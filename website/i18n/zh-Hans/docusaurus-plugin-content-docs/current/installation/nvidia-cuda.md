@@ -4,7 +4,7 @@ description: 在 NVIDIA GPU 上运行 vLLM 后端，并可选择用 CUDA 加速 
 translation:
   source_commit: "8d971517501f80107607162e8aebcc084ca71923"
   source_file: "docs/installation/nvidia-cuda.md"
-  outdated: false
+  outdated: true
 ---
 
 # 使用 NVIDIA CUDA 部署
