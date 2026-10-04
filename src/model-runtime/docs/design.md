@@ -524,11 +524,7 @@ ties, P(true), expected level, normalised-entropy confidence). The native
 engine implements the Qwen3 dense and Qwen3.5 hybrid backbones and Vega-27B's
 unmerged LoRA; on GPUs the backbone runs under BF16 autocast with BF16-resident
 Linear weights, FLA kernels with the released kernel choices pinned
-(`registry/kernel_choices.json`). FLA reads one config set per process, so the
-runtime merges every served model's choices and pins them before the first
-model loads; a model whose choices give a recorded key another configuration
-is refused (serve it in its own `process`) rather than run unpinned.
-Byte-identity is defined against the
+(`registry/kernel_choices.json`). Byte-identity is defined against the
 released runtime on the same device class and recorded on the four scored
 panels (10,653 prompts).
 

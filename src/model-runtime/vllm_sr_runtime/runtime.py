@@ -25,12 +25,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
-from .accel.autotune import (
-    KernelChoiceConflict,
-    freeze_autotune,
-    merge_kernel_choices,
-    pin_kernel_choices,
-)
+from .accel.autotune import freeze_autotune, pin_kernel_choices
 from .config import ModelConfig, ServeConfig
 from .errors import RuntimeServiceError
 from .placement import Placement, place
@@ -195,8 +190,6 @@ class ServedModel:
         self.profiles: dict[str, Profile] = {}
         self.scheduler: Scheduler | None = None
         self.cache = ResultCache(runtime.config.result_cache_entries)
-        self.spec: ModelSpec | None = None
-        self.kernel_choices: dict[str, Any] = {}
 
     # -- names ---------------------------------------------------------------
 
@@ -223,8 +216,7 @@ class ServedModel:
 
     # -- lifecycle -----------------------------------------------------------
 
-    def prepare(self) -> None:
-        """Resolve, verify and place the model, and read its kernel choices; nothing runs on the device."""
+    def load(self) -> None:
         process = self.runtime.config
         config = self.config
         self.health.set("loading", "resolving the model")
@@ -249,28 +241,9 @@ class ServedModel:
         parameters = package.loaded_parameters or 0
         budget = config.memory_budget_gib or process.memory_budget_gib
         placement = place(spec, config.device, parameters, budget)
-        self.family, self.package, self.spec, self.placement = (
-            family,
-            package,
-            spec,
-            placement,
-        )
-        self.kernel_choices = family.kernel_choices(package, placement.device)
-
-    def load(self) -> None:
-        """Load the prepared model on its device, start its worker and pass the golden check."""
-        if self.spec is None:
-            self.prepare()
-        family, package, spec, placement = (
-            self.family,
-            self.package,
-            self.spec,
-            self.placement,
-        )
-        assert family is not None and package is not None and placement is not None
-        assert spec is not None
-        process = self.runtime.config
-        config = self.config
+        choices = family.kernel_choices(package, placement.device)
+        if choices:
+            pin_kernel_choices(choices)
         known = builtin.lookup(package.ref.repo_id or "")
         preferred = None
         if known is not None and known.revision == package.ref.revision:
@@ -299,7 +272,12 @@ class ServedModel:
         except BaseException:
             engine_model.close()
             raise
-        self.model = model
+        self.family, self.package, self.placement, self.model = (
+            family,
+            package,
+            placement,
+            model,
+        )
         try:
             self._start(profiles, process, execute)
         except BaseException:
@@ -658,62 +636,19 @@ class Runtime:
         if self.config.autotune_cache:
             freeze_autotune(self.config.autotune_cache)
         for served in self.served:
-            served.prepare()
-        refused = self._pin_kernel_choices(self.served)
-        if refused:
-            raise next(iter(refused.values()))
-        for served in self.served:
             served.load()
             self._ready_gauge()
 
     def _load_all(self) -> None:
         if self.config.autotune_cache:
             freeze_autotune(self.config.autotune_cache)
-        prepared = []
         for served in self.served:
-            try:
-                served.prepare()
-                prepared.append(served)
-            except Exception as exc:
-                self._failed(served, exc)
-        refused = self._pin_kernel_choices(prepared)
-        for served, exc in refused.items():
-            self._failed(served, exc)
-        for served in prepared:
-            if served in refused:
-                continue
             try:
                 served.load()
             except Exception as exc:
-                self._failed(served, exc)
+                log.error("loading %s failed: %s", served.label, exc)
+                served.health.set("failed", f"{type(exc).__name__}: {exc}")
             self._ready_gauge()
-        self._ready_gauge()
-
-    def _failed(self, served: ServedModel, exc: Exception) -> None:
-        log.error("loading %s failed: %s", served.label, exc)
-        served.health.set("failed", f"{type(exc).__name__}: {exc}")
-
-    def _pin_kernel_choices(
-        self, served: list[ServedModel]
-    ) -> dict[ServedModel, Exception]:
-        """Pin every model's recorded FLA choices as one set before any model loads.
-
-        FLA reads its config directory once per process. A model whose choices
-        conflict with an earlier model's is refused, as it could not run its own.
-        """
-        merged: dict[str, Any] = {}
-        refused: dict[ServedModel, Exception] = {}
-        for model in served:
-            try:
-                merged = merge_kernel_choices(merged, model.kernel_choices)
-            except KernelChoiceConflict as exc:
-                refused[model] = RuntimeError(
-                    f"its FLA kernel choices conflict with an earlier model's ({exc});"
-                    " serve it in its own process"
-                )
-        if merged:
-            pin_kernel_choices(merged)
-        return refused
 
     def _ready_gauge(self) -> None:
         self.metrics.ready.set(1 if self.health.ready else 0)

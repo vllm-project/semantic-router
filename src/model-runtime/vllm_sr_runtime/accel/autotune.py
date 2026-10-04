@@ -50,10 +50,9 @@ def freeze_autotune(directory: str) -> Path:
 def pin_kernel_choices(choices: dict[str, Any]) -> Path | None:
     """Run FLA's autotuned kernels with a model's recorded configurations instead of timing them.
 
-    ``choices`` holds the device class's entries of
-    ``registry/kernel_choices.json`` for every model the process serves
-    (``merge_kernel_choices``): the FLA version the choices were recorded with
-    and, per kernel, each recorded tuning key with its configuration. Every kernel gets an FLA config
+    ``choices`` is one device class's entry of ``registry/kernel_choices.json``:
+    the FLA version the choices were recorded with and, per kernel, each
+    recorded tuning key with its configuration. Every kernel gets an FLA config
     file (``FLA_CACHE_MODE=full``): recorded keys match exactly, and any other
     key takes the first entry that differs from it only in numbers, else the
     kernel's first entry, so no configuration depends on timing. FLA reads the
@@ -94,45 +93,6 @@ def pin_kernel_choices(choices: dict[str, Any]) -> Path | None:
     os.environ[FLA_MODE_ENV] = "full"
     log.info("pinned FLA kernel choices for %d kernels", len(choices["kernels"]))
     return directory
-
-
-class KernelChoiceConflict(ValueError):
-    """Two models' recorded choices cannot share one FLA config set."""
-
-
-def merge_kernel_choices(
-    merged: dict[str, Any], choices: dict[str, Any]
-) -> dict[str, Any]:
-    """One FLA choice set holding ``merged`` and ``choices``, the earlier entries first.
-
-    FLA reads one config directory per process, so every model's choices must
-    be pinned together. Raises ``KernelChoiceConflict`` when the two were
-    recorded with different FLA versions or give one tuning key different
-    configurations.
-    """
-    if not choices:
-        return merged
-    if not merged:
-        return {"fla": choices["fla"], "kernels": dict(choices["kernels"])}
-    if merged["fla"] != choices["fla"]:
-        raise KernelChoiceConflict(
-            f"choices recorded with FLA {choices['fla']}, not {merged['fla']}"
-        )
-    kernels = {name: list(entries) for name, entries in merged["kernels"].items()}
-    for name, entries in choices["kernels"].items():
-        recorded = {
-            fla_key_hash(entry["key"]): entry for entry in kernels.setdefault(name, [])
-        }
-        for entry in entries:
-            digest = fla_key_hash(entry["key"])
-            if digest not in recorded:
-                recorded[digest] = entry
-                kernels[name].append(entry)
-            elif recorded[digest]["config"] != entry["config"]:
-                raise KernelChoiceConflict(
-                    f"{name} has two configurations for key {entry['key']}"
-                )
-    return {"fla": merged["fla"], "kernels": kernels}
 
 
 def fla_version() -> str | None:

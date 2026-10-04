@@ -108,11 +108,6 @@ global:
 If that process crashes or runs out of memory, only its deployments become
 unavailable while the router restarts it; the other models keep answering.
 
-Decision models on a GPU run FLA kernels with their released kernel choices,
-which the runtime pins once per process for all of its models. If two models'
-choices disagree, the later one fails to load with a message saying so; give
-it its own `process`.
-
 ## Attach to a runtime you run
 
 Start a runtime anywhere the router can reach, then point a deployment at it:
