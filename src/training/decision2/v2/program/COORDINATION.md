@@ -205,6 +205,116 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 13:10 — **Decision Studio serving (`studio-serving`): STARTED. Blocker for the coordinator: studio-b has
+  no disk; Vega-27B goes to studio-a for now.**
+  - **Live Space** `vllm-sr/decision-studio` at `1ab04ae`: `DECISION_BACKEND=pull_queue`, registry = the six Decision
+    1.0 models under the old org IDs. **All six 1.0 queues are offline**: no worker heartbeat, and no known host runs
+    one. Decision 1.0 serving was already down before this work. I keep the 1.0 entries.
+  - **Runtime:** the built-in runtime from `main` (`ed174453c`), in the packages' release ROCm image (torch 2.12.0,
+    Triton 3.7.1, FLA 0.5.2, causal-conv1d 1.7.0). Pins come from HF `main` and equal the P2–4 table. `main`'s table
+    pins older revisions: same `model_sha256`, and only the packages' bundled runtime files changed, which the
+    built-in runtime never imports. The built-in runtime does not expose the Gateway's `/api/status` artifact, the
+    `X-Decision-Artifact-*` headers or `/batches`, and its confidence is 1 − normalized entropy (the Gateway checks
+    1.0's margin / ordinal statistic). So I adapt in the Space's HTTP pull worker and make the Gateway's confidence
+    check version-aware. No runtime change.
+  - **studio-b BLOCKED (coordinator → user):** the root disk is 100% full (4.6 GB free). Another person's data under
+    `/root` (bind-mounted into their running training container) takes 491 GB. Docker images take 171 GB, and every
+    one is used by that person's containers (one of them exited). Build cache takes 12 GB (provisioning). Nothing near
+    70 GB can be freed without touching someone else's data. Vega-27B needs about 110 GB there: the 49 GB release
+    image plus about 55 GB of base and adapter weights. **Vega-27B runs on studio-a temporarily.** I move it when the
+    owner frees about 110 GB on studio-b.
+  - **Space repo:** my clone is `/home/xunliu/code/decision-studio`. The stale Sep-26 clone moved to
+    `decision-studio.pre-20261004`. **Studio UI agent: please work in your own clone** (for example
+    `/home/xunliu/code/decision-studio-ui`). We both `git pull --rebase` before every push and keep commits focused.
+    I change backend files only (`model_registry.py`, `relay.py`, `direct_contract.py`, `http_pull_worker.py`,
+    `systemone_api.py`, `MODEL_RELEASES.json`, `deploy/**`, `tests/test_*.py`, `DEPLOYMENT.md`, a new runbook). I
+    announce here before touching `static/**`, `README.md`, `examples.json` or `tetris_arena.py`.
+  - **Registry shape for the UI:**
+    - Decision 2.0 wire IDs are `decision2-kai|eos|sol|nox|lux|vega`, with `version: "2.0"` and canonical IDs
+      `vllm-sr/Decision-2.0-*`.
+    - Decision 1.0 keeps `decision-*` with `version: "1.0"`, moved to `vllm-sr/Decision-1.0-*`.
+    - `/v1/models` rows carry `version`, `parameter_label` and `complete_input_tokens` (Kai 8K, Eos–Lux 16K, Vega 32K).
+    - Labels repeat across generations (Kai, Eos, Sol, Nox, Lux): show the version next to the name.
+  - Signed `studio-serving`.
+
+- 2026-10-04 13:10 — **Model-runtime P2–4 `e2e-docs` (replacement for 3b457b58): RESUMED. Branch pushed (74 commits),
+  `p24-ip2` `c40364dd2` merged; head `a4d9519bb`.** CLI migrate + docs-snippet tests 97 passed; `e2e` module build /
+  vet / test pass.
+  - **The node queue kept running after the outage** (node A 0–31, exact mirror `71f0eb9cb`, the plain router image
+    built from `115f88d85`, no extra layer): `model-runtime` 7 / 7 PASS (4 m 28 s), **`model-runtime-real` PASS on the
+    plain image (3 m 24 s)**, `vela-halu` PASS (3 m 31 s), `vela-shield` PASS (3 m 42 s), `local-classifier-backend`
+    PASS (3 m 43 s). Two failures:
+    - `vela-omni`: the Router's own downloader (`vela_omni requires a complete prepared ORT artifact without a head
+      override`). Router-side downloads are off since `router` `bf630c5eb`; re-running now.
+    - **`multimodal-routing` → `stores`, `embed`: a product bug.** `implicitEmbeddingSpec`
+      (`pkg/modelruntime/embedding_owned.go`) sets `Input.Overflow = "truncate"` for every implicit embedding model,
+      `@embedding.multimodal` (Omni Nano) included. The Omni family's `plan_surface` accepts only `reject`, so the
+      warm-up embed fails and the Router exits (`model runtime rejected the request: invalid_request (this model
+      rejects over-long input (options.overflow: reject))`). Unchanged at `p24-ip2`. Either keep `reject` for
+      `multimodal` or let Omni truncate text as the legacy facade did. `embedding_model: multimodal` users hit it
+      too. Please post the fix sha; I re-run the lane on it.
+  - **The parser flip stopped 4 more routers** (I parsed every profile's `config:` with the router's parser at
+    `p24-ip2`): `jailbreak-onerror`, `response-jailbreak`, `route-action` (an empty `prompt_guard.variant`) and
+    `progress-gate` (`use_mmbert_32k: false`). Fixed in `a4d9519bb`; every other profile and every
+    `deploy/kubernetes/*/semantic-router-values` base parses.
+    - **→ `router`:** a `pkg/config` test that parses each `e2e/profiles/*/values.yaml` `config:` block would catch
+      this class of failure before Kind. I can hand over my throwaway checker.
+  - **Migrate cross-check:** I migrated every legacy config on `main` (`config/config.yaml` plus 44 profile / deploy
+    values) with `vllm-sr config migrate`. The router's parser at my head accepts 44 / 45. The one left is
+    `contradiction_penalty`, which migrate writes and the parser learns with `router`'s IP2 rename.
+  - **Fixture lane:** it now ships no label maps (`b89f4e0fd`), so it covers the card-labels path.
+  - **Node A 0–31 queue at `a4d9519bb`** (images built in 3 min): `model-runtime`, `model-runtime-real`, `vela-omni`,
+    `vela-halu`, `vela-shield`, `local-classifier-backend`, `ml-model-selection`, `hallucination`, then
+    `multimodal-routing`.
+  - **IP2 (by 15:30):** Kind results; user docs pass (task-first pages, plugin example); CI lane timings vs node.
+
+- 2026-10-04 13:05 — **Model-runtime P2–4 `removal` (replacement for 00053ab2): RESUMED. CI on `3ca402416` fails my
+  RISC-V lane; fix pushed (`b2ffca168`), re-running on node F.**
+  - **State:** every `removal` worktree is intact and clean. `b04d8293d` (INTEGRATION READY, 05:03) merges the PR head
+    `3ca402416`. The only unpushed work was `removal-platform` (`111413320`, 10 commits from 02:51–03:23: the ONNX
+    exporters' move, the Published Models wiring, the uid 65532 entrypoint): **now pushed as a backup,
+    `xunzhuo/model-runtime-p24-removal-platform`**. `removal-ip1` was a superseded IP1 attempt; it stays local.
+  - **CI failure (mine):** `Platform Contracts (… riscv64 / QEMU)` failed on `3ca402416`. The riscv64 router passed
+    `/health` and `/ready` under QEMU, then the smoke's evidence step ran a bare `python3`. That step imports the CI
+    harness (PyYAML), which the GitHub runner's Python lacks. My node runs had PyYAML installed system-wide, which hid
+    it. **Fix on `xunzhuo/model-runtime-p24-removal`:** `a20a79db9` `[CI]` (the smoke takes `PYTHON`) and `b2ffca168`
+    `[Build]` (`test-riscv-qemu` passes `$(AGENT_PYTHON)`). Re-running now on node F through CI's own executor
+    (`run_platform_batch.py` with the batch from the CI log, venv from `make harness-venv-install
+    model-runtime-install`, no system PyYAML). I watch my other lanes in this CI run (models, image calibration,
+    performance, ONNX artifacts, training contracts, image builds) and fix what is mine.
+  - **→ `router` (12:58): no objection.** Please retire `variant`, `use_modernbert` and `use_mmbert_32k` with their CEL
+    and webhook rules. Regenerate the CRD (and its Helm copy, if there is one) and the CRD docs in the same commits. I
+    stay out of `deploy/operator/api/**` and the webhook until you post the sha.
+  - **Node F vCPUs 128–159 (untimed lanes and image builds), pinned with `--cpuset-cpus`, threads capped at 32.**
+  - **IP2 (by 15:30):** `INTEGRATION READY removal` = `b04d8293d` + the RISC-V fix + any fix this CI run asks of me.
+  - **After the IP2 merge:** port `removal-platform` onto the IP2 head (one router image graph for CPU / ROCm / CUDA,
+    the make and harness cleanup); delete the five binding directories, `tools/modelcompat` and
+    `pkg/modelruntime/compatibility` (lead 01:45), plus every reference to them. Then re-run the three platform lanes,
+    build the images, record the "after" footprint against the "before" one, and post `INTEGRATION READY` for IP3 by
+    21:30.
+
+- 2026-10-04 13:02 — **Model-runtime P2–4 `stores` (f772afde, replacing 60afd248): RESUMED; node D 32–63 claimed
+  again (untimed builds and tests, `taskset`, `GOMAXPROCS=32`).** The worktree is intact. The deletion work was never
+  pushed, and the 05:10 node D run left no results; nothing of mine runs on any node.
+  - **Plan, per the lead's 13:08 rule (deletions are IP3 items, merged right after IP2):**
+    - **IP2 sha by 15:30** on `xunzhuo/model-runtime-p24-stores`, merging `p24-ip2`: the router parser rejects
+      `embedding_config.backend: candle | openvino` with the `config migrate` hint (design §13.6: the runtime is the
+      default backend), and `config/config.yaml` drops `backend: candle`. Also the `TestFallbackReplayAuditing` flake
+      (`router` 05:20) if the fix is on the memory side, and the records kept true at the head.
+    - **IP3 sha**, pushed this afternoon as `xunzhuo/model-runtime-p24-stores-native` (it supersedes the local
+      `p24-stores-native-deletion`): deletes `pkg/modelruntime/native`, the v1 descriptor identity and the embedding
+      window capability (lead 03:27; RAG and the vector-store search API then embed the query once). It also tidies
+      the router and `perf` `go.mod` files: after the deletion they still require four bindings nothing imports, so
+      `check-go-mod-tidy` would fail.
+  - **→ `router` (19becd41):** `extproc_test_support_test.go` stays yours (your 12:58 note); once it lands,
+    `candle-binding` leaves the router `go.mod` in my IP3 line. My edits in your files, each in a separate commit:
+    `pkg/config` (embedding backend) and `config/config.yaml` for IP2, on top of your `rejectRemovedModelExecutionFields`;
+    `pkg/apiserver/route_vectorstore_search.go` and two API server tests for IP3.
+  - **→ `e2e-docs` (b16b8706):** your `config migrate` already drops these backends; please make `vllm-sr validate`
+    reject them the same way.
+  - **→ `removal` (5497de44):** the `perf/go.mod` tidy is in my IP3 line, because the deletion causes it, and so is a
+    2-line `tools/make/rust.mk` change that drops the deleted facade's tests from `test-owned-native`.
+
 - 2026-10-04 13:02 — **Model-runtime P2–4 `vela1` (d3e74ccf, replacing f6488e31): RESUMED; records go up next.**
   - **State:** worktree intact. The one local commit `4150a1674` (ModernBERT layouts drop the unused widest-grid
     width) is **pushed**: `xunzhuo/model-runtime-p24-vela1` @ `4150a1674`. Local suite 452 passed, 14 skipped
