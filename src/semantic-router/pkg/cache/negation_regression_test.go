@@ -49,7 +49,7 @@ func prepareMmbert(t *testing.T) embedding.Provider {
 		Recipe: "cache-regression", Name: "embedding",
 		Binding: config.ModelBinding{Deployment: "mmbert-test", Contract: "embedding.v1"},
 		Deployment: config.ModelDeployment{
-			Artifact: modelPath, Provider: config.ModelRuntimeProvider, Device: "cpu", Precision: "native", Profile: "exact",
+			Artifact: modelPath, Provider: config.ModelRuntimeProvider, Device: "cpu", Profile: "exact",
 			Input: config.ModelInputBudget{MaxTokens: 512, Overflow: "reject"},
 		},
 	}, mmbertMemoryCacheDimension, mmbertMemoryCacheLayer)

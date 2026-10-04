@@ -13,7 +13,7 @@ describe('Vela defaults and explicit legacy models', () => {
       pii_classifier: 'models/Vela-1.0-Encoder-307M-PII',
       fact_check_classifier: 'models/Vela-1.0-Encoder-307M-FactCheck',
       feedback_detector: 'models/Vela-1.0-Encoder-307M-Feedback',
-      prompt_guard: 'models/mmbert32k-jailbreak-detector-merged',
+      prompt_guard: 'models/Vela-1.0-Encoder-307M-Guard',
       hallucination_detector: 'models/Vela-1.0-Encoder-307M-Halu',
     })
     expect(DEFAULT_SECTIONS.system_models).not.toHaveProperty('safety')
@@ -24,7 +24,6 @@ describe('Vela defaults and explicit legacy models', () => {
         threshold: 0.5,
         min_span_length: 1,
         min_span_confidence: 0,
-        enable_nli_filtering: false,
       },
     })
     expect(DEFAULT_SECTIONS.embedding_models).toMatchObject({
@@ -43,7 +42,7 @@ describe('Vela defaults and explicit legacy models', () => {
           mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
           use_cpu: true,
           embedding_config: {
-            backend: 'candle',
+            backend: 'model_runtime',
             model_type: 'mmbert',
             target_dimension: 256,
             target_layer: 6,

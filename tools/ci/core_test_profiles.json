@@ -114,113 +114,15 @@
       "reason": "Executed with the prepared Omni Nano bundle by the Published Models contract; each listed managed test must pass without skipping."
     },
     {
-      "package": "./pkg/modelruntime/native",
-      "test": "TestMaintainedCPUSameProcess",
-      "source": "src/semantic-router/pkg/modelruntime/native/maintained_cpu_test.go",
-      "profile": "retired-native-facade",
-      "reason": "Qualified the native facade, which is deleted with the bindings after IP2; the model runtime's golden answers and the Published Models contract replace it."
-    },
-    {
-      "package": "./pkg/modelruntime/native",
-      "test": "TestOpenVINOQualifiedFixtureMetadata",
-      "source": "src/semantic-router/pkg/modelruntime/native/openvino_artifact_test.go",
-      "profile": "retired-native-facade",
-      "reason": "Qualified the native facade, which is deleted with the bindings after IP2; the model runtime's golden answers and the Published Models contract replace it."
-    },
-    {
-      "package": "./pkg/modelruntime/native",
-      "test": "TestPublishedOmniModels",
-      "source": "src/semantic-router/pkg/modelruntime/native/published_omni_test.go",
-      "profile": "retired-native-facade",
-      "reason": "Qualified the native facade, which is deleted with the bindings after IP2; the model runtime's golden answers and the Published Models contract replace it."
-    },
-    {
-      "package": "./pkg/modelruntime/native",
-      "test": "TestPublishedVelaHalu",
-      "source": "src/semantic-router/pkg/modelruntime/native/published_halu_test.go",
-      "profile": "retired-native-facade",
-      "reason": "Qualified the native facade, which is deleted with the bindings after IP2; the model runtime's golden answers and the Published Models contract replace it."
-    },
-    {
-      "package": "./pkg/modelruntime/native",
-      "test": "TestPublishedVelaModels",
-      "source": "src/semantic-router/pkg/modelruntime/native/published_vela_test.go",
-      "profile": "retired-native-facade",
-      "reason": "Qualified the native facade, which is deleted with the bindings after IP2; the model runtime's golden answers and the Published Models contract replace it."
-    },
-    {
       "package": "./pkg/modelselection",
       "test": "TestPublishedSelectionsMatchBindingFixtures",
       "source": "src/semantic-router/pkg/modelselection/parity_test.go",
       "profile": "external-selector-checkpoints",
       "reason": "Compares the published selector artifacts (VLLM_SR_TEST_ML_MODELS_DIR) with the selections recorded from the retired bindings; parity on the checked-in artifacts runs in core."
-    },
-    {
-      "package": "candle-binding",
-      "test": "TestOwnedNativeMaintainedHallucinationWithoutLabelMetadata",
-      "source": "candle-binding/instances_native_test.go",
-      "profile": "legacy-hallucination-checkpoints",
-      "reason": "Optional maintained ModernBERT/HaluGate checkpoint without label metadata requires CANDLE_INSTANCE_HALLUCINATION_MODEL; mandatory owned tiny-tensor lifecycle and label-mapping contracts remain in core."
-    },
-    {
-      "package": "onnx-binding/instance",
-      "test": "TestMIGraphXExecutesWithoutCPUFallback",
-      "source": "onnx-binding/instance/instance_test.go",
-      "profile": "hardware.migraphx-amd",
-      "reason": "Requires actual AMD GPU hardware and a MIGraphX-enabled ONNX Runtime; maintained-model smoke additionally requires an explicit revision-locked cache. CPU tiny-tensor ownership tests remain mandatory and do not qualify AMD hardware."
-    },
-    {
-      "package": "onnx-binding/instance",
-      "test": "TestMIGraphXOwnedClassifierUsesMaskedFixedExecutionBudget",
-      "source": "onnx-binding/instance/context_budget_test.go",
-      "profile": "hardware.migraphx-amd",
-      "reason": "Requires actual AMD GPU hardware and a MIGraphX-enabled ONNX Runtime; maintained-model smoke additionally requires an explicit revision-locked cache. CPU tiny-tensor ownership tests remain mandatory and do not qualify AMD hardware."
-    },
-    {
-      "package": "onnx-binding/instance",
-      "test": "TestMIGraphXOwnedEmbeddingUsesExplicitMaskedExecutionBudget",
-      "source": "onnx-binding/instance/embedding_layers_test.go",
-      "profile": "hardware.migraphx-amd",
-      "reason": "Requires actual AMD GPU hardware and a MIGraphX-enabled ONNX Runtime; maintained-model smoke additionally requires an explicit revision-locked cache. CPU tiny-tensor ownership tests remain mandatory and do not qualify AMD hardware."
-    },
-    {
-      "package": "onnx-binding/instance",
-      "test": "TestMaintainedMIGraphXModels",
-      "source": "onnx-binding/instance/maintained_test.go",
-      "profile": "hardware.migraphx-amd",
-      "reason": "Requires actual AMD GPU hardware and a MIGraphX-enabled ONNX Runtime; maintained-model smoke additionally requires an explicit revision-locked cache. CPU tiny-tensor ownership tests remain mandatory and do not qualify AMD hardware."
-    },
-    {
-      "package": "onnx-binding/instance",
-      "test": "TestPublishedGroundedParity",
-      "source": "onnx-binding/instance/grounding_published_test.go",
-      "profile": "explicit-vela-halu-reference",
-      "reason": "Requires VELA_HALU_ARTIFACT with exported Halu weights and halu_reference.json. Explicit CPU/AMD source-reference qualification; not executed by routine native CI."
-    },
-    {
-      "package": "onnx-binding/instance",
-      "test": "TestPublishedOmniFullContext",
-      "source": "onnx-binding/instance/omni_full_context_test.go",
-      "profile": "explicit-vela-omni-full-context",
-      "reason": "Opt-in maximum-context qualification requires VELA_OMNI_ARTIFACT and a matching full-length source golden, optionally via VELA_OMNI_FULL_CONTEXT_REFERENCE. Routine CI does not execute Mini 32768-token inference; short parity probes do not qualify that limit."
-    },
-    {
-      "package": "onnx-binding/instance",
-      "test": "TestPublishedOmniParity",
-      "source": "onnx-binding/instance/omni_published_test.go",
-      "profile": "explicit-vela-omni-reference",
-      "reason": "Requires VELA_OMNI_ARTIFACT retaining source-reference goldens. Explicit CPU/AMD numerical qualification; routine ORT CPU runtime checks Nano/Mini prepared export parity and owned routing/storage integration."
     }
   ],
   "ginkgo_excluded_labels": {
     "model-artifacts": "Optional checkpoint-specific compatibility probes; selected model integrations run in the explicit published-model/local-stack profiles."
   },
-  "race": [
-    {
-      "package": "./pkg/modelruntime/native",
-      "test": "TestORTEmbeddingPreparesEveryAdvertisedLayerBeforePublication",
-      "source": "src/semantic-router/pkg/modelruntime/native/embedding_preparation_test.go",
-      "reason": "Preserve the owned CPU tiny-tensor concurrency contract from test-owned-native; execute once with the race detector."
-    }
-  ]
+  "race": []
 }

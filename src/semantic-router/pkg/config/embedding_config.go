@@ -4,7 +4,6 @@ import "strings"
 
 const (
 	EmbeddingBackendModelRuntime     = ModelRuntimeProvider
-	EmbeddingBackendOpenVINO         = "openvino"
 	EmbeddingBackendOpenAICompatible = "openai_compatible"
 
 	EmbeddingModelTypeQwen3  = "qwen3"

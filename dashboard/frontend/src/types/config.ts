@@ -464,7 +464,6 @@ export interface LegacyVLLMEndpoint {
 
 export interface LegacyModelConfig {
   model_id: string
-  use_modernbert?: boolean
   threshold: number
   use_cpu: boolean
   category_mapping_path?: string

@@ -119,10 +119,10 @@ func TestDefaultJailbreakWindowRespectsArtifactSelection(t *testing.T) {
 	}
 }
 
-func TestDefaultJailbreakWindowPreservesAMDDeployment(t *testing.T) {
+func TestDefaultJailbreakWindowPreservesROCmDeployment(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
 	cfg.ModelDeployments = map[string]config.ModelDeployment{
-		"guard-amd": {Artifact: config.DefaultSystemModels().PromptGuard, Provider: "ort", Device: "migraphx:0", Precision: "native", Input: config.ModelInputBudget{MaxTokens: 8192, Overflow: "reject"}},
+		"guard-amd": {Artifact: config.DefaultSystemModels().PromptGuard, Provider: config.ModelRuntimeProvider, Device: "rocm:0", Input: config.ModelInputBudget{MaxTokens: 8192, Overflow: "reject"}},
 	}
 	cfg.ModelBindings = map[string]config.ModelBinding{
 		"prompt_guard": {Deployment: "guard-amd", Adapter: "modernbert", Contract: config.RemoteClassifierContractLabelDistribution},
@@ -132,14 +132,14 @@ func TestDefaultJailbreakWindowPreservesAMDDeployment(t *testing.T) {
 		t.Fatal(err)
 	}
 	if models.cfg.PromptGuard.Window != nil || models.cfg.PromptGuard.MaxSequenceLength != 8192 {
-		t.Fatalf("explicit AMD execution changed: %+v", models.cfg.PromptGuard)
+		t.Fatalf("explicit ROCm execution changed: %+v", models.cfg.PromptGuard)
 	}
 	_, inference, err := buildJailbreakDependencies(models.cfg, newRiskTestClassifier(nil).JailbreakMapping, models)
 	if err != nil {
 		t.Fatal(err)
 	}
 	owned, ok := inference.(*ownedSequenceBackend)
-	if !ok || owned.spec.Deployment.Input.Overflow != "reject" || owned.spec.Deployment.Device != "migraphx:0" {
+	if !ok || owned.spec.Deployment.Input.Overflow != "reject" || owned.spec.Deployment.Device != "rocm:0" {
 		t.Fatalf("explicit owned backend was replaced: %T", inference)
 	}
 }

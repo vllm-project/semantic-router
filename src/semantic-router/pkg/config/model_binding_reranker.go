@@ -28,9 +28,6 @@ func validateRerankerBinding(decl ModelBinding, deployment ModelDeployment) erro
 	if decl.MappingPath != "" {
 		return fmt.Errorf("reranker returns raw relevance logits and has no label mapping")
 	}
-	if deployment.Provider == "candle" && decl.Head != "" {
-		return fmt.Errorf("candle reranker heads are part of its artifact, not a classifier head binding")
-	}
 	if deployment.Input.Overflow != "reject" {
 		return fmt.Errorf("reranker requires reject overflow for complete tokenizer pairs")
 	}

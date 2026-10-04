@@ -60,11 +60,11 @@ This document defines the project-level surfaces used by skills, reports, and va
   `sessiontelemetry/**`, `responseapi/**`, `publicmodels/**`
 - Task rules: `router-core`
 
-## `native_binding`
+## `model_runtime`
 
-- Rust/cgo/onnx/native model bindings used by runtime signals, classifiers, or training artifacts.
-- Typical paths: `candle-binding/**`, `ml-binding/**`, `nlp-binding/**`, `onnx-binding/**`
-- Task rules: `rust-bindings`, `router-core`
+- The model runtime that serves every classifier, embedding, reranker, and decision model, and the router's client and serving facade for it.
+- Typical paths: `src/model-runtime/**`, `src/semantic-router/pkg/modelservice/**`, `src/semantic-router/pkg/modelruntime/serving/**`
+- Task rules: `router-core`
 
 ## `response_headers`
 

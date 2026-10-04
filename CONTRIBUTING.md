@@ -175,8 +175,6 @@ rerun `make check`.
 Follow the language's standard formatter and keep modules focused:
 
 - Go: `gofmt`, meaningful exported API comments, and `make check-go-mod-tidy`.
-- Rust: `cargo fmt`, `cargo clippy`, explicit error handling, and public API
-  documentation.
 - Python: Black formatting, type hints where they improve the
   interface, and tests for behavior changes.
 
@@ -214,8 +212,8 @@ behavior was verified.
 | --- | --- |
 | `src/semantic-router/` | Go router, config, routing, APIs, and Envoy ExtProc service |
 | `src/vllm-sr/` | Python CLI and local stack orchestration |
+| `src/model-runtime/` | Model runtime that serves every classifier, embedding, and decision model |
 | `config/` | Canonical reference, fragments, runtime examples, and Recipes |
-| `candle-binding/`, `ml-binding/`, `nlp-binding/`, `onnx-binding/` | Native inference bindings |
 | `dashboard/` | Web console frontend and management backend |
 | `deploy/` | Helm, operator, Kubernetes, OpenShift, and local deployment assets |
 | `e2e/` | End-to-end framework and profiles |

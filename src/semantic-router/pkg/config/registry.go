@@ -678,17 +678,6 @@ func findModelByPath(path string) *ModelSpec {
 	return nil
 }
 
-// GetModelsByPurpose returns all models for a specific purpose
-func GetModelsByPurpose(purpose ModelPurpose) []ModelSpec {
-	var models []ModelSpec
-	for _, model := range DefaultModelRegistry {
-		if model.Purpose == purpose {
-			models = append(models, model)
-		}
-	}
-	return models
-}
-
 // GetModelsByTag returns all models with a specific tag
 func GetModelsByTag(tag string) []ModelSpec {
 	var models []ModelSpec

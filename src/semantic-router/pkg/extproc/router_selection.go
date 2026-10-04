@@ -86,11 +86,7 @@ func createModelSelectorRegistry(
 
 func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig, sets ...*embedding.Set) (func(context.Context, string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
 	models := cfg.EmbeddingModels
-	backend := embedding.BackendOverrideFromEnv()
-	if backend == "" {
-		backend = models.EmbeddingBackend()
-	}
-	modelType := selectionEmbeddingModelType(models, backend)
+	modelType := selectionEmbeddingModelType(models, models.EmbeddingBackend())
 	defaultConfig := selection.EmbeddingConfig{
 		ModelType:       modelType,
 		TargetDimension: selectionEmbeddingDimension(models, modelType),

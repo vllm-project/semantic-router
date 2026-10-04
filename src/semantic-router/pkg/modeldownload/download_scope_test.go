@@ -12,7 +12,6 @@ import (
 // tokenizer.json, so the multi-gigabyte ONNX exports shipped in the same repository
 // must not be fetched. Every candle embedding path gets the same narrowing.
 func TestBuildModelSpecsExcludesOnnxWeightsForCandleEmbeddingModels(t *testing.T) {
-	requireCandleEmbeddingRuntime(t)
 	specs, err := BuildModelSpecs(newCandleEmbeddingConfig())
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
@@ -39,7 +38,6 @@ func TestBuildModelSpecsExcludesOnnxWeightsForCandleEmbeddingModels(t *testing.T
 // is keyed and looked up by the canonical path, so it must match whether the collected
 // provisioning path is the literal alias or has already been canonicalized (#2828).
 func TestBuildModelSpecsExcludesOnnxWeightsForAliasedEmbeddingModel(t *testing.T) {
-	requireCandleEmbeddingRuntime(t)
 	for _, configured := range []string{
 		"models/mom-embedding-ultra", // models/-prefixed alias
 		testEmbeddingModelPath,       // canonical path
@@ -76,27 +74,6 @@ func TestBuildModelSpecsExcludesOnnxWeightsForAliasedEmbeddingModel(t *testing.T
 	}
 }
 
-// TestBuildModelSpecsKeepsFullSnapshotForOpenVINOBackend keeps ONNX deployments whole:
-// the OpenVINO embedding backend consumes the ONNX exports, so it must keep receiving
-// the unfiltered repository.
-func TestBuildModelSpecsKeepsFullSnapshotForOpenVINOBackend(t *testing.T) {
-	cfg := newCandleEmbeddingConfig()
-	cfg.EmbeddingModels.EmbeddingConfig = config.HNSWConfig{
-		Backend: config.EmbeddingBackendOpenVINO,
-	}
-
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
-	}
-
-	for _, spec := range specs {
-		if len(spec.ExcludePatterns) != 0 {
-			t.Fatalf("%s ExcludePatterns = %#v, want none for the openvino backend", spec.LocalPath, spec.ExcludePatterns)
-		}
-	}
-}
-
 // TestBuildModelSpecsLeavesNonEmbeddingModelsUnfiltered limits the blast radius to the
 // embedding runtime: other locally provisioned models keep the full snapshot until their
 // own runtime contract is encoded.
@@ -126,7 +103,7 @@ func TestBuildModelSpecsLeavesNonEmbeddingModelsUnfiltered(t *testing.T) {
 // and the completeness contract aligned: a pattern that matched a hard-loaded file
 // would make every download incomplete and loop forever.
 func TestOnnxWeightExcludePatternsNeverMatchCandleRequiredFiles(t *testing.T) {
-	required := candleEmbeddingModelRequiredFiles(newCandleEmbeddingConfig())
+	required := embeddingModelRequiredFiles(newCandleEmbeddingConfig())
 	protected := append([]string{}, DefaultRequiredFiles...)
 	protected = append(protected, "onnx/model_config.json")
 	for _, files := range required {
