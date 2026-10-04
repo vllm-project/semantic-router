@@ -73,6 +73,7 @@ func (k *KindCluster) Create(ctx context.Context) error {
 	if err := k.runCreateClusterCommand(ctx, configFile); err != nil {
 		return fmt.Errorf("failed to create cluster: %w", err)
 	}
+	k.allowPodARP(ctx)
 
 	// Wait for cluster to be ready
 	k.log("Waiting for cluster to be ready...")
@@ -119,6 +120,26 @@ func (k *KindCluster) createClusterArgs(configFile string) []string {
 		k.log("Using Kind config with /mnt mount for storage")
 	}
 	return args
+}
+
+// podARPScript lets every interface of a node answer ARP for its own /32.
+// Hosts that set net.ipv4.conf.default.arp_ignore=2 pass it to Kind's nodes;
+// Kind resets only net.ipv4.conf.all, but an interface's effective value is
+// the larger of the two, so kindnet's /32 veths would ignore their pods' ARP
+// requests and every pod would lose its network.
+const podARPScript = `sysctl -qw net.ipv4.conf.default.arp_ignore=0 && for setting in /proc/sys/net/ipv4/conf/*/arp_ignore; do echo 0 > "$setting"; done`
+
+func (k *KindCluster) allowPodARP(ctx context.Context) {
+	output, err := exec.CommandContext(ctx, "kind", "get", "nodes", "--name", k.Name).Output()
+	if err != nil {
+		k.log("Warning: list Kind nodes: %v", err)
+		return
+	}
+	for _, node := range strings.Fields(string(output)) {
+		if err := exec.CommandContext(ctx, "docker", "exec", node, "sh", "-c", podARPScript).Run(); err != nil {
+			k.log("Warning: reset arp_ignore on %s: %v", node, err)
+		}
+	}
 }
 
 func (k *KindCluster) configureStorageProvisioner(ctx context.Context) error {

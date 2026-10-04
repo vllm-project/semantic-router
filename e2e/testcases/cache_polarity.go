@@ -15,10 +15,10 @@ import (
 )
 
 // The polarity case pins the #2751 contract at the only place E2E can see it:
-// with global.stores.response_cache.polarity_guard.mode set to lexical, a
-// query that clears the similarity threshold but flips the cached one's
-// polarity (a negation cue or an antonym pair) must not be served from the
-// cache, while a genuine paraphrase still hits.
+// the response cache's lexical polarity guard always runs, so a query that
+// clears the similarity threshold but flips the cached one's polarity (a
+// negation cue or an antonym pair) must not be served from the cache, while a
+// genuine paraphrase still hits.
 func init() {
 	pkgtestcases.Register("semantic-cache-polarity", pkgtestcases.TestCase{
 		Description: "Semantic cache rejects opposite-meaning queries via the lexical polarity guard",

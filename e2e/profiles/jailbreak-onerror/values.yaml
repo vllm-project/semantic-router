@@ -120,7 +120,6 @@ config:
           enabled: true
           model_ref: ""
           model_id: ""
-          variant: ""
           backend:
             protocol: http_classify
             contract: label_distribution.v1
