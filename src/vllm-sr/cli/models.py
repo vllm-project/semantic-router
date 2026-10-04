@@ -1879,6 +1879,10 @@ class ProviderReliability(BaseModel):
                 raise ValueError(
                     "request_timeout cannot be 0 without a positive stream_idle_timeout"
                 )
+            if 0 < req_dur < 0.001:
+                raise ValueError(
+                    "request_timeout must be at least 1ms or 0s"
+                )
             self.request_timeout = format_protobuf_duration(req_dur)
 
         if self.connect_timeout is not None:

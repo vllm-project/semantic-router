@@ -590,7 +590,12 @@ func (r *OpenAIRouter) appendReliabilityHeaders(headersOut *[]*core.HeaderValueO
 		rel := modelParams.Reliability
 		if rel.RequestTimeout != "" {
 			if dur, err := time.ParseDuration(rel.RequestTimeout); err == nil {
-				timeoutMs := dur.Milliseconds()
+				var timeoutMs int64
+				if dur > 0 {
+					// Round positive durations up to at least 1ms so sub-millisecond durations
+					// do not truncate to 0, which would disable Envoy's request timeout.
+					timeoutMs = int64((dur + time.Millisecond - 1) / time.Millisecond)
+				}
 				*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
 					Key:      "x-envoy-upstream-rq-timeout-ms",
 					RawValue: []byte(strconv.FormatInt(timeoutMs, 10)),

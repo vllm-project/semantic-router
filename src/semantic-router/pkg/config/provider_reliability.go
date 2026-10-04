@@ -141,6 +141,12 @@ func validateProviderTimeouts(
 			modelName,
 		)
 	}
+	if hasReq && reqDur > 0 && reqDur < time.Millisecond {
+		return fmt.Errorf(
+			"providers.models[%s].reliability.request_timeout must be at least 1ms or 0s",
+			modelName,
+		)
+	}
 
 	if reliability.ConnectTimeout != "" {
 		connDur, connErr := time.ParseDuration(reliability.ConnectTimeout)

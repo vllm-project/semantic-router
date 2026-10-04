@@ -283,6 +283,13 @@ def test_provider_reliability_validation():
     ):
         ProviderReliability(request_timeout="0s", stream_idle_timeout="0s")
 
+    # Submillisecond request_timeout below 1ms is invalid
+    with pytest.raises(
+        ValueError,
+        match="request_timeout must be at least 1ms or 0s",
+    ):
+        ProviderReliability(request_timeout="100us", stream_idle_timeout="10s")
+
     # Connect timeout <= 0 is invalid
     with pytest.raises(ValueError, match="connect_timeout must be greater than 0"):
         ProviderReliability(connect_timeout="0s")

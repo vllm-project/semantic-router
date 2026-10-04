@@ -139,6 +139,12 @@ func TestProviderReliabilityRejectsUnsafeTimeouts(t *testing.T) {
 			},
 		},
 		{
+			name: "submillisecond request timeout below 1ms",
+			reliability: ProviderReliability{
+				RequestTimeout: "100us",
+			},
+		},
+		{
 			name: "negative stream idle timeout",
 			reliability: ProviderReliability{
 				StreamIdleTimeout: "-5s",

@@ -3292,6 +3292,16 @@ func TestAppendReliabilityHeaders(t *testing.T) {
 							StreamIdleTimeout: "15s",
 						},
 					},
+					"submillisecond-model": {
+						Reliability: config.ProviderReliability{
+							RequestTimeout: "100us",
+						},
+					},
+					"submillisecond-roundup-model": {
+						Reliability: config.ProviderReliability{
+							RequestTimeout: "1500us",
+						},
+					},
 					"no-rel-model": {},
 				},
 			},
@@ -3331,7 +3341,29 @@ func TestAppendReliabilityHeaders(t *testing.T) {
 		t.Fatalf("unbounded-model: expected x-envoy-upstream-rq-timeout-ms=0, got %q", headerMap3["x-envoy-upstream-rq-timeout-ms"])
 	}
 
-	// Case 4: model without reliability settings sets no timeout headers
+	// Case 4: submillisecond-model (100us) preserves nonzero millisecond bound (rounds up to 1ms instead of 0)
+	var headersSub []*core.HeaderValueOption
+	r.appendReliabilityHeaders(&headersSub, "submillisecond-model")
+	headerMapSub := make(map[string]string)
+	for _, h := range headersSub {
+		headerMapSub[h.Header.Key] = string(h.Header.RawValue)
+	}
+	if headerMapSub["x-envoy-upstream-rq-timeout-ms"] != "1" {
+		t.Fatalf("submillisecond-model: expected x-envoy-upstream-rq-timeout-ms=1, got %q", headerMapSub["x-envoy-upstream-rq-timeout-ms"])
+	}
+
+	// Case 5: submillisecond-roundup-model (1500us) rounds up to 2ms
+	var headersRoundUp []*core.HeaderValueOption
+	r.appendReliabilityHeaders(&headersRoundUp, "submillisecond-roundup-model")
+	headerMapRoundUp := make(map[string]string)
+	for _, h := range headersRoundUp {
+		headerMapRoundUp[h.Header.Key] = string(h.Header.RawValue)
+	}
+	if headerMapRoundUp["x-envoy-upstream-rq-timeout-ms"] != "2" {
+		t.Fatalf("submillisecond-roundup-model: expected x-envoy-upstream-rq-timeout-ms=2, got %q", headerMapRoundUp["x-envoy-upstream-rq-timeout-ms"])
+	}
+
+	// Case 6: model without reliability settings sets no timeout headers
 	var headers4 []*core.HeaderValueOption
 	r.appendReliabilityHeaders(&headers4, "no-rel-model")
 	if len(headers4) != 0 {
