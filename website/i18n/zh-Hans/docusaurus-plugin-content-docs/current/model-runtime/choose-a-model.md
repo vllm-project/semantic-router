@@ -3,7 +3,7 @@ title: 选择模型、规模和硬件
 sidebar_label: 选择模型
 description: 每个任务该用哪个模型，决策模型需要多大，以及用什么硬件运行。
 translation:
-  source_commit: "914209c45492794c708eaafd5cfd595a710e8f36"
+  source_commit: "a8c166705a025fec6c9cd4bfe4251341f3a64196"
   source_file: "docs/model-runtime/choose-a-model.md"
   outdated: false
 ---

@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "ade3cdf4b4bdcdd7ab26a390e164f204807fb6de"
   source_file: "docs/tutorials/algorithm/selection/knn.md"
   outdated: false
 ---
