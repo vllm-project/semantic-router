@@ -265,6 +265,21 @@ def test_text_image_and_audio_share_one_unit_space(model):
     assert again.items[0].cache_key == keys[0]
 
 
+def test_a_batch_answers_every_input_as_it_answers_alone(model):
+    image = base64.b64encode(golden_image()).decode()
+    sound = base64.b64encode(golden_audio()).decode()
+    inputs = [
+        "route this request",
+        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image}"}},
+        {"type": "input_audio", "input_audio": {"data": sound, "format": "wav"}},
+        "a second, somewhat longer request to embed",
+        "route this request",
+    ]
+    plan = model.plan_surface("embeddings", request({"input": inputs}))
+    assert model.batch_invariant
+    assert model.run(plan.items) == [model.run([item])[0] for item in plan.items]
+
+
 def test_bad_inputs_fail_in_place(model):
     garbage = base64.b64encode(b"not an image").decode()
     _, body = serve(

@@ -17,6 +17,7 @@ import io
 import json
 import math
 import wave
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import numpy as np
@@ -46,6 +47,7 @@ from . import bundle as bundles
 from .processors import AudioFeatures, AudioProcessor, ImageProcessor, TextProcessor
 
 UNIT_NORM_TOLERANCE = 0.005
+CONCURRENT_INPUTS = 4
 # Import name -> distribution of the multimodal extra.
 EXTRA = {"onnxruntime": "onnxruntime", "PIL": "Pillow"}
 GOLDEN_TEXT = "Route this request to the model that answers it best."
@@ -229,9 +231,16 @@ class MultimodalEmbeddingFamily(ModelFamily):
 
 
 class OmniModel(LoadedModel):
-    """One bundle on the onnxruntime engine; each input runs its modality's graphs."""
+    """One bundle on the onnxruntime engine; each input runs its modality's graphs.
+
+    Every input runs its graphs alone, so its vector is the same in any batch:
+    the ``exact`` profile hands every queued request to one ``run``, which runs
+    up to ``CONCURRENT_INPUTS`` inputs at once on the shared ONNX Runtime pool
+    (one short input's run leaves most of the pool idle).
+    """
 
     device_thread = False
+    batch_invariant = True
 
     def __init__(
         self,
@@ -248,6 +257,9 @@ class OmniModel(LoadedModel):
         self.audio = audio
         assert info.embedding is not None
         self.dimension = info.embedding.dimensions[0]
+        self.inputs = ThreadPoolExecutor(
+            max_workers=CONCURRENT_INPUTS, thread_name_prefix="vllm-sr-omni"
+        )
 
     def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan:
         if surface != "embeddings":
@@ -299,10 +311,16 @@ class OmniModel(LoadedModel):
         )
 
     def run(self, items: list[Any], shared_prefix: int = 0) -> list[Any]:
-        return [self._embed(item) for item in items]
+        if len(items) == 1:
+            return [self._embed(items[0])]
+        return list(self.inputs.map(self._embed, items))
 
     def finish_surface(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:
         return embedding.finish(plan, results)
+
+    def close(self) -> None:
+        self.inputs.shutdown(wait=True)
+        super().close()
 
     def _graph(
         self, name: str, size: int, ids: list[int] | None = None, **inputs: np.ndarray
