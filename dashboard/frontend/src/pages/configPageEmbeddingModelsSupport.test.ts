@@ -13,7 +13,7 @@ const localCatalog = {
     mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
     use_cpu: true,
     embedding_config: {
-      backend: 'candle',
+      backend: 'model_runtime',
       model_type: 'mmbert',
       target_dimension: 768,
       future_optimizer: 'preserved',
@@ -33,27 +33,35 @@ describe('embedding models config support', () => {
   it('gives an explicit local backend precedence over legacy model_type inference', () => {
     const editData = embeddingModelsEditData({
       semantic: {
-        embedding_config: { backend: 'candle', model_type: 'remote' },
+        embedding_config: { backend: 'model_runtime', model_type: 'remote' },
       },
     })
 
     expect(editData.provider_type).toBe('local')
-    expect(editData.local_backend).toBe('candle')
+  })
+
+  it('saves a retired local backend as the model runtime', () => {
+    const editData = embeddingModelsEditData({
+      semantic: { embedding_config: { backend: 'candle', model_type: 'mmbert' } },
+    })
+    const saved = embeddingModelsCatalogValue(editData)
+
+    expect(editData.provider_type).toBe('local')
+    expect((saved.semantic as Record<string, unknown>).embedding_config).toEqual(
+      expect.objectContaining({ backend: 'model_runtime', model_type: 'mmbert' }),
+    )
   })
 
   it('shows provider-specific fields for local and remote modes', () => {
     const fields = embeddingModelsFields()
     const localPath = fields.find((field) => field.name === 'mmbert_model_path')
     const endpoint = fields.find((field) => field.name === 'endpoint')
-    const localBackend = fields.find((field) => field.name === 'local_backend')
     const apiProtocol = fields.find((field) => field.name === 'remote_backend')
 
     expect(localPath?.shouldHide?.({ provider_type: 'local' })).toBe(false)
-    expect(localBackend?.shouldHide?.({ provider_type: 'local' })).toBe(false)
     expect(endpoint?.shouldHide?.({ provider_type: 'local' })).toBe(true)
     expect(apiProtocol?.shouldHide?.({ provider_type: 'local' })).toBe(true)
     expect(localPath?.shouldHide?.({ provider_type: 'remote' })).toBe(true)
-    expect(localBackend?.shouldHide?.({ provider_type: 'remote' })).toBe(true)
     expect(endpoint?.shouldHide?.({ provider_type: 'remote' })).toBe(false)
     expect(apiProtocol?.shouldHide?.({ provider_type: 'remote' })).toBe(false)
   })
@@ -110,12 +118,11 @@ describe('embedding models config support', () => {
     const local = embeddingModelsCatalogValue({
       ...embeddingModelsEditData(remote),
       provider_type: 'local',
-      local_backend: 'openvino',
       model_type: 'mmbert',
     })
 
     expect((local.semantic as Record<string, unknown>).embedding_config).toEqual(
-      expect.objectContaining({ backend: 'openvino', model_type: 'mmbert' }),
+      expect.objectContaining({ backend: 'model_runtime', model_type: 'mmbert' }),
     )
     expect((local.semantic as Record<string, unknown>).endpoint).toEqual(
       expect.objectContaining({

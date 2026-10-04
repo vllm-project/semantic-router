@@ -27,20 +27,22 @@ func (d ModelDeployment) IsModelRuntime() bool {
 	return d.Provider == ModelRuntimeProvider
 }
 
-// IsLocalTask reports whether a tokenizer-aware engine the Router owns or
-// attaches to serves the deployment, so input budgets and windows apply.
-func (d ModelDeployment) IsLocalTask() bool {
-	switch d.Provider {
-	case ModelRuntimeProvider, "candle", "ort":
-		return true
-	default:
-		return false
-	}
-}
-
 // Managed reports whether the Router starts and supervises the runtime process.
 func (d ModelDeployment) Managed() bool {
 	return d.IsModelRuntime() && strings.TrimSpace(d.Endpoint) == ""
+}
+
+// ServedModel names the model a consumer of the deployment called name runs:
+// its artifact, or, for an attached runtime without one, the model the runtime
+// serves under served_name or the deployment's name.
+func (d ModelDeployment) ServedModel(name string) string {
+	if d.Artifact != "" || !d.IsModelRuntime() || d.Managed() {
+		return d.Artifact
+	}
+	if d.ServedName != "" {
+		return d.ServedName
+	}
+	return name
 }
 
 // ModelRuntimeDeploymentsInUse returns the model_runtime deployments that the
@@ -191,12 +193,6 @@ func ModelRuntimeProfiles() []string {
 func (d ModelDeployment) validateModelRuntime() error {
 	if d.ExternalModel != "" {
 		return fmt.Errorf("model_runtime deployments cannot set external_model")
-	}
-	if d.CustomOpsProfile != "" || d.CompilationCacheDir != "" {
-		return fmt.Errorf("model_runtime deployments do not use ONNX Runtime custom ops or compilation caches")
-	}
-	if d.Precision != "" {
-		return fmt.Errorf("model_runtime deployments run the package's own dtype policy; select a profile instead of precision")
 	}
 	if d.Input.MaxTokens < 0 {
 		return fmt.Errorf("input.max_tokens must not be negative")

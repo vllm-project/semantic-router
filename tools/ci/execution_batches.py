@@ -39,7 +39,7 @@ EXECUTOR_JOBS = (
     "e2e-fixtures",
     "e2e-dashboard",
 )
-ALL_DISPATCH_JOBS = ("plan", *IMAGE_PRODUCERS, "native-build", *EXECUTOR_JOBS)
+ALL_DISPATCH_JOBS = ("plan", *IMAGE_PRODUCERS, *EXECUTOR_JOBS)
 LANE_IMAGES = frozenset({"extproc", "provider-mocker", "dashboard"})
 
 
@@ -81,7 +81,6 @@ def expected_dispatch_jobs(plan: dict) -> list[str]:
             "plan",
             *(dispatch_job(record) for record in plan["verifications"]),
             *(job for job, images in image_producers(plan["images"]).items() if images),
-            *(["native-build"] if plan["native"] else []),
         }
     )
 

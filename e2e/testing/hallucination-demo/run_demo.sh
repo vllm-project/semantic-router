@@ -95,7 +95,6 @@ fi
 # Step 3: Start Semantic Router (gRPC ExtProc on port 50051)
 echo -e "${YELLOW}[3/5]${NC} Starting Semantic Router (ExtProc port 50051)..."
 cd "$ROOT_DIR"
-export LD_LIBRARY_PATH=${ROOT_DIR}/candle-binding/target/release
 nohup ./bin/router -config=e2e/config/config.hallucination.yaml > /tmp/router_demo.log 2>&1 &
 echo $! > /tmp/router_demo.pid
 

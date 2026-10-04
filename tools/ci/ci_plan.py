@@ -214,7 +214,6 @@ def make_plan(
         "images": images,
         "build_images": build_images,
         "image_sources": image_sources,
-        "native": any(record["native"] for record in verifications),
         "publish_images": publish_images,
         "publish_helm": profile in {"nightly", "release"}
         or (profile == "main" and selection.signals["helm"]),
@@ -315,7 +314,6 @@ def github_outputs(plan: dict) -> dict[str, str]:
         "build_images": plan["build_images"],
         "published_images": [published] if published else [],
         "publish_images": plan["publish_images"],
-        "build_native": plan["native"],
         "multiarch": plan["multiarch"],
         "publish_helm": plan["publish_helm"],
         "publish_python": plan["publish_python"],
