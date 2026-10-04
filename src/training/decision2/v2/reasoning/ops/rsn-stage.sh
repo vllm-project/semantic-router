@@ -11,7 +11,7 @@ SRC=$1 NAME=$2 SIZE=${3:-4b}
 case $SIZE in
   4b) BASEPKG=/data/dev2/models/ix1/DEV2.0-4B-13d42143 LOADED=4208383488 TAG=r13d42143 ;;
   9b) BASEPKG=/data/dev2/models/ix1/DEV2.0-9B-e51f9881 LOADED=7940895744 TAG=re51f9881 ;;
-  2b) BASEPKG=/data/dev2/models/ix1/DEV2.0-2B-a53cf66a LOADED=1881825088 TAG=ra53cf66a ;;
+  2b) BASEPKG=/data/dev2/models/ix1/DEV2.0-2B-a53cf66a LOADED=1883930944 TAG=ra53cf66a ;;
   *) echo "unknown size $SIZE" >&2; exit 2 ;;
 esac
 S=/data/dev2/src/$SRC/src/training/decision2

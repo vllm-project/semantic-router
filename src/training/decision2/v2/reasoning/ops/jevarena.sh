@@ -9,7 +9,7 @@ src=$1 gpu=$2 name=$3 ckpt=$4
 shift 4
 S=/data/dev2/src/$src/src/training/decision2
 OUT=/data/dev2/runs/reasoning/formal/$name
-SOURCE=/data/dev2/models/Decision-1.0-Nox-4B/cde2a68dbaa557ea65dc458104d410a0802ee259
+SOURCE=${RSN_SOURCE:-/data/dev2/models/Decision-1.0-Nox-4B/cde2a68dbaa557ea65dc458104d410a0802ee259}
 [[ -f $ckpt/decision_config.json ]] || { echo "no checkpoint at $ckpt" >&2; exit 2; }
 [[ -e $OUT ]] && { echo "$OUT exists" >&2; exit 2; }
 mkdir -p "$(dirname "$OUT")" /data/dev2/runs/reasoning/triton-cache/formal-4b
