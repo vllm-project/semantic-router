@@ -222,7 +222,7 @@ def test_queued_request_is_dropped_when_its_client_disconnects(
         "server": ("127.0.0.1", 80),
     }
     asyncio.run(app(scope, receive, send))
-    assert sent[0]["status"] == 499
+    assert sent == []  # a status outside the contract is never sent
     release.set()
     first.join(10)
     assert post(TestClient(app), request).status_code == 200

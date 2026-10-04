@@ -46,8 +46,8 @@ def create_app(runtime: Runtime) -> Starlette:
             future = runtime.submit(plan, parsed)
             results = await _unless_disconnected(request, asyncio.wrap_future(future))
             if results is None:
-                status = 499  # the client closed the request; nobody reads a reply
-                return Response(status_code=status)
+                status = 499  # labels the metric only; the client gets no reply
+                return _no_reply
             finished = time.monotonic()
             queue_ms = (submitted - parsed.received) * 1000.0
             compute_ms = (finished - submitted) * 1000.0
@@ -122,6 +122,10 @@ async def _unless_disconnected(request: Request, results: asyncio.Future) -> Any
         return results.result()
     results.cancel()
     return None
+
+
+async def _no_reply(scope: Any, receive: Any, send: Any) -> None:
+    """Stands in for a response once the client that would read it is gone."""
 
 
 async def _disconnected(request: Request) -> None:
