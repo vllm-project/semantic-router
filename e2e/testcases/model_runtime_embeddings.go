@@ -158,6 +158,19 @@ func (s *modelRuntimeSession) postAPI(ctx context.Context, path string, body, in
 		return err
 	}
 	request.Header.Set("Content-Type", "application/json")
+	return s.callAPI(request, path, into)
+}
+
+// getAPI reads one resource of the Router's management API.
+func (s *modelRuntimeSession) getAPI(ctx context.Context, path string, into interface{}) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, s.api.URL(path), nil)
+	if err != nil {
+		return err
+	}
+	return s.callAPI(request, path, into)
+}
+
+func (s *modelRuntimeSession) callAPI(request *http.Request, path string, into interface{}) error {
 	response, err := s.api.HTTPClient(mrRequestTimeout).Do(request)
 	if err != nil {
 		return err

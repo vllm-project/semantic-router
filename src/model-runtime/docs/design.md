@@ -617,7 +617,7 @@ time a job was queued plus its tokens at the measured cost per token (a running
 average of recent forwards). Short work goes first, and a long job still runs
 once the work queued before its expected finish is done, so nothing starves.
 Between two forwards the worker takes the jobs that arrived meanwhile (jobs of
-coalescing profiles wait for the next batching window), so a short request
+coalescing profiles once they have waited one batching window), so a short request
 waits for the forward in flight, not for the remaining windows of a long one;
 each job is answered as soon as its own batches have run. The order of
 forwards never changes a batch's contents, so answers are unchanged. Deadlines
@@ -827,16 +827,20 @@ checked against the prepared head's labels.
 ### 13.6 Configuration migration
 
 `vllm-sr config migrate` (the existing migration command) rewrites legacy
-layouts; the router parser accepts only the canonical layout.
+layouts; the router parser and `vllm-sr validate` accept only the canonical
+layout and refuse every path below with a pointer to `config migrate`.
 
 | Legacy | Migrated to |
 | --- | --- |
 | `provider: candle \| ort \| openvino` | `provider: model_runtime`; device `cpu` → `cpu`, `cuda:N` → `cuda:N`, `rocm:N` / `migraphx:N` → `rocm:N`, `metal:0` → `mps`, OpenVINO devices → `cpu` |
 | `precision: fp16` | `profile: max_speed`; `native` and `fp32` are dropped (exact is FP32) |
 | `custom_ops_profile`, `compilation_cache_dir`, ONNX graph `head` paths | removed (the runtime selects graphs) |
-| `embedding_config.backend: candle \| openvino` | removed (the runtime is the default backend) |
+| `embedding_config.backend: candle \| openvino` | `backend: model_runtime`, the default (local embeddings are served by the runtime) |
+| Module `variant`, `model_type`, `use_modernbert`, `use_mmbert_32k`; `detector.backend: candle` | removed (the served package defines its architecture and windows) |
+| Label mapping files of built-in models | optional: a local consumer takes its labels from the served model card; a file stays a rename override |
 | Legacy model paths and aliases (section 16.3) | their Vela 1.0 replacements, with label remaps where labels differ; refused with guidance where no safe remap exists |
-| `hallucination_explainer`, NLI filtering, the response-cache polarity guard | removed with a warning (retired) |
+| `hallucination_explainer`, `nli_model`, NLI filtering, `use_nli`, the response-cache polarity guard | removed with a warning (retired) |
+| `nli_contradiction_penalty` (looper fusion) | `contradiction_penalty`, read from the Halu grounded head |
 
 ## 14. Security
 
@@ -950,7 +954,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 | E2E profiles | `vela-halu`, `vela-shield`, `vela-omni`, `multimodal-routing`, `local-classifier-backend`, `ml-model-selection`, `hallucination`, and every profile that loads default models through the router image | Run against the runtime; new runtime profiles (section 15) |
 | Harness | `tools/agent/domains.yaml` domains `native-bindings`, `openvino`, `riscv-runtime`, `onnx-*`, `ck-flash-attn-rewriter`, `published-model-tests`, native verifications | Removed; `model-runtime` domain covers the families, engines and parity tools |
 | Docs | runtime, installation, AMD, OpenVINO and Vela pages describing candle, ORT and OpenVINO | Task-oriented runtime docs and a migration guide |
-| RISC-V | candle on riscv64 under QEMU | The pure-Go router builds for riscv64; models attach to a runtime on another host |
+| RISC-V | candle on riscv64 under QEMU, a riscv64 router build and its CI lane | **Removed** (maintainer decision): no riscv64 build, lane, image or build tags |
 
 ### 16.6 Retirements
 
@@ -962,6 +966,8 @@ files carry `!windows && cgo` build tags only because of these imports.
   buckets, the CK flash-attention operator and its rewriter): the runtime's
   ROCm path is native PyTorch; ONNX Runtime remains as a portable engine.
 - **Unwired legacy models** (candle Qwen3 multi-LoRA, Qwen3Guard, DeBERTa).
+- **RISC-V** (maintainer decision): the riscv64 router build, its QEMU lane,
+  build tags and fallbacks that existed only for riscv64.
 
 ## 17. Parity and evidence
 
@@ -988,12 +994,12 @@ Every migrated feature must match or beat the legacy binding's latency (p50,
 p95) and throughput on CPU and on ROCm, measured on the same inputs and
 hardware, with the records in `docs/records/<workstream>-*`. The techniques:
 
-| Where | Technique | Status |
+| Where | Technique | Records |
 | --- | --- | --- |
-| Decision models | exact-shape HIP / CUDA graphs with host-built masks, bit-exact fused Triton kernels, lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard | Phase 1; reused by Decision 1.0 (Qwen3.5) and Vela 2.0 4B / 9B |
-| Runtime core | one bundled call per request and process; a bundle's tasks for one model as one job group (one forward for every head reading the same input); per-model content-hash result cache | this scaffold |
-| Encoders | dynamic cross-request batching with length buckets; packed (varlen) sequences without padding waste; graphs per bucket on GPU; fused kernels, bit-exact where possible; an ONNX Runtime CPU engine where it beats PyTorch; opt-in int8 / fp8 profiles with accuracy records; per-hardware kernel selection | encoder workstreams |
-| Router | parallel async dispatch, deadlines, fail-open, bundled calls, caching of bundle results | router workstreams |
+| Decision models | exact-shape HIP / CUDA graphs with host-built masks, bit-exact fused Triton kernels (FP32 and BF16 streams on gfx942), lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard; Decision 1.0 encoders keep one graph set and one reduced copy per layer stack | `rocm-mi325x-*`, `decision1-performance.md`, `vela2-performance.md` |
+| Runtime core | one bundled call per request and process; a bundle's tasks for one model as one job group (one forward for every head reading the same input); per-model content-hash result cache; shortest-expected-finish scheduling that answers each job when its own batches ran and lets short requests run between the windows of a long one (section 9); package files verified in parallel | `router-latency-cpu.md` |
+| Encoders | packed (varlen) attention in length groups; banded local attention for long rows (from 1,024 tokens on CPU, 2,048 on GPU); oneDNN pre-packed FP32 linears on CPU `exact`, batch-invariant as probed at load, so `exact` batches concurrent requests; dynamic cross-request batching (`batching`); encoder graphs per shape bucket on GPU, replayed only when padding stays small; a fused gfx942 rotary kernel; reduced-precision copies under `max_speed` only where the records show at least 99% agreement (CPU `float32-packed` for Decision 1.0 Kai, Lex and Route and the Vela 2.0 0.3B; BF16 and int8 measured and refused elsewhere); an ONNX Runtime engine with one shared thread pool (Omni); per-hardware kernel registry | `vela1-performance.md`, `embed-performance.md`, `decision1-performance.md`, `vela2-performance.md` |
+| Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; one CPU process per model with thread shares; deadlines and fail-open; pure-Go keyword scoring and model selectors (an AVX2 / FMA dot kernel with a pure-Go fallback) | `router-latency-cpu.md`, `stores-algorithms.md`, `stores-consumers.md` |
 
 ## 19. Phase 1 follow-ups and later work
 

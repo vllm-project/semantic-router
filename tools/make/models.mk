@@ -679,16 +679,3 @@ check-gpu: ## Check GPU availability in Docker container
 		--group-add video \
 		$(ROCM_IMAGE) \
 		python3 -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'ROCm: {torch.cuda.is_available()}'); print(f'GPUs: {torch.cuda.device_count()}'); [print(f'  GPU {i}: {torch.cuda.get_device_name(i)} ({torch.cuda.get_device_properties(i).total_memory/1024**3:.0f}GB)') for i in range(torch.cuda.device_count())]"
-
-# Convert only the immutable registered Vela graphs; tokenizer failure is fatal.
-convert-openvino-test-models: ## Convert pinned Vela Domain and Embedding ONNX graphs to OpenVINO IR
-	@mkdir -p "$(OPENVINO_TEST_REPORT_DIR)"
-	@rm -f "$(OPENVINO_TEST_REPORT_DIR)/models.json" "$(OPENVINO_TEST_REPORT_DIR)/inference.json"
-	@$(OPENVINO_PYTHON) -m unittest discover -s openvino-binding/scripts -p convert_published_models_test.py
-	@cd src/semantic-router && go run ./tools/model-test-assets \
-		--suite openvino --provider ort --output "$(OPENVINO_TEST_SOURCE_DIR)" \
-		--manifest "$(OPENVINO_TEST_REPORT_DIR)/sources.json" --download
-	@$(OPENVINO_PYTHON) openvino-binding/scripts/convert_published_models.py \
-		--sources "$(OPENVINO_TEST_REPORT_DIR)/sources.json" \
-		--output "$(OPENVINO_TEST_MODEL_DIR)" \
-		--manifest "$(OPENVINO_TEST_REPORT_DIR)/models.json"

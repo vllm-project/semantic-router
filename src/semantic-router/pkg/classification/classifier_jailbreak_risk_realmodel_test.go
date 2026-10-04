@@ -15,7 +15,7 @@ func setupRealJailbreakClassifier(t *testing.T) *Classifier {
 	t.Helper()
 	defaults := config.DefaultGlobalConfig()
 	modelPath := requireRealModel(t, "VLLM_SR_JAILBREAK_MODEL", defaults.PromptGuard.ModelID)
-	mappingPath := filepath.Join(modelPath, filepath.Base(defaults.PromptGuard.JailbreakMappingPath))
+	mappingPath := filepath.Join(modelPath, "jailbreak_type_mapping.json")
 	mapping, err := LoadJailbreakMapping(mappingPath)
 	if err != nil {
 		t.Fatalf("load jailbreak mapping: %v", err)

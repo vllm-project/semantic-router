@@ -3,7 +3,7 @@ package config
 import "strings"
 
 const (
-	EmbeddingBackendCandle           = "candle"
+	EmbeddingBackendModelRuntime     = ModelRuntimeProvider
 	EmbeddingBackendOpenVINO         = "openvino"
 	EmbeddingBackendOpenAICompatible = "openai_compatible"
 
@@ -30,7 +30,7 @@ func (e EmbeddingModels) EmbeddingBackend() string {
 	if strings.EqualFold(strings.TrimSpace(e.EmbeddingConfig.ModelType), EmbeddingModelTypeRemote) {
 		return EmbeddingBackendOpenAICompatible
 	}
-	return EmbeddingBackendCandle
+	return EmbeddingBackendModelRuntime
 }
 
 func (e EmbeddingModels) UsesRemoteEmbeddingBackend() bool {

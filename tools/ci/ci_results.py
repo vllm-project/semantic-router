@@ -97,27 +97,9 @@ def actual_platform() -> str:
     return f"{platform.system().lower()}/{machine}"
 
 
-def execution_errors(
-    verification: dict, evidence: dict, producer_platform: str
-) -> list[str]:
-    execution = verification.get("execution")
-    if not execution:
-        errors = (
-            []
-            if producer_platform == verification["platform"]
-            else ["receipt producer ran on a different platform"]
-        )
-        if evidence.get("execution"):
-            errors.append("undeclared emulated execution")
-        return errors
-    if (
-        execution.get("mode") != "qemu-user"
-        or execution.get("host_platform") != producer_platform
-        or evidence.get("execution") != execution
-        or verification["platform"] != "linux/riscv64"
-        or verification["native"]
-    ):
-        return ["emulated target, producer platform or artifact contract differs"]
+def execution_errors(verification: dict, producer_platform: str) -> list[str]:
+    if producer_platform != verification["platform"]:
+        return ["receipt producer ran on a different platform"]
     return []
 
 
@@ -142,7 +124,7 @@ def make_receipt(
             errors.append(
                 f"actual {key} {evidence.get(key)!r} differs from planned {verification[key]!r}"
             )
-    errors.extend(execution_errors(verification, evidence, execution_platform))
+    errors.extend(execution_errors(verification, execution_platform))
     artifacts = artifact_records(evidence, environ=environ)
     required = {f"image:{image}" for image in verification["images"]}
     if verification["native"]:
@@ -161,11 +143,6 @@ def make_receipt(
         "runtime": evidence["runtime"],
         "device": evidence["device"],
         "platform": evidence["platform"],
-        **(
-            {"execution": {**verification["execution"]}}
-            if verification.get("execution")
-            else {}
-        ),
         "artifacts": artifacts,
         "evidence": evidence,
         "evidence_sha256": digest(evidence),

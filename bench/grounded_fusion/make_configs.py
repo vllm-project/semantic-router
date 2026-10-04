@@ -111,7 +111,7 @@ def _fusion_decision(grounding_on: bool, policy: str = "weight") -> dict:
                     "policy": policy,
                     "min_score": 0.34,
                     "min_keep": 1,
-                    "nli_contradiction_penalty": 1.0,
+                    "contradiction_penalty": 1.0,
                     "on_error": "fail" if grounding_on else "skip",
                 },
             },

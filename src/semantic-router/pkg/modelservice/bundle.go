@@ -65,15 +65,6 @@ func InBundle(ctx context.Context) bool {
 	return bundleFrom(ctx) != nil
 }
 
-// Join adds a participant to the context's bundle; call leave when it has
-// finished. Without a bundle both are no-ops.
-func Join(ctx context.Context) (leave func()) {
-	if bundle := bundleFrom(ctx); bundle != nil {
-		return bundle.Join()
-	}
-	return func() {}
-}
-
 // Join adds a participant; call the returned function when it has finished.
 func (b *Bundle) Join() (leave func()) {
 	b.mu.Lock()

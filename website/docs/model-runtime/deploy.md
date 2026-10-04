@@ -84,9 +84,12 @@ can override it under its own `routing.model_bindings`.
 
 ## Group models into processes
 
-By default the router starts one runtime process per device: all CPU models
-share one process, all models on `rocm:0` another. Models in one process share
-the work of a request in one call and use memory efficiently.
+By default the models of one GPU share one runtime process, so all models on
+`rocm:0` answer a request in one call and use memory efficiently. CPU models
+are spread over several processes, one per model up to one per two cores the
+router may use, so a request's models run in parallel; each process runs an
+equal share of the cores as threads. `VLLM_SR_RUNTIME_CPU_PROCESSES` caps the
+number of CPU processes, and `1` keeps every CPU model in one process.
 
 Give a deployment its own `process` name when it should not share a fault
 domain or memory with the others, for example a large decision model:
@@ -138,8 +141,14 @@ Expose it only on a private network: it has no authentication of its own.
 ### On Kubernetes
 
 The router image already contains the CPU runtime, so managed deployments work
-in any cluster. To put models on GPUs, run the runtime as its own Deployment
-with a GPU build of the runtime image and attach to its Service:
+in any cluster. The ROCm router image,
+`ghcr.io/vllm-project/semantic-router/extproc-rocm`, contains the runtime with
+PyTorch for ROCm: give the router pod an AMD GPU and set `device: rocm:0` on a
+deployment, and the router runs that model on the GPU itself.
+
+To share GPU models between several routers, run the runtime as its own
+Deployment from the same image and attach every router to its Service. The
+image's `VLLM_SR_RUNTIME_COMMAND` starts its runtime:
 
 ```yaml
 apiVersion: apps/v1
@@ -156,8 +165,12 @@ spec:
     spec:
       containers:
         - name: runtime
-          image: vllm-sr-runtime:rocm
-          args: ["serve", "vllm-sr/Decision-2.0-Lux-9B", "--device", "rocm:0", "--host", "0.0.0.0", "--port", "8100"]
+          image: ghcr.io/vllm-project/semantic-router/extproc-rocm:latest
+          command: ["sh", "-c"]
+          args:
+            - exec $VLLM_SR_RUNTIME_COMMAND serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --host 0.0.0.0 --port 8100
+          resources:
+            limits: {amd.com/gpu: 1}
           ports:
             - {name: http, containerPort: 8100}
           readinessProbe:
@@ -211,8 +224,9 @@ an unknown signal means for that route (`no_match` by default, or
   deployment answers), `vsr_model_runtime_restarts_total`,
   `vsr_model_runtime_requests_total` by outcome and
   `vsr_model_runtime_unknown_answers_total` by reason on its metrics port.
-- The Dashboard's model inventory lists every deployment with its model,
-  device, profile and state.
+- The router's management API lists every deployment with its process,
+  state, restarts and the model it serves (labels, device, profile):
+  `curl -s localhost:8080/api/v1/inventory/model-runtime`.
 - An attached runtime answers `GET /v1/models` and `GET /health` directly.
 
 The [reference](./reference.md#router-managed-runtimes) lists the environment

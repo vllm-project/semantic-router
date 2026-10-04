@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from starlette.applications import Starlette
+from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 from starlette.routing import Route
@@ -65,7 +66,10 @@ def create_app(runtime: Runtime) -> Starlette:
             observe(request.url.path, status, started)
 
     async def models(request: Request) -> Response:
-        return JSON({"object": "list", "data": runtime.model_cards()})
+        # The first call imports every plugin to describe it; /health must not wait for that.
+        return JSON(
+            {"object": "list", "data": await run_in_threadpool(runtime.model_cards)}
+        )
 
     async def health(request: Request) -> Response:
         body: dict[str, Any] = {

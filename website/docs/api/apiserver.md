@@ -538,6 +538,7 @@ Inspect configured and loaded model and classifier resources.
 | `GET` | `/api/v1/inventory/models` | Get information about loaded models |
 | `GET` | `/api/v1/inventory/classifier` | Get classifier information and status (secrets redacted without secret_view) |
 | `GET` | `/api/v1/inventory/embedding-models` | Get information about loaded embedding models |
+| `GET` | `/api/v1/inventory/model-runtime` | Get the model_runtime deployments: process, readiness, restarts and served model cards |
 | `GET` | `/v1/models` | OpenAI-compatible public model and Entrypoint listing |
 
 ### observability

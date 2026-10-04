@@ -43,6 +43,7 @@ type group struct {
 	models     map[string]*servedModel
 	failure    error
 	quickExits int
+	restarts   int
 	everReady  bool
 }
 
@@ -222,6 +223,7 @@ func (g *group) needsCards(health processHealth) bool {
 func (g *group) processExited(err error, ran time.Duration) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	g.restarts++
 	for _, served := range g.models {
 		served.ready.Store(false)
 		served.state = "restarting"
@@ -291,6 +293,7 @@ func (g *group) status() []DeploymentStatus {
 		status := DeploymentStatus{
 			Name: deployment, Managed: g.managed, Endpoint: g.client.Endpoint(), Process: g.plan.name,
 			Model: served.name, Ready: served.ready.Load(), State: served.state, Reason: served.reason,
+			Restarts: g.restarts,
 		}
 		if served.card != nil {
 			card := *served.card

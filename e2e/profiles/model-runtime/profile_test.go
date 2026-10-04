@@ -189,3 +189,41 @@ func TestRouterStartsManagedRuntimesThroughTheFixtureScript(t *testing.T) {
 		}
 	}
 }
+
+// The modules name no mapping file, so the lane covers labels taken from the
+// served cards; a mapping file would also be a Hub fetch HF_HUB_OFFLINE forbids.
+func TestModulesTakeTheirLabelsFromTheServedCards(t *testing.T) {
+	var profile struct {
+		Config struct {
+			Global struct {
+				ModelCatalog struct {
+					Modules struct {
+						Classifier struct {
+							Domain struct {
+								Mapping   string  `yaml:"category_mapping_path"`
+								Threshold float64 `yaml:"threshold"`
+							} `yaml:"domain"`
+							PII struct {
+								Mapping string `yaml:"pii_mapping_path"`
+							} `yaml:"pii"`
+						} `yaml:"classifier"`
+						PromptGuard struct {
+							Mapping string `yaml:"jailbreak_mapping_path"`
+						} `yaml:"prompt_guard"`
+					} `yaml:"modules"`
+				} `yaml:"model_catalog"`
+			} `yaml:"global"`
+		} `yaml:"config"`
+	}
+	load(t, "values.yaml", &profile)
+	modules := profile.Config.Global.ModelCatalog.Modules
+	// testcases/model_runtime_signals.go (mrDomainThreshold) checks matches against it.
+	if modules.Classifier.Domain.Threshold != 0.01 {
+		t.Fatalf("domain threshold %v, the task-signal case expects 0.01", modules.Classifier.Domain.Threshold)
+	}
+	for _, path := range []string{modules.Classifier.Domain.Mapping, modules.Classifier.PII.Mapping, modules.PromptGuard.Mapping} {
+		if path != "" {
+			t.Fatalf("label map %q: the modules must take their labels from the served cards", path)
+		}
+	}
+}

@@ -4,7 +4,7 @@ description: 理解 canonical v0.3 YAML 文档，以及路由、providers、配�
 translation:
   source_commit: "d8e75b89b7290df941743270c69a111f80dde50a"
   source_file: "docs/installation/configuration.md"
-  outdated: false
+  outdated: true
 ---
 
 # 配置
@@ -54,7 +54,7 @@ Provider 定价放在每个具体模型旁边，位于 `providers.models[].prici
 
 Router 范围的调试表面默认关闭。`global.services.observability.profiling` 提供 Go `pprof` 端点，并且仅在显式启用时提供；然后它绑定 `127.0.0.1:6060`，因此除非显式更改 `bind`，否则 profile 永远不会到达可路由接口。该开关在启动时读取一次，因此更改它需要重启 Router。参见 [API 与可观测性](../tutorials/global/api-and-observability)。
 
-当未配置远程后端时，内置类别/领域分类使用本地 `variant` 选择器。要调用命名的外部分类器，在 `global.model_catalog.modules.classifier.domain` 下附加 `backend`，并从 `global.model_catalog.external[]` 解析其 `model`，设置 `model_role: classification`。共享后端字段是 `protocol`、`contract`、`model` 和可选的 `deadline_ms`；类别当前支持带完整 `label_distribution.v1` 响应契约的 `http_classify`。省略 `backend` 以保留本地行为。已弃用的 `use_modernbert` 和 `use_mmbert_32k` 键仍可读，而生成的 canonical 配置使用 `variant: candle`、`variant: modernbert` 或 `variant: mmbert32k`。
+当未配置远程后端时，内置类别/领域分类在[模型运行时](../model-runtime/overview.md)中运行 Vela Domain。要调用命名的外部分类器，在 `global.model_catalog.modules.classifier.domain` 下附加 `backend`，并从 `global.model_catalog.external[]` 解析其 `model`，设置 `model_role: classification`。共享后端字段是 `protocol`、`contract`、`model` 和可选的 `deadline_ms`；类别当前支持带完整 `label_distribution.v1` 响应契约的 `http_classify`。省略 `backend` 以保留运行时提供的模型。早期的 `variant`、`use_modernbert` 和 `use_mmbert_32k` 选择器已移除；`vllm-sr config migrate` 会删除它们。
 
 复杂度在 `global.model_catalog.modules.complexity` 下附加相同的块，位于 `prototype_scoring` 旁边。它读取两种契约，因此 `contract` 不能默认，必须声明：回归模型使用 `score.v1`，每条规则通过自己的 `hard_above`/`easy_below` 边界（或当分数随难度上升而下降时使用 `hard_below`/`easy_above`）将分数转换为判定；直接返回 `hard`/`easy`/`medium` 的模型使用 `label_distribution.v1`。`threshold` 仍是本地带符号边距的对称简写。`score.v1` 不报告置信度，因此由这些规则门控的决策按引擎的结构默认值排序；Router 会在启动时发出警告。远程调用通过 `llm_remote_connector_*` 和 `llm_complexity_*` 指标可见，评分器失败会记录在每条复杂度规则的信号错误上，而不是被丢弃。
 

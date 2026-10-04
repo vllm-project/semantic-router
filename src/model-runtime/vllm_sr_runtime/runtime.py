@@ -645,9 +645,6 @@ class Runtime:
     def served_id(self) -> str | None:
         return self.primary.served_id
 
-    def accepts_model(self, name: str) -> bool:
-        return any(served.accepts(name) for served in self.served if served.model)
-
     # -- lifecycle -----------------------------------------------------------
 
     def start(self, *, background: bool = True) -> None:
@@ -1134,9 +1131,6 @@ class Runtime:
             for entry in registry.discover()[kind].values()
         ]
         return [served.card(plugins) for served in self.served]
-
-    def model_card(self) -> dict[str, Any]:
-        return self.model_cards()[0]
 
 
 def with_overrides(config: ServeConfig, **changes: Any) -> ServeConfig:

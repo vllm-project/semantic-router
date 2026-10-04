@@ -1197,15 +1197,16 @@ routing:
           synthesis_template: ""
           judge_prompt_version: fusion-v1
           # Grounding-aware synthesis: score panel responses for faithfulness
-          # (hallucination detector against context, else cross-model NLI) and
-          # use the scores to guide the judge. Disabled by default.
+          # with the hallucination detector (against the request's context, else
+          # against each peer response) and use the scores to guide the judge.
+          # Disabled by default.
           grounding:
             enabled: false
             reference: hybrid          # hybrid | context | panel
             policy: weight             # weight | annotate | filter (see below)
             min_score: 0.0             # filter policy only: drop below this (0-1)
             min_keep: 1                # filter policy only: keep at least this many
-            nli_contradiction_penalty: 1.0
+            contradiction_penalty: 1.0 # panel reference: weight of a peer's contradiction
             on_error: skip             # skip (fall back to plain fusion) | fail
             # policy controls how the scores are used:
             #   weight   (default) keep every response; tell the judge to weight
@@ -2481,7 +2482,9 @@ global:
         use_cpu: true
         embedding_config:
           full_context: false
-          backend: candle
+          # model_runtime embeds with the built-in model runtime;
+          # openai_compatible calls the endpoint below.
+          backend: model_runtime
           model_type: mmbert
           preload_embeddings: true
           target_dimension: 0

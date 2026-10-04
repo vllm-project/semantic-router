@@ -18,7 +18,6 @@ from typing import Any
 
 from ...errors import PackageError
 from ...registry.artifacts import (
-    canonical_json,
     inventory,
     safetensors_elements,
     safetensors_header,
@@ -403,7 +402,3 @@ def verify_adapter(root: Path, decision_config: dict[str, Any]) -> dict[str, Any
     ):
         raise PackageError("adapter tensors differ from the pinned projections")
     return config
-
-
-def describe_canonical(value: Any) -> str:
-    return canonical_json(value)

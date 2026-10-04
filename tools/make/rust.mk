@@ -139,7 +139,6 @@ test-rust-flash-attn-module: rust-flash-attn
 
 # Hermetic Go/C ABI contracts. Published checkpoint inference is a separate
 # required suite (make test-models), not a whitelist of optional legacy tests.
-# The same contracts run under RISC-V QEMU without the unsupported race detector.
 BINDING_MINIMAL_GO_TESTS ?= ^Test(Owned.*|NewRegexProvider|RegexProvider_.*|UtilityFunctions)$$
 # This checkpoint case belongs to legacy-hallucination-checkpoints in core_test_profiles.json.
 BINDING_MINIMAL_GO_SKIP ?= ^TestOwnedNativeMaintainedHallucinationWithoutLabelMetadata$$

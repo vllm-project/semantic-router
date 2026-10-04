@@ -29,9 +29,9 @@ func publishedUnifiedClassifier(t *testing.T) (*UnifiedClassifier, *Classifier) 
 	}
 	cfg = models.cfg
 	cfg.CategoryModel.ModelID, cfg.PIIModel.ModelID, cfg.PromptGuard.ModelID = domain, pii, guard
-	cfg.CategoryMappingPath = filepath.Join(domain, filepath.Base(defaults.CategoryMappingPath))
-	cfg.PIIMappingPath = filepath.Join(pii, filepath.Base(defaults.PIIMappingPath))
-	cfg.PromptGuard.JailbreakMappingPath = filepath.Join(guard, filepath.Base(defaults.PromptGuard.JailbreakMappingPath))
+	cfg.CategoryMappingPath = filepath.Join(domain, "category_mapping.json")
+	cfg.PIIMappingPath = filepath.Join(pii, "pii_mapping.json")
+	cfg.PromptGuard.JailbreakMappingPath = filepath.Join(guard, "jailbreak_type_mapping.json")
 	categories, err := LoadCategoryMapping(cfg.CategoryMappingPath)
 	if err != nil {
 		t.Fatal(err)

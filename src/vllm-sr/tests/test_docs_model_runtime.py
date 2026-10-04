@@ -116,13 +116,23 @@ def _router_fragments() -> list[Block]:
     return fragments
 
 
-def test_kubernetes_manifests_parse():
+def test_kubernetes_manifests_parse_and_run_images_the_repository_builds():
     manifests = [block for block in _blocks("yaml") if "apiVersion" in block.text]
+    built = {
+        path.name.removeprefix("Dockerfile.")
+        for path in (REPO_ROOT / "tools" / "docker").glob("Dockerfile.*")
+    }
 
     assert manifests
     for block in manifests:
-        kinds = [document["kind"] for document in yaml.safe_load_all(block.text)]
-        assert kinds and all(kinds), block.where
+        documents = list(yaml.safe_load_all(block.text))
+        assert all(document["kind"] for document in documents), block.where
+        for document in documents:
+            pod = document.get("spec", {}).get("template", {}).get("spec", {})
+            for container in pod.get("containers", []):
+                registry, _, image = container["image"].rpartition("/")
+                assert registry == "ghcr.io/vllm-project/semantic-router", block.where
+                assert image.split(":")[0] in built, block.where
 
 
 def _merge(base: dict, fragment: dict) -> dict:
@@ -318,6 +328,40 @@ def test_vllm_sr_commands_parse():
             raise AssertionError(
                 f"{where}: vllm-sr {' '.join(arguments)}: {error}"
             ) from error
+
+
+def test_documented_image_builds_use_dockerfiles_that_exist():
+    builds = [
+        (block.where, dockerfile)
+        for block in _blocks("bash")
+        for dockerfile in re.findall(
+            r"docker (?:buildx )?build\b[^\n]*?-f (\S+)",
+            block.text.replace("\\\n", " "),
+        )
+    ]
+
+    assert builds
+    for where, dockerfile in builds:
+        assert (REPO_ROOT / dockerfile).is_file(), f"{where}: {dockerfile}"
+
+
+def test_documented_environment_variables_are_read_by_the_runtime_or_router():
+    documented = {
+        name
+        for page in PAGES
+        for name in re.findall(r"\bVLLM_SR_RUNTIME_[A-Z_]+\b", page.read_text())
+    }
+    router = REPO_ROOT / "src" / "semantic-router" / "pkg"
+    sources = "\n".join(
+        path.read_text()
+        for path in (
+            *RUNTIME.rglob("*.py"),
+            *(router / "modelservice").glob("*.go"),
+        )
+    )
+
+    assert documented
+    assert sorted(name for name in documented if f'"{name}"' not in sources) == []
 
 
 def test_vllm_sr_runtime_commands_use_real_options():

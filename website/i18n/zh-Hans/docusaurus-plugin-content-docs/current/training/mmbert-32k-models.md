@@ -4,7 +4,7 @@ sidebar_label: Embedding 和 Reranking
 translation:
   source_commit: "915ddf56e0335e2046c38aa17c4aec6233908039"
   source_file: "docs/training/mmbert-32k-models.md"
-  outdated: false
+  outdated: true
 ---
 
 # 训练 Vela Embedding 和 Reranker {#train-vela-embedding-and-reranker}

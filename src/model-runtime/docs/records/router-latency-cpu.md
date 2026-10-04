@@ -2,37 +2,43 @@
 
 The router's model-backed signals moved from the in-process bindings (candle)
 to the built-in model runtime. This record measures end-to-end router latency
-per request with both, on the same CPU cores, configuration and inputs, and
+per request with both, on the same CPU cores, inputs and signal set, and
 states the design change that the measurement forced.
 
 - **Date:** 2026-10-04.
-- **Machine:** node A, AMD EPYC 9575F, CPU only, otherwise idle.
+- **Machine:** AMD EPYC 9575F, CPU only. Other workstreams' pinned jobs ran
+  on other cores; the 1-minute load stayed between 28 and 55 (the program
+  voids timings taken above 120).
 - **Commits:**
   - Legacy: the router built from the exact mirror of `61aa7eb2d` with the
     candle CPU bindings (`--no-default-features`, as the CPU image).
-  - Runtime: the router built from the exact mirror of `32a45d331`; the model
+  - Runtime: the router built from the exact tree of `bf630c5eb` (the
+    canonical parser; the router downloads no model artifacts); the model
     runtime installed from the same tree into a Python 3.12 environment with
     PyTorch 2.10.0 (CPU) and ONNX Runtime 1.30.
 - **Models:** Vela 1.0 Domain, Guard, PII, FactCheck and Feedback at their
-  pinned registry revisions. Both routers read the same local artifacts; the
-  runtime loads the same revisions from its Hugging Face cache.
-- **Configuration:** [`router-latency-cpu.yaml`](router-latency-cpu.yaml):
-  the default configuration's model-backed request signals (domain, prompt
-  guard, PII, fact-check, feedback) plus one keyword signal, with decisions that
-  read every signal. Each router serves it unchanged, so the legacy router runs
-  the five models through candle and the new router through five implicit
-  `model_runtime` deployments.
+  pinned registry revisions. The legacy router reads local artifacts at those
+  revisions; the runtime loads the same revisions from its Hugging Face cache.
+- **Configuration:** the default configuration's model-backed request signals
+  (domain, prompt guard, PII, fact-check, feedback) plus one keyword signal,
+  with decisions that read every signal. The runtime router serves
+  [`router-latency-cpu.yaml`](router-latency-cpu.yaml) through five implicit
+  `model_runtime` deployments. The legacy router serves
+  [`router-latency-cpu-legacy.yaml`](router-latency-cpu-legacy.yaml): the same
+  signals, decisions and models plus the backend selectors candle needs
+  (`variant`, `use_mmbert_32k`), which the current parser refuses.
 - **Inputs:** the 539 distinct user prompts of the repository's E2E test data
   plus edge cases (median 59 characters, 95th percentile 456, longest 4,920),
   written by [`tools/router_latency.py`](../../tools/router_latency.py)
-  `corpus`.
+  `corpus` (the same corpus file for every run in this record).
 - **Method:** `POST /api/v1/routing/preview` (every signal and the decision, no
   upstream call), measured by the client. Each pass sends the corpus three
   times after 20 warm-up requests: sequentially, then at concurrency 4 and 16.
   Both result caches of the runtime path are off (the router's and the
   runtime's), so every request computes. Each router and its runtime processes
   are pinned to the same 16 cores (`taskset -c 48-63`); the driver runs on four
-  other cores. Three rounds, alternating legacy and runtime.
+  other cores. Three rounds, alternating legacy and runtime. Raw summaries per
+  round: [`router-latency-cpu.json`](router-latency-cpu.json).
 
 ## Result
 
@@ -43,33 +49,41 @@ Median of three rounds (ms, and requests per second):
 
 | Pass | Metric | Legacy (candle) | Runtime | Change |
 | --- | --- | --- | --- | --- |
-| Sequential | p50 | 51.8 | 30.6 | −41 % |
-| | p95 | 233.0 | 115.6 | −50 % |
-| | p99 | 459.2 | 223.2 | −51 % |
-| | req/s | 11.1 | 20.3 | +83 % |
-| Concurrency 4 | p50 | 166.5 | 139.0 | −17 % |
-| | p95 | 609.4 | 314.2 | −48 % |
-| | p99 | 906.6 | 1,207.0 | +33 % |
-| | req/s | 17.2 | 22.4 | +30 % |
-| Concurrency 16 | p50 | 712.9 | 659.8 | −7 % |
-| | p95 | 2,265.9 | 1,719.6 | −24 % |
-| | p99 | 3,549.4 | 1,909.2 | −46 % |
-| | req/s | 17.4 | 22.6 | +30 % |
+| Sequential | p50 | 52.0 | 14.8 | −72 % |
+| | p95 | 231.9 | 48.1 | −79 % |
+| | p99 | 447.2 | 89.3 | −80 % |
+| | req/s | 11.1 | 44.4 | ×4.0 |
+| Concurrency 4 | p50 | 165.8 | 52.1 | −69 % |
+| | p95 | 611.3 | 136.6 | −78 % |
+| | p99 | 918.1 | 552.2 | −40 % |
+| | req/s | 17.3 | 54.8 | ×3.2 |
+| Concurrency 16 | p50 | 702.3 | 211.6 | −70 % |
+| | p95 | 2,234.5 | 719.6 | −68 % |
+| | p99 | 3,440.6 | 760.3 | −78 % |
+| | req/s | 17.7 | 66.4 | ×3.8 |
 
-Per round, sequential p50 was 50.8 / 51.8 / 57.1 ms (legacy) and
-30.4 / 30.6 / 40.6 ms (runtime); the third round ran slower for both.
+Per round, sequential p50 was 53.1 / 52.0 / 50.9 ms (legacy) and
+15.4 / 14.8 / 13.9 ms (runtime).
 
-The runtime router matches or beats the legacy router on p50 and p95 in every
-pass, and on throughput. One tail is slower: p99 at concurrency 4 (see
-[Remaining gap](#remaining-gap)).
-
-Long inputs gain the most. The longest prompt (4,920 characters) takes
-2.5–2.6 s with candle and 1.06–1.13 s with the runtime; Guard and PII scan it in
-windows and dominate both.
+The runtime router beats the legacy router on every percentile and on
+throughput in every pass. Long inputs gain the most: the longest prompt
+(4,920 characters) takes 2.55 s with candle and 0.51 s with the runtime; Guard
+and PII scan it in windows and dominate both.
 
 Footprint, after loading: the legacy router holds 8.5 GB resident; the runtime
-router holds 0.1 GB plus 1.1 GB per runtime process, 5.5 GB for the five models.
-Both are ready 11 s after start.
+router holds 0.1 GB plus 1.54 GB per runtime process, 7.8 GB for the five
+models. The legacy router is ready 12 s after start, the runtime router 8–9 s.
+
+## Earlier measurement
+
+The first measurement, at `32a45d331` (before the parser flip, same machine
+model, same method), had the runtime router at 30.6 ms sequential p50
+(legacy 51.8) and one slower tail: p99 at concurrency 4 was 1,207 ms against
+candle's 907 ms, because short requests queued behind long windowed forwards
+inside a model's process. The runtime at `bf630c5eb` carries the IP1 engine
+work (the exact profile on oneDNN packed linears and length-grouped packed
+attention), which halves the sequential p50 again and removes that tail. Its
+processes held 1.08 GB each then.
 
 ## The design change behind the result
 
@@ -78,7 +92,8 @@ keeps one OpenMP team per calling thread, so concurrent forwards would
 oversubscribe the cores). With all five models in one CPU process, the default
 the design started from, a request's five forwards ran one after another, each
 split across all 16 cores. For short inputs that split is inefficient, and the
-router lost to candle, which runs the models concurrently:
+router lost to candle, which runs the models concurrently. Measured at
+`32a45d331`:
 
 | Process plan (first round of each run, same setup) | Sequential p50 | p95 | req/s | req/s at 16 |
 | --- | --- | --- | --- | --- |
@@ -87,7 +102,7 @@ router lost to candle, which runs the models concurrently:
 | One process per model, pinned to 4/3/3/3/3 cores | 37.8 | 152.2 | 15.6 | 16.7 |
 | One process per model, 4 threads each, unpinned | 30.4 | 115.6 | 20.3 | 22.6 |
 
-So the router now plans CPU processes itself (`pkg/modelservice`): CPU models
+So the router plans CPU processes itself (`pkg/modelservice`): CPU models
 without a `process` key spread over one process per model, at most one per two
 cores (`VLLM_SR_RUNTIME_CPU_PROCESSES` caps it). Each CPU process runs
 `ceil(cores / CPU processes)` threads, where cores is the router's
@@ -95,17 +110,8 @@ cores (`VLLM_SR_RUNTIME_CPU_PROCESSES` caps it). Each CPU process runs
 to a disjoint share measured slower: the share of a rarely used model (the
 feedback detector runs on follow-up turns only) then idles, while unpinned
 threads let the busy processes use it. Every request stage still sends one
-`/v1/bundle` per process; the stage's bundles now run in parallel. GPU devices
+`/v1/bundle` per process; the stage's bundles run in parallel. GPU devices
 keep one process per device.
-
-## Remaining gap
-
-At concurrency 4, p99 is higher with the runtime than with candle. A model's
-process batches the requests queued for it, so a short request queued behind a
-long, windowed one waits for that forward; candle ran each request's forward on
-its own thread. Throughput is still 1.3 times candle's at this concurrency, and
-p95 is half. Ordering a model's queue by length, or a separate lane for long
-windowed inputs, is a runtime scheduler change.
 
 ## Reproduce
 
@@ -114,9 +120,10 @@ downloaded:
 
 ```bash
 python3 tools/router_latency.py corpus --repo . --out corpus.json
-# start a router with router-latency-cpu.yaml, then:
+# start the legacy router with router-latency-cpu-legacy.yaml, then:
 python3 tools/router_latency.py run --url http://127.0.0.1:8080 \
   --corpus corpus.json --out legacy.json --label legacy
+# start the runtime router with router-latency-cpu.yaml, run again to runtime.json, then:
 python3 tools/router_latency.py compare --base legacy.json --new runtime.json --corpus corpus.json
 ```
 

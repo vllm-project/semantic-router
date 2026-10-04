@@ -99,7 +99,7 @@ type HNSWConfig struct {
 func (c HNSWConfig) WithDefaults() HNSWConfig {
 	result := c
 	if result.Backend == "" {
-		result.Backend = EmbeddingBackendCandle
+		result.Backend = EmbeddingBackendModelRuntime
 	}
 	if result.ModelType == "" {
 		if normalizeEmbeddingBackend(result.Backend) == EmbeddingBackendOpenAICompatible {

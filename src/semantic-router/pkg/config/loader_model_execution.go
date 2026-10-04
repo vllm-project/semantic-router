@@ -12,8 +12,9 @@ import (
 // always runs. The fields below selected those in the router;
 // `vllm-sr config migrate` rewrites them.
 var (
-	removedModelProviders   = map[string]bool{"candle": true, "ort": true, "openvino": true}
-	removedDeploymentFields = []string{"precision", "custom_ops_profile", "compilation_cache_dir"}
+	removedModelProviders    = map[string]bool{"candle": true, "ort": true, "openvino": true}
+	removedEmbeddingBackends = map[string]bool{"candle": true, "openvino": true}
+	removedDeploymentFields  = []string{"precision", "custom_ops_profile", "compilation_cache_dir"}
 	// Module paths under global.model_catalog.modules and their removed fields.
 	removedModuleFields = []struct {
 		path   []string
@@ -53,6 +54,10 @@ func rejectRemovedModelExecutionFields(raw map[string]interface{}) error {
 	if backend, _ := detector["backend"].(string); strings.EqualFold(strings.TrimSpace(backend), "candle") {
 		removed = append(removed, "global.model_catalog.modules.hallucination_mitigation.detector.backend: candle")
 	}
+	embeddingConfig := nestedStringMap(nestedStringMap(nestedStringMap(catalog["embeddings"])["semantic"])["embedding_config"])
+	if backend, _ := embeddingConfig["backend"].(string); removedEmbeddingBackends[strings.ToLower(strings.TrimSpace(backend))] {
+		removed = append(removed, "global.model_catalog.embeddings.semantic.embedding_config.backend: "+backend)
+	}
 	removed = appendPresent(removed, "global.model_catalog.system", nestedStringMap(catalog["system"]), "hallucination_explainer")
 	removed = appendPresent(removed, "global.stores.response_cache", nestedStringMap(nestedStringMap(nestedStringMap(raw["global"])["stores"])["response_cache"]), "polarity_guard")
 	removed = append(removed, removedNLIRoutingFields("routing", nestedStringMap(raw["routing"]))...)
@@ -71,7 +76,8 @@ func rejectRemovedModelExecutionFields(raw map[string]interface{}) error {
 }
 
 // removedNLIRoutingFields finds use_nli on hallucination rules and on
-// hallucination plugins of one routing block.
+// hallucination plugins of one routing block, and the NLI name of the fusion
+// grounding penalty (now contradiction_penalty).
 func removedNLIRoutingFields(prefix string, routing map[string]interface{}) []string {
 	var removed []string
 	if rules, ok := nestedStringMap(routing["signals"])["hallucination"].([]interface{}); ok {
@@ -81,6 +87,8 @@ func removedNLIRoutingFields(prefix string, routing map[string]interface{}) []st
 	}
 	decisions, _ := routing["decisions"].([]interface{})
 	for index, decision := range decisions {
+		grounding := nestedStringMap(nestedStringMap(nestedStringMap(nestedStringMap(decision)["algorithm"])["fusion"])["grounding"])
+		removed = appendPresent(removed, fmt.Sprintf("%s.decisions[%d].algorithm.fusion.grounding", prefix, index), grounding, "nli_contradiction_penalty")
 		plugins, _ := nestedStringMap(decision)["plugins"].([]interface{})
 		for pluginIndex, plugin := range plugins {
 			fields := nestedStringMap(plugin)

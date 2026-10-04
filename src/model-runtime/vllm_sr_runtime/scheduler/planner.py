@@ -9,6 +9,11 @@ def padded(length: int) -> int:
     return -(-length // 8) * 8
 
 
+def cost(item: Any) -> int:
+    """Tokens an item costs a forward: its token IDs, or the ``cost`` its family sets (images, audio)."""
+    return getattr(item, "cost", None) or len(item.ids)
+
+
 def length_class(length: int) -> int:
     """The power-of-two band of a row's padded length; rows of one band pad little together."""
     return (padded(length) - 1).bit_length()
@@ -41,4 +46,4 @@ def exact_split(model: Any, items: list[Any], budget: int | None) -> list[list[i
     split = model.exact_batches(items) if model is not None else None
     if split is not None:
         return split
-    return micro_batches([len(item.ids) for item in items], budget)
+    return micro_batches([cost(item) for item in items], budget)
