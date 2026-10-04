@@ -309,6 +309,9 @@ class ServedModel:
             device=placement.device.label,
             profile=config.profile,
         ).set(1)
+        metrics.model_memory.labels(model=self.label).set(
+            model.engine_model.memory_bytes()
+        )
         self.health.set("ready")
         log.info(
             "serving %s on %s (profile %s)",

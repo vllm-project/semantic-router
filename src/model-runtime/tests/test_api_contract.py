@@ -190,6 +190,18 @@ def test_models_health_metrics_and_openapi(client):
         "vllm_sr_runtime_requests_total" in metrics
         and "vllm_sr_runtime_ready 1.0" in metrics
     )
+    memory = [
+        line
+        for line in metrics.splitlines()
+        if line.startswith("vllm_sr_runtime_model_memory_bytes{")
+    ]
+    assert len(memory) == 1 and float(memory[0].rsplit(" ", 1)[1]) > 0
+    memory = [
+        line
+        for line in metrics.splitlines()
+        if line.startswith("vllm_sr_runtime_model_memory_bytes{")
+    ]
+    assert len(memory) == 1 and float(memory[0].rsplit(" ", 1)[1]) > 0
     assert client.get("/openapi.yaml").text == Path(OPENAPI_PATH).read_text()
 
 
