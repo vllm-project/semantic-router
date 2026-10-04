@@ -293,7 +293,7 @@ alias with the same body and response.
     "difficulty": {"type": "score", "instructions": "How difficult is this request?",
                    "criteria": ["Trivial", "Moderate", "Hard"]}
   },
-  "options": {"deadline_ms": 80, "profile": "exact"}
+  "options": {"deadline_ms": 80, "profile": "exact", "return_meta": true}
 }
 ```
 
@@ -307,7 +307,7 @@ alias with the same body and response.
 | `questions.<id>.levels` | | Ordered level descriptions, the same as a Score `criteria` list |
 | `options.deadline_ms` | | Work not started by the deadline is not run; its questions return `deadline_exceeded` |
 | `options.profile` | | `exact`, or the server's enabled profile |
-| `options.return_meta` | | Include `meta` (default true) |
+| `options.return_meta` | | Include `meta` (default false) |
 
 Response:
 
