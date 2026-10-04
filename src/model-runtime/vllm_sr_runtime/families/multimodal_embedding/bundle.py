@@ -11,13 +11,12 @@ executed: the graphs run in ONNX Runtime without custom operators.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ...errors import PackageError
-from ...registry.artifacts import inventory, sha256_file, sha256_json
+from ...registry.artifacts import inventory, read_json, sha256_file, sha256_json
 
 MANIFEST = "vela_omni_manifest.json"
 PENDING_MANIFEST = "vela_omni_manifest.pending.json"
@@ -186,18 +185,11 @@ def required_checks(variant: str) -> set[str]:
     return checks
 
 
-def _read_json(path: Path) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise PackageError(f"unreadable {path.name}: {exc}") from exc
-
-
 def load(root: Path) -> OmniBundle:
     """Verify a prepared bundle; nothing in it is imported or executed."""
     root = Path(root).resolve()
     manifest_path = root / MANIFEST
-    manifest = _read_json(manifest_path)
+    manifest = read_json(manifest_path)
     if not isinstance(manifest, dict) or manifest.get("variant") not in VARIANTS:
         raise PackageError("not a Vela Omni bundle manifest")
     variant = manifest["variant"]
@@ -236,7 +228,7 @@ def load(root: Path) -> OmniBundle:
     }
     if not required <= files.keys():
         raise PackageError("the bundle inventory omits a graph or processor")
-    report = _read_json(root / manifest["reference_parity"]["file"])
+    report = read_json(root / manifest["reference_parity"]["file"])
     tests = report.get("tests") if isinstance(report, dict) else None
     if (
         not tests

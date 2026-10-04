@@ -56,6 +56,18 @@ def canonical_json(value: Any) -> str:
     )
 
 
+def read_json(path: Path, *, mapping: bool = False) -> Any:
+    """A package's JSON file; ``mapping`` requires an object."""
+    path = Path(path)
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise PackageError(f"cannot read {path.name}: {exc}") from exc
+    if mapping and not isinstance(value, dict):
+        raise PackageError(f"{path.name} must hold a JSON object")
+    return value
+
+
 def sha256_json(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 
