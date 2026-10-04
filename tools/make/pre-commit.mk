@@ -56,9 +56,5 @@ precommit-local:
 	    -e SKIP_MODEL_DEPENDENT_TESTS=true \
 	    -v $(shell pwd):/app \
 	    -v /app/.venv-agent \
-	    -v /app/candle-binding/target \
-	    -v /app/onnx-binding/target \
-	    -v /app/ml-binding/target \
-	    -v /app/nlp-binding/target \
 	    -w /app \
 	    ${PRECOMMIT_CONTAINER} bash -c 'make check BASE_REF="$$BASE_REF"'
