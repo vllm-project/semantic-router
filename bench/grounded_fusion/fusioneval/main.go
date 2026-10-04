@@ -241,23 +241,21 @@ func run(opt options) error {
 	return nil
 }
 
-// placeboNLI returns deterministic seeded-random scores: reproducible for a given
-// (seed, premise, hypothesis) but carrying no real signal. Mirrors the in-package
-// test placebo so arm D weights on noise, isolating the score's signal.
-func placeboNLI(seed uint64) looper.NLIClassifyFunc {
-	return func(_ context.Context, premise, hypothesis string) (float32, float32, error) {
+// placeboDetector returns deterministic seeded-random scores: reproducible for a
+// given (seed, context, answer) but carrying no real signal. Mirrors the
+// in-package test placebo so arm D weights on noise, isolating the score's signal.
+func placeboDetector(seed uint64) looper.HallucinationDetectFunc {
+	return func(_ context.Context, contextText, _, answer string) ([]string, float32, error) {
 		h := fnv.New64a()
 		var b [8]byte
 		binary.LittleEndian.PutUint64(b[:], seed)
 		_, _ = h.Write(b[:])
-		_, _ = h.Write([]byte(premise))
+		_, _ = h.Write([]byte(contextText))
 		_, _ = h.Write([]byte{0})
-		_, _ = h.Write([]byte(hypothesis))
+		_, _ = h.Write([]byte(answer))
 		// Deterministic seed for the placebo; the uint64->int64 wrap is harmless.
 		r := rand.New(rand.NewSource(int64(h.Sum64()))) //nolint:gosec // deterministic eval seed, overflow harmless
-		entail := float32(r.Float64())
-		contradict := float32(r.Float64() * (1 - float64(entail)))
-		return entail, contradict, nil
+		return []string{"placebo"}, float32(r.Float64()), nil
 	}
 }
 
@@ -393,7 +391,7 @@ func produceArm(
 	grounding, placebo := armGrounding(arm, opt.reference)
 	backends := shipped
 	if placebo {
-		backends = &looper.GroundingBackends{NLI: placeboNLI(itemSeed(opt.placeboSeed, it.ID))}
+		backends = &looper.GroundingBackends{Detect: placeboDetector(itemSeed(opt.placeboSeed, it.ID))}
 	}
 
 	req := &looper.Request{
@@ -422,7 +420,7 @@ func produceArm(
 }
 
 // armGrounding maps an arm label to its grounding config and whether the placebo
-// NLI must be selected for this request.
+// detector must be selected for this request.
 func armGrounding(arm, reference string) (cfg *config.FusionGroundingConfig, placebo bool) {
 	switch arm {
 	case "B":

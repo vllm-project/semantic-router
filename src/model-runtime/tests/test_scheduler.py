@@ -9,7 +9,7 @@ from vllm_sr_runtime.profiles.batching import BatchingProfile
 from vllm_sr_runtime.profiles.exact import ExactProfile, merged
 from vllm_sr_runtime.profiles.shared_context import SharedContextProfile
 from vllm_sr_runtime.scheduler import scheduler as scheduler_module
-from vllm_sr_runtime.scheduler.planner import micro_batches
+from vllm_sr_runtime.scheduler.planner import cost, micro_batches
 from vllm_sr_runtime.scheduler.scheduler import DEADLINE, Scheduler, SchedulerLimits
 
 
@@ -242,6 +242,21 @@ def test_shared_batches_keep_identical_sequences_together():
     twin = Job([item("c", 512)], None, 0.0, "exact")
     batches = merged([first, other, twin], cap=512)
     assert [names(batch) for batch in batches] == [["b"], ["a", "c"]]
+
+
+@dataclasses.dataclass(frozen=True)
+class Media:
+    question_id: str
+    ids: tuple = ()
+    cost: int = 300
+
+
+def test_inputs_without_token_ids_count_by_their_cost():
+    images = Job([Media("i1"), Media("i2")], None, 0.0, "exact")
+    text = Job([item("t", 8)], None, 0.0, "exact")
+    batches = merged([images, text], cap=512)
+    assert [names(batch) for batch in batches] == [["t"], ["i1"], ["i2"]]
+    assert cost(Media("i1")) == 300 and cost(item("t", 8)) == 8
 
 
 class GatedModel(FakeModel):

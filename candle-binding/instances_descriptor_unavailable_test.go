@@ -1,4 +1,4 @@
-//go:build windows || !cgo || (!amd64 && !arm64 && !riscv64)
+//go:build windows || !cgo || (!amd64 && !arm64)
 
 package candle_binding
 

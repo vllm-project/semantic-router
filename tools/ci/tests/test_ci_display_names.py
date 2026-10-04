@@ -94,7 +94,7 @@ class DisplayNameTests(unittest.TestCase):
                 [],
                 source_sha="a" * 40,
                 requested=(
-                    "platform.router-riscv64-qemu",
+                    "platform.models-cpu",
                     "platform.image-calibration-cpu",
                     "local.memory",
                     "cli-unit",
