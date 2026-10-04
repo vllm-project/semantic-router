@@ -3,12 +3,12 @@ import { routerStructuredField } from './configPageRouterStructuredFields'
 import { normalizeRouterStructuredFields } from './configPageRouterStructuredSchema'
 
 const REMOTE_BACKEND = 'openai_compatible'
-const DEFAULT_LOCAL_BACKEND = 'candle'
+const DEFAULT_LOCAL_BACKEND = 'model_runtime'
 const DEFAULT_LOCAL_MODEL_TYPE = 'qwen3'
 const LOCAL_PROVIDER_TYPE = 'local'
 const REMOTE_PROVIDER_TYPE = 'remote'
 
-type EmbeddingBackend = 'candle' | 'openvino' | 'openai_compatible'
+type EmbeddingBackend = 'model_runtime' | 'openai_compatible'
 type EmbeddingProviderType = 'local' | 'remote'
 
 interface EmbeddingSummaryItem {
@@ -33,7 +33,7 @@ function trimmedString(value: unknown): string {
 
 function resolveBackend(embeddingConfig?: Record<string, unknown>): EmbeddingBackend {
   const backend = trimmedString(embeddingConfig?.backend).toLocaleLowerCase()
-  if (backend === DEFAULT_LOCAL_BACKEND || backend === 'openvino' || backend === REMOTE_BACKEND) {
+  if (backend === DEFAULT_LOCAL_BACKEND || backend === REMOTE_BACKEND) {
     return backend
   }
   if (trimmedString(embeddingConfig?.model_type).toLocaleLowerCase() === 'remote') {
@@ -146,15 +146,15 @@ export function embeddingModelsFields(): FieldConfig[] {
       options: [LOCAL_PROVIDER_TYPE, REMOTE_PROVIDER_TYPE],
       required: true,
       description:
-        'Choose whether embeddings run in-process or through a remote API. Remote mode currently applies to text embedding consumers only.',
+        'Choose whether embeddings run in the built-in model runtime or through a remote API. Remote mode currently applies to text embedding consumers only.',
     },
     {
       name: 'local_backend',
       label: 'Local Backend',
       type: 'select',
-      options: ['candle', 'openvino'],
+      options: [DEFAULT_LOCAL_BACKEND],
       required: true,
-      description: 'Local inference engine used to execute the selected embedding model family.',
+      description: 'The built-in model runtime serves the selected embedding model family.',
       shouldHide: hideForRemote,
     },
     {

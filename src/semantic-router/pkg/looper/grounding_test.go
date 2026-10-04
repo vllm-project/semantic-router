@@ -91,9 +91,12 @@ func TestScoreByPanel_ReadsEachResponseAgainstItsPeers(t *testing.T) {
 	_, err := scoreByPanel(context.Background(), "q", panel("one", "two", "three"), fusionExecutionConfig{}, groundingDetect)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []read{
-		{"two", "q", "one"}, {"three", "q", "one"},
-		{"one", "q", "two"}, {"three", "q", "two"},
-		{"one", "q", "three"}, {"two", "q", "three"},
+		{"two", "q", "one"},
+		{"three", "q", "one"},
+		{"one", "q", "two"},
+		{"three", "q", "two"},
+		{"one", "q", "three"},
+		{"two", "q", "three"},
 	}, reads)
 }
 

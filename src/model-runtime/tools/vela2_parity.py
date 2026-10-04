@@ -2,7 +2,7 @@
 
     python3 tools/vela2_parity.py --package DIR --output OUT.json [--requests REQUESTS.jsonl | --generate N]
         [--device cpu|rocm:0|cuda:0] [--seed 0] [--answers OURS.jsonl] [--approximate]
-        [--engine native|onnxruntime] [--reference-backend torch|onnx]
+        [--engine native|onnxruntime] [--reference-backend torch|onnx] [--reduced KIND[,KIND...]]
 
 The reference is the package's engine, imported from the package directory by this tool only (the runtime
 never imports package code), on the same device class: FP32 on CPU; on GPUs the engine's defaults (BF16
@@ -20,6 +20,12 @@ typed JSON states with ``over``, thresholds, open span labels, long parts that a
 The design's bar (section 17): decisions and span sets identical; max |dp| <= 1e-4 on CPU, <= 0.02 on GPUs.
 ``--approximate`` answers through the approximate batches instead (packed trees and sequences), for the
 accuracy record of the faster profiles.
+
+``--reduced`` records reduced copies (``max_speed``) against the runtime's exact path, which is the reference
+then (the package engine is not loaded): each KIND (``float32-packed``, ``bfloat16``, ``int8``) is loaded as
+``max_speed`` loads it, consenting for the run, and answers through the approximate batches. Per KIND: the
+share of questions whose decision is unchanged, per question type (design section 5.4's floor: at least 99%
+each), and the largest probability differences.
 """
 
 from __future__ import annotations
@@ -29,6 +35,7 @@ import json
 import random
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -46,9 +53,11 @@ from vllm_sr_runtime.plugins.base import (  # noqa: E402
     SurfacePlan,
 )
 from vllm_sr_runtime.plugins.registry import instantiate  # noqa: E402
+from vllm_sr_runtime.profiles.max_speed import MaxSpeedProfile  # noqa: E402
 
 ACCELERATORS = {"cpu": CPUAccelerator, "cuda": CUDAAccelerator, "rocm": ROCmAccelerator}
 CPU_BAR, GPU_BAR = 1e-4, 0.02
+REDUCED_FLOOR = 0.99
 
 # --------------------------------------------------------------------------- synthetic requests
 
@@ -280,16 +289,27 @@ def device_executor(device: str) -> Any:
     return lambda work: accelerator.execute(info, work)
 
 
-def load_runtime(package: Path, device: str, engine: str = "native") -> Any:
-    """The package through the vela2 family on the named engine plugin."""
+def load_runtime(
+    package: Path, device: str, engine: str = "native", reduced: str | None = None
+) -> Any:
+    """The package through the vela2 family on the named engine plugin.
+
+    ``reduced`` loads it as ``max_speed`` does, consenting to that copy kind on
+    the device for this process (the built-in table's consent follows records).
+    """
     accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
     devices = accelerator.devices()
     index = int(device.split(":")[1]) if ":" in device else 0
     family = Vela2Family()
     verified = family.verify(PackageRef(package))
     spec = family.describe(verified)
+    options = EngineOptions()
+    if reduced is not None:
+        field = "reduced_cpu" if device == "cpu" else "reduced_gpu"
+        spec = replace(spec, dtype=replace(spec.dtype, **{field: reduced}))
+        options = MaxSpeedProfile().engine_options(options)
     engine_model = instantiate("engines", engine).load(
-        spec, accelerator, devices[index], EngineOptions()
+        spec, accelerator, devices[index], options
     )
     return family.load(verified, spec, engine_model)
 
@@ -675,6 +695,148 @@ def compare(reference: dict[str, Any], ours: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def question_decision(response: dict[str, Any], question_id: str, kind: str) -> Any:
+    """A question's decision: its error, the Choice label, the Score arg-max, Noul above 0.5,
+    the Set selection or the span set."""
+    answer = response["answers"].get(question_id, {})
+    if "error" in answer:
+        return ("error", answer["error"])
+    if kind == "span":
+        return sorted(
+            (s["label"], s["start"], s["end"]) for s in response["spans"][question_id]
+        )
+    if kind == "set":
+        return sorted(response["sets"][question_id]["selected"])
+    if kind == "choice":
+        return answer["choice"]
+    if kind == "noul":
+        return answer["noul"] > 0.5
+    probabilities = answer["probabilities"]
+    return max(probabilities, key=probabilities.get)
+
+
+def agreement(
+    kinds: dict[str, str], reference: dict[str, Any], ours: dict[str, Any]
+) -> dict[str, list[int]]:
+    """Per question type, [questions whose decision is unchanged, questions]."""
+    out: dict[str, list[int]] = {}
+    for question_id, kind in kinds.items():
+        counts = out.setdefault(kind, [0, 0])
+        counts[0] += question_decision(
+            reference, question_id, kind
+        ) == question_decision(ours, question_id, kind)
+        counts[1] += 1
+    return out
+
+
+def reduced_summary(
+    kind: str, model: Any, records: list[dict[str, Any]], seconds: float
+) -> dict[str, Any]:
+    """One copy's record: agreement per question type against exact, differences, time."""
+    ok = [r for r in records if "error" not in r]
+    totals: dict[str, list[int]] = {}
+    for record in ok:
+        for question_type, (same, count) in record["agreement"].items():
+            total = totals.setdefault(question_type, [0, 0])
+            total[0] += same
+            total[1] += count
+    rates = {
+        question_type: {"same": same, "questions": count, "rate": same / count}
+        for question_type, (same, count) in sorted(totals.items())
+    }
+    errors = [r for r in records if "error" in r]
+    return {
+        "kind": kind,
+        "copy": model.engine_model.receipt().get("reduced"),
+        "requests": len(records),
+        "errors": errors,
+        "identical": sum(r["identical"] for r in ok),
+        "decision_changes": sum(bool(r["decision_changes"]) for r in ok),
+        "agreement": rates,
+        "max_abs_diff": max((r["max_abs_diff"] for r in ok), default=0.0),
+        "max_answer_diff": max((r["max_answer_diff"] for r in ok), default=0.0),
+        "max_span_diff": max((r["max_span_diff"] for r in ok), default=0.0),
+        "seconds": round(seconds, 2),
+        "floor_pass": not errors
+        and all(rate["rate"] >= REDUCED_FLOOR for rate in rates.values()),
+    }
+
+
+def run_reduced(args: argparse.Namespace, requests: list[dict[str, Any]]) -> int:
+    """``--reduced``: every copy's ``max_speed`` answers against the runtime's exact path."""
+    import torch
+
+    torch.manual_seed(0)
+    pin_choices(args.package, args.device)
+    exact = load_runtime(args.package, args.device, args.engine)
+    kinds = args.reduced.split(",")
+    copies = {
+        kind: load_runtime(args.package, args.device, args.engine, kind)
+        for kind in kinds
+    }
+    records: dict[str, list[dict[str, Any]]] = {kind: [] for kind in kinds}
+    seconds = dict.fromkeys(["exact", *kinds], 0.0)
+    for request in requests:
+        state, questions = request["state"], request["questions"]
+        try:
+            started = time.perf_counter()
+            reference, plan = answer(exact, state, questions)
+            seconds["exact"] += time.perf_counter() - started
+        except Exception as exc:  # recorded per request, the run goes on
+            for kind in kinds:
+                records[kind].append(
+                    {"id": request["id"], "error": f"{type(exc).__name__}: {exc}"}
+                )
+            continue
+        reference = system_one_view(reference)
+        kinds_of = {question.id: question.kind for question in plan.request.questions}
+        line: dict[str, Any] = {"id": request["id"]}
+        for kind, model in copies.items():
+            record: dict[str, Any] = {"id": request["id"]}
+            try:
+                started = time.perf_counter()
+                ours, _ = answer(model, state, questions, approximate=True)
+                seconds[kind] += time.perf_counter() - started
+                record.update(compare(reference, ours))
+                record["agreement"] = agreement(kinds_of, reference, ours)
+                line[kind] = [record["decision_changes"], record["max_abs_diff"]]
+            except Exception as exc:  # recorded per request, the run goes on
+                record["error"] = f"{type(exc).__name__}: {exc}"
+                line[kind] = record["error"]
+            records[kind].append(record)
+        print(json.dumps(line), flush=True)
+    summary = {
+        "package": str(args.package),
+        "device": args.device,
+        "reference": "exact",
+        "path": "max_speed",
+        "engine": args.engine,
+        "floor": REDUCED_FLOOR,
+        "exact_s": round(seconds["exact"], 2),
+        "kinds": [
+            reduced_summary(kind, copies[kind], records[kind], seconds[kind])
+            for kind in kinds
+        ],
+        "records": records,
+    }
+    args.output.write_text(
+        json.dumps(summary, indent=1, default=str) + "\n", encoding="utf-8"
+    )
+    print(
+        json.dumps(
+            {
+                **{k: v for k, v in summary.items() if k not in ("kinds", "records")},
+                "kinds": [
+                    {k: v for k, v in s.items() if k != "errors"}
+                    for s in summary["kinds"]
+                ],
+            },
+            default=str,
+        )
+    )
+    return 0 if all(s["floor_pass"] for s in summary["kinds"]) else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--package", required=True, type=Path)
@@ -704,6 +866,10 @@ def main() -> int:
         choices=("torch", "onnx"),
         help="the package engine's backend (onnx: its shipped 0.3B graph)",
     )
+    parser.add_argument(
+        "--reduced",
+        help="reduced copy kinds (comma-separated) to record against the exact path (max_speed)",
+    )
     args = parser.parse_args()
     requests = (
         [
@@ -714,6 +880,8 @@ def main() -> int:
         if args.requests
         else generate(args.generate, args.seed, args.scale)
     )
+    if args.reduced:
+        return run_reduced(args, requests)
     import torch
 
     torch.manual_seed(0)

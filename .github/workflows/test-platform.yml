@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       batch:
-        description: Platform contracts (emulated targets, runtime conformance) with independent verification receipts.
+        description: Platform contracts (runtime conformance) with independent verification receipts.
         type: string
         required: true
 
@@ -41,11 +41,6 @@ jobs:
             ${{ runner.os }}-${{ fromJSON(inputs.batch).platform_id }}-models-
       - name: Install the model runtime
         run: make harness-venv-install model-runtime-install
-      - name: Install RISC-V QEMU
-        if: fromJSON(inputs.batch).execution.mode == 'qemu-user'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y qemu-user-static
       - name: Execute selected platform contracts
         run: |
           .venv-agent/bin/python tools/ci/run_platform_batch.py --batch "$BATCH" \

@@ -78,7 +78,6 @@ def completed(paths=None, *, full=False, profile="pr"):
             "runtime": record["runtime"],
             "device": record["device"],
             "platform": record["platform"],
-            **({"execution": record["execution"]} if record.get("execution") else {}),
             "artifacts": [
                 {"id": item["id"], "sha256": item["sha256"]}
                 for item in builds
@@ -269,7 +268,7 @@ class GateTests(unittest.TestCase):
             self.assertFalse(evaluate_gate(plan, receipts, builds=candidate).passed)
 
     def test_skipped_failed_cancelled_executor_is_never_success(self):
-        plan, receipts, builds = completed()
+        plan, receipts, builds = completed(["tools/make/models.mk"])
         jobs = {name: {"result": "success"} for name in plan["expected_dispatch_jobs"]}
         self.assertTrue(evaluate_gate(plan, receipts, builds=builds, jobs=jobs).passed)
         for executor in ("platform", "native-build"):

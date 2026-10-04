@@ -157,10 +157,17 @@ class Vela2Family(ModelFamily):
                 weight_prefix="encoder.",
             )
             graph = details.root / "onnx" / "model.onnx"
+            known = builtin.by_identity(package.model_sha256)
+            reduced = known.reduced if known else {}
             return ModelSpec(
                 name=package.model_name,
                 backbone=backbone,
-                dtype=DtypePolicy(autocast=None, bf16_resident=False),
+                dtype=DtypePolicy(
+                    autocast=None,
+                    bf16_resident=False,
+                    reduced_gpu=reduced.get("gpu"),
+                    reduced_cpu=reduced.get("cpu"),
+                ),
                 max_input_tokens=details.max_input_tokens,
                 graphs={"default": graph} if graph.is_file() else {},
                 encoder=True,
@@ -309,8 +316,11 @@ class Vela2Model(LoadedModel):
         return self.member.run(items, packed=shared_prefix > 0)
 
     def run_approximate(self, items: list[Any]) -> list[Any]:
-        """Approximate batches (the batching profile) run packed: 4B / 9B trees, 0.3B sequences."""
-        return self.run(items, shared_prefix=1)
+        """Approximate batches run packed: 4B / 9B trees, and 0.3B sequences on the engine's
+        reduced copy where it loaded one (``max_speed`` and the package's consent)."""
+        if isinstance(self.member, EncoderMember):
+            return self.member.run(items, packed=True, reduced=True)
+        return self.member.run(items, packed=True)
 
     def finish_surface(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:
         state: Vela2Plan = plan.state

@@ -85,7 +85,7 @@ class ExecutionBatchTests(unittest.TestCase):
             source_sha="a" * 40,
             requested=(
                 "platform.image-calibration-cpu",
-                "platform.router-riscv64-qemu",
+                "platform.models-cpu",
             ),
         )
         batches = plan["platform_batches"]
@@ -94,10 +94,7 @@ class ExecutionBatchTests(unittest.TestCase):
             validate_execution_batch(batch, "platform")
             self.assertEqual(batch["dispatch_job"], "platform")
             self.assertEqual(batch["runtime"], "model-runtime")
-        qemu = next(row for row in batches if row["execution"])
-        self.assertEqual(qemu["platform"], "linux/riscv64")
-        self.assertEqual(qemu["timeout_minutes"], 60)
-        self.assertIn(" / QEMU / ", qemu["display_name"])
+        self.assertEqual(len({batch["display_name"] for batch in batches}), 2)
 
     def test_e2e_profiles_preserve_all_contracts_once_with_bounded_cost(self):
         plan = make_plan([], source_sha="a" * 40, full=True)
@@ -156,7 +153,7 @@ class ExecutionBatchTests(unittest.TestCase):
             source_sha="a" * 40,
             requested=(
                 "platform.image-calibration-cpu",
-                "platform.router-riscv64-qemu",
+                "platform.models-cpu",
             ),
         )
         original = plan["platform_batches"][0]
@@ -185,7 +182,7 @@ class ExecutionBatchTests(unittest.TestCase):
             source_sha="a" * 40,
             requested=(
                 "platform.image-calibration-cpu",
-                "platform.router-riscv64-qemu",
+                "platform.models-cpu",
             ),
         )["platform_batches"]
         calls = []
@@ -210,13 +207,11 @@ class ExecutionBatchTests(unittest.TestCase):
                 outcomes,
                 {
                     "platform.image-calibration-cpu": False,
-                    "platform.router-riscv64-qemu": True,
+                    "platform.models-cpu": True,
                 },
             )
             results = list(Path(directory).glob("*/results/*.json"))
-            self.assertEqual(
-                [path.stem for path in results], ["platform.router-riscv64-qemu"]
-            )
+            self.assertEqual([path.stem for path in results], ["platform.models-cpu"])
             make_envs = [env for command, env in calls if command[0] == "make"]
             self.assertEqual(len(make_envs), 2)
             self.assertNotEqual(

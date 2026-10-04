@@ -496,7 +496,7 @@ export interface FeedbackDetectorConfig {
 }
 
 export interface EmbeddingOptimizationConfig {
-  backend?: 'candle' | 'openvino' | 'openai_compatible'
+  backend?: 'model_runtime' | 'openai_compatible'
   model_type?: string
   preload_embeddings?: boolean
   target_dimension?: number

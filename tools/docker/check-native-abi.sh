@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Inspect the actual shared libraries before linking a multi-provider router.
-# Candle-only RISC-V builds pass a single argument and skip the ORT ABI check.
 set -euo pipefail
 
-if [[ $# -lt 1 || $# -gt 2 ]]; then
-  echo "usage: $0 CANDLE_LIBRARY [ORT_LIBRARY]" >&2
+if [[ $# -ne 2 ]]; then
+  echo "usage: $0 CANDLE_LIBRARY ORT_LIBRARY" >&2
   exit 2
 fi
 
@@ -27,11 +26,6 @@ grep -qx "candle_instance_load_backbone" "$abi_tmp/candle"
 for operation in clone close text_windows; do
   grep -qx "candle_instance_$operation" "$abi_tmp/candle"
 done
-
-if [[ $# == 1 ]]; then
-  echo "Candle instance exports present (ORT skipped)"
-  exit 0
-fi
 
 exports "$2" > "$abi_tmp/ort"
 for task in sequence token embedding; do

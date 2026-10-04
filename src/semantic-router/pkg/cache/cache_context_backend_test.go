@@ -1,4 +1,4 @@
-//go:build !windows && !riscv64
+//go:build !windows
 
 package cache
 
