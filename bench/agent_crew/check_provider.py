@@ -28,8 +28,8 @@ from typing import Any
 MAX_FINGERPRINT_CHARS = 256
 
 # Go decodes a numeric stop reason into int64; a string only has to be non-empty.
-INT64_MIN = -(2**63)
-INT64_MAX = 2**63 - 1
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
 
 ALLOWED = {
     "response": {
