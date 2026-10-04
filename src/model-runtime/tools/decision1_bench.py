@@ -66,6 +66,11 @@ def requests(args: argparse.Namespace) -> list[dict[str, Any]]:
     ]
 
 
+def wire_size(body: dict[str, Any]) -> int:
+    """The encoded body size the HTTP server passes to ``Runtime.call`` (small bodies plan inline)."""
+    return len(json.dumps(body, separators=(",", ":")).encode("utf-8"))
+
+
 def summary(seconds: list[float]) -> dict[str, float]:
     ordered = sorted(seconds)
     return {
@@ -141,9 +146,10 @@ class Native:
         self.options = {"return_meta": False, "profile": args.profile}
 
     def call(self, body: dict[str, Any]) -> None:
-        """End to end through ``Runtime.call``."""
+        """End to end through ``Runtime.call``, as the HTTP server calls it."""
+        request = {**body, "options": self.options}
         status, _ = self.loop.run_until_complete(
-            self.runtime.call("decisions", {**body, "options": self.options})
+            self.runtime.call("decisions", request, wire_size(request))
         )
         if status != 200:
             raise RuntimeError(f"HTTP {status}")
@@ -178,10 +184,11 @@ class Native:
         """Requests per second in waves of ``concurrency`` concurrent calls."""
 
         async def wave(batch: list[dict[str, Any]]) -> None:
+            requests = [{**body, "options": self.options} for body in batch]
             results = await asyncio.gather(
                 *(
-                    self.runtime.call("decisions", {**body, "options": self.options})
-                    for body in batch
+                    self.runtime.call("decisions", request, wire_size(request))
+                    for request in requests
                 )
             )
             if any(status != 200 for status, _ in results):
