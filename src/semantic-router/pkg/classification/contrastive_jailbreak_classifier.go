@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -67,8 +66,6 @@ type contrastiveJailbreakMessageResult struct {
 	embedding []float32
 	err       error
 }
-
-const maxContrastiveJailbreakWorkers = 8
 
 // NewContrastiveJailbreakClassifierWithProvider creates and initialises a
 // classifier for a single contrastive JailbreakRule. KB embeddings are computed
@@ -185,7 +182,7 @@ func (c *ContrastiveJailbreakClassifier) embedMessages(messages []string) ([][]f
 	close(tasks)
 
 	var workers sync.WaitGroup
-	for range boundedContrastiveJailbreakWorkers(taskCount) {
+	for range embeddingWorkers(taskCount) {
 		workers.Add(1)
 		go func() {
 			defer workers.Done()
@@ -270,7 +267,7 @@ func (c *ContrastiveJailbreakClassifier) preloadKBEmbeddings() error {
 		return nil
 	}
 
-	numWorkers := boundedContrastiveJailbreakWorkers(len(tasks))
+	numWorkers := embeddingWorkers(len(tasks))
 	ok, firstErr := c.collectContrastiveJailbreakEmbeddings(c.embedContrastiveJailbreakTasks(tasks, numWorkers))
 
 	elapsed := time.Since(startTime)
@@ -289,17 +286,6 @@ func (c *ContrastiveJailbreakClassifier) contrastiveJailbreakEmbeddingTasks() []
 		tasks = append(tasks, contrastiveJailbreakEmbeddingTask{text: pattern})
 	}
 	return tasks
-}
-
-func boundedContrastiveJailbreakWorkers(taskCount int) int {
-	numWorkers := runtime.NumCPU() * 2
-	if numWorkers > maxContrastiveJailbreakWorkers {
-		numWorkers = maxContrastiveJailbreakWorkers
-	}
-	if numWorkers > taskCount {
-		return taskCount
-	}
-	return numWorkers
 }
 
 func (c *ContrastiveJailbreakClassifier) embedContrastiveJailbreakTasks(

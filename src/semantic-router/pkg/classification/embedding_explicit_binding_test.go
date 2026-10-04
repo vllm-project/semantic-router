@@ -11,8 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestExplicitEmbeddingBindingOverridesLegacyOpenVINOSelector(t *testing.T) {
-	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "")
+func TestExplicitEmbeddingBindingServesTheEmbeddingSignal(t *testing.T) {
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
@@ -36,8 +35,7 @@ func TestExplicitEmbeddingBindingOverridesLegacyOpenVINOSelector(t *testing.T) {
 	defer server.Close()
 	cfg := &config.RouterConfig{}
 	cfg.Entrypoints = []config.EntrypointMapping{{ModelNames: []string{"test"}, Recipe: config.DefaultRecipeName}}
-	cfg.EmbeddingConfig = config.HNSWConfig{Backend: config.EmbeddingBackendOpenVINO, ModelType: "mmbert", TargetDimension: 2, PreloadEmbeddings: true}
-	cfg.MmBertModelPath = "/unavailable-legacy-openvino/model.xml"
+	cfg.EmbeddingConfig = config.HNSWConfig{ModelType: "mmbert", TargetDimension: 2, PreloadEmbeddings: true}
 	cfg.EmbeddingRules = []config.EmbeddingRule{{Name: "billing", Candidates: []string{"billing invoice"}, SimilarityThreshold: 0.9, AggregationMethodConfiged: config.AggregationMethodMax}}
 	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "selected", Contract: "embedding.v1", Adapter: "openai_compatible"}}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"selected": {Provider: "http", ExternalModel: "embedder"}}
@@ -48,7 +46,7 @@ func TestExplicitEmbeddingBindingOverridesLegacyOpenVINOSelector(t *testing.T) {
 	}
 	defer classifier.Close()
 	if classifier.keywordEmbeddingClassifier == nil || classifier.keywordEmbeddingClassifier.provider == nil {
-		t.Fatal("explicit prepared binding was replaced by the legacy nil-provider fallback")
+		t.Fatal("the embedding classifier was built without the explicitly bound provider")
 	}
 	before := calls.Load()
 	result, err := classifier.keywordEmbeddingClassifier.ClassifyDetailed("billing support")
