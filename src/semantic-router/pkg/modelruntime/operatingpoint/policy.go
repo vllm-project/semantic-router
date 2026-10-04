@@ -223,6 +223,8 @@ func validateExecutions(executions []Execution, window, version int) error {
 		if execution.WeightsFile != "model.safetensors" {
 			return fmt.Errorf("execution must bind complete model.safetensors weights")
 		}
+		// The provider names are the published sidecar format's execution
+		// declarations; the model runtime reads only the score policy.
 		switch execution.Provider {
 		case "candle":
 			if version != 2 || execution.Precision != "float32" || execution.ONNX != nil {

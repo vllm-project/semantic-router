@@ -185,11 +185,6 @@ func (c *RouterConfig) primaryEmbeddingModel() string {
 	return "qwen3"
 }
 
-// ModelRuntimeProfiles lists the numerics profiles a model_runtime deployment may select.
-func ModelRuntimeProfiles() []string {
-	return append([]string(nil), modelRuntimeProfiles...)
-}
-
 func (d ModelDeployment) validateModelRuntime() error {
 	if d.ExternalModel != "" {
 		return fmt.Errorf("model_runtime deployments cannot set external_model")

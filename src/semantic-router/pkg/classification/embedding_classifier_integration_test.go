@@ -1,8 +1,8 @@
 package classification
 
-// Real model integration uses an explicitly prepared, owned Omni artifact.
-// Run with VELA_OMNI_ARTIFACT=/path/to/vela-1.0-omni-nano and ORT_DYLIB_PATH
-// pointing to the installed ORT library. An explicitly selected missing/broken
+// Real model integration serves an explicitly prepared, owned Omni artifact on
+// a managed model runtime. Run with VELA_OMNI_ARTIFACT=/path/to/vela-1.0-omni-nano
+// and the runtime command installed. An explicitly selected missing/broken
 // artifact fails; only an unselected model-backed suite is skipped.
 
 import (
