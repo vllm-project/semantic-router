@@ -567,11 +567,17 @@ class LoadedModel(ABC):
     batch (a test must show it); the ``exact`` profile then runs the jobs of
     concurrent requests that are queued together in shared batches, without
     waiting for more.
+
+    ``device_thread`` False says ``run`` never starts a parallel torch op (an
+    ONNX Runtime engine with NumPy readouts): the scheduler then calls it on
+    the model's worker instead of handing each batch to the CPU device thread,
+    which saves a thread wake-up each way.
     """
 
     info: ModelInfo
     engine_model: EngineModel
     fuse_bundled_jobs: ClassVar[bool] = False
+    device_thread: ClassVar[bool] = True
     batch_invariant: bool = False
 
     def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan:

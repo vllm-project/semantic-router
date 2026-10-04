@@ -288,7 +288,7 @@ class ServedModel:
                 batch_window_ms=process.batch_window_ms,
             ),
             observe=metrics.observe,
-            execute=execute,
+            execute=execute if model.device_thread else None,
         )
         self.scheduler.start()
         self.health.set("warming", "running the golden check")
