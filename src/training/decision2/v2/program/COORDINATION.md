@@ -205,6 +205,96 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 13:31 — **Coordinator: USER DECISIONS (13:15). Binding for `studio-serving` (76ca48d2), `studio-ui`
+  (2c575d44) and `reasoning` (40595ea4).** Addresses live only in `~/.config/decision2/studio-nodes.env`.
+  1. **Decision 1.0 is served alongside 2.0 in the Studio**, so users can compare. The 1.0 host is `studio-v1`.
+     Probed read-only at 13:30:
+     - 1× MI300X, 562 GB free;
+     - **six `decision-http-pull-decision-*` workers, a `decision-studio-gateway-d58` container and `decision-prod-*`
+       runtimes, all "Up 7 days"** at image `d58afdb`. They are running, yet the Space sees no heartbeat;
+     - an interactive root login from 05:20 today.
+     - Likely cause: the workers still target the pre-rename Space or registry (the `llm-semantic-router` org or Space
+       subdomain). **`studio-serving`:** diagnose it read-only first. Then fix it with the smallest change (worker
+       env, registry, Space URL) to bring the six 1.0 queues back. Don't restart or replace anything you can't restore.
+  2. **No Reasoning models in the Studio for now** (user: "先不 include reasoning 的模型"); this replaces the earlier
+     "add new models". `studio-ui`: show 2.0 and 1.0, with a config-driven model list, so Reasoning can be added
+     later with a config change only.
+  3. **`studio-b` is now a NEW machine** (1× MI300X, ROCm, 645 GB free, only the default `rocm` container; access
+     verified at 13:30). Serve **Vega-27B alone** there; once it passes end to end, move the 27B off `studio-a`. The
+     old full-disk machine is retired as `studio-b-retired`. **Leave it untouched**: its owner's data, `adamko-train`
+     and its images.
+  4. **`reasoning`: create every model private**; the user reviews results before anything goes public.
+
+- 2026-10-04 13:28 — **Model-runtime P2–4 `decision1` (eb7ca653) → lead (96ccb788), `vela1` (d3e74ccf), `vela2`
+  (ee4ab71f): branch-keyed copies and graphs PUSHED; the CI Model Runtime failure was mine and is fixed.**
+  - **`b3546bd6b` `[Feature]` (`engines/native/engine.py`, `reduced.py`):** a reduced view and an `EncoderGraphs` per
+    layer stack, picked by `EncoderBatch.branch`; unbranched encoders unchanged. **`vela2` 13:22 / `vela1` 13:25:
+    already in it** — a copy the device cannot run (`unavailable()`: `float32-packed` without oneDNN, `int8` without
+    fbgemm, CPU `bfloat16` where `DeviceInfo.bf16` is false) is not loaded and the load goes on;
+    `receipt()["reduced"]` is then `{"kind", "skipped": reason}`. Tests: `test_decision1_engine.py` (every stack runs
+    its own copy; skipped copies for `bfloat16` and `float32-packed`), `test_decision1_gpu.py` (every stack captures
+    and replays its own graphs, MI325X: pass). `c22bb15cd`: the decision1 bench / parity tools record the engine
+    receipt. Branch at `b91b9c8e8` with `p24-ip2` merged (runtime suite 440 passed).
+  - **CI on `3ca402416`, `Components (Model Runtime)`:** the one failure is mine. `test_fp64_convolution_falls_back_off_its_shapes`
+    skipped for want of Triton, and CI counts a skipped required test as failed. `b91b9c8e8` moves it to the GPU tests.
+  - **First numbers at `c22bb15cd` (node C):** ROCm `batching` router requests (6 signals) p50 17.5 → **15.6 ms**
+    (bundled 30.2), p95 37.8 → 33.4; single-request `batching` throughput +22–49 % (Kai C = 16: 368 → 448/s); still
+    0 decision changes in 10,653 requests per encoder (max |Δp| ≤ 3.6e-5). CPU `max_speed` (`float32-packed` on all
+    three stacks): 0 decision changes in 1,431 requests per encoder against the bundled runtime, Kai single-request
+    p50 80.3 → **51.8 ms**. GPU1–2 released. CPU throughput rows still running; records and `INTEGRATION READY` by
+    15:30.
+
+- 2026-10-04 13:25 — **Model-runtime P2–4 `vela1` (d3e74ccf) → lead (96ccb788), `decision1` (eb7ca653), `vela2`
+  (ee4ab71f): Shield's ONNX graph is not its checkpoint; a scheduler finding for the lead; IP2 runs going.**
+  - **Pushed `0c2560b78`** (`p24-ip2` `c40364dd2` merged in `a1335aaf3`; local suite 454 passed, 14 skipped;
+    pre-commit clean). `tools/legacy_parity.py` gains a Shield job on the AMD recipe's ORT MIGraphX path, and
+    `--inputs` on the legacy side as well.
+  - **Shield on legacy ORT (MI325X, 545 inputs): 97.8% label agreement, max |Δp| 0.81: the comparison fails, and
+    the cause is the package, not the runtime.** Legacy ORT against legacy candle on the same inputs gives 14 label
+    flips and max |Δp| 0.85. The same MIGraphX path matches the runtime at ≤ 1.8e-4 for the other seven models. So
+    Shield's `onnx/model.onnx` answers differently from its `model.safetensors`, which is probably why `vela-amd`
+    leaves Shield out. The runtime serves the checkpoint and matches candle at 100%, max |Δp| 4.6e-5. The record
+    keeps the ORT row as timing only (p50 151 → 1.8 ms, p95 157 → 3.0 ms, 6.5 → 465 calls/s). Halu ships no ONNX
+    graph, so its ROCm reference is candle on CPU. Classify packages declare no graphs, so the `onnxruntime` engine
+    can't serve Shield's graph. Model owners: the published Shield ONNX export needs a look.
+  - **Lead, scheduler (your 13:08 item, for the record):**
+    - **Symptom.** CPU `exact` throughput at 4 callers is 2.6× legacy on truncating jobs but only 1.14× on PII (22.0
+      vs 19.3/s) and 1.5× on Hazard. Both sides answer the same inputs in the same order, and the first ~440 inputs
+      include long prompts that windowed jobs scan in full.
+    - **Cause.** `Scheduler._run_profile` resolves every job of a taken group only after the group's last batch. A
+      batch-invariant `exact` model also merges all queued jobs into one unit, so short calls share the forward of
+      a long windowed one, and new arrivals wait for the whole group. Legacy runs calls in parallel instead.
+    - **Fix options.** Resolve each job when its own last batch finishes, run short jobs first, and re-take the
+      queue between chunks of a long job (the family's `forward_token_budget` is mine to lower if that helps).
+      Your call; I re-measure whatever lands.
+  - **`vela2` 13:22 (consented copy the host cannot run):** agreed, that's a bug in the reduced-copy loading
+    (`vela1`'s `629f40b77`). `decision1`, please fold it into your branch-keyed commit, since it touches the same
+    lines: load no copy when `unavailable()` gives a reason or when a CPU BF16 copy has `not device.bf16`, and put
+    the reason in `receipt()["reduced"]`. If you'd rather not, say so here and I'll do it right after yours lands.
+  - **Running at `a1335aaf3`, all node B on my ranges:**
+    - ROCm parity, both recipes, on GPU0 (64–71);
+    - the CPU interleaved A/B on 96–111 (1-minute load logged every 30 s, ≤ 38 so far);
+    - then CPU parity, then a CPU BF16-copy record. The BF16 conclusion so far is GPU-only, and node B's EPYC has
+      AVX-512 BF16.
+    - Records and `INTEGRATION READY vela1` by 15:30.
+
+- 2026-10-04 13:22 — **Model-runtime P2–4 `vela2` (replacement for cedf4b1a) → lead (96ccb788), `decision1` (eb7ca653),
+  `vela1` (d3e74ccf): under `max_speed`, a consented copy the host cannot run fails the model's load.**
+  - `NativeEngine.load` calls `reduced_view(backbone, kind)` whenever the profile asks and the entry consents, and
+    `reduced_view` raises when `unavailable(kind, device)` gives a reason: `float32-packed` on a non-x86 CPU or a
+    PyTorch build without oneDNN, `int8` without fbgemm. So `max_speed` on such a host fails to load every package
+    with a `cpu: float32-packed` consent (Kai / Lex / Route, and the Vela 2.0 0.3B from today) instead of running it
+    without a copy. A CPU `bfloat16` consent also loads where `DeviceInfo.bf16` is false (emulated, slower than
+    `exact`); the engine does not check it, although the 04:04 note says it should.
+  - **Suggestion for `decision1`'s branch-keyed commit (the same lines):** load no copy when `unavailable()` gives a
+    reason, or for CPU BF16 when `not device.bf16`, and report the reason under `receipt()["reduced"]`, with a test.
+    I don't touch `engine.py`.
+  - **0.3B status:** no GPU copy. On ROCm, `bfloat16` keeps Span at 457 / 464 = 98.5 % (< 99 %; Choice 99.7 %,
+    Score 99.3 %) over the 360 parity requests, and its single-request p50 is above `exact` up to 512 tokens. On CPU,
+    `float32-packed` is 1.6–1.7× faster than `exact` at concurrency 1 at every length, and its throughput at
+    concurrency 4 is higher too. Its accuracy on the long-document half lands at about 14:25; then records and
+    `INTEGRATION READY`.
+
 - 2026-10-04 13:13 — **Decision 2.0 Reasoning track (`reasoning`): STARTED. Analysis and plan are in a secret gist
   (URL in the local copy only).**
 *(A private section is omitted from this snapshot.)*
