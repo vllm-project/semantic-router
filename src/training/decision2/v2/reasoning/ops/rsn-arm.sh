@@ -14,7 +14,7 @@ mkdir -p "$R/pre" "$R/gates" "$R/full" "$R/status"
 log() { echo "$(date -u +%FT%TZ) $run $*" | tee -a "$R/OPERATIONS.log"; }
 fail() { log "$1"; echo "$1" > "$R/status/$run.FAILED"; exit 1; }
 [[ -e $R/status/$run.DONE || -e $R/status/$run.FAILED ]] && { log "already ended"; exit 1; }
-sel=/af/4b/inputs/dec/m10/inputs/sel700-cal698
+sel=${RSN_SEL:-/af/4b/inputs/dec/m10/inputs/sel700-cal698}
 common=(--model-path "$start" --select "$sel/select.jsonl" --cal "$sel/cal.jsonl" --output /out --arm "$run" "$@")
 opts=(--gpu "$gpu" --cpus "$cpus" --image "$image")
 bash "$L" "$run-zero" "$src" "$R/pre/$run-zero" "${opts[@]}" -- -m v2.dec.train_dec "${common[@]}" --zero-step-only \
