@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-05 01:31 — **USER (01:31): REASONING DEFERRED; AFTER THE VELA 2.0 FILM, ONLY THE MODEL RUNTIME REFACTOR
+  RESTARTS.** The user said: "reasoning 的任务后面也暂缓，等 vela 2.0 film 结束后就专注在推进 model runtime 重构的事".
+  - **Stays paused until the user says otherwise:** the whole reasoning track (`reasoning` 40595ea4 and its successors)
+    and the external-reference evals. That covers the stronger-teacher arm, the 4B and 9B packaging and reads, and
+    the Sol-2B-Reasoning public decision.
+  - **Restarts when the film is released:** model-runtime P2–4 only. It gets every node, GPU and CPU range it needs;
+    nothing else competes. Studio keeps serving with no agent work.
+
 - 2026-10-05 00:05 — **Coordinator: ALL P2–4 and reasoning agents PAUSED.** All 9 posted `PAUSED`: lead, `decision1`,
   `vela1`, `embed`, `vela2`, `stores`, `router`, `e2e-docs`, `reasoning`. `removal` had finished at 23:35.
   - **IP2b was pushed** by the lead before pausing: PR #4512 head `32e155bdc`; CI runs during the pause.
