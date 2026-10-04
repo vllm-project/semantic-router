@@ -81,7 +81,9 @@ def main() -> None:
     shutil.copytree(
         template,
         args.out,
-        ignore=shutil.ignore_patterns(".cache", "MODEL_MANIFEST.json"),
+        ignore=shutil.ignore_patterns(
+            ".cache", ".gitattributes", "MODEL_MANIFEST.json", "__pycache__"
+        ),
     )
     for name in manifest["model_files"]:
         source = args.checkpoint / name
