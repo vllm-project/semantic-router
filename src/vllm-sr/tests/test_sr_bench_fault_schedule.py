@@ -120,6 +120,8 @@ class FaultInjectingTarget(BaseHTTPRequestHandler):
         # Normal successful streaming response
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
+        if active_fault:
+            self.send_header("x-vsr-fault-injected", "true")
         self.send_header("x-vsr-selected-model", selected_model)
         self.send_header("x-vsr-selected-decision", decision)
         self.end_headers()
@@ -276,6 +278,7 @@ def test_fault_summary_unit():
         },
         {"case_id": "c2", "status": "completed", "correct": True},
         {"case_id": "c3", "status": "completed", "correct": False},
+        {"case_id": "c4", "status": "completed", "correct": True},
     ]
     calls = [
         {
@@ -284,6 +287,7 @@ def test_fault_summary_unit():
             "role": "subject",
             "status": "failed",
             "call_index": 0,
+            "fault_injected": True,
             "injected_fault": {"call_index": 0, "status": 503},
             "selected_model": "router-picked-model-a",
             "decision": "fallback-decision",
@@ -295,6 +299,7 @@ def test_fault_summary_unit():
             "case_id": "c2",
             "role": "subject",
             "status": "completed",
+            "fault_injected": False,
             "selected_model": "model",
             "decision": "rule-normal",
             "response_status": 200,
@@ -304,6 +309,19 @@ def test_fault_summary_unit():
             "case_id": "c3",
             "role": "subject",
             "status": "completed",
+            "fault_injected": False,
+            "selected_model": "model",
+            "decision": "rule-normal",
+            "response_status": 200,
+        },
+        {
+            "id": "call-4",
+            "case_id": "c4",
+            "role": "subject",
+            "status": "completed",
+            "call_index": 0,
+            "scheduled_fault": {"call_index": 0, "status": 503},
+            "fault_injected": False,
             "selected_model": "model",
             "decision": "rule-normal",
             "response_status": 200,
@@ -329,11 +347,11 @@ def test_fault_summary_unit():
     assert f_call["router_response"]["decision"] == "fallback-decision"
     assert f_call["router_response"]["error"] == "Target HTTP 503"
 
-    assert summary["unfaulted_tasks"]["total"] == 2
-    assert summary["unfaulted_tasks"]["completed"] == 2
-    assert summary["unfaulted_tasks"]["correct"] == 1
-    assert summary["unfaulted_tasks"]["accuracy"] == 0.5
-    assert set(summary["unfaulted_tasks"]["case_ids"]) == {"c2", "c3"}
+    assert summary["unfaulted_tasks"]["total"] == 3
+    assert summary["unfaulted_tasks"]["completed"] == 3
+    assert summary["unfaulted_tasks"]["correct"] == 2
+    assert summary["unfaulted_tasks"]["accuracy"] == 2 / 3
+    assert set(summary["unfaulted_tasks"]["case_ids"]) == {"c2", "c3", "c4"}
 
 
 def test_sr_bench_run_with_status_fault_on_one_task(tmp_path, fault_target):
@@ -549,3 +567,110 @@ def test_sr_bench_run_with_stream_cut_short_fault(tmp_path, fault_target):
     assert f_summary["unfaulted_tasks"]["total"] == 1
     assert f_summary["unfaulted_tasks"]["completed"] == 1
     assert f_summary["unfaulted_tasks"]["case_ids"] == ["task-unaffected"]
+
+
+def test_sr_bench_scheduled_fault_not_injected_by_provider_reports_as_unfaulted(
+    tmp_path, fault_target
+):
+    """Scheduled fault not injected by provider must report as unfaulted."""
+    store = Store(tmp_path)
+    engine = Engine(store)
+
+    # Provider is NOT configured with a fault schedule for this task
+    fault_target.fault_schedules = {}
+
+    manifest_doc = {
+        "version": "sr-bench-1.0",
+        "name": "unexercised-fault-test",
+        "targets": [
+            {
+                "id": "single",
+                "kind": "single",
+                "model": "model",
+                "base_url": f"http://127.0.0.1:{fault_target.server_port}/v1",
+                "prices": PRICES,
+            }
+        ],
+        "cases": [
+            {
+                "id": "task-with-planned-fault",
+                "benchmark": "mmlu-pro",
+                "messages": [{"role": "user", "content": "Question expecting fault"}],
+                "answer": "A",
+                "fault_schedule": [{"call_index": 0, "status": 503}],
+            },
+        ],
+        "limits": {"total_timeout_s": 5, "idle_timeout_s": 2, "max_run_seconds": 15},
+    }
+
+    run = engine.start(manifest_doc, request_key="unexercised-fault-run")
+    wait_run(store, run["id"])
+
+    calls = store.calls(run["id"])
+    assert len(calls) == 1
+    call = calls[0]
+    # Planned intent is recorded
+    assert call["scheduled_fault"] == {"call_index": 0, "status": 503}
+    # But because provider did not inject it, injected_fault is None
+    assert call.get("injected_fault") is None
+    assert call["fault_injected"] is False
+
+    report = make_report(store, run["id"])
+    f_summary = report["fault_summary"]
+
+    # Must NOT report as a faulted task
+    assert f_summary["faulted_tasks"]["total"] == 0
+    assert f_summary["faulted_tasks"]["tasks"] == []
+
+    # Must report as an unfaulted task
+    assert f_summary["unfaulted_tasks"]["total"] == 1
+    assert f_summary["unfaulted_tasks"]["completed"] == 1
+    assert f_summary["unfaulted_tasks"]["correct"] == 1
+    assert f_summary["unfaulted_tasks"]["case_ids"] == ["task-with-planned-fault"]
+
+
+def test_unexpected_transport_failure_without_provider_receipt_fails_closed(tmp_path):
+    """Unexpected transport failure without provider receipt must fail closed."""
+    store = Store(tmp_path)
+    engine = Engine(store)
+
+    # Use a port where no server is listening to simulate transport failure
+    manifest_doc = {
+        "version": "sr-bench-1.0",
+        "name": "fail-closed-test",
+        "targets": [
+            {
+                "id": "single",
+                "kind": "single",
+                "model": "model",
+                "base_url": "http://127.0.0.1:9",
+                "prices": PRICES,
+            }
+        ],
+        "cases": [
+            {
+                "id": "task-transport-failure",
+                "benchmark": "mmlu-pro",
+                "messages": [{"role": "user", "content": "Question"}],
+                "answer": "A",
+                "fault_schedule": [{"call_index": 0, "status": 503}],
+            },
+        ],
+        "limits": {"total_timeout_s": 2, "idle_timeout_s": 1, "max_run_seconds": 5},
+    }
+
+    run = engine.start(manifest_doc, request_key="fail-closed-run")
+    wait_run(store, run["id"])
+
+    # Engine must have recorded a failure and triggered cancel for unexpected failure
+    cancel_event = engine.cancels.get(run["id"])
+    assert cancel_event is not None and cancel_event.is_set()
+
+    calls = store.calls(run["id"])
+    assert len(calls) == 1
+    call = calls[0]
+    # Planned intent is recorded
+    assert call["scheduled_fault"] == {"call_index": 0, "status": 503}
+    # No provider receipt exists
+    assert call["fault_injected"] is False
+    assert call.get("injected_fault") is None

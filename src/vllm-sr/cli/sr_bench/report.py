@@ -193,10 +193,7 @@ def fault_summary(results, subject_calls, total=None, *, planned_case_ids=None):
 
         faulted_calls = []
         for idx, call in enumerate(c_calls):
-            is_fault = (
-                call.get("injected_fault") is not None
-                or call.get("fault_injected") is True
-            )
+            is_fault = call.get("fault_injected") is True
             if is_fault:
                 fault_info = call.get("injected_fault")
                 if fault_info is None:

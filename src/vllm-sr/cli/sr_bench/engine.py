@@ -217,8 +217,14 @@ class Context:
                     result,
                 )
             if scheduled_fault is not None:
-                result["injected_fault"] = scheduled_fault
+                result["scheduled_fault"] = scheduled_fault
                 result["call_index"] = call_index
+            if result.get("fault_injected") is True:
+                result["injected_fault"] = (
+                    scheduled_fault
+                    if scheduled_fault is not None
+                    else {"status": result.get("response_status"), "injected": True}
+                )
             self.store.finish_call(call_id, "completed", result)
             call_record.update(result)
             with self.engine.lock:
@@ -231,8 +237,17 @@ class Context:
             return result
         except CallFailure as exc:
             if scheduled_fault is not None:
-                exc.partial["injected_fault"] = scheduled_fault
+                exc.partial["scheduled_fault"] = scheduled_fault
                 exc.partial["call_index"] = call_index
+            if exc.partial.get("fault_injected") is True:
+                exc.partial["injected_fault"] = (
+                    scheduled_fault
+                    if scheduled_fault is not None
+                    else {
+                        "status": exc.partial.get("response_status"),
+                        "injected": True,
+                    }
+                )
             exc.partial.setdefault("error", str(exc))
             self.store.finish_call(
                 call_id,
@@ -484,9 +499,9 @@ class Engine:
                     self.first_failures[run_id] = failure
                     self.store.event(run_id, "failure_observed", failure)
             # Fail closed: no new cases are dispatched after an unexpected transport/harness failure.
-            # Intended faults scheduled on a task do not abort other tasks in the run.
+            # Intended faults confirmed by the provider do not abort other tasks in the run.
             has_injected_fault = any(
-                c.get("injected_fault") is not None or c.get("fault_injected") is True
+                c.get("fault_injected") is True and c.get("injected_fault") is not None
                 for c in ctx.calls
             )
             if not has_injected_fault:
