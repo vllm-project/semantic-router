@@ -19,7 +19,9 @@ A model whose batches need no device thread may also run a request on the
 thread that planned it (``run_now``), but only when the scheduler is idle:
 nothing queued or planned and the worker not running a batch. Whoever runs
 batches owns the model until they are done, so the caller and the worker
-never run one model at once.
+never run one model at once. Once other jobs are queued the caller stops
+after its forward in flight and leaves its remaining batches to the worker,
+so arrivals still wait for one forward, not for the rest of the request.
 """
 
 from __future__ import annotations
@@ -160,8 +162,10 @@ class Scheduler:
     ) -> list[Future] | None:
         """Run a group on the calling thread if the scheduler is idle, else None.
 
-        Never call it from the event loop: the batches run before it returns.
-        Models whose batches go to a device thread always answer None.
+        Never call it from the event loop: batches run before it returns. When
+        other jobs arrive meanwhile, the worker runs the group's remaining
+        batches in order with theirs and answers the futures. Models whose
+        batches go to a device thread always answer None.
         """
         if self.model.device_thread:
             return None
@@ -174,6 +178,9 @@ class Scheduler:
             self._plan(pending)
             while self._ready:
                 self._run(heapq.heappop(self._ready))
+                with self._lock:
+                    if self._queue:
+                        break
         finally:
             self._release()
         return futures
@@ -232,16 +239,19 @@ class Scheduler:
         queued job's profile coalesces, hold the batching window, then take
         everything. Without it take at once the jobs of profiles that don't
         coalesce and the coalescing jobs that have already waited a window.
-        Either way wait while a ``run_now`` caller owns the model.
+        Either way wait while a ``run_now`` caller owns the model; batches a
+        caller left planned count as planned work.
         """
         window = self.limits.batch_window_ms / 1000.0
         with self._lock:
-            while (self._owned or (wait and not self._queue)) and not self._stopped:
+            while (
+                self._owned or (wait and not self._queue and not self._ready)
+            ) and not self._stopped:
                 self._lock.wait()
             if self._stopped:
                 return None
             self._owned = True
-            if not wait:
+            if not wait or self._ready:
                 now = time.monotonic()
                 taken: list[_Pending] = []
                 kept: deque[_Pending] = deque()
