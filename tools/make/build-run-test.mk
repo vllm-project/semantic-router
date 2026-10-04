@@ -73,15 +73,6 @@ build-ml-binding: ## Build the ml-binding Rust library
 	@cd ml-binding && cargo build --release
 	@echo "ml-binding built successfully"
 
-# Compatibility name: providers are selected by prepared task bindings.
-# The normal Go module includes both native modules; no module substitution.
-build-router-onnx: build-router ## Build the same multi-provider router under its legacy filename
-	@cp bin/router bin/router-onnx
-
-run-router-onnx: build-router-onnx ## Run with per-task Candle/ORT bindings (set ORT_DYLIB_PATH)
-	@export $(NATIVE_ENV) && \
-		./bin/router-onnx -config=$${ONNX_CONFIG_FILE:-e2e/config/onnx-binding/config.onnx-binding-test.yaml} --enable-system-prompt-api=true
-
 # Unit test semantic-router
 # By default, Milvus, Qdrant, Redis, Valkey, and Llama Stack tests are skipped. To enable them, set the relevant env var to false.
 # Example: make test-semantic-router SKIP_MILVUS_TESTS=false SKIP_QDRANT_TESTS=false SKIP_VALKEY_TESTS=false
