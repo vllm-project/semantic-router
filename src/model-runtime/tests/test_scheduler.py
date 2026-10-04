@@ -9,7 +9,7 @@ from vllm_sr_runtime.profiles.batching import BatchingProfile
 from vllm_sr_runtime.profiles.exact import ExactProfile, merged
 from vllm_sr_runtime.profiles.shared_context import SharedContextProfile
 from vllm_sr_runtime.scheduler import scheduler as scheduler_module
-from vllm_sr_runtime.scheduler.planner import micro_batches
+from vllm_sr_runtime.scheduler.planner import cost, micro_batches
 from vllm_sr_runtime.scheduler.scheduler import DEADLINE, Scheduler, SchedulerLimits
 
 
@@ -244,6 +244,21 @@ def test_shared_batches_keep_identical_sequences_together():
     assert [names(batch) for batch in batches] == [["b"], ["a", "c"]]
 
 
+@dataclasses.dataclass(frozen=True)
+class Media:
+    question_id: str
+    ids: tuple = ()
+    cost: int = 300
+
+
+def test_inputs_without_token_ids_count_by_their_cost():
+    images = Job([Media("i1"), Media("i2")], None, 0.0, "exact")
+    text = Job([item("t", 8)], None, 0.0, "exact")
+    batches = merged([images, text], cap=512)
+    assert [names(batch) for batch in batches] == [["t"], ["i1"], ["i2"]]
+    assert cost(Media("i1")) == 300 and cost(item("t", 8)) == 8
+
+
 class GatedModel(FakeModel):
     """Blocks a forward that holds a gated item until its gate opens."""
 
@@ -325,6 +340,31 @@ def test_a_long_job_runs_before_work_queued_after_its_expected_finish(monkeypatc
         late.result(timeout=5)
         long.result(timeout=5)
         assert model.calls == [["long0"], ["long1"], ["late"]]
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
+def test_coalescing_jobs_join_a_busy_worker_after_one_window():
+    gate = threading.Event()
+    model = GatedModel(budget=64, gates={"long0": gate})
+    scheduler = Scheduler(
+        model,
+        {"exact": ExactProfile(), "batching": BatchingProfile()},
+        SchedulerLimits(batch_window_ms=20),
+    )
+    scheduler.start()
+    try:
+        long = scheduler.submit(
+            [item("long0", 64), item("long1", 64)], deadline=None, profile="exact"
+        )
+        assert model.entered.wait(5)
+        batched = scheduler.submit([item("b", 8)], deadline=None, profile="batching")
+        time.sleep(0.05)
+        gate.set()
+        batched.result(timeout=5)
+        long.result(timeout=5)
+        assert ["b"] in model.calls
     finally:
         gate.set()
         scheduler.stop()
