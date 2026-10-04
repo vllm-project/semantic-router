@@ -201,8 +201,8 @@ func emitToolSelectionPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	if cfg.Strategy != "" {
 		fmt.Fprintf(sb, "    strategy: %q\n", cfg.Strategy)
 	}
-	if cfg.FallbackToEmpty != nil && *cfg.FallbackToEmpty {
-		fmt.Fprintf(sb, "    fallback_to_empty: true\n")
+	if cfg.FallbackToEmpty != nil {
+		fmt.Fprintf(sb, "    fallback_to_empty: %v\n", *cfg.FallbackToEmpty)
 	}
 	if cfg.RelevanceThreshold != nil {
 		fmt.Fprintf(sb, "    relevance_threshold: %v\n", *cfg.RelevanceThreshold)

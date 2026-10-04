@@ -124,6 +124,17 @@ global:
 
 当配置了带 `model_role: memory_rewrite` 的外部模型时，其 `max_response_bytes` 限制每次查询改写响应。省略或非正值使用 1 MiB 默认值。
 
+#### 混合检索与反思 {#hybrid-search-and-reflection}
+
+`hybrid_mode` 和 `reflection.algorithm` 可以在 `global.stores.memory` 下全局设置，也可以在决策的 `memory` 插件中覆盖。配置其他任何值（包括 recipe 决策中设置的值）时，Router 将拒绝启动：
+
+| 字段 | 可接受的值 | 默认值 |
+|------|-----------|--------|
+| `hybrid_mode` | `weighted`、`rrf`（完全匹配，小写） | `weighted` |
+| `reflection.algorithm` | `heuristic`、`noop` | `heuristic` |
+
+`hybrid_mode` 仅在 `hybrid_search: true` 时生效。使用 `hybrid_mode: rerank` 或 `algorithm: recency_semantic` 的旧配置将无法启动。请分别改为 `weighted` 和 `heuristic`，这两个值与旧值的实际运行行为相同。
+
 ### 向量存储 {#vector-store}
 
 ```yaml
