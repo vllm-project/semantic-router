@@ -48,14 +48,12 @@ make benchmark-cache-comparison
 make benchmark-hybrid-vs-milvus
 make benchmark-redis
 make benchmark-valkey
-
-# Native inference implementations
-make benchmark-openvino-classifier
-make benchmark-openvino-embedding
-make benchmark-openvino-vs-candle
 ```
 
-不要把存储或绑定比较解释为端到端路由结果。
+模型延迟和吞吐量由模型运行时的基准按模型测量，记录位于
+[`src/model-runtime/docs/records`](https://github.com/vllm-project/semantic-router/tree/main/src/model-runtime/docs/records)。
+
+不要把存储或模型比较解释为端到端路由结果。
 网络位置、预热、数据集形状、模型文件和主机争用都会改变结果。
 
 ## 报告结果 {#reporting-results}
