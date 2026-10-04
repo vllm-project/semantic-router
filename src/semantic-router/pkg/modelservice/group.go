@@ -194,6 +194,11 @@ func (g *group) refresh(ctx context.Context) {
 					"process": g.plan.name, "model": served.name, "deployments": served.deployments, "ready": ready, "state": state,
 				})
 			}
+			if state == "incompatible" && served.state != state {
+				logging.ComponentWarnEvent("model_runtime", "runtime_contract_incompatible", map[string]interface{}{
+					"process": g.plan.name, "model": served.name, "deployments": served.deployments, "reason": reason,
+				})
+			}
 			served.ready.Store(ready)
 			served.state, served.reason = state, reason
 			for _, deployment := range served.deployments {
@@ -293,7 +298,8 @@ func (g *group) broadcastLocked() {
 }
 
 // waitCard waits until a model is ready and returns its card. A failed model,
-// a process that cannot start, or repeated failed loads end the wait at once;
+// a runtime of another contract major, a process that cannot start, or
+// repeated failed loads end the wait at once;
 // only while the group recycles a process whose every model failed does the
 // wait continue.
 func (g *group) waitCard(ctx context.Context, model string) (ModelCard, error) {
@@ -313,6 +319,11 @@ func (g *group) waitCard(ctx context.Context, model string) (ModelCard, error) {
 			reason := served.reason
 			g.mu.Unlock()
 			return ModelCard{}, fmt.Errorf("%w: model %s failed to load: %s", ErrUnavailable, model, reason)
+		}
+		if served.state == "incompatible" {
+			reason := served.reason
+			g.mu.Unlock()
+			return ModelCard{}, fmt.Errorf("%w: model %s: %s", ErrUnavailable, model, reason)
 		}
 		if g.failure != nil {
 			err := g.failure

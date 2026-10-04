@@ -46,19 +46,24 @@ type Model struct {
 
 // Runtime is the fake runtime state; Handler serves it.
 type Runtime struct {
-	mu       sync.Mutex
-	models   map[string]Model
-	ready    map[string]bool
-	failed   map[string]string
-	delay    time.Duration
-	bundles  int
-	tasks    int
-	surfaces map[string]int
+	mu         sync.Mutex
+	models     map[string]Model
+	ready      map[string]bool
+	failed     map[string]string
+	apiVersion string
+	delay      time.Duration
+	bundles    int
+	tasks      int
+	surfaces   map[string]int
 }
+
+// APIVersion is the contract version the fake serves unless SetAPIVersion
+// changes it.
+const APIVersion = "2.0.0"
 
 // New serves models, all ready.
 func New(models ...Model) *Runtime {
-	r := &Runtime{models: make(map[string]Model), ready: make(map[string]bool), failed: make(map[string]string), surfaces: make(map[string]int)}
+	r := &Runtime{models: make(map[string]Model), ready: make(map[string]bool), failed: make(map[string]string), apiVersion: APIVersion, surfaces: make(map[string]int)}
 	for _, model := range models {
 		if model.MaxInputTokens == 0 {
 			model.MaxInputTokens = 8192
@@ -87,6 +92,13 @@ func (r *Runtime) SetFailed(id, reason string) {
 	defer r.mu.Unlock()
 	r.ready[id] = false
 	r.failed[id] = reason
+}
+
+// SetAPIVersion changes the contract version /health and /v1/models report.
+func (r *Runtime) SetAPIVersion(version string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.apiVersion = version
 }
 
 // SetDelay delays every surface answer (deadline tests).
@@ -178,8 +190,9 @@ func (r *Runtime) health(w http.ResponseWriter, _ *http.Request) {
 		everyReady = everyReady && health.Status == "ready"
 		models[id] = health
 	}
+	apiVersion := r.apiVersion
 	r.mu.Unlock()
-	health := api.Health{Status: api.HealthStatus("ready"), Models: &models}
+	health := api.Health{ApiVersion: apiVersion, Status: api.HealthStatus("ready"), Models: &models}
 	status := http.StatusOK
 	if !everyReady {
 		health.Status, status = api.HealthStatus("degraded"), http.StatusServiceUnavailable
@@ -198,8 +211,9 @@ func (r *Runtime) listModels(w http.ResponseWriter, _ *http.Request) {
 	for _, id := range ids {
 		cards = append(cards, r.card(r.models[id], r.ready[id]))
 	}
+	apiVersion := r.apiVersion
 	r.mu.Unlock()
-	write(w, http.StatusOK, api.ModelList{Object: "list", Data: cards}, nil)
+	write(w, http.StatusOK, api.ModelList{ApiVersion: apiVersion, Object: "list", Data: cards}, nil)
 }
 
 func (r *Runtime) card(model Model, ready bool) api.ModelCard {

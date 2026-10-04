@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/runtimetest"
 )
@@ -390,6 +392,57 @@ func TestCardFailsFastWhenTheRuntimeCommandCannotRun(t *testing.T) {
 	}
 	if time.Since(started) > 5*time.Second {
 		t.Fatal("the failure must not wait for the deadline")
+	}
+}
+
+func TestCardRefusesARuntimeOfAnotherContractMajor(t *testing.T) {
+	for _, version := range []string{"3.0.0", ""} {
+		runtime := fakeModels([]modelEntry{{Name: "decider", Model: "vllm-sr/Decision-2.0-Kai-0.6B"}})
+		runtime.SetAPIVersion(version)
+		server := httptest.NewServer(runtime.Handler())
+		manager := NewManager()
+		lease, err := manager.Acquire(runtimeConfig(map[string]config.ModelDeployment{
+			"decider": {Provider: config.ModelRuntimeProvider, Endpoint: server.URL},
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		started := time.Now()
+		_, err = lease.Card(ctx, "decider")
+		cancel()
+		if !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "this router speaks "+RuntimeAPIMajor+".x") {
+			t.Fatalf("api_version %q must be refused, got %v", version, err)
+		}
+		if time.Since(started) > 5*time.Second {
+			t.Fatal("the refusal must not wait for the deadline")
+		}
+		if statuses := lease.Statuses(); statuses[0].Ready || statuses[0].State != "incompatible" {
+			t.Fatalf("the deployment reports the incompatible contract: %+v", statuses)
+		}
+		_ = manager.Shutdown(context.Background())
+		server.Close()
+	}
+}
+
+func TestRuntimeAPIMajorIsTheContractsMajor(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "model-runtime", "vllm_sr_runtime", "api", "openapi.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec struct {
+		Info struct {
+			Version string `yaml:"version"`
+		} `yaml:"info"`
+	}
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if major, _, _ := strings.Cut(spec.Info.Version, "."); major != RuntimeAPIMajor {
+		t.Fatalf("openapi.yaml info.version %s: RuntimeAPIMajor is %s; regenerate the client and move the constant together", spec.Info.Version, RuntimeAPIMajor)
+	}
+	if major, _, _ := strings.Cut(runtimetest.APIVersion, "."); major != RuntimeAPIMajor {
+		t.Fatalf("the fake serves %s", runtimetest.APIVersion)
 	}
 }
 
