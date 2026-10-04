@@ -55,7 +55,7 @@ routing:
 		}
 	}
 	for _, spec := range specs {
-		if spec.RepoID != "llm-semantic-router/Vela-1.0-Encoder-307M-PII" {
+		if spec.RepoID != "vllm-sr/Vela-1.0-Encoder-307M-PII" {
 			continue
 		}
 		for _, name := range spec.RequiredFiles {
