@@ -22,7 +22,11 @@ interface SafetySectionHeaderProps {
 }
 
 /** Toggle for the Safety section. Extracted to keep the section body on its own seam. */
-const SafetySectionHeader: React.FC<SafetySectionHeaderProps> = ({ expanded, bodyId, onToggle }) => (
+const SafetySectionHeader: React.FC<SafetySectionHeaderProps> = ({
+  expanded,
+  bodyId,
+  onToggle,
+}) => (
   <button
     type="button"
     className={styles.gsSectionHeader}
@@ -158,7 +162,6 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
                           ...hallucinationModel,
                           threshold: getNum(hallucinationModel, 'threshold', 0.5),
                         },
-                        use_nli: getBool(current, 'use_nli', false),
                       })
                     } else {
                       onSetField('hallucination_mitigation', {
@@ -212,23 +215,6 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
                       )
                     }
                   />
-                </div>
-                <div className={styles.gsRow}>
-                  <label className={styles.gsLabel}>NLI Model</label>
-                  <label className={styles.gsCheckbox}>
-                    <input
-                      type="checkbox"
-                      checked={getBool(hallucination, 'use_nli', false)}
-                      onChange={(event) =>
-                        onSetNestedField(
-                          'hallucination_mitigation',
-                          'use_nli',
-                          event.target.checked,
-                        )
-                      }
-                    />
-                    <span>Enhanced explanations</span>
-                  </label>
                 </div>
               </div>
             )}
