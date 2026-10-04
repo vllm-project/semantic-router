@@ -627,6 +627,15 @@ bounds jobs and pending tokens per model and answers 429 at once, for a whole
 group or none of it. On CPU, workers of different models share the process's
 intra-op thread pool (`--threads`).
 
+A model whose batches need no device thread (`device_thread = False`, today
+the ONNX Runtime Omni family) skips the hand-off to its worker when it is
+idle: a lone request planned off the event loop runs on its planning thread
+when nothing is queued or planned and the worker is not running a batch. The
+caller and the worker each own the model while they run batches, so one model
+never runs two forwards at once, and the event loop never runs one. Once
+another job is queued the caller stops after its forward in flight and the
+worker runs the rest in expected-finish order with the new arrivals.
+
 ## 10. Placement and supervision
 
 ### 10.1 Placement

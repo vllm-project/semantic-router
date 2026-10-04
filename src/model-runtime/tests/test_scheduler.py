@@ -432,6 +432,50 @@ def test_short_requests_run_between_the_batches_of_a_long_one(monkeypatch):
         scheduler.stop()
 
 
+class GatedCallerModel(GatedModel):
+    """A gated model whose batches may run on the calling thread."""
+
+    device_thread = False
+
+    def __init__(self, budget=None, gates=None):
+        super().__init__(budget=budget, gates=gates)
+        self.threads = []
+
+    def run(self, items):
+        self.threads.append(threading.current_thread().name)
+        return super().run(items)
+
+
+def test_a_caller_leaves_its_remaining_batches_to_the_worker_when_work_arrives(
+    monkeypatch,
+):
+    monkeypatch.setattr(scheduler_module, "COST_SMOOTHING", 0.0)
+    gate = threading.Event()
+    model = GatedCallerModel(budget=64, gates={"long0": gate})
+    scheduler = started(model, token_cost=1e-2)
+    ran = {}
+
+    def caller():
+        ran["futures"] = scheduler.run_now(
+            [[item("long0", 64), item("long1", 64)]], deadline=None, profile="exact"
+        )
+
+    thread = threading.Thread(target=caller, name="caller")
+    try:
+        thread.start()
+        assert model.entered.wait(5)
+        short = scheduler.submit([item("short", 8)], deadline=None, profile="exact")
+        gate.set()
+        thread.join(5)
+        assert short.result(timeout=5) == [[0.0, 8.0]]
+        assert ran["futures"][0].result(timeout=5) == [[0.0, 64.0], [0.0, 64.0]]
+        assert model.calls == [["long0"], ["short"], ["long1"]]
+        assert model.threads == ["caller"] + ["vllm-sr-runtime-worker"] * 2
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
 def test_a_long_job_runs_before_work_queued_after_its_expected_finish(monkeypatch):
     monkeypatch.setattr(scheduler_module, "COST_SMOOTHING", 0.0)
     gate = threading.Event()
