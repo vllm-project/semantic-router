@@ -200,4 +200,4 @@ model, replace `artifact` and `device` with its address, for example
   [detect PII](./guides/pii.md), [stop prompt attacks](./guides/safety.md),
   [use embeddings](./guides/embeddings.md)
 - [Run it with the router](./deploy.md): GPUs, Kubernetes, sharing a runtime
-- [Troubleshooting](./troubleshooting.md)
+- [Troubleshooting](model-runtime/troubleshooting.md)

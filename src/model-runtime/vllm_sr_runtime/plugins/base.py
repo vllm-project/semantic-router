@@ -205,7 +205,10 @@ class EngineOptions:
     """Execution switches a profile may change. Defaults are the exact path.
 
     ``reduced_precision`` loads, next to the exact weights, the reduced copy the
-    model's ``DtypePolicy`` consents to on its device.
+    model's ``DtypePolicy`` consents to on its device. ``exclusive_cpu`` is False
+    when the process serves other CPU models: an engine then must not leave
+    threads spinning on the cores after a run, since they slow the next model's
+    forward.
     """
 
     graphs: bool = True
@@ -214,6 +217,7 @@ class EngineOptions:
     merge_lora: bool = False
     reduced_precision: bool = False
     threads: int | None = None
+    exclusive_cpu: bool = True
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -570,8 +574,9 @@ class LoadedModel(ABC):
 
     ``device_thread`` False says ``run`` never starts a parallel torch op (an
     ONNX Runtime engine with NumPy readouts): the scheduler then calls it on
-    the model's worker instead of handing each batch to the CPU device thread,
-    which saves a thread wake-up each way.
+    the model's worker, or on the request's planning thread while the model is
+    idle, instead of handing each batch to the CPU device thread, which saves a
+    thread wake-up each way.
     """
 
     info: ModelInfo

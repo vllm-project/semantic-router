@@ -120,13 +120,43 @@ def test_gpu_sessions_never_fall_back_to_the_cpu():
         providers.ProviderChoice("CUDAExecutionProvider"), 2
     )
     assert gpu.get_session_config_entry("session.disable_cpu_ep_fallback") == "1"
-    cpu = providers.session_options(
-        providers.ProviderChoice("CPUExecutionProvider"), 2, False
-    )
-    assert cpu.get_session_config_entry("session.intra_op.allow_spinning") == "0"
-    assert cpu.use_per_session_threads is False or (
-        cpu.intra_op_num_threads == 2 and cpu.inter_op_num_threads == 1
-    )
+
+
+def test_cpu_sessions_sharing_the_process_get_own_pools_that_never_spin(monkeypatch):
+    choice = providers.ProviderChoice("CPUExecutionProvider")
+    monkeypatch.setattr(providers, "_SHARED_POOL", {})
+    shared = providers.session_options(choice, 2, exclusive_cpu=False)
+    assert providers._SHARED_POOL == {}
+    assert shared.intra_op_num_threads == 2 and shared.inter_op_num_threads == 1
+    assert shared.get_session_config_entry("session.intra_op.allow_spinning") == "0"
+    monkeypatch.setattr(providers, "_SHARED_POOL", {"size": 4})
+    pooled = providers.session_options(choice, 2, exclusive_cpu=False)
+    assert pooled.use_per_session_threads is False
+    exclusive = providers.session_options(choice, 2)
+    assert exclusive.use_per_session_threads is False
+
+
+def test_the_engine_tells_sessions_whether_the_process_shares_the_cpu(
+    tmp_path, monkeypatch
+):
+    seen = []
+    options = providers.session_options
+
+    def recording(choice, threads, exclusive_cpu=True):
+        seen.append(exclusive_cpu)
+        return options(choice, threads, exclusive_cpu)
+
+    monkeypatch.setattr(providers, "session_options", recording)
+    path = onnx_graphs.token_graph(tmp_path / "model.onnx")
+    engine = OnnxRuntimeEngine()
+    for exclusive in (True, False):
+        engine.load(
+            spec({"default": path}),
+            CPUAccelerator(),
+            CPU,
+            EngineOptions(threads=2, exclusive_cpu=exclusive),
+        )
+    assert seen == [True, False]
 
 
 def test_unsupported_specs_say_why(tmp_path):

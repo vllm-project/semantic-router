@@ -154,6 +154,114 @@ def test_device_faults_fail_the_request_and_are_recorded():
         scheduler.stop()
 
 
+class WorkerModel(FakeModel):
+    """Runs on any thread; records the threads and the most batches in flight at once."""
+
+    device_thread = False
+
+    def __init__(self, gate=None, hold=0.0):
+        super().__init__(gate=gate)
+        self.hold = hold
+        self.threads = []
+        self.inside = 0
+        self.most = 0
+        self.count_lock = threading.Lock()
+
+    def run(self, items):
+        with self.count_lock:
+            self.inside += 1
+            self.most = max(self.most, self.inside)
+            self.threads.append(threading.current_thread().name)
+        try:
+            time.sleep(self.hold)
+            return super().run(items)
+        finally:
+            with self.count_lock:
+                self.inside -= 1
+
+
+def test_an_idle_scheduler_runs_the_group_on_the_calling_thread():
+    model = WorkerModel()
+    scheduler = Scheduler(model, {"exact": ExactProfile()})
+    scheduler.start()
+    try:
+        futures = scheduler.run_now(
+            [[item("a", 4)], [item("b", 6)]], deadline=None, profile="exact"
+        )
+        assert futures is not None and all(future.done() for future in futures)
+        assert [future.result() for future in futures] == [
+            [[0.0, 4.0]],
+            [[0.0, 6.0]],
+        ]
+        assert set(model.threads) == {threading.current_thread().name}
+        expired = scheduler.run_now(
+            [[item("c", 4)]], deadline=time.monotonic() - 1, profile="exact"
+        )
+        assert expired[0].result() is DEADLINE
+    finally:
+        scheduler.stop()
+
+
+def test_run_now_declines_device_thread_models_and_a_busy_scheduler():
+    assert (
+        Scheduler(FakeModel(), {"exact": ExactProfile()}).run_now(
+            [[item("a", 4)]], deadline=None, profile="exact"
+        )
+        is None
+    )
+    gate = threading.Event()
+    model = WorkerModel(gate=gate)
+    scheduler = Scheduler(model, {"exact": ExactProfile()})
+    scheduler.start()
+    try:
+        running = scheduler.submit([item("a", 4)], deadline=None, profile="exact")
+        while not model.threads:
+            time.sleep(0.001)
+        assert (
+            scheduler.run_now([[item("b", 4)]], deadline=None, profile="exact") is None
+        )
+        queued = scheduler.submit([item("c", 4)], deadline=None, profile="exact")
+        assert (
+            scheduler.run_now([[item("d", 4)]], deadline=None, profile="exact") is None
+        )
+        gate.set()
+        assert running.result(timeout=5) and queued.result(timeout=5)
+        assert model.threads == ["vllm-sr-runtime-worker"] * 2
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
+def test_callers_and_the_worker_never_run_one_model_at_once():
+    model = WorkerModel(hold=0.0005)
+    scheduler = Scheduler(model, {"exact": ExactProfile()})
+    scheduler.start()
+    answers = []
+
+    def caller(index):
+        for round_ in range(60):
+            length = 4 + (index * 60 + round_) % 7
+            items = [[item(f"{index}-{round_}", length)]]
+            futures = scheduler.run_now(items, deadline=None, profile="exact")
+            if futures is None:
+                futures = [scheduler.submit(items[0], deadline=None, profile="exact")]
+            answers.append((length, futures[0].result(timeout=10)))
+
+    try:
+        threads = [threading.Thread(target=caller, args=(i,)) for i in range(3)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    finally:
+        scheduler.stop()
+    assert model.most == 1
+    assert len(answers) == 180
+    assert all(result == [[0.0, float(length)]] for length, result in answers)
+    assert "vllm-sr-runtime-worker" in model.threads
+    assert len(set(model.threads)) > 1
+
+
 def test_batching_window_coalesces_concurrent_requests():
     model = FakeModel()
     scheduler = Scheduler(
@@ -319,6 +427,50 @@ def test_short_requests_run_between_the_batches_of_a_long_one(monkeypatch):
         short.result(timeout=5)
         long.result(timeout=5)
         assert model.calls == [["long0"], ["short"], ["long1"]]
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
+class GatedCallerModel(GatedModel):
+    """A gated model whose batches may run on the calling thread."""
+
+    device_thread = False
+
+    def __init__(self, budget=None, gates=None):
+        super().__init__(budget=budget, gates=gates)
+        self.threads = []
+
+    def run(self, items):
+        self.threads.append(threading.current_thread().name)
+        return super().run(items)
+
+
+def test_a_caller_leaves_its_remaining_batches_to_the_worker_when_work_arrives(
+    monkeypatch,
+):
+    monkeypatch.setattr(scheduler_module, "COST_SMOOTHING", 0.0)
+    gate = threading.Event()
+    model = GatedCallerModel(budget=64, gates={"long0": gate})
+    scheduler = started(model, token_cost=1e-2)
+    ran = {}
+
+    def caller():
+        ran["futures"] = scheduler.run_now(
+            [[item("long0", 64), item("long1", 64)]], deadline=None, profile="exact"
+        )
+
+    thread = threading.Thread(target=caller, name="caller")
+    try:
+        thread.start()
+        assert model.entered.wait(5)
+        short = scheduler.submit([item("short", 8)], deadline=None, profile="exact")
+        gate.set()
+        thread.join(5)
+        assert short.result(timeout=5) == [[0.0, 8.0]]
+        assert ran["futures"][0].result(timeout=5) == [[0.0, 64.0], [0.0, 64.0]]
+        assert model.calls == [["long0"], ["short"], ["long1"]]
+        assert model.threads == ["caller"] + ["vllm-sr-runtime-worker"] * 2
     finally:
         gate.set()
         scheduler.stop()

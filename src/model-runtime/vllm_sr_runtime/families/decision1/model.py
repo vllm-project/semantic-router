@@ -16,10 +16,9 @@ from typing import Any, ClassVar
 import torch
 
 from ...errors import INVALID_QUESTION, MAX_LENGTH_EXCEEDED, QuestionError
-from ...heads.candidate import logits
+from ...heads.candidate import forward_logits
 from ...plugins.base import (
     EngineModel,
-    ForwardBatch,
     LoadedModel,
     ModelInfo,
     ModelSpec,
@@ -261,17 +260,12 @@ class QwenDecisionModel(Decision1Model):
         self, items: list[RenderedItem], shared_prefix: int = 0
     ) -> list[list[float] | None]:
         batch = segments.collate(items, self.tokenizer.pad_id, qwen.PAD_MULTIPLE)
-        output = self.engine_model.forward(
-            ForwardBatch(
-                input_ids=batch["input_ids"],
-                attention_mask=batch["attention_mask"],
-                gather=batch["candidate_positions"],
-                query=batch["query_positions"],
-                lengths=[len(item.ids) for item in items],
-                shared_prefix=shared_prefix,
-            )
+        scores = forward_logits(
+            self.engine_model,
+            self.head,
+            batch,
+            [len(item.ids) for item in items],
+            shared_prefix,
         )
-        mask = batch["candidate_mask"].to(output.gathered.device)
         with torch.inference_mode():
-            scores = logits(self.head, output.gathered, output.query, mask)
             return qwen.probabilities(scores, items, self.temperatures)

@@ -198,7 +198,7 @@ At startup the router waits until the task models its routes use have
 loaded: domain, PII, guard, safety, fact-check, feedback and hallucination
 models, and your own classifiers. If one of them fails to load, the router
 does not start, and its log names the model and the reason (see
-[Troubleshooting](./troubleshooting.md#the-runtime-reports-failed)). This
+[Troubleshooting](model-runtime/troubleshooting.md#the-runtime-reports-failed)). This
 holds for an attached runtime too, so start it before the router. Decision
 models do not hold up the start: until one answers, its signals are unknown.
 

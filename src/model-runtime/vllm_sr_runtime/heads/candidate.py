@@ -14,6 +14,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from ..plugins.base import EngineModel, ForwardBatch
+
 HEAD_TENSORS = {
     "candidate_norm.weight",
     "candidate_norm.bias",
@@ -77,3 +79,26 @@ def logits(
     """Candidate logits with padded option slots set to -inf (the scored model's output)."""
     scores = head(gathered, query)
     return scores.masked_fill(~mask, -float("inf"))
+
+
+def forward_logits(
+    engine_model: EngineModel,
+    head: CandidateHead,
+    batch: dict[str, torch.Tensor],
+    lengths: list[int],
+    shared_prefix: int,
+) -> torch.Tensor:
+    """A collated decision batch through the backbone, then the candidate logits."""
+    output = engine_model.forward(
+        ForwardBatch(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+            gather=batch["candidate_positions"],
+            query=batch["query_positions"],
+            lengths=lengths,
+            shared_prefix=shared_prefix,
+        )
+    )
+    mask = batch["candidate_mask"].to(output.gathered.device)
+    with torch.inference_mode():
+        return logits(head, output.gathered, output.query, mask)
