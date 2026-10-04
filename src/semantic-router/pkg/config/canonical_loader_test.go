@@ -565,20 +565,11 @@ global:
 	if cfg.CategoryModel.ModelID != "models/Vela-1.0-Encoder-307M-Domain" {
 		t.Fatalf("expected sparse category override to keep default system model, got %q", cfg.CategoryModel.ModelID)
 	}
-	if cfg.CategoryModel.Variant != CategoryVariantMmBERT32K || cfg.CategoryModel.UseMmBERT32K {
-		t.Fatalf("expected sparse category override to keep canonical mmBERT-32K variant, got variant=%q legacy=%v", cfg.CategoryModel.Variant, cfg.CategoryModel.UseMmBERT32K)
-	}
 	if cfg.PIIModel.ModelID != "models/Vela-1.0-Encoder-307M-PII" {
 		t.Fatalf("expected sparse PII override to keep default system model, got %q", cfg.PIIModel.ModelID)
 	}
-	if !cfg.PIIModel.UseMmBERT32K {
-		t.Fatal("expected sparse PII override to keep mmBERT-32K enabled")
-	}
 	if cfg.PromptGuard.ModelID != "models/Vela-1.0-Encoder-307M-Guard" {
 		t.Fatalf("expected sparse prompt-guard override to keep default system model, got %q", cfg.PromptGuard.ModelID)
-	}
-	if cfg.PromptGuard.Variant != PromptGuardVariantMmBERT32K {
-		t.Fatal("expected sparse prompt-guard override to keep mmBERT-32K enabled")
 	}
 	if !cfg.Classifier.PreferenceModel.ContrastiveEnabled() {
 		t.Fatal("expected sparse classifier override to preserve default preference contrastive mode")
@@ -875,12 +866,10 @@ global:
           model_ref: ""
           model_id: ""
           category_mapping_path: ""
-          use_mmbert_32k: false
         pii:
           model_ref: ""
           model_id: ""
           pii_mapping_path: ""
-          use_mmbert_32k: false
 `)
 
 	cfg, err := ParseYAMLBytes(canonicalYAML)
@@ -894,17 +883,11 @@ global:
 	if cfg.CategoryMappingPath != "" {
 		t.Fatalf("expected category mapping path to be cleared, got %q", cfg.CategoryMappingPath)
 	}
-	if cfg.CategoryModel.UseMmBERT32K {
-		t.Fatal("expected domain classifier mmBERT-32K default to be disabled")
-	}
 	if cfg.PIIModel.ModelID != "" {
 		t.Fatalf("expected PII classifier model to be cleared, got %q", cfg.PIIModel.ModelID)
 	}
 	if cfg.PIIMappingPath != "" {
 		t.Fatalf("expected PII mapping path to be cleared, got %q", cfg.PIIMappingPath)
-	}
-	if cfg.PIIModel.UseMmBERT32K {
-		t.Fatal("expected PII classifier mmBERT-32K default to be disabled")
 	}
 	if cfg.PromptGuard.Enabled {
 		t.Fatal("expected prompt guard to be disabled")

@@ -115,7 +115,6 @@ func TestDefaultPIIWindowPreservesExplicitPolicies(t *testing.T) {
 			c.PIIModel.Window = &config.SequenceHeadWindowConfig{Size: 128, Overlap: 63}
 		},
 		"remote":   func(c *config.RouterConfig) { c.PIIModel.Backend = &config.RemoteClassifierBackend{} },
-		"adapter":  func(c *config.RouterConfig) { c.PIIModel.UseMmBERT32K = false },
 		"disabled": func(c *config.RouterConfig) { v := false; c.PIIModel.Enabled = &v },
 	} {
 		t.Run(name, func(t *testing.T) {

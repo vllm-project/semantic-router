@@ -48,7 +48,7 @@ func (c *RouterConfig) implicitModule(consumer string) (moduleModel, bool) {
 			return local(consumer, classifier.ModelPath, classifier.UseCPU)
 		}
 	case "hallucination_detector":
-		if c.HallucinationMitigation.HallucinationModel.NormalizedBackend() == HallucinationBackendCandle {
+		if c.HallucinationMitigation.HallucinationModel.NormalizedBackend() == HallucinationBackendLocal {
 			return local(consumer, c.HallucinationMitigation.HallucinationModel.ModelID, c.HallucinationMitigation.HallucinationModel.UseCPU)
 		}
 	}
@@ -89,7 +89,7 @@ func (c *RouterConfig) ImplicitTaskDeployment(consumer string) (name string, dep
 // or alias) at its pinned revision, or a local package directory. It runs on
 // CPU when useCPU, else on the best available device.
 func ImplicitModelRuntimeDeployment(model string, useCPU bool) (ModelDeployment, error) {
-	deployment := ModelDeployment{Provider: ModelRuntimeProvider, Device: "auto", Profile: "exact", Precision: "native"}
+	deployment := ModelDeployment{Provider: ModelRuntimeProvider, Device: "auto", Profile: "exact"}
 	if useCPU {
 		deployment.Device = "cpu"
 	}
@@ -138,6 +138,24 @@ func implicitTaskDeploymentsInUse(cfg *RouterConfig, plan *ModelBindingPlan) map
 		}
 	}
 	return used
+}
+
+// RuntimeServedModelPaths lists the resolved local paths of the built-in
+// models that the scope's module consumers run through implicit model_runtime
+// deployments: the runtime downloads them at their pinned revisions, so the
+// router does not. Any other module model is a local package directory.
+func (c *RouterConfig) RuntimeServedModelPaths() map[string]bool {
+	paths := make(map[string]bool)
+	for _, consumer := range c.implicitConsumers() {
+		module, ok := c.implicitModule(consumer)
+		if !ok {
+			continue
+		}
+		if spec := GetModelByPath(strings.TrimSpace(module.model)); spec != nil && servedBuiltIn(spec) {
+			paths[ResolveModelPath(module.model)] = true
+		}
+	}
+	return paths
 }
 
 // implicitConsumers lists the task consumers a scope's modules and rules may run.

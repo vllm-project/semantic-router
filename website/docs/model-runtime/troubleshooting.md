@@ -53,7 +53,11 @@ The model is probably not ready yet, or its answers arrive too late.
 
 ## The runtime reports `failed`
 
-`GET /v1/models` shows the reason for each model. The common ones:
+`GET /v1/models` shows the reason for each model. When the router runs the
+model, its log carries the same reason, for example
+`model runtime is not ready: model @domain_classifier failed to load: ...`,
+and a task model that fails this way stops the router from starting. The
+common reasons:
 
 | Reason says | Do this |
 | --- | --- |

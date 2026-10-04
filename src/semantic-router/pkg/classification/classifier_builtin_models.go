@@ -11,7 +11,7 @@ import (
 // IsCategoryEnabled checks if category classification is properly configured.
 func (c *Classifier) IsCategoryEnabled() bool {
 	modelConfigured := c.Config.CategoryModel.ModelID != "" || c.Config.CategoryModel.Backend != nil
-	return c.Config.CategoryModel.Active() && modelConfigured && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
+	return c.Config.CategoryModel.Active() && modelConfigured && c.CategoryMapping != nil
 }
 
 // initializeCategoryClassifier initializes the category classification model.
@@ -49,7 +49,7 @@ func (c *Classifier) IsJailbreakEnabled() bool {
 		return c.Config.PromptGuard.JailbreakMappingPath != "" && c.jailbreakInference != nil
 	}
 
-	return c.Config.PromptGuard.ModelID != "" && c.Config.PromptGuard.JailbreakMappingPath != ""
+	return c.Config.PromptGuard.ModelID != ""
 }
 
 // initializeJailbreakClassifier initializes the jailbreak classification model.
@@ -195,7 +195,7 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(ctx context.Context
 // IsPIIEnabled checks if PII detection is properly configured.
 func (c *Classifier) IsPIIEnabled() bool {
 	modelConfigured := c.Config.PIIModel.ModelID != "" || c.Config.PIIModel.Backend != nil
-	return c.Config.PIIModel.Active() && modelConfigured && c.Config.PIIMappingPath != "" && c.PIIMapping != nil
+	return c.Config.PIIModel.Active() && modelConfigured && c.PIIMapping != nil
 }
 
 // initializePIIClassifier initializes the PII token classification model.

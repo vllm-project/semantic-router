@@ -138,9 +138,9 @@ global:
   model_catalog:
     deployments:
       classifier:
-        artifact: models/classifier
-        provider: ort
-        device: migraphx:0
+        artifact: /models/classifier
+        provider: model_runtime
+        device: rocm:0
         input:
           max_tokens: 8192
           overflow: reject

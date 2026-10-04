@@ -67,20 +67,10 @@ var optionalModelFeatureGates = []modelFeatureGate{
 		enabled: func(cfg *config.RouterConfig) bool {
 			return cfg.NeedsLocalHallucinationModelsForRouting() ||
 				(cfg.NeedsHallucinationDetectorForDefaultRuntime() &&
-					cfg.HallucinationMitigation.HallucinationModel.NormalizedBackend() == config.HallucinationBackendCandle)
+					cfg.HallucinationMitigation.HallucinationModel.NormalizedBackend() == config.HallucinationBackendLocal)
 		},
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{cfg.HallucinationMitigation.HallucinationModel.ModelID}
-		},
-	},
-	{
-		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.NeedsLocalHallucinationNLIForAPI() ||
-				cfg.NeedsLocalHallucinationNLIForRouting() ||
-				cfg.NeedsLocalNLIForSemanticCache()
-		},
-		paths: func(cfg *config.RouterConfig) []string {
-			return []string{cfg.HallucinationMitigation.NLIModel.ModelID}
 		},
 	},
 	{

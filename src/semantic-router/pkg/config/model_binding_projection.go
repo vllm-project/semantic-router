@@ -40,11 +40,6 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 			scoped.CategoryModel.ModelID = artifact
 			scoped.CategoryModel.MaxSequenceLength = spec.Deployment.Input.MaxTokens
 			scoped.CategoryModel.Backend = remote
-			// The provider adapter is already validated/resolved separately. These
-			// legacy family flags must not override an explicit recipe binding.
-			scoped.CategoryModel.Variant = ""
-			scoped.CategoryModel.UseModernBERT = false
-			scoped.CategoryModel.UseMmBERT32K = false
 			if mapping != "" {
 				scoped.CategoryMappingPath = mapping
 			}
@@ -59,7 +54,6 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 			scoped.PromptGuard.ModelID = artifact
 			scoped.PromptGuard.MaxSequenceLength = spec.Deployment.Input.MaxTokens
 			scoped.PromptGuard.Backend = remote
-			scoped.PromptGuard.Variant = ""
 			if mapping != "" {
 				scoped.PromptGuard.JailbreakMappingPath = mapping
 			}
@@ -87,7 +81,7 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 				scoped.HallucinationMitigation.HallucinationModel.ModelID = external.ModelName
 				scoped.HallucinationMitigation.HallucinationModel.Backend = HallucinationBackendEndpoint
 			} else {
-				scoped.HallucinationMitigation.HallucinationModel.Backend = "candle"
+				scoped.HallucinationMitigation.HallucinationModel.Backend = HallucinationBackendLocal
 				scoped.HallucinationMitigation.HallucinationModel.Endpoint = ""
 			}
 		case "modality_detector":
@@ -97,8 +91,6 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 				classifier.MaxSequenceLength = spec.Deployment.Input.MaxTokens
 				scoped.ModalityDetector.Classifier = &classifier
 			}
-		case "hallucination_explainer":
-			scoped.HallucinationMitigation.NLIModel.ModelID = artifact
 		}
 	}
 	return &scoped, nil

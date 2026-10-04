@@ -57,13 +57,6 @@ func validateRoutingStrategy(cfg *RouterConfig) error {
 	return cfg.Strategy.Validate()
 }
 
-// validPromptGuardVariants is the set of recognized PromptGuardConfig.Variant values.
-var validPromptGuardVariants = map[string]bool{
-	"":                          true, // unset defaults to PromptGuardVariantMmBERT32K under canonical resolution
-	PromptGuardVariantCandle:    true,
-	PromptGuardVariantMmBERT32K: true,
-}
-
 // prompt_guard backend validation lives in validator_prompt_guard.go.
 
 // isValidIPv4 checks if the address is a valid IPv4 address
