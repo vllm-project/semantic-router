@@ -40,6 +40,7 @@ import asyncio
 import base64
 import json
 import os
+import random
 import statistics
 import struct
 import subprocess
@@ -799,6 +800,7 @@ def run_ab(args: argparse.Namespace) -> None:
                 side: statistics.median(windows)
                 for side, windows in values.get("throughput", {}).items()
             },
+            "runtime_minus_legacy_ci95": intervals(values),
         }
         for job, values in report.items()
     }
@@ -809,7 +811,14 @@ def run_ab(args: argparse.Namespace) -> None:
         }
         for job, values in report.items()
     }
-    record = {job: {**summary[job], "latency_ms": calls_ms[job]} for job in summary}
+    record = {
+        job: {
+            **summary[job],
+            "latency_ms": calls_ms[job],
+            "windows_per_s": report[job].get("throughput", {}),
+        }
+        for job in summary
+    }
     Path(args.out).write_text(json.dumps(record) + "\n", encoding="utf-8")
     print(json.dumps(summary))
 
@@ -817,6 +826,44 @@ def run_ab(args: argparse.Namespace) -> None:
 def latency(lines: Iterable[dict[str, Any]]) -> dict[str, float]:
     values = [ns for line in lines for ns in line["latency_ns"]]
     return {"p50_ms": percentile(values, 0.5), "p95_ms": percentile(values, 0.95)}
+
+
+def intervals(values: dict[str, Any], replicates: int = 2000) -> dict[str, list[float]]:
+    """Paired-bootstrap 95 % intervals of runtime minus legacy.
+
+    Latency resamples the alternating call pairs (p50 / p95 in ms); throughput
+    resamples the rounds, whose two windows ran back to back (median req/s).
+    """
+    rng = random.Random(0)
+
+    def bounds(draws: list[float]) -> list[float]:
+        draws.sort()
+        return [draws[int(0.025 * len(draws))], draws[int(0.975 * len(draws)) - 1]]
+
+    out: dict[str, list[float]] = {}
+    legacy, runtime = values["legacy"], values["runtime"]
+    if legacy:
+        draws = {"p50_ms": [], "p95_ms": []}
+        for _ in range(replicates):
+            picks = rng.choices(range(len(legacy)), k=len(legacy))
+            for name, q in (("p50_ms", 0.5), ("p95_ms", 0.95)):
+                draws[name].append(
+                    percentile([runtime[i] for i in picks], q)
+                    - percentile([legacy[i] for i in picks], q)
+                )
+        out |= {name: bounds(found) for name, found in draws.items()}
+    windows = values.get("throughput", {})
+    rounds = list(zip(windows.get("legacy", []), windows.get("runtime", [])))
+    if len(rounds) > 1:
+        found = []
+        for _ in range(replicates):
+            picks = rng.choices(rounds, k=len(rounds))
+            found.append(
+                statistics.median(r for _, r in picks)
+                - statistics.median(lg for lg, _ in picks)
+            )
+        out["per_s"] = bounds(found)
+    return out
 
 
 def load_summary(load: dict[str, Any] | None) -> dict[str, float] | None:
