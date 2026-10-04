@@ -10,7 +10,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// DeploymentStatus is the observable state of one deployment.
+// DeploymentStatus is the observable state of one deployment. Restarts counts
+// the exits of its managed process; an attached endpoint has none.
 type DeploymentStatus struct {
 	Name     string     `json:"name"`
 	Managed  bool       `json:"managed"`
@@ -20,6 +21,7 @@ type DeploymentStatus struct {
 	Ready    bool       `json:"ready"`
 	State    string     `json:"state"`
 	Reason   string     `json:"reason,omitempty"`
+	Restarts int        `json:"restarts"`
 	Card     *ModelCard `json:"card,omitempty"`
 }
 
