@@ -31,7 +31,7 @@ from .encoder import EncoderGraphs
 from .models.forest import ForestShape
 from .models.lora import attach
 from .models.tree import Tree
-from .reduced import REDUCED_AUTOCAST, linear_bytes, reduced_view
+from .reduced import REDUCED_AUTOCAST, linear_bytes, reduced_view, unavailable
 from .weights import (
     cast_parameters,
     keep_linear_bf16,
@@ -39,6 +39,15 @@ from .weights import (
     load_adapter,
     load_backbone,
 )
+
+
+def graph_receipt(graphs: dict[str | None, EncoderGraphs]) -> dict[str, Any]:
+    """The backbone's graph statistics, each branch's under ``branches``."""
+    out = graphs[None].receipt()
+    branches = {name: g.receipt() for name, g in graphs.items() if name is not None}
+    if branches:
+        out["branches"] = branches
+    return out
 
 
 class NativeEngineModel(EngineModel):
@@ -51,18 +60,35 @@ class NativeEngineModel(EngineModel):
         options: EngineOptions,
         residency: dict[str, int] | None,
         branches: dict[str, nn.Module] | None = None,
-        reduced: tuple[str, nn.Module] | None = None,
+        reduced_kind: str | None = None,
     ):
-        """``reduced`` is the ``(kind, view)`` copy approximate batches may run (``reduced.py``)."""
+        """``reduced_kind`` asks for a reduced copy of every layer stack, which approximate batches run (``reduced.py``).
+
+        A copy the device cannot run is skipped, and the receipt says why.
+        """
         self.backbone = backbone
         self.branches = branches or {}
-        self.reduced_kind, self.reduced = reduced or (None, None)
         self.accelerator = accelerator
         self.device_info = device_info
         self.device = accelerator.torch_device(device_info)
         self.spec = spec
         self.options = options
         self.residency = residency
+        self.reduced_kind = reduced_kind
+        self.reduced_skipped = (
+            None
+            if reduced_kind is None
+            else unavailable(reduced_kind, self.device, device_info.bf16)
+        )
+        # Views are taken before the linears are laid out: they copy nn.Linear layers.
+        self.reduced: dict[str | None, nn.Module] = (
+            {}
+            if reduced_kind is None or self.reduced_skipped
+            else {
+                name: reduced_view(module, reduced_kind)
+                for name, module in self.stacks().items()
+            }
+        )
         self.kernels = accelerator.kernels(device_info)
         self.kernels.allow_approximate = not options.exact_kernels_only
         self.kernels.use_variants(spec.kernel_variants)
@@ -78,20 +104,28 @@ class NativeEngineModel(EngineModel):
             and self.linear.variant == onednn.PACKED
             and self.kernels.select("geglu").variant == CONTIGUOUS
         )
-        for module in (backbone, *self.branches.values(), self.reduced):
-            if module is not None:
-                module.kernels = self.kernels
+        for module in (*self.stacks().values(), *self.reduced.values()):
+            module.kernels = self.kernels
         self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
-        self.encoder_graphs: EncoderGraphs | None = None
-        self.reduced_graphs: EncoderGraphs | None = None
+        self.encoder_graphs: dict[str | None, EncoderGraphs] = {}
+        self.reduced_graphs: dict[str | None, EncoderGraphs] = {}
         if self.device.type == "cuda" and not spec.encoder:
             self._install_fast()
         if self.device.type == "cuda" and spec.encoder and options.graphs:
-            self.encoder_graphs = EncoderGraphs(backbone, self.device)
-            if self.reduced is not None:
-                self.reduced_graphs = EncoderGraphs(self.reduced, self.device)
+            self.encoder_graphs = {
+                name: EncoderGraphs(module, self.device)
+                for name, module in self.stacks().items()
+            }
+            self.reduced_graphs = {
+                name: EncoderGraphs(view, self.device)
+                for name, view in self.reduced.items()
+            }
+
+    def stacks(self) -> dict[str | None, nn.Module]:
+        """Every layer stack by branch name; ``None`` is the backbone's own."""
+        return {None: self.backbone, **self.branches}
 
     def _install_fast(self) -> None:
         """The exact GPU fast path (``fast.py``): fused layers, lean LoRA, host masks and graphs."""
@@ -113,17 +147,22 @@ class NativeEngineModel(EngineModel):
         out: dict[str, Any] = {"kernels": self.kernels.describe(), **self.fast}
         if self.graphs is not None:
             out["graphs"] = self.graphs.receipt()
-        if self.encoder_graphs is not None:
-            out["encoder_graphs"] = self.encoder_graphs.receipt()
-        if self.reduced is not None:
+        if self.encoder_graphs:
+            out["encoder_graphs"] = graph_receipt(self.encoder_graphs)
+        if self.reduced:
             out["reduced"] = {
                 "kind": self.reduced_kind,
-                "bytes": linear_bytes(self.reduced),
+                "bytes": sum(linear_bytes(view) for view in self.reduced.values()),
                 **(
-                    {"encoder_graphs": self.reduced_graphs.receipt()}
-                    if self.reduced_graphs is not None
+                    {"encoder_graphs": graph_receipt(self.reduced_graphs)}
+                    if self.reduced_graphs
                     else {}
                 ),
+            }
+        elif self.reduced_skipped:
+            out["reduced"] = {
+                "kind": self.reduced_kind,
+                "skipped": self.reduced_skipped,
             }
         return out
 
@@ -260,23 +299,26 @@ class NativeEngineModel(EngineModel):
     def encode(self, batch: EncoderBatch) -> EncoderOutput:
         """Hidden states at the batch's exits, through its branch if it names one.
 
-        Packed rows stay packed and padded rows padded.
+        Packed rows stay packed and padded rows padded. A reduced batch runs its
+        stack's reduced copy when one is loaded, and every stack has its graphs.
         """
         backbone = (
             self.backbone if batch.branch is None else self.branches[batch.branch]
         )
         if not hasattr(backbone, "encode"):
             return self._encode_decoder(batch)
-        reduced = batch.reduced and self.reduced is not None and batch.branch is None
+        reduced = batch.reduced and batch.branch in self.reduced
         if reduced:
-            backbone = self.reduced
-        graphs = self.reduced_graphs if reduced else self.encoder_graphs
+            backbone = self.reduced[batch.branch]
+        graphs = (self.reduced_graphs if reduced else self.encoder_graphs).get(
+            batch.branch
+        )
         context = self.reduced_autocast if reduced else self.autocast
         exits = tuple(batch.layers) or (backbone.num_layers,)
         if batch.lengths is not None:
             if sum(batch.lengths) != batch.input_ids.numel():
                 raise ValueError("packed lengths do not cover the input IDs")
-            if graphs is not None and batch.branch is None:
+            if graphs is not None:
                 with torch.inference_mode(), context():
                     hidden = graphs(
                         batch.input_ids, batch.lengths, exits, batch.normalize_exits
@@ -340,7 +382,7 @@ class NativeEngineModel(EngineModel):
         return packed + sum(parameter.numel() for parameter in self._parameters())
 
     def memory_bytes(self) -> int:
-        copy_bytes = 0 if self.reduced is None else linear_bytes(self.reduced)
+        copy_bytes = sum(linear_bytes(view) for view in self.reduced.values())
         packed = sum(
             layer.packed.numel() * layer.packed.element_size()
             for layer in self._packed()
@@ -361,6 +403,9 @@ class NativeEngineModel(EngineModel):
     def close(self) -> None:
         self.backbone = None  # type: ignore[assignment]
         self.branches = {}
+        self.reduced = {}
+        self.encoder_graphs = {}
+        self.reduced_graphs = {}
         if self.device.type == "cuda":
             torch.cuda.empty_cache()
 
@@ -443,11 +488,15 @@ class NativeEngine(Engine):
         kind = (
             spec.dtype.reduced_cpu if target.type == "cpu" else spec.dtype.reduced_gpu
         )
-        reduced = None
-        if options.reduced_precision and spec.encoder and kind is not None:
-            reduced = (kind, reduced_view(backbone, kind))
         return NativeEngineModel(
-            backbone, accelerator, device, spec, options, residency, branches, reduced
+            backbone,
+            accelerator,
+            device,
+            spec,
+            options,
+            residency,
+            branches,
+            kind if options.reduced_precision and spec.encoder else None,
         )
 
 

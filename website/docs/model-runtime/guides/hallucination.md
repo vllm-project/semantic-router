@@ -95,4 +95,4 @@ their character offsets in the answer. Through the router, the response
 carries the hallucination warning headers and `x-vsr-matched-hallucination`.
 
 Earlier releases could add an NLI explanation per span. That explainer is
-retired; see [Migrate](../migrate.md#features-that-were-retired).
+retired; see [Migrate](model-runtime/migrate.md#features-that-were-retired).

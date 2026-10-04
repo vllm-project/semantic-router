@@ -18,7 +18,6 @@ from ...plugins.base import (
     BackboneSpec,
     DtypePolicy,
     EngineModel,
-    ForwardBatch,
     LoadedModel,
     LoRASpec,
     ModelFamily,
@@ -31,7 +30,7 @@ from ...plugins.base import (
 )
 
 __all__ = ["Decision2Family", "Decision2Model"]
-from ...heads.candidate import load_head, logits
+from ...heads.candidate import forward_logits, load_head
 from ...registry import builtin, policy
 from ...registry.resolve import download_base
 from ...systemone import (
@@ -350,19 +349,13 @@ class Decision2Model(LoadedModel):
         self, items: list[RenderedItem], shared_prefix: int = 0
     ) -> list[list[float] | None]:
         batch = collate(items, self.tokenizer.pad_id)
-        output = self.engine_model.forward(
-            ForwardBatch(
-                input_ids=batch["input_ids"],
-                attention_mask=batch["attention_mask"],
-                gather=batch["candidate_positions"],
-                query=batch["query_positions"],
-                lengths=[len(item.ids) for item in items],
-                shared_prefix=shared_prefix,
-            )
+        scores = forward_logits(
+            self.engine_model,
+            self.head,
+            batch,
+            [len(item.ids) for item in items],
+            shared_prefix,
         )
-        mask = batch["candidate_mask"].to(output.gathered.device)
-        with torch.inference_mode():
-            scores = logits(self.head, output.gathered, output.query, mask)
         if scores.shape[0] != len(items):
             raise RuntimeError("model returned the wrong number of question answers")
         return [

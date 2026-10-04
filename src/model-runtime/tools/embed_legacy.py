@@ -17,11 +17,15 @@ adds a timed closed-loop load on both.
 ``build`` compiles the legacy side's test binary for ``ab``, which alternates
 legacy and runtime calls on the same cores (the order flips every round, and
 load windows rotate) so both sides see the same moment's contention on a
-shared host; ``ab`` reports latency and throughput only (``compare`` checks
-values).
+shared host; ``--gap-ms`` pauses before every call so neither side's
+spinning thread pools share the cores with the other side's call. ``ab``
+reports latency and throughput only (``compare`` checks values). Confine
+both sides with a cgroup cpuset (a container or a systemd scope): ONNX
+Runtime pins its threads to CPUs it reads from the host, past a ``taskset``
+mask.
 
     python3 tools/embed_legacy.py build --tree TREE --cache HF --flat DIR --out legacy.test
-    python3 tools/embed_legacy.py ab --binary legacy.test --cache HF --out ab.json [--legacy-cpus 16]
+    python3 tools/embed_legacy.py ab --binary legacy.test --cache HF --out ab.json [--legacy-cpus 16] [--gap-ms 50]
 
 ``legacy`` and ``build`` need only the standard library (the runner image has
 a bare Python); ``compare`` needs NumPy.
@@ -89,6 +93,10 @@ JOBS: dict[str, Job] = {
     },
 }
 PROVIDERS = {"embedding": "candle", "rerank": "candle", "omni": "ort"}
+LEGACY_PATHS = {
+    "candle": "router native facade, candle on the CPU (one call per text, per query)",
+    "ort": "router native facade, ONNX Runtime on the prepared Omni bundle (one call per input)",
+}
 MAX_TOKENS = {"embedding": 8192, "rerank": 8192, "omni": 512}
 # Design section 17 (None: not gated); a rerank tie is a legacy logit margin under ``tie``.
 CPU_THRESHOLDS = {"min_cosine": 0.99999, "max_abs": 1e-4, "tie": 1e-3}
@@ -529,6 +537,11 @@ def runtime_request(
     return "embeddings", body
 
 
+def wire_size(body: dict[str, Any]) -> int:
+    """The encoded body size the HTTP server passes to ``Runtime.call`` (small bodies plan inline)."""
+    return len(json.dumps(body, separators=(",", ":")).encode("utf-8"))
+
+
 def runtime_result(spec: dict[str, Any], out: dict[str, Any]) -> Any:
     if spec["Mode"] == "rerank":
         by_index = {r["index"]: r["logit"] for r in out["results"]}
@@ -569,7 +582,9 @@ def run_runtime(args: argparse.Namespace) -> None:
 
     def call(spec: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
         surface, body = runtime_request(spec, item, names[spec["Repo"]])
-        status, out = loop.run_until_complete(runtime.call(surface, body))
+        status, out = loop.run_until_complete(
+            runtime.call(surface, body, wire_size(body))
+        )
         if status != 200:
             raise RuntimeError(json.dumps(out))
         return out
@@ -612,8 +627,9 @@ def runtime_load(
         while time.monotonic() < deadline:
             item = spec["Inputs"][position % len(spec["Inputs"])]
             surface, body = runtime_request(spec, item, model)
+            size = wire_size(body)
             start = time.perf_counter_ns()
-            loop.run_until_complete(runtime.call(surface, body))
+            loop.run_until_complete(runtime.call(surface, body, size))
             with lock:
                 latencies.append(time.perf_counter_ns() - start)
             position += args.concurrency
@@ -682,21 +698,27 @@ def run_ab(args: argparse.Namespace) -> None:
 
     def call_runtime(spec: dict[str, Any], item: dict[str, Any]) -> int:
         surface, body = runtime_request(spec, item, names[spec["Repo"]])
+        size = wire_size(body)
         start = time.perf_counter_ns()
-        status, _ = loop.run_until_complete(runtime.call(surface, body))
+        status, _ = loop.run_until_complete(runtime.call(surface, body, size))
         return time.perf_counter_ns() - start if status == 200 else -1
+
+    calls = {"legacy": call_legacy, "runtime": call_runtime}
 
     def pair(
         spec: dict[str, Any], item: dict[str, Any], legacy_first: bool
     ) -> tuple[int, int]:
-        """One legacy and one runtime call, ``--gap-ms`` apart (pools that spin after a call settle)."""
-        if legacy_first:
-            legacy_ns = call_legacy(spec, item)
+        """One legacy and one runtime call, each ``--gap-ms`` after the previous call.
+
+        ONNX Runtime workers spin for milliseconds after a run; the gap keeps
+        either side's spinning pools off the cores the next call uses.
+        """
+        sides = ("legacy", "runtime") if legacy_first else ("runtime", "legacy")
+        elapsed = {}
+        for side in sides:
             time.sleep(args.gap_ms / 1000)
-            return legacy_ns, call_runtime(spec, item)
-        runtime_ns = call_runtime(spec, item)
-        time.sleep(args.gap_ms / 1000)
-        return call_legacy(spec, item), runtime_ns
+            elapsed[side] = calls[side](spec, item)
+        return elapsed["legacy"], elapsed["runtime"]
 
     report: dict[str, Any] = {}
     for spec in specs:
@@ -721,6 +743,7 @@ def run_ab(args: argparse.Namespace) -> None:
                 ("legacy", "runtime") if round_index % 2 == 0 else ("runtime", "legacy")
             )
             for side in sides:
+                time.sleep(args.gap_ms / 1000)
                 if side == "legacy":
                     command = (
                         f"load\t{spec['Job']}\t{args.concurrency}\t{args.seconds}\n"
@@ -749,7 +772,15 @@ def run_ab(args: argparse.Namespace) -> None:
         }
         for job, values in report.items()
     }
-    Path(args.out).write_text(json.dumps(summary, indent=1) + "\n", encoding="utf-8")
+    calls_ms = {
+        job: {
+            side: [round(ns / 1e6, 3) for ns in values[side]]
+            for side in ("legacy", "runtime")
+        }
+        for job, values in report.items()
+    }
+    record = {job: {**summary[job], "latency_ms": calls_ms[job]} for job in summary}
+    Path(args.out).write_text(json.dumps(record) + "\n", encoding="utf-8")
     print(json.dumps(summary))
 
 
@@ -845,8 +876,9 @@ def run_compare(args: argparse.Namespace) -> None:
             record["load"] = {"legacy": loads[0], "runtime": loads[1]}
             record["throughput_passed"] = loads[1]["per_s"] >= loads[0]["per_s"]
         jobs[job] = record
+    providers = dict.fromkeys(PROVIDERS[JOBS[job].mode] for job in jobs)
     result = {
-        "legacy": "router native facade, candle on the CPU (one call per text, per query)",
+        "legacy": "; ".join(LEGACY_PATHS[provider] for provider in providers),
         "device_class": args.device_class,
         "thresholds": thresholds,
         "jobs": jobs,
@@ -885,7 +917,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     ab.add_argument("--tree", required=True)
     ab.add_argument("--rounds", type=int, default=4)
     ab.add_argument("--legacy-cpus", type=int, default=None)
-    ab.add_argument("--gap-ms", type=float, default=0.0)
+    ab.add_argument(
+        "--gap-ms",
+        type=float,
+        default=0.0,
+        help="pause before every call and load window (the other side's pools settle)",
+    )
     for sub in (runtime, ab):
         sub.add_argument("--device", default="cpu")
         sub.add_argument("--profile", default="exact")

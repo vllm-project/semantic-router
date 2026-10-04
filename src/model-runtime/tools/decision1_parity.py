@@ -122,8 +122,6 @@ def run_native(args: argparse.Namespace) -> int:
         "load_seconds": time.perf_counter() - started,
         "health": served.health.state,
         "golden": served.health.golden.describe(),
-        "kernels": served.model.engine_model.kernels.describe(),
-        "fast_path": getattr(served.model.engine_model, "fast", None),
     }
     loop = asyncio.new_event_loop()
     try:
@@ -144,6 +142,7 @@ def run_native(args: argparse.Namespace) -> int:
                     else {"request_error": status}
                 )
                 write(sink, panel, prompt, answers, time.perf_counter() - started)
+        receipt["engine"] = served.model.engine_model.receipt()
     finally:
         loop.close()
         runtime.stop()

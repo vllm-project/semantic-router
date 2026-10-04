@@ -120,7 +120,7 @@ src/model-runtime/
     runtime.py              # the process: models by served name, surface dispatch, bundles
     api/
       openapi.yaml          # THE contract (served at /openapi.yaml; the Go client is generated from it)
-      app.py, server.py     # Starlette routes; uvicorn over TCP or UDS
+      app.py, server.py     # Starlette routes; uvicorn (uvloop, httptools) over TCP or UDS
     errors.py               # error codes shared by API, scheduler and families
     systemone.py            # System One request semantics shared by every decisions family
     text/                   # shared text handling: the package tokenizer, input policies and windows

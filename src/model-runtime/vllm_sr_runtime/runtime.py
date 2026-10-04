@@ -251,7 +251,10 @@ class ServedModel:
         )
         profiles = self._profiles()
         default = profiles[config.profile]
-        engine_options = default.engine_options(EngineOptions(threads=process.threads))
+        cpu_models = sum(served.device == "cpu" for served in process.served_models())
+        engine_options = default.engine_options(
+            EngineOptions(threads=process.threads, exclusive_cpu=cpu_models <= 1)
+        )
         self.health.set("loading", f"loading weights on {placement.device.label}")
 
         def execute(work: Any) -> Any:
@@ -288,7 +291,7 @@ class ServedModel:
                 batch_window_ms=process.batch_window_ms,
             ),
             observe=metrics.observe,
-            execute=execute,
+            execute=execute if model.device_thread else None,
         )
         self.scheduler.start()
         self.health.set("warming", "running the golden check")
@@ -309,6 +312,9 @@ class ServedModel:
             device=placement.device.label,
             profile=config.profile,
         ).set(1)
+        metrics.model_memory.labels(model=self.label).set(
+            model.engine_model.memory_bytes()
+        )
         self.health.set("ready")
         log.info(
             "serving %s on %s (profile %s)",

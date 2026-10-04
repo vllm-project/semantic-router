@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 import json
+import threading
 import time
 from dataclasses import replace
 
@@ -78,6 +80,36 @@ def test_the_default_engine_serves_a_bundle_on_onnxruntime(tmp_path):
     native = Runtime(ServeConfig(models=(replace(served, engine="native"),)))
     with pytest.raises(RuntimeError, match="no engine can run"):
         native.load()
+
+
+def test_batches_run_on_the_model_worker_not_the_cpu_device_thread(
+    tmp_path, monkeypatch
+):
+    from vllm_sr_runtime.config import ModelConfig, ServeConfig
+    from vllm_sr_runtime.families.multimodal_embedding.family import OmniModel
+    from vllm_sr_runtime.runtime import Runtime
+
+    threads: list[str] = []
+    run = OmniModel.run
+
+    def recording_run(self, items, shared_prefix=0):
+        threads.append(threading.current_thread().name)
+        return run(self, items, shared_prefix)
+
+    monkeypatch.setattr(OmniModel, "run", recording_run)
+    source = {"repo_id": "example/omni-fixture", "revision": "0" * 40}
+    bundle = omni.write_bundle(tmp_path / "omni", source=source)
+    served = ModelConfig(model=str(bundle), name="omni", device="cpu")
+    runtime = Runtime(ServeConfig(models=(served,)))
+    runtime.start(background=False)
+    try:
+        threads.clear()
+        body = {"model": "omni", "input": "hello", "options": {"overflow": "reject"}}
+        status, _ = asyncio.run(runtime.call("embeddings", body))
+    finally:
+        runtime.stop()
+    assert status == 200
+    assert threads == ["vllm-sr-runtime-worker"]
 
 
 @pytest.fixture(scope="module")
@@ -233,6 +265,63 @@ def test_text_image_and_audio_share_one_unit_space(model):
     assert again.items[0].cache_key == keys[0]
 
 
+def test_a_batch_answers_every_input_as_it_answers_alone(model):
+    image = base64.b64encode(golden_image()).decode()
+    sound = base64.b64encode(golden_audio()).decode()
+    inputs = [
+        "route this request",
+        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image}"}},
+        {"type": "input_audio", "input_audio": {"data": sound, "format": "wav"}},
+        "a second, somewhat longer request to embed",
+        "route this request",
+    ]
+    plan = model.plan_surface("embeddings", request({"input": inputs}))
+    assert model.batch_invariant
+    assert model.run(plan.items) == [model.run([item])[0] for item in plan.items]
+
+
+def test_media_inputs_carry_a_scheduler_cost_and_text_counts_its_tokens(model):
+    from vllm_sr_runtime.families.multimodal_embedding.family import MEDIA_COST
+    from vllm_sr_runtime.scheduler.planner import cost
+
+    image = base64.b64encode(golden_image()).decode()
+    sound = base64.b64encode(golden_audio()).decode()
+    inputs = [
+        "route this request",
+        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image}"}},
+        {"type": "input_audio", "input_audio": {"data": sound, "format": "wav"}},
+    ]
+    text, picture, audio = model.plan_surface(
+        "embeddings", request({"input": inputs})
+    ).items
+    assert cost(text) == len(text.ids)
+    assert (cost(picture), cost(audio)) == (
+        MEDIA_COST["nano"]["image"],
+        MEDIA_COST["nano"]["audio"],
+    )
+
+
+def test_truncate_cuts_over_long_text_inside_the_special_tokens(model):
+    text = "route this request to the model that answers it best " * 4
+    image = base64.b64encode(golden_image()).decode()
+    inputs = [
+        text,
+        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image}"}},
+    ]
+    options = {"max_tokens": 8}
+    rejected = serve(model, {"input": inputs, "options": options})[1]
+    assert rejected["data"][0]["error"] == "max_length_exceeded"
+    plan, cut = serve(
+        model, {"input": inputs, "options": {**options, "overflow": "truncate"}}
+    )
+    full = model.text.encode(text, 512)[0]
+    assert plan.items[0].ids == [*full[:7], full[-1]]
+    assert cut["data"][0]["input"]["processed_tokens"] == 8
+    assert cut["data"][0]["input"]["truncated"] is True
+    assert cut["data"][0]["input"]["tokens"] == len(full)
+    assert cut["data"][1]["embedding"] == rejected["data"][1]["embedding"]
+
+
 def test_bad_inputs_fail_in_place(model):
     garbage = base64.b64encode(b"not an image").decode()
     _, body = serve(
@@ -254,21 +343,26 @@ def test_bad_inputs_fail_in_place(model):
     )
     errors = [entry.get("error") for entry in body["data"]]
     assert errors == ["max_length_exceeded", "invalid_input", "invalid_input", None]
-    with pytest.raises(ValueError, match="rejects over-long"):
-        model.plan_surface(
-            "embeddings",
-            request({"input": "hello", "options": {"overflow": "truncate"}}),
-        )
     with pytest.raises(ValueError, match="no layer exits"):
         model.plan_surface("embeddings", request({"input": "hello", "layer": 3}))
 
 
 def test_images_of_any_mode_become_normalized_channels_first_pixels(nano):
+    from PIL import Image
+
     processor = ImageProcessor(bundles.load(nano))
     for mode in ("RGB", "L", "RGBA", "P", "CMYK"):
-        pixels = processor.pixels(png(37, 21, mode))
+        data = png(37, 21, mode)
+        pixels = processor.pixels(data)
         assert pixels.shape == (1, 3, 512, 512) and pixels.dtype == np.float32
         assert pixels.min() >= -1.0 and pixels.max() <= 1.0
+        with Image.open(io.BytesIO(data)) as image:
+            resized = image.convert("RGB").resize(
+                (512, 512), resample=Image.Resampling.BICUBIC, reducing_gap=None
+            )
+        scaled = (np.asarray(resized, dtype=np.float64) * (1 / 255)).astype(np.float32)
+        reference = ((scaled - processor.mean) / processor.std).transpose(2, 0, 1)
+        assert np.array_equal(pixels[0], reference)
     assert processor.pixels(b"\x89PNG broken") == "invalid_input"
 
 

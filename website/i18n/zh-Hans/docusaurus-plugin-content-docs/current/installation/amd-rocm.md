@@ -150,7 +150,7 @@ curl --fail --include http://127.0.0.1:8899/v1/chat/completions \
 
 ## 在 AMD 上运行 Vela 路由模型 {#run-vela-routing-models-on-amd}
 
-Router 自身的模型（Vela 分类器、embedding、reranker 和决策模型）运行在[模型运行时](../model-runtime/overview.md)中。在 AMD Instinct MI300X 和 MI325X GPU 上，运行时通过 ROCm 版 PyTorch 执行这些模型，该路径已经验证。`--platform amd` 选择 AMD 镜像，其中包含带 ROCm 版 PyTorch 的运行时，并把 GPU 传给 Router。
+Router 自身的模型（Vela 分类器、embedding、reranker 和决策模型）运行在[模型运行时](model-runtime/overview.md)中。在 AMD Instinct MI300X 和 MI325X GPU 上，运行时通过 ROCm 版 PyTorch 执行这些模型，该路径已经验证。`--platform amd` 选择 AMD 镜像，其中包含带 ROCm 版 PyTorch 的运行时，并把 GPU 传给 Router。
 
 [Vela AMD 模型卡片](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)及完整配置把全部十个任务模型放在 `rocm:0` 上。连接已有的 OpenAI 兼容后端，使用 `--served-model-name vela-default`。配置预期地址是 `http://vllm:8000`：将后端接入 `vllm-sr-network` 并设置网络别名 `vllm`，或修改 endpoint。先用这个名称验证直连请求。为 Router 和生成后端保留足够内存与算力；选择 Router GPU 时使用 `VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES`，deployment 中索引 `0` 指向可见 GPU。
 
@@ -192,9 +192,9 @@ global:
           overflow: truncate
 ```
 
-`truncate` 对前 32,768 个 token（含特殊 token）分类并报告已截断；`reject` 则对更长的输入让该信号保持未知。此限制只作用于分类器，不会缩短聊天请求，也不改变生成模型的上下文窗口。Guard 和 PII 用重叠窗口扫描长输入（`overflow: window`），见[提示词攻击与不安全内容](../model-runtime/guides/safety.md)和[检测 PII](../model-runtime/guides/pii.md)。
+`truncate` 对前 32,768 个 token（含特殊 token）分类并报告已截断；`reject` 则对更长的输入让该信号保持未知。此限制只作用于分类器，不会缩短聊天请求，也不改变生成模型的上下文窗口。Guard 和 PII 用重叠窗口扫描长输入（`overflow: window`），见[提示词攻击与不安全内容](model-runtime/guides/safety.md)和[检测 PII](model-runtime/guides/pii.md)。
 
-早期版本在这里选择固定的 ONNX Runtime 计算图（`head: onnx/model_rocm_32k.onnx`）和 MIGraphX 编译缓存。`vllm-sr config migrate` 会移除这些设置，见[从原生绑定迁移](../model-runtime/migrate.md)。
+早期版本在这里选择固定的 ONNX Runtime 计算图（`head: onnx/model_rocm_32k.onnx`）和 MIGraphX 编译缓存。`vllm-sr config migrate` 会移除这些设置，见[从原生绑定迁移](model-runtime/migrate.md)。
 
 ## 生产检查清单
 

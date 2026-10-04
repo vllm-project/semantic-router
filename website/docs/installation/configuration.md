@@ -73,7 +73,7 @@ once at startup, so changing it requires a Router restart. See
 [API and Observability](../tutorials/global/api-and-observability).
 
 Built-in category/domain classification runs Vela Domain in the
-[model runtime](../model-runtime/overview.md) when no remote backend is
+[model runtime](model-runtime/overview.md) when no remote backend is
 configured. To call a named external classifier, attach a
 `backend` under `global.model_catalog.modules.classifier.domain` and resolve
 its `model` from `global.model_catalog.external[]` with
