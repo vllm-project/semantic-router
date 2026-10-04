@@ -50,9 +50,10 @@ Rules:
 3. "depends_on" lists the ids of earlier nodes whose conclusions are needed to settle this node ([] if none).
 4. "answer" is the correct answer to the question, "yes" or "no". Phrase roughly half of the questions so that the correct answer is "no" (for example ask about a wrong value, the opposite relation or a rule that does not apply).
 5. "statement" is one short declarative sentence that states the settled conclusion as a true fact (for example "Natalia sold 24 clips in May.").
-6. Between 3 and 10 nodes, in the order the solution settles them. Skip plain restatements of given facts unless the text needs interpretation.
+6. "false_statement" is the same sentence minimally changed so that it is false (a wrong value, a wrong entity or the opposite relation), for example "Natalia sold 30 clips in May.".
+7. Between 3 and 10 nodes, in the order the solution settles them. Skip plain restatements of given facts unless the text needs interpretation.
 
-Return only JSON: {{"nodes": [{{"id": "n1", "depends_on": [], "question": "...", "answer": "yes", "statement": "..."}}]}}"""
+Return only JSON: {{"nodes": [{{"id": "n1", "depends_on": [], "question": "...", "answer": "yes", "statement": "...", "false_statement": "..."}}]}}"""
 
 VERIFY_SUFFIX = (
     "\n\nAnswer one intermediate question about this problem with a single word, yes or no.\n"
@@ -168,6 +169,14 @@ def parse_graph(text: str) -> list[dict[str, Any]]:
         ):
             continue
         deps = [str(d) for d in (item.get("depends_on") or []) if str(d) in kept]
+        false_statement = " ".join(str(item.get("false_statement", "")).split())
+        if (
+            not false_statement
+            or false_statement == statement
+            or _LEAK.search(false_statement)
+            or len(false_statement) > 300
+        ):
+            false_statement = None
         nodes.append(
             {
                 "id": node_id,
@@ -175,6 +184,7 @@ def parse_graph(text: str) -> list[dict[str, Any]]:
                 "question": question,
                 "answer": answer == "yes",
                 "statement": statement,
+                "false_statement": false_statement,
             }
         )
         kept.add(node_id)
