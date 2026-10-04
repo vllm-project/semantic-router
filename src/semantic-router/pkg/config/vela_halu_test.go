@@ -23,17 +23,15 @@ func TestVelaHaluDefaultAndLegacyIdentity(t *testing.T) {
 
 func TestVelaHaluBindingTaskBudget(t *testing.T) {
 	decl := ModelBinding{Deployment: "halu", Adapter: "vela_halu", Contract: RemoteClassifierContractTokenSpans}
-	for _, provider := range []string{"candle", "ort"} {
-		deployment := ModelDeployment{Artifact: "models/custom-halu", Provider: provider, Device: "cpu", Input: ModelInputBudget{MaxTokens: 8192, Overflow: "reject"}}
-		if err := validateTaskModelBinding("hallucination_detector", decl, deployment); err != nil {
-			t.Fatal(err)
-		}
-		deployment.Input.MaxTokens = 32768
-		if err := validateTaskModelBinding("hallucination_detector", decl, deployment); err == nil {
-			t.Fatal("Halu inherited encoder's unqualified 32K capacity")
-		}
+	deployment := ModelDeployment{Artifact: "models/custom-halu", Provider: ModelRuntimeProvider, Device: "cpu", Input: ModelInputBudget{MaxTokens: 8192, Overflow: "reject"}}
+	if err := validateTaskModelBinding("hallucination_detector", decl, deployment); err != nil {
+		t.Fatal(err)
 	}
-	if err := validateTaskModelBinding("pii_classifier", decl, ModelDeployment{Provider: "candle"}); err == nil {
+	deployment.Input.MaxTokens = 32768
+	if err := validateTaskModelBinding("hallucination_detector", decl, deployment); err == nil {
+		t.Fatal("Halu inherited encoder's unqualified 32K capacity")
+	}
+	if err := validateTaskModelBinding("pii_classifier", decl, ModelDeployment{Provider: ModelRuntimeProvider}); err == nil {
 		t.Fatal("Halu accepted an incompatible text-only input task")
 	}
 }

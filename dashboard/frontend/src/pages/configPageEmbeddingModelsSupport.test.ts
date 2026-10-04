@@ -13,7 +13,7 @@ const localCatalog = {
     mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
     use_cpu: true,
     embedding_config: {
-      backend: 'candle',
+      backend: 'model_runtime',
       model_type: 'mmbert',
       target_dimension: 768,
       future_optimizer: 'preserved',
@@ -33,12 +33,24 @@ describe('embedding models config support', () => {
   it('gives an explicit local backend precedence over legacy model_type inference', () => {
     const editData = embeddingModelsEditData({
       semantic: {
-        embedding_config: { backend: 'candle', model_type: 'remote' },
+        embedding_config: { backend: 'model_runtime', model_type: 'remote' },
       },
     })
 
     expect(editData.provider_type).toBe('local')
-    expect(editData.local_backend).toBe('candle')
+    expect(editData.local_backend).toBe('model_runtime')
+  })
+
+  it('loads a retired local backend as the model runtime', () => {
+    const editData = embeddingModelsEditData({
+      semantic: { embedding_config: { backend: 'candle', model_type: 'mmbert' } },
+    })
+    const saved = embeddingModelsCatalogValue(editData)
+
+    expect(editData.local_backend).toBe('model_runtime')
+    expect((saved.semantic as Record<string, unknown>).embedding_config).toEqual(
+      expect.objectContaining({ backend: 'model_runtime', model_type: 'mmbert' }),
+    )
   })
 
   it('shows provider-specific fields for local and remote modes', () => {
@@ -110,12 +122,12 @@ describe('embedding models config support', () => {
     const local = embeddingModelsCatalogValue({
       ...embeddingModelsEditData(remote),
       provider_type: 'local',
-      local_backend: 'openvino',
+      local_backend: 'model_runtime',
       model_type: 'mmbert',
     })
 
     expect((local.semantic as Record<string, unknown>).embedding_config).toEqual(
-      expect.objectContaining({ backend: 'openvino', model_type: 'mmbert' }),
+      expect.objectContaining({ backend: 'model_runtime', model_type: 'mmbert' }),
     )
     expect((local.semantic as Record<string, unknown>).endpoint).toEqual(
       expect.objectContaining({

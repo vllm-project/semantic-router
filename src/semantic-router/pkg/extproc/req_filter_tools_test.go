@@ -159,7 +159,7 @@ var _ = Describe("Tool Selection Request Filter", Label("model-artifacts"), func
 			"embedding": {Deployment: "tools-test", Contract: "embedding.v1"},
 		}
 		prepareCfg.ModelDeployments = map[string]config.ModelDeployment{
-			"tools-test": {Provider: config.ModelRuntimeProvider, Device: "cpu", Precision: "native", Profile: "exact", Artifact: modelPath},
+			"tools-test": {Provider: config.ModelRuntimeProvider, Device: "cpu", Profile: "exact", Artifact: modelPath},
 		}
 		embeddings, err = modelruntime.PrepareOwnedEmbeddings(context.Background(), prepareCfg, servingtest.Managed(GinkgoT()))
 		Expect(err).NotTo(HaveOccurred())

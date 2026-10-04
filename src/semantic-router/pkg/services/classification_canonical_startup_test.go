@@ -23,7 +23,7 @@ func TestStandaloneCanonicalStartupAndFirstReloadShareOwnedPool(t *testing.T) {
 	}
 	cfg := &config.RouterConfig{}
 	cfg.EmbeddingConfig = config.HNSWConfig{ModelType: "mmbert", TargetDimension: 3, TargetLayer: 1}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"global": {Artifact: artifact, Provider: "ort", Device: "cpu", Precision: "native", Input: config.ModelInputBudget{MaxTokens: 4096, Overflow: "truncate"}}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"global": {Artifact: artifact, Provider: "ort", Device: "cpu", Input: config.ModelInputBudget{MaxTokens: 4096, Overflow: "truncate"}}}
 	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "global", Adapter: "mmbert", Contract: "embedding.v1", Head: "model.onnx"}}
 	cfg.EmbeddingRules = []config.EmbeddingRule{{Name: "topic", Candidates: []string{"hello"}}}
 	service, err := NewClassificationServiceFromConfig(cfg)

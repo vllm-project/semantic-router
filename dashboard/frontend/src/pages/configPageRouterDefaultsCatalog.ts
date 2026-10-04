@@ -199,7 +199,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     bert_model_path: '',
     use_cpu: true,
     embedding_config: {
-      backend: 'candle',
+      backend: 'model_runtime',
       model_type: 'mmbert',
       preload_embeddings: true,
       target_dimension: 0,

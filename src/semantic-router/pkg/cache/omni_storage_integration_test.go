@@ -24,7 +24,7 @@ func TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity(t *testing.T) {
 	provider, err := servingtest.Managed(t).Embedding(context.Background(), config.ResolvedModelBinding{
 		Recipe: "storage-test", Name: "embedding",
 		Binding:    config.ModelBinding{Deployment: "omni", Contract: "embedding.v1"},
-		Deployment: config.ModelDeployment{Artifact: artifact, Provider: config.ModelRuntimeProvider, Device: "cpu", Precision: "native", Profile: "exact", Input: config.ModelInputBudget{Overflow: "reject"}},
+		Deployment: config.ModelDeployment{Artifact: artifact, Provider: config.ModelRuntimeProvider, Device: "cpu", Profile: "exact", Input: config.ModelInputBudget{Overflow: "reject"}},
 	}, 0, 0)
 	if err != nil {
 		t.Fatal(err)
