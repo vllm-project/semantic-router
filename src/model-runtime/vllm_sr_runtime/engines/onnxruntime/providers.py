@@ -9,8 +9,10 @@ In a process that has the CPU to itself, CPU sessions share one intra-op pool
 run, so graphs that run one after another (Omni's CLAP windows, then its audio
 graph) otherwise share the cores with the previous session's spinning threads;
 on 16 cores CLAP + audio took 124 ms with per-session pools and 43 ms with the
-shared one. Where the process serves other CPU models, the spinning would slow
-their forwards instead, so sessions get pools that don't spin. Pools are sized
+shared one. Where the process serves other CPU models, that spinning would slow
+their forwards instead, so each session gets its own pool, which spins inside a
+run (small forwards need it: Omni Nano text took 7.4 ms without it, against
+legacy's 5.1) and stops spinning when the run returns. Pools are sized
 to the configured threads, else the CPUs the process may run on (ONNX
 Runtime's own default counts the host's CPUs, not the cpuset).
 """
@@ -126,9 +128,10 @@ def session_options(
 
     In a process that has the CPU to itself, CPU sessions run on the shared
     pool. Where other CPU models share the process, each CPU session gets its
-    own pool of ``cpu_threads(threads)`` that doesn't spin: the shared pool
-    keeps its threads spinning after every run and ONNX Runtime offers no way
-    to stop that. Once the shared pool exists every CPU session must use it.
+    own pool of ``cpu_threads(threads)`` whose threads stop spinning when a run
+    returns: the shared pool keeps spinning after every run, and
+    ``session.force_spinning_stop`` reaches only a session's own pool. Once the
+    shared pool exists every CPU session must use it.
     """
     import onnxruntime as ort
 
@@ -146,7 +149,7 @@ def session_options(
         options.intra_op_num_threads = size
         options.inter_op_num_threads = 1
     if not choice.gpu and not exclusive_cpu:
-        options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+        options.add_session_config_entry("session.force_spinning_stop", "1")
     if choice.gpu:
         options.add_session_config_entry("session.disable_cpu_ep_fallback", "1")
     return options

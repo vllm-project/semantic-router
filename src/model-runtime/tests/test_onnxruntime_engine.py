@@ -122,13 +122,15 @@ def test_gpu_sessions_never_fall_back_to_the_cpu():
     assert gpu.get_session_config_entry("session.disable_cpu_ep_fallback") == "1"
 
 
-def test_cpu_sessions_sharing_the_process_get_own_pools_that_never_spin(monkeypatch):
+def test_cpu_sessions_sharing_the_process_get_own_pools_that_stop_spinning(
+    monkeypatch,
+):
     choice = providers.ProviderChoice("CPUExecutionProvider")
     monkeypatch.setattr(providers, "_SHARED_POOL", {})
     shared = providers.session_options(choice, 2, exclusive_cpu=False)
     assert providers._SHARED_POOL == {}
     assert shared.intra_op_num_threads == 2 and shared.inter_op_num_threads == 1
-    assert shared.get_session_config_entry("session.intra_op.allow_spinning") == "0"
+    assert shared.get_session_config_entry("session.force_spinning_stop") == "1"
     monkeypatch.setattr(providers, "_SHARED_POOL", {"size": 4})
     pooled = providers.session_options(choice, 2, exclusive_cpu=False)
     assert pooled.use_per_session_threads is False
