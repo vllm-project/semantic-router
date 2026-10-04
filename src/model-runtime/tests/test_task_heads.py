@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 import torch
 from starlette.testclient import TestClient
@@ -84,6 +86,17 @@ def test_cards_list_each_head(client):
     assert len(cards["scores"]["heads"][0]["thresholds"]) == 12
     assert cards["grounded"]["heads"][0]["inputs"] == ["grounded"]
     assert all(card["status"] == "ready" for card in cards.values())
+
+
+def test_cards_pin_the_operating_point_each_head_applies(client, packages):
+    cards = {card["id"]: card for card in client.get("/v1/models").json()["data"]}
+    for name in ("scores", "grounded"):
+        policy = (packages[name] / "operating_point.json").read_bytes()
+        assert (
+            cards[name]["heads"][0]["operating_point_sha256"]
+            == hashlib.sha256(policy).hexdigest()
+        )
+    assert cards["sequence"]["heads"][0]["operating_point_sha256"] is None
 
 
 @pytest.mark.reference

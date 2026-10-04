@@ -542,6 +542,7 @@ class ServedModel:
                         else None
                     ),
                     "reduction": head.reduction,
+                    "operating_point_sha256": head.operating_point_sha256,
                 }
                 for head in info.heads
             ]

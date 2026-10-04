@@ -456,7 +456,8 @@ class HeadInfo:
     and / or ``grounded``. ``thresholds`` is a packaged operating point (one
     threshold per label); ``window`` the default ``(tokens, overlap)`` for
     ``overflow: window``; ``reduction`` how windows combine when the head
-    declares one (``max``, ``span_union``).
+    declares one (``max``, ``span_union``). ``operating_point_sha256`` is the
+    digest of the verified policy file the head applies, if any.
     """
 
     name: str
@@ -468,6 +469,7 @@ class HeadInfo:
     overflow: str = "reject"
     window: tuple[int, int] | None = None
     reduction: str | None = None
+    operating_point_sha256: str | None = None
 
 
 @dataclass(frozen=True)

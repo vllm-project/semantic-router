@@ -581,8 +581,13 @@ class TaskHeadsFamily(ModelFamily):
         layer = int(task.config["num_hidden_layers"])
         head, defaults = self._head(task, tokenizer, classifier, layer)
         heads: dict[str, Head] = {head.name: head}
+        described = head.describe()
+        if task.operating_point is not None:
+            described["operating_point_sha256"] = package.details["files"][
+                pkg.OPERATING_POINT
+            ]
         info = self._info(
-            package, ("classify",), parameters, heads=(HeadInfo(**head.describe()),)
+            package, ("classify",), parameters, heads=(HeadInfo(**described),)
         )
         model = TaskHeadsModel(
             info, engine_model, heads, package.max_input_tokens, defaults
