@@ -47,6 +47,22 @@ FIGURES = (
 
 
 class Renderer(card_assets.Renderer):
+    def save(self, fig, path: Path) -> None:
+        """Category labels longer than the base layout allows move the axes right, level with the title."""
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        lefts = [
+            label.get_window_extent(renderer).x0 / fig.bbox.width
+            for ax in fig.axes
+            if ax.axison
+            for label in ax.get_yticklabels()
+            if label.get_visible() and label.get_text()
+        ]
+        if lefts and min(lefts) < 0:
+            title = min(text.get_position()[0] for text in fig.texts)
+            fig.subplots_adjust(left=fig.subplotpars.left + title - min(lefts))
+        super().save(fig, path)
+
     def banner_variant(self, name: str, path: Path) -> None:
         """The Decision 2.0 banner with the variant in the eyebrow and the Reasoning tagline."""
         import numpy as np
@@ -169,7 +185,7 @@ def render_assets(
         {
             "own": own,
             "compare": base,
-            "compare_kind": "family",
+            "compare_kind": "base",
             "family": pareto["family"],
             "decision1": pareto["decision1"],
             "entrants": pareto["entrants"],
