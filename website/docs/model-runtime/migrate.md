@@ -20,6 +20,7 @@ You need to migrate if your configuration contains any of these:
 
 - `provider: candle`, `provider: ort` or `provider: openvino`;
 - `precision`, `custom_ops_profile` or `compilation_cache_dir` on a deployment;
+- `variant`, `model_type`, `use_modernbert` or `use_mmbert_32k` on a module;
 - a binding `head` that names an ONNX or OpenVINO graph file;
 - an older model name such as `models/mom-domain-classifier`,
   `models/mmbert-embed-32k-2d-matryoshka` or `lettucedect`;
@@ -71,7 +72,8 @@ or stored vectors to re-embed because their embedding model changed (see
 | `embedding_config.backend: candle` or `openvino` | removed |
 | `embedding_model: bert` or `gemma` on the response cache, memory or vector store, or no `embedding_model` where MiniLM was the default | `embedding_model: mmbert` (Vela Embedding); re-embed stored vectors |
 | `model_selection.ml.model_type: bert` or `gemma` | `model_type: mmbert`; retrain the selection models on Vela Embedding vectors |
-| `variant`, `use_modernbert`, `use_mmbert_32k` | removed: the runtime reads the architecture from the model |
+| `variant`, `model_type`, `use_modernbert`, `use_mmbert_32k` on a module | removed: the runtime reads the architecture from the model |
+| a label map inside an older model's directory, such as `category_mapping_path: models/mom-domain-classifier/category_mapping.json` | removed: the router reads the labels of the model it runs |
 | `mlp.device` on the MLP selection algorithm | removed: the MLP selector runs in the router |
 | `grounding.nli_contradiction_penalty` of the fusion algorithm | `grounding.contradiction_penalty`: grounding now reads the hallucination detector |
 

@@ -116,13 +116,23 @@ def _router_fragments() -> list[Block]:
     return fragments
 
 
-def test_kubernetes_manifests_parse():
+def test_kubernetes_manifests_parse_and_run_images_the_repository_builds():
     manifests = [block for block in _blocks("yaml") if "apiVersion" in block.text]
+    built = {
+        path.name.removeprefix("Dockerfile.")
+        for path in (REPO_ROOT / "tools" / "docker").glob("Dockerfile.*")
+    }
 
     assert manifests
     for block in manifests:
-        kinds = [document["kind"] for document in yaml.safe_load_all(block.text)]
-        assert kinds and all(kinds), block.where
+        documents = list(yaml.safe_load_all(block.text))
+        assert all(document["kind"] for document in documents), block.where
+        for document in documents:
+            pod = document.get("spec", {}).get("template", {}).get("spec", {})
+            for container in pod.get("containers", []):
+                registry, _, image = container["image"].rpartition("/")
+                assert registry == "ghcr.io/vllm-project/semantic-router", block.where
+                assert image.split(":")[0] in built, block.where
 
 
 def _merge(base: dict, fragment: dict) -> dict:

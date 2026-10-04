@@ -141,8 +141,14 @@ Expose it only on a private network: it has no authentication of its own.
 ### On Kubernetes
 
 The router image already contains the CPU runtime, so managed deployments work
-in any cluster. To put models on GPUs, run the runtime as its own Deployment
-with a GPU build of the runtime image and attach to its Service:
+in any cluster. The ROCm router image,
+`ghcr.io/vllm-project/semantic-router/extproc-rocm`, contains the runtime with
+PyTorch for ROCm: give the router pod an AMD GPU and set `device: rocm:0` on a
+deployment, and the router runs that model on the GPU itself.
+
+To share GPU models between several routers, run the runtime as its own
+Deployment from the same image and attach every router to its Service. The
+image's `VLLM_SR_RUNTIME_COMMAND` starts its runtime:
 
 ```yaml
 apiVersion: apps/v1
@@ -159,8 +165,12 @@ spec:
     spec:
       containers:
         - name: runtime
-          image: vllm-sr-runtime:rocm
-          args: ["serve", "vllm-sr/Decision-2.0-Lux-9B", "--device", "rocm:0", "--host", "0.0.0.0", "--port", "8100"]
+          image: ghcr.io/vllm-project/semantic-router/extproc-rocm:latest
+          command: ["sh", "-c"]
+          args:
+            - exec $VLLM_SR_RUNTIME_COMMAND serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --host 0.0.0.0 --port 8100
+          resources:
+            limits: {amd.com/gpu: 1}
           ports:
             - {name: http, containerPort: 8100}
           readinessProbe:
