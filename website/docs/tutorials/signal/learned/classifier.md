@@ -156,10 +156,13 @@ ordered `labels` as the mapping. See [Run it with the router](../../../model-run
 ## Independent labels with a frozen operating point
 
 A multi-label classifier, such as Hazard, can run independently of the Safety
-signal. Bind `label_scores.v1` and an explicit version-2 operating-point file.
-The binding has only its path and SHA256; model, tokenizer, execution, label
-order, window geometry and thresholds are bound inside that file. There is no
-implicit file discovery. Relative paths resolve inside the deployment artifact.
+signal. Bind `label_scores.v1` to a model runtime deployment whose package
+ships a version-2 `operating_point.json`. Model, tokenizer, execution, label
+order, window geometry and thresholds are bound inside that file, and the
+runtime verifies it before serving. The binding's `operating_point` pins the
+file: `path` names it inside the deployment artifact and `sha256` its bytes.
+Preparation rejects the binding when the runtime serves a policy with a
+different digest.
 
 ```yaml
 routing:
