@@ -147,7 +147,8 @@ Common Prometheus metric families:
 | Signals | `llm_signal_extraction_total`, `llm_signal_match_total`, `llm_signal_extraction_latency_seconds` |
 | Complexity verdicts | `llm_complexity_verdict_total` (by `rule`, `verdict`, `source`), `llm_complexity_evaluation_failures_total` |
 | Remote classifier backends | `llm_remote_connector_requests_total` (by `operation`, `outcome`), `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
-| Recipe routing | `llm_entrypoint_requests_total`, `llm_recipe_selections_total`, `llm_routing_stage_duration_seconds` |
+| Recipe routing | `llm_entrypoint_requests_total`, `llm_recipe_selections_total`, `llm_routing_stage_duration_seconds` (stages `signals`, `decision`, `algorithm`, `prompt_compression`), `llm_prompt_compression_total` (by `recipe` and `outcome`: `compressed`, `skipped_disabled`, `skipped_min_length`, `skipped_max_tokens`) |
+| Streamed request body | `llm_streamed_body_arrival_seconds`, `llm_streamed_body_bytes`, `llm_streamed_body_chunks` (by `recipe`; STREAMED and FULL_DUPLEX_STREAMED modes only) |
 | Projections | `llm_projection_score` (by configured recipe and projection name) |
 | Trace export | `llm_trace_export_spans_total` (by exporter batch result) |
 
