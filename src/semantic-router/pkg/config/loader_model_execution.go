@@ -76,7 +76,8 @@ func rejectRemovedModelExecutionFields(raw map[string]interface{}) error {
 }
 
 // removedNLIRoutingFields finds use_nli on hallucination rules and on
-// hallucination plugins of one routing block.
+// hallucination plugins of one routing block, and the NLI name of the fusion
+// grounding penalty (now contradiction_penalty).
 func removedNLIRoutingFields(prefix string, routing map[string]interface{}) []string {
 	var removed []string
 	if rules, ok := nestedStringMap(routing["signals"])["hallucination"].([]interface{}); ok {
@@ -86,6 +87,8 @@ func removedNLIRoutingFields(prefix string, routing map[string]interface{}) []st
 	}
 	decisions, _ := routing["decisions"].([]interface{})
 	for index, decision := range decisions {
+		grounding := nestedStringMap(nestedStringMap(nestedStringMap(nestedStringMap(decision)["algorithm"])["fusion"])["grounding"])
+		removed = appendPresent(removed, fmt.Sprintf("%s.decisions[%d].algorithm.fusion.grounding", prefix, index), grounding, "nli_contradiction_penalty")
 		plugins, _ := nestedStringMap(decision)["plugins"].([]interface{})
 		for pluginIndex, plugin := range plugins {
 			fields := nestedStringMap(plugin)

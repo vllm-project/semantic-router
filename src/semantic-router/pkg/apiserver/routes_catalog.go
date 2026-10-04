@@ -221,6 +221,12 @@ func apiInventoryRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleEmbeddingModelsInfo,
 			jsonResponse[embeddingModelsResponse](http.StatusOK, "Successful response"),
 		),
+		managedRoute(
+			EndpointMetadata{Path: apiInventoryModelRuntime, Method: "GET", Description: "Get the model_runtime deployments: process, readiness, restarts and served model cards"},
+			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
+			(*ClassificationAPIServer).handleModelRuntimeInventory,
+			jsonResponse[modelRuntimeInventoryResponse](http.StatusOK, "Successful response"),
+		),
 	}
 }
 

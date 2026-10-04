@@ -31,6 +31,7 @@ from typing import Any
 
 from ..errors import RuntimeServiceError
 from ..plugins.base import DEADLINE, Batch, Job, LoadedModel, Profile
+from .planner import cost
 
 __all__ = ["DEADLINE", "Scheduler", "SchedulerLimits"]
 
@@ -143,7 +144,7 @@ class Scheduler:
             if not items:
                 future.set_result([])
                 continue
-            job_tokens = sum(len(item.ids) for item in items)
+            job_tokens = sum(cost(item) for item in items)
             tokens += job_tokens
             job = Job(
                 items=items,
@@ -301,7 +302,7 @@ class Scheduler:
                     pending.future.set_exception(exc)
             return
         seconds = time.monotonic() - started
-        tokens = sum(len(item.ids) for item in items)
+        tokens = sum(cost(item) for item in items)
         self.observe(
             "forward", {"seconds": seconds, "rows": len(items), "tokens": tokens}
         )

@@ -130,7 +130,7 @@ func (k *KindCluster) createClusterArgs(configFile string) []string {
 const podARPScript = `sysctl -qw net.ipv4.conf.default.arp_ignore=0 && for setting in /proc/sys/net/ipv4/conf/*/arp_ignore; do echo 0 > "$setting"; done`
 
 func (k *KindCluster) allowPodARP(ctx context.Context) {
-	output, err := exec.CommandContext(ctx, "kind", "get", "nodes", "--name", k.Name).Output()
+	output, err := exec.CommandContext(ctx, "kind", "get", "nodes", "--name", k.Name).Output() //nolint:gosec // The cluster name comes from the E2E run, never from a request.
 	if err != nil {
 		k.log("Warning: list Kind nodes: %v", err)
 		return

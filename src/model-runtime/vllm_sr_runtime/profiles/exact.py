@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..plugins.base import Batch, Job, LoadedModel, Profile
-from ..scheduler.planner import exact_split, length_class, padded
+from ..scheduler.planner import cost, exact_split, length_class, padded
 
 # Padded tokens of one shared forward on a batch-invariant model. It bounds how
 # long one forward holds the device, so a short request queued behind the
@@ -70,18 +70,19 @@ def merged(jobs: list[Job], cap: int) -> list[Batch]:
 
     Only for batch-invariant models, where a row's answer does not depend on
     the batch it runs in. Rows with the same token IDs stay in one batch, where
-    the family computes them once, and count once against ``cap``; a sequence
-    longer than ``cap`` runs alone.
+    the family computes them once, and count once against ``cap``; inputs
+    without token IDs (images, audio) count by their ``cost``. A row costlier
+    than ``cap`` runs alone.
     """
-    sequences: dict[tuple[int, ...], list[tuple[Job, int]]] = {}
+    units: dict[object, tuple[int, list[tuple[Job, int]]]] = {}
     for job in jobs:
         for index, item in enumerate(job.items):
-            sequences.setdefault(tuple(item.ids), []).append((job, index))
+            key = tuple(item.ids) if item.ids else (id(job), index)
+            units.setdefault(key, (padded(cost(item)), []))[1].append((job, index))
     batches: list[Batch] = []
     current: dict[int, tuple[Job, list[int]]] = {}
     band = width = count = 0
-    for ids, rows in sorted(sequences.items(), key=lambda entry: padded(len(entry[0]))):
-        length = padded(len(ids))
+    for length, rows in sorted(units.values(), key=lambda unit: unit[0]):
         if current and (
             length_class(length) != band or max(width, length) * (count + 1) > cap
         ):
