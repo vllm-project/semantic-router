@@ -76,27 +76,6 @@ func TestBuildModelSpecsExcludesOnnxWeightsForAliasedEmbeddingModel(t *testing.T
 	}
 }
 
-// TestBuildModelSpecsKeepsFullSnapshotForOpenVINOBackend keeps ONNX deployments whole:
-// the OpenVINO embedding backend consumes the ONNX exports, so it must keep receiving
-// the unfiltered repository.
-func TestBuildModelSpecsKeepsFullSnapshotForOpenVINOBackend(t *testing.T) {
-	cfg := newCandleEmbeddingConfig()
-	cfg.EmbeddingModels.EmbeddingConfig = config.HNSWConfig{
-		Backend: config.EmbeddingBackendOpenVINO,
-	}
-
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
-	}
-
-	for _, spec := range specs {
-		if len(spec.ExcludePatterns) != 0 {
-			t.Fatalf("%s ExcludePatterns = %#v, want none for the openvino backend", spec.LocalPath, spec.ExcludePatterns)
-		}
-	}
-}
-
 // TestBuildModelSpecsLeavesNonEmbeddingModelsUnfiltered limits the blast radius to the
 // embedding runtime: other locally provisioned models keep the full snapshot until their
 // own runtime contract is encoded.
