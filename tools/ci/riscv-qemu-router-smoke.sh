@@ -9,6 +9,8 @@ cd "${REPO_ROOT}"
 
 ROUTER_BIN=${RISCV_ROUTER_BIN:?}
 QEMU=${RISCV_QEMU:?}
+# The evidence writer imports the CI harness, which needs the harness venv's packages.
+PYTHON=${PYTHON:-python3}
 read -r -a RUNTIME <<<"${VLLM_SR_RUNTIME_COMMAND:-vllm-sr-runtime}"
 REPORT_DIR=${MODEL_TEST_REPORT_DIR:?}
 RUNTIME_PORT=${RISCV_RUNTIME_PORT:-18100}
@@ -69,7 +71,7 @@ curl -sf --max-time 60 -o "${REPORT_DIR}/runtime-classify.body" \
 
 # One domain signal and one decision per fixture label: the category the router
 # reports must then be exactly the label the runtime predicted.
-routing_rules=$(python3 - "${REPORT_DIR}/runtime-classify.body" "${work}/domain-mapping.json" <<'PY'
+routing_rules=$("${PYTHON}" - "${REPORT_DIR}/runtime-classify.body" "${work}/domain-mapping.json" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -173,7 +175,7 @@ classify_status=$(curl -sf --max-time 120 -o "${REPORT_DIR}/classify.body" -w '%
   -H "Content-Type: application/json" -d "{\"text\":\"${PROMPT}\"}" \
   "${API_URL}/api/v1/diagnostics/classify/intent")
 
-python3 - "${REPORT_DIR}" "${classify_status}" <<'PY'
+"${PYTHON}" - "${REPORT_DIR}" "${classify_status}" <<'PY'
 import json
 import subprocess
 import sys
