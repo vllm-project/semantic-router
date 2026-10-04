@@ -280,6 +280,37 @@ def test_one_forward_reads_every_repeat_and_bundled_task(monkeypatch, client, ru
     assert len(calls) == 1 and len(calls[0]) == 2
 
 
+def test_engines_learn_whether_their_process_shares_the_cpu(packages, monkeypatch):
+    import vllm_sr_runtime.runtime as runtime_module
+
+    seen = {}
+    choose = runtime_module.choose_engine
+
+    def recording(name, spec, device, preferred=None):
+        chosen, engine = choose(name, spec, device, preferred)
+        load = engine.load
+
+        def load_and_record(spec, accelerator, device, options):
+            seen[spec.name] = options.exclusive_cpu
+            return load(spec, accelerator, device, options)
+
+        engine.load = load_and_record
+        return chosen, engine
+
+    monkeypatch.setattr(runtime_module, "choose_engine", recording)
+    alone, other = list(packages.items())[:2]
+    for served in ((alone,), (alone, other)):
+        models = tuple(
+            ModelConfig(model=str(path), name=name, device="cpu")
+            for name, path in served
+        )
+        runtime = Runtime(ServeConfig(models=models, result_cache_entries=0))
+        runtime.start(background=False)
+        runtime.stop()
+        assert set(seen.values()) == {len(served) == 1}
+        seen.clear()
+
+
 @pytest.mark.parametrize("profile", ["shared_context", "batching", "max_speed"])
 def test_approximate_profiles_serve_every_head(packages, profile):
     models = tuple(

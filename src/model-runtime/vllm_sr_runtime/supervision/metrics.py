@@ -109,6 +109,12 @@ class RuntimeMetrics:
             "1 when the model passed its golden check.",
             registry=self.registry,
         )
+        self.model_memory = Gauge(
+            "vllm_sr_runtime_model_memory_bytes",
+            "Bytes of a model's loaded weights, packed layouts and reduced-precision copies.",
+            ["model"],
+            registry=self.registry,
+        )
         self.model_info = Gauge(
             "vllm_sr_runtime_model_info",
             "The served model (value 1).",

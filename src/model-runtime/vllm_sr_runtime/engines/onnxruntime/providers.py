@@ -4,12 +4,14 @@ The CPU provider is validated. GPU providers run only when the installed
 onnxruntime build has them, never fall back to the CPU for a node they cannot
 run, and stay unvalidated until a record says otherwise.
 
-CPU sessions share one intra-op pool per process (created before the first
-session): each session's own pool spins after a run, so graphs that run one
-after another (Omni's CLAP windows, then its audio graph) otherwise share the
-cores with the previous session's spinning threads; on 16 cores CLAP + audio
-took 124 ms with per-session pools and 43 ms with the shared one. The pool is
-sized to the configured threads, else the CPUs the process may run on (ONNX
+In a process that has the CPU to itself, CPU sessions share one intra-op pool
+(created before the first session): each session's own pool spins after a
+run, so graphs that run one after another (Omni's CLAP windows, then its audio
+graph) otherwise share the cores with the previous session's spinning threads;
+on 16 cores CLAP + audio took 124 ms with per-session pools and 43 ms with the
+shared one. Where the process serves other CPU models, the spinning would slow
+their forwards instead, so sessions get pools that don't spin. Pools are sized
+to the configured threads, else the CPUs the process may run on (ONNX
 Runtime's own default counts the host's CPUs, not the cpuset).
 """
 
@@ -118,12 +120,15 @@ def shared_pool(threads: int) -> int | None:
 
 
 def session_options(
-    choice: ProviderChoice, threads: int | None, spinning: bool | None = None
+    choice: ProviderChoice, threads: int | None, exclusive_cpu: bool = True
 ) -> Any:
     """Sequential execution with every graph optimization; GPU sessions never fall back to the CPU.
 
-    CPU sessions run on the shared pool where it exists (``spinning`` then has
-    no effect), else on their own pool of ``cpu_threads(threads)``.
+    In a process that has the CPU to itself, CPU sessions run on the shared
+    pool. Where other CPU models share the process, each CPU session gets its
+    own pool of ``cpu_threads(threads)`` that doesn't spin: the shared pool
+    keeps its threads spinning after every run and ONNX Runtime offers no way
+    to stop that. Once the shared pool exists every CPU session must use it.
     """
     import onnxruntime as ort
 
@@ -132,15 +137,16 @@ def session_options(
     options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
     options.log_severity_level = 3
     size = cpu_threads(threads)
-    if not choice.gpu and shared_pool(size):
+    pooled = not choice.gpu and (
+        (exclusive_cpu and shared_pool(size)) or _SHARED_POOL.get("size")
+    )
+    if pooled:
         options.use_per_session_threads = False
     else:
         options.intra_op_num_threads = size
         options.inter_op_num_threads = 1
-    if spinning is not None:
-        options.add_session_config_entry(
-            "session.intra_op.allow_spinning", "1" if spinning else "0"
-        )
+    if not choice.gpu and not exclusive_cpu:
+        options.add_session_config_entry("session.intra_op.allow_spinning", "0")
     if choice.gpu:
         options.add_session_config_entry("session.disable_cpu_ep_fallback", "1")
     return options
