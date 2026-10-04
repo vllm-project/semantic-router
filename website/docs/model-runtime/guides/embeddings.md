@@ -111,4 +111,4 @@ the model, layer and dimension that identify the vector space.
 Vectors of different models, layers or sizes are never compared with each
 other. After you change any of them, re-index vector stores and re-add the
 memories you need, and expect the semantic cache to fill again. See
-[Re-embed when the embedding model changes](../migrate.md#re-embed-when-the-embedding-model-changes).
+[Re-embed when the embedding model changes](model-runtime/migrate.md#re-embed-when-the-embedding-model-changes).

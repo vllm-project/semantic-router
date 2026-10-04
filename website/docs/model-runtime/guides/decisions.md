@@ -121,6 +121,6 @@ needs a Hugging Face token with access. See
 ## Check it
 
 Ask the model the same question directly with `/v1/decisions`; see the
-[Quickstart](../quickstart.md#3-send-a-request). Through the router,
+[Quickstart](model-runtime/quickstart.md#3-send-a-request). Through the router,
 `x-vsr-matched-decision-model` lists the decision signals that matched and
 `x-vsr-selected-model` the model the selector chose.
