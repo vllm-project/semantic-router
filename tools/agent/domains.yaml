@@ -918,7 +918,10 @@ profiles:
       - e2e/testcases/testdata/complexity_routing_cases.json
       - src/semantic-router/pkg/classification/complexity_classifier.go
       - src/semantic-router/pkg/classification/complexity_rule_scoring.go
+      - src/semantic-router/pkg/classification/complexity_candidate_embeddings.go
+      - src/semantic-router/pkg/classification/complexity_query_embeddings.go
       - src/semantic-router/pkg/classification/classifier_signal_complexity.go
+      - src/semantic-router/pkg/classification/classifier_signal_complexity_publish.go
   long-context-routing:
     display_name: Long Context Routing
     owner: e2e
