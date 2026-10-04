@@ -1005,7 +1005,7 @@ Analyze replay and outcomes to produce recipe-learning artifacts.
 | Parameter | Description |
 | --- | --- |
 | `--replay-file FILE` | Router replay JSON file. Accepts a router_replay.list payload or a record array. |
-| `--endpoint TEXT` | Router management base URL (origin or /api/v1). Defaults to http://localhost:8080 when --replay-file is omitted. Uses VSR_MGMT_TOKEN for bearer auth when set. |
+| `--endpoint TEXT` | Router management base URL (origin or /api/v1). Defaults to http://localhost:&lt;8080 + VLLM_SR_PORT_OFFSET&gt; when --replay-file is omitted. Uses VSR_MGMT_TOKEN for bearer auth when set. |
 | `--cases-file FILE` | Optional eval cases JSON with replay_id/request_id plus expected_decision or expected_model. |
 | `--recipe-file FILE` | Optional current recipe YAML used to materialize complete candidate recipe variants. |
 | `--limit INTEGER` | Replay records to fetch from the endpoint.  [default: 100] |
