@@ -66,7 +66,7 @@ common reasons:
 | access denied, gated or private | Log in with `hf auth login` or set `HF_TOKEN` for the account that has access. Vela 2.0 is a private preview. |
 | does not fit, out of memory | Use a smaller model, a GPU with more memory, or give the model its own `process`. |
 | device not available | The named GPU does not exist or the installed PyTorch has no support for it. Use `device: auto`, or install the right PyTorch build. |
-| no family recognizes the package | The model's architecture is not supported. See [Choose a model](./choose-a-model.md#your-own-models). |
+| no family recognizes the package | The model's architecture is not supported. See [Choose a model](model-runtime/choose-a-model.md#your-own-models). |
 | a licence must be accepted | The model's licence restricts use. Pass `--accept-licence <id>` after you checked that you may use it. |
 
 When one model of a process fails, the other models in that process keep
