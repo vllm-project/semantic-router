@@ -85,8 +85,10 @@ def test_router_binary_needs_only_the_target_c_linker() -> None:
     assert "CGO_ENABLED=1" in build
     assert "gcc-aarch64-linux-gnu" in build
     assert "go build" in build
-    for image_stage in ("python-base", "runtime", "router", "vllm-sr", "extproc"):
+    for image_stage in ("python-base", "runtime", "router", "extproc"):
         assert "apt-get" not in graph[image_stage][1], image_stage
+    # The CLI's readiness and status probes run curl inside the stack image.
+    assert "apt-get install -y --no-install-recommends curl &&" in graph["vllm-sr"][1]
     assert "COPY --link --from=router-build /out/router /usr/local/bin/router" in (
         graph["router"][1]
     )
