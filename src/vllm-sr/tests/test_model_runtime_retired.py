@@ -199,3 +199,19 @@ def test_the_inventory_is_the_router_parsers():
     assert tuple((strings(path), strings(names)) for path, names in modules) == (
         REMOVED_MODULE_FIELDS
     )
+
+
+def test_the_hallucination_endpoint_shorthand_is_retired():
+    document = _legacy()
+    modules = document["global"]["model_catalog"]["modules"]
+    modules["hallucination_mitigation"]["detector"] = {
+        "backend": "endpoint",
+        "endpoint": "http://detector:8000/v1",
+        "model_id": "lettucedect",
+    }
+
+    found = retired_model_fields(document)
+
+    detector = "global.model_catalog.modules.hallucination_mitigation.detector"
+    assert f"{detector}.backend: endpoint" in found
+    assert f"{detector}.endpoint" in found

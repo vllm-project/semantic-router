@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import posixpath
 from typing import Any
+from urllib.parse import urlparse
 
 from cli.config_migration_embeddings import migrate_embedding_models
 from cli.config_migration_legacy_models import (
@@ -37,6 +38,7 @@ _DEVICE_PREFIXES = {"cuda": "cuda", "rocm": "rocm", "migraphx": "rocm"}
 _EXECUTION_FIELDS = ("custom_ops_profile", "compilation_cache_dir")
 _LOCAL_SELECTORS = ("use_modernbert", "use_mmbert_32k", "variant")
 _HALLUCINATION_NLI_FIELDS = ("enable_nli_filtering", "nli_entailment_threshold")
+_HALLUCINATION_ENDPOINT = "hallucination-detector"
 
 # (module path under model_catalog.modules, model field, label-map field).
 _MODULE_MODELS = (
@@ -318,7 +320,9 @@ def _migrate_modules(catalog: dict[str, Any], notes: MigrationNotes) -> None:
         )
     hallucination = dict_at(modules, "hallucination_mitigation")
     if hallucination is not None:
-        _migrate_hallucination(base + ".hallucination_mitigation", hallucination, notes)
+        _migrate_hallucination(
+            base + ".hallucination_mitigation", hallucination, catalog, notes
+        )
 
 
 def _replace_module_model(
@@ -360,7 +364,10 @@ def _drop_local_selectors(
 
 
 def _migrate_hallucination(
-    path: str, hallucination: dict[str, Any], notes: MigrationNotes
+    path: str,
+    hallucination: dict[str, Any],
+    catalog: dict[str, Any],
+    notes: MigrationNotes,
 ) -> None:
     for field in ("explainer", "nli_model"):
         if hallucination.pop(field, None) is not None:
@@ -375,7 +382,13 @@ def _migrate_hallucination(
                 f"{detector_path}.{field}", "removed; NLI filtering is retired"
             )
     if str(detector.get("backend") or "").strip().lower() == "endpoint":
+        _migrate_hallucination_endpoint(detector_path, detector, catalog, notes)
         return
+    if detector.pop("endpoint", None) is not None:
+        notes.changed(
+            detector_path + ".endpoint",
+            "removed; a remote detector is a hallucination_detector binding",
+        )
     if detector.pop("backend", None) not in (None, ""):
         notes.changed(
             detector_path + ".backend",
@@ -387,6 +400,72 @@ def _migrate_hallucination(
             detector_path + ".include_explanation",
             "removed; NLI explanations are retired, spans stay in the response",
         )
+
+
+def _migrate_hallucination_endpoint(
+    path: str, detector: dict[str, Any], catalog: dict[str, Any], notes: MigrationNotes
+) -> None:
+    """Rewrite `backend: endpoint` into the http_chat binding it was shorthand for.
+
+    The shorthand applied to every recipe without its own binding, so the
+    binding becomes the catalog-wide default.
+    """
+    endpoint = str(detector.get("endpoint") or "").strip()
+    model = str(detector.get("model_id") or "").strip()
+    parsed = urlparse(endpoint.rstrip("/"))
+    if not model or parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError(
+            f"{path}: backend: endpoint needs an absolute http(s) endpoint and a model_id"
+        )
+    if parsed.path != "/v1" or parsed.query or parsed.fragment:
+        raise ValueError(
+            f"{path}.endpoint {endpoint!r}: an http_chat deployment posts to "
+            "<host>/v1/chat/completions; declare the external model and the "
+            "hallucination_detector binding by hand for any other path"
+        )
+    bindings = catalog.setdefault("bindings", {})
+    if "hallucination_detector" in bindings:
+        notes.changed(
+            path + ".backend",
+            "removed; the hallucination_detector binding already selects the detector",
+        )
+    else:
+        deployments = catalog.setdefault("deployments", {})
+        external = catalog.setdefault("external", [])
+        name = _HALLUCINATION_ENDPOINT
+        if name in deployments or any(
+            isinstance(other, dict) and other.get("name") == name for other in external
+        ):
+            raise ValueError(
+                f"{path}: the name {name!r} is taken; declare the "
+                "hallucination_detector binding by hand"
+            )
+        external.append(
+            {
+                "name": name,
+                "model_role": "classification",
+                "llm_endpoint": {
+                    "address": parsed.hostname,
+                    "port": parsed.port or (443 if parsed.scheme == "https" else 80),
+                    "protocol": parsed.scheme,
+                },
+                "llm_model_name": model,
+                "llm_timeout_seconds": 10,
+            }
+        )
+        deployments[name] = {"provider": "http", "external_model": name}
+        bindings["hallucination_detector"] = {
+            "deployment": name,
+            "contract": "token_spans.v1",
+            "adapter": "http_chat",
+        }
+        notes.changed(
+            path + ".backend",
+            "moved to global.model_catalog.bindings.hallucination_detector "
+            f"(http_chat deployment {name})",
+        )
+    for field in ("backend", "endpoint", "model_id"):
+        detector.pop(field, None)
 
 
 def _migrate_signals(path: str, signals: dict[str, Any], notes: MigrationNotes) -> None:
