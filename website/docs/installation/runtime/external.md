@@ -6,7 +6,7 @@ description: Connect a classifier, guard, or embedding model hosted outside the 
 Use an external service when another server manages the model and its hardware.
 The Router sends it the text to inspect and uses its response as a routing
 signal. For models the router runs itself, see the
-[model runtime](../../model-runtime/overview.md).
+[model runtime](model-runtime/overview.md).
 
 ## Choose an API
 

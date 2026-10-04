@@ -5,7 +5,7 @@
 `decision` asks a decision model a typed question about the request and turns the answer into a routing fact.
 You write the question in plain language: pick one of a few options
 (`choice`), yes or no (`noul`), or a level on a scale (`score`). The model
-runs in the [built-in model runtime](../../../model-runtime/overview.md),
+runs in the [built-in model runtime](model-runtime/overview.md),
 which the router starts for you.
 
 ## Key Advantages

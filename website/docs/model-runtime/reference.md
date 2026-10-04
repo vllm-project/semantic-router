@@ -189,8 +189,9 @@ status, `vllm_sr_runtime_request_duration_seconds`,
 `vllm_sr_runtime_forward_duration_seconds`, `vllm_sr_runtime_batch_rows`,
 `vllm_sr_runtime_batch_tokens`, `vllm_sr_runtime_bundle_tasks`,
 `vllm_sr_runtime_result_cache_total` by model and outcome,
-`vllm_sr_runtime_queue_depth`, `vllm_sr_runtime_ready` and
-`vllm_sr_runtime_model_info`.
+`vllm_sr_runtime_queue_depth`, `vllm_sr_runtime_ready`,
+`vllm_sr_runtime_model_info` and `vllm_sr_runtime_model_memory_bytes` (the
+bytes a model's loaded weights take, reduced-precision copies included).
 
 ## Security
 

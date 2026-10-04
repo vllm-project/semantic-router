@@ -23,7 +23,7 @@ feature reports "unknown" and your routes fall back the way you configured.
 | --- | --- | --- |
 | Use the router's built-in features | Nothing extra. The router starts and supervises the runtime for you. | [Run it with the router](./deploy.md) |
 | Put the models on a GPU or share them between routers | Start a runtime yourself and point the router at it with `endpoint`. | [Run it with the router](./deploy.md#attach-to-a-runtime-you-run) |
-| Call the models from your own code | Run `vllm-sr serve <model>` and send HTTP requests. | [Quickstart](./quickstart.md) |
+| Call the models from your own code | Run `vllm-sr serve <model>` and send HTTP requests. | [Quickstart](model-runtime/quickstart.md) |
 
 ## What it can serve
 
@@ -68,4 +68,4 @@ runtime with a GPU build of PyTorch and attach the router to it.
 
 The candle, ONNX Runtime and OpenVINO back ends are gone. Run
 `vllm-sr config migrate` to update your configuration; see
-[Migrate from the native bindings](./migrate.md).
+[Migrate from the native bindings](model-runtime/migrate.md).
