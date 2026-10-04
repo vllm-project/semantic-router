@@ -18564,15 +18564,6 @@
                                 "hallucination_confidence": {
                                   "type": "number"
                                 },
-                                "nli_confidence": {
-                                  "type": "number"
-                                },
-                                "nli_label": {
-                                  "type": "string"
-                                },
-                                "nli_score_available": {
-                                  "type": "boolean"
-                                },
                                 "score_available": {
                                   "type": "boolean"
                                 },
@@ -18591,8 +18582,6 @@
                                 "start",
                                 "end",
                                 "score_available",
-                                "nli_label",
-                                "nli_score_available",
                                 "severity",
                                 "explanation"
                               ]
@@ -22728,15 +22717,6 @@
                           "hallucination_confidence": {
                             "type": "number"
                           },
-                          "nli_confidence": {
-                            "type": "number"
-                          },
-                          "nli_label": {
-                            "type": "string"
-                          },
-                          "nli_score_available": {
-                            "type": "boolean"
-                          },
                           "score_available": {
                             "type": "boolean"
                           },
@@ -22755,8 +22735,6 @@
                           "start",
                           "end",
                           "score_available",
-                          "nli_label",
-                          "nli_score_available",
                           "severity",
                           "explanation"
                         ]
