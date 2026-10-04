@@ -34,9 +34,11 @@ from ...heads.candidate import forward_logits, load_head
 from ...registry import builtin, policy
 from ...registry.resolve import download_base
 from ...systemone import (
+    GOLDEN_STATE,
     MAX_LEVELS,
     MAX_OPTIONS,
     MIN_LEVELS,
+    golden_questions,
     question_options,
     valid_state,
 )
@@ -45,29 +47,7 @@ from ...text.tokenizer import Tokenizer
 from . import package as pkg
 from .answers import apply_score_bias, product_answer
 
-GOLDEN_STATE = (
-    "Write a Python function that merges two sorted lists and explain its running time."
-)
-GOLDEN_QUESTIONS = {
-    "domain": {
-        "type": "choice",
-        "instructions": "Which domain does this request belong to?",
-        "criteria": {
-            "code": "Programming",
-            "math": "Mathematics",
-            "other": "Anything else",
-        },
-    },
-    "reasoning": {
-        "type": "noul",
-        "instructions": "Does answering this request need multi-step reasoning?",
-    },
-    "difficulty": {
-        "type": "score",
-        "instructions": "How difficult is this request?",
-        "criteria": ["Trivial", "Moderate", "Hard"],
-    },
-}
+GOLDEN_QUESTIONS = golden_questions("Anything else")
 
 
 class Decision2Family(ModelFamily):

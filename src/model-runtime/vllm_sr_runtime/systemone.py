@@ -23,6 +23,30 @@ MIN_LEVELS, MAX_LEVELS = 2, 10
 
 canonical = canonical_json
 
+GOLDEN_STATE = (
+    "Write a Python function that merges two sorted lists and explain its running time."
+)
+
+
+def golden_questions(other: Any) -> dict[str, Any]:
+    """The readiness request's questions, one per System One type; ``other`` describes Choice's catch-all option."""
+    return {
+        "domain": {
+            "type": "choice",
+            "instructions": "Which domain does this request belong to?",
+            "criteria": {"code": "Programming", "math": "Mathematics", "other": other},
+        },
+        "reasoning": {
+            "type": "noul",
+            "instructions": "Does answering this request need multi-step reasoning?",
+        },
+        "difficulty": {
+            "type": "score",
+            "instructions": "How difficult is this request?",
+            "criteria": ["Trivial", "Moderate", "Hard"],
+        },
+    }
+
 
 def json_payload(
     value: Any, *, nullable: bool = False, require_nonempty_text: bool = False
