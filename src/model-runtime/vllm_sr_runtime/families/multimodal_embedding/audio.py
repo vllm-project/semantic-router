@@ -12,6 +12,7 @@ IEEE float32, up to eight channels and 30 seconds.
 
 from __future__ import annotations
 
+import functools
 import math
 import struct
 from dataclasses import dataclass
@@ -189,8 +190,12 @@ def decode_wav(data: bytes) -> PCM:
     return PCM(pcm, rate)
 
 
+@functools.lru_cache(maxsize=32)
 def _kernel(original: int, new: int) -> tuple[np.ndarray, int]:
-    """torchaudio's Hann sinc kernel ``[new, 2 * width + original]`` for coprime rates."""
+    """torchaudio's Hann sinc kernel for coprime rates, transposed (``[2 * width + original, new]``, float64).
+
+    It depends only on the rates, so each pair is built once (read-only).
+    """
     base = min(original, new) * ROLLOFF
     width = math.ceil(LOWPASS_WIDTH * original / base)
     # The phase is divided in float32 (torch.arange's default dtype), the rest in float64.
@@ -203,7 +208,9 @@ def _kernel(original: int, new: int) -> tuple[np.ndarray, int]:
     angle = t * math.pi
     with np.errstate(invalid="ignore", divide="ignore"):
         sinc = np.where(angle == 0, 1.0, np.sin(angle) / angle)
-    return (sinc * window * (base / original)).astype(np.float32), width
+    kernel = (sinc * window * (base / original)).astype(np.float32).T.astype(np.float64)
+    kernel.setflags(write=False)
+    return kernel, width
 
 
 def resample(signal: np.ndarray, source: int, target: int) -> np.ndarray:
@@ -213,12 +220,13 @@ def resample(signal: np.ndarray, source: int, target: int) -> np.ndarray:
     divisor = math.gcd(source, target)
     original, new = source // divisor, target // divisor
     kernel, width = _kernel(original, new)
+    taps = kernel.shape[0]
     length = -(-len(signal) * new // original)
     groups = -(-length // new)
-    right = max((groups - 1) * original + kernel.shape[1] - width - len(signal), 0)
+    right = max((groups - 1) * original + taps - width - len(signal), 0)
     padded = np.pad(signal.astype(np.float64), (width, right))
-    frames = sliding_window_view(padded, kernel.shape[1])[::original][:groups]
-    out = frames @ kernel.T.astype(np.float64)
+    frames = sliding_window_view(padded, taps)[::original][:groups]
+    out = frames @ kernel
     return out.reshape(-1)[:length].astype(np.float32)
 
 
@@ -253,15 +261,19 @@ def features(wave: np.ndarray, spec: Spectrum) -> np.ndarray:
         padded[: min(len(wave), spec.n_samples)] = wave[: spec.n_samples]
     half = spec.n_fft // 2
     centred = np.pad(padded.astype(np.float64), (half, half), mode="reflect")
-    frames = sliding_window_view(centred, spec.n_fft)[:: spec.hop_length][
-        : spec.n_frames
-    ]
+    # Whisper zero-pads to 30 s; frames past the signal hold only zeros, so their
+    # power is exactly 0 and their energy exactly the floor.
+    live = spec.n_frames
+    if not spec.clap:
+        live = min(live, -(-(min(len(wave), spec.n_samples) + half) // spec.hop_length))
+    frames = sliding_window_view(centred, spec.n_fft)[:: spec.hop_length][:live]
     window = 0.5 - 0.5 * np.cos(2 * math.pi * np.arange(spec.n_fft) / spec.n_fft)
     spectrum = np.fft.rfft(frames * window, axis=1).astype(np.complex64)
     power = (
         spectrum.real.astype(np.float64) ** 2 + spectrum.imag.astype(np.float64) ** 2
     )
-    energy = np.maximum(power @ spec.mel_filters, 1e-10)
+    energy = np.full((spec.n_frames, spec.mel_filters.shape[1]), 1e-10)
+    energy[:live] = np.maximum(power @ spec.mel_filters, 1e-10)
     if spec.clap:
         return (10.0 * np.log10(energy)).astype(np.float32)
     log = np.log10(energy).T.astype(np.float32)

@@ -195,7 +195,7 @@ func (d ModelDeployment) validateModelRuntime() error {
 	if d.CustomOpsProfile != "" || d.CompilationCacheDir != "" {
 		return fmt.Errorf("model_runtime deployments do not use ONNX Runtime custom ops or compilation caches")
 	}
-	if d.Precision != "native" {
+	if d.Precision != "" {
 		return fmt.Errorf("model_runtime deployments run the package's own dtype policy; select a profile instead of precision")
 	}
 	if d.Input.MaxTokens < 0 {

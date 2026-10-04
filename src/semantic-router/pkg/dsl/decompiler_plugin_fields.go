@@ -123,9 +123,6 @@ func pluginFieldsHallucination(p *config.DecisionPlugin) map[string]Value {
 	if cfg.Enabled {
 		fields["enabled"] = BoolValue{V: true}
 	}
-	if cfg.UseNLI {
-		fields["use_nli"] = BoolValue{V: true}
-	}
 	if cfg.HallucinationAction != "" {
 		fields["hallucination_action"] = StringValue{V: cfg.HallucinationAction}
 	}

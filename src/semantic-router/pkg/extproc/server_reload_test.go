@@ -14,11 +14,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
+// The balance recipe's classifiers are runtime-served; the router downloads
+// only the embedding it runs itself.
 var expectedAMDModelPaths = []string{
 	"models/Vela-1.0-Encoder-307M-Embedding",
-	"models/Vela-1.0-Encoder-307M-Domain",
-	"models/Vela-1.0-Encoder-307M-FactCheck",
-	"models/Vela-1.0-Encoder-307M-Feedback",
 }
 
 func TestReloadRejectsPreviewAdmissionChangeBeforePreparation(t *testing.T) {

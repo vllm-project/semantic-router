@@ -134,11 +134,6 @@ func assets(suite, provider, output string) (manifest, []modeldownload.ModelSpec
 			// as well as the selected graph, including for ONNX execution.
 			spec.RequiredFiles = append(spec.RequiredFiles, "model.safetensors", "operating_point.json")
 		}
-		for _, mapping := range []string{defaults.CategoryMappingPath, defaults.PromptGuard.JailbreakMappingPath, defaults.PIIMappingPath} {
-			if filepath.Dir(mapping) == model.LocalPath {
-				spec.RequiredFiles = append(spec.RequiredFiles, filepath.Base(mapping))
-			}
-		}
 		specs = append(specs, spec)
 	}
 	if suite == "runtime" {
