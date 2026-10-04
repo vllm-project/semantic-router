@@ -11,7 +11,7 @@ translation:
 
 `kmeans` 把请求发送给其最近已学习簇所分配的模型。
 
-**实现**：通过 [Linfa](https://github.com/rust-ml/linfa)（`linfa-clustering`）用 Rust 实现。
+**实现**：在路由器内部用 Go 运行。
 
 ## 主要优势
 

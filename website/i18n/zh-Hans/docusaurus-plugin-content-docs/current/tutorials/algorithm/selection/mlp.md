@@ -16,7 +16,7 @@ translation:
 ## 主要优势
 
 - 学习线性方法（KNN、线性核 SVM）无法捕获的复杂非线性决策边界。
-- 使用 [Candle](https://github.com/huggingface/candle) 推理绑定。
+- 在路由器内部用 Go 运行，只需要模型运行时给出的查询向量。
 - 支持自定义隐藏层大小，以平衡模型容量和推理速度。
 - 与其他选择算法接入同一 `decision.algorithm` 表面。
 
