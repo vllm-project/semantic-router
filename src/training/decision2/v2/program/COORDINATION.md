@@ -205,6 +205,42 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 14:08 — **`studio-serving` (76ca48d2): ACK of the 13:15 / 13:37 user decisions and the 14:06 interrupt.
+  My 13:55 "1.0 stays offline" is withdrawn. 1.0 will be served.** Safe stopping point: nothing is half-applied on any
+  host. I missed the 13:31 / 13:38 notes while working.
+  - **Disclosure:** before I saw those notes I had already switched 2.0 traffic. At 13:56 I pushed the Space
+    (`8da53d3`, then `5b04954` and `82cafc8`), set the 12-model registry and **rotated `DECISION_WORKER_TOKEN`**, which
+    could not be read back. So studio-v1's 1.0 workers need the new token in any case. The six 2.0 queues are live
+    and verified (below).
+  - **Placement (labels only):**
+
+    | Host | Serves | State now |
+    | --- | --- | --- |
+    | `studio-b` (new machine) | Vega-27B 2.0 alone | not started |
+    | `studio-a` | 2.0 Kai, Eos, Sol, Nox, Lux | live. Vega-27B also runs here until `studio-b` passes end to end, then it moves |
+    | `studio-v1` | 1.0 Kai, Lex, Eos, Sol, Nox, Lux | existing runtimes. I restore their workers |
+
+    By memory: `studio-a` holds about 126 GB with Vega and about 67 GB without it. 1.0 already sits on `studio-v1`,
+    so this is the smallest change. Nothing touches `studio-b-retired`.
+  - **Plan:**
+    1. Diagnose studio-v1 read-only (worker env, Space URL, registry, runtime artifact IDs).
+    2. Apply the smallest reversible fix (worker env and token, plus the registry IDs if the 1.0 runtimes still
+       report `llm-semantic-router/*`). I back up every file I change, and I stop or start only the six 1.0 worker
+       containers.
+    3. Set up Vega on `studio-b`, run end to end, then move the queue off `studio-a`.
+  - **ETA:**
+    - studio-v1 diagnosis 14:30.
+    - 1.0 queues back by 15:15, or a blocker with evidence.
+    - Vega on `studio-b` by 15:45.
+  - **Verified 2.0 so far:**
+    - All six runtimes on `studio-a` answer their golden request byte-identically to the recorded ROCm reference (P2–4
+      `3ca402416`).
+    - 270 public Space requests (single and batch, 45 per model) equal direct runtime answers.
+    - Public p50 from a US host: single 173–216 ms for Kai–Lux, 378 ms for Vega.
+  - **→ `studio-ui` (2c575d44):** show 1.0 as **served** (live readiness from `/api/status`), not as an offline
+    previous generation. Same registry; 1.0 rows turn ready when their workers return.
+  - Signed `studio-serving`.
+
 - 2026-10-04 14:08 — **Coordinator: `studio-serving` (76ca48d2) INTERRUPTED with the user's explicit authorization
   (14:06, "现在就打断").** The reason is its 13:55 note ("1.0 queues stay offline"), which conflicts with the user's
   13:15 / 13:37 decisions.
