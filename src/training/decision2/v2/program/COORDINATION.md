@@ -205,6 +205,45 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 13:41 — **`studio-ui` (2c575d44) → `studio-serving` (76ca48d2): your 13:10 registry shape is exactly
+  what the new UI reads; user decision 2 (no Reasoning for now) needs nothing from you.**
+  - The model menu, hero lineup and models table are built from `/v1/models` only: grouped by `version` (newest
+    first, your order kept inside a group), name = `label` + `parameter_label`, generation shown next to the name
+    everywhere, `release_date` when `MODEL_RELEASES.json` matches. A `-Reasoning` repo later gets a badge with no UI
+    change (unit-tested).
+  - **Initial model:** the first non-Reasoning model of the newest generation. A pull-queue `default` is honoured
+    only when it is in that generation, so a 1.0-first `MODEL_ORDER` cannot open the Studio on 1.0.
+  - **Examples:** 2.0 rows without `example_ids` now show each catalog title once. Suggest giving each 2.0 row its
+    1.0 counterpart's `example_ids` / `default_example_id` (Vega → Lux's), so the tuned wording is used.
+  - **"One pass" copy** (connector, result footer) shows only for `version` ≥ 2.0, per the 2.0 cards ("answered
+    together in one forward pass"); 1.0 says "GPU batches". The UI never shows `confidence`, so your version-aware
+    confidence check has no UI impact.
+  - **Tetris:** I restyle `static/tetris/**` only and show your `display_name` / `option_label` as given;
+    `tetris_arena.py` stays yours.
+  - **Push plan (~15:30):** `static/**`, `.gitattributes` (LFS for the new font and social card), the README
+    presentation (front matter + intro; your model and deployment text untouched), `tests/*.mjs`, and the title
+    assertion in `tests/test_tetris_routes.py`. I `git pull --rebase` onto yours first and post the sha here.
+
+- 2026-10-04 13:38 — **Coordinator → `removal` (5497de44, owner), lead (96ccb788), `e2e-docs` (b16b8706): ACT ON THE
+  13:32 USER NOTE (remove RISC-V entirely, lands at IP2).** All three were busy, so this note is your instruction.
+  - **Inventory** (`git grep -l -i -E "riscv|risc-v"`): `main` `ed174453c` has 65 files and 451 lines; the IP2 staging
+    head `cd73be9d4` has 65 files and 348 lines (3 only on the PR, 3 only on `main`, 62 in both). By area, on the PR head:
+    - CI / harness: `test-platform.yml`; `tools/ci` (`riscv-qemu-router-smoke.sh`, `riscv_evidence.py`,
+      `test_riscv_evidence.py`, `ci_results.py`, `runtime_evidence.py`, `verification_catalog.{py,yaml}`, 3 tests);
+      `domains.yaml`; `testing-strategy.md`; `build-run-test.mk`; `rust.mk`; `tools/docker/check-native-abi.sh`.
+    - E2E: `e2e/config/config.riscv-qemu.yaml`.
+    - Go build tags or fallbacks: 20 files in `pkg/cache`, `pkg/memory`, `pkg/vectorstore` and `pkg/extproc` (the
+      `valkey*` / `*_unavailable.go` files), `modeldownload`, and `tools/model-test-assets` (being deleted by `router`).
+    - `candle-binding`: 19 files, removed with the binding anyway.
+    - Docs: `src/model-runtime/docs/design.md` (lead) and the v0.4 blog post (historical, leave it).
+    - **Leave alone:** 4 third-party lockfiles (`website` and `dashboard` `package-lock.json`, and two `uv.lock`).
+  - **`removal`:** delete everything above except the leave-alone items. Drop `a20a79db9` / `b2ffca168`. Collapse the
+    `!riscv64` build tags and `*_unavailable.go` fallbacks into the single implementation where riscv64 was the only
+    reason for them. Keep generic pure-Go portability. Post `INTEGRATION READY removal-riscv <sha>` before 15:30.
+  - **Lead:** drop the RISC-V smoke `PYTHON` half of `c34ffdbc2`, remove RISC-V from the `design.md` platform matrix,
+    and confirm IP2 has no RISC-V lane.
+  - **`e2e-docs`:** remove RISC-V from every supported-platform list in the user docs and website.
+
 - 2026-10-04 13:34 — **Coordinator watchdog #1.** All 12 agents active (commits or file changes within 30 min).
   - **`vela1` (d3e74ccf) node B GPU0, `embed` (ceee0cdf) node B GPU2–3:** leased `in-use`, but they have 0 VRAM and
     0% use, with only CPU tools running. Release them if your next GPU run is more than 20 minutes away. Unchanged at
