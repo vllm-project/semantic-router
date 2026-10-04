@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     import torch
 
     from ..accel.kernels import KernelSet
+    from ..config import ServeConfig
 
 # The API surfaces a model may serve (``/v1/<surface>``).
 SURFACES = ("decisions", "classify", "embeddings", "rerank")
@@ -792,6 +793,11 @@ class Profile(ABC):
     def descriptor(cls) -> dict[str, Any]:
         """Capability descriptor listed in ``/v1/models``."""
         return {"numerics": cls.numerics, "coalesces": cls.coalesces}
+
+    @classmethod
+    def from_config(cls, config: ServeConfig) -> Profile:
+        """The profile a process's options ask for; one that reads none ignores them."""
+        return cls()
 
     def engine_options(self, base: EngineOptions) -> EngineOptions:
         return base

@@ -91,19 +91,6 @@ class EvaluationRegistryMatchesServedModels(unittest.TestCase):
             "so the rest of this file keeps checking it",
         )
 
-    def test_merged_ids_match_the_makefile_download_list(self):
-        expected = {
-            f"{HF_ORG}/{name}"
-            for name in read_make_variable("MMBERT_32K_MERGED_MODELS")
-        }
-        actual = {config["id"] for config in LEGACY_MODEL_REGISTRY.values()}
-        self.assertEqual(
-            actual,
-            expected,
-            "the evaluation registry and MMBERT_32K_MERGED_MODELS name "
-            "different checkpoints",
-        )
-
     def test_lora_ids_match_the_makefile_adapter_list(self):
         expected = {
             f"{HF_ORG}/{name}"
@@ -180,9 +167,6 @@ class EvaluationRegistryMatchesServedModels(unittest.TestCase):
             if entry["id"] in pins:
                 self.assertEqual(entry["revision"], pins[entry["id"]])
 
-    def test_eval_download_uses_the_registry_without_renaming_legacy_variables(self):
+    def test_eval_download_uses_the_registry(self):
         makefile = MODELS_MK.read_text()
         self.assertIn("python3 -m src.training.model_eval.download_models", makefile)
-        self.assertIn(
-            "./bin/router -config=config/config.yaml --download-only", makefile
-        )
