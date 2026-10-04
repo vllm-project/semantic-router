@@ -7,16 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sort"
 	"strings"
 )
 
-// ErrIdentityUnsupported means this provider has no verified local representation
+// ErrIdentityUnsupported means this provider has no verified representation
 // descriptor. It must not be treated as evidence that two vector spaces match.
 var ErrIdentityUnsupported = errors.New("embedding content identity is unsupported")
 
-// ConsumerSettings describes the actual embedding call, including text preparation
-// performed before crossing the native ABI. Zero layer/dimension use model defaults.
+// ConsumerSettings describes the actual embedding call, including the
+// consumer's text preparation. Zero layer/dimension use model defaults.
 type ConsumerSettings struct {
 	ModelType   string
 	Layer       int
@@ -24,26 +23,23 @@ type ConsumerSettings struct {
 	InputPolicy string
 }
 
-// ArtifactDigest binds one loaded weight, graph, or external tensor artifact.
+// ArtifactDigest binds the served content: a model package's digest.
 type ArtifactDigest struct {
 	Role   string `json:"role"`
 	SHA256 string `json:"sha256"`
 }
 
-// RuntimeDescriptor is captured from a successfully initialized local model.
-// Paths and repository revisions are deliberately absent: content defines identity.
+// RuntimeDescriptor describes the vectors a model runtime serves. Paths and
+// repository revisions are deliberately absent: content defines identity.
 type RuntimeDescriptor struct {
-	Version               int              `json:"version"`
-	ModelType             string           `json:"model_type"`
-	Runtime               string           `json:"runtime"`
-	EffectiveConfigSHA256 string           `json:"effective_config_sha256"`
-	TokenizerSHA256       string           `json:"tokenizer_sha256"`
-	Artifacts             []ArtifactDigest `json:"artifacts"`
-	Layer                 int              `json:"layer"`
-	Dimension             int              `json:"dimension"`
-	MaxSequenceLength     int              `json:"max_sequence_length"`
-	PoolingContract       string           `json:"pooling_contract"`
-	ExecutionPolicy       string           `json:"execution_policy,omitempty"`
+	Version           int              `json:"version"`
+	ModelType         string           `json:"model_type"`
+	Runtime           string           `json:"runtime"`
+	Artifacts         []ArtifactDigest `json:"artifacts"`
+	Layer             int              `json:"layer"`
+	Dimension         int              `json:"dimension"`
+	MaxSequenceLength int              `json:"max_sequence_length"`
+	PoolingContract   string           `json:"pooling_contract"`
 }
 
 // ContentIdentity is suitable for isolating vector namespaces. It is not a model
@@ -111,34 +107,4 @@ func IdentityForRuntime(descriptor RuntimeDescriptor, inputPolicy string) (Conte
 func validDigest(value string) bool {
 	decoded, err := hex.DecodeString(value)
 	return err == nil && len(decoded) == sha256.Size && value == strings.ToLower(value)
-}
-
-// IdentityFromDescriptor combines the native representation with the caller's
-// explicit, versioned input policy. It never reads mutable files after model load.
-func IdentityFromDescriptor(raw []byte, inputPolicy string) (ContentIdentity, error) {
-	var descriptor RuntimeDescriptor
-	if err := json.Unmarshal(raw, &descriptor); err != nil {
-		return ContentIdentity{}, fmt.Errorf("decode embedding descriptor: %w", err)
-	}
-	if descriptor.Version != 1 || strings.TrimSpace(descriptor.ModelType) == "" || descriptor.Runtime == "" || descriptor.PoolingContract == "" || descriptor.Layer < 0 || descriptor.Dimension <= 0 || descriptor.MaxSequenceLength <= 0 || inputPolicy == "" {
-		return ContentIdentity{}, fmt.Errorf("incomplete or unsupported embedding runtime descriptor")
-	}
-	if !validDigest(descriptor.EffectiveConfigSHA256) || !validDigest(descriptor.TokenizerSHA256) || len(descriptor.Artifacts) == 0 {
-		return ContentIdentity{}, fmt.Errorf("embedding descriptor lacks verified content digests")
-	}
-	sort.Slice(descriptor.Artifacts, func(i, j int) bool { return descriptor.Artifacts[i].Role < descriptor.Artifacts[j].Role })
-	for i, artifact := range descriptor.Artifacts {
-		if artifact.Role == "" || !validDigest(artifact.SHA256) || (i > 0 && artifact.Role == descriptor.Artifacts[i-1].Role) {
-			return ContentIdentity{}, fmt.Errorf("invalid embedding artifact digest")
-		}
-	}
-	canonical, err := json.Marshal(struct {
-		Descriptor  RuntimeDescriptor `json:"descriptor"`
-		InputPolicy string            `json:"input_policy"`
-	}{descriptor, inputPolicy})
-	if err != nil {
-		return ContentIdentity{}, err
-	}
-	digest := sha256.Sum256(canonical)
-	return ContentIdentity{Fingerprint: "embedding-v1-" + hex.EncodeToString(digest[:]), Descriptor: descriptor}, nil
 }

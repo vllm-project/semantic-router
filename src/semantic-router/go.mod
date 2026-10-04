@@ -4,7 +4,6 @@ go 1.25.0
 
 replace (
 	github.com/vllm-project/semantic-router/candle-binding => ../../candle-binding
-	github.com/vllm-project/semantic-router/openvino-binding => ../../openvino-binding
 	github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache => ./pkg/cache
 	github.com/vllm-project/semantic-router/src/semantic-router/pkg/config => ./pkg/config
 	github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc => ./pkg/extproc
@@ -37,7 +36,6 @@ require (
 	github.com/tidwall/sjson v1.2.5
 	github.com/valkey-io/valkey-glide/go/v2 v2.3.0
 	github.com/vllm-project/semantic-router/candle-binding v0.0.0-00010101000000-000000000000
-	github.com/vllm-project/semantic-router/openvino-binding v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.34.0
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.38.0
@@ -106,7 +104,6 @@ require (
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
-	github.com/vllm-project/semantic-router/onnx-binding v0.0.0-00010101000000-000000000000
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
@@ -138,5 +135,3 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
-
-replace github.com/vllm-project/semantic-router/onnx-binding => ../../onnx-binding

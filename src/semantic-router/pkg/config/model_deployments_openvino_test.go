@@ -51,16 +51,3 @@ func TestOpenVINODeploymentContract(t *testing.T) {
 		})
 	}
 }
-
-func TestOpenVINOLegacyDefaultsBecomeOwnedExecution(t *testing.T) {
-	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "")
-	models := EmbeddingModels{EmbeddingConfig: HNSWConfig{Backend: EmbeddingBackendOpenVINO}}
-	models.UseCPU = true
-	if p, d := DefaultEmbeddingExecution(models); p != "openvino" || d != "CPU" {
-		t.Fatalf("%s %s", p, d)
-	}
-	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "openvino")
-	if p, d := DefaultCategoryExecution(false); p != "openvino" || d != "AUTO" {
-		t.Fatalf("%s %s", p, d)
-	}
-}
