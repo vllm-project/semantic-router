@@ -330,6 +330,31 @@ def test_a_long_job_runs_before_work_queued_after_its_expected_finish(monkeypatc
         scheduler.stop()
 
 
+def test_coalescing_jobs_join_a_busy_worker_after_one_window():
+    gate = threading.Event()
+    model = GatedModel(budget=64, gates={"long0": gate})
+    scheduler = Scheduler(
+        model,
+        {"exact": ExactProfile(), "batching": BatchingProfile()},
+        SchedulerLimits(batch_window_ms=20),
+    )
+    scheduler.start()
+    try:
+        long = scheduler.submit(
+            [item("long0", 64), item("long1", 64)], deadline=None, profile="exact"
+        )
+        assert model.entered.wait(5)
+        batched = scheduler.submit([item("b", 8)], deadline=None, profile="batching")
+        time.sleep(0.05)
+        gate.set()
+        batched.result(timeout=5)
+        long.result(timeout=5)
+        assert ["b"] in model.calls
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
 def test_a_job_past_its_deadline_skips_its_remaining_batches():
     gate = threading.Event()
     model = GatedModel(budget=64, gates={"long0": gate})
