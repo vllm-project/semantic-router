@@ -2,7 +2,7 @@
 
 ## Overview
 
-[Vela 1.0](https://huggingface.co/collections/llm-semantic-router/vela-10)
+[Vela 1.0](https://huggingface.co/collections/vllm-sr/vela-10)
 is a family of fourteen published model checkpoints for intelligent routing.
 The Router registry currently includes the Vela 307M encoder base and ten task
 models covering routing, prompt protection, content safety, retrieval and
@@ -51,8 +51,8 @@ the Router's default multimodal components.
 
 | Checkpoint | Total parameters | Output dimensions | Text limit | Text backbone and readout |
 | --- | ---: | ---: | ---: | --- |
-| [Omni Nano](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/README.md) | 163.8M (163,771,288) | 384 | 512 tokens | Frozen GIST-small; CLS readout |
-| [Omni Mini](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/README.md) | 1.36B (1,361,475,288) | 768 | 32,768 tokens | Qwen3-Embedding-0.6B; last-token Matryoshka readout |
+| [Omni Nano](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/README.md) | 163.8M (163,771,288) | 384 | 512 tokens | Frozen GIST-small; CLS readout |
+| [Omni Mini](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/README.md) | 1.36B (1,361,475,288) | 768 | 32,768 tokens | Qwen3-Embedding-0.6B; last-token Matryoshka readout |
 
 Parameter counts include every modality branch, including the CLAP audio branch;
 integer and running-statistics buffers are not parameters. Nano retains CLS
@@ -79,8 +79,8 @@ affine before final L2 normalization. Text/image paths are retained; audio is
 newly trained and evaluated.
 
 The latest cards compare routing and cross-modal retrieval with the
-[original small](https://huggingface.co/llm-semantic-router/multi-modal-embed-small/tree/fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4)
-and [original large](https://huggingface.co/llm-semantic-router/multi-modal-embed-large/tree/e21cde3ccc414c56f504b322662f42c603a939ee)
+[original small](https://huggingface.co/vllm-sr/multi-modal-embed-small/tree/fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4)
+and [original large](https://huggingface.co/vllm-sr/multi-modal-embed-large/tree/e21cde3ccc414c56f504b322662f42c603a939ee)
 models. Scores are 0–100; each cell shows original → current:
 
 | Metric | Original small → Nano | Original large → Mini |
@@ -122,9 +122,9 @@ matched raw-text control: Mean(TaskType) rises from **58.79 to 64.68**, with
 38 tasks improving and three declining. This instruction-mode result does not
 replace the default shared mode for image/audio comparisons. Both new audio
 paths are freshly evaluated; speech–text retrieval regresses despite aggregate
-audio gains. See the pinned [Nano evaluation](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/EVALUATION.md),
-[Mini evaluation](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/EVALUATION.md)
-and [matched instruction comparison](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/instruction-mode.md#matched-raw-comparison)
+audio gains. See the pinned [Nano evaluation](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/EVALUATION.md),
+[Mini evaluation](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/EVALUATION.md)
+and [matched instruction comparison](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/instruction-mode.md#matched-raw-comparison)
 for measurement identities, all tasks and regressions. These panels do not
 establish full multilingual or image coverage, latency, or memory performance.
 
