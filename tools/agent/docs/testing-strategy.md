@@ -178,9 +178,10 @@ parity and maximum-context qualifications that require explicit inputs remain
 separately declared; a shorter input acceptance test cannot qualify full context.
 
 `make test-models` provisions its own prerequisites, and benchmarks let the
-runtime download each pinned model on first start. Product startup and
-`make download-models` instead provision models referenced by the active
-configuration. They are not the full test inventory. A pre-existing local model
+runtime download each pinned model on first start. Product startup instead
+provisions the models the active configuration references: the model runtime
+downloads each model it serves, and the Router provisions label maps and the Omni
+bundles. That is not the full test inventory. A pre-existing local model
 cache does not activate optional inference during ordinary core tests.
 
 A build identity includes its source revision, platform, and build inputs.
