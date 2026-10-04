@@ -135,9 +135,9 @@ func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions .
 		path    string
 		handler http.HandlerFunc
 	}{
-		{"/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath)},
+		{"/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath, runtimeConfigReadonly)},
 		{"/api/router/config/schema", handlers.ConfigSchemaHandler(cfg.RouterAPIURL, store)},
-		{"/api/router/config/yaml", handlers.ConfigYAMLHandler(cfg.AbsConfigPath)},
+		{"/api/router/config/yaml", handlers.ConfigYAMLHandler(cfg.AbsConfigPath, runtimeConfigReadonly)},
 		{"/api/router/config/versions", handlers.ConfigVersionsHandler(cfg.AbsConfigPath)},
 		{"/api/router/config/deployments", handlers.ConfigDeploymentsHandler()},
 		{"/api/router/config/deployments/", handlers.ConfigDeploymentDetailHandler()},

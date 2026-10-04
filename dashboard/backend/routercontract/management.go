@@ -41,7 +41,7 @@ func buildManagementPolicies() []ManagementPolicy {
 	}
 	add(http.MethodGet, configRead, false,
 		"/api/v1/config/hash", "/api/v1/config/schema",
-		"/api/v1/inventory/models", "/api/v1/inventory/classifier", "/api/v1/inventory/embedding-models",
+		"/api/v1/inventory/models", "/api/v1/inventory/embedding-models",
 		"/api/v1/plugins", "/api/v1/plugins/{type}", "/api/v1/plugins/{type}/bindings",
 		"/api/v1/diagnostics/models",
 		"/api/v1/storage/response-cache/capabilities", "/api/v1/storage/response-cache/health", "/api/v1/storage/response-cache/stats",
@@ -49,6 +49,7 @@ func buildManagementPolicies() []ManagementPolicy {
 		"/api/v1/observability/plugins/context_compression/stats",
 		"/api/v1/storage/knowledge-bases", "/api/v1/storage/knowledge-bases/{name}",
 		"/api/v1/storage/knowledge-bases/{name}/map/metadata", "/api/v1/storage/knowledge-bases/{name}/map/data.ndjson")
+	add(http.MethodGet, configWrite, false, "/api/v1/inventory/classifier")
 	add(http.MethodGet, replayRead, false,
 		"/api/v1/observability/replays", "/api/v1/observability/replays/aggregate", "/api/v1/observability/replays/trajectory", "/api/v1/observability/replays/{id}", "/api/v1/observability/audit")
 	add(http.MethodPost, feedbackSubmit, true, "/api/v1/observability/outcomes")

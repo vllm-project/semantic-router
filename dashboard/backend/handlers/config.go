@@ -12,7 +12,7 @@ import (
 )
 
 // ConfigHandler reads and serves the config as JSON from the local config file.
-func ConfigHandler(configPath string) http.HandlerFunc {
+func ConfigHandler(configPath string, readonlyMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -26,6 +26,11 @@ func ConfigHandler(configPath string) http.HandlerFunc {
 			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
 			return
 		}
+		if !callerCanWriteConfig(r, readonlyMode) {
+			for i := range configData.Listeners {
+				configData.Listeners[i].APIKeys = nil
+			}
+		}
 
 		if err := writeYAMLTaggedJSON(w, configData); err != nil {
 			log.Printf("Error encoding config to JSON: %v", err)
@@ -36,7 +41,7 @@ func ConfigHandler(configPath string) http.HandlerFunc {
 // ConfigYAMLHandler reads and serves the config as raw YAML text.
 // This is used by the DSL Builder to load the current router config
 // and decompile it into DSL via WASM.
-func ConfigYAMLHandler(configPath string) http.HandlerFunc {
+func ConfigYAMLHandler(configPath string, readonlyMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -50,6 +55,13 @@ func ConfigYAMLHandler(configPath string) http.HandlerFunc {
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
 			return
+		}
+		if !callerCanWriteConfig(r, readonlyMode) {
+			data, err = withoutListenerAPIKeys(data)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
+				return
+			}
 		}
 
 		_, _ = w.Write(data)

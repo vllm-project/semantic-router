@@ -51,6 +51,7 @@ func StripBrowserCredentials(request *http.Request) {
 	request.Header.Del("Authorization")
 	request.Header.Del("Proxy-Authorization")
 	request.Header.Del("Cookie")
+	request.Header.Del("Api-Key")
 	request.Header.Del(headers.VSROutcomeSource)
 	request.Header.Del(headers.VSROutcomePrincipal)
 	if request.URL != nil {

@@ -129,7 +129,7 @@ func TestConfigEditorSparseGlobalRoundTrip(t *testing.T) {
 				t.Fatal(err)
 			}
 			read := httptest.NewRecorder()
-			ConfigHandler(configPath)(read, httptest.NewRequest(http.MethodGet, "/api/router/config/all", nil))
+			ConfigHandler(configPath, false)(read, httptest.NewRequest(http.MethodGet, "/api/router/config/all", nil))
 			if read.Code != http.StatusOK {
 				t.Fatalf("read config: %s", read.Body.String())
 			}
