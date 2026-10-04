@@ -205,6 +205,61 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 14:10 — **INTEGRATION READY router `b72e0ae65`** (IP2; `xunzhuo/model-runtime-p24-router`; contains the late
+  IP1 sha `bf630c5eb` — take this one instead — and merges `p24-ip2` `37dc4ba30`, no conflicts). → lead (96ccb788).
+  - **Items (14:05 note):** inventory endpoint; `panel` grounding on the Halu head + `contradiction_penalty`; the
+    response-stage bundle; `tools/model-test-assets` deleted; operator CRD selectors retired + `embedding_config.backend`
+    enum; `extproc_test_support_test.go` off `candle-binding`; the gate rerun.
+  - **Node D 64–95, exact mirror `36148a3ee`** (`b72e0ae65` adds only `docs/records/router-latency-cpu*`): router module
+    build + vet clean and `go test ./...` passes (native suites with the bindings); golangci-lint **0 issues** on every
+    changed line (router module, operator); config schema, API reference, operator CRD + bundle and CRD reference
+    regenerate with no diff; operator tests pass; `dashboard/backend`, `e2e`, `perf` vet clean; `dashboard/backend`
+    tests pass except the known node D `/data` symlink case (`TestDashboardDevLauncherPassesSharedAssetRoot`). CLI
+    (local): `test_algorithm_config.py` 54 passed, config-loading suites 176 passed.
+  - **Gate record `docs/records/router-latency-cpu.{md,json}`** (node B 48–63, three interleaved rounds, load 28–55,
+    legacy `61aa7eb2d` candle vs `bf630c5eb` + runtime, both caches off, 539 inputs; medians): sequential p50 52.0 →
+    14.8 ms, p95 231.9 → 48.1, p99 447 → 89, 11.1 → 44.4 req/s; c4 p50 165.8 → 52.1, p95 611 → 137, **p99 918 → 552**
+    (the 05:20 slower tail is gone), 17.3 → 54.8 req/s; c16 p50 702 → 212, p95 2,235 → 720, p99 3,441 → 760, 17.7 →
+    66.4 req/s. **0 / 539 decisions differ in every round.** Footprint 8.5 GB → 7.8 GB (router 0.1 GB + five runtime
+    processes of 1.54 GB; 1.08 GB each at `32a45d331`). Ready 12 s → 8–9 s. The legacy router reads
+    `router-latency-cpu-legacy.yaml` (same signals / decisions / models plus `variant` / `use_mmbert_32k`, which the
+    parser now refuses).
+  - **Next (IP2b):** whatever the merge or CI reports, and two router gaps from `removal`'s notes that I verify now —
+    an attached deployment bound as `domain_classifier` without an `artifact` (04:39), and the managed runtime's fixed
+    8 MiB request body for large images (04:55).
+
+- 2026-10-04 14:09 — **Model-runtime P2–4 `embed` (67b9eb80, replacing fd9f7608) → lead (96ccb788), `vela1` (d3e74ccf),
+  everyone running ONNX Runtime: two measurement traps, the Omni p95 answered, Omni fixed; `INTEGRATION READY` by 15:30.**
+  - **`taskset` does not confine ONNX Runtime with default thread counts.** Its sessions pin their threads to CPUs read
+    from the host; a `taskset` mask doesn't stop that (only a cgroup cpuset does). My old Omni A/Bs had the legacy
+    facade's threads on CPUs 1–15 (the other NUMA node) while the main thread sat on 112–127. All my CPU runs now use a
+    cgroup cpuset: `systemd-run --scope -p AllowedCPUs=112-127 -- …` on the host, `--cpuset-cpus` in containers. If your
+    tools run ONNX Runtime with default thread counts under `taskset`, check yours.
+  - **My A/B paused only between the two calls of a pair**, so each pair's first call shared the cores with the other
+    process's still-spinning ONNX Runtime pool. Fixed in `7c2c6e21b`: a 50 ms pause before every call and load window.
+  - **Omni Nano image p95 (12:55): sampling noise.** Every sequential call took 110–119 ms; one outlier in 12 pairs. But
+    under fair confinement Omni trailed: Nano text p50 6.1 vs 4.9 ms, 4-caller throughput 186 vs 225/s, images 1–4 %.
+    In identical conditions a bare ONNX Runtime 1.30 run beats legacy (4.7 vs 5.2 ms); `Runtime.call` lost about 1.9 ms
+    per cold call to the CPU device-thread hand-off (each wake-up costs ~1 ms on these guests), and the worker ran one
+    request per forward while legacy ran 4 calls in parallel.
+  - **Fixes, please review — `[Harness]` `2e2c7bb5a`:** `LoadedModel.device_thread` (default True). A family whose `run`
+    starts no parallel torch op sets it False, and the scheduler runs that model's batches on its worker. Only Omni
+    sets it (`4b2b3f409`, with a test that serves a fixture through `Runtime.call`). `72e4e2267`: Omni is
+    batch-invariant by construction (each input runs alone), and a batch's inputs run 4 at a time on the shared pool.
+  - **Lead 13:40, Omni `overflow: truncate`: done (`bf4a889a9`).** Text is cut inside the special tokens through the
+    shared `heads.embedding.encode_text`; images and audio are unchanged; tests included. `e2e-docs`: re-run on it.
+  - **Lead, scheduler (`6472144d8`):** Omni image and audio items carry no token IDs, so `merged()` groups every queued
+    media item as one "sequence" with 0 padded tokens: one uncapped batch, and the cost model treats media as free. The
+    answers are right (Omni never dedupes by IDs). A per-item cost hint would fix both; your call.
+  - **`vela1`:** `torch.set_num_threads` clears oneDNN's process-wide primitive cache, and `task_heads`'
+    `single_threaded()` calls it twice per graph run. In a process that also serves a native model, every graph run
+    makes the next native forward rebuild its oneDNN primitives.
+  - **Encoders (CPU, cgroup-confined, `7c2c6e21b`):** every job beats legacy candle: p50 2.7–8.1× faster, p95 about 9×,
+    4-caller throughput 2.6–4×. Native beats both ONNX Runtime paths at every size, so `auto` stays native first
+    with no `BuiltinModel.engines` preference. ROCm (all rows, side by side) and ROCm parity are at `5a73fc17e`.
+  - **Running (node B 112–127):** the final Omni latency, throughput and values plus the candle A/B at `bf4a889a9`, done by
+    about 14:45; then the records and `INTEGRATION READY`. `p24-ip2` `37dc4ba30` is merged. GPU2–3 stay released.
+
 - 2026-10-04 14:08 — **`studio-serving` (76ca48d2): ACK of the 13:15 / 13:37 user decisions and the 14:06 interrupt.
   My 13:55 "1.0 stays offline" is withdrawn. 1.0 will be served.** Safe stopping point: nothing is half-applied on any
   host. I missed the 13:31 / 13:38 notes while working.
