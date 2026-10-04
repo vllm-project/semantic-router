@@ -86,6 +86,8 @@ AMD_JOBS: dict[str, Job] = {
     "modality": ("Modality", "sequence", 8192, "reject", None, MIGRAPHX),
     "hazard": ("Hazard", "operating_point", 32768, "reject", None, MIGRAPHX),
     "pii": ("PII", "tokens", 8192, "reject", None, MIGRAPHX),
+    # Not in the recipe; its package ships an ONNX graph, so ORT serves it the same way.
+    "shield": ("Shield", "sequence", 8192, "reject", None, MIGRAPHX),
 }
 RECIPES = {"cpu": CPU_JOBS, "amd": AMD_JOBS}
 REVISIONS = {
@@ -479,7 +481,7 @@ def flat_copy(source: Path, target: Path) -> Path:
 
 
 def job_specs(args: argparse.Namespace) -> list[dict[str, Any]]:
-    """Each job's spec; with ``--inputs`` (a legacy run's jobs file) its inputs exactly.
+    """Each job's spec; with ``--inputs`` (an earlier run's jobs file) its inputs exactly.
 
     The corpus reads the tree's e2e testdata, which changes over time, so a
     runtime run compared with an earlier legacy run takes that run's inputs.
@@ -1163,6 +1165,9 @@ def main(argv: Iterable[str] | None = None) -> int:
         sub.add_argument("--concurrency", type=int, default=0)
         sub.add_argument("--seconds", type=float, default=20.0)
         sub.add_argument("--limit", type=int, default=0)
+        sub.add_argument(
+            "--inputs", help="an earlier run's .jobs.json: answer exactly its inputs"
+        )
         if name == "legacy":
             sub.add_argument(
                 "--tree",
@@ -1183,9 +1188,6 @@ def main(argv: Iterable[str] | None = None) -> int:
             sub.add_argument("--device", default="cpu")
             sub.add_argument("--profile", default="exact")
             sub.add_argument("--threads", type=int)
-            sub.add_argument(
-                "--inputs", help="a legacy run's .jobs.json: answer exactly its inputs"
-            )
     build = commands.add_parser("build-legacy")
     build.add_argument("--cache", required=True)
     build.add_argument("--recipe", choices=sorted(RECIPES), default="cpu")
