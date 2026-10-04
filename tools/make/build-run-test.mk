@@ -35,7 +35,7 @@ RISCV_QEMU ?= $(firstword $(wildcard /usr/bin/qemu-riscv64-static /usr/bin/qemu-
 test-riscv-qemu: build-router-riscv ## Run the riscv64 router under qemu-user, attached to a model runtime on the host
 	@$(LOG_TARGET)
 	@test -n "$(RISCV_QEMU)" || { echo "missing qemu-riscv64; install qemu-user-static"; exit 1; }
-	@RISCV_QEMU="$(RISCV_QEMU)" RISCV_ROUTER_BIN="$(CURDIR)/bin/router-riscv64" \
+	@RISCV_QEMU="$(RISCV_QEMU)" RISCV_ROUTER_BIN="$(CURDIR)/bin/router-riscv64" PYTHON="$(AGENT_PYTHON)" \
 		VLLM_SR_RUNTIME_COMMAND="$${VLLM_SR_RUNTIME_COMMAND:-$(AGENT_VENV)/bin/vllm-sr-runtime}" \
 		MODEL_TEST_REPORT_DIR="$${MODEL_TEST_REPORT_DIR:-$(CURDIR)/.agent-harness/riscv-qemu}" \
 		bash tools/ci/riscv-qemu-router-smoke.sh

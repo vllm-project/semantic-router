@@ -94,6 +94,7 @@ class ModelMakeContractsTests(unittest.TestCase):
                     "--no-print-directory",
                     "verify-image-routing-calibration",
                     "SHELL=/bin/sh",
+                    "AGENT_PYTHON=python3",
                     f"MODEL_TEST_REPORT_DIR={root / 'reports'}",
                     f"MODEL_TEST_MODELS_DIR={root / 'models'}",
                 ],

@@ -164,7 +164,7 @@ var onnxWeightExcludePatterns = []string{
 func candleEmbeddingModelExcludePatterns(cfg *config.RouterConfig) map[string][]string {
 	excluded := make(map[string][]string)
 	provider, _ := config.DefaultModelExecution(cfg.EmbeddingModels.UseCPU)
-	if provider != "candle" || cfg.EmbeddingModels.EmbeddingBackend() != config.EmbeddingBackendCandle {
+	if provider != "candle" || cfg.EmbeddingModels.EmbeddingBackend() != config.EmbeddingBackendModelRuntime {
 		return excluded
 	}
 

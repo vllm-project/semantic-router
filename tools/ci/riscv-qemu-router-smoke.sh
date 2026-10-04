@@ -16,6 +16,7 @@ API_PORT=${RISCV_ROUTER_API_PORT:-18080}
 EXTPROC_PORT=${RISCV_ROUTER_EXTPROC_PORT:-15051}
 METRICS_PORT=${RISCV_ROUTER_METRICS_PORT:-19190}
 READY_TIMEOUT=${RISCV_ROUTER_READY_TIMEOUT:-600}
+PYTHON=${PYTHON:-python3}
 RUNTIME_URL="http://127.0.0.1:${RUNTIME_PORT}"
 API_URL="http://127.0.0.1:${API_PORT}"
 DEPLOYMENT=riscv-domain
@@ -69,7 +70,7 @@ curl -sf --max-time 60 -o "${REPORT_DIR}/runtime-classify.body" \
 
 # One domain signal and one decision per fixture label: the category the router
 # reports must then be exactly the label the runtime predicted.
-routing_rules=$(python3 - "${REPORT_DIR}/runtime-classify.body" "${work}/domain-mapping.json" <<'PY'
+routing_rules=$("${PYTHON}" - "${REPORT_DIR}/runtime-classify.body" "${work}/domain-mapping.json" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -173,7 +174,7 @@ classify_status=$(curl -sf --max-time 120 -o "${REPORT_DIR}/classify.body" -w '%
   -H "Content-Type: application/json" -d "{\"text\":\"${PROMPT}\"}" \
   "${API_URL}/api/v1/diagnostics/classify/intent")
 
-python3 - "${REPORT_DIR}" "${classify_status}" <<'PY'
+"${PYTHON}" - "${REPORT_DIR}" "${classify_status}" <<'PY'
 import json
 import subprocess
 import sys
