@@ -13,9 +13,12 @@ forward took 25 ms instead of 13 ms on 16 cores. One thread, one team.
 
 A process that runs CPU device work keeps freed memory in its heap (glibc).
 By default glibc hands a freed activation's pages back to the kernel, and the
-next forward faults them in again, zero-filled: a one-row 307M encoder forward
-on 16 EPYC cores took 62 ms with 51,000 page faults at 128 tokens and 470 ms at
-1,024, against 20 ms and 109 ms with the memory kept.
+next forward faults them in again, zero-filled, until its dynamic thresholds
+have grown past the forward's blocks. In a fresh process a one-row 307M encoder
+forward on 16 EPYC cores took 62 ms with 51,000 page faults at 128 tokens and
+470 ms at 1,024, against 20 ms and 109 ms with the memory kept; in a serving
+process, which has already run larger batches, inputs longer than those keep
+paying it (Vela Halu's p95 2.76 s against 2.11 s).
 """
 
 from __future__ import annotations
@@ -49,7 +52,7 @@ _EXECUTOR: ThreadPoolExecutor | None = None
 M_TRIM_THRESHOLD = -1
 M_MMAP_THRESHOLD = -3
 HEAP_MMAP_THRESHOLD = 32 << 20
-HEAP_TRIM_THRESHOLD = 1 << 30
+HEAP_TRIM_THRESHOLD = 256 << 20
 
 
 def keep_freed_memory() -> bool:
