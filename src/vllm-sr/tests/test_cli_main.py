@@ -1,7 +1,9 @@
 import hashlib
 import importlib
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -72,6 +74,31 @@ def test_cli_help_lists_registered_commands():
     for retired_name in ("validate", "eval", "chat", "rag"):
         assert f"  {retired_name} " not in result.output
     assert " init" not in result.output
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["--help"],
+        ["--version"],
+        ["optimize", "recipe-learning", "--help"],
+    ],
+)
+def test_cli_loads_with_malformed_port_offset(args):
+    # A fresh interpreter, because the defect is evaluation at import time.
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(PROJECT_ROOT)
+    environment["VLLM_SR_PORT_OFFSET"] = "x9"
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cli.main", *args],
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_cli_version_matches_project_metadata():
