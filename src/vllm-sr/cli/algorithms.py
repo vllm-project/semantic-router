@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from cli.config_schema import surface_types
 
 from .config_contract import QuorumFailurePolicy
+from .models_decision import DecisionSelectionConfig
 
 SUPPORTED_ALGORITHM_TYPES = frozenset(surface_types("algorithms"))
 
@@ -536,6 +537,7 @@ class AlgorithmConfig(BaseModel):
     hybrid: HybridSelectionConfig | None = None
     multi_factor: MultiFactorSelectionConfig | None = None
     prompt: PromptSelectionConfig | None = None
+    decision: DecisionSelectionConfig | None = None
     # Behavior on algorithm failure: "skip" or "fail"
     on_error: str | None = "skip"
 
@@ -550,4 +552,8 @@ class AlgorithmConfig(BaseModel):
                 raise ValueError("prompt on_error must be fallback")
         elif self.prompt is not None:
             raise ValueError("prompt configuration requires algorithm.type=prompt")
+        if self.type == "decision" and self.decision is None:
+            raise ValueError("algorithm.type=decision requires decision configuration")
+        if self.type != "decision" and self.decision is not None:
+            raise ValueError("decision configuration requires algorithm.type=decision")
         return self
