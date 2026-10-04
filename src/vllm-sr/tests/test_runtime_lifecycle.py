@@ -1,5 +1,6 @@
 import pytest
 from cli import runtime_lifecycle
+from cli.router_probe import router_probe_command
 from cli.runtime_stack import resolve_runtime_stack
 
 
@@ -50,9 +51,7 @@ def test_wait_for_router_health_uses_configured_management_port(monkeypatch):
         resolve_runtime_stack(), management_port=9090
     )
 
-    assert commands == [
-        ["curl", "-f", "-s", "--max-time", "5.000", "http://localhost:9090/ready"]
-    ]
+    assert commands == [router_probe_command("http://localhost:9090/ready", 5.0)]
 
 
 def test_wait_for_router_health_reads_bearer_from_container_environment(monkeypatch):
@@ -77,17 +76,12 @@ def test_wait_for_router_health_reads_bearer_from_container_environment(monkeypa
         readiness_token_env="CATALOG_MANAGEMENT_TOKEN",
     )
 
-    assert len(commands) == 1
-    command = commands[0]
-    assert command[:2] == ["sh", "-c"]
-    assert command[-3:] == [
-        "CATALOG_MANAGEMENT_TOKEN",
-        "http://localhost:9090/ready",
-        "5.000",
+    assert commands == [
+        router_probe_command(
+            "http://localhost:9090/ready", 5.0, "CATALOG_MANAGEMENT_TOKEN"
+        )
     ]
-    assert 'printenv "$1"' in command[2]
-    assert 'curl -f -s --max-time "$3" -H @-' in command[2]
-    assert "secret-value" not in repr(command)
+    assert "secret-value" not in repr(commands)
 
 
 def test_runtime_summary_is_clean_human_stdout(capsys):

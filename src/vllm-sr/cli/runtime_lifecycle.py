@@ -31,6 +31,7 @@ from cli.container_cli import (
     load_openclaw_registry,
 )
 from cli.container_runtime import get_container_runtime
+from cli.router_probe import router_probe_command
 from cli.runtime_lifecycle_lock import acquire_runtime_lifecycle_lock
 from cli.runtime_stack import RuntimeStackLayout
 from cli.terminal import echo, fields, heading, progress, success
@@ -342,24 +343,9 @@ def _wait_for_readiness(
 def _router_readiness_command(
     management_port: int, readiness_token_env: str | None, timeout: float = 5.0
 ) -> list[str]:
-    endpoint = f"http://localhost:{management_port}/ready"
-    max_time = f"{max(0.001, timeout):.3f}"
-    if readiness_token_env is None:
-        return ["curl", "-f", "-s", "--max-time", max_time, endpoint]
-    script = (
-        'set -eu; token="$(printenv "$1")"; test -n "$token"; '
-        "printf 'Authorization: Bearer %s\\n' \"$token\" | "
-        'curl -f -s --max-time "$3" -H @- "$2"'
+    return router_probe_command(
+        f"http://localhost:{management_port}/ready", timeout, readiness_token_env
     )
-    return [
-        "sh",
-        "-c",
-        script,
-        "vllm-sr-readiness",
-        readiness_token_env,
-        endpoint,
-        max_time,
-    ]
 
 
 def wait_and_verify_runtime(

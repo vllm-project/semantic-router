@@ -11,6 +11,7 @@ a container that is up but not answering yet.
 
 from cli.consts import DEFAULT_API_PORT, DEFAULT_ENVOY_PORT
 from cli.container_cli import container_exec, container_status
+from cli.router_probe import router_probe_command
 from cli.runtime_stack import RuntimeStackLayout
 from cli.terminal import fields
 from cli.utils import get_logger
@@ -52,7 +53,7 @@ def report_service_status(service: str, stack_layout) -> None:
 def _check_router_status(container_name: str) -> bool:
     return_code, _stdout, _stderr = container_exec(
         container_name,
-        ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/health"],
+        router_probe_command(f"http://localhost:{DEFAULT_API_PORT}/health"),
     )
     return return_code == 0
 
