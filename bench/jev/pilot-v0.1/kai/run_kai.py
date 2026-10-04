@@ -9,6 +9,7 @@ Standard library only.
 
 import argparse
 import hashlib
+import http.client
 import json
 import math
 import time
@@ -118,6 +119,11 @@ def call(base_url, body_bytes):
         error = f"timeout after {TIMEOUT_S} s"
     except urllib.error.URLError as url_error:
         error = f"URL error: {url_error.reason}"
+    except http.client.IncompleteRead as read_error:
+        raw = read_error.partial.decode("utf-8", errors="replace")
+        error = f"response body incomplete: {read_error!r}"
+    except (http.client.HTTPException, OSError) as connection_error:
+        error = f"connection failed: {connection_error!r}"
     except ValueError as parse_error:
         error = f"response JSON invalid: {parse_error}"
     elapsed_ms = round((time.perf_counter() - started) * 1000, 3)

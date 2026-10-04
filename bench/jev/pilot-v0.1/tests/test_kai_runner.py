@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import contextlib
+import http.server
 import importlib.util
 import io
 import json
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -59,6 +61,29 @@ def fake_call(responses: list) -> mock.Mock:
     return mock.Mock(side_effect=call)
 
 
+class ScriptedRuntime(http.server.BaseHTTPRequestHandler):
+    """Answers each request with the next (body, bytes to send) pair. Sending
+    fewer bytes than the declared length truncates the body, and None closes
+    the connection without a response."""
+
+    replies: list = []
+
+    def do_POST(self) -> None:
+        self.rfile.read(int(self.headers["Content-Length"]))
+        self.close_connection = True
+        body, sent = self.replies.pop(0)
+        if sent is None:
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body[:sent])
+
+    def log_message(self, *args) -> None:
+        pass
+
+
 class TestMalformedResponses(unittest.TestCase):
     def test_malformed_body_is_a_recorded_contract_failure(self) -> None:
         for name, body in MALFORMED.items():
@@ -100,6 +125,29 @@ class TestMalformedResponses(unittest.TestCase):
         self.assertEqual(
             valid, [False] * len(MALFORMED) + [True] * (cases - len(MALFORMED))
         )
+
+    def test_run_records_a_truncated_and_a_dropped_response(self) -> None:
+        cases = len((PILOT_DIR / "inputs.jsonl").read_text("utf-8").splitlines())
+        valid = json.dumps(VALID).encode()
+        ScriptedRuntime.replies = [(valid, len(valid)), (valid, 20), (valid, None)]
+        ScriptedRuntime.replies += [(valid, len(valid))] * (cases - 2)
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), ScriptedRuntime)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        argv = ["run_kai.py", "--base-url", f"http://127.0.0.1:{server.server_port}"]
+        with tempfile.TemporaryDirectory() as out_dir, mock.patch.object(
+            sys, "argv", [*argv, "--pilot-dir", str(PILOT_DIR), "--out-dir", out_dir]
+        ), contextlib.redirect_stdout(io.StringIO()):
+            RUNNER.main()
+            lines = (Path(out_dir) / "kai-results.jsonl").read_text("utf-8")
+
+        truncated, dropped, *healthy = [json.loads(line) for line in lines.splitlines()]
+        self.assertIn("IncompleteRead", truncated["error"])
+        self.assertEqual(truncated["raw_response"], valid[:20].decode())
+        self.assertIn("RemoteDisconnected", dropped["error"])
+        self.assertFalse(truncated["contract_valid"] or dropped["contract_valid"])
+        self.assertEqual([r["contract_valid"] for r in healthy], [True] * (cases - 2))
 
 
 if __name__ == "__main__":
