@@ -26,7 +26,8 @@ translation:
 - 旧模型名，例如 `models/mom-domain-classifier`、
   `models/mmbert-embed-32k-2d-matryoshka` 或 `lettucedect`；
 - NLI 解释器（`hallucination_explainer`、`nli_model`、`enable_nli_filtering`、`use_nli`）
-  或响应缓存的 `polarity_guard` 设置。
+  或响应缓存的 `polarity_guard` 设置；
+- 使用 `backend: endpoint` 的幻觉检测器。
 
 路由器在启动时会拒绝这些设置，并提示你运行迁移命令。
 
@@ -72,6 +73,7 @@ Changes to review
 | 旧模型目录中的标签映射，例如 `category_mapping_path: models/mom-domain-classifier/category_mapping.json` | 移除：路由器读取所运行模型的标签 |
 | MLP 选择算法上的 `mlp.device` | 移除：MLP 选择器在路由器内运行 |
 | fusion 算法的 `grounding.nli_contradiction_penalty` | `grounding.contradiction_penalty`：grounding 现在读取幻觉检测器 |
+| 使用 `backend: endpoint`、`endpoint` 和 `model_id` 的幻觉检测器 | 指向该聊天服务的 `hallucination_detector` binding；路径不是 `/v1` 的 endpoint 需要手动编写 |
 
 ### 更名的模型 {#model-names-that-changed}
 
