@@ -67,8 +67,7 @@ func (c *Client) Decide(ctx context.Context, request Request) (Response, error) 
 		State:     request.State,
 		Questions: make(map[string]api.Question, len(request.Questions)),
 	}
-	returnMeta := true
-	options := api.RequestOptions{ReturnMeta: &returnMeta}
+	options := api.RequestOptions{}
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := float64(time.Until(deadline).Microseconds()) / 1000.0
 		if remaining <= 0 {
@@ -129,9 +128,6 @@ func encodeQuestion(question Question) api.Question {
 
 func decodeResponse(body api.DecisionResponse) Response {
 	decoded := Response{Model: body.Model, Answers: make(map[string]Answer, len(body.Answers)), InputTokens: body.Usage.InputTokens}
-	if body.Meta != nil && body.Meta.Revision != nil {
-		decoded.Revision = *body.Meta.Revision
-	}
 	for id, answer := range body.Answers {
 		decoded.Answers[id] = decodeAnswer(answer)
 	}
