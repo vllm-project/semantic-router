@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""The plugin guide's "Try it", run as written: install, serve, ask.
+
+The test reads its commands, keyword package and request from the guide
+(`website/docs/model-runtime/plugins.md`). It needs the model runtime in the
+current Python environment (`make model-runtime-install`, whose test extra
+brings the example's build backend). pip installs the example plugin from the
+repository into a private directory on PYTHONPATH instead of the environment,
+so no other test sees its entry points; discovery still reads the entry points
+of the installed distribution.
+"""
+
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import tomllib
+import unittest
+from pathlib import Path
+
+from runtime_http import HTTP_OK, ServeProcess, call, page_requests
+
+REPO = Path(__file__).resolve().parents[3]
+GUIDE = REPO / "website/docs/model-runtime/plugins.md"
+EXAMPLE = REPO / "src/model-runtime/examples/third_party_plugin"
+BASH_BLOCK = re.compile(r"^```bash\n(.*?)^```", re.M | re.S)
+HEREDOC = re.compile(r"cat > (\S+) <<'(\w+)'\n(.*?)\n\2$", re.M | re.S)
+OUTCOME = re.compile(r"returns `(\w+)` for the first text and `(\w+)` for the second")
+
+
+def _try_it() -> tuple[list[str], dict[str, str], list[str]]:
+    """The guide's pip install arguments, written files and serve arguments."""
+    for block in BASH_BLOCK.findall(GUIDE.read_text(encoding="utf-8")):
+        if "vllm-sr-runtime serve" not in block:
+            continue
+        files = {path: body + "\n" for path, _, body in HEREDOC.findall(block)}
+        lines = HEREDOC.sub("", block).splitlines()
+        (install,) = [line for line in lines if line.startswith("pip install ")]
+        (serve,) = [line for line in lines if line.startswith("vllm-sr-runtime serve ")]
+        return shlex.split(install)[2:], files, shlex.split(serve)[2:]
+    raise AssertionError(f"{GUIDE} has no block that serves the example")
+
+
+def _without_port(arguments: list[str]) -> list[str]:
+    at = arguments.index("--port")
+    return arguments[:at] + arguments[at + 2 :]
+
+
+class TestPluginExample(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.root = Path(tempfile.mkdtemp(prefix="vllm-sr-plugin-"))
+        cls.addClassCleanup(shutil.rmtree, cls.root, ignore_errors=True)
+        install, files, cls.serve_arguments = _try_it()
+        cls.package = Path(cls.serve_arguments[0])
+
+        # The guide installs the runtime and the example from the repository
+        # root; the runtime is already installed, so only the example goes in.
+        if REPO / install[-1] != EXAMPLE:
+            raise AssertionError(f"the guide installs {install}, not the example")
+        source = cls.root / "example"
+        shutil.copytree(
+            EXAMPLE,
+            source,
+            ignore=shutil.ignore_patterns("build", "*.egg-info", "__pycache__"),
+        )
+        cls.site = cls.root / "site"
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--no-deps"]
+            + ["--no-build-isolation", "--target", str(cls.site), str(source)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        cls.local = cls.root / "keywords"
+        for path, body in files.items():
+            written = cls.local / Path(path).relative_to(cls.package)
+            written.parent.mkdir(parents=True, exist_ok=True)
+            written.write_text(body, encoding="utf-8")
+        cls.env = {"PYTHONPATH": str(cls.site)}
+
+    def _serve(self) -> ServeProcess:
+        arguments = [str(self.local), *_without_port(self.serve_arguments[1:])]
+        runtime = ServeProcess(
+            ["vllm-sr-runtime", "serve", *arguments],
+            self.root / f"serve-{time.monotonic_ns()}.log",
+            env=self.env,
+        )
+        self.addCleanup(runtime.stop)
+        runtime.wait_ready()
+        return runtime
+
+    def test_the_guides_request_gets_the_guides_answer(self):
+        runtime = self._serve()
+        prose = " ".join(GUIDE.read_text(encoding="utf-8").split())
+        expected = list(OUTCOME.search(prose).groups())
+
+        status, response = call(
+            runtime.base, "/v1/classify", page_requests(GUIDE)["/v1/classify"]
+        )
+
+        self.assertEqual(status, HTTP_OK, response)
+        self.assertEqual([result["label"] for result in response["results"]], expected)
+
+    def test_the_installed_distribution_is_what_the_runtime_lists(self):
+        project = tomllib.loads((EXAMPLE / "pyproject.toml").read_text())["project"]
+        declared = {
+            name for group in project["entry-points"].values() for name in group
+        }
+        runtime = self._serve()
+
+        listed = subprocess.run(
+            ["vllm-sr-runtime", "plugins"],
+            check=True,
+            capture_output=True,
+            text=True,
+            env={**os.environ, **self.env},
+        )
+        status, models = call(runtime.base, "/v1/models")
+
+        plugins = json.loads(listed.stdout)
+        self.assertIn("example_keywords", plugins["families"])
+        self.assertIn("example_counts", plugins["engines"])
+        self.assertEqual(status, HTTP_OK)
+        (card,) = models["data"]
+        served = {
+            plugin["name"]: (plugin["distribution"], plugin["version"])
+            for plugin in card["plugins"]
+            if plugin["name"] in declared
+        }
+        self.assertEqual(
+            served,
+            {name: (project["name"], project["version"]) for name in declared},
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
