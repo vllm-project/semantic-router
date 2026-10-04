@@ -1172,6 +1172,10 @@ profiles:
       - src/semantic-router/pkg/extproc/router_replay*.go
       - src/semantic-router/pkg/apiserver/route_router_replay*.go
       - dashboard/backend/router/router_replay*.go
+      - e2e/testcases/topic_continuity_replay.go
+      - src/semantic-router/pkg/topiccontinuity/**
+      - src/semantic-router/pkg/extproc/req_filter_topic_continuity*.go
+      - src/semantic-router/pkg/extproc/request_original_history.go
   dynamo:
     display_name: Dynamo Gateway
     owner: e2e
