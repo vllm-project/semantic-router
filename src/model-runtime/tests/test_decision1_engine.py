@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 import torch
 from torch import nn
@@ -14,6 +16,7 @@ from vllm_sr_runtime.accel.kernels import (
     sdpa_ref,
 )
 from vllm_sr_runtime.engines.native import models
+from vllm_sr_runtime.engines.native import reduced as copies
 from vllm_sr_runtime.engines.native.engine import NativeEngine
 from vllm_sr_runtime.engines.native.weights import cast_parameters, load_backbone
 from vllm_sr_runtime.families.decision1 import package as pkg
@@ -175,6 +178,70 @@ def test_reduced_copy_consent_comes_from_the_pinned_package(tmp_path, monkeypatc
     )
     dtype = family.describe(package).dtype
     assert (dtype.reduced_gpu, dtype.reduced_cpu) == (None, "float32-packed")
+
+
+PACKED_IDS = torch.tensor([2, 5, 9, 11, 7, 1, 2, 8, 1])
+PACKED_LENGTHS = [6, 3]
+
+
+def vela_engine(tmp_path, reduced_cpu, device=None):
+    """The tiny Vela-encoder package on CPU under ``max_speed``, consenting to ``reduced_cpu``."""
+    family = Decision1Family()
+    spec = family.describe(
+        family.verify(PackageRef(write_package(tmp_path / "v", runtime=pkg.VELA)))
+    )
+    spec = replace(spec, dtype=replace(spec.dtype, reduced_cpu=reduced_cpu))
+    accelerator = CPUAccelerator()
+    options = EngineOptions(reduced_precision=True, exact_kernels_only=False)
+    return NativeEngine().load(
+        spec, accelerator, device or accelerator.devices()[0], options
+    )
+
+
+def packed_hidden(engine, branch, reduced):
+    batch = EncoderBatch(
+        PACKED_IDS, None, lengths=PACKED_LENGTHS, branch=branch, reduced=reduced
+    )
+    return engine.encode(batch).hidden[engine.backbone.num_layers]
+
+
+def test_reduced_batches_run_the_copy_of_their_stack(tmp_path):
+    if copies.unavailable("int8", torch.device("cpu")):
+        pytest.skip(copies.unavailable("int8", torch.device("cpu")))
+    engine = vela_engine(tmp_path, "int8")
+    assert set(engine.reduced) == {None, "choice", "score"}
+    assert engine.receipt()["reduced"]["kind"] == "int8"
+    for branch, stack in engine.stacks().items():
+        view = engine.reduced[branch]
+        assert (
+            view.embeddings.tok_embeddings.weight
+            is stack.embeddings.tok_embeddings.weight
+        )
+        alone = copies.reduced_view(stack, "int8")
+        alone.kernels = engine.kernels
+        with torch.inference_mode():
+            expected = alone.encode(
+                PACKED_IDS, alone.packed(PACKED_LENGTHS, "cpu"), (alone.num_layers,)
+            )[alone.num_layers]
+        exact = packed_hidden(engine, branch, reduced=False)
+        assert torch.equal(packed_hidden(engine, branch, reduced=True), expected)
+        assert not torch.equal(expected, exact)
+        assert torch.equal(packed_hidden(engine, branch, reduced=False), exact)
+
+
+@pytest.mark.parametrize("kind", ["bfloat16", "float32-packed"])
+def test_a_copy_the_cpu_cannot_run_is_skipped_not_fatal(tmp_path, monkeypatch, kind):
+    monkeypatch.setattr(copies.onednn, "available", lambda: False)
+    device = replace(CPUAccelerator().devices()[0], bf16=False)
+    engine = vela_engine(tmp_path, kind, device)
+    assert engine.reduced == {} and engine.memory_bytes() > 0
+    receipt = engine.receipt()["reduced"]
+    assert receipt["kind"] == kind and receipt["skipped"]
+    for branch in engine.stacks():
+        assert torch.equal(
+            packed_hidden(engine, branch, reduced=True),
+            packed_hidden(engine, branch, reduced=False),
+        )
 
 
 def test_type_head_layer_is_the_reference_encoder_layer():
