@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 )
 
 // ModelIdentity names the exact serving configuration of a model. A routing
@@ -46,12 +48,17 @@ type SourceCache struct {
 // Request describes the target turn and the backend capabilities known to the
 // router. The source record and mapper are supplied by later integration steps.
 type Request struct {
-	Namespace       string
-	SessionID       string
-	Target          ModelIdentity
-	SourceCanExport bool
-	TargetCanLoad   bool
-	Now             time.Time
+	// Principal must come from the configured authentication gateway. A
+	// client-provided session ID alone cannot authorize cache reuse.
+	AuthenticatedPrincipal string
+	// SessionProvenance uses the RequestContext provenance values. Only an
+	// explicit session or retained Response API lineage may reuse state.
+	SessionProvenance string
+	SessionID         string
+	Target            ModelIdentity
+	SourceCanExport   bool
+	TargetCanLoad     bool
+	Now               time.Time
 }
 
 // Hint is an eligible transfer candidate. It is not evidence of a cache hit.
@@ -70,6 +77,7 @@ type Reason string
 const (
 	ReasonEligible           Reason = "eligible"
 	ReasonMissingInput       Reason = "missing_input"
+	ReasonUntrustedSession   Reason = "untrusted_session"
 	ReasonUnpinnedIdentity   Reason = "unpinned_identity"
 	ReasonUnavailableBackend Reason = "unavailable_backend"
 	ReasonScopeMismatch      Reason = "scope_mismatch"
@@ -83,11 +91,17 @@ const (
 // PlanHandoff returns a candidate only when every router-visible condition is
 // satisfied. A nil hint means the target request must use normal prefill.
 func PlanHandoff(request Request, source SourceCache, mapper Mapper) (*Hint, Reason) {
-	if !present(request.Namespace, request.SessionID, source.Namespace,
+	if !present(request.SessionID, source.Namespace,
 		source.SessionID, source.CacheID, source.Endpoint, mapper.ID) ||
 		request.Now.IsZero() {
 		return nil, ReasonMissingInput
 	}
+	if !present(request.AuthenticatedPrincipal) ||
+		(request.SessionProvenance != "header" && request.SessionProvenance != "response_api") ||
+		!cache.UserScopeSecretConfigured() {
+		return nil, ReasonUntrustedSession
+	}
+	namespace := cache.UserScopeNamespace(request.AuthenticatedPrincipal)
 	if !validIdentity(request.Target) || !validIdentity(source.Model) ||
 		!validIdentity(mapper.Source) || !validIdentity(mapper.Target) {
 		return nil, ReasonUnpinnedIdentity
@@ -95,7 +109,7 @@ func PlanHandoff(request Request, source SourceCache, mapper Mapper) (*Hint, Rea
 	if !request.SourceCanExport || !request.TargetCanLoad {
 		return nil, ReasonUnavailableBackend
 	}
-	if request.Namespace != source.Namespace || request.SessionID != source.SessionID {
+	if namespace != source.Namespace || request.SessionID != source.SessionID {
 		return nil, ReasonScopeMismatch
 	}
 	if source.ExpiresAt.IsZero() || !request.Now.Before(source.ExpiresAt) {
@@ -115,7 +129,7 @@ func PlanHandoff(request Request, source SourceCache, mapper Mapper) (*Hint, Rea
 		return nil, ReasonUnsupportedServing
 	}
 	return &Hint{
-		Namespace:      request.Namespace,
+		Namespace:      namespace,
 		CacheID:        source.CacheID,
 		MapperID:       mapper.ID,
 		SourceEndpoint: source.Endpoint,

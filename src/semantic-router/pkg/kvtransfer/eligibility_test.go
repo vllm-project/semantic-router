@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 )
 
 func testModel(name, revision string) ModelIdentity {
@@ -20,19 +22,22 @@ func testModel(name, revision string) ModelIdentity {
 	}
 }
 
-func testHandoff() (Request, SourceCache, Mapper) {
+func testHandoff(t *testing.T) (Request, SourceCache, Mapper) {
+	t.Helper()
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "test-only-kv-scope-secret")
 	now := time.Date(2026, time.October, 4, 0, 0, 0, 0, time.UTC)
 	sourceModel := testModel("Qwen/Qwen3-14B", strings.Repeat("a", 40))
 	targetModel := testModel("Qwen/Qwen3-32B", strings.Repeat("b", 40))
 	return Request{
-			Namespace:       "tenant-a",
-			SessionID:       "session-1",
-			Target:          targetModel,
-			SourceCanExport: true,
-			TargetCanLoad:   true,
-			Now:             now,
+			AuthenticatedPrincipal: "tenant-a",
+			SessionProvenance:      "header",
+			SessionID:              "session-1",
+			Target:                 targetModel,
+			SourceCanExport:        true,
+			TargetCanLoad:          true,
+			Now:                    now,
 		}, SourceCache{
-			Namespace: "tenant-a",
+			Namespace: cache.UserScopeNamespace("tenant-a"),
 			SessionID: "session-1",
 			CacheID:   "opaque-cache-1",
 			Endpoint:  "10.0.1.5:8000",
@@ -46,12 +51,12 @@ func testHandoff() (Request, SourceCache, Mapper) {
 }
 
 func TestPlanHandoffReturnsCandidateForExactIdentity(t *testing.T) {
-	request, source, mapper := testHandoff()
+	request, source, mapper := testHandoff(t)
 	hint, reason := PlanHandoff(request, source, mapper)
 	if reason != ReasonEligible || hint == nil {
 		t.Fatalf("PlanHandoff() = (%v, %q), want eligible hint", hint, reason)
 	}
-	if hint.Namespace != request.Namespace || hint.CacheID != source.CacheID ||
+	if hint.Namespace != source.Namespace || hint.CacheID != source.CacheID ||
 		hint.MapperID != mapper.ID || hint.SourceEndpoint != source.Endpoint {
 		t.Fatalf("PlanHandoff() hint = %+v, want source-scoped mapper hint", hint)
 	}
@@ -64,7 +69,19 @@ func TestPlanHandoffRejectsUnsafeCandidates(t *testing.T) {
 		want   Reason
 	}{
 		{"tenant mismatch", func(_ *Request, source *SourceCache, _ *Mapper) {
-			source.Namespace = "tenant-b"
+			source.Namespace = cache.UserScopeNamespace("tenant-b")
+		}, ReasonScopeMismatch},
+		{"missing authenticated principal", func(request *Request, _ *SourceCache, _ *Mapper) {
+			request.AuthenticatedPrincipal = ""
+		}, ReasonUntrustedSession},
+		{"untrusted derived session", func(request *Request, _ *SourceCache, _ *Mapper) {
+			request.SessionProvenance = "message_hash"
+		}, ReasonUntrustedSession},
+		{"unknown session provenance", func(request *Request, _ *SourceCache, _ *Mapper) {
+			request.SessionProvenance = "unknown"
+		}, ReasonUntrustedSession},
+		{"different authenticated principal", func(request *Request, _ *SourceCache, _ *Mapper) {
+			request.AuthenticatedPrincipal = "tenant-b"
 		}, ReasonScopeMismatch},
 		{"session mismatch", func(_ *Request, source *SourceCache, _ *Mapper) {
 			source.SessionID = "session-2"
@@ -130,12 +147,28 @@ func TestPlanHandoffRejectsUnsafeCandidates(t *testing.T) {
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			request, source, mapper := testHandoff()
+			request, source, mapper := testHandoff(t)
 			test.change(&request, &source, &mapper)
 			hint, reason := PlanHandoff(request, source, mapper)
 			if hint != nil || reason != test.want {
 				t.Fatalf("PlanHandoff() = (%v, %q), want (nil, %q)", hint, reason, test.want)
 			}
 		})
+	}
+}
+
+func TestPlanHandoffRequiresConfiguredScopeSecret(t *testing.T) {
+	request, source, mapper := testHandoff(t)
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "")
+	if hint, reason := PlanHandoff(request, source, mapper); hint != nil || reason != ReasonUntrustedSession {
+		t.Fatalf("PlanHandoff() = (%v, %q), want untrusted session", hint, reason)
+	}
+}
+
+func TestPlanHandoffAcceptsRetainedResponseSession(t *testing.T) {
+	request, source, mapper := testHandoff(t)
+	request.SessionProvenance = "response_api"
+	if hint, reason := PlanHandoff(request, source, mapper); hint == nil || reason != ReasonEligible {
+		t.Fatalf("PlanHandoff() = (%v, %q), want eligible hint", hint, reason)
 	}
 }
