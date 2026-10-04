@@ -473,6 +473,31 @@ def test_approximate_batches_run_each_stack_over_its_own_rows(packages, runtimes
         assert row == pytest.approx(value, abs=1e-4)
 
 
+def test_type_heads_read_packed_rows_by_length_only_when_padding_wastes():
+    assert vela.readout_groups([40, 44, 48]) == [[0, 1, 2]]
+    assert vela.readout_groups([30, 33, 500]) == [[0, 1], [2]]
+    assert vela.readout_groups([9, 200, 10, 130, 12, 150]) == [
+        [0, 2],
+        [4],
+        [3, 5],
+        [1],
+    ]
+
+
+def test_coalesced_rows_of_mixed_lengths_answer_like_their_own_requests(runtimes):
+    model = model_of(runtimes["vela"])
+    states = (STATE, " ".join([STATE] * 12))
+    items = [item for state in states for item in model.plan(state, MANY).items]
+    choices = [len(item.ids) for item in items if item.task_type == "choice"]
+    assert len(vela.readout_groups(choices)) > 1
+    for row, value in zip(
+        model.run_approximate(items),
+        [model.run([item])[0] for item in items],
+        strict=True,
+    ):
+        assert row == pytest.approx(value, abs=1e-4)
+
+
 def test_batching_profile_serves_the_encoder(packages):
     runtime = Runtime(
         ServeConfig(model=str(packages["vela"]), device="cpu", profile="batching")

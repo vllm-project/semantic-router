@@ -12,6 +12,7 @@ type present runs its stack over the whole physical batch.
 
 from __future__ import annotations
 
+import itertools
 import json
 from collections.abc import Callable
 from pathlib import Path
@@ -27,6 +28,7 @@ from .questions import KINDS, NoulDefaults, Row
 
 PHYSICAL_BATCH = 8
 MAX_INPUT_TOKENS = 1024
+READOUT_PADDING = 0.25
 NOUL_DEFAULTS = NoulDefaults(
     false="No. The statement or question is not satisfied.",
     true="Yes. The statement or question is satisfied.",
@@ -182,6 +184,53 @@ def collate(items: list[RenderedItem], pad_id: int) -> dict[str, torch.Tensor]:
     }
 
 
+def readout_groups(lengths: list[int]) -> list[list[int]]:
+    """Row indices for the type heads' padded reads of packed rows.
+
+    One group while padding every row to the longest wastes at most
+    ``READOUT_PADDING`` of the real tokens. Past that, rows in length order
+    form groups in which no row pads by more than ``READOUT_PADDING``, so a
+    short row never pads to a long one.
+    """
+    if len(lengths) * max(lengths) <= (1 + READOUT_PADDING) * sum(lengths):
+        return [list(range(len(lengths)))]
+    groups: list[list[int]] = []
+    for row in sorted(range(len(lengths)), key=lengths.__getitem__):
+        if groups and lengths[row] <= (1 + READOUT_PADDING) * lengths[groups[-1][0]]:
+            groups[-1].append(row)
+        else:
+            groups.append([row])
+    return groups
+
+
+def padded_marker_logits(
+    readout: TypeReadout,
+    kind: str,
+    items: list[RenderedItem],
+    hidden: torch.Tensor,
+    device: torch.device,
+) -> torch.Tensor:
+    """Masked marker logits ``[rows, width]`` of ``items`` whose hidden states lie packed back to back."""
+    lengths = [len(item.ids) for item in items]
+    width = max(lengths)
+    starts = torch.arange(len(items), device=device)[:, None] * width
+    positions = (starts + torch.arange(width, device=device)[None, :])[
+        torch.arange(width, device=device)[None, :]
+        < torch.tensor(lengths, device=device)[:, None]
+    ]
+    rows = hidden.new_zeros((len(items) * width, hidden.shape[-1])).index_copy_(
+        0, positions, hidden
+    )
+    batch = {name: value.to(device) for name, value in collate(items, 0).items()}
+    scores = readout(
+        kind,
+        rows.view(len(items), width, hidden.shape[-1]),
+        ~batch["attention_mask"],
+        batch["markers"],
+    )
+    return scores.masked_fill(~batch["valid"], torch.finfo(torch.float32).min)
+
+
 def packed_marker_logits(
     encode: Callable[[EncoderBatch], Any],
     readout: TypeReadout,
@@ -193,9 +242,10 @@ def packed_marker_logits(
     """Masked marker logits ``[rows, width]`` of rows of one type, their layer stack run packed.
 
     The rows run back to back without padding (the engine's packed layout);
-    the type's head layers then read them padded with a key mask. Packing
-    changes the attention and GEMM shapes, so this serves approximate profiles,
-    which also run the engine's reduced-precision copy when it loaded one.
+    the type's head layers then read them padded with a key mask, by length
+    group (``readout_groups``). Packing changes the attention and GEMM shapes,
+    so this serves approximate profiles, which also run the engine's
+    reduced-precision copy when it loaded one.
     """
     lengths = [len(item.ids) for item in items]
     ids = torch.tensor(
@@ -210,23 +260,27 @@ def packed_marker_logits(
             reduced=True,
         )
     ).hidden[exit_layer]
-    width, hidden = max(lengths), packed.shape[-1]
-    starts = torch.arange(len(items), device=device)[:, None] * width
-    positions = (starts + torch.arange(width, device=device)[None, :])[
-        torch.arange(width, device=device)[None, :]
-        < torch.tensor(lengths, device=device)[:, None]
-    ]
-    rows = packed.new_zeros((len(items) * width, hidden)).index_copy_(
-        0, positions, packed
+    groups = readout_groups(lengths)
+    if len(groups) == 1:
+        return padded_marker_logits(readout, kind, items, packed, device)
+    offsets = [0, *itertools.accumulate(lengths)]
+    width = max(len(item.gather) for item in items)
+    output = torch.full(
+        (len(items), width), torch.finfo(torch.float32).min, device=device
     )
-    batch = {name: value.to(device) for name, value in collate(items, 0).items()}
-    scores = readout(
-        kind,
-        rows.view(len(items), width, hidden),
-        ~batch["attention_mask"],
-        batch["markers"],
-    )
-    return scores.masked_fill(~batch["valid"], torch.finfo(torch.float32).min)
+    for group in groups:
+        tokens = torch.cat(
+            [torch.arange(offsets[row], offsets[row + 1]) for row in group]
+        ).to(device)
+        scores = padded_marker_logits(
+            readout,
+            kind,
+            [items[row] for row in group],
+            packed.index_select(0, tokens),
+            device,
+        )
+        output[torch.tensor(group, device=device), : scores.shape[1]] = scores
+    return output
 
 
 def marker_logits(
