@@ -4,8 +4,9 @@ Random Qwen3.5 backbones at Eos-0.8B's and Nox-4B's layer widths (few layers) ho
 in BF16, as the engine holds a ``gpu_weights`` backbone (rotary buffers stay FP32). An untouched copy
 is the reference; the other copy runs the fused layers through the graph runner (first use eager,
 second captured, third replayed) and must equal it (``torch.equal``). The Eos case also selects its
-released FP64 convolution variant, whose gated-delta blocks run eagerly inside the fused layers.
-The Vela encoders' three layer stacks each replay their own bucket graphs.
+released FP64 convolution variant, whose gated-delta blocks run eagerly inside the fused layers,
+and which hands shapes it does not cover to the default kernel. The Vela encoders' three layer
+stacks each replay their own bucket graphs.
 """
 
 from __future__ import annotations
@@ -84,6 +85,22 @@ def test_bf16_stream_fast_path_equals_eager(case):
     assert not any(layer._fused_failed for layer in fused.layers)
     stats = graphs.receipt()
     assert stats["failed"] == 0 and stats["replays"] > 0
+
+
+def test_fp64_convolution_falls_back_off_its_shapes():
+    pytest.importorskip("triton")
+    from vllm_sr_runtime.accel.triton_fp64_conv import fp64_conv
+
+    calls = []
+
+    def default(hidden_states, weight, bias=None, activation=None):
+        calls.append(hidden_states.shape)
+        return hidden_states
+
+    conv = fp64_conv(default)
+    x = torch.randn(1, 8, 16)
+    assert conv(x, torch.randn(8, 4), None, activation="silu") is x
+    assert calls == [x.shape]
 
 
 def test_every_encoder_stack_replays_its_own_graphs(tmp_path):

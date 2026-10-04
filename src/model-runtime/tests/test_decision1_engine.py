@@ -278,19 +278,3 @@ def test_type_readout_runs_in_fp32_on_reduced_precision_hidden_states():
         reduced = readout("choice", hidden.bfloat16(), padding, markers)
     assert full.dtype == reduced.dtype == torch.float32
     assert torch.allclose(full, reduced, atol=0.05)
-
-
-def test_fp64_convolution_falls_back_off_its_shapes():
-    pytest.importorskip("triton")
-    from vllm_sr_runtime.accel.triton_fp64_conv import fp64_conv
-
-    calls = []
-
-    def default(hidden_states, weight, bias=None, activation=None):
-        calls.append(hidden_states.shape)
-        return hidden_states
-
-    conv = fp64_conv(default)
-    x = torch.randn(1, 8, 16)
-    assert conv(x, torch.randn(8, 4), None, activation="silu") is x
-    assert calls == [x.shape]
