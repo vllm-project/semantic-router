@@ -50,10 +50,6 @@ website/static/model-catalog/*
 docs/
 paper/
 perf/
-candle-binding/target/
-ml-binding/target/
-nlp-binding/target/
-onnx-binding/target/
 src/training/model_classifier/verified_single_judge_*/
 dashboard/frontend/node_modules/
 dashboard/wizmap/node_modules/
