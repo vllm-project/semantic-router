@@ -63,10 +63,6 @@ replace github.com/vllm-project/semantic-router/src/semantic-router => ../src/se
 
 replace github.com/vllm-project/semantic-router/candle-binding => ../candle-binding
 
-replace github.com/vllm-project/semantic-router/ml-binding => ../ml-binding
-
-replace github.com/vllm-project/semantic-router/nlp-binding => ../nlp-binding
-
 replace github.com/vllm-project/semantic-router/openvino-binding => ../openvino-binding
 
 replace github.com/vllm-project/semantic-router/onnx-binding => ../onnx-binding

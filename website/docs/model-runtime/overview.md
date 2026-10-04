@@ -51,8 +51,9 @@ feature reports "unknown" and your routes fall back the way you configured.
 - **Requests never wait on a broken model.** A model that is too slow, still
   restarting or crashed makes its feature "unknown" for that request. The
   router restarts a crashed runtime and keeps routing meanwhile.
-- **One call per request.** All the model work of one request goes to the
-  runtime as a single bundled call, so adding signals does not add round trips.
+- **Few calls per request.** The model work a request's signals send to one
+  runtime process goes as a single bundled call, and CPU models in separate
+  processes answer in parallel, so adding signals does not add round trips.
 - **Pluggable.** New model families, engines and hardware back ends are
   ordinary Python packages. See [Add your own model family](./plugins.md).
 

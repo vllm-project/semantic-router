@@ -76,7 +76,7 @@ serving.
 
 | Message mentions | Do this |
 | --- | --- |
-| `candle`, `ort`, `openvino`, `precision`, `custom_ops_profile`, `compilation_cache_dir` | Run `vllm-sr config migrate`. See [Migrate](./migrate.md). |
+| `removed model execution fields`, `candle`, `ort`, `openvino`, `precision`, `variant`, `use_mmbert_32k`, `use_nli`, `polarity_guard` | Run `vllm-sr config migrate`. See [Migrate](./migrate.md). |
 | a binding does not match the model | The model has different labels, heads, dimensions or a smaller input limit than the feature needs. Bind a model made for that feature, or change `input`. |
 | `artifact must be a Hub repository ID or an absolute package path` | Use `owner/name` for a Hub model or an absolute path for a local copy. |
 | `revision must be a 40-hex commit` | Use the full commit hash, not a branch or tag. |
