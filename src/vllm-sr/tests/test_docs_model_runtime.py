@@ -330,6 +330,26 @@ def test_vllm_sr_commands_parse():
             ) from error
 
 
+def test_translations_in_sync_show_the_english_snippets():
+    """A translated page that claims to be current shows the snippets the tests check."""
+    translated = (
+        DOCS.parent / "i18n" / "zh-Hans" / "docusaurus-plugin-content-docs" / "current"
+    )
+    checked = 0
+    for page in PAGES:
+        translation = translated / page.relative_to(DOCS)
+        if not translation.is_file():
+            continue
+        text = translation.read_text(encoding="utf-8")
+        if re.search(r"^\s*outdated:\s*true\s*$", text, re.M):
+            continue
+        assert FENCE.findall(text) == FENCE.findall(
+            page.read_text(encoding="utf-8")
+        ), translation.relative_to(REPO_ROOT)
+        checked += 1
+    assert checked
+
+
 def test_documented_image_builds_use_dockerfiles_that_exist():
     builds = [
         (block.where, dockerfile)

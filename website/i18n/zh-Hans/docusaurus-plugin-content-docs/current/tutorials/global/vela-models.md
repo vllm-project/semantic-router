@@ -82,7 +82,7 @@ Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带�
 
 ## 配置 {#configuration}
 
-每个 Vela 模型都运行在[模型运行时](../../model-runtime/overview.md)中，因此默认配置无需任何设置。以下片段把 Domain 绑定到一个显式的 CPU deployment，输入预算为 32K。请将其加入已包含 providers、signals 和 decisions 的配置。
+每个 Vela 模型都运行在[模型运行时](model-runtime/overview.md)中，因此默认配置无需任何设置。以下片段把 Domain 绑定到一个显式的 CPU deployment，输入预算为 32K。请将其加入已包含 providers、signals 和 decisions 的配置。
 
 ```yaml
 routing:
@@ -103,7 +103,7 @@ global:
           overflow: reject
 ```
 
-其他分类器使用相同的 deployment 与 consumer binding 结构。PII 返回 `token_spans.v1`，Embedding 使用 `embedding.v1`，Reranker 使用 `relevance_scores.v1`。运行时从模型包读取每个模型的架构，因此这些 binding 不需要 adapter。完整契约见[与路由器一起运行](../../model-runtime/deploy.md)。
+其他分类器使用相同的 deployment 与 consumer binding 结构。PII 返回 `token_spans.v1`，Embedding 使用 `embedding.v1`，Reranker 使用 `relevance_scores.v1`。运行时从模型包读取每个模型的架构，因此这些 binding 不需要 adapter。完整契约见[与路由器一起运行](model-runtime/deploy.md)。
 
 Hazard 使用独立分类契约 `label_scores.v1`，并通过 SHA-256 固定 `operating_point.json`。该策略绑定权重、tokenizer、重叠窗口和十二个阈值。Decision 选择标签，不覆盖这些阈值；参考配置包含完整示例。
 
@@ -111,11 +111,11 @@ PII 的重叠扫描、Hazard 的窗口策略与整段文本分类不同。应按
 
 ## 推理引擎与硬件 {#inference-engines-and-hardware}
 
-模型运行时用 PyTorch 运行 Vela 模型。CPU 执行（包括 32K 输入）已验证，经 ROCm 的 AMD Instinct MI300X 和 MI325X GPU 也已验证。CUDA 可用但尚未验证，NVIDIA 性能需要在目标硬件上测量。[Profiles](../../model-runtime/profiles.md) 在精确与速度之间取舍，[选择模型](../../model-runtime/choose-a-model.md)列出每个模型的开销。
+模型运行时用 PyTorch 运行 Vela 模型。CPU 执行（包括 32K 输入）已验证，经 ROCm 的 AMD Instinct MI300X 和 MI325X GPU 也已验证。CUDA 可用但尚未验证，NVIDIA 性能需要在目标硬件上测量。[Profiles](model-runtime/profiles.md) 在精确与速度之间取舍，[选择模型](model-runtime/choose-a-model.md)列出每个模型的开销。
 
 [Vela AMD 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)把全部十个任务模型放在 AMD GPU 上，并保留发布的运行策略。`--platform amd` 选择 AMD 镜像及设备访问，不会让所有模型自动使用 GPU，也不会覆盖显式 CPU 部署。见 [AMD ROCm](../../installation/amd-rocm.md#run-vela-routing-models-on-amd)。
 
-早期版本通过 Candle、ONNX Runtime、MIGraphX 或 OpenVINO 运行 Vela，并用 `head` 选择导出的 ONNX 计算图。这些 provider 已移除；模型仓库仍保留 ONNX 导出供其他工具使用。`vllm-sr config migrate` 会改写旧的 deployment，见[从原生绑定迁移](../../model-runtime/migrate.md)。
+早期版本通过 Candle、ONNX Runtime、MIGraphX 或 OpenVINO 运行 Vela，并用 `head` 选择导出的 ONNX 计算图。这些 provider 已移除；模型仓库仍保留 ONNX 导出供其他工具使用。`vllm-sr config migrate` 会改写旧的 deployment，见[从原生绑定迁移](model-runtime/migrate.md)。
 
 各模型卡片列出支持的输入长度、用法及可比评测结果。公开对比以此前的 mmBERT 家族为基线，使用匹配数据；质量分数、最大可接受输入长度和推理性能衡量的是不同属性。
 

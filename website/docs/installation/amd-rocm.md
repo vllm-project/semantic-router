@@ -173,7 +173,7 @@ answer quality and operating behavior on the actual deployment.
 ## Run Vela routing models on AMD
 
 The Router's own models (the Vela classifiers, embeddings, reranker and
-decision models) run in the [model runtime](../model-runtime/overview.md). On
+decision models) run in the [model runtime](model-runtime/overview.md). On
 AMD Instinct MI300X and MI325X GPUs it runs them through PyTorch for ROCm,
 which is validated. `--platform amd` selects the AMD image, which ships the
 runtime with the ROCm build of PyTorch, and passes the GPUs to the Router.
@@ -246,7 +246,7 @@ scan long inputs in overlapping windows (`overflow: window`); see
 Earlier releases selected fixed ONNX Runtime graphs (`head:
 onnx/model_rocm_32k.onnx`) and MIGraphX compilation caches here.
 `vllm-sr config migrate` removes those settings; see
-[Migrate from the native bindings](../model-runtime/migrate.md).
+[Migrate from the native bindings](model-runtime/migrate.md).
 
 ## Compare with the 98x paper setup
 

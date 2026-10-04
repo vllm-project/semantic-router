@@ -133,7 +133,7 @@ vllm-sr serve --config config.yaml
 ```
 
 The Router's own models (classifiers, embeddings, decision models) run in the
-[model runtime](../model-runtime/overview.md). To run them on CUDA, use
+[model runtime](model-runtime/overview.md). To run them on CUDA, use
 `--platform nvidia`: the CUDA image ships the runtime with the CUDA build of
 PyTorch, and deployments with `device: auto` or `device: cuda:0` use the GPU.
 CUDA support works but is not yet validated; measure it on your hardware.
