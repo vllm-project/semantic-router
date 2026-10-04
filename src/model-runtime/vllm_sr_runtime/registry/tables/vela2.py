@@ -3,8 +3,10 @@
 Entries pin a revision, the SHA-256 of every file the family loads, the
 expected identity and parameter count; references live in
 ``registry/golden_answers_vela2.json`` and the 4B / 9B backbones' kernel
-choices in ``registry/kernel_choices.json``. The repositories are private: a
-token with access is needed to download them.
+choices in ``registry/kernel_choices.json``. ``reduced`` names the copy
+``max_speed`` may load per device class, where ``docs/records/vela2-parity.md``
+and ``vela2-performance.md`` show it at the accuracy floor and faster. The
+repositories are private: a token with access is needed to download them.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ def _vela(
     backbone: str,
     memory: float,
     files: dict[str, str],
+    reduced: dict[str, str] | None = None,
 ) -> BuiltinModel:
     return BuiltinModel(
         repo_id=f"{ORG}/Vela-2.0-{size}",
@@ -33,6 +36,7 @@ def _vela(
         min_device_memory_gib=memory,
         files=files,
         access="private",
+        reduced=reduced or {},
     )
 
 
@@ -51,6 +55,7 @@ MODELS: tuple[BuiltinModel, ...] = (
             "model.safetensors": "bd37dd0db177d766bc554eded78ae8493bc248172d0480f6a543b30932a0cc8e",
             "tokenizer.json": "e4b670c5ab72158f35de150792133e8c92adb4ba677d26b99d22c77f34c63faf",
         },
+        reduced={"cpu": "float32-packed"},
     ),
     _vela(
         "4B",

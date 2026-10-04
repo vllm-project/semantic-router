@@ -271,6 +271,17 @@ def test_encoder_consent_to_a_reduced_copy_comes_from_its_builtin_entry(
     assert (dtype.autocast, dtype.bf16_resident) == (None, False)
 
 
+def test_only_the_measured_copy_is_consented() -> None:
+    from vllm_sr_runtime.registry import builtin
+
+    consent = {
+        model.repo_id.rsplit("/", 1)[1]: dict(model.reduced)
+        for model in builtin.all_models("vela2")
+        if model.reduced
+    }
+    assert consent == {"Vela-2.0-0.3B": {"cpu": "float32-packed"}}
+
+
 def test_max_speed_runs_encoder_approximate_batches_on_the_copy(
     packages, monkeypatch
 ) -> None:
