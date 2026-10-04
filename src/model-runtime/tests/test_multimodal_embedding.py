@@ -280,6 +280,27 @@ def test_a_batch_answers_every_input_as_it_answers_alone(model):
     assert model.run(plan.items) == [model.run([item])[0] for item in plan.items]
 
 
+def test_truncate_cuts_over_long_text_inside_the_special_tokens(model):
+    text = "route this request to the model that answers it best " * 4
+    image = base64.b64encode(golden_image()).decode()
+    inputs = [
+        text,
+        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image}"}},
+    ]
+    options = {"max_tokens": 8}
+    rejected = serve(model, {"input": inputs, "options": options})[1]
+    assert rejected["data"][0]["error"] == "max_length_exceeded"
+    plan, cut = serve(
+        model, {"input": inputs, "options": {**options, "overflow": "truncate"}}
+    )
+    full = model.text.encode(text, 512)[0]
+    assert plan.items[0].ids == [*full[:7], full[-1]]
+    assert cut["data"][0]["input"]["processed_tokens"] == 8
+    assert cut["data"][0]["input"]["truncated"] is True
+    assert cut["data"][0]["input"]["tokens"] == len(full)
+    assert cut["data"][1]["embedding"] == rejected["data"][1]["embedding"]
+
+
 def test_bad_inputs_fail_in_place(model):
     garbage = base64.b64encode(b"not an image").decode()
     _, body = serve(
@@ -301,11 +322,6 @@ def test_bad_inputs_fail_in_place(model):
     )
     errors = [entry.get("error") for entry in body["data"]]
     assert errors == ["max_length_exceeded", "invalid_input", "invalid_input", None]
-    with pytest.raises(ValueError, match="rejects over-long"):
-        model.plan_surface(
-            "embeddings",
-            request({"input": "hello", "options": {"overflow": "truncate"}}),
-        )
     with pytest.raises(ValueError, match="no layer exits"):
         model.plan_surface("embeddings", request({"input": "hello", "layer": 3}))
 

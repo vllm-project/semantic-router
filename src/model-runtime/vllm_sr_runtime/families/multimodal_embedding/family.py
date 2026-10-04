@@ -268,10 +268,6 @@ class OmniModel(LoadedModel):
         parsed = embedding.parse_request(
             request, self.info.embedding, self.info.limits["max_input_tokens"]
         )
-        if parsed.overflow != "reject":
-            raise ValueError(
-                "this model rejects over-long input (options.overflow: reject)"
-            )
         items = [self._item(entry, parsed) for entry in parsed.inputs]
         rep = embedding.representation(self.info.model_sha256, 0, self.dimension, True)
         return embedding.plan(request, parsed, items, rep)
@@ -283,7 +279,9 @@ class OmniModel(LoadedModel):
             return entry.error
         if entry.modality == "text":
             assert entry.text is not None
-            encoded = self.text.encode(entry.text, parsed.max_tokens, parsed.input_type)
+            encoded = self.text.encode(
+                entry.text, parsed.max_tokens, parsed.input_type, parsed.overflow
+            )
             if isinstance(encoded, str):
                 return encoded
             ids, usage = encoded
