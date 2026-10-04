@@ -20,9 +20,8 @@ import (
 const (
 	profileDir = "e2e/profiles/model-runtime/"
 	valuesFile = profileDir + "values.yaml"
-	// FilesConfigMap holds the fixture script, the attached models file and
-	// the fixtures' label maps; the Router pod and the attached runtime mount
-	// it at /opt/vsr-e2e.
+	// FilesConfigMap holds the fixture script and the attached models file;
+	// the Router pod and the attached runtime mount it at /opt/vsr-e2e.
 	FilesConfigMap = "model-runtime-e2e"
 )
 
@@ -30,9 +29,6 @@ const (
 var configMapFiles = map[string]string{
 	"runtime_with_fixtures.py": profileDir + "runtime_with_fixtures.py",
 	"attached-models.yaml":     profileDir + "attached-models.yaml",
-	"category_mapping.json":    profileDir + "category_mapping.json",
-	"pii_mapping.json":         profileDir + "pii_mapping.json",
-	"jailbreak_mapping.json":   profileDir + "jailbreak_mapping.json",
 }
 
 // The attached runtime starts before the Router so that its deployments can

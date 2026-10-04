@@ -190,9 +190,9 @@ func TestRouterStartsManagedRuntimesThroughTheFixtureScript(t *testing.T) {
 	}
 }
 
-// The modules' label maps come from the ConfigMap, or the Router would fetch
-// the Vela models' maps from the Hub, which HF_HUB_OFFLINE forbids.
-func TestModulesReadTheFixtureLabelMapsFromTheConfigMap(t *testing.T) {
+// The modules name no mapping file, so the lane covers labels taken from the
+// served cards; a mapping file would also be a Hub fetch HF_HUB_OFFLINE forbids.
+func TestModulesTakeTheirLabelsFromTheServedCards(t *testing.T) {
 	var profile struct {
 		Config struct {
 			Global struct {
@@ -222,9 +222,8 @@ func TestModulesReadTheFixtureLabelMapsFromTheConfigMap(t *testing.T) {
 		t.Fatalf("domain threshold %v, the task-signal case expects 0.01", modules.Classifier.Domain.Threshold)
 	}
 	for _, path := range []string{modules.Classifier.Domain.Mapping, modules.Classifier.PII.Mapping, modules.PromptGuard.Mapping} {
-		key := strings.TrimPrefix(path, "/opt/vsr-e2e/")
-		if _, shipped := configMapFiles[key]; !shipped || key == path {
-			t.Fatalf("label map %q is not one of the ConfigMap's files", path)
+		if path != "" {
+			t.Fatalf("label map %q: the modules must take their labels from the served cards", path)
 		}
 	}
 }
