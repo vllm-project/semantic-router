@@ -227,8 +227,8 @@ def write_candidate_recipes(artifact: dict[str, Any], output_dir: Path) -> None:
     default=None,
     help=(
         "Router management base URL (origin or /api/v1). "
-        f"Defaults to http://localhost:<{DEFAULT_API_PORT} + VLLM_SR_PORT_OFFSET> "
-        "when --replay-file is omitted."
+        f"Defaults to http://localhost:{DEFAULT_API_PORT}, with VLLM_SR_PORT_OFFSET "
+        "added to the port, when --replay-file is omitted."
         " Uses VSR_MGMT_TOKEN for bearer auth when set."
     ),
 )
