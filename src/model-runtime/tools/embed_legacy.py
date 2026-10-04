@@ -89,6 +89,10 @@ JOBS: dict[str, Job] = {
     },
 }
 PROVIDERS = {"embedding": "candle", "rerank": "candle", "omni": "ort"}
+LEGACY_PATHS = {
+    "candle": "router native facade, candle on the CPU (one call per text, per query)",
+    "ort": "router native facade, ONNX Runtime on the prepared Omni bundle (one call per input)",
+}
 MAX_TOKENS = {"embedding": 8192, "rerank": 8192, "omni": 512}
 # Design section 17 (None: not gated); a rerank tie is a legacy logit margin under ``tie``.
 CPU_THRESHOLDS = {"min_cosine": 0.99999, "max_abs": 1e-4, "tie": 1e-3}
@@ -845,8 +849,9 @@ def run_compare(args: argparse.Namespace) -> None:
             record["load"] = {"legacy": loads[0], "runtime": loads[1]}
             record["throughput_passed"] = loads[1]["per_s"] >= loads[0]["per_s"]
         jobs[job] = record
+    providers = dict.fromkeys(PROVIDERS[JOBS[job].mode] for job in jobs)
     result = {
-        "legacy": "router native facade, candle on the CPU (one call per text, per query)",
+        "legacy": "; ".join(LEGACY_PATHS[provider] for provider in providers),
         "device_class": args.device_class,
         "thresholds": thresholds,
         "jobs": jobs,
