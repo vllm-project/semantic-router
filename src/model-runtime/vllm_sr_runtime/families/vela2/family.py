@@ -311,9 +311,13 @@ class Vela2Model(LoadedModel):
         """The 4B / 9B trees always pack on the shared-context path; the 0.3B has one exact path."""
         return 1 if isinstance(self.member, DecoderMember) and items else 0
 
-    def run(self, items: list[Any], shared_prefix: int = 0) -> list[Any]:
-        """One forward per batch; ``shared_prefix`` > 0 (shared-context path) packs the 4B / 9B trees."""
-        return self.member.run(items, packed=shared_prefix > 0)
+    def run(self, items: list[Any]) -> list[Any]:
+        """One forward per batch, as the packages' engine runs it."""
+        return self.member.run(items, packed=False)
+
+    def run_shared(self, items: list[Any], shared_prefix: int) -> list[Any]:
+        """The shared-context path packs the 4B / 9B trees."""
+        return self.member.run(items, packed=True)
 
     def run_approximate(self, items: list[Any]) -> list[Any]:
         """Approximate batches run packed: 4B / 9B trees, and 0.3B sequences on the engine's

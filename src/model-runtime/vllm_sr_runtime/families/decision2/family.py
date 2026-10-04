@@ -345,8 +345,11 @@ class Decision2Model(LoadedModel):
             input_tokens=tokens,
         )
 
-    def run(
-        self, items: list[RenderedItem], shared_prefix: int = 0
+    def run(self, items: list[RenderedItem]) -> list[list[float] | None]:
+        return self.run_shared(items, 0)
+
+    def run_shared(
+        self, items: list[RenderedItem], shared_prefix: int
     ) -> list[list[float] | None]:
         batch = collate(items, self.tokenizer.pad_id)
         scores = forward_logits(

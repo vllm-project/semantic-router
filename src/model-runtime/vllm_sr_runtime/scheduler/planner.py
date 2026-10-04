@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ..plugins.base import LoadedModel, WorkItem
 
 
 def padded(length: int) -> int:
     return -(-length // 8) * 8
 
 
-def cost(item: Any) -> int:
+def cost(item: WorkItem) -> int:
     """Tokens an item costs a forward: its token IDs, or the ``cost`` its family sets (images, audio)."""
-    return getattr(item, "cost", None) or len(item.ids)
+    declared: int | None = getattr(item, "cost", None)
+    return declared or len(item.ids)
 
 
 def length_class(length: int) -> int:
@@ -41,7 +45,9 @@ def micro_batches(lengths: list[int], budget: int | None) -> list[list[int]]:
     return groups
 
 
-def exact_split(model: Any, items: list[Any], budget: int | None) -> list[list[int]]:
+def exact_split(
+    model: LoadedModel[Any, Any] | None, items: list[WorkItem], budget: int | None
+) -> list[list[int]]:
     """One request's exact forwards: the model's released split (``exact_batches``), else ``micro_batches``."""
     split = model.exact_batches(items) if model is not None else None
     if split is not None:

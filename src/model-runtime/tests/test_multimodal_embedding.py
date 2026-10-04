@@ -90,9 +90,9 @@ def test_batches_never_run_on_the_cpu_device_thread(tmp_path, monkeypatch):
     threads: list[str] = []
     run = OmniModel.run
 
-    def recording_run(self, items, shared_prefix=0):
+    def recording_run(self, items):
         threads.append(threading.current_thread().name)
-        return run(self, items, shared_prefix)
+        return run(self, items)
 
     monkeypatch.setattr(OmniModel, "run", recording_run)
     source = {"repo_id": "example/omni-fixture", "revision": "0" * 40}
