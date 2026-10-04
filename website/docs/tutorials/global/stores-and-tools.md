@@ -39,8 +39,6 @@ global:
       enabled: true
       backend_type: memory
       similarity_threshold: 0.8
-      polarity_guard:
-        mode: lexical
 ```
 
 #### Negation guard
@@ -50,8 +48,8 @@ mode"*: opposite-meaning queries often score above `similarity_threshold`
 while genuine paraphrases score below it, so raising the threshold does not
 reliably prevent false hits. Every cache backend applies a lexical guard
 before it serves a semantic candidate: it catches negation cues and known
-antonym swaps in near-identical English token sets (`polarity_guard.mode:
-lexical`, the only mode). It needs no model and runs for the in-memory, Redis,
+antonym swaps in near-identical English token sets. It needs no model, has no
+setting, and runs for the in-memory, Redis,
 Valkey, Milvus, Qdrant and hybrid caches. It does not cover cue-less,
 word-order-only or non-English changes.
 
@@ -61,9 +59,9 @@ backends reject candidates without an original query and continue checking the
 bounded fetched candidate set. The same check also applies to hybrid's Milvus
 fallback.
 
-Earlier releases offered an NLI tier (`nli`, `lexical+nli`) on the in-memory
-backend. The NLI model is retired; `vllm-sr config migrate` changes those modes
-to `lexical`.
+Earlier releases configured it with `polarity_guard`, including an NLI tier
+(`nli`, `lexical+nli`) on the in-memory backend. The NLI model is retired and
+the router refuses `polarity_guard`; `vllm-sr config migrate` removes it.
 
 ### Memory
 
