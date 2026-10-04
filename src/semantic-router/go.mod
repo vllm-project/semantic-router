@@ -3,7 +3,6 @@ module github.com/vllm-project/semantic-router/src/semantic-router
 go 1.25.0
 
 replace (
-	github.com/vllm-project/semantic-router/candle-binding => ../../candle-binding
 	github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache => ./pkg/cache
 	github.com/vllm-project/semantic-router/src/semantic-router/pkg/config => ./pkg/config
 	github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc => ./pkg/extproc
@@ -35,7 +34,6 @@ require (
 	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5
 	github.com/valkey-io/valkey-glide/go/v2 v2.3.0
-	github.com/vllm-project/semantic-router/candle-binding v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.34.0
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.38.0
