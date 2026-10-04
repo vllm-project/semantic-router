@@ -6,6 +6,11 @@ sizes. The opt-in approximate profiles change no Choice, Score, Noul or Set
 decision. On the 4B and 9B they change span sets in 6% of requests (short
 spans in long windowed documents) and move answers by up to 0.037, above the
 design's GPU bar of 0.02 (section 17); on the 0.3B they stay within 6e-6.
+Under `max_speed` the 0.3B runs a `float32-packed` copy of its linear layers
+on CPU, which keeps every Choice, Noul, Score and Set decision and 463 of
+464 span sets. On ROCm no copy
+qualifies: BF16 misses the 99% floor on spans and is slower for a single
+short request.
 
 - **Date:** 2026-10-04.
 - **Packages:** Vela-2.0-0.3B `13e85201`, Vela-2.0-4B `c50cba67`,
@@ -96,3 +101,61 @@ The same 360 requests on ROCm, `tools/vela2_parity.py --approximate`:
 - The 300 requests of the second seed took 27 s on the packed 0.3B path
   against the engine's 46 s, 61 s against 154 s on the 4B and 74 s against
   194 s on the 9B (`vela2-performance.md` has the per-request latencies).
+
+## Reduced copies (`max_speed`, 0.3B)
+
+Under `max_speed` an encoder can load a reduced copy of its backbone's
+linear layers next to the FP32 weights: its approximate batches run on the
+copy and `exact` never does (design section 5.4). The built-in entry
+consents per device class (`BuiltinModel.reduced`) only where at least 99%
+of every answer type's decisions are unchanged against `exact` and the copy
+is faster (`vela2-performance.md`). **The 0.3B consents to `float32-packed`
+on CPU and to no copy on GPUs.**
+
+- **Date:** 2026-10-04, at `10ca64d02`; the merges since change no forward
+  on these paths (only the scheduler).
+- **Requests:** the 360 generated requests above (seeds 1 and 2).
+- **Reference:** the runtime's exact path, which answers these requests
+  byte-identically to the package engine (above). `tools/vela2_parity.py
+  --reduced KIND` loads each copy as `max_speed` does (consenting for the run)
+  and answers through its approximate batches: packed sequences on the copy.
+- **Decisions:** per question, the Choice label, the Score arg-max level, Noul
+  above 0.5, the Set selection and the span set (label, start, end).
+- **Devices:** CPU: PyTorch 2.10's CPU build (MKL, oneDNN) on an AMD EPYC
+  with AVX-512 BF16 (no AMX), 16 cores per process. ROCm: one MI325X in the
+  release image.
+
+Questions whose decision is unchanged, per answer type:
+
+| Copy | Device | Requests | Choice | Noul | Score | Set | Span | Requests changed | Max \|Δp\| answers / spans |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `float32-packed` | CPU | 360 | 391 / 391 | 283 / 283 | 289 / 289 | 139 / 139 | 463 / 464 (99.8%) | 1 | 5.3e-6 / 5.7e-6 |
+| `bfloat16` | CPU | 270 | 291 / 292 | 206 / 206 | 223 / 224 | 101 / 101 | 331 / 334 (99.1%) | 5 | 0.045 / 0.022 |
+| `int8` | CPU | 270 | **219 / 292 (75.0%)** | **166 / 206 (80.6%)** | **141 / 224 (62.9%)** | **93 / 101 (92.1%)** | **178 / 334 (53.3%)** | 193 | 0.85 / 0.84 |
+| `bfloat16` | ROCm | 360 | 390 / 391 | 283 / 283 | 287 / 289 | 139 / 139 | **457 / 464 (98.5%)** | 10 | 0.045 / 0.046 |
+
+- **`float32-packed` (CPU): consented.** oneDNN's pre-packed FP32 linear
+  rounds each GEMM differently from MKL's `F.linear`, and nothing else.
+  Over the 360 requests it moves answers by at most 5.3e-6 and span
+  probabilities by 5.7e-6, and it changes one decision: the entity span set
+  of request `g2-0178`, where a span sits on its threshold. That request's
+  largest move is 1.1e-6, and every copy flips the same span.
+- **`bfloat16` (CPU): no consent.** It ran on 270 of the 360 requests: all
+  180 whose state is a short prompt and 90 of the 180 that carry a document
+  (the CPU runs were split to finish in time, and the other 90 ran
+  `float32-packed` alone). On those it keeps 99.1% of span sets, with no
+  margin, and the same BF16 copy on ROCm drops to 98.5% over all 360. A
+  `cpu` consent also names one copy for every CPU, while BF16 runs at this
+  speed only with AVX-512 BF16 or AMX instructions and rounds differently on
+  each, so this record would not carry to other CPUs. `float32-packed` runs
+  the same FP32 math on any x86 CPU with oneDNN.
+- **`int8` (CPU): fails the floor** on every answer type, on the same 270
+  requests: dynamic int8 activations move answers by up to 0.85.
+- **`bfloat16` (ROCm): fails the floor on spans** (98.5%). The seven span
+  sets that change hold hallucination, PII and entity spans whose mean
+  probability crosses its threshold, four of them in documents of 2,000
+  tokens or more; one Choice and two Score decisions change too, all in such
+  documents. It is also slower than `exact` for a single request up to 512
+  tokens (`vela2-performance.md`), so GPUs load no copy.
+- `vela2-reduced.json` has the raw summaries of this record and of the
+  latency record, with every changed decision.
