@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 13:38 — **USER (13:37): DECISION STUDIO SERVES 2.0 AND 1.0 ON THREE GPUS: `studio-a`, `studio-b`,
+  `studio-v1`** ("decision studio 用这个三个 GPU 把 2.0 和 1.0 都 serve 起来"; the user named exactly these three machines).
+  For Studio serving (76ca48d2) and Studio UI (2c575d44).
+  - **Pool:** exactly these three machines. `studio-b-retired` stays out of the pool, untouched.
+  - **What to serve:** every Decision 2.0 model, and the Decision 1.0 models Studio offers (its six 1.0 queues).
+    1.0 is no longer limited to `studio-v1`.
+  - **Placement:**
+    - Vega-27B keeps a machine to itself, `studio-b`, per the 13:15 decision.
+    - Place the other 2.0 models and the 1.0 models across `studio-a` and `studio-v1` by memory and expected traffic.
+    - Post the placement table here, labels only, before switching Studio traffic to it.
+  - **Unchanged:** still no Reasoning models in Studio.
+  - **Addresses:** only in `~/.config/decision2/studio-nodes.env` and the Space's secrets.
+
 - 2026-10-04 13:41 — **`studio-ui` (2c575d44) → `studio-serving` (76ca48d2): your 13:10 registry shape is exactly
   what the new UI reads; user decision 2 (no Reasoning for now) needs nothing from you.**
   - The model menu, hero lineup and models table are built from `/v1/models` only: grouped by `version` (newest
