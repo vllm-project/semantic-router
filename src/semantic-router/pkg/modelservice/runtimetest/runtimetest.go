@@ -24,12 +24,13 @@ import (
 
 // Head is one classify head of a fake model.
 type Head struct {
-	Name       string
-	Kind       string
-	Labels     []string
-	Inputs     []string
-	Thresholds []float64
-	Window     *api.WindowOptions
+	Name                 string
+	Kind                 string
+	Labels               []string
+	Inputs               []string
+	Thresholds           []float64
+	Window               *api.WindowOptions
+	OperatingPointSHA256 string
 }
 
 // Model is one served model: classify with heads, embeddings with an
@@ -48,6 +49,7 @@ type Runtime struct {
 	mu       sync.Mutex
 	models   map[string]Model
 	ready    map[string]bool
+	failed   map[string]string
 	delay    time.Duration
 	bundles  int
 	tasks    int
@@ -56,7 +58,7 @@ type Runtime struct {
 
 // New serves models, all ready.
 func New(models ...Model) *Runtime {
-	r := &Runtime{models: make(map[string]Model), ready: make(map[string]bool), surfaces: make(map[string]int)}
+	r := &Runtime{models: make(map[string]Model), ready: make(map[string]bool), failed: make(map[string]string), surfaces: make(map[string]int)}
 	for _, model := range models {
 		if model.MaxInputTokens == 0 {
 			model.MaxInputTokens = 8192
@@ -70,11 +72,21 @@ func New(models ...Model) *Runtime {
 	return r
 }
 
-// SetReady changes one model's readiness.
+// SetReady changes one model's readiness and clears a load failure.
 func (r *Runtime) SetReady(id string, ready bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.ready[id] = ready
+	delete(r.failed, id)
+}
+
+// SetFailed reports one model as failed to load, with a reason, as the
+// runtime does when loading raised.
+func (r *Runtime) SetFailed(id, reason string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ready[id] = false
+	r.failed[id] = reason
 }
 
 // SetDelay delays every surface answer (deadline tests).
@@ -157,11 +169,14 @@ func (r *Runtime) health(w http.ResponseWriter, _ *http.Request) {
 	models := make(map[string]api.ModelHealth, len(r.models))
 	everyReady := true
 	for id := range r.models {
-		status := api.ModelHealthStatus("ready")
-		if !r.ready[id] {
-			status, everyReady = api.ModelHealthStatus("loading"), false
+		health := api.ModelHealth{Status: api.ModelHealthStatus("ready")}
+		if reason, failed := r.failed[id]; failed {
+			health.Status, health.Reason = api.ModelHealthStatus("failed"), &reason
+		} else if !r.ready[id] {
+			health.Status = api.ModelHealthStatus("loading")
 		}
-		models[id] = api.ModelHealth{Status: status}
+		everyReady = everyReady && health.Status == "ready"
+		models[id] = health
 	}
 	r.mu.Unlock()
 	health := api.Health{Status: api.HealthStatus("ready"), Models: &models}
@@ -215,6 +230,10 @@ func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 			thresholds := slices.Clone(head.Thresholds)
 			reduction := "max"
 			heads[i].Thresholds, heads[i].Reduction = &thresholds, &reduction
+		}
+		if head.OperatingPointSHA256 != "" {
+			digest := head.OperatingPointSHA256
+			heads[i].OperatingPointSha256 = &digest
 		}
 		if head.Window != nil {
 			tokens, overlap := head.Window.Tokens, 0

@@ -9,8 +9,10 @@ from cli.models import UserConfig
 from cli.validation_error import ValidationError
 
 MODEL_RUNTIME_PROVIDER = "model_runtime"
-MODEL_RUNTIME_PROFILES = ("exact", "shared_context", "batching", "max_speed")
-MODEL_RUNTIME_DEVICE = re.compile(r"^(auto|cpu|mps|(cuda|rocm|xpu)(:[0-9]+)?)$")
+# The runtime owns profile and accelerator names, plugins' included: the
+# validator checks their shape and leaves an unknown name to the runtime.
+MODEL_RUNTIME_PROFILE = re.compile(r"^[a-z][a-z0-9_]*$")
+MODEL_RUNTIME_DEVICE = re.compile(r"^[a-z][a-z0-9_]*(:[0-9]+)?$")
 MODEL_RUNTIME_REVISION = re.compile(r"^[0-9a-f]{40}$")
 MODEL_RUNTIME_PROCESS = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$")
 HUB_REPOSITORY_ID = re.compile(r"^[A-Za-z0-9][\w.-]*/[\w.-]+$")
@@ -28,9 +30,9 @@ def model_runtime_deployment_error(deployment: dict) -> str | None:
     if (budget.get("overflow") or "reject") not in INPUT_OVERFLOWS:
         return "input.overflow must be reject, truncate or window"
     if not MODEL_RUNTIME_DEVICE.match(deployment.get("device") or "auto"):
-        return "device must be auto, cpu, mps, cuda[:N], rocm[:N] or xpu[:N]"
-    if (deployment.get("profile") or "exact") not in MODEL_RUNTIME_PROFILES:
-        return "profile must be one of " + ", ".join(MODEL_RUNTIME_PROFILES)
+        return "device must be an accelerator name with an optional index, such as cpu, cuda:0 or rocm:1"
+    if not MODEL_RUNTIME_PROFILE.match(deployment.get("profile") or "exact"):
+        return "profile must be a profile name, such as exact or batching"
     revision = deployment.get("revision") or ""
     if revision and not MODEL_RUNTIME_REVISION.match(revision):
         return "revision must be a 40-hex commit"

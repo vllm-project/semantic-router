@@ -329,8 +329,10 @@ type FactCheckModelConfig struct {
 }
 
 type HallucinationModelConfig struct {
-	Backend            string  `yaml:"backend,omitempty"`
-	Endpoint           string  `yaml:"endpoint,omitempty"`
+	Backend string `yaml:"backend,omitempty"`
+	// Endpoint is the remote detector's base URL, which the endpoint detector
+	// derives from its binding's external model; it is not configurable.
+	Endpoint           string  `yaml:"-"`
 	IncludeExplanation bool    `yaml:"include_explanation,omitempty"`
 	ModelID            string  `yaml:"model_id"`
 	Threshold          float32 `yaml:"threshold"`

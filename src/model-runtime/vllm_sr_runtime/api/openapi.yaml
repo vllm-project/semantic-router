@@ -1020,6 +1020,11 @@ components:
         reduction:
           type: string
           nullable: true
+        operating_point_sha256:
+          type: string
+          nullable: true
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 of the verified operating_point.json the head applies.
     EmbeddingCard:
       type: object
       required: [dimensions, layers]

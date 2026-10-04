@@ -34,17 +34,19 @@ type ModelCard struct {
 
 // HeadCard is one classify head: its kind (sequence, scores or token), label
 // order, accepted inputs and the overflow, window and threshold policy the
-// package declares.
+// package declares. OperatingPointSHA256 is the digest of the verified policy
+// file the head applies, if any.
 type HeadCard struct {
-	Name             string
-	Kind             string
-	Labels           []string
-	Inputs           []string
-	DefaultThreshold *float64
-	Thresholds       []float64
-	Overflow         string
-	Window           *Window
-	Reduction        string
+	Name                 string
+	Kind                 string
+	Labels               []string
+	Inputs               []string
+	DefaultThreshold     *float64
+	Thresholds           []float64
+	Overflow             string
+	Window               *Window
+	Reduction            string
+	OperatingPointSHA256 string
 }
 
 // EmbeddingCard lists the dimensions and layer exits a pooled model serves.
@@ -139,7 +141,7 @@ func decodeHead(head api.HeadCard) HeadCard {
 	decoded := HeadCard{
 		Name: head.Name, Kind: string(head.Kind), Labels: append([]string(nil), head.Labels...),
 		Inputs: derefSlice(head.Inputs), DefaultThreshold: head.DefaultThreshold, Thresholds: derefSlice(head.Thresholds),
-		Overflow: deref(head.Overflow), Reduction: deref(head.Reduction),
+		Overflow: deref(head.Overflow), Reduction: deref(head.Reduction), OperatingPointSHA256: deref(head.OperatingPointSha256),
 	}
 	if head.Window != nil && head.Window.Tokens != nil {
 		decoded.Window = &Window{Tokens: *head.Window.Tokens, Overlap: deref(head.Window.Overlap)}

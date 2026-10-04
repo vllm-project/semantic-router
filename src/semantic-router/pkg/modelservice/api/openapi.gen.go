@@ -392,12 +392,15 @@ type HeadCard struct {
 	DefaultThreshold *float64 `json:"default_threshold"`
 
 	// Inputs Accepted inputs (text, pair, grounded).
-	Inputs    *[]string    `json:"inputs,omitempty"`
-	Kind      HeadCardKind `json:"kind"`
-	Labels    []string     `json:"labels"`
-	Name      string       `json:"name"`
-	Overflow  *string      `json:"overflow,omitempty"`
-	Reduction *string      `json:"reduction"`
+	Inputs *[]string    `json:"inputs,omitempty"`
+	Kind   HeadCardKind `json:"kind"`
+	Labels []string     `json:"labels"`
+	Name   string       `json:"name"`
+
+	// OperatingPointSha256 SHA-256 of the verified operating_point.json the head applies.
+	OperatingPointSha256 *string `json:"operating_point_sha256"`
+	Overflow             *string `json:"overflow,omitempty"`
+	Reduction            *string `json:"reduction"`
 
 	// Thresholds The packaged operating point, one threshold per label.
 	Thresholds *[]float64 `json:"thresholds"`
