@@ -2,9 +2,7 @@ package config
 
 import (
 	"fmt"
-	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -12,15 +10,12 @@ import (
 // inference service. Artifact aliases and module policy remain in the catalog;
 // recipe bindings select the adapter and head separately from execution.
 type ModelDeployment struct {
-	Artifact            string           `yaml:"artifact,omitempty" json:"artifact,omitempty"`
-	Revision            string           `yaml:"revision,omitempty" json:"revision,omitempty"`
-	ExternalModel       string           `yaml:"external_model,omitempty" json:"external_model,omitempty"`
-	Provider            string           `yaml:"provider" json:"provider"`
-	Device              string           `yaml:"device,omitempty" json:"device,omitempty"`
-	Precision           string           `yaml:"precision,omitempty" json:"precision,omitempty"`
-	CustomOpsProfile    string           `yaml:"custom_ops_profile,omitempty" json:"custom_ops_profile,omitempty"`
-	CompilationCacheDir string           `yaml:"compilation_cache_dir,omitempty" json:"compilation_cache_dir,omitempty"`
-	Input               ModelInputBudget `yaml:"input,omitempty" json:"input,omitempty"`
+	Artifact      string           `yaml:"artifact,omitempty" json:"artifact,omitempty"`
+	Revision      string           `yaml:"revision,omitempty" json:"revision,omitempty"`
+	ExternalModel string           `yaml:"external_model,omitempty" json:"external_model,omitempty"`
+	Provider      string           `yaml:"provider" json:"provider"`
+	Device        string           `yaml:"device,omitempty" json:"device,omitempty"`
+	Input         ModelInputBudget `yaml:"input,omitempty" json:"input,omitempty"`
 	// Profile selects a model_runtime numerics profile: exact (the default,
 	// byte-identical to the released packages) or an opt-in faster profile.
 	Profile string `yaml:"profile,omitempty" json:"profile,omitempty"`
@@ -84,26 +79,12 @@ func (p *ModelBindingPlan) Lookup(recipe RecipeName, name string) (ResolvedModel
 }
 
 func (d ModelDeployment) WithDefaults() ModelDeployment {
-	if d.CustomOpsProfile == "none" {
-		d.CustomOpsProfile = ""
-	}
 	if d.Provider == ModelRuntimeProvider {
 		if d.Device == "" {
 			d.Device = "auto"
 		}
 		if d.Profile == "" {
 			d.Profile = "exact"
-		}
-	}
-	if d.Provider != "http" && d.Provider != ModelRuntimeProvider {
-		if d.Device == "" {
-			d.Device = "cpu"
-			if d.Provider == "openvino" {
-				d.Device = "CPU"
-			}
-		}
-		if d.Precision == "" {
-			d.Precision = "native"
 		}
 	}
 	if d.Input.Overflow == "" {
@@ -114,45 +95,12 @@ func (d ModelDeployment) WithDefaults() ModelDeployment {
 
 func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	switch d.Provider {
-	case "candle", "ort":
-		if strings.TrimSpace(d.Artifact) == "" || d.ExternalModel != "" {
-			return fmt.Errorf("local deployment requires artifact and cannot set external_model")
-		}
-		if d.Device != "cpu" {
-			parts := strings.Split(d.Device, ":")
-			if len(parts) != 2 {
-				return fmt.Errorf("device must name cpu or an explicit provider:index")
-			}
-			index, err := strconv.Atoi(parts[1])
-			if err != nil || index < 0 {
-				return fmt.Errorf("device index must be a non-negative integer")
-			}
-			if (d.Provider == "ort" && parts[0] != "migraphx" && parts[0] != "rocm") || (d.Provider == "candle" && parts[0] != "cuda" && parts[0] != "metal") {
-				return fmt.Errorf("device %q is incompatible with provider %q", d.Device, d.Provider)
-			}
-		}
-		if d.Precision != "native" && d.Precision != "fp32" && d.Precision != "fp16" {
-			return fmt.Errorf("precision must be native, fp32 or fp16")
-		}
-	case "openvino":
-		if strings.TrimSpace(d.Artifact) == "" || d.ExternalModel != "" {
-			return fmt.Errorf("local deployment requires artifact and cannot set external_model")
-		}
-		if strings.TrimSpace(d.Device) != d.Device || d.Device == "" || strings.ContainsRune(d.Device, 0) {
-			return fmt.Errorf("OpenVINO device must be non-empty and trimmed")
-		}
-		if d.Precision != "native" {
-			return fmt.Errorf("OpenVINO executes the exported IR with native precision")
-		}
-		if d.Input.Overflow == "window" {
-			return fmt.Errorf("OpenVINO supports reject or truncate input policy")
-		}
 	case "http":
 		if d.Artifact != "" || strings.TrimSpace(d.ExternalModel) == "" {
 			return fmt.Errorf("http deployment requires external_model and cannot set artifact")
 		}
-		if d.Device != "" || d.Precision != "" {
-			return fmt.Errorf("external service device and precision are not controlled by the router")
+		if d.Device != "" {
+			return fmt.Errorf("external service devices are not controlled by the router")
 		}
 		if _, err := findNamedExternalModel(cfg, d.ExternalModel); err != nil {
 			return err
@@ -165,12 +113,6 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	if d.Profile != "" || d.Endpoint != "" || d.Process != "" || d.ServedName != "" {
 		return fmt.Errorf("profile, endpoint, process and served_name apply only to model_runtime deployments")
 	}
-	if d.CustomOpsProfile != "" && (d.CustomOpsProfile != "ck_flash_attention" || d.Provider != "ort" || !strings.HasPrefix(d.Device, "rocm:")) {
-		return fmt.Errorf("custom_ops_profile requires ck_flash_attention on an ORT rocm:index deployment")
-	}
-	if err := d.ValidateCompilationCache(); err != nil {
-		return err
-	}
 	if d.Input.MaxTokens < 0 {
 		return fmt.Errorf("input.max_tokens must not be negative")
 	}
@@ -178,21 +120,6 @@ func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	case "reject", "truncate", "window":
 	default:
 		return fmt.Errorf("unsupported input.overflow %q", d.Input.Overflow)
-	}
-	return nil
-}
-
-// ValidateCompilationCache checks an explicitly selected provider cache. An
-// empty directory disables caching; runtime preparation checks artifact paths.
-func (d ModelDeployment) ValidateCompilationCache() error {
-	if d.CompilationCacheDir == "" {
-		return nil
-	}
-	if d.Provider != "ort" || !strings.HasPrefix(d.Device, "migraphx:") {
-		return fmt.Errorf("compilation_cache_dir requires an ORT migraphx:index deployment")
-	}
-	if strings.TrimSpace(d.CompilationCacheDir) != d.CompilationCacheDir || strings.ContainsRune(d.CompilationCacheDir, '\x00') || !filepath.IsAbs(d.CompilationCacheDir) {
-		return fmt.Errorf("compilation_cache_dir must be an absolute, trimmed path without null bytes")
 	}
 	return nil
 }
@@ -348,27 +275,11 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		}
 	}
 	if decl.Adapter == "vela_halu" {
-		if name != "hallucination_detector" || !deployment.IsLocalTask() {
+		if name != "hallucination_detector" || !deployment.IsModelRuntime() {
 			return fmt.Errorf("vela_halu requires a local hallucination_detector binding")
 		}
 		if deployment.Input.MaxTokens > 8192 {
 			return fmt.Errorf("vela_halu task input budget cannot exceed 8192 tokens")
-		}
-	}
-	if deployment.Provider == "ort" && name == "hallucination_detector" && decl.Adapter != "vela_halu" {
-		return fmt.Errorf("%s has no ORT task adapter", name)
-	}
-	if deployment.Provider == "openvino" {
-		if want != "embedding.v1" && want != RemoteClassifierContractLabelDistribution {
-			return fmt.Errorf("OpenVINO supports text embedding and sequence label distributions only")
-		}
-		switch decl.Adapter {
-		case "auto", "bert", "modernbert", "mmbert", "mmbert32k", "mmbert-32k":
-		default:
-			return fmt.Errorf("unsupported OpenVINO adapter %q", decl.Adapter)
-		}
-		if decl.Head != "" && filepath.Ext(decl.Head) != ".xml" {
-			return fmt.Errorf("OpenVINO head must identify a complete IR XML graph")
 		}
 	}
 	// Artifact-specific capacity is checked by the loaded provider. Config

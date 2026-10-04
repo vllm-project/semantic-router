@@ -418,6 +418,13 @@ class Accelerator(ABC):
         """Run device work (loading, forwards, readouts); inline unless the device needs one thread."""
         return work()
 
+    def device_fault(self, error: BaseException) -> bool:
+        """Whether an error from device work left the device unusable until the process restarts.
+
+        Any other error fails only the batch that raised it.
+        """
+        return False
+
 
 # ---------------------------------------------------------------------------
 # Families
@@ -574,8 +581,9 @@ class LoadedModel(ABC):
 
     ``device_thread`` False says ``run`` never starts a parallel torch op (an
     ONNX Runtime engine with NumPy readouts): the scheduler then calls it on
-    the model's worker instead of handing each batch to the CPU device thread,
-    which saves a thread wake-up each way.
+    the model's worker, or on the request's planning thread while the model is
+    idle, instead of handing each batch to the CPU device thread, which saves a
+    thread wake-up each way.
     """
 
     info: ModelInfo

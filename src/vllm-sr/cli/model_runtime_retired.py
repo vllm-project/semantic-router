@@ -98,7 +98,8 @@ def retired_model_fields(data: dict[str, Any]) -> list[str]:
 
 
 def _nli_routing_fields(prefix: str, routing: dict[str, Any]) -> list[str]:
-    """``use_nli`` on hallucination rules and hallucination plugins."""
+    """``use_nli`` on hallucination rules and plugins, and the fusion
+    grounding's NLI penalty (now ``contradiction_penalty``)."""
     removed: list[str] = []
     rules = _mapping(routing.get("signals")).get("hallucination")
     for index, rule in enumerate(rules if isinstance(rules, list) else []):
@@ -109,6 +110,14 @@ def _nli_routing_fields(prefix: str, routing: dict[str, Any]) -> list[str]:
         )
     decisions = routing.get("decisions")
     for index, decision in enumerate(decisions if isinstance(decisions, list) else []):
+        algorithm = _mapping(_mapping(decision).get("algorithm"))
+        removed.extend(
+            _present(
+                f"{prefix}.decisions[{index}].algorithm.fusion.grounding",
+                _mapping(_mapping(algorithm.get("fusion")).get("grounding")),
+                ("nli_contradiction_penalty",),
+            )
+        )
         plugins = _mapping(decision).get("plugins")
         for position, entry in enumerate(plugins if isinstance(plugins, list) else []):
             plugin = _mapping(entry)

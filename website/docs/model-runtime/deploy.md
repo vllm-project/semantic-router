@@ -148,7 +148,7 @@ deployment, and the router runs that model on the GPU itself.
 
 To share GPU models between several routers, run the runtime as its own
 Deployment from the same image and attach every router to its Service. The
-image's `VLLM_SR_RUNTIME_COMMAND` starts its runtime:
+image's `vllm-sr-runtime` command starts it:
 
 ```yaml
 apiVersion: apps/v1
@@ -166,9 +166,8 @@ spec:
       containers:
         - name: runtime
           image: ghcr.io/vllm-project/semantic-router/extproc-rocm:latest
-          command: ["sh", "-c"]
-          args:
-            - exec $VLLM_SR_RUNTIME_COMMAND serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --host 0.0.0.0 --port 8100
+          command: ["vllm-sr-runtime"]
+          args: ["serve", "vllm-sr/Decision-2.0-Lux-9B", "--device", "rocm:0", "--host", "0.0.0.0", "--port", "8100"]
           resources:
             limits: {amd.com/gpu: 1}
           ports:

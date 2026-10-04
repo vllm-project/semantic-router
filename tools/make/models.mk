@@ -10,8 +10,13 @@ test-model-selection-parity: ## Compare Python-trained selectors with the router
 
 .PHONY: test-model-selection-parity
 
-.PHONY: onnx-artifact-test
-onnx-artifact-test: ck-rewrite-deps ## Verify external ONNX weight packing with real CPU inference
+ONNX_ARTIFACT_PYTHON_DEPS ?= onnx==1.22.0 onnxruntime==1.24.2
+
+.PHONY: onnx-artifact-deps onnx-artifact-test
+onnx-artifact-deps: harness-venv-install ## Install the ONNX artifact test dependencies into the harness venv
+	@"$(AGENT_PYTHON)" -c "import onnx, onnxruntime" 2>/dev/null || "$(AGENT_PYTHON)" -m pip install --quiet $(ONNX_ARTIFACT_PYTHON_DEPS)
+
+onnx-artifact-test: onnx-artifact-deps ## Verify external ONNX weight packing with real CPU inference
 	@"$(AGENT_PYTHON)" -m unittest discover -s tools/models/onnx/artifact_tests -p 'test_*.py'
 
 test-training-contracts: harness-venv-install ## Run dependency-light model training contract tests
@@ -35,32 +40,12 @@ test-training-contracts: harness-venv-install ## Run dependency-light model trai
 		src/training/model_eval/test_baseline_artifact.py \
 		src/training/model_classifier/prompt_guard_fine_tuning_lora/test_jailbreak_provenance.py
 
-# Models are automatically downloaded by the router at startup in production.
-# For testing, we use the router's --download-only flag to download models and exit.
+# Models are downloaded by the model runtime the router starts. The targets
+# below fetch training bases and adapters for the Python trainers.
 
 # Hugging Face org for mmBERT models
 HF_ORG := vllm-sr
 MODELS_DIR := models
-
-# The checked-in reference suite targets
-# peft-internal-testing/tiny-random-BertForSequenceClassification at
-# 325bf1727142e5f4216ca8e3eef68752321979ac. The model remains external and
-# must be downloaded at that exact revision before running qualification.
-CANDLE_COMPAT_LABELS ?= LABEL_0,LABEL_1
-CANDLE_COMPAT_SUITE ?= pkg/modelruntime/compatibility/testdata/tiny-random-bert-cpu-suite-v1.json
-CANDLE_COMPAT_OUTPUT ?= $(CURDIR)/.agent-harness/compatibility/candle-cpu-receipt.json
-
-# mmBERT merged models (for Rust inference)
-MMBERT_MODELS := \
-	mmbert-intent-classifier-merged \
-	mmbert-fact-check-merged \
-	mmbert-pii-detector-merged \
-	mmbert-jailbreak-detector-merged
-
-# mmBERT embedding model with 2D Matryoshka support
-# Downloaded automatically by the router's built-in downloader (make download-models)
-# Registry maps this to local path models/mom-embedding-ultra (see config/registry.go)
-MMBERT_EMBEDDING_MODEL := mmbert-embed-32k-2d-matryoshka
 
 # mmBERT base 32K YaRN model (extended context MLM model)
 MMBERT_32K_BASE_MODEL := mmbert-32k-yarn
@@ -80,89 +65,10 @@ MMBERT_32K_LORA_ADAPTERS := \
 	mmbert32k-jailbreak-detector-lora \
 	mmbert32k-factcheck-classifier-lora
 
-# mmBERT-32K merged models (for Rust/Go inference)
-MMBERT_32K_MERGED_MODELS := \
-	mmbert32k-feedback-detector-merged \
-	mmbert32k-intent-classifier-merged \
-	mmbert32k-pii-detector-merged \
-	mmbert32k-jailbreak-detector-merged \
-	mmbert32k-factcheck-classifier-merged
-
-# mmBERT-32K ONNX models (for ONNX Runtime inference - ROCm/CPU)
-# These are stored in the onnx/ subdirectory of merged model repos
-MMBERT_32K_ONNX_MODELS := \
-	mmbert32k-intent-classifier-merged \
-	mmbert32k-jailbreak-detector-merged \
-	mmbert32k-pii-detector-merged \
-	mmbert32k-factcheck-classifier-merged \
-	mmbert32k-feedback-detector-merged
-
-# Download models by running the router with --download-only flag
-download-models: ## Download models using router's built-in download logic
-	@echo "📦 Downloading models via router..."
-	@echo ""
-	@$(MAKE) build-router
-	@echo ""
-	@echo "Running router with --download-only flag..."
-	@echo "This may take a few minutes depending on your network speed..."
-	@export $(NATIVE_ENV) && \
-		./bin/router -config=config/config.yaml --download-only
-	@echo ""
-	@echo "Models downloaded successfully"
-
-QWEN3_EMBEDDING_REPO := Qwen/Qwen3-Embedding-0.6B
-QWEN3_EMBEDDING_DIR := mom-embedding-pro
-
-download-qwen3-embedding: ## Download the Qwen3 embedding model for binding tests and benchmarks
-	@echo "⬇️  Downloading $(QWEN3_EMBEDDING_REPO)..."
-	@mkdir -p "$(MODELS_DIR)"
-	@hf download $(QWEN3_EMBEDDING_REPO) --local-dir "$(MODELS_DIR)/$(QWEN3_EMBEDDING_DIR)"
-
-download-models-lora: ## Download models for LoRA and advanced embedding tests
-	@$(MAKE) download-models
-	@$(MAKE) download-qwen3-embedding
-
-# The evaluation registry pins current Vela native snapshots. The MMBERT lists
-# below and their download targets intentionally remain explicit legacy tools.
+# The evaluation registry pins current Vela native snapshots.
 .PHONY: download-eval-models
 download-eval-models: ## Download Vela native eval models, including attack-only Guard (legacy is explicit)
 	@python3 -m src.training.model_eval.download_models --output $(MODELS_DIR)
-
-.PHONY: qualify-candle-cpu check-candle-qualification-source test-modelcompat-native check-modelcompat
-
-# Offline command tests are owned by the shared Go-tool registry. Native
-# qualification stays explicit and never downloads a checkpoint by default.
-test-modelcompat-native: ## Test the native receipt round-trip against an explicitly supplied pinned fixture
-	@test -n "$(CANDLE_MODEL_PATH)" || (echo "CANDLE_MODEL_PATH is required" && exit 1)
-	@$(MAKE) rust-ci
-	@cd src/semantic-router && $(NATIVE_ENV) CGO_ENABLED=1 CANDLE_MODEL_PATH="$(abspath $(CANDLE_MODEL_PATH))" \
-		go test -race -count=1 -v -run '^TestNativeCandleCPUCommandRoundTrip$$' ../../tools/modelcompat/*.go
-
-check-modelcompat: test-modelcompat harness-go-bootstrap ## Test and lint the offline compatibility tool
-	@cd src/semantic-router && $(NATIVE_ENV) "$$(go env GOPATH)/bin/golangci-lint" run --config ../../tools/linter/go/.golangci.yml ../../tools/modelcompat/*.go
-
-# Do not attribute a working-tree build to HEAD. Local planning artifacts outside
-# the compiled source trees do not affect this source check.
-check-candle-qualification-source:
-	@git diff --quiet HEAD -- || { echo "Candle qualification requires committed sources (tracked changes found)"; exit 1; }
-	@untracked="$$(git ls-files --others --exclude-standard -- src/semantic-router candle-binding tools/modelcompat)" && \
-		test -z "$$untracked" || { echo "Candle qualification requires committed sources (untracked source files found)"; exit 1; }
-
-qualify-candle-cpu: check-candle-qualification-source ## Generate a local CPU Candle compatibility receipt (requires CANDLE_MODEL_PATH and CANDLE_ARTIFACT_REVISION)
-	@test -n "$(CANDLE_MODEL_PATH)" || (echo "CANDLE_MODEL_PATH is required" && exit 1)
-	@test -n "$(CANDLE_ARTIFACT_REVISION)" || (echo "CANDLE_ARTIFACT_REVISION is required" && exit 1)
-	@$(MAKE) rust-ci
-	@mkdir -p "$(dir $(CANDLE_COMPAT_OUTPUT))"
-	@cd src/semantic-router && \
-		$(NATIVE_ENV) \
-		go run ../../tools/modelcompat/main.go qualify-candle-cpu \
-			--model-path "$(abspath $(CANDLE_MODEL_PATH))" \
-			--artifact-revision "$(CANDLE_ARTIFACT_REVISION)" \
-			--router-revision "$(shell git rev-parse HEAD)" \
-			--labels "$(CANDLE_COMPAT_LABELS)" \
-			--suite "$(CANDLE_COMPAT_SUITE)" \
-			--output "$(abspath $(CANDLE_COMPAT_OUTPUT))"
-	@echo "Candle CPU compatibility receipt: $(CANDLE_COMPAT_OUTPUT)"
 
 # The published-model contract and image calibration serve the runtime's pinned
 # releases; the prepared Omni Nano bundle is built once in the models directory.
@@ -193,21 +99,6 @@ test-models: download-models-image-calibration ## Run the published-model contra
 
 .PHONY: test-models
 
-download-mmbert: ## Download all mmBERT merged models for Rust inference
-	@echo "📦 Downloading mmBERT merged models from Hugging Face..."
-	@mkdir -p $(MODELS_DIR)
-	@for model in $(MMBERT_MODELS); do \
-		echo ""; \
-		echo "⬇️  Downloading $$model..."; \
-		if [ -d "$(MODELS_DIR)/$$model" ]; then \
-			echo "   Already exists, updating..."; \
-		fi; \
-		hf download $(HF_ORG)/$$model --local-dir $(MODELS_DIR)/$$model; \
-	done
-	@echo ""
-	@echo "mmBERT models downloaded to $(MODELS_DIR)/"
-	@ls -la $(MODELS_DIR)/
-
 download-mmbert-lora: ## Download mmBERT LoRA adapters for Python fine-tuning
 	@echo "📦 Downloading mmBERT LoRA adapters from Hugging Face..."
 	@mkdir -p $(MODELS_DIR)
@@ -223,7 +114,7 @@ download-mmbert-lora: ## Download mmBERT LoRA adapters for Python fine-tuning
 	@echo "mmBERT LoRA adapters downloaded to $(MODELS_DIR)/"
 	@ls -la $(MODELS_DIR)/
 
-download-mmbert-all: download-mmbert download-mmbert-lora download-mmbert-32k-lora download-mmbert-32k-merged download-mmbert-32k download-mmbert-32k-onnx ## Download all mmBERT models, LoRA adapters, ONNX, and 32K base model
+download-mmbert-all: download-mmbert-lora download-mmbert-32k-lora download-mmbert-32k ## Download the mmBERT LoRA adapters and the 32K base model
 
 download-mmbert-32k-lora: ## Download mmBERT-32K LoRA adapters (32K context models)
 	@echo "📦 Downloading mmBERT-32K LoRA adapters from Hugging Face..."
@@ -245,28 +136,6 @@ download-mmbert-32k-lora: ## Download mmBERT-32K LoRA adapters (32K context mode
 	@echo "  - mmbert32k-pii-detector-lora        (17 PII entity types)"
 	@echo "  - mmbert32k-jailbreak-detector-lora  (prompt injection)"
 	@echo "  - mmbert32k-factcheck-classifier-lora (fact-check routing)"
-
-download-mmbert-32k-merged: ## Download mmBERT-32K merged models (for Rust/Go inference)
-	@echo "📦 Downloading mmBERT-32K merged models from Hugging Face..."
-	@echo "   These are full models for Rust/Go inference (not LoRA adapters)"
-	@mkdir -p $(MODELS_DIR)
-	@for model in $(MMBERT_32K_MERGED_MODELS); do \
-		echo ""; \
-		echo "⬇️  Downloading $$model..."; \
-		if [ -d "$(MODELS_DIR)/$$model" ]; then \
-			echo "   Already exists, updating..."; \
-		fi; \
-		hf download $(HF_ORG)/$$model --local-dir $(MODELS_DIR)/$$model; \
-	done
-	@echo ""
-	@echo "mmBERT-32K merged models downloaded to $(MODELS_DIR)/"
-	@echo ""
-	@echo "Available 32K merged models (for Rust inference):"
-	@echo "  - mmbert32k-feedback-detector-merged   (4-class satisfaction)"
-	@echo "  - mmbert32k-intent-classifier-merged   (14-class MMLU-Pro)"
-	@echo "  - mmbert32k-pii-detector-merged        (35-class PII NER)"
-	@echo "  - mmbert32k-jailbreak-detector-merged  (binary jailbreak)"
-	@echo "  - mmbert32k-factcheck-classifier-merged (binary fact-check)"
 
 download-mmbert-32k: ## Download mmBERT 32K YaRN base model (extended context MLM)
 	@echo "📦 Downloading mmBERT 32K YaRN base model..."
@@ -291,100 +160,14 @@ download-mmbert-32k: ## Download mmBERT 32K YaRN base model (extended context ML
 	@echo "  - Architecture: ModernBERT with Flash Attention 2"
 	@echo "  - Reference: https://huggingface.co/$(HF_ORG)/$(MMBERT_32K_BASE_MODEL)"
 
-download-mmbert-32k-onnx: ## Download mmBERT-32K ONNX models (from onnx/ subdir of merged repos on HF)
-	@echo "📦 Downloading mmBERT-32K ONNX models from Hugging Face..."
-	@echo "   These are ONNX versions for efficient inference with ONNX Runtime"
-	@echo "   Supports: ROCm (AMD GPU), CUDA (NVIDIA GPU), OpenVINO (Intel), CPU"
-	@mkdir -p $(MODELS_DIR)
-	@for model in $(MMBERT_32K_ONNX_MODELS); do \
-		echo ""; \
-		echo "⬇️  Downloading $$model/onnx/..."; \
-		onnx_dir="$(MODELS_DIR)/$${model}-onnx"; \
-		if [ -d "$$onnx_dir" ]; then \
-			echo "   Already exists, updating..."; \
-		fi; \
-		mkdir -p "$$onnx_dir"; \
-		echo "   Downloading model.onnx and config.json from onnx/ subdir..."; \
-		hf download $(HF_ORG)/$$model onnx/model.onnx onnx/config.json --local-dir "$$onnx_dir"; \
-		if [ -f "$$onnx_dir/onnx/model.onnx" ]; then \
-			mv "$$onnx_dir/onnx/"* "$$onnx_dir/"; \
-			rmdir "$$onnx_dir/onnx" 2>/dev/null || true; \
-		fi; \
-		echo "   Downloading tokenizer files from onnx/ subdir (fallback to repo root)..."; \
-		hf download $(HF_ORG)/$$model onnx/tokenizer.json onnx/tokenizer_config.json onnx/special_tokens_map.json --local-dir "$$onnx_dir" 2>/dev/null && { \
-			for f in tokenizer.json tokenizer_config.json special_tokens_map.json; do \
-				[ -f "$$onnx_dir/onnx/$$f" ] && mv "$$onnx_dir/onnx/$$f" "$$onnx_dir/$$f"; \
-			done; \
-			rmdir "$$onnx_dir/onnx" 2>/dev/null || true; \
-		} || { \
-			echo "   (onnx/ subdir tokenizer not found, downloading from repo root)"; \
-			hf download $(HF_ORG)/$$model tokenizer.json tokenizer_config.json special_tokens_map.json --local-dir "$$onnx_dir" 2>/dev/null || true; \
-		}; \
-		echo "   Downloading label/fact_check mapping files (if any)..."; \
-		hf download $(HF_ORG)/$$model label_mapping.json --local-dir "$$onnx_dir" 2>/dev/null || true; \
-		hf download $(HF_ORG)/$$model fact_check_mapping.json --local-dir "$$onnx_dir" 2>/dev/null || true; \
-	done
-	@echo ""
-	@echo "mmBERT-32K ONNX models downloaded to $(MODELS_DIR)/"
-	@echo ""
-	@echo "Available ONNX models (~1.2GB each):"
-	@echo "  - mmbert32k-intent-classifier-merged-onnx     (14-class MMLU-Pro)"
-	@echo "  - mmbert32k-jailbreak-detector-merged-onnx    (binary jailbreak)"
-	@echo "  - mmbert32k-pii-detector-merged-onnx          (35-class PII NER)"
-	@echo "  - mmbert32k-factcheck-classifier-merged-onnx  (fact-check routing)"
-	@echo "  - mmbert32k-feedback-detector-merged-onnx     (4-class satisfaction)"
-	@echo ""
-	@echo "Usage with onnx-binding:"
-	@echo "  ONNX_MODEL_PATH=models/mmbert32k-intent-classifier-merged-onnx make run-router-onnx"
-
-# Fact-check and feedback: download merged models, export to ONNX, upload to HF
-# Requires: hf login (or HF_TOKEN) for upload
-download-export-upload-onnx-factcheck-feedback: ## Download merged factcheck/feedback, export to ONNX, upload to Hugging Face
-	@chmod +x scripts/download_export_upload_onnx_factcheck_feedback.sh
-	@./scripts/download_export_upload_onnx_factcheck_feedback.sh
-
-export-onnx-factcheck-feedback: ## Export factcheck and feedback merged models to ONNX (requires models in models/, run: make download-mmbert-32k-merged first; needs optimum: pip install optimum[onnxruntime])
-	@echo "📤 Exporting factcheck and feedback to ONNX..."
-	@python3 tools/models/export_classifiers_to_onnx.py --model factcheck --output-dir $(MODELS_DIR)
-	@python3 tools/models/export_classifiers_to_onnx.py --model feedback --output-dir $(MODELS_DIR)
-	@echo "ONNX export done: $(MODELS_DIR)/mmbert32k-factcheck-classifier-merged-onnx, $(MODELS_DIR)/mmbert32k-feedback-detector-merged-onnx"
-
-upload-onnx-factcheck-feedback: export-onnx-factcheck-feedback ## Export and upload factcheck/feedback ONNX to Hugging Face (requires login)
-	@echo "⬆️  Uploading ONNX to Hugging Face..."
-	@SKIP_DOWNLOAD=1 SKIP_UPLOAD=0 ./scripts/download_export_upload_onnx_factcheck_feedback.sh
-
-test-mmbert-32k: ## Test mmBERT 32K context with AVX512 optimization
-	@echo "🧪 Testing mmBERT 32K context length support..."
-	@echo "   Using release mode + native CPU optimization (AVX512)"
-	@echo ""
-	cd candle-binding && \
-		MMBERT_MODEL_PATH=../$(MODELS_DIR)/mmbert-embed-32k-2d-matryoshka \
-		RUSTFLAGS="-C target-cpu=native" \
-		cargo test --release --no-default-features --lib test_32k_context_length -- --ignored --nocapture
-	@echo ""
-	@echo "mmBERT 32K context test completed"
-
-test-mmbert-32k-all: ## Run all 32K-related tests with optimization
-	@echo "🧪 Running all 32K tests with AVX512 optimization..."
-	cd candle-binding && \
-		MMBERT_MODEL_PATH=../$(MODELS_DIR)/mmbert-embed-32k-2d-matryoshka \
-		RUSTFLAGS="-C target-cpu=native" \
-		cargo test --release --no-default-features --lib "32k" -- --nocapture
-	@echo ""
-	@echo "All 32K tests completed"
-
 clean-minimal-models: ## No-op target for backward compatibility
 	@echo "ℹ️  This target is no longer needed"
 
 clean-mmbert: ## Remove downloaded mmBERT models
 	@echo "🗑️  Removing mmBERT models..."
-	@for model in $(MMBERT_MODELS) $(MMBERT_LORA_ADAPTERS) $(MMBERT_32K_LORA_ADAPTERS) $(MMBERT_32K_MERGED_MODELS); do \
+	@for model in $(MMBERT_LORA_ADAPTERS) $(MMBERT_32K_LORA_ADAPTERS); do \
 		rm -rf $(MODELS_DIR)/$$model; \
 	done
-	@for model in $(MMBERT_32K_ONNX_MODELS); do \
-		rm -rf $(MODELS_DIR)/$${model}-onnx; \
-	done
-	@rm -rf $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)
 	@rm -rf $(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL)
 	@echo "mmBERT models removed"
 
@@ -568,7 +351,7 @@ train-mmbert32k-factcheck: ## Train Fact Check Classifier
 		mv lora_fact_check_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/fact-check-lora; \
 	fi
 
-merge-mmbert32k-all: ## Merge all LoRA adapters into full models for Rust inference
+merge-mmbert32k-all: ## Merge all LoRA adapters into full models
 	@echo "🔗 Merging all mmBERT-32K LoRA adapters..."
 	@echo ""
 	@$(MAKE) merge-mmbert32k-intent

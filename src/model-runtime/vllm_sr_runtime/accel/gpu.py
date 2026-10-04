@@ -17,6 +17,14 @@ import torch
 from ..plugins.base import Accelerator, DeviceInfo
 from .kernels import Kernel, KernelSet, reference_kernels
 
+# Errors after which the process's device context stays unusable.
+DEVICE_FAULT_MARKERS = (
+    "CUDA error",
+    "HIP error",
+    "device-side assert",
+    "illegal memory access",
+)
+
 
 def _optional(module: str, attribute: str) -> Any:
     try:
@@ -98,6 +106,16 @@ class GPUAccelerator(Accelerator):
 
     def synchronize(self, device: DeviceInfo) -> None:
         torch.cuda.synchronize(device.index or 0)
+
+    def device_fault(self, error: BaseException) -> bool:
+        """Device errors poison the context; running out of memory fails only the batch."""
+        if isinstance(error, torch.OutOfMemoryError):
+            return False
+        if isinstance(error, getattr(torch, "AcceleratorError", ())):
+            return True
+        return isinstance(error, RuntimeError) and any(
+            marker in str(error) for marker in DEVICE_FAULT_MARKERS
+        )
 
 
 def _wrap_conv(fn: Any) -> Any:

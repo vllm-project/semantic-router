@@ -7,7 +7,7 @@ import jsonschema
 import pytest
 import yaml
 from starlette.testclient import TestClient
-from vllm_sr_runtime.api.app import OPENAPI_PATH, create_app
+from vllm_sr_runtime.api.app import API_VERSION, OPENAPI_PATH, create_app
 from vllm_sr_runtime.config import ServeConfig
 from vllm_sr_runtime.runtime import Runtime
 
@@ -184,18 +184,21 @@ def test_models_health_metrics_and_openapi(client):
     health = client.get("/health")
     assert health.status_code == 200
     check("Health", health.json())
-    assert client.get("/health/live").json()["status"] == "alive"
+    live = client.get("/health/live").json()
+    check("Health", live)
+    assert live["status"] == "alive"
+    assert (
+        API_VERSION
+        == SPEC["info"]["version"]
+        == models["api_version"]
+        == health.json()["api_version"]
+        == live["api_version"]
+    )
     metrics = client.get("/metrics").text
     assert (
         "vllm_sr_runtime_requests_total" in metrics
         and "vllm_sr_runtime_ready 1.0" in metrics
     )
-    memory = [
-        line
-        for line in metrics.splitlines()
-        if line.startswith("vllm_sr_runtime_model_memory_bytes{")
-    ]
-    assert len(memory) == 1 and float(memory[0].rsplit(" ", 1)[1]) > 0
     memory = [
         line
         for line in metrics.splitlines()

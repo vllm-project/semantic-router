@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,8 @@ from ..errors import RuntimeServiceError
 from ..runtime import Runtime
 
 OPENAPI_PATH = Path(__file__).with_name("openapi.yaml")
+# The contract version (``info.version`` in openapi.yaml), reported to clients.
+API_VERSION = "2.0.0"
 
 
 class JSON(Response):
@@ -26,6 +29,39 @@ class JSON(Response):
         return json.dumps(
             content, ensure_ascii=False, allow_nan=False, separators=(",", ":")
         ).encode("utf-8")
+
+
+def non_finite() -> RuntimeServiceError:
+    return RuntimeServiceError(
+        "internal_error", "the model produced a non-finite number"
+    )
+
+
+def respond(content: Any, status: int = 200) -> Response:
+    """A JSON response; one holding NaN or infinity becomes the contract's 500."""
+    try:
+        return JSON(content, status_code=status)
+    except ValueError:
+        error = non_finite()
+        return JSON(error.body(), status_code=error.status)
+
+
+def respond_bundle(content: dict[str, Any]) -> Response:
+    """A bundle response; a task whose result holds NaN or infinity alone answers 500."""
+    try:
+        return JSON(content)
+    except ValueError:
+        results = []
+        for result in content["results"]:
+            try:
+                json.dumps(result, allow_nan=False)
+                results.append(result)
+            except ValueError:
+                error = non_finite()
+                results.append(
+                    {"id": result["id"], "status": error.status, **error.body()}
+                )
+        return JSON({**content, "results": results})
 
 
 def create_app(runtime: Runtime) -> Starlette:
@@ -43,7 +79,9 @@ def create_app(runtime: Runtime) -> Starlette:
             try:
                 body, size = await _read_json(request, runtime.config.max_request_bytes)
                 status, response = await runtime.call(surface, body, size)
-                return JSON(response, status_code=status)
+                answer = respond(response, status)
+                status = answer.status_code
+                return answer
             except RuntimeServiceError as exc:
                 status = exc.status
                 return JSON(exc.body(), status_code=exc.status)
@@ -58,7 +96,9 @@ def create_app(runtime: Runtime) -> Starlette:
         try:
             body, size = await _read_json(request, runtime.config.max_request_bytes)
             status, response = await runtime.bundle(body, size)
-            return JSON(response, status_code=status)
+            if status == HTTPStatus.OK:
+                return respond_bundle(response)
+            return respond(response, status)
         except RuntimeServiceError as exc:
             status = exc.status
             return JSON(exc.body(), status_code=exc.status)
@@ -68,11 +108,16 @@ def create_app(runtime: Runtime) -> Starlette:
     async def models(request: Request) -> Response:
         # The first call imports every plugin to describe it; /health must not wait for that.
         return JSON(
-            {"object": "list", "data": await run_in_threadpool(runtime.model_cards)}
+            {
+                "object": "list",
+                "api_version": API_VERSION,
+                "data": await run_in_threadpool(runtime.model_cards),
+            }
         )
 
     async def health(request: Request) -> Response:
         body: dict[str, Any] = {
+            "api_version": API_VERSION,
             "status": runtime.health.state,
             "reason": runtime.health.reason,
             "model": runtime.served_id,
@@ -82,7 +127,14 @@ def create_app(runtime: Runtime) -> Starlette:
         return JSON(body, status_code=200 if runtime.health.ready else 503)
 
     async def live(request: Request) -> Response:
-        return JSON({"status": "alive", "reason": None, "model": runtime.served_id})
+        return JSON(
+            {
+                "api_version": API_VERSION,
+                "status": "alive",
+                "reason": None,
+                "model": runtime.served_id,
+            }
+        )
 
     async def metrics(request: Request) -> Response:
         if runtime.scheduler is not None:

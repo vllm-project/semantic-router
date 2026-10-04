@@ -30,7 +30,7 @@ func modalityPreparationModels(t *testing.T, cfg *config.RouterConfig, explicit 
 	t.Helper()
 	if explicit {
 		cfg.ModelDeployments = map[string]config.ModelDeployment{
-			"selected": {Artifact: "selected-model", Provider: "ort", Device: "rocm:0", Precision: "native", Input: config.ModelInputBudget{MaxTokens: 8192, Overflow: "reject"}},
+			"selected": {Artifact: "vllm-sr/selected-model", Provider: config.ModelRuntimeProvider, Device: "rocm:0", Input: config.ModelInputBudget{MaxTokens: 8192, Overflow: "reject"}},
 		}
 		cfg.ModelBindings = map[string]config.ModelBinding{
 			"modality_detector": {Deployment: "selected", Adapter: "mmbert32k", Contract: config.RemoteClassifierContractLabelDistribution},
@@ -105,7 +105,7 @@ func TestOwnedModalityRulesPrepareAndEvaluateForNamedAndDefaultConsumers(t *test
 		resource := &modalityTestResource{}
 		apply, err := buildOwnedModalityOption(cfg, models, func(_ context.Context, spec config.ResolvedModelBinding) (*binding.Resolved[string, tasks.LabelDistribution], error) {
 			loads++
-			if spec.Recipe != recipe || spec.Deployment.Artifact != "selected-model" || spec.Deployment.Input.MaxTokens != 8192 {
+			if spec.Recipe != recipe || spec.Deployment.Artifact != "vllm-sr/selected-model" || spec.Deployment.Input.MaxTokens != 8192 {
 				t.Fatalf("consumer lost explicit deployment: %+v", spec)
 			}
 			return preparedModalityHandle(t, spec, resource, &calls), nil

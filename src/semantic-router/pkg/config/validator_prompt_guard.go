@@ -73,7 +73,7 @@ func (cfg PromptGuardConfig) ValidateBoundWindow(deployment ModelDeployment) err
 	if cfg.Window == nil {
 		return nil
 	}
-	if !deployment.IsLocalTask() {
+	if !deployment.IsModelRuntime() {
 		return fmt.Errorf("prompt_guard.window requires a local deployment")
 	}
 	return cfg.validateWindowParameters(deployment.Input.MaxTokens)

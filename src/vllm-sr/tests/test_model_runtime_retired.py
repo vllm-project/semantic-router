@@ -46,6 +46,10 @@ def _legacy() -> dict:
                 "rules": {"operator": "AND", "conditions": []},
                 "modelRefs": [{"model": "general"}],
                 "plugins": [hallucination_plugin],
+                "algorithm": {
+                    "type": "fusion",
+                    "fusion": {"grounding": {"nli_contradiction_penalty": 0.5}},
+                },
             }
         ],
     }
@@ -149,6 +153,7 @@ def test_every_retired_setting_is_found_by_its_path():
     for prefix in ("routing", "recipes[0].routing"):
         expected += [
             f"{prefix}.signals.hallucination[0].use_nli",
+            f"{prefix}.decisions[0].algorithm.fusion.grounding.nli_contradiction_penalty",
             f"{prefix}.decisions[0].plugins[0].configuration.use_nli",
         ]
     assert found == expected
