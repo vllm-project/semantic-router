@@ -3,7 +3,7 @@
     python3 tools/vela2_bench.py --package DIR --device cpu|rocm:0 --output OUT.json
         [--sides runtime,runtime-shared,runtime-batching,max_speed:KIND,reference,reference-onnx]
         [--tokens 32,128,512,2048] [--requests 40] [--warmup 5] [--concurrency 1,8]
-        [--prompts PROMPTS.jsonl]
+        [--prompts PROMPTS.jsonl] [--rounds 5 --baselines reference,runtime]
 
 Workload: the router's signals as one Vela 2.0 request (domain over 14 subject areas,
 jailbreak, PII spans, fact-check, feedback, modality and safety categories) over a
@@ -14,6 +14,12 @@ sides take turns per request (in rotating order), so a drift of the machine's sp
 during the run reaches every side alike. ``--prompts`` runs
 given prompts (``{"id", "text"}`` lines) instead, and records each one's latency at
 concurrency 1, to pair with another runtime's per-prompt latencies.
+
+``--rounds N`` repeats the measured requests N times after one warm-up; above
+concurrency 1 the sides run one after another in an order that rotates every
+round. ``intervals`` then holds, per row and side, the mean over the rounds of
+side minus baseline (p50, p95, req/s) with its 95% t interval, for every
+``--baselines`` side.
 
 Sides:
 - ``runtime``: the family on the exact profile through the runtime's scheduler;
@@ -180,13 +186,13 @@ def drive(
 
 
 def interleaved(
-    callers: dict[str, Any], states: list[Any]
+    callers: dict[str, Any], states: list[Any], offset: int = 0
 ) -> dict[str, tuple[dict[str, float], list[float]]]:
     """Every side answers each request in turn, one at a time; per side its summary and latencies."""
     sides = list(callers)
     latencies = {side: [0.0] * len(states) for side in sides}
     for index, state in enumerate(states):
-        shift = index % len(sides)
+        shift = (index + offset) % len(sides)
         for side in sides[shift:] + sides[:shift]:
             started = time.perf_counter()
             callers[side](state)
@@ -195,6 +201,53 @@ def interleaved(
         side: (summary(values, sum(values)), values)
         for side, values in latencies.items()
     }
+
+
+T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365,
+       8: 2.306, 9: 2.262, 10: 2.228, 15: 2.131, 20: 2.086, 30: 2.042}  # fmt: skip
+METRICS = ("p50_ms", "p95_ms", "throughput_rps")
+
+
+def intervals(runs: list[dict[str, Any]], baselines: list[str]) -> list[dict[str, Any]]:
+    """Per row and side, side minus each baseline over the rounds: mean and 95% t interval."""
+    rows: dict[tuple[Any, int], dict[str, dict[int, dict[str, Any]]]] = {}
+    for run in runs:
+        row = rows.setdefault((run["tokens"], run["concurrency"]), {})
+        row.setdefault(run["side"], {})[run.get("round", 0)] = run
+    out = []
+    for (tokens, clients), sides in rows.items():
+        for index, baseline in enumerate(baselines):
+            if baseline not in sides:
+                continue
+            for side in (s for s in sides if s not in baselines[: index + 1]):
+                rounds = sorted(set(sides[side]) & set(sides[baseline]))
+                entry: dict[str, Any] = {
+                    "tokens": tokens,
+                    "concurrency": clients,
+                    "side": side,
+                    "baseline": baseline,
+                    "rounds": len(rounds),
+                }
+                for metric in METRICS:
+                    diffs = [
+                        sides[side][r][metric] - sides[baseline][r][metric]
+                        for r in rounds
+                    ]
+                    mean = statistics.fmean(diffs)
+                    half = 0.0
+                    if len(diffs) > 1:
+                        df = len(diffs) - 1
+                        t = T95[max(k for k in T95 if k <= df)]
+                        half = t * statistics.stdev(diffs) / len(diffs) ** 0.5
+                    base = statistics.fmean(sides[baseline][r][metric] for r in rounds)
+                    entry[metric] = {
+                        "baseline": round(base, 3),
+                        "diff": round(mean, 3),
+                        "low": round(mean - half, 3),
+                        "high": round(mean + half, 3),
+                    }
+                out.append(entry)
+    return out
 
 
 def runtime_side(model: Any, profile: str, execute: Any) -> tuple[Any, Any]:
@@ -234,6 +287,8 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--prompts", type=Path)
     parser.add_argument("--engine", default="native", help="runtime engine plugin")
+    parser.add_argument("--rounds", type=int, default=1)
+    parser.add_argument("--baselines", default="reference,runtime")
     args = parser.parse_args()
     sides = args.sides.split(",")
     lengths = [int(x) for x in args.tokens.split(",")]
@@ -293,28 +348,39 @@ def main() -> int:
         for side in sides:
             for text in warm:
                 callers[side]({"request": text})
-        measured: list[tuple[str, int, dict[str, float], list[float]]] = []
-        if 1 in concurrency:
-            for side, (result, latencies) in interleaved(callers, states).items():
-                measured.append((side, 1, result, latencies))
-        for clients in (c for c in concurrency if c != 1):
-            for side in sides:
-                measured.append((side, clients, *drive(callers[side], states, clients)))
-        for side, clients, result, latencies in measured:
+        measured: list[tuple[int, str, int, dict[str, float], list[float]]] = []
+        for turn in range(args.rounds):
+            order = sides[turn % len(sides) :] + sides[: turn % len(sides)]
+            if 1 in concurrency:
+                for side, (result, latencies) in interleaved(
+                    callers, states, turn
+                ).items():
+                    measured.append((turn, side, 1, result, latencies))
+            for clients in (c for c in concurrency if c != 1):
+                for side in order:
+                    measured.append(
+                        (turn, side, clients, *drive(callers[side], states, clients))
+                    )
+        for turn, side, clients, result, latencies in measured:
             result.update(side=side, tokens=tokens, concurrency=clients)
+            if args.rounds > 1:
+                result["round"] = turn
             print(json.dumps(result), flush=True)
-            if ids and clients == 1:
+            if ids and clients == 1 and turn == 0:
                 result["latency_ms"] = {
                     key: round(1000 * value, 3)
                     for key, value in zip(ids, latencies, strict=True)
                 }
             runs.append(result)
+    report: dict[str, Any] = {
+        "package": str(args.package),
+        "device": args.device,
+        "runs": runs,
+    }
+    if args.rounds > 1:
+        report["intervals"] = intervals(runs, args.baselines.split(","))
     args.output.write_text(
-        json.dumps(
-            {"package": str(args.package), "device": args.device, "runs": runs},
-            indent=1,
-        )
-        + "\n",
+        json.dumps(report, indent=1) + "\n",
         encoding="utf-8",
     )
     return 0
