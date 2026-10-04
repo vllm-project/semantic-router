@@ -8,23 +8,37 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// newTestEndpointDetector builds an endpoint detector pointed at the given base
-// URL. The base URL is treated as the OpenAI-compatible "/v1" root; the detector
-// appends "/chat/completions".
+// newTestEndpointDetector binds hallucination_detector to an http_chat
+// deployment of the server at endpoint; the detector posts to its
+// /v1/chat/completions.
 func newTestEndpointDetector(t *testing.T, endpoint string, includeExplanation bool) *EndpointHallucinationDetector {
 	t.Helper()
-	detector, err := NewEndpointHallucinationDetector(&config.HallucinationModelConfig{
-		Backend:            config.HallucinationBackendEndpoint,
-		Endpoint:           endpoint,
-		ModelID:            "test-detector",
-		IncludeExplanation: includeExplanation,
-	})
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.Atoi(parsed.Port())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.RouterConfig{}
+	cfg.HallucinationMitigation.HallucinationModel.IncludeExplanation = includeExplanation
+	cfg.ExternalModels = []config.ExternalModelConfig{{Name: "detector", ModelName: "test-detector", ModelRole: config.ModelRoleClassification, ModelEndpoint: config.ClassifierVLLMEndpoint{Address: parsed.Hostname(), Port: port, Protocol: parsed.Scheme}}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"detector": {Provider: "http", ExternalModel: "detector"}}
+	cfg.ModelBindings = map[string]config.ModelBinding{"hallucination_detector": {Deployment: "detector", Adapter: config.RemoteClassifierProtocolHTTPChat, Contract: config.RemoteClassifierContractTokenSpans}}
+	models, err := newClassifierModelRuntime(cfg, RecipeRuntimeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	detector, err := NewEndpointHallucinationDetector(&models.cfg.HallucinationMitigation.HallucinationModel, models)
 	if err != nil {
 		t.Fatalf("NewEndpointHallucinationDetector: %v", err)
 	}
