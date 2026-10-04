@@ -29,7 +29,7 @@ from .questions import KINDS, NoulDefaults, Row
 PHYSICAL_BATCH = 8
 MAX_INPUT_TOKENS = 1024
 READOUT_PADDING = 0.25
-# Below this many padded tokens one read costs less than the launches of several on a GPU.
+# Below this many padded tokens one read costs less than several.
 READOUT_ONE_GRID = 1024
 NOUL_DEFAULTS = NoulDefaults(
     false="No. The statement or question is not satisfied.",
@@ -245,10 +245,12 @@ def packed_marker_logits(
     """Masked marker logits ``[rows, width]`` of rows of one type, their layer stack run packed.
 
     The rows run back to back without padding (the engine's packed layout);
-    the type's head layers then read them padded with a key mask, by length
-    group (``readout_groups``). Packing changes the attention and GEMM shapes,
-    so this serves approximate profiles, which also run the engine's
-    reduced-precision copy when it loaded one.
+    the type's head layers then read them padded with a key mask: by length
+    group on CPUs (``readout_groups``), where padding costs compute, and as one
+    grid on GPUs, where several reads' launches cost more than the padding.
+    Packing changes the attention and GEMM shapes, so this serves approximate
+    profiles, which also run the engine's reduced-precision copy when it loaded
+    one.
     """
     lengths = [len(item.ids) for item in items]
     ids = torch.tensor(
@@ -263,7 +265,9 @@ def packed_marker_logits(
             reduced=True,
         )
     ).hidden[exit_layer]
-    groups = readout_groups(lengths)
+    groups = (
+        readout_groups(lengths) if device.type == "cpu" else [list(range(len(items)))]
+    )
     if len(groups) == 1:
         return padded_marker_logits(readout, kind, items, packed, device)
     offsets = [0, *itertools.accumulate(lengths)]
