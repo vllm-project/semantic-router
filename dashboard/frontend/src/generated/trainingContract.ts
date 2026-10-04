@@ -4,12 +4,30 @@ export interface APIError {
   message: string
 }
 
+export interface ArchitectureDriverDescriptor {
+  id: CapabilityID
+  family: string
+  display_name: string
+  supported_targets: Array<Target>
+  supported_formats: Array<CapabilityID>
+  supported_runtimes: Array<CapabilityID>
+  required_model_files?: Array<string>
+}
+
 export interface Artifact {
   schema_version: "semantic-router.training/v1"
   id: string
   created_at: string
   provenance: Provenance
   profile: Profile
+}
+
+export interface ArtifactFormatDescriptor {
+  id: CapabilityID
+  component: Component
+  display_name: string
+  file_extensions: Array<string>
+  direct_runtimes: Array<CapabilityID>
 }
 
 export interface ArtifactResult {
@@ -59,6 +77,21 @@ export interface BindingProposalSpec {
   name: string
 }
 
+export interface CapabilityCatalog {
+  schema_version: "semantic-router.training/v1"
+  targets: Array<TargetDescriptor>
+  trainers: Array<TrainerDescriptor>
+  architectures: Array<ArchitectureDriverDescriptor>
+  executors: Array<ExecutorDescriptor>
+  formats: Array<ArtifactFormatDescriptor>
+  runtimes: Array<RuntimeAdapterDescriptor>
+  precisions: Array<PrecisionDescriptor>
+  hardware: Array<HardwareProviderDescriptor>
+  conversions?: Array<ConversionRule>
+}
+
+export type CapabilityID = string
+
 export interface Catalog {
   asset_request: DataAssetSpec
   snapshot_request: SnapshotSpec
@@ -84,6 +117,9 @@ export interface Catalog {
   error: APIError
   event_page: EventPage
   worker_submission: WorkerSubmission
+  capability_catalog: CapabilityCatalog
+  plan_request: TrainingPlanRequest
+  plan_response: TrainingPlanResponse
 }
 
 export interface ClassifierProfile {
@@ -106,6 +142,13 @@ export interface ComparisonResponse {
 export interface Component {
   name: string
   version: string
+}
+
+export interface ConversionRule {
+  source_format: CapabilityID
+  target_format: CapabilityID
+  executor: CapabilityID
+  hardware: Array<CapabilityID>
 }
 
 export interface DataAsset {
@@ -132,6 +175,10 @@ export interface DataSnapshot {
   profile: Profile
   content: File
 }
+
+export type DiagnosticCode = "UNSUPPORTED_TARGET" | "UNKNOWN_CAPABILITY" | "INCOMPATIBLE_ARCHITECTURE" | "INCOMPATIBLE_EXECUTOR" | "INCOMPATIBLE_HARDWARE" | "INCOMPATIBLE_PRECISION" | "MISSING_FORMAT_CONVERSION" | "UNSUPPORTED_QUALIFICATION" | "INVALID_PARAMETER"
+
+export type DiagnosticSeverity = "error" | "warning"
 
 export interface Evaluation {
   schema_version: "semantic-router.training/v1"
@@ -163,6 +210,15 @@ export interface Event {
 export interface EventPage {
   events: Array<Event>
   next_after: number
+}
+
+export interface ExecutorDescriptor {
+  id: CapabilityID
+  component: Component
+  display_name: string
+  supported_hardware: Array<CapabilityID>
+  min_memory_bytes?: number
+  isolation_level: string
 }
 
 export interface Experiment {
@@ -203,6 +259,14 @@ export interface Fixture {
   proposal: BindingProposal
 }
 
+export interface HardwareProviderDescriptor {
+  id: CapabilityID
+  provider: string
+  device_type: string
+  display_name: string
+  supported_precisions: Array<CapabilityID>
+}
+
 export interface Metadata {
   schema_version: "semantic-router.training/v1"
   id: string
@@ -212,6 +276,46 @@ export interface Metadata {
 export interface ModelRef {
   repository: string
   revision: string
+}
+
+export interface ParameterConstraint {
+  type: string
+  required: boolean
+  default?: unknown
+  description?: string
+  enum?: Array<string>
+  minimum?: number
+  maximum?: number
+}
+
+export interface PlanDiagnostic {
+  code: DiagnosticCode
+  severity: DiagnosticSeverity
+  field?: string
+  message: string
+  remediation?: string
+}
+
+export interface PlannedQualification {
+  key: string
+  task_key: string
+  runtime: CapabilityID
+  hardware: CapabilityID
+  precision: CapabilityID
+  connector: string
+}
+
+export interface PlannedVariant {
+  key: string
+  format: CapabilityID
+  producing_task: string
+  qualifications: Array<PlannedQualification>
+}
+
+export interface PrecisionDescriptor {
+  id: CapabilityID
+  name: string
+  bits_per_element: number
 }
 
 export type Profile =
@@ -246,6 +350,25 @@ export interface QualificationSpec {
   receipt: File
 }
 
+export interface QualificationTargetRequest {
+  key: string
+  runtime: CapabilityID
+  hardware: CapabilityID
+  precision: CapabilityID
+}
+
+export interface ResolvedTrainingPlan {
+  target_contract: Target
+  trainer: CapabilityID
+  architecture?: CapabilityID
+  executor: CapabilityID
+  training_hardware: CapabilityID
+  training_precision: CapabilityID
+  tasks: Array<TaskSpec>
+  artifact_variants: Array<PlannedVariant>
+  resolved_parameters: Record<string, unknown>
+}
+
 export interface RunGraph {
   run: TrainingRun
   tasks: Array<RunTask>
@@ -278,6 +401,17 @@ export interface RunTask {
   attempts: Array<Attempt>
 }
 
+export interface RuntimeAdapterDescriptor {
+  id: CapabilityID
+  component: Component
+  display_name: string
+  supported_targets: Array<Target>
+  accepted_formats: Array<CapabilityID>
+  supported_hardware: Array<CapabilityID>
+  supported_precisions: Array<CapabilityID>
+  connector: string
+}
+
 export interface SelectorProfile {
   candidate_models: Array<string>
   observation_fields: Array<string>
@@ -306,10 +440,49 @@ export interface SubmitRunRequest {
 
 export type Target = "selector.model-choice/v1" | "signal.label-scores/v1" | "signal.spans/v1"
 
+export interface TargetDescriptor {
+  id: CapabilityID
+  target_contract: Target
+  display_name: string
+  description?: string
+}
+
 export interface TaskSpec {
   key: string
   depends_on?: Array<string>
   executor: Component
+}
+
+export interface TrainerDescriptor {
+  id: CapabilityID
+  component: Component
+  display_name: string
+  supported_targets: Array<Target>
+  supported_architectures?: Array<CapabilityID>
+  supported_executors: Array<CapabilityID>
+  supported_hardware: Array<CapabilityID>
+  supported_precisions: Array<CapabilityID>
+  produced_formats: Array<CapabilityID>
+  parameters?: Record<string, ParameterConstraint>
+}
+
+export interface TrainingPlanRequest {
+  schema_version: "semantic-router.training/v1"
+  target_contract: Target
+  architecture?: CapabilityID
+  trainer: CapabilityID
+  executor?: CapabilityID
+  training_hardware: CapabilityID
+  training_precision: CapabilityID
+  parameters?: Record<string, unknown>
+  qualification_targets?: Array<QualificationTargetRequest>
+}
+
+export interface TrainingPlanResponse {
+  schema_version: "semantic-router.training/v1"
+  valid: boolean
+  plan?: ResolvedTrainingPlan
+  diagnostics?: Array<PlanDiagnostic>
 }
 
 export interface TrainingRun {
