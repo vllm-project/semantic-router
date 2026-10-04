@@ -205,6 +205,30 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 23:48 — **PAUSED reasoning** (`00c08ba3d`, pushed; nothing running; no leases or CPU claims on nodes C, D, F). The 2B private release is done (above). 4B α 0.5 passes the Index gate (+0.74 [+0.34, +1.17]); its private package is not built yet. The 9B TF α 0.75 Index chain was stopped mid-shard. Disclosure: a 1-minute card build ran on node D cores 32–47 at about 23:33. Handoff: `decision2-program/reasoning-handoff.md`. — reasoning (40595ea4)
+
+- 2026-10-04 23:45 — **PAUSED embed** (ceee0cdf) at `160674c5d` (`xunzhuo/model-runtime-p24-embed`, pushed, clean).
+  Handoff: `/home/xunliu/code/mr-scratch/p24-embed/HANDOFF.md`. No node jobs, leases or CPU claims. Spin-duration
+  sweep recorded: `force_spinning_stop` causes the Omni throughput loss; 1000 µs spin is level on image and Mini
+  text but trails Nano text by 5 %. Nano image p50 is still open.
+
+- 2026-10-04 23:45 — **PAUSED e2e-docs** (`b99317ced`, pushed; nothing running, no claims). Before pausing: PR head `cf13ba13a` `vllm-sr serve` PASS without the curl patch, `multimodal-routing` PASS; IP3 trial `-ip3-check` @ `bfd3557d0` (+ `router-ip3`) Kind `model-runtime` (incl. load-retry), `hallucination`, `vela-halu` PASS, CLI integration 20/20. Handoff: `mr-scratch/p24-e2e-docs/HANDOFF.md`. — e2e-docs
+
+- 2026-10-04 23:44 — **PAUSED vela2** (replacement for cedf4b1a): branch `xunzhuo/model-runtime-p24-vela2` @ `c0e5a8281`
+  (pushed, clean; = `cf13ba13a` + `vela2_bench --rounds`). Node B jobs stopped; GPU4 released; vCPUs 144–159 free.
+  0.3B ROCm 5-round run complete; CPU and 4B partial; 9B not started. Handoff: next steps P1-5 adopt, P1-4 GPU check,
+  finish the re-timing.
+
+- 2026-10-04 23:44 — **PAUSED router**: `xunzhuo/model-runtime-p24-router-ip3` @ `34fd7fc19` (pushed, clean; P2-12,
+  P1-12 contract + P2-13 enums, P2-14 and partial P2-15 since 23:26). No jobs, leases or claims. The handoff is
+  `p24-router-handoff.md` in my agent store.
+
+- 2026-10-04 23:43 — **PAUSED decision1** (eb7ca653) at `3e764abf2` (pushed; P1-13 and P1-5 done, P1-4 attempt reverted because the released per-model FLA choices conflict for 47 of 55 model pairs, P2-23 open); node C A/B stopped with 2 of 5 rounds kept (Eos 3), node C 0–63 released, no GPU leases; handoff `decision1-handoff.md` in my agent store.
+
+- 2026-10-04 23:44 — **PAUSED stores (f772afde)** at `c679ad7b2` (pushed, clean). The P0-2 fix is committed as
+  `[Harness]` `10564d6c0` for the lead's review. The fixed head is not measured yet. No jobs are running; node B
+  48–63 and node D 32–63 are released. The handoff has the restart steps.
+
 - 2026-10-04 23:45 — **Coordinator: pause order delivered (user, 23:40).**
   - **Interrupted, each with the pause message:** lead, `decision1`, `vela1`, `embed`, `vela2`, `stores`,
     `e2e-docs`, `router`, `reasoning`.
