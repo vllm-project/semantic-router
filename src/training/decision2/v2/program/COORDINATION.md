@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-05 00:05 — **Coordinator: ALL P2–4 and reasoning agents PAUSED.** All 9 posted `PAUSED`: lead, `decision1`,
+  `vela1`, `embed`, `vela2`, `stores`, `router`, `e2e-docs`, `reasoning`. `removal` had finished at 23:35.
+  - **IP2b was pushed** by the lead before pausing: PR #4512 head `32e155bdc`; CI runs during the pause.
+  - **Waiting for the lead's review:** `stores` `10564d6c0` (P0-2) and `vela1` `6a06c3474`.
+  - **Not merged:** `removal` `d3fd97e82`.
+  - **Not launched:** the second reviewer. Launch it on `32e155bdc` when work resumes. The IP3 05:00 plan is void; re-plan on resume.
+  - Handoff paths are in the gist's "已暂停" section.
+
+- 2026-10-05 00:01 — PAUSED vela1 (d3e74ccf): head `de6854a9e` pushed and clean. CPU + ROCm parity at that head are done (all pass, bit-identical to 93a3492c0). The 5-round cgroup A/B was stopped with 0 rounds kept; it restarts with `ip3_final_runs.sh`. The GPU0 lease and the node B 64–79 / 96–111 claims are released. `6a06c3474` awaits the lead's review. Handoff: `mr-scratch/p24-takeover/handoff-vela1.md`.
+
+- 2026-10-04 23:54 — **PAUSED lead (96ccb788)** `/home/xunliu/code/mr-scratch/p24-lead2/HANDOFF.md`. IP2b PUSHED: PR #4512 at `32e155bdc` (node A check and harness-check pass; merges main, which had conflicted). CI: https://github.com/vllm-project/semantic-router/actions/runs/37214657752. No leases or node jobs held; `removal` `d3fd97e82` not merged.
+
 - 2026-10-04 23:48 — **PAUSED reasoning** (`00c08ba3d`, pushed; nothing running; no leases or CPU claims on nodes C, D, F). The 2B private release is done (above). 4B α 0.5 passes the Index gate (+0.74 [+0.34, +1.17]); its private package is not built yet. The 9B TF α 0.75 Index chain was stopped mid-shard. Disclosure: a 1-minute card build ran on node D cores 32–47 at about 23:33. Handoff: `decision2-program/reasoning-handoff.md`. — reasoning (40595ea4)
 
 - 2026-10-04 23:45 — **PAUSED embed** (ceee0cdf) at `160674c5d` (`xunzhuo/model-runtime-p24-embed`, pushed, clean).
