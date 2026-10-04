@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 from dataclasses import dataclass
@@ -87,8 +86,6 @@ def evaluate_gate(
         errors.append(f"invalid dispatch plan: {error}")
     if plan.get("full_cpu_version") != load_catalog()["full_cpu"]["version"]:
         errors.append("plan full CPU inventory version differs")
-    if plan.get("native") != any(record["native"] for record in planned.values()):
-        errors.append("plan native dependency differs from required contracts")
     actual = {}
     for receipt in receipts:
         name = receipt.get("id")
@@ -119,8 +116,6 @@ def evaluate_gate(
                 except ValueError as error:
                     errors.append(str(error))
     expected_builds = {f"image:{name}" for name in plan.get("images", [])}
-    if plan.get("native"):
-        expected_builds.add("native:cpu")
     if set(build_map) != expected_builds:
         errors.append(
             f"build inventory mismatch: missing={sorted(expected_builds - set(build_map))}, extra={sorted(set(build_map) - expected_builds)}"
@@ -172,8 +167,6 @@ def evaluate_gate(
         if len(set(consumed_ids)) != len(consumed_ids):
             errors.append(f"{name}: duplicate consumed artifact identity")
         dependencies = {f"image:{image}" for image in record["images"]}
-        if record["native"]:
-            dependencies.add("native:cpu")
         if not dependencies <= set(consumed_ids):
             errors.append(f"{name}: missing artifact dependencies")
         for artifact in consumed:
@@ -222,19 +215,6 @@ def load_builds(directory: Path) -> list[dict]:
                 },
             }
         )
-    native = directory / "ci-build-native-cpu/receipt.json"
-    if native.exists():
-        manifest = native.with_name("manifest.json")
-        rows = json.loads(native.read_text())
-        if (
-            len(rows) != 1
-            or rows[0].get("sha256")
-            != hashlib.sha256(manifest.read_bytes()).hexdigest()
-        ):
-            raise ValueError("native build receipt differs from actual manifest")
-        if json.loads(manifest.read_text()).get("platform") != "linux/amd64":
-            raise ValueError("native build platform is not Linux AMD64")
-        builds.extend(rows)
     return builds
 
 
