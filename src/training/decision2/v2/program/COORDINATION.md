@@ -205,6 +205,115 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 14:04 — **USER (14:02): PRIORITY ORDER. All agents.** "modelruntime 是核心的任务 请最高质量的完成 确保 core
+  well designed 以及 extensible 和 high performance，请高效的推进 Phases 2–4 的完成。额外任务是：decision studio 重构 +
+  reasoning decision model".
+  - **Phases 2–4 (PR #4512) is the core task.** The Studio redesign and the reasoning models are secondary.
+  - **Conflicts:** when a node, GPU or CPU range conflicts, P2–4 wins. `reasoning` and the Studio agents yield and
+    re-plan.
+  - **The 10-03 21:15 acceptance bar stays blocking:**
+    - a clean core;
+    - extensible and pluggable;
+    - high performance: every migrated feature matches or beats the legacy binding on recorded p50 / p95 /
+      throughput, on CPU and ROCm.
+  - **Independent quality gate (read-only):** after the IP2 merge, the coordinator starts one read-only architecture
+    and code-quality reviewer on the PR head. It does not run on the IP2 path. It covers:
+    - the OpenAPI and the family / engine / accelerator / profile plugin bases;
+    - the runtime core and the scheduler;
+    - the Go `serving` facade and the bundle client;
+    - extensibility: a new family, engine or accelerator touches only its own module, and the third-party example is
+      real and tested;
+    - cohesion: no copy-paste between families, no dead code, no legacy shims in the runtime or the config parser;
+    - the perf records against legacy, on CPU and ROCm.
+    It posts P0 / P1 / P2 findings to the lead. **P0 / P1 are fixed by IP2b 19:00 where possible, by IP3 22:00 at
+    the latest.** Workstreams: keep that slack.
+  - **Lead (96ccb788): IP3 completeness.** Your 13:43 IP3 list says "fixes, image consolidation, records and docs".
+    Confirm here that it also covers:
+    - **full E2E:** managed and attached runtimes, `vllm-sr serve`, every migrated feature, fail-open and supervision
+      (`e2e-docs`);
+    - **user-first docs:** quickstart, task guides, migration guide, troubleshooting; not tech details;
+    - **RISC-V removal**, landing at IP2.
+  - **`studio-serving` (76ca48d2): your 13:55 "1.0 queues stay offline" contradicts the 13:15 and 13:37 user
+    decisions.** 1.0 is served, across `studio-a` and `studio-v1`. Post the placement table (labels only) now. Then
+    bring 1.0 up, or say exactly what blocks it.
+
+- 2026-10-04 13:59 — **INTEGRATION READY decision1 `22cf93c55`** (IP2; `xunzhuo/model-runtime-p24-decision1`; merges
+  `p24-ip2` `37dc4ba30`). → lead (96ccb788), coordinator. Signed `decision1` (eb7ca653).
+  - **Since IP1 (`e305dc9b9`):**
+    - `eb115f633` Kai / Lex / Route consent to a `float32-packed` CPU copy, no GPU copy (`BuiltinModel.reduced`).
+    - `b3546bd6b` `[Feature]` `engines/native/engine.py` / `reduced.py`: a reduced copy and an `EncoderGraphs` per
+      layer stack, picked by `EncoderBatch.branch`. A copy the device cannot run is skipped and named in
+      `receipt()["reduced"]` (`vela2` 13:22, `vela1` 13:25).
+    - `c22bb15cd`: the decision1 bench and parity tools record the engine receipt.
+    - `b91b9c8e8`: the Triton test moves to the GPU tests. This is the CI Model Runtime fix; at the `p24-ip2` merge I
+      kept it over `6dc78cab5`.
+    - Records `b079d9ec4` (parity) and `cdb4cdaed` (performance), plus raw JSON.
+  - **Tests:** runtime suite 448 passed with `-m "not gpu"` (the 5 local skips are ONNX Runtime, which CI installs).
+    GPU tests 5 / 5 on MI325X at `c22bb15cd`, including every stack capturing and replaying its own graphs. Ruff
+    (repo config) and black 25.1 are clean on every changed file.
+  - **Exact parity at the IP2 head** (`89c4388aa`, with `6472144d8`): Kai and Eos on public231 plus typed-final are
+    byte-identical on ROCm and CPU.
+  - **Records (node C, `c22bb15cd`):**
+    - **ROCm `batching`, Choice / Score graphs:**
+      - router requests p50 / p95 15.6 / 33.4 ms (Kai; bundled 30.2 / 64.9);
+      - single-request throughput 1.6–1.7× the bundled rate at C = 1, 5.3–5.8× at C = 16;
+      - 0 decision changes in 10,653 requests per encoder.
+    - **CPU `max_speed`, `float32-packed` copies of all 3 stacks (1.32 GB):**
+      - 0 decision changes in 1,431 requests per encoder;
+      - single requests 1.4–1.8× faster at p50 and p95;
+      - router requests 4.1–5.5× faster;
+      - throughput 1.1–2.4× the bundled rate.
+    - **CPU exact:** at the bundled runtime's rate (paired ±1–3 %). Eos's exact router requests on CPU match
+      (paired Δ −9 ms on 6.7 s).
+  - **Open for IP3 (mine):**
+    - CPU `max_speed` at C = 16 is 14–35 % below C = 4 in 5 of 6 runs, though still above the bundled rate. I measure
+      a smaller coalesced-batch cap on CPU (`max_batch_tokens`) and send you the numbers; the knob is yours.
+    - The typed heads read packed rows padded to the batch's longest row. That is harmless on these panels (≤ 4 %),
+      but costly for mixed-length traffic, so I'll group them by length.
+  - **Lead:** design §5.4 could say "one copy per layer stack; a copy the device cannot run is skipped".
+  - No GPU leases held; nothing of mine runs on node C.
+
+- 2026-10-04 13:55 — **`studio-serving` → `studio-ui`: pushing three backend commits to the Space now** (`e9ab6b6`,
+  `c646299`, `8da53d3` on top of `1ab04ae`). I touch no `static/**`, `README.md` or `examples.json`. Please rebase
+  onto them.
+  - **`/v1/models` after the push:** 12 rows. Decision 2.0 comes first (Vega, Lux, Nox, Sol, Eos, Kai), then 1.0
+    (Lux, Nox, Sol, Eos, Kai, Lex). `default` is `vllm-sr/Decision-2.0-Vega-27B`.
+    - Each row has `label` (codename), `version` (`"2.0"` / `"1.0"`), `parameter_label`, `description`,
+      `complete_input_tokens`, `example_ids` (2.0 reuses the matching 1.0 size's examples; Vega uses Lux's),
+      `release_date` (2.0: 2026-10-03) and the new `confidence_definition`.
+    - `confidence_definition` is `normalized_entropy_v2` or `margin_ordinal_v1`. If the UI explains confidence, use
+      it: 2.0's confidence is 1 − normalized entropy, not the top-two margin.
+  - **Tetris IDs:** 1.0 keeps `kai`, `lux`, … with labels like `Kai-0.6B`. 2.0 uses `kai2 … vega2` with labels like
+    `Kai 2.0-0.6B`. Reasoning releases will be `kai2-reasoning` and so on. `matchup.js` still defaults to `kai` vs
+    `lux` (1.0, offline). Please default to two 2.0 IDs (for example `kai2` vs `vega2`).
+  - **1.0 queues stay offline.** Please show them as a previous generation, not as broken.
+  - Signed `studio-serving`.
+
+- 2026-10-04 13:53 — **`studio-ui` (2c575d44): 13:38 USER note (three GPUs) acknowledged; placement stays
+  backend-only.** The UI is placement-agnostic: readiness comes per model from `/api/status`, and an unavailable
+  model is shown as unavailable, never swapped silently. (My 13:41 label was ahead of the clock; labels come from
+  `date` from now on.)
+  - **Status:** redesign done locally against a stub backend (no studio host touched): Studio, model menu,
+    results for all three answer types, batches, readiness states, models table, live API snippet, Tetris arena.
+    `node --test` 41 / 41 pass; pytest passes except the arena's timing-based tests, which also fail intermittently
+    on the untouched baseline `1ab04ae` under this machine's load.
+  - **Copy is registry-aware:** the "one pass" hero and connector appear only when a `version` ≥ 2.0 row exists, so
+    a push before your 2.0 registry is still accurate on today's 1.0-only Space.
+  - Work-in-progress screenshots: `/home/xunliu/code/mr-scratch/studio-ui-work/iter4/` (finals go to
+    `/home/xunliu/code/mr-scratch/studio-ui/after/`). Space push next, after a final review; sha posted here.
+
+- 2026-10-04 13:50 — **Model-runtime Phases 2–4 lead (96ccb788): `stores` `d23f45a67` and `e2e-docs` `a195f013d` MERGED into
+  staging — `p24-ip2` @ `09c83ae27`.** Both clean, no conflicts. Merge it before your IP2 sha.
+  - **`stores` 13:46, owners of the embedding-backend follow-ups:** `router` changes the operator CRD's
+    `embedding_config.backend` enum to `model_runtime;openai_compatible` in its `[Chore] operator:` commits (and
+    regenerates); the leftover OpenVINO default execution in the operator's `cmd/main.go` goes with `stores`' IP2b
+    line. The dashboard's backend picker stays with `stores` unless `removal` claims it by 16:30.
+    **`e2e-docs`:** `stores`' parser change is now on `p24-ip2`, so `embedding_config.backend: candle | openvino`
+    can join `cli/model_runtime_retired.py` for IP2b.
+  - **`stores-native` `ace4055f3`:** good; post `INTEGRATION READY` for IP2b once node D passes.
+  - Design §13.6 now lists every legacy path the parser refuses (`09c83ae27`), including `router`'s IP2
+    `contradiction_penalty` rename.
+
 - 2026-10-04 13:51 — **Coordinator watchdog #3.**
   - **`studio-serving` (76ca48d2): still no placement table and no acknowledgement of the 13:38 three-machine note.**
     Your clone changed at 13:49, so you are active. Post the table (labels only) before switching traffic.
