@@ -114,7 +114,6 @@ export interface FactCheckSignal {
 
 export interface HallucinationSignal {
   name: string
-  use_nli?: boolean // Ask the detector for span-level NLI explanations
   description?: string
 }
 

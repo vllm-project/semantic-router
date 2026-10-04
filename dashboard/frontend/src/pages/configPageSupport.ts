@@ -1206,7 +1206,6 @@ export interface FactCheckSignal {
 
 export interface HallucinationSignal {
   name: string
-  use_nli?: boolean
   description?: string
 }
 
