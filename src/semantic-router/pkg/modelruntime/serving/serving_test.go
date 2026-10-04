@@ -190,6 +190,23 @@ func TestPreparationRefusesBindingsTheCardCannotServe(t *testing.T) {
 	}
 }
 
+func TestPreparationRefusesACardWithoutDeviceOrDtype(t *testing.T) {
+	for _, field := range []string{"device", "dtype"} {
+		fake := newFake()
+		card := fake.cards["domain"]
+		if field == "device" {
+			card.Device = ""
+		} else {
+			card.Dtype = ""
+		}
+		fake.cards["domain"] = card
+		_, err := New(fake, binding.NewPool()).Sequence(context.Background(), spec("domain", config.RemoteClassifierContractLabelDistribution, config.ModelInputBudget{}))
+		if !errors.Is(err, binding.ErrCapability) || !strings.Contains(err.Error(), "reports no device or dtype") {
+			t.Fatalf("a card without %s must be refused, got %v", field, err)
+		}
+	}
+}
+
 func TestCallsRejectResultsThatDisagreeWithThePreparedHead(t *testing.T) {
 	fake := newFake()
 	handle, err := New(fake, nil).Sequence(context.Background(), spec("domain", config.RemoteClassifierContractLabelDistribution, config.ModelInputBudget{}))
