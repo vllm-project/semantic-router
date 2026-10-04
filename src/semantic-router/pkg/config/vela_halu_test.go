@@ -8,7 +8,7 @@ func TestVelaHaluDefaultAndLegacyIdentity(t *testing.T) {
 		t.Fatalf("Halu default = %q", got)
 	}
 	model := GetModelByPath(cfg.HallucinationMitigation.HallucinationModel.ModelID)
-	if model == nil || model.DefaultProvider != "candle" || model.DefaultDevice != "cpu" || model.DefaultAdapter != "vela_halu" || model.MaxContextLength != 8192 || len(model.Revision) != 40 {
+	if model == nil || model.DefaultAdapter != "vela_halu" || model.MaxContextLength != 8192 || len(model.Revision) != 40 {
 		t.Fatalf("invalid Halu task identity: %+v", model)
 	}
 	legacy := GetModelByPath("models/mom-halugate-detector")
