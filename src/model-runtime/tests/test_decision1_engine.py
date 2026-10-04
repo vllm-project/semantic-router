@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 import torch
@@ -91,6 +92,23 @@ def test_load_backbone_renames_prefixes(tmp_path):
         holder.layer = nn.Linear(2, 2)
     load_backbone(holder, [tmp_path / "w.safetensors"], renames={"block.": "layer."})
     assert torch.equal(holder.layer.weight, torch.ones(2, 2))
+
+
+def test_loaded_weights_live_in_process_memory_not_the_checkpoint_mapping(tmp_path):
+    maps = Path("/proc/self/maps")
+    if not maps.exists():
+        pytest.skip("needs /proc/self/maps")
+    path = tmp_path / "w.safetensors"
+    save({"block.weight": torch.ones(512, 512)}, path)
+    holder = nn.Module()
+    with torch.device("meta"):
+        holder.layer = nn.Linear(512, 512, bias=False)
+    load_backbone(holder, [path], renames={"block.": "layer."})
+    pointer = holder.layer.weight.data_ptr()
+    for line in maps.read_text().splitlines():
+        start, end = (int(value, 16) for value in line.split()[0].split("-"))
+        if start <= pointer < end:
+            assert str(path) not in line
 
 
 def test_branches_share_the_embedding_and_run_their_own_stack(tmp_path):

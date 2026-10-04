@@ -1,4 +1,4 @@
-# Explicit AMD deployments: ROCm for Guard/Embedding/Reranker, MIGraphX for other classifiers.
+# Explicit AMD deployments: the built-in model runtime serves every model on rocm:0.
 # All-signals Preview is limited to 8192 tokens; task-specific budgets include special tokens.
 # Replace vs_your_documents after creating and indexing a vector store for RAG.
 version: v0.3

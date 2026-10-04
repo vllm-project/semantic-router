@@ -15,7 +15,7 @@ import time
 import pytest
 import torch
 from torch import nn
-from vllm_sr_runtime.config import ServeConfig
+from vllm_sr_runtime.config import ModelConfig, ServeConfig
 from vllm_sr_runtime.families.decision1 import package as pkg
 from vllm_sr_runtime.families.decision1 import qwen, vela
 from vllm_sr_runtime.families.decision1.questions import KINDS
@@ -94,7 +94,9 @@ def packages(tmp_path_factory):
 def runtimes(packages):
     started = {}
     for name, root in packages.items():
-        runtime = Runtime(ServeConfig(model=str(root), device="cpu"))
+        runtime = Runtime(
+            ServeConfig(models=(ModelConfig(model=str(root), device="cpu"),))
+        )
         runtime.start(background=False)
         started[name] = runtime
     yield started
@@ -110,7 +112,7 @@ def decide(runtime, questions, state=STATE, **options):
 
 
 def model_of(runtime):
-    return runtime.primary.model
+    return runtime.lookup(None).model
 
 
 @pytest.mark.parametrize("name", ["qwen", "vela"])
@@ -123,7 +125,7 @@ def test_answers_are_typed_and_deterministic(runtimes, name):
     assert answers["difficulty"]["legend"]["2"] == '{"level":"Hard"}'
     assert body["usage"]["input_tokens"] > 0
     assert decide(runtimes[name], QUESTIONS)[1]["answers"] == answers
-    assert runtimes[name].primary.health.state == "ready"
+    assert runtimes[name].lookup(None).health.state == "ready"
 
 
 def test_qwen_physical_batches_and_padding(runtimes):
@@ -524,7 +526,13 @@ def test_coalesced_rows_of_mixed_lengths_answer_like_their_own_requests(runtimes
 
 def test_batching_profile_serves_the_encoder(packages):
     runtime = Runtime(
-        ServeConfig(model=str(packages["vela"]), device="cpu", profile="batching")
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=str(packages["vela"]), device="cpu", profile="batching"
+                ),
+            )
+        )
     )
     runtime.start(background=False)
     try:
@@ -538,7 +546,13 @@ def test_batching_profile_serves_the_encoder(packages):
 
 def test_shared_context_profile_serves_the_decoder(packages):
     runtime = Runtime(
-        ServeConfig(model=str(packages["qwen"]), device="cpu", profile="shared_context")
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=str(packages["qwen"]), device="cpu", profile="shared_context"
+                ),
+            )
+        )
     )
     runtime.start(background=False)
     try:

@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     import torch
 
     from ..accel.kernels import KernelSet
+    from ..config import ServeConfig
 
 # The API surfaces a model may serve (``/v1/<surface>``).
 SURFACES = ("decisions", "classify", "embeddings", "rerank")
@@ -418,6 +419,13 @@ class Accelerator(ABC):
         """Run device work (loading, forwards, readouts); inline unless the device needs one thread."""
         return work()
 
+    def device_fault(self, error: BaseException) -> bool:
+        """Whether an error from device work left the device unusable until the process restarts.
+
+        Any other error fails only the batch that raised it.
+        """
+        return False
+
 
 # ---------------------------------------------------------------------------
 # Families
@@ -561,7 +569,7 @@ class LoadedModel(ABC):
     ``cache_key`` (a content hash of everything its result depends on) may be
     answered from the per-model result cache instead of a forward. The default
     surface methods serve ``/v1/decisions`` through ``plan`` and ``answer``,
-    the Phase 1 decision interface, which encoder families need not implement.
+    the decision families' hooks, which encoder families need not implement.
 
     ``fuse_bundled_jobs`` lets the ``exact`` profile run the jobs of one
     bundle as one batch, so a family can compute each distinct input once for
@@ -608,7 +616,17 @@ class LoadedModel(ABC):
         """Validate and render a request; per-item failures stay in the plan."""
         if surface != "decisions" or "decisions" not in self.info.surfaces:
             raise UnsupportedSurfaceError(surface, self.info.id)
-        plan = self.plan(request.body["state"], request.body["questions"])
+        body = request.body
+        if "state" not in body:
+            raise ValueError("state is required")
+        questions = body.get("questions")
+        if (
+            not isinstance(questions, dict)
+            or not questions
+            or any(not isinstance(key, str) or not key for key in questions)
+        ):
+            raise ValueError("questions must be a nonempty mapping of question IDs")
+        plan = self.plan(body["state"], questions)
         return SurfacePlan("decisions", list(plan.items), plan.input_tokens, plan)
 
     def finish_surface(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:
@@ -775,6 +793,11 @@ class Profile(ABC):
     def descriptor(cls) -> dict[str, Any]:
         """Capability descriptor listed in ``/v1/models``."""
         return {"numerics": cls.numerics, "coalesces": cls.coalesces}
+
+    @classmethod
+    def from_config(cls, config: ServeConfig) -> Profile:
+        """The profile a process's options ask for; one that reads none ignores them."""
+        return cls()
 
     def engine_options(self, base: EngineOptions) -> EngineOptions:
         return base

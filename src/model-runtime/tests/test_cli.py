@@ -3,6 +3,7 @@ import os
 import pytest
 from vllm_sr_runtime import cli
 from vllm_sr_runtime.cli import build_parser, config_from_args, main
+from vllm_sr_runtime.plugins import registry
 
 
 def test_serve_arguments_map_to_the_config():
@@ -23,21 +24,29 @@ def test_serve_arguments_map_to_the_config():
         ]
     )
     config = config_from_args(args)
-    assert (
-        config.model == "vllm-sr/Decision-2.0-Kai-0.6B"
-        and config.revision == "cd49ea38"
+    (model,) = config.models
+    assert (model.model, model.revision) == (
+        "vllm-sr/Decision-2.0-Kai-0.6B",
+        "cd49ea38",
     )
-    assert (
-        config.device == "rocm:1"
-        and config.uds == "/tmp/x.sock"
-        and config.profile == "shared_context"
-    )
-    assert config.host == "127.0.0.1" and config.accept_licences == ("cc-by-4.0",)
+    assert model.device == "rocm:1" and model.profile == "shared_context"
+    assert config.uds == "/tmp/x.sock" and config.host == "127.0.0.1"
+    assert config.accept_licences == ("cc-by-4.0",)
 
 
-def test_unknown_profile_is_rejected():
-    with pytest.raises(SystemExit):
-        build_parser().parse_args(["serve", "m", "--profile", "turbo"])
+def test_profiles_are_any_registered_profile_plugin(monkeypatch):
+    with pytest.raises(SystemExit, match="unknown profile 'turbo'"):
+        config_from_args(
+            build_parser().parse_args(["serve", "m", "--profile", "turbo"])
+        )
+    names = registry.names
+    monkeypatch.setattr(
+        registry,
+        "names",
+        lambda kind: [*names(kind), "turbo"] if kind == "profiles" else names(kind),
+    )
+    args = build_parser().parse_args(["serve", "m", "--profile", "turbo"])
+    assert config_from_args(args).models[0].profile == "turbo"
 
 
 def test_models_and_fixture_commands(capsys, tmp_path):
@@ -77,7 +86,7 @@ def test_several_models_share_the_process_options(tmp_path):
         ]
     )
     config = config_from_args(args)
-    assert config.model is None and len(config.models) == 2
+    assert len(config.models) == 2
     kai, local = config.models
     assert (kai.model, kai.revision, kai.device) == (
         "vllm-sr/Decision-2.0-Kai-0.6B",
@@ -85,9 +94,9 @@ def test_several_models_share_the_process_options(tmp_path):
         "cpu",
     )
     assert (local.model, local.revision) == (str(tmp_path), None)
-    single = config_from_args(
+    (single,) = config_from_args(
         build_parser().parse_args(["serve", "acme/model@" + "a" * 40])
-    )
+    ).models
     assert single.model == "acme/model" and single.revision == "a" * 40
 
 

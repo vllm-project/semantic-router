@@ -159,7 +159,9 @@ func prepareExplicitEmbedding(ctx context.Context, cfg *config.RouterConfig, run
 // implicitEmbeddingSpec is the module-default deployment of an embedding model
 // type: the configured package served by the model runtime as
 // "@embedding.<model>", on CPU unless use_cpu is false. Inputs over budget are
-// truncated, as embeddings always were.
+// truncated, as embeddings always were. Concurrent requests share batches:
+// embeddings feed similarity thresholds, not bit-exact answers, and one exact
+// forward at a time cannot keep up with concurrent short texts.
 func implicitEmbeddingSpec(cfg *config.RouterConfig, recipe config.RecipeName, model string) (config.ResolvedModelBinding, error) {
 	path, served := embeddingModels[model]
 	if !served {
@@ -170,6 +172,7 @@ func implicitEmbeddingSpec(cfg *config.RouterConfig, recipe config.RecipeName, m
 		return config.ResolvedModelBinding{}, fmt.Errorf("embedding model %s: %w", model, err)
 	}
 	deployment.Input.Overflow = "truncate"
+	deployment.Profile = "batching"
 	return config.ResolvedModelBinding{
 		Recipe: recipe, Name: "embedding",
 		Binding:    config.ModelBinding{Deployment: "@embedding." + model, Contract: "embedding.v1"},
