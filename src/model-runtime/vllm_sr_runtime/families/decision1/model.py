@@ -151,6 +151,10 @@ class VelaDecisionModel(Decision1Model):
     def physical_batches(self, items: list[RenderedItem]) -> list[list[int]]:
         return vela.physical_batches(items)
 
+    def forward_token_budget(self) -> int | None:
+        """Coalesced batches on CPUs stay within ``vela.CPU_BATCH_TOKENS``; exact keeps the released batches."""
+        return vela.CPU_BATCH_TOKENS if self.engine_model.device.type == "cpu" else None
+
     def run(
         self, items: list[RenderedItem], shared_prefix: int = 0
     ) -> list[list[float] | None]:
