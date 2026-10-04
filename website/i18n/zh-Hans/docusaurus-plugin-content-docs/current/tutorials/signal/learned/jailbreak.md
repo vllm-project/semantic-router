@@ -2,7 +2,7 @@
 translation:
   source_commit: "96eb530f67c9d6fbd59fd1a82e857b3a7eb330ba"
   source_file: "docs/tutorials/signal/learned/jailbreak.md"
-  outdated: false
+  outdated: true
 ---
 
 # 越狱检测信号 {#jailbreak-signal}
@@ -78,7 +78,6 @@ global:
   model_catalog:
     modules:
       prompt_guard:
-        variant: mmbert32k
         max_sequence_length: 32768
         window:
           size: 128
@@ -89,7 +88,7 @@ global:
 
 请求规则、检测 API 和响应扫描使用相同的窗口间最大正类风险。对于多个正类标签，运行时先在各窗口内累加其概率，再选择风险最高的窗口。标签和置信度保留该窗口的完整概率分布。对比式规则保持现有文本窗口策略。
 
-在隐式默认配置之外，省略 `window` 会保留完整输入推理或已配置的旧扫描方式。窗口大小和阈值需要针对检查点单独评估；扫描所有 token 并不证明模型理解了远距离上下文。被引用的攻击以及含义依赖另一窗口的指令需要单独评估。本地 Candle 和 ORT 模型绑定也可选择 token 窗口，但加载的适配器和计算图必须支持请求的执行形状。
+在隐式默认配置之外，省略 `window` 会保留完整输入推理或已配置的旧扫描方式。窗口大小和阈值需要针对检查点单独评估；扫描所有 token 并不证明模型理解了远距离上下文。被引用的攻击以及含义依赖另一窗口的指令需要单独评估。绑定到[模型运行时](../../../model-runtime/guides/safety.md)部署的模型也可选择 token 窗口，但模型必须支持所请求的窗口大小。
 
 后端若声明输入被截断或未处理完整，该次扫描即为未解析。请求规则、文本检测 API 和响应扫描不能使用其概率宣称完整输入干净。另一个已完整打分片段上的检测仍然有效；错误继续遵循配置的 `on_error` 与响应规则策略。
 

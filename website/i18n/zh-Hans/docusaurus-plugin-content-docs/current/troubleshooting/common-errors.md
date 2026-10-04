@@ -4,7 +4,7 @@ sidebar_label: 常见错误
 translation:
   source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
   source_file: "docs/troubleshooting/common-errors.md"
-  outdated: false
+  outdated: true
 ---
 
 # 常见错误
