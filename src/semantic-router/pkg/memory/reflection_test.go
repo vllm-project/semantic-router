@@ -174,6 +174,56 @@ func TestReflectionGate_CJKDedupKeepsChangedAmount(t *testing.T) {
 	assert.Equal(t, "twenty", result[1].Memory.ID)
 }
 
+func TestReflectionGate_DedupKeepsSwappedAmounts(t *testing.T) {
+	// Default dedup threshold is 0.90. These pairs share one character or word
+	// set, so unordered Jaccard is 1, but the amounts belong to different
+	// entities.
+	cases := []struct {
+		name string
+		a, b string
+	}{
+		{
+			name: "han",
+			a:    "旅行预算一万美元，机票预算两万美元",
+			b:    "旅行预算两万美元，机票预算一万美元",
+		},
+		{
+			name: "digits",
+			a:    "旅行预算10000美元，机票预算20000美元",
+			b:    "旅行预算20000美元，机票预算10000美元",
+		},
+		{
+			name: "english",
+			a:    "travel budget is 10000 and airfare budget is 20000",
+			b:    "travel budget is 20000 and airfare budget is 10000",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.InDelta(t, 1.0, wordJaccard(tc.a, tc.b), 0.01)
+
+			g := NewReflectionGate(config.MemoryReflectionConfig{}, nil)
+			require.NotNil(t, g)
+
+			now := time.Now()
+			swapped := g.Filter([]*RetrieveResult{
+				{Memory: &Memory{ID: "first", Content: tc.a, CreatedAt: now}, Score: 0.9},
+				{Memory: &Memory{ID: "swapped", Content: tc.b, CreatedAt: now}, Score: 0.8},
+			})
+			require.Len(t, swapped, 2)
+			assert.Equal(t, "first", swapped[0].Memory.ID)
+			assert.Equal(t, "swapped", swapped[1].Memory.ID)
+
+			identical := g.Filter([]*RetrieveResult{
+				{Memory: &Memory{ID: "keep", Content: tc.a, CreatedAt: now}, Score: 0.9},
+				{Memory: &Memory{ID: "drop", Content: tc.a, CreatedAt: now}, Score: 0.8},
+			})
+			require.Len(t, identical, 1)
+			assert.Equal(t, "keep", identical[0].Memory.ID)
+		})
+	}
+}
+
 func TestTextUnits_PunctuationSplitsLatin(t *testing.T) {
 	assert.Equal(t, []string{"hello", "world"}, textUnits("hello world"))
 	assert.Equal(t, []string{"hello", "world"}, textUnits("hello,world"))

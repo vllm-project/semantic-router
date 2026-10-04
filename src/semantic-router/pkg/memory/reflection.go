@@ -154,6 +154,9 @@ func (g *ReflectionGate) applyRecencyDecay(memories []*RetrieveResult, now time.
 // dedup removes memories that are near-duplicates of a higher-scored memory.
 // Uses text-unit Jaccard as a proxy for cosine similarity, so it does not
 // need embeddings. Latin words stay one unit; each CJK character is its own.
+// The Jaccard bag ignores order, so the same numerals swapped across entities
+// score 1. A memory is dropped only when the overlap is high and those
+// numeric values stay bound to the same preceding text.
 func (g *ReflectionGate) dedup(memories []*RetrieveResult) []*RetrieveResult {
 	if len(memories) <= 1 {
 		return memories
@@ -163,12 +166,16 @@ func (g *ReflectionGate) dedup(memories []*RetrieveResult) []*RetrieveResult {
 	for i, candidate := range memories {
 		isDup := false
 		for _, existing := range kept {
-			if wordJaccard(candidate.Memory.Content, existing.Memory.Content) >= g.dedupThreshold {
-				logging.Debugf("ReflectionGate: dedup memory id=%s (similar to id=%s)",
-					candidate.Memory.ID, existing.Memory.ID)
-				isDup = true
-				break
+			if wordJaccard(candidate.Memory.Content, existing.Memory.Content) < g.dedupThreshold {
+				continue
 			}
+			if numericBindingsDiffer(candidate.Memory.Content, existing.Memory.Content) {
+				continue
+			}
+			logging.Debugf("ReflectionGate: dedup memory id=%s (similar to id=%s)",
+				candidate.Memory.ID, existing.Memory.ID)
+			isDup = true
+			break
 		}
 		if !isDup {
 			kept = append(kept, memories[i])
@@ -221,6 +228,63 @@ func wordSet(s string) map[string]bool {
 		set[unit] = true
 	}
 	return set
+}
+
+// cjkNumericRunes are Han and Hangul numeral characters. Magnitude words
+// (十百千万, 십백천만) stay here so "一万" and "两万" are numeric bindings,
+// not just shared context around 一 and 两.
+const cjkNumericRunes = "零〇一二三四五六七八九十百千万亿两兩壹贰貳叁參肆伍陆陸柒捌玖拾佰仟萬億" +
+	"영일이삼사오육륙칠팔구십백천만억조"
+
+// numericBindingsDiffer reports whether numeric units are attached to
+// different preceding text. Character-set Jaccard is 1 for
+// "旅行预算一万美元，机票预算两万美元" and the amounts swapped, because 一 and
+// 两 both occur once. The spans before each numeral differ, so the facts stay
+// distinct. Texts with no numerals compare equal.
+func numericBindingsDiffer(a, b string) bool {
+	left := numericBindings(a)
+	right := numericBindings(b)
+	if len(left) != len(right) {
+		return true
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return true
+		}
+	}
+	return false
+}
+
+func numericBindings(s string) []string {
+	units := textUnits(s)
+	bindings := make([]string, 0)
+	ctx := make([]string, 0)
+	for _, unit := range units {
+		if !isNumericUnit(unit) {
+			ctx = append(ctx, unit)
+			continue
+		}
+		bindings = append(bindings, strings.Join(ctx, "\x1f")+"\x00"+unit)
+		ctx = ctx[:0]
+	}
+	sort.Strings(bindings)
+	return bindings
+}
+
+func isNumericUnit(unit string) bool {
+	r, size := utf8.DecodeRuneInString(unit)
+	if size == 0 {
+		return false
+	}
+	if size == len(unit) && strings.ContainsRune(cjkNumericRunes, r) {
+		return true
+	}
+	for _, digit := range unit {
+		if !unicode.IsDigit(digit) {
+			return false
+		}
+	}
+	return true
 }
 
 // textUnits splits text the same way multilingual signals do. Each Han,
