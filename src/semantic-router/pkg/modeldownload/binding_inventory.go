@@ -92,7 +92,7 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		}
 	}
 	if hasEmbedding {
-		scoped.EmbeddingConfig.Backend = config.EmbeddingBackendCandle
+		scoped.EmbeddingConfig.Backend = config.EmbeddingBackendModelRuntime
 	}
 	// A remote default does not suppress an explicit local primary deployment.
 	active := map[string]bool{

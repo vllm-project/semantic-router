@@ -827,16 +827,20 @@ checked against the prepared head's labels.
 ### 13.6 Configuration migration
 
 `vllm-sr config migrate` (the existing migration command) rewrites legacy
-layouts; the router parser accepts only the canonical layout.
+layouts; the router parser and `vllm-sr validate` accept only the canonical
+layout and refuse every path below with a pointer to `config migrate`.
 
 | Legacy | Migrated to |
 | --- | --- |
 | `provider: candle \| ort \| openvino` | `provider: model_runtime`; device `cpu` → `cpu`, `cuda:N` → `cuda:N`, `rocm:N` / `migraphx:N` → `rocm:N`, `metal:0` → `mps`, OpenVINO devices → `cpu` |
 | `precision: fp16` | `profile: max_speed`; `native` and `fp32` are dropped (exact is FP32) |
 | `custom_ops_profile`, `compilation_cache_dir`, ONNX graph `head` paths | removed (the runtime selects graphs) |
-| `embedding_config.backend: candle \| openvino` | removed (the runtime is the default backend) |
+| `embedding_config.backend: candle \| openvino` | `backend: model_runtime`, the default (local embeddings are served by the runtime) |
+| Module `variant`, `model_type`, `use_modernbert`, `use_mmbert_32k`; `detector.backend: candle` | removed (the served package defines its architecture and windows) |
+| Label mapping files of built-in models | optional: a local consumer takes its labels from the served model card; a file stays a rename override |
 | Legacy model paths and aliases (section 16.3) | their Vela 1.0 replacements, with label remaps where labels differ; refused with guidance where no safe remap exists |
-| `hallucination_explainer`, NLI filtering, the response-cache polarity guard | removed with a warning (retired) |
+| `hallucination_explainer`, `nli_model`, NLI filtering, `use_nli`, the response-cache polarity guard | removed with a warning (retired) |
+| `nli_contradiction_penalty` (looper fusion) | `contradiction_penalty`, read from the Halu grounded head |
 
 ## 14. Security
 
@@ -950,7 +954,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 | E2E profiles | `vela-halu`, `vela-shield`, `vela-omni`, `multimodal-routing`, `local-classifier-backend`, `ml-model-selection`, `hallucination`, and every profile that loads default models through the router image | Run against the runtime; new runtime profiles (section 15) |
 | Harness | `tools/agent/domains.yaml` domains `native-bindings`, `openvino`, `riscv-runtime`, `onnx-*`, `ck-flash-attn-rewriter`, `published-model-tests`, native verifications | Removed; `model-runtime` domain covers the families, engines and parity tools |
 | Docs | runtime, installation, AMD, OpenVINO and Vela pages describing candle, ORT and OpenVINO | Task-oriented runtime docs and a migration guide |
-| RISC-V | candle on riscv64 under QEMU | The pure-Go router builds for riscv64; models attach to a runtime on another host |
+| RISC-V | candle on riscv64 under QEMU, a riscv64 router build and its CI lane | **Removed** (maintainer decision): no riscv64 build, lane, image or build tags |
 
 ### 16.6 Retirements
 
@@ -962,6 +966,8 @@ files carry `!windows && cgo` build tags only because of these imports.
   buckets, the CK flash-attention operator and its rewriter): the runtime's
   ROCm path is native PyTorch; ONNX Runtime remains as a portable engine.
 - **Unwired legacy models** (candle Qwen3 multi-LoRA, Qwen3Guard, DeBERTa).
+- **RISC-V** (maintainer decision): the riscv64 router build, its QEMU lane,
+  build tags and fallbacks that existed only for riscv64.
 
 ## 17. Parity and evidence
 

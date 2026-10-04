@@ -239,7 +239,7 @@ func TestSelectionEmbeddingModelTypeNormalizesCase(t *testing.T) {
 			models := config.EmbeddingModels{
 				EmbeddingConfig: config.HNSWConfig{ModelType: tc.modelType},
 			}
-			if got := selectionEmbeddingModelType(models, config.EmbeddingBackendCandle); got != tc.want {
+			if got := selectionEmbeddingModelType(models, config.EmbeddingBackendModelRuntime); got != tc.want {
 				t.Errorf("selectionEmbeddingModelType(%q) = %q, want %q", tc.modelType, got, tc.want)
 			}
 		})
