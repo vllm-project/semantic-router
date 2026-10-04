@@ -22,8 +22,6 @@ from .config import (
 from .plugins import registry
 from .registry import builtin
 
-PROFILES = ("exact", "shared_context", "batching", "max_speed")
-
 
 def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
@@ -61,8 +59,7 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--profile",
         default="exact",
-        choices=PROFILES,
-        help="numerics profile (default: exact)",
+        help="numerics profile plugin (default: exact)",
     )
     parser.add_argument(
         "--engine",
@@ -152,10 +149,8 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _models(
-    args: argparse.Namespace,
-) -> tuple[str | None, str | None, tuple[ModelConfig, ...]]:
-    """(single model, its revision, explicit models) from MODEL arguments or --models."""
+def _models(args: argparse.Namespace) -> tuple[ModelConfig, ...]:
+    """The served models, from MODEL arguments or --models."""
     positional = list(args.model or [])
     if args.models_file:
         if positional:
@@ -164,27 +159,23 @@ def _models(
             raise SystemExit(
                 "--revision and --served-model-name apply to one MODEL argument"
             )
-        return None, None, load_models_file(args.models_file)
+        return load_models_file(args.models_file)
     if not positional:
         raise SystemExit("serve needs a MODEL argument or --models FILE")
-    if len(positional) == 1:
-        model, revision = split_revision(positional[0])
-        if revision and args.revision and revision != args.revision:
-            raise SystemExit(
-                f"{positional[0]} conflicts with --revision {args.revision}"
-            )
-        return model, revision or args.revision, ()
-    if args.revision or args.served_model_name:
+    if len(positional) > 1 and (args.revision or args.served_model_name):
         raise SystemExit(
             "--revision and --served-model-name apply to one MODEL argument"
         )
     models = []
     for value in positional:
         model, revision = split_revision(value)
+        if revision and args.revision and revision != args.revision:
+            raise SystemExit(f"{value} conflicts with --revision {args.revision}")
         models.append(
             ModelConfig(
                 model=model,
-                revision=revision,
+                revision=revision or args.revision,
+                name=args.served_model_name,
                 device=args.device,
                 profile=args.profile,
                 engine=args.engine,
@@ -192,23 +183,22 @@ def _models(
                 memory_budget_gib=args.memory_budget,
             )
         )
-    return None, None, tuple(models)
+    return tuple(models)
 
 
 def config_from_args(args: argparse.Namespace) -> ServeConfig:
-    model, revision, models = _models(args)
+    models = _models(args)
+    profiles = registry.names("profiles")
+    for model in models:
+        if model.profile not in profiles:
+            raise SystemExit(
+                f"unknown profile {model.profile!r}; available: {', '.join(profiles)}"
+            )
     return ServeConfig(
-        model=model,
-        revision=revision,
         models=models,
-        device=args.device,
         host=args.host,
         port=args.port,
         uds=args.uds,
-        profile=args.profile,
-        engine=args.engine,
-        family=args.family,
-        served_model_name=args.served_model_name,
         max_bundle_tasks=args.max_bundle_tasks,
         result_cache_entries=args.result_cache_entries,
         threads=args.threads,

@@ -293,8 +293,13 @@ migrate` maps the legacy `precision: fp16` to `max_speed`.
 ### 5.5 Third-party plugins
 
 A third party ships a normal Python distribution with entry points. The runtime
-loads entry points at startup, refuses duplicate names, and lists every active
-plugin with its distribution, version and descriptor in `/v1/models`. Plugins
+loads entry points at startup, refuses a name two distributions claim with
+different targets, refuses a class that does not subclass its group's base or
+carries another name, and lists every active plugin with its distribution,
+version and descriptor in `/v1/models`. The built-in plugins are the runtime's
+own entry points; run uninstalled from a source tree, it reads them from its
+`pyproject.toml`. A profile builds itself from the process options
+(`Profile.from_config`), and the CLI accepts any registered profile. Plugins
 run in the runtime process; the runtime never executes code from a model
 package. `examples/third_party_plugin` is a complete, documented example (a
 keyword family and a counting engine). The test suite builds its wheel with its
@@ -439,8 +444,10 @@ labels), embedding and rerank descriptors, limits, licence, profiles, engine,
 accelerator, device, dtype, plugin versions, and per-model readiness and
 golden status. `/health` returns 200 only when every model is ready, and lists
 per-model states otherwise; `/health/live` returns 200 while the process
-serves HTTP. `/metrics` is Prometheus text with a `model` label on every
-model-scoped series.
+serves HTTP. All three report `api_version`, the contract version
+(`info.version`); a client refuses a runtime of another major version.
+`/metrics` is Prometheus text with a `model` label on every model-scoped
+series.
 
 ## 7. Model registry
 

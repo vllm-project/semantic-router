@@ -887,8 +887,11 @@ components:
           type: string
     ModelList:
       type: object
-      required: [object, data]
+      required: [object, data, api_version]
       properties:
+        api_version:
+          type: string
+          description: The version of this contract the runtime serves (`info.version`); a client refuses another major version.
         object:
           type: string
         data:
@@ -1127,8 +1130,11 @@ components:
           additionalProperties: true
     Health:
       type: object
-      required: [status]
+      required: [status, api_version]
       properties:
+        api_version:
+          type: string
+          description: The version of this contract the runtime serves (`info.version`); a client refuses another major version.
         status:
           type: string
           enum: [starting, loading, warming, ready, degraded, failed, alive]

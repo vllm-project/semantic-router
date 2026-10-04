@@ -657,7 +657,14 @@ class TaskHeadsFamily(ModelFamily):
             exits = layout.exits if native else self._graph_exits(task, strict=True)
             scorers = layout.scorers(exits) if native else dict.fromkeys(exits)
             relevance = {
-                exit: RelevanceHead(exit, scorers[exit]).to(engine_model.device)
+                exit: RelevanceHead(
+                    exit,
+                    (
+                        None
+                        if scorers[exit] is None
+                        else engine_model.place(scorers[exit])
+                    ),
+                )
                 for exit in exits
             }
             planner = RerankSurface(layout, tokenizer, relevance)
@@ -665,7 +672,7 @@ class TaskHeadsFamily(ModelFamily):
             info = self._info(package, ("rerank",), parameters, rerank=planner.info)
             normalize_exits = True
         surface = info.surfaces[0]
-        return TaskHeadsModel(
+        model = TaskHeadsModel(
             info,
             engine_model,
             heads,
@@ -674,6 +681,10 @@ class TaskHeadsFamily(ModelFamily):
             planners={surface: planner},
             normalize_exits=normalize_exits,
         )
+        model.batch_invariant = engine_model.batch_invariant and batch_invariant(
+            model, int(task.config["vocab_size"])
+        )
+        return model
 
     @staticmethod
     def _head(

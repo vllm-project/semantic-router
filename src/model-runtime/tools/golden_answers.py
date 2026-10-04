@@ -21,7 +21,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from vllm_sr_runtime.config import ServeConfig
+from vllm_sr_runtime.config import ModelConfig, ServeConfig
 from vllm_sr_runtime.registry import builtin
 from vllm_sr_runtime.runtime import Runtime
 
@@ -31,9 +31,7 @@ def answers(
 ) -> dict[str, Any]:
     runtime = Runtime(
         ServeConfig(
-            model=model,
-            revision=revision,
-            device=args.device,
+            models=(ModelConfig(model=model, revision=revision, device=args.device),),
             cache_dir=args.cache_dir,
             base_path=args.base_path,
             offline=args.offline,
@@ -42,7 +40,7 @@ def answers(
     )
     try:
         runtime.load()
-        served = runtime.primary
+        served = runtime.lookup(None)
         assert served.model is not None and served.placement is not None
         assert served.family is not None and served.package is not None
         values: dict[str, Any] = {}

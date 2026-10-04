@@ -409,15 +409,20 @@ def test_a_model_whose_rows_change_with_the_batch_is_not_batch_invariant(
 
 
 def test_the_result_cache_answers_repeated_inputs(monkeypatch, packages):
-    runtime = Runtime(ServeConfig(model=str(packages["sequence"]), device="cpu"))
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(packages["sequence"]), device="cpu"),)
+        )
+    )
     runtime.start(background=False)
     try:
         client = TestClient(create_app(runtime))
         first = classify(client, None, [TEXT])
         calls = []
-        original = runtime.model.engine_model.encode
+        model = runtime.lookup(None).model
+        original = model.engine_model.encode
         monkeypatch.setattr(
-            runtime.model.engine_model,
+            model.engine_model,
             "encode",
             lambda b: calls.append(b) or original(b),
         )
