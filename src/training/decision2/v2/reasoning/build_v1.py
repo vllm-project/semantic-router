@@ -41,7 +41,12 @@ def programs(name: str, count: int, namespace: str) -> list[dict[str, Any]]:
     out, attempts = [], 0
     while len(out) < count and attempts < count * 4:
         attempts += 1
-        problem = GENERATORS[name].generate(rng, f"{namespace}-{name}-{attempts:06d}")
+        try:
+            problem = GENERATORS[name].generate(
+                rng, f"{namespace}-{name}-{attempts:06d}"
+            )
+        except ValueError:
+            problem = None
         if problem is not None:
             out.append(problem)
     return out
@@ -141,7 +146,9 @@ def main() -> None:
     dev_nodes = []
     for problem in dev_problems + teacher_dev:
         rng = random.Random(f"{BUILD_VERSION}:devnode:{problem['pid']}")
-        for item in problem["nodes"][: args.cap]:
+        for item in [
+            n for n in problem["nodes"] if n["kind"] == "noul" or len(n["options"]) >= 2
+        ][: args.cap]:
             view = node_view(problem, item, [], rng, problem["nodes"], "dev", "select")
             dev_nodes.append(view)
 

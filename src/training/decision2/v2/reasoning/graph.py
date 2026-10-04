@@ -113,7 +113,7 @@ def check_problem(problem: dict[str, Any]) -> None:
     final = problem["final"]
     if final["task_type"] not in ("choice", "noul", "score"):
         raise ValueError("final task type")
-    if not 0 <= final["label"] < len(final["options"]):
+    if len(final["options"]) < 2 or not 0 <= final["label"] < len(final["options"]):
         raise ValueError("final label")
     descriptions = [str(o["description"]) for o in final["options"]]
     if len(set(descriptions)) != len(descriptions):

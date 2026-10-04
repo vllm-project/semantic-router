@@ -277,7 +277,11 @@ def problem_rows(
 ) -> dict[str, list[tuple[dict[str, Any], float]]]:
     """Rows with weights for each arm: {"tf": [...], "tfm": [...], "f0": [...]}. The final row comes first."""
     rng = random.Random(_stable(seed, problem["pid"]))
-    nodes = [n for n in problem["nodes"] if n.get("verified", True)]
+    nodes = [
+        n
+        for n in problem["nodes"]
+        if n.get("verified", True) and (n["kind"] == "noul" or len(n["options"]) >= 2)
+    ]
     by_id = {n["id"]: n for n in nodes}
     chosen = nodes if len(nodes) <= cap else rng.sample(nodes, cap)
     depth = depths(nodes)
