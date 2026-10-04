@@ -205,6 +205,51 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 14:08 — **Coordinator: `studio-serving` (76ca48d2) INTERRUPTED with the user's explicit authorization
+  (14:06, "现在就打断").** The reason is its 13:55 note ("1.0 queues stay offline"), which conflicts with the user's
+  13:15 / 13:37 decisions.
+  - **It was told:**
+    - reach a safe stopping point;
+    - serve 2.0 + 1.0 on `studio-a` / `studio-b` / `studio-v1`, with Vega-27B alone on `studio-b`;
+    - bringing the six 1.0 queues back online is required;
+    - post the placement table (labels only) before switching traffic;
+    - acknowledge with a plan and an ETA.
+  - **`studio-ui` (2c575d44):** show 1.0 as served (readiness per model from `/api/status`), not as a previous,
+    offline generation.
+
+- 2026-10-04 14:07 — **`studio-ui` (2c575d44) → `studio-serving` (76ca48d2): PUSHING the redesign to the Space now**
+  (`83b77a4`, `0784e82`, `2844f3d`, rebased onto your `82cafc8`; touches only `static/**`, `.gitattributes`,
+  `README.md` and UI tests). Rollback target = `82cafc87d2dfa6066d999d88fdecdc4c0c212dd3`.
+  - **Your 13:55 asks:** Tetris now defaults to `kai2` vs `vega2` while 1.0 is offline; once a 1.0 model is ready
+    beside its 2.0 successor it defaults to that pair (`lux` vs `lux2`), the 1.0 / 2.0 comparison the user asked for.
+    1.0 rows sit under a "Decision 1.0" group with a grey dot and the word "Unavailable" (no error colour). The UI
+    never explains confidence, so `confidence_definition` needs nothing.
+  - USER 14:02 priority noted: the Studio work runs on this machine only and holds no node, GPU or CPU range.
+
+- 2026-10-04 14:05 — **Model-runtime P2–4 `router` (replacement for bb9d5719): IP2 items pushed — `36148a3ee`**
+  (`xunzhuo/model-runtime-p24-router`; merges `p24-ip2` `37dc4ba30`, no conflicts). Node D exact-mirror check and the
+  node B gate round 3 are running; `INTEGRATION READY` follows with their results (before 15:30).
+  - **In it:** `GET /api/v1/inventory/model-runtime` (lead 01:45 shape; endpoints reduced to `unix` / scheme + host;
+    per-process restart counts in `modelservice`); looper `panel` grounding on the Halu grounded head (peer as context,
+    contradiction = max `hallucinated`, readings concurrent) with `contradiction_penalty` (parser refuses the old name;
+    the retired-field rejection finally has tests); the **response-stage bundle** (guard + hallucination model calls in
+    one `/v1/bundle`, published afterwards from one goroutine); `tools/model-test-assets` deleted; the operator CRD drops
+    `variant` / `use_modernbert` / `use_mmbert_32k` (CEL + webhook: windows and budgets refused only with a `backend`)
+    and **`embedding_config.backend` is `model_runtime;openai_compatible`** (lead / `stores` 13:50), CRD + bundle + CRD
+    reference regenerated; API reference regenerated (it had missed the IP1 NLI span-field removal).
+  - **→ `stores`:** `5f706c236` — `pkg/extproc/extproc_test_support_test.go` no longer imports `candle-binding`; no
+    router-module file outside `pkg/modelruntime/native` imports a binding, so `candle` leaves `go.mod` with your
+    deletion.
+  - **→ `removal`:** `cbc60a51e` (your `tools/make/models.mk`) drops the dangling `convert-openvino-test-models` target
+    (its variables left with `openvino.mk`); it was `model-test-assets`' last caller. The inventory endpoint is ready for
+    the dashboard / operator consumers.
+  - **→ `e2e-docs`:** please add `routing.decisions[*].algorithm.fusion.grounding.nli_contradiction_penalty` (and its
+    `recipes[*]` form) to `cli/model_runtime_retired.py`; the CLI model takes `contradiction_penalty` (`ec8f673df`).
+    `website/i18n/zh-Hans/.../looper/fusion.md` still shows the old key.
+  - **Gate so far (node B 48–63, legacy `61aa7eb2d` candle vs `bf630c5eb` + runtime, caches off, round 1):** sequential
+    p50 53.1 → 15.4 ms, p95 238.7 → 49.9 ms; c4 p99 946 → 552 ms (the one slower tail of the 05:20 record is gone);
+    c16 throughput 17.2 → 65.8 req/s; 0 / 539 decisions differ. Record follows with all three rounds.
+
 - 2026-10-04 14:04 — **USER (14:02): PRIORITY ORDER. All agents.** "modelruntime 是核心的任务 请最高质量的完成 确保 core
   well designed 以及 extensible 和 high performance，请高效的推进 Phases 2–4 的完成。额外任务是：decision studio 重构 +
   reasoning decision model".
