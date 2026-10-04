@@ -86,7 +86,8 @@ AMD_JOBS: dict[str, Job] = {
     "modality": ("Modality", "sequence", 8192, "reject", None, MIGRAPHX),
     "hazard": ("Hazard", "operating_point", 32768, "reject", None, MIGRAPHX),
     "pii": ("PII", "tokens", 8192, "reject", None, MIGRAPHX),
-    # Not in the recipe; its package ships an ONNX graph, so ORT serves it the same way.
+    # Not in the recipe: the package's ONNX graph answers differently from its
+    # checkpoint (which candle and the runtime serve), so this job times ORT only.
     "shield": ("Shield", "sequence", 8192, "reject", None, MIGRAPHX),
 }
 RECIPES = {"cpu": CPU_JOBS, "amd": AMD_JOBS}
@@ -484,7 +485,8 @@ def job_specs(args: argparse.Namespace) -> list[dict[str, Any]]:
     """Each job's spec; with ``--inputs`` (an earlier run's jobs file) its inputs exactly.
 
     The corpus reads the tree's e2e testdata, which changes over time, so a
-    runtime run compared with an earlier legacy run takes that run's inputs.
+    runtime run compared with an earlier legacy run takes that run's inputs,
+    and without ``--jobs`` the recipe's jobs that run had.
     """
     items = corpus(args.seed)
     recorded = {}
@@ -494,8 +496,12 @@ def job_specs(args: argparse.Namespace) -> list[dict[str, Any]]:
             for spec in json.loads(Path(args.inputs).read_text(encoding="utf-8"))
         }
     table = RECIPES[args.recipe]
+    if args.jobs:
+        jobs = args.jobs.split(",")
+    else:
+        jobs = [job for job in table if not recorded or job in recorded]
     specs = []
-    for job in args.jobs.split(",") if args.jobs else table:
+    for job in jobs:
         name, mode, max_tokens, overflow, window, execution = table[job]
         path = snapshot(Path(args.cache), name)
         if getattr(args, "flat", None):
