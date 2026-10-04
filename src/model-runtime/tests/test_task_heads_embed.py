@@ -9,10 +9,15 @@ from dataclasses import replace
 import numpy as np
 import pytest
 import torch
+from vllm_sr_runtime.accel import onednn
 from vllm_sr_runtime.accel.cpu import CPUAccelerator
 from vllm_sr_runtime.engines.native.engine import NativeEngine
 from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.families.task_heads.family import TaskHeadsFamily, length_buckets
+from vllm_sr_runtime.families.task_heads.family import (
+    TaskHeadsFamily,
+    batch_invariant,
+    length_buckets,
+)
 from vllm_sr_runtime.plugins.base import (
     DeviceInfo,
     EngineOptions,
@@ -21,6 +26,7 @@ from vllm_sr_runtime.plugins.base import (
     SurfaceRequest,
     UnsupportedSurfaceError,
 )
+from vllm_sr_runtime.profiles.exact import ExactProfile
 from vllm_sr_runtime.testing import embed_packages
 
 CPU = DeviceInfo(accelerator="cpu", index=None, name="cpu")
@@ -137,6 +143,26 @@ def test_native_reranker_serves_every_trained_exit(reranker):
     assert default["meta"]["pair_scorer"] == {"layer": 2, "dimension": 32}
     with pytest.raises(PackageError, match="pair_scorer"):
         load(reranker, pair_scorer=[{"layer": 2}])
+
+
+def test_native_cpu_embedders_and_rerankers_pass_the_batch_invariance_probe(
+    embedder, reranker
+):
+    if not onednn.available():
+        pytest.skip("oneDNN's packed linear needs an x86 CPU")
+    for root in (embedder, reranker):
+        _, _, model = load(root)
+        assert model.batch_invariant
+        profile = ExactProfile()
+        profile.available(model)
+        assert profile.merge
+    _, package, model = load(embedder)
+    head = model.heads["pooled@4"]
+    readout = head.readout
+    head.readout = lambda rows, sequences: [
+        vector + 1e-7 * len(sequences) for vector in readout(rows, sequences)
+    ]
+    assert not batch_invariant(model, package.details["package"].config["vocab_size"])
 
 
 def test_graph_engine_serves_the_configured_exits(embedder, reranker):

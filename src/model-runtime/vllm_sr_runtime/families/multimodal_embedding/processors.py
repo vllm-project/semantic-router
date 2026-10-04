@@ -123,7 +123,8 @@ class ImageProcessor:
         )
         pixels = np.empty((1, 3, self.size, self.size), dtype=np.float32)
         for channel in range(3):
-            np.take(self.table[channel], resized[..., channel], out=pixels[0, channel])
+            # Indexing gathers twice as fast as np.take(..., out=) on strided channels.
+            pixels[0, channel] = self.table[channel][resized[..., channel]]
         return pixels
 
 
