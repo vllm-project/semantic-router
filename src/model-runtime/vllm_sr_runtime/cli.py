@@ -22,8 +22,6 @@ from .config import (
 from .plugins import registry
 from .registry import builtin
 
-PROFILES = ("exact", "shared_context", "batching", "max_speed")
-
 
 def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
@@ -61,8 +59,7 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--profile",
         default="exact",
-        choices=PROFILES,
-        help="numerics profile (default: exact)",
+        help="numerics profile plugin (default: exact)",
     )
     parser.add_argument(
         "--engine",
@@ -190,8 +187,15 @@ def _models(args: argparse.Namespace) -> tuple[ModelConfig, ...]:
 
 
 def config_from_args(args: argparse.Namespace) -> ServeConfig:
+    models = _models(args)
+    profiles = registry.names("profiles")
+    for model in models:
+        if model.profile not in profiles:
+            raise SystemExit(
+                f"unknown profile {model.profile!r}; available: {', '.join(profiles)}"
+            )
     return ServeConfig(
-        models=_models(args),
+        models=models,
         host=args.host,
         port=args.port,
         uds=args.uds,

@@ -7,8 +7,13 @@ scheduler collects requests for at most ``batch_window_ms``.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from ..plugins.base import Batch, Job, Profile
 from ..scheduler.planner import cost, padded
+
+if TYPE_CHECKING:
+    from ..config import ServeConfig
 
 DEFAULT_MAX_BATCH_TOKENS = 65_536
 
@@ -21,6 +26,10 @@ class BatchingProfile(Profile):
 
     def __init__(self, max_batch_tokens: int = DEFAULT_MAX_BATCH_TOKENS):
         self.max_batch_tokens = max_batch_tokens
+
+    @classmethod
+    def from_config(cls, config: ServeConfig) -> BatchingProfile:
+        return cls(max_batch_tokens=config.max_batch_tokens)
 
     def plan(self, jobs: list[Job], token_budget: int | None) -> list[Batch]:
         budget = min(token_budget or self.max_batch_tokens, self.max_batch_tokens)
