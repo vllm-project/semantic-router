@@ -161,6 +161,10 @@ for _af in KIB4W2-a40 KIB4L2-a40 KIB4Q-a40 KF-a33 KF-a40 KF-a50 KFxKIB-a40 KFxKI
   DIAGNOSTIC[AF-$_af-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/af/AF-$_af-bf16-re51f9881"
 done
 unset _af
+for _rs in R4-TF R4-TF-a50 R4-TF-a75 R4-F0 R4-F0-a50 R4-F0-a75 R4-TFM R4-TFM-a50 R4-TFM-a75 ; do  # reasoning track 4B BF16 release copies
+  DIAGNOSTIC[RS-$_rs-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/rsn/RS-$_rs-bf16-r13d42143"
+done
+unset _rs
 
 mode="${1:-}"; shift || true
 src="" model="" gpu="" gpus="" run="" rows="" rows_dir="" cache="" only="" tag=""
