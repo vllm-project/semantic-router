@@ -412,7 +412,9 @@ type HeadCardKind string
 
 // Health defines model for Health.
 type Health struct {
-	Model *string `json:"model"`
+	// ApiVersion The version of this contract the runtime serves (`info.version`); a client refuses another major version.
+	ApiVersion string  `json:"api_version"`
+	Model      *string `json:"model"`
 
 	// Models Per-model states when a process serves several models.
 	Models *map[string]ModelHealth `json:"models,omitempty"`
@@ -499,8 +501,10 @@ type ModelLimits struct {
 
 // ModelList defines model for ModelList.
 type ModelList struct {
-	Data   []ModelCard `json:"data"`
-	Object string      `json:"object"`
+	// ApiVersion The version of this contract the runtime serves (`info.version`); a client refuses another major version.
+	ApiVersion string      `json:"api_version"`
+	Data       []ModelCard `json:"data"`
+	Object     string      `json:"object"`
 }
 
 // PluginInfo defines model for PluginInfo.
