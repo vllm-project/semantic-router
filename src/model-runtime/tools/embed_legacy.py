@@ -537,6 +537,11 @@ def runtime_request(
     return "embeddings", body
 
 
+def wire_size(body: dict[str, Any]) -> int:
+    """The encoded body size the HTTP server passes to ``Runtime.call`` (small bodies plan inline)."""
+    return len(json.dumps(body, separators=(",", ":")).encode("utf-8"))
+
+
 def runtime_result(spec: dict[str, Any], out: dict[str, Any]) -> Any:
     if spec["Mode"] == "rerank":
         by_index = {r["index"]: r["logit"] for r in out["results"]}
@@ -577,7 +582,9 @@ def run_runtime(args: argparse.Namespace) -> None:
 
     def call(spec: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
         surface, body = runtime_request(spec, item, names[spec["Repo"]])
-        status, out = loop.run_until_complete(runtime.call(surface, body))
+        status, out = loop.run_until_complete(
+            runtime.call(surface, body, wire_size(body))
+        )
         if status != 200:
             raise RuntimeError(json.dumps(out))
         return out
@@ -620,8 +627,9 @@ def runtime_load(
         while time.monotonic() < deadline:
             item = spec["Inputs"][position % len(spec["Inputs"])]
             surface, body = runtime_request(spec, item, model)
+            size = wire_size(body)
             start = time.perf_counter_ns()
-            loop.run_until_complete(runtime.call(surface, body))
+            loop.run_until_complete(runtime.call(surface, body, size))
             with lock:
                 latencies.append(time.perf_counter_ns() - start)
             position += args.concurrency
@@ -690,8 +698,9 @@ def run_ab(args: argparse.Namespace) -> None:
 
     def call_runtime(spec: dict[str, Any], item: dict[str, Any]) -> int:
         surface, body = runtime_request(spec, item, names[spec["Repo"]])
+        size = wire_size(body)
         start = time.perf_counter_ns()
-        status, _ = loop.run_until_complete(runtime.call(surface, body))
+        status, _ = loop.run_until_complete(runtime.call(surface, body, size))
         return time.perf_counter_ns() - start if status == 200 else -1
 
     calls = {"legacy": call_legacy, "runtime": call_runtime}
