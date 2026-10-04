@@ -6096,6 +6096,1550 @@
     "p95_ms": 11.6436,
     "mean_ms": 8.7942
    }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 8.0686,
+    "p95_ms": 8.6752,
+    "mean_ms": 8.2229,
+    "requests_per_second": 121.612
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 7.0579,
+    "p95_ms": 7.712,
+    "mean_ms": 7.083,
+    "requests_per_second": 141.1827
+   },
+   "throughput": {
+    "1": 123.085,
+    "4": 280.764,
+    "16": 448.262
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 3,
+      "replays": 1264,
+      "eager": 3,
+      "packed": 122,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-ip2",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 12.3634,
+    "p95_ms": 15.6134,
+    "mean_ms": 12.9189,
+    "requests_per_second": 77.4058
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 231,
+    "p50_ms": 15.2644,
+    "p95_ms": 35.1019,
+    "mean_ms": 16.6556,
+    "requests_per_second": 60.0397
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 13.347,
+    "p95_ms": 30.2161,
+    "mean_ms": 14.8064,
+    "requests_per_second": 67.5384
+   },
+   "throughput": {
+    "1": 59.686,
+    "4": 93.439,
+    "16": 112.395
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 6,
+      "replays": 501,
+      "eager": 8,
+      "packed": 180,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 1,
+      "replays": 426,
+      "eager": 1,
+      "packed": 261,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-ip2",
+   "side": "paired",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "batching",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 30.2133,
+    "p95_ms": 64.8737,
+    "mean_ms": 30.912,
+    "requests_per_second": 32.3498
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 22.8046,
+    "p95_ms": 50.0738,
+    "mean_ms": 24.1939,
+    "requests_per_second": 41.3327
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 14.7643,
+    "p95_ms": 32.4558,
+    "mean_ms": 15.9858,
+    "requests_per_second": 62.5556
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 15.62,
+    "p95_ms": 33.3666,
+    "mean_ms": 16.77,
+    "requests_per_second": 59.6303
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -7.3835,
+     "mean": -6.7181
+    },
+    "scheduler": {
+     "p50": -15.3134,
+     "mean": -14.9263
+    },
+    "call": {
+     "p50": -14.5593,
+     "mean": -14.142
+    }
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 5,
+      "replays": 417,
+      "eager": 5,
+      "packed": 78,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 1,
+      "replays": 369,
+      "eager": 1,
+      "packed": 130,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 7.7962,
+    "p95_ms": 8.6839,
+    "mean_ms": 7.9438,
+    "requests_per_second": 125.8839
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 7.0011,
+    "p95_ms": 7.3606,
+    "mean_ms": 7.0074,
+    "requests_per_second": 142.7067
+   },
+   "throughput": {
+    "1": 126.631,
+    "4": 263.065,
+    "16": 408.715
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 3,
+      "replays": 1264,
+      "eager": 3,
+      "packed": 122,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-ip2",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 12.3268,
+    "p95_ms": 16.9699,
+    "mean_ms": 12.8691,
+    "requests_per_second": 77.7054
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 231,
+    "p50_ms": 14.2894,
+    "p95_ms": 34.1246,
+    "mean_ms": 16.2556,
+    "requests_per_second": 61.5171
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 13.5189,
+    "p95_ms": 30.6339,
+    "mean_ms": 14.805,
+    "requests_per_second": 67.5448
+   },
+   "throughput": {
+    "1": 60.491,
+    "4": 90.493,
+    "16": 111.768
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 6,
+      "replays": 501,
+      "eager": 8,
+      "packed": 180,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 1,
+      "replays": 426,
+      "eager": 1,
+      "packed": 261,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-ip2",
+   "side": "paired",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "batching",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 30.6495,
+    "p95_ms": 65.2687,
+    "mean_ms": 31.6489,
+    "requests_per_second": 31.5967
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 22.7539,
+    "p95_ms": 49.8293,
+    "mean_ms": 24.3749,
+    "requests_per_second": 41.0258
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 14.6485,
+    "p95_ms": 33.6508,
+    "mean_ms": 16.077,
+    "requests_per_second": 62.2007
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 15.7833,
+    "p95_ms": 35.2424,
+    "mean_ms": 17.2214,
+    "requests_per_second": 58.0672
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -7.8536,
+     "mean": -7.274
+    },
+    "scheduler": {
+     "p50": -16.0739,
+     "mean": -15.5719
+    },
+    "call": {
+     "p50": -14.9508,
+     "mean": -14.4275
+    }
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 5,
+      "replays": 417,
+      "eager": 5,
+      "packed": 78,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 1,
+      "replays": 369,
+      "eager": 1,
+      "packed": 130,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 7.859,
+    "p95_ms": 8.5849,
+    "mean_ms": 7.9033,
+    "requests_per_second": 126.5295
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 7.2082,
+    "p95_ms": 7.5441,
+    "mean_ms": 7.3609,
+    "requests_per_second": 135.8531
+   },
+   "throughput": {
+    "1": 127.632,
+    "4": 247.343,
+    "16": 404.246
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 3,
+      "replays": 1265,
+      "eager": 3,
+      "packed": 122,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-ip2",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 12.5759,
+    "p95_ms": 16.6723,
+    "mean_ms": 13.1703,
+    "requests_per_second": 75.9282
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 231,
+    "p50_ms": 15.5129,
+    "p95_ms": 34.3838,
+    "mean_ms": 16.6679,
+    "requests_per_second": 59.9957
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 13.7758,
+    "p95_ms": 28.5451,
+    "mean_ms": 14.586,
+    "requests_per_second": 68.5588
+   },
+   "throughput": {
+    "1": 61.413,
+    "4": 89.162,
+    "16": 113.074
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 6,
+      "replays": 501,
+      "eager": 8,
+      "packed": 180,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 1,
+      "replays": 426,
+      "eager": 1,
+      "packed": 261,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-ip2",
+   "side": "paired",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "batching",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 30.5607,
+    "p95_ms": 64.4549,
+    "mean_ms": 31.2188,
+    "requests_per_second": 32.0319
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 22.7498,
+    "p95_ms": 48.6068,
+    "mean_ms": 24.1095,
+    "requests_per_second": 41.4774
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 14.5453,
+    "p95_ms": 31.9662,
+    "mean_ms": 15.9234,
+    "requests_per_second": 62.8008
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 15.6338,
+    "p95_ms": 33.884,
+    "mean_ms": 16.7252,
+    "requests_per_second": 59.79
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -7.7225,
+     "mean": -7.1093
+    },
+    "scheduler": {
+     "p50": -15.963,
+     "mean": -15.2955
+    },
+    "call": {
+     "p50": -15.0336,
+     "mean": -14.4936
+    }
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 5,
+      "replays": 417,
+      "eager": 5,
+      "packed": 78,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 1,
+      "replays": 369,
+      "eager": 1,
+      "packed": 130,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "cpu",
+   "workload": "router",
+   "set": "bench-cpu-ip2",
+   "side": "paired",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "public231:30"
+   ],
+   "router": true,
+   "threads": 16,
+   "profile": "exact",
+   "bundled": {
+    "requests": 30,
+    "p50_ms": 6694.0114,
+    "p95_ms": 7112.9945,
+    "mean_ms": 6691.4024,
+    "requests_per_second": 0.1494
+   },
+   "direct": {
+    "requests": 30,
+    "p50_ms": 6696.5924,
+    "p95_ms": 7222.7247,
+    "mean_ms": 6708.7217,
+    "requests_per_second": 0.1491
+   },
+   "scheduler": {
+    "requests": 30,
+    "p50_ms": 6728.9983,
+    "p95_ms": 7196.346,
+    "mean_ms": 6687.2878,
+    "requests_per_second": 0.1495
+   },
+   "call": {
+    "requests": 30,
+    "p50_ms": 6667.9957,
+    "p95_ms": 7071.83,
+    "mean_ms": 6707.7932,
+    "requests_per_second": 0.1491
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": 9.5924,
+     "mean": 17.3194
+    },
+    "scheduler": {
+     "p50": 3.1588,
+     "mean": -4.1146
+    },
+    "call": {
+     "p50": -9.1316,
+     "mean": 16.3909
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "panel-r2",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 87.7557,
+    "p95_ms": 106.5879,
+    "mean_ms": 91.9892,
+    "requests_per_second": 10.8708
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 85.3765,
+    "p95_ms": 99.9503,
+    "mean_ms": 88.1988,
+    "requests_per_second": 11.338
+   },
+   "throughput": {
+    "1": 11.25,
+    "4": 10.884,
+    "16": 11.229
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "panel-r2",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 52.8627,
+    "p95_ms": 63.9697,
+    "mean_ms": 55.1058,
+    "requests_per_second": 18.1469
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 52.5212,
+    "p95_ms": 62.8087,
+    "mean_ms": 54.2941,
+    "requests_per_second": 18.4182
+   },
+   "throughput": {
+    "1": 17.388,
+    "4": 22.012,
+    "16": 14.234
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "panel-r2",
+   "set": "bench-cpu-ip2",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "single": {
+    "requests": 400,
+    "p50_ms": 75.467,
+    "p95_ms": 90.5963,
+    "mean_ms": 79.7203,
+    "requests_per_second": 12.5439
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 85.2578,
+    "p95_ms": 101.8344,
+    "mean_ms": 89.5193,
+    "requests_per_second": 11.1708
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 83.0845,
+    "p95_ms": 96.3579,
+    "mean_ms": 86.58,
+    "requests_per_second": 11.55
+   },
+   "throughput": {
+    "1": 11.305,
+    "4": 12.679,
+    "16": 12.72
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 82.6147,
+    "p95_ms": 96.8324,
+    "mean_ms": 86.8341,
+    "requests_per_second": 11.5162
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 82.4686,
+    "p95_ms": 99.6004,
+    "mean_ms": 86.4548,
+    "requests_per_second": 11.5667
+   },
+   "throughput": {
+    "1": 11.589,
+    "4": 11.434,
+    "16": 11.956
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.7718,
+    "p95_ms": 61.3421,
+    "mean_ms": 53.7922,
+    "requests_per_second": 18.5901
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 49.897,
+    "p95_ms": 54.1489,
+    "mean_ms": 51.8043,
+    "requests_per_second": 19.3034
+   },
+   "throughput": {
+    "1": 18.955,
+    "4": 14.003,
+    "16": 17.87
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-ip2",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "single": {
+    "requests": 400,
+    "p50_ms": 80.259,
+    "p95_ms": 94.6201,
+    "mean_ms": 84.548,
+    "requests_per_second": 11.8276
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "router",
+   "set": "bench-cpu-ip2",
+   "side": "paired",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "public231:100"
+   ],
+   "router": true,
+   "threads": 16,
+   "profile": "max_speed",
+   "bundled": {
+    "requests": 100,
+    "p50_ms": 1070.0523,
+    "p95_ms": 1234.9745,
+    "mean_ms": 1086.3593,
+    "requests_per_second": 0.9205
+   },
+   "direct": {
+    "requests": 100,
+    "p50_ms": 1009.8473,
+    "p95_ms": 1165.0505,
+    "mean_ms": 1003.1032,
+    "requests_per_second": 0.9969
+   },
+   "scheduler": {
+    "requests": 100,
+    "p50_ms": 192.7719,
+    "p95_ms": 244.4663,
+    "mean_ms": 200.6009,
+    "requests_per_second": 4.985
+   },
+   "call": {
+    "requests": 100,
+    "p50_ms": 193.1266,
+    "p95_ms": 247.716,
+    "mean_ms": 201.652,
+    "requests_per_second": 4.959
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -72.1322,
+     "mean": -83.2561
+    },
+    "scheduler": {
+     "p50": -872.3461,
+     "mean": -885.7584
+    },
+    "call": {
+     "p50": -868.1528,
+     "mean": -884.7073
+    }
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "panel-r2",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 78.3624,
+    "p95_ms": 90.9912,
+    "mean_ms": 81.8436,
+    "requests_per_second": 12.2184
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 76.4448,
+    "p95_ms": 95.4767,
+    "mean_ms": 81.9917,
+    "requests_per_second": 12.1964
+   },
+   "throughput": {
+    "1": 12.185,
+    "4": 12.637,
+    "16": 13.176
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "panel-r2",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 45.9931,
+    "p95_ms": 50.889,
+    "mean_ms": 48.0564,
+    "requests_per_second": 20.8089
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 44.2807,
+    "p95_ms": 46.9515,
+    "mean_ms": 45.4109,
+    "requests_per_second": 22.0212
+   },
+   "throughput": {
+    "1": 21.02,
+    "4": 27.141,
+    "16": 17.651
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "panel-r2",
+   "set": "bench-cpu-ip2",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "single": {
+    "requests": 400,
+    "p50_ms": 82.5035,
+    "p95_ms": 96.1676,
+    "mean_ms": 87.3743,
+    "requests_per_second": 11.445
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 80.5987,
+    "p95_ms": 99.3584,
+    "mean_ms": 85.079,
+    "requests_per_second": 11.7538
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 79.7831,
+    "p95_ms": 90.9378,
+    "mean_ms": 83.4989,
+    "requests_per_second": 11.9762
+   },
+   "throughput": {
+    "1": 11.862,
+    "4": 12.888,
+    "16": 12.472
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 79.0211,
+    "p95_ms": 94.5079,
+    "mean_ms": 82.3737,
+    "requests_per_second": 12.1398
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 77.186,
+    "p95_ms": 87.9878,
+    "mean_ms": 80.1626,
+    "requests_per_second": 12.4747
+   },
+   "throughput": {
+    "1": 12.032,
+    "4": 12.323,
+    "16": 12.214
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 49.4816,
+    "p95_ms": 53.7926,
+    "mean_ms": 51.197,
+    "requests_per_second": 19.5324
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 49.6884,
+    "p95_ms": 55.0391,
+    "mean_ms": 52.0362,
+    "requests_per_second": 19.2174
+   },
+   "throughput": {
+    "1": 19.11,
+    "4": 24.318,
+    "16": 20.846
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-ip2",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "single": {
+    "requests": 400,
+    "p50_ms": 77.2098,
+    "p95_ms": 90.7655,
+    "mean_ms": 80.9423,
+    "requests_per_second": 12.3545
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "router",
+   "set": "bench-cpu-ip2",
+   "side": "paired",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "public231:100"
+   ],
+   "router": true,
+   "threads": 16,
+   "profile": "max_speed",
+   "bundled": {
+    "requests": 100,
+    "p50_ms": 788.9257,
+    "p95_ms": 1008.8531,
+    "mean_ms": 830.3121,
+    "requests_per_second": 1.2044
+   },
+   "direct": {
+    "requests": 100,
+    "p50_ms": 765.6256,
+    "p95_ms": 928.5377,
+    "mean_ms": 791.8003,
+    "requests_per_second": 1.2629
+   },
+   "scheduler": {
+    "requests": 100,
+    "p50_ms": 189.4126,
+    "p95_ms": 258.411,
+    "mean_ms": 199.8568,
+    "requests_per_second": 5.0036
+   },
+   "call": {
+    "requests": 100,
+    "p50_ms": 188.5543,
+    "p95_ms": 246.6795,
+    "mean_ms": 196.4345,
+    "requests_per_second": 5.0908
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -16.6961,
+     "mean": -38.5118
+    },
+    "scheduler": {
+     "p50": -593.1607,
+     "mean": -630.4553
+    },
+    "call": {
+     "p50": -597.4858,
+     "mean": -633.8776
+    }
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "panel-r2",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 77.3385,
+    "p95_ms": 85.1132,
+    "mean_ms": 79.9995,
+    "requests_per_second": 12.5001
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 76.6344,
+    "p95_ms": 88.0211,
+    "mean_ms": 81.0482,
+    "requests_per_second": 12.3383
+   },
+   "throughput": {
+    "1": 12.384,
+    "4": 12.447,
+    "16": 12.398
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "panel-r2",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 45.9299,
+    "p95_ms": 48.7785,
+    "mean_ms": 47.492,
+    "requests_per_second": 21.0562
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 44.5494,
+    "p95_ms": 48.1413,
+    "mean_ms": 46.1979,
+    "requests_per_second": 21.646
+   },
+   "throughput": {
+    "1": 20.906,
+    "4": 23.863,
+    "16": 18.091
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "panel-r2",
+   "set": "bench-cpu-ip2",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "single": {
+    "requests": 400,
+    "p50_ms": 72.3434,
+    "p95_ms": 82.6494,
+    "mean_ms": 75.9477,
+    "requests_per_second": 13.167
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 81.6407,
+    "p95_ms": 96.9812,
+    "mean_ms": 85.9896,
+    "requests_per_second": 11.6293
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 80.36,
+    "p95_ms": 92.7165,
+    "mean_ms": 83.7394,
+    "requests_per_second": 11.9418
+   },
+   "throughput": {
+    "1": 11.547,
+    "4": 13.444,
+    "16": 12.92
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 79.7468,
+    "p95_ms": 97.8935,
+    "mean_ms": 87.6005,
+    "requests_per_second": 11.4155
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 78.2686,
+    "p95_ms": 90.9918,
+    "mean_ms": 81.6825,
+    "requests_per_second": 12.2425
+   },
+   "throughput": {
+    "1": 12.118,
+    "4": 12.167,
+    "16": 12.189
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-ip2",
+   "side": "native",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 49.2213,
+    "p95_ms": 55.6906,
+    "mean_ms": 51.0549,
+    "requests_per_second": 19.5868
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 48.5639,
+    "p95_ms": 56.3294,
+    "mean_ms": 51.3604,
+    "requests_per_second": 19.4703
+   },
+   "throughput": {
+    "1": 19.615,
+    "4": 25.938,
+    "16": 16.791
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-ip2",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "single": {
+    "requests": 400,
+    "p50_ms": 75.0429,
+    "p95_ms": 87.4726,
+    "mean_ms": 78.7026,
+    "requests_per_second": 12.7061
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "router",
+   "set": "bench-cpu-ip2",
+   "side": "paired",
+   "commit": "c22bb15cd",
+   "prompts": [
+    "public231:100"
+   ],
+   "router": true,
+   "threads": 16,
+   "profile": "max_speed",
+   "bundled": {
+    "requests": 100,
+    "p50_ms": 780.8388,
+    "p95_ms": 941.1159,
+    "mean_ms": 807.3206,
+    "requests_per_second": 1.2387
+   },
+   "direct": {
+    "requests": 100,
+    "p50_ms": 784.3148,
+    "p95_ms": 953.9453,
+    "mean_ms": 806.7877,
+    "requests_per_second": 1.2395
+   },
+   "scheduler": {
+    "requests": 100,
+    "p50_ms": 189.1669,
+    "p95_ms": 300.7981,
+    "mean_ms": 201.082,
+    "requests_per_second": 4.9731
+   },
+   "call": {
+    "requests": 100,
+    "p50_ms": 189.276,
+    "p95_ms": 233.3251,
+    "mean_ms": 197.4918,
+    "requests_per_second": 5.0635
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -2.0315,
+     "mean": -0.5329
+    },
+    "scheduler": {
+     "p50": -591.4586,
+     "mean": -606.2386
+    },
+    "call": {
+     "p50": -591.8657,
+     "mean": -609.8288
+    }
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
   }
  ]
 }

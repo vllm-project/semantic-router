@@ -7,16 +7,19 @@ on the same node, inputs and devices.
   (parity record) and serves a single request 1.35–1.42× faster at p50 on the
   encoders and 1.6–2.8× faster on the decoders, end to end through the API.
 - **The router's requests go further on the opt-in profiles.** For six router
-  signals about one prompt, `batching` cuts the encoders' p50 by 40% and their
-  p95 by about a third. `shared_context` cuts the decoders' p95 by 53–76% (Lux
+  signals about one prompt, `batching` halves the encoders' p50 and p95 (Kai
+  30.2 → 15.6 ms and 64.9 → 33.4 ms), with every layer stack replaying its own
+  GPU graphs. `shared_context` cuts the decoders' p95 by 53–76% (Lux
   575 → 135 ms). 128 questions about one input run 2.9–3.7× faster than the
   bundled runtime. At 16 concurrent single requests, `batching` serves 2.9–7.6×
   the bundled runtime's throughput.
 - **On CPU, exact matches the bundled runtime, and the opt-in profiles win:**
   both sides run the same FP32 math through the same MKL kernels, so single
   requests land at 0.99–1.05× at p50. Six router signals run 3.3–4.1× faster
-  on the encoders with `batching`. For `max_speed`, the encoders consent to a
-  `float32-packed` copy, measured 1.5× faster with every decision kept.
+  on the encoders with `batching`. `max_speed` runs the encoders on
+  `float32-packed` copies of their three stacks: single requests 1.4–1.8×
+  faster at p50 and p95, the six router signals 4.1–5.5× faster, 1.1–2.4× the
+  bundled throughput, and no decision changes in 1,431 requests per encoder.
 
 - **Date:** 2026-10-04.
 - **ROCm:** one AMD Instinct MI325X (gfx942) per run, in the packages' release
@@ -33,8 +36,11 @@ on the same node, inputs and devices.
   `a3d2593a0` only the coalescing profiles hold the queue for the batching
   window, so `shared_context` no longer waits for it. The throughput and
   many-question runs are at `d5b985e43`, with the same `decision1` runtime code
-  as `0bc5c6a75`.
-- **Raw results:** `decision1-performance.json`, every run without paths.
+  as `0bc5c6a75`. From `c22bb15cd` every encoder layer stack has its own GPU
+  graphs and reduced copy: the encoders' `batching` and `max_speed` rows and the
+  CPU throughput rows are at that commit.
+- **Raw results:** `decision1-performance.json`, every run without paths; from
+  `c22bb15cd` with what the engine ran (graphs per layer stack, the copy).
 - **Shared node:** other workstreams' jobs ran on other cores of the same
   node. The single-request and router latencies are therefore paired:
   `tools/decision1_bench.py paired` loads both runtimes in one process and
@@ -77,11 +83,11 @@ bundled.
 | Model | Profile | Bundled p50 | Bundled p95 | Runtime p50 | Runtime p95 | Paired Δ p50 | Commit |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Kai-0.6B | `exact` | 29.9 | 59.7 | 26.8 | 57.4 | -2.9 | `6537747d8` |
-|  | `batching` | 29.5 | 60.5 | 17.5 | 37.8 | -11.9 | `6537747d8` |
+|  | `batching` | 30.2 | 64.9 | 15.6 | 33.4 | -14.6 | `c22bb15cd` |
 | Lex-0.6B | `exact` | 29.7 | 58.5 | 26.6 | 55.7 | -2.8 | `6537747d8` |
-|  | `batching` | 30.1 | 58.6 | 17.6 | 39.6 | -12.5 | `6537747d8` |
+|  | `batching` | 30.6 | 65.3 | 15.8 | 35.2 | -15.0 | `c22bb15cd` |
 | Route-0.6B | `exact` | 29.7 | 58.3 | 26.6 | 61.1 | -2.7 | `6537747d8` |
-|  | `batching` | 30.1 | 60.1 | 17.9 | 37.0 | -12.2 | `6537747d8` |
+|  | `batching` | 30.6 | 64.5 | 15.6 | 33.9 | -15.0 | `c22bb15cd` |
 | Eos-0.8B | `exact` | 30.1 | 181.4 | 24.0 | 123.4 | -4.8 | `0bc5c6a75` |
 |  | `shared_context` | 30.7 | 188.2 | 23.6 | 89.0 | -4.7 | `a3d2593a0` |
 | Sol-2B | `exact` | 38.4 | 198.9 | 30.1 | 162.4 | -8.2 | `0bc5c6a75` |
@@ -93,7 +99,9 @@ bundled.
 
 - Exact runs the released shapes, so on the encoders it does the bundled
   runtime's work: every question type present runs its stack over all six
-  rows. `batching` runs each stack over its own rows only, packed.
+  rows. `batching` runs each stack over its own rows only, packed, and from
+  `c22bb15cd` replays a bucket graph per stack (at `6537747d8` only the Noul
+  stack had graphs: p50 17.5–17.9 ms, p95 37.0–39.6 ms).
 - `shared_context` computes the prompt once for all six questions; the
   decoders' long prompts are where the bundled runtime's p95 comes from.
 
@@ -156,6 +164,26 @@ Router requests:
 - The bundled rates come from the same session's separate runs, so they can
   differ from the paired latencies above by the node's load at the time.
 
+The encoders' `batching` at `c22bb15cd`, where every layer stack replays its
+own graphs, against the bundled runtime's sequential rate in the same session
+(router requests: the paired run's):
+
+| Model | Workload | Bundled (sequential) | `batching` C = 1 | C = 4 | C = 16 |
+| --- | --- | --- | --- | --- | --- |
+| Kai-0.6B | single | 77.4 | 123.1 | 280.8 | 448.3 |
+|  | router | 32.3 | 59.7 | 93.4 | 112.4 |
+| Lex-0.6B | single | 77.7 | 126.6 | 263.1 | 408.7 |
+|  | router | 31.6 | 60.5 | 90.5 | 111.8 |
+| Route-0.6B | single | 75.9 | 127.6 | 247.3 | 404.2 |
+|  | router | 32.0 | 61.4 | 89.2 | 113.1 |
+
+- One `batching` request alone is now 1.6–1.7× the bundled rate (8.1 vs
+  12.4 ms at p50 for Kai), and 16 concurrent ones 5.3–5.8×.
+- Against the table above (`d5b985e43`, the Noul stack's graphs only, another
+  session), the Choice and Score stacks' graphs help most where launches
+  dominate: one request at a time, +36–49% for single requests and +22–27% for
+  router requests; at C = 16, +3–22% and +8–17%.
+
 ## CPU
 
 ### Single request, exact
@@ -182,35 +210,52 @@ Router requests:
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Kai-0.6B | `exact` | 1,054 | 1,351 | 986.7 | 1,261 | -51.1 | `0bc5c6a75` |
 |  | `batching` | 1,339 | 1,654 | 325.4 | 458.9 | -1,008.6 | `0bc5c6a75` |
+|  | `max_speed` | 1,070 | 1,235 | 193.1 | 247.7 | -868.2 | `c22bb15cd` |
 | Lex-0.6B | `exact` | 1,064 | 1,397 | 1,061 | 1,293 | -20.6 | `0bc5c6a75` |
 |  | `batching` | 1,102 | 1,390 | 279.1 | 384.6 | -812.3 | `0bc5c6a75` |
+|  | `max_speed` | 788.9 | 1,009 | 188.6 | 246.7 | -597.5 | `c22bb15cd` |
 | Route-0.6B | `exact` | 1,022 | 1,467 | 1,003 | 1,328 | -39.7 | `0bc5c6a75` |
 |  | `batching` | 1,147 | 1,397 | 350.0 | 437.5 | -801.3 | `0bc5c6a75` |
-| Eos-0.8B | `shared_context` | 6,255 | 6,666 | 6,315 | 6,785 | +27.1 | `0bc5c6a75` |
+|  | `max_speed` | 780.8 | 941.1 | 189.3 | 233.3 | -591.9 | `c22bb15cd` |
+| Eos-0.8B | `exact` | 6,694 | 7,113 | 6,668 | 7,072 | -9.1 | `c22bb15cd` |
+|  | `shared_context` | 6,255 | 6,666 | 6,315 | 6,785 | +27.1 | `0bc5c6a75` |
 
-- Exact does the bundled runtime's work and is 2–5% faster. `batching` runs
-  each question type's stack over its own rows only, packed, and serves the
-  six signals 3.3–4.1× faster.
-- Eos (the first 30 prompts): `shared_context` is within 1% of the bundled
-  runtime. These prompts are short next to the six router questions, so
-  little is shared; on ROCm, the long prompts are where it pays (p95 above).
+- On the encoders, exact does the bundled runtime's work and is 2–5% faster.
+  `batching` runs each question type's stack over its own rows only, packed,
+  and serves the six signals 3.3–4.1× faster. `max_speed` does the same on the
+  `float32-packed` copies of the three stacks: 4.1–5.5× faster, with no
+  decision changes (parity record). Its bundled rows come from a later session
+  on other cores, hence their own bundled numbers.
+- Eos (the first 30 prompts): exact, the default, matches the bundled runtime
+  (paired Δ −9 ms on 6.7 s), and `shared_context` is within 1% of it. These
+  prompts are short next to the six router questions, so little is shared; on
+  ROCm, the long prompts are where it pays (p95 above).
 
 ### Throughput (requests/s, encoders)
 
-Single requests, all runs on the same 16 cores (32–47) at `0bc5c6a75`; the
-bundled rate is its sequential rate on those cores.
+Single requests at `c22bb15cd`, two rounds on the same 16 cores (32–47) of a
+shared node (load 40–78). Each model's runs follow its bundled sequential
+pass on those cores. Cells read round 1 / round 2.
 
-| Model | Bundled (sequential) | Exact C = 4 | Exact C = 16 | Approximate C = 4 | Approximate C = 16 | Approximate profile |
-| --- | --- | --- | --- | --- | --- | --- |
-| Kai-0.6B | 12.7 | 12.0 | 12.0 | 14.3 | 12.0 | `batching` |
-| Lex-0.6B | 13.0 | 13.0 | 13.3 | 15.0 | 12.8 | `batching` |
-| Route-0.6B | 13.0 | 12.2 | 12.5 | 14.3 | 12.6 | `batching` |
+| Model | Bundled (sequential) | Exact C = 1 | Exact C = 4 | Exact C = 16 | `max_speed` C = 1 | `max_speed` C = 4 | `max_speed` C = 16 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Kai-0.6B | 11.8 / 12.5 | 11.6 / 11.3 | 11.4 / 10.9 | 12.0 / 11.2 | 19.0 / 17.4 | 14.0 / 22.0 | 17.9 / 14.2 |
+| Lex-0.6B | 12.4 / 11.5 | 12.0 / 12.2 | 12.3 / 12.6 | 12.2 / 13.2 | 19.1 / 21.0 | 24.3 / 27.1 | 20.9 / 17.7 |
+| Route-0.6B | 12.7 / 13.2 | 12.1 / 12.4 | 12.2 / 12.5 | 12.2 / 12.4 | 19.6 / 20.9 | 25.9 / 23.9 | 16.8 / 18.1 |
 
-- A CPU forward is compute-bound and exact runs one request per forward, so
-  exact under concurrency stays at the bundled runtime's rate (−6% to +2%).
-- `batching` is 10–15% above it at C = 4, where packing removes the padding
-  and the per-forward overheads are shared. At C = 16 it falls back to the
-  exact rate; that cause is not measured yet.
+- **Exact** runs one request per forward with the released numerics (CPU rows
+  are not batch-invariant; see the parity record), so its rate is the bundled
+  runtime's: 0.87–1.15× of the same round's bundled pass. Unpaired rates on this node move by up to 10% between rounds
+  (Lex's bundled pass 12.4 → 11.5, Kai's 11.8 → 12.5); the paired latencies
+  above are the precise comparison.
+- **`max_speed`** serves 1.4–1.8× the bundled rate one request at a time and
+  up to 2.4× at C = 4. From C = 4 to C = 16 it loses 14–35% in five of six
+  runs, though it stays at 1.1–1.7× the bundled rate: coalesced batches of
+  12–16 requests run slower per token on 16 cores than batches of 4. That
+  cause is not measured yet.
+- **`batching`** (FP32 weights, round 1 only) is 1.0–1.1× the bundled rate at
+  C = 4 and 16: on CPU, packing saves only the padding; the packed linears of
+  `max_speed` are what pays.
 
 ## Reduced copies under `max_speed`
 
@@ -241,9 +286,15 @@ or Score level) as the FP32 path.
 - **`float32-packed` keeps every decision:** max |Δp| 2.4e-5, while its
   linears run through oneDNN's pre-packed kernel instead of MKL's.
 - **So Kai, Lex and Route consent to `float32-packed` on CPU, and to no GPU
-  copy** (`BuiltinModel.reduced`). The copy serves `max_speed`'s approximate
-  batches once the engine loads reduced copies; the exact profile keeps
-  MKL, so its answers stay byte-identical to the bundled runtime.
+  copy** (`BuiltinModel.reduced`). The exact profile keeps MKL, so its answers
+  stay byte-identical to the bundled runtime.
+- **The served copy (`c22bb15cd`):** the engine loads one copy per layer stack
+  (1.32 GB of pre-packed linears for the three), and `max_speed` runs
+  `batching` on it. Through the runtime it changes no decision in 1,431
+  requests per encoder against the bundled runtime (parity record) and serves
+  single requests 1.4–1.8× and router requests 4.1–5.5× faster than the bundled
+  runtime (CPU sections). A host that cannot run the copy (no oneDNN) serves
+  `max_speed` without it, and the receipt says why.
 
 ## Where a request's time goes
 
@@ -267,6 +318,9 @@ From the paired single-request runs, p50:
   - the additive attention masks are built once per forward;
   - `batching` runs each question type's stack over that type's rows only,
     packed back to back with no padding (`run_approximate`);
+  - on GPUs every stack replays its own bucket graphs (approximate profiles);
+  - `max_speed` on CPU runs a copy of every stack whose linears oneDNN
+    pre-packed once at load;
   - on CPU, every forward runs on one device thread, so one thread pool serves
     them all.
 - **Decoders:**
@@ -284,10 +338,10 @@ From the paired single-request runs, p50:
 
 ```bash
 python3 tools/decision1_bench.py paired --package PACKAGE_DIR --model vllm-sr/Decision-1.0-Kai-0.6B \
-  --cache-dir HF_CACHE --device rocm:0|cpu [--threads 16] [--profile batching] \
+  --cache-dir HF_CACHE --device rocm:0|cpu [--threads 16] [--profile batching|max_speed] \
   --prompts typed-final:PROMPTS.jsonl:400 [--router QUESTIONS.json] --output paired.json
 python3 tools/decision1_bench.py native --model vllm-sr/Decision-1.0-Kai-0.6B --cache-dir HF_CACHE \
-  --device rocm:0|cpu --profile exact|batching|shared_context --prompts typed-final:PROMPTS.jsonl:400 \
+  --device rocm:0|cpu --profile exact|batching|shared_context|max_speed --prompts typed-final:PROMPTS.jsonl:400 \
   --concurrency 1 4 16 --output native.json
 python3 tools/decision1_bench.py reference --package PACKAGE_DIR --repo vllm-sr/Decision-1.0-Kai-0.6B \
   --device cuda:0|cpu --prompts many64:MANY64.jsonl:20 --warmup 4 --output reference.json
