@@ -31,6 +31,8 @@ MAX_INPUT_TOKENS = 1024
 READOUT_PADDING = 0.25
 # Below this many padded tokens one read costs less than several.
 READOUT_ONE_GRID = 1024
+# Larger coalesced batches run slower per token on CPUs (max_speed at 16 concurrent requests, 16 cores).
+CPU_BATCH_TOKENS = 1024
 NOUL_DEFAULTS = NoulDefaults(
     false="No. The statement or question is not satisfied.",
     true="Yes. The statement or question is satisfied.",

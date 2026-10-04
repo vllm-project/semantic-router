@@ -21,8 +21,10 @@ from vllm_sr_runtime.families.decision1 import qwen, vela
 from vllm_sr_runtime.families.decision1.questions import KINDS
 from vllm_sr_runtime.heads.candidate import load_head, logits
 from vllm_sr_runtime.plugins.base import Job, RenderedItem
+from vllm_sr_runtime.profiles.batching import BatchingProfile
 from vllm_sr_runtime.profiles.exact import ExactProfile
 from vllm_sr_runtime.runtime import Runtime
+from vllm_sr_runtime.scheduler.planner import padded
 from vllm_sr_runtime.testing.decision1 import write_package
 from vllm_sr_runtime.text import segments
 
@@ -183,6 +185,27 @@ def test_exact_profile_runs_the_released_physical_batches(runtimes):
     assert [
         indices for batch in batches for _, indices in batch.parts
     ] == model.exact_batches(plan.items)
+
+
+def test_vela_coalesces_within_the_cpu_budget_while_exact_keeps_its_batches(runtimes):
+    model = model_of(runtimes["vela"])
+    budget = model.forward_token_budget()
+    assert budget == vela.CPU_BATCH_TOKENS
+    plan = model.plan(" ".join([STATE] * 12), MANY)
+    released = model.exact_batches(plan.items)
+    widest = max(len(item.ids) for item in plan.items)
+    assert len(released[0]) * padded(widest) > budget
+    jobs = [
+        Job(items=plan.items, deadline=None, enqueued=time.monotonic(), profile=name)
+        for name in ("exact", "batching", "batching", "batching")
+    ]
+    for batch in BatchingProfile().plan(jobs[1:], budget):
+        rows = batch.items()
+        assert len(rows) * padded(max(len(row.ids) for row in rows)) <= budget
+    exact = ExactProfile()
+    exact.available(model)
+    batches = exact.plan(jobs[:1], budget)
+    assert [indices for batch in batches for _, indices in batch.parts] == released
 
 
 def qwen_reference(package, items, temperatures, pad_id):
