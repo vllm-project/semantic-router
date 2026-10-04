@@ -34,10 +34,9 @@ The PR, main, nightly, and release entrypoints share one verification plan:
   It records the source revision, selection reasons, required cases, and build
   dependencies in the `ci-plan` artifact.
 - **Quality** checks source formatting, static rules, trusted security checks,
-  and generated contracts. Checks that need native libraries wait for that
-  artifact; other static checks can start immediately.
-- **Artifacts** builds selected container images and native libraries, or
-  acquires an already qualified provider-mocker image by immutable digest.
+  and generated contracts. Every static check can start immediately.
+- **Artifacts** builds selected container images, or acquires an already
+  qualified provider-mocker image by immutable digest.
   Artifact production and verification are separate responsibilities.
 - **Tests** executes the selected unit, integration, and end-to-end contracts.
   Contracts are grouped as Components, Runtime, Conformance, Integration,
@@ -55,7 +54,7 @@ Compatible component checks use one of three setup classes: **CLI and Fleet**,
 worker with its own test inventory, logs, and result. A failed contract leaves
 other independent checks running, but fails its worker and the Gate.
 
-Runtime contracts run in separate workers matched to their runtime, device,
+Platform contracts run in separate workers matched to their runtime, device,
 target platform, and execution mode. Each keeps its own prepared models and
 required receipt. Kubernetes profiles also run in separate workers with their
 own images, clusters, state, and evidence. A profile failure does not suppress
@@ -123,8 +122,8 @@ result in the current run.
 
 | Contract | Local command | Required evidence |
 | --- | --- | --- |
-| Core | `make test-and-build-local` | Router logic, registered Go tools, native interfaces, selector parity, and local core checks. |
-| Go tools | `make go-tools-test` | CLI, classifier operating-point, fusion evaluation, image calibration, and offline model-compatibility tests. |
+| Core | `make test-and-build-local` | Router logic, registered Go tools, selector parity, and local core checks. |
+| Go tools | `make go-tools-test` | CLI, classifier operating-point, fusion evaluation, image calibration, and model-selection tests. |
 | Dashboard | `make dashboard-check`; `make dashboard-test-wasm`; `make dashboard-test-e2e-evaluation` | Frontend and backend tests, compiled WASM behavior, and browser acceptance. |
 | Model runtime | `make model-runtime-test` | Families, engines, scheduling, the HTTP contract, and golden answers on CPU. |
 | Published models | `make test-models` | Classifier, cache, and Omni real-model tests serving the pinned Vela 1.0 packages through a managed model runtime, without a skip. |
@@ -137,9 +136,9 @@ result in the current run.
 | Performance | `make perf-check PERF_BASE_REF=<base-commit>` | Complete benchmark inventory and a paired comparison using identical model artifacts. |
 
 Use the prerequisites in the corresponding reusable workflow when reproducing
-its job. Model contracts need the model runtime (`make model-runtime-install`);
-Core's native-library tests need a compatible `ORT_DYLIB_PATH`. Storage
-integration requires its selected services. In required CI, missing dependencies fail the suite.
+its job. Model contracts need the model runtime (`make model-runtime-install`).
+Storage integration requires its selected services. In required CI, missing
+dependencies fail the suite.
 
 Kubernetes baseline inventory comes from the test registry. Regular runs select
 all 36 non-stress cases; full runs select all 38 cases, including the two stress
@@ -153,9 +152,7 @@ retain their dedicated `soak-tools` and image-calibration owners.
 
 Core discovers external Go tools from
 [`go-tools.mk`](../../make/go-tools.mk), including sources outside the Router Go
-module. For the separate compatibility CLI test that needs a pinned checkpoint,
-run `make test-modelcompat-native CANDLE_MODEL_PATH=/path/to/fixture`. The default
-Core suite tests the offline command without downloading that checkpoint.
+module.
 
 Dashboard runs both Go tests in the JavaScript/WASM runtime and Node
 assertions against the compiled compiler. Their discovered cases and actual
@@ -181,14 +178,15 @@ parity and maximum-context qualifications that require explicit inputs remain
 separately declared; a shorter input acceptance test cannot qualify full context.
 
 `make test-models` provisions its own prerequisites, and benchmarks let the
-runtime download each pinned model on first start. Product startup and
-`make download-models` instead provision models referenced by the active
-configuration. They are not the full test inventory. A pre-existing local model
+runtime download each pinned model on first start. Product startup instead
+provisions the models the active configuration references: the model runtime
+downloads each model it serves, and the Router provisions label maps and the Omni
+bundles. That is not the full test inventory. A pre-existing local model
 cache does not activate optional inference during ordinary core tests.
 
 A build identity includes its source revision, platform, and build inputs.
-CI builds each selected image and CPU native library artifact once, checks its
-content digest when loading it, and reuses that read-only artifact across suites.
+CI builds each selected image once, checks its content digest when loading it,
+and reuses that read-only artifact across suites.
 Containers, databases, networks, and volumes are not shared between suites.
 Image publication promotes the qualified OCI archive. CLI publication uploads
 the wheel and source distribution already checked from an isolated installation.

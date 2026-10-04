@@ -70,7 +70,7 @@ def collection_errors(
 
 def artifact_records(evidence: dict, *, environ: dict | None = None) -> list[dict]:
     records = list(evidence.get("artifacts", []))
-    for name in ("CI_IMAGE_RECEIPTS", "CI_NATIVE_RECEIPTS"):
+    for name in ("CI_IMAGE_RECEIPTS",):
         value = (os.environ if environ is None else environ).get(name)
         if value:
             records.extend(json.loads(Path(value).read_text()))
@@ -127,8 +127,6 @@ def make_receipt(
     errors.extend(execution_errors(verification, execution_platform))
     artifacts = artifact_records(evidence, environ=environ)
     required = {f"image:{image}" for image in verification["images"]}
-    if verification["native"]:
-        required.add("native:cpu")
     missing = required - {record["id"] for record in artifacts}
     if missing:
         errors.append(f"missing consumed artifact identities: {sorted(missing)}")

@@ -297,8 +297,10 @@ loads entry points at startup, refuses duplicate names, and lists every active
 plugin with its distribution, version and descriptor in `/v1/models`. Plugins
 run in the runtime process; the runtime never executes code from a model
 package. `examples/third_party_plugin` is a complete, documented example (a
-keyword family and a counting engine) that the test suite installs through its
-entry points and serves on every surface next to a Decision 2.0 model.
+keyword family and a counting engine). The test suite builds its wheel with its
+own build backend, installs it into a fresh directory, discovers it through the
+entry points its `pyproject.toml` declares and serves it on every surface next
+to a Decision 2.0 model.
 
 ## 6. API
 
@@ -437,8 +439,10 @@ labels), embedding and rerank descriptors, limits, licence, profiles, engine,
 accelerator, device, dtype, plugin versions, and per-model readiness and
 golden status. `/health` returns 200 only when every model is ready, and lists
 per-model states otherwise; `/health/live` returns 200 while the process
-serves HTTP. `/metrics` is Prometheus text with a `model` label on every
-model-scoped series.
+serves HTTP. All three report `api_version`, the contract version
+(`info.version`); a client refuses a runtime of another major version.
+`/metrics` is Prometheus text with a `model` label on every model-scoped
+series.
 
 ## 7. Model registry
 
@@ -601,11 +605,12 @@ bundle  -> plan every task -> submit all at once -> await each -> results in tas
 Each model has its own scheduler and worker thread. Validation and rendering
 happen on the request thread, so malformed requests never take queue
 capacity. In `exact`, one request's rows form one padded batch, split only by
-the forward token budget. A bundle's tasks for one model are queued at once as
-one job group: decision models still run each task as its own batch (their
-released numerics), and a family that sets `fuse_bundled_jobs` (encoders) runs
-the group as one batch, so one forward serves every head and consumer that
-reads the same input. On a batch-invariant model, `exact` runs the queued jobs
+the forward token budget. A bundle's tasks for one model and profile are
+queued at once as one job group, whatever their deadlines (each job keeps its
+own, measured from when the HTTP request arrived). Decision models still run
+each task as its own batch (their released numerics), and a family that sets
+`fuse_bundled_jobs` (encoders) runs the group as one batch, so one forward
+serves every head and consumer that reads the same input. On a batch-invariant model, `exact` runs the queued jobs
 of concurrent requests in shared batches: one length class (power-of-two band
 of padded length) per batch, at most 512 padded tokens, rows with the same
 token IDs always together so the family computes them once. Repeated cacheable
@@ -623,9 +628,10 @@ each job is answered as soon as its own batches have run. The order of
 forwards never changes a batch's contents, so answers are unchanged. Deadlines
 travel with jobs; a job whose deadline passes before its next batch runs is
 answered `deadline_exceeded` and its remaining batches are skipped. Admission
-bounds jobs and pending tokens per model and answers 429 at once, for a whole
-group or none of it. On CPU, workers of different models share the process's
-intra-op thread pool (`--threads`).
+bounds, per model, the jobs not yet answered (queued, planned or running) and
+their tokens, and answers 429 at once, for a whole group or none of it. On
+CPU, workers of different models share the process's intra-op thread pool
+(`--threads`).
 
 A model whose batches need no device thread (`device_thread = False`, today
 the ONNX Runtime Omni family) skips the hand-off to its worker when it is
@@ -656,8 +662,13 @@ embeddings compare by cosine). Without a reference the runtime checks
 determinism and well-formed answers and reports `golden: unverified`. A
 failed model does not stop the others; `/health` reports the process
 degraded and the router treats only that model's deployments as unavailable.
-A device error during serving exits the process so the supervisor restarts it
-with a clean device context.
+A device fault during serving exits the process so the supervisor restarts it
+with a clean device context. The accelerator decides what is one (on CUDA and
+ROCm: a CUDA or HIP error, a device-side assert or an illegal memory access;
+running out of memory is not). Any other error in a forward fails only the
+requests whose jobs were in that batch, as `internal_error`, and so does an
+answer holding NaN or infinity; the model keeps serving. A model that fails
+to load releases its worker and device memory.
 
 ### 10.3 Router-managed lifecycle
 

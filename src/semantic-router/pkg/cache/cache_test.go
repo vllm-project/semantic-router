@@ -2366,10 +2366,6 @@ func (dcc *DatabaseCallCounter) Get() int64 {
 	return atomic.LoadInt64(&dcc.calls)
 }
 
-func (dcc *DatabaseCallCounter) Reset() {
-	atomic.StoreInt64(&dcc.calls, 0)
-}
-
 // createTestMilvusConfig creates a temporary Milvus config file for testing
 // Returns the path to the config file and cleanup function
 func createTestMilvusConfig(collectionName string, efConstruction int, dropOnStartup bool) (string, func(), error) {

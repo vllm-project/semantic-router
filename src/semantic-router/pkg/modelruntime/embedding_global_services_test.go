@@ -114,7 +114,7 @@ func TestGlobalModuleDefaultDoesNotBorrowRecipeEmbedding(t *testing.T) {
 	cfg.EmbeddingConfig = config.HNSWConfig{ModelType: "bert", Backend: config.EmbeddingBackendOpenAICompatible, TargetDimension: 2}
 	cfg.EmbeddingModels.Endpoint = config.EmbeddingEndpointConfig{BaseURL: server.URL, Model: "global-default", Dimensions: 2}
 	cfg.Tools.Enabled = true
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"recipe-only": {Provider: "ort", Device: "rocm:7", Artifact: "/not-installed/recipe-only"}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"recipe-only": {Provider: config.ModelRuntimeProvider, Device: "rocm:7", Artifact: "/not-installed/recipe-only"}}
 	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "recipe-only", Adapter: "mmbert", Contract: "embedding.v1"}}
 	runtime := serving.New(nil, binding.NewPool())
 	services, err := PrepareOwnedGlobalServiceEmbeddings(context.Background(), cfg, runtime)

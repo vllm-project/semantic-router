@@ -25,12 +25,12 @@ live model comparison.
 
 The `perf/` package contains Go benchmarks for classification, decision
 evaluation, response-cache operations, ExtProc processing, and Looper-family
-paths. They do not need a running Router, but model-dependent suites require the
-native libraries and benchmark model files.
+paths. They do not need a running Router. Classification and cache benchmarks
+serve the catalog's pinned Vela models through the model runtime, which
+downloads them on first start; install the runtime once:
 
 ```bash
-make download-models-perf
-make rust
+make model-runtime-install
 make perf-bench-quick
 ```
 

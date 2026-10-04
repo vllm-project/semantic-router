@@ -1,9 +1,7 @@
 """Every engine-mode option in one typed object.
 
 ``ServeConfig`` holds the process options. A process serves one or more
-models, each described by a ``ModelConfig``; the single-model fields of
-``ServeConfig`` (``model``, ``revision``, ``device`` ...) describe the only
-model when ``models`` is empty, which is the Phase 1 command line.
+models, each described by a ``ModelConfig``.
 """
 
 from __future__ import annotations
@@ -45,17 +43,12 @@ class ModelConfig:
 
 @dataclass(frozen=True)
 class ServeConfig:
-    model: str | None = None
-    revision: str | None = None
-    device: str = "auto"
+    """Process options; ``memory_budget_gib`` is the budget of a model that sets none."""
+
+    models: tuple[ModelConfig, ...] = ()
     host: str = "127.0.0.1"
     port: int = DEFAULT_PORT
     uds: str | None = None
-    profile: str = "exact"
-    engine: str = "auto"
-    family: str | None = None
-    served_model_name: str | None = None
-    models: tuple[ModelConfig, ...] = ()
     threads: int | None = None
     memory_budget_gib: float | None = None
     max_queue: int = 256
@@ -75,22 +68,9 @@ class ServeConfig:
 
     def served_models(self) -> tuple[ModelConfig, ...]:
         """The models this process serves, in load order."""
-        if self.models:
-            return self.models
-        if not self.model:
+        if not self.models:
             raise ValueError("a runtime needs at least one model")
-        return (
-            ModelConfig(
-                model=self.model,
-                revision=self.revision,
-                name=self.served_model_name,
-                device=self.device,
-                profile=self.profile,
-                engine=self.engine,
-                family=self.family,
-                memory_budget_gib=self.memory_budget_gib,
-            ),
-        )
+        return self.models
 
 
 def split_revision(value: str) -> tuple[str, str | None]:

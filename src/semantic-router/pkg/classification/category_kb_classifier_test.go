@@ -1,11 +1,14 @@
 package classification
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 func TestKnowledgeBaseDefinitionLoad(t *testing.T) {
@@ -154,27 +157,30 @@ func writeKnowledgeBaseFixture(t *testing.T) string {
 	return root
 }
 
-func TestShouldDeferPreload_DefaultBackendDefers(t *testing.T) {
-	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "")
-	c := &KnowledgeBaseClassifier{}
-	if !c.shouldDeferPreload() {
-		t.Fatal("shouldDeferPreload must return true when no backend override is set (default = candle)")
+func TestKnowledgeBaseClassifierEmbedsExemplarsOnFirstUse(t *testing.T) {
+	var calls atomic.Int32
+	provider, err := embedding.NewFuncProvider("test", 2, func(context.Context, string) ([]float32, error) {
+		calls.Add(1)
+		return []float32{1, 0}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestShouldDeferPreload_ExplicitCandleDefers(t *testing.T) {
-	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "candle")
-	c := &KnowledgeBaseClassifier{}
-	if !c.shouldDeferPreload() {
-		t.Fatal("shouldDeferPreload must return true when backend is explicitly 'candle'")
+	classifier, err := NewKnowledgeBaseClassifierWithProvider(config.KnowledgeBaseConfig{
+		Name:   "fixture",
+		Source: config.KnowledgeBaseSource{Path: writeKnowledgeBaseFixture(t)},
+	}, "mmbert", "", provider)
+	if err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestShouldDeferPreload_OpenVINODoesNotDefer(t *testing.T) {
-	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "openvino")
-	c := &KnowledgeBaseClassifier{}
-	if c.shouldDeferPreload() {
-		t.Fatal("shouldDeferPreload must return false when backend is 'openvino'")
+	if got := calls.Load(); got != 0 {
+		t.Fatalf("construction embedded %d texts, want none before first use", got)
+	}
+	if _, err := classifier.Classify("write a python function"); err != nil {
+		t.Fatal(err)
+	}
+	if got := calls.Load(); got != 4 {
+		t.Fatalf("first use embedded %d texts, want the 3 exemplars and the query", got)
 	}
 }
 

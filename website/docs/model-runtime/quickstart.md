@@ -195,7 +195,7 @@ model, replace `artifact` and `device` with its address, for example
 
 ## Next steps
 
-- [Choose a model, size and hardware](./choose-a-model.md)
+- [Choose a model, size and hardware](model-runtime/choose-a-model.md)
 - Turn on a built-in feature: [classify requests](./guides/classify.md),
   [detect PII](./guides/pii.md), [stop prompt attacks](./guides/safety.md),
   [use embeddings](./guides/embeddings.md)

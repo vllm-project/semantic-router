@@ -67,7 +67,7 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 	}
 
 	if c.jailbreakInitializer == nil {
-		return fmt.Errorf("jailbreak initializer is required for Candle-based inference")
+		return fmt.Errorf("jailbreak initializer is required for local inference")
 	}
 
 	numClasses := c.JailbreakMapping.GetJailbreakTypeCount()
@@ -76,7 +76,7 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 	}
 
 	logging.ComponentEvent("classifier", "jailbreak_detector_init_started", map[string]interface{}{
-		"mode":      "candle",
+		"mode":      "model_runtime",
 		"model_ref": c.Config.PromptGuard.ModelID,
 		"classes":   numClasses,
 		"use_cpu":   c.Config.PromptGuard.UseCPU,

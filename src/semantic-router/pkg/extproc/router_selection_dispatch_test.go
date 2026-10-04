@@ -220,9 +220,8 @@ func TestQwenMLRequestUsesModelDefaultDimension(t *testing.T) {
 
 // TestSelectionEmbeddingModelTypeNormalizesCase guards against a configured
 // modelType (e.g. "Qwen3") passing validation case-insensitively but then
-// reaching candle_binding.SupportsBatchedEmbedding and GetEmbeddingBatched
-// unnormalized -- the former is case/whitespace-tolerant, the latter is not,
-// so a mismatch there routes a "batchable" model into a call that fails.
+// reaching the embedding provider lookup unnormalized: the prepared providers
+// are keyed by the normalized name, so the lookup would miss.
 func TestSelectionEmbeddingModelTypeNormalizesCase(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -249,9 +248,8 @@ func TestSelectionEmbeddingModelTypeNormalizesCase(t *testing.T) {
 // TestBuildMLSelectionConfigNormalizesModelTypeCase guards the same
 // unnormalized-modelType bug as TestSelectionEmbeddingModelTypeNormalizesCase,
 // but on the sibling ml.model_type path: nothing validates or rewrites it, so
-// it reaches factory.go's mlEmbeddingConfig -- and the same
-// SupportsBatchedEmbedding/FFI dispatch -- independently of the default
-// embedding model type.
+// it reaches factory.go's mlEmbeddingConfig -- and the same provider lookup --
+// independently of the default embedding model type.
 func TestBuildMLSelectionConfigNormalizesModelTypeCase(t *testing.T) {
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{

@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from vllm_sr_runtime.config import ServeConfig
+from vllm_sr_runtime.config import ModelConfig, ServeConfig
 from vllm_sr_runtime.runtime import Runtime
 from vllm_sr_runtime.testing.fixtures import write_package
 
@@ -41,7 +41,11 @@ def package_copy(tmp_path, qwen3_package) -> Path:
 
 
 def start_runtime(package: Path, **overrides) -> Runtime:
-    runtime = Runtime(ServeConfig(model=str(package), device="cpu", **overrides))
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(package), device="cpu"),), **overrides
+        )
+    )
     runtime.start(background=False)
     return runtime
 

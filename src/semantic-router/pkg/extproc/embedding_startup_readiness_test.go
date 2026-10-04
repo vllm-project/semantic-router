@@ -108,30 +108,6 @@ func TestStartupWarmupUsesGlobalToolsOwner(t *testing.T) {
 	}
 }
 
-func TestStartupReadinessIncludesCacheWithoutEnablingOtherConsumers(t *testing.T) {
-	if os.Getenv("ORT_DYLIB_PATH") == "" {
-		t.Skip("requires real ONNX Runtime")
-	}
-	artifact, err := filepath.Abs("../../../../onnx-binding/instance/testdata/omni")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg := &config.RouterConfig{}
-	cfg.EmbeddingConfig.ModelType = "multimodal"
-	cfg.SemanticCache.Enabled = true
-	cfg.SemanticCache.EmbeddingModel = "multimodal"
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"omni": {Artifact: artifact, Provider: "ort", Device: "cpu", Input: config.ModelInputBudget{MaxTokens: 512, Overflow: "reject"}}}
-	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "omni", Adapter: "vela_omni", Contract: "embedding.v1"}}
-	router := prepareReadinessRouter(t, cfg)
-	if router.Embeddings.Ready() || router.serviceEmbeddings.Ready() || !router.cacheEmbeddings.Ready() {
-		t.Fatal("fixture must prepare only the cache owner")
-	}
-	state := router.embeddingRuntimeState()
-	if !state.AnyReady || state.ToolsReady || state.KnowledgeBasesReady {
-		t.Fatalf("cache readiness leaked to tools/KB: %+v", state)
-	}
-}
-
 func TestReloadWarmupUsesNewNamedKnowledgeBaseOwner(t *testing.T) {
 	previousCfg, previousCount := newReadinessEmbeddingConfig(t)
 	previousCfg.Tools.Enabled = true

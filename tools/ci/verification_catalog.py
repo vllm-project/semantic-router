@@ -125,7 +125,7 @@ def catalog_errors(registry: dict) -> list[str]:
             worker = catalog["component_workers"].get(record.get("worker"))
             if not worker or not worker.get("display_name"):
                 errors.append(f"verification {name} lacks a declared component worker")
-            if record["native"] or record["images"] or record["runtime"] != "none":
+            if record["images"] or record["runtime"] != "none":
                 errors.append(
                     f"verification {name} is incompatible with a lightweight worker"
                 )

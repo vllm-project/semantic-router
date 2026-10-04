@@ -44,15 +44,6 @@ type ConfigurableInputChecker interface {
 	FitsInputWithOptions(context.Context, string, Options) (bool, error)
 }
 
-// Window offsets are UTF-8 bytes in the original text, with End exclusive.
-type Window struct {
-	Start int
-	End   int
-}
-type WindowProvider interface {
-	Windows(context.Context, string, int) ([]Window, error)
-}
-
 // Embed applies options at the provider boundary. Remote providers retain their
 // configured server-side output semantics; unsupported local options fail.
 func Embed(ctx context.Context, provider Provider, text string, options Options) ([]float32, error) {
@@ -152,17 +143,6 @@ func (p *providerView) FitsInput(ctx context.Context, text string) (bool, error)
 		return false, fmt.Errorf("%w: embedding provider does not report input truncation", binding.ErrCapability)
 	}
 	return q.FitsInputWithOptions(ctx, text, p.options)
-}
-
-// Windows reports a missing tokenizer as a capability mismatch, the same way a
-// prepared provider without local token windows does, so a caller can tell an
-// absent tokenizer from a tokenizer that failed.
-func (p *providerView) Windows(ctx context.Context, text string, limit int) ([]Window, error) {
-	q, ok := p.Provider.(WindowProvider)
-	if !ok {
-		return nil, fmt.Errorf("%w: embedding provider does not support token windows", binding.ErrCapability)
-	}
-	return q.Windows(ctx, text, limit)
 }
 
 // CacheIdentity names immutable model/adapter semantics for request-local caches.

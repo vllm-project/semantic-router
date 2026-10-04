@@ -22,15 +22,6 @@ MAX_SELECTOR_CANDIDATES = 255
 def model_runtime_deployment_error(deployment: dict) -> str | None:
     if deployment.get("external_model"):
         return "model_runtime deployments cannot set external_model"
-    if (deployment.get("custom_ops_profile") or "none") != "none" or deployment.get(
-        "compilation_cache_dir"
-    ):
-        return "model_runtime deployments do not use ONNX Runtime custom ops or compilation caches"
-    if (deployment.get("precision") or "native") != "native":
-        return (
-            "model_runtime deployments run the package's own dtype policy; "
-            "select a profile instead of precision"
-        )
     budget = deployment.get("input") or {}
     if (budget.get("max_tokens") or 0) < 0:
         return "input.max_tokens must not be negative"

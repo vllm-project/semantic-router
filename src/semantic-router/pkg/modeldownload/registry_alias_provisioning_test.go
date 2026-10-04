@@ -10,7 +10,6 @@ import (
 )
 
 func TestBuildModelSpecsCanonicalEmbeddingAliases(t *testing.T) {
-	requireCandleEmbeddingRuntime(t)
 	for _, tc := range []struct {
 		family string
 		field  string
@@ -103,7 +102,7 @@ func TestAliasedModelRequirementsShareCanonicalKey(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.GemmaModelPath = "gemma"
 	cfg.MmBertModelPath = "models/gemma"
-	required := candleEmbeddingModelRequiredFiles(cfg)
+	required := embeddingModelRequiredFiles(cfg)
 	if _, exists := required["gemma"]; exists {
 		t.Fatal("Candle requirements retained a bare alias key")
 	}

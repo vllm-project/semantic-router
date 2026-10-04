@@ -35,6 +35,8 @@ test = [
   "httpx>=0.27",
   "jsonschema>=4.21",
   "onnx>=1.17",
+  "setuptools>=69",
+  "wheel>=0.42",
 ]
 reference = [
   "transformers>=5.0",

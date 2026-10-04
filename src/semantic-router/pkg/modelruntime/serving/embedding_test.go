@@ -112,7 +112,7 @@ func embeddingSpec(deployment string) config.ResolvedModelBinding {
 	return config.ResolvedModelBinding{
 		Recipe: config.DefaultRecipeName, Name: "embedding",
 		Binding:    config.ModelBinding{Deployment: deployment, Contract: embeddingContract},
-		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime:8100", Precision: "native", Device: "cpu", Profile: "exact", Input: config.ModelInputBudget{Overflow: "truncate"}},
+		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime:8100", Device: "cpu", Profile: "exact", Input: config.ModelInputBudget{Overflow: "truncate"}},
 	}
 }
 
