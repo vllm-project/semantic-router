@@ -162,6 +162,11 @@ export function deleteModel(src: string, name: string): string {
 
 // ---------- Signal mutations ----------
 
+// JSON string escapes are a subset of the Go escapes the DSL parser unquotes.
+export function quoteDSLString(value: string): string {
+  return JSON.stringify(value)
+}
+
 /**
  * Serialize a signal's fields to DSL block body text.
  * Supports recursive indentation to match Go decompiler output format.
@@ -197,7 +202,7 @@ function countLeafFields(obj: DSLFieldObject): number {
 }
 
 function serializeValue(value: DSLFieldValue, currentIndent = '  '): string {
-  if (typeof value === 'string') return `"${value}"`
+  if (typeof value === 'string') return quoteDSLString(value)
   if (typeof value === 'number') return String(value)
   if (typeof value === 'boolean') return value ? 'true' : 'false'
   if (value === null) return 'null'
@@ -527,13 +532,13 @@ function serializeRouteBody(input: RouteInput): string {
     const modelParts = input.models.map((m) => {
       const attrs: string[] = []
       if (m.reasoning !== undefined) attrs.push(`reasoning = ${m.reasoning}`)
-      if (m.effort) attrs.push(`effort = "${m.effort}"`)
-      if (m.lora) attrs.push(`lora = "${m.lora}"`)
-      if (m.paramSize) attrs.push(`param_size = "${m.paramSize}"`)
+      if (m.effort) attrs.push(`effort = ${quoteDSLString(m.effort)}`)
+      if (m.lora) attrs.push(`lora = ${quoteDSLString(m.lora)}`)
+      if (m.paramSize) attrs.push(`param_size = ${quoteDSLString(m.paramSize)}`)
       if (m.weight !== undefined) attrs.push(`weight = ${m.weight}`)
-      if (m.reasoningFamily) attrs.push(`reasoning_family = "${m.reasoningFamily}"`)
+      if (m.reasoningFamily) attrs.push(`reasoning_family = ${quoteDSLString(m.reasoningFamily)}`)
       const attrStr = attrs.length > 0 ? ` (${attrs.join(', ')})` : ''
-      return `"${m.model}"${attrStr}`
+      return `${quoteDSLString(m.model)}${attrStr}`
     })
     if (modelParts.length === 1) {
       lines.push(`  MODEL ${modelParts[0]}`)
@@ -582,7 +587,7 @@ export function updateRoute(
   const block = findBlock(src, 'ROUTE', null, name)
   if (!block) return src
 
-  const descPart = input.description ? ` (description = "${input.description}")` : ''
+  const descPart = input.description ? ` (description = ${quoteDSLString(input.description)})` : ''
   const body = serializeRouteBody(input)
   const newBlock = `ROUTE ${name}${descPart} {\n${body}\n}\n`
   return src.slice(0, block.start) + newBlock + src.slice(block.end)
@@ -597,7 +602,7 @@ export function addRoute(
   name: string,
   input: RouteInput,
 ): string {
-  const descPart = input.description ? ` (description = "${input.description}")` : ''
+  const descPart = input.description ? ` (description = ${quoteDSLString(input.description)})` : ''
   const body = serializeRouteBody(input)
   const newBlock = `ROUTE ${name}${descPart} {\n${body}\n}\n`
 
@@ -658,7 +663,7 @@ export function formatSignalRef(
   signalName: string,
   fields: DSLFieldObject = {},
 ): string {
-  return `${signalType}(${[JSON.stringify(signalName), ...inlineFieldEntries(fields)].join(', ')})`
+  return `${signalType}(${[quoteDSLString(signalName), ...inlineFieldEntries(fields)].join(', ')})`
 }
 
 function inlineFieldEntries(fields: DSLFieldObject): string[] {
@@ -674,7 +679,7 @@ function serializeInlineValue(value: DSLFieldValue): string {
     return entries.length > 0 ? `{ ${entries.join(', ')} }` : '{}'
   }
   if (typeof value === 'number') return formatDslNumber(value)
-  return typeof value === 'string' ? JSON.stringify(value) : String(value)
+  return typeof value === 'string' ? quoteDSLString(value) : String(value)
 }
 
 // The DSL lexer has no exponent form, so 1e-7 is written as 0.0000001.
@@ -720,11 +725,11 @@ function escRe(s: string): string {
 }
 
 function dslNamePattern(name: string): string {
-  return `(?:${escRe(name)}|"${escRe(name)}")`
+  return `(?:${escRe(name)}|${escRe(quoteDSLString(name))})`
 }
 
 function formatDslName(name: string): string {
-  return /^[_A-Za-z][\w]*$/.test(name) ? name : `"${name}"`
+  return /^[_A-Za-z][\w]*$/.test(name) ? name : quoteDSLString(name)
 }
 
 function findBlockFromIndex(src: string, startIndex: number): BlockSpan | null {
