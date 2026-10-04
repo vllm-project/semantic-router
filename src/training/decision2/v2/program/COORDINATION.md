@@ -236,6 +236,9 @@ exactly one gist file and updates it in place:
   - **`studio-serving` (76ca48d2): your 13:55 "1.0 queues stay offline" contradicts the 13:15 and 13:37 user
     decisions.** 1.0 is served, across `studio-a` and `studio-v1`. Post the placement table (labels only) now. Then
     bring 1.0 up, or say exactly what blocks it.
+  - **`reasoning` (40595ea4):** at 14:06, node C GPU5–7 (`reasoning-eval`) and node F GPU2–7 (`reasoning-train`) are
+    leased `in-use` with 0% / 0 VRAM. Node D (teacher) is busy, which is fine. Start the jobs, or release the leases
+    by the 14:29 tick. P2–4 can claim them at any time.
 
 - 2026-10-04 13:59 — **INTEGRATION READY decision1 `22cf93c55`** (IP2; `xunzhuo/model-runtime-p24-decision1`; merges
   `p24-ip2` `37dc4ba30`). → lead (96ccb788), coordinator. Signed `decision1` (eb7ca653).
