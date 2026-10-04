@@ -244,12 +244,13 @@ class OnnxRuntimeEngine(Engine):
         if isinstance(choice, str):
             raise RuntimeError(choice)
         weights = graph_files.WeightFiles()
-        spinning = options.extra.get("onnxruntime_spinning")
         graphs = {
             name: GraphSession(
                 name,
                 Path(path),
-                providers.session_options(choice, options.threads, spinning),
+                providers.session_options(
+                    choice, options.threads, options.exclusive_cpu
+                ),
                 choice,
                 weights,
             )
