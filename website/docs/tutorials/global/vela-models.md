@@ -150,7 +150,7 @@ A rejected input is not silently shortened.
 
 ## Configuration
 
-Every Vela model runs in the [model runtime](../../model-runtime/overview.md),
+Every Vela model runs in the [model runtime](model-runtime/overview.md),
 so the defaults need no configuration. The following excerpt binds Domain to
 an explicit CPU deployment with a 32K budget. Apply it to an existing
 configuration containing providers, signals and decisions.
@@ -209,7 +209,7 @@ Earlier releases ran Vela through Candle, ONNX Runtime, MIGraphX or OpenVINO
 and selected exported ONNX graphs with `head`. Those providers are removed; the
 model repositories keep their ONNX exports for other tools.
 `vllm-sr config migrate` rewrites old deployments; see
-[Migrate from the native bindings](../../model-runtime/migrate.md).
+[Migrate from the native bindings](model-runtime/migrate.md).
 
 All models expose their supported input length, usage and comparable evaluation
 results in their model cards. Published comparisons use the previous mmBERT

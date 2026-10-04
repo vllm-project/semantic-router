@@ -8,7 +8,7 @@ description: Update a configuration that used the candle, ONNX Runtime or OpenVI
 
 Earlier releases ran models inside the router with three back ends: candle,
 ONNX Runtime (`ort`) and OpenVINO. Those back ends are gone. Every model now
-runs in the [model runtime](./overview.md), on CPU by default and on GPUs when
+runs in the [model runtime](model-runtime/overview.md), on CPU by default and on GPUs when
 you ask for them.
 
 **Most configurations need no change.** If you only turn features on (a
