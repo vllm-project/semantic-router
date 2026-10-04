@@ -169,8 +169,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     spec = TASK_SPECS[args.task]
-    measured = resolve_measured_artifact(args, served)
-    spec.validate_artifact(measured.repo)
+    measured = resolve_measured_artifact(args, served, spec.validate_artifact)
     dataset_revision = resolve_hf_revision(spec.dataset_repo, repo_type="dataset")
 
     mapping = (
@@ -188,7 +187,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     findings = (
         registry_drift(inventory, MODEL_REGISTRY)
         + uncovered_artifacts(config)
-        + check_registry_label_order(args.task, mapping)
+        + check_registry_label_order(args.task, measured.repo, mapping)
         + _provenance_findings(args, measured)
     )
     for finding in findings:

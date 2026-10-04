@@ -27,7 +27,7 @@ translation:
 
 ## 选择起始模型 {#record-the-base-and-task-lineage}
 
-训练新任务时，使用 [Vela Encoder](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M)。它是分类器、Embedding 和 Reranker 的共同基座。下载明确的 Hub revision，并保持权重、tokenizer 和配置一致。
+训练新任务时，使用 [Vela Encoder](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M)。它是分类器、Embedding 和 Reranker 的共同基座。下载明确的 Hub revision，并保持权重、tokenizer 和配置一致。
 
 改进已有任务时，从完整的 Vela 任务 checkpoint 继续训练，保留已训练的 head。除非要训练新的输出契约，否则保持标签和预处理一致。各任务指南分别说明新任务初始化和继续训练。
 

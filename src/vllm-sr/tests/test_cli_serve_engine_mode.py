@@ -1,0 +1,150 @@
+"""`vllm-sr serve MODEL` delegates to the model runtime; router mode is unchanged."""
+
+import sys
+import types
+
+import pytest
+from cli.commands import runtime as runtime_commands
+from cli.main import main
+from click.testing import CliRunner
+
+REVISION = "881bee413681d80ebeac86afcda8b4138dae516e"
+
+
+@pytest.fixture
+def runtime_calls(monkeypatch):
+    calls = []
+    package = types.ModuleType("vllm_sr_runtime")
+    module = types.ModuleType("vllm_sr_runtime.cli")
+
+    def fake_main(argv):
+        calls.append(list(argv))
+        return 0
+
+    module.main = fake_main
+    package.cli = module
+    monkeypatch.setitem(sys.modules, "vllm_sr_runtime", package)
+    monkeypatch.setitem(sys.modules, "vllm_sr_runtime.cli", module)
+    return calls
+
+
+@pytest.fixture
+def router_serve(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        runtime_commands, "_execute_serve", lambda *args: calls.append(args)
+    )
+    return calls
+
+
+def test_engine_mode_delegates_to_the_runtime(runtime_calls, router_serve):
+    result = CliRunner().invoke(
+        main,
+        [
+            "serve",
+            "vllm-sr/Decision-2.0-Kai-0.6B",
+            "--revision",
+            REVISION,
+            "--device",
+            "cpu",
+            "--port",
+            "8200",
+            "--profile",
+            "batching",
+            "--log-level",
+            "warn",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert runtime_calls == [
+        [
+            "serve",
+            "vllm-sr/Decision-2.0-Kai-0.6B",
+            "--device",
+            "cpu",
+            "--profile",
+            "batching",
+            "--revision",
+            REVISION,
+            "--port",
+            "8200",
+            "--log-level",
+            "warning",
+        ]
+    ]
+    assert router_serve == []
+
+
+def test_engine_mode_defaults_and_unix_socket(runtime_calls, tmp_path):
+    socket = str(tmp_path / "runtime.sock")
+    result = CliRunner().invoke(main, ["serve", "/models/kai", "--uds", socket])
+
+    assert result.exit_code == 0, result.output
+    assert runtime_calls == [
+        [
+            "serve",
+            "/models/kai",
+            "--device",
+            "auto",
+            "--profile",
+            "exact",
+            "--uds",
+            socket,
+        ]
+    ]
+
+
+@pytest.mark.parametrize(
+    "arguments, message",
+    [
+        (["--config", "my.yaml"], "--config applies to router mode"),
+        (["--target", "k8s"], "--target applies to router mode"),
+        (["--recipe-env", "TOKEN"], "--recipe-env applies to router mode"),
+        (["--profile", "dev"], "is not a runtime profile"),
+        (["--uds", "/tmp/r.sock", "--port", "1"], "--uds cannot be combined"),
+    ],
+)
+def test_engine_mode_rejects_router_options(runtime_calls, arguments, message):
+    result = CliRunner().invoke(
+        main, ["serve", "vllm-sr/Decision-2.0-Kai-0.6B", *arguments]
+    )
+
+    assert result.exit_code == 2
+    assert message in result.output
+    assert runtime_calls == []
+
+
+def test_router_mode_rejects_engine_options(router_serve):
+    result = CliRunner().invoke(main, ["serve", "--device", "cpu"])
+
+    assert result.exit_code == 2
+    assert "--device applies to engine mode" in result.output
+    assert router_serve == []
+
+
+def test_router_mode_keeps_the_deployment_profile(router_serve):
+    result = CliRunner().invoke(main, ["serve", "--target", "k8s", "--profile", "dev"])
+
+    assert result.exit_code == 0, result.output
+    assert len(router_serve) == 1
+    assert "dev" in router_serve[0]
+
+
+def test_engine_mode_without_the_runtime_explains_the_install(monkeypatch):
+    monkeypatch.setitem(sys.modules, "vllm_sr_runtime", None)
+    monkeypatch.setitem(sys.modules, "vllm_sr_runtime.cli", None)
+
+    result = CliRunner().invoke(main, ["serve", "vllm-sr/Decision-2.0-Kai-0.6B"])
+
+    assert result.exit_code == 1
+    assert "pip install ./src/model-runtime" in result.output
+
+
+def test_serve_help_documents_engine_mode():
+    result = CliRunner().invoke(main, ["serve", "--help"])
+
+    assert result.exit_code == 0
+    assert "ENGINE MODE" in result.output
+    assert "--revision" in result.output
+    assert "--uds" in result.output

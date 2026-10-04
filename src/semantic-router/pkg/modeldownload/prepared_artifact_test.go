@@ -137,6 +137,23 @@ func TestPreparedArtifactRejectsCorruptionSourceMismatchAndEscapes(t *testing.T)
 	}
 }
 
+// Caches and mounted bundles prepared before the Hugging Face organization move
+// record the old repo ID for the same pinned source.
+func TestPreparedArtifactAcceptsSourceRecordedUnderLegacyOrg(t *testing.T) {
+	spec := fixtureOmniSpec(t.TempDir())
+	_, name, _ := strings.Cut(spec.RepoID, "/")
+	for repo, accepted := range map[string]bool{"llm-semantic-router/" + name: true, "example/" + name: false} {
+		recorded := spec
+		recorded.LocalPath, recorded.RepoID = t.TempDir(), repo
+		preparedFixture(t, recorded.LocalPath, recorded)
+		check := spec
+		check.LocalPath = recorded.LocalPath
+		if _, err := verifyPreparedArtifact(check); (err == nil) != accepted {
+			t.Fatalf("bundle from %s: accepted=%v, want %v (%v)", repo, err == nil, accepted, err)
+		}
+	}
+}
+
 func TestPreparedArtifactMissingBundleFailsWithoutNativeFallback(t *testing.T) {
 	t.Setenv("ROUTER_MODEL_ARTIFACTS", t.TempDir())
 	spec := fixtureOmniSpec(filepath.Join(t.TempDir(), "cache"))
