@@ -17,11 +17,15 @@ adds a timed closed-loop load on both.
 ``build`` compiles the legacy side's test binary for ``ab``, which alternates
 legacy and runtime calls on the same cores (the order flips every round, and
 load windows rotate) so both sides see the same moment's contention on a
-shared host; ``ab`` reports latency and throughput only (``compare`` checks
-values).
+shared host; ``--gap-ms`` pauses before every call so neither side's
+spinning thread pools share the cores with the other side's call. ``ab``
+reports latency and throughput only (``compare`` checks values). Confine
+both sides with a cgroup cpuset (a container or a systemd scope): ONNX
+Runtime pins its threads to CPUs it reads from the host, past a ``taskset``
+mask.
 
     python3 tools/embed_legacy.py build --tree TREE --cache HF --flat DIR --out legacy.test
-    python3 tools/embed_legacy.py ab --binary legacy.test --cache HF --out ab.json [--legacy-cpus 16]
+    python3 tools/embed_legacy.py ab --binary legacy.test --cache HF --out ab.json [--legacy-cpus 16] [--gap-ms 50]
 
 ``legacy`` and ``build`` need only the standard library (the runner image has
 a bare Python); ``compare`` needs NumPy.
@@ -690,17 +694,22 @@ def run_ab(args: argparse.Namespace) -> None:
         status, _ = loop.run_until_complete(runtime.call(surface, body))
         return time.perf_counter_ns() - start if status == 200 else -1
 
+    calls = {"legacy": call_legacy, "runtime": call_runtime}
+
     def pair(
         spec: dict[str, Any], item: dict[str, Any], legacy_first: bool
     ) -> tuple[int, int]:
-        """One legacy and one runtime call, ``--gap-ms`` apart (pools that spin after a call settle)."""
-        if legacy_first:
-            legacy_ns = call_legacy(spec, item)
+        """One legacy and one runtime call, each ``--gap-ms`` after the previous call.
+
+        ONNX Runtime workers spin for milliseconds after a run; the gap keeps
+        either side's spinning pools off the cores the next call uses.
+        """
+        sides = ("legacy", "runtime") if legacy_first else ("runtime", "legacy")
+        elapsed = {}
+        for side in sides:
             time.sleep(args.gap_ms / 1000)
-            return legacy_ns, call_runtime(spec, item)
-        runtime_ns = call_runtime(spec, item)
-        time.sleep(args.gap_ms / 1000)
-        return call_legacy(spec, item), runtime_ns
+            elapsed[side] = calls[side](spec, item)
+        return elapsed["legacy"], elapsed["runtime"]
 
     report: dict[str, Any] = {}
     for spec in specs:
@@ -725,6 +734,7 @@ def run_ab(args: argparse.Namespace) -> None:
                 ("legacy", "runtime") if round_index % 2 == 0 else ("runtime", "legacy")
             )
             for side in sides:
+                time.sleep(args.gap_ms / 1000)
                 if side == "legacy":
                     command = (
                         f"load\t{spec['Job']}\t{args.concurrency}\t{args.seconds}\n"
@@ -753,7 +763,15 @@ def run_ab(args: argparse.Namespace) -> None:
         }
         for job, values in report.items()
     }
-    Path(args.out).write_text(json.dumps(summary, indent=1) + "\n", encoding="utf-8")
+    calls_ms = {
+        job: {
+            side: [round(ns / 1e6, 3) for ns in values[side]]
+            for side in ("legacy", "runtime")
+        }
+        for job, values in report.items()
+    }
+    record = {job: {**summary[job], "latency_ms": calls_ms[job]} for job in summary}
+    Path(args.out).write_text(json.dumps(record) + "\n", encoding="utf-8")
     print(json.dumps(summary))
 
 
@@ -890,7 +908,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     ab.add_argument("--tree", required=True)
     ab.add_argument("--rounds", type=int, default=4)
     ab.add_argument("--legacy-cpus", type=int, default=None)
-    ab.add_argument("--gap-ms", type=float, default=0.0)
+    ab.add_argument(
+        "--gap-ms",
+        type=float,
+        default=0.0,
+        help="pause before every call and load window (the other side's pools settle)",
+    )
     for sub in (runtime, ab):
         sub.add_argument("--device", default="cpu")
         sub.add_argument("--profile", default="exact")
