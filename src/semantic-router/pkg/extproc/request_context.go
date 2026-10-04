@@ -400,6 +400,10 @@ type RequestContext struct {
 	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
 	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
 
+	// pendingTrustedFactsOutcomes holds trusted-facts gate outcomes evaluated
+	// before Replay created its record; startRouterReplay appends them.
+	pendingTrustedFactsOutcomes []routerreplay.Outcome
+
 	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
 	// configuration, or nil when the selected decision declares none.
 	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig

@@ -8,16 +8,19 @@ import (
 	"sync"
 	"testing"
 
+	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
-// runTrustedFactsLooper executes a tool-bearing confidence Looper decision and
+// runTrustedFactsLooper executes a tool-bearing confidence Looper decision,
+// requires a successful response, checks the gate outcome reached Replay, and
 // returns how many upstream model calls carried tools. Confidence forwards the
 // original tools to its models, unlike ratings or ReMoM which strip them.
-func runTrustedFactsLooper(t *testing.T, stageRoles []string) (calls, callsWithTools int) {
+func runTrustedFactsLooper(t *testing.T, stageRoles []string, want llmprotocol.TrustedOutcome) (calls, callsWithTools int) {
 	t.Helper()
 	var mu sync.Mutex
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +37,8 @@ func runTrustedFactsLooper(t *testing.T, stageRoles []string) (calls, callsWithT
 			"id": "chatcmpl-trusted", "object": "chat.completion", "created": 1, "model": "backend-model",
 			"choices": []map[string]interface{}{{
 				"index": 0, "message": map[string]interface{}{"role": "assistant", "content": "ok"}, "finish_reason": "stop",
+				// Confidence scores each model by avg_logprob and fails without it.
+				"logprobs": map[string]interface{}{"content": []map[string]interface{}{{"token": "ok", "logprob": -0.1}}},
 			}},
 			"usage": map[string]int{"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
 		})
@@ -67,14 +72,20 @@ func runTrustedFactsLooper(t *testing.T, stageRoles []string) (calls, callsWithT
 		RouterReplayPluginConfig: &replayConfig,
 		VSRSelectedDecision:      decision,
 	}
-	if _, err := router.handleLooperExecution(context.Background(), request, decision, ctx); err != nil {
+	response, err := router.handleLooperExecution(context.Background(), request, decision, ctx)
+	if err != nil {
 		t.Fatalf("handleLooperExecution: %v", err)
 	}
+	immediate := response.GetImmediateResponse()
+	if code := immediate.GetStatus().GetCode(); code != typev3.StatusCode_OK {
+		t.Fatalf("Looper status = %v, want OK; body: %s", code, immediate.GetBody())
+	}
+	requireTrustedFactsReplayOutcome(t, router.ReplayRecorder, ctx, want)
 	return calls, callsWithTools
 }
 
 func TestHandleLooperExecutionTrustedFactsDeniesExcludedFinalStage(t *testing.T) {
-	calls, withTools := runTrustedFactsLooper(t, []string{config.TrustedStageCandidate})
+	calls, withTools := runTrustedFactsLooper(t, []string{config.TrustedStageCandidate}, llmprotocol.TrustedDeny)
 	if calls == 0 {
 		t.Fatal("Looper made no upstream calls")
 	}
@@ -84,7 +95,7 @@ func TestHandleLooperExecutionTrustedFactsDeniesExcludedFinalStage(t *testing.T)
 }
 
 func TestHandleLooperExecutionTrustedFactsAllowsAuthorizedFinalStage(t *testing.T) {
-	calls, withTools := runTrustedFactsLooper(t, []string{config.TrustedStageFinal})
+	calls, withTools := runTrustedFactsLooper(t, []string{config.TrustedStageFinal}, llmprotocol.TrustedAllow)
 	if calls == 0 || withTools != calls {
 		t.Fatalf("authorized final stage must keep tools, %d/%d calls carried tools", withTools, calls)
 	}

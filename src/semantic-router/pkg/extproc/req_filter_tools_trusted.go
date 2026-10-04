@@ -90,8 +90,12 @@ func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *
 	r.recordTrustedFactsOutcome(ctx, toolsCfg, facts, outcome)
 	switch outcome {
 	case llmprotocol.TrustedDeny:
-		if len(request.Tools) > 0 {
+		// Responses hosted image_generation lives outside Request.Tools, so
+		// deny clears it too; its forced tool_choice then falls to the
+		// no-tools cleanup below.
+		if len(request.Tools) > 0 || request.ImageGeneration != nil {
 			request.Tools = nil
+			request.ImageGeneration = nil
 			request.Generation++
 		}
 		clearSemanticToolChoiceWhenNoTools(request)
@@ -132,8 +136,10 @@ func (r *OpenAIRouter) trustedFactsToolsAvailable(freshnessSeconds int) bool {
 
 // recordTrustedFactsOutcome records the bounded gate result: enforcement,
 // stage, declared sources, and outcome only — never prompts, arguments,
-// results, or credentials. The outcome is appended to the replay record when
-// one exists; recording never fails the request.
+// results, or credentials. The gate runs before Replay starts on both the
+// ordinary and Looper paths, so without a record the outcome is retained on
+// the request context and appended once Replay creates one. Recording never
+// fails the request.
 func (r *OpenAIRouter) recordTrustedFactsOutcome(ctx *RequestContext, toolsCfg *config.ToolsPluginConfig, facts llmprotocol.TrustedFacts, outcome llmprotocol.TrustedOutcome) {
 	decision := ""
 	if ctx != nil && ctx.VSRSelectedDecision != nil {
@@ -141,14 +147,7 @@ func (r *OpenAIRouter) recordTrustedFactsOutcome(ctx *RequestContext, toolsCfg *
 	}
 	reason := routerreplay.NewTrustedFactsReason(string(facts.Enforcement), string(facts.Stage), append([]string(nil), toolsCfg.TrustedFacts.TrustSources...), string(outcome))
 	logging.Infof("[ToolsPlugin] Decision %q trusted-facts outcome=%s enforcement=%s stage=%s", decision, reason.Outcome, reason.Enforcement, reason.Stage)
-	if ctx == nil || ctx.RouterReplayID == "" {
-		return
-	}
-	recorder := ctx.RouterReplayRecorder
-	if recorder == nil && r != nil {
-		recorder = r.ReplayRecorder
-	}
-	if recorder == nil {
+	if ctx == nil {
 		return
 	}
 	replayOutcome := routerreplay.Outcome{
@@ -166,7 +165,34 @@ func (r *OpenAIRouter) recordTrustedFactsOutcome(ctx *RequestContext, toolsCfg *
 	if decision != "" {
 		replayOutcome.Metadata["decision"] = decision
 	}
-	if err := recorder.AppendOutcome(ctx.RouterReplayID, replayOutcome); err != nil {
+	if ctx.RouterReplayID == "" {
+		ctx.pendingTrustedFactsOutcomes = append(ctx.pendingTrustedFactsOutcomes, replayOutcome)
+		return
+	}
+	recorder := ctx.RouterReplayRecorder
+	if recorder == nil && r != nil {
+		recorder = r.ReplayRecorder
+	}
+	appendTrustedFactsReplayOutcome(recorder, ctx.RouterReplayID, replayOutcome)
+}
+
+// appendPendingTrustedFactsOutcomes attaches gate outcomes retained before the
+// Replay record existed. Each outcome is appended once.
+func appendPendingTrustedFactsOutcomes(ctx *RequestContext, recorder *routerreplay.Recorder) {
+	if ctx == nil || ctx.RouterReplayID == "" || len(ctx.pendingTrustedFactsOutcomes) == 0 {
+		return
+	}
+	for _, outcome := range ctx.pendingTrustedFactsOutcomes {
+		appendTrustedFactsReplayOutcome(recorder, ctx.RouterReplayID, outcome)
+	}
+	ctx.pendingTrustedFactsOutcomes = nil
+}
+
+func appendTrustedFactsReplayOutcome(recorder *routerreplay.Recorder, replayID string, outcome routerreplay.Outcome) {
+	if recorder == nil {
+		return
+	}
+	if err := recorder.AppendOutcome(replayID, outcome); err != nil {
 		logging.Warnf("[ToolsPlugin] trusted-facts replay append failed: %v", err)
 	}
 }

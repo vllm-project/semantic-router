@@ -1,16 +1,20 @@
 package extproc
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
 // trustedFactsTestConfig builds an enabled tools plugin config carrying the
@@ -51,10 +55,13 @@ func loadedTrustedFactsToolsDB(t *testing.T) *tools.ToolsDatabase {
 	return db
 }
 
+// trustedFactsTestRequest carries function tools with object schemas so the
+// strict encoder accepts them on paths that serialize the request.
 func trustedFactsTestRequest() *llmprotocol.Request {
 	req := testNeutralRequest("model", "look up the weather")
 	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
-	req.Tools = []llmprotocol.Tool{{Name: "search"}, {Name: "calculator"}}
+	schema := json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}}}`)
+	req.Tools = []llmprotocol.Tool{{Name: "search", InputSchema: schema}, {Name: "calculator", InputSchema: schema}}
 	return req
 }
 
@@ -295,4 +302,112 @@ func TestHandleToolSelectionTrustedFactsAvailabilityNeedsBoundedEvidence(t *test
 			}
 		})
 	}
+}
+
+// Responses image_generation is normalized outside Request.Tools. An
+// authoritative deny must drop it and its forced tool_choice from the encoded
+// request, while allow keeps both.
+func TestHandleToolSelectionTrustedFactsGatesHostedImageGeneration(t *testing.T) {
+	body := []byte(`{"model":"model","input":"draw a chart and look up the weather",` +
+		`"tools":[{"type":"function","name":"search","parameters":{"type":"object","properties":{"query":{"type":"string"}}}},{"type":"image_generation"}],` +
+		`"tool_choice":{"type":"image_generation"}}`)
+	cases := map[string]struct {
+		trusted   *config.TrustedFactsConfig
+		wantImage bool
+	}{
+		"deny clears hosted tool": {
+			trusted: &config.TrustedFactsConfig{
+				Enabled:          true,
+				Enforcement:      config.TrustedEnforcementAuthoritative,
+				TrustSources:     []string{config.TrustedSourceRuntimeFresh},
+				FreshnessSeconds: 60,
+				StageRoles:       []string{config.TrustedStageCandidate},
+			},
+		},
+		"allow keeps hosted tool": {
+			trusted: &config.TrustedFactsConfig{
+				Enabled:      true,
+				Enforcement:  config.TrustedEnforcementAuthoritative,
+				TrustSources: []string{config.TrustedSourceOperatorPolicy},
+				StageRoles:   []string{config.TrustedStageCandidate},
+			},
+			wantImage: true,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			router := &OpenAIRouter{
+				ToolsDatabase:     loadedTrustedFactsToolsDB(t),
+				ResponseAPIFilter: NewResponseAPIFilter(NewMockResponseStore()),
+			}
+			ctx := trustedFactsTestContext(t, trustedFactsTestConfig(t, tc.trusted))
+			ctx.SourceFormat = llmprotocol.OpenAIResponsesV1
+			ctx.TraceContext = t.Context()
+			req, immediate := router.prepareProtocolRequest(body, ctx)
+			require.Nil(t, immediate)
+			require.NotNil(t, req.ImageGeneration, "fixture must normalize the hosted tool")
+
+			router.handleToolSelectionForRequest(req, &ext_proc.ProcessingResponse{}, ctx)
+
+			engine, err := router.protocolEngine()
+			require.NoError(t, err)
+			encoded, err := engine.EncodeRequest(llmprotocol.OpenAIResponsesV1, *ctx.SemanticRequest, ctx.ProtocolEnvelope)
+			require.NoError(t, err)
+			var wire struct {
+				Tools      []map[string]any `json:"tools"`
+				ToolChoice any              `json:"tool_choice"`
+			}
+			require.NoError(t, json.Unmarshal(encoded.Body, &wire))
+			hasImage := false
+			for _, tool := range wire.Tools {
+				if tool["type"] == "image_generation" {
+					hasImage = true
+				}
+			}
+			require.Equal(t, tc.wantImage, hasImage, "encoded tools: %s", encoded.Body)
+			if tc.wantImage {
+				require.Equal(t, map[string]any{"type": "image_generation"}, wire.ToolChoice)
+				return
+			}
+			require.Empty(t, wire.Tools)
+			require.Nil(t, wire.ToolChoice, "deny must drop the forced hosted tool_choice")
+		})
+	}
+}
+
+// The gate runs before the ordinary path starts its Replay record, so the
+// outcome must survive until the record exists.
+func TestEntrypointRoutingReplayRecordsTrustedFactsOutcome(t *testing.T) {
+	calls := 0
+	r, ctx, model := dispatchReplayFixture(t, false, renderMock(t, &calls, 0, 0))
+	cfg := trustedFactsTestConfig(t, &config.TrustedFactsConfig{
+		Enabled:          true,
+		Enforcement:      config.TrustedEnforcementAuthoritative,
+		TrustSources:     []string{config.TrustedSourceRuntimeFresh},
+		FreshnessSeconds: 60,
+		StageRoles:       []string{config.TrustedStageCandidate},
+	})
+	ctx.VSRSelectedDecision.Plugins = append(ctx.VSRSelectedDecision.Plugins, mustToolsDecisionPlugin(t, cfg))
+	ctx.SemanticRequest.Tools = trustedFactsTestRequest().Tools
+	ctx.SemanticRequest.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
+
+	_, err := r.handleEntrypointModelRouting(ctx.SemanticRequest, "auto", ctx.VSRSelectedDecision.Name, entropy.ReasoningDecision{}, model, ctx)
+	require.NoError(t, err)
+	require.Empty(t, ctx.SemanticRequest.Tools)
+	requireTrustedFactsReplayOutcome(t, r.ReplayRecorder, ctx, llmprotocol.TrustedDeny)
+}
+
+func requireTrustedFactsReplayOutcome(t *testing.T, recorder *routerreplay.Recorder, ctx *RequestContext, want llmprotocol.TrustedOutcome) {
+	t.Helper()
+	require.NotEmpty(t, ctx.RouterReplayID, "Replay record was not created")
+	record, ok := recorder.GetRecord(ctx.RouterReplayID)
+	require.True(t, ok)
+	var verdicts []string
+	for _, outcome := range record.Outcomes {
+		if outcome.Target == "trusted_facts" {
+			verdicts = append(verdicts, outcome.Verdict)
+		}
+	}
+	require.Equal(t, []string{string(want)}, verdicts, "trusted_facts outcomes on the Replay record")
+	require.Empty(t, ctx.pendingTrustedFactsOutcomes, "retained outcomes must be appended exactly once")
 }
