@@ -1,6 +1,9 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // MaxUpstreamCallsPerRequest is the hard per-request amplification budget for
 // Looper-family algorithms. Concurrency controls (max_concurrent) bound
@@ -16,9 +19,18 @@ const MaxUpstreamCallsPerRequest = 32
 // EstimatedReMoMUpstreamCalls returns the statically knowable upstream call
 // count for a ReMoM breadth schedule: every entry is one parallel round and
 // ReMoM always appends one final synthesis round.
+//
+// The running sum saturates at math.MaxInt instead of overflowing, so an
+// oversized but otherwise well-formed schedule still compares greater than
+// MaxUpstreamCallsPerRequest rather than wrapping to a small or negative value.
+// Entries are expected to be positive; validateReMoMBreadthSchedule rejects
+// non-positive entries first.
 func EstimatedReMoMUpstreamCalls(schedule []int) int {
 	total := 1 // final synthesis round
 	for _, breadth := range schedule {
+		if breadth > math.MaxInt-total {
+			return math.MaxInt
+		}
 		total += breadth
 	}
 	return total
