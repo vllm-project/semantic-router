@@ -5,9 +5,11 @@ On the exact profile (answers identical to the packages' engine,
 every measured length on ROCm (by 7–49% at the median) and equal to it on
 CPU, where both run the same operations on MKL. The opt-in approximate
 profiles serve the 4B and 9B 2–4× faster than the engine on ROCm and 1.5×
-on CPU, and the 0.3B up to 28% faster. One Vela 2.0 0.3B request also
-replaces the seven Vela 1.0 classifier calls a router request made: on CPU
-it is 2.2× faster than their sum at the median and 10× at p95.
+on CPU, and the 0.3B up to 28% faster. On CPU, `max_speed` runs the 0.3B on
+a `float32-packed` copy of its linear layers, 1.6–1.7× faster than `exact`
+at every length. One Vela 2.0 0.3B request also replaces the seven Vela 1.0
+classifier calls a router request made: on CPU it is 2.2× faster than their
+sum at the median and 10× at p95, and 3.2× at the median under `max_speed`.
 
 - **Date:** 2026-10-04.
 - **Devices:** one AMD Instinct MI325X (gfx942) per run, in the Decision 2.0
@@ -71,6 +73,70 @@ it is 2.2× faster than their sum at the median and 10× at p95.
   2,048. `batching` (and `max_speed`) also merge concurrent requests, which a
   CPU does not run faster (one request already keeps the 16 cores busy) and
   which costs a quarter of the throughput at 512 tokens.
+
+## Vela-2.0-0.3B reduced copies (`max_speed`)
+
+`max_speed` serves the 0.3B as `batching` does (packed sequences, 2 ms
+window), on a reduced copy of the backbone's linear layers where the built-in
+entry consents to one (design section 5.4). The 0.3B consents to
+`float32-packed` on CPU and to no copy on GPUs: `vela2-parity.md` has the
+accuracy, and `vela2-reduced.json` the raw summaries of both records.
+
+- **Date:** 2026-10-04, at `7b76fdd29` (the IP2 staging head merged, with
+  its scheduler changes). A first run at `10ca64d02` agrees within the node's
+  noise; `vela2-reduced.json` has both.
+- **Sides:** `exact` and `batching` on one model without a copy, and one
+  `max_speed` model per copy kind (consented for the run), all in one process
+  (`tools/vela2_bench.py --sides runtime,runtime-batching,max_speed:KIND`).
+  Same workload, warm-up and request counts as above; at concurrency 1 the
+  sides take turns per request.
+- **CPU:** 16 cores of an AMD EPYC with AVX-512 BF16 (no AMX), PyTorch 2.10's
+  CPU build (MKL, oneDNN), node load 15–42. **ROCm:** one MI325X, 16 host
+  cores, release image.
+
+CPU, p50 / p95 ms at concurrency 1:
+
+| Tokens | exact | batching | `float32-packed` | `bfloat16` | `int8` |
+| --- | --- | --- | --- | --- | --- |
+| 32 | 128.2 / 132.8 | 130.4 / 137.6 | 79.8 / 83.6 | 72.2 / 74.6 | 66.5 / 69.1 |
+| 128 | 146.5 / 153.7 | 149.7 / 160.4 | 91.3 / 99.0 | 80.3 / 85.3 | 75.5 / 77.6 |
+| 512 | 253.0 / 272.2 | 231.3 / 244.2 | 145.8 / 153.0 | 129.3 / 137.2 | 119.7 / 126.4 |
+| 2,048 | 963.5 / 1,052.5 | 808.3 / 881.6 | 595.6 / 681.4 | 385.2 / 413.2 | 563.8 / 619.8 |
+
+CPU, requests per second at concurrency 4:
+
+| Tokens | exact | batching | `float32-packed` | `bfloat16` | `int8` |
+| --- | --- | --- | --- | --- | --- |
+| 32 | 7.76 | 9.23 | 15.05 | 16.20 | 18.47 |
+| 128 | 6.82 | 7.28 | 12.10 | 13.87 | 15.07 |
+| 512 | 3.90 | 3.36 | 4.46 | 6.76 | 4.76 |
+| 2,048 | 1.07 | 1.08 | 1.41 | 1.97 | 1.27 |
+
+ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
+
+| Tokens | exact | batching | `bfloat16` | exact req/s | batching req/s | `bfloat16` req/s |
+| --- | --- | --- | --- | --- | --- | --- |
+| 32 | 7.4 / 8.0 | 9.0 / 9.8 | 10.6 / 15.1 | 151.4 | 157.2 | 286.3 |
+| 128 | 8.2 / 8.7 | 9.8 / 10.7 | 10.4 / 11.2 | 130.1 | 160.7 | 229.3 |
+| 512 | 12.2 / 12.8 | 14.6 / 15.4 | 12.4 / 13.3 | 79.8 | 91.5 | 123.1 |
+| 2,048 | 27.3 / 30.2 | 24.4 / 26.4 | 17.7 / 19.8 | 36.6 | 48.0 | 78.2 |
+
+- **CPU, `float32-packed`:** oneDNN's pre-packed FP32 linear (weights
+  reordered once at load) is 1.5–1.8× faster than `exact` at concurrency 1,
+  on p50 and p95 at every length (1.6–1.7× at the median), and gives
+  1.1–1.9× its throughput at concurrency 4. It also beats `batching`, the
+  same packed path on MKL's `F.linear`, on every row. At concurrency 4
+  `max_speed` merges concurrent requests as `batching` does, which widens the
+  latency spread: at 512 tokens its p95 was 1,142 ms against `exact`'s
+  1,041 ms in this run, and 998 against 1,122 ms in the first. Its answers
+  stay within about 1e-5 of `exact`.
+- **CPU, `bfloat16` and `int8`:** faster still on this CPU (BF16 2.5× at
+  2,048 tokens), but `int8` fails the accuracy floor; `vela2-parity.md`
+  explains why BF16 gets no consent.
+- **ROCm, `bfloat16`:** faster at 2,048 tokens and in throughput, but a
+  single request up to 512 tokens is slower than `exact` (the batching window
+  and the packed path on a launch-bound forward), and it fails the accuracy
+  floor on spans, so GPUs load no copy.
 
 ## Vela-2.0-4B and 9B on ROCm
 
@@ -142,11 +208,16 @@ legacy calls succeeded):
 | Vela 1.0, seven calls | 252.9 | 1,445.9 | 754.5 | 1.33 |
 | Vela 2.0 0.3B, exact | 117.6 | 141.7 | 141.1 | 7.09 |
 | Vela 2.0 0.3B engine | 118.4 | 143.6 | 141.9 | 7.05 |
+| Vela 2.0 0.3B, `max_speed` (`float32-packed`) | 82.9 | 107.7 | 96.5 | 10.37 |
 
 Per input, the Vela 2.0 request is 2.2× faster than the seven calls at the
-median. Long inputs gain the most: the legacy jailbreak and PII models read
-them in 512-token windows that overlap by half (the other five cut them at
-512 tokens), where the Vela 2.0 request reads them once.
+median, and 3.2× under `max_speed`. Long inputs gain the most: the legacy
+jailbreak and PII models read them in 512-token windows that overlap by half
+(the other five cut them at 512 tokens), where the Vela 2.0 request reads
+them once. The `max_speed` row comes from a later run at `7b76fdd29` that
+interleaved it with `exact` on the same inputs; `exact` measured 134.5 /
+168.2 / 157.6 ms and 6.34 requests per second there (the node was about 10%
+slower than in the first run).
 
 ROCm (the AMD recipe's ONNX Runtime path, MIGraphX; the 360 inputs on which
 all seven legacy calls succeeded):
@@ -176,6 +247,10 @@ more about that path than about the models.
   trees into one row per prefix (blocks merged by log-sum-exp, no block
   padding) and the 0.3B sequences back to back (no padding; local layers in
   query blocks on long rows); `vela2-parity.md` records their accuracy.
+- **A reduced copy where the records allow one.** Under `max_speed` the
+  0.3B's packed batches run on a `float32-packed` copy of its linear layers on
+  CPU (oneDNN's pre-packed FP32 GEMMs), while `exact` keeps its own linear
+  weights; the copy shares every other parameter with it.
 - **Graphs, measured and left out.** A graph per exact 4B tree shape replays
   in 1–2 ms less than the 80–165 ms eager forward at 32–512 prompt tokens
   (the forward is GPU-bound), while capturing a shape costs about four

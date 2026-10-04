@@ -4,7 +4,7 @@ sidebar_label: Safety 和 Hazard
 translation:
   source_commit: "915ddf56e0335e2046c38aa17c4aec6233908039"
   source_file: "docs/training/mmbert-safety-classifier.md"
-  outdated: false
+  outdated: true
 ---
 
 # 训练 Vela Safety 和 Hazard {#train-vela-safety-and-hazard}
