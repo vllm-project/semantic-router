@@ -2,12 +2,24 @@
 
 Requests are validated and rendered before they reach the queue, so the
 queue only holds runnable work. One worker thread owns the model's device:
-it drains the queue, drops jobs whose deadline passed, asks the active
-profile to form batches, runs them and resolves each job's future.
+it takes queued jobs, drops those whose deadline passed, asks each job's
+profile to form batches and runs the batches one at a time. A job is answered
+as soon as its own batches have run.
+
+Planned batches run in order of their jobs' expected finish: the time a job
+was queued plus its tokens at the measured cost per token. Short work goes
+first, yet a long job still runs once the work queued before its expected
+finish is done, so nothing starves. Between two forwards the worker takes the
+jobs that arrived meanwhile (those of profiles that coalesce once they have
+waited one batching window), so a short request waits for the forward in flight,
+not for the rest of a long request. The order of forwards never changes what
+a batch contains, so answers are unchanged.
 """
 
 from __future__ import annotations
 
+import heapq
+import itertools
 import threading
 import time
 from collections import deque
@@ -18,9 +30,14 @@ from functools import partial
 from typing import Any
 
 from ..errors import RuntimeServiceError
-from ..plugins.base import DEADLINE, Job, LoadedModel, Profile
+from ..plugins.base import DEADLINE, Batch, Job, LoadedModel, Profile
 
 __all__ = ["DEADLINE", "Scheduler", "SchedulerLimits"]
+
+# Seconds per token assumed until the first forward is measured, and the
+# weight of each later forward in the running estimate.
+INITIAL_TOKEN_COST = 2e-5
+COST_SMOOTHING = 0.1
 
 
 @dataclass
@@ -36,6 +53,19 @@ class _Pending:
     future: Future
     tokens: int
     results: list[Any] = field(default_factory=list)
+    remaining: int = 0
+    finish: float = 0.0
+    started: bool = False
+
+
+@dataclass(order=True)
+class _Planned:
+    """One batch waiting to run, ordered by its earliest owner's expected finish."""
+
+    finish: float
+    sequence: int
+    batch: Batch = field(compare=False)
+    owners: list[_Pending] = field(compare=False)
 
 
 class Scheduler:
@@ -59,6 +89,9 @@ class Scheduler:
         self._stopped = False
         self._groups = 0
         self._failure: BaseException | None = None
+        self._ready: list[_Planned] = []
+        self._sequence = itertools.count()
+        self._token_cost: float | None = None
         self._thread = threading.Thread(
             target=self._loop, name="vllm-sr-runtime-worker", daemon=True
         )
@@ -80,8 +113,9 @@ class Scheduler:
         return self._failure
 
     def depth(self) -> int:
+        """Queued jobs plus planned batches still waiting for the device."""
         with self._lock:
-            return len(self._queue)
+            return len(self._queue) + len(self._ready)
 
     # -- submission ----------------------------------------------------------
 
@@ -138,16 +172,48 @@ class Scheduler:
 
     # -- worker --------------------------------------------------------------
 
-    def _take(self) -> list[_Pending]:
+    def _loop(self) -> None:
+        while True:
+            taken = self._take(wait=not self._ready)
+            if taken is None:
+                self._abandon()
+                return
+            self._plan(taken)
+            if self._ready:
+                self._run(heapq.heappop(self._ready))
+
+    def _take(self, *, wait: bool) -> list[_Pending] | None:
+        """Queued jobs to plan, or None once stopped.
+
+        With ``wait`` (nothing planned) block until work arrives and, when a
+        queued job's profile coalesces, hold the batching window, then take
+        everything. Without it take at once the jobs of profiles that don't
+        coalesce and the coalescing jobs that have already waited a window.
+        """
+        window = self.limits.batch_window_ms / 1000.0
         with self._lock:
-            while not self._queue and not self._stopped:
-                self._lock.wait()
+            if wait:
+                while not self._queue and not self._stopped:
+                    self._lock.wait()
             if self._stopped:
-                return []
-            window = self.limits.batch_window_ms / 1000.0
-            if window > 0 and any(
-                self.profiles[p.job.profile].coalesces for p in self._queue
-            ):
+                return None
+            if not wait:
+                now = time.monotonic()
+                taken: list[_Pending] = []
+                kept: deque[_Pending] = deque()
+                for pending in self._queue:
+                    ripe = now - pending.job.enqueued >= window
+                    if ripe or not self.profiles[pending.job.profile].coalesces:
+                        taken.append(pending)
+                    else:
+                        kept.append(pending)
+                self._queue = kept
+                self._queued_tokens = sum(pending.tokens for pending in kept)
+                return taken
+            coalescing = any(
+                self.profiles[pending.job.profile].coalesces for pending in self._queue
+            )
+            if window > 0 and coalescing:
                 deadline = time.monotonic() + window
                 while (
                     not self._stopped and (remaining := deadline - time.monotonic()) > 0
@@ -158,74 +224,118 @@ class Scheduler:
             self._queued_tokens = 0
             return taken
 
-    def _loop(self) -> None:
-        while True:
-            taken = self._take()
-            if not taken:
-                return
-            now = time.monotonic()
-            live = []
-            for pending in taken:
-                if pending.job.deadline is not None and now > pending.job.deadline:
-                    pending.future.set_result(DEADLINE)
-                    self.observe("deadline", {"questions": len(pending.job.items)})
-                    continue
-                self.observe("queue", {"seconds": now - pending.job.enqueued})
-                pending.results = [None] * len(pending.job.items)
-                live.append(pending)
-            by_profile: dict[str, list[_Pending]] = {}
-            for pending in live:
-                by_profile.setdefault(pending.job.profile, []).append(pending)
-            for name, group in by_profile.items():
-                self._run_profile(self.profiles[name], group)
-
-    def _run_profile(self, profile: Profile, group: list[_Pending]) -> None:
-        owners = {id(pending.job): pending for pending in group}
-        try:
-            batches = profile.plan(
-                [pending.job for pending in group], self.model.forward_token_budget()
-            )
-        except Exception as exc:
-            for pending in group:
-                pending.future.set_exception(exc)
-            return
-        failed: set[int] = set()
-        for batch in batches:
-            if all(id(job) in failed for job, _ in batch.parts):
+    def _plan(self, taken: list[_Pending]) -> None:
+        now = time.monotonic()
+        by_profile: dict[str, list[_Pending]] = {}
+        for pending in taken:
+            if pending.job.deadline is not None and now > pending.job.deadline:
+                self._expire(pending)
                 continue
-            items = batch.items()
-            started = time.monotonic()
+            pending.results = [None] * len(pending.job.items)
+            pending.remaining = len(pending.job.items)
+            pending.finish = pending.job.enqueued + pending.tokens * (
+                self._token_cost or INITIAL_TOKEN_COST
+            )
+            by_profile.setdefault(pending.job.profile, []).append(pending)
+        for name, group in by_profile.items():
+            owners = {id(pending.job): pending for pending in group}
             try:
-                if batch.shared_prefix:
-                    work = partial(
-                        self.model.run, items, shared_prefix=batch.shared_prefix
-                    )
-                elif not batch.exact:
-                    work = partial(self.model.run_approximate, items)
-                else:
-                    work = partial(self.model.run, items)
-                values = self.execute(work)
+                batches = self.profiles[name].plan(
+                    [pending.job for pending in group],
+                    self.model.forward_token_budget(),
+                )
             except Exception as exc:
-                self._failure = exc
-                for job, _ in batch.parts:
-                    if id(job) not in failed:
-                        failed.add(id(job))
-                        owners[id(job)].future.set_exception(exc)
+                for pending in group:
+                    pending.future.set_exception(exc)
                 continue
-            self.observe(
-                "forward",
-                {
-                    "seconds": time.monotonic() - started,
-                    "rows": len(items),
-                    "tokens": sum(len(item.ids) for item in items),
-                },
+            planned_rows = dict.fromkeys(owners, 0)
+            for batch in batches:
+                members = {id(job): owners[id(job)] for job, _ in batch.parts}
+                for job, indices in batch.parts:
+                    planned_rows[id(job)] += len(indices)
+                heapq.heappush(
+                    self._ready,
+                    _Planned(
+                        min(member.finish for member in members.values()),
+                        next(self._sequence),
+                        batch,
+                        list(members.values()),
+                    ),
+                )
+            for key, rows in planned_rows.items():
+                if rows != owners[key].remaining:
+                    owners[key].future.set_exception(
+                        RuntimeError(f"profile {name!r} did not plan every item once")
+                    )
+
+    def _run(self, planned: _Planned) -> None:
+        now = time.monotonic()
+        for pending in planned.owners:
+            if (
+                not pending.future.done()
+                and pending.job.deadline is not None
+                and now > pending.job.deadline
+            ):
+                self._expire(pending)
+        if all(pending.future.done() for pending in planned.owners):
+            return
+        batch = planned.batch
+        items = batch.items()
+        started = time.monotonic()
+        for pending in planned.owners:
+            if not pending.started:
+                pending.started = True
+                self.observe("queue", {"seconds": started - pending.job.enqueued})
+        try:
+            if batch.shared_prefix:
+                work = partial(self.model.run, items, shared_prefix=batch.shared_prefix)
+            elif not batch.exact:
+                work = partial(self.model.run_approximate, items)
+            else:
+                work = partial(self.model.run, items)
+            values = self.execute(work)
+        except Exception as exc:
+            self._failure = exc
+            for pending in planned.owners:
+                if not pending.future.done():
+                    pending.future.set_exception(exc)
+            return
+        seconds = time.monotonic() - started
+        tokens = sum(len(item.ids) for item in items)
+        self.observe(
+            "forward", {"seconds": seconds, "rows": len(items), "tokens": tokens}
+        )
+        if tokens:
+            sample = seconds / tokens
+            self._token_cost = (
+                sample
+                if self._token_cost is None
+                else self._token_cost + COST_SMOOTHING * (sample - self._token_cost)
             )
-            cursor = 0
-            for job, indices in batch.parts:
-                pending = owners[id(job)]
-                for index in indices:
-                    pending.results[index] = values[cursor]
-                    cursor += 1
-        for pending in group:
-            if id(pending.job) not in failed and not pending.future.done():
+        owners = {id(pending.job): pending for pending in planned.owners}
+        cursor = 0
+        for job, indices in batch.parts:
+            pending = owners[id(job)]
+            for index in indices:
+                pending.results[index] = values[cursor]
+                cursor += 1
+            pending.remaining -= len(indices)
+            if pending.remaining == 0 and not pending.future.done():
                 pending.future.set_result(pending.results)
+
+    def _expire(self, pending: _Pending) -> None:
+        pending.future.set_result(DEADLINE)
+        self.observe("deadline", {"questions": len(pending.job.items)})
+
+    def _abandon(self) -> None:
+        """Answer every queued or planned job once the scheduler stops."""
+        with self._lock:
+            queued = list(self._queue)
+            self._queue.clear()
+            self._queued_tokens = 0
+        planned = [pending for entry in self._ready for pending in entry.owners]
+        self._ready.clear()
+        error = RuntimeServiceError("not_ready", "the runtime is shutting down")
+        for pending in itertools.chain(queued, planned):
+            if not pending.future.done():
+                pending.future.set_exception(error)

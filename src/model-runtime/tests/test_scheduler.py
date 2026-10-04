@@ -1,3 +1,4 @@
+import dataclasses
 import threading
 import time
 
@@ -5,8 +6,9 @@ import pytest
 from vllm_sr_runtime.errors import RuntimeServiceError
 from vllm_sr_runtime.plugins.base import Job, LoadedModel, RenderedItem
 from vllm_sr_runtime.profiles.batching import BatchingProfile
-from vllm_sr_runtime.profiles.exact import ExactProfile
+from vllm_sr_runtime.profiles.exact import ExactProfile, merged
 from vllm_sr_runtime.profiles.shared_context import SharedContextProfile
+from vllm_sr_runtime.scheduler import scheduler as scheduler_module
 from vllm_sr_runtime.scheduler.planner import micro_batches
 from vllm_sr_runtime.scheduler.scheduler import DEADLINE, Scheduler, SchedulerLimits
 
@@ -195,7 +197,7 @@ class FusingModel(FakeModel):
 def test_exact_runs_queued_requests_together_only_on_a_batch_invariant_model():
     jobs = [
         Job([item("a", 9)], None, 0.0, "exact"),
-        Job([item("b", 5)], None, 0.0, "exact"),
+        Job([item("b", 13)], None, 0.0, "exact"),
     ]
     profile = ExactProfile()
     profile.available(FakeModel())
@@ -205,6 +207,192 @@ def test_exact_runs_queued_requests_together_only_on_a_batch_invariant_model():
     profile.available(invariant)
     (batch,) = profile.plan(jobs, None)
     assert [job for job, _ in batch.parts] == jobs and batch.exact
+
+
+def names(batch):
+    return sorted(row.question_id for row in batch.items())
+
+
+def window(name, length, start):
+    return dataclasses.replace(
+        item(name, length), ids=list(range(start, start + length))
+    )
+
+
+def test_shared_batches_hold_one_length_class_within_the_cap():
+    short = Job([item("s1", 5), item("s2", 7)], None, 0.0, "exact")
+    windows = Job(
+        [window(f"w{i}", 512, 1000 * i) for i in range(3)] + [item("tail", 6)],
+        None,
+        0.0,
+        "exact",
+    )
+    batches = merged([windows, short], cap=512)
+    assert [names(batch) for batch in batches] == [
+        ["s1", "s2", "tail"],
+        ["w0"],
+        ["w1"],
+        ["w2"],
+    ]
+
+
+def test_shared_batches_keep_identical_sequences_together():
+    first = Job([item("a", 512)], None, 0.0, "exact")
+    other = Job([item("b", 500)], None, 0.0, "exact")
+    twin = Job([item("c", 512)], None, 0.0, "exact")
+    batches = merged([first, other, twin], cap=512)
+    assert [names(batch) for batch in batches] == [["b"], ["a", "c"]]
+
+
+class GatedModel(FakeModel):
+    """Blocks a forward that holds a gated item until its gate opens."""
+
+    def __init__(self, budget=None, gates=None):
+        super().__init__(budget=budget)
+        self.gates = gates or {}
+        self.entered = threading.Event()
+
+    def run(self, items):
+        self.calls.append([i.question_id for i in items])
+        for row in items:
+            if row.question_id in self.gates:
+                self.entered.set()
+                self.gates[row.question_id].wait(5)
+        return [[0.0, float(len(i.ids))] for i in items]
+
+
+def started(model, limits=None, token_cost=None):
+    scheduler = Scheduler(model, {"exact": ExactProfile()}, limits)
+    scheduler._token_cost = token_cost
+    scheduler.start()
+    return scheduler
+
+
+def test_a_job_is_answered_as_soon_as_its_own_batches_ran():
+    gate = threading.Event()
+    model = GatedModel(gates={"blocker": gate, "long": gate})
+    scheduler = started(model)
+    try:
+        scheduler.submit([item("blocker", 8)], deadline=None, profile="exact")
+        assert model.entered.wait(5)
+        long = scheduler.submit([item("long", 64)], deadline=None, profile="exact")
+        short = scheduler.submit([item("short", 8)], deadline=None, profile="exact")
+        model.entered.clear()
+        gate.clear()
+        threading.Timer(0.05, gate.set).start()
+        assert short.result(timeout=5) == [[0.0, 8.0]]
+        long.result(timeout=5)
+        assert model.calls == [["blocker"], ["short"], ["long"]]
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
+def test_short_requests_run_between_the_batches_of_a_long_one(monkeypatch):
+    monkeypatch.setattr(scheduler_module, "COST_SMOOTHING", 0.0)
+    gate = threading.Event()
+    model = GatedModel(budget=64, gates={"long0": gate})
+    scheduler = started(model, token_cost=1e-2)
+    try:
+        long = scheduler.submit(
+            [item("long0", 64), item("long1", 64)], deadline=None, profile="exact"
+        )
+        assert model.entered.wait(5)
+        short = scheduler.submit([item("short", 8)], deadline=None, profile="exact")
+        time.sleep(0.02)
+        gate.set()
+        short.result(timeout=5)
+        long.result(timeout=5)
+        assert model.calls == [["long0"], ["short"], ["long1"]]
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
+def test_a_long_job_runs_before_work_queued_after_its_expected_finish(monkeypatch):
+    monkeypatch.setattr(scheduler_module, "COST_SMOOTHING", 0.0)
+    gate = threading.Event()
+    model = GatedModel(budget=64, gates={"long0": gate})
+    scheduler = started(model, token_cost=1e-6)
+    try:
+        long = scheduler.submit(
+            [item("long0", 64), item("long1", 64)], deadline=None, profile="exact"
+        )
+        assert model.entered.wait(5)
+        time.sleep(0.02)
+        late = scheduler.submit([item("late", 8)], deadline=None, profile="exact")
+        gate.set()
+        late.result(timeout=5)
+        long.result(timeout=5)
+        assert model.calls == [["long0"], ["long1"], ["late"]]
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
+def test_coalescing_jobs_join_a_busy_worker_after_one_window():
+    gate = threading.Event()
+    model = GatedModel(budget=64, gates={"long0": gate})
+    scheduler = Scheduler(
+        model,
+        {"exact": ExactProfile(), "batching": BatchingProfile()},
+        SchedulerLimits(batch_window_ms=20),
+    )
+    scheduler.start()
+    try:
+        long = scheduler.submit(
+            [item("long0", 64), item("long1", 64)], deadline=None, profile="exact"
+        )
+        assert model.entered.wait(5)
+        batched = scheduler.submit([item("b", 8)], deadline=None, profile="batching")
+        time.sleep(0.05)
+        gate.set()
+        batched.result(timeout=5)
+        long.result(timeout=5)
+        assert ["b"] in model.calls
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
+def test_a_job_past_its_deadline_skips_its_remaining_batches():
+    gate = threading.Event()
+    model = GatedModel(budget=64, gates={"long0": gate})
+    scheduler = started(model)
+    try:
+        future = scheduler.submit(
+            [item("long0", 64), item("long1", 64)],
+            deadline=time.monotonic() + 0.05,
+            profile="exact",
+        )
+        assert model.entered.wait(5)
+        time.sleep(0.1)
+        gate.set()
+        assert future.result(timeout=5) is DEADLINE
+        assert model.calls == [["long0"]]
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
+def test_stopping_answers_every_planned_and_queued_job():
+    gate = threading.Event()
+    model = GatedModel(budget=64, gates={"long0": gate})
+    scheduler = started(model)
+    long = scheduler.submit(
+        [item("long0", 64), item("long1", 64)], deadline=None, profile="exact"
+    )
+    assert model.entered.wait(5)
+    queued = scheduler.submit([item("queued", 8)], deadline=None, profile="exact")
+    stopper = threading.Thread(target=scheduler.stop)
+    stopper.start()
+    time.sleep(0.05)
+    gate.set()
+    stopper.join(5)
+    for future in (long, queued):
+        with pytest.raises(RuntimeServiceError) as error:
+            future.result(timeout=5)
+        assert error.value.code == "not_ready"
 
 
 def test_exact_runs_a_bundle_group_as_one_batch_only_when_the_model_fuses():

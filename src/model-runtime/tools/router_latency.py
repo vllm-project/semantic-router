@@ -155,6 +155,26 @@ def summary(latencies: list[float], wall: float) -> dict[str, float]:
     }
 
 
+def concurrent_pass(client: Client, work: list[str], concurrency: int) -> dict:
+    """Send ``work`` from ``concurrency`` closed-loop callers."""
+    latencies: list[float] = []
+    lock = threading.Lock()
+    failures = 0
+
+    def one(text: str) -> None:
+        nonlocal failures
+        elapsed, status, _ = client.preview(text)
+        with lock:
+            latencies.append(elapsed)
+            if status != 200:
+                failures += 1
+
+    started = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        list(pool.map(one, work))
+    return {**summary(latencies, time.perf_counter() - started), "errors": failures}
+
+
 def cmd_run(args: argparse.Namespace) -> None:
     texts = json.loads(Path(args.corpus).read_text(encoding="utf-8"))
     host, _, port = args.url.rpartition(":")
@@ -183,25 +203,9 @@ def cmd_run(args: argparse.Namespace) -> None:
     result["outcomes"] = outcomes
     result["first_response"] = client.preview(texts[0])[2]
     for concurrency in args.concurrency:
-        latencies: list[float] = []
-        lock = threading.Lock()
-        failures = [0]
-
-        def one(text: str) -> None:
-            elapsed, status, _ = client.preview(text)
-            with lock:
-                latencies.append(elapsed)
-                if status != 200:
-                    failures[0] += 1
-
-        work = texts * args.repeat
-        started = time.perf_counter()
-        with ThreadPoolExecutor(max_workers=concurrency) as pool:
-            list(pool.map(one, work))
-        result["passes"][f"concurrency_{concurrency}"] = {
-            **summary(latencies, time.perf_counter() - started),
-            "errors": failures[0],
-        }
+        result["passes"][f"concurrency_{concurrency}"] = concurrent_pass(
+            client, texts * args.repeat, concurrency
+        )
     Path(args.out).write_text(
         json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8"
     )
@@ -231,7 +235,7 @@ def cmd_compare(args: argparse.Namespace) -> None:
         )
     differ = [
         (i, a, b)
-        for i, (a, b) in enumerate(zip(base["outcomes"], new["outcomes"]))
+        for i, (a, b) in enumerate(zip(base["outcomes"], new["outcomes"], strict=True))
         if (a["decision"], a["model"]) != (b["decision"], b["model"])
     ]
     print(f"decisions differing: {len(differ)} / {len(base['outcomes'])}")

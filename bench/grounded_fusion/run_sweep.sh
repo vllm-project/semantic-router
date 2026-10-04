@@ -18,13 +18,12 @@ DRACO="${DRACO_PATH:-$HOME/Downloads/draco.json}"
 DOMAINS="${DOMAINS:-Medicine,Law}"
 THRESHOLDS=(0.34 0.55 0.60)
 RESBASE=bench/grounded_fusion/results_sweep
-export LD_LIBRARY_PATH="$REPO/candle-binding/target/release:$REPO/ml-binding/target/release:$REPO/nlp-binding/target/release"
 
 start_router() {  # $1 = config path
   pkill -f "bin/router" 2>/dev/null || true; sleep 3
   nohup ./bin/router -config="$1" > /tmp/router_ab.log 2>&1 &
   for _ in $(seq 1 40); do
-    if grep -q "hallucination_nli_initialized" /tmp/router_ab.log 2>/dev/null \
+    if curl -sf http://localhost:8080/ready >/dev/null 2>&1 \
        && lsof -nP -iTCP:50051 -sTCP:LISTEN >/dev/null 2>&1; then
       echo "  router ready ($1)"; sleep 2; return 0
     fi

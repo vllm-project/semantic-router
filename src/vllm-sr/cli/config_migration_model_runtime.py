@@ -16,7 +16,7 @@ from cli.config_migration_embeddings import migrate_embedding_models
 from cli.config_migration_legacy_models import (
     PREPARED_BUNDLE_ROOT,
     Replacement,
-    follow_mapping_path,
+    is_legacy_mapping,
     is_retired_nli,
     replacement_for,
     runtime_artifact,
@@ -29,9 +29,9 @@ from cli.config_migration_paths import (
     dict_at,
     signal_maps,
 )
+from cli.model_runtime_retired import REMOVED_PROVIDERS
 
 MODEL_RUNTIME = "model_runtime"
-REMOVED_PROVIDERS = frozenset({"candle", "ort", "openvino"})
 # Legacy device prefixes and the runtime accelerator that replaces them.
 _DEVICE_PREFIXES = {"cuda": "cuda", "rocm": "rocm", "migraphx": "rocm"}
 _EXECUTION_FIELDS = ("custom_ops_profile", "compilation_cache_dir")
@@ -149,35 +149,40 @@ def _migrate_deployments(catalog: dict[str, Any], notes: MigrationNotes) -> set[
     for name, deployment in deployments.items():
         if not isinstance(deployment, dict):
             continue
-        provider = deployment.get("provider")
-        if provider not in REMOVED_PROVIDERS:
-            continue
         path = f"global.model_catalog.deployments.{name}"
-        device, problem = runtime_device(provider, deployment.get("device"))
-        deployment["provider"] = MODEL_RUNTIME
-        deployment["device"] = device
-        notes.changed(path, f"provider {provider} -> {MODEL_RUNTIME}, device {device}")
-        if problem:
-            notes.changed(path + ".device", problem)
-        precision = deployment.pop("precision", None)
-        if precision == "fp16":
-            deployment.setdefault("profile", "max_speed")
+        provider = str(deployment.get("provider") or "").strip().lower()
+        if provider in REMOVED_PROVIDERS:
+            device, problem = runtime_device(provider, deployment.get("device"))
+            deployment["provider"] = MODEL_RUNTIME
+            deployment["device"] = device
             notes.changed(
-                path + ".precision",
-                "fp16 -> profile max_speed (the default exact profile runs FP32)",
+                path, f"provider {provider} -> {MODEL_RUNTIME}, device {device}"
             )
-        elif precision not in (None, "", "native", "fp32"):
-            notes.changed(
-                path + ".precision", f"removed unsupported value {precision!r}"
-            )
-        for field in _EXECUTION_FIELDS:
-            if deployment.pop(field, None) not in (None, "", "none"):
-                notes.changed(
-                    f"{path}.{field}", "removed; the runtime selects kernels and graphs"
-                )
-        _migrate_artifact(path, deployment, notes)
-        migrated.add(name)
+            if problem:
+                notes.changed(path + ".device", problem)
+            _migrate_artifact(path, deployment, notes)
+            migrated.add(name)
+        _drop_execution_fields(path, deployment, notes)
     return migrated
+
+
+def _drop_execution_fields(
+    path: str, deployment: dict[str, Any], notes: MigrationNotes
+) -> None:
+    precision = deployment.pop("precision", None)
+    if precision == "fp16":
+        deployment.setdefault("profile", "max_speed")
+        notes.changed(
+            path + ".precision",
+            "fp16 -> profile max_speed (the default exact profile runs FP32)",
+        )
+    elif precision not in (None, "", "native", "fp32"):
+        notes.changed(path + ".precision", f"removed unsupported value {precision!r}")
+    for field in _EXECUTION_FIELDS:
+        if deployment.pop(field, None) not in (None, "", "none"):
+            notes.changed(
+                f"{path}.{field}", "removed; the runtime selects kernels and graphs"
+            )
 
 
 def _migrate_artifact(
@@ -306,8 +311,7 @@ def _migrate_modules(catalog: dict[str, Any], notes: MigrationNotes) -> None:
         _replace_module_model(path, module, model_field, mapping_field, notes)
         _drop_local_selectors(path, module, notes)
     guard = dict_at(modules, "prompt_guard")
-    if guard is not None and str(guard.get("model_type") or "").lower() == "candle":
-        guard.pop("model_type")
+    if guard is not None and guard.pop("model_type", None) not in (None, ""):
         notes.changed(
             base + ".prompt_guard.model_type",
             "removed; the runtime detects the model architecture from the package",
@@ -332,14 +336,12 @@ def _replace_module_model(
     notes.changed(
         f"{path}.{model_field}", f"{legacy} -> {replacement.target}: {replacement.note}"
     )
-    if mapping_field:
-        mapping = follow_mapping_path(module.get(mapping_field), legacy, replacement)
-        if mapping is not None:
-            module[mapping_field] = mapping
-            notes.changed(
-                f"{path}.{mapping_field}",
-                f"follows the model to {mapping or 'the labels the model declares'}",
-            )
+    if mapping_field and is_legacy_mapping(module.get(mapping_field), legacy):
+        module.pop(mapping_field)
+        notes.changed(
+            f"{path}.{mapping_field}",
+            "removed; the router reads the labels of the model it runs",
+        )
     return replacement
 
 
@@ -360,12 +362,18 @@ def _drop_local_selectors(
 def _migrate_hallucination(
     path: str, hallucination: dict[str, Any], notes: MigrationNotes
 ) -> None:
-    if hallucination.pop("explainer", None) is not None:
-        notes.changed(path + ".explainer", "removed; the NLI explainer is retired")
+    for field in ("explainer", "nli_model"):
+        if hallucination.pop(field, None) is not None:
+            notes.changed(f"{path}.{field}", "removed; the NLI explainer is retired")
     detector = hallucination.get("detector")
     if not isinstance(detector, dict):
         return
     detector_path = path + ".detector"
+    for field in _HALLUCINATION_NLI_FIELDS:
+        if detector.pop(field, None) not in (None, False):
+            notes.changed(
+                f"{detector_path}.{field}", "removed; NLI filtering is retired"
+            )
     if str(detector.get("backend") or "").strip().lower() == "endpoint":
         return
     if detector.pop("backend", None) not in (None, ""):
@@ -374,11 +382,6 @@ def _migrate_hallucination(
             "removed; the detector runs in the model runtime",
         )
     _replace_module_model(detector_path, detector, "model_id", "", notes)
-    for field in _HALLUCINATION_NLI_FIELDS:
-        if detector.pop(field, None) not in (None, False):
-            notes.changed(
-                f"{detector_path}.{field}", "removed; NLI filtering is retired"
-            )
     if detector.pop("include_explanation", None):
         notes.changed(
             detector_path + ".include_explanation",
@@ -438,16 +441,10 @@ def _migrate_decision(
 
 
 def _migrate_polarity_guard(canonical: dict[str, Any], notes: MigrationNotes) -> None:
-    guard = dict_at(canonical, "global", "stores", "response_cache", "polarity_guard")
-    if guard is None:
-        return
-    path = "global.stores.response_cache.polarity_guard"
-    mode = str(guard.get("mode") or "").strip().lower()
-    if mode in {"nli", "lexical+nli"}:
-        guard["mode"] = "lexical"
+    cache = dict_at(canonical, "global", "stores", "response_cache")
+    if cache is not None and "polarity_guard" in cache:
+        cache.pop("polarity_guard")
         notes.changed(
-            path + ".mode",
-            f"{mode} -> lexical; the NLI tier is retired and the lexical guard stays",
+            "global.stores.response_cache.polarity_guard",
+            "removed; the NLI tier is retired and the lexical guard always runs",
         )
-    if guard.pop("nli", None) is not None:
-        notes.changed(path + ".nli", "removed; the NLI tier is retired")

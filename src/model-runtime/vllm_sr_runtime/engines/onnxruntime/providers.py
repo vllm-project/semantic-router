@@ -3,10 +3,19 @@
 The CPU provider is validated. GPU providers run only when the installed
 onnxruntime build has them, never fall back to the CPU for a node they cannot
 run, and stay unvalidated until a record says otherwise.
+
+CPU sessions share one intra-op pool per process (created before the first
+session): each session's own pool spins after a run, so graphs that run one
+after another (Omni's CLAP windows, then its audio graph) otherwise share the
+cores with the previous session's spinning threads; on 16 cores CLAP + audio
+took 124 ms with per-session pools and 43 ms with the shared one. The pool is
+sized to the configured threads, else the CPUs the process may run on (ONNX
+Runtime's own default counts the host's CPUs, not the cpuset).
 """
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -83,19 +92,51 @@ def _options(name: str, device: DeviceInfo) -> dict[str, str]:
     return {"device_id": str(device.index or 0)}
 
 
+_SHARED_POOL: dict[str, int] = {}
+
+
+def cpu_threads(threads: int | None) -> int:
+    """The intra-op pool size: as configured, else the CPUs this process may run on."""
+    if threads:
+        return threads
+    affinity = getattr(os, "sched_getaffinity", None)
+    return len(affinity(0)) if affinity else os.cpu_count() or 1
+
+
+def shared_pool(threads: int) -> int | None:
+    """The size of the process's shared CPU pool, created on first use; None if ORT started without it."""
+    import onnxruntime as ort
+
+    if "size" not in _SHARED_POOL:
+        try:
+            ort.set_global_thread_pool_sizes(threads, 1)
+        except RuntimeError:
+            _SHARED_POOL["size"] = 0
+        else:
+            _SHARED_POOL["size"] = threads
+    return _SHARED_POOL["size"] or None
+
+
 def session_options(
     choice: ProviderChoice, threads: int | None, spinning: bool | None = None
 ) -> Any:
-    """Sequential execution with every graph optimization; GPU sessions never fall back to the CPU."""
+    """Sequential execution with every graph optimization; GPU sessions never fall back to the CPU.
+
+    CPU sessions run on the shared pool where it exists (``spinning`` then has
+    no effect), else on their own pool of ``cpu_threads(threads)``.
+    """
     import onnxruntime as ort
 
     options = ort.SessionOptions()
     options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
     options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-    options.inter_op_num_threads = 1
     options.log_severity_level = 3
-    if threads:
-        options.intra_op_num_threads = threads
+    size = cpu_threads(threads)
+    if not choice.gpu and shared_pool(size):
+        options.use_per_session_threads = False
+    else:
+        options.intra_op_num_threads = size
+        options.inter_op_num_threads = 1
     if spinning is not None:
         options.add_session_config_entry(
             "session.intra_op.allow_spinning", "1" if spinning else "0"

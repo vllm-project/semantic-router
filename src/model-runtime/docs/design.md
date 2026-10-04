@@ -593,8 +593,8 @@ processors ported to NumPy against the bundle's golden inputs and outputs.
 
 ```text
 request -> validate (400) -> route to its model (404 / 422) -> admission (429)
-        -> plan: render every item (per-item errors) -> micro-batches within the token budget
-        -> that model's queue (deadline-ordered) -> its worker -> readout -> response
+        -> plan: render every item (per-item errors) -> that model's queue
+        -> its worker: the profile forms batches -> shortest expected finish first -> readout -> response
 bundle  -> plan every task -> submit all at once -> await each -> results in task order
 ```
 
@@ -605,12 +605,27 @@ the forward token budget. A bundle's tasks for one model are queued at once as
 one job group: decision models still run each task as its own batch (their
 released numerics), and a family that sets `fuse_bundled_jobs` (encoders) runs
 the group as one batch, so one forward serves every head and consumer that
-reads the same input. Repeated cacheable items are answered from the model's
-result cache (`--result-cache-entries`, keyed by profile and content).
-Deadlines travel with jobs; a job whose deadline has passed when the worker
-picks it up is not run. Admission bounds jobs and pending tokens per model and
-answers 429 at once, for a whole group or none of it. On CPU, workers of
-different models share the process's intra-op thread pool (`--threads`).
+reads the same input. On a batch-invariant model, `exact` runs the queued jobs
+of concurrent requests in shared batches: one length class (power-of-two band
+of padded length) per batch, at most 512 padded tokens, rows with the same
+token IDs always together so the family computes them once. Repeated cacheable
+items are answered from the model's result cache (`--result-cache-entries`,
+keyed by profile and content).
+
+The worker runs planned batches in order of their jobs' expected finish: the
+time a job was queued plus its tokens at the measured cost per token (a running
+average of recent forwards). Short work goes first, and a long job still runs
+once the work queued before its expected finish is done, so nothing starves.
+Between two forwards the worker takes the jobs that arrived meanwhile (jobs of
+coalescing profiles once they have waited one batching window), so a short request
+waits for the forward in flight, not for the remaining windows of a long one;
+each job is answered as soon as its own batches have run. The order of
+forwards never changes a batch's contents, so answers are unchanged. Deadlines
+travel with jobs; a job whose deadline passes before its next batch runs is
+answered `deadline_exceeded` and its remaining batches are skipped. Admission
+bounds jobs and pending tokens per model and answers 429 at once, for a whole
+group or none of it. On CPU, workers of different models share the process's
+intra-op thread pool (`--threads`).
 
 ## 10. Placement and supervision
 
@@ -762,11 +777,19 @@ the smallest consumer timeout as its context deadline and `options.deadline_ms`.
 ### 13.4 Lifecycle: process groups and attached endpoints
 
 - **Managed (default).** The router groups its `model_runtime` deployments
-  without an `endpoint` into processes: by `process` when set, else one
-  process per device (`cpu`, `auto`, `rocm:0`, ...). For each group it writes a
-  models file and starts `vllm-sr-runtime serve --models <file> --uds <path>`
-  when the configuration loads, and stops it when the group disappears or the
-  router exits (SIGTERM, then SIGKILL after a grace period). The supervisor
+  without an `endpoint` into processes: by `process` when set; else each GPU
+  device gets one process, and each CPU model its own process (`cpu-0`,
+  `cpu-1`, ...; at most half the cores, capped by
+  `VLLM_SR_RUNTIME_CPU_PROCESSES`; `1` folds them into one). A CPU process
+  runs `ceil(cores / processes)` threads, unpinned, so a busy model can use
+  the cores an idle one leaves: on 16 cores and five task models, one shared
+  process served 11.1 requests/s, pinned disjoint shares 15.6, unpinned
+  shares 20.3 (`docs/records/router-latency-cpu.md`). For each group it
+  writes a models file and starts `vllm-sr-runtime serve --models <file>
+  --uds <path>` when the configuration loads, and stops it when the group
+  disappears or the router exits (SIGTERM, then SIGKILL after a grace
+  period). Preparing a binding waits for the deployment's card while its model
+  is `loading` (up to `VLLM_SR_RUNTIME_READY_TIMEOUT`, default 10 minutes). The supervisor
   polls `/health` and `/v1/models`, restarts a dead or failed process with
   exponential back-off (1 s to 60 s), and marks only the affected deployments
   unavailable. Sockets live in a private 0700 directory.
@@ -804,16 +827,20 @@ checked against the prepared head's labels.
 ### 13.6 Configuration migration
 
 `vllm-sr config migrate` (the existing migration command) rewrites legacy
-layouts; the router parser accepts only the canonical layout.
+layouts; the router parser and `vllm-sr validate` accept only the canonical
+layout and refuse every path below with a pointer to `config migrate`.
 
 | Legacy | Migrated to |
 | --- | --- |
 | `provider: candle \| ort \| openvino` | `provider: model_runtime`; device `cpu` → `cpu`, `cuda:N` → `cuda:N`, `rocm:N` / `migraphx:N` → `rocm:N`, `metal:0` → `mps`, OpenVINO devices → `cpu` |
 | `precision: fp16` | `profile: max_speed`; `native` and `fp32` are dropped (exact is FP32) |
 | `custom_ops_profile`, `compilation_cache_dir`, ONNX graph `head` paths | removed (the runtime selects graphs) |
-| `embedding_config.backend: candle \| openvino` | removed (the runtime is the default backend) |
+| `embedding_config.backend: candle \| openvino` | `backend: model_runtime`, the default (local embeddings are served by the runtime) |
+| Module `variant`, `model_type`, `use_modernbert`, `use_mmbert_32k`; `detector.backend: candle` | removed (the served package defines its architecture and windows) |
+| Label mapping files of built-in models | optional: a local consumer takes its labels from the served model card; a file stays a rename override |
 | Legacy model paths and aliases (section 16.3) | their Vela 1.0 replacements, with label remaps where labels differ; refused with guidance where no safe remap exists |
-| `hallucination_explainer`, NLI filtering, the response-cache polarity guard | removed with a warning (retired) |
+| `hallucination_explainer`, `nli_model`, NLI filtering, `use_nli`, the response-cache polarity guard | removed with a warning (retired) |
+| `nli_contradiction_penalty` (looper fusion) | `contradiction_penalty`, read from the Halu grounded head |
 
 ## 14. Security
 
@@ -927,7 +954,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 | E2E profiles | `vela-halu`, `vela-shield`, `vela-omni`, `multimodal-routing`, `local-classifier-backend`, `ml-model-selection`, `hallucination`, and every profile that loads default models through the router image | Run against the runtime; new runtime profiles (section 15) |
 | Harness | `tools/agent/domains.yaml` domains `native-bindings`, `openvino`, `riscv-runtime`, `onnx-*`, `ck-flash-attn-rewriter`, `published-model-tests`, native verifications | Removed; `model-runtime` domain covers the families, engines and parity tools |
 | Docs | runtime, installation, AMD, OpenVINO and Vela pages describing candle, ORT and OpenVINO | Task-oriented runtime docs and a migration guide |
-| RISC-V | candle on riscv64 under QEMU | The pure-Go router builds for riscv64; models attach to a runtime on another host |
+| RISC-V | candle on riscv64 under QEMU, a riscv64 router build and its CI lane | **Removed** (maintainer decision): no riscv64 build, lane, image or build tags |
 
 ### 16.6 Retirements
 
@@ -939,6 +966,8 @@ files carry `!windows && cgo` build tags only because of these imports.
   buckets, the CK flash-attention operator and its rewriter): the runtime's
   ROCm path is native PyTorch; ONNX Runtime remains as a portable engine.
 - **Unwired legacy models** (candle Qwen3 multi-LoRA, Qwen3Guard, DeBERTa).
+- **RISC-V** (maintainer decision): the riscv64 router build, its QEMU lane,
+  build tags and fallbacks that existed only for riscv64.
 
 ## 17. Parity and evidence
 

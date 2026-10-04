@@ -4,8 +4,9 @@ Both configs are identical except ``algorithm.fusion.grounding.enabled``. They:
   - add a deterministic ``deliberate_sentinel`` regex keyword rule + a top-priority
     fusion decision keyed to it (the harness prepends the sentinel to every prompt),
   - bind the fusion panel/judge to a local Ollama proxy via provider backend_refs,
-  - wire the NLI model (models/mom-halugate-explainer) so PANEL-mode grounding
-    actually fires instead of silently falling back to plain fusion.
+  - enable hallucination mitigation so the router's hallucination detector, served
+    by the model runtime, backs context grounding. The NLI explainer is retired, so
+    panel grounding has no NLI backend and falls back to plain fusion.
 
 Usage:
     .venv-bench/bin/python -m bench.grounded_fusion.make_configs \
@@ -146,10 +147,8 @@ def build(base: dict, grounding_on: bool, policy: str = "weight") -> dict:
         if store in c["global"].get("stores", {}):
             c["global"]["stores"][store]["enabled"] = False
 
-    # Ensure hallucination_mitigation is enabled so the detector + NLI model init
-    # (initializeHallucinationDetector -> wireFusionGroundingBackends). The NLI
-    # model for PANEL-mode grounding comes from the `explainer` block
-    # (models/mom-halugate-explainer), which the reference config already sets.
+    # Enable hallucination_mitigation so the router prepares its hallucination
+    # detector, the grounding backend for context-mode fusion.
     hm = c["global"]["model_catalog"]["modules"]["hallucination_mitigation"]
     hm["enabled"] = True
     return c
