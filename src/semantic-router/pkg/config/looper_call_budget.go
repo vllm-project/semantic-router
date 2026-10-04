@@ -55,8 +55,10 @@ func validateReMoMBreadthScheduleBudget(schedule []int) error {
 }
 
 // validateDecisionModelRefBudget rejects a decision whose candidate list alone
-// exceeds the per-request amplification budget, because fan-out algorithms
-// (ratings, confidence, fusion, ReMoM) may call every candidate.
+// exceeds the per-request amplification budget. It is a backstop for fan-out
+// algorithms whose call count is not modeled separately: ratings and confidence
+// dispatch roughly one call per candidate, while algorithms with extra
+// mandatory stages (Fusion, ReMoM) are checked by their own estimators below.
 func validateDecisionModelRefBudget(decisionName string, modelRefs []ModelRef) error {
 	if len(modelRefs) <= MaxUpstreamCallsPerRequest {
 		return nil
@@ -67,5 +69,39 @@ func validateDecisionModelRefBudget(decisionName string, modelRefs []ModelRef) e
 		len(modelRefs),
 		MaxUpstreamCallsPerRequest,
 		MaxUpstreamCallsPerRequest,
+	)
+}
+
+// EstimatedFusionUpstreamCalls returns Fusion's statically knowable upstream
+// call count: one panel call per effective analysis model plus the mandatory
+// judge stages. The separate analysis mode runs an analysis stage before the
+// final synthesis (two judge calls); one_call and none dispatch a single judge
+// call. Panel selection (analysis_models overriding modelRefs) is resolved by
+// the caller.
+func EstimatedFusionUpstreamCalls(panelSize int, analysisMode string) int {
+	judgeStages := 1
+	if EffectiveFusionAnalysisMode(analysisMode) == FusionAnalysisModeSeparate {
+		judgeStages = 2
+	}
+	return panelSize + judgeStages
+}
+
+// validateFusionCallBudget rejects a Fusion decision whose effective panel plus
+// mandatory judge stages already exceed the per-request amplification budget.
+// The call count is knowable from configuration before any retries.
+func validateFusionCallBudget(decisionName string, panelSize int, analysisMode string) error {
+	estimated := EstimatedFusionUpstreamCalls(panelSize, analysisMode)
+	if estimated <= MaxUpstreamCallsPerRequest {
+		return nil
+	}
+	judgeStages := estimated - panelSize
+	return fmt.Errorf(
+		"decision '%s': fusion panel of %d analysis models plus %d judge stage(s) requests %d upstream calls, exceeding the per-request limit of %d; reduce analysis_models or modelRefs to at most %d",
+		decisionName,
+		panelSize,
+		judgeStages,
+		estimated,
+		MaxUpstreamCallsPerRequest,
+		MaxUpstreamCallsPerRequest-judgeStages,
 	)
 }
