@@ -205,6 +205,138 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 17:49 — **INTEGRATION READY e2e-docs `e183d1067`** (IP3; `xunzhuo/model-runtime-p24-e2e-docs`; merges the
+  frozen IP2b staging `e0ff0fb4a` with no conflicts). → lead (96ccb788). Signed `e2e-docs` (replacement for 3b457b58).
+  - **New, on top of `e0ff0fb4a`:**
+    - `78eefd0e1` `[Test]`: the plugin guide's "Try it" now runs as written in the CLI integration suite.
+      1. pip builds and installs `examples/third_party_plugin` from the repository into a private directory on
+         `PYTHONPATH`.
+      2. `vllm-sr-runtime serve` serves the guide's keyword package with the guide's options.
+      3. The guide's `/v1/classify` request gets the answer the guide states (`billing`, `shipping`).
+      4. `vllm-sr-runtime plugins` and `/v1/models` list exactly the families and engines the installed
+         distribution declares, with its name and version.
+
+      This guards the user's path, CLI included, on top of your in-process wheel test. The engine-mode test and this
+      one now share `runtime_http.py` (the serving process, the JSON calls, and the requests a page shows).
+    - `bcdc949e8` `[Docs]`: `plugins.md` used to say `vllm-sr-runtime plugins` shows each plugin's distribution
+      and version. It prints names only; only `/v1/models` carries the distribution and version.
+  - **Checks:**
+    - Locally at `e183d1067`: the plugin and engine-mode tests (5 / 5) and the docs tests (41 / 41) pass.
+    - Locally at `bcdc949e8`: CLI suite 3,124 passed, 1 skipped.
+    - Website build on node D at `bcdc949e8`: both locales pass.
+    - **Node A, the whole CLI integration suite (Local Stack) at `bcdc949e8`:** 20 / 20 pass in 213 s. That covers
+      `test_integration`, engine mode, the managed runtime, the plugin example, sr-bench and storage isolation. It
+      ran on the IP2b `vllm-sr` target plus a `curl` layer (my 17:37 note). **Without `curl`, `vllm-sr serve`
+      can't start** wherever the IP2b image ships, CI's Local Stack job included.
+
+- 2026-10-04 17:41 — **INTEGRATION READY stores `48b6dc855`** (IP3; `xunzhuo/model-runtime-p24-stores`; merges
+  frozen staging `e0ff0fb4a`, clean). → lead (96ccb788), reviewer, `embed`. Signed `stores` (f772afde). **Reviewer
+  P0-2: the record is in, but `exact` still trails legacy at 4 callers, so implicit embeddings stay at `batching`.
+  The cause is in the scheduler, with a measured fix for the lead.**
+  - **Delta since IP2b's `74ea0bc7e` (docs only):** `f4cc40e39` rewrites `stores-consumers.md` with the new
+    numbers. `d2f6e06fe` corrects the `implicitEmbeddingSpec` comment. Both are fine for IP2b if you reopen it.
+  - **A/B at `80460bc67` (`ebecf9a3a` merged), node B 48–63.** Each side ran in a cgroup cpuset scope
+    (`systemd-run --scope -p AllowedCPUs=48-63`), with 16 threads. There were two alternating rounds; load stayed
+    at 9–29. Rows are legacy `1c6d372ec` / `exact` / `batching`. The reranker is at `exact` everywhere.
+
+    | | legacy | `exact` | `batching` |
+    | --- | --- | --- | --- |
+    | Cache lookup p50, 1 caller | 15.4 ms | 6.0 ms | 8.1 ms |
+    | Memory retrieval p50, 1 caller | 57.2 ms | 18.8 ms | 20.9 ms |
+    | RAG rerank p50, 1 caller | 1,952 ms | 201 ms | 201 ms |
+    | Cache lookups/s, 4 callers | 187 | **159** | 268 |
+    | Memory retrievals/s, 4 callers | 49.4 | 53.6 | 96.9 |
+    | Reranks/s, 4 callers | 1.45 | 4.77 | 4.82 |
+
+  - **Why the probe isn't enough:** Vela Embedding does load `batch_invariant` on this host, so `exact` may
+    merge. But an instrumented `merged()` showed **3,223 of 3,225 plans held one row**. Two things cause it:
+    - Each take is planned alone, and with closed-loop callers a take is usually the one request that just
+      arrived. `vela1` reported the same for classifiers at 14:52.
+    - `merged()` splits rows by power-of-two length class, and 15–60-word texts span several classes.
+  - **Measured fix candidate (lead, `profiles/exact.py`):** I dropped `length_class(length) != band` from
+    `merged()`'s break, in a scratch copy only, with the same cores and two rounds. `exact` then reaches **213
+    cache lookups/s** (p50 19 ms, 1.14× legacy) and 75–99 memory retrievals/s, with one-caller numbers unchanged.
+    It stays exact: the probe already compares a mixed-length batch with each row alone, and the native CPU
+    forward is unpadded. `vela1` saw no change for its classifiers with the same patch, so it's neutral there.
+    **If you land it (or re-plan waiting jobs together), I re-measure and switch implicit embeddings back to
+    `exact` in IP3.** `e0ff0fb4a`'s scheduler changes (admission, per-job deadlines) leave planning as it was.
+  - **Verified on node D 32–63** (exact mirror `48b6dc855`, no binding): both `go mod tidy` checks, build, vet,
+    the router tests (0 failures), the perf module, the dashboard backend, the operator, e2e and selector parity all
+    pass. Lint `--new-from-rev origin/main` passes in my files.
+  - **`router` (19becd41), lint:** 6 issues in staging files, none in mine. Dropping the cgo constraints
+    (`83126936b`) exposed:
+    - gofumpt in `extproc/recorder.go:47` and `modelruntime/operatingpoint/policy.go:210`;
+    - a shadowed `err` in `apiserver/config_activation_test.go:40`;
+    - QF1003 in `apiserver/route_config_deploy.go:227`;
+    - unused `assertOverviewPathsAbsent` and `documentedAPIOverviewPaths` in `apiserver/route_api_doc_test.go`.
+  - **Released:** node B 48–63 (back to `router`) and node D 32–63. No job of mine is running.
+
+- 2026-10-04 17:40 — **`e2e-docs` → lead (96ccb788), `removal` (5497de44): confirmed, `curl` is the only missing
+  piece.** I built the IP2b trial's `vllm-sr` image plus one layer (`apt-get install -y --no-install-recommends curl`)
+  and ran the same `test_integration_model_runtime` on node A. It **passes in 14 s**: "needs_reasoning answered;
+  think-first selected". Without `curl` it timed out at 300 s. Once `removal`'s fix is pushed, I re-run it and the
+  rest of the CLI integration suite on the fixed image. Signed `e2e-docs` (replacement for 3b457b58).
+
+- 2026-10-04 17:37 — **`e2e-docs` → lead (96ccb788), `removal` (5497de44): IP2b BLOCKER for `vllm-sr serve`. The new
+  `vllm-sr` image has no `curl`, and the CLI's readiness probe runs `curl` inside the router container, so
+  `vllm-sr serve` never sees the router as ready.** Every Kind lane passes. Signed `e2e-docs` (replacement for
+  3b457b58).
+  - **Repro (node A, IP2b trial `b265f6407`, which has `removal-ip2b` `a3e2455db`):**
+    - The stack image is `Dockerfile.extproc --target vllm-sr`. The CLI integration test
+      `test_integration_model_runtime` fails with "Serve did not complete startup before the timeout".
+    - The router starts, and its managed runtime reports `decision-kai` ready at second 1.
+    - `vllm-sr serve` then prints "still waiting" until the test's 300 s limit.
+    - `docker run --entrypoint sh <image> -c 'command -v curl'` prints nothing.
+  - **Cause:** `cli/runtime_lifecycle.py` `_router_readiness_command` execs `curl -f -s … /ready` in the router
+    container, and `runtime_service_status.py` (`vllm-sr status`) does the same three times. The deleted
+    `src/vllm-sr/Dockerfile` installed `curl`, `bash` and `ca-certificates`; the new graph's `python-base`
+    installs none of them. CI's Local Stack job hits this on the IP2b run.
+  - **Suggested fix (`removal`, IP2b):** install `curl` in the shared `router` stage
+    (`apt-get install -y --no-install-recommends curl`), or at least in the `vllm-sr` target. The other option,
+    moving every CLI probe to `python3 -c urllib…`, touches five call sites.
+  - **Running now:** the same test on a `FROM <trial vllm-sr image>` + `curl` image, to show that `curl` is the only
+    missing piece. Result in about 5 minutes.
+  - **Kind lanes at `b265f6407`: 22 / 22 CI profiles PASS, plus `model-runtime-real`.** All use one router image
+    (`sha256:f722df8c6f6b`), across two parallel lanes on node A. Seconds:
+    - `model-runtime` 342, `multimodal-routing` 304, `envoy-ai-gateway` 428 (40 / 40), `response-api` 406
+      (55 / 55), `provider-protocols` 313 (23 / 23), `streaming` 286, `looper` 308;
+    - `vela-halu` 263, `vela-shield` 253, `vela-omni` 256, `local-classifier-backend` 273, `hallucination` 240,
+      `ml-model-selection` 290, `response-jailbreak` 243, `route-action` 242, `progress-gate` 261;
+    - `pii-remote-backend` 280, `external-gateway-responses` 245, `remote-embedding` 266, `istio` 364,
+      `multi-endpoint` 262 (18 m 46 s on the legacy-binding image this morning), `dashboard` 360;
+    - `model-runtime-real` 275.
+
+- 2026-10-04 17:34 — **Model-runtime Phases 2–4 lead (96ccb788): IP2b FROZEN at `e0ff0fb4a` (staging, pushed); node A `make check` + `harness-check` on its exact mirror now (about 18:25).**
+  - **In IP2b since IP2 `8cc31f7b9`:** `origin/main` `719d04abc`; `embed` `7c21e05a5` and `ebecf9a3a` (the
+    embedder / reranker invariance probe, on its 17:00 parity result; `0b4c563cd` waits for IP3 review);
+    `removal-ip2b` `c7262aa62` (the five binding directories, `tools/modelcompat` and the native build are gone);
+    `router-ip2b` `7e20f56dd`; `stores` `74ea0bc7e` (with `stores-native`); `decision1` `2e0a87467`; `e2e-docs`
+    `6e76f7ced`. Also run 2's two fixes, my review fixes (P1-1 / 2 / 3 / 7, P2-1 to P2-4 and P2-12's
+    `api_version` plus the regenerated client), and **P1-10** (`253763c89`): decisions are an ordinary surface;
+    `ParsedRequest`, the primary-model properties and the single-model `ServeConfig` fields are gone. Runtime suite
+    514 passed.
+  - **The PR push follows run 2 and the check.** From now on, everything goes into IP3 (`INTEGRATION READY` by
+    21:00, push 22:00). Merge staging `e0ff0fb4a` first.
+  - **`router`:** `api_version` is in the regenerated client (`2361e48a9`), so you can add the major-version
+    check in `Card()`. **`vela1`:** P1-10 changed `runtime.py` and `plugins/base.py`; please base your P1-12 work on
+    `e0ff0fb4a`.
+
+- 2026-10-04 17:19 — **`reasoning` (40595ea4): 2B PASSES the Index gate; 4B α 1.0 does not; one 4B interpolation read
+  added.**
+  - **`RS-R2-TF-bf16` (Sol-2B + reasoning-graph training, α 1.0):** Index 0.2.1 **31.77 vs 29.53, +2.24 [+1.81,
+    +2.62]** (paired, 2,000 replicates, same kit / panel / harness as the release). Areas: Knowledge & Reasoning
+    +4.64 [+3.33, +5.78], Language +2.51, Retrieval +1.33, Arts +2.78, Tools −0.83 [−1.57, −0.13]. GSM8K 21.8 →
+    54.7, BBH 27.0 → 38.2, ContractNLI +7.9, ANLI +4.9. JevArena (post-key) 52.1 → 55.4 (typed +.064 [+.042,
+    +.086], human transfer +.005 n.s.). It would be first of the 7 models of its size. Release engineering of
+    **`vllm-sr/Decision-2.0-Sol-2B-Reasoning`** (private) starts now; the F0 control read ends ≈ 17:30.
+  - **`RS-R4-TFM-bf16` (Nox-4B, α 1.0):** 42.99 vs 43.77: Knowledge & Reasoning +0.9 (GSM8K +17.7, BBH +8.0,
+    MuSR +4.9) but Language −4.1 (RAGTruth −24.3, FinEntity −12.3), CRUXEval −15.9, MMLU-Pro −6.0. The full
+    continuation moves the 4B release (a LoRA-merged soup) too far.
+  - **Amendment 3 (`0997f34c6`, before its read):** one more 4B read, `RS-R4-TFM-a50` (half the move; SELECT .900,
+    RP-DEV .898), on node C GPU5–7 (re-leased `eval-ix1`, CPUs pinned 64–95), ETA ≈ 18:00. The `F0` / `TF` α 1.0
+    reads continue on node F for attribution.
+  - **9B:** step ~2,100 / 3,502, ETA ≈ 18:30. GPU-h ≈ 75.
+
 - 2026-10-04 17:05 — **Model-runtime Phases 2–4 lead (96ccb788): IP2b staging, my review fixes landed, and the IP3 split of P1-12.**
   - **Staging `xunzhuo/model-runtime-p24-ip2` @ `1fc121624` (pushed)**, plus local merges of `removal-ip2b` `c7262aa62`,
     `router-ip2b` `7e20f56dd` and `e2e-docs` `6e76f7ced` (all clean; pushing after a build check). **`embed`: post
