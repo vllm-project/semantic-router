@@ -153,7 +153,7 @@ go run ../../tools/models/classifier-operating-point/main.go \
   --output /path/to/new-operating-point.json
 ```
 
-工具输出工作点文件的 SHA256，保留评分和窗口设置，并核验已有权重身份。它为版本 1 补齐最终配置、分词器哈希与 Candle 执行身份；对于版本 2，则保留执行声明并核验所引用的文件。工具不选择阈值、不验证模型能力，且拒绝覆盖已有文件。请将工作点与对应的原生文件一起发布，不要跨 checkpoint 复制阈值。
+工具输出工作点文件的 SHA256，保留评分和窗口设置，并核验已有权重身份。它补齐最终配置与分词器哈希；对于版本 2，则保留执行声明并核验所引用的文件。工具不选择阈值、不验证模型能力，且拒绝覆盖已有文件。请将工作点与对应的原生文件一起发布，不要跨 checkpoint 复制阈值。
 
 本地路径在 Router 内处理请求文本。`llm` 与 `sequence_classifier` 都会把该文本发给已配置的外部模型，因此请相应选择提供方与保留策略。标签与阈值必须作为同一版本化约定一起评估。完整示例见
 [`llm`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/label-score.yaml)

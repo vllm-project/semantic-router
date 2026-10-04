@@ -18,6 +18,7 @@ import os
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Callable
 from concurrent.futures import Future
 from dataclasses import dataclass, replace
 from http import HTTPStatus
@@ -280,44 +281,24 @@ class ServedModel:
                 spec, placement.accelerator, placement.device, engine_options
             )
         )
-        model = execute(lambda: family.load(package, spec, engine_model))
-        for name, profile in list(profiles.items()):
-            unavailable = profile.available(model)
-            if unavailable:
-                if name == config.profile:
-                    raise RuntimeError(
-                        f"profile {name!r} is unavailable: {unavailable}"
-                    )
-                profiles.pop(name)
-        self.family, self.package, self.placement, self.model, self.profiles = (
+        try:
+            model = execute(lambda: family.load(package, spec, engine_model))
+        except BaseException:
+            engine_model.close()
+            raise
+        self.family, self.package, self.placement, self.model = (
             family,
             package,
             placement,
             model,
-            profiles,
         )
+        try:
+            self._start(profiles, process, execute)
+        except BaseException:
+            self.stop()
+            self.scheduler = self.model = None
+            raise
         metrics = self.runtime.metrics
-        self.scheduler = Scheduler(
-            model,
-            profiles,
-            SchedulerLimits(
-                max_queue=process.max_queue,
-                max_queued_tokens=process.max_queued_tokens,
-                batch_window_ms=process.batch_window_ms,
-            ),
-            observe=metrics.observe,
-            execute=execute if model.device_thread else None,
-        )
-        self.scheduler.start()
-        self.health.set("warming", "running the golden check")
-        self.health.golden = golden_check(
-            self.golden_decisions,
-            family.golden(package),
-            placement.device.accelerator,
-            run_surface=self.golden_surface,
-        )
-        if self.health.golden.status == "failed":
-            raise RuntimeError(self.health.golden.detail or "golden check failed")
         metrics.model_info.labels(
             model=self.label,
             revision=model.info.revision or "local",
@@ -338,11 +319,58 @@ class ServedModel:
             config.profile,
         )
 
+    def _start(
+        self,
+        profiles: dict[str, Profile],
+        process: ServeConfig,
+        execute: Callable[[Any], Any],
+    ) -> None:
+        """Bind the profiles, start the worker and pass the golden check."""
+        assert self.model is not None and self.placement is not None
+        model, placement = self.model, self.placement
+        for name, profile in list(profiles.items()):
+            unavailable = profile.available(model)
+            if unavailable:
+                if name == self.config.profile:
+                    raise RuntimeError(
+                        f"profile {name!r} is unavailable: {unavailable}"
+                    )
+                profiles.pop(name)
+        self.profiles = profiles
+        self.scheduler = Scheduler(
+            model,
+            profiles,
+            SchedulerLimits(
+                max_queue=process.max_queue,
+                max_queued_tokens=process.max_queued_tokens,
+                batch_window_ms=process.batch_window_ms,
+            ),
+            observe=self.runtime.metrics.observe,
+            execute=execute if model.device_thread else None,
+            device_fault=placement.accelerator.device_fault,
+        )
+        self.scheduler.start()
+        self.health.set("warming", "running the golden check")
+        assert self.family is not None and self.package is not None
+        self.health.golden = golden_check(
+            self.golden_decisions,
+            self.family.golden(self.package),
+            placement.device.accelerator,
+            run_surface=self.golden_surface,
+        )
+        if self.health.golden.status == "failed":
+            raise RuntimeError(self.health.golden.detail or "golden check failed")
+
     def stop(self) -> None:
-        if self.scheduler is not None:
-            self.scheduler.stop()
+        """Stop the worker, then free the model once no forward can still use it."""
+        stopped = self.scheduler.stop() if self.scheduler is not None else True
         if self.model is not None:
-            self.model.close()
+            if stopped:
+                self.model.close()
+            else:
+                log.warning(
+                    "%s: a forward is still running; the model stays open", self.label
+                )
 
     def _family(self, ref, options: RegistryOptions) -> ModelFamily:
         names = (
@@ -409,24 +437,30 @@ class ServedModel:
     def submit_items(
         self, items: list[Any], deadline: float | None, profile: str
     ) -> Future:
-        return self.submit_items_group([items], deadline, profile)[0]
+        return self.submit_items_group([items], [deadline], profile)[0]
 
     def submit_items_group(
-        self, item_lists: list[list[Any]], deadline: float | None, profile: str
+        self,
+        item_lists: list[list[Any]],
+        deadlines: list[float | None],
+        profile: str,
     ) -> list[Future]:
         if self.scheduler is None:
             raise RuntimeServiceError("not_ready", f"the model is {self.health.state}")
         return self.scheduler.submit_group(
-            item_lists, deadline=deadline, profile=profile
+            item_lists, deadlines=deadlines, profile=profile
         )
 
     def run_items_now(
-        self, item_lists: list[list[Any]], deadline: float | None, profile: str
+        self,
+        item_lists: list[list[Any]],
+        deadlines: list[float | None],
+        profile: str,
     ) -> list[Future] | None:
         """Run the group on this thread if the model's scheduler is idle (never on the event loop)."""
         if self.scheduler is None:
             return None
-        return self.scheduler.run_now(item_lists, deadline=deadline, profile=profile)
+        return self.scheduler.run_now(item_lists, deadlines=deadlines, profile=profile)
 
     def meta(
         self, profile_name: str, queue_ms: float, compute_ms: float
@@ -740,15 +774,25 @@ class Runtime:
         )
 
     def _options(
-        self, served: ServedModel, surface: str, body: dict[str, Any]
+        self,
+        served: ServedModel,
+        surface: str,
+        body: dict[str, Any],
+        received: float | None = None,
     ) -> tuple[float | None, str, bool, float]:
+        """Generic options; ``received`` is when the HTTP request arrived (default now).
+
+        Every task of one bundle shares ``received``, so equal ``deadline_ms``
+        values give equal deadlines.
+        """
         options = body.get("options") or {}
         allowed = GENERIC_OPTIONS | SURFACE_OPTIONS[surface]
         if not isinstance(options, dict) or set(options) - allowed:
             raise RuntimeServiceError(
                 "invalid_request", f"options accepts only {sorted(allowed)}"
             )
-        received = time.monotonic()
+        if received is None:
+            received = time.monotonic()
         deadline = None
         if "deadline_ms" in options:
             value = options["deadline_ms"]
@@ -779,7 +823,7 @@ class Runtime:
 
     # -- decisions (Phase 1 interface) ---------------------------------------
 
-    def parse(self, body: Any) -> ParsedRequest:
+    def parse(self, body: Any, received: float | None = None) -> ParsedRequest:
         if not isinstance(body, dict):
             raise RuntimeServiceError(
                 "invalid_request", "the request body must be a JSON object"
@@ -803,7 +847,7 @@ class Runtime:
             )
         served = self.lookup(body.get("model"))
         deadline, profile, return_meta, received = self._options(
-            served, "decisions", body
+            served, "decisions", body, received
         )
         return ParsedRequest(
             body["state"], questions, deadline, profile, return_meta, received, served
@@ -830,7 +874,9 @@ class Runtime:
 
     # -- every surface -------------------------------------------------------
 
-    def prepare(self, surface: str, body: Any) -> Prepared:
+    def prepare(
+        self, surface: str, body: Any, received: float | None = None
+    ) -> Prepared:
         """Validate a surface request and plan it for its model (runs off the event loop)."""
         if surface not in SURFACES:
             raise RuntimeServiceError("invalid_request", f"unknown surface {surface!r}")
@@ -854,7 +900,7 @@ class Runtime:
                 f"model {served.label} does not serve /v1/{surface}",
             )
         if surface == "decisions":
-            parsed = self.parse(body)
+            parsed = self.parse(body, received)
             plan = served.plan_decisions(parsed)
             request = SurfaceRequest(
                 surface,
@@ -871,7 +917,9 @@ class Runtime:
                     "decisions", list(plan.items), plan.input_tokens, (parsed, plan)
                 ),
             )
-        deadline, profile, return_meta, received = self._options(served, surface, body)
+        deadline, profile, return_meta, received = self._options(
+            served, surface, body, received
+        )
         request = SurfaceRequest(
             surface, body, deadline, profile, return_meta, received
         )
@@ -937,30 +985,25 @@ class Runtime:
         return 200, {"results": results}
 
     def _prepare_outcome(
-        self, surface: str, body: Any
+        self, surface: str, body: Any, received: float
     ) -> Prepared | tuple[int, dict[str, Any]]:
         try:
-            return self.prepare(surface, body)
-        except RuntimeServiceError as exc:
-            return exc.status, exc.body()
+            return self.prepare(surface, body, received)
         except Exception as exc:
-            error = RuntimeServiceError(
-                "internal_error", f"{type(exc).__name__}: {exc}"
-            )
-            return 500, error.body()
+            return _error_outcome(exc)
 
     def _prepare_and_run(
-        self, surface: str, body: Any
+        self, surface: str, body: Any, received: float
     ) -> tuple[Prepared | tuple[int, dict[str, Any]], _Lookup | None]:
         """Plan one request off the event loop and run it here if its model is idle."""
-        prepared = self._prepare_outcome(surface, body)
+        prepared = self._prepare_outcome(surface, body, received)
         if not isinstance(prepared, Prepared):
             return prepared, None
         lookup = self._lookup([(0, prepared)])
         lookup.submitted = time.monotonic()
         try:
             lookup.futures = prepared.served.run_items_now(
-                lookup.misses, prepared.request.deadline, prepared.request.profile
+                lookup.misses, [prepared.request.deadline], prepared.request.profile
             )
         except Exception as exc:
             lookup.futures = exc
@@ -973,19 +1016,22 @@ class Runtime:
     ) -> list[tuple[int, dict[str, Any]]]:
         """Plan every request, run each model's share as one job group, finish in order.
 
-        A lone request planned off the event loop runs on its planning thread
-        when its model's scheduler is idle.
+        A group holds a model's tasks of one profile, whatever their deadlines:
+        each job keeps its own. A lone request planned off the event loop runs
+        on its planning thread when its model's scheduler is idle.
         """
+        received = time.monotonic()
         lookups: list[_Lookup | None] = [None] * len(requests)
         if size is not None and size <= INLINE_PLAN_BYTES:
             planned = [
-                self._prepare_outcome(surface, body) for surface, body in requests
+                self._prepare_outcome(surface, body, received)
+                for surface, body in requests
             ]
         elif len(requests) == 1:
             from starlette.concurrency import run_in_threadpool
 
             prepared, lookups[0] = await run_in_threadpool(
-                self._prepare_and_run, *requests[0]
+                self._prepare_and_run, *requests[0], received
             )
             planned = [prepared]
         else:
@@ -993,7 +1039,7 @@ class Runtime:
 
             planned = await asyncio.gather(
                 *(
-                    run_in_threadpool(self._prepare_outcome, surface, body)
+                    run_in_threadpool(self._prepare_outcome, surface, body, received)
                     for surface, body in requests
                 )
             )
@@ -1002,14 +1048,10 @@ class Runtime:
             await self._run_group([(0, planned[0])], outcomes, lookups[0])
             return [outcome for outcome in outcomes if outcome is not None]
         outcomes = [None] * len(requests)
-        groups: dict[tuple[int, str, float | None], list[tuple[int, Prepared]]] = {}
+        groups: dict[tuple[int, str], list[tuple[int, Prepared]]] = {}
         for index, prepared in enumerate(planned):
             if isinstance(prepared, Prepared):
-                key = (
-                    id(prepared.served),
-                    prepared.request.profile,
-                    prepared.request.deadline,
-                )
+                key = (id(prepared.served), prepared.request.profile)
                 groups.setdefault(key, []).append((index, prepared))
             else:
                 outcomes[index] = prepared
@@ -1053,8 +1095,8 @@ class Runtime:
         outcomes: list[tuple[int, dict[str, Any]] | None],
         lookup: _Lookup | None = None,
     ) -> None:
+        """Run one model's job group; every member is answered from its own jobs."""
         served = members[0][1].served
-        request = members[0][1].request
         if lookup is None:
             lookup = self._lookup(members)
         values, slots = lookup.values, lookup.slots
@@ -1065,34 +1107,36 @@ class Runtime:
                 raise futures
             if futures is None:
                 futures = served.submit_items_group(
-                    lookup.misses, request.deadline, request.profile
+                    lookup.misses,
+                    [prepared.request.deadline for _, prepared in members],
+                    members[0][1].request.profile,
                 )
-            results = await asyncio.gather(*(asyncio.wrap_future(f) for f in futures))
-        except RuntimeServiceError as exc:
-            for index, _ in members:
-                outcomes[index] = (exc.status, exc.body())
-            return
         except Exception as exc:
+            for index, _ in members:
+                outcomes[index] = _error_outcome(exc)
+            return
+        results = await asyncio.gather(
+            *(asyncio.wrap_future(future) for future in futures),
+            return_exceptions=True,
+        )
+        if any(isinstance(result, BaseException) for result in results):
             failure = served.device_failure()
             if failure is not None:
                 self.degrade(f"{type(failure).__name__}: {failure}", served)
-            error = RuntimeServiceError(
-                "internal_error", f"{type(exc).__name__}: {exc}"
-            )
-            for index, _ in members:
-                outcomes[index] = (500, error.body())
-            return
         finished = time.monotonic()
-        for member_slots, member_results in zip(slots, results, strict=True):
-            for offset, (member, position, key) in enumerate(member_slots):
+        compute_ms = (finished - submitted) * 1000.0
+        for member, (index, prepared) in enumerate(members):
+            member_results = results[member]
+            if isinstance(member_results, BaseException):
+                outcomes[index] = _error_outcome(member_results)
+                continue
+            for offset, (_, position, key) in enumerate(slots[member]):
                 value = (
                     DEADLINE if member_results is DEADLINE else member_results[offset]
                 )
                 values[(member, position)] = value
                 if key is not None and value is not DEADLINE and value is not None:
                     served.cache.put(key, value)
-        compute_ms = (finished - submitted) * 1000.0
-        for member, (index, prepared) in enumerate(members):
             count = len(prepared.plan.items)
             item_values = [values[(member, position)] for position in range(count)]
             if count and all(value is DEADLINE for value in item_values):
@@ -1106,10 +1150,7 @@ class Runtime:
                     self.finish(prepared, results_for_member, queue_ms, compute_ms),
                 )
             except Exception as exc:
-                error = RuntimeServiceError(
-                    "internal_error", f"{type(exc).__name__}: {exc}"
-                )
-                outcomes[index] = (500, error.body())
+                outcomes[index] = _error_outcome(exc)
 
     def _bundle_tasks(self, body: Any) -> list[tuple[str, str, dict[str, Any]]]:
         if not isinstance(body, dict) or set(body) - {"tasks", "options"}:
@@ -1213,3 +1254,11 @@ class Runtime:
 
 def with_overrides(config: ServeConfig, **changes: Any) -> ServeConfig:
     return replace(config, **changes)
+
+
+def _error_outcome(error: BaseException) -> tuple[int, dict[str, Any]]:
+    """The contract's error answer for an exception from planning or running a request."""
+    if isinstance(error, RuntimeServiceError):
+        return error.status, error.body()
+    internal = RuntimeServiceError("internal_error", f"{type(error).__name__}: {error}")
+    return 500, internal.body()

@@ -38,16 +38,15 @@ describe('embedding models config support', () => {
     })
 
     expect(editData.provider_type).toBe('local')
-    expect(editData.local_backend).toBe('model_runtime')
   })
 
-  it('loads a retired local backend as the model runtime', () => {
+  it('saves a retired local backend as the model runtime', () => {
     const editData = embeddingModelsEditData({
       semantic: { embedding_config: { backend: 'candle', model_type: 'mmbert' } },
     })
     const saved = embeddingModelsCatalogValue(editData)
 
-    expect(editData.local_backend).toBe('model_runtime')
+    expect(editData.provider_type).toBe('local')
     expect((saved.semantic as Record<string, unknown>).embedding_config).toEqual(
       expect.objectContaining({ backend: 'model_runtime', model_type: 'mmbert' }),
     )
@@ -57,15 +56,12 @@ describe('embedding models config support', () => {
     const fields = embeddingModelsFields()
     const localPath = fields.find((field) => field.name === 'mmbert_model_path')
     const endpoint = fields.find((field) => field.name === 'endpoint')
-    const localBackend = fields.find((field) => field.name === 'local_backend')
     const apiProtocol = fields.find((field) => field.name === 'remote_backend')
 
     expect(localPath?.shouldHide?.({ provider_type: 'local' })).toBe(false)
-    expect(localBackend?.shouldHide?.({ provider_type: 'local' })).toBe(false)
     expect(endpoint?.shouldHide?.({ provider_type: 'local' })).toBe(true)
     expect(apiProtocol?.shouldHide?.({ provider_type: 'local' })).toBe(true)
     expect(localPath?.shouldHide?.({ provider_type: 'remote' })).toBe(true)
-    expect(localBackend?.shouldHide?.({ provider_type: 'remote' })).toBe(true)
     expect(endpoint?.shouldHide?.({ provider_type: 'remote' })).toBe(false)
     expect(apiProtocol?.shouldHide?.({ provider_type: 'remote' })).toBe(false)
   })
@@ -122,7 +118,6 @@ describe('embedding models config support', () => {
     const local = embeddingModelsCatalogValue({
       ...embeddingModelsEditData(remote),
       provider_type: 'local',
-      local_backend: 'model_runtime',
       model_type: 'mmbert',
     })
 

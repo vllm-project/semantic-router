@@ -418,6 +418,13 @@ class Accelerator(ABC):
         """Run device work (loading, forwards, readouts); inline unless the device needs one thread."""
         return work()
 
+    def device_fault(self, error: BaseException) -> bool:
+        """Whether an error from device work left the device unusable until the process restarts.
+
+        Any other error fails only the batch that raised it.
+        """
+        return False
+
 
 # ---------------------------------------------------------------------------
 # Families

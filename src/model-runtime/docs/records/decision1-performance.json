@@ -7640,6 +7640,5763 @@
      "bytes": 1323565056
     }
    }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap1024-r1.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1024,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.3494,
+    "p95_ms": 58.8069,
+    "mean_ms": 52.5866,
+    "requests_per_second": 19.0162
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.0005,
+    "p95_ms": 54.1327,
+    "mean_ms": 52.1581,
+    "requests_per_second": 19.1725
+   },
+   "throughput": {
+    "4": 23.12,
+    "16": 21.063
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap1024-r2.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1024,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.0225,
+    "p95_ms": 56.6269,
+    "mean_ms": 51.9116,
+    "requests_per_second": 19.2635
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 49.9567,
+    "p95_ms": 56.8545,
+    "mean_ms": 52.1622,
+    "requests_per_second": 19.171
+   },
+   "throughput": {
+    "4": 22.818,
+    "16": 24.648
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap2048-r1.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 2048,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.7904,
+    "p95_ms": 54.9709,
+    "mean_ms": 52.0603,
+    "requests_per_second": 19.2085
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.3455,
+    "p95_ms": 54.0268,
+    "mean_ms": 51.8508,
+    "requests_per_second": 19.2861
+   },
+   "throughput": {
+    "4": 23.304,
+    "16": 21.159
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap2048-r2.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 2048,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.1799,
+    "p95_ms": 56.672,
+    "mean_ms": 52.6656,
+    "requests_per_second": 18.9877
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 49.8841,
+    "p95_ms": 53.7972,
+    "mean_ms": 52.7521,
+    "requests_per_second": 18.9566
+   },
+   "throughput": {
+    "4": 25.892,
+    "16": 24.318
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap4096-r1.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 4096,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.8767,
+    "p95_ms": 54.7157,
+    "mean_ms": 52.0263,
+    "requests_per_second": 19.2211
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.108,
+    "p95_ms": 54.165,
+    "mean_ms": 51.6299,
+    "requests_per_second": 19.3686
+   },
+   "throughput": {
+    "4": 25.921,
+    "16": 17.72
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap4096-r2.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 4096,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.2807,
+    "p95_ms": 58.3447,
+    "mean_ms": 53.6686,
+    "requests_per_second": 18.6329
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.4968,
+    "p95_ms": 53.9311,
+    "mean_ms": 51.8725,
+    "requests_per_second": 19.278
+   },
+   "throughput": {
+    "4": 23.017,
+    "16": 17.92
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap65536-r1.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 65536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.5689,
+    "p95_ms": 61.2741,
+    "mean_ms": 54.4614,
+    "requests_per_second": 18.3616
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.0926,
+    "p95_ms": 54.3791,
+    "mean_ms": 51.6998,
+    "requests_per_second": 19.3424
+   },
+   "throughput": {
+    "4": 24.022,
+    "16": 16.661
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap65536-r2.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 65536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.6131,
+    "p95_ms": 55.4519,
+    "mean_ms": 51.8157,
+    "requests_per_second": 19.2992
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 49.8547,
+    "p95_ms": 53.2054,
+    "mean_ms": 52.4811,
+    "requests_per_second": 19.0545
+   },
+   "throughput": {
+    "4": 24.247,
+    "16": 16.275
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap1024-r1.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1024,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.6855,
+    "p95_ms": 58.2114,
+    "mean_ms": 53.2624,
+    "requests_per_second": 18.775
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.9218,
+    "p95_ms": 54.5272,
+    "mean_ms": 52.8857,
+    "requests_per_second": 18.9087
+   },
+   "throughput": {
+    "4": 22.373,
+    "16": 26.153
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap1024-r2.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1024,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.4406,
+    "p95_ms": 61.6372,
+    "mean_ms": 54.3548,
+    "requests_per_second": 18.3976
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.7024,
+    "p95_ms": 55.1326,
+    "mean_ms": 51.9511,
+    "requests_per_second": 19.2489
+   },
+   "throughput": {
+    "4": 22.441,
+    "16": 25.187
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap2048-r1.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 2048,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.9607,
+    "p95_ms": 55.3349,
+    "mean_ms": 52.6084,
+    "requests_per_second": 19.0084
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.3576,
+    "p95_ms": 55.121,
+    "mean_ms": 52.2573,
+    "requests_per_second": 19.1361
+   },
+   "throughput": {
+    "4": 25.591,
+    "16": 19.269
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap2048-r2.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 2048,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.4898,
+    "p95_ms": 56.1851,
+    "mean_ms": 54.7064,
+    "requests_per_second": 18.2794
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 51.3841,
+    "p95_ms": 54.8411,
+    "mean_ms": 52.1985,
+    "requests_per_second": 19.1576
+   },
+   "throughput": {
+    "4": 22.897,
+    "16": 21.833
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap4096-r1.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 4096,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.4647,
+    "p95_ms": 59.1394,
+    "mean_ms": 53.3767,
+    "requests_per_second": 18.7348
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.9328,
+    "p95_ms": 56.4417,
+    "mean_ms": 53.0041,
+    "requests_per_second": 18.8665
+   },
+   "throughput": {
+    "4": 23.982,
+    "16": 16.885
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap4096-r2.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 4096,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.4917,
+    "p95_ms": 56.4178,
+    "mean_ms": 53.2287,
+    "requests_per_second": 18.7868
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 51.2735,
+    "p95_ms": 57.3845,
+    "mean_ms": 54.2585,
+    "requests_per_second": 18.4303
+   },
+   "throughput": {
+    "4": 23.706,
+    "16": 16.424
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap65536-r1.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 65536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.4821,
+    "p95_ms": 58.0739,
+    "mean_ms": 53.1269,
+    "requests_per_second": 18.8228
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.0931,
+    "p95_ms": 54.8472,
+    "mean_ms": 54.0362,
+    "requests_per_second": 18.5061
+   },
+   "throughput": {
+    "4": 13.386,
+    "16": 16.119
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap",
+   "run": "cap65536-r2.native-max_speed",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 65536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.8743,
+    "p95_ms": 57.3712,
+    "mean_ms": 52.8566,
+    "requests_per_second": 18.9191
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.7867,
+    "p95_ms": 58.1868,
+    "mean_ms": 52.5956,
+    "requests_per_second": 19.013
+   },
+   "throughput": {
+    "4": 25.401,
+    "16": 16.495
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "css15-mixed400.cap1024-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1024,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.021,
+    "p95_ms": 120.2371,
+    "mean_ms": 44.9604,
+    "requests_per_second": 22.2418
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 31.5504,
+    "p95_ms": 118.9391,
+    "mean_ms": 44.5494,
+    "requests_per_second": 22.447
+   },
+   "throughput": {
+    "4": 25.608,
+    "16": 27.171
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "css15-mixed400.cap1536-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.8562,
+    "p95_ms": 121.148,
+    "mean_ms": 46.0039,
+    "requests_per_second": 21.7373
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 31.3519,
+    "p95_ms": 117.899,
+    "mean_ms": 44.1293,
+    "requests_per_second": 22.6607
+   },
+   "throughput": {
+    "4": 25.074,
+    "16": 26.717
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "css15-mixed400.cap1536-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.8791,
+    "p95_ms": 125.6405,
+    "mean_ms": 45.8779,
+    "requests_per_second": 21.797
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 31.2507,
+    "p95_ms": 125.4623,
+    "mean_ms": 46.1483,
+    "requests_per_second": 21.6693
+   },
+   "throughput": {
+    "4": 26.091,
+    "16": 26.116
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "css15-mixed400.cap2048-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 2048,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.681,
+    "p95_ms": 117.3494,
+    "mean_ms": 45.3688,
+    "requests_per_second": 22.0416
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 30.9525,
+    "p95_ms": 116.0452,
+    "mean_ms": 43.2447,
+    "requests_per_second": 23.1242
+   },
+   "throughput": {
+    "4": 24.79,
+    "16": 26.745
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "css15-mixed400.cap2048-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 2048,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.7598,
+    "p95_ms": 124.2394,
+    "mean_ms": 45.8101,
+    "requests_per_second": 21.8292
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 31.2263,
+    "p95_ms": 116.8455,
+    "mean_ms": 43.654,
+    "requests_per_second": 22.9074
+   },
+   "throughput": {
+    "4": 24.919,
+    "16": 26.18
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "css15-mixed400.cap65536-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 65536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.2771,
+    "p95_ms": 118.5825,
+    "mean_ms": 44.6285,
+    "requests_per_second": 22.4072
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 30.8619,
+    "p95_ms": 118.3825,
+    "mean_ms": 44.9792,
+    "requests_per_second": 22.2325
+   },
+   "throughput": {
+    "4": 26.469,
+    "16": 27.724
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "css15-mixed400.cap65536-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 65536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 33.1295,
+    "p95_ms": 123.1897,
+    "mean_ms": 46.0882,
+    "requests_per_second": 21.6975
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 31.0241,
+    "p95_ms": 118.0169,
+    "mean_ms": 43.5446,
+    "requests_per_second": 22.965
+   },
+   "throughput": {
+    "4": 26.133,
+    "16": 24.511
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap1024-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1024,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.0536,
+    "p95_ms": 54.7221,
+    "mean_ms": 50.8479,
+    "requests_per_second": 19.6665
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 49.8267,
+    "p95_ms": 52.4269,
+    "mean_ms": 50.795,
+    "requests_per_second": 19.687
+   },
+   "throughput": {
+    "4": 23.032,
+    "16": 24.448
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap1024-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1024,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.7804,
+    "p95_ms": 55.558,
+    "mean_ms": 52.0082,
+    "requests_per_second": 19.2277
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 49.7558,
+    "p95_ms": 52.5653,
+    "mean_ms": 51.038,
+    "requests_per_second": 19.5932
+   },
+   "throughput": {
+    "4": 23.342,
+    "16": 24.237
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap1536-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.7621,
+    "p95_ms": 60.2436,
+    "mean_ms": 53.789,
+    "requests_per_second": 18.5912
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.3654,
+    "p95_ms": 55.0372,
+    "mean_ms": 51.7648,
+    "requests_per_second": 19.3182
+   },
+   "throughput": {
+    "4": 23.713,
+    "16": 24.312
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap1536-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.2873,
+    "p95_ms": 56.7446,
+    "mean_ms": 53.5868,
+    "requests_per_second": 18.6613
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.3231,
+    "p95_ms": 55.4532,
+    "mean_ms": 52.1049,
+    "requests_per_second": 19.192
+   },
+   "throughput": {
+    "4": 25.979,
+    "16": 16.709
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap2048-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 2048,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.9797,
+    "p95_ms": 59.2683,
+    "mean_ms": 53.2899,
+    "requests_per_second": 18.7653
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.1657,
+    "p95_ms": 57.8499,
+    "mean_ms": 51.9109,
+    "requests_per_second": 19.2638
+   },
+   "throughput": {
+    "4": 24.921,
+    "16": 19.392
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap2048-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 2048,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 49.356,
+    "p95_ms": 53.6419,
+    "mean_ms": 50.8854,
+    "requests_per_second": 19.652
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 49.5125,
+    "p95_ms": 52.731,
+    "mean_ms": 50.8498,
+    "requests_per_second": 19.6658
+   },
+   "throughput": {
+    "4": 24.87,
+    "16": 19.416
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap65536-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 65536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.2702,
+    "p95_ms": 54.8159,
+    "mean_ms": 53.1295,
+    "requests_per_second": 18.8219
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.6319,
+    "p95_ms": 54.8298,
+    "mean_ms": 52.6257,
+    "requests_per_second": 19.0021
+   },
+   "throughput": {
+    "4": 23.536,
+    "16": 16.592
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap65536-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 65536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.5055,
+    "p95_ms": 55.3355,
+    "mean_ms": 52.9882,
+    "requests_per_second": 18.8721
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.3704,
+    "p95_ms": 58.0956,
+    "mean_ms": 52.7947,
+    "requests_per_second": 18.9413
+   },
+   "throughput": {
+    "4": 26.236,
+    "16": 17.202
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "css15-mixed400.cap1024-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1024,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.5034,
+    "p95_ms": 120.7654,
+    "mean_ms": 45.0392,
+    "requests_per_second": 22.2029
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 32.525,
+    "p95_ms": 121.5095,
+    "mean_ms": 45.4404,
+    "requests_per_second": 22.0069
+   },
+   "throughput": {
+    "4": 26.325,
+    "16": 28.081
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "css15-mixed400.cap1536-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.3224,
+    "p95_ms": 120.2537,
+    "mean_ms": 45.1696,
+    "requests_per_second": 22.1388
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 31.9827,
+    "p95_ms": 121.0613,
+    "mean_ms": 45.4927,
+    "requests_per_second": 21.9815
+   },
+   "throughput": {
+    "4": 21.88,
+    "16": 19.291
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "css15-mixed400.cap1536-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.784,
+    "p95_ms": 122.0589,
+    "mean_ms": 46.2558,
+    "requests_per_second": 21.6189
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 31.6041,
+    "p95_ms": 118.0842,
+    "mean_ms": 43.8967,
+    "requests_per_second": 22.7807
+   },
+   "throughput": {
+    "4": 25.763,
+    "16": 25.25
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "css15-mixed400.cap2048-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 2048,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.086,
+    "p95_ms": 123.3111,
+    "mean_ms": 45.3395,
+    "requests_per_second": 22.0558
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 32.0721,
+    "p95_ms": 118.7458,
+    "mean_ms": 44.6293,
+    "requests_per_second": 22.4068
+   },
+   "throughput": {
+    "4": 24.729,
+    "16": 28.326
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "css15-mixed400.cap2048-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 2048,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.7,
+    "p95_ms": 122.6469,
+    "mean_ms": 46.552,
+    "requests_per_second": 21.4814
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 32.043,
+    "p95_ms": 120.6807,
+    "mean_ms": 45.4304,
+    "requests_per_second": 22.0117
+   },
+   "throughput": {
+    "4": 25.528,
+    "16": 26.605
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "css15-mixed400.cap65536-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 65536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.7885,
+    "p95_ms": 125.4271,
+    "mean_ms": 47.0965,
+    "requests_per_second": 21.233
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 31.6318,
+    "p95_ms": 119.9445,
+    "mean_ms": 44.7814,
+    "requests_per_second": 22.3307
+   },
+   "throughput": {
+    "4": 25.226,
+    "16": 29.756
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "css15-mixed400.cap65536-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 65536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.2447,
+    "p95_ms": 121.4726,
+    "mean_ms": 45.8918,
+    "requests_per_second": 21.7904
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 31.4569,
+    "p95_ms": 118.7845,
+    "mean_ms": 45.0942,
+    "requests_per_second": 22.1758
+   },
+   "throughput": {
+    "4": 26.812,
+    "16": 29.266
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap1024-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1024,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.1216,
+    "p95_ms": 56.2328,
+    "mean_ms": 53.4312,
+    "requests_per_second": 18.7157
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.8,
+    "p95_ms": 56.0939,
+    "mean_ms": 53.7861,
+    "requests_per_second": 18.5922
+   },
+   "throughput": {
+    "4": 23.23,
+    "16": 24.98
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap1024-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1024,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.0976,
+    "p95_ms": 54.4698,
+    "mean_ms": 52.027,
+    "requests_per_second": 19.2208
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.9188,
+    "p95_ms": 55.1124,
+    "mean_ms": 52.4126,
+    "requests_per_second": 19.0794
+   },
+   "throughput": {
+    "4": 23.831,
+    "16": 23.734
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap1536-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.2127,
+    "p95_ms": 59.4114,
+    "mean_ms": 53.5149,
+    "requests_per_second": 18.6864
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.3921,
+    "p95_ms": 57.0781,
+    "mean_ms": 52.0366,
+    "requests_per_second": 19.2172
+   },
+   "throughput": {
+    "4": 23.24,
+    "16": 14.214
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap1536-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 1536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.7553,
+    "p95_ms": 56.5852,
+    "mean_ms": 53.9024,
+    "requests_per_second": 18.5521
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.8049,
+    "p95_ms": 55.3817,
+    "mean_ms": 52.5205,
+    "requests_per_second": 19.0402
+   },
+   "throughput": {
+    "4": 21.883,
+    "16": 20.459
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap2048-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 2048,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.2248,
+    "p95_ms": 56.7537,
+    "mean_ms": 53.2204,
+    "requests_per_second": 18.7898
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.6046,
+    "p95_ms": 55.7476,
+    "mean_ms": 53.4029,
+    "requests_per_second": 18.7256
+   },
+   "throughput": {
+    "4": 25.199,
+    "16": 22.27
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap2048-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 2048,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.2827,
+    "p95_ms": 54.9626,
+    "mean_ms": 53.369,
+    "requests_per_second": 18.7375
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.9279,
+    "p95_ms": 54.2347,
+    "mean_ms": 51.9598,
+    "requests_per_second": 19.2456
+   },
+   "throughput": {
+    "4": 23.29,
+    "16": 19.411
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap65536-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 65536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.4602,
+    "p95_ms": 58.9474,
+    "mean_ms": 54.7512,
+    "requests_per_second": 18.2644
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.5506,
+    "p95_ms": 53.79,
+    "mean_ms": 52.9133,
+    "requests_per_second": 18.8988
+   },
+   "throughput": {
+    "4": 24.238,
+    "16": 16.148
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-cap2",
+   "run": "typed-final.cap65536-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": 65536,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.7162,
+    "p95_ms": 54.5136,
+    "mean_ms": 52.3507,
+    "requests_per_second": 19.1019
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.4391,
+    "p95_ms": 53.6681,
+    "mean_ms": 51.4406,
+    "requests_per_second": 19.4399
+   },
+   "throughput": {
+    "4": 23.38,
+    "16": 16.318
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-readout",
+   "run": "cpu-max_speed-NEW-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.5911,
+    "p95_ms": 123.6826,
+    "mean_ms": 45.2817,
+    "requests_per_second": 22.084
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 32.1432,
+    "p95_ms": 123.2781,
+    "mean_ms": 46.5247,
+    "requests_per_second": 21.494
+   },
+   "throughput": {
+    "1": 21.495,
+    "4": 23.972,
+    "16": 23.758
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-readout",
+   "run": "cpu-max_speed-NEW-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.2275,
+    "p95_ms": 117.9742,
+    "mean_ms": 45.0448,
+    "requests_per_second": 22.2001
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 31.1629,
+    "p95_ms": 117.2689,
+    "mean_ms": 43.7292,
+    "requests_per_second": 22.868
+   },
+   "throughput": {
+    "1": 21.988,
+    "4": 24.784,
+    "16": 27.182
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-readout",
+   "run": "cpu-max_speed-OLD-r1",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.5488,
+    "p95_ms": 126.4545,
+    "mean_ms": 46.2259,
+    "requests_per_second": 21.6329
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 32.207,
+    "p95_ms": 118.752,
+    "mean_ms": 44.8143,
+    "requests_per_second": 22.3143
+   },
+   "throughput": {
+    "1": 21.477,
+    "4": 22.968,
+    "16": 18.514
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-readout",
+   "run": "cpu-max_speed-OLD-r2",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.8215,
+    "p95_ms": 124.8862,
+    "mean_ms": 46.3873,
+    "requests_per_second": 21.5576
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 32.8362,
+    "p95_ms": 121.6184,
+    "mean_ms": 45.799,
+    "requests_per_second": 21.8345
+   },
+   "throughput": {
+    "1": 21.61,
+    "4": 24.315,
+    "16": 18.964
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "set": "bench-readout",
+   "run": "rocm-batching-NEW-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": null,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 6.8363,
+    "p95_ms": 11.8436,
+    "mean_ms": 7.7085,
+    "requests_per_second": 129.7274
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 5.9554,
+    "p95_ms": 10.7129,
+    "mean_ms": 6.6203,
+    "requests_per_second": 151.0505
+   },
+   "throughput": {
+    "1": 136.865,
+    "4": 222.765,
+    "16": 350.66
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 10,
+      "replays": 1081,
+      "eager": 10,
+      "packed": 254,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "set": "bench-readout",
+   "run": "rocm-batching-NEW-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": null,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 7.2518,
+    "p95_ms": 13.2355,
+    "mean_ms": 8.2076,
+    "requests_per_second": 121.839
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 6.0813,
+    "p95_ms": 10.8329,
+    "mean_ms": 6.6915,
+    "requests_per_second": 149.4427
+   },
+   "throughput": {
+    "1": 132.458,
+    "4": 246.076,
+    "16": 362.829
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 10,
+      "replays": 1081,
+      "eager": 10,
+      "packed": 254,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "set": "bench-readout",
+   "run": "rocm-batching-OLD-r1",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": null,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 6.3343,
+    "p95_ms": 10.9636,
+    "mean_ms": 7.2068,
+    "requests_per_second": 138.757
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 5.5381,
+    "p95_ms": 9.812,
+    "mean_ms": 6.2162,
+    "requests_per_second": 160.8689
+   },
+   "throughput": {
+    "1": 130.863,
+    "4": 234.781,
+    "16": 347.519
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 10,
+      "replays": 1081,
+      "eager": 10,
+      "packed": 254,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "set": "bench-readout",
+   "run": "rocm-batching-OLD-r2",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": null,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 6.9515,
+    "p95_ms": 12.195,
+    "mean_ms": 7.7978,
+    "requests_per_second": 128.2413
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 6.0822,
+    "p95_ms": 10.9029,
+    "mean_ms": 6.7213,
+    "requests_per_second": 148.7818
+   },
+   "throughput": {
+    "1": 129.117,
+    "4": 227.027,
+    "16": 373.537
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 10,
+      "replays": 1081,
+      "eager": 10,
+      "packed": 254,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-readout",
+   "run": "cpu-max_speed-NEW-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 33.2942,
+    "p95_ms": 131.4761,
+    "mean_ms": 48.41,
+    "requests_per_second": 20.6569
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 32.232,
+    "p95_ms": 122.4543,
+    "mean_ms": 45.6126,
+    "requests_per_second": 21.9238
+   },
+   "throughput": {
+    "1": 20.738,
+    "4": 24.121,
+    "16": 29.921
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-readout",
+   "run": "cpu-max_speed-NEW-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.4428,
+    "p95_ms": 124.3888,
+    "mean_ms": 45.5661,
+    "requests_per_second": 21.9461
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 31.142,
+    "p95_ms": 119.3862,
+    "mean_ms": 45.0225,
+    "requests_per_second": 22.2111
+   },
+   "throughput": {
+    "1": 21.026,
+    "4": 24.908,
+    "16": 26.773
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-readout",
+   "run": "cpu-max_speed-OLD-r1",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 33.8372,
+    "p95_ms": 126.4093,
+    "mean_ms": 47.2341,
+    "requests_per_second": 21.1711
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 32.1786,
+    "p95_ms": 122.0155,
+    "mean_ms": 45.6371,
+    "requests_per_second": 21.912
+   },
+   "throughput": {
+    "1": 20.471,
+    "4": 23.799,
+    "16": 19.796
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-readout",
+   "run": "cpu-max_speed-OLD-r2",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 33.4854,
+    "p95_ms": 129.6188,
+    "mean_ms": 48.6763,
+    "requests_per_second": 20.5439
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 31.6507,
+    "p95_ms": 120.459,
+    "mean_ms": 44.9806,
+    "requests_per_second": 22.2318
+   },
+   "throughput": {
+    "1": 20.659,
+    "4": 20.97,
+    "16": 18.58
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "set": "bench-readout",
+   "run": "rocm-batching-NEW-r1",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": null,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 6.9456,
+    "p95_ms": 12.6642,
+    "mean_ms": 7.8575,
+    "requests_per_second": 127.2668
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 5.9456,
+    "p95_ms": 10.6564,
+    "mean_ms": 6.6001,
+    "requests_per_second": 151.5124
+   },
+   "throughput": {
+    "1": 130.823,
+    "4": 221.929,
+    "16": 339.454
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 10,
+      "replays": 1081,
+      "eager": 10,
+      "packed": 254,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "set": "bench-readout",
+   "run": "rocm-batching-NEW-r2",
+   "side": "native",
+   "commit": "8d45cd2f2",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": null,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 6.6508,
+    "p95_ms": 11.5813,
+    "mean_ms": 7.4177,
+    "requests_per_second": 134.812
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 6.0133,
+    "p95_ms": 10.8498,
+    "mean_ms": 6.685,
+    "requests_per_second": 149.5878
+   },
+   "throughput": {
+    "1": 134.972,
+    "4": 226.421,
+    "16": 355.533
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 10,
+      "replays": 1081,
+      "eager": 10,
+      "packed": 255,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "set": "bench-readout",
+   "run": "rocm-batching-OLD-r1",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": null,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 6.8229,
+    "p95_ms": 12.3419,
+    "mean_ms": 7.572,
+    "requests_per_second": 132.0647
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 5.8332,
+    "p95_ms": 10.5694,
+    "mean_ms": 6.5463,
+    "requests_per_second": 152.7569
+   },
+   "throughput": {
+    "1": 132.361,
+    "4": 242.785,
+    "16": 341.361
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 10,
+      "replays": 1081,
+      "eager": 10,
+      "packed": 254,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "set": "bench-readout",
+   "run": "rocm-batching-OLD-r2",
+   "side": "native",
+   "commit": "c012e5dc7",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": null,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 6.8199,
+    "p95_ms": 12.1443,
+    "mean_ms": 7.7039,
+    "requests_per_second": 129.8048
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 6.2009,
+    "p95_ms": 11.4031,
+    "mean_ms": 6.9165,
+    "requests_per_second": 144.5817
+   },
+   "throughput": {
+    "1": 122.24,
+    "4": 247.525,
+    "16": 382.631
+   },
+   "engine": {
+    "encoder_graphs": {
+     "backbone": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     },
+     "choice": {
+      "captures": 10,
+      "replays": 1081,
+      "eager": 10,
+      "packed": 254,
+      "failed": 0
+     },
+     "score": {
+      "captures": 0,
+      "replays": 0,
+      "eager": 0,
+      "packed": 0,
+      "failed": 0
+     }
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "css15-mixed400.native-batching",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 52.5281,
+    "p95_ms": 180.2215,
+    "mean_ms": 74.1025,
+    "requests_per_second": 13.4948
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 52.8006,
+    "p95_ms": 180.6094,
+    "mean_ms": 73.2378,
+    "requests_per_second": 13.6542
+   },
+   "throughput": {
+    "1": 13.295,
+    "4": 16.344,
+    "16": 18.774
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "css15-mixed400.native-exact",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.7457,
+    "p95_ms": 178.5998,
+    "mean_ms": 71.7074,
+    "requests_per_second": 13.9456
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.3329,
+    "p95_ms": 182.7522,
+    "mean_ms": 72.0277,
+    "requests_per_second": 13.8836
+   },
+   "throughput": {
+    "1": 12.96,
+    "4": 13.187,
+    "16": 12.969
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "css15-mixed400.native-max_speed",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 35.5372,
+    "p95_ms": 137.0983,
+    "mean_ms": 49.6145,
+    "requests_per_second": 20.1554
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 33.75,
+    "p95_ms": 130.8454,
+    "mean_ms": 48.016,
+    "requests_per_second": 20.8264
+   },
+   "throughput": {
+    "1": 18.371,
+    "4": 23.716,
+    "16": 26.376
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "css15-mixed400.paired-exact",
+   "side": "paired",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "css15mixed:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 400,
+    "p50_ms": 78.5773,
+    "p95_ms": 205.4474,
+    "mean_ms": 96.6871,
+    "requests_per_second": 10.3426
+   },
+   "direct": {
+    "requests": 400,
+    "p50_ms": 78.8369,
+    "p95_ms": 208.491,
+    "mean_ms": 97.0881,
+    "requests_per_second": 10.2999
+   },
+   "scheduler": {
+    "requests": 400,
+    "p50_ms": 79.5014,
+    "p95_ms": 204.3778,
+    "mean_ms": 97.3287,
+    "requests_per_second": 10.2745
+   },
+   "call": {
+    "requests": 400,
+    "p50_ms": 82.4078,
+    "p95_ms": 205.6246,
+    "mean_ms": 100.8653,
+    "requests_per_second": 9.9142
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": 1.1643,
+     "mean": 0.401
+    },
+    "scheduler": {
+     "p50": 1.4517,
+     "mean": 0.6416
+    },
+    "call": {
+     "p50": 2.5793,
+     "mean": 4.1782
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "css15-mixed400.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 44.0904,
+    "p95_ms": 172.036,
+    "mean_ms": 64.2606,
+    "requests_per_second": 15.5616
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "typed-final.native-batching",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 91.2809,
+    "p95_ms": 110.3541,
+    "mean_ms": 95.8327,
+    "requests_per_second": 10.4349
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 89.7149,
+    "p95_ms": 106.9426,
+    "mean_ms": 94.5573,
+    "requests_per_second": 10.5756
+   },
+   "throughput": {
+    "1": 11.443,
+    "4": 13.545,
+    "16": 14.502
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "typed-final.native-exact",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 87.7673,
+    "p95_ms": 107.183,
+    "mean_ms": 91.7199,
+    "requests_per_second": 10.9028
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 86.3305,
+    "p95_ms": 104.2296,
+    "mean_ms": 89.7321,
+    "requests_per_second": 11.1443
+   },
+   "throughput": {
+    "1": 10.977,
+    "4": 10.845,
+    "16": 11.295
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "typed-final.native-max_speed",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 57.0484,
+    "p95_ms": 60.0736,
+    "mean_ms": 58.0353,
+    "requests_per_second": 17.2309
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 56.249,
+    "p95_ms": 62.2792,
+    "mean_ms": 57.8266,
+    "requests_per_second": 17.2931
+   },
+   "throughput": {
+    "1": 16.741,
+    "4": 20.241,
+    "16": 22.355
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "typed-final.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 84.9191,
+    "p95_ms": 100.1965,
+    "mean_ms": 88.1121,
+    "requests_per_second": 11.3492
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "css15-mixed400.native-batching",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.711,
+    "p95_ms": 179.9216,
+    "mean_ms": 72.6838,
+    "requests_per_second": 13.7582
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 46.6937,
+    "p95_ms": 173.6693,
+    "mean_ms": 67.4537,
+    "requests_per_second": 14.825
+   },
+   "throughput": {
+    "1": 14.686,
+    "4": 17.413,
+    "16": 19.23
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "css15-mixed400.native-exact",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 45.5706,
+    "p95_ms": 172.1174,
+    "mean_ms": 65.9334,
+    "requests_per_second": 15.1668
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 44.9618,
+    "p95_ms": 174.8701,
+    "mean_ms": 65.6333,
+    "requests_per_second": 15.2362
+   },
+   "throughput": {
+    "1": 13.771,
+    "4": 13.631,
+    "16": 13.909
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "css15-mixed400.native-max_speed",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 34.6399,
+    "p95_ms": 128.2083,
+    "mean_ms": 49.0992,
+    "requests_per_second": 20.3669
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 34.591,
+    "p95_ms": 130.2603,
+    "mean_ms": 48.5762,
+    "requests_per_second": 20.5862
+   },
+   "throughput": {
+    "1": 20.355,
+    "4": 22.526,
+    "16": 24.427
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "css15-mixed400.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 44.2209,
+    "p95_ms": 171.948,
+    "mean_ms": 63.8963,
+    "requests_per_second": 15.6504
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "typed-final.native-batching",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 87.928,
+    "p95_ms": 101.0444,
+    "mean_ms": 91.4481,
+    "requests_per_second": 10.9352
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 86.4057,
+    "p95_ms": 102.468,
+    "mean_ms": 90.1829,
+    "requests_per_second": 11.0886
+   },
+   "throughput": {
+    "1": 11.885,
+    "4": 13.713,
+    "16": 14.596
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "typed-final.native-exact",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 85.2307,
+    "p95_ms": 98.1306,
+    "mean_ms": 88.4328,
+    "requests_per_second": 11.308
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 83.0085,
+    "p95_ms": 105.9684,
+    "mean_ms": 87.0834,
+    "requests_per_second": 11.4832
+   },
+   "throughput": {
+    "1": 11.617,
+    "4": 11.271,
+    "16": 11.382
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "typed-final.native-max_speed",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 56.3825,
+    "p95_ms": 61.905,
+    "mean_ms": 57.5528,
+    "requests_per_second": 17.3754
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 55.8415,
+    "p95_ms": 59.2822,
+    "mean_ms": 58.1045,
+    "requests_per_second": 17.2104
+   },
+   "throughput": {
+    "1": 16.646,
+    "4": 20.894,
+    "16": 21.808
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "typed-final.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 85.2289,
+    "p95_ms": 97.3006,
+    "mean_ms": 90.2084,
+    "requests_per_second": 11.0854
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "css15-mixed400.native-batching",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.0078,
+    "p95_ms": 167.7929,
+    "mean_ms": 69.9361,
+    "requests_per_second": 14.2988
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 51.3287,
+    "p95_ms": 167.9578,
+    "mean_ms": 70.9595,
+    "requests_per_second": 14.0925
+   },
+   "throughput": {
+    "1": 14.574,
+    "4": 17.477,
+    "16": 18.636
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "css15-mixed400.native-exact",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 48.4962,
+    "p95_ms": 165.7835,
+    "mean_ms": 66.9851,
+    "requests_per_second": 14.9287
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 46.7328,
+    "p95_ms": 165.5267,
+    "mean_ms": 66.821,
+    "requests_per_second": 14.9654
+   },
+   "throughput": {
+    "1": 14.542,
+    "4": 14.991,
+    "16": 14.708
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "css15-mixed400.native-max_speed",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 29.052,
+    "p95_ms": 109.5451,
+    "mean_ms": 40.9762,
+    "requests_per_second": 24.4044
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 29.4972,
+    "p95_ms": 111.9832,
+    "mean_ms": 41.9599,
+    "requests_per_second": 23.8323
+   },
+   "throughput": {
+    "1": 23.431,
+    "4": 28.167,
+    "16": 32.199
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "css15-mixed400.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 42.3674,
+    "p95_ms": 160.8814,
+    "mean_ms": 61.9334,
+    "requests_per_second": 16.1464
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "typed-final.native-batching",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 79.2862,
+    "p95_ms": 89.0145,
+    "mean_ms": 82.4477,
+    "requests_per_second": 12.1289
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 78.1241,
+    "p95_ms": 89.4444,
+    "mean_ms": 81.8537,
+    "requests_per_second": 12.2169
+   },
+   "throughput": {
+    "1": 12.088,
+    "4": 15.255,
+    "16": 16.807
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "typed-final.native-exact",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 76.4956,
+    "p95_ms": 85.8463,
+    "mean_ms": 79.6884,
+    "requests_per_second": 12.5489
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 77.3934,
+    "p95_ms": 84.4441,
+    "mean_ms": 80.4178,
+    "requests_per_second": 12.4351
+   },
+   "throughput": {
+    "1": 11.977,
+    "4": 12.079,
+    "16": 12.161
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "typed-final.native-max_speed",
+   "side": "native",
+   "commit": "d3d1d7e68",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 49.2256,
+    "p95_ms": 52.0369,
+    "mean_ms": 50.2501,
+    "requests_per_second": 19.9005
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 48.482,
+    "p95_ms": 51.2597,
+    "mean_ms": 49.8769,
+    "requests_per_second": 20.0494
+   },
+   "throughput": {
+    "1": 20.499,
+    "4": 26.791,
+    "16": 27.768
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ip3",
+   "run": "typed-final.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 71.5633,
+    "p95_ms": 78.2276,
+    "mean_ms": 75.2042,
+    "requests_per_second": 13.2971
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r1.native-batching",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 52.8015,
+    "p95_ms": 197.3635,
+    "mean_ms": 76.0367,
+    "requests_per_second": 13.1515
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.6546,
+    "p95_ms": 192.6095,
+    "mean_ms": 73.3266,
+    "requests_per_second": 13.6376
+   },
+   "throughput": {
+    "1": 13.503,
+    "4": 15.724,
+    "16": 17.279
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r1.native-exact",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 48.8659,
+    "p95_ms": 191.359,
+    "mean_ms": 71.8422,
+    "requests_per_second": 13.9194
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 46.9921,
+    "p95_ms": 188.1346,
+    "mean_ms": 69.288,
+    "requests_per_second": 14.4325
+   },
+   "throughput": {
+    "1": 13.82,
+    "4": 13.856,
+    "16": 14.021
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r1.native-max_speed",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 35.3433,
+    "p95_ms": 138.7753,
+    "mean_ms": 51.1846,
+    "requests_per_second": 19.5371
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 34.0364,
+    "p95_ms": 128.2471,
+    "mean_ms": 48.2537,
+    "requests_per_second": 20.7238
+   },
+   "throughput": {
+    "1": 19.062,
+    "4": 21.118,
+    "16": 25.724
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r1.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.3724,
+    "p95_ms": 195.9379,
+    "mean_ms": 74.1078,
+    "requests_per_second": 13.4939
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r2.native-batching",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 55.8213,
+    "p95_ms": 203.3372,
+    "mean_ms": 77.5852,
+    "requests_per_second": 12.8891
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 51.1633,
+    "p95_ms": 192.2736,
+    "mean_ms": 72.5228,
+    "requests_per_second": 13.7888
+   },
+   "throughput": {
+    "1": 13.549,
+    "4": 16.062,
+    "16": 17.731
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r2.native-exact",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 48.3678,
+    "p95_ms": 190.6558,
+    "mean_ms": 70.2496,
+    "requests_per_second": 14.235
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 46.7763,
+    "p95_ms": 187.0078,
+    "mean_ms": 67.6446,
+    "requests_per_second": 14.7832
+   },
+   "throughput": {
+    "1": 13.769,
+    "4": 13.968,
+    "16": 14.011
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r2.native-max_speed",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 34.9412,
+    "p95_ms": 138.9724,
+    "mean_ms": 49.9268,
+    "requests_per_second": 20.0293
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 33.1617,
+    "p95_ms": 127.9317,
+    "mean_ms": 47.4044,
+    "requests_per_second": 21.0951
+   },
+   "throughput": {
+    "1": 20.941,
+    "4": 23.277,
+    "16": 24.902
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r2.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.4831,
+    "p95_ms": 198.0551,
+    "mean_ms": 73.9196,
+    "requests_per_second": 13.5282
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "panel.batching",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 85.461,
+    "p95_ms": 93.805,
+    "mean_ms": 88.7994,
+    "requests_per_second": 11.2613
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 85.6862,
+    "p95_ms": 92.6832,
+    "mean_ms": 88.087,
+    "requests_per_second": 11.3524
+   },
+   "throughput": {
+    "1": 10.865,
+    "4": 12.698,
+    "16": 12.009
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "panel.exact",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 83.0062,
+    "p95_ms": 93.5994,
+    "mean_ms": 88.9986,
+    "requests_per_second": 11.2361
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 80.6518,
+    "p95_ms": 88.845,
+    "mean_ms": 83.3181,
+    "requests_per_second": 12.0022
+   },
+   "throughput": {
+    "1": 11.603,
+    "4": 11.732,
+    "16": 11.697
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "panel.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 75.6731,
+    "p95_ms": 89.4321,
+    "mean_ms": 85.0829,
+    "requests_per_second": 11.7532
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r1.native-batching",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 85.2939,
+    "p95_ms": 91.5809,
+    "mean_ms": 87.4886,
+    "requests_per_second": 11.4301
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 86.6095,
+    "p95_ms": 100.1106,
+    "mean_ms": 90.5187,
+    "requests_per_second": 11.0474
+   },
+   "throughput": {
+    "1": 11.016,
+    "4": 13.448,
+    "16": 14.244
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r1.native-exact",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 85.7982,
+    "p95_ms": 103.1065,
+    "mean_ms": 89.4436,
+    "requests_per_second": 11.1802
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 84.8198,
+    "p95_ms": 105.7221,
+    "mean_ms": 89.5923,
+    "requests_per_second": 11.1617
+   },
+   "throughput": {
+    "1": 11.049,
+    "4": 11.394,
+    "16": 11.557
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r1.native-max_speed",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 56.4653,
+    "p95_ms": 59.863,
+    "mean_ms": 58.4786,
+    "requests_per_second": 17.1003
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 56.0642,
+    "p95_ms": 59.0867,
+    "mean_ms": 57.4391,
+    "requests_per_second": 17.4097
+   },
+   "throughput": {
+    "1": 16.85,
+    "4": 20.295,
+    "16": 21.848
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r1.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 85.0165,
+    "p95_ms": 100.3367,
+    "mean_ms": 89.5585,
+    "requests_per_second": 11.1659
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r2.native-batching",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 87.5522,
+    "p95_ms": 103.1628,
+    "mean_ms": 91.1423,
+    "requests_per_second": 10.9718
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 85.5385,
+    "p95_ms": 100.6071,
+    "mean_ms": 88.7632,
+    "requests_per_second": 11.2659
+   },
+   "throughput": {
+    "1": 11.11,
+    "4": 13.506,
+    "16": 14.333
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r2.native-exact",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 84.8555,
+    "p95_ms": 93.0159,
+    "mean_ms": 87.8966,
+    "requests_per_second": 11.377
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 83.9244,
+    "p95_ms": 98.7035,
+    "mean_ms": 86.898,
+    "requests_per_second": 11.5077
+   },
+   "throughput": {
+    "1": 11.455,
+    "4": 11.109,
+    "16": 11.351
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r2.native-max_speed",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 56.3253,
+    "p95_ms": 63.6645,
+    "mean_ms": 57.4009,
+    "requests_per_second": 17.4213
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 55.1121,
+    "p95_ms": 62.1068,
+    "mean_ms": 56.8436,
+    "requests_per_second": 17.5921
+   },
+   "throughput": {
+    "1": 16.83,
+    "4": 20.994,
+    "16": 23.336
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r2.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 85.6683,
+    "p95_ms": 93.8473,
+    "mean_ms": 88.0492,
+    "requests_per_second": 11.3573
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r1.native-batching",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 52.9581,
+    "p95_ms": 202.0386,
+    "mean_ms": 76.1842,
+    "requests_per_second": 13.1261
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 50.3295,
+    "p95_ms": 193.5506,
+    "mean_ms": 73.2516,
+    "requests_per_second": 13.6516
+   },
+   "throughput": {
+    "1": 13.454,
+    "4": 15.675,
+    "16": 16.943
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r1.native-exact",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.0236,
+    "p95_ms": 189.6623,
+    "mean_ms": 72.015,
+    "requests_per_second": 13.886
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 47.5844,
+    "p95_ms": 187.4863,
+    "mean_ms": 69.0537,
+    "requests_per_second": 14.4815
+   },
+   "throughput": {
+    "1": 13.818,
+    "4": 13.917,
+    "16": 14.176
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r1.native-max_speed",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 35.5988,
+    "p95_ms": 134.2276,
+    "mean_ms": 50.6939,
+    "requests_per_second": 19.7263
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 33.5507,
+    "p95_ms": 127.4175,
+    "mean_ms": 47.7269,
+    "requests_per_second": 20.9526
+   },
+   "throughput": {
+    "1": 19.609,
+    "4": 22.54,
+    "16": 24.88
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r1.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 49.8484,
+    "p95_ms": 191.6037,
+    "mean_ms": 72.0153,
+    "requests_per_second": 13.8859
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r2.native-batching",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 51.3605,
+    "p95_ms": 194.8746,
+    "mean_ms": 73.9501,
+    "requests_per_second": 13.5226
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 51.2296,
+    "p95_ms": 194.9425,
+    "mean_ms": 74.6614,
+    "requests_per_second": 13.3938
+   },
+   "throughput": {
+    "1": 13.27,
+    "4": 17.049,
+    "16": 19.269
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r2.native-exact",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 48.9305,
+    "p95_ms": 191.0482,
+    "mean_ms": 71.0134,
+    "requests_per_second": 14.0818
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 48.4384,
+    "p95_ms": 191.844,
+    "mean_ms": 70.9242,
+    "requests_per_second": 14.0996
+   },
+   "throughput": {
+    "1": 13.843,
+    "4": 13.906,
+    "16": 13.82
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r2.native-max_speed",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 34.9243,
+    "p95_ms": 133.6503,
+    "mean_ms": 49.0442,
+    "requests_per_second": 20.3898
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 35.0429,
+    "p95_ms": 134.6135,
+    "mean_ms": 49.1366,
+    "requests_per_second": 20.3514
+   },
+   "throughput": {
+    "1": 19.657,
+    "4": 23.64,
+    "16": 24.926
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r2.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 48.527,
+    "p95_ms": 191.8652,
+    "mean_ms": 71.1705,
+    "requests_per_second": 14.0508
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "panel.batching",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 79.9094,
+    "p95_ms": 83.7273,
+    "mean_ms": 82.7735,
+    "requests_per_second": 12.0812
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 77.6269,
+    "p95_ms": 80.8874,
+    "mean_ms": 80.8036,
+    "requests_per_second": 12.3757
+   },
+   "throughput": {
+    "1": 12.293,
+    "4": 15.137,
+    "16": 13.798
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "panel.exact",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 85.5279,
+    "p95_ms": 93.0164,
+    "mean_ms": 88.5226,
+    "requests_per_second": 11.2965
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 84.327,
+    "p95_ms": 90.4626,
+    "mean_ms": 85.7801,
+    "requests_per_second": 11.6577
+   },
+   "throughput": {
+    "1": 11.249,
+    "4": 12.431,
+    "16": 12.672
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "panel.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 82.9165,
+    "p95_ms": 89.3065,
+    "mean_ms": 85.3561,
+    "requests_per_second": 11.7156
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r1.native-batching",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 85.4685,
+    "p95_ms": 96.265,
+    "mean_ms": 88.3854,
+    "requests_per_second": 11.3141
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 86.6253,
+    "p95_ms": 109.5528,
+    "mean_ms": 90.5692,
+    "requests_per_second": 11.0413
+   },
+   "throughput": {
+    "1": 10.776,
+    "4": 13.294,
+    "16": 14.321
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r1.native-exact",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 84.9738,
+    "p95_ms": 96.5986,
+    "mean_ms": 87.8429,
+    "requests_per_second": 11.384
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 84.752,
+    "p95_ms": 103.0168,
+    "mean_ms": 88.271,
+    "requests_per_second": 11.3287
+   },
+   "throughput": {
+    "1": 11.157,
+    "4": 11.256,
+    "16": 11.433
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r1.native-max_speed",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 57.6663,
+    "p95_ms": 62.8146,
+    "mean_ms": 60.1384,
+    "requests_per_second": 16.6283
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 56.555,
+    "p95_ms": 65.7708,
+    "mean_ms": 60.5675,
+    "requests_per_second": 16.5105
+   },
+   "throughput": {
+    "1": 16.69,
+    "4": 20.448,
+    "16": 21.837
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r1.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 85.7127,
+    "p95_ms": 99.1484,
+    "mean_ms": 89.3754,
+    "requests_per_second": 11.1888
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r2.native-batching",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 87.3427,
+    "p95_ms": 107.9418,
+    "mean_ms": 90.8089,
+    "requests_per_second": 11.0121
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 86.7473,
+    "p95_ms": 101.0086,
+    "mean_ms": 89.8678,
+    "requests_per_second": 11.1275
+   },
+   "throughput": {
+    "1": 10.9,
+    "4": 13.487,
+    "16": 14.212
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r2.native-exact",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 84.3522,
+    "p95_ms": 95.948,
+    "mean_ms": 87.4522,
+    "requests_per_second": 11.4348
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 83.7195,
+    "p95_ms": 102.7668,
+    "mean_ms": 87.3723,
+    "requests_per_second": 11.4453
+   },
+   "throughput": {
+    "1": 11.48,
+    "4": 11.371,
+    "16": 11.491
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r2.native-max_speed",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 56.2853,
+    "p95_ms": 60.0329,
+    "mean_ms": 57.2753,
+    "requests_per_second": 17.4595
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 55.2664,
+    "p95_ms": 61.1776,
+    "mean_ms": 56.7912,
+    "requests_per_second": 17.6084
+   },
+   "throughput": {
+    "1": 16.543,
+    "4": 12.776,
+    "16": 8.838
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r2.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 86.1164,
+    "p95_ms": 91.5885,
+    "mean_ms": 88.4859,
+    "requests_per_second": 11.3012
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r1.native-batching",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 53.4047,
+    "p95_ms": 195.7133,
+    "mean_ms": 75.6601,
+    "requests_per_second": 13.217
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 53.1709,
+    "p95_ms": 196.4978,
+    "mean_ms": 74.4913,
+    "requests_per_second": 13.4244
+   },
+   "throughput": {
+    "1": 12.975,
+    "4": 16.437,
+    "16": 17.923
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r1.native-exact",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.8542,
+    "p95_ms": 194.6415,
+    "mean_ms": 71.8294,
+    "requests_per_second": 13.9219
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 49.4556,
+    "p95_ms": 190.4329,
+    "mean_ms": 72.2922,
+    "requests_per_second": 13.8327
+   },
+   "throughput": {
+    "1": 13.843,
+    "4": 14.112,
+    "16": 13.648
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r1.native-max_speed",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 37.5682,
+    "p95_ms": 139.6564,
+    "mean_ms": 52.1935,
+    "requests_per_second": 19.1595
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 36.58,
+    "p95_ms": 138.1693,
+    "mean_ms": 51.9668,
+    "requests_per_second": 19.2431
+   },
+   "throughput": {
+    "1": 20.935,
+    "4": 23.614,
+    "16": 25.394
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r1.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.2485,
+    "p95_ms": 194.4014,
+    "mean_ms": 72.8364,
+    "requests_per_second": 13.7294
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r2.native-batching",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 50.937,
+    "p95_ms": 194.8532,
+    "mean_ms": 74.6758,
+    "requests_per_second": 13.3912
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 51.5559,
+    "p95_ms": 193.9311,
+    "mean_ms": 74.1375,
+    "requests_per_second": 13.4885
+   },
+   "throughput": {
+    "1": 13.539,
+    "4": 17.498,
+    "16": 20.058
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r2.native-exact",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 49.0297,
+    "p95_ms": 193.593,
+    "mean_ms": 72.6223,
+    "requests_per_second": 13.7699
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 48.4335,
+    "p95_ms": 190.7505,
+    "mean_ms": 70.9134,
+    "requests_per_second": 14.1017
+   },
+   "throughput": {
+    "1": 13.801,
+    "4": 13.948,
+    "16": 13.92
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r2.native-max_speed",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 36.667,
+    "p95_ms": 141.4728,
+    "mean_ms": 51.9061,
+    "requests_per_second": 19.2655
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 34.4704,
+    "p95_ms": 129.9462,
+    "mean_ms": 48.7031,
+    "requests_per_second": 20.5326
+   },
+   "throughput": {
+    "1": 20.076,
+    "4": 22.485,
+    "16": 25.727
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "css15-mixed400.r2.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 49.0809,
+    "p95_ms": 196.6175,
+    "mean_ms": 72.3804,
+    "requests_per_second": 13.8159
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "panel.exact",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 72.501,
+    "p95_ms": 77.1108,
+    "mean_ms": 74.5218,
+    "requests_per_second": 13.4189
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 72.9453,
+    "p95_ms": 86.4391,
+    "mean_ms": 78.6295,
+    "requests_per_second": 12.7179
+   },
+   "throughput": {
+    "1": 11.46,
+    "4": 11.547,
+    "16": 11.923
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "panel.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 72.5285,
+    "p95_ms": 75.5191,
+    "mean_ms": 73.432,
+    "requests_per_second": 13.618
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r1.native-batching",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 88.1597,
+    "p95_ms": 106.4206,
+    "mean_ms": 92.1366,
+    "requests_per_second": 10.8535
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 87.0016,
+    "p95_ms": 102.8918,
+    "mean_ms": 90.9051,
+    "requests_per_second": 11.0005
+   },
+   "throughput": {
+    "1": 10.733,
+    "4": 13.696,
+    "16": 14.373
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r1.native-exact",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 85.9555,
+    "p95_ms": 93.2379,
+    "mean_ms": 88.241,
+    "requests_per_second": 11.3326
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 85.0363,
+    "p95_ms": 98.6175,
+    "mean_ms": 88.4414,
+    "requests_per_second": 11.3069
+   },
+   "throughput": {
+    "1": 11.187,
+    "4": 11.439,
+    "16": 11.536
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r1.native-max_speed",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 57.7254,
+    "p95_ms": 64.3581,
+    "mean_ms": 60.3546,
+    "requests_per_second": 16.5687
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 56.9753,
+    "p95_ms": 63.3019,
+    "mean_ms": 58.9463,
+    "requests_per_second": 16.9646
+   },
+   "throughput": {
+    "1": 16.454,
+    "4": 13.654,
+    "16": 9.842
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r1.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 86.4273,
+    "p95_ms": 104.74,
+    "mean_ms": 89.9441,
+    "requests_per_second": 11.118
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r2.native-batching",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 87.8207,
+    "p95_ms": 100.96,
+    "mean_ms": 91.2116,
+    "requests_per_second": 10.9635
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 86.1939,
+    "p95_ms": 104.4357,
+    "mean_ms": 90.2754,
+    "requests_per_second": 11.0772
+   },
+   "throughput": {
+    "1": 10.905,
+    "4": 13.272,
+    "16": 14.585
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r2.native-exact",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 85.4855,
+    "p95_ms": 95.6187,
+    "mean_ms": 88.3673,
+    "requests_per_second": 11.3164
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 84.2754,
+    "p95_ms": 93.5175,
+    "mean_ms": 87.0461,
+    "requests_per_second": 11.4882
+   },
+   "throughput": {
+    "1": 11.361,
+    "4": 11.537,
+    "16": 11.035
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r2.native-max_speed",
+   "side": "native",
+   "commit": "69ae2d0c5",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 57.9334,
+    "p95_ms": 64.9775,
+    "mean_ms": 60.4211,
+    "requests_per_second": 16.5505
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 55.6896,
+    "p95_ms": 61.4606,
+    "mean_ms": 57.4743,
+    "requests_per_second": 17.3991
+   },
+   "throughput": {
+    "1": 17.783,
+    "4": 22.193,
+    "16": 23.719
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-final",
+   "run": "typed-final.r2.reference",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 86.0713,
+    "p95_ms": 92.5856,
+    "mean_ms": 88.3526,
+    "requests_per_second": 11.3183
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "css15-mixed400.r1.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 35.8923,
+    "p95_ms": 141.378,
+    "mean_ms": 51.6544,
+    "requests_per_second": 19.3594
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 36.0837,
+    "p95_ms": 136.7387,
+    "mean_ms": 50.4599,
+    "requests_per_second": 19.8177
+   },
+   "throughput": {
+    "1": 19.908,
+    "4": 22.732,
+    "16": 24.588
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "css15-mixed400.r2.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 35.5661,
+    "p95_ms": 141.826,
+    "mean_ms": 52.1303,
+    "requests_per_second": 19.1827
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 35.5972,
+    "p95_ms": 133.8652,
+    "mean_ms": 50.3323,
+    "requests_per_second": 19.868
+   },
+   "throughput": {
+    "1": 20.477,
+    "4": 22.613,
+    "16": 24.043
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "css15-mixed400.r3.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 35.5419,
+    "p95_ms": 131.1464,
+    "mean_ms": 50.0638,
+    "requests_per_second": 19.9745
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 35.1064,
+    "p95_ms": 134.3159,
+    "mean_ms": 50.3113,
+    "requests_per_second": 19.8763
+   },
+   "throughput": {
+    "1": 19.976,
+    "4": 22.576,
+    "16": 25.764
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "typed-final.r1.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 55.9735,
+    "p95_ms": 64.9124,
+    "mean_ms": 58.4907,
+    "requests_per_second": 17.0967
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 54.7127,
+    "p95_ms": 61.9808,
+    "mean_ms": 56.5334,
+    "requests_per_second": 17.6887
+   },
+   "throughput": {
+    "1": 18.02,
+    "4": 20.138,
+    "16": 21.44
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "typed-final.r2.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 57.0071,
+    "p95_ms": 61.4142,
+    "mean_ms": 57.5139,
+    "requests_per_second": 17.3871
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 57.4846,
+    "p95_ms": 63.2024,
+    "mean_ms": 59.1379,
+    "requests_per_second": 16.9096
+   },
+   "throughput": {
+    "1": 16.853,
+    "4": 20.373,
+    "16": 21.776
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "typed-final.r3.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 57.1532,
+    "p95_ms": 61.7721,
+    "mean_ms": 57.9395,
+    "requests_per_second": 17.2594
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 57.5536,
+    "p95_ms": 61.769,
+    "mean_ms": 58.9595,
+    "requests_per_second": 16.9608
+   },
+   "throughput": {
+    "1": 16.955,
+    "4": 20.351,
+    "16": 22.14
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "css15-mixed400.r1.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 37.7844,
+    "p95_ms": 141.7823,
+    "mean_ms": 52.9269,
+    "requests_per_second": 18.894
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 34.9326,
+    "p95_ms": 124.3783,
+    "mean_ms": 48.5814,
+    "requests_per_second": 20.584
+   },
+   "throughput": {
+    "1": 20.162,
+    "4": 22.797,
+    "16": 26.053
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "css15-mixed400.r2.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 37.288,
+    "p95_ms": 134.7752,
+    "mean_ms": 51.6078,
+    "requests_per_second": 19.3769
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 35.1806,
+    "p95_ms": 138.7541,
+    "mean_ms": 49.9453,
+    "requests_per_second": 20.0219
+   },
+   "throughput": {
+    "1": 20.412,
+    "4": 22.938,
+    "16": 25.337
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "css15-mixed400.r3.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 36.8547,
+    "p95_ms": 143.3179,
+    "mean_ms": 52.4369,
+    "requests_per_second": 19.0705
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 35.9862,
+    "p95_ms": 134.6454,
+    "mean_ms": 50.5018,
+    "requests_per_second": 19.8013
+   },
+   "throughput": {
+    "1": 23.254,
+    "4": 28.077,
+    "16": 31.643
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "typed-final.r1.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 58.3669,
+    "p95_ms": 66.7255,
+    "mean_ms": 60.777,
+    "requests_per_second": 16.4536
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 58.5397,
+    "p95_ms": 67.9612,
+    "mean_ms": 59.9087,
+    "requests_per_second": 16.6921
+   },
+   "throughput": {
+    "1": 17.047,
+    "4": 21.184,
+    "16": 22.357
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "typed-final.r2.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 57.9875,
+    "p95_ms": 63.5983,
+    "mean_ms": 59.1359,
+    "requests_per_second": 16.9102
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 58.3581,
+    "p95_ms": 64.449,
+    "mean_ms": 59.9873,
+    "requests_per_second": 16.6702
+   },
+   "throughput": {
+    "1": 17.625,
+    "4": 21.242,
+    "16": 22.875
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "typed-final.r3.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 56.9819,
+    "p95_ms": 63.1056,
+    "mean_ms": 58.7581,
+    "requests_per_second": 17.0189
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 58.4066,
+    "p95_ms": 65.7954,
+    "mean_ms": 60.6348,
+    "requests_per_second": 16.4922
+   },
+   "throughput": {
+    "1": 17.509,
+    "4": 20.963,
+    "16": 22.673
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "css15-mixed400.r1.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 36.5793,
+    "p95_ms": 144.784,
+    "mean_ms": 54.3318,
+    "requests_per_second": 18.4054
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 36.0858,
+    "p95_ms": 136.8846,
+    "mean_ms": 50.9816,
+    "requests_per_second": 19.6149
+   },
+   "throughput": {
+    "1": 20.106,
+    "4": 22.237,
+    "16": 26.367
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "css15-mixed400.r2.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 36.0015,
+    "p95_ms": 143.0358,
+    "mean_ms": 51.4923,
+    "requests_per_second": 19.4204
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 36.3203,
+    "p95_ms": 149.0723,
+    "mean_ms": 54.1654,
+    "requests_per_second": 18.462
+   },
+   "throughput": {
+    "1": 18.739,
+    "4": 22.646,
+    "16": 26.247
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "css15-mixed400.r3.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "css15-mixed400:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 37.4082,
+    "p95_ms": 142.1815,
+    "mean_ms": 53.8228,
+    "requests_per_second": 18.5795
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 34.8358,
+    "p95_ms": 131.707,
+    "mean_ms": 49.2891,
+    "requests_per_second": 20.2885
+   },
+   "throughput": {
+    "1": 19.068,
+    "4": 21.473,
+    "16": 28.502
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "typed-final.r1.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 56.9248,
+    "p95_ms": 68.0446,
+    "mean_ms": 59.4572,
+    "requests_per_second": 16.8188
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 55.3469,
+    "p95_ms": 61.0312,
+    "mean_ms": 56.9113,
+    "requests_per_second": 17.5712
+   },
+   "throughput": {
+    "1": 17.553,
+    "4": 19.469,
+    "16": 21.167
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "typed-final.r2.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 58.0356,
+    "p95_ms": 65.3257,
+    "mean_ms": 59.8044,
+    "requests_per_second": 16.7212
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 57.7977,
+    "p95_ms": 64.399,
+    "mean_ms": 58.943,
+    "requests_per_second": 16.9655
+   },
+   "throughput": {
+    "1": 17.015,
+    "4": 20.032,
+    "16": 23.025
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "set": "bench-cpu-ms3",
+   "run": "typed-final.r3.native-max_speed",
+   "side": "native",
+   "commit": "7292622f3",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "threads": 16,
+   "max_batch_tokens": null,
+   "profile": "max_speed",
+   "single": {
+    "requests": 400,
+    "p50_ms": 58.3435,
+    "p95_ms": 63.6859,
+    "mean_ms": 60.3929,
+    "requests_per_second": 16.5582
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 56.3378,
+    "p95_ms": 61.5239,
+    "mean_ms": 57.2374,
+    "requests_per_second": 17.4711
+   },
+   "throughput": {
+    "1": 16.576,
+    "4": 20.412,
+    "16": 22.466
+   },
+   "engine": {
+    "reduced": {
+     "kind": "float32-packed",
+     "bytes": 1323565056
+    }
+   }
   }
  ]
 }

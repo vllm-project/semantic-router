@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,39 @@ class JSON(Response):
         ).encode("utf-8")
 
 
+def non_finite() -> RuntimeServiceError:
+    return RuntimeServiceError(
+        "internal_error", "the model produced a non-finite number"
+    )
+
+
+def respond(content: Any, status: int = 200) -> Response:
+    """A JSON response; one holding NaN or infinity becomes the contract's 500."""
+    try:
+        return JSON(content, status_code=status)
+    except ValueError:
+        error = non_finite()
+        return JSON(error.body(), status_code=error.status)
+
+
+def respond_bundle(content: dict[str, Any]) -> Response:
+    """A bundle response; a task whose result holds NaN or infinity alone answers 500."""
+    try:
+        return JSON(content)
+    except ValueError:
+        results = []
+        for result in content["results"]:
+            try:
+                json.dumps(result, allow_nan=False)
+                results.append(result)
+            except ValueError:
+                error = non_finite()
+                results.append(
+                    {"id": result["id"], "status": error.status, **error.body()}
+                )
+        return JSON({**content, "results": results})
+
+
 def create_app(runtime: Runtime) -> Starlette:
     def observe(endpoint: str, status: int, started: float) -> None:
         runtime.metrics.requests.labels(endpoint=endpoint, status=str(status)).inc()
@@ -43,7 +77,9 @@ def create_app(runtime: Runtime) -> Starlette:
             try:
                 body, size = await _read_json(request, runtime.config.max_request_bytes)
                 status, response = await runtime.call(surface, body, size)
-                return JSON(response, status_code=status)
+                answer = respond(response, status)
+                status = answer.status_code
+                return answer
             except RuntimeServiceError as exc:
                 status = exc.status
                 return JSON(exc.body(), status_code=exc.status)
@@ -58,7 +94,9 @@ def create_app(runtime: Runtime) -> Starlette:
         try:
             body, size = await _read_json(request, runtime.config.max_request_bytes)
             status, response = await runtime.bundle(body, size)
-            return JSON(response, status_code=status)
+            if status == HTTPStatus.OK:
+                return respond_bundle(response)
+            return respond(response, status)
         except RuntimeServiceError as exc:
             status = exc.status
             return JSON(exc.body(), status_code=exc.status)

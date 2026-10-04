@@ -152,8 +152,8 @@ def test_references_must_name_model_runtime_deployments():
 
     def wrong_provider(document):
         document["global"]["model_catalog"]["deployments"]["decision-kai"] = {
-            "provider": "candle",
-            "artifact": "models/kai",
+            "provider": "http",
+            "external_model": "kai",
         }
 
     assert any("is not declared" in error for error in _errors(_config(unknown)))
@@ -195,7 +195,6 @@ def test_decision_type_requires_its_configuration():
         ({"artifact": "vllm-sr/x", "device": "xpu:1"}, None),
         ({"artifact": "vllm-sr/x", "device": "mps"}, None),
         ({"artifact": "vllm-sr/x", "profile": "Fast!"}, "profile must be"),
-        ({"artifact": "vllm-sr/x", "precision": "fp16"}, "instead of precision"),
         ({"artifact": "vllm-sr/x", "input": {"overflow": "truncate"}}, None),
         ({"artifact": "vllm-sr/x", "input": {"overflow": "cut"}}, "input.overflow"),
         ({"artifact": "vllm-sr/x", "input": {"max_tokens": -1}}, "not be negative"),
@@ -220,9 +219,9 @@ def test_model_runtime_deployment_rules(deployment, message):
 
 def test_other_providers_reject_runtime_fields():
     def runtime_field(document):
-        document["global"]["model_catalog"]["deployments"]["local"] = {
-            "provider": "candle",
-            "artifact": "models/x",
+        document["global"]["model_catalog"]["deployments"]["remote"] = {
+            "provider": "http",
+            "external_model": "x",
             "profile": "exact",
         }
 

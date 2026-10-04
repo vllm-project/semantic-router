@@ -85,15 +85,24 @@ class Scheduler:
         limits: SchedulerLimits | None = None,
         observe: Callable[[str, dict[str, Any]], None] | None = None,
         execute: Callable[[Callable[[], Any]], Any] | None = None,
+        device_fault: Callable[[BaseException], bool] | None = None,
     ):
-        """``execute`` runs each batch where the device wants its work (the CPU's one thread)."""
+        """``execute`` runs each batch where the device wants its work (the CPU's one thread).
+
+        ``device_fault`` tells an error that left the device unusable, which is
+        recorded as the scheduler's ``failure``, from any other error in a
+        forward, which fails only the jobs of that batch.
+        """
         self.model = model
         self.profiles = profiles
         self.limits = limits or SchedulerLimits()
         self.observe = observe or (lambda event, values: None)
         self.execute = execute or (lambda work: work())
+        self.device_fault = device_fault or (lambda error: False)
         self._queue: deque[_Pending] = deque()
-        self._queued_tokens = 0
+        # Admitted jobs not yet answered, queued or planned, and their tokens.
+        self._pending_jobs = 0
+        self._pending_tokens = 0
         self._lock = threading.Condition()
         self._stopped = False
         self._groups = 0
@@ -111,12 +120,14 @@ class Scheduler:
     def start(self) -> None:
         self._thread.start()
 
-    def stop(self) -> None:
+    def stop(self) -> bool:
+        """Stop taking work and answer what is left; whether the worker has exited."""
         with self._lock:
             self._stopped = True
             self._lock.notify_all()
         if self._thread.is_alive():
             self._thread.join(timeout=10)
+        return not self._thread.is_alive()
 
     @property
     def failure(self) -> BaseException | None:
@@ -132,33 +143,46 @@ class Scheduler:
     def submit(
         self, items: list[Any], *, deadline: float | None, profile: str
     ) -> Future:
-        return self.submit_group([items], deadline=deadline, profile=profile)[0]
+        return self.submit_group([items], deadlines=[deadline], profile=profile)[0]
 
     def submit_group(
-        self, item_lists: list[list[Any]], *, deadline: float | None, profile: str
+        self,
+        item_lists: list[list[Any]],
+        *,
+        deadlines: list[float | None],
+        profile: str,
     ) -> list[Future]:
-        """Queue one job per item list at once, as one group (a bundle's tasks for this model)."""
-        futures, pending = self._jobs(item_lists, deadline, profile)
+        """Queue one job per item list at once, as one group (a bundle's tasks for this model).
+
+        ``deadlines`` holds each job's own deadline. Admission counts every
+        job not yet answered, queued or planned, and refuses the whole group
+        or none of it.
+        """
+        futures, pending = self._jobs(item_lists, deadlines, profile)
         if not pending:
             return futures
         tokens = sum(entry.tokens for entry in pending)
         with self._lock:
             if self._stopped:
                 raise RuntimeServiceError("not_ready", "the runtime is shutting down")
-            if len(self._queue) + len(pending) > self.limits.max_queue or (
-                self._queue
-                and self._queued_tokens + tokens > self.limits.max_queued_tokens
+            if self._pending_jobs + len(pending) > self.limits.max_queue or (
+                self._pending_jobs
+                and self._pending_tokens + tokens > self.limits.max_queued_tokens
             ):
                 raise RuntimeServiceError(
                     "overloaded", "the request queue is full; retry later"
                 )
+            self._admit(pending)
             self._queue.extend(pending)
-            self._queued_tokens += tokens
             self._lock.notify()
         return futures
 
     def run_now(
-        self, item_lists: list[list[Any]], *, deadline: float | None, profile: str
+        self,
+        item_lists: list[list[Any]],
+        *,
+        deadlines: list[float | None],
+        profile: str,
     ) -> list[Future] | None:
         """Run a group on the calling thread if the scheduler is idle, else None.
 
@@ -174,7 +198,9 @@ class Scheduler:
                 return None
             self._owned = True
         try:
-            futures, pending = self._jobs(item_lists, deadline, profile)
+            futures, pending = self._jobs(item_lists, deadlines, profile)
+            with self._lock:
+                self._admit(pending)
             self._plan(pending)
             while self._ready:
                 self._run(heapq.heappop(self._ready))
@@ -186,7 +212,10 @@ class Scheduler:
         return futures
 
     def _jobs(
-        self, item_lists: list[list[Any]], deadline: float | None, profile: str
+        self,
+        item_lists: list[list[Any]],
+        deadlines: list[float | None],
+        profile: str,
     ) -> tuple[list[Future], list[_Pending]]:
         if profile not in self.profiles:
             raise RuntimeServiceError(
@@ -198,7 +227,7 @@ class Scheduler:
         with self._lock:
             self._groups += 1
             group = self._groups if len(item_lists) > 1 else None
-        for future, items in zip(futures, item_lists, strict=True):
+        for future, items, deadline in zip(futures, item_lists, deadlines, strict=True):
             if not items:
                 future.set_result([])
                 continue
@@ -211,6 +240,18 @@ class Scheduler:
             )
             pending.append(_Pending(job, future, sum(cost(item) for item in items)))
         return futures, pending
+
+    def _admit(self, pending: list[_Pending]) -> None:
+        """Count jobs as pending until they are answered (the caller holds the lock)."""
+        for entry in pending:
+            self._pending_jobs += 1
+            self._pending_tokens += entry.tokens
+            entry.future.add_done_callback(partial(self._settle, entry.tokens))
+
+    def _settle(self, tokens: int, _future: Future) -> None:
+        with self._lock:
+            self._pending_jobs -= 1
+            self._pending_tokens -= tokens
 
     def _release(self) -> None:
         with self._lock:
@@ -262,7 +303,6 @@ class Scheduler:
                     else:
                         kept.append(pending)
                 self._queue = kept
-                self._queued_tokens = sum(pending.tokens for pending in kept)
                 return taken
             coalescing = any(
                 self.profiles[pending.job.profile].coalesces for pending in self._queue
@@ -275,7 +315,6 @@ class Scheduler:
                     self._lock.wait(timeout=remaining)
             taken = list(self._queue)
             self._queue.clear()
-            self._queued_tokens = 0
             return taken
 
     def _plan(self, taken: list[_Pending]) -> None:
@@ -349,7 +388,8 @@ class Scheduler:
                 work = partial(self.model.run, items)
             values = self.execute(work)
         except Exception as exc:
-            self._failure = exc
+            if self.device_fault(exc):
+                self._failure = exc
             for pending in planned.owners:
                 if not pending.future.done():
                     pending.future.set_exception(exc)
@@ -388,7 +428,6 @@ class Scheduler:
                 self._lock.wait()
             queued = list(self._queue)
             self._queue.clear()
-            self._queued_tokens = 0
         planned = [pending for entry in self._ready for pending in entry.owners]
         self._ready.clear()
         error = RuntimeServiceError("not_ready", "the runtime is shutting down")

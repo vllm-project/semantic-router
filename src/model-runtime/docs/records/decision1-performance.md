@@ -14,12 +14,13 @@ on the same node, inputs and devices.
   bundled runtime. At 16 concurrent single requests, `batching` serves 2.9–7.6×
   the bundled runtime's throughput.
 - **On CPU, exact matches the bundled runtime, and the opt-in profiles win:**
-  both sides run the same FP32 math through the same MKL kernels, so single
-  requests land at 0.99–1.05× at p50. Six router signals run 3.3–4.1× faster
-  on the encoders with `batching`. `max_speed` runs the encoders on
-  `float32-packed` copies of their three stacks: single requests 1.4–1.8×
-  faster at p50 and p95, the six router signals 4.1–5.5× faster, 1.1–2.4× the
-  bundled throughput, and no decision changes in 1,431 requests per encoder.
+  both sides run the same FP32 math through the same MKL kernels. Each in its
+  own process, exact serves 0.99–1.04× the bundled throughput with
+  0.99–1.04× its p50. Six router signals run 3.3–4.1× faster on the encoders
+  with `batching`. `max_speed` runs the encoders on `float32-packed` copies of
+  their three stacks: single requests 1.3–1.5× faster at p50 and p95, the six
+  router signals 4.1–5.5× faster, 1.4–2.0× the bundled throughput, and no
+  decision changes in 1,431 requests per encoder.
 
 - **Date:** 2026-10-04.
 - **ROCm:** one AMD Instinct MI325X (gfx942) per run, in the packages' release
@@ -37,8 +38,10 @@ on the same node, inputs and devices.
   window, so `shared_context` no longer waits for it. The throughput and
   many-question runs are at `d5b985e43`, with the same `decision1` runtime code
   as `0bc5c6a75`. From `c22bb15cd` every encoder layer stack has its own GPU
-  graphs and reduced copy: the encoders' `batching` and `max_speed` rows and the
-  CPU throughput rows are at that commit.
+  graphs and reduced copy: the encoders' ROCm `batching` rows and the CPU
+  `max_speed` router rows are at that commit. The CPU unpaired rows are at
+  `69ae2d0c5` and `7292622f3` (weights in process memory, oneDNN's primitive
+  cache, and the CPU-only batch budget and type-head reads before them).
 - **Raw results:** `decision1-performance.json`, every run without paths; from
   `c22bb15cd` with what the engine ran (graphs per layer stack, the copy).
 - **Shared node:** other workstreams' jobs ran on other cores of the same
@@ -203,6 +206,12 @@ own graphs, against the bundled runtime's sequential rate in the same session
   (Kai) to 4% higher (Eos).
 - Again at `a3d2593a0` (with `GOMP_SPINCOUNT=10000`, on the quieter cores
   32–47): Kai bundled 106.0 / 119.6, runtime 107.2 / 125.0, paired Δ +1.1 ms.
+- These paired runs load the bundled model on the process's main thread,
+  which gives the process a second OpenMP thread team. With two teams on the
+  cores, every parallel region waits for a wake-up (the case `accel/cpu.py`
+  describes), so both sides run about 1.6× slower than alone. The deltas stay
+  fair; the absolute latencies are high. The encoders' unpaired rows below
+  run each side in its own process.
 
 ### Router request
 
@@ -231,31 +240,65 @@ own graphs, against the bundled runtime's sequential rate in the same session
   prompts are short next to the six router questions, so little is shared; on
   ROCm, the long prompts are where it pays (p95 above).
 
-### Throughput (requests/s, encoders)
+### Unpaired single requests and throughput (encoders)
 
-Single requests at `c22bb15cd`, two rounds on the same 16 cores (32–47) of a
-shared node (load 40–78). Each model's runs follow its bundled sequential
-pass on those cores. Cells read round 1 / round 2.
+Each side ran in its own fresh process, on the same 16 cores per model (Kai
+32–47, Lex 48–63, Route 0–15), each model's runs right after the bundled
+runtime's sequential pass on those cores. Two kinds of prompt lengths:
+uniform (the 400 typed-final requests, about 250 tokens each) and mixed (a
+seeded sample of 400 css15 prompts that fit the 1,024-token input: 11–770
+tokens, median 43). The bundled, exact and `batching` rows are two rounds at
+`69ae2d0c5`; `max_speed` is three rounds at `7292622f3`. Means.
 
-| Model | Bundled (sequential) | Exact C = 1 | Exact C = 4 | Exact C = 16 | `max_speed` C = 1 | `max_speed` C = 4 | `max_speed` C = 16 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Kai-0.6B | 11.8 / 12.5 | 11.6 / 11.3 | 11.4 / 10.9 | 12.0 / 11.2 | 19.0 / 17.4 | 14.0 / 22.0 | 17.9 / 14.2 |
-| Lex-0.6B | 12.4 / 11.5 | 12.0 / 12.2 | 12.3 / 12.6 | 12.2 / 13.2 | 19.1 / 21.0 | 24.3 / 27.1 | 20.9 / 17.7 |
-| Route-0.6B | 12.7 / 13.2 | 12.1 / 12.4 | 12.2 / 12.5 | 12.2 / 12.4 | 19.6 / 20.9 | 25.9 / 23.9 | 16.8 / 18.1 |
+Throughput, requests/s, C = 1 / 4 / 16:
 
-- **Exact** runs one request per forward with the released numerics (CPU rows
-  are not batch-invariant; see the parity record), so its rate is the bundled
-  runtime's: 0.87–1.15× of the same round's bundled pass. Unpaired rates on this node move by up to 10% between rounds
-  (Lex's bundled pass 12.4 → 11.5, Kai's 11.8 → 12.5); the paired latencies
-  above are the precise comparison.
-- **`max_speed`** serves 1.4–1.8× the bundled rate one request at a time and
-  up to 2.4× at C = 4. From C = 4 to C = 16 it loses 14–35% in five of six
-  runs, though it stays at 1.1–1.7× the bundled rate: coalesced batches of
-  12–16 requests run slower per token on 16 cores than batches of 4. That
-  cause is not measured yet.
-- **`batching`** (FP32 weights, round 1 only) is 1.0–1.1× the bundled rate at
-  C = 4 and 16: on CPU, packing saves only the padding; the packed linears of
-  `max_speed` are what pays.
+| Model | Lengths | Bundled (sequential) | Exact | `max_speed` | `batching` |
+| --- | --- | --- | --- | --- | --- |
+| Kai-0.6B | uniform | 11.3 | 11.3 / 11.3 / 11.5 | 17.3 / 20.3 / 21.8 | 11.1 / 13.5 / 14.3 |
+|  | mixed | 13.5 | 13.8 / 13.9 / 14.0 | 20.1 / 22.6 / 24.8 | 13.5 / 15.9 / 17.5 |
+| Lex-0.6B | uniform | 11.2 | 11.3 / 11.3 / 11.5 | 17.4 / 21.1 / 22.6 | 10.8 / 13.4 / 14.3 |
+|  | mixed | 14.0 | 13.8 / 13.9 / 14.0 | 21.3 / 24.6 / 27.7 | 13.4 / 16.4 / 18.1 |
+| Route-0.6B | uniform | 11.2 | 11.3 / 11.5 / 11.3 | 17.0 / 20.0 / 22.2 | 10.8 / 13.5 / 14.5 |
+|  | mixed | 13.8 | 13.8 / 14.0 / 13.8 | 19.3 / 22.1 / 27.0 | 13.3 / 17.0 / 19.0 |
+
+Single requests, ms:
+
+| Model | Lengths | Bundled p50 / p95 | Exact p50 / p95 | `max_speed` p50 / p95 |
+| --- | --- | --- | --- | --- |
+| Kai-0.6B | uniform | 85.3 / 97.1 | 85.3 / 98.1 | 56.7 / 62.7 |
+|  | mixed | 50.4 / 197.0 | 48.6 / 191.0 | 35.7 / 138.1 |
+| Lex-0.6B | uniform | 85.9 / 95.4 | 84.7 / 96.3 | 57.8 / 64.5 |
+|  | mixed | 49.2 / 191.7 | 49.5 / 190.4 | 37.3 / 140.0 |
+| Route-0.6B | uniform | 86.2 / 98.7 | 85.7 / 94.4 | 57.8 / 65.7 |
+|  | mixed | 49.7 / 195.5 | 49.9 / 194.1 | 36.7 / 143.3 |
+
+- **Exact matches the bundled runtime:** 0.99–1.04× its rate at every
+  concurrency and 0.99–1.04× its p50, with p95 from 4% lower to 1% higher.
+  It does the same FP32 work, one request per forward (CPU rows are not
+  batch-invariant; see the parity record).
+- **`max_speed`** serves 1.4–2.0× the bundled rate and answers single
+  requests 1.3–1.5× faster at p50 and p95.
+- **`batching`** (FP32 weights) serves 1.0–1.4×: on CPU, packing saves the
+  padding of coalesced requests; the packed linears of `max_speed` are what
+  pays.
+- **Four CPU-only changes since `c22bb15cd`,** each measured in alternating
+  rounds:
+  - **Weights in process memory** (`69ae2d0c5`; Where a request's time goes):
+    exact went from 0.84–0.92× of the bundled rate on short prompts (one round
+    at `d3d1d7e68`) to the table above.
+  - **oneDNN keeps 8,192 compiled primitives** (`7292622f3`). A packed linear
+    sees a new row count for almost every coalesced batch, and at the default
+    1,024 entries it recompiled on most calls: 620–664 µs per call across
+    1,088 distinct row counts against 300–360 µs across 16. Before, 4 of 12
+    `max_speed` runs at C = 4 or 16 fell to 8.8–14 requests/s, below one
+    request at a time; after, none of 18 did.
+  - **Coalesced batches stay within 1,024 padded tokens** (`2774d97dc`): at
+    C = 16 on uniform lengths, 16.9 → 24.3 (Kai) and 16.2 → 24.4 (Lex)
+    requests/s, 1–7% lower at C = 4; 1,536 and 2,048 were lower or erratic.
+  - **Type heads read coalesced rows by length group** (`eb8fe8582`): at C = 16
+    on mixed lengths, 18.8 → 25.5 (Kai) and 19.2 → 28.4 (Lex) requests/s. On
+    MI325X it gained nothing and lost up to 9% at C = 4, so GPUs keep one
+    padded read.
 
 ## Reduced copies under `max_speed`
 
@@ -292,7 +335,7 @@ or Score level) as the FP32 path.
   (1.32 GB of pre-packed linears for the three), and `max_speed` runs
   `batching` on it. Through the runtime it changes no decision in 1,431
   requests per encoder against the bundled runtime (parity record) and serves
-  single requests 1.4–1.8× and router requests 4.1–5.5× faster than the bundled
+  single requests 1.3–1.5× and router requests 4.1–5.5× faster than the bundled
   runtime (CPU sections). A host that cannot run the copy (no oneDNN) serves
   `max_speed` without it, and the receipt says why.
 
@@ -310,6 +353,30 @@ From the paired single-request runs, p50:
   faster than the bundled runtime's `system_one` on the same requests: by
   4–22 ms on ROCm. On CPU, where both run the same FP32 math through the same
   MKL kernels, it ranges from 3.4% faster (Route) to 0.4% slower (Eos).
+- **A short CPU request** (Kai, one Noul question about a 7-word prompt, 16
+  cores, every path on the device thread of one process with one OpenMP team):
+  planning 0.22 ms, the family's `run` 31.05 ms, through the scheduler 31.67
+  ms, through `Runtime.call` 32.98 ms, while the bundled `system_one` took
+  26.95 ms. The profile showed why: the same 88 `aten::mm` calls took 222 µs
+  each against the bundled runtime's 169 µs, because the native backbone's
+  FP32 weights were views of the checkpoint's file mapping. Since `69ae2d0c5`
+  they are copied into process memory once at load, with identical answers.
+  End to end, in fresh processes alternating on the same cores (3 rounds,
+  p50), the request went from 30.1–31.7 ms to 25.5–26.2 ms, against
+  24.7–25.4 ms for the bundled runtime called directly on its main thread.
+  The remaining ~0.9 ms is the API layer.
+- **A short CPU request** (Kai, one Noul question about a 7-word prompt, 16
+  cores, every path on the device thread of one process with one OpenMP team):
+  planning 0.22 ms, the family's `run` 31.05 ms, through the scheduler 31.67
+  ms, through `Runtime.call` 32.98 ms, while the bundled `system_one` took
+  26.95 ms. The profile showed why: the same 88 `aten::mm` calls took 222 µs
+  each against the bundled runtime's 169 µs, because the native backbone's
+  FP32 weights were views of the checkpoint's file mapping. Since `69ae2d0c5`
+  they are copied into process memory once at load, with identical answers.
+  End to end, in fresh processes alternating on the same cores (3 rounds,
+  p50), the request went from 30.1–31.7 ms to 25.5–26.2 ms, against
+  24.7–25.4 ms for the bundled runtime called directly on its main thread.
+  The remaining ~0.9 ms is the API layer.
 
 ## What makes it fast
 
@@ -321,6 +388,10 @@ From the paired single-request runs, p50:
   - on GPUs every stack replays its own bucket graphs (approximate profiles);
   - `max_speed` on CPU runs a copy of every stack whose linears oneDNN
     pre-packed once at load;
+  - on CPUs, coalesced batches stay within 1,024 padded tokens, and the type
+    heads read coalesced rows by length group instead of padded to the longest;
+  - the weights live in the process's memory, not in the checkpoint's file
+    mapping;
   - on CPU, every forward runs on one device thread, so one thread pool serves
     them all.
 - **Decoders:**
