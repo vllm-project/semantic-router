@@ -45,7 +45,7 @@ func TestProduceArmKeepsRealAndPlaceboGroundingRequestLocal(t *testing.T) {
 		}
 	}
 	done := make(chan answerRecord, 1)
-	go func() { done <- produceArm(fusion, client, opt, it, entry, "C", real) }()
+	go func() { done <- produceArm(fusion, client, opt, it, entry, "C", &looper.GroundingBackends{NLI: real}) }()
 	select {
 	case <-entered:
 	case <-time.After(5 * time.Second):
@@ -54,15 +54,15 @@ func TestProduceArmKeepsRealAndPlaceboGroundingRequestLocal(t *testing.T) {
 
 	// Keep one real request in flight while another arm and a separate real
 	// model use the same FusionLooper. None may replace its scorer.
-	placebo := produceArm(fusion, client, opt, it, entry, "D", real)
+	placebo := produceArm(fusion, client, opt, it, entry, "D", &looper.GroundingBackends{NLI: real})
 	require.Empty(t, placebo.Error)
 	require.True(t, placebo.GroundingPresent)
 	require.Len(t, placebo.Panel, 2)
 	assert.Equal(t, int32(1), realCalls.Load(), "placebo must not call the real model")
 
-	other := produceArm(fusion, client, opt, it, entry, "C", func(context.Context, string, string) (float32, float32, error) {
+	other := produceArm(fusion, client, opt, it, entry, "C", &looper.GroundingBackends{NLI: func(context.Context, string, string) (float32, float32, error) {
 		return 0.25, 0.75, nil
-	})
+	}})
 	assertArmScores(t, other, 0.25)
 	unblock()
 	select {
@@ -73,10 +73,10 @@ func TestProduceArmKeepsRealAndPlaceboGroundingRequestLocal(t *testing.T) {
 	}
 	assert.Equal(t, int32(2), realCalls.Load())
 
-	repeated := produceArm(fusion, client, opt, it, entry, "D", real)
+	repeated := produceArm(fusion, client, opt, it, entry, "D", &looper.GroundingBackends{NLI: real})
 	require.Empty(t, repeated.Error)
 	assert.Equal(t, placebo.Panel, repeated.Panel, "placebo remains deterministic for its item and seed")
-	plain := produceArm(fusion, client, opt, it, entry, "B", real)
+	plain := produceArm(fusion, client, opt, it, entry, "B", &looper.GroundingBackends{NLI: real})
 	require.Empty(t, plain.Error)
 	assert.False(t, plain.GroundingPresent)
 	assert.Equal(t, int32(2), realCalls.Load(), "plain and placebo arms must not use real NLI")
@@ -84,11 +84,19 @@ func TestProduceArmKeepsRealAndPlaceboGroundingRequestLocal(t *testing.T) {
 	assert.Equal(t, entry.PanelSHA256, repeated.PanelSHA256)
 }
 
-func TestPrepareNLIRejectsMissingArtifact(t *testing.T) {
-	nli, owner, err := prepareNLI(options{nliModel: filepath.Join(t.TempDir(), "missing"), useCPU: true})
+func TestRouterGroundingRejectsMissingConfig(t *testing.T) {
+	backends, owner, err := routerGrounding(filepath.Join(t.TempDir(), "missing.yaml"))
 	require.Error(t, err)
-	assert.Nil(t, nli)
+	assert.Nil(t, backends)
 	assert.Nil(t, owner)
+}
+
+func TestOnlyShippedGroundingArmsNeedTheRouterConfig(t *testing.T) {
+	reference := config.FusionGroundingReferencePanel
+	assert.False(t, needsShippedGrounding([]string{"A", "B", "D"}, reference))
+	for _, arm := range []string{"C", "annotate", "filter"} {
+		assert.True(t, needsShippedGrounding([]string{"A", arm}, reference), arm)
+	}
 }
 
 func assertArmScores(t *testing.T, record answerRecord, score float64) {
