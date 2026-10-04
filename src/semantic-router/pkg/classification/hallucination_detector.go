@@ -46,8 +46,8 @@ const (
 	hallucinationAnswerOverlapRunes = 64
 )
 
-func hallucinationAnswerChunks(answer string) []string {
-	return securitySignalChunks(answer, hallucinationAnswerChunkBudget, hallucinationAnswerOverlapRunes)
+func hallucinationAnswerChunks(answer string) []signalChunkSpan {
+	return securitySignalChunkSpans(answer, hallucinationAnswerChunkBudget, hallucinationAnswerOverlapRunes)
 }
 
 func mergeChunkConfidence(merged bool, mergedConfidence float32, chunk bool, chunkConfidence float32) float32 {
@@ -122,21 +122,17 @@ func (d *HallucinationDetector) detectSpans(ctx context.Context, contextText, qu
 	if contextText == "" {
 		return merged, fmt.Errorf("context is required for hallucination detection")
 	}
-	chunks := []string{answer}
+	chunks := []signalChunkSpan{{Text: answer}}
 	// The published pair adapter owns its complete answer budget. Splitting it
 	// here would change the evidence and the artifact's measured task.
 	if d.spec.Binding.Adapter != "vela_halu" {
 		chunks = hallucinationAnswerChunks(answer)
 	}
-	searchStart := 0
 	for _, chunk := range chunks {
-		start := strings.Index(answer[searchStart:], chunk)
-		if start < 0 {
-			return merged, fmt.Errorf("answer window is not a substring of the original answer")
-		}
-		start += searchStart
-		searchStart = start + 1
-		result, err := d.handle.Call(ctx, string(d.spec.Recipe), tasks.GroundedTextRequest{Context: contextText, Question: question, Answer: chunk})
+		// The chunker knows where each chunk starts. Searching the answer for
+		// its text instead finds an earlier copy when the answer repeats itself.
+		start := chunk.StartByte
+		result, err := d.handle.Call(ctx, string(d.spec.Recipe), tasks.GroundedTextRequest{Context: contextText, Question: question, Answer: chunk.Text})
 		if err != nil {
 			return merged, err
 		}
