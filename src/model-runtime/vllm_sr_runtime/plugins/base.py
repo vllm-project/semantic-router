@@ -346,6 +346,10 @@ class EngineModel(ABC):
     def memory_bytes(self) -> int:
         return 0
 
+    def max_forward_tokens(self) -> int | None:
+        """Most tokens one forward may hold on this device's kernels; None when they set no limit."""
+        return None
+
     def place(self, module: torch.nn.Module) -> torch.nn.Module:
         """A family's own module (a head) on this device, laid out as the backbone is."""
         return module.to(self.device)

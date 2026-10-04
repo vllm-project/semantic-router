@@ -40,6 +40,9 @@ from .weights import (
     load_backbone,
 )
 
+# FLA's gated-delta kernels index q / k / v with 32-bit offsets: one forward's stay within 2**30 elements.
+GATED_DELTA_ELEMENTS = 2**30 - 1
+
 
 def graph_receipt(graphs: dict[str | None, EncoderGraphs]) -> dict[str, Any]:
     """The backbone's graph statistics, each branch's under ``branches``."""
@@ -376,6 +379,17 @@ class NativeEngineModel(EngineModel):
             for layer in module.modules()
             if isinstance(layer, onednn.PackedLinear)
         ]
+
+    def max_forward_tokens(self) -> int | None:
+        """Tokens one GPU forward may hold before a gated-delta q / k / v outgrows FLA's offsets."""
+        config = self.spec.backbone.config
+        heads = config.get("linear_num_value_heads")
+        if self.device.type == "cpu" or not heads:
+            return None
+        width = heads * max(
+            config["linear_key_head_dim"], config["linear_value_head_dim"]
+        )
+        return GATED_DELTA_ELEMENTS // width
 
     def parameter_count(self) -> int:
         packed = sum(layer.weight_elements for layer in self._packed())

@@ -258,7 +258,6 @@ class Decision1Family(ModelFamily):
             head=candidate,
             temperatures=details.temperatures,
             null_choice_as_key=files.model_name in qwen.NULL_CHOICE_AS_KEY,
-            spec=spec,
         )
 
     def _info(
