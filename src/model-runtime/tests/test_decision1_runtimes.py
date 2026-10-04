@@ -475,6 +475,7 @@ def test_approximate_batches_run_each_stack_over_its_own_rows(packages, runtimes
 
 def test_type_heads_read_packed_rows_by_length_only_when_padding_wastes():
     assert vela.readout_groups([40, 44, 48]) == [[0, 1, 2]]
+    assert vela.readout_groups([10, 300, 30]) == [[0, 1, 2]]
     assert vela.readout_groups([30, 33, 500]) == [[0, 1], [2]]
     assert vela.readout_groups([9, 200, 10, 130, 12, 150]) == [
         [0, 2],

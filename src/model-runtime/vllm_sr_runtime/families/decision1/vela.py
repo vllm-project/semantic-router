@@ -29,6 +29,8 @@ from .questions import KINDS, NoulDefaults, Row
 PHYSICAL_BATCH = 8
 MAX_INPUT_TOKENS = 1024
 READOUT_PADDING = 0.25
+# Below this many padded tokens one read costs less than the launches of several on a GPU.
+READOUT_ONE_GRID = 1024
 NOUL_DEFAULTS = NoulDefaults(
     false="No. The statement or question is not satisfied.",
     true="Yes. The statement or question is satisfied.",
@@ -187,12 +189,13 @@ def collate(items: list[RenderedItem], pad_id: int) -> dict[str, torch.Tensor]:
 def readout_groups(lengths: list[int]) -> list[list[int]]:
     """Row indices for the type heads' padded reads of packed rows.
 
-    One group while padding every row to the longest wastes at most
-    ``READOUT_PADDING`` of the real tokens. Past that, rows in length order
-    form groups in which no row pads by more than ``READOUT_PADDING``, so a
-    short row never pads to a long one.
+    One group while the padded grid is small (``READOUT_ONE_GRID`` tokens) or
+    wastes at most ``READOUT_PADDING`` of the real tokens. Past that, rows in
+    length order form groups in which no row pads by more than
+    ``READOUT_PADDING``, so a short row never pads to a long one.
     """
-    if len(lengths) * max(lengths) <= (1 + READOUT_PADDING) * sum(lengths):
+    grid = len(lengths) * max(lengths)
+    if grid <= READOUT_ONE_GRID or grid <= (1 + READOUT_PADDING) * sum(lengths):
         return [list(range(len(lengths)))]
     groups: list[list[int]] = []
     for row in sorted(range(len(lengths)), key=lengths.__getitem__):
