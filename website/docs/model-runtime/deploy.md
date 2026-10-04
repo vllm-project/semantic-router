@@ -224,8 +224,9 @@ an unknown signal means for that route (`no_match` by default, or
   deployment answers), `vsr_model_runtime_restarts_total`,
   `vsr_model_runtime_requests_total` by outcome and
   `vsr_model_runtime_unknown_answers_total` by reason on its metrics port.
-- The Dashboard's model inventory lists every deployment with its model,
-  device, profile and state.
+- The router's management API lists every deployment with its process,
+  state, restarts and the model it serves (labels, device, profile):
+  `curl -s localhost:8080/api/v1/inventory/model-runtime`.
 - An attached runtime answers `GET /v1/models` and `GET /health` directly.
 
 The [reference](./reference.md#router-managed-runtimes) lists the environment

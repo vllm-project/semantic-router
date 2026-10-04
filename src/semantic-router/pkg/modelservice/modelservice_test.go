@@ -169,10 +169,10 @@ func TestPlanProcessesSpreadsCPUModelsOverThreadShares(t *testing.T) {
 
 func TestManagedCommandAndModelsFile(t *testing.T) {
 	got := strings.Join(managedCommand([]string{"vllm-sr-runtime"}, "/run/x.sock", "/run/x.models.json", "/cache", 0), " ")
-	if want := "vllm-sr-runtime serve --models /run/x.models.json --uds /run/x.sock --cache-dir /cache"; got != want {
+	if want := "vllm-sr-runtime serve --models /run/x.models.json --uds /run/x.sock --max-request-bytes 67108864 --cache-dir /cache"; got != want {
 		t.Fatalf("command\n got %s\nwant %s", got, want)
 	}
-	if got := strings.Join(managedCommand([]string{"vllm-sr-runtime"}, "/run/x.sock", "/run/x.models.json", "", 4), " "); !strings.HasSuffix(got, "--uds /run/x.sock --threads 4") {
+	if got := strings.Join(managedCommand([]string{"vllm-sr-runtime"}, "/run/x.sock", "/run/x.models.json", "", 4), " "); !strings.HasSuffix(got, "--max-request-bytes 67108864 --threads 4") {
 		t.Fatalf("a CPU share passes its thread count: %s", got)
 	}
 	plan := planProcesses(map[string]config.ModelDeployment{

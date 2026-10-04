@@ -40,6 +40,18 @@ describe('embedding models config support', () => {
     expect(editData.provider_type).toBe('local')
   })
 
+  it('saves a retired local backend as the model runtime', () => {
+    const editData = embeddingModelsEditData({
+      semantic: { embedding_config: { backend: 'candle', model_type: 'mmbert' } },
+    })
+    const saved = embeddingModelsCatalogValue(editData)
+
+    expect(editData.provider_type).toBe('local')
+    expect((saved.semantic as Record<string, unknown>).embedding_config).toEqual(
+      expect.objectContaining({ backend: 'model_runtime', model_type: 'mmbert' }),
+    )
+  })
+
   it('shows provider-specific fields for local and remote modes', () => {
     const fields = embeddingModelsFields()
     const localPath = fields.find((field) => field.name === 'mmbert_model_path')

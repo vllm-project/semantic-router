@@ -61,7 +61,7 @@ var _ = BeforeSuite(func() {
 		"embedding": {Deployment: "tools-test", Contract: "embedding.v1"},
 	}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{
-		"tools-test": {Provider: config.ModelRuntimeProvider, Device: "cpu", Precision: "native", Profile: "exact", Artifact: modelPath},
+		"tools-test": {Provider: config.ModelRuntimeProvider, Device: "cpu", Profile: "exact", Artifact: modelPath},
 	}
 	set, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, servingtest.Managed(GinkgoT()))
 	Expect(err).NotTo(HaveOccurred())

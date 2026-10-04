@@ -14,7 +14,7 @@ import (
 
 func TestOperatorModelDeploymentsReachCanonicalConfig(t *testing.T) {
 	spec := vllmv1alpha1.ConfigSpec{
-		ModelDeployments: rawCanonicalRoutingJSON(t, `{"shared":{"artifact":"models/checkpoint","revision":"pinned","provider":"candle","device":"cpu","precision":"fp32","input":{"max_tokens":512,"overflow":"reject"}}}`),
+		ModelDeployments: rawCanonicalRoutingJSON(t, `{"shared":{"artifact":"vllm-sr/checkpoint","revision":"`+strings.Repeat("a", 40)+`","provider":"model_runtime","device":"cpu","input":{"max_tokens":512,"overflow":"reject"}}}`),
 		ModelAdmission:   rawCanonicalRoutingJSON(t, `{"shared":{"max_concurrency":2,"max_queue":3,"queue_timeout_ms":500,"on_overflow":"shed"}}`),
 		Routing:          rawCanonicalRoutingJSON(t, `{"model_bindings":{"pii_classifier":{"deployment":"shared","contract":"token_spans.v1","adapter":"mmbert","head":"pii","mapping_path":"mappings/pii.json"}}}`),
 	}
@@ -31,7 +31,7 @@ func TestOperatorModelDeploymentsReachCanonicalConfig(t *testing.T) {
 	if unmarshalErr := yaml.Unmarshal(encoded, &roundTrip); unmarshalErr != nil {
 		t.Fatal(unmarshalErr)
 	}
-	wantDeployment := routerconfig.ModelDeployment{Artifact: "models/checkpoint", Revision: "pinned", Provider: "candle", Device: "cpu", Precision: "fp32", Input: routerconfig.ModelInputBudget{MaxTokens: 512, Overflow: "reject"}}
+	wantDeployment := routerconfig.ModelDeployment{Artifact: "vllm-sr/checkpoint", Revision: strings.Repeat("a", 40), Provider: routerconfig.ModelRuntimeProvider, Device: "cpu", Input: routerconfig.ModelInputBudget{MaxTokens: 512, Overflow: "reject"}}
 	if !reflect.DeepEqual(roundTrip.Global.ModelCatalog.Deployments["shared"], wantDeployment) {
 		t.Fatalf("deployment was changed: %#v", roundTrip.Global.ModelCatalog.Deployments)
 	}

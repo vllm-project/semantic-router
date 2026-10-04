@@ -9,7 +9,7 @@ func decisionSignalConfig() *RouterConfig {
 	cfg := &RouterConfig{}
 	cfg.ModelDeployments = map[string]ModelDeployment{
 		"decider": {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Revision: strings.Repeat("a", 40)},
-		"bert":    {Provider: "candle", Artifact: "models/bert"},
+		"bert":    {Provider: "http", ExternalModel: "bert"},
 	}
 	threshold := 1.0
 	cfg.DecisionRules = []DecisionSignalRule{
@@ -44,15 +44,14 @@ func TestModelRuntimeDeploymentValidation(t *testing.T) {
 		"bad profile":           {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Profile: "turbo"},
 		"bad endpoint":          {Provider: ModelRuntimeProvider, Endpoint: "tcp://host:1"},
 		"relative socket":       {Provider: ModelRuntimeProvider, Endpoint: "unix://run/x.sock"},
-		"precision":             {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Precision: "fp16"},
 		"negative budget":       {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Input: ModelInputBudget{MaxTokens: -1}},
 		"bad overflow":          {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Input: ModelInputBudget{Overflow: "drop"}},
 		"attached process":      {Provider: ModelRuntimeProvider, Endpoint: "http://runtime:8100", Process: "encoders"},
 		"managed served name":   {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", ServedName: "x"},
 		"bad process":           {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Process: "../escape"},
-		"profile elsewhere":     {Provider: "candle", Artifact: "models/x", Profile: "exact"},
-		"process elsewhere":     {Provider: "candle", Artifact: "models/x", Process: "encoders"},
-		"served name elsewhere": {Provider: "candle", Artifact: "models/x", ServedName: "x"},
+		"profile elsewhere":     {Provider: "http", ExternalModel: "x", Profile: "exact"},
+		"process elsewhere":     {Provider: "http", ExternalModel: "x", Process: "encoders"},
+		"served name elsewhere": {Provider: "http", ExternalModel: "x", ServedName: "x"},
 	}
 	for name, deployment := range invalid {
 		if err := deployment.WithDefaults().validate(&RouterConfig{}); err == nil {
@@ -63,7 +62,7 @@ func TestModelRuntimeDeploymentValidation(t *testing.T) {
 
 func TestModelRuntimeDeploymentDefaults(t *testing.T) {
 	deployment := ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x"}.WithDefaults()
-	if deployment.Device != "auto" || deployment.Profile != "exact" || deployment.Precision != "" || !deployment.Managed() {
+	if deployment.Device != "auto" || deployment.Profile != "exact" || !deployment.Managed() {
 		t.Fatalf("defaults = %+v", deployment)
 	}
 	if (ModelDeployment{Provider: ModelRuntimeProvider, Endpoint: "http://x:1"}).Managed() {

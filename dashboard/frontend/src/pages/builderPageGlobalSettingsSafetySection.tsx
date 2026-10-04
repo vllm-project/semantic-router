@@ -22,7 +22,11 @@ interface SafetySectionHeaderProps {
 }
 
 /** Toggle for the Safety section. Extracted to keep the section body on its own seam. */
-const SafetySectionHeader: React.FC<SafetySectionHeaderProps> = ({ expanded, bodyId, onToggle }) => (
+const SafetySectionHeader: React.FC<SafetySectionHeaderProps> = ({
+  expanded,
+  bodyId,
+  onToggle,
+}) => (
   <button
     type="button"
     className={styles.gsSectionHeader}

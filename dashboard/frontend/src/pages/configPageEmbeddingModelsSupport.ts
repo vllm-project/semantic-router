@@ -146,7 +146,7 @@ export function embeddingModelsFields(): FieldConfig[] {
       options: [LOCAL_PROVIDER_TYPE, REMOTE_PROVIDER_TYPE],
       required: true,
       description:
-        'Choose whether embeddings run in-process or through a remote API. Remote mode currently applies to text embedding consumers only.',
+        'Choose whether embeddings run in the built-in model runtime or through a remote API. Remote mode currently applies to text embedding consumers only.',
     },
     {
       name: 'remote_backend',

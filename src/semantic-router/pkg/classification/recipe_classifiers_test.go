@@ -18,7 +18,7 @@ func TestUnreachableDefaultDoesNotPrepareRoutingArtifacts(t *testing.T) {
 		Recipes:       []config.RoutingRecipe{{Name: config.DefaultRecipeName, Profile: defaultProfile}, {Name: "active"}},
 		Entrypoints:   []config.EntrypointMapping{{ModelNames: []string{"public"}, Recipe: "active"}},
 	}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"dormant": {Artifact: missing, Provider: "candle", Device: "cpu"}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"dormant": {Artifact: missing, Provider: config.ModelRuntimeProvider, Device: "cpu"}}
 	classifiers, err := BuildRecipeClassifiers(cfg, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("unreachable default tried to load routing model: %v", err)
