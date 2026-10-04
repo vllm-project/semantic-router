@@ -379,18 +379,14 @@ class ServedModel:
         )
 
     def _profiles(self) -> dict[str, Profile]:
-        process = self.runtime.config
-        exact = registry.instantiate("profiles", "exact")
-        profiles: dict[str, Profile] = {"exact": exact}
-        if self.config.profile != "exact":
-            entry = registry.plugin("profiles", self.config.profile).load()
-            if self.config.profile in ("batching", "max_speed"):
-                profiles[self.config.profile] = entry(
-                    max_batch_tokens=process.max_batch_tokens
-                )
-            else:
-                profiles[self.config.profile] = entry()
-        return profiles
+        """``exact`` (golden checks run on it) and the model's own profile."""
+        names = dict.fromkeys(("exact", self.config.profile))
+        return {
+            name: registry.plugin("profiles", name)
+            .load()
+            .from_config(self.runtime.config)
+            for name in names
+        }
 
     def _golden(self, surface: str, body: dict[str, Any]) -> dict[str, Any]:
         """A golden request's response body on the exact profile, before readiness."""
