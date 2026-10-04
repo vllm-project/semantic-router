@@ -638,7 +638,7 @@ var _ = Describe("Security Checks", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// If PII classifier is available, should detect entities
-				// If not available (candle-binding issues), should return empty slice gracefully
+				// Without a served PII model it returns an empty slice
 				if len(piiTypes) > 0 {
 					// Check that we get actual PII types (not empty)
 					for _, piiType := range piiTypes {
@@ -647,7 +647,7 @@ var _ = Describe("Security Checks", func() {
 					}
 				} else {
 					// PII classifier not available - this is acceptable in test environment
-					Skip("PII classifier not available (candle-binding dependency missing)")
+					Skip("PII classifier not available (no PII model served)")
 				}
 			})
 
@@ -700,7 +700,7 @@ var _ = Describe("Security Checks", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				if len(testPII) == 0 {
-					Skip("PII classifier not available (candle-binding dependency missing)")
+					Skip("PII classifier not available (no PII model served)")
 				}
 
 				for _, tc := range testCases {
@@ -727,7 +727,7 @@ var _ = Describe("Security Checks", func() {
 				detectedPII := router.Classifier.DetectPIIInContent(context.Background(), contentList)
 
 				// If PII classifier is available, should detect entities
-				// If not available (candle-binding issues), should return empty slice gracefully
+				// Without a served PII model it returns an empty slice
 				if len(detectedPII) > 0 {
 					// Should not contain duplicates
 					seenTypes := make(map[string]bool)
@@ -737,7 +737,7 @@ var _ = Describe("Security Checks", func() {
 					}
 				} else {
 					// PII classifier not available - this is acceptable in test environment
-					Skip("PII classifier not available (candle-binding dependency missing)")
+					Skip("PII classifier not available (no PII model served)")
 				}
 			})
 
@@ -1056,7 +1056,7 @@ var _ = Describe("Security Checks", func() {
 			}
 
 			response, err := router.HandleRequestBody(bodyRequest, ctx)
-			// Should process (jailbreak detection result depends on candle_binding)
+			// Should process (jailbreak detection result depends on a served jailbreak model)
 			Expect(err).To(Or(BeNil(), HaveOccurred()))
 			if err == nil {
 				// Should either continue or return jailbreak violation
@@ -1404,7 +1404,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 				}
 			}
 
-			// Some errors might be expected due to candle_binding dependencies
+			// Some errors might be expected without served models
 			// The important thing is that the system doesn't crash
 			Expect(errorCount).To(BeNumerically("<=", numRequests))
 		})
@@ -1729,7 +1729,7 @@ var _ = Describe("Caching Functionality", func() {
 		}
 
 		response, err := router.HandleRequestBody(bodyRequest, ctx)
-		// Even if caching fails due to candle_binding, request should continue
+		// Even if caching fails without a served embedding model, request should continue
 		Expect(err).To(Or(BeNil(), HaveOccurred()))
 		if err == nil {
 			Expect(response.GetRequestBody().Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
