@@ -66,13 +66,18 @@ class EmbeddingRequest:
 
 @dataclass(frozen=True)
 class EmbedItem:
-    """One media or text input ready to run; ``ids`` bound admission and batches (empty for media)."""
+    """One media or text input ready to run.
+
+    ``ids`` bound admission and batches; media have none and set ``cost``, the
+    text tokens of the same model their forward takes as long as.
+    """
 
     index: int
     modality: str
     ids: list[int]
     cache_key: str
     features: dict[str, np.ndarray] = field(default_factory=dict)
+    cost: int | None = None
 
 
 @dataclass

@@ -48,6 +48,12 @@ from .processors import AudioFeatures, AudioProcessor, ImageProcessor, TextProce
 
 UNIT_NORM_TOLERANCE = 0.005
 CONCURRENT_INPUTS = 4
+# A media input's scheduler cost in text tokens of the same bundle: its CPU
+# forward takes about as long as a text that long (measured on 16 cores).
+MEDIA_COST = {
+    "nano": {"image": 1200, "audio": 1600},
+    "mini": {"image": 300, "audio": 550},
+}
 # Import name -> distribution of the multimodal extra.
 EXTRA = {"onnxruntime": "onnxruntime", "PIL": "Pillow"}
 GOLDEN_TEXT = "Route this request to the model that answers it best."
@@ -203,6 +209,7 @@ class MultimodalEmbeddingFamily(ModelFamily):
             text,
             ImageProcessor(verified),
             AudioProcessor(verified, config),
+            MEDIA_COST[verified.variant],
         )
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
@@ -249,12 +256,14 @@ class OmniModel(LoadedModel):
         text: TextProcessor,
         image: ImageProcessor,
         audio: AudioProcessor,
+        media_cost: dict[str, int],
     ):
         self.info = info
         self.engine_model = engine_model
         self.text = text
         self.image = image
         self.audio = audio
+        self.media_cost = media_cost
         assert info.embedding is not None
         self.dimension = info.embedding.dimensions[0]
         self.inputs = ThreadPoolExecutor(
@@ -293,20 +302,18 @@ class OmniModel(LoadedModel):
             pixels = self.image.pixels(entry.data)
             if isinstance(pixels, str):
                 return pixels
+            inputs = {"pixel_values": pixels}
+            cost = self.media_cost["image"]
             return (
-                embedding.EmbedItem(
-                    entry.index, "image", [], key, {"pixel_values": pixels}
-                ),
+                embedding.EmbedItem(entry.index, "image", [], key, inputs, cost),
                 None,
             )
         features = self.audio.features(entry.data, entry.media_type)
         if isinstance(features, str):
             return features
-        features_by_graph = {"clap": features.clap, "whisper": features.whisper}
-        return (
-            embedding.EmbedItem(entry.index, "audio", [], key, features_by_graph),
-            None,
-        )
+        by_graph = {"clap": features.clap, "whisper": features.whisper}
+        cost = self.media_cost["audio"]
+        return embedding.EmbedItem(entry.index, "audio", [], key, by_graph, cost), None
 
     def run(self, items: list[Any], shared_prefix: int = 0) -> list[Any]:
         if len(items) == 1:

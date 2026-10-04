@@ -280,6 +280,27 @@ def test_a_batch_answers_every_input_as_it_answers_alone(model):
     assert model.run(plan.items) == [model.run([item])[0] for item in plan.items]
 
 
+def test_media_inputs_carry_a_scheduler_cost_and_text_counts_its_tokens(model):
+    from vllm_sr_runtime.families.multimodal_embedding.family import MEDIA_COST
+    from vllm_sr_runtime.scheduler.planner import cost
+
+    image = base64.b64encode(golden_image()).decode()
+    sound = base64.b64encode(golden_audio()).decode()
+    inputs = [
+        "route this request",
+        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image}"}},
+        {"type": "input_audio", "input_audio": {"data": sound, "format": "wav"}},
+    ]
+    text, picture, audio = model.plan_surface(
+        "embeddings", request({"input": inputs})
+    ).items
+    assert cost(text) == len(text.ids)
+    assert (cost(picture), cost(audio)) == (
+        MEDIA_COST["nano"]["image"],
+        MEDIA_COST["nano"]["audio"],
+    )
+
+
 def test_truncate_cuts_over_long_text_inside_the_special_tokens(model):
     text = "route this request to the model that answers it best " * 4
     image = base64.b64encode(golden_image()).decode()
