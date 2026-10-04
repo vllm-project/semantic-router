@@ -2,7 +2,7 @@
 title: 快速开始
 description: 安装模型运行时，运行一个模型，向它发送请求，再让路由器使用它。
 translation:
-  source_commit: "1e39fb0b200087d4d6aa4d40a1cf729ebf2f077f"
+  source_commit: "89f6f79ab6aedeefd1e5a75616088ebfa5fed5d9"
   source_file: "docs/model-runtime/quickstart.md"
   outdated: false
 ---
@@ -15,7 +15,7 @@ translation:
 你需要 Linux 或 macOS、Python 3.10 或更新版本，以及约 3 GB 可用磁盘空间用于下载模型。
 不需要 GPU。
 
-## 1. 安装
+## 1. 安装 {#1-install}
 
 运行时是一个 Python 包，与 `vllm-sr` CLI 放在同一个仓库中。把两者装进一个虚拟环境，
 并使用 CPU 版 PyTorch：
@@ -35,7 +35,7 @@ pip install ./src/vllm-sr ./src/model-runtime
 vllm-sr-runtime models
 ```
 
-## 2. 运行模型
+## 2. 运行模型 {#2-serve-a-model}
 
 启动最小的决策模型 Decision 2.0 Kai。决策模型回答你用自然语言写下的问题。
 
@@ -52,7 +52,7 @@ curl -s localhost:8100/health
 
 模型加载完成并通过自检后，它返回 `{"status": "ready", ...}`；在此之前返回 HTTP 503 和当前阶段。
 
-## 3. 发送请求
+## 3. 发送请求 {#3-send-a-request}
 
 对同一个请求同时提两个问题：它属于哪类工作（一个**选择题**，choice），
 以及回答它是否需要多步推理（一个**是/否问题**，称为 **noul**）。
@@ -94,7 +94,7 @@ curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
 
 结果列出最可能的领域（`label`）以及全部 14 个领域各自的概率。
 
-## 4. 在路由器中使用
+## 4. 在路由器中使用 {#4-use-it-from-the-router}
 
 路由器会替你运行模型。把模型声明为 `provider: model_runtime` 的 **deployment**，
 然后在 `decision` 信号中向它提问。把下面的内容保存为 `config.yaml`，并把 `vllm:8000`
@@ -180,7 +180,7 @@ curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
 例如 `endpoint: http://host.docker.internal:8100`，并用 `--host 0.0.0.0` 启动那个服务，
 让路由器容器能够访问它。
 
-## 下一步
+## 下一步 {#next-steps}
 
 - [选择模型、规模和硬件](model-runtime/choose-a-model.md)
 - 开启一个内置功能：[请求分类](model-runtime/guides/classify.md)、

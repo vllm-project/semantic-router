@@ -3,7 +3,7 @@ title: 从原生绑定迁移
 sidebar_label: 从原生绑定迁移
 description: 更新使用了 candle、ONNX Runtime 或 OpenVINO 后端、旧模型名或 NLI 解释器的配置。
 translation:
-  source_commit: "716ebd68fdb558ef90581736202566d114e4a739"
+  source_commit: "89f6f79ab6aedeefd1e5a75616088ebfa5fed5d9"
   source_file: "docs/model-runtime/migrate.md"
   outdated: false
 ---
@@ -30,7 +30,7 @@ translation:
 
 路由器在启动时会拒绝这些设置，并提示你运行迁移命令。
 
-## 1. 运行迁移
+## 1. 运行迁移 {#1-run-the-migration}
 
 ```bash
 vllm-sr config migrate --config legacy.yaml --output legacy.migrated.yaml
@@ -50,7 +50,7 @@ Changes to review
 （迁移后的文件保留该值，在你修正之前路由器会拒绝它），或因 embedding 模型改变而需要重新向量化的已存储向量
 （见[更换 embedding 模型时重新向量化](#re-embed-when-the-embedding-model-changes)）。
 
-## 2. 检查修改
+## 2. 检查修改 {#2-review-the-changes}
 
 | 之前 | 之后 |
 | --- | --- |
@@ -73,7 +73,7 @@ Changes to review
 | MLP 选择算法上的 `mlp.device` | 移除：MLP 选择器在路由器内运行 |
 | fusion 算法的 `grounding.nli_contradiction_penalty` | `grounding.contradiction_penalty`：grounding 现在读取幻觉检测器 |
 
-### 更名的模型
+### 更名的模型 {#model-names-that-changed}
 
 较旧的任务模型由同一任务的 Vela 1.0 模型替代。替代模型使用相同的标签名，
 因此你的信号规则和路由条件仍匹配原来匹配的内容。
@@ -92,7 +92,7 @@ Changes to review
 | `multi-modal-embed-small` / `-large` | `Vela-1.0-Omni-Nano` / `-Mini` | **重新向量化**已存储的向量 |
 | Qwen3-Embedding-0.6B（`mom-embedding-pro`） | 不变 | |
 
-### 已退役的功能
+### 已退役的功能 {#features-that-were-retired}
 
 - **NLI 解释器**（`hallucination_explainer`、`enable_nli_filtering`、本地检测器上的
   `include_explanation`、`use_nli`）。幻觉检查仍会标出回答中无依据的片段，只是不再为每个片段附加 NLI 判定。
@@ -102,7 +102,7 @@ Changes to review
 - **ONNX Runtime 的 MIGraphX 和 CK flash-attention 路径。** AMD GPU 通过 ROCm 版 PyTorch
   运行模型（`device: rocm:N`）。
 
-## 3. 校验并启动
+## 3. 校验并启动 {#3-validate-and-start}
 
 ```bash
 vllm-sr config validate --config legacy.migrated.yaml
@@ -112,7 +112,7 @@ vllm-sr serve --config legacy.migrated.yaml
 首次启动时，运行时会下载尚未拥有的模型。[与路由器一起运行](model-runtime/deploy.md#check-what-is-running)
 介绍如何查看每个 deployment 何时就绪。
 
-## 完整示例
+## 完整示例 {#a-complete-example}
 
 下面的配置在 AMD GPU 上用 ONNX Runtime 运行 embedding，在 NVIDIA GPU 上用 candle 运行领域分类器，
 并使用一个旧的 jailbreak 模型和 NLI 解释器：
@@ -234,7 +234,7 @@ global:
 - **Embedding 信号和知识库：** 它们的示例文本会在启动时重新向量化。请在你自己的流量上检查相似度阈值；
   不同模型的分数不可直接比较。
 
-## Kubernetes 与 Docker
+## Kubernetes 与 Docker {#kubernetes-and-docker}
 
 路由器镜像不再包含原生库。它们包含 CPU 运行时，因此托管模型开箱即用。
 请删除仅为 candle、ONNX Runtime 或 OpenVINO 存在的环境变量、init 容器或卷。

@@ -73,6 +73,7 @@ zh-Hans	intro.md
 zh-Hans	model-runtime/migrate.md
 zh-Hans	model-runtime/overview.md
 zh-Hans	model-runtime/quickstart.md
+zh-Hans	model-runtime/troubleshooting.md
 zh-Hans	overview/goals.md
 zh-Hans	overview/mom-model-family.md
 zh-Hans	overview/semantic-router-overview.md

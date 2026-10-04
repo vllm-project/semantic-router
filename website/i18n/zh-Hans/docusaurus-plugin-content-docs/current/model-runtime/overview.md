@@ -3,7 +3,7 @@ title: 模型运行时
 sidebar_label: 概览
 description: 对请求进行分类、防护、向量化和路由的模型都运行在内置模型运行时中。从这里开始。
 translation:
-  source_commit: "b7b8a1be3b6a3838c1627cbb91c127c570242eb3"
+  source_commit: "89f6f79ab6aedeefd1e5a75616088ebfa5fed5d9"
   source_file: "docs/model-runtime/overview.md"
   outdated: false
 ---
@@ -19,7 +19,7 @@ translation:
 之后如果运行时变慢或崩溃，请求仍会继续流转：该功能报告“未知”，
 路由按你配置的方式回退。
 
-## 三种用法
+## 三种用法 {#three-ways-to-use-it}
 
 | 你想要 | 这样做 | 阅读 |
 | --- | --- | --- |
@@ -27,7 +27,7 @@ translation:
 | 把模型放到 GPU 上，或在多个路由器之间共享 | 自己启动一个运行时，并用 `endpoint` 让路由器指向它。 | [与路由器一起运行](model-runtime/deploy.md#attach-to-a-runtime-you-run) |
 | 在自己的代码里调用模型 | 运行 `vllm-sr serve <model>` 并发送 HTTP 请求。 | [快速开始](model-runtime/quickstart.md) |
 
-## 它能提供什么
+## 它能提供什么 {#what-it-can-serve}
 
 | 任务 | 内置模型 | 指南 |
 | --- | --- | --- |
@@ -42,7 +42,7 @@ translation:
 
 [选择模型](model-runtime/choose-a-model.md)帮助你挑选规模和硬件。
 
-## 你可以依赖的特性
+## 你可以依赖的特性 {#what-you-can-rely-on}
 
 - **固定版本并经过校验。** 内置模型固定到确切的 Hugging Face revision。
   每个文件在加载前都会对照记录的 SHA-256 校验，模型仓库中附带的代码永远不会执行。
@@ -55,13 +55,13 @@ translation:
 - **可插拔。** 新的模型家族、引擎和硬件后端都是普通的 Python 包。
   见[添加你自己的模型家族](model-runtime/plugins.md)。
 
-## 硬件
+## 硬件 {#hardware}
 
 CPU 和 AMD GPU（MI300X、MI325X）已经验证。NVIDIA GPU 可用但尚未验证；
 Intel GPU（`xpu`）和 Apple GPU（`mps`）可用但尚未验证。每个路由器镜像都包含 CPU 运行时。
 要使用 GPU，请用 GPU 版 PyTorch 运行运行时，并让路由器连接它。
 
-## 从旧版本升级？
+## 从旧版本升级？ {#coming-from-an-older-release}
 
 candle、ONNX Runtime 和 OpenVINO 后端已经移除。运行 `vllm-sr config migrate`
 更新你的配置；见[从原生绑定迁移](model-runtime/migrate.md)。
