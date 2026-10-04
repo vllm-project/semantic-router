@@ -42,6 +42,10 @@ type CategoryModel struct {
 	Backend             *RemoteClassifierBackend `yaml:"backend,omitempty"`
 	CategoryMappingPath string                   `yaml:"category_mapping_path"`
 	FallbackCategory    string                   `yaml:"fallback_category,omitempty"`
+	// Calibration maps the probability a matched domain reports onto the
+	// declared label_correctness/v1 scale. Absent, domain scores keep their
+	// uncalibrated probability kind.
+	Calibration *ScoreCalibrationReference `yaml:"calibration,omitempty"`
 }
 
 type PIIModel struct {

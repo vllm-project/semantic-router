@@ -493,6 +493,9 @@
         "fallback_category": {
           "type": "string"
         },
+        "calibration": {
+          "$ref": "#/$defs/ScoreCalibrationReference"
+        },
         "model_ref": {
           "type": "string"
         }
@@ -6511,6 +6514,22 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "ScoreCalibrationReference": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path",
+        "sha256"
+      ]
     },
     "SequenceHeadModelConfig": {
       "properties": {

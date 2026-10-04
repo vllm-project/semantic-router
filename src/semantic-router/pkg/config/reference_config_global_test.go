@@ -330,7 +330,9 @@ func assertReferenceConfigClassifierModuleCoverage(t testingT, classifier map[st
 	// backend and local selectors are mutually exclusive. The canonical local
 	// variant is supplied by defaults, so the exhaustive reference does not need
 	// to force a variant line that users must delete before adding a backend.
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "domain"), reflect.TypeOf(CanonicalCategoryModule{}), "global.model_catalog.modules.classifier.domain", "backend", "variant", "use_modernbert", "use_mmbert_32k")
+	// calibration pins an artifact fitted on exact model files, so the
+	// reference keeps the uncalibrated default that any model revision starts.
+	assertMapCoversStructFields(t, mustMapAt(t, classifier, "domain"), reflect.TypeOf(CanonicalCategoryModule{}), "global.model_catalog.modules.classifier.domain", "backend", "variant", "use_modernbert", "use_mmbert_32k", "calibration")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "mcp"), reflect.TypeOf(MCPCategoryModel{}), "global.model_catalog.modules.classifier.mcp")
 	// pii.backend is the remote token_spans.v1 attachment and is mutually
 	// exclusive with the local use_mmbert_32k path the reference config shows,

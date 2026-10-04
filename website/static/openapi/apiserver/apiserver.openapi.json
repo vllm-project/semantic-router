@@ -20264,6 +20264,9 @@
                                   "fallback_reason": {
                                     "type": "string"
                                   },
+                                  "score_artifact": {
+                                    "type": "string"
+                                  },
                                   "score_kind": {
                                     "type": "string"
                                   },
@@ -24426,6 +24429,9 @@
                               "type": "string"
                             },
                             "fallback_reason": {
+                              "type": "string"
+                            },
+                            "score_artifact": {
                               "type": "string"
                             },
                             "score_kind": {
@@ -31974,6 +31980,9 @@
                         "fallback_reason": {
                           "type": "string"
                         },
+                        "score_artifact": {
+                          "type": "string"
+                        },
                         "score_kind": {
                           "type": "string"
                         },
@@ -35409,6 +35418,9 @@
                               "type": "string"
                             },
                             "fallback_reason": {
+                              "type": "string"
+                            },
+                            "score_artifact": {
                               "type": "string"
                             },
                             "score_kind": {

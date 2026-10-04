@@ -247,6 +247,9 @@ func ValidateCategoryModelBackend(cfg *RouterConfig) error {
 	if err := model.ValidateLocalVariant(); err != nil {
 		return err
 	}
+	if err := validateCategoryCalibration(model); err != nil {
+		return err
+	}
 	if model.Backend == nil {
 		return nil
 	}

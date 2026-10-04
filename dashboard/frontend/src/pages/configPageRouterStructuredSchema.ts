@@ -157,7 +157,10 @@ const classifierModelSchema = (
     use_mmbert_32k: boolean('Use mmBERT 32K'),
     ...(mappingField ? { [mappingField]: text('Mapping Path') } : {}),
     ...(mappingField === 'category_mapping_path'
-      ? { fallback_category: text('Fallback Category') }
+      ? {
+          fallback_category: text('Fallback Category'),
+          calibration: object('Calibration', { path: text('Path'), sha256: text('SHA256') }),
+        }
       : {}),
   })
 

@@ -24,7 +24,7 @@ func reportAmbiguousConfidencePools(cfg *RouterConfig) {
 		if scoped == nil {
 			return nil
 		}
-		for _, fallback := range ambiguousConfidencePools(scoped.Decisions) {
+		for _, fallback := range ambiguousConfidencePools(scoped.Decisions, scoped.CalibratedScoreFamilies()...) {
 			logging.Warnf(
 				"routing profile %q tier %d ranks by priority: %s report different score kinds (%s). "+
 					"Confidence orders a pool only when every member reports the same kind",
@@ -39,7 +39,7 @@ func reportAmbiguousConfidencePools(cfg *RouterConfig) {
 // ambiguousConfidencePools groups decisions the way selection does, by tier
 // when any decision sets one and into a single pool otherwise, and returns
 // the pools that hold more than one score kind.
-func ambiguousConfidencePools(decisions []Decision) []confidencePoolFallback {
+func ambiguousConfidencePools(decisions []Decision, calibrated ...string) []confidencePoolFallback {
 	tiered := false
 	for i := range decisions {
 		if decisions[i].Tier > 0 {
@@ -63,7 +63,7 @@ func ambiguousConfidencePools(decisions []Decision) []confidencePoolFallback {
 		if kinds[pool] == nil {
 			kinds[pool] = map[ScoreKind]struct{}{}
 		}
-		collectScoreKinds(&decision.Rules, kinds[pool])
+		collectScoreKinds(&decision.Rules, kinds[pool], calibrated)
 	}
 
 	pools := make([]int, 0, len(members))
@@ -91,20 +91,20 @@ func ambiguousConfidencePools(decisions []Decision) []confidencePoolFallback {
 // collectScoreKinds gathers the score kinds a rule tree can report. A
 // predicate leaf answers a threshold rather than reporting a measurement, so
 // it declares no kind.
-func collectScoreKinds(node *RuleNode, kinds map[ScoreKind]struct{}) {
+func collectScoreKinds(node *RuleNode, kinds map[ScoreKind]struct{}, calibrated []string) {
 	if node == nil {
 		return
 	}
 	if len(node.Conditions) > 0 {
 		for i := range node.Conditions {
-			collectScoreKinds(&node.Conditions[i], kinds)
+			collectScoreKinds(&node.Conditions[i], kinds, calibrated)
 		}
 		return
 	}
 	if node.Predicate != nil {
 		return
 	}
-	if kind := SignalScoreKind(strings.ToLower(strings.TrimSpace(node.Type))); kind != ScoreKindNone {
+	if kind := SignalScoreKind(strings.ToLower(strings.TrimSpace(node.Type)), calibrated...); kind != ScoreKindNone {
 		kinds[kind] = struct{}{}
 	}
 }

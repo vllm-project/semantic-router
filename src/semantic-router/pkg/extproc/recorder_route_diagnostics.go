@@ -195,14 +195,15 @@ func replayDecisionRanking(trace *decision.RankingTrace) *routerreplay.DecisionR
 		return nil
 	}
 	return &routerreplay.DecisionRanking{
-		Strategy:   trace.Strategy,
-		Tiered:     trace.Tiered,
-		Tier:       trace.Tier,
-		Comparable: trace.Comparable,
-		Fallback:   trace.Fallback,
-		ScoreKind:  trace.ScoreKind,
-		DecidedBy:  trace.DecidedBy,
-		Winner:     trace.Winner,
-		Candidates: trace.Candidates,
+		Strategy:      trace.Strategy,
+		Tiered:        trace.Tiered,
+		Tier:          trace.Tier,
+		Comparable:    trace.Comparable,
+		Fallback:      trace.Fallback,
+		ScoreKind:     trace.ScoreKind,
+		ScoreArtifact: trace.ScoreArtifact,
+		DecidedBy:     trace.DecidedBy,
+		Winner:        trace.Winner,
+		Candidates:    trace.Candidates,
 	}
 }

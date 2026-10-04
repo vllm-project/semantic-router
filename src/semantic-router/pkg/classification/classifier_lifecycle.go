@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -303,11 +304,36 @@ func (c *Classifier) ownsDefaultAPIConsumer() bool {
 
 func (c *Classifier) initializeConfiguredCategoryRuntime() error {
 	if c.IsCategoryEnabled() {
-		return c.initializeCategoryClassifier()
+		if err := c.initializeCategoryClassifier(); err != nil {
+			return err
+		}
+		return c.loadDomainCalibration()
+	}
+	if c.Config.CategoryModel.Calibration != nil {
+		return fmt.Errorf("classifier.domain.calibration requires the local category classifier")
 	}
 	if c.IsMCPCategoryEnabled() {
 		return c.initializeMCPCategoryClassifier()
 	}
+	return nil
+}
+
+// loadDomainCalibration binds the declared calibration to the category model
+// and label order this classifier actually loaded.
+func (c *Classifier) loadDomainCalibration() error {
+	ref := c.Config.CategoryModel.Calibration
+	if ref == nil {
+		return nil
+	}
+	labels := make([]string, c.CategoryMapping.GetCategoryCount())
+	for i := range labels {
+		labels[i], _ = c.CategoryMapping.GetCategoryFromIndex(i)
+	}
+	calibration, err := decision.LoadScoreCalibration(*ref, config.SignalTypeDomain, c.Config.CategoryModel.ModelID, labels)
+	if err != nil {
+		return fmt.Errorf("classifier.domain.calibration: %w", err)
+	}
+	c.domainCalibration = calibration
 	return nil
 }
 
