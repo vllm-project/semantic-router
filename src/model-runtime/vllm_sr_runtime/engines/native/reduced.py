@@ -59,12 +59,21 @@ COPIES: dict[str, Callable[[nn.Linear], nn.Module]] = {
 }
 
 
-def unavailable(kind: str, device: torch.device) -> str | None:
-    """Why ``kind`` cannot run on ``device``; None when it can."""
+def unavailable(
+    kind: str, device: torch.device, native_bf16: bool = True
+) -> str | None:
+    """Why ``kind`` cannot run on ``device``; None when it can.
+
+    ``native_bf16`` is ``DeviceInfo.bf16``: a CPU BF16 copy needs it.
+    """
     if kind not in COPIES:
         return f"unknown reduced copy {kind!r} (one of {', '.join(COPIES)})"
     if kind in ("int8", "float32-packed") and device.type != "cpu":
         return f"{kind} copies run on CPUs"
+    if kind == "bfloat16" and device.type == "cpu" and not native_bf16:
+        return (
+            "this CPU computes BF16 without native instructions (AVX-512 BF16 or AMX)"
+        )
     if kind == "float32-packed" and not onednn.available():
         return "oneDNN's packed linear needs an x86 CPU and a PyTorch build with oneDNN"
     if kind == "int8" and "fbgemm" not in torch.backends.quantized.supported_engines:

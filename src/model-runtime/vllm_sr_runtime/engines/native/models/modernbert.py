@@ -335,10 +335,6 @@ class Layout:
     restore: torch.Tensor | None = None
     sizes: tuple[int, ...] = ()
 
-    @property
-    def width(self) -> int:
-        return max(group.width for group in self.groups)
-
     def split(self, tokens: torch.Tensor) -> list[tuple[Group, torch.Tensor]]:
         """Each group with its slice of the layers' token-major values."""
         if len(self.groups) == 1:
@@ -434,7 +430,8 @@ def packed_layout(
     long row does not widen every short one: attention costs rows x width^2.
     A single row without padding keeps the identity layout, which is the
     padded path. Rows of at least ``band_from`` tokens (``BAND_FROM`` for the
-    device type) run local layers in query blocks.
+    device type) run local layers in query blocks. ``uniform`` grids hold rows
+    of one length only, so every row attends exactly as it would alone.
     """
     if band_from is None:
         band_from = BAND_FROM.get(torch.device(device).type, BAND_FROM["cuda"])

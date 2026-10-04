@@ -1,7 +1,7 @@
 """Latency and throughput of the vela2 family against the Vela 2.0 packages' own engine.
 
     python3 tools/vela2_bench.py --package DIR --device cpu|rocm:0 --output OUT.json
-        [--sides runtime,runtime-shared,runtime-batching,reference,reference-onnx]
+        [--sides runtime,runtime-shared,runtime-batching,max_speed:KIND,reference,reference-onnx]
         [--tokens 32,128,512,2048] [--requests 40] [--warmup 5] [--concurrency 1,8]
         [--prompts PROMPTS.jsonl]
 
@@ -19,6 +19,8 @@ Sides:
 - ``runtime``: the family on the exact profile through the runtime's scheduler;
 - ``runtime-shared``: the shared-context profile (4B / 9B: packed trees, one parts pass);
 - ``runtime-batching``: cross-request batching (2 ms window);
+- ``max_speed:KIND``: the max_speed profile on a model that loaded the KIND reduced copy
+  (``float32-packed``, ``bfloat16``, ``int8``; consented for the run);
 - ``reference``: ``vela2_inference.py`` (torch), one request at a time as its server does;
 - ``reference-onnx``: its ONNX backend (0.3B on CPU).
 """
@@ -50,6 +52,7 @@ from vela2_parity import (  # noqa: E402
 from vllm_sr_runtime.plugins.base import SurfacePlan  # noqa: E402
 from vllm_sr_runtime.profiles.batching import BatchingProfile  # noqa: E402
 from vllm_sr_runtime.profiles.exact import ExactProfile  # noqa: E402
+from vllm_sr_runtime.profiles.max_speed import MaxSpeedProfile  # noqa: E402
 from vllm_sr_runtime.profiles.shared_context import SharedContextProfile  # noqa: E402
 from vllm_sr_runtime.scheduler.scheduler import Scheduler, SchedulerLimits  # noqa: E402
 
@@ -199,6 +202,7 @@ def runtime_side(model: Any, profile: str, execute: Any) -> tuple[Any, Any]:
         "exact": ExactProfile(),
         "shared_context": SharedContextProfile(),
         "batching": BatchingProfile(),
+        "max_speed": MaxSpeedProfile(),
     }
     for value in profiles.values():
         value.available(model)
@@ -240,7 +244,15 @@ def main() -> int:
     runs: list[dict[str, Any]] = []
     callers: dict[str, Any] = {}
     for side in sides:
-        if side.startswith("runtime"):
+        if side.startswith("max_speed:"):
+            kind = side.split(":", maxsplit=1)[1]
+            copy = execute(
+                lambda kind=kind: load_runtime(
+                    args.package, args.device, args.engine, kind
+                )
+            )
+            callers[side], _ = runtime_side(copy, "max_speed", execute)
+        elif side.startswith("runtime"):
             profile = {"runtime": "exact", "runtime-shared": "shared_context"}.get(
                 side, "batching"
             )
