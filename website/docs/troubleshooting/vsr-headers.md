@@ -126,6 +126,7 @@ Matched signal headers contain comma-separated rule names. They require
 | `x-vsr-matched-conversation` | `conversation` |
 | `x-vsr-matched-event` | `event` |
 | `x-vsr-matched-input-modality` | `input_modality` |
+| `x-vsr-matched-decision-model` | `decision` (noul and score rule names; `rule:choice` for choices) |
 
 ## Projection headers
 
