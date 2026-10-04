@@ -1,7 +1,5 @@
 """Check the out-of-tree plugin against an installed vLLM interface."""
 
-# ruff: noqa: PLC0415 - vLLM is optional in the training contract environment.
-
 from __future__ import annotations
 
 import importlib.util
