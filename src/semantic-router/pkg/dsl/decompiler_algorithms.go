@@ -38,6 +38,30 @@ var algorithmFieldExporters = map[string]algorithmFieldExporter{
 	"prompt": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		promptAlgorithmToFields(algo.Prompt, fields)
 	},
+	"decision": func(algo *config.AlgorithmConfig, fields map[string]Value) {
+		decisionModelAlgorithmToFields(algo.Decision, fields)
+	},
+}
+
+func decisionModelAlgorithmToFields(
+	decision *config.DecisionSelectionConfig,
+	fields map[string]Value,
+) {
+	if decision == nil {
+		return
+	}
+	decisionFields := map[string]Value{}
+	setStringValue(decisionFields, "deployment", decision.Deployment)
+	setStringValue(decisionFields, "instructions", decision.Instructions)
+	setIntValue(decisionFields, "timeout_ms", decision.TimeoutMs)
+	if len(decision.Candidates) > 0 {
+		candidates := map[string]Value{}
+		for name, description := range decision.Candidates {
+			candidates[name] = StringValue{V: description}
+		}
+		decisionFields["candidates"] = ObjectValue{Fields: candidates}
+	}
+	fields["decision"] = ObjectValue{Fields: decisionFields}
 }
 
 func promptAlgorithmToFields(

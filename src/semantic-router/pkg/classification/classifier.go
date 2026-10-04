@@ -8,6 +8,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
 // PreloadKnowledgeBases materializes every KB referenced by this classifier.
@@ -83,6 +84,8 @@ type Classifier struct {
 	contextClassifier *ContextClassifier
 
 	admissionRegistry *admission.Registry
+	// decisionDecider answers decision signals; nil uses the process-wide model runtime manager.
+	decisionDecider modelservice.Decider
 	// tokenCalibrator learns provider-specific prompt token ratios for context routing.
 	tokenCalibrator *CalibratedTokenCounter
 
