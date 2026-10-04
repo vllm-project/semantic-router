@@ -26,7 +26,9 @@ holds on all four scored panels, on CPU on subsets of them. That is design
   returns every legend description as a string (the object's canonical JSON).
   The reference's legend is compared in the contract's form.
 - **Raw results:** `decision1-parity.json`, one entry per model, device,
-  profile and commit, with every panel's counts.
+  profile and commit, with every panel's counts. From `c22bb15cd` an entry
+  also carries what the engine ran: graph statistics per layer stack and the
+  reduced copy.
 
 ## Exact profile, ROCm, four scored panels
 
@@ -69,6 +71,11 @@ The first requests of each panel; public231 in full.
 | Lux-9B | 531 (100 / 100 / 231 / 100) | identical | identical |
 
 `51b6bd721` has the same `decision1` runtime code as `d5b985e43`.
+
+**At `89c4388aa`** (per-stack graphs and copies, and the scheduler that answers
+each job when its own batches ran), a spot check on ROCm and CPU: Kai and Eos
+on public231 and the first typed-final requests (400; Eos on CPU 200), every
+answer byte-identical.
 
 ## What exactness takes
 
@@ -119,18 +126,35 @@ section).
 These profiles are opt-in. They change the shapes, so they are compared within
 a tolerance rather than bit for bit.
 
-- **`batching`, encoders, ROCm, four panels, `d5b985e43`:** each type's stack
-  runs over its own rows, packed without padding (`run_approximate`).
+- **`batching`, encoders, ROCm, four panels:** each type's stack runs over
+  its own rows, packed without padding (`run_approximate`). From `c22bb15cd`
+  every stack also replays its own bucket graphs; before, only the Noul stack
+  did.
+
+  | Model | Commit | Identical requests | Decision changes | Max \|Δp\| |
+  | --- | --- | --- | --- | --- |
+  | Kai-0.6B | `d5b985e43` | 10,253 / 10,653 | 0 | 9.6e-6 |
+  |  | `c22bb15cd` | 6,002 / 10,653 | 0 | 1.4e-5 |
+  | Lex-0.6B | `d5b985e43` | 10,253 / 10,653 | 0 | 5.7e-6 |
+  |  | `c22bb15cd` | 6,007 / 10,653 | 0 | 2.6e-5 |
+  | Route-0.6B | `d5b985e43` | 10,253 / 10,653 | 0 | 8.2e-5 |
+  |  | `c22bb15cd` | 6,002 / 10,653 | 0 | 3.6e-5 |
+
+  At `d5b985e43` every single-question request stayed byte-identical: one
+  packed row computes exactly like one padded row, and the 400 requests that
+  differed were typed-final's two-question requests. A bucket graph pads its
+  rows and masks the padding, which moves the last bits of single-question
+  Choice and Score requests too; no decision changes.
+- **`max_speed`, encoders, CPU, `c22bb15cd`:** `batching` on the
+  `float32-packed` copy of all three stacks (1.32 GB of pre-packed linears),
+  on the CPU subsets above, against the bundled runtime.
 
   | Model | Identical requests | Decision changes | Max \|Δp\| |
   | --- | --- | --- | --- |
-  | Kai-0.6B | 10,253 / 10,653 | 0 | 9.6e-6 |
-  | Lex-0.6B | 10,253 / 10,653 | 0 | 5.7e-6 |
-  | Route-0.6B | 10,253 / 10,653 | 0 | 8.2e-5 |
+  | Kai-0.6B | 70 / 1,431 | 0 | 1.1e-5 |
+  | Lex-0.6B | 56 / 1,431 | 0 | 4.5e-6 |
+  | Route-0.6B | 61 / 1,431 | 0 | 3.5e-5 |
 
-  Every single-question request stays byte-identical: one packed row computes
-  exactly like one padded row. The 400 requests that differ are exactly
-  typed-final's two-question requests.
 - **`shared_context`, decoders, ROCm, `d5b985e43`:** the public many-question
   request (`tools/many_questions.py`) at 64 and 128 questions, 5 requests each
   (960 questions). The bundled runtime has no shared mode, so it answers every
