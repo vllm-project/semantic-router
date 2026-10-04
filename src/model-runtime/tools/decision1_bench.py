@@ -188,12 +188,8 @@ class Native:
         return len(bodies) / (time.perf_counter() - started)
 
     def receipt(self) -> dict[str, Any]:
-        engine = self.served.model.engine_model
-        out = {"fast_path": getattr(engine, "fast", None)}
-        graphs = getattr(engine, "graphs", None)
-        if graphs is not None:
-            out["graphs"] = graphs.receipt()
-        return out
+        """What ran: kernels, fast-path pieces, graphs per layer stack and reduced copies."""
+        return {"engine": self.served.model.engine_model.receipt()}
 
     def close(self) -> None:
         self.loop.close()
