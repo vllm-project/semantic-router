@@ -950,7 +950,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 | E2E profiles | `vela-halu`, `vela-shield`, `vela-omni`, `multimodal-routing`, `local-classifier-backend`, `ml-model-selection`, `hallucination`, and every profile that loads default models through the router image | Run against the runtime; new runtime profiles (section 15) |
 | Harness | `tools/agent/domains.yaml` domains `native-bindings`, `openvino`, `riscv-runtime`, `onnx-*`, `ck-flash-attn-rewriter`, `published-model-tests`, native verifications | Removed; `model-runtime` domain covers the families, engines and parity tools |
 | Docs | runtime, installation, AMD, OpenVINO and Vela pages describing candle, ORT and OpenVINO | Task-oriented runtime docs and a migration guide |
-| RISC-V | candle on riscv64 under QEMU | The pure-Go router builds for riscv64; models attach to a runtime on another host |
+| RISC-V | candle on riscv64 under QEMU, a riscv64 router build and its CI lane | **Removed** (maintainer decision): no riscv64 build, lane, image or build tags |
 
 ### 16.6 Retirements
 
@@ -962,6 +962,8 @@ files carry `!windows && cgo` build tags only because of these imports.
   buckets, the CK flash-attention operator and its rewriter): the runtime's
   ROCm path is native PyTorch; ONNX Runtime remains as a portable engine.
 - **Unwired legacy models** (candle Qwen3 multi-LoRA, Qwen3Guard, DeBERTa).
+- **RISC-V** (maintainer decision): the riscv64 router build, its QEMU lane,
+  build tags and fallbacks that existed only for riscv64.
 
 ## 17. Parity and evidence
 
