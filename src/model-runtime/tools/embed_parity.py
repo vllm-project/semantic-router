@@ -497,7 +497,7 @@ class EncoderParity:
                 rows = [item.ids for item in plan.items]
                 hidden, _ = self.hidden(rows, exit[0], True)
                 with torch.inference_mode():
-                    logits = scorers[exit](hidden[:, 0, : exit[1]].float()).reshape(-1)
+                    logits = scorers[exit](hidden[:, 0, : exit[1]].float())[:, 0]
                 run["reference"] += logits.tolist()
                 reference_order = sorted(
                     range(len(documents)), key=lambda i: (-float(logits[i]), i)

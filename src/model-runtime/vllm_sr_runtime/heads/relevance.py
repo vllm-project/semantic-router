@@ -149,7 +149,12 @@ class RelevanceLayout:
     def scorers(
         self, exits: Sequence[tuple[int, int]]
     ) -> dict[tuple[int, int], nn.Module]:
-        """The FP32 scorer MLP of every exit in ``exits``."""
+        """The FP32 scorer MLP of every exit in ``exits``; the logit is output column 0.
+
+        The last layer carries a second, zero output: oneDNN computes a
+        one-output linear differently at different batch sizes, two outputs
+        the same in any batch.
+        """
         from safetensors.torch import load_file
 
         tensors = load_file(str(self.weights))
@@ -157,12 +162,13 @@ class RelevanceLayout:
         for layer, dim in exits:
             prefix = f"{layer}.{dim}"
             scorer = nn.Sequential(
-                nn.Linear(dim, dim // 2), nn.GELU(), nn.Linear(dim // 2, 1)
+                nn.Linear(dim, dim // 2), nn.GELU(), nn.Linear(dim // 2, 2)
             )
             scorer[0].weight.data = tensors[f"{prefix}.0.weight"]
             scorer[0].bias.data = tensors[f"{prefix}.0.bias"]
-            scorer[2].weight.data = tensors[f"{prefix}.3.weight"]
-            scorer[2].bias.data = tensors[f"{prefix}.3.bias"]
+            weight, bias = tensors[f"{prefix}.3.weight"], tensors[f"{prefix}.3.bias"]
+            scorer[2].weight.data = torch.cat([weight, torch.zeros_like(weight)])
+            scorer[2].bias.data = torch.cat([bias, torch.zeros_like(bias)])
             out[(layer, dim)] = scorer.float().eval()
         return out
 
@@ -184,7 +190,7 @@ class RelevanceHead(Head):
         else:
             assert self.scorer is not None
             cls = rows.first(sequences, self.layer)[:, : self.exit[1]].float()
-            logits = self.scorer(cls).reshape(-1)
+            logits = self.scorer(cls)[:, 0]
         return [float(value) for value in logits.float().cpu()]
 
     def to(self, device: torch.device) -> RelevanceHead:
