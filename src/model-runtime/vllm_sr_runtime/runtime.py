@@ -251,7 +251,10 @@ class ServedModel:
         )
         profiles = self._profiles()
         default = profiles[config.profile]
-        engine_options = default.engine_options(EngineOptions(threads=process.threads))
+        cpu_models = sum(served.device == "cpu" for served in process.served_models())
+        engine_options = default.engine_options(
+            EngineOptions(threads=process.threads, exclusive_cpu=cpu_models <= 1)
+        )
         self.health.set("loading", f"loading weights on {placement.device.label}")
 
         def execute(work: Any) -> Any:
