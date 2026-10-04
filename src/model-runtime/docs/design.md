@@ -617,7 +617,7 @@ time a job was queued plus its tokens at the measured cost per token (a running
 average of recent forwards). Short work goes first, and a long job still runs
 once the work queued before its expected finish is done, so nothing starves.
 Between two forwards the worker takes the jobs that arrived meanwhile (jobs of
-coalescing profiles wait for the next batching window), so a short request
+coalescing profiles once they have waited one batching window), so a short request
 waits for the forward in flight, not for the remaining windows of a long one;
 each job is answered as soon as its own batches have run. The order of
 forwards never changes a batch's contents, so answers are unchanged. Deadlines

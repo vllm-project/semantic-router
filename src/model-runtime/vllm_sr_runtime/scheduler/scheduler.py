@@ -10,8 +10,8 @@ Planned batches run in order of their jobs' expected finish: the time a job
 was queued plus its tokens at the measured cost per token. Short work goes
 first, yet a long job still runs once the work queued before its expected
 finish is done, so nothing starves. Between two forwards the worker takes the
-jobs that arrived meanwhile (those of profiles that coalesce wait for the
-next batching window), so a short request waits for the forward in flight,
+jobs that arrived meanwhile (those of profiles that coalesce once they have
+waited one batching window), so a short request waits for the forward in flight,
 not for the rest of a long request. The order of forwards never changes what
 a batch contains, so answers are unchanged.
 """
@@ -187,28 +187,32 @@ class Scheduler:
 
         With ``wait`` (nothing planned) block until work arrives and, when a
         queued job's profile coalesces, hold the batching window, then take
-        everything. Without it take only the jobs of profiles that don't
-        coalesce, at once.
+        everything. Without it take at once the jobs of profiles that don't
+        coalesce and the coalescing jobs that have already waited a window.
         """
+        window = self.limits.batch_window_ms / 1000.0
         with self._lock:
             if wait:
                 while not self._queue and not self._stopped:
                     self._lock.wait()
             if self._stopped:
                 return None
-            coalescing = [
-                p for p in self._queue if self.profiles[p.job.profile].coalesces
-            ]
             if not wait:
-                if len(coalescing) == len(self._queue):
-                    return []
-                taken = [
-                    p for p in self._queue if not self.profiles[p.job.profile].coalesces
-                ]
-                self._queue = deque(coalescing)
-                self._queued_tokens = sum(p.tokens for p in coalescing)
+                now = time.monotonic()
+                taken: list[_Pending] = []
+                kept: deque[_Pending] = deque()
+                for pending in self._queue:
+                    ripe = now - pending.job.enqueued >= window
+                    if ripe or not self.profiles[pending.job.profile].coalesces:
+                        taken.append(pending)
+                    else:
+                        kept.append(pending)
+                self._queue = kept
+                self._queued_tokens = sum(pending.tokens for pending in kept)
                 return taken
-            window = self.limits.batch_window_ms / 1000.0
+            coalescing = any(
+                self.profiles[pending.job.profile].coalesces for pending in self._queue
+            )
             if window > 0 and coalescing:
                 deadline = time.monotonic() + window
                 while (
