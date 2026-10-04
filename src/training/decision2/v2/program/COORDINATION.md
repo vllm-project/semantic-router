@@ -205,6 +205,60 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 13:05 — **Coordinator: REPLACEMENT AGENTS STARTED (the old ones cannot be resumed across sessions),
+  plus three new tracks.** Every replacement continues from its predecessor's worktree, branch, notes and records,
+  and signs notes with the same workstream ID.
+
+  | Workstream | Old agent | Replacement |
+  | --- | --- | --- |
+  | lead | 23203ab9 | 96ccb788 |
+  | `decision1` | 6a8380f8 | eb7ca653 |
+  | `vela1` | f6488e31 | d3e74ccf |
+  | `embed` | fd9f7608 | ceee0cdf |
+  | `vela2` | cedf4b1a | ee4ab71f |
+  | `router` | bb9d5719 | 19becd41 |
+  | `stores` | 60afd248 | f772afde |
+  | `removal` | 00053ab2 | 5497de44 |
+  | `e2e-docs` | 3b457b58 | b16b8706 |
+
+  - **New tracks (user, 12:43):**
+    - **`reasoning` (40595ea4):** reasoning distillation into Decision 2.0 at 0.6B–9B, released as
+      `vllm-sr/Decision-2.0-<Codename>-<Size>-Reasoning` (private first). GPUs: node D GPU0–7, node F GPU2–7 and node C
+      GPU5–7, as in the 12:50 note.
+    - **`studio-serving` (76ca48d2):** all six Decision 2.0 models behind the Space `vllm-sr/decision-studio`, on two
+      new single-MI300X hosts, `studio-a` and `studio-b`. Their addresses are in `~/.config/decision2/studio-nodes.env`,
+      never in notes. `studio-b` serves Vega-27B alone.
+    - **`studio-ui` (2c575d44):** the Studio's white, premium redesign.
+  - Reasoning releases are posted as `REASONING RELEASE <repo> <revision> <manifest_sha256>`, for `studio-serving` to
+    pick up.
+
+- 2026-10-04 12:58 — **Model-runtime P2–4 `router` (replacement agent for bb9d5719): RESUMED.**
+  - Worktree intact at `bf630c5eb` (pushed, clean; the PR head `3ca402416` is merged in it).
+    `INTEGRATION READY router bf630c5eb` (05:20) stands for the IP2 merge; the IP2 items below come as a newer sha.
+  - **Node blocks:** node D **64–95** (untimed builds / tests, pinned, `GOMAXPROCS=32`) and node B **32–63** (timed gate
+    only, per the 04:22 table). The gate harness moves from node A to node B: the same legacy `61aa7eb2d` candle build,
+    models, corpus and method as `router-latency-cpu.md`.
+  - **IP2 (by 15:30):** `GET /api/v1/inventory/model-runtime` (the lead's 01:45 shape); looper `panel` grounding on the
+    Halu grounded head with `contradiction_penalty` (the parser takes only the new name); the response-stage bundle;
+    `tools/model-test-assets` deleted with its `models.mk` target; `pkg/extproc/extproc_test_support_test.go` off
+    `candle-binding` **now**, so at IP2 no router-module file outside `pkg/modelruntime/native` imports a binding
+    (`stores` deletes `native`, `removal` the binding dirs, both right after IP2, no ordering with me); the gate rerun.
+  - **→ `removal`:** I retire the operator CRD fields `variant`, `use_modernbert` and `use_mmbert_32k` with their CEL
+    and webhook rules in separate `[Chore] operator:` commits unless you object here by 14:00. The inventory endpoint
+    is for your dashboard / operator consumers; I post its sha here.
+  - **→ `e2e-docs`:** the `contradiction_penalty` key also changes in `dashboard/frontend/src/lib/dslAlgorithmSchemas.ts`,
+    `src/vllm-sr/cli/algorithms.py` and the `bench/router_flow` configs (separate small commits of mine).
+
+- 2026-10-04 12:55 — **Model-runtime P2–4 `embed` (replacement agent 67b9eb80 for fd9f7608): RESUMED.**
+  - Worktree intact at `9c3427bc5` (pushed); the two uncommitted files are the draft `embed-parity.md` /
+    `embed-performance.md`, kept and finished for IP2. The PR head `3ca402416` is already merged in my branch.
+  - **The 05:35 run at `5a73fc17e` finished on node B at 06:14** (CPU: native / ORT engine / legacy ORT interleaved,
+    candle and Omni A/Bs; ROCm side by side; ROCm parity 6 / 6, 20 / 20, 1 / 1). `5a73fc17e..9c3427bc5` only deletes an
+    unused constant and helper. Every row beats legacy on p50 / p95 / throughput **except Omni Nano image p95**
+    (233.7 vs 167.6 ms, 12 pairs): investigating before I write the records.
+  - Node B GPU2–3 leases re-taken (agent 67b9eb80); CPU only on my 04:22 ranges (80–95 host threads, 112–127 timed).
+  - Target: `INTEGRATION READY embed` by 15:30.
+
 - 2026-10-04 12:50 — **Coordinator (new session 38b1ae72, taking over from cba71646): RESTART AFTER A HOST OUTAGE.
   Every agent stopped at about 05:40, and the local machine rebooted at 11:27, which wiped `/tmp`. I am resuming
   every P2–4 agent now.**
