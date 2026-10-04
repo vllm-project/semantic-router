@@ -562,7 +562,7 @@ fn test_mmbert_32k_token_classifier_error_handling() {
 #[rstest]
 fn test_mmbert_32k_expected_config_values() {
     // Document expected mmBERT-32K (YaRN) configuration values based on
-    // https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+    // https://huggingface.co/vllm-sr/mmbert-32k-yarn
 
     let expected_config = vec![
         ("vocab_size", "256000"),

@@ -20,6 +20,7 @@ const (
 	DecisionAlgorithmSVM          = "svm"
 	DecisionAlgorithmWorkflows    = "workflows"
 	DecisionAlgorithmPrompt       = "prompt"
+	DecisionAlgorithmDecision     = "decision"
 
 	DecisionPluginResponseCache = "response_cache"
 	// DecisionPluginSemanticCache is the deprecated public spelling retained
@@ -88,6 +89,7 @@ var signalCatalog = []SignalCatalogEntry{
 	{Type: SignalTypeMetadata, DisplayName: "Metadata", Collection: "metadata", ObservationKey: "metadata", DecisionReferenceable: true},
 	{Type: SignalTypeClassifier, DisplayName: "Classifier", Collection: "classifiers", ObservationKey: "classifier", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 	{Type: SignalTypeInputModality, DisplayName: "Input Modality", Collection: "input_modality", ObservationKey: "input_modality", DecisionReferenceable: true},
+	{Type: SignalTypeDecision, DisplayName: "Decision Model", Collection: "decision", ObservationKey: "decision", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 }
 
 // DecisionPluginCatalogEntry describes one route-local plugin family. Its
@@ -170,6 +172,7 @@ var decisionAlgorithmRegistry = []decisionAlgorithmRegistryEntry{
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmSVM, DisplayName: "SVM", Description: "Select a model with the shared support-vector classifier.", Tier: "experimental", Execution: AlgorithmExecutionSelector}},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmWorkflows, DisplayName: "Workflows", Description: "Execute a static or dynamically planned Router Flow.", Tier: "experimental", Execution: AlgorithmExecutionLooper, ConfigField: "workflows"}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Workflows != nil }},
 	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmPrompt, DisplayName: "Prompt", Description: "Use a helper model to select one declared candidate.", Tier: "experimental", Execution: AlgorithmExecutionSelector, ConfigField: "prompt", PayloadShape: AlgorithmPayloadNested}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Prompt != nil }},
+	{Catalog: AlgorithmCatalogEntry{Type: DecisionAlgorithmDecision, DisplayName: "Decision Model", Description: "Ask a decision model which declared candidate should answer.", Tier: "supported", Execution: AlgorithmExecutionSelector, ConfigField: "decision", PayloadShape: AlgorithmPayloadNested}, IsConfigured: func(config *AlgorithmConfig) bool { return config.Decision != nil }},
 }
 
 var pluginTypeAliases = map[string]string{
