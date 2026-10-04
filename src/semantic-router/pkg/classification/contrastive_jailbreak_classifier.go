@@ -70,13 +70,9 @@ type contrastiveJailbreakMessageResult struct {
 
 const maxContrastiveJailbreakWorkers = 8
 
-// NewContrastiveJailbreakClassifier creates and initialises a classifier for a
-// single contrastive JailbreakRule. KB embeddings are computed eagerly using a
-// worker pool (same approach as ComplexityClassifier).
-func NewContrastiveJailbreakClassifier(rule config.JailbreakRule, defaultModelType string) (*ContrastiveJailbreakClassifier, error) {
-	return NewContrastiveJailbreakClassifierWithProvider(rule, defaultModelType, nil)
-}
-
+// NewContrastiveJailbreakClassifierWithProvider creates and initialises a
+// classifier for a single contrastive JailbreakRule. KB embeddings are computed
+// eagerly using a worker pool (same approach as ComplexityClassifier).
 func NewContrastiveJailbreakClassifierWithProvider(rule config.JailbreakRule, defaultModelType string, provider embedding.Provider) (*ContrastiveJailbreakClassifier, error) {
 	modelType := defaultModelType
 	if modelType == "" {
