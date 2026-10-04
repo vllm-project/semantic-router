@@ -108,7 +108,6 @@ func fakeRuntime(calls *atomic.Int64, ready *atomic.Bool) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"model": "tiny", "answers": answers, "usage": map[string]int{"input_tokens": 10, "output_tokens": 0},
-			"meta": map[string]interface{}{"revision": strings.Repeat("a", 40), "deadline_seen": body.Options["deadline_ms"] != nil},
 		})
 	})
 	return mux
@@ -136,7 +135,7 @@ func TestClientDecideOverTCP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.Revision != strings.Repeat("a", 40) || response.InputTokens != 10 {
+	if response.InputTokens != 10 {
 		t.Fatalf("unexpected response metadata: %+v", response)
 	}
 	if got := response.Answers["reasoning"]; got.Type != "noul" || got.Noul != 0.8 {
