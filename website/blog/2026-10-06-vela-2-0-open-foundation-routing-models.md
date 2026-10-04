@@ -38,7 +38,7 @@ Every member takes the same request: a state (plain text, or `request`, `context
 
 The 0.3B encoder reads one token sequence: a schema block of typed questions behind marker tokens, then the typed parts. The decoders start from Decision 2.0. A Decision 2.0 model uses a Qwen3.5 text backbone as an encoder and never generates text; it asks one question per sequence, so every question re-reads the context. In Vela 2.0 the state is encoded once, and every question is attached as its own block with an attention mask that lets the block see the state and itself, and nothing else.
 
-![The state is read once; each question block sees only the state and itself](/img/blog/vela2-one-read.png)
+[![The state is read once; each question block sees only the state and itself](/img/blog/vela2-one-read.png)](/img/blog/vela2-one-read.png)
 
 Adding a question therefore does not change the other answers; in FP32 the isolation is exact. The encoder, where all questions share one sequence, lacks this property: in one check a single answer moved from 0.771 asked alone to 0.461 bundled.
 
@@ -48,7 +48,7 @@ Spans were the hard part in a decoder. Under a causal mask a word's state sees o
 
 The label side needed a fix too. Our first decoder span head read each label at a single marker token, and the label vectors came out almost identical (pairwise cosine 0.997), so it learned whether a word is an entity but not which one. The released span head reads each label as the mean hidden state of its whole label block, name and description, plus a learned slot embedding, and scores every word × label pair with a bilinear + MLP scorer in FP32. On dev, the repeated target and the new span head together raise short PII F1 from 0.828 to 0.959, and long-document PII F1 from about 0.06 to 0.94.
 
-![Span head v2 and the two-head dispatch](/img/blog/vela2-span-heads.png)
+[![Span head v2 and the two-head dispatch](/img/blog/vela2-span-heads.png)](/img/blog/vela2-span-heads.png)
 
 ### Two span heads
 
@@ -58,7 +58,7 @@ Because the router path is untouched, every router output is bitwise identical w
 
 ## Training
 
-![Three training stages for the decoders](/img/blog/vela2-training.png)
+[![Three training stages for the decoders](/img/blog/vela2-training.png)](/img/blog/vela2-training.png)
 
 All four members share one data recipe. Every source is written as parts, typed questions and answers, and labels are resampled at every draw following GLiNER2's recipe: options are anonymised, dropped and paraphrased, so the model cannot memorise a label set.
 
