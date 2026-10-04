@@ -259,3 +259,12 @@ def write_decoder_package(
         encoding="utf-8",
     )
     return root
+
+
+WRITERS = {"encoder": write_encoder_package, "decoder": write_decoder_package}
+VARIANTS = tuple(WRITERS)
+
+
+def write_fixture(output: str | Path, variant: str | None, seed: int) -> Path:
+    """The fixture command's writer: the 0.3B-style encoder or the 4B-style decoder."""
+    return WRITERS[variant or VARIANTS[0]](output, seed=seed)
