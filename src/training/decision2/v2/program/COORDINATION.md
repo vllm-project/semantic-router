@@ -205,6 +205,75 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 15:01 — **Coordinator → lead (96ccb788): `embed` (ceee0cdf) HANDOFF at 14:59, resumed at once for IP3.**
+  `INTEGRATION READY embed 407687e1c` (IP2) stands. Its encoders pass the gate; Omni on CPU is still behind legacy on
+  a few rows (Nano text p50 5.82 vs 5.11 ms; Nano image p95 +3.4%; Mini audio p50 +2.5% / p95 +8%).
+  - **Decision needed from you:** for short text, the gap is the event-loop → worker hand-off (about 0.5 ms per
+    wake-up). `embed` proposes that **an idle model's batch runs on the submitting thread**. This is a core-scheduler
+    change, so please accept or decline it here. `embed` keeps it as a separate commit until you decide. Please
+    review its `[Harness]` `LoadedModel.device_thread` at the merge as well.
+  - **Also for everyone timing ORT:** `taskset` does not confine ONNX Runtime threads. Use a cgroup cpuset (see
+    `embed`'s note).
+
+- 2026-10-04 15:02 — **Model-runtime P2–4 `vela1` (d3e74ccf) → `embed` (67b9eb80), lead (96ccb788): in a process that serves
+  an `onnxruntime`-engine model and native models, ORT's spinning pool makes the next native forward 2.4–3× slower;
+  `single_threaded()` stays.**
+  - **Setup:** node B 96–111, 16 threads, one process at `5a598dded` serving Vela Embedding on `onnxruntime` and Vela
+    Domain on native. 40 calls per cell, p50 in ms, 2 rounds each. The first number is with ORT's shared pool as
+    shipped; the second is with per-session pools and `session.intra_op.allow_spinning=0` (an experimental patch,
+    not committed).
+
+    | Tokens | Domain alone | Domain right after an embedding call | Embedding alone |
+    | --- | --- | --- | --- |
+    | 16 | 8.2–10.3 | **19.2–43.5** → 8.6–9.0 | 11.7–13.5 → 15.0–16.1 |
+    | 64 | 15.1–18.0 | **44.4–50.9** → 15.5–16.4 | 21.1–26.6 → 26.7–28.1 |
+    | 256 | 33.4–39.4 | **66.6–74.6** → 35.0–35.3 | 54.5–62.7 → 75.5–79.6 |
+
+  - **Reading:** ORT's intra-op threads keep spinning on the cores after a run, so torch's parallel regions in the
+    next native forward fight them. Without spinning the native forward is back to its own time, but ORT runs pay
+    the wake-up: 64 tokens 21 → 28 ms. For one embedding call plus one classification of 64 tokens that is still
+    65 → 44 ms.
+  - **`embed` 14:09 (`set_num_threads` clears oneDNN's cache):** measured, and not the visible cost. Without
+    `task_heads`' `single_threaded()` the embedding calls get 15–24% slower (16 tokens 13.4 → 15.6 ms, 64 tokens
+    24.6 → 30.6, 256 60 → 69), while Domain-after-embedding is as slow either way. So the toggle stays.
+  - **Suggestion, `embed`'s engine with the lead:** where one process serves `onnxruntime` CPU sessions and native
+    CPU models, sessions don't spin (per-session pools with `allow_spinning=0`, or a non-spinning shared pool if ORT
+    exposes one); ORT-only processes keep spinning. A plain default needs no new option. Separate processes on
+    shared cores (the router's default, one CPU process per model) may see the same effect at the OS level; I have
+    not measured that.
+
+- 2026-10-04 14:59 — **Model-runtime Phases 2–4 lead (96ccb788): IP2 FROZEN at `065010cb5` (staging `p24-ip2`).** Merged since my
+  last note, all clean: `decision1` `d3d1d7e68`, `vela1` `5a598dded`, `embed` `f09744b43` (`device_thread` reviewed:
+  accepted). Local: runtime suite 500 passed, `tools/ci` 446, ruff / black / `go vet` clean. **Node A `make check` +
+  `harness-check` on the exact head now; the PR push follows when both pass (≈ 15:45).** Anything posted from now on
+  goes into IP2b (18:30 / 19:00).
+  - **New on staging from me:** the runtime serves on uvloop with the httptools parser (`1dd7970d1`): on a tiny
+    fixture model, 500 sequential classify calls over keep-alive, three interleaved pairs, p50 7.6–9.5 → 5.8–6.8 ms
+    and p95 14–17 → 10.5–11.6 ms. It cuts both thread hand-offs' wake-up cost and HTTP parsing for every model.
+  - **`embed` 14:45, Omni CPU gate gap:** please re-measure Nano text, images and Mini audio at `065010cb5` (uvloop
+    and your media cost are both in). If a gap remains: **"caller runs" is accepted for IP3 as a `[Harness]` commit**
+    under these rules: only models with `device_thread = False`; only when the scheduler is idle (nothing queued or
+    planned, the worker not executing), under a lock the worker honours; never on the event-loop thread (requests
+    planned off the loop only); with a test that two callers and the worker never run one model at once.
+  - **`decision1` 14:50, the CPU coalescing cap:** keep it in the family for now (its numbers are family-specific);
+    a device-aware default for every encoder family is a later change if `vela1` / `embed` measure the same.
+
+- 2026-10-04 14:59 — **INTEGRATION READY embed `407687e1c`** (supersedes `f09744b43` from 14:45; merges `p24-ip2`
+  `7831870e6`; runtime suite 488 passed, 14 skipped; lint and pre-commit clean). → lead (96ccb788).
+  - **Added since 14:45:**
+    - `0e8c6f458`: Omni images normalize through a per-channel table (256 values per channel, built with the
+      processor's own float64 / float32 steps). Bit-identical to the old formula for every image mode (tested);
+      about 40 % less preprocessing.
+    - `c5f5adc37`: the record.
+  - **Image-only A/B at `0e8c6f458`** (16 rounds, idle node), legacy → runtime p50 / p95:
+    - Nano 114.9 / 121.6 → 115.9 / 125.7 ms.
+    - Mini 310.7 / 323.2 → 308.2 / 323.9 ms.
+    - Both ONNX Runtime versions run the vision graphs at the same speed (bare: Nano 103 ms, Mini 283 ms). What is
+      left is about one thread hand-off per request.
+  - **Omni gate gap for IP3 now:** Nano text p50 +0.7 ms; Nano image p95 +3 %, Mini image p95 +0.2 % (Mini image
+    p50 now wins); Mini audio p50 +2.5 % / p95 +8 %; text and image throughput up to 2.4 % below legacy. The rest of
+    the 14:45 note stands: caller-runs proposal for the lead, Mini audio preprocessing for me.
+
 - 2026-10-04 14:54 — **`studio-serving` (76ca48d2): Vega-27B MOVED to `studio-b` (ahead of the 15:45 ETA). Studio
   serving is in its final layout; 12 / 12 queues ready.** → coordinator, `studio-ui` (2c575d44).
 
@@ -253,27 +322,6 @@ exactly one gist file and updates it in place:
   `make recipe-conformance-live-cpu-all` (or the shards CI's plan selects) on staging `p24-ip2` (Docker with a bridge
   network: node A 32–63 is free when `e2e-docs` is not using it; post your block) and post the result. If it needs
   a fix, it goes into IP2b.
-
-- 2026-10-04 14:50 — **INTEGRATION READY decision1 `d3d1d7e68`** (IP2; supersedes `22cf93c55`; merges `p24-ip2`
-  `f81877f89`, no conflicts). → lead (96ccb788). Signed `decision1` (eb7ca653).
-  - **New since `22cf93c55`.** Each change affects only the Vela encoders' approximate profiles on CPU; exact is
-    unchanged, and so are GPUs.
-    - `7e0466cad`, `8d45cd2f2`, `eb8fe8582`: on CPUs the type heads read coalesced rows by length group, not padded
-      to the longest row. On a mixed-length css15 sample (two rounds), `max_speed` at C = 16 went 18.8 → 25.5/s
-      (Kai) and 19.2 → 28.4/s (Lex). GPUs keep one grid: there it gained nothing and cost up to 9 % at C = 4.
-    - `2774d97dc`: on CPUs, coalesced batches stay within 1,024 padded tokens (`forward_token_budget`). Typed-final
-      at C = 16: 16.9 → 24.3/s (Kai) and 16.2 → 24.4/s (Lex); C = 4 costs 1–7 %. 1,536 and 2,048 were lower or
-      erratic. Exact keeps the released physical batches, which ignore the budget.
-    - `c012e5dc7`: `decision1_bench.py --max-batch-tokens`.
-  - **Tests:**
-    - runtime suite 456 passed (`-m "not gpu"`);
-    - GPU tests 6 / 6 on MI325X at `d3d1d7e68`;
-    - exact spot check at `d3d1d7e68`: byte-identical on ROCm and CPU (Kai and Eos, public231 + typed-final);
-    - `batching` on the 4 full panels at `8d45cd2f2`: 0 decision changes.
-  - **Records:** CPU throughput at this sha (exact / `max_speed` / `batching` against the bundled runtime, on uniform
-    and mixed lengths) is running on node C 32–63. The records commit follows for IP3; no GPU leases held.
-  - **Lead:** the cap lives in the family. If you prefer one device-aware `max_batch_tokens` default for every encoder
-    family on CPU, these numbers support 1,024.
 
 - 2026-10-04 14:52 — **INTEGRATION READY vela1 `5a598dded`** (IP2; `xunzhuo/model-runtime-p24-vela1`; merges `p24-ip2`
   `da8b511f5`, no conflicts).
