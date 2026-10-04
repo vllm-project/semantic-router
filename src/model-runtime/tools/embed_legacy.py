@@ -5,7 +5,9 @@ at the legacy commit) on the CPU as the router did (candle for Vela and Qwen3;
 ONNX Runtime on the prepared bundle for Omni text, images and audio), in a Go
 test written into a copy of that commit's tree with its built bindings (the
 setup of ``tools/legacy_parity.py``). The runtime side serves the same
-packages in-process through ``Runtime.call`` with its result cache off. Both
+packages in-process through ``Runtime.call`` with its result cache off, timed
+inside an event loop that runs forever on its own thread, as the server's
+handler is. Both
 answer one request at a time (one text per embedding call, a query with its
 documents per rerank call), repeated, on the same inputs; ``--concurrency``
 adds a timed closed-loop load on both.
@@ -542,13 +544,35 @@ def wire_size(body: dict[str, Any]) -> int:
     return len(json.dumps(body, separators=(",", ":")).encode("utf-8"))
 
 
-def event_loop() -> asyncio.AbstractEventLoop:
-    """The loop the HTTP server runs on: uvloop where it is installed."""
-    try:
-        import uvloop
-    except ImportError:
-        return asyncio.new_event_loop()
-    return uvloop.new_event_loop()
+class LoopThread:
+    """An event loop running forever on its own thread, as the server's does; calls are timed inside it.
+
+    asyncio's loop: over HTTP the server answers as fast on asyncio as on
+    uvloop, but uvloop driven from another thread adds a wake-up per call
+    that the server never pays.
+    """
+
+    def __init__(self) -> None:
+        self.loop = asyncio.new_event_loop()
+        self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
+        self.thread.start()
+
+    def call(
+        self, runtime: Any, surface: str, body: dict[str, Any]
+    ) -> tuple[int, int, dict[str, Any]]:
+        """(nanoseconds inside the loop, HTTP status, body) of one ``Runtime.call``."""
+
+        async def timed() -> tuple[int, int, dict[str, Any]]:
+            start = time.perf_counter_ns()
+            status, out = await runtime.call(surface, body, wire_size(body))
+            return time.perf_counter_ns() - start, status, out
+
+        return asyncio.run_coroutine_threadsafe(timed(), self.loop).result()
+
+    def close(self) -> None:
+        self.loop.call_soon_threadsafe(self.loop.stop)
+        self.thread.join()
+        self.loop.close()
 
 
 def runtime_result(spec: dict[str, Any], out: dict[str, Any]) -> Any:
@@ -587,16 +611,14 @@ def serve_runtime(
 def run_runtime(args: argparse.Namespace) -> None:
     specs = job_specs(args)
     runtime, names = serve_runtime(args, specs)
-    loop = event_loop()
+    loop = LoopThread()
 
-    def call(spec: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
+    def call(spec: dict[str, Any], item: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         surface, body = runtime_request(spec, item, names[spec["Repo"]])
-        status, out = loop.run_until_complete(
-            runtime.call(surface, body, wire_size(body))
-        )
+        elapsed, status, out = loop.call(runtime, surface, body)
         if status != 200:
             raise RuntimeError(json.dumps(out))
-        return out
+        return elapsed, out
 
     with open(args.out, "w", encoding="utf-8") as stream:
         for spec in specs:
@@ -609,40 +631,39 @@ def run_runtime(args: argparse.Namespace) -> None:
                     "latency_ns": [],
                 }
                 for repeat in range(max(args.repeats, 1)):
-                    start = time.perf_counter_ns()
-                    out = call(spec, item)
-                    line["latency_ns"].append(time.perf_counter_ns() - start)
+                    elapsed, out = call(spec, item)
+                    line["latency_ns"].append(elapsed)
                     if repeat == 0:
                         line["result"] = runtime_result(spec, out)
                 stream.write(json.dumps(line) + "\n")
             if args.concurrency:
-                load = runtime_load(runtime, spec, names[spec["Repo"]], args)
+                load = runtime_load(runtime, loop, spec, names[spec["Repo"]], args)
                 stream.write(json.dumps(load) + "\n")
     loop.close()
     runtime.stop()
 
 
 def runtime_load(
-    runtime: Any, spec: dict[str, Any], model: str, args: argparse.Namespace
+    runtime: Any,
+    loop: LoopThread,
+    spec: dict[str, Any],
+    model: str,
+    args: argparse.Namespace,
 ) -> dict[str, Any]:
-    """The legacy load's closed loop: ``concurrency`` callers for ``seconds``."""
+    """The legacy load's closed loop: ``concurrency`` callers for ``seconds``, on one loop as the server's."""
     deadline = time.monotonic() + args.seconds
     latencies: list[int] = []
     lock = threading.Lock()
 
     def worker(index: int) -> None:
-        loop = event_loop()
         position = index
         while time.monotonic() < deadline:
             item = spec["Inputs"][position % len(spec["Inputs"])]
             surface, body = runtime_request(spec, item, model)
-            size = wire_size(body)
-            start = time.perf_counter_ns()
-            loop.run_until_complete(runtime.call(surface, body, size))
+            elapsed, _, _ = loop.call(runtime, surface, body)
             with lock:
-                latencies.append(time.perf_counter_ns() - start)
+                latencies.append(elapsed)
             position += args.concurrency
-        loop.close()
 
     began = time.monotonic()
     threads = [
@@ -699,7 +720,7 @@ def run_ab(args: argparse.Namespace) -> None:
         if legacy.poll() is not None:
             raise SystemExit("the legacy binary exited before it was ready")
     runtime, names = serve_runtime(args, specs)
-    loop = event_loop()
+    loop = LoopThread()
 
     def call_legacy(spec: dict[str, Any], item: dict[str, Any]) -> int:
         legacy.stdin.write(f"call\t{spec['Job']}\t{item['id']}\n")
@@ -707,10 +728,8 @@ def run_ab(args: argparse.Namespace) -> None:
 
     def call_runtime(spec: dict[str, Any], item: dict[str, Any]) -> int:
         surface, body = runtime_request(spec, item, names[spec["Repo"]])
-        size = wire_size(body)
-        start = time.perf_counter_ns()
-        status, _ = loop.run_until_complete(runtime.call(surface, body, size))
-        return time.perf_counter_ns() - start if status == 200 else -1
+        elapsed, status, _ = loop.call(runtime, surface, body)
+        return elapsed if status == 200 else -1
 
     calls = {"legacy": call_legacy, "runtime": call_runtime}
 
@@ -760,7 +779,9 @@ def run_ab(args: argparse.Namespace) -> None:
                     legacy.stdin.write(command)
                     window = json.loads(legacy.stdout.readline())
                 else:
-                    window = runtime_load(runtime, spec, names[spec["Repo"]], args)
+                    window = runtime_load(
+                        runtime, loop, spec, names[spec["Repo"]], args
+                    )
                 rates[side].append(window["calls"] / window["seconds"])
     legacy.stdin.close()
     legacy.wait()
