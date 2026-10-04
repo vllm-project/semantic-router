@@ -36,7 +36,7 @@ from tqdm import tqdm
 # DEFAULT CONFIGURATION
 # These are the proven hyperparameters from our experiments
 # ============================================================
-DEFAULT_MODEL = "llm-semantic-router/mmbert-embed-32k-2d-matryoshka"
+DEFAULT_MODEL = "vllm-sr/mmbert-embed-32k-2d-matryoshka"
 DEFAULT_ITERATIONS = 2
 DEFAULT_LEARNING_RATE = 5e-5
 DEFAULT_EPOCHS = 2
