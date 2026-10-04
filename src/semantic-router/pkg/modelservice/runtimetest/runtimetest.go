@@ -24,12 +24,13 @@ import (
 
 // Head is one classify head of a fake model.
 type Head struct {
-	Name       string
-	Kind       string
-	Labels     []string
-	Inputs     []string
-	Thresholds []float64
-	Window     *api.WindowOptions
+	Name                 string
+	Kind                 string
+	Labels               []string
+	Inputs               []string
+	Thresholds           []float64
+	Window               *api.WindowOptions
+	OperatingPointSHA256 string
 }
 
 // Model is one served model: classify with heads, embeddings with an
@@ -215,6 +216,10 @@ func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 			thresholds := slices.Clone(head.Thresholds)
 			reduction := "max"
 			heads[i].Thresholds, heads[i].Reduction = &thresholds, &reduction
+		}
+		if head.OperatingPointSHA256 != "" {
+			digest := head.OperatingPointSHA256
+			heads[i].OperatingPointSha256 = &digest
 		}
 		if head.Window != nil {
 			tokens, overlap := head.Window.Tokens, 0
