@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute platform contracts (emulated targets, runtime conformance) with separate receipts."""
+"""Execute platform contracts (runtime conformance) with separate receipts."""
 
 from __future__ import annotations
 

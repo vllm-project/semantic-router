@@ -9,8 +9,10 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import struct
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -21,6 +23,7 @@ HUB_REPOSITORY_PREFIXES = ("models--", "datasets--", "spaces--")
 MAX_SAFETENSORS_HEADER = 256 << 20
 HEADER_LENGTH_BYTES = 8
 MIN_SAFETENSORS_HEADER = 2
+MAX_HASH_THREADS = 8
 
 
 def sha256_file(path: Path) -> str:
@@ -29,6 +32,18 @@ def sha256_file(path: Path) -> str:
         for block in iter(lambda: stream.read(8 << 20), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def sha256_files(paths: dict[str, Path]) -> dict[str, str]:
+    """SHA-256 of each named file; files are read and hashed in parallel (both release the GIL)."""
+    if len(paths) <= 1:
+        return {name: sha256_file(path) for name, path in paths.items()}
+    affinity = os.sched_getaffinity(0) if hasattr(os, "sched_getaffinity") else ()
+    workers = min(len(paths), MAX_HASH_THREADS, len(affinity) or os.cpu_count() or 1)
+    with ThreadPoolExecutor(
+        max_workers=workers, thread_name_prefix="vllm-sr-hash"
+    ) as pool:
+        return dict(zip(paths, pool.map(sha256_file, paths.values()), strict=True))
 
 
 def canonical_json(value: Any) -> str:
@@ -74,7 +89,7 @@ def inventory(root: Path, *, ignore_hub_added: bool = True) -> dict[str, str]:
     if not root.is_dir():
         raise PackageError(f"package root is not a directory: {root}")
     store = _snapshot_store(root)
-    files: dict[str, str] = {}
+    files: dict[str, Path] = {}
     for path in sorted(root.rglob("*")):
         relative = PurePosixPath(path.relative_to(root).as_posix())
         name = relative.as_posix()
@@ -86,8 +101,8 @@ def inventory(root: Path, *, ignore_hub_added: bool = True) -> dict[str, str]:
             continue
         if not path.is_file() or not safe_relative(name):
             raise PackageError(f"unsafe package entry: {name}")
-        files[name] = sha256_file(path)
-    return files
+        files[name] = path
+    return sha256_files(files)
 
 
 def named_files(root: Path, names: Iterable[str]) -> dict[str, str]:
@@ -102,7 +117,7 @@ def named_files(root: Path, names: Iterable[str]) -> dict[str, str]:
         raise PackageError(f"package root is not a directory: {root}")
     resolved = root.resolve()
     store = _snapshot_store(root)
-    files: dict[str, str] = {}
+    files: dict[str, Path] = {}
     for name in sorted(set(names)):
         if not safe_relative(name):
             raise PackageError(f"unsafe package path: {name}")
@@ -112,8 +127,8 @@ def named_files(root: Path, names: Iterable[str]) -> dict[str, str]:
             raise PackageError(f"package contains a link: {name}")
         if not target.is_file():
             raise PackageError(f"package file is missing: {name}")
-        files[name] = sha256_file(target)
-    return files
+        files[name] = target
+    return sha256_files(files)
 
 
 def _snapshot_store(root: Path) -> Path | None:
