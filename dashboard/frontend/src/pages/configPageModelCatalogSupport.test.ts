@@ -64,7 +64,17 @@ describe('effective model API format', () => {
   const model = { name: 'alias', catalog: modelID, backend_refs: [{ provider: 'test' }] }
 
   it('exposes only formats accepted by canonical provider input', () => {
-    expect(modelAPIFormats).toEqual(['openai', 'responses', 'anthropic'])
+    expect(modelAPIFormats).toEqual(['openai', 'responses', 'anthropic', 'speech'])
+  })
+
+  it('resolves speech only through a provider that creates Speech API requests', () => {
+    const speech = 'openai/audio-speech@1'
+    const tts = { name: 'tts', api_format: 'speech' as const, backend_refs: [{ provider: 'test' }] }
+    const speechCatalog = fixture([chat])
+    speechCatalog.providers[0].protocols = [chat, speech]
+    speechCatalog.providers[0].supported_operations = [`${chat}#create`, `${speech}#create`]
+    expect(effectiveModelAPIFormat(tts, speechCatalog)).toEqual({ format: 'speech' })
+    expect(effectiveModelAPIFormat(tts, fixture([chat])).error).toMatch(/cannot create/)
   })
 
   it('uses the single model protocol ahead of the provider default', () => {

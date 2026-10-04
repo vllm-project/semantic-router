@@ -493,6 +493,40 @@ func TestCatalogInputRejectsUnsupportedExplicitAPIFormat(t *testing.T) {
 	}
 }
 
+func TestAPIFormatsRoundTripThroughCatalogProtocols(t *testing.T) {
+	registry, err := modelcatalog.BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, apiFormat := range []string{APIFormatOpenAI, APIFormatResponses, APIFormatAnthropic, APIFormatSpeech} {
+		protocol := catalogProtocolForAPIFormat(apiFormat)
+		if _, ok := registry.Protocol(protocol); !ok {
+			t.Fatalf("api_format %q maps to %q, which the built-in catalog does not define", apiFormat, protocol)
+		}
+		got, err := apiFormatForProtocol(protocol)
+		if err != nil || got != apiFormat {
+			t.Fatalf("apiFormatForProtocol(%q) = %q, %v; want %q", protocol, got, err, apiFormat)
+		}
+	}
+}
+
+func TestSpeechAPIFormatRequiresProviderWithSpeechAPI(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: tts
+      api_format: speech
+      backend_refs:
+        - provider: anthropic
+          base_url: https://tts.example/v1
+routing: {}
+`))
+	if err == nil || !strings.Contains(err.Error(), `"openai/audio-speech@1" is not supported by provider "anthropic"`) {
+		t.Fatalf("expected unsupported speech protocol error, got %v", err)
+	}
+}
+
 func TestCanonicalBackendExplicitEmptyAuthPrefixOverridesCatalogDefault(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
 version: v0.3

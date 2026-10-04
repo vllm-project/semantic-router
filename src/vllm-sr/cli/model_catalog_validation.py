@@ -31,6 +31,7 @@ SUPPORTED_PROTOCOLS = frozenset(
         "openai/chat-completions@1",
         "openai/responses@1",
         "anthropic/messages@1",
+        "openai/audio-speech@1",
     }
 )
 _SEMVER = re.compile(

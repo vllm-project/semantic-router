@@ -304,16 +304,26 @@ def _parse_catalog_model(
 
 
 def _parse_catalog_protocols(value: Any) -> tuple[str, ...]:
-    """Project v2 protocol definitions onto the CLI virtual-model contract."""
+    """Project v2 protocol definitions onto the CLI virtual-model contract.
+
+    Virtual models answer chat-family protocols only; a protocol without the
+    chat capability, such as the Speech API, needs a dedicated backend.
+    """
 
     if not isinstance(value, list) or not value:
         raise ModelCatalogError("built-in catalog has no protocols")
     protocol_ids: list[str] = []
+    chat_protocol_ids: set[str] = set()
     for item in value:
         if not isinstance(item, dict):
             raise ModelCatalogError("catalog protocol entry is invalid")
-        protocol_ids.append(_required_string(item, "id"))
-    return _unique_enum_strings(protocol_ids, "protocols", SUPPORTED_PROTOCOLS)
+        protocol_id = _required_string(item, "id")
+        protocol_ids.append(protocol_id)
+        capabilities = item.get("capabilities")
+        if isinstance(capabilities, list) and "chat" in capabilities:
+            chat_protocol_ids.add(protocol_id)
+    protocols = _unique_enum_strings(protocol_ids, "protocols", SUPPORTED_PROTOCOLS)
+    return tuple(protocol for protocol in protocols if protocol in chat_protocol_ids)
 
 
 def _parse_model_verification(
