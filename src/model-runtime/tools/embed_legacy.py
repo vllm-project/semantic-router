@@ -542,6 +542,15 @@ def wire_size(body: dict[str, Any]) -> int:
     return len(json.dumps(body, separators=(",", ":")).encode("utf-8"))
 
 
+def event_loop() -> asyncio.AbstractEventLoop:
+    """The loop the HTTP server runs on: uvloop where it is installed."""
+    try:
+        import uvloop
+    except ImportError:
+        return asyncio.new_event_loop()
+    return uvloop.new_event_loop()
+
+
 def runtime_result(spec: dict[str, Any], out: dict[str, Any]) -> Any:
     if spec["Mode"] == "rerank":
         by_index = {r["index"]: r["logit"] for r in out["results"]}
@@ -578,7 +587,7 @@ def serve_runtime(
 def run_runtime(args: argparse.Namespace) -> None:
     specs = job_specs(args)
     runtime, names = serve_runtime(args, specs)
-    loop = asyncio.new_event_loop()
+    loop = event_loop()
 
     def call(spec: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
         surface, body = runtime_request(spec, item, names[spec["Repo"]])
@@ -622,7 +631,7 @@ def runtime_load(
     lock = threading.Lock()
 
     def worker(index: int) -> None:
-        loop = asyncio.new_event_loop()
+        loop = event_loop()
         position = index
         while time.monotonic() < deadline:
             item = spec["Inputs"][position % len(spec["Inputs"])]
@@ -690,7 +699,7 @@ def run_ab(args: argparse.Namespace) -> None:
         if legacy.poll() is not None:
             raise SystemExit("the legacy binary exited before it was ready")
     runtime, names = serve_runtime(args, specs)
-    loop = asyncio.new_event_loop()
+    loop = event_loop()
 
     def call_legacy(spec: dict[str, Any], item: dict[str, Any]) -> int:
         legacy.stdin.write(f"call\t{spec['Job']}\t{item['id']}\n")

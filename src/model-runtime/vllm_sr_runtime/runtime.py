@@ -140,6 +140,21 @@ class Prepared:
     plan: SurfacePlan
 
 
+@dataclass
+class _Lookup:
+    """A job group's result-cache hits and the items still to run, per member.
+
+    ``futures`` is set when the planning thread already ran the misses
+    (``Scheduler.run_now``), ``submitted`` when it tried to.
+    """
+
+    values: dict[tuple[int, int], Any]
+    misses: list[list[Any]]
+    slots: list[list[tuple[int, int, str | None]]]
+    submitted: float | None = None
+    futures: list[Future] | BaseException | None = None
+
+
 class ResultCache:
     """Item results of one model by content key, least recently used out first.
 
@@ -398,6 +413,14 @@ class ServedModel:
         return self.scheduler.submit_group(
             item_lists, deadline=deadline, profile=profile
         )
+
+    def run_items_now(
+        self, item_lists: list[list[Any]], deadline: float | None, profile: str
+    ) -> list[Future] | None:
+        """Run the group on this thread if the model's scheduler is idle (never on the event loop)."""
+        if self.scheduler is None:
+            return None
+        return self.scheduler.run_now(item_lists, deadline=deadline, profile=profile)
 
     def meta(
         self, profile_name: str, queue_ms: float, compute_ms: float
@@ -919,14 +942,45 @@ class Runtime:
             )
             return 500, error.body()
 
+    def _prepare_and_run(
+        self, surface: str, body: Any
+    ) -> tuple[Prepared | tuple[int, dict[str, Any]], _Lookup | None]:
+        """Plan one request off the event loop and run it here if its model is idle."""
+        prepared = self._prepare_outcome(surface, body)
+        if not isinstance(prepared, Prepared):
+            return prepared, None
+        lookup = self._lookup([(0, prepared)])
+        lookup.submitted = time.monotonic()
+        try:
+            lookup.futures = prepared.served.run_items_now(
+                lookup.misses, prepared.request.deadline, prepared.request.profile
+            )
+        except Exception as exc:
+            lookup.futures = exc
+        if lookup.futures is None:
+            lookup.submitted = None
+        return prepared, lookup
+
     async def _serve(
         self, requests: list[tuple[str, Any]], size: int | None = None
     ) -> list[tuple[int, dict[str, Any]]]:
-        """Plan every request, run each model's share as one job group, finish in order."""
+        """Plan every request, run each model's share as one job group, finish in order.
+
+        A lone request planned off the event loop runs on its planning thread
+        when its model's scheduler is idle.
+        """
+        lookups: list[_Lookup | None] = [None] * len(requests)
         if size is not None and size <= INLINE_PLAN_BYTES:
             planned = [
                 self._prepare_outcome(surface, body) for surface, body in requests
             ]
+        elif len(requests) == 1:
+            from starlette.concurrency import run_in_threadpool
+
+            prepared, lookups[0] = await run_in_threadpool(
+                self._prepare_and_run, *requests[0]
+            )
+            planned = [prepared]
         else:
             from starlette.concurrency import run_in_threadpool
 
@@ -936,7 +990,11 @@ class Runtime:
                     for surface, body in requests
                 )
             )
-        outcomes: list[tuple[int, dict[str, Any]] | None] = [None] * len(requests)
+        if lookups[0] is not None:
+            outcomes: list[tuple[int, dict[str, Any]] | None] = [None]
+            await self._run_group([(0, planned[0])], outcomes, lookups[0])
+            return [outcome for outcome in outcomes if outcome is not None]
+        outcomes = [None] * len(requests)
         groups: dict[tuple[int, str, float | None], list[tuple[int, Prepared]]] = {}
         for index, prepared in enumerate(planned):
             if isinstance(prepared, Prepared):
@@ -953,11 +1011,7 @@ class Runtime:
         )
         return [outcome for outcome in outcomes if outcome is not None]
 
-    async def _run_group(
-        self,
-        members: list[tuple[int, Prepared]],
-        outcomes: list[tuple[int, dict[str, Any]] | None],
-    ) -> None:
+    def _lookup(self, members: list[tuple[int, Prepared]]) -> _Lookup:
         served = members[0][1].served
         request = members[0][1].request
         values: dict[tuple[int, int], Any] = {}
@@ -984,11 +1038,28 @@ class Runtime:
                 member_slots.append((member, position, key))
             misses.append(items)
             slots.append(member_slots)
-        submitted = time.monotonic()
+        return _Lookup(values, misses, slots)
+
+    async def _run_group(
+        self,
+        members: list[tuple[int, Prepared]],
+        outcomes: list[tuple[int, dict[str, Any]] | None],
+        lookup: _Lookup | None = None,
+    ) -> None:
+        served = members[0][1].served
+        request = members[0][1].request
+        if lookup is None:
+            lookup = self._lookup(members)
+        values, slots = lookup.values, lookup.slots
+        submitted = lookup.submitted or time.monotonic()
         try:
-            futures = served.submit_items_group(
-                misses, request.deadline, request.profile
-            )
+            futures = lookup.futures
+            if isinstance(futures, BaseException):
+                raise futures
+            if futures is None:
+                futures = served.submit_items_group(
+                    lookup.misses, request.deadline, request.profile
+                )
             results = await asyncio.gather(*(asyncio.wrap_future(f) for f in futures))
         except RuntimeServiceError as exc:
             for index, _ in members:

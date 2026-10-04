@@ -14,6 +14,12 @@ jobs that arrived meanwhile (those of profiles that coalesce once they have
 waited one batching window), so a short request waits for the forward in flight,
 not for the rest of a long request. The order of forwards never changes what
 a batch contains, so answers are unchanged.
+
+A model whose batches need no device thread may also run a request on the
+thread that planned it (``run_now``), but only when the scheduler is idle:
+nothing queued or planned and the worker not running a batch. Whoever runs
+batches owns the model until they are done, so the caller and the worker
+never run one model at once.
 """
 
 from __future__ import annotations
@@ -93,6 +99,7 @@ class Scheduler:
         self._ready: list[_Planned] = []
         self._sequence = itertools.count()
         self._token_cost: float | None = None
+        self._owned = False
         self._thread = threading.Thread(
             target=self._loop, name="vllm-sr-runtime-worker", daemon=True
         )
@@ -129,33 +136,10 @@ class Scheduler:
         self, item_lists: list[list[Any]], *, deadline: float | None, profile: str
     ) -> list[Future]:
         """Queue one job per item list at once, as one group (a bundle's tasks for this model)."""
-        if profile not in self.profiles:
-            raise RuntimeServiceError(
-                "invalid_request", f"profile {profile!r} is not enabled"
-            )
-        futures: list[Future] = [Future() for _ in item_lists]
-        pending = []
-        tokens = 0
-        enqueued = time.monotonic()
-        with self._lock:
-            self._groups += 1
-            group = self._groups if len(item_lists) > 1 else None
-        for future, items in zip(futures, item_lists, strict=True):
-            if not items:
-                future.set_result([])
-                continue
-            job_tokens = sum(cost(item) for item in items)
-            tokens += job_tokens
-            job = Job(
-                items=items,
-                deadline=deadline,
-                enqueued=enqueued,
-                profile=profile,
-                group=group,
-            )
-            pending.append(_Pending(job, future, job_tokens))
+        futures, pending = self._jobs(item_lists, deadline, profile)
         if not pending:
             return futures
+        tokens = sum(entry.tokens for entry in pending)
         with self._lock:
             if self._stopped:
                 raise RuntimeServiceError("not_ready", "the runtime is shutting down")
@@ -171,6 +155,61 @@ class Scheduler:
             self._lock.notify()
         return futures
 
+    def run_now(
+        self, item_lists: list[list[Any]], *, deadline: float | None, profile: str
+    ) -> list[Future] | None:
+        """Run a group on the calling thread if the scheduler is idle, else None.
+
+        Never call it from the event loop: the batches run before it returns.
+        Models whose batches go to a device thread always answer None.
+        """
+        if self.model.device_thread:
+            return None
+        with self._lock:
+            if self._stopped or self._owned or self._queue or self._ready:
+                return None
+            self._owned = True
+        try:
+            futures, pending = self._jobs(item_lists, deadline, profile)
+            self._plan(pending)
+            while self._ready:
+                self._run(heapq.heappop(self._ready))
+        finally:
+            self._release()
+        return futures
+
+    def _jobs(
+        self, item_lists: list[list[Any]], deadline: float | None, profile: str
+    ) -> tuple[list[Future], list[_Pending]]:
+        if profile not in self.profiles:
+            raise RuntimeServiceError(
+                "invalid_request", f"profile {profile!r} is not enabled"
+            )
+        futures: list[Future] = [Future() for _ in item_lists]
+        pending = []
+        enqueued = time.monotonic()
+        with self._lock:
+            self._groups += 1
+            group = self._groups if len(item_lists) > 1 else None
+        for future, items in zip(futures, item_lists, strict=True):
+            if not items:
+                future.set_result([])
+                continue
+            job = Job(
+                items=items,
+                deadline=deadline,
+                enqueued=enqueued,
+                profile=profile,
+                group=group,
+            )
+            pending.append(_Pending(job, future, sum(cost(item) for item in items)))
+        return futures, pending
+
+    def _release(self) -> None:
+        with self._lock:
+            self._owned = False
+            self._lock.notify_all()
+
     # -- worker --------------------------------------------------------------
 
     def _loop(self) -> None:
@@ -179,25 +218,29 @@ class Scheduler:
             if taken is None:
                 self._abandon()
                 return
-            self._plan(taken)
-            if self._ready:
-                self._run(heapq.heappop(self._ready))
+            try:
+                self._plan(taken)
+                if self._ready:
+                    self._run(heapq.heappop(self._ready))
+            finally:
+                self._release()
 
     def _take(self, *, wait: bool) -> list[_Pending] | None:
-        """Queued jobs to plan, or None once stopped.
+        """Own the model and take queued jobs to plan, or None once stopped.
 
         With ``wait`` (nothing planned) block until work arrives and, when a
         queued job's profile coalesces, hold the batching window, then take
         everything. Without it take at once the jobs of profiles that don't
         coalesce and the coalescing jobs that have already waited a window.
+        Either way wait while a ``run_now`` caller owns the model.
         """
         window = self.limits.batch_window_ms / 1000.0
         with self._lock:
-            if wait:
-                while not self._queue and not self._stopped:
-                    self._lock.wait()
+            while (self._owned or (wait and not self._queue)) and not self._stopped:
+                self._lock.wait()
             if self._stopped:
                 return None
+            self._owned = True
             if not wait:
                 now = time.monotonic()
                 taken: list[_Pending] = []
@@ -331,6 +374,8 @@ class Scheduler:
     def _abandon(self) -> None:
         """Answer every queued or planned job once the scheduler stops."""
         with self._lock:
+            while self._owned:
+                self._lock.wait()
             queued = list(self._queue)
             self._queue.clear()
             self._queued_tokens = 0
