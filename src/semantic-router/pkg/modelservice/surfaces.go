@@ -2,7 +2,6 @@ package modelservice
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -289,15 +288,6 @@ func optionalInt(value int) *int {
 	return &value
 }
 
-// classifyItem is the object form of a classify input (ClassifyItem in openapi.yaml).
-type classifyItem struct {
-	Text     *string `json:"text,omitempty"`
-	TextPair *string `json:"text_pair,omitempty"`
-	Context  *string `json:"context,omitempty"`
-	Question *string `json:"question,omitempty"`
-	Answer   *string `json:"answer,omitempty"`
-}
-
 func encodeClassify(ctx context.Context, model string, request ClassifyRequest) (api.ClassifyRequest, error) {
 	if len(request.Inputs) == 0 {
 		return api.ClassifyRequest{}, fmt.Errorf("%w: classify needs at least one input", ErrRejected)
@@ -306,12 +296,16 @@ func encodeClassify(ctx context.Context, model string, request ClassifyRequest) 
 	if err != nil {
 		return api.ClassifyRequest{}, err
 	}
-	inputs := make([]classifyItem, len(request.Inputs))
+	items := make(api.ClassifyItemList, len(request.Inputs))
 	for index, input := range request.Inputs {
-		inputs[index] = classifyItem{
+		items[index] = api.ClassifyItem{
 			Text: optionalString(input.Text), TextPair: optionalString(input.TextPair),
 			Context: optionalString(input.Context), Question: optionalString(input.Question), Answer: optionalString(input.Answer),
 		}
+	}
+	var inputs api.ClassifyInput
+	if err := inputs.FromClassifyItemList(items); err != nil {
+		return api.ClassifyRequest{}, fmt.Errorf("%w: %w", ErrRejected, err)
 	}
 	returnMeta := true
 	options := api.ClassifyOptions{DeadlineMs: deadline, ReturnMeta: &returnMeta, MaxTokens: optionalInt(request.MaxTokens), Threshold: request.Threshold}
@@ -334,16 +328,22 @@ func encodeEmbed(ctx context.Context, model string, request EmbedRequest) (api.E
 	if err != nil {
 		return api.EmbeddingsRequest{}, err
 	}
-	inputs := make([]map[string]interface{}, len(request.Inputs))
+	parts := make(api.ContentPartList, len(request.Inputs))
 	for index, input := range request.Inputs {
 		switch {
 		case input.ImageURL != "":
-			inputs[index] = map[string]interface{}{"type": "image_url", "image_url": map[string]string{"url": input.ImageURL}}
+			parts[index] = api.ContentPart{Type: api.ImageUrl, ImageUrl: &api.ImagePart{Url: input.ImageURL}}
 		case input.AudioWAV != "":
-			inputs[index] = map[string]interface{}{"type": "input_audio", "input_audio": map[string]string{"data": input.AudioWAV, "format": "wav"}}
+			format := "wav"
+			parts[index] = api.ContentPart{Type: api.InputAudio, InputAudio: &api.AudioPart{Data: input.AudioWAV, Format: &format}}
 		default:
-			inputs[index] = map[string]interface{}{"type": "text", "text": input.Text}
+			text := input.Text
+			parts[index] = api.ContentPart{Type: api.Text, Text: &text}
 		}
+	}
+	var inputs api.EmbeddingsInput
+	if err := inputs.FromContentPartList(parts); err != nil {
+		return api.EmbeddingsRequest{}, fmt.Errorf("%w: %w", ErrRejected, err)
 	}
 	returnMeta := true
 	options := api.EmbeddingsOptions{DeadlineMs: deadline, ReturnMeta: &returnMeta, MaxTokens: optionalInt(request.MaxTokens)}
@@ -372,9 +372,9 @@ func encodeRerank(ctx context.Context, model string, request RerankRequest) (api
 		return api.RerankRequest{}, err
 	}
 	returnMeta := true
-	options := api.EmbeddingsOptions{DeadlineMs: deadline, ReturnMeta: &returnMeta, MaxTokens: optionalInt(request.MaxTokens)}
+	options := api.RerankOptions{DeadlineMs: deadline, ReturnMeta: &returnMeta, MaxTokens: optionalInt(request.MaxTokens)}
 	if request.Overflow != "" {
-		overflow := api.EmbeddingsOptionsOverflow(request.Overflow)
+		overflow := api.RerankOptionsOverflow(request.Overflow)
 		options.Overflow = &overflow
 	}
 	return api.RerankRequest{
@@ -495,31 +495,27 @@ func decodeEmbed(body api.EmbeddingsResponse) (EmbedResponse, error) {
 }
 
 // decodeVector reads a float list or a base64 string of little-endian float32 values.
-func decodeVector(value interface{}) ([]float32, error) {
-	switch typed := value.(type) {
-	case string:
-		raw, err := base64.StdEncoding.DecodeString(typed)
-		if err != nil || len(raw)%4 != 0 {
-			return nil, fmt.Errorf("%w: embedding is not base64 float32", ErrFailed)
-		}
-		vector := make([]float32, len(raw)/4)
-		for index := range vector {
-			vector[index] = math.Float32frombits(binary.LittleEndian.Uint32(raw[index*4:]))
-		}
-		return checkVector(vector)
-	case []interface{}:
-		vector := make([]float32, len(typed))
-		for index, element := range typed {
-			number, ok := element.(float64)
-			if !ok {
-				return nil, fmt.Errorf("%w: embedding holds a non-number", ErrFailed)
-			}
-			vector[index] = float32(number)
-		}
-		return checkVector(vector)
-	default:
+func decodeVector(value api.EmbeddingVector) ([]float32, error) {
+	raw, err := value.MarshalJSON()
+	if err != nil || len(raw) == 0 {
 		return nil, fmt.Errorf("%w: embedding has an unknown encoding", ErrFailed)
 	}
+	if raw[0] != '"' {
+		vector, err := value.AsFloatVector()
+		if err != nil {
+			return nil, fmt.Errorf("%w: embedding holds a non-number", ErrFailed)
+		}
+		return checkVector(vector)
+	}
+	packed, err := value.AsBase64Vector()
+	if err != nil || len(packed)%4 != 0 {
+		return nil, fmt.Errorf("%w: embedding is not base64 float32", ErrFailed)
+	}
+	vector := make([]float32, len(packed)/4)
+	for index := range vector {
+		vector[index] = math.Float32frombits(binary.LittleEndian.Uint32(packed[index*4:]))
+	}
+	return checkVector(vector)
 }
 
 func checkVector(vector []float32) ([]float32, error) {

@@ -1,7 +1,6 @@
 package runtimetest
 
 import (
-	"encoding/base64"
 	"encoding/binary"
 	"math"
 	"net/http"
@@ -98,39 +97,39 @@ type embeddingPart struct {
 	data string
 }
 
-func embeddingParts(input interface{}) ([]embeddingPart, bool) {
-	switch typed := input.(type) {
-	case string:
-		return []embeddingPart{{text: &typed}}, true
-	case []interface{}:
-		parts := make([]embeddingPart, 0, len(typed))
-		for _, element := range typed {
-			switch value := element.(type) {
-			case string:
-				parts = append(parts, embeddingPart{text: &value})
-			case map[string]interface{}:
-				switch value["type"] {
-				case "text":
-					text, _ := value["text"].(string)
-					parts = append(parts, embeddingPart{text: &text})
-				case "image_url":
-					image, _ := value["image_url"].(map[string]interface{})
-					url, _ := image["url"].(string)
-					parts = append(parts, embeddingPart{data: url})
-				case "input_audio":
-					audio, _ := value["input_audio"].(map[string]interface{})
-					data, _ := audio["data"].(string)
-					parts = append(parts, embeddingPart{data: data})
-				default:
-					return nil, false
-				}
-			default:
-				return nil, false
-			}
+func embeddingParts(input api.EmbeddingsInput) ([]embeddingPart, bool) {
+	if text, err := input.AsInputText(); err == nil {
+		return []embeddingPart{{text: &text}}, true
+	}
+	if texts, err := input.AsTextList(); err == nil {
+		parts := make([]embeddingPart, len(texts))
+		for i := range texts {
+			parts[i] = embeddingPart{text: &texts[i]}
 		}
 		return parts, true
 	}
-	return nil, false
+	list, err := input.AsContentPartList()
+	if err != nil {
+		return nil, false
+	}
+	parts := make([]embeddingPart, 0, len(list))
+	for _, part := range list {
+		switch {
+		case part.Type == api.Text:
+			text := ""
+			if part.Text != nil {
+				text = *part.Text
+			}
+			parts = append(parts, embeddingPart{text: &text})
+		case part.Type == api.ImageUrl && part.ImageUrl != nil:
+			parts = append(parts, embeddingPart{data: part.ImageUrl.Url})
+		case part.Type == api.InputAudio && part.InputAudio != nil:
+			parts = append(parts, embeddingPart{data: part.InputAudio.Data})
+		default:
+			return nil, false
+		}
+	}
+	return parts, true
 }
 
 func hashedVector(dimension, layer int, words []string) []float64 {
@@ -166,15 +165,22 @@ func normalize(vector []float64) []float64 {
 	return out
 }
 
-func encodeVector(vector []float64, format *api.EmbeddingsRequestEncodingFormat) interface{} {
+func encodeVector(vector []float64, format *api.EmbeddingsRequestEncodingFormat) api.EmbeddingVector {
+	var encoded api.EmbeddingVector
 	if format == nil || *format != "base64" {
-		return vector
+		floats := make(api.FloatVector, len(vector))
+		for i, value := range vector {
+			floats[i] = float32(value)
+		}
+		_ = encoded.FromFloatVector(floats)
+		return encoded
 	}
 	raw := make([]byte, 4*len(vector))
 	for i, value := range vector {
 		binary.LittleEndian.PutUint32(raw[4*i:], math.Float32bits(float32(value)))
 	}
-	return base64.StdEncoding.EncodeToString(raw)
+	_ = encoded.FromBase64Vector(raw)
+	return encoded
 }
 
 func (r *Runtime) rerank(body api.RerankRequest) (int, api.RerankResponse, *api.ErrorBody) {

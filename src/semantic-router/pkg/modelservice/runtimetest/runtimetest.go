@@ -242,7 +242,7 @@ func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 		}
 		if len(head.Thresholds) > 0 {
 			thresholds := slices.Clone(head.Thresholds)
-			reduction := "max"
+			reduction := api.Max
 			heads[i].Thresholds, heads[i].Reduction = &thresholds, &reduction
 		}
 		if head.OperatingPointSHA256 != "" {

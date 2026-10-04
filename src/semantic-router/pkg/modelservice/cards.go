@@ -107,7 +107,7 @@ func decodeCard(card api.ModelCard) ModelCard {
 		Repo: deref(card.Repo), Revision: deref(card.Revision), ModelSHA256: deref(card.ModelSha256),
 		ManifestSHA256: deref(card.ManifestSha256), Profile: deref(card.Profile), Engine: deref(card.Engine),
 		Accelerator: deref(card.Accelerator), Device: deref(card.Device), Dtype: deref(card.Dtype),
-		Status: deref(card.Status), Reason: deref(card.Reason),
+		Status: string(deref(card.Status)), Reason: deref(card.Reason),
 	}
 	if card.Limits != nil {
 		decoded.MaxInputTokens = deref(card.Limits.MaxInputTokens)
@@ -141,7 +141,7 @@ func decodeHead(head api.HeadCard) HeadCard {
 	decoded := HeadCard{
 		Name: head.Name, Kind: string(head.Kind), Labels: append([]string(nil), head.Labels...),
 		Inputs: derefSlice(head.Inputs), DefaultThreshold: head.DefaultThreshold, Thresholds: derefSlice(head.Thresholds),
-		Overflow: deref(head.Overflow), Reduction: deref(head.Reduction), OperatingPointSHA256: deref(head.OperatingPointSha256),
+		Overflow: string(deref(head.Overflow)), Reduction: string(deref(head.Reduction)), OperatingPointSHA256: deref(head.OperatingPointSha256),
 	}
 	if head.Window != nil && head.Window.Tokens != nil {
 		decoded.Window = &Window{Tokens: *head.Window.Tokens, Overlap: deref(head.Window.Overlap)}
