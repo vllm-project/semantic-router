@@ -61,10 +61,10 @@ Decision 1.0 模型（`vllm-sr/Decision-1.0-Kai-0.6B`、`-Lex-0.6B`、`-Route-0.
 | 硬件 | 状态 | 用法 |
 | --- | --- | --- |
 | CPU | 已验证 | 每个路由器镜像都能开箱即用地在 CPU 上运行模型。 |
-| AMD Instinct MI300X、MI325X | 已验证 | 安装 ROCm 版 PyTorch，并设置 `device: rocm:0`。 |
-| NVIDIA GPU | 可用，尚未验证 | 安装 CUDA 版 PyTorch，并设置 `device: cuda:0`。 |
-| Intel GPU | 可用，尚未验证 | 使用 XPU 版 PyTorch，设置 `device: xpu:0`。 |
-| Apple 芯片 | 可用，尚未验证 | 在 macOS 上设置 `device: mps`。 |
+| AMD Instinct MI300X、MI325X | 已验证 | 设置 `device: rocm:0`。`vllm-sr serve --platform amd` 和 `extproc-rocm` 镜像自带 ROCm 版 PyTorch。 |
+| NVIDIA GPU | 可用，尚未验证 | 设置 `device: cuda:0`。`vllm-sr serve --platform nvidia` 自带 CUDA 版 PyTorch。 |
+| Intel GPU | 可用，尚未验证 | 设置 `device: xpu:0`，并把运行时安装在 XPU 版 PyTorch 旁边。 |
+| Apple 芯片 | 可用，尚未验证 | 设置 `device: mps`，并在 macOS 上安装运行时。 |
 
 `device: auto`（默认）选择第一个有足够空闲显存的已验证 GPU，否则使用 CPU。
 你显式指定的 GPU 必须存在，否则模型会带着明确的原因加载失败，而不是悄悄在 CPU 上运行。
