@@ -9,6 +9,7 @@ models, the per-model result cache, bundle fusion and per-model readiness.
 from __future__ import annotations
 
 import json
+import math
 import shutil
 import subprocess
 import sys
@@ -237,29 +238,93 @@ def test_a_bundle_serves_every_surface_and_model_in_task_order(client):
     assert results[4]["error"]["code"] == "model_not_found"
 
 
-def test_bundled_tasks_for_one_model_share_one_forward(client, runtime):
+@pytest.mark.parametrize(
+    "fillers, bundle_options, task_deadlines",
+    [
+        (11, {}, (None, None)),
+        (12, {"deadline_ms": 5000}, (None, None)),
+        (13, {}, (4000, 5000)),
+    ],
+    ids=["no deadline", "bundle deadline", "task deadlines"],
+)
+def test_bundled_tasks_for_one_model_share_one_forward(
+    client, runtime, fillers, bundle_options, task_deadlines
+):
     model = keyword_model(runtime)
     before = model.forwards
+    tasks = []
+    for task_id, text, deadline in zip(
+        ("a", "b"), ("one charge", "two parcels, delivery"), task_deadlines, strict=True
+    ):
+        # The example caches by token IDs, so each case differs in length.
+        classify = {"model": "keywords", "input": [text + " fused" * fillers]}
+        if deadline is not None:
+            classify["options"] = {"deadline_ms": deadline}
+        tasks.append({"id": task_id, "classify": classify})
+    body = client.post(
+        "/v1/bundle", json={"tasks": tasks, "options": bundle_options}
+    ).json()
+    assert [result["status"] for result in body["results"]] == [200, 200]
+    assert model.forwards == before + 1
+
+
+def test_a_forward_error_fails_only_its_request(client, runtime, monkeypatch):
+    model = keyword_model(runtime)
+    run = model.run
+    failed = []
+
+    def fail_once(items, **options):
+        if not failed:
+            failed.append(items)
+            raise ValueError("a readout bug")
+        return run(items, **options)
+
+    monkeypatch.setattr(model, "run", fail_once)
+    broken = client.post(
+        "/v1/classify", json={"model": "keywords", "input": ["a refund that fails"]}
+    )
+    assert broken.status_code == 500
+    assert broken.json()["error"]["code"] == "internal_error"
+    served = client.post(
+        "/v1/classify", json={"model": "keywords", "input": ["a refund that works"]}
+    )
+    assert served.status_code == 200
+    assert client.get("/health").status_code == 200
+
+
+def test_a_non_finite_answer_fails_only_its_task(client, runtime, monkeypatch):
+    model = keyword_model(runtime)
+    run = model.run
+    poisoned = 9
+
+    def poison(items, **options):
+        rows = run(items, **options)
+        return [
+            [math.nan] * len(row) if len(item.ids) == poisoned else row
+            for item, row in zip(items, rows, strict=True)
+        ]
+
+    monkeypatch.setattr(model, "run", poison)
+    text = "a refund" + " nan" * (poisoned - 2)
+    alone = client.post("/v1/classify", json={"model": "keywords", "input": [text]})
+    assert alone.status_code == 500
+    assert alone.json()["error"]["code"] == "internal_error"
     body = client.post(
         "/v1/bundle",
         json={
             "tasks": [
+                {"id": "bad", "classify": {"model": "keywords", "input": [text]}},
                 {
-                    "id": "a",
-                    "classify": {"model": "keywords", "input": ["one charge, fused"]},
-                },
-                {
-                    "id": "b",
-                    "classify": {
-                        "model": "keywords",
-                        "input": ["two parcels, fused delivery"],
-                    },
+                    "id": "good",
+                    "classify": {"model": "keywords", "input": ["a parcel delivered"]},
                 },
             ]
         },
-    ).json()
-    assert [result["status"] for result in body["results"]] == [200, 200]
-    assert model.forwards == before + 1
+    )
+    assert body.status_code == 200
+    results = body.json()["results"]
+    assert [result["status"] for result in results] == [500, 200]
+    assert results[0]["error"]["code"] == "internal_error"
 
 
 def test_repeated_items_are_answered_from_the_result_cache(client, runtime):
