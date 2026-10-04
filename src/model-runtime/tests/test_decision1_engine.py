@@ -213,6 +213,7 @@ def test_type_readout_runs_in_fp32_on_reduced_precision_hidden_states():
     assert torch.allclose(full, reduced, atol=0.05)
 
 
+@pytest.mark.gpu
 def test_fp64_convolution_falls_back_off_its_shapes():
     pytest.importorskip("triton")
     from vllm_sr_runtime.accel.triton_fp64_conv import fp64_conv

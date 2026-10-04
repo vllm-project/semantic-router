@@ -150,6 +150,10 @@ func CompareWithBaseline(current, baseline *Baseline, thresholds *ThresholdsConf
 	for benchName, currentMetric := range current.Benchmarks {
 		baselineMetric, exists := baseline.Benchmarks[benchName]
 		if !exists && currentMetric.ModelIdentity != nil {
+			if baseline.ModelBaselineReset != "" {
+				// A reset baseline measures model benchmarks without gating them.
+				continue
+			}
 			return nil, fmt.Errorf("%s requires a measured same-checkpoint model baseline", benchName)
 		}
 		if !exists {
