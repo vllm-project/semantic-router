@@ -100,8 +100,15 @@ what surrounds them:
   runs up to four inputs at once on the shared pool. Images and audio carry a
   scheduler cost (text-token equivalents of their forward time), so each runs
   in its own batch.
-- **Images and Mini audio:** within 1–3.5 % at p50; their preprocessing
-  (Pillow decode and resize, NumPy features) is what remains to profile.
+- **Images:** the vision graphs take the same time on both ONNX Runtime
+  versions (bare runs: Nano 103 ms, Mini 283 ms); the runtime's Pillow
+  decode, resize and normalization took 3.0 / 1.6 ms of a request.
+  Normalizing through a per-channel table (bit-identical, `0e8c6f458`) cuts
+  that by about 40 %; an image-only A/B there (16 rounds, idle node): Nano
+  p50 / p95 114.9 / 121.6 → 115.9 / 125.7 ms, Mini 310.7 / 323.2 → 308.2 /
+  323.9 ms.
+- **Mini audio:** its NumPy features for clips of several CLAP windows are
+  what remains to profile.
 
 ## CPU: legacy ONNX Runtime execution vs both runtime engines
 
