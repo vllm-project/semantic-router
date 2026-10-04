@@ -115,12 +115,16 @@ def create_app(runtime: Runtime) -> Starlette:
             }
         )
 
+    def only_model() -> str | None:
+        """The served model's ID; a process serving several lists them in ``models``."""
+        return runtime.served[0].served_id if len(runtime.served) == 1 else None
+
     async def health(request: Request) -> Response:
         body: dict[str, Any] = {
             "api_version": API_VERSION,
             "status": runtime.health.state,
             "reason": runtime.health.reason,
-            "model": runtime.served_id,
+            "model": only_model(),
         }
         if len(runtime.served) > 1:
             body["models"] = runtime.health.describe()
@@ -132,19 +136,18 @@ def create_app(runtime: Runtime) -> Starlette:
                 "api_version": API_VERSION,
                 "status": "alive",
                 "reason": None,
-                "model": runtime.served_id,
+                "model": only_model(),
             }
         )
 
     async def metrics(request: Request) -> Response:
-        if runtime.scheduler is not None:
-            runtime.metrics.queue_depth.set(
-                sum(
-                    served.scheduler.depth()
-                    for served in runtime.served
-                    if served.scheduler
-                )
+        runtime.metrics.queue_depth.set(
+            sum(
+                served.scheduler.depth()
+                for served in runtime.served
+                if served.scheduler
             )
+        )
         return Response(
             runtime.metrics.render(), media_type="text/plain; version=0.0.4"
         )
