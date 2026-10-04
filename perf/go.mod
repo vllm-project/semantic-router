@@ -44,9 +44,6 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/valkey-io/valkey-glide/go/v2 v2.3.0 // indirect
-	github.com/vllm-project/semantic-router/candle-binding v0.0.0-00010101000000-000000000000 // indirect
-	github.com/vllm-project/semantic-router/onnx-binding v0.0.0-00010101000000-000000000000 // indirect
-	github.com/vllm-project/semantic-router/openvino-binding v0.0.0-00010101000000-000000000000 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
@@ -66,10 +63,3 @@ replace github.com/vllm-project/semantic-router/src/semantic-router => ../src/se
 
 replace github.com/vllm-project/semantic-router/candle-binding => ../candle-binding
 
-replace github.com/vllm-project/semantic-router/ml-binding => ../ml-binding
-
-replace github.com/vllm-project/semantic-router/nlp-binding => ../nlp-binding
-
-replace github.com/vllm-project/semantic-router/openvino-binding => ../openvino-binding
-
-replace github.com/vllm-project/semantic-router/onnx-binding => ../onnx-binding
