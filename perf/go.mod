@@ -60,6 +60,3 @@ require (
 )
 
 replace github.com/vllm-project/semantic-router/src/semantic-router => ../src/semantic-router
-
-replace github.com/vllm-project/semantic-router/candle-binding => ../candle-binding
-
