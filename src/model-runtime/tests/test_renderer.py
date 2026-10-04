@@ -41,6 +41,10 @@ def test_noul_defaults_and_partial_criteria():
         {"key": "false", "description": "No"},
         {"key": "true", "description": "Definitely"},
     ]
+    _, _, options = question_options(
+        {"type": "noul", "instructions": "q", "criteria": {"false": None}}
+    )
+    assert options[0] == {"key": "false", "description": "No"}
 
 
 def test_score_levels_are_ordered_indices():
@@ -86,7 +90,9 @@ def test_choices_superset_matches_criteria_order():
             "criteria": {"a": float("nan"), "b": "x"},
         },
         {"type": "noul", "instructions": "q", "criteria": {"yes": "y", "no": "n"}},
-        {"type": "noul", "instructions": "q", "criteria": {"false": None, "true": "y"}},
+        {"type": "noul", "instructions": "q", "criteria": {"false": "", "true": "y"}},
+        {"type": "choice", "instructions": " ", "criteria": {"a": "A", "b": "B"}},
+        {"type": "noul", "instructions": "q", "colour": "blue"},
         {"type": "score", "instructions": "q", "criteria": ["only"]},
         {"type": "score", "instructions": "q", "criteria": [str(i) for i in range(11)]},
         {
