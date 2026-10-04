@@ -93,9 +93,7 @@ def _compatibility(record: dict) -> dict:
     }
     common.update(images=sorted(record["images"]), dispatch_job=dispatch_job(record))
     if record["executor"] == "platform":
-        common.update(
-            platform_id=record["platform_id"], execution=record.get("execution", {})
-        )
+        common["platform_id"] = record["platform_id"]
     else:
         common["resource_class"] = record.get("resource_class", "standard")
     return common
@@ -118,8 +116,6 @@ def _batch(records: list[dict], shard: int) -> dict:
         extra = [image for image in common["images"] if image not in LANE_IMAGES]
         if extra:
             label += " / " + " + ".join(extra)
-    elif common.get("execution"):
-        label += " / QEMU"
     if executor == "platform":
         # Platform contracts run in separate workers; their runtime label alone
         # would collide in the Actions matrix.
