@@ -90,6 +90,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
 		Classifiers:   append([]ClassifierSignalRule(nil), signals.ClassifierRules...),
 		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
+		Decision:      append([]DecisionSignalRule(nil), signals.DecisionRules...),
 	}
 }
 
@@ -326,6 +327,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			ResponseCache: cfg.SemanticCache,
 			Memory:        cfg.Memory,
 			VectorStore:   cloneVectorStoreConfig(cfg.VectorStore),
+			ToolSessions:  cloneToolSessionStoreConfig(cfg.ToolSessions),
 		},
 		Integrations: CanonicalIntegrationGlobal{
 			Tools:  cfg.Tools,
@@ -632,6 +634,38 @@ func cloneVectorStoreConfig(cfg *VectorStoreConfig) *VectorStoreConfig {
 		return nil
 	}
 	cloned := *cfg
+	return &cloned
+}
+
+// cloneToolSessionStoreConfig deep-clones a ToolSessionStoreConfig. Unlike
+// cloneVectorStoreConfig's shallow *cfg copy (safe there because
+// VectorStoreConfig has no pointer fields of its own), this struct is
+// pointer-heavy (five *int fields plus a nested *ToolSessionRedisConfig) —
+// a shallow copy would alias those pointers with the original across the
+// canonical export boundary, letting a mutation on one side leak into the
+// other.
+func cloneToolSessionStoreConfig(cfg *ToolSessionStoreConfig) *ToolSessionStoreConfig {
+	if cfg == nil {
+		return nil
+	}
+	cloned := *cfg
+	cloned.TTLSeconds = cloneIntPtr(cfg.TTLSeconds)
+	cloned.MaxSessions = cloneIntPtr(cfg.MaxSessions)
+	cloned.MaxSessionsByIdentity = cloneIntPtr(cfg.MaxSessionsByIdentity)
+	cloned.MaxStateBytes = cloneIntPtr(cfg.MaxStateBytes)
+	cloned.TimeoutMs = cloneIntPtr(cfg.TimeoutMs)
+	if cfg.Redis != nil {
+		redisClone := *cfg.Redis
+		cloned.Redis = &redisClone
+	}
+	return &cloned
+}
+
+func cloneIntPtr(v *int) *int {
+	if v == nil {
+		return nil
+	}
+	cloned := *v
 	return &cloned
 }
 
