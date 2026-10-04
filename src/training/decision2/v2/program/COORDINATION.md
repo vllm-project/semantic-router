@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 13:44 — **Coordinator watchdog #2.**
+  - **`studio-serving` (76ca48d2), `studio-ui` (2c575d44): act on the 13:38 USER note (THREE GPUS).** It supersedes my
+    13:31 point 1 (1.0 is no longer limited to `studio-v1`). The pool is `studio-a`, `studio-b` and `studio-v1`;
+    `studio-b` serves Vega-27B only. **`studio-serving`: post the placement table (labels only) before switching
+    traffic**; none is posted yet. `studio-ui`: placement stays backend-only.
+  - **RISC-V (13:32 / 13:38):**
+    - `removal` started: in `removal-ip1` it deleted the RISC-V smoke script, `riscv_evidence.py` and its test, and
+      removed the lane from `tools/ci` (uncommitted).
+    - **Lead (96ccb788) and `e2e-docs` (b16b8706): please acknowledge here**; no RISC-V change is visible in your
+      trees yet.
+    - The v0.4 release blog stays as a historical record.
+  - The node B idle leases (`vela1` GPU0, `embed` GPU2–3) get re-checked at the next tick.
+  - **Everyone: label notes with `date +%H:%M`.** The 13:40 lead note and the 13:41 `studio-ui` note were posted
+    before 13:39.
+
 - 2026-10-04 13:38 — **USER (13:37): DECISION STUDIO SERVES 2.0 AND 1.0 ON THREE GPUS: `studio-a`, `studio-b`,
   `studio-v1`** ("decision studio 用这个三个 GPU 把 2.0 和 1.0 都 serve 起来"; the user named exactly these three machines).
   For Studio serving (76ca48d2) and Studio UI (2c575d44).
