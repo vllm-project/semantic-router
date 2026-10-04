@@ -52,8 +52,9 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 ## 运行时报告 `failed` {#the-runtime-reports-failed}
 
 `GET /v1/models` 会给出每个模型失败的原因。由路由器运行模型时，路由器日志会带有同样的原因，例如
-`model runtime is not ready: model @domain_classifier failed to load: ...`；
-以这种方式加载失败的任务模型会让路由器无法启动。常见原因：
+`model runtime is not ready: model @domain_classifier failed to load: ...`。
+路由器运行的某个运行时进程中所有模型都加载失败时，路由器会重启该进程（首次等待 1 秒，之后最长间隔 60 秒），
+因此 GPU 被占用、磁盘已满这类暂时性原因消除后，模型会自行恢复。重试三次仍然失败的任务模型会让路由器无法启动。常见原因：
 
 | 原因提示 | 处理方法 |
 | --- | --- |

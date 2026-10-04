@@ -55,9 +55,12 @@ The model is probably not ready yet, or its answers arrive too late.
 
 `GET /v1/models` shows the reason for each model. When the router runs the
 model, its log carries the same reason, for example
-`model runtime is not ready: model @domain_classifier failed to load: ...`,
-and a task model that fails this way stops the router from starting. The
-common reasons:
+`model runtime is not ready: model @domain_classifier failed to load: ...`.
+When every model of a runtime process the router runs has failed, the router
+restarts that process (1 second at first, up to 60 seconds apart), so a passing
+cause such as a busy GPU or a full disk clears on its own. A task model that
+still fails after three tries stops the router from starting. The common
+reasons:
 
 | Reason says | Do this |
 | --- | --- |

@@ -210,6 +210,7 @@ answer:
 | The answer arrives after the feature's timeout | Unknown |
 | The runtime is overloaded | Unknown |
 | The runtime process crashed | Unknown until the router has restarted it (back-off from 1 s to 60 s) |
+| Every model of a process failed to load | Unknown; the router restarts that process with the same back-off until the model loads |
 | The input is longer than the deployment allows and `overflow: reject` | An error for that input |
 
 An unknown signal does not match. A decision's `rules.on_unknown` chooses what
