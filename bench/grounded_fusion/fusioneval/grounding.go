@@ -16,7 +16,7 @@ import (
 // routerGrounding returns the grounding backends the router serves for the
 // default recipe of a router config: its model catalog through the managed
 // runtime, then that recipe's classifier. Panel and context grounding both read
-// answers with that recipe's hallucination detector.
+// the hallucination detector.
 func routerGrounding(path string) (*looper.GroundingBackends, io.Closer, error) {
 	cfg, err := config.Load(path)
 	if err != nil {

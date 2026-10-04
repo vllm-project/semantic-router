@@ -30,15 +30,17 @@ func TestProduceArmKeepsRealAndPlaceboGroundingRequestLocal(t *testing.T) {
 	entry.PanelSHA256 = panelSHA256(entry.Panel)
 
 	entered, release := make(chan struct{}), make(chan struct{})
-	var releaseOnce sync.Once
+	var startOnce, releaseOnce sync.Once
 	unblock := func() { releaseOnce.Do(func() { close(release) }) }
 	t.Cleanup(unblock)
-	// Two responses: the panel reads each against the other, two readings per arm.
-	var realCalls atomic.Int32
+	var realCalls, forbiddenCalls atomic.Int32
+	forbidden := func(context.Context, string, string, string) ([]string, float32, error) {
+		forbiddenCalls.Add(1)
+		return nil, 0, nil
+	}
 	real := func(ctx context.Context, _, _, _ string) ([]string, float32, error) {
-		if realCalls.Add(1) == 2 {
-			close(entered)
-		}
+		realCalls.Add(1)
+		startOnce.Do(func() { close(entered) })
 		select {
 		case <-release:
 			return []string{"unsupported"}, 0.25, nil
@@ -58,11 +60,10 @@ func TestProduceArmKeepsRealAndPlaceboGroundingRequestLocal(t *testing.T) {
 
 	// Keep one real request in flight while another arm and a separate real
 	// model use the same FusionLooper. None may replace its scorer.
-	placebo := produceArm(fusion, client, opt, it, entry, "D", &looper.GroundingBackends{Detect: real})
+	placebo := produceArm(fusion, client, opt, it, entry, "D", &looper.GroundingBackends{Detect: forbidden})
 	require.Empty(t, placebo.Error)
 	require.True(t, placebo.GroundingPresent)
 	require.Len(t, placebo.Panel, 2)
-	assert.Equal(t, int32(2), realCalls.Load(), "placebo must not call the real model")
 
 	other := produceArm(fusion, client, opt, it, entry, "C", &looper.GroundingBackends{Detect: func(context.Context, string, string, string) ([]string, float32, error) {
 		return []string{"unsupported"}, 0.75, nil
@@ -75,15 +76,15 @@ func TestProduceArmKeepsRealAndPlaceboGroundingRequestLocal(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("real arm did not finish after releasing its detector")
 	}
-	assert.Equal(t, int32(2), realCalls.Load())
+	assert.Equal(t, int32(2), realCalls.Load(), "the real arm reads each response against its peer once")
 
-	repeated := produceArm(fusion, client, opt, it, entry, "D", &looper.GroundingBackends{Detect: real})
+	repeated := produceArm(fusion, client, opt, it, entry, "D", &looper.GroundingBackends{Detect: forbidden})
 	require.Empty(t, repeated.Error)
 	assert.Equal(t, placebo.Panel, repeated.Panel, "placebo remains deterministic for its item and seed")
-	plain := produceArm(fusion, client, opt, it, entry, "B", &looper.GroundingBackends{Detect: real})
+	plain := produceArm(fusion, client, opt, it, entry, "B", &looper.GroundingBackends{Detect: forbidden})
 	require.Empty(t, plain.Error)
 	assert.False(t, plain.GroundingPresent)
-	assert.Equal(t, int32(2), realCalls.Load(), "plain and placebo arms must not use the real detector")
+	assert.Zero(t, forbiddenCalls.Load(), "plain and placebo arms must not use the request's detector")
 	assert.Equal(t, entry.PanelSHA256, plain.PanelSHA256)
 	assert.Equal(t, entry.PanelSHA256, repeated.PanelSHA256)
 }

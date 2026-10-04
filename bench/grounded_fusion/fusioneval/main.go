@@ -241,10 +241,9 @@ func run(opt options) error {
 	return nil
 }
 
-// placeboDetector returns deterministic seeded-random detector readings:
-// reproducible for a given (seed, context, answer) but carrying no real signal.
-// Mirrors the in-package test placebo so arm D weights on noise, isolating the
-// score's signal.
+// placeboDetector returns deterministic seeded-random scores: reproducible for a
+// given (seed, context, answer) but carrying no real signal. Mirrors the
+// in-package test placebo so arm D weights on noise, isolating the score's signal.
 func placeboDetector(seed uint64) looper.HallucinationDetectFunc {
 	return func(_ context.Context, contextText, _, answer string) ([]string, float32, error) {
 		h := fnv.New64a()

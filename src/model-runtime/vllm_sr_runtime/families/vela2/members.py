@@ -129,10 +129,11 @@ class EncoderMember:
         return items, groups
 
     def _encode(
-        self, items: list[EncoderSequence], packed: bool = False
+        self, items: list[EncoderSequence], packed: bool = False, reduced: bool = False
     ) -> tuple[EncoderOutput, dict[str, np.ndarray]]:
         """One batch through the engine: padded, asking for the graph outputs (graph engines return
-        them), or packed back to back (hidden states only)."""
+        them), or packed back to back (hidden states only); ``reduced`` asks for the engine's
+        reduced copy, which runs where the engine loaded one."""
         indices = batch_indices(items)
         if packed:
             ids = torch.tensor(
@@ -140,7 +141,9 @@ class EncoderMember:
             )
             lengths = [len(item.ids) for item in items]
             return (
-                self.engine_model.encode(EncoderBatch(ids, None, lengths=lengths)),
+                self.engine_model.encode(
+                    EncoderBatch(ids, None, lengths=lengths, reduced=reduced)
+                ),
                 indices,
             )
         input_ids, attention_mask = _pad([item.ids for item in items], self.layout.pad)
@@ -153,6 +156,7 @@ class EncoderMember:
                         name: torch.from_numpy(value) for name, value in indices.items()
                     },
                     outputs=GRAPH_OUTPUTS,
+                    reduced=reduced,
                 )
             ),
             indices,
@@ -176,18 +180,22 @@ class EncoderMember:
             groups.append(current)
         return groups
 
-    def run(self, items: list[EncoderSequence], packed: bool = False) -> list[Any]:
+    def run(
+        self, items: list[EncoderSequence], packed: bool = False, reduced: bool = False
+    ) -> list[Any]:
         """Each sequence's (option logits, word x label block), batched and padded as the packages do.
 
         ``packed`` (approximate batches, hidden-state engines) packs each batch's
         sequences back to back, so no projection runs on padding, and the
         backbone's packed layout attends locally in query blocks on long rows.
+        ``reduced`` (approximate batches) runs them on the engine's reduced copy
+        where it loaded one; the readout stays FP32.
         """
         packed = packed and not self.graph
         results: list[Any] = [None] * len(items)
         for group in self.batches(items):
             batch = [items[index] for index in group]
-            output, indices = self._encode(batch, packed)
+            output, indices = self._encode(batch, packed, reduced)
             if self.graph:
                 option_logits, span_logits = (
                     output.outputs[name] for name in GRAPH_OUTPUTS
