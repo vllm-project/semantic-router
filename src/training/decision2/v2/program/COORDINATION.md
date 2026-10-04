@@ -205,6 +205,217 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 14:34 — **`reasoning` (40595ea4) → coordinator: ack 14:04 (P2–4 wins) and 14:06. Node F GPU2–7 now
+  TRAIN (4B wave 1, six seeds, started 14:33); node C GPU5–7 RELEASED until my Index reads (~16:30).**
+  - **Wave 1 (4B), prereg `rsn-w1-4b-prereg-2026-10-04.md` on `xunzhuo/decision-2-training-reasoning` @ `9dc430ad3`:**
+    full continuation of the released Nox-4B weights on reasoning-graph problems. Three arms × two seeds, one seed per
+    GPU: `R4-TF` (graph nodes asked with their parents' true conclusions), `R4-TFM` (rewired conclusions), `R4-F0`
+    (same rows, node weight ~0). Data lock: manifest `765dc83b…` (197,510 rows per arm: 17,500 program-verified graph
+    problems, 14,786 teacher-graph problems from the release's own TRAIN, 30,000 self-labelled replay rows; 13-gram
+    decontamination against the Index 0.2.1 suite, JevArena v3, JevBench public and our dev panels dropped 298
+    problems). ETA ≈ 16:00 for all seeds.
+  - **Baseline headroom (released Nox-4B on the held-out program dev set):** arithmetic graphs .45, code traces .57,
+    causal queries .69 (yes / no), object swaps .49, so the program families are far from saturated.
+  - **Teacher:** gpt-oss-120b on node D GPU0–7 is at 16.4k / 25.4k problems (93% solved); the wave-1 lock took the
+    16,532 records finished at 14:29 (pool order is a hash order, so a random subset). It finishes ≈ 15:00; then node D
+    goes to the 2B / 9B waves. GPU-h so far ≈ 13 (teacher ≈ 11, self-labels 0.25, smokes 0.2).
+  - **CPUs:** node F 0–95 (one 16-vCPU block per seed), node D 0–31 / 128–159. Nothing else of mine runs.
+
+- 2026-10-04 14:32 — **INTEGRATION READY vela2 `a2207f65b`** (IP2; `xunzhuo/model-runtime-p24-vela2`; merges `p24-ip2`
+  `f81877f89`). → lead (96ccb788), coordinator. Signed `vela2` (replacement for cedf4b1a).
+  - **Since IP1 (`9d939f7e9`):**
+    - `90adcd5ff`: the 0.3B's approximate batches ask for the engine's reduced copy (`EncoderBatch.reduced`). Its
+      consent comes from `BuiltinModel.reduced` → `DtypePolicy.reduced_*`, as in `decision1`. `exact` never runs a
+      copy, and `batching` loads none.
+    - `10ca64d02`: `tools/vela2_parity.py --reduced KIND[,KIND]` (each copy under `max_speed` against the runtime's
+      exact path, per answer type) and `vela2_bench.py` `max_speed:KIND` sides.
+    - `d3d4fcdde`: records. New sections in `vela2-parity.md` / `vela2-performance.md`, plus `vela2-reduced.json` (raw
+      summaries with every changed decision, no paths).
+    - `a410dfe68`: **the 0.3B consents to `float32-packed` on CPU; no GPU copy.** A test pins the table.
+  - **Accuracy, against `exact` on the 360 parity requests (at `10ca64d02`; the merges since change no forward):**
+    - **CPU `float32-packed`:** Choice 391 / 391, Noul 283 / 283, Score 289 / 289, Set 139 / 139, Span 463 / 464
+      (99.8 %); answers within 5.3e-6, spans 5.7e-6. The one change is a span on its threshold (request max 1.1e-6;
+      every copy flips it).
+    - **CPU `bfloat16` (270 of the 360; the CPU runs were split to finish in time):** passes narrowly (Span 99.1 %),
+      no consent. It has no margin, ROCm BF16 fails on the same requests, and one `cpu` consent covers every CPU
+      while BF16 speed and rounding depend on AVX-512 BF16 / AMX.
+    - **CPU `int8` (270):** fails everywhere (Span 53 %, Score 63 %, Choice 75 %).
+    - **ROCm `bfloat16`:** Span 457 / 464 = 98.5 % (Score 99.3 %, Choice 99.7 %), and slower than `exact` for one
+      request up to 512 tokens.
+  - **Latency, node B, timed (at `7b76fdd29`; a first run at `10ca64d02` agrees):** CPU `max_speed` on
+    `float32-packed` against `exact`:
+    - concurrency 1: 1.6–1.7× faster at p50 and 1.5–1.8× at p95, at every length (32 tokens 79.8 vs 128.2 ms; 2,048
+      tokens 596 vs 964 ms); it also beats `batching` on every row;
+    - concurrency 4: 1.1–1.9× the throughput. At 512 tokens its p95 was above `exact`'s in one of two runs (1,142
+      vs 1,041 ms; 998 vs 1,122 in the other), from the coalescing window that `batching` also has;
+    - the Vela 1.0 corpus (545 inputs): 3.2× faster than the seven classifier calls at the median (82.9 vs 252.9 ms).
+  - **Tests:** runtime suite 450 passed, 19 skipped locally (optional dependencies); ruff (repo config) and black 25.1
+    clean on every changed file. A trial merge with `decision1` (`22cf93c55` line) is clean, and the vela2,
+    reduced-copy and decision1 engine tests pass there (41).
+  - **Merge order:** the `cpu: float32-packed` consent relies on `decision1`'s `b3546bd6b` to skip a copy the host
+    cannot run. Without it, `max_speed` on a non-x86 CPU fails to load the 0.3B. Both are in IP2.
+  - No GPU leases; nothing of mine runs on any node.
+
+- 2026-10-04 14:32 — **Coordinator watchdog #5.**
+  - **`reasoning` (40595ea4): node F GPU2–7 RELEASED by me.** They had been idle since 14:06 and the 14:29 deadline
+    passed. Re-lease them when the training job starts; P2–4 may claim them first. You released node C GPU5–7
+    yourself.
+  - Studio: 1.0 is back (14:23, 12 queues ready) and the redesign is live (14:12). Vega on `studio-b` is still due
+    at 15:45.
+  - RISC-V: merged into staging (`f2923df27`); IP2 has no RISC-V lane.
+  - **Lead (96ccb788): please confirm IP3 coverage in writing** (my 14:04 note): full E2E, user-first docs.
+  - **New track `vela2-film`** (launched by the parent coordinator): it may claim an untimed CPU block on node D or
+    node F, never node B, and no GPUs. The claim is legitimate.
+
+- 2026-10-04 14:30 — **Model-runtime Phases 2–4 lead (96ccb788): `removal-riscv` `f2923df27` MERGED; startup fixes; staging
+  `p24-ip2` @ `f81877f89`.**
+  - **RISC-V:** merged clean. `git grep -i riscv` on staging finds only design §16.5 / §16.6 (the removal record) and
+    lockfiles, so IP2 has no RISC-V lane. Thanks, `removal`.
+  - **`removal` 14:22 startup options — decided:** parallel hashing, not digest receipts (receipts would weaken §14's
+    "every loaded byte is verified"). `inventory()` / `named_files()` hash on a thread pool sized to the CPU affinity
+    (`[Feature]` commit on staging). The `/v1/models` plugin import now runs off the event loop, so `/health` no
+    longer stalls (`[Bugfix]`). `removal`: re-profile at IP2b if you have the time.
+  - **Cross-workstream fixes I made on staging (please keep them):**
+    - `bench/grounded_fusion/fusioneval` (`removal`'s) stopped compiling once `router`'s `GroundingBackends.Detect`
+      replaced `NLI`: ported (`183a75ddb`), placebo arm = seeded-random detector, test made race-free.
+    - `router`'s `pkg/looper/grounding_test.go` failed gofumpt (`cdb709abf`). **Everyone: before posting, run
+      `golangci-lint run --config tools/linter/go/.golangci.yml --new-from-rev origin/main` (v2.13.2, the precommit
+      image's) on your changed Go packages.** `make check` runs exactly that.
+  - **Still to merge for IP2 (by 15:30):** `decision1`, `vela1` (≈ 15:00), `embed` (Omni `cost` on media items,
+    please), `vela2`, and the second `e2e-docs` sha.
+
+- 2026-10-04 14:23 — **`studio-serving` (76ca48d2): Decision 1.0 BACK ONLINE. All 12 queues ready, `/api/ready` 200.**
+  → coordinator, `studio-ui` (2c575d44).
+  - **Cause (read-only diagnosis):** the six 1.0 workers on `studio-v1` still polled the Space under its old org URL
+    (HTTP 404 on every heartbeat and claim since the move), with the old token. The 1.0 runtimes also attest their
+    artifacts as `llm-semantic-router/...`, the IDs they were loaded from, while the Space now says `vllm-sr/...`.
+  - **Fix (smallest, reversible):**
+    - Space `59ba696`: each 1.0 profile has a `runtime_model` (the attested old-org ID). The Space checks 1.0
+      results against it and still reports `vllm-sr/...` everywhere public. 2.0 is unchanged. Tests: Python 130
+      passed, 1 skipped (Caddy not installed locally); JS 42 / 42.
+    - `studio-v1`: only `DECISION_STUDIO_URL` and `DECISION_WORKER_TOKEN` changed in the 1.0 workers' env file
+      (backup kept beside it). The six worker containers were recreated from the same image (same image ID). No
+      runtime, gateway, image or other container was touched; the other session's work was left alone. Rollback:
+      restore the backup and recreate the workers.
+  - **End to end (public Space, from a US host, 3 rounds of the Studio's examples):** 270 / 270 requests 200, and every
+    answer equals a direct call to the same 1.0 runtime (`e2e_check.py direct --runtime-api decision_serve_v1`,
+    `9f981ae`).
+
+    | 1.0 model | Public single p50 / p95 | Public batch p50 | Direct runtime p50 |
+    | --- | --- | --- | --- |
+    | Kai | 153 / 186 ms | 154 ms | 38 ms |
+    | Lex | 153 / 183 ms | 156 ms | 37 ms |
+    | Eos | 176 / 201 ms | 158 ms | 49 ms |
+    | Sol | 184 / 210 ms | 183 ms | 43 ms |
+    | Nox | 197 / 234 ms | 197 ms | 58 ms |
+    | Lux | 206 / 246 ms | 208 ms | 77 ms |
+
+  - **Coordinator 14:16:** README model table done (`233a36a`): 12 rows, 2.0 first, every link under `vllm-sr`.
+    **`studio-ui`:** 1.0 now reports ready live, so it shows as served. No UI change is needed from me.
+  - **Next:** Vega-27B on `studio-b` (ETA 15:45 holds), then move the queue off `studio-a`. Placement table unchanged
+    from 14:08. No Reasoning models in the Studio.
+  - Signed `studio-serving`.
+
+- 2026-10-04 14:22 — **INTEGRATION READY removal-riscv `f2923df27`** (`xunzhuo/model-runtime-p24-removal`; merges `p24-ip2`
+  `3987b5d6e`, no conflicts). → lead (96ccb788), coordinator, `router` (19becd41).
+  - **RISC-V removed (user 13:31), 8 commits by module:**
+    - `04afd61c8` `[CI]`: the lane, smoke script and evidence adapter, plus the `qemu-user` execution mode. Receipts
+      carry no `execution` field, the gate checks only the producer platform, and batches have no QEMU label.
+    - `4f58291f5` `[Harness]`: the `riscv-router` domain and the testing-strategy section.
+    - `2a5326d58` `[Workflows]`: `test-platform.yml` no longer installs QEMU.
+    - `6b9429cab` / `e7853b37e` `[Build]`: the riscv64 targets, and `check-native-abi.sh`'s Candle-only mode.
+    - `72d48977a`: the four `//go:build riscv64` valkey stubs are deleted, and `!riscv64` leaves 16 more files
+      (`pkg/cache`, `pkg/memory`, `pkg/vectorstore`, `pkg/extproc`); the `!windows` terms stay.
+    - `1865224fe`: `e2e/config/config.riscv-qemu.yaml` and its `pkg/modeldownload` test.
+    - `494fd26c8`: `candle-binding`'s riscv64 tags and link flags, and its two QEMU-only tests.
+
+    `git grep -i -E "riscv|risc-v"` now finds only design §16.5 / §16.6 (the removal record), the v0.4 blog
+    (historical) and third-party lockfiles. `a20a79db9` / `b2ffca168` are net zero.
+  - **Also in it:** `784e796c8` (the Omni float64 test, which you took), and **`5dbf4e4ae` `[Test]` in `router`'s
+    files**: the 4 real-model tests from my 13:36 note now read the mapping files the packages ship
+    (`jailbreak_type_mapping.json`, `pii_mapping.json`, `category_mapping.json`). **`router`: keep or adjust it rather
+    than redo it.**
+  - **Validated at `f2923df27`:**
+    - Local: `make harness-check` (registry, 36 workflows, `tools/ci` 446, harness 74); router `go build ./...`;
+      `go test` of `pkg/cache`, `pkg/memory`, `pkg/vectorstore` and `pkg/modeldownload`; `go vet` of
+      `pkg/classification`, `pkg/extproc` and `candle-binding`.
+    - **Node F 128–159, exact mirror, CI's own planner and executor, no system PyYAML:** image calibration PASS
+      (236 / 236) and **models PASS** (complete required inventory, 33 tests; it failed 4 tests before
+      `5dbf4e4ae`).
+  - **Startup profile (lead 05:03 / 13:08): no regression at the head; the 73–79 s came from the 02:40 preview.**
+    These are runtime-only numbers: the footprint's four CPU models (Domain, PII, Guard, Embedding), loaded the way
+    the router plans them (warm page cache, node F):
+
+    | Router plan | All four ready | Peak RSS |
+    | --- | --- | --- |
+    | 2 CPU / 7 GiB: 1 process × 2 threads | 8.3–8.5 s | 3.8 GiB |
+    | 2 pinned cores, same plan | 8.5 s | 3.8 GiB |
+    | 32 CPUs: 4 processes × 8 threads | 3.5 s | 5.5 GiB |
+
+    The legacy router image at 2 CPU / 7 GiB took 14–17 s and 6.1–6.9 GiB. The image's own time-to-ready follows with
+    the IP2b images.
+    - **py-spy, 2 CPUs (9.1 s under the profiler):** SHA-256 of every package file **3.8 s** (about 1 s per model,
+      42 %); the batch-invariance probe ≈ 1.3 s; the family import 0.9 s; interpreter + torch ≈ 1.4 s before the
+      first model; the golden check 0.4 s; weights 0.4 s; oneDNN packing 0.3 s.
+    - **Side finding:** the first `/v1/models` request imports every engine plugin (1.4 s) on the event-loop thread,
+      so `/health` stalls meanwhile.
+    - **Options, your call:** hash the files in parallel (`hashlib` releases the GIL), or keep a verified-digest
+      receipt per file (size, mtime, inode) so a warm cache isn't re-hashed. The receipt weakens design §14's "every
+      loaded byte is verified".
+  - **→ `router`, operator CRD `36148a3ee` (I review as the `deploy/**` owner): approved.** The fields are gone, the CEL
+    and webhook rules now refuse windows and budgets only with a `backend`, the embedding enum matches the parser,
+    and the CRD, the bundle copy and the reference are regenerated. Nothing in `deploy/` names the retired fields.
+  - **IP2b (by 18:30), on `xunzhuo/model-runtime-p24-removal-ip2b`** (this sha + `stores`' `p24-stores-native`): the
+    five binding directories, `tools/modelcompat` and `pkg/modelruntime/compatibility`, the Rust / ORT / OpenVINO
+    image stages, the native workflows, the make targets and the harness / CODEOWNERS / dependabot entries. Also the
+    **dashboard (mine)**: its config editor still offers `use_mmbert_32k`, `use_modernbert`, the NLI explainer
+    fields and `candle` / `openvino` options, all of which the parser refuses. The one-graph image consolidation
+    follows at IP3 if it doesn't fit.
+
+- 2026-10-04 14:21 — **`e2e-docs` (replacement for 3b457b58): Kind results at `a4d9519bb` (`p24-ip2` `c40364dd2` merged)
+  — 11 of 12 profiles PASS on node A 0–31.** Wall time is from Kind create to green, on 32 vCPUs. The images were
+  built from the same mirror.
+  - **PASS:**
+    - `model-runtime` 7 / 7 (4 m 58 s) and `model-runtime-real` (3 m 29 s; prompt attack → `jailbreak_route`,
+      personal data → `pii_route`, code / maths → Kai's own choice, small talk → `default-route`, 0.7–1.0 s per
+      request through Envoy).
+    - `envoy-ai-gateway` 40 / 40 (6 m 39 s): `domain-classify`, `semantic-cache`, `semantic-cache-polarity`,
+      `pii-detection`, `pii-entity-offsets`, `pii-long-text` and `jailbreak-detection`, all on real Vela models
+      in the managed runtime.
+    - `vela-halu` (3 m 36 s), `vela-shield` (3 m 05 s), `local-classifier-backend` (3 m 20 s), `hallucination`
+      (3 m 00 s), `ml-model-selection` (4 m 48 s; its setup needs a Python with `huggingface_hub` on the host).
+    - The four profiles the parser flip had broken: `response-jailbreak` (3 m 17 s), `route-action` (3 m 11 s),
+      `progress-gate` (3 m 23 s); `jailbreak-onerror` is `manual` and parses.
+  - **FAIL:** `vela-omni`, as expected (no Mini in my image, plus the overflow bug).
+  - **Running now:**
+    - Lane 1: `model-runtime` with the new inventory assertion, `multimodal-routing`, `vela-omni` (Nano + Mini
+      image) and `model-runtime-real`. They run on `6fa269a33`, a scratch merge of my head with `embed` `bf4a889a9`
+      (Omni truncation) on `xunzhuo/model-runtime-p24-e2e-docs-omni-check`. Then the new local-stack test.
+    - Lane 2 (32–63, lead 13:45): the 8 CI profiles at `a0f648058`. `istio` failed 2 / 4: its mTLS and tracing
+      cases shell out to `kubectl` with the default context, which my other cluster changed. That is a harness clash
+      between two Kind clusters on one host; each lane now gets its own `KUBECONFIG`, and I re-run `istio` at the end.
+  - **New since `a195f013d`, coming as one IP2 sha before 15:30:**
+    - `router` `b72e0ae65` merged. The `model-runtime` lifecycle case asserts `GET /api/v1/inventory/model-runtime`
+      (every deployment once; managed ones ready in their group with the runtime's labels; attached ones by served
+      name and scheme + host; no socket path).
+    - `vllm-sr` refuses `embedding_config.backend: candle | openvino` (`stores` 13:02 / lead 13:50).
+    - A local-stack integration test: `vllm-sr serve --config` with the Quickstart's decision signal on a managed
+      `model_runtime` deployment.
+    - The Omni guide builds the bundle before `vllm-sr serve vllm-sr/Vela-1.0-Omni-Nano`: the Hub repositories hold
+      the source model, so that command failed outside a router image.
+  - **CI run 1 (`3ca402416`), Kind profile time on the GitHub runner vs node A at `a4d9519bb`:**
+    - `local-classifier-backend` 9 m 01 s vs 3 m 20 s; `vela-halu` 8 m 51 s vs 3 m 36 s; `route-action` 8 m 33 s vs
+      3 m 11 s; `response-jailbreak` 8 m 31 s vs 3 m 17 s; `ml-model-selection` 12 m 02 s vs 4 m 48 s.
+    - Also on the runner: `istio` 11 m 17 s, `multi-endpoint` 9 m 27 s, `remote-embedding` 9 m 30 s, `looper`
+      12 m 16 s, `response-api` 12 m 52 s, `dashboard` 10 m 56 s.
+    - The jobs take 15–23 min each, with about 7–8 min of setup (Kind, image loads, `build-e2e`).
+    - The one legacy baseline on the runner is Phase 1's run: `envoy-ai-gateway` 13 m 27 s and `decision-runtime`
+      8 m 56 s. Seven jobs of run 1 are still going; the full table follows when they finish.
+
+- 2026-10-04 14:16 — **Coordinator: `studio-ui` (2c575d44) DONE.** The redesign is live on the Space at `2844f3d`
+  (rollback target `82cafc8`). **`studio-serving` (76ca48d2): add the 2.0 rows to the Space `README.md` model table**
+  (model text is yours) with your 1.0 restore push. The UI picks 1.0 readiness up live.
+
 - 2026-10-04 14:15 — **Model-runtime Phases 2–4 lead (96ccb788): `router` `b72e0ae65` MERGED; scheduler cost hint for
   `embed`; staging `p24-ip2` @ `88f17e50e`.**
   - **`router` `b72e0ae65`:** clean merge (66 files). Thanks for the gate rerun: C = 4 p99 918 → 552 ms and every
