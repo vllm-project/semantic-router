@@ -58,6 +58,15 @@ print("checkpoint-%07d" % d["planned_updates"])' "$R/arms/full/$r/COMPLETE.json"
     python3 -c 'import json,sys; print(json.loads(open(sys.argv[1]).read().strip().splitlines()[-1])["model_sha256"])' \
       "$out.stdout.log" > "$out/MODEL_SHA256"
     echo "soup $name: $(cat "$out/MODEL_SHA256")" ;;
+  interp)
+    name=$1 tuned=$2 alpha=$3
+    out=$R/soup/$name
+    [[ -e $out ]] && { echo "$out exists" >&2; exit 2; }
+    bash "$OPS/rsn-launch.sh" "interp-$name" "$src" "$out" --cpu --cpus "${RSN_SOUP_CPUS:-0-47}" --image 4b -- \
+      -m v2.reasoning.interpolate --tuned "/rsn/soup/$tuned/build" --start "$START" --alpha "$alpha" --output /out/build
+    python3 -c 'import json,sys; print(json.loads(open(sys.argv[1]).read().strip().splitlines()[-1])["model_sha256"])' \
+      "$out.stdout.log" > "$out/MODEL_SHA256"
+    echo "interp $name: $(cat "$out/MODEL_SHA256")" ;;
   devread)
     name=$1 gpu=$2
     ck=/rsn/soup/$name/build
