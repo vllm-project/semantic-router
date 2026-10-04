@@ -43,6 +43,19 @@ func (d ModelDeployment) Managed() bool {
 	return d.IsModelRuntime() && strings.TrimSpace(d.Endpoint) == ""
 }
 
+// ServedModel names the model a consumer of the deployment called name runs:
+// its artifact, or, for an attached runtime without one, the model the runtime
+// serves under served_name or the deployment's name.
+func (d ModelDeployment) ServedModel(name string) string {
+	if d.Artifact != "" || !d.IsModelRuntime() || d.Managed() {
+		return d.Artifact
+	}
+	if d.ServedName != "" {
+		return d.ServedName
+	}
+	return name
+}
+
 // ModelRuntimeDeploymentsInUse returns the model_runtime deployments that the
 // configuration uses, with defaults applied: those a decision signal or a
 // decision algorithm names, and those an active task binding names in the

@@ -46,7 +46,7 @@ func validateGenericModelBinding(cfg *RouterConfig, rule *ClassifierSignalRule, 
 	default:
 		return fmt.Errorf("unsupported generic classifier type %q", rule.Type)
 	}
-	projected := projectGenericClassifierRule(*rule, deployment)
+	projected := projectGenericClassifierRule(*rule, decl.Deployment, deployment)
 	if deployment.Provider != "http" {
 		return nil
 	}
@@ -56,7 +56,7 @@ func validateGenericModelBinding(cfg *RouterConfig, rule *ClassifierSignalRule, 
 	return validateSequenceClassifierSignal(cfg, projected)
 }
 
-func projectGenericClassifierRule(rule ClassifierSignalRule, deployment ModelDeployment) ClassifierSignalRule {
+func projectGenericClassifierRule(rule ClassifierSignalRule, name string, deployment ModelDeployment) ClassifierSignalRule {
 	rule.Model, rule.ModelPath, rule.UseCPU = "", "", false
 	if deployment.Provider == "http" {
 		rule.Model = deployment.ExternalModel
@@ -65,7 +65,7 @@ func projectGenericClassifierRule(rule ClassifierSignalRule, deployment ModelDep
 		}
 	} else {
 		rule.Type = ClassifierSignalTypeLocal
-		rule.ModelPath = ResolveModelPath(deployment.Artifact)
+		rule.ModelPath = ResolveModelPath(deployment.ServedModel(name))
 		rule.UseCPU = deployment.Device == "cpu"
 	}
 	return rule

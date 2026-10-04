@@ -111,3 +111,13 @@ func TestModelDeploymentROCmCustomOpsIsExplicitAndScoped(t *testing.T) {
 		t.Fatal("none did not normalize to no custom ops")
 	}
 }
+
+func TestSafetyBindingOnAnAttachedRuntimeNeedsNoArtifact(t *testing.T) {
+	cfg := safetyTestConfig()
+	cfg.SafetyModels.Safety.ModelID = ""
+	cfg.ModelDeployments = map[string]ModelDeployment{"head": {Provider: ModelRuntimeProvider, Endpoint: "http://runtime:8100", Input: ModelInputBudget{MaxTokens: 2048}}}
+	cfg.ModelBindings = map[string]ModelBinding{"safety.unsafe": {Deployment: "head", Adapter: "modernbert", Contract: RemoteClassifierContractLabelDistribution}}
+	if err := validateSafetySignalContracts(cfg); err != nil {
+		t.Fatalf("an attached safety head selects its model by deployment name: %v", err)
+	}
+}
