@@ -112,8 +112,9 @@ func (c *Classifier) initializeHallucinationDetector() error {
 
 // GroundingBackends returns this recipe's prepared functions. The request's
 // generation lease keeps them alive; no process-global callback is replaced.
-// The NLI explainer is retired, so panel grounding has no NLI backend and
-// skips that check under its on_error policy.
+// Both grounding references read the hallucination detector: the context
+// reference against the request's context, the panel reference against each
+// peer response.
 func (c *Classifier) GroundingBackends() *looper.GroundingBackends {
 	if c == nil {
 		return nil
@@ -125,7 +126,8 @@ func (c *Classifier) GroundingBackends() *looper.GroundingBackends {
 			if err != nil {
 				return nil, 0, err
 			}
-			// Faithfulness uses span overlap; confidence is optional evidence.
+			// The score is the detector's summary, its highest
+			// hallucinated-token probability when it reports one.
 			return result.UnsupportedSpans, result.Confidence, nil
 		}
 	}

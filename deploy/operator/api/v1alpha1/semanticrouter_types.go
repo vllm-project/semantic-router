@@ -1077,8 +1077,9 @@ type EmbeddingModelsConfig struct {
 
 // HNSWEmbeddingConfig contains settings for embedding classification with HNSW indexing
 type HNSWEmbeddingConfig struct {
-	// Backend selects the embedding provider backend.
-	// +kubebuilder:validation:Enum=candle;openvino;openai_compatible
+	// Backend selects the embedding provider backend: the built-in model
+	// runtime (the default) or an external OpenAI-compatible endpoint.
+	// +kubebuilder:validation:Enum=model_runtime;openai_compatible
 	// +optional
 	Backend string `json:"backend,omitempty"`
 
@@ -1500,8 +1501,8 @@ type ToolsConfig struct {
 
 // PromptGuardConfig defines prompt guard configuration.
 //
-// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || (!has(self.backend) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="max_sequence_length requires the local mmbert32k variant"
-// +kubebuilder:validation:XValidation:rule="!has(self.window) || (!has(self.backend) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="window requires the local mmbert32k variant"
+// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || !has(self.backend)",message="max_sequence_length applies to the local model; omit it with backend"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || !has(self.backend)",message="window applies to the local model; omit it with backend"
 // +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
 type PromptGuardConfig struct {
 	// Backend selects a named external classifier and its typed result contract.
@@ -1514,18 +1515,13 @@ type PromptGuardConfig struct {
 	// +optional
 	MaxSequenceLength int `json:"max_sequence_length,omitempty"`
 	// Window enables explicit scanning of all input tokens. Omission or null
-	// keeps whole-input inference. Only the local mmbert32k variant supports it.
+	// keeps whole-input inference. Only the local model supports it.
 	// +nullable
 	// +optional
 	Window *PromptGuardWindowConfig `json:"window,omitempty"`
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
-	// Variant selects a local Candle-backed model variant. It is mutually
-	// exclusive with Backend. When both are omitted, the operator uses mmbert32k.
-	// +kubebuilder:validation:Enum=candle;mmbert32k
-	// +optional
-	Variant string `json:"variant,omitempty"`
 	// +kubebuilder:default="models/Vela-1.0-Encoder-307M-Guard"
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
@@ -1581,8 +1577,6 @@ type ClassifierConfig struct {
 type CategoryModelConfig struct {
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
-	// +optional
-	UseModernBERT bool `json:"use_modernbert,omitempty"`
 	// Classification threshold (0.0-1.0). Stored as string to avoid float precision issues.
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
@@ -1601,9 +1595,8 @@ type CategoryModelConfig struct {
 // admission instead of by the router at load.
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.contract) || self.backend.contract == 'token_spans.v1'",message="PII reads token_spans.v1 only; omit backend.contract or set it to token_spans.v1"
-// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.use_mmbert_32k) || !self.use_mmbert_32k",message="backend cannot be combined with local use_mmbert_32k"
-// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || (!has(self.backend) && has(self.use_mmbert_32k) && self.use_mmbert_32k)",message="max_sequence_length requires local use_mmbert_32k"
-// +kubebuilder:validation:XValidation:rule="!has(self.window) || (!has(self.backend) && has(self.use_mmbert_32k) && self.use_mmbert_32k)",message="window requires local use_mmbert_32k"
+// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || !has(self.backend)",message="max_sequence_length applies to the local model; omit it with backend"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || !has(self.backend)",message="window applies to the local model; omit it with backend"
 // +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
 type PIIModelConfig struct {
 	// MaxSequenceLength is the total tokenized input budget, including special
@@ -1611,9 +1604,6 @@ type PIIModelConfig struct {
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	MaxSequenceLength int `json:"max_sequence_length,omitempty"`
-	// UseMmBERT32K selects the local model that supports token windows.
-	// +optional
-	UseMmBERT32K bool `json:"use_mmbert_32k,omitempty"`
 	// Window scans original content tokens with explicit overlap. Omission or
 	// null leaves window selection unchanged; no CRD defaults are injected.
 	// +nullable
@@ -1621,8 +1611,6 @@ type PIIModelConfig struct {
 	Window *PromptGuardWindowConfig `json:"window,omitempty"`
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
-	// +optional
-	UseModernBERT bool `json:"use_modernbert,omitempty"`
 	// Detection threshold (0.0-1.0). Stored as string to avoid float precision issues.
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
@@ -1633,8 +1621,8 @@ type PIIModelConfig struct {
 	PIIMappingPath string `json:"pii_mapping_path,omitempty"`
 	// Backend names a remote token classifier speaking token_spans.v1. Its
 	// absence keeps local PII inference. The local selectors this replaces are
-	// model_id, use_modernbert, use_mmbert_32k and use_cpu above. Explicit
-	// token windows are only supported by the local mmbert32k model.
+	// model_id and use_cpu above. Explicit token windows are only supported by
+	// the local model.
 	// +optional
 	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
 	// OnError selects what a PII backend failure, or a provider-declared

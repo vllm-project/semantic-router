@@ -3,7 +3,9 @@ version: v0.3
 # Router latency gate config (docs/records/router-latency-cpu.md): the
 # model-backed request signals of the default configuration (domain, prompt
 # guard, PII, fact-check, feedback) plus a keyword signal, on the Vela 1.0
-# models, with decisions that read every one.
+# models, with decisions that read every one. The legacy router reads
+# router-latency-cpu-legacy.yaml: the same signals, decisions and models with
+# its backend selectors (variant, use_mmbert_32k), which this router rejects.
 
 listeners:
   - name: http-18899
@@ -187,7 +189,6 @@ global:
         model_id: models/Vela-1.0-Encoder-307M-Guard
         threshold: 0.5
         use_cpu: true
-        variant: mmbert32k
         max_sequence_length: 0
         jailbreak_mapping_path: models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json
         positive_labels: [jailbreak]
@@ -208,7 +209,6 @@ global:
           model_id: models/Vela-1.0-Encoder-307M-PII
           threshold: 0.9
           use_cpu: true
-          use_mmbert_32k: true
           pii_mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
       hallucination_mitigation:
         enabled: false
@@ -218,7 +218,6 @@ global:
           model_id: models/Vela-1.0-Encoder-307M-FactCheck
           threshold: 0.95
           use_cpu: true
-          use_mmbert_32k: true
       feedback_detector:
         enabled: true
         model_ref: feedback_detector
@@ -226,4 +225,3 @@ global:
         model_id: models/Vela-1.0-Encoder-307M-Feedback
         threshold: 0.7
         use_cpu: true
-        use_mmbert_32k: true

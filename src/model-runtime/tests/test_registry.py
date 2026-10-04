@@ -184,6 +184,20 @@ def test_a_hub_package_without_a_manifest_keeps_its_pointer_files(
     assert calls[-1] == ["model.safetensors"] and ref.revision == revision
 
 
+def test_parallel_hashing_matches_one_file_at_a_time(tmp_path):
+    from vllm_sr_runtime.registry.artifacts import inventory, sha256_file, sha256_files
+
+    for index in range(12):
+        (tmp_path / f"part-{index}.bin").write_bytes(
+            bytes([index]) * (index * 4099 + 1)
+        )
+    paths = {path.name: path for path in sorted(tmp_path.iterdir())}
+    expected = {name: sha256_file(path) for name, path in paths.items()}
+    assert sha256_files(paths) == expected
+    assert inventory(tmp_path) == expected
+    assert sha256_files({}) == {}
+
+
 def test_named_files_hash_only_what_a_family_loads(tmp_path):
     from vllm_sr_runtime.registry.artifacts import named_files, sha256_file
 

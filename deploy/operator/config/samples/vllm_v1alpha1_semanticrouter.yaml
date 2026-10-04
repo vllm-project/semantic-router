@@ -152,7 +152,6 @@ spec:
     # Prompt guard / jailbreak detection
     prompt_guard:
       enabled: true
-      variant: mmbert32k
       model_id: "models/Vela-1.0-Encoder-307M-Guard"
       threshold: "0.5"
       use_cpu: true
