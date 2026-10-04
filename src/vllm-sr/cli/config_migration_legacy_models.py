@@ -21,32 +21,26 @@ QWEN3_EMBEDDING = "models/mom-embedding-pro"
 class Replacement:
     """A legacy model's runtime replacement.
 
-    ``mapping_file`` names the label map shipped in the replacement package, so
-    a module mapping path that pointed into the legacy directory follows the
-    model. ``reembed`` marks embedding replacements whose vectors live in a
-    different space.
+    ``reembed`` marks embedding replacements whose vectors live in a different
+    space.
     """
 
     target: str
     note: str
-    mapping_file: str = ""
     reembed: bool = False
 
 
 _DOMAIN = Replacement(
     VELA + "Domain",
     "Vela Domain keeps the 14 MMLU-Pro domain labels",
-    mapping_file="category_mapping.json",
 )
 _PII = Replacement(
     VELA + "PII",
     "Vela PII keeps the 35 BIO labels of the 17 PII types",
-    mapping_file="pii_mapping.json",
 )
 _GUARD = Replacement(
     VELA + "Guard",
     "Vela Guard keeps the benign / jailbreak labels",
-    mapping_file="jailbreak_type_mapping.json",
 )
 _FACT_CHECK = Replacement(
     VELA + "FactCheck",
@@ -292,15 +286,12 @@ def runtime_artifact(value: object) -> str | None:
     return HUB_REPOSITORIES.get(path) or PREPARED_BUNDLES.get(path)
 
 
-def follow_mapping_path(
-    mapping_path: object, legacy_model: str, replacement: Replacement
-) -> str | None:
-    """Move a label map that lived inside the legacy model's directory."""
-    if not isinstance(mapping_path, str) or not mapping_path.strip():
-        return None
-    prefix = _normalized(legacy_model) + "/"
-    if not mapping_path.startswith(prefix):
-        return None
-    if replacement.mapping_file:
-        return f"{replacement.target}/{replacement.mapping_file}"
-    return ""
+def is_legacy_mapping(mapping_path: object, legacy_model: str) -> bool:
+    """Whether a label map lived inside the legacy model's directory.
+
+    Such a map described the legacy model only; the router reads a runtime
+    model's labels from the model itself. A map elsewhere is the operator's.
+    """
+    return isinstance(mapping_path, str) and mapping_path.startswith(
+        _normalized(legacy_model) + "/"
+    )

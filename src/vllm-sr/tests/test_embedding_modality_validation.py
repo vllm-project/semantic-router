@@ -119,13 +119,12 @@ def test_explicit_binding_defers_media_capability_to_loaded_provider():
         "embedding": {
             "deployment": "omni",
             "contract": "embedding.v1",
-            "adapter": "vela_omni",
         }
     }
     raw["global"]["model_catalog"]["deployments"] = {
         "omni": {
-            "artifact": "models/vela-1.0-omni-nano",
-            "provider": "ort",
+            "artifact": "/opt/router-model-artifacts/vela-1.0-omni-nano",
+            "provider": "model_runtime",
             "device": "cpu",
         }
     }

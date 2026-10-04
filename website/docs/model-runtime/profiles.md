@@ -50,7 +50,7 @@ your own traffic before you switch.
 The runtime is fast in the default profile too. It never trades correctness
 for these:
 
-- every signal of a request reaches the runtime in one bundled call;
+- the signals of a request reach each runtime process in one bundled call;
 - features that ask one model about the same text share one pass through the
   model;
 - work for different models runs in parallel;

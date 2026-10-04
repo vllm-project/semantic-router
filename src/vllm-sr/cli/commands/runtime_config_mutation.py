@@ -119,14 +119,6 @@ GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
         "detector",
         "use_cpu",
     ),
-    (
-        "global",
-        "model_catalog",
-        "modules",
-        "hallucination_mitigation",
-        "explainer",
-        "use_cpu",
-    ),
     ("global", "model_catalog", "modules", "feedback_detector", "use_cpu"),
     (
         "global",

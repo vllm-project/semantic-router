@@ -30,6 +30,8 @@ var mrSignalPrompts = []string{
 
 const (
 	mrSignalThreshold = 0.5
+	// Must match classifier.domain.threshold in values.yaml.
+	mrDomainThreshold = 0.01
 	// The Router reads float32 model outputs the runtime reports as JSON.
 	mrScoreTolerance = 1e-5
 	// Must match the windows in values.yaml.
@@ -81,8 +83,8 @@ func checkTaskSignals(
 	if err != nil {
 		return nil, err
 	}
-	if len(preview.SignalErrors) > 0 {
-		return nil, fmt.Errorf("routing preview reported signal errors %v", preview.SignalErrors)
+	if err = onlyOfflineSignalError(preview.SignalErrors); err != nil {
+		return nil, err
 	}
 	text := preview.OriginalText
 	if text == "" {
@@ -100,12 +102,20 @@ func checkTaskSignals(
 	if err != nil {
 		return nil, err
 	}
-	domainProbability, _ := domain.result.Probability(domain.labels, domain.result.Label)
-	if matched := headerItems(response.Headers, "x-vsr-matched-domains"); len(matched) != 1 || !matched[domain.result.Label] {
-		return nil, fmt.Errorf("x-vsr-matched-domains %v, the domain model chose %q", matched, domain.result.Label)
+	// An uncertain distribution, which random weights give, matches every
+	// domain at or above the threshold; a confident one only the top domain.
+	matchedDomains := headerItems(response.Headers, "x-vsr-matched-domains")
+	if !matchedDomains[domain.result.Label] {
+		return nil, fmt.Errorf("x-vsr-matched-domains %v lacks %q, the domain model's choice", matchedDomains, domain.result.Label)
 	}
-	if err = sameScore(preview.SignalConfidences, "domain:"+domain.result.Label, domainProbability); err != nil {
-		return nil, err
+	for name := range matchedDomains {
+		probability, known := domain.result.Probability(domain.labels, name)
+		if !known || probability < mrDomainThreshold {
+			return nil, fmt.Errorf("domain %s matched, but the domain model gives it %.6f", name, probability)
+		}
+		if err = sameScore(preview.SignalConfidences, "domain:"+name, probability); err != nil {
+			return nil, err
+		}
 	}
 
 	windowed := &modelruntime.ClassifyOptions{
@@ -179,6 +189,17 @@ func sameScore(values map[string]float64, key string, want float64) error {
 	}
 	if math.Abs(got-want) > mrScoreTolerance {
 		return fmt.Errorf("the Router reported %s=%.6f, the runtime %.6f", key, got, want)
+	}
+	return nil
+}
+
+// onlyOfflineSignalError allows the one signal error the profile plants: the
+// decision signal of the deployment that has no runtime.
+func onlyOfflineSignalError(signalErrors map[string]string) error {
+	for signal, reason := range signalErrors {
+		if signal != "decision:offline" || reason != "decision_unavailable" {
+			return fmt.Errorf("routing preview reported signal errors %v", signalErrors)
+		}
 	}
 	return nil
 }

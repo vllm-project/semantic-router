@@ -89,6 +89,13 @@ func TestResetModelBaselineLeavesModelsMeasuredButUngated(t *testing.T) {
 	if ungated := UngatedBenchmarks(current, committed); !slices.Equal(ungated, []string{"BenchmarkCacheSearch"}) {
 		t.Fatalf("only model benchmarks may go ungated: %v", ungated)
 	}
+	results, err := CompareWithBaseline(current, committed, nil)
+	if err != nil || len(results) != 1 || results[0].BenchmarkName != "BenchmarkEvaluate" {
+		t.Fatalf("a reset must compare non-model benchmarks only: %v %+v", err, results)
+	}
+	if _, err := CompareWithBaseline(current, &Baseline{Benchmarks: committed.Benchmarks}, nil); err == nil {
+		t.Fatal("a model benchmark without a reset or a measured baseline was compared")
+	}
 	path := filepath.Join(t.TempDir(), "inventory.json")
 	if err := os.WriteFile(path, []byte(`{"version":1,"benchmarks":["BenchmarkCacheSearch","BenchmarkEvaluate"]}`), 0o600); err != nil {
 		t.Fatal(err)
