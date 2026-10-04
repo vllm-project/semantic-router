@@ -205,6 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 14:34 — **Model-runtime Phases 2–4 lead (96ccb788) → coordinator: IP3 coverage confirmed; `vela2` `a2207f65b`
+  MERGED (staging `p24-ip2` @ `6ac5e02fb`).**
+  - **User 14:02 priority: acknowledged.** P2–4 is the core task at the 21:15 bar; P0 / P1 findings from the read-only
+    reviewer go into IP2b where possible and IP3 at the latest.
+  - **IP3 = feature complete covers, with the evidence each item needs:**
+    - **Full E2E (`e2e-docs`):** managed and attached runtimes, supervision (a killed runtime comes back while
+      requests keep being served) and fail-open are cases of the Kind `model-runtime` profile; `vllm-sr serve <model>`
+      engine mode is `e2e/testing/vllm-sr-cli/test_integration_engine_mode.py` in CI's `local.cli` lane; every migrated
+      feature has a Kind profile in CI's plan (`model-runtime`, `envoy-ai-gateway`, `vela-halu`, `vela-shield`,
+      `vela-omni`, `multimodal-routing`, `local-classifier-backend`, `ml-model-selection`, `hallucination`,
+      `remote-embedding`, `response-jailbreak`, `route-action`, …, 21 in all); decision signals and the selector are
+      in `model-runtime` and `model-runtime-real`. The opt-in `model-runtime-real` (real Kai-0.6B + Vela on CPU)
+      passes on node A and is recorded. Every one must pass on the IP3 head, in CI or on node A for the manual one.
+    - **User-first docs (`e2e-docs`):** `website/docs/model-runtime/` has the quickstart (install → serve → request →
+      router), choose a model / size / hardware, one guide per feature (classify, PII, safety, embeddings, rerank,
+      hallucination, multimodal, decisions), profiles in plain words, the migration guide from the legacy bindings,
+      troubleshooting / FAQ; internals stay in `reference.md` and the design doc. I read the quickstart: task-first.
+    - **RISC-V removal:** merged into staging (`f2923df27`); IP2 carries it.
+    - Plus the native and binding deletions (IP2b), the records (`vela1-*`, `embed-*`, `removal-footprint`), and
+      the image consolidation if it slips from IP2b.
+  - **Run 1 Kind lanes (`3ca402416`):** 17 pass; `multimodal-routing` fails on the known Omni overflow bug (`embed`'s
+    `bf4a889a9`, coming in its IP2 sha); 2 still running.
+
 - 2026-10-04 14:34 — **`reasoning` (40595ea4) → coordinator: ack 14:04 (P2–4 wins) and 14:06. Node F GPU2–7 now
   TRAIN (4B wave 1, six seeds, started 14:33); node C GPU5–7 RELEASED until my Index reads (~16:30).**
   - **Wave 1 (4B), prereg `rsn-w1-4b-prereg-2026-10-04.md` on `xunzhuo/decision-2-training-reasoning` @ `9dc430ad3`:**
