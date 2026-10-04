@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 import json
+import threading
 import time
 from dataclasses import replace
 
@@ -78,6 +80,36 @@ def test_the_default_engine_serves_a_bundle_on_onnxruntime(tmp_path):
     native = Runtime(ServeConfig(models=(replace(served, engine="native"),)))
     with pytest.raises(RuntimeError, match="no engine can run"):
         native.load()
+
+
+def test_batches_run_on_the_model_worker_not_the_cpu_device_thread(
+    tmp_path, monkeypatch
+):
+    from vllm_sr_runtime.config import ModelConfig, ServeConfig
+    from vllm_sr_runtime.families.multimodal_embedding.family import OmniModel
+    from vllm_sr_runtime.runtime import Runtime
+
+    threads: list[str] = []
+    run = OmniModel.run
+
+    def recording_run(self, items, shared_prefix=0):
+        threads.append(threading.current_thread().name)
+        return run(self, items, shared_prefix)
+
+    monkeypatch.setattr(OmniModel, "run", recording_run)
+    source = {"repo_id": "example/omni-fixture", "revision": "0" * 40}
+    bundle = omni.write_bundle(tmp_path / "omni", source=source)
+    served = ModelConfig(model=str(bundle), name="omni", device="cpu")
+    runtime = Runtime(ServeConfig(models=(served,)))
+    runtime.start(background=False)
+    try:
+        threads.clear()
+        body = {"model": "omni", "input": "hello", "options": {"overflow": "reject"}}
+        status, _ = asyncio.run(runtime.call("embeddings", body))
+    finally:
+        runtime.stop()
+    assert status == 200
+    assert threads == ["vllm-sr-runtime-worker"]
 
 
 @pytest.fixture(scope="module")

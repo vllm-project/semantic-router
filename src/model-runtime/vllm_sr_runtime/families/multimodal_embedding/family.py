@@ -231,6 +231,8 @@ class MultimodalEmbeddingFamily(ModelFamily):
 class OmniModel(LoadedModel):
     """One bundle on the onnxruntime engine; each input runs its modality's graphs."""
 
+    device_thread = False
+
     def __init__(
         self,
         info: ModelInfo,
