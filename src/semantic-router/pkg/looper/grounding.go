@@ -160,7 +160,7 @@ func scoreByPanel(ctx context.Context, panel []*ModelResponse, cfg fusionExecuti
 	if nli == nil {
 		return nil, fmt.Errorf("nli backend not configured")
 	}
-	penalty := cfg.GroundingNLIContradictionPenalty
+	penalty := cfg.GroundingContradictionPenalty
 	if penalty <= 0 {
 		penalty = 1.0
 	}

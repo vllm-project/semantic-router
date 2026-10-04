@@ -47,7 +47,7 @@ func TestScoreByPanel_RanksContradictedLower(t *testing.T) {
 	}, nil)
 
 	p := panel("good one", "good two", "bad three")
-	scores, err := scoreByPanel(context.Background(), p, fusionExecutionConfig{GroundingNLIContradictionPenalty: 1.0}, groundingNLIClassify)
+	scores, err := scoreByPanel(context.Background(), p, fusionExecutionConfig{GroundingContradictionPenalty: 1.0}, groundingNLIClassify)
 	require.NoError(t, err)
 	require.Len(t, scores, 3)
 
@@ -102,7 +102,7 @@ func TestScoreByPanel_LongAnswerSentenceChunking(t *testing.T) {
 	dirty := long(true)
 
 	p := panel(clean, dirty)
-	scores, err := scoreByPanel(context.Background(), p, fusionExecutionConfig{GroundingNLIContradictionPenalty: 1.0}, groundingNLIClassify)
+	scores, err := scoreByPanel(context.Background(), p, fusionExecutionConfig{GroundingContradictionPenalty: 1.0}, groundingNLIClassify)
 	require.NoError(t, err)
 	require.Len(t, scores, 2)
 
@@ -246,13 +246,13 @@ func TestApplyGrounding_PanelModeFiltersContradicted(t *testing.T) {
 
 	l := newGroundedTestFusionLooper(&config.LooperConfig{})
 	cfg := fusionExecutionConfig{
-		GroundingEnabled:                 true,
-		GroundingReference:               config.FusionGroundingReferencePanel,
-		GroundingPolicy:                  config.FusionGroundingPolicyFilter,
-		GroundingOnError:                 config.FusionOnErrorSkip,
-		GroundingMinScore:                0.5,
-		GroundingMinKeep:                 1,
-		GroundingNLIContradictionPenalty: 1.0,
+		GroundingEnabled:              true,
+		GroundingReference:            config.FusionGroundingReferencePanel,
+		GroundingPolicy:               config.FusionGroundingPolicyFilter,
+		GroundingOnError:              config.FusionOnErrorSkip,
+		GroundingMinScore:             0.5,
+		GroundingMinKeep:              1,
+		GroundingContradictionPenalty: 1.0,
 	}
 	kept, scores, mode, err := l.applyGrounding(context.Background(), newFusionTestRequest(), cfg, panel("good one", "good two", "bad three"))
 	require.NoError(t, err)
@@ -277,13 +277,13 @@ func TestApplyGrounding_WeightPolicyKeepsAll(t *testing.T) {
 
 	l := newGroundedTestFusionLooper(&config.LooperConfig{})
 	cfg := fusionExecutionConfig{
-		GroundingEnabled:                 true,
-		GroundingReference:               config.FusionGroundingReferencePanel,
-		GroundingPolicy:                  config.FusionGroundingPolicyWeight,
-		GroundingOnError:                 config.FusionOnErrorSkip,
-		GroundingMinScore:                0.5, // high threshold is ignored under weight
-		GroundingMinKeep:                 1,
-		GroundingNLIContradictionPenalty: 1.0,
+		GroundingEnabled:              true,
+		GroundingReference:            config.FusionGroundingReferencePanel,
+		GroundingPolicy:               config.FusionGroundingPolicyWeight,
+		GroundingOnError:              config.FusionOnErrorSkip,
+		GroundingMinScore:             0.5, // high threshold is ignored under weight
+		GroundingMinKeep:              1,
+		GroundingContradictionPenalty: 1.0,
 	}
 	in := panel("good one", "good two", "bad three")
 	kept, scores, _, err := l.applyGrounding(context.Background(), newFusionTestRequest(), cfg, in)
@@ -307,13 +307,13 @@ func TestApplyGrounding_AnnotatePolicyKeepsAll(t *testing.T) {
 
 	l := newGroundedTestFusionLooper(&config.LooperConfig{})
 	cfg := fusionExecutionConfig{
-		GroundingEnabled:                 true,
-		GroundingReference:               config.FusionGroundingReferencePanel,
-		GroundingPolicy:                  config.FusionGroundingPolicyAnnotate,
-		GroundingOnError:                 config.FusionOnErrorSkip,
-		GroundingMinScore:                0.9,
-		GroundingMinKeep:                 1,
-		GroundingNLIContradictionPenalty: 1.0,
+		GroundingEnabled:              true,
+		GroundingReference:            config.FusionGroundingReferencePanel,
+		GroundingPolicy:               config.FusionGroundingPolicyAnnotate,
+		GroundingOnError:              config.FusionOnErrorSkip,
+		GroundingMinScore:             0.9,
+		GroundingMinKeep:              1,
+		GroundingContradictionPenalty: 1.0,
 	}
 	kept, scores, _, err := l.applyGrounding(context.Background(), newFusionTestRequest(), cfg, panel("good one", "bad two"))
 	require.NoError(t, err)
