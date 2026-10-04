@@ -172,8 +172,8 @@ func TestDashboardCloseDisconnectsMCPClients(t *testing.T) {
 		t.Fatalf("MCP status before close = %q, want %q", state.Status, mcp.StatusConnected)
 	}
 
-	if err := dashboard.Close(); err != nil {
-		t.Fatalf("close dashboard: %v", err)
+	if closeErr := dashboard.Close(); closeErr != nil {
+		t.Fatalf("close dashboard: %v", closeErr)
 	}
 	state, err = dashboard.mcpManager.GetServerStatus(mcp.BuiltinOpenClawServerID)
 	if err != nil {
@@ -270,7 +270,7 @@ func TestMCPStdioHelper(t *testing.T) {
 
 		response, err := json.Marshal(map[string]interface{}{
 			"jsonrpc": "2.0",
-			"id":      json.RawMessage(request.ID),
+			"id":      request.ID,
 			"result":  result,
 		})
 		if err != nil {
