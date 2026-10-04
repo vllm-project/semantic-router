@@ -245,8 +245,9 @@ def readme(inputs: dict[str, Any]) -> str:
         f"{index['rank_text']}.",
         f"- **Stronger multi-step reasoning:** Knowledge & Reasoning {know_own:.1f} vs. {know_base:.1f} "
         f"({_signed(know_own - know_base)}).",
-        f"- **No extra cost:** the same architecture and one forward pass; a median of {latency['own']:.1f} ms per "
-        f"single-question request on a single GPU ({base_name}: {latency['base']:.1f} ms).",
+        f"- **No extra cost:** the same architecture, size and single forward pass as {base_name}; a median of "
+        f"{latency['own']:.1f} ms per request on one GPU ({base_name}: {latency['base']:.1f} ms on the same GPU "
+        "and runtime).",
         "- **Many questions, one pass:** Choice, Yes / No and Score questions about the same input are answered "
         "together, with a probability for every option.",
         "",

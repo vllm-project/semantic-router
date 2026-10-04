@@ -51,7 +51,7 @@ case $stage in
     gpu_run "$E" automap --package "$PKG" --output "$W/checks/automap.json" --site /opt/decision-fla \
       --reference "$W/checks/run-a.json" --require-kernels
     gpu_run "$E" automap-card --package "$PKG" --output "$W/checks/automap-card.json" --site /opt/decision-fla \
-      --require-kernels
+      --reference "$W/checks/run-a.json"
     for side in new base; do
       pkg=$PKG
       [[ $side == base ]] && pkg=$template
