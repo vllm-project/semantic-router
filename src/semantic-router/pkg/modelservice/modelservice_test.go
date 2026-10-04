@@ -19,6 +19,14 @@ import (
 
 const fakeRuntimeEnv = "MODELSERVICE_FAKE_RUNTIME"
 
+// fakeRuntimeFailOnceEnv names a marker file: the first fake process to start
+// creates it and reports every model failed; later processes load normally.
+// fakeRuntimeFailAlwaysEnv makes every fake process report its models failed.
+const (
+	fakeRuntimeFailOnceEnv   = "MODELSERVICE_FAKE_FAIL_ONCE"
+	fakeRuntimeFailAlwaysEnv = "MODELSERVICE_FAKE_FAIL_ALWAYS"
+)
+
 // TestMain lets the test binary act as a managed runtime process:
 // <binary> serve --models FILE --uds PATH serves the fake contract on the socket.
 func TestMain(m *testing.M) {
@@ -53,7 +61,18 @@ func serveManagedFake(args []string) {
 	if err != nil {
 		os.Exit(2)
 	}
-	_ = http.Serve(listener, fakeModels(document.Models).Handler())
+	fake := fakeModels(document.Models)
+	failed := os.Getenv(fakeRuntimeFailAlwaysEnv) == "1"
+	if marker := os.Getenv(fakeRuntimeFailOnceEnv); marker != "" {
+		_, statErr := os.Stat(marker)
+		failed = errors.Is(statErr, os.ErrNotExist) && os.WriteFile(marker, nil, 0o600) == nil
+	}
+	if failed {
+		for _, entry := range document.Models {
+			fake.SetFailed(entry.Name, "fake load failure")
+		}
+	}
+	_ = http.Serve(listener, fake.Handler())
 }
 
 func sampleRequest(state string) Request {
@@ -302,6 +321,53 @@ func TestManagerSharesProcessesByCompositionAndSupervisesThem(t *testing.T) {
 	_ = generation.Close()
 	if len(manager.groups) != 1 {
 		t.Fatalf("closing the last lease stops its process: %d processes", len(manager.groups))
+	}
+}
+
+// managedFakeLease serves one managed fake deployment, "kai", from this test binary.
+func managedFakeLease(t *testing.T) *Lease {
+	t.Helper()
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(fakeRuntimeEnv, "1")
+	t.Setenv(RuntimeCommandEnv, binary)
+	t.Setenv(RuntimeDirEnv, filepath.Join(t.TempDir(), "run"))
+	manager := NewManager()
+	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
+	lease, err := manager.Acquire(runtimeConfig(map[string]config.ModelDeployment{
+		"kai": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Device: "cpu"},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return lease
+}
+
+func TestSupervisorRestartsAProcessWhoseEveryModelFailedToLoad(t *testing.T) {
+	t.Setenv(fakeRuntimeFailOnceEnv, filepath.Join(t.TempDir(), "failed-once"))
+	lease := managedFakeLease(t)
+	waitReady(t, lease, "kai")
+	if statuses := lease.Statuses(); len(statuses) != 1 || statuses[0].Restarts != 1 || !statuses[0].Ready {
+		t.Fatalf("one recycle restarts the process: %+v", statuses)
+	}
+}
+
+func TestCardFailsAfterRepeatedFailedLoads(t *testing.T) {
+	t.Setenv(fakeRuntimeFailAlwaysEnv, "1")
+	lease := managedFakeLease(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	started := time.Now()
+	if _, err := lease.Card(ctx, "kai"); !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "failed to load 3 times") {
+		t.Fatalf("repeated failed loads must fail preparation, got %v", err)
+	}
+	if time.Since(started) > 20*time.Second {
+		t.Fatal("the failure must not wait for the deadline")
+	}
+	if statuses := lease.Statuses(); statuses[0].Restarts < 2 {
+		t.Fatalf("the supervisor retried before giving up: %+v", statuses)
 	}
 }
 
