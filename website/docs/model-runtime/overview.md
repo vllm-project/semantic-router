@@ -13,9 +13,9 @@ hallucination detector, and decision models that answer routing questions.
 
 You usually do not have to do anything for this to work. When a feature needs
 a model, the router downloads it, checks every file, starts the runtime and
-sends it the request text. If the runtime is slow or not ready yet, requests
-keep flowing: the feature reports "unknown" and your routes fall back the way
-you configured.
+sends it the request text. It starts serving once the models its routes need
+have loaded. If a runtime is slow or crashes later, requests keep flowing: the
+feature reports "unknown" and your routes fall back the way you configured.
 
 ## Three ways to use it
 
@@ -48,9 +48,9 @@ you configured.
 - **Same answers as the released models.** The default `exact` profile gives
   the answers the model publishers measured. Faster settings are opt-in and say
   that they may change results. See [Profiles](./profiles.md).
-- **Requests never wait on a broken model.** A model that is still loading, too
-  slow or crashed makes its feature "unknown" for that request. The router
-  restarts a crashed runtime and keeps routing meanwhile.
+- **Requests never wait on a broken model.** A model that is too slow, still
+  restarting or crashed makes its feature "unknown" for that request. The
+  router restarts a crashed runtime and keeps routing meanwhile.
 - **One call per request.** All the model work of one request goes to the
   runtime as a single bundled call, so adding signals does not add round trips.
 - **Pluggable.** New model families, engines and hardware back ends are

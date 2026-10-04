@@ -479,7 +479,18 @@ def flat_copy(source: Path, target: Path) -> Path:
 
 
 def job_specs(args: argparse.Namespace) -> list[dict[str, Any]]:
+    """Each job's spec; with ``--inputs`` (a legacy run's jobs file) its inputs exactly.
+
+    The corpus reads the tree's e2e testdata, which changes over time, so a
+    runtime run compared with an earlier legacy run takes that run's inputs.
+    """
     items = corpus(args.seed)
+    recorded = {}
+    if getattr(args, "inputs", None):
+        recorded = {
+            spec["Job"]: spec["Inputs"]
+            for spec in json.loads(Path(args.inputs).read_text(encoding="utf-8"))
+        }
     table = RECIPES[args.recipe]
     specs = []
     for job in args.jobs.split(",") if args.jobs else table:
@@ -489,7 +500,9 @@ def job_specs(args: argparse.Namespace) -> list[dict[str, Any]]:
             path = flat_copy(path, Path(args.flat) / f"{name}-{REVISIONS[name][:12]}")
         config = json.loads((path / "config.json").read_text(encoding="utf-8"))
         labels = [config["id2label"][str(i)] for i in range(len(config["id2label"]))]
-        selected = inputs_for(mode, items)
+        if recorded and job not in recorded:
+            raise SystemExit(f"{args.inputs} has no job {job!r}")
+        selected = recorded[job] if recorded else inputs_for(mode, items)
         if args.limit:
             selected = selected[: args.limit]
         specs.append(
@@ -1106,7 +1119,7 @@ def run_compare(args: argparse.Namespace) -> None:
         "device_class": args.device_class,
         "thresholds": thresholds,
         "inputs_sha256": hashlib.sha256(
-            json.dumps(corpus(args.seed), sort_keys=True).encode()
+            json.dumps([spec["Inputs"] for spec in specs], sort_keys=True).encode()
         ).hexdigest(),
         "context": json.loads(args.context) if args.context else {},
         "jobs": jobs,
@@ -1170,6 +1183,9 @@ def main(argv: Iterable[str] | None = None) -> int:
             sub.add_argument("--device", default="cpu")
             sub.add_argument("--profile", default="exact")
             sub.add_argument("--threads", type=int)
+            sub.add_argument(
+                "--inputs", help="a legacy run's .jobs.json: answer exactly its inputs"
+            )
     build = commands.add_parser("build-legacy")
     build.add_argument("--cache", required=True)
     build.add_argument("--recipe", choices=sorted(RECIPES), default="cpu")

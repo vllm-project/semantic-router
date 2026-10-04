@@ -57,7 +57,6 @@ configOverride:
         pii_classifier: ""
         fact_check_classifier: ""
         hallucination_detector: ""
-        hallucination_explainer: ""
         feedback_detector: ""
       kbs: []
       modules:
@@ -87,9 +86,6 @@ configOverride:
             model_ref: ""
             model_id: ""
           detector:
-            model_ref: ""
-            model_id: ""
-          explainer:
             model_ref: ""
             model_id: ""
         feedback_detector:

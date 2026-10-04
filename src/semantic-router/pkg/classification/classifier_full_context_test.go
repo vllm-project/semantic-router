@@ -35,7 +35,6 @@ func TestNativeLongContextBudgetReachesSignalDispatcher(t *testing.T) {
 			mock := &contextCapturingCategory{}
 			c := buildDomainClassifier(&mock.MockCategoryInference)
 			c.categoryInference = mock
-			c.Config.CategoryModel.Variant = config.CategoryVariantMmBERT32K
 			c.Config.CategoryModel.MaxSequenceLength = tc.limit
 			text, original := full, ""
 			if tc.compressed {
@@ -61,7 +60,6 @@ func TestNativeLongContextPIIUsesOnePassWithOriginalByteOffsets(t *testing.T) {
 	const email = "alice@example.org"
 	text := strings.Repeat("中文填充。", 900) + email + strings.Repeat(" plain context ", 200) + email
 	c, model := newLongTextPIIClassifier(email)
-	c.Config.PIIModel.UseMmBERT32K = true
 	c.Config.PIIModel.MaxSequenceLength = 32768
 	model.windowRunes = 32768
 	got, err := c.ClassifyPIIWithDetails(context.Background(), text)
@@ -83,7 +81,6 @@ func TestNativeLongContextPIIUsesOnePassWithOriginalByteOffsets(t *testing.T) {
 
 func TestExplicitBindingInputPolicyUsesSelectedRecipeDeployment(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	cfg.CategoryModel.UseMmBERT32K = true
 	cfg.CategoryModel.MaxSequenceLength = 32768
 	cfg.ModelBindings = map[string]config.ModelBinding{"domain_classifier": {Deployment: "selected"}}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"other": {Provider: "candle", Input: config.ModelInputBudget{MaxTokens: 32768}}}

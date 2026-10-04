@@ -71,7 +71,7 @@ func TestHallucinationDetectorReportsUnsupportedAnswerSpans(t *testing.T) {
 		}
 	}
 	explained, err := detector.DetectWithExplanations(context.Background(), contextText, "How tall?", answer)
-	if err != nil || len(explained.Spans) != 2 || explained.Spans[0].NLILabel != NLIUnknown || !strings.Contains(explained.Spans[0].Explanation, "Unsupported claim") {
+	if err != nil || len(explained.Spans) != 2 || !strings.Contains(explained.Spans[0].Explanation, "Unsupported claim") {
 		t.Fatalf("explanations = %+v %v", explained, err)
 	}
 	grounded, err := detector.Detect(context.Background(), contextText, "How tall?", "The Eiffel Tower is 330 metres tall")

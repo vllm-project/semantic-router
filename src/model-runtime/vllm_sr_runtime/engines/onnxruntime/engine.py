@@ -184,6 +184,11 @@ class OnnxRuntimeModel(EngineModel):
             "provider_options": dict(self.choice.options),
             "validated": self.choice.validated,
             "threads": self.threads,
+            "shared_cpu_pool": (
+                None
+                if self.choice.gpu
+                else providers.shared_pool(providers.cpu_threads(self.threads))
+            ),
             "graphs": {name: graph.path.name for name, graph in self.graphs.items()},
         }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -57,11 +58,11 @@ func testModelRuntimeLifecycle(ctx context.Context, client *kubernetes.Clientset
 	return nil
 }
 
-// checkManagedProcesses requires one process per group: the cpu device group
-// and the "decisions" process group, each serving its deployments under their
-// own names, ready, with the family and heads the fixtures declare.
+// checkManagedProcesses requires the "decisions" process group to serve the
+// decision fixture alone and the device's CPU models to run in one process
+// ("cpu") or spread over several ("cpu-0" …), each deployment in exactly one
+// process, ready, with the family and surfaces its fixture declares.
 func checkManagedProcesses(ctx context.Context, session *modelRuntimeSession) (map[string][]string, error) {
-	want := map[string][]string{mrDecisionsProcess: {mrDecisionDeployment}, mrDeviceProcess: mrDeviceGroup}
 	var runtimes map[string][]string
 	err := modelruntime.Eventually(ctx, mrReadyTimeout, func(ctx context.Context) error {
 		var err error
@@ -69,21 +70,35 @@ func checkManagedProcesses(ctx context.Context, session *modelRuntimeSession) (m
 		if err != nil {
 			return err
 		}
-		if len(runtimes) != len(want) {
-			return fmt.Errorf("managed runtime processes %v, want one per group %v", runtimes, want)
+		served := 0
+		for _, models := range runtimes {
+			served += len(models)
+		}
+		if served != len(mrManagedDeployments) {
+			return fmt.Errorf("managed runtime processes %v serve %d models, want the %d managed deployments", runtimes, served, len(mrManagedDeployments))
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	groups := map[string][]string{}
+	processes := map[string][]string{}
+	owner := map[string]string{}
 	for socket, models := range runtimes {
-		group := strings.SplitN(filepath.Base(socket), "-", 2)[0]
+		process := strings.SplitN(filepath.Base(socket), "-", 2)[0]
 		sort.Strings(models)
-		groups[group] = models
-		if strings.Join(models, ",") != strings.Join(want[group], ",") {
-			return nil, fmt.Errorf("process %s serves %v, want %v", socket, models, want[group])
+		processes[filepath.Base(socket)] = models
+		for _, model := range models {
+			if previous, twice := owner[model]; twice {
+				return nil, fmt.Errorf("%s runs in two processes, %s and %s", model, previous, socket)
+			}
+			owner[model] = socket
+			switch {
+			case process == mrDecisionsProcess && model == mrDecisionDeployment:
+			case process == mrDeviceProcess && slices.Contains(mrDeviceGroup, model):
+			default:
+				return nil, fmt.Errorf("process %s serves %s, which belongs to another group", socket, model)
+			}
 		}
 		listed, err := modelruntime.NewClient(modelruntime.SocketTransport{Target: session.pod, Socket: socket}).Models(ctx)
 		if err != nil {
@@ -95,7 +110,7 @@ func checkManagedProcesses(ctx context.Context, session *modelRuntimeSession) (m
 			}
 		}
 	}
-	return groups, nil
+	return processes, nil
 }
 
 func checkFixtureCard(card modelruntime.ModelCard) error {
