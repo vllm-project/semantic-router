@@ -50,10 +50,10 @@ func TestToolsDatabaseUsesRemoteProvider(t *testing.T) {
 		}},
 	})
 
-	if err := database.AddTool(openai.ChatCompletionToolParam{}, "weather forecast", "weather", nil); err != nil {
+	if err := database.AddTool(openai.ChatCompletionToolParam{Function: openai.FunctionDefinitionParam{Name: "weather"}}, "weather forecast", "weather", nil); err != nil {
 		t.Fatalf("AddTool weather failed: %v", err)
 	}
-	if err := database.AddTool(openai.ChatCompletionToolParam{}, "math calculator", "math", nil); err != nil {
+	if err := database.AddTool(openai.ChatCompletionToolParam{Function: openai.FunctionDefinitionParam{Name: "calculator"}}, "math calculator", "math", nil); err != nil {
 		t.Fatalf("AddTool math failed: %v", err)
 	}
 

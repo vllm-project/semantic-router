@@ -11,9 +11,9 @@ import (
 )
 
 // memoryStoreShardCount is a fixed shard count for the per-key lock split.
-// Sessions hash-distribute across shards, so the hot read/write path (an
-// existing key's CompareAndSwap or a Load) only ever contends with other
-// operations landing on the same shard, not with the whole store. Not
+// Sessions hash-distribute across shards. Existing-key state access uses
+// one shard after a brief admissionMu-protected lifecycle check; admission
+// and eviction bookkeeping serialize under admissionMu. Not
 // configurable: this is an implementation-scale knob, not a deployment
 // concern (unlike max_sessions/max_sessions_per_identity, which are).
 const memoryStoreShardCount = 64
@@ -52,6 +52,7 @@ type MemoryStore struct {
 	ttl                   time.Duration
 	maxSessions           int
 	maxSessionsByIdentity int
+	maxStateBytes         int
 
 	// nextRevision is a store-wide (not per-key) monotonic counter: every
 	// successful write anywhere in this store — a fresh admission or an
@@ -68,18 +69,17 @@ type MemoryStore struct {
 	// impossible: a revision captured before a key's expiry can never equal
 	// one issued after that key was reclaimed, because reclamation always
 	// draws a strictly higher value from this same sequence. Safe for
-	// concurrent use without a lock — Add is independently atomic, so this
-	// can be called while holding admissionMu (admitNewLocked) or only a
+	// concurrent use without a lock — allocation uses an atomic CAS loop, so this
+	// can be called while holding admissionMu (compareAndSwapCreate) or only a
 	// shard's mu (CompareAndSwap's update path) with no new lock-ordering
-	// rule. Starts at zero; the first Add(1) returns 1, so 0 remains
-	// reserved for "no revision issued yet" (CompareAndSwap's create case).
+	// rule. Exhaustion fails without wrapping; zero remains reserved for
+	// CompareAndSwap's create case.
 	nextRevision atomic.Uint64
 
 	// admissionMu guards every field below and serializes admission
 	// (new-key creation, which may trigger eviction) relative to other
-	// admissions. An existing key's CompareAndSwap/Load never takes this
-	// lock — only that key's shard lock — so reuse of already-admitted
-	// sessions is not serialized by store-wide bookkeeping. Lock ordering
+	// admissions. Existing-key operations briefly check lifecycle under this
+	// lock, then use their shard lock without admission bookkeeping. Lock ordering
 	// is always admissionMu outer, a shard's mu inner; a shard's mu is
 	// never held while acquiring admissionMu.
 	admissionMu  sync.Mutex
@@ -101,6 +101,7 @@ func NewMemoryStore(cfg config.ToolSessionStoreConfig, clock func() time.Time) *
 		ttl:                   time.Duration(cfg.EffectiveTTLSeconds()) * time.Second,
 		maxSessions:           cfg.EffectiveMaxSessions(),
 		maxSessionsByIdentity: cfg.EffectiveMaxSessionsByIdentity(),
+		maxStateBytes:         cfg.EffectiveMaxStateBytes(),
 		keyQuota:              make(map[string]QuotaKey),
 		quotaMembers:          make(map[QuotaKey]map[string]struct{}),
 	}
@@ -125,14 +126,20 @@ func (s *MemoryStore) isClosed() bool {
 // Load implements Store. See store.go's Store doc comment for why this
 // returns (VersionedState, error) rather than the originally sketched
 // (VersionedState, bool, error).
-func (s *MemoryStore) Load(_ context.Context, key string) (VersionedState, error) {
+func (s *MemoryStore) Load(ctx context.Context, key string) (VersionedState, error) {
+	if err := ctx.Err(); err != nil {
+		return VersionedState{}, err
+	}
 	if s.isClosed() {
 		return VersionedState{}, ErrStoreClosed
 	}
 	shard := s.shardFor(key)
-	now := s.clock()
-
 	shard.mu.Lock()
+	if err := ctx.Err(); err != nil {
+		shard.mu.Unlock()
+		return VersionedState{}, err
+	}
+	now := s.clock().UTC()
 	entry, ok := shard.entries[key]
 	var observedRevision uint64
 	var observedExpiry time.Time
@@ -145,9 +152,14 @@ func (s *MemoryStore) Load(_ context.Context, key string) (VersionedState, error
 	if ok && !expired {
 		// Sliding idle expiry: a successful Load refreshes the deadline,
 		// same as a successful CompareAndSwap.
-		entry.state.LastSeenAt = now
-		entry.state.ExpiresAt = now.Add(s.ttl)
 		result := entry.state.Clone()
+		result.LastSeenAt = now
+		result.ExpiresAt = now.Add(s.ttl)
+		if err := result.validateEncodedSize(s.maxStateBytes); err != nil {
+			shard.mu.Unlock()
+			return VersionedState{}, err
+		}
+		entry.state = result.Clone()
 		shard.mu.Unlock()
 		return VersionedState{State: result, Found: true}, nil
 	}
@@ -208,27 +220,27 @@ func (s *MemoryStore) deleteIfExpiredLocked(key string, observedRevision uint64,
 }
 
 // CompareAndSwap implements Store. expectedRevision == 0 (create) and > 0
-// (update an existing, live entry) are handled by different paths with
-// different locking: an update only ever touches the key's own shard lock
-// (the hot, contended-only-with-itself path); a create must serialize
-// against every other concurrent create via admissionMu, since it may
+// (update an existing, live entry) use different locking: an update checks
+// lifecycle then takes its shard lock; a create holds admissionMu throughout
+// preparation and admission, serializing against other creates since it may
 // evict under quota/global caps and must not race the expired-readmission
 // ABA hazard documented on compareAndSwapCreate/deleteIfExpiredLocked.
 func (s *MemoryStore) CompareAndSwap(
-	_ context.Context,
+	ctx context.Context,
 	key string,
 	expectedRevision uint64,
 	next State,
 	ttl time.Duration,
 	quota QuotaKey,
 ) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	if ttl <= 0 {
 		ttl = s.ttl
 	}
-	now := s.clock()
-
 	if expectedRevision == 0 {
-		return s.compareAndSwapCreate(key, next, ttl, quota, now)
+		return s.compareAndSwapCreate(ctx, key, next, ttl, quota)
 	}
 
 	if s.isClosed() {
@@ -245,6 +257,10 @@ func (s *MemoryStore) CompareAndSwap(
 	shard := s.shardFor(key)
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	now := s.clock().UTC()
 
 	entry, exists := shard.entries[key]
 	if !exists || !entry.state.ExpiresAt.After(now) {
@@ -254,20 +270,12 @@ func (s *MemoryStore) CompareAndSwap(
 		return false, ErrRevisionMismatch
 	}
 
-	stored := next.Clone()
-	stored.LastSeenAt = now
-	stored.ExpiresAt = now.Add(ttl)
-	// Draw from the store-wide sequence, not entry.state.Revision + 1: see
-	// nextRevision's doc comment. A per-key increment here would be exactly
-	// the pre-fix behavior for this path (harmless on its own, since this
-	// branch only runs against a live, still-current entry) but the two
-	// write sites must stay on the same global sequence for admitNewLocked's
-	// guarantee to hold — a fresh admission must never coincidentally match
-	// a value this path could also produce. (Verified: reverting only this
-	// line makes TestMemoryStore_StaleUpdatedRevisionRejectedAfterExpiryAndReadmission
-	// fail while the sibling create-only regression test still passes —
-	// this is exactly the coverage gap that test exists to close.)
-	stored.Revision = s.nextRevision.Add(1)
+	// The update and create paths must share the allocator. The stale-updated-
+	// revision regression detects reverting just this path to a per-key count.
+	stored, err := s.prepareWrite(next, now, ttl)
+	if err != nil {
+		return false, err
+	}
 	entry.state = stored
 	return true, nil
 }
@@ -279,7 +287,7 @@ func (s *MemoryStore) CompareAndSwap(
 // observation from a concurrent Load can interleave and delete a
 // just-admitted live entry out from under this call (the ABA race this
 // store's expired-cleanup paths must all guard against).
-func (s *MemoryStore) compareAndSwapCreate(key string, next State, ttl time.Duration, quota QuotaKey, now time.Time) (bool, error) {
+func (s *MemoryStore) compareAndSwapCreate(ctx context.Context, key string, next State, ttl time.Duration, quota QuotaKey) (bool, error) {
 	s.admissionMu.Lock()
 	defer s.admissionMu.Unlock()
 	if s.closed {
@@ -288,13 +296,24 @@ func (s *MemoryStore) compareAndSwapCreate(key string, next State, ttl time.Dura
 
 	shard := s.shardFor(key)
 	shard.mu.Lock()
+	if err := ctx.Err(); err != nil {
+		shard.mu.Unlock()
+		return false, err
+	}
+	now := s.clock().UTC()
 	entry, exists := shard.entries[key]
+	if exists && entry.state.ExpiresAt.After(now) {
+		shard.mu.Unlock()
+		return false, ErrRevisionMismatch
+	}
+	// Preparation must precede reclamation and quota eviction: an exhausted
+	// allocator or oversized write must leave even the expired entry intact.
+	stored, err := s.prepareWrite(next, now, ttl)
+	if err != nil {
+		shard.mu.Unlock()
+		return false, err
+	}
 	if exists {
-		if entry.state.ExpiresAt.After(now) {
-			// Still live: a create cannot replace a live entry.
-			shard.mu.Unlock()
-			return false, ErrRevisionMismatch
-		}
 		// Expired: safe to reclaim here, unlike deleteIfExpiredLocked's
 		// stale-observation case, because this whole function already
 		// holds admissionMu — nothing else admission-gated can have
@@ -304,32 +323,21 @@ func (s *MemoryStore) compareAndSwapCreate(key string, next State, ttl time.Dura
 	}
 	shard.mu.Unlock()
 
-	return s.admitNewLocked(key, next, ttl, quota, now)
+	return s.admitNewLocked(key, stored, quota)
 }
 
 // admitNewLocked creates a brand-new entry, evicting under quota/global
 // caps first if necessary. Caller must already hold admissionMu for the
 // call's whole duration (see compareAndSwapCreate) — this serializes
-// concurrent creations against each other and against expired-cleanup;
-// reuse of existing keys (the hot CompareAndSwap update path) never
-// contends with this.
-func (s *MemoryStore) admitNewLocked(key string, next State, ttl time.Duration, quota QuotaKey, now time.Time) (bool, error) {
+// concurrent creations against each other and against expired-cleanup.
+// Existing-key updates do not mutate admission bookkeeping.
+func (s *MemoryStore) admitNewLocked(key string, stored State, quota QuotaKey) (bool, error) {
 	if _, already := s.keyQuota[key]; already {
 		return false, ErrRevisionMismatch
 	}
 
 	s.evictForIdentityLocked(quota)
 	s.evictForCapacityLocked()
-
-	stored := next.Clone()
-	stored.LastSeenAt = now
-	stored.ExpiresAt = now.Add(ttl)
-	// Not a hardcoded 1: see nextRevision's doc comment. A fresh admission
-	// must draw a value this same key's earlier (expired, reclaimed)
-	// incarnation could never have held, or a writer still holding that
-	// earlier incarnation's revision could replay a stale CAS against this
-	// one and have it incorrectly match.
-	stored.Revision = s.nextRevision.Add(1)
 
 	shard := s.shardFor(key)
 	shard.mu.Lock()
@@ -476,7 +484,10 @@ func (s *MemoryStore) removeFromBookkeeping(key string) {
 }
 
 // Delete implements Store.
-func (s *MemoryStore) Delete(_ context.Context, key string) error {
+func (s *MemoryStore) Delete(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if s.isClosed() {
 		return ErrStoreClosed
 	}

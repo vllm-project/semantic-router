@@ -8,6 +8,11 @@ It supports two modes:
 - `add`: retrieve tools from a tools database
 - `filter`: filter tools that are already present in the incoming request
 
+Database tool names are trimmed and must be unique. Catalog enumeration uses
+name order; equal similarity scores use name order before `top_k` truncation.
+File loads and incremental additions reject duplicate names or non-finite
+embedding values. A failed file batch leaves the existing catalog unchanged.
+
 ## Key Advantages
 
 - Separates route decision logic from tool retrieval/filter behavior.
@@ -95,9 +100,14 @@ Sticky state is scoped to a trusted, authenticated session — it is never
 active for an anonymous or derived session identity — and every stored
 identity is re-authorized and re-validated against the current request's
 catalog, policy, and model/wire capabilities before use; a stored identity
-is never trusted blindly. Full runtime behavior (this configuration
-contract is Phase 1 of 4; the plugin does not yet read or write session
-state) is tracked in
+is never trusted blindly. **Runtime enablement remains unavailable:** `sticky.enabled: true` is rejected
+at both configuration admission and direct router construction.
+[Phase 2 (#4517)](https://github.com/vllm-project/semantic-router/issues/4517)
+adds a library planner and bounded state updates, without reading or writing
+sticky state in the request path. Runtime integration is
+[Phase 3 (#4519)](https://github.com/vllm-project/semantic-router/issues/4519),
+which keeps reuse, authorization, invalidation, recovery, and fallback together.
+The implementation sequence is recorded in
 [PL-0042](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/docs/plans/pl-0042-sticky-tool-selection.md).
 See the complete disabled example:
 [`sticky-add-from-database.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/tool-selection/sticky-add-from-database.yaml).
