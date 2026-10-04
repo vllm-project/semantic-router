@@ -263,7 +263,7 @@ def test_graph_heads_and_the_explainer_binding_leave_task_bindings():
     assert "recipes[0].routing.model_bindings.domain_classifier.head" in paths
 
 
-def test_system_models_and_module_models_move_to_vela_with_their_label_maps():
+def test_system_models_and_module_models_move_to_vela_without_legacy_label_maps():
     migrated, notes = _migrate(
         _config(
             {
@@ -328,30 +328,60 @@ def test_system_models_and_module_models_move_to_vela_with_their_label_maps():
         "safety": "models/Vela-1.0-Encoder-307M-Safety",
     }
     modules = catalog["modules"]
+    # The legacy label maps described the legacy models; the router reads the
+    # replacements' labels from the models themselves.
     assert modules["classifier"]["domain"] == {
         "model_ref": "domain_classifier",
         "model_id": "models/Vela-1.0-Encoder-307M-Domain",
-        "category_mapping_path": "models/Vela-1.0-Encoder-307M-Domain/category_mapping.json",
     }
     assert modules["classifier"]["pii"] == {
         "model_id": "models/Vela-1.0-Encoder-307M-PII",
-        "pii_mapping_path": "models/Vela-1.0-Encoder-307M-PII/pii_mapping.json",
     }
     assert modules["prompt_guard"] == {
         "enabled": True,
         "model_id": "models/Vela-1.0-Encoder-307M-Guard",
-        "jailbreak_mapping_path": "models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json",
     }
     assert modules["feedback_detector"] == {
         "enabled": True,
         "model_id": "models/Vela-1.0-Encoder-307M-Feedback",
-        "feedback_mapping_path": "",
     }
     assert modules["modality_detector"]["classifier"]["model_path"] == (
         "models/Vela-1.0-Encoder-307M-Modality"
     )
     assert any("NO_FEEDBACK" in note.message for note in notes)
     assert "global.model_catalog.system.hallucination_explainer" in _note_paths(notes)
+    assert (
+        "global.model_catalog.modules.classifier.domain.category_mapping_path"
+        in _note_paths(notes)
+    )
+
+
+def test_an_operators_own_label_map_stays_with_the_replacement_model():
+    migrated, notes = _migrate(
+        _config(
+            {
+                "model_catalog": {
+                    "modules": {
+                        "classifier": {
+                            "domain": {
+                                "model_id": "models/mom-domain-classifier",
+                                "category_mapping_path": "config/domains.json",
+                            }
+                        }
+                    }
+                }
+            }
+        )
+    )
+
+    assert _catalog(migrated)["modules"]["classifier"]["domain"] == {
+        "model_id": "models/Vela-1.0-Encoder-307M-Domain",
+        "category_mapping_path": "config/domains.json",
+    }
+    assert (
+        "global.model_catalog.modules.classifier.domain.category_mapping_path"
+        not in _note_paths(notes)
+    )
 
 
 def test_local_hallucination_detector_loses_nli_and_the_explainer_retires():

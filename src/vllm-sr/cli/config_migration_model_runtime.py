@@ -16,7 +16,7 @@ from cli.config_migration_embeddings import migrate_embedding_models
 from cli.config_migration_legacy_models import (
     PREPARED_BUNDLE_ROOT,
     Replacement,
-    follow_mapping_path,
+    is_legacy_mapping,
     is_retired_nli,
     replacement_for,
     runtime_artifact,
@@ -336,14 +336,12 @@ def _replace_module_model(
     notes.changed(
         f"{path}.{model_field}", f"{legacy} -> {replacement.target}: {replacement.note}"
     )
-    if mapping_field:
-        mapping = follow_mapping_path(module.get(mapping_field), legacy, replacement)
-        if mapping is not None:
-            module[mapping_field] = mapping
-            notes.changed(
-                f"{path}.{mapping_field}",
-                f"follows the model to {mapping or 'the labels the model declares'}",
-            )
+    if mapping_field and is_legacy_mapping(module.get(mapping_field), legacy):
+        module.pop(mapping_field)
+        notes.changed(
+            f"{path}.{mapping_field}",
+            "removed; the router reads the labels of the model it runs",
+        )
     return replacement
 
 
