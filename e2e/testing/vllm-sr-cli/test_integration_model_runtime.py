@@ -150,9 +150,12 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
         deadline = time.time() + ANSWER_TIMEOUT_SECONDS
         selected = matched = ""
         while time.time() < deadline:
+            # As on the page: "auto" lets the Router choose; a named model
+            # skips the decisions.
             headers = self._send_mock_chat_completion(
                 mock_container,
                 request_headers={"x-vsr-debug": "true"},
+                model="auto",
                 content="Plan a three-step proof that there are infinitely many primes.",
             )
             selected = headers.get("x-vsr-selected-decision", "")
