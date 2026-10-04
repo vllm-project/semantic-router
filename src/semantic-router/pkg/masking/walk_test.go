@@ -621,3 +621,133 @@ func TestApply_CustomToolResultKeepsTextMasking(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+// scanForValues reports every occurrence of every value, so a mixed payload
+// can be checked for leftovers rather than just its first match.
+func scanForValues(entityType string, values ...string) ScanFunc {
+	return func(text string) ([]Span, error) {
+		var spans []Span
+		for _, value := range values {
+			for offset := 0; ; {
+				idx := strings.Index(text[offset:], value)
+				if idx < 0 {
+					break
+				}
+				start := offset + idx
+				spans = append(spans, Span{
+					EntityType: entityType, Start: start, End: start + len(value), Confidence: 1.0,
+				})
+				offset = start + len(value)
+			}
+		}
+		return spans, nil
+	}
+}
+
+// A JSON prefix with text appended is mixed text, not a JSON document: the
+// decoder would consume only the prefix and leave the rest unscanned.
+func TestApply_ToolResultTrailingTextIsMasked(t *testing.T) {
+	request := toolResultRequest(`{"note":"safe"} alice@example.com`)
+
+	result, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Changed {
+		t.Fatal("result reported no change, so the trailing text was never scanned")
+	}
+	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
+	if want := `{"note":"safe"} [EMAIL_ADDRESS_0]`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Masking the whole payload must not drop what follows the first value.
+func TestApply_ToolResultTrailingTextKeepsBothHalves(t *testing.T) {
+	request := toolResultRequest(`{"a":"alice@example.com"} bob@example.com`)
+
+	scan := scanForValues("EMAIL_ADDRESS", "alice@example.com", "bob@example.com")
+	if _, err := Apply(request, NewAllocator(defaultCfg()), scan); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
+	if want := `{"a":"[EMAIL_ADDRESS_0]"} [EMAIL_ADDRESS_1]`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// A second JSON value is past the end of the first, so it needs the text path.
+func TestApply_ToolResultSecondJSONValueIsMasked(t *testing.T) {
+	request := toolResultRequest(`{"a":1} {"b":"alice@example.com"}`)
+
+	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
+	if want := `{"a":1} {"b":"[EMAIL_ADDRESS_0]"}`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// A function tool result that only starts like JSON is text, not a refusal.
+func TestApply_ToolResultMalformedJSONIsMaskedAsText(t *testing.T) {
+	request := toolResultRequest(`{"a": alice@example.com`)
+
+	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
+	if want := `{"a": [EMAIL_ADDRESS_0]`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Trailing whitespace still describes one JSON document, so the structured
+// path stays in force and object keys are preserved.
+func TestApply_ToolResultTrailingWhitespaceStaysStructured(t *testing.T) {
+	request := toolResultRequest("{\"alice@example.com\":\"alice@example.com\"}\n  ")
+
+	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
+	if want := `{"alice@example.com":"[EMAIL_ADDRESS_0]"}`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Function arguments must be one JSON object. Re-serialising a payload with a
+// remainder would silently drop it, so masking fails closed instead.
+func TestApply_ToolCallArgumentsWithTrailingContentFailClosed(t *testing.T) {
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
+					ID: "call_1", Name: "lookup", Arguments: `{"a":1} alice@example.com`,
+				}},
+			}},
+		},
+	}
+
+	_, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com"))
+	if err == nil {
+		t.Fatal("tool call arguments with trailing content were accepted")
+	}
+	if !strings.Contains(err.Error(), "trailing content") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// toolResultRequest wraps one function tool-result text payload.
+func toolResultRequest(text string) *llmprotocol.Request {
+	return &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
+					CallID:  "call_1",
+					Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}},
+				}},
+			}},
+		},
+	}
+}

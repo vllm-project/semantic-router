@@ -67,7 +67,9 @@ If a response happens to echo a placeholder like `[EMAIL_ADDRESS_0]` back to the
 
 The masking walk touches message content, system/developer instructions, tool-call arguments, and tool results — and nothing else.
 
-Tool payloads are masked according to their kind. A function call's JSON arguments and a structured (JSON object or array) tool result are decoded first and masked at their string leaves, so object keys stay intact, the payload stays valid JSON, and an escaped value such as `alice@example.com` is still caught. A custom tool's free-form input and a plain-text tool result are masked as text.
+Tool payloads are masked according to their kind. A function call's JSON arguments and a structured tool result are decoded first and masked at their string leaves, so object keys stay intact, the payload stays valid JSON, and an escaped value such as `alice@example.com` is still caught. A custom tool's free-form input and a plain-text tool result are masked as text.
+
+A tool result counts as structured only when it is exactly one JSON object or array with nothing after it. A payload such as `{"note":"safe"} alice@example.com` is mixed text, so it is masked as text and the whole string is scanned; decoding it would read only the leading value and leave the remainder unscanned. Function-call arguments must be a single JSON object, so a remainder there fails closed instead.
 
 Specifically left alone:
 

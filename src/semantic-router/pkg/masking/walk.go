@@ -2,7 +2,9 @@ package masking
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -144,7 +146,7 @@ func maskToolResult(
 		block := &result.Content[i]
 		structured := block.Kind == llmprotocol.ContentText &&
 			result.Kind != llmprotocol.ToolKindCustom &&
-			looksLikeJSONDocument(block.Text)
+			isCompleteJSONDocument(block.Text)
 		if !structured {
 			if err := applyToBlock(block, a, scan, out, depth+1); err != nil {
 				return err
@@ -168,11 +170,31 @@ func maskToolResult(
 	return nil
 }
 
-// looksLikeJSONDocument reports whether text is a JSON object or array. Bare
-// scalars stay on the text path so a plain result is never reserialised.
-func looksLikeJSONDocument(text string) bool {
+// isCompleteJSONDocument reports whether text is exactly one JSON object or
+// array with nothing after it. A tool result is ordinary text, so a payload
+// like `{"a":1} alice@example.com` is mixed text and belongs on the text path:
+// decoding it would scan only the leading value and leave the rest unscanned.
+// Bare scalars stay on the text path too, so a plain result is never
+// reserialised.
+func isCompleteJSONDocument(text string) bool {
 	trimmed := strings.TrimSpace(text)
-	return strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")
+	if !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[") {
+		return false
+	}
+	decoder := json.NewDecoder(strings.NewReader(trimmed))
+	var probe json.RawMessage
+	if err := decoder.Decode(&probe); err != nil {
+		return false
+	}
+	return isAtEndOfInput(decoder)
+}
+
+// isAtEndOfInput reports whether a decoder that has read one value consumed
+// the whole input. A second value, or trailing bytes that are not JSON at all,
+// both mean the payload holds more than the value already decoded.
+func isAtEndOfInput(decoder *json.Decoder) bool {
+	var trailing json.RawMessage
+	return errors.Is(decoder.Decode(&trailing), io.EOF)
 }
 
 // maskToolCallArguments masks string leaves of the arguments JSON. Keys,
@@ -221,6 +243,11 @@ func maskJSONDocument(document string, a *Allocator, scan ScanFunc, out *Result)
 		// Content the router cannot parse cannot be masked, and dispatching
 		// it unmasked would be a silent bypass (D4).
 		return "", false, fmt.Errorf("not valid JSON: %w", err)
+	}
+	// Re-serialising would drop whatever follows the first value, and only
+	// that value is ever scanned, so a trailing remainder is a bypass (D4).
+	if !isAtEndOfInput(decoder) {
+		return "", false, fmt.Errorf("trailing content after the first JSON value")
 	}
 	masked, changed, err := maskJSONValue(decoded, a, scan, out)
 	if err != nil {
