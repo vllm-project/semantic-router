@@ -22,11 +22,13 @@ class ExactProfile(Profile):
     def __init__(self) -> None:
         self.fuse = False
         self.merge = False
+        self.banded = True
         self.model: LoadedModel | None = None
 
     def available(self, model: LoadedModel) -> str | None:
         self.fuse = bool(getattr(model, "fuse_bundled_jobs", False))
         self.merge = bool(getattr(model, "batch_invariant", False))
+        self.banded = not getattr(model, "packs_rows", False)
         self.model = model
         return None
 
@@ -37,7 +39,9 @@ class ExactProfile(Profile):
         """
         if self.merge:
             return merged(
-                jobs, min(token_budget or MERGED_BATCH_TOKENS, MERGED_BATCH_TOKENS)
+                jobs,
+                min(token_budget or MERGED_BATCH_TOKENS, MERGED_BATCH_TOKENS),
+                self.banded,
             )
         batches = []
         for unit in self._units(jobs):
@@ -65,14 +69,17 @@ class ExactProfile(Profile):
         return units
 
 
-def merged(jobs: list[Job], cap: int) -> list[Batch]:
-    """Every job's rows in shared batches of one length class, each within ``cap`` padded tokens.
+def merged(jobs: list[Job], cap: int, banded: bool = True) -> list[Batch]:
+    """Every job's rows in shared batches, each within ``cap`` padded tokens.
 
     Only for batch-invariant models, where a row's answer does not depend on
     the batch it runs in. Rows with the same token IDs stay in one batch, where
     the family computes them once, and count once against ``cap``; inputs
     without token IDs (images, audio) count by their ``cost``. A row costlier
-    than ``cap`` runs alone.
+    than ``cap`` runs alone. ``banded`` keeps each batch to one length class,
+    so padded rows pad little; a model that packs its rows needs no bands, and
+    closed-loop callers' short texts, spread over several classes, then still
+    share forwards.
     """
     units: dict[object, tuple[int, list[tuple[Job, int]]]] = {}
     for job in jobs:
@@ -84,7 +91,8 @@ def merged(jobs: list[Job], cap: int) -> list[Batch]:
     band = width = count = 0
     for length, rows in sorted(units.values(), key=lambda unit: unit[0]):
         if current and (
-            length_class(length) != band or max(width, length) * (count + 1) > cap
+            (banded and length_class(length) != band)
+            or max(width, length) * (count + 1) > cap
         ):
             batches.append(Batch(parts=list(current.values())))
             current, width, count = {}, 0, 0

@@ -202,6 +202,7 @@ class TaskHeadsModel(LoadedModel):
         self.defaults = defaults
         self.planners = planners or {}
         self.normalize_exits = normalize_exits
+        self.packs_rows = engine_model.hidden_states
 
     def forward_token_budget(self) -> int | None:
         return max(FORWARD_TOKEN_BUDGET, self.limit)
