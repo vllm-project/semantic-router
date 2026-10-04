@@ -28,9 +28,12 @@ Face revision, so the same name always loads the same files.
 | Embed text, images and audio together | `vllm-sr/Vela-1.0-Omni-Nano` or `-Mini` | 164M / 1.36B | Mini is more accurate and accepts longer text |
 | Ask your own questions in plain language | A decision model (next section) | 0.6B to 27B | |
 
-The task models all run well on a CPU: on 16 cores Vela Domain classifies a
-short request in about 17 ms. Most of them read up to 32,768 tokens; longer or
-shorter limits are listed on each model card and in `GET /v1/models`.
+The task models all run well on a CPU: on 16 cores the median Vela Domain
+request takes about 11 ms, three times faster than the native bindings that
+earlier releases used
+([measurements](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela1-performance.md)).
+Most of them read up to 32,768 tokens; longer or shorter limits are listed on
+each model card and in `GET /v1/models`.
 
 ## Decision models
 
