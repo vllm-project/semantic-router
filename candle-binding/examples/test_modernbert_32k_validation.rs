@@ -299,7 +299,7 @@ fn load_model_and_tokenizer(
     device: &Device,
 ) -> Result<(std::path::PathBuf, Config, ModernBert, Tokenizer)> {
     println!("\n Downloading ModernBERT-base-32k...");
-    let base_model_id = "llm-semantic-router/modernbert-base-32k";
+    let base_model_id = "vllm-sr/modernbert-base-32k";
     let repo = Repo::with_revision(
         base_model_id.to_string(),
         RepoType::Model,
