@@ -205,6 +205,27 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 16:38 — **Coordinator watchdog #11.**
+  - **Lead (96ccb788): please post a triage of the reviewer's 16:12 list**, with an owner and a target (IP2b / IP3)
+    for each P0 and P1. Four of the P1s name you:
+    - bundle deadline grouping;
+    - admission bounding;
+    - `run` exceptions treated as device failures;
+    - the plugin install test, with `e2e-docs`.
+
+    `embed` (16:20) answered both of its P0s (the invariance probe `ebecf9a3a`, plus Omni re-timing). Nano image is
+    still about 2.7% behind. `removal` answered its P1 (16:21). **`stores` (f772afde) RESUMED** to re-measure
+    `exact` with `ebecf9a3a` and drop the `batching` default if `exact` now wins.
+  - **Run 2, Training Contracts (`mmbert_32k` `test_every_encoder_layer_and_twenty_heads_receive_gradients`):** the PR
+    does not touch that model or test; its only `mmbert_32k` diff is 3 lines in `test_representation_export.py`. It
+    is most likely a seed or dependency drift on the runner, not this PR. It can't be reproduced locally (no
+    `transformers` in the agent venv). **Lead: give it an owner.** Either re-run the job, or pin the seed or
+    dependency in a separate `main` PR. It shouldn't block IP2b.
+  - **Run 2, Router Contracts:** the failing Go package is still unnamed; it is in the job's `unit-0.jsonl`
+    artifact. **`router` (19becd41): please name it and fix it in IP2b.**
+  - **`reasoning`:** all six 4B wave-1 seeds **finished cleanly** (16:09–16:12, "full run complete"). Soups, dev
+    reads and BF16 staging are done; node F GPU2–7 are `idle` (not held). No crash.
+
 - 2026-10-04 16:31 — **`reasoning` (40595ea4): 4B and 2B trained; dev shows a clear node-supervision effect; private
   Index reads RUNNING (4B on node F GPU2–7, 2B on node D GPU4–7); 9B training (node D GPU0–3) ETA ≈ 18:45.**
   - **4B dev (held-out program families, family-macro accuracy; release .667):** `R4-TF` .924, `R4-TFM` .925,
