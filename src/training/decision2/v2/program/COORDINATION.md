@@ -205,6 +205,89 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 23:36 — **Model-runtime P2–4 lead (96ccb788) → coordinator, all P2–4 workstreams: correction to my 23:14 note.
+  CI never started on `cf13ba13a`, because the PR conflicted with `main`. IP2b goes up as `32e155bdc` at about 00:00.**
+  - **Why:** `main` moved by 11 commits since `719d04abc`, and one of them conflicts with ours in
+    `e2e/pkg/cluster/kind.go`. Main added a Kind bootstrap retry; we have the pod ARP fix. GitHub cannot build the
+    merge commit, so the `Pull Request` workflow did not run.
+  - **Merge `32e155bdc`:** the ARP fix now runs inside each bootstrap attempt. The e2e cluster package builds and its
+    tests pass. The router builds, and `pkg/config` and `pkg/dsl` tests pass with main's plugin-config fixes.
+  - **Also in `32e155bdc`** (my IP3 lead items, tested; runtime suite 525 passed):
+    - P2-5: a client that disconnects cancels its call, and the scheduler skips its batches that have not run (499 in
+      the metrics). Scheduler futures tolerate a cancelled caller.
+    - P2-11: CLI defaults come from `ServeConfig` / `ModelConfig`, and `--backbone` goes. Every built-in family has a
+      fixture writer that its own family detects (`decision2`, `vela2` and `multimodal_embedding` are new).
+    - P2-18: the ONNX engine's test-only `graph_metadata` is removed.
+    - Design: §13.3 states P1-9 (one bundle per runtime process; on CPU, per model), §12 explains P2-7's
+      import-time env defaults (they must precede PyTorch's load; the caller's values win), and §9 covers
+      cancellation.
+  - **Node A check on the exact sha** (64–95,128–159, precommit image) is running; I push when it passes.
+  - **Workstreams:** for IP3, merge `p24-ip2` at `32e155bdc` or later. `vela1`'s `de6854a9e` merges cleanly with it.
+    `e2e-docs`: I drop the curl probe branch `8d8d202b0`, since staging carries curl.
+
+- 2026-10-04 23:35 — **`removal` (5497de44) → lead (96ccb788), coordinator, reviewer: INTEGRATION READY removal
+  `d3fd97e82` (IP3). The branch is `xunzhuo/model-runtime-p24-removal-ip2b`; staging `cf13ba13a` is merged
+  (`abd241daf`).**
+  - **The 17 k8s testdata files are intended, and committed in `3e28e3478`.** `TestConverterWithTestData`
+    rewrites `pkg/k8s/testdata/output/*.yaml` from the current config structs. The committed goldens still had
+    `variant`, `use_mmbert_32k`, `use_modernbert`, `enable_nli_filtering` and the hallucination `explainer`, all
+    of which the loader now rejects as retired. A rerun at the merged head reproduces the same 187 deletions, and
+    a second run leaves no diff.
+  - **P2-17 is already closed on staging.** `a288f013e` removed the ORT case, and
+    `embedding_startup_readiness_test.go` now uses only the `http` provider.
+  - **The lead's 16:22 list was already done:** `6c5d41dec` (the jailbreak and PII ConfigMap comments) and
+    `86db129f5` (the hallucination demo README and `run_demo.sh`, plus `run_cli_tests.py`
+    `"runtime": "model-runtime"`). Both are in staging.
+  - **Records:** `6f5928ab5` (`removal-footprint.md` / `.json` / `.yaml`) is unchanged. The 17:01 numbers stand.
+  - **Deletion-completeness sweep** (binding directories, Candle including CamelCase identifiers, Rust and
+    RISC-V, build tags, cgo link flags, make targets). Three new commits:
+    - `225b2f8dd` `[Test]`: deletes `e2e/testing/07-router-path-selection-test.py`. It tested the Candle unified
+      classifier's LoRA-versus-traditional path choice (`unified.rs`, `lora_config.json` auto-discovery), which
+      no longer exists. `03-classification-api-test.py` still covers the intent and batch endpoints it called.
+    - `c39a192a8` `[Test]`: the `modeldownload` tests and one classification test no longer name Candle in
+      identifiers, comments or messages. Behavior is unchanged.
+    - `d3fd97e82` `[Harness]`: `Dockerfile.precommit` no longer installs rustup, rustfmt or clippy (no crate or
+      hook uses them), and `testing-strategy.md` drops the Clippy sentence. `tree-sitter-rust` stays for the AST
+      scanner.
+  - **Kept on purpose:**
+    - the loader's retired-field and provider rejections, and their tests;
+    - `vllm-sr config migrate` and its tests, plus the migrate and troubleshooting docs;
+    - the operating-point sidecar's `provider: candle` execution (it is the published file format);
+    - the lexical and model-selection parity comments that cite the binding they were recorded from;
+    - the legacy-baseline tools under `src/model-runtime/tools`;
+    - design §16 (the decision record), versioned docs, blogs, the paper and `pl-0042`;
+    - the Hugging Face Candle acknowledgement.
+  - **Checks on `d3fd97e82`:**
+    - local: `make harness-check` exit 0; `make config-schema-check` exit 0; `make test-semantic-router` exit 0;
+      `go vet` and `go test` for `pkg/modeldownload`, `pkg/classification`, `pkg/k8s` and `pkg/extproc`;
+      `test_agent_make_contract` / `test_docker_build_args` (21 tests) OK.
+    - node F 128–159, exact mirror: `Dockerfile.precommit` builds (no `cargo` or `rustup` in the image).
+    - No E2E profile run; the router change only renames tests.
+  - **Node F is clean:** the `removal-cpu128` builder and the 14 footprint and check images are removed. Nothing
+    of mine runs on any node.
+
+- 2026-10-04 23:32 — **Model-runtime P2–4 `vela1` (d3e74ccf) → lead (96ccb788), coordinator, `stores`: RESUMED.
+  Staging `cf13ba13a` is merged; the head is `de6854a9e` (pushed). The 5-round A/B is running there.**
+  - **Tests at `de6854a9e`:** mypy (strict, plugin API) passes; the CPU suite has 511 passed, 7 failed. All 7 are
+    Transformers ≥ 5 reference tests that my local venv (4.56) can't run (`qwen3_5`, `rope_parameters`); they are
+    environment failures, not code ones. `6a06c3474` (P1-12 Python side, P2-9, P2-10) still waits for the lead's review.
+  - **Running on node B, started 23:28:**
+    - **A/B on 96–111, inside one cgroup cpuset.** It runs in a `sudo systemd-run --scope -p AllowedCPUs=96-111`
+      scope; the effective cpuset (96–111) is logged. A user scope gets no cpuset controller on node B, and its
+      allowed list stays 0–159. The run has 5 rounds of interleaved pairs, then 5 rounds of 20 s windows at 4
+      callers (legacy, `exact`, `batching`), with the load logged.
+    - **95% CIs:** latency (p50 / p95 ratios and the median speedup) bootstraps the input pairs. The `exact` /
+      legacy rate is a t-interval over the rounds, paired by round.
+    - **Beside it on 64–79:** CPU parity, then ROCm parity on GPU0 (lease written only while it runs) for answer
+      identity.
+    - ETA about 02:15. Records and `INTEGRATION READY vela1` follow, by 04:30.
+  - **The finished 2-round A/B at `6ad576cf6` (18:40) did survive.** It is below the standard, so it is replaced.
+  - **`stores` / lead, about P0-2:** `packs_rows` changes how `task_heads` merges batches, because the length bands
+    drop for packing models. If it lands in IP3, my A/B at `de6854a9e` doesn't measure the final head. Please tell me
+    which commit carries it. I can rerun the A/B on the merged head (about 2.75 h), but only if it is pushed by about
+    01:30.
+  — vela1
+
 - 2026-10-04 23:32 — **USER (23:30) → `reasoning` (40595ea4): RUN THE PRE-REGISTERED STRONGER-TEACHER ARM NOW.**
   The user asked whether `gpt-oss-120b` is too old as the teacher, and chose: "现在就跑已登记的更强 teacher 实验：只替换教师生成的那部分，
   先在同一批题上对比，更好再全面换".
