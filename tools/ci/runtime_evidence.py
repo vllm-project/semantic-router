@@ -12,7 +12,6 @@ from http import HTTPStatus
 from pathlib import Path
 
 from image_calibration import evidence as image_calibration_evidence
-from riscv_evidence import evidence as riscv_evidence
 from run_model_tests import required_inventory
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -156,7 +155,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "kind",
-        choices=["local", "recipes", "models", "image-calibration", "riscv-qemu"],
+        choices=["local", "recipes", "models", "image-calibration"],
     )
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -166,8 +165,6 @@ def main() -> None:
         result = models_evidence(args.directory)
     elif args.kind == "image-calibration":
         result = image_calibration_evidence(args.directory)
-    elif args.kind == "riscv-qemu":
-        result = riscv_evidence(args.directory)
     elif args.kind == "local":
         result = local_evidence(args.directory, args.suite)
     else:
