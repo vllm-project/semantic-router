@@ -1,0 +1,1700 @@
+{
+ "cpu_interleaved_ab": {
+  "context": {
+   "device": "AMD EPYC 9575F, the same 16 pinned vCPUs for both sides (taskset)",
+   "legacy_commit": "61aa7eb2db0cfd9f00bfa06abd4944b3864cf38d",
+   "legacy_env": "Go 1.25 test binary of pkg/modelruntime/native, bindings built in golang:1.25-bookworm, serve mode",
+   "legacy_recipe": "cpu (candle; Hazard and Halu through their operating point / grounded facades)",
+   "method": "per input one legacy call and one runtime exact call alternate (order flips each round), 2 rounds; then 20 s windows of 4 closed-loop callers rotate over legacy, exact and batching (2 rounds, medians)",
+   "node_load_1min": {
+    "max": 60.91,
+    "median": 37.05,
+    "samples": 132
+   },
+   "runtime_commit": "0a2ced48322e5b90ed78ae7cbb9425ee51139bc8",
+   "runtime_env": "Python 3.12.3, torch 2.10.0+cpu, 16 threads"
+  },
+  "jobs": {
+   "domain": {
+    "legacy_ms": {
+     "p50": 35.318072,
+     "p95": 199.752247
+    },
+    "median_speedup": 3.20076906448318,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 11.309924,
+     "p95": 32.190258
+    },
+    "throughput_per_s": {
+     "batching": 101.54234964284178,
+     "exact": 70.54119155811253,
+     "legacy": 40.55271189266236
+    }
+   },
+   "factcheck": {
+    "legacy_ms": {
+     "p50": 34.677899,
+     "p95": 196.318029
+    },
+    "median_speedup": 3.17376129683182,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 11.470552,
+     "p95": 30.917547
+    },
+    "throughput_per_s": {
+     "batching": 110.56874406231596,
+     "exact": 70.59072472554425,
+     "legacy": 39.75911258817257
+    }
+   },
+   "feedback": {
+    "legacy_ms": {
+     "p50": 34.269329,
+     "p95": 205.468903
+    },
+    "median_speedup": 3.259622552383548,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 11.296884,
+     "p95": 30.377539
+    },
+    "throughput_per_s": {
+     "batching": 104.7253674554477,
+     "exact": 66.33181849046036,
+     "legacy": 40.47481934746871
+    }
+   },
+   "guard": {
+    "legacy_ms": {
+     "p50": 35.289709,
+     "p95": 195.048894
+    },
+    "median_speedup": 3.1827361414320685,
+    "pairs": 1090,
+    "runtime_ms": {
+     "p50": 11.223816,
+     "p95": 29.525453
+    },
+    "throughput_per_s": {
+     "batching": 48.95355368832266,
+     "exact": 43.35330541055947,
+     "legacy": 18.45051616173305
+    }
+   },
+   "halu": {
+    "legacy_ms": {
+     "p50": 1343.813913,
+     "p95": 40269.442527
+    },
+    "median_speedup": 10.225895723903479,
+    "pairs": 128,
+    "runtime_ms": {
+     "p50": 135.593624,
+     "p95": 2753.798477
+    },
+    "throughput_per_s": {
+     "batching": 2.503121973335227,
+     "exact": 3.4665306553908763,
+     "legacy": 1.4510426189479195
+    }
+   },
+   "hazard": {
+    "legacy_ms": {
+     "p50": 34.473512,
+     "p95": 201.950923
+    },
+    "median_speedup": 3.2527550983073565,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 11.359565,
+     "p95": 30.905793
+    },
+    "throughput_per_s": {
+     "batching": 18.51005752719159,
+     "exact": 29.57621244265561,
+     "legacy": 12.501571644196218
+    }
+   },
+   "modality": {
+    "legacy_ms": {
+     "p50": 33.800999,
+     "p95": 200.746675
+    },
+    "median_speedup": 3.2518173498452496,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 11.047171,
+     "p95": 29.906809
+    },
+    "throughput_per_s": {
+     "batching": 104.78695348634682,
+     "exact": 67.75214084966632,
+     "legacy": 39.36372907596949
+    }
+   },
+   "pii": {
+    "legacy_ms": {
+     "p50": 33.427259,
+     "p95": 190.245609
+    },
+    "median_speedup": 3.164701815564465,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 10.838145,
+     "p95": 28.427174
+    },
+    "throughput_per_s": {
+     "batching": 20.233411990894894,
+     "exact": 30.93180552625809,
+     "legacy": 18.335068027960713
+    }
+   },
+   "pii_truncate": {
+    "legacy_ms": {
+     "p50": 84.697682,
+     "p95": 254.877441
+    },
+    "median_speedup": 7.078116331463523,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 11.421184,
+     "p95": 30.752376
+    },
+    "throughput_per_s": {
+     "batching": 114.29938703894237,
+     "exact": 77.54293671425688,
+     "legacy": 27.966726595483074
+    }
+   },
+   "safety": {
+    "legacy_ms": {
+     "p50": 33.402155,
+     "p95": 195.154414
+    },
+    "median_speedup": 3.274875774372184,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 10.677488,
+     "p95": 28.838474
+    },
+    "throughput_per_s": {
+     "batching": 109.17761189032947,
+     "exact": 73.08141976694321,
+     "legacy": 39.506164878829836
+    }
+   },
+   "shield": {
+    "legacy_ms": {
+     "p50": 34.557101,
+     "p95": 201.441438
+    },
+    "median_speedup": 3.1975258920014547,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 11.244139,
+     "p95": 30.363338
+    },
+    "throughput_per_s": {
+     "batching": 106.68109522687047,
+     "exact": 68.19730944994689,
+     "legacy": 38.414496336095574
+    }
+   }
+  }
+ },
+ "cpu_interleaved_ab_before_scheduler": {
+  "context": {
+   "device": "AMD EPYC 9575F, the same 16 pinned vCPUs for both sides (taskset)",
+   "legacy_commit": "61aa7eb2db0cfd9f00bfa06abd4944b3864cf38d",
+   "legacy_env": "Go 1.25 test binary of pkg/modelruntime/native, bindings built in golang:1.25-bookworm, serve mode",
+   "legacy_recipe": "cpu (candle; Hazard and Halu through their operating point / grounded facades)",
+   "method": "per input one legacy call and one runtime exact call alternate (order flips each round), 2 rounds; then 20 s windows of 4 closed-loop callers rotate over legacy, exact and batching (2 rounds, medians)",
+   "note": "the same A/B before the scheduler answered jobs per batch (cd73be9d4); node load not logged",
+   "runtime_commit": "93a3492c00693814a5cb58744d7261b80474664b",
+   "runtime_env": "Python 3.12.3, torch 2.10.0+cpu, 16 threads"
+  },
+  "jobs": {
+   "domain": {
+    "legacy_ms": {
+     "p50": 30.643987,
+     "p95": 185.508381
+    },
+    "median_speedup": 3.594104320269472,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 8.821324,
+     "p95": 25.377697
+    },
+    "throughput_per_s": {
+     "batching": 106.88107210463242,
+     "exact": 110.49938430917774,
+     "legacy": 39.961798144729435
+    }
+   },
+   "factcheck": {
+    "legacy_ms": {
+     "p50": 32.123757,
+     "p95": 188.672062
+    },
+    "median_speedup": 3.3279488947919424,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 10.231243,
+     "p95": 26.641331
+    },
+    "throughput_per_s": {
+     "batching": 109.9299249787396,
+     "exact": 101.62756068006546,
+     "legacy": 40.60238286875025
+    }
+   },
+   "feedback": {
+    "legacy_ms": {
+     "p50": 32.395208,
+     "p95": 188.866088
+    },
+    "median_speedup": 3.3492409189334573,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 10.327421,
+     "p95": 27.125389
+    },
+    "throughput_per_s": {
+     "batching": 110.54588539328674,
+     "exact": 101.53716240636615,
+     "legacy": 41.57621847774739
+    }
+   },
+   "guard": {
+    "legacy_ms": {
+     "p50": 31.287754,
+     "p95": 181.54655
+    },
+    "median_speedup": 3.515020697821147,
+    "pairs": 1090,
+    "runtime_ms": {
+     "p50": 9.197146,
+     "p95": 24.980427
+    },
+    "throughput_per_s": {
+     "batching": 50.70719509745582,
+     "exact": 49.26155613273571,
+     "legacy": 18.99049959172472
+    }
+   },
+   "halu": {
+    "legacy_ms": {
+     "p50": 1361.574297,
+     "p95": 40681.971922
+    },
+    "median_speedup": 12.042838015634242,
+    "pairs": 128,
+    "runtime_ms": {
+     "p50": 115.072104,
+     "p95": 2785.188567
+    },
+    "throughput_per_s": {
+     "batching": 3.013804879122629,
+     "exact": 2.995726222461193,
+     "legacy": 1.5237879165711354
+    }
+   },
+   "hazard": {
+    "legacy_ms": {
+     "p50": 32.197522,
+     "p95": 187.286149
+    },
+    "median_speedup": 3.3157288095767026,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 10.256137,
+     "p95": 27.549443
+    },
+    "throughput_per_s": {
+     "batching": 21.13712847371748,
+     "exact": 19.771112896101094,
+     "legacy": 12.820584039895142
+    }
+   },
+   "modality": {
+    "legacy_ms": {
+     "p50": 33.525675,
+     "p95": 192.590559
+    },
+    "median_speedup": 3.3635274368692176,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 10.317428,
+     "p95": 28.182267
+    },
+    "throughput_per_s": {
+     "batching": 116.89760984690838,
+     "exact": 102.89728832710539,
+     "legacy": 41.33923595451244
+    }
+   },
+   "pii": {
+    "legacy_ms": {
+     "p50": 32.987845,
+     "p95": 192.188575
+    },
+    "median_speedup": 3.37819465907504,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 10.304653,
+     "p95": 28.975742
+    },
+    "throughput_per_s": {
+     "batching": 22.220048522611698,
+     "exact": 22.017682553243805,
+     "legacy": 19.317654958351092
+    }
+   },
+   "pii_truncate": {
+    "legacy_ms": {
+     "p50": 76.805764,
+     "p95": 236.798529
+    },
+    "median_speedup": 7.354063622850674,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 10.59092,
+     "p95": 28.57353
+    },
+    "throughput_per_s": {
+     "batching": 110.8381014124551,
+     "exact": 106.56429566844933,
+     "legacy": 27.49838132433812
+    }
+   },
+   "safety": {
+    "legacy_ms": {
+     "p50": 31.663445,
+     "p95": 191.463698
+    },
+    "median_speedup": 3.4490738610063314,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 9.637158,
+     "p95": 26.509363
+    },
+    "throughput_per_s": {
+     "batching": 112.9420658656967,
+     "exact": 102.8495688749044,
+     "legacy": 41.44502012011195
+    }
+   },
+   "shield": {
+    "legacy_ms": {
+     "p50": 32.124866,
+     "p95": 194.356465
+    },
+    "median_speedup": 3.39051217625489,
+    "pairs": 1094,
+    "runtime_ms": {
+     "p50": 10.075889,
+     "p95": 27.236666
+    },
+    "throughput_per_s": {
+     "batching": 115.01033969493028,
+     "exact": 107.20502647875028,
+     "legacy": 40.90898300663423
+    }
+   }
+  }
+ },
+ "cpu_profiles": {
+  "max_speed_bf16_copy": {
+   "context": {
+    "baseline": "the runtime's exact profile on the same cores and inputs",
+    "candidate": "max_speed with a BF16 copy of the linears under CPU autocast (heads FP32), recorded before any consent",
+    "device": "AMD EPYC 9575F (AVX-512 BF16), 16 pinned cores (node B 64-79)",
+    "runtime_commit": "0a2ced48322e5b90ed78ae7cbb9425ee51139bc8",
+    "runtime_env": "Python 3.12.3, torch 2.10.0+cpu, 16 threads"
+   },
+   "jobs": {
+    "domain": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 84.874,
+       "concurrency": 4,
+       "p50_ms": 32.573,
+       "p95_ms": 107.302
+      },
+      "runtime": {
+       "calls_per_s": 102.126,
+       "concurrency": 4,
+       "p50_ms": 34.607,
+       "p95_ms": 70.056
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.676,
+       "p95": 22.893
+      },
+      "runtime": {
+       "p50": 12.101,
+       "p95": 33.537
+      }
+     }
+    },
+    "factcheck": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 83.905,
+       "concurrency": 4,
+       "p50_ms": 33.921,
+       "p95_ms": 107.026
+      },
+      "runtime": {
+       "calls_per_s": 108.79,
+       "concurrency": 4,
+       "p50_ms": 32.837,
+       "p95_ms": 64.714
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.698,
+       "p95": 23.565
+      },
+      "runtime": {
+       "p50": 11.722,
+       "p95": 31.6
+      }
+     }
+    },
+    "feedback": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 84.023,
+       "concurrency": 4,
+       "p50_ms": 33.318,
+       "p95_ms": 112.401
+      },
+      "runtime": {
+       "calls_per_s": 106.435,
+       "concurrency": 4,
+       "p50_ms": 33.003,
+       "p95_ms": 68.751
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.636,
+       "p95": 23.537
+      },
+      "runtime": {
+       "p50": 11.978,
+       "p95": 32.581
+      }
+     }
+    },
+    "guard": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 52.302,
+       "concurrency": 4,
+       "p50_ms": 27.753,
+       "p95_ms": 103.728
+      },
+      "runtime": {
+       "calls_per_s": 48.333,
+       "concurrency": 4,
+       "p50_ms": 32.25,
+       "p95_ms": 72.54
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.347,
+       "p95": 22.245
+      },
+      "runtime": {
+       "p50": 11.667,
+       "p95": 31.21
+      }
+     }
+    },
+    "halu": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 4.086,
+       "concurrency": 4,
+       "p50_ms": 492.76,
+       "p95_ms": 5144.286
+      },
+      "runtime": {
+       "calls_per_s": 3.097,
+       "concurrency": 4,
+       "p50_ms": 525.448,
+       "p95_ms": 13358.667
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 118.971,
+       "p95": 2456.872
+      },
+      "runtime": {
+       "p50": 109.153,
+       "p95": 2154.139
+      }
+     }
+    },
+    "hazard": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 40.442,
+       "concurrency": 4,
+       "p50_ms": 27.564,
+       "p95_ms": 141.089
+      },
+      "runtime": {
+       "calls_per_s": 27.576,
+       "concurrency": 4,
+       "p50_ms": 31.295,
+       "p95_ms": 107.933
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.748,
+       "p95": 23.512
+      },
+      "runtime": {
+       "p50": 11.927,
+       "p95": 31.183
+      }
+     }
+    },
+    "modality": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 84.329,
+       "concurrency": 4,
+       "p50_ms": 34.515,
+       "p95_ms": 109.857
+      },
+      "runtime": {
+       "calls_per_s": 107.1,
+       "concurrency": 4,
+       "p50_ms": 32.934,
+       "p95_ms": 69.33
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.618,
+       "p95": 23.514
+      },
+      "runtime": {
+       "p50": 11.718,
+       "p95": 31.029
+      }
+     }
+    },
+    "pii": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 38.184,
+       "concurrency": 4,
+       "p50_ms": 33.932,
+       "p95_ms": 113.79
+      },
+      "runtime": {
+       "calls_per_s": 22.773,
+       "concurrency": 4,
+       "p50_ms": 32.644,
+       "p95_ms": 77.814
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.905,
+       "p95": 23.517
+      },
+      "runtime": {
+       "p50": 12.098,
+       "p95": 32.517
+      }
+     }
+    },
+    "pii_truncate": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 75.934,
+       "concurrency": 4,
+       "p50_ms": 38.425,
+       "p95_ms": 115.745
+      },
+      "runtime": {
+       "calls_per_s": 102.826,
+       "concurrency": 4,
+       "p50_ms": 34.551,
+       "p95_ms": 71.886
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 8.968,
+       "p95": 25.805
+      },
+      "runtime": {
+       "p50": 11.692,
+       "p95": 31.356
+      }
+     }
+    },
+    "safety": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 84.542,
+       "concurrency": 4,
+       "p50_ms": 34.036,
+       "p95_ms": 110.392
+      },
+      "runtime": {
+       "calls_per_s": 108.508,
+       "concurrency": 4,
+       "p50_ms": 31.747,
+       "p95_ms": 69.485
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.654,
+       "p95": 23.84
+      },
+      "runtime": {
+       "p50": 12.008,
+       "p95": 31.945
+      }
+     }
+    },
+    "shield": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 83.712,
+       "concurrency": 4,
+       "p50_ms": 33.422,
+       "p95_ms": 110.015
+      },
+      "runtime": {
+       "calls_per_s": 107.385,
+       "concurrency": 4,
+       "p50_ms": 32.756,
+       "p95_ms": 68.779
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.693,
+       "p95": 23.412
+      },
+      "runtime": {
+       "p50": 11.44,
+       "p95": 30.888
+      }
+     }
+    }
+   }
+  }
+ },
+ "format": "vela1-performance-summary/1",
+ "rocm_profiles_amd_inputs": {
+  "batching": {
+   "context": {
+    "baseline": "the runtime's exact profile on the same GPU and inputs",
+    "candidate": "the batching profile, one request at a time",
+    "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
+    "runtime_commit": "b1eafc87ad1f961c99234ccc72c9a2d555ceca1a",
+    "runtime_env": "decision20-lux-runtime image: PyTorch 2.12.0 ROCm 7.2"
+   },
+   "jobs": {
+    "domain": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 454.092,
+       "concurrency": 4,
+       "p50_ms": 7.481,
+       "p95_ms": 11.018
+      },
+      "runtime": {
+       "calls_per_s": 614.717,
+       "concurrency": 4,
+       "p50_ms": 5.012,
+       "p95_ms": 11.268
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.785,
+       "p95": 2.984
+      },
+      "runtime": {
+       "p50": 3.982,
+       "p95": 5.128
+      }
+     }
+    },
+    "factcheck": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 460.1,
+       "concurrency": 4,
+       "p50_ms": 7.317,
+       "p95_ms": 11.063
+      },
+      "runtime": {
+       "calls_per_s": 595.77,
+       "concurrency": 4,
+       "p50_ms": 5.095,
+       "p95_ms": 11.751
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.785,
+       "p95": 3.024
+      },
+      "runtime": {
+       "p50": 3.875,
+       "p95": 5.135
+      }
+     }
+    },
+    "feedback": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 443.79,
+       "concurrency": 4,
+       "p50_ms": 7.573,
+       "p95_ms": 12.122
+      },
+      "runtime": {
+       "calls_per_s": 599.831,
+       "concurrency": 4,
+       "p50_ms": 5.014,
+       "p95_ms": 11.594
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.868,
+       "p95": 3.113
+      },
+      "runtime": {
+       "p50": 3.993,
+       "p95": 5.219
+      }
+     }
+    },
+    "guard": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 454.411,
+       "concurrency": 4,
+       "p50_ms": 7.463,
+       "p95_ms": 11.021
+      },
+      "runtime": {
+       "calls_per_s": 617.662,
+       "concurrency": 4,
+       "p50_ms": 4.996,
+       "p95_ms": 10.93
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.856,
+       "p95": 3.088
+      },
+      "runtime": {
+       "p50": 3.976,
+       "p95": 5.173
+      }
+     }
+    },
+    "hazard": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 364.046,
+       "concurrency": 4,
+       "p50_ms": 7.375,
+       "p95_ms": 11.174
+      },
+      "runtime": {
+       "calls_per_s": 446.153,
+       "concurrency": 4,
+       "p50_ms": 5.128,
+       "p95_ms": 11.913
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.798,
+       "p95": 3.036
+      },
+      "runtime": {
+       "p50": 3.875,
+       "p95": 5.064
+      }
+     }
+    },
+    "modality": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 462.382,
+       "concurrency": 4,
+       "p50_ms": 7.288,
+       "p95_ms": 11.254
+      },
+      "runtime": {
+       "calls_per_s": 608.791,
+       "concurrency": 4,
+       "p50_ms": 5.03,
+       "p95_ms": 11.239
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.742,
+       "p95": 2.958
+      },
+      "runtime": {
+       "p50": 3.889,
+       "p95": 5.141
+      }
+     }
+    },
+    "pii": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 430.891,
+       "concurrency": 4,
+       "p50_ms": 7.718,
+       "p95_ms": 11.914
+      },
+      "runtime": {
+       "calls_per_s": 552.529,
+       "concurrency": 4,
+       "p50_ms": 5.19,
+       "p95_ms": 14.817
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.885,
+       "p95": 3.235
+      },
+      "runtime": {
+       "p50": 4.014,
+       "p95": 5.323
+      }
+     }
+    },
+    "safety": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 463.818,
+       "concurrency": 4,
+       "p50_ms": 7.246,
+       "p95_ms": 10.858
+      },
+      "runtime": {
+       "calls_per_s": 619.177,
+       "concurrency": 4,
+       "p50_ms": 5.012,
+       "p95_ms": 11.472
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.723,
+       "p95": 2.947
+      },
+      "runtime": {
+       "p50": 3.858,
+       "p95": 5.039
+      }
+     }
+    }
+   }
+  },
+  "max_speed_bf16_copy": {
+   "context": {
+    "baseline": "the runtime's exact profile on the same GPU and inputs",
+    "candidate": "max_speed with a BF16 copy of the linears (heads FP32), recorded before any consent",
+    "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
+    "runtime_commit": "973842d9edf7172097a9b7f1b1bff076d1e78056",
+    "runtime_env": "decision20-lux-runtime image: PyTorch 2.12.0 ROCm 7.2"
+   },
+   "jobs": {
+    "domain": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 323.842,
+       "concurrency": 4,
+       "p50_ms": 10.878,
+       "p95_ms": 16.148
+      },
+      "runtime": {
+       "calls_per_s": 463.869,
+       "concurrency": 4,
+       "p50_ms": 6.617,
+       "p95_ms": 17.444
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.654,
+       "p95": 3.982
+      },
+      "runtime": {
+       "p50": 6.687,
+       "p95": 10.997
+      }
+     }
+    },
+    "factcheck": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 321.637,
+       "concurrency": 4,
+       "p50_ms": 10.709,
+       "p95_ms": 17.096
+      },
+      "runtime": {
+       "calls_per_s": 467.862,
+       "concurrency": 4,
+       "p50_ms": 6.552,
+       "p95_ms": 18.611
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.653,
+       "p95": 4.561
+      },
+      "runtime": {
+       "p50": 6.559,
+       "p95": 9.976
+      }
+     }
+    },
+    "feedback": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 313.116,
+       "concurrency": 4,
+       "p50_ms": 10.996,
+       "p95_ms": 17.806
+      },
+      "runtime": {
+       "calls_per_s": 437.109,
+       "concurrency": 4,
+       "p50_ms": 6.964,
+       "p95_ms": 20.038
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.72,
+       "p95": 5.366
+      },
+      "runtime": {
+       "p50": 6.779,
+       "p95": 11.535
+      }
+     }
+    },
+    "guard": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 317.916,
+       "concurrency": 4,
+       "p50_ms": 10.987,
+       "p95_ms": 16.949
+      },
+      "runtime": {
+       "calls_per_s": 442.68,
+       "concurrency": 4,
+       "p50_ms": 6.853,
+       "p95_ms": 19.003
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.678,
+       "p95": 5.183
+      },
+      "runtime": {
+       "p50": 6.752,
+       "p95": 11.965
+      }
+     }
+    },
+    "hazard": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 261.384,
+       "concurrency": 4,
+       "p50_ms": 10.821,
+       "p95_ms": 19.844
+      },
+      "runtime": {
+       "calls_per_s": 413.352,
+       "concurrency": 4,
+       "p50_ms": 6.607,
+       "p95_ms": 18.581
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.651,
+       "p95": 4.535
+      },
+      "runtime": {
+       "p50": 6.635,
+       "p95": 10.137
+      }
+     }
+    },
+    "modality": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 322.637,
+       "concurrency": 4,
+       "p50_ms": 10.725,
+       "p95_ms": 16.994
+      },
+      "runtime": {
+       "calls_per_s": 463.787,
+       "concurrency": 4,
+       "p50_ms": 6.685,
+       "p95_ms": 19.051
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.642,
+       "p95": 5.605
+      },
+      "runtime": {
+       "p50": 6.72,
+       "p95": 12.109
+      }
+     }
+    },
+    "pii": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 309.806,
+       "concurrency": 4,
+       "p50_ms": 11.149,
+       "p95_ms": 17.561
+      },
+      "runtime": {
+       "calls_per_s": 418.284,
+       "concurrency": 4,
+       "p50_ms": 7.003,
+       "p95_ms": 20.604
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.74,
+       "p95": 4.606
+      },
+      "runtime": {
+       "p50": 6.882,
+       "p95": 9.453
+      }
+     }
+    },
+    "safety": {
+     "calls_per_s_4_callers": {
+      "legacy": {
+       "calls_per_s": 323.855,
+       "concurrency": 4,
+       "p50_ms": 10.711,
+       "p95_ms": 17.324
+      },
+      "runtime": {
+       "calls_per_s": 464.572,
+       "concurrency": 4,
+       "p50_ms": 6.547,
+       "p95_ms": 18.971
+      }
+     },
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.627,
+       "p95": 4.399
+      },
+      "runtime": {
+       "p50": 6.749,
+       "p95": 11.175
+      }
+     }
+    }
+   }
+  }
+ },
+ "rocm_vs_legacy_amd": {
+  "context": {
+   "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
+   "legacy_commit": "61aa7eb2db0cfd9f00bfa06abd4944b3864cf38d",
+   "legacy_env": "Dockerfile.extproc-rocm at 61aa7eb2d: ONNX Runtime MIGraphX / ROCm EP (config/recipes/vela-amd)",
+   "runtime_commit": "0a2ced48322e5b90ed78ae7cbb9425ee51139bc8",
+   "runtime_env": "decision20-lux-runtime image: PyTorch 2.12.0 ROCm 7.2, profile exact (FP32), encoder graphs and fused rotary on"
+  },
+  "jobs": {
+   "domain": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 6.024,
+      "concurrency": 4,
+      "p50_ms": 635.069,
+      "p95_ms": 812.117
+     },
+     "runtime": {
+      "calls_per_s": 424.473,
+      "concurrency": 4,
+      "p50_ms": 3.936,
+      "p95_ms": 9.724
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 154.058,
+      "p95": 155.906
+     },
+     "runtime": {
+      "p50": 1.791,
+      "p95": 3.013
+     }
+    }
+   },
+   "factcheck": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 6.263,
+      "concurrency": 4,
+      "p50_ms": 634.104,
+      "p95_ms": 648.92
+     },
+     "runtime": {
+      "calls_per_s": 437.582,
+      "concurrency": 4,
+      "p50_ms": 3.771,
+      "p95_ms": 9.7
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 158.244,
+      "p95": 163.861
+     },
+     "runtime": {
+      "p50": 1.822,
+      "p95": 3.218
+     }
+    }
+   },
+   "feedback": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 6.029,
+      "concurrency": 4,
+      "p50_ms": 668.314,
+      "p95_ms": 686.861
+     },
+     "runtime": {
+      "calls_per_s": 424.003,
+      "concurrency": 4,
+      "p50_ms": 3.897,
+      "p95_ms": 9.385
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 157.934,
+      "p95": 164.111
+     },
+     "runtime": {
+      "p50": 1.831,
+      "p95": 3.145
+     }
+    }
+   },
+   "guard": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 4.088,
+      "concurrency": 4,
+      "p50_ms": 977.759,
+      "p95_ms": 984.083
+     },
+     "runtime": {
+      "calls_per_s": 418.039,
+      "concurrency": 4,
+      "p50_ms": 3.945,
+      "p95_ms": 9.661
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 245.814,
+      "p95": 258.072
+     },
+     "runtime": {
+      "p50": 1.903,
+      "p95": 3.302
+     }
+    }
+   },
+   "hazard": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 61.291,
+      "concurrency": 4,
+      "p50_ms": 57.179,
+      "p95_ms": 80.014
+     },
+     "runtime": {
+      "calls_per_s": 341.141,
+      "concurrency": 4,
+      "p50_ms": 3.874,
+      "p95_ms": 9.886
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 13.379,
+      "p95": 14.127
+     },
+     "runtime": {
+      "p50": 1.796,
+      "p95": 3.077
+     }
+    }
+   },
+   "modality": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 6.18,
+      "concurrency": 4,
+      "p50_ms": 640.035,
+      "p95_ms": 691.283
+     },
+     "runtime": {
+      "calls_per_s": 421.65,
+      "concurrency": 4,
+      "p50_ms": 3.904,
+      "p95_ms": 9.776
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 158.561,
+      "p95": 167.205
+     },
+     "runtime": {
+      "p50": 1.857,
+      "p95": 3.115
+     }
+    }
+   },
+   "pii": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 7.44,
+      "concurrency": 4,
+      "p50_ms": 536.079,
+      "p95_ms": 539.387
+     },
+     "runtime": {
+      "calls_per_s": 400.201,
+      "concurrency": 4,
+      "p50_ms": 4.069,
+      "p95_ms": 10.892
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 134.033,
+      "p95": 136.054
+     },
+     "runtime": {
+      "p50": 1.866,
+      "p95": 3.174
+     }
+    }
+   },
+   "safety": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 6.394,
+      "concurrency": 4,
+      "p50_ms": 623.069,
+      "p95_ms": 639.868
+     },
+     "runtime": {
+      "calls_per_s": 439.075,
+      "concurrency": 4,
+      "p50_ms": 3.763,
+      "p95_ms": 9.133
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 155.259,
+      "p95": 163.998
+     },
+     "runtime": {
+      "p50": 1.74,
+      "p95": 3.029
+     }
+    }
+   }
+  }
+ },
+ "rocm_vs_legacy_cpu": {
+  "context": {
+   "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
+   "legacy_commit": "61aa7eb2db0cfd9f00bfa06abd4944b3864cf38d",
+   "legacy_device": "AMD EPYC 9575F, 16 pinned cores",
+   "legacy_env": "Go 1.25 test binary of pkg/modelruntime/native, bindings built in golang:1.25-bookworm",
+   "legacy_recipe": "cpu (candle; Hazard and Halu through their operating point / grounded facades)",
+   "runtime_commit": "0a2ced48322e5b90ed78ae7cbb9425ee51139bc8",
+   "runtime_env": "decision20-lux-runtime image: PyTorch 2.12.0 ROCm 7.2, profile exact (FP32), encoder graphs and fused rotary on"
+  },
+  "jobs": {
+   "domain": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 35.467,
+      "concurrency": 4,
+      "p50_ms": 68.371,
+      "p95_ms": 302.169
+     },
+     "runtime": {
+      "calls_per_s": 454.554,
+      "concurrency": 4,
+      "p50_ms": 5.67,
+      "p95_ms": 20.582
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 40.385,
+      "p95": 213.647
+     },
+     "runtime": {
+      "p50": 1.861,
+      "p95": 3.134
+     }
+    }
+   },
+   "factcheck": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 40.53,
+      "concurrency": 4,
+      "p50_ms": 57.336,
+      "p95_ms": 264.839
+     },
+     "runtime": {
+      "calls_per_s": 451.145,
+      "concurrency": 4,
+      "p50_ms": 5.618,
+      "p95_ms": 21.745
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 35.585,
+      "p95": 232.021
+     },
+     "runtime": {
+      "p50": 1.777,
+      "p95": 3.046
+     }
+    }
+   },
+   "feedback": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 38.244,
+      "concurrency": 4,
+      "p50_ms": 61.866,
+      "p95_ms": 288.325
+     },
+     "runtime": {
+      "calls_per_s": 436.137,
+      "concurrency": 4,
+      "p50_ms": 5.478,
+      "p95_ms": 21.448
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 36.267,
+      "p95": 209.347
+     },
+     "runtime": {
+      "p50": 1.899,
+      "p95": 3.193
+     }
+    }
+   },
+   "guard": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 17.38,
+      "concurrency": 4,
+      "p50_ms": 60.922,
+      "p95_ms": 266.617
+     },
+     "runtime": {
+      "calls_per_s": 380.718,
+      "concurrency": 4,
+      "p50_ms": 4.015,
+      "p95_ms": 9.719
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 37.282,
+      "p95": 210.522
+     },
+     "runtime": {
+      "p50": 1.963,
+      "p95": 3.228
+     }
+    }
+   },
+   "halu": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 1.665,
+      "concurrency": 4,
+      "p50_ms": 1478.262,
+      "p95_ms": 6420.067
+     },
+     "runtime": {
+      "calls_per_s": 79.331,
+      "concurrency": 4,
+      "p50_ms": 37.232,
+      "p95_ms": 178.842
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 1424.366,
+      "p95": 38738.256
+     },
+     "runtime": {
+      "p50": 9.175,
+      "p95": 68.988
+     }
+    }
+   },
+   "hazard": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 24.907,
+      "concurrency": 4,
+      "p50_ms": 101.531,
+      "p95_ms": 432.433
+     },
+     "runtime": {
+      "calls_per_s": 335.768,
+      "concurrency": 4,
+      "p50_ms": 3.887,
+      "p95_ms": 10.141
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 33.927,
+      "p95": 213.885
+     },
+     "runtime": {
+      "p50": 1.876,
+      "p95": 3.214
+     }
+    }
+   },
+   "modality": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 41.024,
+      "concurrency": 4,
+      "p50_ms": 54.804,
+      "p95_ms": 269.262
+     },
+     "runtime": {
+      "calls_per_s": 451.188,
+      "concurrency": 4,
+      "p50_ms": 5.577,
+      "p95_ms": 21.524
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 32.57,
+      "p95": 213.462
+     },
+     "runtime": {
+      "p50": 1.892,
+      "p95": 3.17
+     }
+    }
+   },
+   "pii": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 18.484,
+      "concurrency": 4,
+      "p50_ms": 55.479,
+      "p95_ms": 263.815
+     },
+     "runtime": {
+      "calls_per_s": 315.908,
+      "concurrency": 4,
+      "p50_ms": 4.072,
+      "p95_ms": 12.244
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 34.589,
+      "p95": 211.876
+     },
+     "runtime": {
+      "p50": 1.987,
+      "p95": 3.405
+     }
+    }
+   },
+   "pii_truncate": {
+    "calls_per_s_4_callers": {
+     "runtime": {
+      "calls_per_s": 408.391,
+      "concurrency": 4,
+      "p50_ms": 6.019,
+      "p95_ms": 24.591
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 82.45,
+      "p95": 244.356
+     },
+     "runtime": {
+      "p50": 1.952,
+      "p95": 3.447
+     }
+    }
+   },
+   "safety": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 39.221,
+      "concurrency": 4,
+      "p50_ms": 60.918,
+      "p95_ms": 267.856
+     },
+     "runtime": {
+      "calls_per_s": 472.752,
+      "concurrency": 4,
+      "p50_ms": 5.306,
+      "p95_ms": 20.014
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 38.051,
+      "p95": 215.5
+     },
+     "runtime": {
+      "p50": 1.762,
+      "p95": 3.058
+     }
+    }
+   },
+   "shield": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 40.687,
+      "concurrency": 4,
+      "p50_ms": 54.991,
+      "p95_ms": 272.996
+     },
+     "runtime": {
+      "calls_per_s": 455.26,
+      "concurrency": 4,
+      "p50_ms": 5.538,
+      "p95_ms": 21.498
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 34.346,
+      "p95": 218.322
+     },
+     "runtime": {
+      "p50": 1.882,
+      "p95": 3.26
+     }
+    }
+   }
+  },
+  "note": "legacy candle on 16 CPU cores against the runtime on one MI325X (deployments that move to a GPU)"
+ },
+ "rocm_vs_legacy_ort_shield": {
+  "context": {
+   "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
+   "driver_commit": "d59b7be03799d79b9adbcc73c13df63936e7cc83",
+   "legacy_commit": "61aa7eb2db0cfd9f00bfa06abd4944b3864cf38d",
+   "legacy_env": "Dockerfile.extproc-rocm at 61aa7eb2d: ONNX Runtime MIGraphX EP on the package's onnx/model.onnx (Shield is outside config/recipes/vela-amd; same ORT path and 8K session)",
+   "runtime_commit": "0a2ced48322e5b90ed78ae7cbb9425ee51139bc8",
+   "runtime_env": "decision20-lux-runtime image: PyTorch 2.12.0 ROCm 7.2, profile exact (FP32), encoder graphs and fused rotary on"
+  },
+  "jobs": {
+   "shield": {
+    "calls_per_s_4_callers": {
+     "legacy": {
+      "calls_per_s": 6.471,
+      "concurrency": 4,
+      "p50_ms": 617.121,
+      "p95_ms": 625.492
+     },
+     "runtime": {
+      "calls_per_s": 450.106,
+      "concurrency": 4,
+      "p50_ms": 3.665,
+      "p95_ms": 9.647
+     }
+    },
+    "latency_ms": {
+     "legacy": {
+      "p50": 151.218,
+      "p95": 157.224
+     },
+     "runtime": {
+      "p50": 1.738,
+      "p95": 2.99
+     }
+    }
+   }
+  },
+  "note": "latency only; see vela1-parity.json rocm_vs_legacy_ort_shield"
+ }
+}

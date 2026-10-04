@@ -17,6 +17,7 @@ import io
 import json
 import math
 import wave
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import numpy as np
@@ -46,6 +47,13 @@ from . import bundle as bundles
 from .processors import AudioFeatures, AudioProcessor, ImageProcessor, TextProcessor
 
 UNIT_NORM_TOLERANCE = 0.005
+CONCURRENT_INPUTS = 4
+# A media input's scheduler cost in text tokens of the same bundle: its CPU
+# forward takes about as long as a text that long (measured on 16 cores).
+MEDIA_COST = {
+    "nano": {"image": 1200, "audio": 1600},
+    "mini": {"image": 300, "audio": 550},
+}
 # Import name -> distribution of the multimodal extra.
 EXTRA = {"onnxruntime": "onnxruntime", "PIL": "Pillow"}
 GOLDEN_TEXT = "Route this request to the model that answers it best."
@@ -201,6 +209,7 @@ class MultimodalEmbeddingFamily(ModelFamily):
             text,
             ImageProcessor(verified),
             AudioProcessor(verified, config),
+            MEDIA_COST[verified.variant],
         )
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
@@ -229,7 +238,16 @@ class MultimodalEmbeddingFamily(ModelFamily):
 
 
 class OmniModel(LoadedModel):
-    """One bundle on the onnxruntime engine; each input runs its modality's graphs."""
+    """One bundle on the onnxruntime engine; each input runs its modality's graphs.
+
+    Every input runs its graphs alone, so its vector is the same in any batch:
+    the ``exact`` profile hands every queued request to one ``run``, which runs
+    up to ``CONCURRENT_INPUTS`` inputs at once on the shared ONNX Runtime pool
+    (one short input's run leaves most of the pool idle).
+    """
+
+    device_thread = False
+    batch_invariant = True
 
     def __init__(
         self,
@@ -238,14 +256,19 @@ class OmniModel(LoadedModel):
         text: TextProcessor,
         image: ImageProcessor,
         audio: AudioProcessor,
+        media_cost: dict[str, int],
     ):
         self.info = info
         self.engine_model = engine_model
         self.text = text
         self.image = image
         self.audio = audio
+        self.media_cost = media_cost
         assert info.embedding is not None
         self.dimension = info.embedding.dimensions[0]
+        self.inputs = ThreadPoolExecutor(
+            max_workers=CONCURRENT_INPUTS, thread_name_prefix="vllm-sr-omni"
+        )
 
     def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan:
         if surface != "embeddings":
@@ -254,10 +277,6 @@ class OmniModel(LoadedModel):
         parsed = embedding.parse_request(
             request, self.info.embedding, self.info.limits["max_input_tokens"]
         )
-        if parsed.overflow != "reject":
-            raise ValueError(
-                "this model rejects over-long input (options.overflow: reject)"
-            )
         items = [self._item(entry, parsed) for entry in parsed.inputs]
         rep = embedding.representation(self.info.model_sha256, 0, self.dimension, True)
         return embedding.plan(request, parsed, items, rep)
@@ -269,7 +288,9 @@ class OmniModel(LoadedModel):
             return entry.error
         if entry.modality == "text":
             assert entry.text is not None
-            encoded = self.text.encode(entry.text, parsed.max_tokens, parsed.input_type)
+            encoded = self.text.encode(
+                entry.text, parsed.max_tokens, parsed.input_type, parsed.overflow
+            )
             if isinstance(encoded, str):
                 return encoded
             ids, usage = encoded
@@ -281,26 +302,30 @@ class OmniModel(LoadedModel):
             pixels = self.image.pixels(entry.data)
             if isinstance(pixels, str):
                 return pixels
+            inputs = {"pixel_values": pixels}
+            cost = self.media_cost["image"]
             return (
-                embedding.EmbedItem(
-                    entry.index, "image", [], key, {"pixel_values": pixels}
-                ),
+                embedding.EmbedItem(entry.index, "image", [], key, inputs, cost),
                 None,
             )
         features = self.audio.features(entry.data, entry.media_type)
         if isinstance(features, str):
             return features
-        features_by_graph = {"clap": features.clap, "whisper": features.whisper}
-        return (
-            embedding.EmbedItem(entry.index, "audio", [], key, features_by_graph),
-            None,
-        )
+        by_graph = {"clap": features.clap, "whisper": features.whisper}
+        cost = self.media_cost["audio"]
+        return embedding.EmbedItem(entry.index, "audio", [], key, by_graph, cost), None
 
     def run(self, items: list[Any], shared_prefix: int = 0) -> list[Any]:
-        return [self._embed(item) for item in items]
+        if len(items) == 1:
+            return [self._embed(items[0])]
+        return list(self.inputs.map(self._embed, items))
 
     def finish_surface(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:
         return embedding.finish(plan, results)
+
+    def close(self) -> None:
+        self.inputs.shutdown(wait=True)
+        super().close()
 
     def _graph(
         self, name: str, size: int, ids: list[int] | None = None, **inputs: np.ndarray

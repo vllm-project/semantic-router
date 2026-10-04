@@ -7,7 +7,8 @@
         --prompts NAME:REQUESTS.jsonl:COUNT --output OUT.json [--threads N] [--router QUESTIONS.json]
     python3 tools/decision1_bench.py native --model REPO --revision REV --cache-dir DIR \\
         --device cpu|rocm:0 --prompts NAME:REQUESTS.jsonl:COUNT --output OUT.json \\
-        [--profile P] [--concurrency 1 4 16] [--threads N] [--router QUESTIONS.json]
+        [--profile P] [--concurrency 1 4 16] [--threads N] [--router QUESTIONS.json] \\
+        [--max-batch-tokens N]
 
 Single requests: every prompt once as one request, sequentially, after an
 untimed warm-up pass (GPU graphs captured, caches filled); p50, p95 and mean
@@ -118,6 +119,9 @@ class Native:
         from vllm_sr_runtime.config import ServeConfig
         from vllm_sr_runtime.runtime import Runtime
 
+        overrides = (
+            {"max_batch_tokens": args.max_batch_tokens} if args.max_batch_tokens else {}
+        )
         self.runtime = Runtime(
             ServeConfig(
                 model=args.model,
@@ -127,6 +131,7 @@ class Native:
                 offline=True,
                 profile=args.profile,
                 threads=args.threads,
+                **overrides,
             )
         )
         self.runtime.start(background=False)
@@ -188,12 +193,8 @@ class Native:
         return len(bodies) / (time.perf_counter() - started)
 
     def receipt(self) -> dict[str, Any]:
-        engine = self.served.model.engine_model
-        out = {"fast_path": getattr(engine, "fast", None)}
-        graphs = getattr(engine, "graphs", None)
-        if graphs is not None:
-            out["graphs"] = graphs.receipt()
-        return out
+        """What ran: kernels, fast-path pieces, graphs per layer stack and reduced copies."""
+        return {"engine": self.served.model.engine_model.receipt()}
 
     def close(self) -> None:
         self.loop.close()
@@ -291,6 +292,11 @@ def main() -> int:
         command.add_argument("--revision")
         command.add_argument("--cache-dir")
         command.add_argument("--profile", default="exact")
+        command.add_argument(
+            "--max-batch-tokens",
+            type=int,
+            help="padded tokens a coalesced batch may hold (default: the server's)",
+        )
     for command in (reference, native, paired):
         command.add_argument("--device", default="cpu")
         command.add_argument("--prompts", action="append", required=True)
@@ -308,6 +314,7 @@ def main() -> int:
         threads=args.threads,
         prompts=args.prompts,
         router=bool(args.router),
+        max_batch_tokens=getattr(args, "max_batch_tokens", None),
         started_unix=started,
     )
     Path(args.output).write_text(json.dumps(result, indent=1) + "\n", encoding="utf-8")

@@ -198,7 +198,10 @@ def test_only_measured_packages_consent_to_a_reduced_copy():
         for model in builtin.all_models("decision1")
         if model.reduced
     }
-    assert consent == {"Decision-1.0-Lex-0.6B": {"cpu": "bfloat16"}}
+    assert consent == {
+        f"Decision-1.0-{name}": {"cpu": "float32-packed"}
+        for name in ("Kai-0.6B", "Lex-0.6B", "Route-0.6B")
+    }
 
 
 def test_built_in_table_pins_all_seven_packages():

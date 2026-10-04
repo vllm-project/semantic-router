@@ -21,8 +21,10 @@ from vllm_sr_runtime.families.decision1 import qwen, vela
 from vllm_sr_runtime.families.decision1.questions import KINDS
 from vllm_sr_runtime.heads.candidate import load_head, logits
 from vllm_sr_runtime.plugins.base import Job, RenderedItem
+from vllm_sr_runtime.profiles.batching import BatchingProfile
 from vllm_sr_runtime.profiles.exact import ExactProfile
 from vllm_sr_runtime.runtime import Runtime
+from vllm_sr_runtime.scheduler.planner import padded
 from vllm_sr_runtime.testing.decision1 import write_package
 from vllm_sr_runtime.text import segments
 
@@ -183,6 +185,27 @@ def test_exact_profile_runs_the_released_physical_batches(runtimes):
     assert [
         indices for batch in batches for _, indices in batch.parts
     ] == model.exact_batches(plan.items)
+
+
+def test_vela_coalesces_within_the_cpu_budget_while_exact_keeps_its_batches(runtimes):
+    model = model_of(runtimes["vela"])
+    budget = model.forward_token_budget()
+    assert budget == vela.CPU_BATCH_TOKENS
+    plan = model.plan(" ".join([STATE] * 12), MANY)
+    released = model.exact_batches(plan.items)
+    widest = max(len(item.ids) for item in plan.items)
+    assert len(released[0]) * padded(widest) > budget
+    jobs = [
+        Job(items=plan.items, deadline=None, enqueued=time.monotonic(), profile=name)
+        for name in ("exact", "batching", "batching", "batching")
+    ]
+    for batch in BatchingProfile().plan(jobs[1:], budget):
+        rows = batch.items()
+        assert len(rows) * padded(max(len(row.ids) for row in rows)) <= budget
+    exact = ExactProfile()
+    exact.available(model)
+    batches = exact.plan(jobs[:1], budget)
+    assert [indices for batch in batches for _, indices in batch.parts] == released
 
 
 def qwen_reference(package, items, temperatures, pad_id):
@@ -468,6 +491,32 @@ def test_approximate_batches_run_each_stack_over_its_own_rows(packages, runtimes
     for row, value in zip(
         model.run_approximate(shuffled),
         [model.run([i])[0] for i in shuffled],
+        strict=True,
+    ):
+        assert row == pytest.approx(value, abs=1e-4)
+
+
+def test_type_heads_read_packed_rows_by_length_only_when_padding_wastes():
+    assert vela.readout_groups([40, 44, 48]) == [[0, 1, 2]]
+    assert vela.readout_groups([10, 300, 30]) == [[0, 1, 2]]
+    assert vela.readout_groups([30, 33, 500]) == [[0, 1], [2]]
+    assert vela.readout_groups([9, 200, 10, 130, 12, 150]) == [
+        [0, 2],
+        [4],
+        [3, 5],
+        [1],
+    ]
+
+
+def test_coalesced_rows_of_mixed_lengths_answer_like_their_own_requests(runtimes):
+    model = model_of(runtimes["vela"])
+    states = (STATE, " ".join([STATE] * 12))
+    items = [item for state in states for item in model.plan(state, MANY).items]
+    choices = [len(item.ids) for item in items if item.task_type == "choice"]
+    assert len(vela.readout_groups(choices)) > 1
+    for row, value in zip(
+        model.run_approximate(items),
+        [model.run([item])[0] for item in items],
         strict=True,
     ):
         assert row == pytest.approx(value, abs=1e-4)

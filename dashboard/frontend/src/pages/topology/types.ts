@@ -495,7 +495,6 @@ export interface ConfigData {
   }>
   hallucination?: Array<{
     name: string
-    use_nli?: boolean
     description?: string
   }>
   pii?: Array<{
@@ -652,7 +651,6 @@ export interface ConfigData {
     }>
     hallucination?: Array<{
       name: string
-      use_nli?: boolean
       description?: string
     }>
     pii?: Array<{
