@@ -372,7 +372,7 @@ def window(name, length, start):
     )
 
 
-def test_shared_batches_hold_one_length_class_within_the_cap():
+def test_shared_batches_stay_within_the_cap():
     short = Job([item("s1", 5), item("s2", 7)], None, 0.0, "exact")
     windows = Job(
         [window(f"w{i}", 512, 1000 * i) for i in range(3)] + [item("tail", 6)],
@@ -387,6 +387,8 @@ def test_shared_batches_hold_one_length_class_within_the_cap():
         ["w1"],
         ["w2"],
     ]
+    mixed = Job([item("a", 10), item("b", 30), item("c", 60)], None, 0.0, "exact")
+    assert [names(batch) for batch in merged([mixed], cap=512)] == [["a", "b", "c"]]
 
 
 def test_shared_batches_keep_identical_sequences_together():

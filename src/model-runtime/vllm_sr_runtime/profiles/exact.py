@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..plugins.base import Batch, Job, LoadedModel, Profile
-from ..scheduler.planner import cost, exact_split, length_class, padded
+from ..scheduler.planner import cost, exact_split, padded
 
 # Padded tokens of one shared forward on a batch-invariant model. It bounds how
 # long one forward holds the device, so a short request queued behind the
@@ -66,10 +66,11 @@ class ExactProfile(Profile):
 
 
 def merged(jobs: list[Job], cap: int) -> list[Batch]:
-    """Every job's rows in shared batches of one length class, each within ``cap`` padded tokens.
+    """Every job's rows in shared batches, shortest first, each within ``cap`` padded tokens.
 
     Only for batch-invariant models, where a row's answer does not depend on
-    the batch it runs in. Rows with the same token IDs stay in one batch, where
+    the batch it runs in (whether the engine pads it or packs it is the
+    engine's choice). Rows with the same token IDs stay in one batch, where
     the family computes them once, and count once against ``cap``; inputs
     without token IDs (images, audio) count by their ``cost``. A row costlier
     than ``cap`` runs alone.
@@ -81,14 +82,11 @@ def merged(jobs: list[Job], cap: int) -> list[Batch]:
             units.setdefault(key, (padded(cost(item)), []))[1].append((job, index))
     batches: list[Batch] = []
     current: dict[int, tuple[Job, list[int]]] = {}
-    band = width = count = 0
+    width = count = 0
     for length, rows in sorted(units.values(), key=lambda unit: unit[0]):
-        if current and (
-            length_class(length) != band or max(width, length) * (count + 1) > cap
-        ):
+        if current and max(width, length) * (count + 1) > cap:
             batches.append(Batch(parts=list(current.values())))
             current, width, count = {}, 0, 0
-        band = length_class(length)
         for job, index in rows:
             current.setdefault(id(job), (job, []))[1].append(index)
         width, count = max(width, length), count + 1

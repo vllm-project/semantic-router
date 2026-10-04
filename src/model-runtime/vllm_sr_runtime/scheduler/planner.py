@@ -14,11 +14,6 @@ def cost(item: Any) -> int:
     return getattr(item, "cost", None) or len(item.ids)
 
 
-def length_class(length: int) -> int:
-    """The power-of-two band of a row's padded length; rows of one band pad little together."""
-    return (padded(length) - 1).bit_length()
-
-
 def micro_batches(lengths: list[int], budget: int | None) -> list[list[int]]:
     """Indices per forward: one batch when its padded size fits the budget.
 
