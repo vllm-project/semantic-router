@@ -11,12 +11,13 @@ import (
 // token_spans.v1 contract. The scalar form below predates that mechanism and
 // keeps working as shorthand: `backend: endpoint` with `endpoint` and
 // `model_id` desugars into an http deployment bound through the http_chat
-// adapter, and `backend: candle` (or unset) is the local module default. Both
+// adapter, and `backend: model_runtime` (or unset) is the local module
+// default, served by the built-in model runtime. Both
 // resolve through the same binding plan; nothing at runtime reads the scalar
 // to choose a code path.
 const (
-	// HallucinationBackendCandle names the in-process detector (default).
-	HallucinationBackendCandle = "candle"
+	// HallucinationBackendLocal names the built-in runtime's detector (default).
+	HallucinationBackendLocal = ModelRuntimeProvider
 	// HallucinationBackendEndpoint is the legacy shorthand for a chat-based
 	// remote detector behind an OpenAI-compatible server.
 	HallucinationBackendEndpoint = "endpoint"
@@ -28,20 +29,20 @@ const (
 )
 
 // NormalizedBackend returns the trimmed, lower-cased legacy backend token,
-// defaulting to candle when unset. It describes how the detector was
+// defaulting to the local runtime detector when unset. It describes how the detector was
 // configured, for display and for the model-download gates; backend selection
 // itself goes through the binding plan.
 func (c *HallucinationModelConfig) NormalizedBackend() string {
 	backend := strings.ToLower(strings.TrimSpace(c.Backend))
 	if backend == "" {
-		return HallucinationBackendCandle
+		return HallucinationBackendLocal
 	}
 	return backend
 }
 
 // LegacyHallucinationBinding desugars the scalar `backend: endpoint` form into
 // the binding CompileModelBindings would otherwise expect the recipe to
-// declare. The boolean is false for the candle default, where the module's
+// declare. The boolean is false for the local default, where the module's
 // canonical local binding applies. An unknown backend token or an unusable
 // endpoint is a configuration error.
 func LegacyHallucinationBinding(model *HallucinationModelConfig) (ModelBinding, ModelDeployment, bool, error) {
@@ -80,7 +81,7 @@ func validateHallucinationContracts(cfg *RouterConfig) error {
 }
 
 // ValidateHallucinationBackend validates the legacy backend scalar. An unset
-// backend defaults to candle; an unknown value is rejected, and the endpoint
+// backend is the local detector; an unknown value is rejected, and the endpoint
 // form requires an absolute http(s) endpoint plus a model_id. This is a pure
 // check and does not mutate the config.
 func ValidateHallucinationBackend(cfg *HallucinationModelConfig) error {
@@ -88,13 +89,13 @@ func ValidateHallucinationBackend(cfg *HallucinationModelConfig) error {
 		return nil
 	}
 	switch cfg.NormalizedBackend() {
-	case HallucinationBackendCandle:
+	case HallucinationBackendLocal:
 		return nil
 	case HallucinationBackendEndpoint:
 		// endpoint backend requirements are validated below
 	default:
 		return fmt.Errorf("hallucination detector backend %q is not supported; use %q or %q, or bind hallucination_detector to a deployment",
-			cfg.Backend, HallucinationBackendCandle, HallucinationBackendEndpoint)
+			cfg.Backend, HallucinationBackendLocal, HallucinationBackendEndpoint)
 	}
 	endpoint := cfg.Endpoint
 	if strings.TrimSpace(endpoint) == "" {

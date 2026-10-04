@@ -269,7 +269,7 @@ func TestInitializeRuntimeInitializesJailbreakClassifierForResponseStageConsumer
 }
 
 func TestLocalHallucinationDetectorWithoutRuntimeRejectsCandidate(t *testing.T) {
-	classifier := &Classifier{Config: newHallucinationLifecycleConfig(config.HallucinationBackendCandle)}
+	classifier := &Classifier{Config: newHallucinationLifecycleConfig(config.HallucinationBackendLocal)}
 	if classifier.IsHallucinationDetectionEnabled() {
 		t.Fatal("a local detector without model runtime services must not advertise enabled capability")
 	}
@@ -310,11 +310,8 @@ func TestPublicAuxiliaryConsumersAreOwnedOnlyByDefaultClassifier(t *testing.T) {
 					ModelID: "models/test-fact-check",
 				},
 				HallucinationModel: config.HallucinationModelConfig{
-					Backend: config.HallucinationBackendCandle,
+					Backend: config.HallucinationBackendLocal,
 					ModelID: "models/test-hallucination-detector",
-				},
-				NLIModel: config.NLIModelConfig{
-					ModelID: "models/test-hallucination-explainer",
 				},
 			},
 			FeedbackDetector: config.FeedbackDetectorConfig{

@@ -136,9 +136,6 @@ func TestRISCVAssetsUseOnlyRegisteredCandleDomain(t *testing.T) {
 	if m.Models[0].Name != "Domain" || m.Models[0].RepoID != model.RepoID || m.Models[0].Revision != model.Revision || !specs[0].Strict || specs[0].CheckONNX {
 		t.Fatalf("RISC-V did not use the registered Candle checkpoint: %+v", m)
 	}
-	if !slices.Contains(specs[0].RequiredFiles, "category_mapping.json") {
-		t.Fatal("RISC-V router must use the checkpoint's category mapping")
-	}
 	if _, _, err := assets("riscv", "ort", t.TempDir()); err == nil {
 		t.Fatal("RISC-V accepted an unqualified ORT runtime")
 	}

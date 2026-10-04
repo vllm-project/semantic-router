@@ -16,7 +16,7 @@ func TestVelaHaluDefaultAndLegacyIdentity(t *testing.T) {
 		t.Fatalf("legacy detector silently retargeted: %+v", legacy)
 	}
 	policy := cfg.HallucinationMitigation.HallucinationModel
-	if policy.Threshold != .5 || policy.MinSpanLength != 1 || policy.MinSpanConfidence != 0 || policy.EnableNLIFiltering {
+	if policy.Threshold != .5 || policy.MinSpanLength != 1 || policy.MinSpanConfidence != 0 {
 		t.Fatalf("default postprocessing changes published Halu verdict: %+v", policy)
 	}
 }

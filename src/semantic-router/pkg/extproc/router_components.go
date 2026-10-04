@@ -68,7 +68,6 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 			"similarity_threshold": cacheConfig.SimilarityThreshold,
 			"ttl_seconds":          cacheConfig.TTLSeconds,
 			"max_entries":          cacheConfig.MaxEntries,
-			"polarity_guard_mode":  semanticCacheCfg.PolarityGuard.NormalizedMode(),
 		})
 	} else {
 		logging.ComponentEvent("extproc", "semantic_cache_disabled", map[string]interface{}{

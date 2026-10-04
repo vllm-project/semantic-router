@@ -508,7 +508,6 @@ func CreateTestConfig() *config.RouterConfig {
 				CategoryModel: config.CategoryModel{
 					ModelID:             categoryModelID,
 					UseCPU:              true,
-					UseModernBERT:       true,
 					CategoryMappingPath: categoryMappingPath,
 				},
 				MCPCategoryModel: config.MCPCategoryModel{

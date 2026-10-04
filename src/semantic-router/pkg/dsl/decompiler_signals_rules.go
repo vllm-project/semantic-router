@@ -413,9 +413,6 @@ func (d *decompiler) decompileJailbreakSignals() {
 func (d *decompiler) decompileHallucinationSignals() {
 	for _, rule := range d.cfg.HallucinationRules {
 		d.write("SIGNAL hallucination %s {\n", quoteName(rule.Name))
-		if rule.UseNLI {
-			d.write("  use_nli: true\n")
-		}
 		if rule.Description != "" {
 			d.write("  description: %q\n", rule.Description)
 		}
