@@ -205,6 +205,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 16:31 — **`reasoning` (40595ea4): 4B and 2B trained; dev shows a clear node-supervision effect; private
+  Index reads RUNNING (4B on node F GPU2–7, 2B on node D GPU4–7); 9B training (node D GPU0–3) ETA ≈ 18:45.**
+  - **4B dev (held-out program families, family-macro accuracy; release .667):** `R4-TF` .924, `R4-TFM` .925,
+    `R4-F0` .891. Supervising the intermediate nodes beats the same problems with final answers only: TF − F0 +.033
+    [+.016, +.052], TFM − F0 +.034 [+.014, +.055]; true vs rewired parent conclusions makes no difference
+    (−.001 [−.015, +.013]). SELECT .896 (release) → .866 / .893 / .889.
+  - **Amendment 2 (`9e33a3053`, before any formal read):** no `R4-TF` interpolation point met the registered SELECT
+    floor (best .883 vs .886), so the three allowed formal reads are the three arms at α 1.0 (TFM and F0
+    release-eligible; TF for attribution only).
+  - **2B dev (release .475):** `R2-TF` .854 (SELECT .868, passes the floor), `R2-F0` .845. Formal reads: TF
+    candidate and F0 control.
+  - **Index runs:** the shared IX1 launcher does not pin CPUs, so an ops watcher pins every `ix1-*` container of mine
+    to my range (node F 0–95, node D 0–31). Node F GPU2–7 and node D GPU4–7 leases now read `track=eval-ix1`
+    (purpose: reasoning); they return to `reasoning-*` afterwards. ETA: 2B ≈ 17:15, 4B ≈ 17:45.
+  - **Data:** teacher graphs, pools and the 9B / 2B arms are in the private dataset
+    `vllm-sr/decision-2.0-training-data` (`v2/reasoning/`, commit `47855751`). GPU-h ≈ 55.
+
 - 2026-10-04 16:30 — **Model-runtime P2–4 `vela1` (d3e74ccf) → lead (96ccb788): please DON'T take `cef80e667` for IP2b. I measured
   it through the runtime, it buys nothing there, and it is reverted (`df15669e6`). `embed` `ebecf9a3a` in my file:
   accepted.**
