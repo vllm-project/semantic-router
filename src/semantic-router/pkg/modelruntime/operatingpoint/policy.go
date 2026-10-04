@@ -80,7 +80,6 @@ type InputPolicy struct {
 // Policy is immutable after decoding. Accessors return copies of mutable data.
 type Policy struct {
 	definition Definition
-	digest     string
 	execution  *Execution
 }
 
@@ -151,7 +150,7 @@ func Decode(data []byte, digest string) (*Policy, error) {
 	if w.BatchOrder != order || w.Tokenization != "Tokenize once without truncation; slice original content token IDs and restore the tokenizer special-token envelope for each window." {
 		return nil, fmt.Errorf("unsupported reference window preparation")
 	}
-	return &Policy{definition: d, digest: digest}, nil
+	return &Policy{definition: d}, nil
 }
 
 // All versioned fields are required, including zero overlap and empty special-token
@@ -210,7 +209,6 @@ func validSHA256(value string) bool {
 	decoded, err := hex.DecodeString(value)
 	return err == nil && len(decoded) == 32 && strings.ToLower(value) == value
 }
-func (p *Policy) Digest() string        { return p.digest }
 func (p *Policy) Labels() []string      { return slices.Clone(p.definition.Labels) }
 func (p *Policy) Thresholds() []float32 { return slices.Clone(p.definition.Thresholds) }
 func (p *Policy) Window() tasks.TextWindowsRequest {
