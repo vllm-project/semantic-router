@@ -994,12 +994,12 @@ Every migrated feature must match or beat the legacy binding's latency (p50,
 p95) and throughput on CPU and on ROCm, measured on the same inputs and
 hardware, with the records in `docs/records/<workstream>-*`. The techniques:
 
-| Where | Technique | Status |
+| Where | Technique | Records |
 | --- | --- | --- |
-| Decision models | exact-shape HIP / CUDA graphs with host-built masks, bit-exact fused Triton kernels, lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard | Phase 1; reused by Decision 1.0 (Qwen3.5) and Vela 2.0 4B / 9B |
-| Runtime core | one bundled call per request and process; a bundle's tasks for one model as one job group (one forward for every head reading the same input); per-model content-hash result cache | this scaffold |
-| Encoders | dynamic cross-request batching with length buckets; packed (varlen) sequences without padding waste; graphs per bucket on GPU; fused kernels, bit-exact where possible; an ONNX Runtime CPU engine where it beats PyTorch; opt-in int8 / fp8 profiles with accuracy records; per-hardware kernel selection | encoder workstreams |
-| Router | parallel async dispatch, deadlines, fail-open, bundled calls, caching of bundle results | router workstreams |
+| Decision models | exact-shape HIP / CUDA graphs with host-built masks, bit-exact fused Triton kernels (FP32 and BF16 streams on gfx942), lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard; Decision 1.0 encoders keep one graph set and one reduced copy per layer stack | `rocm-mi325x-*`, `decision1-performance.md`, `vela2-performance.md` |
+| Runtime core | one bundled call per request and process; a bundle's tasks for one model as one job group (one forward for every head reading the same input); per-model content-hash result cache; shortest-expected-finish scheduling that answers each job when its own batches ran and lets short requests run between the windows of a long one (section 9); package files verified in parallel | `router-latency-cpu.md` |
+| Encoders | packed (varlen) attention in length groups; banded local attention for long rows (from 1,024 tokens on CPU, 2,048 on GPU); oneDNN pre-packed FP32 linears on CPU `exact`, batch-invariant as probed at load, so `exact` batches concurrent requests; dynamic cross-request batching (`batching`); encoder graphs per shape bucket on GPU, replayed only when padding stays small; a fused gfx942 rotary kernel; reduced-precision copies under `max_speed` only where the records show at least 99% agreement (CPU `float32-packed` for Decision 1.0 Kai, Lex and Route and the Vela 2.0 0.3B; BF16 and int8 measured and refused elsewhere); an ONNX Runtime engine with one shared thread pool (Omni); per-hardware kernel registry | `vela1-performance.md`, `embed-performance.md`, `decision1-performance.md`, `vela2-performance.md` |
+| Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; one CPU process per model with thread shares; deadlines and fail-open; pure-Go keyword scoring and model selectors (an AVX2 / FMA dot kernel with a pure-Go fallback) | `router-latency-cpu.md`, `stores-algorithms.md`, `stores-consumers.md` |
 
 ## 19. Phase 1 follow-ups and later work
 
