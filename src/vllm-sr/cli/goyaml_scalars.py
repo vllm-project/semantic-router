@@ -51,6 +51,7 @@ _GO_BASE0_INT = re.compile(
 
 _INT64_MIN, _INT64_MAX = -(2**63), 2**63 - 1
 _UINT64_MAX = 2**64 - 1
+_UINT64_DECIMAL_DIGITS = len(str(_UINT64_MAX))
 
 # strconv.FormatFloat with the 'g' format and shortest precision switches to
 # %e below this decimal exponent or from this one upward (ftoa.go).
@@ -110,7 +111,12 @@ def _go_base0_int(text: str) -> int | None:
         return sign * int(match.group("hex"), 16)
     if match.group("oct0") is not None:
         return sign * int(match.group("oct0") or "0", 8)
-    return sign * int(match.group("dec"))
+    decimal = match.group("dec")
+    # More than 20 decimal digits cannot fit uint64. Leave them to the float
+    # fallback without building a large int or hitting Python's digit limit.
+    if len(decimal) > _UINT64_DECIMAL_DIGITS:
+        return None
+    return sign * int(decimal)
 
 
 def _finite_go_float(text: str) -> float | None:
