@@ -55,6 +55,7 @@ type (
 	LooperAttempt                 = store.LooperAttempt
 	LooperDiagnostics             = store.LooperDiagnostics
 	RouteDiagnostics              = store.RouteDiagnostics
+	TopicContinuityRecord         = store.TopicContinuityRecord
 	DecisionRanking               = store.DecisionRanking
 	RoutingRecord                 = store.Record
 	ToolTrace                     = store.ToolTrace

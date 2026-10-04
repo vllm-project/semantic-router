@@ -204,6 +204,7 @@ type RouteDiagnostics struct {
 	SelectionReasoning             string                               `json:"selection_reasoning,omitempty"`
 	SelectionTrace                 *selectiontrace.MultiFactorObjective `json:"selection_trace,omitempty"`
 	FusionQuorum                   *FusionQuorumDiagnostics             `json:"fusion_quorum,omitempty"`
+	TopicContinuity                []TopicContinuityRecord              `json:"topic_continuity,omitempty"`
 	Looper                         *LooperDiagnostics                   `json:"looper,omitempty"`
 	PreparedDispatch               *PreparedDispatchReceipt             `json:"prepared_dispatch,omitempty"`
 	PromptHelperModel              string                               `json:"prompt_helper_model,omitempty"`
@@ -651,6 +652,7 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	}
 	cloned := *value
 	cloned.FusionQuorum = cloneFusionQuorumDiagnostics(value.FusionQuorum)
+	cloned.TopicContinuity = append([]TopicContinuityRecord(nil), value.TopicContinuity...)
 	cloned.SelectionTrace = value.SelectionTrace.Clone()
 	cloned.Looper = cloneLooperDiagnostics(value.Looper)
 	if value.PreparedDispatch != nil {

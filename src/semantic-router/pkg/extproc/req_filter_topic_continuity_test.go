@@ -176,3 +176,25 @@ func TestTopicContinuityEvaluatesOncePerRequest(t *testing.T) {
 		t.Fatal("a second call re-evaluated the request")
 	}
 }
+
+func TestTopicContinuityReplayReceiptsFollowDeclarationOrder(t *testing.T) {
+	router := topicContinuityRouter(t,
+		config.TopicContinuityRule{Name: "z_rule"},
+		config.TopicContinuityRule{Name: "a_rule"},
+		config.TopicContinuityRule{Name: "m_rule"},
+	)
+	ctx := topicContinuityContext(topicChangeRequest())
+	router.evaluateTopicContinuity(ctx)
+	diagnostics := buildReplayRouteDiagnostics(ctx, "auto", "model-a", "route", 0, 0)
+	if len(diagnostics.TopicContinuity) != 3 {
+		t.Fatalf("receipts = %+v", diagnostics.TopicContinuity)
+	}
+	for i, want := range []string{"z_rule", "a_rule", "m_rule"} {
+		if got := diagnostics.TopicContinuity[i].Signal; got != want {
+			t.Fatalf("receipt %d = %q, want %q", i, got, want)
+		}
+	}
+	if diagnostics.TopicContinuity[0].Reason != string(topiccontinuity.ReasonExplicitChange) {
+		t.Fatalf("receipt = %+v", diagnostics.TopicContinuity[0])
+	}
+}

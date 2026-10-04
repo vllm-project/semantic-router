@@ -25336,6 +25336,113 @@
                                 "additionalProperties": {
                                   "type": "string"
                                 }
+                              },
+                              "topic_continuity": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "assistant_included": {
+                                      "type": "boolean"
+                                    },
+                                    "class": {
+                                      "type": "string"
+                                    },
+                                    "classify_us": {
+                                      "type": "integer"
+                                    },
+                                    "combined_score": {
+                                      "type": "number"
+                                    },
+                                    "confidence": {
+                                      "type": "number"
+                                    },
+                                    "coverage": {
+                                      "type": "string"
+                                    },
+                                    "entity_score": {
+                                      "type": "number"
+                                    },
+                                    "evaluator_version": {
+                                      "type": "string"
+                                    },
+                                    "excluded_content_present": {
+                                      "type": "boolean"
+                                    },
+                                    "fallback": {
+                                      "type": "boolean"
+                                    },
+                                    "feature_cap_reached": {
+                                      "type": "boolean"
+                                    },
+                                    "history_source": {
+                                      "type": "string"
+                                    },
+                                    "input_bytes": {
+                                      "type": "integer"
+                                    },
+                                    "lexical_score": {
+                                      "type": "number"
+                                    },
+                                    "live_prose_terms": {
+                                      "type": "integer"
+                                    },
+                                    "live_terms": {
+                                      "type": "integer"
+                                    },
+                                    "marker_ambiguous": {
+                                      "type": "boolean"
+                                    },
+                                    "max_entity_score": {
+                                      "type": "number"
+                                    },
+                                    "max_raw_score": {
+                                      "type": "number"
+                                    },
+                                    "prepare_extract_us": {
+                                      "type": "integer"
+                                    },
+                                    "prior_turns_examined": {
+                                      "type": "integer"
+                                    },
+                                    "reason": {
+                                      "type": "string"
+                                    },
+                                    "schema_version": {
+                                      "type": "string"
+                                    },
+                                    "signal": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "signal",
+                                    "schema_version",
+                                    "evaluator_version",
+                                    "class",
+                                    "confidence",
+                                    "reason",
+                                    "fallback",
+                                    "coverage",
+                                    "history_source",
+                                    "assistant_included",
+                                    "excluded_content_present",
+                                    "feature_cap_reached",
+                                    "marker_ambiguous",
+                                    "prior_turns_examined",
+                                    "input_bytes",
+                                    "live_terms",
+                                    "live_prose_terms",
+                                    "lexical_score",
+                                    "entity_score",
+                                    "combined_score",
+                                    "max_raw_score",
+                                    "max_entity_score",
+                                    "classify_us",
+                                    "prepare_extract_us"
+                                  ]
+                                }
                               }
                             }
                           },
@@ -29494,6 +29601,113 @@
                           "type": "object",
                           "additionalProperties": {
                             "type": "string"
+                          }
+                        },
+                        "topic_continuity": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "assistant_included": {
+                                "type": "boolean"
+                              },
+                              "class": {
+                                "type": "string"
+                              },
+                              "classify_us": {
+                                "type": "integer"
+                              },
+                              "combined_score": {
+                                "type": "number"
+                              },
+                              "confidence": {
+                                "type": "number"
+                              },
+                              "coverage": {
+                                "type": "string"
+                              },
+                              "entity_score": {
+                                "type": "number"
+                              },
+                              "evaluator_version": {
+                                "type": "string"
+                              },
+                              "excluded_content_present": {
+                                "type": "boolean"
+                              },
+                              "fallback": {
+                                "type": "boolean"
+                              },
+                              "feature_cap_reached": {
+                                "type": "boolean"
+                              },
+                              "history_source": {
+                                "type": "string"
+                              },
+                              "input_bytes": {
+                                "type": "integer"
+                              },
+                              "lexical_score": {
+                                "type": "number"
+                              },
+                              "live_prose_terms": {
+                                "type": "integer"
+                              },
+                              "live_terms": {
+                                "type": "integer"
+                              },
+                              "marker_ambiguous": {
+                                "type": "boolean"
+                              },
+                              "max_entity_score": {
+                                "type": "number"
+                              },
+                              "max_raw_score": {
+                                "type": "number"
+                              },
+                              "prepare_extract_us": {
+                                "type": "integer"
+                              },
+                              "prior_turns_examined": {
+                                "type": "integer"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "schema_version": {
+                                "type": "string"
+                              },
+                              "signal": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "signal",
+                              "schema_version",
+                              "evaluator_version",
+                              "class",
+                              "confidence",
+                              "reason",
+                              "fallback",
+                              "coverage",
+                              "history_source",
+                              "assistant_included",
+                              "excluded_content_present",
+                              "feature_cap_reached",
+                              "marker_ambiguous",
+                              "prior_turns_examined",
+                              "input_bytes",
+                              "live_terms",
+                              "live_prose_terms",
+                              "lexical_score",
+                              "entity_score",
+                              "combined_score",
+                              "max_raw_score",
+                              "max_entity_score",
+                              "classify_us",
+                              "prepare_extract_us"
+                            ]
                           }
                         }
                       }
