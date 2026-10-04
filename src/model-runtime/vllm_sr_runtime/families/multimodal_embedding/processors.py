@@ -85,7 +85,12 @@ class TextProcessor:
 
 
 class ImageProcessor:
-    """Decoded RGB resized to the graph's square input, rescaled and normalized, channels first."""
+    """Decoded RGB resized to the graph's square input, rescaled and normalized, channels first.
+
+    A pixel's normalized value depends only on its byte and channel, so the
+    rescale and normalization are one table of 256 values per channel,
+    computed with the processor's own float64 and float32 steps.
+    """
 
     def __init__(self, bundle: OmniBundle):
         settings = bundle.processors["image"]
@@ -93,6 +98,8 @@ class ImageProcessor:
         self.resample = _RESAMPLE[settings["resample"]]
         self.mean = np.asarray(settings["mean"], dtype=np.float32)
         self.std = np.asarray(settings["std"], dtype=np.float32)
+        scaled = (np.arange(256, dtype=np.float64) * (1 / 255)).astype(np.float32)
+        self.table = np.ascontiguousarray(((scaled[:, None] - self.mean) / self.std).T)
 
     def pixels(self, data: bytes) -> np.ndarray | str:
         """``[1, 3, size, size]`` float32, or ``invalid_input`` for an unreadable image."""
@@ -111,14 +118,13 @@ class ImageProcessor:
         ):
             return INVALID_INPUT
         resample = getattr(Image.Resampling, self.resample)
-        resized = rgb.resize(
-            (self.size, self.size), resample=resample, reducing_gap=None
+        resized = np.asarray(
+            rgb.resize((self.size, self.size), resample=resample, reducing_gap=None)
         )
-        scaled = (np.asarray(resized, dtype=np.float64) * (1 / 255)).astype(np.float32)
-        normalized = (scaled - self.mean) / self.std
-        return np.ascontiguousarray(
-            normalized.transpose(2, 0, 1)[None], dtype=np.float32
-        )
+        pixels = np.empty((1, 3, self.size, self.size), dtype=np.float32)
+        for channel in range(3):
+            np.take(self.table[channel], resized[..., channel], out=pixels[0, channel])
+        return pixels
 
 
 class AudioProcessor:

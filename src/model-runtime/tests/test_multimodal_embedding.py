@@ -348,11 +348,21 @@ def test_bad_inputs_fail_in_place(model):
 
 
 def test_images_of_any_mode_become_normalized_channels_first_pixels(nano):
+    from PIL import Image
+
     processor = ImageProcessor(bundles.load(nano))
     for mode in ("RGB", "L", "RGBA", "P", "CMYK"):
-        pixels = processor.pixels(png(37, 21, mode))
+        data = png(37, 21, mode)
+        pixels = processor.pixels(data)
         assert pixels.shape == (1, 3, 512, 512) and pixels.dtype == np.float32
         assert pixels.min() >= -1.0 and pixels.max() <= 1.0
+        with Image.open(io.BytesIO(data)) as image:
+            resized = image.convert("RGB").resize(
+                (512, 512), resample=Image.Resampling.BICUBIC, reducing_gap=None
+            )
+        scaled = (np.asarray(resized, dtype=np.float64) * (1 / 255)).astype(np.float32)
+        reference = ((scaled - processor.mean) / processor.std).transpose(2, 0, 1)
+        assert np.array_equal(pixels[0], reference)
     assert processor.pixels(b"\x89PNG broken") == "invalid_input"
 
 
