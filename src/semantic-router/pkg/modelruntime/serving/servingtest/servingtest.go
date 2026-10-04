@@ -48,16 +48,6 @@ func Sequence(labels ...string) runtimetest.Model {
 	return runtimetest.Model{Heads: []runtimetest.Head{{Name: "default", Kind: "sequence", Labels: labels}}}
 }
 
-// Scores is a fake classify model with one independent-label head.
-func Scores(labels ...string) runtimetest.Model {
-	return runtimetest.Model{Heads: []runtimetest.Head{{Name: "default", Kind: "scores", Labels: labels}}}
-}
-
-// Tokens is a fake classify model with one token head over BIO labels.
-func Tokens(labels ...string) runtimetest.Model {
-	return runtimetest.Model{Heads: []runtimetest.Head{{Name: "default", Kind: "token", Labels: labels}}}
-}
-
 // Grounded is a fake hallucination model: answer words absent from the context are spans.
 func Grounded() runtimetest.Model {
 	return runtimetest.Model{Heads: []runtimetest.Head{{Name: "default", Kind: "token", Labels: []string{"supported", "hallucinated"}, Inputs: []string{"grounded"}}}}
