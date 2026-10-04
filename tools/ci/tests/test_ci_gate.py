@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 import os
 import re
@@ -67,8 +66,6 @@ def completed(paths=None, *, full=False, profile="pr"):
         plan["plan_sha256"] = digest(
             {k: v for k, v in plan.items() if k != "plan_sha256"}
         )
-    if plan["native"]:
-        builds.append({"id": "native:cpu", "sha256": "c" * 64, "source_sha": SHA})
     receipts = []
     for record in plan["verifications"]:
         field = "checks" if record["activity"] in {"quality", "package"} else "cases"
@@ -84,7 +81,6 @@ def completed(paths=None, *, full=False, profile="pr"):
                 if item["id"]
                 in {
                     *(f"image:{image}" for image in record["images"]),
-                    *(["native:cpu"] if record["native"] else []),
                 }
             ],
         }
@@ -271,7 +267,7 @@ class GateTests(unittest.TestCase):
         plan, receipts, builds = completed(["tools/make/models.mk"])
         jobs = {name: {"result": "success"} for name in plan["expected_dispatch_jobs"]}
         self.assertTrue(evaluate_gate(plan, receipts, builds=builds, jobs=jobs).passed)
-        for executor in ("platform", "native-build"):
+        for executor in ("platform", "performance"):
             for status in ("skipped", "failure", "cancelled"):
                 jobs[executor]["result"] = status
                 self.assertFalse(
@@ -399,9 +395,7 @@ class GateTransportTests(unittest.TestCase):
         validate_gate_transport(self.gate, errors)
         self.assertEqual(errors, [])
         expected = json.loads(self.step["env"]["EXECUTOR_RESULTS"])
-        incomplete = {
-            name: value for name, value in expected.items() if name != "native-build"
-        }
+        incomplete = {name: value for name, value in expected.items() if name != "core"}
         with_output = {**expected, "outputs": "${{ needs.plan.outputs.plan }}"}
         for value in (
             "${{ toJSON(needs) }}",
@@ -447,38 +441,20 @@ class GateTransportTests(unittest.TestCase):
             directory = root / ".agent-harness/ci"
             results = directory / "results"
             results.mkdir(parents=True)
-            native_bytes = json.dumps({"platform": "linux/amd64"}).encode()
-            native_digest = hashlib.sha256(native_bytes).hexdigest()
             for build in builds:
-                if build["id"] == "native:cpu":
-                    output = results / "ci-build-native-cpu"
-                    output.mkdir()
-                    (output / "manifest.json").write_bytes(native_bytes)
-                    (output / "receipt.json").write_text(
-                        json.dumps([{**build, "sha256": native_digest}])
+                name = build["id"].removeprefix("image:")
+                output = results / f"ci-build-image-{name}"
+                output.mkdir()
+                (output / "manifest.json").write_text(
+                    json.dumps(
+                        {
+                            "images": [{"platform": "linux/amd64"}],
+                            **build,
+                            "id": name,
+                        }
                     )
-                else:
-                    name = build["id"].removeprefix("image:")
-                    output = results / f"ci-build-image-{name}"
-                    output.mkdir()
-                    (output / "manifest.json").write_text(
-                        json.dumps(
-                            {
-                                "images": [{"platform": "linux/amd64"}],
-                                **build,
-                                "id": name,
-                            }
-                        )
-                    )
+                )
             for receipt in receipts:
-                for collection in (
-                    receipt["artifacts"],
-                    receipt["evidence"]["artifacts"],
-                ):
-                    for artifact in collection:
-                        if artifact["id"] == "native:cpu":
-                            artifact["sha256"] = native_digest
-                receipt["evidence_sha256"] = digest(receipt["evidence"])
                 output = results / f"ci-result-{receipt['id']}"
                 output.mkdir()
                 (output / "result.json").write_text(json.dumps(receipt))

@@ -70,6 +70,7 @@ zh-Hans	installation/support-matrix.md
 zh-Hans	installation/upgrade-rollback.md
 zh-Hans	installation/valkey-memory.md
 zh-Hans	intro.md
+zh-Hans	model-runtime/choose-a-model.md
 zh-Hans	model-runtime/migrate.md
 zh-Hans	model-runtime/overview.md
 zh-Hans	model-runtime/quickstart.md

@@ -238,8 +238,8 @@ func TestConfigValidationDefersWindowBindingBudgets(t *testing.T) {
 			cfg := &RouterConfig{ConfigSource: ConfigSourceKubernetes}
 			tc.configure(cfg)
 			cfg.ModelDeployments = map[string]ModelDeployment{
-				"large": {Provider: "candle", Artifact: "models/test", Input: ModelInputBudget{MaxTokens: 256, Overflow: "window"}},
-				"small": {Provider: "candle", Artifact: "models/test", Input: ModelInputBudget{MaxTokens: 64, Overflow: "window"}},
+				"large": {Provider: ModelRuntimeProvider, Artifact: "models/test", Input: ModelInputBudget{MaxTokens: 256, Overflow: "window"}},
+				"small": {Provider: ModelRuntimeProvider, Artifact: "models/test", Input: ModelInputBudget{MaxTokens: 64, Overflow: "window"}},
 			}
 			for _, name := range []RecipeName{DefaultRecipeName, "private"} {
 				cfg.Recipes = append(cfg.Recipes, RoutingRecipe{Name: name, Profile: RoutingProfile{

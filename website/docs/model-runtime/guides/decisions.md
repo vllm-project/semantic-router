@@ -116,7 +116,7 @@ sizes are more accurate on a GPU. Decision 1.0 models answer the same
 questions. Vela 2.0 also answers `set` and `span` questions and has ready-made
 questions for PII, hallucination and toxicity; it is a private preview and
 needs a Hugging Face token with access. See
-[Choose a model](../choose-a-model.md#decision-models).
+[Choose a model](model-runtime/choose-a-model.md#decision-models).
 
 ## Check it
 

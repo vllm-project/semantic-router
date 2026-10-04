@@ -2,7 +2,7 @@ import React, { useId } from 'react'
 
 import type { DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 import styles from './BuilderPage.module.css'
-import { getBool, getNum, getObj, getStr } from './builderPageGlobalSettingsSupport'
+import { getBool, getNum, getObj } from './builderPageGlobalSettingsSupport'
 
 interface GlobalSettingsSafetySectionProps {
   local: DSLFieldObject
@@ -84,7 +84,6 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
                         ...current,
                         enabled: true,
                         threshold: getNum(current, 'threshold', 0.7),
-                        model_type: getStr(current, 'model_type', 'candle'),
                       })
                     } else {
                       onSetField('prompt_guard', { ...current, enabled: false })
@@ -114,27 +113,6 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
                       )
                     }
                   />
-                </div>
-                <div className={styles.gsRow}>
-                  <label className={styles.gsLabel}>Model</label>
-                  <div className={styles.gsRadioGroup}>
-                    {[
-                      { label: 'Candle (local)', value: 'candle' },
-                      { label: 'vLLM (external)', value: 'vllm' },
-                    ].map((option) => (
-                      <label key={option.value} className={styles.gsRadio}>
-                        <input
-                          type="radio"
-                          name="gs-pg-model"
-                          checked={getStr(promptGuard, 'model_type', 'candle') === option.value}
-                          onChange={() =>
-                            onSetNestedField('prompt_guard', 'model_type', option.value)
-                          }
-                        />
-                        <span>{option.label}</span>
-                      </label>
-                    ))}
-                  </div>
                 </div>
               </div>
             )}

@@ -102,22 +102,26 @@ def run_reference(args: argparse.Namespace) -> int:
 
 
 def run_native(args: argparse.Namespace) -> int:
-    from vllm_sr_runtime.config import ServeConfig
+    from vllm_sr_runtime.config import ModelConfig, ServeConfig
     from vllm_sr_runtime.runtime import Runtime
 
     config = ServeConfig(
-        model=args.model,
-        revision=args.revision,
-        device=args.device,
+        models=(
+            ModelConfig(
+                model=args.model,
+                revision=args.revision,
+                device=args.device,
+                profile=args.profile,
+            ),
+        ),
         cache_dir=args.cache_dir,
         offline=True,
-        profile=args.profile,
         threads=args.threads,
     )
     started = time.perf_counter()
     runtime = Runtime(config)
     runtime.start(background=False)
-    served = runtime.primary
+    served = runtime.lookup(None)
     receipt = {
         "load_seconds": time.perf_counter() - started,
         "health": served.health.state,

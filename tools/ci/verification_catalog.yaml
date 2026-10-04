@@ -6,7 +6,6 @@ defaults:
   platform: linux/amd64
   runtime: none
   device: none
-  native: false
   images: []
   services: []
 component_workers:
@@ -37,7 +36,6 @@ verifications:
     executor: generated
     category: quality
     workflow: .github/workflows/check-generated.yml
-    native: true
     inventory: canonical-generated-contracts-v1
   security:
     display_name: Security Checks
@@ -64,8 +62,7 @@ verifications:
     executor: core
     category: components
     workflow: .github/workflows/test-and-build.yml
-    native: true
-    inventory: go-core-native-abi-and-selector-parity
+    inventory: go-core-and-selector-parity
   storage:
     display_name: Storage Integration
     activity: test
@@ -74,7 +71,6 @@ verifications:
     category: integration
     workflow: .github/workflows/test-storage.yml
     services: [milvus, redis, qdrant, valkey, postgres]
-    native: true
     inventory: required-storage-framework-discovery
   dashboard:
     display_name: Dashboard Tests
@@ -83,7 +79,6 @@ verifications:
     executor: dashboard
     category: components
     workflow: .github/workflows/dashboard-test.yml
-    native: true
     inventory: dashboard-go-vitest-and-controlled-api-browser
   operator:
     display_name: Kubernetes Operator

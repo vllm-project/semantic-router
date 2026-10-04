@@ -2,7 +2,7 @@
 # Threshold-sweep A/B for grounding-aware fusion on the contested domains.
 #
 # Grounding's min_score only changes FILTER+SYNTHESIS; the panel responses, their
-# NLI grounding scores, and the panel rubric grades are threshold-independent, so:
+# grounding scores, and the panel rubric grades are threshold-independent, so:
 #   - the OFF arm runs once,
 #   - the panel is graded once (on the first/base threshold),
 #   - the ON arm runs once per threshold.

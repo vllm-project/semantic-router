@@ -52,7 +52,7 @@ const models: RouterModelInfo[] = [
     forward_max_tokens: '32768',
     overflow: 'truncate',
     precision: 'native',
-    provider: 'ort',
+    provider: 'model_runtime',
   },
 }))
 

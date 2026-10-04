@@ -18,6 +18,7 @@ import os
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Callable
 from concurrent.futures import Future
 from dataclasses import dataclass, replace
 from http import HTTPStatus
@@ -39,7 +40,6 @@ from .plugins.base import (
     ModelSpec,
     Profile,
     RegistryOptions,
-    RequestPlan,
     SurfacePlan,
     SurfaceRequest,
     UnsupportedSurfaceError,
@@ -49,7 +49,7 @@ from .registry import builtin
 from .registry.resolve import resolve
 from .scheduler.scheduler import Scheduler, SchedulerLimits
 from .supervision.metrics import RuntimeMetrics
-from .supervision.readiness import STATES, GoldenResult, Health, golden_check
+from .supervision.readiness import STATES, Health, golden_check
 
 log = logging.getLogger("vllm_sr_runtime")
 AUTO_ENGINE = "auto"
@@ -79,7 +79,7 @@ def choose_engine(
     raise RuntimeError(f"no engine can run {spec.name}: {'; '.join(reasons)}")
 
 
-__all__ = ["DEADLINE", "ParsedRequest", "Runtime", "ServedModel", "with_overrides"]
+__all__ = ["DEADLINE", "Runtime", "ServedModel", "with_overrides"]
 
 GENERIC_OPTIONS = {"deadline_ms", "profile", "return_meta"}
 SURFACE_FIELDS = {
@@ -116,19 +116,6 @@ STATE_ORDER = {state: index for index, state in enumerate(STATES)}
 # Requests up to this many encoded bytes are planned on the event loop: their
 # rendering costs less than a hop to a worker thread.
 INLINE_PLAN_BYTES = 16 << 10
-
-
-@dataclass
-class ParsedRequest:
-    """A validated decisions request (Phase 1 shape); ``target`` is its model."""
-
-    state: Any
-    questions: dict[str, Any]
-    deadline: float | None
-    profile: str
-    return_meta: bool
-    received: float
-    target: ServedModel | None = None
 
 
 @dataclass
@@ -280,44 +267,24 @@ class ServedModel:
                 spec, placement.accelerator, placement.device, engine_options
             )
         )
-        model = execute(lambda: family.load(package, spec, engine_model))
-        for name, profile in list(profiles.items()):
-            unavailable = profile.available(model)
-            if unavailable:
-                if name == config.profile:
-                    raise RuntimeError(
-                        f"profile {name!r} is unavailable: {unavailable}"
-                    )
-                profiles.pop(name)
-        self.family, self.package, self.placement, self.model, self.profiles = (
+        try:
+            model = execute(lambda: family.load(package, spec, engine_model))
+        except BaseException:
+            engine_model.close()
+            raise
+        self.family, self.package, self.placement, self.model = (
             family,
             package,
             placement,
             model,
-            profiles,
         )
+        try:
+            self._start(profiles, process, execute)
+        except BaseException:
+            self.stop()
+            self.scheduler = self.model = None
+            raise
         metrics = self.runtime.metrics
-        self.scheduler = Scheduler(
-            model,
-            profiles,
-            SchedulerLimits(
-                max_queue=process.max_queue,
-                max_queued_tokens=process.max_queued_tokens,
-                batch_window_ms=process.batch_window_ms,
-            ),
-            observe=metrics.observe,
-            execute=execute if model.device_thread else None,
-        )
-        self.scheduler.start()
-        self.health.set("warming", "running the golden check")
-        self.health.golden = golden_check(
-            self.golden_decisions,
-            family.golden(package),
-            placement.device.accelerator,
-            run_surface=self.golden_surface,
-        )
-        if self.health.golden.status == "failed":
-            raise RuntimeError(self.health.golden.detail or "golden check failed")
         metrics.model_info.labels(
             model=self.label,
             revision=model.info.revision or "local",
@@ -338,11 +305,58 @@ class ServedModel:
             config.profile,
         )
 
+    def _start(
+        self,
+        profiles: dict[str, Profile],
+        process: ServeConfig,
+        execute: Callable[[Any], Any],
+    ) -> None:
+        """Bind the profiles, start the worker and pass the golden check."""
+        assert self.model is not None and self.placement is not None
+        model, placement = self.model, self.placement
+        for name, profile in list(profiles.items()):
+            unavailable = profile.available(model)
+            if unavailable:
+                if name == self.config.profile:
+                    raise RuntimeError(
+                        f"profile {name!r} is unavailable: {unavailable}"
+                    )
+                profiles.pop(name)
+        self.profiles = profiles
+        self.scheduler = Scheduler(
+            model,
+            profiles,
+            SchedulerLimits(
+                max_queue=process.max_queue,
+                max_queued_tokens=process.max_queued_tokens,
+                batch_window_ms=process.batch_window_ms,
+            ),
+            observe=self.runtime.metrics.observe,
+            execute=execute if model.device_thread else None,
+            device_fault=placement.accelerator.device_fault,
+        )
+        self.scheduler.start()
+        self.health.set("warming", "running the golden check")
+        assert self.family is not None and self.package is not None
+        self.health.golden = golden_check(
+            self.golden_decisions,
+            self.family.golden(self.package),
+            placement.device.accelerator,
+            run_surface=self.golden_surface,
+        )
+        if self.health.golden.status == "failed":
+            raise RuntimeError(self.health.golden.detail or "golden check failed")
+
     def stop(self) -> None:
-        if self.scheduler is not None:
-            self.scheduler.stop()
+        """Stop the worker, then free the model once no forward can still use it."""
+        stopped = self.scheduler.stop() if self.scheduler is not None else True
         if self.model is not None:
-            self.model.close()
+            if stopped:
+                self.model.close()
+            else:
+                log.warning(
+                    "%s: a forward is still running; the model stays open", self.label
+                )
 
     def _family(self, ref, options: RegistryOptions) -> ModelFamily:
         names = (
@@ -370,23 +384,24 @@ class ServedModel:
                 profiles[self.config.profile] = entry()
         return profiles
 
-    def golden_decisions(self, state: Any, questions: dict[str, Any]) -> dict[str, Any]:
-        """Answers to a golden decisions request on the exact profile, before readiness."""
-        parsed = ParsedRequest(
-            state, questions, None, "exact", False, time.monotonic(), self
-        )
-        plan = self.plan_decisions(parsed)
-        results = self.submit_items(plan.items, None, "exact").result()
-        return self.assemble(parsed, plan, results, 0.0, 0.0)["answers"]
-
-    def golden_surface(self, surface: str, body: dict[str, Any]) -> dict[str, float]:
-        """The numbers of a golden surface response on the exact profile, before readiness."""
+    def _golden(self, surface: str, body: dict[str, Any]) -> dict[str, Any]:
+        """A golden request's response body on the exact profile, before readiness."""
         assert self.model is not None
         request = SurfaceRequest(surface, body, None, "exact", False, time.monotonic())
         plan = self.model.plan_surface(surface, request)
         results = self.submit_items(plan.items, None, "exact").result()
-        response = self.model.finish_surface(plan, results)
-        return self.model.golden_values(surface, response)
+        return self.model.finish_surface(plan, results)
+
+    def golden_decisions(self, state: Any, questions: dict[str, Any]) -> dict[str, Any]:
+        """Answers to a golden decisions request."""
+        return self._golden("decisions", {"state": state, "questions": questions})[
+            "answers"
+        ]
+
+    def golden_surface(self, surface: str, body: dict[str, Any]) -> dict[str, float]:
+        """The numbers of a golden surface response."""
+        assert self.model is not None
+        return self.model.golden_values(surface, self._golden(surface, body))
 
     # -- requests ------------------------------------------------------------
 
@@ -396,37 +411,33 @@ class ServedModel:
                 "not_ready", f"model {self.label} is {self.health.state}"
             )
 
-    def plan_decisions(self, parsed: ParsedRequest) -> RequestPlan:
-        if self.model is None:
-            raise RuntimeServiceError("not_ready", f"the model is {self.health.state}")
-        try:
-            return self.model.plan(parsed.state, parsed.questions)
-        except UnsupportedSurfaceError as exc:
-            raise RuntimeServiceError("unsupported_surface", str(exc)) from exc
-        except ValueError as exc:
-            raise RuntimeServiceError("invalid_request", str(exc)) from exc
-
     def submit_items(
         self, items: list[Any], deadline: float | None, profile: str
     ) -> Future:
-        return self.submit_items_group([items], deadline, profile)[0]
+        return self.submit_items_group([items], [deadline], profile)[0]
 
     def submit_items_group(
-        self, item_lists: list[list[Any]], deadline: float | None, profile: str
+        self,
+        item_lists: list[list[Any]],
+        deadlines: list[float | None],
+        profile: str,
     ) -> list[Future]:
         if self.scheduler is None:
             raise RuntimeServiceError("not_ready", f"the model is {self.health.state}")
         return self.scheduler.submit_group(
-            item_lists, deadline=deadline, profile=profile
+            item_lists, deadlines=deadlines, profile=profile
         )
 
     def run_items_now(
-        self, item_lists: list[list[Any]], deadline: float | None, profile: str
+        self,
+        item_lists: list[list[Any]],
+        deadlines: list[float | None],
+        profile: str,
     ) -> list[Future] | None:
         """Run the group on this thread if the model's scheduler is idle (never on the event loop)."""
         if self.scheduler is None:
             return None
-        return self.scheduler.run_now(item_lists, deadline=deadline, profile=profile)
+        return self.scheduler.run_now(item_lists, deadlines=deadlines, profile=profile)
 
     def meta(
         self, profile_name: str, queue_ms: float, compute_ms: float
@@ -444,34 +455,6 @@ class ServedModel:
             "queue_ms": round(queue_ms, 3),
             "compute_ms": round(compute_ms, 3),
         }
-
-    def assemble(
-        self,
-        parsed: ParsedRequest,
-        plan: RequestPlan,
-        results: Any,
-        queue_ms: float,
-        compute_ms: float,
-    ) -> dict[str, Any]:
-        """The decisions response (Phase 1 path, unchanged)."""
-        assert self.model is not None
-        surface_plan = SurfacePlan(
-            "decisions", list(plan.items), plan.input_tokens, plan
-        )
-        body = self.model.finish_surface(surface_plan, results)
-        metrics = self.runtime.metrics
-        for answer in body.get("answers", {}).values():
-            metrics.questions.labels(
-                type=str(answer.get("type")), outcome=answer.get("error", "answered")
-            ).inc()
-        response: dict[str, Any] = {"model": self.served_id, **body}
-        response.setdefault(
-            "usage", {"input_tokens": plan.input_tokens, "output_tokens": 0}
-        )
-        if parsed.return_meta:
-            response["meta"] = self.meta(parsed.profile, queue_ms, compute_ms)
-        metrics.input_tokens.inc(plan.input_tokens)
-        return response
 
     def device_failure(self) -> BaseException | None:
         return self.scheduler.failure if self.scheduler else None
@@ -607,14 +590,6 @@ class ProcessHealth:
                 return f"{served.label}: {served.health.reason or served.health.state}"
         return None
 
-    @property
-    def golden(self) -> GoldenResult:
-        return self._models[0].health.golden
-
-    @golden.setter
-    def golden(self, value: GoldenResult) -> None:
-        self._models[0].health.golden = value
-
     def set(self, state: str, reason: str | None = None) -> None:
         for served in self._models:
             served.health.set(state, reason)
@@ -639,40 +614,6 @@ class Runtime:
             raise ValueError("served model names must be unique")
         self.health = ProcessHealth(self)
         self._thread: threading.Thread | None = None
-
-    # -- the primary model (Phase 1 attributes) -----------------------------
-
-    @property
-    def primary(self) -> ServedModel:
-        return self.served[0]
-
-    @property
-    def model(self) -> LoadedModel | None:
-        return self.primary.model
-
-    @property
-    def package(self) -> VerifiedPackage | None:
-        return self.primary.package
-
-    @property
-    def placement(self) -> Placement | None:
-        return self.primary.placement
-
-    @property
-    def family(self) -> ModelFamily | None:
-        return self.primary.family
-
-    @property
-    def profiles(self) -> dict[str, Profile]:
-        return self.primary.profiles
-
-    @property
-    def scheduler(self) -> Scheduler | None:
-        return self.primary.scheduler
-
-    @property
-    def served_id(self) -> str | None:
-        return self.primary.served_id
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -739,15 +680,25 @@ class Runtime:
         )
 
     def _options(
-        self, served: ServedModel, surface: str, body: dict[str, Any]
+        self,
+        served: ServedModel,
+        surface: str,
+        body: dict[str, Any],
+        received: float | None = None,
     ) -> tuple[float | None, str, bool, float]:
+        """Generic options; ``received`` is when the HTTP request arrived (default now).
+
+        Every task of one bundle shares ``received``, so equal ``deadline_ms``
+        values give equal deadlines.
+        """
         options = body.get("options") or {}
         allowed = GENERIC_OPTIONS | SURFACE_OPTIONS[surface]
         if not isinstance(options, dict) or set(options) - allowed:
             raise RuntimeServiceError(
                 "invalid_request", f"options accepts only {sorted(allowed)}"
             )
-        received = time.monotonic()
+        if received is None:
+            received = time.monotonic()
         deadline = None
         if "deadline_ms" in options:
             value = options["deadline_ms"]
@@ -776,65 +727,16 @@ class Runtime:
             )
         return deadline, profile, return_meta, received
 
-    # -- decisions (Phase 1 interface) ---------------------------------------
-
-    def parse(self, body: Any) -> ParsedRequest:
-        if not isinstance(body, dict):
-            raise RuntimeServiceError(
-                "invalid_request", "the request body must be a JSON object"
-            )
-        unknown = set(body) - SURFACE_FIELDS["decisions"]
-        if unknown:
-            raise RuntimeServiceError(
-                "invalid_request", f"unknown request fields: {sorted(unknown)}"
-            )
-        if "state" not in body:
-            raise RuntimeServiceError("invalid_request", "state is required")
-        questions = body.get("questions")
-        if (
-            not isinstance(questions, dict)
-            or not questions
-            or any(not isinstance(k, str) or not k for k in questions)
-        ):
-            raise RuntimeServiceError(
-                "invalid_request",
-                "questions must be a nonempty mapping of question IDs",
-            )
-        served = self.lookup(body.get("model"))
-        deadline, profile, return_meta, received = self._options(
-            served, "decisions", body
-        )
-        return ParsedRequest(
-            body["state"], questions, deadline, profile, return_meta, received, served
-        )
-
-    def plan(self, parsed: ParsedRequest) -> RequestPlan:
-        return (parsed.target or self.primary).plan_decisions(parsed)
-
-    def submit(self, plan: RequestPlan, parsed: ParsedRequest) -> Future:
-        served = parsed.target or self.primary
-        return served.submit_items(plan.items, parsed.deadline, parsed.profile)
-
-    def assemble(
-        self,
-        parsed: ParsedRequest,
-        plan: RequestPlan,
-        results: Any,
-        queue_ms: float,
-        compute_ms: float,
-    ) -> dict[str, Any]:
-        return (parsed.target or self.primary).assemble(
-            parsed, plan, results, queue_ms, compute_ms
-        )
-
     # -- every surface -------------------------------------------------------
 
-    def prepare(self, surface: str, body: Any) -> Prepared:
+    def prepare(
+        self, surface: str, body: Any, received: float | None = None
+    ) -> Prepared:
         """Validate a surface request and plan it for its model (runs off the event loop)."""
         if surface not in SURFACES:
             raise RuntimeServiceError("invalid_request", f"unknown surface {surface!r}")
-        if len(self.served) == 1 and not self.primary.health.ready:
-            self.primary.require_ready()
+        if len(self.served) == 1:
+            self.served[0].require_ready()
         if not isinstance(body, dict):
             raise RuntimeServiceError(
                 "invalid_request", "the request body must be a JSON object"
@@ -852,25 +754,9 @@ class Runtime:
                 "unsupported_surface",
                 f"model {served.label} does not serve /v1/{surface}",
             )
-        if surface == "decisions":
-            parsed = self.parse(body)
-            plan = served.plan_decisions(parsed)
-            request = SurfaceRequest(
-                surface,
-                body,
-                parsed.deadline,
-                parsed.profile,
-                parsed.return_meta,
-                parsed.received,
-            )
-            return Prepared(
-                served,
-                request,
-                SurfacePlan(
-                    "decisions", list(plan.items), plan.input_tokens, (parsed, plan)
-                ),
-            )
-        deadline, profile, return_meta, received = self._options(served, surface, body)
+        deadline, profile, return_meta, received = self._options(
+            served, surface, body, received
+        )
         request = SurfaceRequest(
             surface, body, deadline, profile, return_meta, received
         )
@@ -886,11 +772,14 @@ class Runtime:
         self, prepared: Prepared, results: Any, queue_ms: float, compute_ms: float
     ) -> dict[str, Any]:
         served, request, plan = prepared.served, prepared.request, prepared.plan
-        if request.surface == "decisions":
-            parsed, request_plan = plan.state
-            return served.assemble(parsed, request_plan, results, queue_ms, compute_ms)
         assert served.model is not None
         body = served.model.finish_surface(plan, results)
+        if request.surface == "decisions":
+            for answer in body.get("answers", {}).values():
+                self.metrics.questions.labels(
+                    type=str(answer.get("type")),
+                    outcome=answer.get("error", "answered"),
+                ).inc()
         response: dict[str, Any] = {"model": served.served_id, **body}
         response.setdefault(
             "usage", {"input_tokens": plan.input_tokens, "output_tokens": 0}
@@ -936,30 +825,25 @@ class Runtime:
         return 200, {"results": results}
 
     def _prepare_outcome(
-        self, surface: str, body: Any
+        self, surface: str, body: Any, received: float
     ) -> Prepared | tuple[int, dict[str, Any]]:
         try:
-            return self.prepare(surface, body)
-        except RuntimeServiceError as exc:
-            return exc.status, exc.body()
+            return self.prepare(surface, body, received)
         except Exception as exc:
-            error = RuntimeServiceError(
-                "internal_error", f"{type(exc).__name__}: {exc}"
-            )
-            return 500, error.body()
+            return _error_outcome(exc)
 
     def _prepare_and_run(
-        self, surface: str, body: Any
+        self, surface: str, body: Any, received: float
     ) -> tuple[Prepared | tuple[int, dict[str, Any]], _Lookup | None]:
         """Plan one request off the event loop and run it here if its model is idle."""
-        prepared = self._prepare_outcome(surface, body)
+        prepared = self._prepare_outcome(surface, body, received)
         if not isinstance(prepared, Prepared):
             return prepared, None
         lookup = self._lookup([(0, prepared)])
         lookup.submitted = time.monotonic()
         try:
             lookup.futures = prepared.served.run_items_now(
-                lookup.misses, prepared.request.deadline, prepared.request.profile
+                lookup.misses, [prepared.request.deadline], prepared.request.profile
             )
         except Exception as exc:
             lookup.futures = exc
@@ -972,19 +856,22 @@ class Runtime:
     ) -> list[tuple[int, dict[str, Any]]]:
         """Plan every request, run each model's share as one job group, finish in order.
 
-        A lone request planned off the event loop runs on its planning thread
-        when its model's scheduler is idle.
+        A group holds a model's tasks of one profile, whatever their deadlines:
+        each job keeps its own. A lone request planned off the event loop runs
+        on its planning thread when its model's scheduler is idle.
         """
+        received = time.monotonic()
         lookups: list[_Lookup | None] = [None] * len(requests)
         if size is not None and size <= INLINE_PLAN_BYTES:
             planned = [
-                self._prepare_outcome(surface, body) for surface, body in requests
+                self._prepare_outcome(surface, body, received)
+                for surface, body in requests
             ]
         elif len(requests) == 1:
             from starlette.concurrency import run_in_threadpool
 
             prepared, lookups[0] = await run_in_threadpool(
-                self._prepare_and_run, *requests[0]
+                self._prepare_and_run, *requests[0], received
             )
             planned = [prepared]
         else:
@@ -992,7 +879,7 @@ class Runtime:
 
             planned = await asyncio.gather(
                 *(
-                    run_in_threadpool(self._prepare_outcome, surface, body)
+                    run_in_threadpool(self._prepare_outcome, surface, body, received)
                     for surface, body in requests
                 )
             )
@@ -1001,14 +888,10 @@ class Runtime:
             await self._run_group([(0, planned[0])], outcomes, lookups[0])
             return [outcome for outcome in outcomes if outcome is not None]
         outcomes = [None] * len(requests)
-        groups: dict[tuple[int, str, float | None], list[tuple[int, Prepared]]] = {}
+        groups: dict[tuple[int, str], list[tuple[int, Prepared]]] = {}
         for index, prepared in enumerate(planned):
             if isinstance(prepared, Prepared):
-                key = (
-                    id(prepared.served),
-                    prepared.request.profile,
-                    prepared.request.deadline,
-                )
+                key = (id(prepared.served), prepared.request.profile)
                 groups.setdefault(key, []).append((index, prepared))
             else:
                 outcomes[index] = prepared
@@ -1052,8 +935,8 @@ class Runtime:
         outcomes: list[tuple[int, dict[str, Any]] | None],
         lookup: _Lookup | None = None,
     ) -> None:
+        """Run one model's job group; every member is answered from its own jobs."""
         served = members[0][1].served
-        request = members[0][1].request
         if lookup is None:
             lookup = self._lookup(members)
         values, slots = lookup.values, lookup.slots
@@ -1064,34 +947,36 @@ class Runtime:
                 raise futures
             if futures is None:
                 futures = served.submit_items_group(
-                    lookup.misses, request.deadline, request.profile
+                    lookup.misses,
+                    [prepared.request.deadline for _, prepared in members],
+                    members[0][1].request.profile,
                 )
-            results = await asyncio.gather(*(asyncio.wrap_future(f) for f in futures))
-        except RuntimeServiceError as exc:
-            for index, _ in members:
-                outcomes[index] = (exc.status, exc.body())
-            return
         except Exception as exc:
+            for index, _ in members:
+                outcomes[index] = _error_outcome(exc)
+            return
+        results = await asyncio.gather(
+            *(asyncio.wrap_future(future) for future in futures),
+            return_exceptions=True,
+        )
+        if any(isinstance(result, BaseException) for result in results):
             failure = served.device_failure()
             if failure is not None:
                 self.degrade(f"{type(failure).__name__}: {failure}", served)
-            error = RuntimeServiceError(
-                "internal_error", f"{type(exc).__name__}: {exc}"
-            )
-            for index, _ in members:
-                outcomes[index] = (500, error.body())
-            return
         finished = time.monotonic()
-        for member_slots, member_results in zip(slots, results, strict=True):
-            for offset, (member, position, key) in enumerate(member_slots):
+        compute_ms = (finished - submitted) * 1000.0
+        for member, (index, prepared) in enumerate(members):
+            member_results = results[member]
+            if isinstance(member_results, BaseException):
+                outcomes[index] = _error_outcome(member_results)
+                continue
+            for offset, (_, position, key) in enumerate(slots[member]):
                 value = (
                     DEADLINE if member_results is DEADLINE else member_results[offset]
                 )
                 values[(member, position)] = value
                 if key is not None and value is not DEADLINE and value is not None:
                     served.cache.put(key, value)
-        compute_ms = (finished - submitted) * 1000.0
-        for member, (index, prepared) in enumerate(members):
             count = len(prepared.plan.items)
             item_values = [values[(member, position)] for position in range(count)]
             if count and all(value is DEADLINE for value in item_values):
@@ -1105,10 +990,7 @@ class Runtime:
                     self.finish(prepared, results_for_member, queue_ms, compute_ms),
                 )
             except Exception as exc:
-                error = RuntimeServiceError(
-                    "internal_error", f"{type(exc).__name__}: {exc}"
-                )
-                outcomes[index] = (500, error.body())
+                outcomes[index] = _error_outcome(exc)
 
     def _bundle_tasks(self, body: Any) -> list[tuple[str, str, dict[str, Any]]]:
         if not isinstance(body, dict) or set(body) - {"tasks", "options"}:
@@ -1191,9 +1073,8 @@ class Runtime:
                 return failure
         return None
 
-    def degrade(self, reason: str, served: ServedModel | None = None) -> None:
-        target = served or self.primary
-        target.health.set("degraded", reason)
+    def degrade(self, reason: str, served: ServedModel) -> None:
+        served.health.set("degraded", reason)
         self._ready_gauge()
         if self.config.exit_on_device_error:
             log.error("device failure, exiting for a clean restart: %s", reason)
@@ -1212,3 +1093,11 @@ class Runtime:
 
 def with_overrides(config: ServeConfig, **changes: Any) -> ServeConfig:
     return replace(config, **changes)
+
+
+def _error_outcome(error: BaseException) -> tuple[int, dict[str, Any]]:
+    """The contract's error answer for an exception from planning or running a request."""
+    if isinstance(error, RuntimeServiceError):
+        return error.status, error.body()
+    internal = RuntimeServiceError("internal_error", f"{type(error).__name__}: {error}")
+    return 500, internal.body()

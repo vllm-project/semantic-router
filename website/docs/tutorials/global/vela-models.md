@@ -196,7 +196,7 @@ The model runtime runs Vela models with PyTorch. CPU execution is validated,
 including 32K inputs, and so are AMD Instinct MI300X and MI325X GPUs through
 ROCm. CUDA works but is not yet validated; measure NVIDIA performance on the
 target hardware. [Profiles](../../model-runtime/profiles.md) trade exactness
-for speed, and [Choose a model](../../model-runtime/choose-a-model.md) lists
+for speed, and [Choose a model](model-runtime/choose-a-model.md) lists
 what each model costs.
 
 The [Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)

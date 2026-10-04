@@ -102,26 +102,9 @@ func TestVelaEmbeddingReleasePreservesCompiledRuntimeArtifacts(t *testing.T) {
 			t.Fatalf("optional training artifact would be downloaded: %s", name)
 		}
 	}
-	want := []string{"config.json", "tokenizer.json"}
-	if provider, _ := config.DefaultModelExecution(true); provider == "ort" {
-		for _, graph := range []string{"onnx/layer-22/model.onnx", "onnx/layer-6/model.onnx"} {
-			if !requiresGraphAlternative(spec, graph) || revisionArtifactExcluded(graph, spec.ExcludePatterns) {
-				t.Fatalf("required layer alternative is missing or excluded: %s", graph)
-			}
-		}
-		// Tensor dependencies follow the selected graph's actual external-data
-		// references; their filenames are not required to be model.onnx.data.
-		if !spec.CheckONNX {
-			t.Fatal("selected ONNX graphs would skip external tensor checks")
-		}
-		if revisionArtifactExcluded("onnx/layer-6/model_fa_fp16.onnx", spec.ExcludePatterns) {
-			t.Fatal("AMD optimized graph was excluded")
-		}
-	} else {
-		want = append(want, "model.safetensors")
-		if !revisionArtifactExcluded("onnx/layer-6/model.onnx", spec.ExcludePatterns) {
-			t.Fatal("Candle-only download retained unused ONNX exports")
-		}
+	want := []string{"config.json", "tokenizer.json", "model.safetensors"}
+	if !revisionArtifactExcluded("onnx/layer-6/model.onnx", spec.ExcludePatterns) {
+		t.Fatal("the download retained ONNX exports the runtime never loads")
 	}
 	for _, name := range want {
 		if !slices.Contains(spec.RequiredFiles, name) || revisionArtifactExcluded(name, spec.ExcludePatterns) {

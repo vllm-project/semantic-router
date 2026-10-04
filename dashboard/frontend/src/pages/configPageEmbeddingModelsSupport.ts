@@ -149,15 +149,6 @@ export function embeddingModelsFields(): FieldConfig[] {
         'Choose whether embeddings run in the built-in model runtime or through a remote API. Remote mode currently applies to text embedding consumers only.',
     },
     {
-      name: 'local_backend',
-      label: 'Local Backend',
-      type: 'select',
-      options: [DEFAULT_LOCAL_BACKEND],
-      required: true,
-      description: 'The built-in model runtime serves the selected embedding model family.',
-      shouldHide: hideForRemote,
-    },
-    {
       name: 'remote_backend',
       label: 'API Protocol',
       type: 'select',
@@ -235,7 +226,6 @@ export function embeddingModelsEditData(data: unknown): EditFormData {
   return {
     ...semantic,
     provider_type: providerType,
-    local_backend: providerType === LOCAL_PROVIDER_TYPE ? backend : DEFAULT_LOCAL_BACKEND,
     remote_backend: providerType === REMOTE_PROVIDER_TYPE ? backend : REMOTE_BACKEND,
     model_type: localModelType,
     embedding_config: optimization,
@@ -284,7 +274,7 @@ export function embeddingModelsCatalogValue(rawData: EditFormData): Record<strin
   const remote = providerType === REMOTE_PROVIDER_TYPE
   const backend = remote
     ? trimmedString(rawData.remote_backend) || REMOTE_BACKEND
-    : trimmedString(rawData.local_backend) || DEFAULT_LOCAL_BACKEND
+    : DEFAULT_LOCAL_BACKEND
   const dataForNormalization = remote ? rawData : { ...rawData, endpoint: undefined }
   const normalized = normalizeRouterStructuredFields('embedding_models', dataForNormalization)
   const rawModelType = normalized.model_type
@@ -296,7 +286,6 @@ export function embeddingModelsCatalogValue(rawData: EditFormData): Record<strin
   const semanticFields = { ...normalized }
   delete semanticFields.backend
   delete semanticFields.provider_type
-  delete semanticFields.local_backend
   delete semanticFields.remote_backend
   delete semanticFields.model_type
   delete semanticFields.embedding_config

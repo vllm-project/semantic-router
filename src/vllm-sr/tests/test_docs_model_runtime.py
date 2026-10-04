@@ -116,12 +116,25 @@ def _router_fragments() -> list[Block]:
     return fragments
 
 
+def _published_images() -> dict[str, tuple]:
+    """The images CI builds and publishes: name -> (context, Dockerfile, platforms)."""
+    ci = REPO_ROOT / "tools" / "ci"
+    sys.path.insert(0, str(ci))
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "image_artifacts", ci / "image_artifacts.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(str(ci))
+    return module.DEFINITIONS
+
+
 def test_kubernetes_manifests_parse_and_run_images_the_repository_builds():
     manifests = [block for block in _blocks("yaml") if "apiVersion" in block.text]
-    built = {
-        path.name.removeprefix("Dockerfile.")
-        for path in (REPO_ROOT / "tools" / "docker").glob("Dockerfile.*")
-    }
+    published = _published_images()
+    runtime_commands = []
 
     assert manifests
     for block in manifests:
@@ -132,7 +145,16 @@ def test_kubernetes_manifests_parse_and_run_images_the_repository_builds():
             for container in pod.get("containers", []):
                 registry, _, image = container["image"].rpartition("/")
                 assert registry == "ghcr.io/vllm-project/semantic-router", block.where
-                assert image.split(":")[0] in built, block.where
+                assert image.split(":")[0] in published, block.where
+                _, dockerfile, _ = published[image.split(":")[0]]
+                assert (REPO_ROOT / dockerfile).is_file(), block.where
+                command = [*container.get("command", []), *container.get("args", [])]
+                if command[:1] == ["vllm-sr-runtime"]:
+                    runtime_commands.append((block.where, command[1:]))
+
+    assert runtime_commands
+    for where, arguments in runtime_commands:
+        _assert_runtime_options(where, arguments)
 
 
 def _merge(base: dict, fragment: dict) -> dict:
@@ -384,16 +406,20 @@ def test_documented_environment_variables_are_read_by_the_runtime_or_router():
     assert sorted(name for name in documented if f'"{name}"' not in sources) == []
 
 
-def test_vllm_sr_runtime_commands_use_real_options():
+def _assert_runtime_options(where: str, arguments: list[str]) -> None:
     source = (RUNTIME / "cli.py").read_text()
+    assert f'"{arguments[0]}"' in source, f"{where}: no subcommand {arguments[0]}"
+    for argument in arguments[1:]:
+        if argument.startswith("--"):
+            assert f'"{argument}"' in source, f"{where}: no option {argument}"
+
+
+def test_vllm_sr_runtime_commands_use_real_options():
     commands = _commands("vllm-sr-runtime")
 
     assert commands
     for where, arguments in commands:
-        assert f'"{arguments[0]}"' in source, f"{where}: no subcommand {arguments[0]}"
-        for argument in arguments[1:]:
-            if argument.startswith("--"):
-                assert f'"{argument}"' in source, f"{where}: no option {argument}"
+        _assert_runtime_options(where, arguments)
 
 
 def test_migration_example_is_what_the_tool_writes():

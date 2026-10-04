@@ -124,23 +124,19 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     model_ref: 'prompt_guard',
     threshold: 0.7,
     use_cpu: true,
-    use_mmbert_32k: true,
-    jailbreak_mapping_path:
-      'models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json',
+    jailbreak_mapping_path: 'models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json',
   },
   classifier: {
     domain: {
       model_ref: 'domain_classifier',
       threshold: 0.5,
       use_cpu: true,
-      use_mmbert_32k: true,
       category_mapping_path: 'models/Vela-1.0-Encoder-307M-Domain/category_mapping.json',
     },
     pii: {
       model_ref: 'pii_classifier',
       threshold: 0.9,
       use_cpu: true,
-      use_mmbert_32k: true,
       pii_mapping_path: 'models/Vela-1.0-Encoder-307M-PII/pii_mapping.json',
     },
     preference: {
@@ -153,7 +149,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
       model_ref: 'fact_check_classifier',
       threshold: 0.85,
       use_cpu: true,
-      use_mmbert_32k: true,
     },
     detector: {
       model_ref: 'hallucination_detector',
@@ -162,13 +157,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
       min_span_length: 1,
       min_span_confidence: 0,
       context_window_size: 50,
-      enable_nli_filtering: false,
-      nli_entailment_threshold: 0.75,
-    },
-    explainer: {
-      model_ref: 'hallucination_explainer',
-      threshold: 0.9,
-      use_cpu: true,
     },
   } satisfies CanonicalHallucinationModuleConfig,
   feedback_detector: {
@@ -176,19 +164,17 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     model_ref: 'feedback_detector',
     threshold: 0.7,
     use_cpu: true,
-    use_mmbert_32k: true,
   } satisfies FeedbackDetectorConfig & { model_ref?: string },
   complexity: {},
   external_models: [],
   knowledge_bases: [],
   admission: {},
   system_models: {
-    prompt_guard: 'models/mmbert32k-jailbreak-detector-merged',
+    prompt_guard: 'models/Vela-1.0-Encoder-307M-Guard',
     domain_classifier: 'models/Vela-1.0-Encoder-307M-Domain',
     pii_classifier: 'models/Vela-1.0-Encoder-307M-PII',
     fact_check_classifier: 'models/Vela-1.0-Encoder-307M-FactCheck',
     hallucination_detector: 'models/Vela-1.0-Encoder-307M-Halu',
-    hallucination_explainer: 'models/mom-halugate-explainer',
     feedback_detector: 'models/Vela-1.0-Encoder-307M-Feedback',
   } satisfies CanonicalSystemModels,
   embedding_models: {
@@ -340,7 +326,7 @@ export const SECTION_META: Record<
   hallucination_mitigation: {
     title: 'Hallucination Mitigation',
     eyebrow: 'Model Catalog',
-    description: 'Fact-check, detector, and explainer modules used for hallucination review.',
+    description: 'Fact-check and detector modules used for hallucination review.',
   },
   feedback_detector: {
     title: 'Feedback Detector',
