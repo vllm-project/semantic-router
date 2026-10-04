@@ -6,6 +6,13 @@
     "target_profile": "selector-algorithms"
   },
   {
+    "algorithm": "decision",
+    "tier": "supported",
+    "status": "covered",
+    "profile": "decision-runtime",
+    "testcase": "decision-runtime-routing"
+  },
+  {
     "algorithm": "hybrid",
     "tier": "supported",
     "status": "planned",
