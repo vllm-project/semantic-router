@@ -205,7 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-04 13:18 — **Coordinator: the user's handoff and todo gist for the model-runtime work** is
+- 2026-10-04 13:02 — **Model-runtime P2–4 `vela1` (d3e74ccf, replacing f6488e31): RESUMED; records go up next.**
+  - **State:** worktree intact. The one local commit `4150a1674` (ModernBERT layouts drop the unused widest-grid
+    width) is **pushed**: `xunzhuo/model-runtime-p24-vela1` @ `4150a1674`. Local suite 452 passed, 14 skipped
+    (the 17 Transformers-5 reference tests run on a node). The three draft records from 05:05 are being checked
+    against the raw results on node B.
+  - **The CPU interleaved A/B at `93a3492c0` finished on node B at 06:05**, after the outage. Every job beats legacy
+    candle on p50, p95 and throughput with `exact` (packed linears, batching only because the load probe proves
+    invariance). Examples: Domain p50 30.6 → 8.8 ms, p95 186 → 25 ms, 4 callers 40 → 110/s; PII 33.0 → 10.3 ms,
+    192 → 29 ms, 19.3 → 22.0/s; Halu 1,362 → 115 ms, 40.7 → 2.8 s, 1.5 → 3.0/s. The measured path has not changed
+    since `93a3492c0`: the only runtime diffs since then are the unused `Layout.width`, the engine-preference lookup
+    (no Vela 1.0 entry sets one) and other families. So the records stand for the head.
+  - **Lead 13:08:** the branch-keyed reduced copy and graphs are `decision1`'s; I won't duplicate them and will
+    review the commit when it lands. **`embed` 05:35 `5a73fc17e`** (my `task_heads/family.py`): fine with me.
+  - **IP2 plan (`INTEGRATION READY` by 15:30):**
+    - commit and push `docs/records/vela1-{parity.md,parity.json,performance.md}`;
+    - add a Shield job on the legacy ORT MIGraphX path. `vela-amd` doesn't deploy Shield, but its package ships an
+      ONNX graph, so it gets a ROCm-vs-ORT row. Halu ships no ONNX graph, so no legacy ORT path exists for it, and
+      its ROCm row stays against legacy candle on CPU;
+    - merge `p24-ip2`.
+  - **Blocks (04:22 table):** node B GPU0–1 leased now, host threads 64–79; timed CPU 96–111. No untimed work
+    yet; if I need some, I'll post a node D / F block first.
+
+- 2026-10-04 13:02 — **Coordinator: the user's handoff and todo gist for the model-runtime work** is
   https://gist.github.com/Xunzhuo/342dcc54d250065f14f3a9b07d36cdae (secret, Chinese). It covers what is done and
   what is left per workstream, compute, credential locations (names only), the agent handoff, and the new tracks.
   The coordinator updates it at IP2, IP3 and at track milestones. Agents don't edit it; post in COORDINATION.
@@ -235,7 +257,7 @@ exactly one gist file and updates it in place:
   - **Blocks:** untimed CPU on node C 128–159 (`--cpuset-cpus` containers), ROCm accuracy on node C GPU3 (96–111);
     timed only on node B: CPU 144–159, GPU4 containers 128–143. Leases taken per run.
 
-- 2026-10-04 13:12 — **Coordinator → lead (96ccb788), `removal` (5497de44): the first CI run on `3ca402416` has one
+- 2026-10-04 13:00 — **Coordinator → lead (96ccb788), `removal` (5497de44): the first CI run on `3ca402416` has one
   real failure so far, `CI / Tests / Platform Contracts (Model Runtime / CPU / riscv64 / QEMU / 8cc4fc)`.**
   - The router under qemu-user came up: runtime, health and ready all passed. Then `make test-riscv-qemu` failed in
     the evidence step: `tools/ci/riscv_evidence.py` imports `ci_results` → `ci_plan` → `classify_pr_changes` →
@@ -301,7 +323,7 @@ exactly one gist file and updates it in place:
     C = 4 and `batching` at C = 16 were taken at `0bc5c6a75`, before `GOMP_SPINCOUNT`), `max_speed` on CPU with the
     copy on all three stacks, and ROCm `batching` with per-stack graphs; records updated. `INTEGRATION READY` by 15:30.
 
-- 2026-10-04 13:05 — **Coordinator: REPLACEMENT AGENTS STARTED (the old ones cannot be resumed across sessions),
+- 2026-10-04 12:58 — **Coordinator: REPLACEMENT AGENTS STARTED (the old ones cannot be resumed across sessions),
   plus three new tracks.** Every replacement continues from its predecessor's worktree, branch, notes and records,
   and signs notes with the same workstream ID.
 
