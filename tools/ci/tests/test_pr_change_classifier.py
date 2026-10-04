@@ -26,7 +26,7 @@ from verification_catalog import (  # noqa: E402
 
 SHA = "a" * 40
 IMAGE_CALIBRATION = "platform.image-calibration-cpu"
-RISCV = "platform.router-riscv64-qemu"
+MODELS = "platform.models-cpu"
 
 
 class SelectionTests(unittest.TestCase):
@@ -106,7 +106,7 @@ class SelectionTests(unittest.TestCase):
             make_plan(["README.md"], source_sha=SHA, requested=(IMAGE_CALIBRATION,))
 
     def test_manual_selection_is_generic_and_never_publishes(self):
-        for name in (RISCV, "local.cli", "cli-package"):
+        for name in (MODELS, "local.cli", "cli-package"):
             with self.subTest(name=name):
                 plan = make_plan([], source_sha=SHA, requested=(name,))
                 self.assertEqual(plan["expected_verification_ids"], [name])
@@ -152,11 +152,8 @@ class SelectionTests(unittest.TestCase):
         fixtures = {
             "tools/make/models.mk": {IMAGE_CALIBRATION, "performance"},
             "tools/make/common.mk": {IMAGE_CALIBRATION, "performance"},
-            "tools/make/build-run-test.mk": {RISCV, "performance"},
-            "tools/ci/riscv-qemu-router-smoke.sh": {RISCV},
-            "tools/ci/riscv_evidence.py": {RISCV},
-            "src/semantic-router/pkg/cache/valkey_cache.go": {RISCV},
-            "src/semantic-router/go.mod": {RISCV, "core"},
+            "tools/make/build-run-test.mk": {"performance"},
+            "src/semantic-router/go.mod": {"core"},
         }
         for path, expected in fixtures.items():
             with self.subTest(path=path):
@@ -244,7 +241,7 @@ class SelectionTests(unittest.TestCase):
 
     def test_owning_workflow_edits_select_executor_contracts(self):
         cases = {
-            "test-platform.yml": {IMAGE_CALIBRATION, RISCV},
+            "test-platform.yml": {IMAGE_CALIBRATION, MODELS},
             "test-local.yml": {"local.cli", "local.memory"},
             "performance-test.yml": {"performance"},
             "operator-ci.yml": {"operator"},
@@ -416,46 +413,12 @@ class SelectionTests(unittest.TestCase):
             )
 
     def test_platform_output_lists_one_worker_per_contract(self):
-        plan = make_plan(["tools/ci/riscv_evidence.py"], source_sha=SHA)
+        plan = make_plan(["tools/calibration/image-routing/main.go"], source_sha=SHA)
         outputs = github_outputs(plan)
         batches = json.loads(outputs["platform"])
-        self.assertEqual([row["verifications"][0]["id"] for row in batches], [RISCV])
-
-    def test_riscv_is_an_emulated_platform_contract_with_router_source_triggers(self):
-        for path in (
-            "tools/ci/riscv-qemu-router-smoke.sh",
-            "tools/ci/riscv_evidence.py",
-            "tools/ci/runtime_evidence.py",
-            "tools/make/build-run-test.mk",
-            "src/semantic-router/go.mod",
-            "src/semantic-router/pkg/cache/valkey_cache_unavailable.go",
-            "src/semantic-router/pkg/cache/exact_cache_valkey.go",
-            "src/semantic-router/pkg/memory/valkey_store_integration_test.go",
-            "src/semantic-router/pkg/vectorstore/valkey_backend.go",
-            "src/semantic-router/pkg/extproc/router_memory.go",
-            "src/semantic-router/pkg/extproc/router_memory_valkey.go",
-            "src/semantic-router/pkg/extproc/router_memory_valkey_unavailable.go",
-            ".github/workflows/test-platform.yml",
-        ):
-            with self.subTest(path=path):
-                self.assertIn(RISCV, classify([path]).selected_jobs)
-        for profile in ("pr", "main"):
-            plan = make_plan(
-                ["tools/ci/riscv_evidence.py"], source_sha=SHA, profile=profile
-            )
-            self.assertIn(RISCV, plan["expected_verification_ids"])
-        plan = make_plan([], source_sha=SHA, requested=(RISCV,))
-        self.assertEqual(plan["images"], [])
-        record = plan["verifications"][0]
-        self.assertEqual(record["executor"], "platform")
-        self.assertEqual(record["workflow"], ".github/workflows/test-platform.yml")
-        self.assertEqual(record["runtime"], "model-runtime")
-        self.assertEqual(record["platform"], "linux/riscv64")
         self.assertEqual(
-            record["execution"], {"mode": "qemu-user", "host_platform": "linux/amd64"}
+            [row["verifications"][0]["id"] for row in batches], [IMAGE_CALIBRATION]
         )
-        self.assertIn(RISCV, full_cpu_ids())
-        self.assertFalse((ROOT / ".github/workflows/riscv-qemu.yml").exists())
 
     def test_runtime_combinations_are_qualified_rows_not_cartesian_product(self):
         records = verification_records(load_domain_registry())
@@ -464,10 +427,7 @@ class SelectionTests(unittest.TestCase):
         ]
         self.assertEqual(
             {(r["runtime"], r["device"], r["platform"]) for r in platform},
-            {
-                ("model-runtime", "cpu", "linux/amd64"),
-                ("model-runtime", "cpu", "linux/riscv64"),
-            },
+            {("model-runtime", "cpu", "linux/amd64")},
         )
         self.assertIn("cuda", load_catalog()["full_cpu"]["excluded"])
 

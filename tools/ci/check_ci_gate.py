@@ -163,13 +163,9 @@ def evaluate_gate(
         for key in ("runtime", "device", "platform"):
             if evidence.get(key) != record[key]:
                 errors.append(f"{name}: evidence {key} differs from plan")
-        if receipt.get("execution") != record.get("execution"):
-            errors.append(f"{name}: execution mode differs from plan")
-        producer = receipt.get("execution", {}).get(
-            "host_platform", receipt.get("platform")
-        )
         errors.extend(
-            f"{name}: {error}" for error in execution_errors(record, evidence, producer)
+            f"{name}: {error}"
+            for error in execution_errors(record, receipt.get("platform"))
         )
         consumed = receipt.get("artifacts", [])
         consumed_ids = [item.get("id") for item in consumed]

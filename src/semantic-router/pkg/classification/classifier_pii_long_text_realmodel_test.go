@@ -13,7 +13,7 @@ func setupRealPIIClassifier(t *testing.T) *Classifier {
 	t.Helper()
 	defaults := config.DefaultGlobalConfig()
 	modelPath := requireRealModel(t, "VLLM_SR_PII_MODEL", defaults.PIIModel.ModelID)
-	mappingPath := filepath.Join(modelPath, filepath.Base(defaults.PIIMappingPath))
+	mappingPath := filepath.Join(modelPath, "pii_mapping.json")
 	mapping, err := LoadPIIMapping(mappingPath)
 	if err != nil {
 		t.Fatalf("load PII mapping: %v", err)

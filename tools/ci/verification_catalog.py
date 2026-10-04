@@ -141,16 +141,6 @@ def catalog_errors(registry: dict) -> list[str]:
             errors.append(f"test verification {name} has no boundary")
         if record.get("device") not in {"cpu", "none"}:
             errors.append(f"verification {name} has no declared hardware runner")
-        if (execution := record.get("execution")) and (
-            execution != {"mode": "qemu-user", "host_platform": "linux/amd64"}
-            or record["platform"] != "linux/riscv64"
-            or record["runtime"] != "model-runtime"
-            or record["device"] != "cpu"
-            or record["native"]
-        ):
-            errors.append(
-                f"verification {name} has an invalid emulated target contract"
-            )
     # Only recurring public CI promises are required. Manual/experimental support
     # must not accidentally be upgraded by the CPU planner.
     public = ROOT / "website/docs/installation/support-matrix.md"
