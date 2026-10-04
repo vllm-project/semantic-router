@@ -43,7 +43,7 @@ func TestModelRuntimeDeploymentsInUseFollowActiveConsumers(t *testing.T) {
 	if _, ok := used["vela-domain"]; !ok || len(used) != 1 {
 		t.Fatalf("only the domain consumer is active, in use = %v", used)
 	}
-	if used["vela-domain"].Profile != "exact" || used["vela-domain"].Precision != "native" {
+	if used["vela-domain"].Profile != "exact" || used["vela-domain"].Precision != "" {
 		t.Fatalf("defaults are applied: %+v", used["vela-domain"])
 	}
 	cfg.Decisions = append(cfg.Decisions, Decision{Name: "private", Rules: RuleNode{Type: SignalTypePII, Name: "any"}})

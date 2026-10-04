@@ -3,6 +3,8 @@ package testcases
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"slices"
 
 	"k8s.io/client-go/kubernetes"
 
@@ -12,7 +14,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("model-runtime-bundles", pkgtestcases.TestCase{
-		Description: "One request reaches each runtime process once per request stage: the domain, PII and guard tasks of the signal stage arrive as one /v1/bundle",
+		Description: "One request reaches each runtime process once per request stage: a process's domain, PII and guard tasks of the signal stage arrive as one /v1/bundle",
 		Tags:        []string{"model-runtime", "bundles", "performance"},
 		Fn:          testModelRuntimeBundles,
 	})
@@ -21,11 +23,23 @@ func init() {
 const (
 	runtimeRequestsMetric    = "vllm_sr_runtime_requests_total"
 	runtimeBundleTasksMetric = "vllm_sr_runtime_bundle_tasks"
-	// The device group answers the domain, PII and guard signals.
-	mrDeviceGroupTasks = 3
-	mrBundleRequests   = 3
+	mrBundleRequests         = 3
 )
 
+// mrSignalStageModels answer the signal stage of every request.
+var mrSignalStageModels = []string{mrDomainDeployment, mrGuardDeployment, mrPIIDeployment}
+
+// signalProcess is one managed process serving signal-stage models.
+type signalProcess struct {
+	socket string
+	client *modelruntime.Client
+	tasks  int
+	before modelruntime.Metrics
+}
+
+// testModelRuntimeBundles sends requests and requires every process that
+// serves signal-stage models, however the Router spread them, to receive one
+// /v1/bundle per request carrying all of its tasks, and no single calls.
 func testModelRuntimeBundles(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	session, err := openModelRuntimeSession(ctx, client, opts)
 	if err != nil {
@@ -35,11 +49,7 @@ func testModelRuntimeBundles(ctx context.Context, client *kubernetes.Clientset, 
 	if err = session.waitReady(ctx, mrManagedDeployments...); err != nil {
 		return err
 	}
-	device, _, err := session.managed(ctx, mrDomainDeployment)
-	if err != nil {
-		return err
-	}
-	before, err := device.Metrics(ctx)
+	processes, err := signalProcesses(ctx, session)
 	if err != nil {
 		return err
 	}
@@ -48,24 +58,58 @@ func testModelRuntimeBundles(ctx context.Context, client *kubernetes.Clientset, 
 			return err
 		}
 	}
-	after, err := device.Metrics(ctx)
-	if err != nil {
-		return err
+	details := map[string]interface{}{"requests": mrBundleRequests}
+	for _, process := range processes {
+		after, err := process.client.Metrics(ctx)
+		if err != nil {
+			return err
+		}
+		bundles := countDelta(process.before, after, runtimeRequestsMetric, map[string]string{"endpoint": "/v1/bundle"})
+		classify := countDelta(process.before, after, runtimeRequestsMetric, map[string]string{"endpoint": "/v1/classify"})
+		tasks := after.Sum(runtimeBundleTasksMetric+"_sum", nil) - process.before.Sum(runtimeBundleTasksMetric+"_sum", nil)
+		details[process.socket] = map[string]interface{}{"bundles": bundles, "classify_calls": classify, "bundled_tasks": tasks}
+		if bundles != mrBundleRequests || classify != 0 {
+			return fmt.Errorf("%d requests reached %s as %v bundles and %v single classify calls, want one bundle each", mrBundleRequests, process.socket, bundles, classify)
+		}
+		if tasks != float64(mrBundleRequests*process.tasks) {
+			return fmt.Errorf("%s's bundles carried %v tasks, want %d per request", process.socket, tasks, process.tasks)
+		}
 	}
-
-	bundles := countDelta(before, after, runtimeRequestsMetric, map[string]string{"endpoint": "/v1/bundle"})
-	classify := countDelta(before, after, runtimeRequestsMetric, map[string]string{"endpoint": "/v1/classify"})
-	tasks := after.Sum(runtimeBundleTasksMetric+"_sum", nil) - before.Sum(runtimeBundleTasksMetric+"_sum", nil)
 	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{"requests": mrBundleRequests, "bundles": bundles, "classify_calls": classify, "bundled_tasks": tasks})
-	}
-	if bundles != mrBundleRequests || classify != 0 {
-		return fmt.Errorf("%d requests reached the device group as %v bundles and %v single classify calls, want one bundle each", mrBundleRequests, bundles, classify)
-	}
-	if tasks != mrBundleRequests*mrDeviceGroupTasks {
-		return fmt.Errorf("the bundles carried %v tasks, want %d per request (domain, PII, guard)", tasks, mrDeviceGroupTasks)
+		opts.SetDetails(details)
 	}
 	return nil
+}
+
+func signalProcesses(ctx context.Context, session *modelRuntimeSession) ([]signalProcess, error) {
+	runtimes, err := session.pod.ManagedRuntimes(ctx, mrSocketDir)
+	if err != nil {
+		return nil, err
+	}
+	var processes []signalProcess
+	found := 0
+	for socket, models := range runtimes {
+		tasks := 0
+		for _, model := range models {
+			if slices.Contains(mrSignalStageModels, model) {
+				tasks++
+			}
+		}
+		if tasks == 0 {
+			continue
+		}
+		client := modelruntime.NewClient(modelruntime.SocketTransport{Target: session.pod, Socket: socket})
+		before, err := client.Metrics(ctx)
+		if err != nil {
+			return nil, err
+		}
+		found += tasks
+		processes = append(processes, signalProcess{socket: filepath.Base(socket), client: client, tasks: tasks, before: before})
+	}
+	if found != len(mrSignalStageModels) {
+		return nil, fmt.Errorf("managed processes %v serve %d of the signal-stage models %v", runtimes, found, mrSignalStageModels)
+	}
+	return processes, nil
 }
 
 func countDelta(before, after modelruntime.Metrics, name string, labels map[string]string) float64 {

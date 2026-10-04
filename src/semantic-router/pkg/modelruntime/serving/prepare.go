@@ -77,6 +77,23 @@ func (r *Runtime) prepareHead(ctx context.Context, spec config.ResolvedModelBind
 	return &target{spec: spec, deployment: spec.Binding.Deployment, card: card, head: head, resource: resource}, capability, nil
 }
 
+// Labels returns the label vocabulary, in output order, of the classify head
+// the binding runs; consumers without a mapping file take their labels from
+// the served model.
+func (r *Runtime) Labels(ctx context.Context, spec config.ResolvedModelBinding) ([]string, error) {
+	ctx, cancel := preparationContext(ctx)
+	defer cancel()
+	card, err := r.card(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+	head, ok := card.Head(spec.Binding.Head)
+	if !ok || len(head.Labels) == 0 {
+		return nil, fmt.Errorf("%w: deployment %q has no labeled head %q", binding.ErrCapability, spec.Binding.Deployment, spec.Binding.Head)
+	}
+	return slices.Clone(head.Labels), nil
+}
+
 // preparationContext bounds a preparation whose caller set no deadline, so a
 // runtime that never becomes ready fails the generation instead of blocking it.
 func preparationContext(ctx context.Context) (context.Context, context.CancelFunc) {

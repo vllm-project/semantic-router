@@ -19,18 +19,18 @@ configOverride:
     model_catalog:
       deployments:
         local-domain:
-          artifact: models/Vela-1.0-Encoder-307M-Domain
+          artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
+          revision: f6354f54adcf38770f635ad903be2b00577f6c11
           provider: model_runtime
           device: cpu
-          precision: native
           input:
             max_tokens: 512
             overflow: reject
         local-pii:
-          artifact: models/Vela-1.0-Encoder-307M-PII
+          artifact: vllm-sr/Vela-1.0-Encoder-307M-PII
+          revision: 6d3300c4bd7975f30a664503f6c725cf1fbbad48
           provider: model_runtime
           device: cpu
-          precision: native
           input:
             max_tokens: 512
             overflow: reject

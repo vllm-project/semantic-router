@@ -26,9 +26,8 @@ func TestSafetyInventoryUsesPerRuleBindingAndRetainsOtherDefaultHead(t *testing.
 		if _, exists := findSpecByPath(specs, "models/old-safety"); exists {
 			t.Fatal("downloaded overridden module")
 		}
-		hazard, exists := findSpecByPath(specs, "models/hazard")
-		if !exists || len(hazard.RequiredFileGroups) == 0 {
-			t.Fatalf("lost implicit typed hazard artifact: %+v", specs)
+		if _, exists := findSpecByPath(specs, "models/hazard"); !exists {
+			t.Fatalf("lost the implicit Hazard package: %+v", specs)
 		}
 		bound, exists := findSpecByPath(specs, "models/bound")
 		if remote && exists {

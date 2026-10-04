@@ -183,13 +183,11 @@ classifier:
     model_id: "test-category-model"
     threshold: 0.7
     use_cpu: false
-    use_modernbert: true
     category_mapping_path: "/path/to/category.json"
   pii_model:
     model_id: "test-pii-model"
     threshold: 0.6
     use_cpu: true
-    use_modernbert: false
     pii_mapping_path: "/path/to/pii.json"
 
 categories:
@@ -263,7 +261,6 @@ tools:
 
 				// Verify classifier config
 				Expect(cfg.CategoryModel.ModelID).To(Equal("test-category-model"))
-				Expect(cfg.CategoryModel.UseModernBERT).To(BeTrue())
 
 				// Verify categories
 				Expect(cfg.Categories).To(HaveLen(1))
@@ -736,7 +733,7 @@ classifier:
 				Expect(cfg.IsPIIClassifierEnabled()).To(BeFalse())
 			})
 
-			It("should return false when mapping path is missing", func() {
+			It("should return true for a local model without a mapping path", func() {
 				configContent := `
 classifier:
   pii_model:
@@ -748,7 +745,8 @@ classifier:
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(cfg.IsPIIClassifierEnabled()).To(BeFalse())
+				// The served model's card supplies the labels.
+				Expect(cfg.IsPIIClassifierEnabled()).To(BeTrue())
 			})
 		})
 

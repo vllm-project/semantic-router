@@ -762,11 +762,19 @@ the smallest consumer timeout as its context deadline and `options.deadline_ms`.
 ### 13.4 Lifecycle: process groups and attached endpoints
 
 - **Managed (default).** The router groups its `model_runtime` deployments
-  without an `endpoint` into processes: by `process` when set, else one
-  process per device (`cpu`, `auto`, `rocm:0`, ...). For each group it writes a
-  models file and starts `vllm-sr-runtime serve --models <file> --uds <path>`
-  when the configuration loads, and stops it when the group disappears or the
-  router exits (SIGTERM, then SIGKILL after a grace period). The supervisor
+  without an `endpoint` into processes: by `process` when set; else each GPU
+  device gets one process, and each CPU model its own process (`cpu-0`,
+  `cpu-1`, ...; at most half the cores, capped by
+  `VLLM_SR_RUNTIME_CPU_PROCESSES`; `1` folds them into one). A CPU process
+  runs `ceil(cores / processes)` threads, unpinned, so a busy model can use
+  the cores an idle one leaves: on 16 cores and five task models, one shared
+  process served 11.1 requests/s, pinned disjoint shares 15.6, unpinned
+  shares 20.3 (`docs/records/router-latency-cpu.md`). For each group it
+  writes a models file and starts `vllm-sr-runtime serve --models <file>
+  --uds <path>` when the configuration loads, and stops it when the group
+  disappears or the router exits (SIGTERM, then SIGKILL after a grace
+  period). Preparing a binding waits for the deployment's card while its model
+  is `loading` (up to `VLLM_SR_RUNTIME_READY_TIMEOUT`, default 10 minutes). The supervisor
   polls `/health` and `/v1/models`, restarts a dead or failed process with
   exponential back-off (1 s to 60 s), and marks only the affected deployments
   unavailable. Sockets live in a private 0700 directory.
