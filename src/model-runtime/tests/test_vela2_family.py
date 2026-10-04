@@ -235,6 +235,96 @@ def test_packed_encoder_batches_match_padded_ones(models) -> None:
         assert np.array_equal(a, b)
 
 
+def consent(monkeypatch, verified, reduced: dict[str, str]) -> None:
+    """Make ``verified`` a built-in whose entry consents to ``reduced`` copies."""
+    from vllm_sr_runtime.families.vela2 import family as module
+    from vllm_sr_runtime.registry.tables.common import BuiltinModel
+
+    entry = BuiltinModel(
+        repo_id="vllm-sr/fixture",
+        revision="0" * 40,
+        family="vela2",
+        model_sha256=verified.model_sha256,
+        manifest_sha256="",
+        loaded_parameters=0,
+        backbone="modernbert",
+        min_device_memory_gib=1,
+        reduced=reduced,
+    )
+    monkeypatch.setattr(
+        module.builtin,
+        "by_identity",
+        lambda identity: entry if identity == verified.model_sha256 else None,
+    )
+
+
+def test_encoder_consent_to_a_reduced_copy_comes_from_its_builtin_entry(
+    packages, monkeypatch
+) -> None:
+    family = Vela2Family()
+    encoder = family.verify(PackageRef(packages["encoder"]))
+    unknown = family.describe(encoder).dtype
+    assert (unknown.reduced_cpu, unknown.reduced_gpu) == (None, None)
+    consent(monkeypatch, encoder, {"cpu": "float32-packed"})
+    dtype = family.describe(encoder).dtype
+    assert (dtype.reduced_cpu, dtype.reduced_gpu) == ("float32-packed", None)
+    assert (dtype.autocast, dtype.bf16_resident) == (None, False)
+
+
+def test_only_the_measured_copy_is_consented() -> None:
+    from vllm_sr_runtime.registry import builtin
+
+    consent = {
+        model.repo_id.rsplit("/", 1)[1]: dict(model.reduced)
+        for model in builtin.all_models("vela2")
+        if model.reduced
+    }
+    assert consent == {"Vela-2.0-0.3B": {"cpu": "float32-packed"}}
+
+
+def test_max_speed_runs_encoder_approximate_batches_on_the_copy(
+    packages, monkeypatch
+) -> None:
+    from vllm_sr_runtime.engines.native.reduced import unavailable
+    from vllm_sr_runtime.profiles.max_speed import MaxSpeedProfile
+
+    reason = unavailable("float32-packed", torch.device("cpu"))
+    if reason:
+        pytest.skip(reason)
+    family = Vela2Family()
+    verified = family.verify(PackageRef(packages["encoder"]))
+    consent(monkeypatch, verified, {"cpu": "float32-packed"})
+    spec = family.describe(verified)
+    accelerator = CPUAccelerator()
+    device = accelerator.devices()[0]
+    exact_model = NativeEngine().load(spec, accelerator, device, EngineOptions())
+    assert "reduced" not in exact_model.receipt()
+    engine_model = NativeEngine().load(
+        spec, accelerator, device, MaxSpeedProfile().engine_options(EngineOptions())
+    )
+    assert engine_model.receipt()["reduced"]["kind"] == "float32-packed"
+    model = family.load(verified, spec, engine_model)
+    batches = []
+    encode = engine_model.encode
+    monkeypatch.setattr(
+        engine_model, "encode", lambda batch: batches.append(batch) or encode(batch)
+    )
+    items = model.plan(GOLDEN_STATE, GOLDEN_QUESTIONS).items
+    exact = model.run(items)
+    assert batches and not any(batch.reduced for batch in batches)
+    batches.clear()
+    approximate = model.run_approximate(items)
+    assert batches and all(batch.reduced and batch.lengths for batch in batches)
+    for (exact_logits, exact_block), (logits, block) in zip(
+        exact, approximate, strict=True
+    ):
+        for a, b in zip(exact_logits, logits, strict=True):
+            np.testing.assert_allclose(b, a, atol=1e-4, rtol=1e-4)
+        assert (exact_block is None) == (block is None)
+        if block is not None:
+            np.testing.assert_allclose(block, exact_block, atol=1e-4, rtol=1e-4)
+
+
 @pytest.mark.parametrize("layout", ["rows", "packed"])
 def test_tree_blocks_equal_their_full_sequences(models, layout) -> None:
     engine_model = models["decoder"].engine_model
