@@ -27,6 +27,7 @@ import {
   getReasoningFamiliesMap,
 } from './configPageSupport'
 import { getNormalizedModels } from './configPageModelNormalization'
+import { responseErrorMessage } from './configPageRequestErrors'
 import type { OpenViewModal } from './configPageRouterSectionSupport'
 
 interface ConfigPageProps {
@@ -116,7 +117,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     try {
       const response = await fetch('/api/router/config/all')
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        throw new Error(await responseErrorMessage(response))
       }
       const data = await response.json()
       const normalized = projectCanonicalConfigForManager(data)
@@ -159,7 +160,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     try {
       const response = await fetch('/api/tools-db')
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        throw new Error(await responseErrorMessage(response))
       }
       const data = await response.json()
       setToolsData(data)
@@ -188,23 +189,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       })
 
       if (!response.ok) {
-        // Try to read error message from response body
-        const errorText = await response.text()
-        let errorMessage = `HTTP ${response.status}: ${response.statusText}`
-        if (errorText) {
-          try {
-            const errorJson = JSON.parse(errorText)
-            if (errorJson.error || errorJson.message) {
-              errorMessage = errorJson.message || errorJson.error
-            } else {
-              errorMessage = errorText
-            }
-          } catch {
-            // If not JSON, use the text as-is
-            errorMessage = errorText
-          }
-        }
-        throw new Error(errorMessage)
+        throw new Error(await responseErrorMessage(response))
       }
 
       // Refresh config after save
@@ -395,6 +380,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
             <div>
               <h3>Error Loading Config</h3>
               <p>{error}</p>
+              <button type="button" className={styles.button} onClick={() => fetchConfig()}>
+                Retry
+              </button>
             </div>
           </div>
         )}
