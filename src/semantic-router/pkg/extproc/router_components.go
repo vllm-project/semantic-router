@@ -120,7 +120,7 @@ func toolsEmbeddingProvider(cfg *config.RouterConfig, sets ...*embedding.Set) (e
 	if cfg == nil || !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
 		return nil, nil
 	}
-	provider, err := embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
+	provider, err := embedding.NewProvider(cfg.EmbeddingModels)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tools embedding provider: %w", err)
 	}

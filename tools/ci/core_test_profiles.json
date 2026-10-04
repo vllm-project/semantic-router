@@ -114,41 +114,6 @@
       "reason": "Executed with the prepared Omni Nano bundle by the Published Models contract; each listed managed test must pass without skipping."
     },
     {
-      "package": "./pkg/modelruntime/native",
-      "test": "TestMaintainedCPUSameProcess",
-      "source": "src/semantic-router/pkg/modelruntime/native/maintained_cpu_test.go",
-      "profile": "retired-native-facade",
-      "reason": "Qualified the native facade, which is deleted with the bindings after IP2; the model runtime's golden answers and the Published Models contract replace it."
-    },
-    {
-      "package": "./pkg/modelruntime/native",
-      "test": "TestOpenVINOQualifiedFixtureMetadata",
-      "source": "src/semantic-router/pkg/modelruntime/native/openvino_artifact_test.go",
-      "profile": "retired-native-facade",
-      "reason": "Qualified the native facade, which is deleted with the bindings after IP2; the model runtime's golden answers and the Published Models contract replace it."
-    },
-    {
-      "package": "./pkg/modelruntime/native",
-      "test": "TestPublishedOmniModels",
-      "source": "src/semantic-router/pkg/modelruntime/native/published_omni_test.go",
-      "profile": "retired-native-facade",
-      "reason": "Qualified the native facade, which is deleted with the bindings after IP2; the model runtime's golden answers and the Published Models contract replace it."
-    },
-    {
-      "package": "./pkg/modelruntime/native",
-      "test": "TestPublishedVelaHalu",
-      "source": "src/semantic-router/pkg/modelruntime/native/published_halu_test.go",
-      "profile": "retired-native-facade",
-      "reason": "Qualified the native facade, which is deleted with the bindings after IP2; the model runtime's golden answers and the Published Models contract replace it."
-    },
-    {
-      "package": "./pkg/modelruntime/native",
-      "test": "TestPublishedVelaModels",
-      "source": "src/semantic-router/pkg/modelruntime/native/published_vela_test.go",
-      "profile": "retired-native-facade",
-      "reason": "Qualified the native facade, which is deleted with the bindings after IP2; the model runtime's golden answers and the Published Models contract replace it."
-    },
-    {
       "package": "./pkg/modelselection",
       "test": "TestPublishedSelectionsMatchBindingFixtures",
       "source": "src/semantic-router/pkg/modelselection/parity_test.go",
@@ -215,12 +180,5 @@
   "ginkgo_excluded_labels": {
     "model-artifacts": "Optional checkpoint-specific compatibility probes; selected model integrations run in the explicit published-model/local-stack profiles."
   },
-  "race": [
-    {
-      "package": "./pkg/modelruntime/native",
-      "test": "TestORTEmbeddingPreparesEveryAdvertisedLayerBeforePublication",
-      "source": "src/semantic-router/pkg/modelruntime/native/embedding_preparation_test.go",
-      "reason": "Preserve the owned CPU tiny-tensor concurrency contract from test-owned-native; execute once with the race detector."
-    }
-  ]
+  "race": []
 }

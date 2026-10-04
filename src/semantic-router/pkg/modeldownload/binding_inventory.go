@@ -114,7 +114,6 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 	}
 	required := ExtractRequiredFilesByModel(&scoped)
 	defaultProvider, _ := config.DefaultModelExecution(cfg.EmbeddingModels.UseCPU)
-	embeddingProvider, _ := config.DefaultEmbeddingExecution(cfg.EmbeddingModels)
 	if defaultProvider == "candle" {
 		for path, files := range candleEmbeddingModelRequiredFiles(&scoped) {
 			required[path] = append(required[path], files...)
@@ -132,9 +131,6 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 			continue
 		}
 		provider, adapter := defaultProvider, model
-		if model == primary {
-			provider = embeddingProvider
-		}
 		if catalog := config.GetModelByPath(*path); catalog != nil && catalog.DefaultAdapter != "" {
 			provider, adapter = catalog.DefaultProvider, catalog.DefaultAdapter
 		}
@@ -152,15 +148,6 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		explicitPaths[config.ResolveModelPath(*path)] = true
 	}
 
-	if provider, device := config.DefaultCategoryExecution(cfg.CategoryModel.UseCPU); provider == "openvino" && active["domain_classifier"] {
-		if _, explicit := plan.Lookup(cfg.RoutingScope, "domain_classifier"); !explicit {
-			spec := config.ResolvedModelBinding{Recipe: cfg.RoutingScope, Name: "domain_classifier", Binding: config.ModelBinding{Contract: config.RemoteClassifierContractLabelDistribution, Adapter: "auto"}, Deployment: config.ModelDeployment{Provider: provider, Device: device, Artifact: cfg.CategoryModel.ModelID}}
-			if err := i.addDefaultDeployment(cfg, spec); err != nil {
-				return err
-			}
-			explicitPaths[config.ResolveModelPath(cfg.CategoryModel.ModelID)] = true
-		}
-	}
 	for name := range cfg.ModelBindings {
 		spec, ok := plan.Lookup(cfg.RoutingScope, name)
 		if global {
