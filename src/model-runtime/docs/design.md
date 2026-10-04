@@ -593,8 +593,8 @@ processors ported to NumPy against the bundle's golden inputs and outputs.
 
 ```text
 request -> validate (400) -> route to its model (404 / 422) -> admission (429)
-        -> plan: render every item (per-item errors) -> micro-batches within the token budget
-        -> that model's queue (deadline-ordered) -> its worker -> readout -> response
+        -> plan: render every item (per-item errors) -> that model's queue
+        -> its worker: the profile forms batches -> shortest expected finish first -> readout -> response
 bundle  -> plan every task -> submit all at once -> await each -> results in task order
 ```
 
@@ -605,12 +605,27 @@ the forward token budget. A bundle's tasks for one model are queued at once as
 one job group: decision models still run each task as its own batch (their
 released numerics), and a family that sets `fuse_bundled_jobs` (encoders) runs
 the group as one batch, so one forward serves every head and consumer that
-reads the same input. Repeated cacheable items are answered from the model's
-result cache (`--result-cache-entries`, keyed by profile and content).
-Deadlines travel with jobs; a job whose deadline has passed when the worker
-picks it up is not run. Admission bounds jobs and pending tokens per model and
-answers 429 at once, for a whole group or none of it. On CPU, workers of
-different models share the process's intra-op thread pool (`--threads`).
+reads the same input. On a batch-invariant model, `exact` runs the queued jobs
+of concurrent requests in shared batches: one length class (power-of-two band
+of padded length) per batch, at most 512 padded tokens, rows with the same
+token IDs always together so the family computes them once. Repeated cacheable
+items are answered from the model's result cache (`--result-cache-entries`,
+keyed by profile and content).
+
+The worker runs planned batches in order of their jobs' expected finish: the
+time a job was queued plus its tokens at the measured cost per token (a running
+average of recent forwards). Short work goes first, and a long job still runs
+once the work queued before its expected finish is done, so nothing starves.
+Between two forwards the worker takes the jobs that arrived meanwhile (jobs of
+coalescing profiles once they have waited one batching window), so a short request
+waits for the forward in flight, not for the remaining windows of a long one;
+each job is answered as soon as its own batches have run. The order of
+forwards never changes a batch's contents, so answers are unchanged. Deadlines
+travel with jobs; a job whose deadline passes before its next batch runs is
+answered `deadline_exceeded` and its remaining batches are skipped. Admission
+bounds jobs and pending tokens per model and answers 429 at once, for a whole
+group or none of it. On CPU, workers of different models share the process's
+intra-op thread pool (`--threads`).
 
 ## 10. Placement and supervision
 
