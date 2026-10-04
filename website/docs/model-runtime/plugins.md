@@ -47,8 +47,9 @@ vllm-sr-runtime plugins
 ```
 
 The first request returns `billing` for the first text and `shipping` for the
-second. `vllm-sr-runtime plugins` and `GET /v1/models` list
-`example_keywords` and `example_counts` with their distribution and version.
+second. `vllm-sr-runtime plugins` lists `example_keywords` among the families
+and `example_counts` among the engines; `GET /v1/models` also shows the
+distribution and version each came from.
 
 ## Write your own
 
