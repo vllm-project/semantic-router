@@ -182,9 +182,9 @@ curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
 
 ## 下一步
 
-- [选择模型、规模和硬件](./choose-a-model.md)
-- 开启一个内置功能：[请求分类](./guides/classify.md)、
-  [检测 PII](./guides/pii.md)、[拦截提示词攻击](./guides/safety.md)、
-  [使用 embeddings](./guides/embeddings.md)
-- [与路由器一起运行](./deploy.md)：GPU、Kubernetes、共享运行时
-- [故障排查](./troubleshooting.md)
+- [选择模型、规模和硬件](model-runtime/choose-a-model.md)
+- 开启一个内置功能：[请求分类](model-runtime/guides/classify.md)、
+  [检测 PII](model-runtime/guides/pii.md)、[拦截提示词攻击](model-runtime/guides/safety.md)、
+  [使用 embeddings](model-runtime/guides/embeddings.md)
+- [与路由器一起运行](model-runtime/deploy.md)：GPU、Kubernetes、共享运行时
+- [故障排查](model-runtime/troubleshooting.md)

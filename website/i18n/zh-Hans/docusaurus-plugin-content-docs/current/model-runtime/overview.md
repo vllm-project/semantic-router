@@ -23,37 +23,37 @@ translation:
 
 | 你想要 | 这样做 | 阅读 |
 | --- | --- | --- |
-| 使用路由器的内置功能 | 不需要额外操作。路由器会替你启动并监管运行时。 | [与路由器一起运行](./deploy.md) |
-| 把模型放到 GPU 上，或在多个路由器之间共享 | 自己启动一个运行时，并用 `endpoint` 让路由器指向它。 | [与路由器一起运行](./deploy.md#attach-to-a-runtime-you-run) |
-| 在自己的代码里调用模型 | 运行 `vllm-sr serve <model>` 并发送 HTTP 请求。 | [快速开始](./quickstart.md) |
+| 使用路由器的内置功能 | 不需要额外操作。路由器会替你启动并监管运行时。 | [与路由器一起运行](model-runtime/deploy.md) |
+| 把模型放到 GPU 上，或在多个路由器之间共享 | 自己启动一个运行时，并用 `endpoint` 让路由器指向它。 | [与路由器一起运行](model-runtime/deploy.md#attach-to-a-runtime-you-run) |
+| 在自己的代码里调用模型 | 运行 `vllm-sr serve <model>` 并发送 HTTP 请求。 | [快速开始](model-runtime/quickstart.md) |
 
 ## 它能提供什么
 
 | 任务 | 内置模型 | 指南 |
 | --- | --- | --- |
-| 识别领域、判断是否需要事实核查、读取用户反馈、识别请求的输出模态 | Vela 1.0 Domain、FactCheck、Feedback、Modality | [请求分类](./guides/classify.md) |
-| 发现个人信息 | Vela 1.0 PII | [检测 PII](./guides/pii.md) |
-| 拦截提示词攻击和不安全内容 | Vela 1.0 Guard、Safety、Shield、Hazard | [提示词攻击与不安全内容](./guides/safety.md) |
-| 对照来源检查回答 | Vela 1.0 Halu | [幻觉检查](./guides/hallucination.md) |
-| 语义缓存、记忆、RAG、工具选择、embedding 信号 | Vela 1.0 Embedding、Qwen3-Embedding-0.6B | [Embeddings](./guides/embeddings.md) |
-| 对检索到的文档重排序 | Vela 1.0 Reranker | [文档重排序](./guides/rerank.md) |
-| 按图片和音频路由 | Vela 1.0 Omni Nano 和 Mini | [图片与音频](./guides/multimodal.md) |
-| 用自然语言提出你自己的路由问题 | Decision 2.0、Decision 1.0、Vela 2.0（私有预览） | [决策模型](./guides/decisions.md) |
+| 识别领域、判断是否需要事实核查、读取用户反馈、识别请求的输出模态 | Vela 1.0 Domain、FactCheck、Feedback、Modality | [请求分类](model-runtime/guides/classify.md) |
+| 发现个人信息 | Vela 1.0 PII | [检测 PII](model-runtime/guides/pii.md) |
+| 拦截提示词攻击和不安全内容 | Vela 1.0 Guard、Safety、Shield、Hazard | [提示词攻击与不安全内容](model-runtime/guides/safety.md) |
+| 对照来源检查回答 | Vela 1.0 Halu | [幻觉检查](model-runtime/guides/hallucination.md) |
+| 语义缓存、记忆、RAG、工具选择、embedding 信号 | Vela 1.0 Embedding、Qwen3-Embedding-0.6B | [Embeddings](model-runtime/guides/embeddings.md) |
+| 对检索到的文档重排序 | Vela 1.0 Reranker | [文档重排序](model-runtime/guides/rerank.md) |
+| 按图片和音频路由 | Vela 1.0 Omni Nano 和 Mini | [图片与音频](model-runtime/guides/multimodal.md) |
+| 用自然语言提出你自己的路由问题 | Decision 2.0、Decision 1.0、Vela 2.0（私有预览） | [决策模型](model-runtime/guides/decisions.md) |
 
-[选择模型](./choose-a-model.md)帮助你挑选规模和硬件。
+[选择模型](model-runtime/choose-a-model.md)帮助你挑选规模和硬件。
 
 ## 你可以依赖的特性
 
 - **固定版本并经过校验。** 内置模型固定到确切的 Hugging Face revision。
   每个文件在加载前都会对照记录的 SHA-256 校验，模型仓库中附带的代码永远不会执行。
 - **与发布模型相同的答案。** 默认的 `exact` profile 给出模型发布方测得的答案。
-  更快的设置需要显式开启，并会说明可能改变结果。见 [Profiles](./profiles.md)。
+  更快的设置需要显式开启，并会说明可能改变结果。见 [Profiles](model-runtime/profiles.md)。
 - **请求从不等待故障模型。** 太慢、仍在重启或已崩溃的模型会让该请求上的对应功能变为“未知”。
   路由器会重启崩溃的运行时，并在此期间继续路由。
 - **每个请求的调用很少。** 一个请求的各信号发往同一运行时进程的模型工作会合并为一次调用，
   分布在不同进程中的 CPU 模型并行回答，因此增加信号不会增加往返次数。
 - **可插拔。** 新的模型家族、引擎和硬件后端都是普通的 Python 包。
-  见[添加你自己的模型家族](./plugins.md)。
+  见[添加你自己的模型家族](model-runtime/plugins.md)。
 
 ## 硬件
 
@@ -64,4 +64,4 @@ Intel GPU（`xpu`）和 Apple GPU（`mps`）可用但尚未验证。每个路由
 ## 从旧版本升级？
 
 candle、ONNX Runtime 和 OpenVINO 后端已经移除。运行 `vllm-sr config migrate`
-更新你的配置；见[从原生绑定迁移](./migrate.md)。
+更新你的配置；见[从原生绑定迁移](model-runtime/migrate.md)。

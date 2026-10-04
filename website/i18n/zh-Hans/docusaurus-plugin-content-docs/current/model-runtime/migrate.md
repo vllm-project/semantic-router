@@ -11,7 +11,7 @@ translation:
 # 从原生绑定迁移
 
 早期版本在路由器内部用三种后端运行模型：candle、ONNX Runtime（`ort`）和 OpenVINO。
-这些后端已经移除。现在每个模型都运行在[模型运行时](./overview.md)中，默认在 CPU 上，
+这些后端已经移除。现在每个模型都运行在[模型运行时](model-runtime/overview.md)中，默认在 CPU 上，
 你要求时在 GPU 上。
 
 **大多数配置无需修改。** 如果你只是开启功能（`domain` 信号、语义缓存、PII 检测），
@@ -60,7 +60,7 @@ Changes to review
 | `device: rocm:N` 或 `migraphx:N` | `device: rocm:N` |
 | `device: metal:0` | `device: mps` |
 | OpenVINO 设备（`CPU`、`GPU`、`NPU` 等） | `device: cpu`；Intel GPU 可使用 `device: xpu:0`（尚未验证） |
-| `precision: fp16` | `profile: max_speed`（近似；见 [Profiles](./profiles.md)） |
+| `precision: fp16` | `profile: max_speed`（近似；见 [Profiles](model-runtime/profiles.md)） |
 | `precision: native` 或 `fp32` | 移除：默认的 `exact` profile 本就以 FP32 运行 |
 | `custom_ops_profile`、`compilation_cache_dir` | 移除：运行时自行选择内核 |
 | 计算图 `head`，例如 `onnx/model_fa.onnx` | 移除：运行时自行选择模型的计算图 |
@@ -109,7 +109,7 @@ vllm-sr config validate --config legacy.migrated.yaml
 vllm-sr serve --config legacy.migrated.yaml
 ```
 
-首次启动时，运行时会下载尚未拥有的模型。[与路由器一起运行](./deploy.md#check-what-is-running)
+首次启动时，运行时会下载尚未拥有的模型。[与路由器一起运行](model-runtime/deploy.md#check-what-is-running)
 介绍如何查看每个 deployment 何时就绪。
 
 ## 完整示例
@@ -238,4 +238,4 @@ global:
 
 路由器镜像不再包含原生库。它们包含 CPU 运行时，因此托管模型开箱即用。
 请删除仅为 candle、ONNX Runtime 或 OpenVINO 存在的环境变量、init 容器或卷。
-需要 GPU 时，运行 GPU 运行时并让路由器连接它；见[与路由器一起运行](./deploy.md#on-kubernetes)。
+需要 GPU 时，运行 GPU 运行时并让路由器连接它；见[与路由器一起运行](model-runtime/deploy.md#on-kubernetes)。
