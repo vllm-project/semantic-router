@@ -95,6 +95,44 @@ PYTHONPATH=. python3 src/training/kv_mapper/fit_run.py \
 PYTHONPATH=. python3 -m unittest src.training.kv_mapper.tests.test_fit
 ```
 
+## Eval
+
+`eval.py` computes KV-space rel_err / cosine / R² and paired bootstrap CIs on
+per-item scores (same examples, every arm). `eval_report.py` reads a JSON dump
+from a GPU run and writes the report. Inject / HellaSwag / CoQA collection
+stays on the GPU box; this PR is the CI math.
+
+```bash
+PYTHONPATH=. python3 src/training/kv_mapper/eval_report.py \
+  --items /tmp/inject_items.json --output /tmp/inject_report.json
+```
+
+`items.json` shape: `metric`, optional `reference` (default `cold`), and
+`arms` mapping each arm to records of `{ "id": "example-id", "score": 0.0 }`.
+Every arm must have the same unique example IDs; record order may differ.
+
+`model_eval_run.py` runs held-out HellaSwag validation with the pinned source
+and target revisions from an artifact. It uses a seeded random sample with
+stable example IDs. Each item scores the same endings against four target-model
+cache arms: cold target, mapped source, raw source, and zero KV. The report
+contains paired bootstrap intervals for total-log-probability HellaSwag
+accuracy, length-normalized accuracy, and mean gold-ending log probability,
+plus per-layer-averaged pre-RoPE K/V relative errors. Per-item files include
+ending token counts so both accuracy rankings can be reproduced. The scorer
+checks its cached continuation against a full forward pass in a small Qwen3
+model test. The GPU runner needs torch, transformers, and datasets in addition
+to the artifact dependencies.
+
+```bash
+PYTHONPATH=. python3 src/training/kv_mapper/model_eval_run.py \
+  --artifact /tmp/kv-artifacts/<mapper-id> \
+  --dataset-revision <hellaswag-sha> --count 100 --seed 42 \
+  --output-dir /tmp/kv-eval
+```
+
+This run measures teacher-forced target cache injection. Connector reuse and
+fallback require their own integration evaluation.
+
 ## Distill
 
 `distill.py` adds a second stage on top of the ridge fit, following KV-Lingo
@@ -120,9 +158,10 @@ stays frozen and a rank-16 correction is trained in the NoRA form
 ([arXiv 2608.31036](https://arxiv.org/abs/2608.31036)), and each tensor's rate
 is `--lr` times the RMS of its map, because value maps there are about fifty
 times smaller than key maps. Training every entry of W (`--rank 0`) needs a
-rate near `1e-5` to come close; at `1e-4` it lowers the chat KL while plain text gets
-worse than the ridge fit. Check the result on held-out plain text as well as
-on chat. Needs torch, transformers and datasets.
+rate near `1e-5` to come close; at `1e-4` it lowers the chat KL while plain
+text gets worse than the ridge fit. Check the result on held-out plain text as
+well as on chat, and compare it with `model_eval_run.py` on the same items as
+its stage-1 artifact. Needs torch, transformers and datasets.
 
 ```bash
 PYTHONPATH=. python3 src/training/kv_mapper/distill_run.py \
