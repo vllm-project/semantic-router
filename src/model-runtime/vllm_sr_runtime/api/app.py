@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ from ..errors import RuntimeServiceError
 from ..runtime import Runtime
 
 OPENAPI_PATH = Path(__file__).with_name("openapi.yaml")
+_SURROGATE_ESCAPE = re.compile(rb"\\u[dD][89a-fA-F]")
 
 
 class JSON(Response):
@@ -122,11 +124,14 @@ async def _read_json(request: Request, limit: int) -> Any:
                 "request_too_large", f"the request body exceeds {limit} bytes"
             )
         chunks.append(chunk)
+    raw = b"".join(chunks)
     try:
-        body = json.loads(b"".join(chunks))
-        # JSON can escape an unpaired surrogate that no tokenizer accepts, so
-        # every field must encode as UTF-8 before the request goes any further.
-        json.dumps(body, ensure_ascii=False).encode("utf-8")
+        body = json.loads(raw.decode("utf-8"))
+        # Strict UTF-8 cannot carry a surrogate, so only a \uD800-\uDFFF escape
+        # can leave an unpaired one that no tokenizer accepts. Only a body with
+        # such an escape is re-encoded to find out.
+        if _SURROGATE_ESCAPE.search(raw):
+            json.dumps(body, ensure_ascii=False).encode("utf-8")
     except UnicodeEncodeError as exc:
         raise RuntimeServiceError(
             "invalid_request", "the request contains an unpaired surrogate"

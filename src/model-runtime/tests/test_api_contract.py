@@ -171,27 +171,39 @@ def test_body_that_is_not_json(client):
 
 
 @pytest.mark.parametrize(
-    "field,old",
+    "field,old,surrogate",
     [
-        ("state", '"Write a'),
-        ("instructions", '"Which domain'),
-        ("question id", '"domain"'),
-        ("criteria key", '"code"'),
+        ("state", '"Write a', b"\\ud800"),
+        ("instructions", '"Which domain', b"\\ud800"),
+        ("question id", '"domain"', b"\\ud800"),
+        ("criteria key", '"code"', b"\\ud800"),
+        ("state as raw bytes", '"Write a', b"\xed\xa0\x80"),
     ],
 )
-def test_unpaired_surrogate_is_an_invalid_request(client, field, old):
-    raw = json.dumps({"state": STATE, "questions": QUESTIONS})
+def test_unpaired_surrogate_is_an_invalid_request(client, field, old, surrogate):
+    raw = json.dumps({"state": STATE, "questions": QUESTIONS}).encode()
+    old = old.encode()
     assert raw.count(old) == 1, field
-    raw = raw.replace(old, old[:3] + "\\ud800" + old[3:])
     response = client.post(
         "/v1/decisions",
-        content=raw.encode(),
+        content=raw.replace(old, old[:3] + surrogate + old[3:]),
         headers={"content-type": "application/json"},
     )
     assert response.status_code == 400
     check("ErrorResponse", response.json())
     assert response.json()["error"]["code"] == "invalid_request"
     assert client.get("/health").json()["status"] == "ready"
+
+
+def test_escaped_surrogate_pair_is_accepted(client):
+    raw = json.dumps({"state": STATE + " \U0001f600", "questions": QUESTIONS})
+    assert "\\ud83d\\ude00" in raw
+    response = client.post(
+        "/v1/decisions",
+        content=raw.encode(),
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 200
 
 
 def test_models_health_metrics_and_openapi(client):
