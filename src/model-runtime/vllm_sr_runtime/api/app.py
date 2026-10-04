@@ -18,6 +18,8 @@ from ..errors import RuntimeServiceError
 from ..runtime import Runtime
 
 OPENAPI_PATH = Path(__file__).with_name("openapi.yaml")
+# The contract version (``info.version`` in openapi.yaml), reported to clients.
+API_VERSION = "2.0.0"
 
 
 class JSON(Response):
@@ -106,31 +108,46 @@ def create_app(runtime: Runtime) -> Starlette:
     async def models(request: Request) -> Response:
         # The first call imports every plugin to describe it; /health must not wait for that.
         return JSON(
-            {"object": "list", "data": await run_in_threadpool(runtime.model_cards)}
+            {
+                "object": "list",
+                "api_version": API_VERSION,
+                "data": await run_in_threadpool(runtime.model_cards),
+            }
         )
+
+    def only_model() -> str | None:
+        """The served model's ID; a process serving several lists them in ``models``."""
+        return runtime.served[0].served_id if len(runtime.served) == 1 else None
 
     async def health(request: Request) -> Response:
         body: dict[str, Any] = {
+            "api_version": API_VERSION,
             "status": runtime.health.state,
             "reason": runtime.health.reason,
-            "model": runtime.served_id,
+            "model": only_model(),
         }
         if len(runtime.served) > 1:
             body["models"] = runtime.health.describe()
         return JSON(body, status_code=200 if runtime.health.ready else 503)
 
     async def live(request: Request) -> Response:
-        return JSON({"status": "alive", "reason": None, "model": runtime.served_id})
+        return JSON(
+            {
+                "api_version": API_VERSION,
+                "status": "alive",
+                "reason": None,
+                "model": only_model(),
+            }
+        )
 
     async def metrics(request: Request) -> Response:
-        if runtime.scheduler is not None:
-            runtime.metrics.queue_depth.set(
-                sum(
-                    served.scheduler.depth()
-                    for served in runtime.served
-                    if served.scheduler
-                )
+        runtime.metrics.queue_depth.set(
+            sum(
+                served.scheduler.depth()
+                for served in runtime.served
+                if served.scheduler
             )
+        )
         return Response(
             runtime.metrics.render(), media_type="text/plain; version=0.0.4"
         )

@@ -40,7 +40,6 @@ from .plugins.base import (
     ModelSpec,
     Profile,
     RegistryOptions,
-    RequestPlan,
     SurfacePlan,
     SurfaceRequest,
     UnsupportedSurfaceError,
@@ -50,7 +49,7 @@ from .registry import builtin
 from .registry.resolve import resolve
 from .scheduler.scheduler import Scheduler, SchedulerLimits
 from .supervision.metrics import RuntimeMetrics
-from .supervision.readiness import STATES, GoldenResult, Health, golden_check
+from .supervision.readiness import STATES, Health, golden_check
 
 log = logging.getLogger("vllm_sr_runtime")
 AUTO_ENGINE = "auto"
@@ -80,7 +79,7 @@ def choose_engine(
     raise RuntimeError(f"no engine can run {spec.name}: {'; '.join(reasons)}")
 
 
-__all__ = ["DEADLINE", "ParsedRequest", "Runtime", "ServedModel", "with_overrides"]
+__all__ = ["DEADLINE", "Runtime", "ServedModel", "with_overrides"]
 
 GENERIC_OPTIONS = {"deadline_ms", "profile", "return_meta"}
 SURFACE_FIELDS = {
@@ -117,19 +116,6 @@ STATE_ORDER = {state: index for index, state in enumerate(STATES)}
 # Requests up to this many encoded bytes are planned on the event loop: their
 # rendering costs less than a hop to a worker thread.
 INLINE_PLAN_BYTES = 16 << 10
-
-
-@dataclass
-class ParsedRequest:
-    """A validated decisions request (Phase 1 shape); ``target`` is its model."""
-
-    state: Any
-    questions: dict[str, Any]
-    deadline: float | None
-    profile: str
-    return_meta: bool
-    received: float
-    target: ServedModel | None = None
 
 
 @dataclass
@@ -398,23 +384,24 @@ class ServedModel:
                 profiles[self.config.profile] = entry()
         return profiles
 
-    def golden_decisions(self, state: Any, questions: dict[str, Any]) -> dict[str, Any]:
-        """Answers to a golden decisions request on the exact profile, before readiness."""
-        parsed = ParsedRequest(
-            state, questions, None, "exact", False, time.monotonic(), self
-        )
-        plan = self.plan_decisions(parsed)
-        results = self.submit_items(plan.items, None, "exact").result()
-        return self.assemble(parsed, plan, results, 0.0, 0.0)["answers"]
-
-    def golden_surface(self, surface: str, body: dict[str, Any]) -> dict[str, float]:
-        """The numbers of a golden surface response on the exact profile, before readiness."""
+    def _golden(self, surface: str, body: dict[str, Any]) -> dict[str, Any]:
+        """A golden request's response body on the exact profile, before readiness."""
         assert self.model is not None
         request = SurfaceRequest(surface, body, None, "exact", False, time.monotonic())
         plan = self.model.plan_surface(surface, request)
         results = self.submit_items(plan.items, None, "exact").result()
-        response = self.model.finish_surface(plan, results)
-        return self.model.golden_values(surface, response)
+        return self.model.finish_surface(plan, results)
+
+    def golden_decisions(self, state: Any, questions: dict[str, Any]) -> dict[str, Any]:
+        """Answers to a golden decisions request."""
+        return self._golden("decisions", {"state": state, "questions": questions})[
+            "answers"
+        ]
+
+    def golden_surface(self, surface: str, body: dict[str, Any]) -> dict[str, float]:
+        """The numbers of a golden surface response."""
+        assert self.model is not None
+        return self.model.golden_values(surface, self._golden(surface, body))
 
     # -- requests ------------------------------------------------------------
 
@@ -423,16 +410,6 @@ class ServedModel:
             raise RuntimeServiceError(
                 "not_ready", f"model {self.label} is {self.health.state}"
             )
-
-    def plan_decisions(self, parsed: ParsedRequest) -> RequestPlan:
-        if self.model is None:
-            raise RuntimeServiceError("not_ready", f"the model is {self.health.state}")
-        try:
-            return self.model.plan(parsed.state, parsed.questions)
-        except UnsupportedSurfaceError as exc:
-            raise RuntimeServiceError("unsupported_surface", str(exc)) from exc
-        except ValueError as exc:
-            raise RuntimeServiceError("invalid_request", str(exc)) from exc
 
     def submit_items(
         self, items: list[Any], deadline: float | None, profile: str
@@ -478,34 +455,6 @@ class ServedModel:
             "queue_ms": round(queue_ms, 3),
             "compute_ms": round(compute_ms, 3),
         }
-
-    def assemble(
-        self,
-        parsed: ParsedRequest,
-        plan: RequestPlan,
-        results: Any,
-        queue_ms: float,
-        compute_ms: float,
-    ) -> dict[str, Any]:
-        """The decisions response (Phase 1 path, unchanged)."""
-        assert self.model is not None
-        surface_plan = SurfacePlan(
-            "decisions", list(plan.items), plan.input_tokens, plan
-        )
-        body = self.model.finish_surface(surface_plan, results)
-        metrics = self.runtime.metrics
-        for answer in body.get("answers", {}).values():
-            metrics.questions.labels(
-                type=str(answer.get("type")), outcome=answer.get("error", "answered")
-            ).inc()
-        response: dict[str, Any] = {"model": self.served_id, **body}
-        response.setdefault(
-            "usage", {"input_tokens": plan.input_tokens, "output_tokens": 0}
-        )
-        if parsed.return_meta:
-            response["meta"] = self.meta(parsed.profile, queue_ms, compute_ms)
-        metrics.input_tokens.inc(plan.input_tokens)
-        return response
 
     def device_failure(self) -> BaseException | None:
         return self.scheduler.failure if self.scheduler else None
@@ -641,14 +590,6 @@ class ProcessHealth:
                 return f"{served.label}: {served.health.reason or served.health.state}"
         return None
 
-    @property
-    def golden(self) -> GoldenResult:
-        return self._models[0].health.golden
-
-    @golden.setter
-    def golden(self, value: GoldenResult) -> None:
-        self._models[0].health.golden = value
-
     def set(self, state: str, reason: str | None = None) -> None:
         for served in self._models:
             served.health.set(state, reason)
@@ -673,40 +614,6 @@ class Runtime:
             raise ValueError("served model names must be unique")
         self.health = ProcessHealth(self)
         self._thread: threading.Thread | None = None
-
-    # -- the primary model (Phase 1 attributes) -----------------------------
-
-    @property
-    def primary(self) -> ServedModel:
-        return self.served[0]
-
-    @property
-    def model(self) -> LoadedModel | None:
-        return self.primary.model
-
-    @property
-    def package(self) -> VerifiedPackage | None:
-        return self.primary.package
-
-    @property
-    def placement(self) -> Placement | None:
-        return self.primary.placement
-
-    @property
-    def family(self) -> ModelFamily | None:
-        return self.primary.family
-
-    @property
-    def profiles(self) -> dict[str, Profile]:
-        return self.primary.profiles
-
-    @property
-    def scheduler(self) -> Scheduler | None:
-        return self.primary.scheduler
-
-    @property
-    def served_id(self) -> str | None:
-        return self.primary.served_id
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -820,57 +727,6 @@ class Runtime:
             )
         return deadline, profile, return_meta, received
 
-    # -- decisions (Phase 1 interface) ---------------------------------------
-
-    def parse(self, body: Any, received: float | None = None) -> ParsedRequest:
-        if not isinstance(body, dict):
-            raise RuntimeServiceError(
-                "invalid_request", "the request body must be a JSON object"
-            )
-        unknown = set(body) - SURFACE_FIELDS["decisions"]
-        if unknown:
-            raise RuntimeServiceError(
-                "invalid_request", f"unknown request fields: {sorted(unknown)}"
-            )
-        if "state" not in body:
-            raise RuntimeServiceError("invalid_request", "state is required")
-        questions = body.get("questions")
-        if (
-            not isinstance(questions, dict)
-            or not questions
-            or any(not isinstance(k, str) or not k for k in questions)
-        ):
-            raise RuntimeServiceError(
-                "invalid_request",
-                "questions must be a nonempty mapping of question IDs",
-            )
-        served = self.lookup(body.get("model"))
-        deadline, profile, return_meta, received = self._options(
-            served, "decisions", body, received
-        )
-        return ParsedRequest(
-            body["state"], questions, deadline, profile, return_meta, received, served
-        )
-
-    def plan(self, parsed: ParsedRequest) -> RequestPlan:
-        return (parsed.target or self.primary).plan_decisions(parsed)
-
-    def submit(self, plan: RequestPlan, parsed: ParsedRequest) -> Future:
-        served = parsed.target or self.primary
-        return served.submit_items(plan.items, parsed.deadline, parsed.profile)
-
-    def assemble(
-        self,
-        parsed: ParsedRequest,
-        plan: RequestPlan,
-        results: Any,
-        queue_ms: float,
-        compute_ms: float,
-    ) -> dict[str, Any]:
-        return (parsed.target or self.primary).assemble(
-            parsed, plan, results, queue_ms, compute_ms
-        )
-
     # -- every surface -------------------------------------------------------
 
     def prepare(
@@ -879,8 +735,8 @@ class Runtime:
         """Validate a surface request and plan it for its model (runs off the event loop)."""
         if surface not in SURFACES:
             raise RuntimeServiceError("invalid_request", f"unknown surface {surface!r}")
-        if len(self.served) == 1 and not self.primary.health.ready:
-            self.primary.require_ready()
+        if len(self.served) == 1:
+            self.served[0].require_ready()
         if not isinstance(body, dict):
             raise RuntimeServiceError(
                 "invalid_request", "the request body must be a JSON object"
@@ -897,24 +753,6 @@ class Runtime:
             raise RuntimeServiceError(
                 "unsupported_surface",
                 f"model {served.label} does not serve /v1/{surface}",
-            )
-        if surface == "decisions":
-            parsed = self.parse(body, received)
-            plan = served.plan_decisions(parsed)
-            request = SurfaceRequest(
-                surface,
-                body,
-                parsed.deadline,
-                parsed.profile,
-                parsed.return_meta,
-                parsed.received,
-            )
-            return Prepared(
-                served,
-                request,
-                SurfacePlan(
-                    "decisions", list(plan.items), plan.input_tokens, (parsed, plan)
-                ),
             )
         deadline, profile, return_meta, received = self._options(
             served, surface, body, received
@@ -934,11 +772,14 @@ class Runtime:
         self, prepared: Prepared, results: Any, queue_ms: float, compute_ms: float
     ) -> dict[str, Any]:
         served, request, plan = prepared.served, prepared.request, prepared.plan
-        if request.surface == "decisions":
-            parsed, request_plan = plan.state
-            return served.assemble(parsed, request_plan, results, queue_ms, compute_ms)
         assert served.model is not None
         body = served.model.finish_surface(plan, results)
+        if request.surface == "decisions":
+            for answer in body.get("answers", {}).values():
+                self.metrics.questions.labels(
+                    type=str(answer.get("type")),
+                    outcome=answer.get("error", "answered"),
+                ).inc()
         response: dict[str, Any] = {"model": served.served_id, **body}
         response.setdefault(
             "usage", {"input_tokens": plan.input_tokens, "output_tokens": 0}
@@ -1232,9 +1073,8 @@ class Runtime:
                 return failure
         return None
 
-    def degrade(self, reason: str, served: ServedModel | None = None) -> None:
-        target = served or self.primary
-        target.health.set("degraded", reason)
+    def degrade(self, reason: str, served: ServedModel) -> None:
+        served.health.set("degraded", reason)
         self._ready_gauge()
         if self.config.exit_on_device_error:
             log.error("device failure, exiting for a clean restart: %s", reason)

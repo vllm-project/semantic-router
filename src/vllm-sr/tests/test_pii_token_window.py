@@ -66,14 +66,13 @@ def test_pii_local_window(pii, refused):
     assert before["global"]["model_catalog"]["modules"]["classifier"]["pii"] == pii
 
 
-@pytest.mark.parametrize("provider", ["candle", "ort"])
 @pytest.mark.parametrize("named_recipe", [False, True])
-def test_pii_bound_window_uses_deployment_budget(provider, named_recipe):
+def test_pii_bound_window_uses_deployment_budget(named_recipe):
     value = config(
         {"max_sequence_length": 512, "window": {"size": 1024, "overlap": 128}},
         {
-            "provider": provider,
-            "artifact": "models/synthetic-pii",
+            "provider": "model_runtime",
+            "artifact": "/models/synthetic-pii",
             "device": "cpu",
             "input": {"max_tokens": 8192, "overflow": "window"},
         },
@@ -91,17 +90,17 @@ def test_pii_bound_window_uses_deployment_budget(provider, named_recipe):
 @pytest.mark.parametrize(
     "window,budget,provider",
     [
-        (None, {"max_tokens": 1024, "overflow": "window"}, "candle"),
-        ({"size": 128}, {"max_tokens": 1024, "overflow": "reject"}, "candle"),
-        ({"size": 128}, {"max_tokens": 0, "overflow": "window"}, "candle"),
-        ({"size": 1024}, {"max_tokens": 512, "overflow": "window"}, "ort"),
+        (None, {"max_tokens": 1024, "overflow": "window"}, "model_runtime"),
+        ({"size": 128}, {"max_tokens": 1024, "overflow": "reject"}, "model_runtime"),
+        ({"size": 128}, {"max_tokens": 0, "overflow": "window"}, "model_runtime"),
+        ({"size": 1024}, {"max_tokens": 512, "overflow": "window"}, "model_runtime"),
         ({"size": 128}, {"max_tokens": 0, "overflow": "reject"}, "http"),
     ],
 )
 def test_pii_bound_window_refuses_incompatible_contract(window, budget, provider):
     deployment = {
         "provider": provider,
-        "artifact": "models/synthetic-pii",
+        "artifact": "/models/synthetic-pii",
         "input": budget,
     }
     if provider == "http":

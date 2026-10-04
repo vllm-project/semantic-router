@@ -77,10 +77,9 @@ def test_named_default_resolves_without_mutating_authoring_config():
 def test_explicit_amd_override_replaces_whole_entry_and_remains_immutable():
     raw = hazard_document()
     deployment = {
-        "artifact": "models/operator-hazard",
-        "provider": "ort",
-        "device": "migraphx:0",
-        "precision": "native",
+        "provider": "model_runtime",
+        "artifact": "/models/operator-hazard",
+        "device": "rocm:0",
         "input": {"max_tokens": 32768, "overflow": "reject"},
     }
     raw["global"] = {"model_catalog": {"deployments": {"hazard": deployment}}}
@@ -111,7 +110,7 @@ def test_deployment_defaults_do_not_rescue_invalid_explicit_bindings(scenario):
         ] = "not-registered"
     elif scenario == "incomplete_override":
         raw["global"] = {
-            "model_catalog": {"deployments": {"hazard": {"provider": "ort"}}}
+            "model_catalog": {"deployments": {"hazard": {"provider": "model_runtime"}}}
         }
     else:
         raw["global"] = {"model_catalog": {"deployments": None}}
@@ -119,7 +118,9 @@ def test_deployment_defaults_do_not_rescue_invalid_explicit_bindings(scenario):
     errors = validate_model_runtime_references(config)
     assert errors
     if scenario == "incomplete_override":
-        assert effective_model_deployments(config)["hazard"] == {"provider": "ort"}
+        assert effective_model_deployments(config)["hazard"] == {
+            "provider": "model_runtime"
+        }
         assert "requires artifact" in str(errors[0])
     else:
         assert any("Unknown model deployment" in str(error) for error in errors)

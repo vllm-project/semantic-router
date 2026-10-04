@@ -116,7 +116,7 @@ class Native:
     """The decision1 family behind a ``Runtime``, with each way of sending it a request."""
 
     def __init__(self, args: argparse.Namespace) -> None:
-        from vllm_sr_runtime.config import ServeConfig
+        from vllm_sr_runtime.config import ModelConfig, ServeConfig
         from vllm_sr_runtime.runtime import Runtime
 
         overrides = (
@@ -124,18 +124,22 @@ class Native:
         )
         self.runtime = Runtime(
             ServeConfig(
-                model=args.model,
-                revision=args.revision,
-                device=args.device,
+                models=(
+                    ModelConfig(
+                        model=args.model,
+                        revision=args.revision,
+                        device=args.device,
+                        profile=args.profile,
+                    ),
+                ),
                 cache_dir=args.cache_dir,
                 offline=True,
-                profile=args.profile,
                 threads=args.threads,
                 **overrides,
             )
         )
         self.runtime.start(background=False)
-        self.served = self.runtime.primary
+        self.served = self.runtime.lookup(None)
         self.profile = args.profile
         self.loop = asyncio.new_event_loop()
         self.options = {"return_meta": False, "profile": args.profile}

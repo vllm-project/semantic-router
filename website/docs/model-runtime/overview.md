@@ -38,7 +38,7 @@ feature reports "unknown" and your routes fall back the way you configured.
 | Route on images and audio | Vela 1.0 Omni Nano and Mini | [Images and audio](./guides/multimodal.md) |
 | Ask your own routing questions in plain language | Decision 2.0, Decision 1.0, Vela 2.0 (private preview) | [Decision models](./guides/decisions.md) |
 
-[Choose a model](./choose-a-model.md) helps you pick a size and hardware.
+[Choose a model](model-runtime/choose-a-model.md) helps you pick a size and hardware.
 
 ## What you can rely on
 
@@ -61,8 +61,9 @@ feature reports "unknown" and your routes fall back the way you configured.
 
 CPU and AMD GPUs (MI300X, MI325X) are validated. NVIDIA GPUs work but are not
 yet validated; Intel GPUs (`xpu`) and Apple GPUs (`mps`) are available and not
-yet validated. Every router image includes the CPU runtime. For a GPU, run the
-runtime with a GPU build of PyTorch and attach the router to it.
+yet validated. Every router image runs models on the CPU. The AMD and NVIDIA
+images (`vllm-sr serve --platform amd` or `--platform nvidia`) also run them on
+the GPU.
 
 ## Coming from an older release?
 

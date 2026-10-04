@@ -439,8 +439,10 @@ labels), embedding and rerank descriptors, limits, licence, profiles, engine,
 accelerator, device, dtype, plugin versions, and per-model readiness and
 golden status. `/health` returns 200 only when every model is ready, and lists
 per-model states otherwise; `/health/live` returns 200 while the process
-serves HTTP. `/metrics` is Prometheus text with a `model` label on every
-model-scoped series.
+serves HTTP. All three report `api_version`, the contract version
+(`info.version`); a client refuses a runtime of another major version.
+`/metrics` is Prometheus text with a `model` label on every model-scoped
+series.
 
 ## 7. Model registry
 

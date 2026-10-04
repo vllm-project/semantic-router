@@ -3,7 +3,7 @@ title: 模型运行时
 sidebar_label: 概览
 description: 对请求进行分类、防护、向量化和路由的模型都运行在内置模型运行时中。从这里开始。
 translation:
-  source_commit: "89f6f79ab6aedeefd1e5a75616088ebfa5fed5d9"
+  source_commit: "a8c166705a025fec6c9cd4bfe4251341f3a64196"
   source_file: "docs/model-runtime/overview.md"
   outdated: false
 ---
@@ -58,8 +58,8 @@ translation:
 ## 硬件 {#hardware}
 
 CPU 和 AMD GPU（MI300X、MI325X）已经验证。NVIDIA GPU 可用但尚未验证；
-Intel GPU（`xpu`）和 Apple GPU（`mps`）可用但尚未验证。每个路由器镜像都包含 CPU 运行时。
-要使用 GPU，请用 GPU 版 PyTorch 运行运行时，并让路由器连接它。
+Intel GPU（`xpu`）和 Apple GPU（`mps`）可用但尚未验证。每个路由器镜像都能在 CPU 上运行模型；
+AMD 和 NVIDIA 镜像（`vllm-sr serve --platform amd` 或 `--platform nvidia`）还能在 GPU 上运行它们。
 
 ## 从旧版本升级？ {#coming-from-an-older-release}
 

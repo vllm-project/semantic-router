@@ -131,9 +131,9 @@ domains' smallest unit or static checks. Common direct targets include:
 | --- | --- |
 | Harness or workflows | `make harness-check` |
 | Go router | `make test-semantic-router` |
-| Native bindings | `make test-binding` |
+| Model runtime | `make model-runtime-test` |
 | Python CLI | `make vllm-sr-test` |
-| Category, PII, or jailbreak classifier | `make test-category-classifier`, `make test-pii-classifier`, or `make test-jailbreak-classifier` |
+| Published models (domain, PII, jailbreak and the other classifiers) | `make test-models` |
 | Explicit integration or E2E | `make verify DOMAIN=<domain>` or `make verify PROFILE=<profile>` |
 
 Integration and E2E are explicit because a path classifier cannot infer all
