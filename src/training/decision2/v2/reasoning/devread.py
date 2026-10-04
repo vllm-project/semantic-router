@@ -30,7 +30,11 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--max-length", type=int, default=8192)
     args = parser.parse_args()
-    rows = [row for path in args.rows for row in load_partition(path, "select")]
+    rows, files = [], []
+    for path in args.rows:
+        part = load_partition(path, "select")
+        rows += part
+        files += [path.name] * len(part)
     model, tokenizer = load_dec_checkpoint(args.checkpoint, args.source_path)
     device = torch.device("cuda:0")
     model = model.float().to(device).eval()
@@ -65,13 +69,16 @@ def main() -> None:
                 probs[i] = p[j, : len(items[i]["keys"])].tolist()
     per_family: dict[str, list[int]] = defaultdict(list)
     records = []
+    per_file: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(list))
     for i, row in enumerate(rows):
         p = probs[i]
         correct = int(max(range(len(p)), key=p.__getitem__) == row["label"])
         per_family[row["family"]].append(correct)
+        per_file[files[i]][row["family"]].append(correct)
         records.append(
             {
                 "id": row["id"],
+                "file": files[i],
                 "family": row["family"],
                 "correct": correct,
                 "p_gold": p[row["label"]],
@@ -81,11 +88,16 @@ def main() -> None:
         f: {"n": len(v), "acc": sum(v) / len(v)} for f, v in sorted(per_family.items())
     }
     macro = sum(s["acc"] for s in summary.values()) / len(summary)
+    file_macro = {
+        name: sum(sum(v) / len(v) for v in fams.values()) / len(fams)
+        for name, fams in per_file.items()
+    }
     out = {
         "checkpoint": str(args.checkpoint),
         "identity": dec_fingerprint(args.checkpoint, args.source_path)["model_sha256"],
         "rows": len(rows),
         "family_macro_accuracy": macro,
+        "file_macro_accuracy": file_macro,
         "families": summary,
         "seconds": time.perf_counter() - started,
         "records": records,

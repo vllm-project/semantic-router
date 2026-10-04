@@ -152,30 +152,29 @@ def main() -> None:
             view = node_view(problem, item, [], rng, problem["nodes"], "dev", "select")
             dev_nodes.append(view)
 
-    # decontamination over every new row (program finals and all node views; released rows were audited before)
-    new_rows = {
-        r["id"]: r
-        for arm in ("tf", "tfm")
-        for r, _ in arms[arm]
-        if r["source"].startswith("decision2_reasoning")
-        or r["render_template"].startswith("reasoning_node")
-    }
+    # decontamination over every row except replay: a flagged final (program or released teacher-problem row)
+    # drops its whole problem, a flagged node view drops that view
+    final_pid = {final_row(p)["id"]: p["pid"] for p in train_problems + teacher_train}
+    final_pid.update({r["id"]: r["audit_metadata"]["pid"] for r in dev_final})
+    new_rows = {r["id"]: r for arm in ("tf", "tfm") for r, _ in arms[arm]}
     for r in dev_final + dev_nodes:
         new_rows[r["id"]] = r
     report = scan(list(new_rows.values()), args.eval)
     flagged = report.pop("flagged")
-    flagged_pids = {
-        new_rows[i]["audit_metadata"]["pid"]
-        for i in flagged
-        if new_rows[i]["render_template"] != ""
-        and new_rows[i]["audit_metadata"].get("view") == "final"
+    flagged_pids = {final_pid[i] for i in flagged if i in final_pid}
+    report["flagged_problems_by_family"] = dict(
+        Counter(new_rows[i]["family"] for i in flagged if i in final_pid)
+    )
+    report["flagged_views_by_family"] = dict(
+        Counter(new_rows[i]["family"] for i in flagged if i not in final_pid)
+    )
+    row_pid = {
+        rid: final_pid.get(rid) or new_rows[rid]["audit_metadata"].get("pid")
+        for rid in new_rows
     }
 
     def keep(row: dict[str, Any]) -> bool:
-        return (
-            row["id"] not in flagged
-            and row["audit_metadata"].get("pid") not in flagged_pids
-        )
+        return row["id"] not in flagged and row_pid.get(row["id"]) not in flagged_pids
 
     replay = [json.loads(line) for line in args.replay.open(encoding="utf-8")]
     labels: dict[str, dict] = {}
@@ -193,7 +192,9 @@ def main() -> None:
         "counts": {},
     }
     for arm, rows in arms.items():
-        kept = [(r, w) for r, w in rows if keep(r)] + [(r, 1.0) for r in replay]
+        kept = [(r, w) for r, w in rows if keep(r)] + [
+            (r, 1.0) for r in replay if r["id"] not in new_rows
+        ]
         for r, _ in kept:
             validate_row(r, "train")
         rows_path, weights_path = (
