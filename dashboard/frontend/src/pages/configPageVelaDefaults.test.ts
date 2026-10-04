@@ -43,7 +43,7 @@ describe('Vela defaults and explicit legacy models', () => {
           mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
           use_cpu: true,
           embedding_config: {
-            backend: 'candle',
+            backend: 'model_runtime',
             model_type: 'mmbert',
             target_dimension: 256,
             target_layer: 6,
