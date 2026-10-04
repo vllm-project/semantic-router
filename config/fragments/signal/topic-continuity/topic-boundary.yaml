@@ -1,0 +1,16 @@
+routing:
+  signals:
+    # Evidence for context policy: whether the live turn still depends on
+    # retained history. Not decision-referenceable; consumers read the typed
+    # result from the request context.
+    topic_continuity:
+      - name: topic_boundary
+        description: Whether the live turn still depends on retained history.
+        include_assistant: true
+        thresholds:
+          continuation: 0.35
+          change: 0.08
+        limits:
+          max_prior_turns: 8
+          max_turn_bytes: 16384
+          max_input_bytes: 147456
