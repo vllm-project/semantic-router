@@ -2481,7 +2481,9 @@ global:
         use_cpu: true
         embedding_config:
           full_context: false
-          backend: candle
+          # model_runtime embeds with the built-in model runtime;
+          # openai_compatible calls the endpoint below.
+          backend: model_runtime
           model_type: mmbert
           preload_embeddings: true
           target_dimension: 0
