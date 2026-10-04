@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -367,6 +368,67 @@ func TestSystemOneBackendRejectsMoreLabelsThanChoiceAccepts(t *testing.T) {
 		systemOneExternal(t, server), newDeclaredLabelMapping(labels), "tone", "Which?", 0,
 	); err == nil {
 		t.Fatalf("NewSystemOneClassifierInference accepted %d labels", len(labels))
+	}
+}
+
+// A rate-limited endpoint gets one retry from the shared connector, and a
+// second 429 is an error the signal reports rather than a distribution.
+func TestSystemOneBackendReportsRateLimitAfterOneRetry(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		http.Error(w, "slow down", http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	backend := newTestSystemOneBackend(t, server)
+	defer backend.Close()
+
+	_, err := backend.Classify(context.Background(), "please advise")
+	if err == nil || !strings.Contains(err.Error(), "status 429") {
+		t.Fatalf("Classify error = %v, want one naming status 429", err)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("endpoint saw %d requests, want the first and one retry", got)
+	}
+}
+
+// The endpoint holds the request well past the deadline and would then answer,
+// so only the deadline can make this call fail.
+func TestSystemOneBackendStopsAtItsDeadline(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Reading the body lets the server notice the client leaving.
+		_, _ = io.Copy(io.Discard, r.Body)
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(10 * time.Second):
+		}
+		systemOneReply("decision-kai", map[string]any{
+			"type": "choice", "choice": "formal", "confidence": 0.5,
+			"probabilities": map[string]float32{"formal": 0.7, "casual": 0.2, "hostile": 0.1},
+		})(w, r)
+	}))
+	defer server.Close()
+
+	rule := systemOneRule()
+	const deadline = 100 * time.Millisecond
+	backend, err := NewSystemOneClassifierInference(
+		systemOneExternal(t, server), newDeclaredLabelMapping(rule.Labels), rule.Name, rule.Instructions, deadline,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+
+	startedAt := time.Now()
+	_, err = backend.Classify(context.Background(), "please advise")
+	elapsed := time.Since(startedAt)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Classify error = %v, want the deadline", err)
+	}
+	if elapsed < deadline || elapsed > 2*time.Second {
+		t.Fatalf("Classify returned after %v, want shortly after the %v deadline", elapsed, deadline)
 	}
 }
 
