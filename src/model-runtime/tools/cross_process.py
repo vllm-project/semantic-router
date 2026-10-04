@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from gpu_parity import canonical, category, numbers
-from vllm_sr_runtime.config import ServeConfig
+from vllm_sr_runtime.config import ModelConfig, ServeConfig
 from vllm_sr_runtime.runtime import Runtime
 
 
@@ -60,9 +60,11 @@ def answer(args: argparse.Namespace) -> int:
     before = autotune_entries(args.autotune_cache)
     runtime = Runtime(
         ServeConfig(
-            model=args.model,
-            revision=args.revision,
-            device=args.device,
+            models=(
+                ModelConfig(
+                    model=args.model, revision=args.revision, device=args.device
+                ),
+            ),
             cache_dir=args.cache_dir,
             base_path=args.base_path,
             offline=args.offline,
@@ -73,22 +75,25 @@ def answer(args: argparse.Namespace) -> int:
     try:
         runtime.load()
         load_seconds = time.perf_counter() - started
-        assert runtime.model is not None and runtime.placement is not None
+        served = runtime.lookup(None)
+        assert served.model is not None and served.placement is not None
         count = 0
         started = time.perf_counter()
         with args.answers.open("x", encoding="utf-8") as sink:
             for name, prompts in panels(args.panel):
                 for prompt in prompts:
-                    parsed = runtime.parse(
+                    prepared = runtime.prepare(
+                        "decisions",
                         {
                             "state": prompt["state"],
                             "questions": prompt["questions"],
                             "options": {"profile": "exact", "return_meta": False},
-                        }
+                        },
                     )
-                    plan = runtime.plan(parsed)
-                    results = runtime.submit(plan, parsed).result()
-                    answers = runtime.assemble(parsed, plan, results, 0.0, 0.0)
+                    results = served.submit_items(
+                        prepared.plan.items, None, "exact"
+                    ).result()
+                    answers = runtime.finish(prepared, results, 0.0, 0.0)
                     row = {
                         "panel": name,
                         "id": prompt["id"],
@@ -96,16 +101,16 @@ def answer(args: argparse.Namespace) -> int:
                     }
                     sink.write(json.dumps(row) + "\n")
                     count += 1
-        info, engine = runtime.model.info, runtime.model.engine_model
+        info, engine = served.model.info, served.model.engine_model
         receipt = {
             "schema": "model-runtime-cross-process/1",
             "model": info.id,
             "repo": info.repo,
             "revision": info.revision,
             "model_sha256": info.model_sha256,
-            "device": runtime.placement.device.label,
-            "device_name": runtime.placement.device.name,
-            "golden": runtime.health.golden.describe(),
+            "device": served.placement.device.label,
+            "device_name": served.placement.device.name,
+            "golden": served.health.golden.describe(),
             "autotune_cache": args.autotune_cache,
             "autotune_entries": {
                 "before": before,
