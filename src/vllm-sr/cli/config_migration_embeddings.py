@@ -15,8 +15,8 @@ from typing import Any
 from cli.config_migration_legacy_models import replacement_for
 from cli.config_migration_notes import MigrationNotes
 from cli.config_migration_paths import as_list, decisions, dict_at
+from cli.model_runtime_retired import REMOVED_EMBEDDING_BACKENDS
 
-REMOVED_EMBEDDING_BACKENDS = frozenset({"candle", "openvino"})
 RETIRED_EMBEDDING_TYPES = frozenset({"gemma", "bert"})
 VELA_EMBEDDING = "mmbert"
 VELA_EMBEDDING_PATH = "models/Vela-1.0-Encoder-307M-Embedding"

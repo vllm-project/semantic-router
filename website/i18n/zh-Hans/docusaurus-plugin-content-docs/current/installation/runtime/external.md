@@ -4,7 +4,7 @@ description: 连接 Router 之外部署的分类器、防护模型或嵌入模�
 translation:
   source_commit: "915ddf56e0335e2046c38aa17c4aec6233908039"
   source_file: "docs/installation/runtime/external.md"
-  outdated: false
+  outdated: true
 ---
 
 当模型及硬件由其他服务管理时，使用外部服务。Router 将待检查的文本发送给服务，并将结果用于路由信号。进程内运行的模型见[进程内模型](model-runtime/deploy.md)。

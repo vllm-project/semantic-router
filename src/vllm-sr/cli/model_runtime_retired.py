@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 REMOVED_PROVIDERS = frozenset({"candle", "ort", "openvino"})
+REMOVED_EMBEDDING_BACKENDS = frozenset({"candle", "openvino"})
 REMOVED_DEPLOYMENT_FIELDS = ("precision", "custom_ops_profile", "compilation_cache_dir")
 # Module paths under global.model_catalog.modules and their removed fields.
 REMOVED_MODULE_FIELDS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
@@ -57,6 +58,19 @@ def retired_model_fields(data: dict[str, Any]) -> list[str]:
     if isinstance(backend, str) and backend.strip().lower() == "candle":
         removed.append(
             "global.model_catalog.modules.hallucination_mitigation.detector.backend: candle"
+        )
+    embedding_config = _mapping(
+        _mapping(_mapping(catalog.get("embeddings")).get("semantic")).get(
+            "embedding_config"
+        )
+    )
+    backend = embedding_config.get("backend")
+    if (
+        isinstance(backend, str)
+        and backend.strip().lower() in REMOVED_EMBEDDING_BACKENDS
+    ):
+        removed.append(
+            f"global.model_catalog.embeddings.semantic.embedding_config.backend: {backend}"
         )
     removed.extend(
         _present(
