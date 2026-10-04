@@ -1,5 +1,6 @@
 import pytest
 import torch
+from vllm_sr_runtime.accel import cpu
 from vllm_sr_runtime.accel.cpu import CPUAccelerator
 from vllm_sr_runtime.accel.cuda import CUDAAccelerator
 from vllm_sr_runtime.accel.rocm import ROCmAccelerator
@@ -30,6 +31,31 @@ def test_cpu_devices_report_native_bf16(monkeypatch, avx512_bf16, amx, native):
     (device,) = CPUAccelerator().devices()
     assert device.bf16 is native
     assert CPUAccelerator().capabilities(device)["native_bf16"] is native
+
+
+def test_the_cpu_device_thread_keeps_freed_memory_in_the_heap(monkeypatch):
+    calls = []
+
+    class Libc:
+        def mallopt(self, parameter, value):
+            calls.append((parameter, value))
+            return 1
+
+    monkeypatch.setattr(cpu.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(cpu.platform, "libc_ver", lambda: ("glibc", "2.39"))
+    monkeypatch.setattr(cpu.ctypes, "CDLL", lambda name: Libc())
+    monkeypatch.setattr(cpu, "_EXECUTOR", None)
+    executor = cpu.device_thread()
+    try:
+        assert cpu.device_thread() is executor
+    finally:
+        executor.shutdown()
+    assert calls == [
+        (cpu.M_MMAP_THRESHOLD, cpu.HEAP_MMAP_THRESHOLD),
+        (cpu.M_TRIM_THRESHOLD, cpu.HEAP_TRIM_THRESHOLD),
+    ]
+    monkeypatch.setattr(cpu.platform, "libc_ver", lambda: ("", ""))
+    assert cpu.keep_freed_memory() is False
 
 
 def test_cpu_placement_and_budget():

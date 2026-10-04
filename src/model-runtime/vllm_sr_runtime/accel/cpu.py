@@ -10,10 +10,18 @@ exist (a loader thread, one worker per model) the threads outnumber the cores,
 libgomp stops spin-waiting between parallel regions and every one of a
 forward's hundreds of regions pays a wake-up: a 307M encoder's short-input
 forward took 25 ms instead of 13 ms on 16 cores. One thread, one team.
+
+A process that runs CPU device work keeps freed memory in its heap (glibc).
+By default glibc hands a freed activation's pages back to the kernel, and the
+next forward faults them in again, zero-filled: a one-row 307M encoder forward
+on 16 EPYC cores took 62 ms with 51,000 page faults at 128 tokens and 470 ms at
+1,024, against 20 ms and 109 ms with the memory kept.
 """
 
 from __future__ import annotations
 
+import ctypes
+import ctypes.util
 import os
 import platform
 import threading
@@ -35,6 +43,26 @@ from .kernels import (
 
 _LOCK = threading.Lock()
 _EXECUTOR: ThreadPoolExecutor | None = None
+# glibc ``mallopt`` parameters. Blocks up to the mmap threshold (glibc's largest
+# on 64-bit hosts) come from the heap, which returns memory to the kernel only
+# past the trim threshold of free space at its top.
+M_TRIM_THRESHOLD = -1
+M_MMAP_THRESHOLD = -3
+HEAP_MMAP_THRESHOLD = 32 << 20
+HEAP_TRIM_THRESHOLD = 1 << 30
+
+
+def keep_freed_memory() -> bool:
+    """Keep freed CPU memory in the process heap instead of the kernel (glibc); whether it applied."""
+    if platform.system() != "Linux" or platform.libc_ver()[0] != "glibc":
+        return False
+    mallopt = getattr(ctypes.CDLL(ctypes.util.find_library("c")), "mallopt", None)
+    if mallopt is None:
+        return False
+    return bool(
+        mallopt(M_MMAP_THRESHOLD, HEAP_MMAP_THRESHOLD)
+        and mallopt(M_TRIM_THRESHOLD, HEAP_TRIM_THRESHOLD)
+    )
 
 
 def native_bf16() -> bool:
@@ -44,10 +72,11 @@ def native_bf16() -> bool:
 
 
 def device_thread() -> ThreadPoolExecutor:
-    """The process's single CPU device thread."""
+    """The process's single CPU device thread; creating it keeps freed memory in the heap."""
     global _EXECUTOR  # noqa: PLW0603 - one executor per process, created on first use
     with _LOCK:
         if _EXECUTOR is None:
+            keep_freed_memory()
             _EXECUTOR = ThreadPoolExecutor(
                 max_workers=1, thread_name_prefix="vllm-sr-cpu"
             )
