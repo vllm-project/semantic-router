@@ -12,7 +12,8 @@
 # ACCELERATOR is cpu (linux/amd64 and linux/arm64), rocm or cuda (linux/amd64).
 # GPU images take PyTorch from the official wheels, which carry their ROCm or
 # CUDA user-space libraries; the host supplies only the GPU driver. The ROCm
-# image also builds causal-conv1d for CAUSAL_CONV1D_ARCHS (default gfx942).
+# image also builds causal-conv1d for CAUSAL_CONV1D_ARCHS (default gfx90a,
+# gfx942 and gfx950: Instinct MI200, MI300 and MI350).
 ARG IMAGE_REGISTRY=docker.io/
 ARG PYTHON_IMAGE=library/python:3.12-slim-bookworm
 ARG ACCELERATOR=cpu
@@ -103,13 +104,15 @@ RUN pip install --index-url "$TORCH_ROCM_INDEX" "$TORCH_ROCM" && \
 # PyTorch with the ROCm SDK and build tools the released decoders' wheel was
 # built with: the same compiler emits the same GPU code, which keeps the
 # decoders' convolution identical to their released answers. Without it they
-# fall back to a reference convolution that misses them. Only the wheel leaves
+# fall back to a reference convolution that misses them. A GPU the wheel has no
+# code for fails at the decoders' first convolution instead, so
+# CAUSAL_CONV1D_ARCHS names every GPU the image serves. Only the wheel leaves
 # this stage. AMD's packages are pinned over Debian's older ROCm of the same
 # names, and ROCm's lld needs libxml2, which they don't declare.
 FROM torch-rocm-base AS causal-conv1d-rocm
 ARG ROCM_SDK=7.2.3
 ARG CAUSAL_CONV1D=causal-conv1d==1.7.0
-ARG CAUSAL_CONV1D_ARCHS=gfx942
+ARG CAUSAL_CONV1D_ARCHS=gfx90a,gfx942,gfx950
 RUN mkdir -p /etc/apt/keyrings && \
     python -c "import urllib.request; urllib.request.urlretrieve('https://repo.radeon.com/rocm/rocm.gpg.key', '/etc/apt/keyrings/rocm.asc')" && \
     echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.asc] https://repo.radeon.com/rocm/apt/$ROCM_SDK jammy main" \

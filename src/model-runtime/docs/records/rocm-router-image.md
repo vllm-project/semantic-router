@@ -43,9 +43,15 @@ PyPI publishes no ROCm wheel. The `causal-conv1d-rocm` build stage compiles
 the 1.7.0 sdist (sha256 `3202758494eaa7b5…`) against the image's own PyTorch,
 with ROCm 7.2.3's compiler (AMD clang 22.0.0git, roc-7.2.3 26084) and the
 release build's tools (setuptools 79.0.1, wheel 0.48.0, ninja 1.13.2), for
-`CAUSAL_CONV1D_ARCHS` (gfx942 by default; 145 s on 16 vCPUs). The image
-installs only the wheel (sha256 `58d292e607483d44…`); its extension is
+`CAUSAL_CONV1D_ARCHS`. The image installs only the wheel; its extension is
 `/usr/local/lib/python3.12/site-packages/causal_conv1d_cuda.cpython-312-x86_64-linux-gnu.so`.
+
+- The image the records and the smoke ran (`af71d5e82`) built gfx942 only: 145 s
+  on 16 vCPUs, wheel sha256 `58d292e607483d44…`.
+- The default is now gfx90a, gfx942 and gfx950 (Instinct MI200, MI300 and
+  MI350), because a decoder fails on a GPU the wheel has no code for: 359 s on
+  28 vCPUs, 21.5 MB. Its gfx942 code objects pass the same check below, so the
+  records hold for it.
 
 **Check against the release image's wheel**, with the release image's ROCm
 tools: both carry three gfx942 code objects (one per `.cu` file) of the same

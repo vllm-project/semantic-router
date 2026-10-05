@@ -119,6 +119,8 @@ def test_rocm_image_builds_causal_conv1d_with_the_released_rocm_sdk() -> None:
     # the GPU code their answers were recorded with.
     assert "ARG ROCM_SDK=7.2.3" in build
     assert "ARG CAUSAL_CONV1D=causal-conv1d==1.7.0" in build
+    # Instinct MI200, MI300 and MI350: a GPU without code fails its first convolution.
+    assert "ARG CAUSAL_CONV1D_ARCHS=gfx90a,gfx942,gfx950" in build
     assert "Pin: release o=repo.radeon.com" in build
     assert "CAUSAL_CONV1D_FORCE_BUILD=TRUE" in build
     assert "--no-build-isolation" in build
