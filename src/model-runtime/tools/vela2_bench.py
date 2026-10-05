@@ -18,7 +18,7 @@ concurrency 1, to pair with another runtime's per-prompt latencies.
 ``--rounds N`` repeats the measured requests N times after one warm-up; above
 concurrency 1 the sides run one after another in an order that rotates every
 round. ``intervals`` then holds, per row and side, the mean over the rounds of
-side minus baseline (p50, p95, req/s) with its 95% t interval, for every
+side minus baseline (p50, p95, mean, req/s) with its 95% t interval, for every
 ``--baselines`` side.
 
 Sides:
@@ -27,13 +27,15 @@ Sides:
 - ``runtime-batching``: cross-request batching (2 ms window);
 - ``max_speed:KIND``: the max_speed profile on a model that loaded the KIND reduced copy
   (``float32-packed``, ``bfloat16``, ``int8``; consented for the run);
-- ``reference``: ``vela2_inference.py`` (torch), one request at a time as its server does;
+- ``reference``: ``vela2_inference.py`` (torch), one request at a time in arrival order, as its
+  server serves concurrent callers;
 - ``reference-onnx``: its ONNX backend (0.3B on CPU).
 """
 
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import random
 import statistics
@@ -205,7 +207,7 @@ def interleaved(
 
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365,
        8: 2.306, 9: 2.262, 10: 2.228, 15: 2.131, 20: 2.086, 30: 2.042}  # fmt: skip
-METRICS = ("p50_ms", "p95_ms", "throughput_rps")
+METRICS = ("p50_ms", "p95_ms", "mean_ms", "throughput_rps")
 
 
 def intervals(runs: list[dict[str, Any]], baselines: list[str]) -> list[dict[str, Any]]:
@@ -390,15 +392,28 @@ def main() -> int:
 def _reference_caller(engine: Any, execute: Any) -> Any:
     """The engine as its own server runs it: one request at a time, presets expanded.
 
-    Its forwards run on the device's thread (the process's one CPU thread), the
-    best case for its torch work, as the runtime's batches do.
+    Its server (``vela2_serve.py``) holds one lock per forward; over HTTP a
+    caller's next request arrives a round trip after its response, so waiting
+    requests take turns. In one process a bare lock lets the releasing caller
+    take it again at once and starves the others, so requests are served here in
+    arrival order. Its forwards run on the device's thread (the process's one CPU
+    thread), the best case for its torch work, as the runtime's batches do.
     """
-    lock = threading.Lock()
+    turn = threading.Condition()
+    tickets = itertools.count()
+    serving = [0]
     questions = expand_presets(engine, ROUTER_QUESTIONS)
 
     def call(state: Any) -> dict[str, Any]:
-        with lock:
+        with turn:
+            ticket = next(tickets)
+            turn.wait_for(lambda: serving[0] == ticket)
+        try:
             return execute(lambda: engine.system_one(state, questions))
+        finally:
+            with turn:
+                serving[0] += 1
+                turn.notify_all()
 
     return call
 
