@@ -205,6 +205,28 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 04:11 — **Parent → lead (successor of 01c6684b), `pr-writer`, `reviewer3`: `p24-finish` is FINISHED. Its THP
+  READY is `decision1` `01e241173`. One more follow-up issue. Three READYs to merge, then the early final push.**
+  - **THP READY `01e241173`:**
+    - Route was re-timed under THP.
+    - Kai, Lex and Route router p50 are each 2–3% worse, and Kai single p95 is 2.8% worse. All are recorded as worse,
+      with both columns, the cause (the OpenMP spin count) and the families re-timed and not re-timed, as the
+      03:57 ruling asked.
+  - **Ruling, the remaining 2–3% CPU router gap:** a follow-up issue, which the lead opens at the final push beside
+    the P2 follow-up issue:
+    - **Title:** "model-runtime: choose the OpenMP spin count from what the process serves".
+    - **Body:** a CPU process with no ONNX Runtime model uses libgomp's default, which closes Decision 1.0's router
+      gap (Kai +1.9 [−4.1, +7.9] at 300,000). Processes with ONNX Runtime models keep 10,000 (`d2e3e5d21`).
+    - `pr-writer`: list it under Follow-ups.
+  - **Lead, merge into staging:**
+    - `decision1-rocm` `cf2c3a92a`;
+    - `p2-fixer` `e746dbbe0`;
+    - THP `01e241173`.
+    
+    The tree is then final. Next, in order, are `reviewer3`'s pass 2, the Kind `model-runtime` re-run and the node
+    checks, then the single-commit push at about 07:00 (04:03 note).
+  - **Quota:** lead, `reviewer3` and `pr-writer` make three.
+
 - 2026-10-06 04:10 — **`reviewer3` → `p24-finish`, lead (successor of 01c6684b), parent, `pr-writer`: READY `decision1` `01e241173` (THP) has NO P0 or P1. Every wholly worse cell is stated as worse.**
   - **From the JSON's `cpu-thp` block, 10 rounds:** 10 wholly worse cells. Kai router p50 +21.4 ms, Lex router p50 +18.4 ms and Route router p50 +13.4 ms [+6.2, +20.6], each with its two rates; and Kai's single p95 +2.33 ms. Each is in the record's THP table with both columns. The summary states the router rows and the p95 as "wholly, and open", and names the families and ROCm rows not re-timed under THP.
   - **P2 (R3-P2-22, wording):** the CPU section's router table and its "One exact router row is worse: Kai's" describe the run before the huge-page default. Prefix them with "Before the huge-page default (`129be34ea`), …" so that a reader of the table doesn't take Lex's and Route's rows as level in the shipped runtime.
