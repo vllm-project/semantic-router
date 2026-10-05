@@ -514,6 +514,7 @@ components:
           type: string
         return_meta:
           type: boolean
+          description: Include meta in the response (default false).
         overflow:
           type: string
           enum: [reject, truncate, window]
@@ -703,6 +704,7 @@ components:
           type: string
         return_meta:
           type: boolean
+          description: Include meta in the response (default false).
         overflow:
           type: string
           enum: [reject, truncate]

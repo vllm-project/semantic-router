@@ -87,7 +87,6 @@ type ClassifyResponse struct {
 	Labels      []string
 	Results     []ClassifyResult
 	InputTokens int
-	Revision    string
 }
 
 // EmbedInput is one embeddings input: Text, an image data URL, or base64 WAV audio.
@@ -313,8 +312,7 @@ func encodeClassify(ctx context.Context, model string, request ClassifyRequest) 
 			Context: optionalString(input.Context), Question: optionalString(input.Question), Answer: optionalString(input.Answer),
 		}
 	}
-	returnMeta := true
-	options := api.ClassifyOptions{DeadlineMs: deadline, ReturnMeta: &returnMeta, MaxTokens: optionalInt(request.MaxTokens), Threshold: request.Threshold}
+	options := api.ClassifyOptions{DeadlineMs: deadline, MaxTokens: optionalInt(request.MaxTokens), Threshold: request.Threshold}
 	if request.Overflow != "" {
 		overflow := api.ClassifyOptionsOverflow(request.Overflow)
 		options.Overflow = &overflow
@@ -345,8 +343,7 @@ func encodeEmbed(ctx context.Context, model string, request EmbedRequest) (api.E
 			inputs[index] = map[string]interface{}{"type": "text", "text": input.Text}
 		}
 	}
-	returnMeta := true
-	options := api.EmbeddingsOptions{DeadlineMs: deadline, ReturnMeta: &returnMeta, MaxTokens: optionalInt(request.MaxTokens)}
+	options := api.EmbeddingsOptions{DeadlineMs: deadline, MaxTokens: optionalInt(request.MaxTokens)}
 	if request.Overflow != "" {
 		overflow := api.EmbeddingsOptionsOverflow(request.Overflow)
 		options.Overflow = &overflow
@@ -371,8 +368,7 @@ func encodeRerank(ctx context.Context, model string, request RerankRequest) (api
 	if err != nil {
 		return api.RerankRequest{}, err
 	}
-	returnMeta := true
-	options := api.EmbeddingsOptions{DeadlineMs: deadline, ReturnMeta: &returnMeta, MaxTokens: optionalInt(request.MaxTokens)}
+	options := api.EmbeddingsOptions{DeadlineMs: deadline, MaxTokens: optionalInt(request.MaxTokens)}
 	if request.Overflow != "" {
 		overflow := api.EmbeddingsOptionsOverflow(request.Overflow)
 		options.Overflow = &overflow
@@ -414,9 +410,6 @@ func finite(values ...[]float64) bool {
 
 func decodeClassify(body api.ClassifyResponse) ClassifyResponse {
 	decoded := ClassifyResponse{Model: body.Model, Head: body.Head, Kind: string(body.Kind), Labels: body.Labels, InputTokens: body.Usage.InputTokens}
-	if body.Meta != nil && body.Meta.Revision != nil {
-		decoded.Revision = *body.Meta.Revision
-	}
 	for _, result := range body.Results {
 		item := ClassifyResult{Index: result.Index, Probabilities: floats(result.Probabilities), Scores: floats(result.Scores), Input: decodeUsage(result.Input)}
 		if result.Error != nil {

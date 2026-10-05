@@ -179,9 +179,11 @@ type ClassifyOptions struct {
 	MaxTokens *int `json:"max_tokens,omitempty"`
 
 	// Overflow What happens to an input longer than max_tokens (default the head's declared policy, usually reject). Nothing is cut silently.
-	Overflow   *ClassifyOptionsOverflow `json:"overflow,omitempty"`
-	Profile    *string                  `json:"profile,omitempty"`
-	ReturnMeta *bool                    `json:"return_meta,omitempty"`
+	Overflow *ClassifyOptionsOverflow `json:"overflow,omitempty"`
+	Profile  *string                  `json:"profile,omitempty"`
+
+	// ReturnMeta Include meta in the response (default false).
+	ReturnMeta *bool `json:"return_meta,omitempty"`
 
 	// ReturnTokens Token heads; include per-token label probabilities.
 	ReturnTokens *bool `json:"return_tokens,omitempty"`
@@ -314,7 +316,9 @@ type EmbeddingsOptions struct {
 	MaxTokens  *int                       `json:"max_tokens,omitempty"`
 	Overflow   *EmbeddingsOptionsOverflow `json:"overflow,omitempty"`
 	Profile    *string                    `json:"profile,omitempty"`
-	ReturnMeta *bool                      `json:"return_meta,omitempty"`
+
+	// ReturnMeta Include meta in the response (default false).
+	ReturnMeta *bool `json:"return_meta,omitempty"`
 }
 
 // EmbeddingsOptionsOverflow defines model for EmbeddingsOptions.Overflow.
