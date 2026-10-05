@@ -11,7 +11,8 @@
 #
 # ACCELERATOR is cpu (linux/amd64 and linux/arm64), rocm or cuda (linux/amd64).
 # GPU images take PyTorch from the official wheels, which carry their ROCm or
-# CUDA user-space libraries; the host supplies only the GPU driver.
+# CUDA user-space libraries; the host supplies only the GPU driver. The ROCm
+# image also builds causal-conv1d for CAUSAL_CONV1D_ARCHS (default gfx942).
 ARG IMAGE_REGISTRY=docker.io/
 ARG PYTHON_IMAGE=library/python:3.12-slim-bookworm
 ARG ACCELERATOR=cpu
@@ -83,10 +84,12 @@ ARG TORCH_CPU=torch==2.10.0
 RUN pip install --index-url https://download.pytorch.org/whl/cpu "$TORCH_CPU" && \
     python -c "import torch"
 
-FROM python-base AS torch-rocm
+# ROCm takes the rocm7.2 wheels: the rocm7.1 build crashes replaying the
+# runtime's HIP graphs.
+FROM python-base AS torch-rocm-base
 ARG TARGETARCH
 ARG TORCH_ROCM=torch==2.12.0
-ARG TORCH_ROCM_INDEX=https://download.pytorch.org/whl/rocm7.1
+ARG TORCH_ROCM_INDEX=https://download.pytorch.org/whl/rocm7.2
 RUN test "$TARGETARCH" = amd64 || { echo "ACCELERATOR=rocm supports linux/amd64 only" >&2; exit 1; }
 # The ROCm wheels link libatomic, which the slim base does not carry.
 RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 gcc libc6-dev && \
@@ -95,6 +98,34 @@ RUN pip install --index-url "$TORCH_ROCM_INDEX" "$TORCH_ROCM" && \
     pip install fla-core==0.5.2 packaging && \
     python -c "import torch, fla.ops.gated_delta_rule" && \
     printf '#include <Python.h>\n' | cc -fsyntax-only -x c -I "$(python -c 'import sysconfig; print(sysconfig.get_paths()["include"])')" -
+
+# causal-conv1d publishes no ROCm wheel, so it is built against the image's
+# PyTorch with the ROCm SDK and build tools the released decoders' wheel was
+# built with: the same compiler emits the same GPU code, which keeps the
+# decoders' convolution identical to their released answers. Without it they
+# fall back to a reference convolution that misses them. Only the wheel leaves
+# this stage. AMD's packages are pinned over Debian's older ROCm of the same
+# names, and ROCm's lld needs libxml2, which they don't declare.
+FROM torch-rocm-base AS causal-conv1d-rocm
+ARG ROCM_SDK=7.2.3
+ARG CAUSAL_CONV1D=causal-conv1d==1.7.0
+ARG CAUSAL_CONV1D_ARCHS=gfx942
+RUN mkdir -p /etc/apt/keyrings && \
+    python -c "import urllib.request; urllib.request.urlretrieve('https://repo.radeon.com/rocm/rocm.gpg.key', '/etc/apt/keyrings/rocm.asc')" && \
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.asc] https://repo.radeon.com/rocm/apt/$ROCM_SDK jammy main" \
+      > /etc/apt/sources.list.d/rocm.list && \
+    printf 'Package: *\nPin: release o=repo.radeon.com\nPin-Priority: 600\n' > /etc/apt/preferences.d/rocm && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends g++ libxml2 hipcc hip-dev rocm-llvm rocm-device-libs hipcub-dev rocprim-dev && \
+    rm -rf /var/lib/apt/lists/*
+RUN pip install setuptools==79.0.1 wheel==0.48.0 ninja==1.13.2 && \
+    CAUSAL_CONV1D_FORCE_BUILD=TRUE HIP_ARCHITECTURES="$CAUSAL_CONV1D_ARCHS" ROCM_PATH=/opt/rocm \
+      pip wheel --no-build-isolation --no-deps --no-binary causal-conv1d --wheel-dir /wheels "$CAUSAL_CONV1D"
+
+FROM torch-rocm-base AS torch-rocm
+RUN --mount=type=bind,from=causal-conv1d-rocm,source=/wheels,target=/tmp/wheels \
+    pip install --no-deps /tmp/wheels/causal_conv1d-*.whl && \
+    python -c "import causal_conv1d"
 
 FROM python-base AS torch-cuda
 ARG TARGETARCH

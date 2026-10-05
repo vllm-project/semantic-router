@@ -53,7 +53,8 @@ for these:
 - the signals of a request reach each runtime process in one bundled call;
 - features that ask one model about the same text share one pass through the
   model;
-- work for different models runs in parallel;
+- work for different models runs in parallel, on different processes and
+  devices; the models that share one GPU take turns on it;
 - a repeated input is not computed again: each model keeps a cache of recent
   results, keyed by the exact input and profile (`--result-cache-entries`);
 - long inputs are split into windows only when you ask for windowing.

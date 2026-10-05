@@ -261,7 +261,7 @@ func assertReferenceConfigModelCatalogCoverage(t testingT, modelCatalog map[stri
 
 func assertReferenceConfigEmbeddingCatalogCoverage(t testingT, embeddings map[string]interface{}) {
 	assertMapCoversStructFields(t, embeddings, reflect.TypeOf(CanonicalEmbeddingModels{}), "global.model_catalog.embeddings")
-	assertMapCoversStructFields(t, mustMapAt(t, embeddings, "semantic"), reflect.TypeOf(EmbeddingModels{}), "global.model_catalog.embeddings.semantic")
+	assertMapCoversStructFields(t, mustMapAt(t, embeddings, "semantic"), reflect.TypeOf(EmbeddingModels{}), "global.model_catalog.embeddings.semantic", "gemma_model_path", "bert_model_path")
 	assertMapCoversStructFields(
 		t,
 		mustMapAt(t, embeddings, "semantic", "embedding_config"),

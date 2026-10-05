@@ -209,9 +209,9 @@ func (s *ClassificationAPIServer) writeModelDiagnosticError(w http.ResponseWrite
 }
 
 // executeModelDiagnostic bounds the response while transferring the lease to
-// the actual inference. A canceled native forward cannot be unloaded early.
-// Its prepared resource retains the one shared admission ticket; the API does
-// not add a competing admission policy or discover another model instance.
+// the actual inference, which keeps the binding's one shared admission ticket
+// until the model call returns; the API does not add a competing admission
+// policy or discover another model instance.
 func executeModelDiagnostic[T any](w http.ResponseWriter, r *http.Request, release func(), invoke func(context.Context) (T, error)) (T, error) {
 	var zero T
 	ctx, cancel := context.WithTimeout(r.Context(), apiWriteTimeout)

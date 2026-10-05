@@ -61,14 +61,18 @@ type PIIModel struct {
 }
 
 type EmbeddingModels struct {
-	Qwen3ModelPath      string                  `yaml:"qwen3_model_path"`
-	GemmaModelPath      string                  `yaml:"gemma_model_path"`
-	MmBertModelPath     string                  `yaml:"mmbert_model_path"`
-	MultiModalModelPath string                  `yaml:"multimodal_model_path,omitempty"`
-	BertModelPath       string                  `yaml:"bert_model_path"`
-	UseCPU              bool                    `yaml:"use_cpu"`
-	EmbeddingConfig     HNSWConfig              `yaml:"embedding_config,omitempty"`
-	Endpoint            EmbeddingEndpointConfig `yaml:"endpoint,omitempty"`
+	Qwen3ModelPath      string `yaml:"qwen3_model_path"`
+	MmBertModelPath     string `yaml:"mmbert_model_path"`
+	MultiModalModelPath string `yaml:"multimodal_model_path,omitempty"`
+	// RetiredGemmaModelPath and RetiredBertModelPath keep the empty keys that
+	// deployed configs and the operator CRD still carry parseable; the loader
+	// refuses a value (the runtime has no EmbeddingGemma or MiniLM family) and
+	// nothing reads them.
+	RetiredGemmaModelPath string                  `yaml:"gemma_model_path,omitempty" jsonschema:"maxLength=0"`
+	RetiredBertModelPath  string                  `yaml:"bert_model_path,omitempty" jsonschema:"maxLength=0"`
+	UseCPU                bool                    `yaml:"use_cpu"`
+	EmbeddingConfig       HNSWConfig              `yaml:"embedding_config,omitempty"`
+	Endpoint              EmbeddingEndpointConfig `yaml:"endpoint,omitempty"`
 }
 
 func (e EmbeddingModels) MinSimilarityThreshold() float32 {
