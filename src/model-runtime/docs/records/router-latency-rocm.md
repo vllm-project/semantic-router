@@ -26,8 +26,8 @@ legacy router is in [`router-latency-cpu.md`](router-latency-cpu.md).
   `ACCELERATOR=rocm`, `TORCH_ROCM_INDEX` at the rocm7.2 index), built from the
   exact mirror: PyTorch 2.12.0+rocm7.2, HIP 7.2.53211, Triton 3.7.0, `fla-core`
   0.5.2. It has no `causal-conv1d`. The shipped image adds it for the decoders'
-  causal convolution, which the Vela 1.0 (ModernBERT) encoders don't have, so
-  it doesn't change these rows.
+  causal convolution, which the Vela 1.0 (ModernBERT) encoders don't have; an
+  A/B against that image follows the result.
 - **Models:** Vela 1.0 Domain, Guard, PII, FactCheck and Feedback at their
   pinned registry revisions, as in `router-latency-cpu.md`.
 - **Configuration:**
@@ -88,6 +88,30 @@ on ROCm: the GPU rows barely move with the node's load, and the CPU rows do.
 ROCm throughput levels off at about 108 requests per second from 4 callers
 on: the one GPU process runs the five models' device work one at a time, so
 more callers only queue.
+
+## The shipped image, and the node's other GPUs
+
+After the five rounds, the same router served the same corpus from the
+candidate shipped image (staging `af71d5e82`: these packages plus
+`causal-conv1d` 1.7.0 and MIOpen's databases in the model volume), alternating
+with this image for three rounds on ROCm. Decisions matched on 539 of 539
+inputs between the two images in every round, and every point estimate
+favoured the shipped image, most intervals straddling zero. Its undisturbed
+passes match this record: sequential p50 10.3–10.9 ms and 104–105 requests per
+second at 16 callers.
+
+By then four other GPUs of the node ran jobs whose host threads shared this
+NUMA node, and both images showed an intermittent slow phase. In some
+sub-passes the sequential p95 rose to 35–199 ms (15–18 ms otherwise), or the
+rate at 16 callers fell to 29–70 requests per second, while the router
+container spent 1.5–3.5 times its usual CPU time per request; the cause was
+not isolated further. Four more passes of this image after those jobs paused
+were back at this record's values (sequential p50 10.4–10.9 ms, 101–104
+requests per second at 16 callers), and a diagnostic hook in the runtime
+logged 41 graph captures in each, none failed. So the five rounds show the
+GPU path on a node whose other GPUs were mostly idle; a router that shares its
+host with other GPU jobs should expect that variance. The passes are in the
+JSON (`shipped_image`).
 
 ## What the CPU side measures
 
