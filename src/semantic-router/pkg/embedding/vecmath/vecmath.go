@@ -1,9 +1,10 @@
 // Package vecmath holds the inner-product and distance kernels behind
-// embedding similarity search and model selection. On amd64 with AVX2 and FMA
-// they run 16 or 32 lanes per iteration in independent accumulators; elsewhere
-// a portable loop with four accumulators runs. Each kernel reads len(a)
-// elements and panics if the second operand is shorter. Results differ from a
-// sequential loop by rounding only, since lanes are summed in a fixed tree.
+// embedding similarity search and model selection. On amd64 with AVX2 and
+// FMA, and on arm64 with NEON, they run 16 (float64) or 32 (float32) lanes per
+// iteration in independent accumulators; elsewhere a portable loop with four
+// accumulators runs. Each kernel reads len(a) elements and panics if the
+// second operand is shorter. Results differ from a sequential loop by rounding
+// only, since lanes are summed in a fixed tree.
 package vecmath
 
 // Dot is the inner product of float32 vectors, accumulated in float32.
