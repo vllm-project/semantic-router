@@ -205,6 +205,52 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 01:18 — **Parent rulings on the lead's 01:12 note and `router`'s 01:21 handoff. Parent → lead (successor
+  of 01c6684b), `p24-finish`, `runtime-arch`, all P2–4 workstreams.**
+  - **`runtime-arch` is LAUNCHED (01:17)**, cut from staging `122152210`. Its items are R2-P2-10 (#4600), R2-P2-11
+    (#4601), and a small third item (below). READY by 07:30.
+  - **R2-P2-7 (#4598):** a fresh `router` successor launches in `vela2-08b`'s slot when `vela2-08b` posts READY
+    (about 02:15). It works from `router`'s 01:20 plan in `mr-scratch/p24-router/HANDOFF.md`. READY by 07:30.
+    Thanks, `router`.
+  - **`decision1`'s Kai-0.6B `exact` router-request row on CPU (p50 +66.1 ms [+5.1, +127.1], +7.6%):** the user's
+    bar is no regression, and the push is at 10:00, so this gets one time-boxed attempt.
+    - After the decoder re-time (READY about 03:30), `p24-finish` looks for the cause until 05:00. Profile the request
+      path against the bundled runtime: tokenization, bundle split, threads, warm caches.
+    - A fix lands only if it is principled, holds over 10 quiet interleaved rounds, and makes no other cell worse.
+    - Otherwise it ships recorded, as the lead recommends, with the cause stated as not found.
+  - **No CPU LAPACK in the ROCm image's release PyTorch:**
+    - The lead's documentation stands: `rocm-router-image.md` and the deploy guide, in the slimming commit.
+    - Also, `runtime-arch` adds a plan-time refusal by capability: the CPU accelerator reports LAPACK, and the GDN
+      families require it. The failure then says why and what to do (the CPU image or a GPU device), instead of a
+      golden mismatch.
+    - If that threatens `runtime-arch`'s READY, it drops the refusal and only the documentation ships.
+  - **Reviewer:** the fresh read-only reviewer takes the first slot after the `router` successor. That is
+    `contracts`'s or `p24-finish`'s, about 03:00–03:30. Its pass 1 covers IP3b and is due 06:00; pass 2 covers the
+    folded items and is due 09:00.
+  - **Acknowledged:**
+    - The lead owns the image slimming, READY-equivalent by 06:30.
+    - The PR closes #4596–#4601 and #4603; #4602 (R2-P2-12) stays open.
+    - Node C 0–15 and 144–159 stay free until 03:00.
+  - **Quota:** lead, `vela2-08b`, `p24-finish`, `contracts` and `runtime-arch` make five.
+
+- 2026-10-06 01:21 — **HANDOFF `router` (successor of ce54d321; cab0e94a) → parent, lead (successor of 01c6684b): R2-P2-7 is CONFIRMED for the
+  `router` role, but this agent's context is spent, so a fresh `router` successor should take it. Everything of mine is
+  merged, and nothing of mine runs.**
+  - **Merged into staging `122152210`:** READY `82aa0391d`, the P2-20 records (stack B and the shipped image
+    `a580be6b9`), the memory-width P1 and the response-cache examples, `embed`'s ROCm section and `vela1`'s ROCm A/B
+    (`733e373ec`). Branch `xunzhuo/model-runtime-p24-router-ip3` @ `733e373ec`, pushed and clean.
+  - **Released:** every lease and claim (node B GPU1–2, node C GPU6 and 128–143, node D 64–95). No job, container or
+    watcher of mine runs on any node.
+  - **R2-P2-7 plan for the successor, about 3 hours, so READY by 07:30 fits:** it is in
+    `/home/xunliu/code/mr-scratch/p24-router/HANDOFF.md` (the 01:20 section).
+    - `planProcesses` resolves `device: auto` before it groups processes.
+    - The source of truth is the runtime's own `auto` choice, through a small runtime query, not a Go copy of
+      `auto_priority`. A CPU result joins the per-model CPU spread, and a GPU result keeps one process per device.
+    - Also: planning tests, design §13.4 and `deploy.md` (en and zh-Hans), the Kind `model-runtime` re-run and the node D
+      check.
+  - **Parent:** please relaunch `router` for R2-P2-7 under the quota guard, or name another owner.
+  — `router` (successor of ce54d321; cab0e94a)
+
 - 2026-10-06 01:12 — **Model-runtime P2–4 lead (successor of 01c6684b) → parent, `p24-finish`, `runtime-arch`, `contracts`, `router`, `vela2-08b`: three READYs MERGED. Staging `122152210` = `58cbe432e` + `embed` `c78f06ea7` + `decision1` `4acef6ae7` + `router` `733e373ec` (all clean, signed off). `runtime-arch` can cut from it now. The lead takes the ROCm image slimming. IP3 CI is green.**
   - **Node A:** the repo check and the fresh smoke run on `122152210` now. The check doesn't include `make test-e2e-profile-multimodal` (it needs Kind); the PR's E2E lanes run it at the final push.
   - **Schedule (the parent's proposal, adopted):** new items post READY by 07:30; existing items may run to 05:00; integration and node checks 07:30–09:30; the single-commit push at about 10:00. The commit message draft goes to the parent by 09:30.
