@@ -10,11 +10,12 @@ whose interval straddles zero is level.
 
 - **Date:** 2026-10-05.
 - **Runtime:** the CPU rows against legacy (Omni, the encoders and the
-  native-model probe) at `e0e0e2850`, in one run. The ROCm rows at
-  `0d80ded16`: the commits after it change ONNX Runtime, Omni and the heap
-  freeze after a runtime loads, none of which `tools/embed_bench.py` or the
-  native engine on the GPU runs. The engine-level CPU rows and the engine
-  decision are from 2026-10-04 at `7c2c6e21b`.
+  native-model probe) at `e0e0e2850`, in one run. The ROCm rows run the
+  router image's own runtime (`a580be6b9`); this branch's commits since
+  change ONNX Runtime, Omni, request-option parsing and the heap freeze
+  after a runtime loads, none of which `tools/embed_bench.py` or the native
+  engine on the GPU runs. The engine-level CPU rows and the engine decision
+  are from 2026-10-04 at `7c2c6e21b`.
 - **CPU:** node B vCPUs 112–127 (16 vCPUs of an AMD EPYC 9575F KVM guest, one
   NUMA node), PyTorch 2.10.0 (oneDNN, MKL) and ONNX Runtime 1.30.0 in the
   runtime (the router image's pins), ONNX Runtime 1.22.0 in the legacy
@@ -26,14 +27,12 @@ whose interval straddles zero is level.
   vCPUs. The guest's 1-minute load was 5–19 of 160 during the run (other
   workloads, on other vCPUs).
 - **ROCm:** one AMD Instinct MI325X (gfx942, node B GPU2) for both sides, with
-  host vCPUs 80–87 in a cgroup cpuset. The runtime side runs stack B, the
-  router image's ROCm stack: PyTorch 2.12.0+rocm7.2 (HIP 7.2), Triton 3.7.0,
-  in a venv whose `pip freeze` hashes to `bfc6d181299c5a94`. Its pins equal
-  the staging image's (`extproc-rocm72cc:af71d5e82`) apart from Python
-  3.12.14 against 3.12.15 and `causal-conv1d`, which these encoders never
-  run. The legacy
-  side runs in the legacy router image: ONNX Runtime 1.22.1 ROCm with the CK
-  flash-attention operator library. Host load 13–34 of 160.
+  host vCPUs 80–87 in docker cgroup cpusets. The runtime side runs in the
+  router's ROCm image, `mr-p24-lead/extproc-rocm72rt:a580be6b9`: vLLM's ROCm
+  PyTorch 2.12.0+git6bbd260 (AOTriton 0.13.50, ROCm 7.2.3) and Triton 3.7.0.
+  The legacy side runs in the legacy router image: ONNX Runtime 1.22.1 ROCm
+  with the CK flash-attention operator library. Host load 2–11 of 160.
+  `router` ran these rounds for this record (2026-10-05, 23:40–23:45).
 - **Legacy paths:** the router's native facade at `61aa7eb2d` (candle on the
   CPU for Vela Embedding, Reranker and Qwen3-Embedding, the router's default;
   ONNX Runtime on the prepared bundle for Omni), and the legacy ONNX Runtime
@@ -306,32 +305,45 @@ compares it with legacy candle.
 
 ## ROCm: legacy ONNX Runtime + CK flash attention vs the native engine
 
-Engine-level scenarios, six rounds with the order rotated (legacy first in
-even rounds), 100 timed runs per scenario and round, the same GPU and host
-cores for both sides. p50 (p95) ms are medians of the rounds; intervals are
-paired t-intervals over the rounds of runtime minus legacy; throughput in
-items per second (texts, or query-document pairs). The native engine runs as
-it serves: gfx942 fused rotary, encoder graphs (3 captures, 327 replays, 0
-failed per Embedding round), block-local attention from 2,048 tokens.
+Engine-level scenarios, six interleaved rounds (the order rotated each round)
+on one MI325X (node B GPU2) and the same 8 host vCPUs for both sides (80–87,
+docker cgroup cpusets), 100 timed runs per scenario. The runtime side runs in
+the router's shipped ROCm image (`a580be6b9`: vLLM's ROCm PyTorch
+2.12.0+git6bbd260 with AOTriton 0.13.50, Triton 3.7.0), with the native engine
+as it serves (gfx942 fused rotary, encoder graphs, block-local attention from
+2,048 tokens). The legacy side is ONNX Runtime's ROCm EP with CK flash
+attention in the legacy router image (`61aa7eb2d`). The node's 1-minute load
+stayed between 2 and 11. p50 (p95) ms are medians of the rounds; Δ is runtime
+− legacy over the paired rounds, with a 95% t interval.
 
-| Scenario | Legacy p50 (p95) ms | Runtime p50 (p95) ms | p50 Δ ms [95% CI] | p95 Δ ms [95% CI] | Items/s, legacy → runtime |
-| --- | --- | --- | --- | --- | --- |
-| Embedding, one text of 16 tokens | 4.17 (4.36) | 1.54 (1.56) | −2.63 [−2.71, −2.54] | −2.81 [−2.90, −2.72] | |
-| Embedding, one text of 64 tokens | 4.16 (4.35) | 1.76 (1.77) | −2.38 [−2.44, −2.32] | −2.58 [−2.66, −2.51] | |
-| Embedding, one text of 256 tokens | 4.53 (4.71) | 3.10 (3.11) | −1.45 [−1.50, −1.39] | −1.58 [−1.65, −1.51] | |
-| Embedding, one text of 1,024 tokens | 7.16 (7.27) | 6.79 (7.01) | −0.37 [−0.50, −0.23] | −0.30 [−0.43, −0.17] | |
-| Embedding, 32 texts of 16–256 tokens | 140.3 (142.7) | 23.2 (24.4) | −113.3 [−123.2, −103.3] | −119.3 [−122.5, −116.0] | 228 → 1,364 |
-| Reranker, query + 10 documents | 43.0 (43.7) | 9.26 (9.50) | −33.6 [−34.5, −32.7] | −34.2 [−35.0, −33.4] | 232 → 1,096 |
-| Reranker, query + 50 documents | 214.7 (217.6) | 25.3 (25.7) | −188.2 [−191.9, −184.5] | −194.7 [−208.3, −181.2] | 232 → 1,974 |
+| Vela Embedding | Legacy | Runtime | p50 Δ [95% CI] | p95 Δ [95% CI] |
+| --- | --- | --- | --- | --- |
+| one text, 16 tokens | 4.01 (4.14) | 1.53 (1.55) | −2.49 [−2.53, −2.45] | −2.59 [−2.64, −2.54] |
+| one text, 64 tokens | 3.95 (4.12) | 1.74 (1.75) | −2.21 [−2.26, −2.17] | −2.35 [−2.44, −2.27] |
+| one text, 256 tokens | 4.55 (4.64) | 2.63 (2.64) | −1.92 [−1.97, −1.87] | −2.00 [−2.04, −1.95] |
+| one text, 1,024 tokens | 6.94 (7.00) | 6.46 (6.63) | −0.47 [−0.54, −0.41] | −0.39 [−0.53, −0.25] |
+| 32 texts of 16–256 tokens | 136.7 (138.4) | 26.0 (26.9) | −110.7 [−111.6, −109.7] | −111.0 [−112.3, −109.8] |
 
-Every row is better. Short rows replay a captured HIP graph per length
-bucket; multi-row batches replay one only when the bucket pads little (else
-they run packed); a rerank request is one packed forward of all its pairs.
-The ROCm goldens of all three models are byte-identical on this stack, so
-nothing is re-recorded. Qwen3-Embedding has no legacy GPU path (candle has no
-ROCm); on the MI325X it takes 14–16 ms for one text of up to 256 tokens
-(launch-bound: its decoder path runs without graphs), 26.5 ms at 1,024 tokens
-and 104 ms for 32 texts (2026-10-04, `5a73fc17e`).
+| Vela Reranker | Legacy | Runtime | p50 Δ [95% CI] | p95 Δ [95% CI] |
+| --- | --- | --- | --- | --- |
+| query + 10 documents | 41.8 (42.3) | 9.13 (9.45) | −32.6 [−32.9, −32.3] | −32.7 [−33.2, −32.3] |
+| query + 50 documents | 209.5 (213.8) | 34.0 (34.4) | −176.0 [−177.6, −174.4] | −175.1 [−185.9, −164.2] |
+
+Every interval lies wholly on the runtime's side. Throughput, items per second
+(median of the rounds): 32 texts 234 → 1,226; query + 10 documents 239 →
+1,090; query + 50 documents 238 → 1,471.
+
+Short rows replay a captured HIP graph per length bucket; multi-row batches
+replay one only when the bucket pads little (else they run packed); a rerank
+request is one packed forward of all its pairs. The 1,024-token row was the
+last one behind: the fused rotary kernel (`rotary_half`, bit-exact) took it
+from 7.5 to 6.5 ms, and block-local attention, which costs more than dense
+masked attention below 2,048 tokens on this GPU, now starts there.
+Qwen3-Embedding has no legacy GPU path (candle has no ROCm); on the MI325X it
+takes 14–16 ms for one text of up to 256 tokens (launch-bound: its decoder
+path runs without graphs), 26.5 ms at 1,024 tokens and 104 ms for 32 texts
+(2026-10-04, `5a73fc17e`). The ROCm golden answers of all three models hold
+in this image in every value (parity record).
 
 ## ONNX Runtime vs PyTorch on the CPU, per model
 
