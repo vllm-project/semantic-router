@@ -205,6 +205,54 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 00:47 — **`p24-finish` (successor of `decision1` 4fe5617f and `embed` fc6fcbfa) → lead (successor of 01c6684b), parent, `router`: INTEGRATION READY embed `c78f06ea7`** (`xunzhuo/model-runtime-p24-embed`, pushed, clean; contains staging `58cbe432e` and `router`'s ROCm records `f10368515`). **Against the legacy bindings, 47 CPU cells are better or level and one is worse and open; all 14 ROCm cells are better. Goldens hold on the adopted image.**
+  - **What it adds over `407687e1c`** (code at `e0e0e2850` and its parents, all CPU or ONNX Runtime):
+    - per-session ONNX Runtime pools, capped per graph (`ModelSpec.graph_threads`), with a bounded idle spin (2 ms, or 1 ms beside another CPU engine; `ModelSpec.graph_spin_us`); the receipt reports each pool. `onnxruntime>=1.26`; the adopted image ships 1.30.0.
+    - Omni: Nano's text graph on 12 threads with a 10 ms spin; a batch's images one at a time; image bands resized on three threads (bit-identical).
+    - `freeze_heap` after every load pass: no gen-2 GC over 2 ms after load, against 83–131 ms before.
+    - one positive-integer option parser and one decisions golden request (`35ee68c4d`).
+    - the A/B tool's intervals and resume; test flakes fixed; the A/B tool passes ruff (`3a2556573`).
+    - records (`89a9f551f`, `c78f06ea7`) and `router`'s merge (`79b55a9c0`).
+  - **CPU A/B against legacy, `e0e0e2850`, one run on node B 112–127 (load 5–19), Omni 10 interleaved rounds, encoders 6:**
+
+    | Rows | Better | Level | Worse |
+    | --- | --- | --- | --- |
+    | Encoders: 6 jobs, p50 / p95 and 4-caller rate | 18 | 0 | 0 |
+    | Omni, 1 caller: 6 jobs, p50 / p95 | 7 | 5 | 0 |
+    | Omni, 4-caller run's sequential pairs, p50 / p95 | 5 | 6 | 1 |
+    | Omni, 4 callers, rate | 4 | 2 | 0 |
+
+    - **Closed, against the run before `e0e0e2850` (at `0877e5ce7`):** Nano text 1-caller p95 +0.88 [+0.12, +1.16] → +0.01 [−0.16, +0.41]; Nano image p95 in the 4-caller run's pairs +14.8 [+7.9, +28.3] → +27.1 [−43.4, +33.0]; Mini image rate −0.06 [−0.10, −0.02] → −0.00 [−0.03, +0.02]. All three are now level.
+    - **OPEN (P0-1), recorded unchanged: Nano text p95 in the 4-caller run's sequential pairs, 7.45 against 7.00 ms, +0.45 ms [+0.21, +0.64].** The cause is the 64–104-token texts: legacy's 16 threads have a sweet spot at 64 tokens. No measured setting closes the cell without a cost: ONNX Runtime's own spin slows the next graph on the same cores, and two sessions split by length collapsed the rate.
+    - **Re-check, not quiet:** at 00:16–00:20 I re-ran the same pool for 10 rounds while another workstream's CPU parity ran on 132–143 of the same NUMA node. It read Nano text far worse: p50 +2.88 ms [+2.54, +3.19], −55 req/s [−60, −51]; legacy's p50 moved 4.50 → 5.09 ms and the runtime's 4.55 → 7.97. So the runtime's pool is more sensitive to such neighbours than legacy's. The cause is not found; the record shows this beside the cell.
+  - **ROCm against legacy ORT + CK flash attention (`router`'s 6 rounds in `a580be6b9`, merged):** all 14 Embedding and Reranker cells better, for example one 16-token text 4.01 → 1.53 ms and 32 texts 136.7 → 26.0 ms.
+  - **Goldens at `c05aa8b77`:** ROCm in `a580be6b9` (node D GPU1, two fresh processes): Vela Embedding, Reranker and Qwen3-Embedding equal the recorded answers in every value. CPU (PyTorch 2.10.0, ONNX Runtime 1.30.0): all five matched, within 4.8e-7 (encoders, 16 threads, node D) and 1.1e-7 (Omni, 4 threads, node B 32–35 for 17 s). Not byte for byte, since CPU numerics move with the host and thread count. Parity against legacy: every job passes the CPU bar by about five orders of magnitude.
+  - **Checks:** the model-runtime CPU suite: 589 passed. `make check CHANGED_FILES=<the 22 files over staging>` exits 0 (lint, mypy, `model-runtime-test`, the client check) on `79b55a9c0`, which equals `c78f06ea7` except for one record paragraph (`md fmt` passed). **Not run by me:** `make test-e2e-profile-multimodal`, which `make impact` lists for the `image-calibration` domain (it needs Kind). Lead: please include it in IP3b's node A run. Node D GPU1 is released.
+  - **Next (the parent's 00:42 scope):** the `decision1` decoder ROCm rows re-timed in `a580be6b9`. Lead: I propose `decision1`'s own queue (`final-ab-queue.sh`, 5 rounds, the same rows) on node C GPU1, GPU2, GPU5 and GPU7 (host 0–7, 8–15, 144–151, 152–159), with Transformers 5.17 mounted for the bundled side. That's about 2 h unattended, so READY about 03:30. Say if you want other rows or GPUs.
+    - Within 05:00 I'd also look at the two open CPU cells (Kai's router requests, `embed`'s Nano text), but only as follow-up READYs, and only if a fix holds over 10 rounds on a quiet NUMA node.
+  — `p24-finish`
+
+- 2026-10-06 00:45 — **`contracts` → lead (successor of 01c6684b), parent: START. R2-P2-9, R2-P2-2 and the R2-P2-1 remainder on one branch; INTEGRATION READY by 07:30.**
+  - **Owner and branch:** `contracts` (fresh Max agent). Branch `xunzhuo/model-runtime-p24-contracts`, cut from staging `58cbe432e`, worktree `/home/xunliu/code/vllm-sr-p24-contracts`. I merge newer staging when you move it.
+  - **R2-P2-9, ETA 02:15:** a `Liveness` schema (`status: alive` plus `api_version`) for `/health/live`; `Health` keeps only the readiness states. Files: the runtime's `api/openapi.yaml`, `api/app.py` (the `live` handler only), `tests/test_api_contract.py`, the generated `pkg/modelservice/api/openapi.gen.go`, the fake runtime in `pkg/modelservice/runtimetest/` if it needs a line, and the docs (runtime `docs/design.md`, `README.md`, `website/docs/model-runtime/reference.md`).
+    - **`router`, FYI:** the router reads only `/health`, so `pkg/modelservice/health.go` and `client.go` keep their types. I don't touch `pkg/modelruntime/serving` or `pkg/modelservice/process.go`.
+    - **`p24-finish` / `runtime-arch`:** I don't touch `plugins/base.py`, `registry/builtin.py`, `runtime.py`, `supervision/` or the engines.
+    - Contract version: 2.0.0 or a bump, decided from how the branch's tests define it, with the reason in the milestone note.
+  - **R2-P2-2, ETA 04:15:** one `runtime/model-runtime@v1` capability replaces `runtime/candle@v1` and `runtime/onnxruntime@v1`; the training contract's version moves; the dashboard types are regenerated. Files: `pkg/trainingcontract/` (capabilities, planner tests, testdata, generated OpenAPI / schema), the dashboard's training-contract types and test, `src/training/README.md`, and any other consumer the grep finds.
+  - **R2-P2-1 remainder, ETA 06:15:** remove `RetiredGemmaModelPath` / `RetiredBertModelPath` (router), the two CLI model fields, and the operator's `GemmaModelPath`. The router and the CLI then refuse the key itself, empty or set, with the `vllm-sr config migrate` pointer, and migrate drops both. Then regenerate the schema, the dashboard TS, the CRD, the bundle and `crd-reference.md`, and drop the empty keys from the two maintained configs.
+    - **Operator effect, flagged now:** once the field leaves the CRD, the API server prunes `gemma_model_path` from stored CRs, which then run on the default embedding model (what migrate produces). A kubectl that validates strictly (the default since 1.27) refuses new applies as an unknown field, but without the migrate pointer. Refusing a stored CR would mean keeping the field as a deprecated stub with a CEL rule, which is a compatibility shim in the API. I follow the user's instruction (remove it) and write the effect into the READY and the operator docs unless you say otherwise.
+  - **Checks:** `make impact` and `make check CHANGED_FILES=…`, Go, Python and dashboard unit tests, the operator's generate / verify targets. Heavy checks (`make harness-check` if needed) run on node A in the precommit image at my exact head.
+  — `contracts`
+
+- 2026-10-06 00:46 — **`vela2-08b` → lead (successor of 01c6684b), parent: Vela-2.0-0.8B parity is BYTE-IDENTICAL, so no F1 / EM deltas are needed. The ROCm timing is done and recorded (pushed `b056d8c4c`). CPU timing starts now; READY stays on track for 02:15.**
+  - **Exact profile, against the package's own engine:** CPU 60 / 60 identical (PyTorch 2.10 CPU, MKL); ROCm 360 / 360 identical in `a580be6b9` and 360 / 360 in the release image. Every request has 0 rendering mismatches and max |Δ| 0.0.
+  - **Shipped image against the release image:** the runtime and the engine each answer all 360 requests byte-identically to the release image's (max drift 0.0), as the 4B / 9B do. Three cold processes started together on two GPUs, with one empty autotune cache, answer alike (each pair 360 / 360) and tune nothing (0 → 0 entries).
+  - **Re-pin readiness at the new pins:** the image's golden check matched 7 / 7 for 0.3B, 4B and 9B (download, verification, golden). On CPU the 0.3B and 4B matched 7 / 7; the 9B is running.
+  - **ROCm timing (10 interleaved rounds, GPU6, four sides, 32–2,048 tokens × 1 / 4 callers):** every profile is faster than the engine on every row, with every interval on the better side. `exact` is 22–30% faster at the median with one caller and gives 1.35–1.45× the engine's requests per second with 4 callers. `shared_context` / `batching` are 1.6–2.4× faster. I re-ran it once with nothing else of mine on the node, because single rounds of the first run overlapped my model loads on GPU4; the record keeps both runs.
+  - **Disclosure (opt-in approximate profiles, not `exact`):** on the 0.8B, the packed path changes span sets in 33 of 360 requests, and 9 Choice / Score / Noul decisions. All 9 are near ties on the exact path (top two within 0.008, or a Noul within 0.005 of 0.5), and answers move by up to 0.025. The 4B / 9B change span sets only. This is recorded in `vela2-parity.md`.
+  - **CPU timing (now, host 128–143, `systemd-run` scope):** a decoder request takes seconds on CPU, so the full 10-round grid would take hours. Instead it runs 5 interleaved rounds at 32 / 128 / 512 tokens, then 3 rounds at 2,048, one caller, four sides. ETA about 01:45.
+  — `vela2-08b`
+
 - 2026-10-06 00:42 — **USER (00:38): SCOPE CHANGE FOR #4512. Seven follow-ups fold into this PR, and the final push
   moves from 03:00 to about 10:00 (CI green about 14:30). Parent → lead (successor of 01c6684b), `router`,
   `p24-finish`, `vela2-08b`, all P2–4 workstreams.** The user chose this after the parent's analysis: these items were
