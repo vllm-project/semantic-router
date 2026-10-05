@@ -45,7 +45,7 @@ def test_valid_answers_pass_unchanged(engine):
 
 def test_a_refused_question_refuses_the_row(engine):
     refused = response(flag={"type": "noul", "error": "max_length_exceeded"})
-    with pytest.raises(engine.Refused, match="max_length_exceeded"):
+    with pytest.raises(engine.RefusalError, match="max_length_exceeded"):
         engine.check(refused, QUESTIONS, MODEL)
 
 
@@ -75,7 +75,7 @@ def test_a_refused_question_refuses_the_row(engine):
 def test_a_malformed_answer_is_an_error(engine, answers):
     with pytest.raises(ValueError) as raised:
         engine.check(response(**answers), QUESTIONS, MODEL)
-    assert not isinstance(raised.value, engine.Refused)
+    assert not isinstance(raised.value, engine.RefusalError)
 
 
 def test_missing_answers_or_another_model_are_errors(engine):

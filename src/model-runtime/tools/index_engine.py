@@ -44,7 +44,7 @@ SUM_TOLERANCE = 1e-5
 PROFILE = "exact"
 
 
-class Refused(ValueError):
+class RefusalError(ValueError):
     """The model declined a question of the row."""
 
 
@@ -55,7 +55,7 @@ def _probability(value: Any) -> bool:
 def check(
     response: dict[str, Any], questions: dict[str, dict[str, Any]], model: str
 ) -> dict[str, Any]:
-    """The response unchanged if it answers every question validly; raises ``Refused`` or ``ValueError``."""
+    """The response unchanged if it answers every question validly; raises ``RefusalError`` or ``ValueError``."""
     if response.get("model") != model:
         raise ValueError("the runtime answered under another model identity")
     answers = response.get("answers")
@@ -67,7 +67,7 @@ def check(
     if errors - REFUSALS:
         raise ValueError(f"the runtime answered {sorted(errors - REFUSALS)}")
     if errors:
-        raise Refused(",".join(sorted(errors)))
+        raise RefusalError(",".join(sorted(errors)))
     for key, question in questions.items():
         answer = answers[key]
         if answer.get("type") != question.get("type"):
@@ -86,7 +86,9 @@ def check(
         ):
             raise ValueError("the runtime returned an invalid option distribution")
         top = max(values)
-        first = next(o for o, v in zip(options, values) if abs(v - top) <= TIE)
+        first = next(
+            o for o, v in zip(options, values, strict=True) if abs(v - top) <= TIE
+        )
         if answer.get("choice") != first:
             raise ValueError("the choice is not the first most probable option")
     return response
@@ -146,7 +148,7 @@ class RuntimeIndexEngine:
         response = self.service.finish(prepared, results, 0.0, 0.0)
         try:
             return check(response, questions, self.model_id), None
-        except Refused as exc:
+        except RefusalError as exc:
             raise Unsupported(str(exc)) from exc
 
     def warmup(self) -> None:
