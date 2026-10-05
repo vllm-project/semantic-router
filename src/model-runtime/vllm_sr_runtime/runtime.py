@@ -12,6 +12,7 @@ worker. Requests name their model (optional while a process serves one);
 from __future__ import annotations
 
 import asyncio
+import gc
 import logging
 import math
 import os
@@ -104,7 +105,26 @@ def planned_engine(config: ModelConfig) -> str:
     return engines[0] if len(engines) == 1 else AUTO_ENGINE
 
 
-__all__ = ["DEADLINE", "Runtime", "ServedModel", "planned_engine", "with_overrides"]
+def freeze_heap() -> None:
+    """Collect once, then leave every object that exists now out of later collections.
+
+    Loading leaves the frameworks', tokenizers' and models' long-lived objects
+    behind. A full collection walks all of them (90-130 ms in a process that
+    serves Omni Nano and Mini) and stalls whichever request triggers it; once
+    they are frozen it walks only what requests allocated since.
+    """
+    gc.collect()
+    gc.freeze()
+
+
+__all__ = [
+    "DEADLINE",
+    "Runtime",
+    "ServedModel",
+    "freeze_heap",
+    "planned_engine",
+    "with_overrides",
+]
 
 GENERIC_OPTIONS = {"deadline_ms", "profile", "return_meta"}
 SURFACE_FIELDS = {
@@ -669,12 +689,13 @@ class Runtime:
             served.stop()
 
     def load(self) -> None:
-        """Load every model in order; the first failure is raised (foreground start)."""
+        """Load every model in order, then ``freeze_heap``; the first failure is raised (foreground start)."""
         if self.config.autotune_cache:
             freeze_autotune(self.config.autotune_cache)
         for served in self.served:
             served.load()
             self._ready_gauge()
+        freeze_heap()
 
     def _load_all(self) -> None:
         """Load every model in order, then reload the ones that failed with back-off.
@@ -683,7 +704,8 @@ class Runtime:
         once. Any other failure (no device with enough free memory, a
         download, a busy device) is retried ``load_attempts`` times in all,
         waiting ``load_retry_seconds`` and doubling up to 300 s, while the
-        model reports ``loading``; the other models serve meanwhile.
+        model reports ``loading``; the other models serve meanwhile. Every pass
+        ends with ``freeze_heap``.
         """
         if self.config.autotune_cache:
             freeze_autotune(self.config.autotune_cache)
@@ -714,6 +736,7 @@ class Runtime:
                         )
                         retry.append(served)
                 self._ready_gauge()
+            freeze_heap()
             if not retry:
                 return
             delay = min(self.config.load_retry_seconds * 2 ** (attempt - 1), 300.0)
