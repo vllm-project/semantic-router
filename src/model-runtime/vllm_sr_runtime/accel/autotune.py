@@ -179,8 +179,8 @@ class RoutedCache(MutableMapping):
 def route_autotuners(kernels: dict[str, Any]) -> set[str]:
     """Give every FLA autotuner named in ``kernels`` a ``RoutedCache``; the names found.
 
-    FLA defines some kernel names in several modules and keys its config files
-    by name, so every autotuner of a name is routed, as FLA would apply a file.
+    FLA keys its config files by kernel name, so every autotuner of a name is
+    routed, as FLA would apply a file.
     """
     found = set()
     with _ROUTING:
@@ -195,9 +195,14 @@ def route_autotuners(kernels: dict[str, Any]) -> set[str]:
 
 
 def fla_autotuners() -> dict[str, list[Any]]:
-    """FLA's autotuned kernels by name, after importing the gated delta rule's modules."""
+    """FLA's config-file autotuners by kernel name, after importing the gated delta rule's modules.
+
+    These are the autotuners ``FLA_CACHE_MODE`` applies to. Most sit inside a
+    ``triton.heuristics`` wrapper, so module attributes are unwrapped.
+    """
     importlib.import_module(FLA_GATED_DELTA)
-    from triton.runtime.autotuner import Autotuner
+    from fla.ops.utils.cache import CachedAutotuner
+    from triton.runtime.jit import KernelInterface
 
     found: dict[str, list[Any]] = {}
     seen: set[int] = set()
@@ -206,10 +211,15 @@ def fla_autotuners() -> dict[str, list[Any]]:
             module_name == "fla" or module_name.startswith("fla.")
         ):
             continue
-        for value in list(vars(module).values()):
-            if isinstance(value, Autotuner) and id(value) not in seen:
-                seen.add(id(value))
-                found.setdefault(value.base_fn.__name__, []).append(value)
+        for attribute in list(vars(module).values()):
+            kernel = attribute
+            while isinstance(kernel, KernelInterface) and not isinstance(
+                kernel, CachedAutotuner
+            ):
+                kernel = getattr(kernel, "fn", None)
+            if isinstance(kernel, CachedAutotuner) and id(kernel) not in seen:
+                seen.add(id(kernel))
+                found.setdefault(kernel.kernel_name, []).append(kernel)
     return found
 
 

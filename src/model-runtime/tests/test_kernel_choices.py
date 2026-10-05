@@ -204,9 +204,9 @@ def two_fla_models(tmp_path, monkeypatch, fla):
         "second": recorded((KEY, config(BT=32))),
     }
     launched: dict[str, set[str]] = {"first": set(), "second": set()}
-    run = QwenDecisionModel.run
+    run = QwenDecisionModel.run_shared
 
-    def forward(self, items, shared_prefix=0):
+    def forward(self, items, shared_prefix):
         launched[self.info.id].add(json.dumps(fla.run(tuple(KEY))))
         return run(self, items, shared_prefix)
 
@@ -220,7 +220,7 @@ def two_fla_models(tmp_path, monkeypatch, fla):
         "kernel_choices",
         lambda self, package, device: choices[package.model_name],
     )
-    monkeypatch.setattr(QwenDecisionModel, "run", forward)
+    monkeypatch.setattr(QwenDecisionModel, "run_shared", forward)
     monkeypatch.setattr(runtime_module, "golden_check", matched)
     return roots, choices, launched
 
@@ -285,13 +285,17 @@ def test_a_model_whose_choices_cannot_run_loads_unverified_and_says_why(
     try:
         ask(runtime, "second")
         first, second = runtime.served
-        assert first.health.golden.status == "matched"
-        assert second.health.state == "ready"
-        assert second.health.golden.status == "unverified"
-        assert second.health.golden.detail == (
+        reason = (
             "kernel choices not applied: they were recorded with FLA 0.6.0, not 0.5.2"
         )
-        assert second.card([])["golden"]["status"] == "unverified"
+        assert first.health.golden.status == "matched"
+        assert first.health.reason is None
+        assert second.health.state == "ready"
+        assert second.health.golden.status == "unverified"
+        assert second.health.golden.detail == reason
+        card = second.card([])
+        assert (card["status"], card["reason"]) == ("ready", reason)
+        assert card["golden"]["status"] == "unverified"
     finally:
         runtime.stop()
     assert "second runs without its recorded kernel choices" in caplog.text
@@ -299,18 +303,52 @@ def test_a_model_whose_choices_cannot_run_loads_unverified_and_says_why(
     assert launched["second"] == {json.dumps({"timed": KEY})}
 
 
+def test_a_pinned_model_without_a_device_thread_runs_inline_in_its_scope(
+    two_fla_models, fla, monkeypatch
+):
+    from vllm_sr_runtime.families.decision1.model import QwenDecisionModel
+
+    roots, _, launched = two_fla_models
+    threads = set()
+    run = QwenDecisionModel.run_shared
+
+    def inline(self, items, shared_prefix):
+        threads.add(threading.current_thread().name)
+        return run(self, items, shared_prefix)
+
+    monkeypatch.setattr(QwenDecisionModel, "run_shared", inline)
+    monkeypatch.setattr(QwenDecisionModel, "device_thread", False)
+    runtime = serve(roots)
+    try:
+        threads.clear()
+        for _ in range(3):
+            ask(runtime, "first")
+            ask(runtime, "second")
+    finally:
+        runtime.stop()
+    # Requests ran on their planning threads (a request that arrives while the worker
+    # still holds the model runs on the worker instead); every forward ran its own choices.
+    assert threads - {"vllm-sr-runtime-worker"}
+    assert not any(name.startswith("vllm-sr-cpu") for name in threads)
+    assert launched == {
+        "first": {json.dumps(config(BT=8))},
+        "second": {json.dumps(config(BT=32))},
+    }
+    assert fla.timed == []
+
+
 def test_models_without_choices_never_enter_a_scope(tmp_path, monkeypatch):
     from vllm_sr_runtime.families.decision1.model import QwenDecisionModel
     from vllm_sr_runtime.testing.decision1 import write_package
 
     scopes = []
-    run = QwenDecisionModel.run
+    run = QwenDecisionModel.run_shared
 
-    def forward(self, items, shared_prefix=0):
+    def forward(self, items, shared_prefix):
         scopes.append(getattr(autotune._SCOPE, "choices", None))
         return run(self, items, shared_prefix)
 
-    monkeypatch.setattr(QwenDecisionModel, "run", forward)
+    monkeypatch.setattr(QwenDecisionModel, "run_shared", forward)
     runtime = serve([write_package(tmp_path / "plain", model_name="plain")])
     try:
         ask(runtime, "plain")
@@ -391,6 +429,10 @@ def test_fla_s_gated_delta_rule_runs_each_scoped_model_s_configurations():
     delta = accelerator.kernels(device).select("chunk_gated_delta_rule")
     if delta.source != "fla":
         pytest.skip("FLA's chunked gated delta rule is not installed")
+    for model in builtin.all_models():
+        recorded = model.kernel_choices.get("rocm:gfx942")
+        if recorded:
+            assert KernelChoices(recorded).install() is None, model.repo_id
     eos = builtin.lookup("vllm-sr/Decision-2.0-Eos-0.8B").kernel_choices["rocm:gfx942"]
     sol = builtin.lookup("vllm-sr/Decision-2.0-Sol-2B").kernel_choices["rocm:gfx942"]
     first, second = KernelChoices(eos), KernelChoices(sol)

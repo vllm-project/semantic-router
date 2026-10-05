@@ -310,7 +310,7 @@ class ServedModel:
         metrics.model_memory.labels(model=self.label).set(
             model.engine_model.memory_bytes()
         )
-        self.health.set("ready")
+        self.health.set("ready", self.unpinned)
         log.info(
             "serving %s on %s (profile %s)",
             self.label,
@@ -347,11 +347,7 @@ class ServedModel:
                 batch_window_ms=process.batch_window_ms,
             ),
             observe=self.runtime.metrics.observe,
-            execute=(
-                execute
-                if model.device_thread or self.kernel_choices is not None
-                else None
-            ),
+            execute=execute if model.device_thread else self._inline(),
             device_fault=placement.accelerator.device_fault,
         )
         self.scheduler.start()
@@ -367,10 +363,12 @@ class ServedModel:
             raise RuntimeError(self.health.golden.detail or "golden check failed")
         if self.unpinned and self.health.golden.status == "matched":
             self.health.golden = replace(
-                self.health.golden,
-                status="unverified",
-                detail=f"kernel choices not applied: {self.unpinned}",
+                self.health.golden, status="unverified", detail=self.unpinned
             )
+
+    def _inline(self) -> Callable[[Callable[[], Any]], Any] | None:
+        """How a model without a device thread runs its batches: inline, in its choice scope if pinned."""
+        return self.kernel_choices.run if self.kernel_choices is not None else None
 
     def _pin(self, recorded: dict[str, Any]) -> None:
         """Run the model's device work on its recorded kernel choices, or record why it can't.
@@ -382,14 +380,13 @@ class ServedModel:
         if not recorded:
             return
         choices = KernelChoices(recorded)
-        self.unpinned = choices.install()
-        if self.unpinned is None:
+        reason = choices.install()
+        if reason is None:
             self.kernel_choices = choices
             return
+        self.unpinned = f"kernel choices not applied: {reason}"
         log.warning(
-            "%s runs without its recorded kernel choices: %s",
-            self.label,
-            self.unpinned,
+            "%s runs without its recorded kernel choices: %s", self.label, reason
         )
 
     def stop(self) -> None:
