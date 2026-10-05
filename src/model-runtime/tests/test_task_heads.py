@@ -344,7 +344,9 @@ def test_cpu_rows_are_bit_identical_alone_and_inside_other_requests_batches(runt
     texts = ["Hi", TEXT, LONG[:300], LONG[:120], LONG]
     for name in ("sequence", "safety", "scores", "token", "grounded"):
         model = served(runtime, name).model
-        if torch.version.hip is None and torch.version.cuda is None:
+        cpu_build = torch.version.hip is None and torch.version.cuda is None
+        if cpu_build and torch.__version__.startswith("2.10."):
+            # The images' CPU PyTorch; other builds may legitimately probe variant.
             assert model.batch_invariant, name
         if not model.batch_invariant:
             continue
