@@ -40,13 +40,9 @@ type ClassifyRequest struct {
 // text the head read (End exclusive); callers convert them once.
 type Span = api.Span
 
-// InputUsage holds one input's tokenizer facts, including special tokens.
-type InputUsage struct {
-	Tokens          int
-	ProcessedTokens int
-	Truncated       bool
-	Windows         int
-}
+// InputUsage holds one input's tokenizer facts, including special tokens;
+// Windows is set only for an input read in windows.
+type InputUsage = api.InputUsage
 
 // ClassifyWindow is one window of a windowed input, in content-token offsets.
 type ClassifyWindow struct {
@@ -360,17 +356,6 @@ func encodeRerank(ctx context.Context, model string, request RerankRequest) (api
 	}, nil
 }
 
-func decodeUsage(usage *api.InputUsage) *InputUsage {
-	if usage == nil {
-		return nil
-	}
-	decoded := &InputUsage{Tokens: usage.Tokens, ProcessedTokens: usage.ProcessedTokens, Truncated: usage.Truncated}
-	if usage.Windows != nil {
-		decoded.Windows = *usage.Windows
-	}
-	return decoded
-}
-
 func floats(values *[]float64) []float64 {
 	if values == nil {
 		return nil
@@ -392,7 +377,7 @@ func finite(values ...[]float64) bool {
 func decodeClassify(body api.ClassifyResponse) ClassifyResponse {
 	decoded := ClassifyResponse{Model: body.Model, Head: body.Head, Kind: string(body.Kind), Labels: body.Labels, InputTokens: body.Usage.InputTokens}
 	for _, result := range body.Results {
-		item := ClassifyResult{Index: result.Index, Probabilities: floats(result.Probabilities), Scores: floats(result.Scores), Input: decodeUsage(result.Input)}
+		item := ClassifyResult{Index: result.Index, Probabilities: floats(result.Probabilities), Scores: floats(result.Scores), Input: result.Input}
 		if result.Error != nil {
 			item.Error = string(*result.Error)
 			decoded.Results = append(decoded.Results, item)
@@ -439,7 +424,7 @@ func decodeEmbed(body api.EmbeddingsResponse) (EmbedResponse, error) {
 		if item.Index < 0 || item.Index >= len(body.Data) {
 			return EmbedResponse{}, fmt.Errorf("%w: embedding index %d is out of range", ErrFailed, item.Index)
 		}
-		decoded.Inputs[item.Index] = decodeUsage(item.Input)
+		decoded.Inputs[item.Index] = item.Input
 		if item.Error != nil {
 			decoded.Errors[item.Index] = string(*item.Error)
 			continue
@@ -500,7 +485,7 @@ func decodeRerank(body api.RerankResponse, documents int) (RerankResponse, error
 			return RerankResponse{}, fmt.Errorf("%w: rerank result index %d is invalid", ErrFailed, result.Index)
 		}
 		seen[result.Index] = true
-		item := RerankResult{Index: result.Index, Input: decodeUsage(result.Input)}
+		item := RerankResult{Index: result.Index, Input: result.Input}
 		switch {
 		case result.Error != nil:
 			item.Error = string(*result.Error)
