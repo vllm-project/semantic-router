@@ -155,7 +155,7 @@ func TestClassifyEncodesInputsAndDecodesResults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.Revision != "abc" || len(response.Results) != 2 || response.Results[0].Label != "billing" {
+	if len(response.Results) != 2 || response.Results[0].Label != "billing" {
 		t.Fatalf("unexpected response %+v", response)
 	}
 	if span := response.Results[0].Spans[0]; span.Label != "PERSON" || span.End != 3 || response.Results[0].Windows[0].End != 4 {
@@ -165,6 +165,9 @@ func TestClassifyEncodesInputsAndDecodesResults(t *testing.T) {
 	options := body["options"].(map[string]interface{})
 	if options["overflow"] != "window" || options["deadline_ms"] == nil || options["window"].(map[string]interface{})["overlap"] != 64.0 {
 		t.Fatalf("options were not sent: %v", options)
+	}
+	if _, asked := options["return_meta"]; asked {
+		t.Fatalf("the router reads no runtime meta, so it must not ask for it: %v", options)
 	}
 	inputs := body["input"].([]interface{})
 	if inputs[0].(map[string]interface{})["text"] != "Tom" || inputs[1].(map[string]interface{})["answer"] != "a" {
