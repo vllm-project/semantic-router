@@ -205,8 +205,8 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-05 23:52 — **Parent → lead (successor of 01c6684b), `router`: `vela2-08b` is running (launched 23:40), and
-  a successor for `decision1` and `embed`, `p24-finish`, is launched (23:50). That puts five Max agents at work, so
+- 2026-10-05 23:41 — **Parent → lead (successor of 01c6684b), `router`: `vela2-08b` is running (launched 23:36), and
+  a successor for `decision1` and `embed`, `p24-finish`, is launched (23:40). That puts five Max agents at work, so
   nothing else launches.**
   - **`p24-finish`:** does `decision1` first (READY target 01:15), then `embed` (READY by 02:15). It says by 01:30 if
     either won't make it, and that one goes in the PR body as a follow-up, as you planned.
@@ -251,7 +251,7 @@ exactly one gist file and updates it in place:
   - **CI on IP3 `47c948da2`** ([run 37313887926](https://github.com/vllm-project/semantic-router/actions/runs/37313887926)): no failures; the last Kubernetes lanes are running.
   — lead (successor of 01c6684b)
 
-- 2026-10-05 23:35 — **USER (23:31, re-sent): DRIVE #4512 TO READY, AND Vela-2.0-0.8B IS IN THIS PR. Nobody has
+- 2026-10-05 23:33 — **USER (23:31, re-sent): DRIVE #4512 TO READY, AND Vela-2.0-0.8B IS IN THIS PR. Nobody has
   owned it since 21:16, so the parent launches a dedicated Max agent for it now.** The user repeated: "先不管镜像的事 继续推进到 PR ready，把 0.8B 的 vela 2.0 也一并 include … 0.8B 不单独拆 follow up 了".
   - **Image:** settled. The adopted release-environment image (`a580be6b9`) stands, and the user isn't asked about it
     again. Slimming it is a follow-up.
@@ -396,13 +396,13 @@ exactly one gist file and updates it in place:
   — lead (successor of 01c6684b)
 
 - 2026-10-05 21:16 — **USER (20:58): DRIVE #4512 TO READY; INCLUDE Vela-2.0-0.8B; IMAGE QUESTION SET ASIDE.**
-  (Corrected by the parent at 23:35; see the 23:35 note.) The user said: "先不管镜像的事 继续推进到 PR ready，把 0.8B 的
+  (Corrected by the parent at 23:33; see the 23:33 note.) The user said: "先不管镜像的事 继续推进到 PR ready，把 0.8B 的
   vela 2.0 也一并 include 包括 Vela 2.0 新环境上 span 的质量（F1 和 exact match）和发布版相比在噪声内，可以接，0.8B
   不单独拆 follow up 了". It supersedes the 20:32 follow-up decision.
   - **Image:** the user doesn't want to decide image questions now. The lead's adoption of the release-environment
     PyTorch, taken from the public vLLM ROCm digest (`a580be6b9`, the lead's 22:30 report), stands, because it
     restored exactness. Slimming the image is a follow-up, and READY and the push don't wait on it.
-  - **Vela-2.0-0.8B is IN #4512 (IP3b).** The scope is in the 23:35 note.
+  - **Vela-2.0-0.8B is IN #4512 (IP3b).** The scope is in the 23:33 note.
   - **Vela 2.0 acceptance rule:** if a size is not byte-identical to its release on the adopted image, accept it when
     its span F1 and exact match B − R (paired 95% CIs) are within noise. If it's worse beyond noise, report it to the
     user before merging.
