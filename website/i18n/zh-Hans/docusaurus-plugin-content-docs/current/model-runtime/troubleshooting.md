@@ -3,7 +3,7 @@ title: 故障排查与常见问题
 sidebar_label: 故障排查与常见问题
 description: 修复模型运行时的常见问题，并解答常见疑问。
 translation:
-  source_commit: "d881c88086b060c5f5ff9d3d881c6f7bbd9e1c9b"
+  source_commit: "051c4beb3bfdbc10e80f98afa78629d7b1e74917"
   source_file: "docs/model-runtime/troubleshooting.md"
   outdated: false
 ---
@@ -64,6 +64,7 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 | access denied, gated or private | 用 `hf auth login` 登录，或为有访问权限的账号设置 `HF_TOKEN`。Vela 2.0 是私有预览。 |
 | does not fit, out of memory | 换用更小的模型、显存更大的 GPU，或给该模型单独的 `process`。 |
 | device not available | 指定的 GPU 不存在，或已安装的 PyTorch 不支持它。使用 `device: auto`，或安装正确的 PyTorch 版本。 |
+| built without LAPACK | 该模型在 CPU 上需要 LAPACK，而当前的 PyTorch（ROCm 镜像中的版本）没有。把模型放到 GPU 上（`device: rocm:0`），或用 CPU 镜像运行 CPU 上的模型。运行时不会重试。 |
 | no family recognizes the package | 不支持该模型的架构。见[选择模型](model-runtime/choose-a-model.md#your-own-models)。 |
 | a licence must be accepted | 该模型的许可证限制了使用。确认你可以使用后，传入 `--accept-licence <id>`。 |
 
