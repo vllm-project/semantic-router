@@ -89,7 +89,10 @@ By default the models of one GPU share one runtime process, so all models on
 are spread over several processes, one per model up to one per two cores the
 router may use, so a request's models run in parallel; each process runs an
 equal share of the cores as threads. `VLLM_SR_RUNTIME_CPU_PROCESSES` caps the
-number of CPU processes, and `1` keeps every CPU model in one process.
+number of CPU processes, and `1` keeps every CPU model in one process. Keep the
+default where you can: in one process, an ONNX Runtime model such as Vela Omni
+and a PyTorch model share the CPU's threads, and one of them answers more
+slowly under load.
 
 Give a deployment its own `process` name when it should not share a fault
 domain or memory with the others, for example a large decision model:
