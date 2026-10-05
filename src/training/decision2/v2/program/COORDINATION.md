@@ -205,6 +205,63 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 00:36 — **`p24-finish` (successor of `decision1` 4fe5617f and `embed` fc6fcbfa) → lead (successor of 01c6684b), parent: INTEGRATION READY decision1 `4acef6ae7`** (`xunzhuo/model-runtime-p24-decision1`, pushed, clean; contains staging `58cbe432e`). **On the adopted image the PR's runtime is byte-identical to the Decision 1.0 release on every check. One CPU cell is worse and open: Kai's router requests.**
+  - **What it adds over `2e0a87467`:** the merge with staging adds no runtime-package code, because staging already carries `decision1`'s device lock (`873bf178f` = `c3606cf8c`) and decoder thread-local capture (`607850d59` = `f25dae5dd`). The branch adds:
+    - `[Docs]` design 11: the kernel-choice routing "takes no lock of its own (a GPU's device calls are serialized, §9)". Staging still says "there is no lock", which contradicts its own `accel/gpu.py`.
+    - `79908fad8` `decision1_parity.py --concurrent`, and `test_decision1_gpu.py` (two decoders in one process under concurrent requests that capture).
+    - Records: the parity record (P1-4, the lock under concurrency, cold processes, router requests, and now the adopted image) and the performance record (the P1-4 cost, the CPU A/B, the ROCm A/B).
+    - `f67dc4b76` / `4acef6ae7`: the two records commits made tonight.
+  - **Adopted image `mr-p24-lead/extproc-rocm72rt:a580be6b9`, runtime at `1bd99cd37`, node C (untimed):**
+
+    | Check | All seven models |
+    | --- | --- |
+    | Four scored panels against the released references | 10,653 / 10,653 prompts identical, 0 decision changes, max diff 0.0 |
+    | Router requests against the bundled runtime in the image (Transformers 5.17.0 on `PYTHONPATH`) | 231 / 231 |
+    | ROCm golden answers, two fresh processes | equal to the committed file in every value |
+    | CPU golden answers, CPU PyTorch 2.10 image, 16 threads | equal in every value (4 threads: within 3.5e-7) |
+
+    - The device lock changes no number. Every load matched its golden.
+    - **Image finding (yours to weigh, not a `decision1` change):** the adopted image's PyTorch has no LAPACK or MKL (`torch._C.has_lapack` and `torch.backends.mkl.is_available()` are false). The Qwen3.5 decoders' CPU path (`chunk_gated_delta_rule_ref` calls `torch.triangular_solve`) raises, so a GDN decoder placed on `cpu` in the ROCm image fails its golden check at load. Kai runs on its CPU path (matched within 8.3e-7). The official-wheel image had CPU LAPACK. The parity record says this, and that CPU deployments use the CPU image.
+  - **CPU performance (records-only, from the data `decision1` collected; nothing re-measured except one series):** every exact single-request row is level or better. **Kai's exact router row is WHOLLY WORSE at 10 rounds:** p50 +66.1 ms [+5.1, +127.1] (867.8 → 933.9 ms, +7.6%), p95 +74.6 [+11.2, +138.1], and the rate one at a time −0.07 req/s [−0.11, −0.02]. The four-lane rounds 6–10 ran unattended after 19:20 under the standard's load rule (maximum 99).
+    - A second 10-round series on quiet cores (node C 16–31, NUMA node 0 otherwise idle, load ≤ 44), which I ran: p50 +65.3 [+10.4, +120.2] (646 → 711 ms), worse. In 3 of 10 fresh processes the runtime took 807–834 ms (+24–29%), in the rest 1–5% slower.
+    - Lex (+57) and Route (+70 ms) lean the same way but are level; the decoders are level. Single requests are level, so the cost is in how a six-question request runs. It's not found yet, and the record says it's open.
+    - The runtime code on this branch equals staging's, so the gap is in #4512 whether or not this merges. The records disclose it.
+  - **ROCm performance:** the interleaved A/B (5 rounds, intervals) replaces the IP2 paired rows, and **no row is worse** (266 better and 70 level cells). The record states plainly that it was timed in `be7366c49` plus Transformers (the packages of `af71d5e82`, the official wheel's attention), **not re-timed on `a580be6b9`**. It also discloses the trial-image build that overlapped GPU5 / GPU7's many-question rounds 2–3. `router` declined these rows, and I re-time them on `a580be6b9` only if time is left after `embed`.
+  - **Checks:** the model-runtime CPU suite: 535 passed, 5 skipped. `make check CHANGED_FILES=<the 7 files over staging>` exits 0: lint, mypy (12 files), `model-runtime-test` 575 passed, the client check. `make impact`: domain `model-runtime`. Node C GPU1–5 leases are released.
+  - **`embed` open cell (my call, due 00:30, now): RECORDED OPEN.** The only principled candidate is Nano text on 12 threads with ONNX Runtime's default spin instead of 10 ms. In `embed`'s own 3-round A/B it was absolutely faster (p50 4.36 against 4.43 ms, p95 6.87 against 7.06, +25.9 against +18.6 req/s). But the variant harness can't express "default" at `e0e0e2850` (the engine reads the spin entry for its receipt), and runs of the shipped setting at 3–5 rounds disagreed with its 10-round final. Not verifiable by 02:15.
+    - A 10-round re-check of the shipped setting at 00:16–00:20 on node B 112–127 read Nano text much worse: p50 +2.88 ms [+2.54, +3.19], −55 req/s. Another workstream's CPU parity was running on 132–143 of the same NUMA node at the time, so it isn't a quiet run. The record shows it beside the quiet final run.
+    - `embed` READY about 01:45, with `router`'s ROCm commit merged if it's posted by then.
+  — `p24-finish`
+
+- 2026-10-06 00:34 — **`router` (successor of ce54d321; cab0e94a) → `p24-finish`, lead (successor of 01c6684b): `embed`'s ROCm rows in the shipped
+  image are DONE. Records-only commit `f10368515` (ROCm section of `embed-performance.md` only) is on
+  `xunzhuo/model-runtime-p24-router-ip3`. It merges cleanly into `embed`'s `8991d3460`.**
+  - **Run:** `embed`'s `run_rocm2.sh`, copied as `run_rocm_img.sh` so the native side runs in
+    `mr-p24-lead/extproc-rocm72rt:a580be6b9`. Legacy ORT ROCm EP with CK flash attention (`61aa7eb2d`) against the native
+    engine, node B GPU2, the same 8 vCPUs 80–87 for both sides, 6 interleaved rounds, load 2–11, 23:40–23:45.
+  - **Result:** every p50 and p95 interval lies on the runtime's side.
+
+    | Scenario | Legacy p50 | Runtime p50 | Δ [95% CI] |
+    | --- | --- | --- | --- |
+    | one text, 16 tokens | 4.01 | 1.53 | −2.49 [−2.53, −2.45] |
+    | one text, 1,024 tokens | 6.94 | 6.46 | −0.47 [−0.54, −0.41] |
+    | 32 texts of 16–256 tokens | 136.7 | 26.0 | −110.7 [−111.6, −109.7] |
+    | query + 50 documents | 209.5 | 34.0 | −176.0 [−177.6, −174.4] |
+
+  - **Raw data:** node B `/data/dev2/runs/mr-p24/embed/rocm-a580be6b9-image/`, summarized by `embed`'s `rocm_summ.py`.
+    GPU2 is released.
+  - **Vela 1.0:** the A/B is in its last round (about 00:45). Its `vela1-performance` records-only commit follows by
+    about 01:15.
+  — `router` (successor of ce54d321; cab0e94a)
+
+- 2026-10-06 00:19 — **`vela2-08b` → lead (successor of 01c6684b), parent: the 0.8B registry entry, the re-pin and both goldens are PUSHED (`e5117b533`). Parity and ROCm timing are running on node B.**
+  - **0.8B entry (`adb25205c`):** `vllm-sr/Vela-2.0-0.8B` at `a778eb2a` (full SHA in the table), the SHA-256 of the seven files the family loads (they equal the package's `SHA256SUMS`), identity `e231da38…`, 755,685,699 loaded parameters, a 4 GiB floor (Eos-0.8B's). Its config differs from the 4B's only in backbone sizes, so the decoder member, layout and engine serve it unchanged: the change is data only.
+  - **Kernel choices:** Eos-0.8B's gfx942 entry, because the 0.8B's backbone is Eos-0.8B's (the 4B / 9B carry Nox-4B / Lux-9B's the same way). In the image the 0.8B runs them and tunes nothing (0 autotune entries).
+  - **Goldens (`e5117b533`):** CPU from PyTorch 2.10's CPU build (MKL); ROCm from three fresh processes in `mr-p24-lead/extproc-rocm72rt:a580be6b9`, all identical and within 0.0033 of CPU.
+  - **Re-pin (`bd9cbeeb9`): a pin-only bump for all three sizes.** The new pins are 0.3B `a3209a50`, 4B `c1e64d4f` and 9B `bc876163`. The commits since the old pins change only the card, its images and (4B / 9B) `SHA256SUMS`. Every loaded file has the same SHA-256 at both revisions, and the new `SHA256SUMS` list exactly the pinned digests. So their goldens and kernel choices move to the new revisions unchanged, and nothing is re-timed. A readiness check of each size at its new pin (download, verification, golden) runs in the image and on CPU now.
+  - **Running on node B (GPU4 and GPU6 leased):** the 360-request parity on GPU4 (host 128–131); the ROCm timing, 10 rounds, on GPU6 (host 48–55), done about 01:15; the CPU parity (60 requests) on host 132–143. The CPU timing follows on 128–143.
+  — `vela2-08b`
+
 - 2026-10-05 23:59 — **Model-runtime P2–4 lead (successor of 01c6684b) → parent, `p24-finish`, `vela2-08b`, `router`, `vela2`: plans ACCEPTED as posted. Staging is `58cbe432e` (main merged; generated catalog and references checked). IP3b merge window 02:15–02:30, push 03:00.**
   - **`p24-finish`:** both plans accepted, including the ROCm-row wording for `decision1` (state the image they were timed on). The open `embed` cell is your call by 00:30, as you wrote. Only a principled setting counts; otherwise record it as open with its numbers, and I report it in the PR body. Please merge `router`'s `embed` ROCm commit into `embed`'s branch, as you offered.
   - **`vela2-08b`:** accepted. The 02:15 contract is in my 23:34 note.
