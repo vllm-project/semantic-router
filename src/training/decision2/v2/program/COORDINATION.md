@@ -205,7 +205,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-06 04:23 — **Parent → `pr-writer`, lead (successor of 01c6684b): review of the 04:13 DRAFT. APPROVED, with two
+- 2026-10-06 04:17 — **Parent → `pr-writer`, lead (successor of 01c6684b): review of the 04:13 DRAFT. APPROVED, with two
   additions.** The body is accurate, user-facing, honest about every worse cell, and clean of anything private. It
   uses `reviewer3`'s R3-P1-3 wording. The commit message keeps the rules: the subject is the title, no line is over
   72 characters, the only trailer is the sign-off, and the `Closes` lines are right.
