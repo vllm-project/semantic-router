@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { DEFAULT_SECTIONS } from './configPageRouterDefaultsCatalog'
+import { buildRouterSectionCards } from './configPageRouterDefaultsSupport'
 import {
   embeddingModelsCatalogValue,
   embeddingModelsEditData,
@@ -32,6 +33,26 @@ describe('Vela defaults and explicit legacy models', () => {
     })
     expect(DEFAULT_SECTIONS.feedback_detector).toMatchObject({ threshold: 0.7 })
     expect(DEFAULT_SECTIONS.feedback_detector).not.toHaveProperty('max_sequence_length')
+  })
+
+  it('leaves store widths to the embedding model and offers only runtime embedding models', () => {
+    // Vela Embedding serves 768, 512, 256, 128 and 64; an unset width takes the model's own.
+    expect(DEFAULT_SECTIONS.memory).toMatchObject({ milvus: { collection: 'agentic_memory' } })
+    expect((DEFAULT_SECTIONS.memory as { milvus: object }).milvus).not.toHaveProperty('dimension')
+    expect(DEFAULT_SECTIONS.vector_store).not.toHaveProperty('embedding_dimension')
+
+    const cards = buildRouterSectionCards({
+      config: null,
+      routerConfig: { vector_store: { enabled: true } },
+      routerDefaults: null,
+      toolsData: [],
+      toolsLoading: false,
+      toolsError: null,
+    })
+    const vectorStore = cards.find((card) => card.key === 'vector_store')
+    expect(
+      vectorStore?.editFields.find((field) => field.name === 'embedding_model')?.options,
+    ).toEqual(['mmbert', 'qwen3', 'multimodal'])
   })
 
   it.each([false, true])(

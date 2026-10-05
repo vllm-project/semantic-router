@@ -19673,6 +19673,126 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/abs/2510.26692v2",
+        "verification": "claimed"
+      },
+      "id": "moonshot/kimi-linear-48b-a3b-instruct-report-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.717
+      },
+      "model": "moonshot/kimi-linear-48b-a3b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "samples_per_prompt": 8,
+        "source_kind": "official_technical_report",
+        "table": "Table 9",
+        "variant": "Kimi-Linear-Instruct"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/abs/2510.26692v2",
+        "verification": "claimed"
+      },
+      "id": "moonshot/kimi-linear-48b-a3b-instruct-report-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.727
+      },
+      "model": "moonshot/kimi-linear-48b-a3b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "metric_variant": "exact_match",
+        "source_kind": "official_technical_report",
+        "table": "Table 9",
+        "variant": "Kimi-Linear-Instruct"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/abs/2510.26692v2",
+        "verification": "claimed"
+      },
+      "id": "moonshot/kimi-linear-48b-a3b-instruct-report-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.586
+      },
+      "model": "moonshot/kimi-linear-48b-a3b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "samples_per_prompt": 64,
+        "source_kind": "official_technical_report",
+        "table": "Table 9",
+        "variant": "Kimi-Linear-Instruct"
+      }
+    },
+    {
+      "benchmark": "huggingfaceh4/math-500@1.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/abs/2510.26692v2",
+        "verification": "claimed"
+      },
+      "id": "moonshot/kimi-linear-48b-a3b-instruct-report-math-500@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.946
+      },
+      "model": "moonshot/kimi-linear-48b-a3b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "reported_measure": "accuracy",
+        "source_kind": "official_technical_report",
+        "table": "Table 9",
+        "variant": "Kimi-Linear-Instruct"
+      }
+    },
+    {
+      "benchmark": "livecodebench/livecodebench@6.0.0",
+      "benchmark_profile": "published-code-generation",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/abs/2510.26692v2",
+        "verification": "claimed"
+      },
+      "id": "moonshot/kimi-linear-48b-a3b-instruct-report-livecodebench-v6@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.457
+      },
+      "model": "moonshot/kimi-linear-48b-a3b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "dataset_release": "v6",
+        "source_kind": "official_technical_report",
+        "table": "Table 9",
+        "variant": "Kimi-Linear-Instruct"
+      }
+    },
+    {
       "benchmark": "scicode-bench/scicode@1.0.0",
       "benchmark_profile": "published-standard",
       "evidence": {
@@ -31502,6 +31622,144 @@ const builtInCatalogJSON = `{
         "run_kind": "independent",
         "source_model": "Qwen3 30B A3B 2507 (Reasoning)",
         "source_model_slug": "qwen3-30b-a3b-2507-reasoning"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-text-only",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/step-5",
+        "verification": "imported"
+      },
+      "id": "independent/step-5-preview-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.464782205746061
+      },
+      "model": "stepfun/step-5-preview",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Step 5 Preview",
+        "source_model_slug": "step-5"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/step-5",
+        "verification": "imported"
+      },
+      "id": "independent/step-5-preview-scicode@1.0.0",
+      "metrics": {
+        "score": 0.58912037037037
+      },
+      "model": "stepfun/step-5-preview",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Step 5 Preview",
+        "source_model_slug": "step-5"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/critpt@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/step-5",
+        "verification": "imported"
+      },
+      "id": "independent/step-5-preview-critpt@1.0.0",
+      "metrics": {
+        "score": 0.208571428571429
+      },
+      "model": "stepfun/step-5-preview",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Step 5 Preview",
+        "source_model_slug": "step-5"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/omniscience@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/step-5",
+        "verification": "imported"
+      },
+      "id": "independent/step-5-preview-omniscience@1.0.0",
+      "metrics": {
+        "index": 16.383333333333333
+      },
+      "model": "stepfun/step-5-preview",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Step 5 Preview",
+        "source_model_slug": "step-5"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/lcr@1.1.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/step-5",
+        "verification": "imported"
+      },
+      "id": "independent/step-5-preview-lcr@1.1.0",
+      "metrics": {
+        "score": 0.883333333333333
+      },
+      "model": "stepfun/step-5-preview",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Step 5 Preview",
+        "source_model_slug": "step-5"
+      }
+    },
+    {
+      "benchmark": "mmmu-benchmark/mmmu-pro@1.0.0",
+      "benchmark_profile": "standard-10",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/step-5",
+        "verification": "imported"
+      },
+      "id": "independent/step-5-preview-mmmu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.763583815028902
+      },
+      "model": "stepfun/step-5-preview",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Step 5 Preview",
+        "source_model_slug": "step-5"
       }
     },
     {
@@ -62866,6 +63124,180 @@ const builtInCatalogJSON = `{
             "independent-standard",
             "published-standard"
           ],
+          "evaluation": "moonshot/kimi-linear-48b-a3b-instruct-report-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.727,
+          "status": "available",
+          "value": 0.727,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 72.7
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "moonshot/kimi-linear-48b-a3b-instruct",
+      "provenance": [
+        "moonshot/kimi-linear-48b-a3b-instruct-report-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "default",
+      "score": 72.7,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "moonshot/kimi-linear-48b-a3b-instruct-report-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.717,
+          "status": "available",
+          "value": 0.717,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "moonshot/kimi-linear-48b-a3b-instruct",
+      "provenance": [
+        "moonshot/kimi-linear-48b-a3b-instruct-report-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profile": "published-code-generation",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "evaluation": "moonshot/kimi-linear-48b-a3b-instruct-report-livecodebench-v6@1.0.0",
+          "metric": "pass_at_1",
+          "normalized": 0.457,
+          "status": "available",
+          "value": 0.457,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "moonshot/kimi-linear-48b-a3b-instruct",
+      "provenance": [
+        "moonshot/kimi-linear-48b-a3b-instruct-report-livecodebench-v6@1.0.0"
+      ],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "moonshot/kimi-linear-48b-a3b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.727,
+          "status": "available",
+          "value": 0.727,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "moonshot/kimi-linear-48b-a3b-instruct",
+      "provenance": [
+        "moonshot/kimi-linear-48b-a3b-instruct-report-gpqa-diamond@1.0.0",
+        "moonshot/kimi-linear-48b-a3b-instruct-report-livecodebench-v6@1.0.0",
+        "moonshot/kimi-linear-48b-a3b-instruct-report-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
           "evaluation": "nvidia/nemotron-3.5-lightning-model-card-mmlu-pro@1.0.0",
           "metric": "accuracy",
           "normalized": 0.8194,
@@ -78001,6 +78433,637 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-text-only",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "evaluation": "independent/step-5-preview-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.464782205746061,
+          "status": "available",
+          "value": 0.464782205746061,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [
+        "independent/step-5-preview-humanitys-last-exam@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/step-5-preview-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.58912037037037,
+          "status": "available",
+          "value": 0.58912037037037,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [
+        "independent/step-5-preview-scicode@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [
+        "independent/step-5-preview-humanitys-last-exam@1.0.0",
+        "independent/step-5-preview-scicode@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "stepfun/step-3.7-flash",
       "provenance": [],
       "reasoning_effort": "low",
@@ -92858,6 +93921,56 @@ const builtInCatalogJSON = `{
     {
       "capabilities": [
         "chat",
+        "tools",
+        "long_context"
+      ],
+      "description": "Open-weight Kimi hybrid linear-attention MoE model for efficient long-context chat.",
+      "display_name": "Kimi Linear 48B A3B Instruct",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "type": "open_weights"
+      },
+      "family": "kimi-linear",
+      "id": "moonshot/kimi-linear-48b-a3b-instruct",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "48B (3B active)",
+      "presentation": {
+        "logo": "package:moonshot",
+        "monochrome": true,
+        "monogram": "K"
+      },
+      "publisher": "Moonshot / Kimi",
+      "released_at": "2025-10-30",
+      "revision": "e1df551a447157d4658b573f9a695d57658590e9",
+      "tags": [
+        "open_weights",
+        "moe",
+        "hybrid_architecture",
+        "efficient"
+      ],
+      "verification": {
+        "authority": "Moonshot AI",
+        "source": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/blob/e1df551a447157d4658b573f9a695d57658590e9/README.md",
+        "status": "claimed",
+        "verified_at": "2026-09-23"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
         "reasoning",
         "tools",
         "structured_output",
@@ -94186,6 +95299,62 @@ const builtInCatalogJSON = `{
         "source": "https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507",
         "status": "claimed",
         "verified_at": "2026-09-09"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "StepFun flagship multimodal MoE preview for agentic software engineering and knowledge work.",
+      "display_name": "Step 5 Preview",
+      "distribution": {
+        "source": "https://platform.stepfun.ai/docs/en/guides/models/step-5-preview",
+        "type": "proprietary_api"
+      },
+      "family": "step-5",
+      "id": "stepfun/step-5-preview",
+      "kind": "physical",
+      "lifecycle": "experimental",
+      "limits": {
+        "context_window_size": 1000000
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "600B (27B active)",
+      "presentation": {
+        "logo": "package:stepfun",
+        "monochrome": false,
+        "monogram": "S"
+      },
+      "publisher": "StepFun",
+      "reasoning_family": "step-3.7",
+      "released_at": "2026-09-18",
+      "tags": [
+        "proprietary",
+        "reasoning",
+        "multimodal",
+        "agentic",
+        "moe",
+        "preview"
+      ],
+      "verification": {
+        "authority": "StepFun",
+        "source": "https://www.stepfun.com/step-5-preview",
+        "status": "claimed",
+        "verified_at": "2026-09-24"
       }
     },
     {
@@ -99329,6 +100498,21 @@ const builtInCatalogJSON = `{
       "id": "stepfun",
       "models": [
         {
+          "catalog": "stepfun/step-5-preview",
+          "id": "step-5-preview",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_transport": "top_level_effort",
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://platform.stepfun.ai/docs/en/guides/models/step-5-preview",
+            "status": "claimed",
+            "verified_at": "2026-09-24"
+          }
+        },
+        {
           "catalog": "stepfun/step-3.7-flash",
           "id": "step-3.7-flash",
           "lifecycle": "active",
@@ -100012,6 +101196,25 @@ const builtInCatalogJSON = `{
             "source": "https://huggingface.co/moonshotai/Kimi-K3",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "moonshot/kimi-linear-48b-a3b-instruct",
+          "id": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "restrictions": {
+            "minimum_vllm_version": "0.11.1",
+            "trust_remote_code": true
+          },
+          "verification": {
+            "source": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/blob/e1df551a447157d4658b573f9a695d57658590e9/README.md",
+            "status": "claimed",
+            "verified_at": "2026-09-23"
           }
         },
         {
