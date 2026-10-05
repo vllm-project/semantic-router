@@ -24,7 +24,6 @@ QUESTION_ERROR_CODES = (
     DEADLINE_EXCEEDED,
     UNAVAILABLE,
 )
-ITEM_ERROR_CODES = QUESTION_ERROR_CODES
 
 # Request-level codes and their HTTP status.
 REQUEST_ERROR_STATUS = {
@@ -68,6 +67,10 @@ class QuestionError(ValueError):
 
 class PackageError(ValueError):
     """A model package failed verification; nothing from it was executed."""
+
+
+class VerificationError(RuntimeError):
+    """A loaded model whose golden answers are wrong; loading it again gives the same answers."""
 
 
 class PlacementError(RuntimeError):

@@ -22,11 +22,6 @@ RUN apt-get update && apt-get install -y \
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y nodejs
 
-# Rust 1.90 with rustfmt + clippy — matches CI dtolnay/rust-toolchain 1.90
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.90.0
-ENV PATH="/root/.cargo/bin:${PATH}"
-RUN rustup component add rustfmt clippy
-
 # markdownlint-cli pinned — matches the harness bootstrap version
 RUN npm install -g markdownlint-cli@0.43.0
 

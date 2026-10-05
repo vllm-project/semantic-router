@@ -27,6 +27,8 @@ def schema(name):
             node = {key: resolve(value) for key, value in node.items()}
             if node.pop("nullable", False) and "type" in node:
                 node["type"] = [node["type"], "null"]
+                if "enum" in node:
+                    node["enum"] = [*node["enum"], None]
             return node
         if isinstance(node, list):
             return [resolve(item) for item in node]
@@ -63,7 +65,12 @@ def test_decisions_response_matches_the_contract(client):
         "2": "Hard",
     }
     assert body["usage"]["input_tokens"] > 0 and body["usage"]["output_tokens"] == 0
-    assert body["meta"]["profile"] == "exact" and body["meta"]["numerics"] == "exact"
+    assert "meta" not in body
+    meta = post(
+        client,
+        {"state": STATE, "questions": QUESTIONS, "options": {"return_meta": True}},
+    ).json()["meta"]
+    assert meta["profile"] == "exact" and meta["numerics"] == "exact"
 
 
 def test_systemone_alias_answers_identically(client):
@@ -278,6 +285,62 @@ def test_body_that_is_not_json(client):
     assert response.status_code == 400
 
 
+@pytest.mark.parametrize(
+    "name, body",
+    [
+        ("ClassifyRequest", {"input": "one text"}),
+        ("ClassifyRequest", {"input": ["a", "b"]}),
+        ("ClassifyRequest", {"input": [{"text": "query", "text_pair": "document"}]}),
+        (
+            "ClassifyRequest",
+            {"input": [{"context": "c", "question": "q", "answer": "a"}]},
+        ),
+        ("EmbeddingsRequest", {"input": "one text"}),
+        ("EmbeddingsRequest", {"input": ["a", "b"]}),
+        (
+            "EmbeddingsRequest",
+            {
+                "input": [
+                    {"type": "text", "text": "a"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,AA=="},
+                    },
+                    {
+                        "type": "input_audio",
+                        "input_audio": {"data": "AA==", "format": "wav"},
+                    },
+                ]
+            },
+        ),
+        ("Embedding", {"object": "embedding", "index": 0, "embedding": [0.5, -0.5]}),
+        ("Embedding", {"object": "embedding", "index": 0, "embedding": "AAAAPw=="}),
+    ],
+)
+def test_surface_payloads_match_the_contract(name, body):
+    check(name, body)
+
+
+@pytest.mark.parametrize(
+    "name, body",
+    [
+        ("ClassifyRequest", {"input": []}),
+        ("ClassifyRequest", {"input": [1]}),
+        ("ClassifyRequest", {"input": [{"txt": "a"}]}),
+        ("EmbeddingsRequest", {"input": [{"type": "video_url"}]}),
+        ("EmbeddingsRequest", {"input": [{"type": "image_url", "image_url": {}}]}),
+        ("Embedding", {"object": "embedding", "index": 0, "embedding": ["a"]}),
+        (
+            "RerankRequest",
+            {"query": "q", "documents": ["d"], "options": {"profile": "Fast!"}},
+        ),
+    ],
+)
+def test_malformed_surface_payloads_fail_the_contract(name, body):
+    with pytest.raises(jsonschema.ValidationError):
+        check(name, body)
+
+
 def test_models_health_metrics_and_openapi(client):
     models = client.get("/v1/models").json()
     check("ModelList", models)
@@ -348,6 +411,20 @@ def test_request_size_limit(qwen3_runtime):
         assert response.status_code == 413
     finally:
         object.__setattr__(qwen3_runtime, "config", original)
+
+
+def test_models_report_the_process_limits_a_bundle_must_fit(client, qwen3_runtime):
+    config = qwen3_runtime.config
+    limits = client.get("/v1/models").json()["limits"]
+    assert limits == {
+        "max_bundle_tasks": config.max_bundle_tasks,
+        "max_request_bytes": config.max_request_bytes,
+    }
+    task = {"decisions": {"state": STATE, "questions": QUESTIONS}}
+    tasks = [{"id": str(i), **task} for i in range(limits["max_bundle_tasks"] + 1)]
+    response = client.post("/v1/bundle", json={"tasks": tasks})
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "request_too_large"
 
 
 @pytest.mark.parametrize("path", ["/v1/classify", "/v1/bundle"])

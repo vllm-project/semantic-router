@@ -19,11 +19,9 @@ It does **not** download a language model or start a vLLM server.
 - Linux and an NVIDIA GPU supported by the vLLM release you plan to run;
 - an x86-64 host when using the current Semantic Router CUDA image;
 - a GPU of compute capability 7.0 or newer (Volta and later) for the Router
-  image, which compiles its local models for that minimum; build with
-  `CUDA_COMPUTE_CAP=<value>` to target an older or newer floor;
-- an NVIDIA driver, and GPU passthrough into the Router container. The CUDA
-  Router image links the driver library directly, so it does not start without
-  passthrough even when every Router-side model is configured for CPU;
+  image, the oldest architecture its PyTorch build (CUDA 12.8) includes;
+- an NVIDIA driver, and GPU passthrough into the Router container for the
+  Router-side models that run on CUDA;
 - Docker and NVIDIA Container Toolkit;
 - enough GPU memory for the vLLM model, KV cache, and any Router-side models;
   and
@@ -205,9 +203,8 @@ routed request proves the Router, recipe, and backend binding work together.
 
 Configure Docker with `nvidia-ctk`, restart Docker, and repeat NVIDIA's sample
 container command. Debug the container runtime before debugging either vLLM or
-Semantic Router. This is not optional for the CUDA Router image: it links the
-driver library, so without working passthrough the container exits at startup
-with `libcuda.so.1: cannot open shared object file`.
+Semantic Router: without working passthrough, the Router-side models configured
+for CUDA cannot load.
 
 ### The Router uses the CPU
 

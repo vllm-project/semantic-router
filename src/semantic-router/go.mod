@@ -22,6 +22,7 @@ require (
 	github.com/mark3labs/mcp-go v0.42.0-beta.1
 	github.com/milvus-io/milvus-proto/go-api/v2 v2.4.10-0.20240819025435-512e3b98866a
 	github.com/milvus-io/milvus-sdk-go/v2 v2.4.2
+	github.com/oapi-codegen/runtime v1.1.1
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.38.0
 	github.com/openai/openai-go v1.12.0
@@ -52,6 +53,8 @@ require (
 	sigs.k8s.io/controller-runtime v0.22.4
 	sigs.k8s.io/yaml v1.6.0
 )
+
+require github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect

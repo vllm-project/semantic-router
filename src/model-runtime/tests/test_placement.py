@@ -4,7 +4,7 @@ from vllm_sr_runtime.accel.cpu import CPUAccelerator
 from vllm_sr_runtime.accel.cuda import CUDAAccelerator
 from vllm_sr_runtime.accel.rocm import ROCmAccelerator
 from vllm_sr_runtime.errors import PlacementError
-from vllm_sr_runtime.placement import parse_device, place
+from vllm_sr_runtime.placement import auto_order, device_kind, parse_device, place
 from vllm_sr_runtime.plugins.base import BackboneSpec, DtypePolicy, ModelSpec
 
 SPEC = ModelSpec("tiny", BackboneSpec("qwen3", {}, ()), DtypePolicy(), 1024)
@@ -62,3 +62,13 @@ def test_gpu_devices_report_memory_and_bf16():
 def test_xpu_and_mps_devices_parse():
     assert parse_device("xpu:1") == ("xpu", 1)
     assert parse_device("mps") == ("mps", None)
+
+
+def test_device_names_and_the_auto_order_come_from_the_accelerators():
+    assert auto_order() == ["rocm", "cuda", "cpu"]
+    assert CPUAccelerator.descriptor()["auto_priority"] == 100
+    with pytest.raises(PlacementError, match="one of cpu, cuda, mps, rocm, xpu"):
+        parse_device("tpu:0")
+    assert device_kind("rocm:1") == "rocm"
+    if not GPU:
+        assert device_kind("auto") == "cpu"

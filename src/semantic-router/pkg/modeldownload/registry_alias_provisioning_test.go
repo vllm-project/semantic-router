@@ -51,7 +51,7 @@ func TestBuildModelSpecsCanonicalEmbeddingAliases(t *testing.T) {
 					}
 					for _, file := range files {
 						if !slices.Contains(spec.RequiredFiles, file) {
-							t.Errorf("required Candle file %q absent from %v", file, spec.RequiredFiles)
+							t.Errorf("required runtime file %q absent from %v", file, spec.RequiredFiles)
 						}
 					}
 				})
@@ -104,14 +104,14 @@ func TestAliasedModelRequirementsShareCanonicalKey(t *testing.T) {
 	cfg.MmBertModelPath = "models/gemma"
 	required := embeddingModelRequiredFiles(cfg)
 	if _, exists := required["gemma"]; exists {
-		t.Fatal("Candle requirements retained a bare alias key")
+		t.Fatal("runtime requirements retained a bare alias key")
 	}
 	if _, exists := required["models/gemma"]; exists {
-		t.Fatal("Candle requirements retained a prefixed alias key")
+		t.Fatal("runtime requirements retained a prefixed alias key")
 	}
 	want := []string{"model.safetensors", "tokenizer.json", "2_Dense/model.safetensors", "3_Dense/model.safetensors"}
 	if got := required["models/mom-embedding-flash"]; !reflect.DeepEqual(got, want) {
-		t.Fatalf("merged Candle requirements = %v, want %v", got, want)
+		t.Fatalf("merged runtime requirements = %v, want %v", got, want)
 	}
 	cfg.CategoryMappingPath = "models/domain-classifier/category_mapping.json"
 	if got := ExtractRequiredFilesByModel(cfg)["models/mom-domain-classifier"]; !reflect.DeepEqual(got, []string{"category_mapping.json"}) {

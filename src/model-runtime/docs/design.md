@@ -152,7 +152,7 @@ src/model-runtime/
     profiles/               # exact, shared_context, batching, max_speed
     testing/
       fixtures.py           # tiny random-weight packages for every family, and a tiny tokenizer
-  examples/third_party_plugin/  # a documented out-of-tree family and engine, installed by the tests
+  examples/third_party_plugin/  # a documented out-of-tree family, engine, accelerator and profile, installed by the tests
   tests/                    # unit, contract, registry, scheduler, server and integration tests
   tools/                    # golden answers, parity drivers (GPU, legacy), benchmarks
 ```
@@ -304,13 +304,14 @@ carries another name, and lists every active plugin with its distribution,
 version and descriptor in `/v1/models`. The built-in plugins are the runtime's
 own entry points; run uninstalled from a source tree, it reads them from its
 `pyproject.toml`. A profile builds itself from the process options
-(`Profile.from_config`), and the CLI accepts any registered profile. Plugins
-run in the runtime process; the runtime never executes code from a model
-package. `examples/third_party_plugin` is a complete, documented example (a
-keyword family and a counting engine). The test suite builds its wheel with its
-own build backend, installs it into a fresh directory, discovers it through the
-entry points its `pyproject.toml` declares and serves it on every surface next
-to a Decision 2.0 model.
+(`Profile.from_config`), and the CLI accepts any registered profile and
+device. Plugins run in the runtime process; the runtime never executes code
+from a model package. `examples/third_party_plugin` is a complete, documented
+example (a keyword family, a counting engine, a host accelerator and a
+one-by-one profile). The test suite builds its wheel with its own build
+backend, installs it into a fresh directory, discovers it through the entry
+points its `pyproject.toml` declares, serves it on every surface next to a
+Decision 2.0 model, and serves it on the example accelerator and profile.
 
 ## 6. API
 
@@ -318,7 +319,10 @@ The contract is `vllm_sr_runtime/api/openapi.yaml` (OpenAPI 3.0.3), served at
 `GET /openapi.yaml`, checked by contract tests on both sides, and the source of
 the Go client in `pkg/modelservice/api`. Every surface takes an optional
 `model` (the served model ID, required when a process serves several models)
-and `options` with `deadline_ms` and `return_meta`. A request-level error uses
+and `options` with `deadline_ms` and `return_meta` (the runtime's `meta`:
+revision, profile, numerics, engine, device and timings, only when asked;
+a family's own fields such as `meta.representation` are always returned).
+A request-level error uses
 an HTTP status with `{"error": {"code", "message"}}`: 400 `invalid_request`,
 404 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface`
 (the model does not serve this surface), 429 `overloaded`, 503 `not_ready`.
@@ -444,8 +448,10 @@ schedulers at once (so tasks for different models run in parallel and tasks for
 one model share its batching), and returns `results` in task order:
 `{id, status, <surface>: <response body>}` or `{id, status, error}` with the
 status the task would have had alone. The bundle itself fails only when it is
-malformed (400) or too large (413). The bundle deadline applies to every task
-unless a task's own deadline is earlier.
+malformed (400) or too large (413): more tasks than `--max-bundle-tasks` (64
+by default) or a body over `--max-request-bytes`. `/v1/models` reports both as
+`limits`, so a client splits larger work into several bundles. The bundle
+deadline applies to every task unless a task's own deadline is earlier.
 
 ### 6.6 `GET /v1/models`, `GET /health`, `GET /metrics`
 
@@ -453,7 +459,8 @@ unless a task's own deadline is earlier.
 `model_sha256`, `manifest_sha256`, surfaces, question types, heads (with
 labels), embedding and rerank descriptors, limits, licence, profiles, engine,
 accelerator, device, dtype, plugin versions, and per-model readiness and
-golden status. `/health` returns 200 only when every model is ready, and lists
+golden status, plus the process's `limits` (`max_bundle_tasks`,
+`max_request_bytes`). `/health` returns 200 only when every model is ready, and lists
 per-model states otherwise; `/health/live` returns 200 while the process
 serves HTTP. All three report `api_version`, the contract version
 (`info.version`); a client refuses a runtime of another major version.
@@ -650,12 +657,17 @@ each job is answered as soon as its own batches have run. The order of
 forwards never changes a batch's contents, so answers are unchanged. Deadlines
 travel with jobs; a job whose deadline passes before its next batch runs is
 answered `deadline_exceeded` and its remaining batches are skipped. A client
-that disconnects before its answer cancels its jobs the same way; the request
-is counted with status 499 in the metrics. Admission
+that disconnects before its answer cancels its jobs the same way: they leave
+the queue at once and stop counting against admission, and the request is
+counted with status 499 in the metrics. Admission
 bounds, per model, the jobs not yet answered (queued, planned or running) and
 their tokens, and answers 429 at once, for a whole group or none of it. On
 CPU, workers of different models share the process's intra-op thread pool
-(`--threads`).
+(`--threads`). On a GPU, each device call (load, warm-up, golden check, a
+batch) holds the device's lock (`GPUAccelerator.execute`), so the models of
+one GPU never launch work at once: a model captures a HIP / CUDA graph the
+second time it sees a shape, and a capture fails when another thread
+launches work on the device, whatever the capture mode.
 
 A model whose batches need no device thread (`device_thread = False`, today
 the ONNX Runtime Omni family) skips the hand-off to its worker when it is
@@ -670,11 +682,15 @@ worker runs the rest in expected-finish order with the new arrivals.
 
 ### 10.1 Placement
 
-Each model is placed on its own device: `--device auto` picks the first
-available validated GPU with enough free memory, else `cpu`; an explicit
-`cpu`, `cuda:N`, `rocm:N`, `xpu:N` or `mps` is honoured or fails. The memory
-estimate is the weight bytes under the dtype policy plus the activation bound;
-`--memory-budget` caps it per model.
+Each model is placed on its own device. `--device` names `auto` or any
+installed accelerator plugin with an optional `:N` (`cpu`, `cuda`, `rocm`,
+`xpu` and `mps` are built in); an explicit device is honoured or fails.
+`auto` tries the accelerators in the order of their `auto_priority` (ROCm,
+CUDA, then the CPU; an accelerator without one, such as XPU, MPS or a
+third-party plugin by default, serves only when named) and takes the first
+available device with enough free memory. The memory estimate is the weight
+bytes under the dtype policy plus the activation bound; `--memory-budget`
+caps it per model.
 
 ### 10.2 Readiness and health
 
@@ -692,7 +708,11 @@ ROCm: a CUDA or HIP error, a device-side assert or an illegal memory access;
 running out of memory is not). Any other error in a forward fails only the
 requests whose jobs were in that batch, as `internal_error`, and so does an
 answer holding NaN or infinity; the model keeps serving. A model that fails
-to load releases its worker and device memory.
+to load releases its worker and device memory. A package or golden-answer
+failure is final; any other load failure (no device with enough free memory,
+a download, a busy device) is retried `--load-attempts` times in all (5),
+after `--load-retry-seconds` (5 s) doubling up to 300 s, while the model
+reports `loading` with the reason and the others serve.
 
 ### 10.3 Router-managed lifecycle
 
@@ -1009,7 +1029,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 
 | Surface | Today | Target |
 | --- | --- | --- |
-| Images | `tools/docker/Dockerfile.extproc{,-rocm}`, `src/vllm-sr/Dockerfile{,.cuda,.rocm}`, `deploy/operator/Dockerfile`, `onnx-binding/Dockerfile.rocm`, `openvino-binding/Dockerfile` build Rust bindings, ORT, MIGraphX or OpenVINO | Pure-Go router; the runtime with CPU, ROCm or CUDA PyTorch; the Omni bundle stage stays; binding images deleted |
+| Images | `tools/docker/Dockerfile.extproc{,-rocm}`, `src/vllm-sr/Dockerfile{,.cuda,.rocm}`, `deploy/operator/Dockerfile`, `onnx-binding/Dockerfile.rocm`, `openvino-binding/Dockerfile` build Rust bindings, ORT, MIGraphX or OpenVINO | Pure-Go router; the runtime with CPU, ROCm or CUDA PyTorch; the Omni bundle stage stays; binding images deleted. One `tools/docker/Dockerfile.extproc` builds all five images (`ACCELERATOR`, targets `extproc` and `vllm-sr`); sizes, build times and startup in `docs/records/removal-footprint.md` |
 | Make | `rust.mk`, `openvino.mk`, `build-run-test.mk` binding targets, `models.mk` native model tests, `common.mk` library paths | Deleted or pointed at the runtime |
 | Workflows | `test-native.yml`, `build-native.yml`, `publish-crate.yml`, the native lanes of `ci.yml`, `performance-test.yml`, Rust hooks in `pre-commit.yml` | Deleted, or replaced by the model-runtime lanes |
 | Helm and operator | model download init containers, native library environment, provider settings | The runtime ships in the router image; optional attached runtime sidecar values |
