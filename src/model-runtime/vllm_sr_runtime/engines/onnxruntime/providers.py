@@ -4,17 +4,21 @@ The CPU provider is validated. GPU providers run only when the installed
 onnxruntime build has them, never fall back to the CPU for a node they cannot
 run, and stay unvalidated until a record says otherwise.
 
-In a process that has the CPU to itself, CPU sessions share one intra-op pool
-(created before the first session): each session's own pool spins after a
-run, so graphs that run one after another (Omni's CLAP windows, then its audio
-graph) otherwise share the cores with the previous session's spinning threads;
-on 16 cores CLAP + audio took 124 ms with per-session pools and 43 ms with the
-shared one. Where the process serves other CPU models, that spinning would slow
-their forwards instead, so each session gets its own pool, which spins inside a
-run (small forwards need it: Omni Nano text took 7.4 ms without it, against
-legacy's 5.1) and stops spinning when the run returns. Pools are sized
-to the configured threads, else the CPUs the process may run on (ONNX
-Runtime's own default counts the host's CPUs, not the cpuset).
+CPU sessions share one intra-op pool (created before the first session) unless
+a model on another engine serves the process's CPU too. Each session's own
+pool spins after a run, so graphs that run one after another (Omni's CLAP
+windows, then its audio graph) otherwise share the cores with the previous
+session's spinning threads: on 16 cores CLAP + audio took 124 ms with
+per-session pools and 43 ms with the shared one. An idle pool spins about
+40 ms, which would double a native forward that follows an ONNX Runtime run on
+the same cores, and the shared pool's spin can't be bounded. So beside another
+engine's CPU models each session gets its own pool whose idle threads spin for
+``SHARED_PROCESS_SPIN_US`` and then sleep: long enough to carry a run's
+parallel sections, short enough to leave the cores to the next model. Pools
+that stop spinning the moment a run returns cost Omni 13-24 % of its 4-caller
+throughput, and pools that never spin take Nano text from 5.1 to 7.4 ms. Pools
+are sized to the configured threads, else the CPUs the process may run on
+(ONNX Runtime's own default counts the host's CPUs, not the cpuset).
 """
 
 from __future__ import annotations
@@ -97,6 +101,10 @@ def _options(name: str, device: DeviceInfo) -> dict[str, str]:
 
 
 _SHARED_POOL: dict[str, int] = {}
+# How long an idle thread of a session's own pool spins before it sleeps, beside
+# another engine's CPU models (``session.intra_op.spin_duration_us``, ONNX
+# Runtime 1.26 and later).
+SHARED_PROCESS_SPIN_US = 1000
 
 
 def cpu_threads(threads: int | None) -> int:
@@ -121,17 +129,21 @@ def shared_pool(threads: int) -> int | None:
     return _SHARED_POOL["size"] or None
 
 
+def shared_pool_size() -> int | None:
+    """The shared CPU pool's size if it exists; never creates it."""
+    return _SHARED_POOL.get("size") or None
+
+
 def session_options(
-    choice: ProviderChoice, threads: int | None, exclusive_cpu: bool = True
+    choice: ProviderChoice, threads: int | None, shared_cpu: bool = False
 ) -> Any:
     """Sequential execution with every graph optimization; GPU sessions never fall back to the CPU.
 
-    In a process that has the CPU to itself, CPU sessions run on the shared
-    pool. Where other CPU models share the process, each CPU session gets its
-    own pool of ``cpu_threads(threads)`` whose threads stop spinning when a run
-    returns: the shared pool keeps spinning after every run, and
-    ``session.force_spinning_stop`` reaches only a session's own pool. Once the
-    shared pool exists every CPU session must use it.
+    CPU sessions run on the shared pool, unless ``shared_cpu`` (another
+    engine's models serve the process's CPU too): then each gets its own pool
+    of ``cpu_threads(threads)`` whose idle threads spin for
+    ``SHARED_PROCESS_SPIN_US``. Once the shared pool exists every CPU session
+    must use it.
     """
     import onnxruntime as ort
 
@@ -141,15 +153,17 @@ def session_options(
     options.log_severity_level = 3
     size = cpu_threads(threads)
     pooled = not choice.gpu and (
-        (exclusive_cpu and shared_pool(size)) or _SHARED_POOL.get("size")
+        (not shared_cpu and shared_pool(size)) or _SHARED_POOL.get("size")
     )
     if pooled:
         options.use_per_session_threads = False
     else:
         options.intra_op_num_threads = size
         options.inter_op_num_threads = 1
-    if not choice.gpu and not exclusive_cpu:
-        options.add_session_config_entry("session.force_spinning_stop", "1")
+        if not choice.gpu and shared_cpu:
+            options.add_session_config_entry(
+                "session.intra_op.spin_duration_us", str(SHARED_PROCESS_SPIN_US)
+            )
     if choice.gpu:
         options.add_session_config_entry("session.disable_cpu_ep_fallback", "1")
     return options

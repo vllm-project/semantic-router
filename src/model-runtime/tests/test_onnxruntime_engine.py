@@ -122,46 +122,57 @@ def test_gpu_sessions_never_fall_back_to_the_cpu():
     assert gpu.get_session_config_entry("session.disable_cpu_ep_fallback") == "1"
 
 
-def test_cpu_sessions_sharing_the_process_get_own_pools_that_stop_spinning(
+def test_cpu_sessions_beside_another_engine_get_own_pools_that_spin_briefly(
     monkeypatch,
 ):
     choice = providers.ProviderChoice("CPUExecutionProvider")
     monkeypatch.setattr(providers, "_SHARED_POOL", {})
-    shared = providers.session_options(choice, 2, exclusive_cpu=False)
-    assert providers._SHARED_POOL == {}
-    assert shared.intra_op_num_threads == 2 and shared.inter_op_num_threads == 1
-    assert shared.get_session_config_entry("session.force_spinning_stop") == "1"
+    own = providers.session_options(choice, 2, shared_cpu=True)
+    assert providers._SHARED_POOL == {} and providers.shared_pool_size() is None
+    assert own.intra_op_num_threads == 2 and own.inter_op_num_threads == 1
+    spin = own.get_session_config_entry("session.intra_op.spin_duration_us")
+    assert spin == str(providers.SHARED_PROCESS_SPIN_US)
+    with pytest.raises(RuntimeError):
+        own.get_session_config_entry("session.force_spinning_stop")
     monkeypatch.setattr(providers, "_SHARED_POOL", {"size": 4})
-    pooled = providers.session_options(choice, 2, exclusive_cpu=False)
+    pooled = providers.session_options(choice, 2, shared_cpu=True)
     assert pooled.use_per_session_threads is False
-    exclusive = providers.session_options(choice, 2)
-    assert exclusive.use_per_session_threads is False
+    with pytest.raises(RuntimeError):
+        pooled.get_session_config_entry("session.intra_op.spin_duration_us")
+    alone = providers.session_options(choice, 2)
+    assert alone.use_per_session_threads is False
 
 
-def test_the_engine_tells_sessions_whether_the_process_shares_the_cpu(
-    tmp_path, monkeypatch
+@pytest.mark.parametrize(
+    ("neighbors", "shared_cpu"),
+    [
+        (frozenset(), False),
+        (frozenset({"onnxruntime"}), False),
+        (frozenset({"onnxruntime", "native"}), True),
+        (frozenset({"auto"}), True),
+    ],
+)
+def test_sessions_share_the_pool_unless_another_engine_serves_the_cpu(
+    tmp_path, monkeypatch, neighbors, shared_cpu
 ):
     seen = []
     options = providers.session_options
 
-    def recording(choice, threads, exclusive_cpu=True):
-        seen.append(exclusive_cpu)
-        return options(choice, threads, exclusive_cpu)
+    def recording(choice, threads, shared_cpu=False):
+        seen.append(shared_cpu)
+        return options(choice, threads, shared_cpu)
 
     monkeypatch.setattr(providers, "session_options", recording)
     path = onnx_graphs.token_graph(tmp_path / "model.onnx")
-    engine = OnnxRuntimeEngine()
-    for exclusive in (True, False):
-        engine.load(
-            spec({"default": path}),
-            CPUAccelerator(),
-            CPU,
-            EngineOptions(
-                threads=2,
-                cpu_neighbors=frozenset() if exclusive else frozenset({"native"}),
-            ),
-        )
-    assert seen == [True, False]
+    model = OnnxRuntimeEngine().load(
+        spec({"default": path}),
+        CPUAccelerator(),
+        CPU,
+        EngineOptions(threads=2, cpu_neighbors=neighbors),
+    )
+    assert seen == [shared_cpu]
+    # ONNX Runtime refuses a session its own pool once the shared one exists.
+    assert model.receipt()["shared_cpu_pool"] == providers.shared_pool_size()
 
 
 def test_unsupported_specs_say_why(tmp_path):
