@@ -100,7 +100,7 @@ func (c *Client) Decide(ctx context.Context, request Request) (Response, error) 
 	if response.JSON200 == nil {
 		return Response{}, fmt.Errorf("%w: missing decision response body", ErrFailed)
 	}
-	return decodeResponse(*response.JSON200), nil
+	return checkAnswers(request, decodeResponse(*response.JSON200)), nil
 }
 
 func encodeQuestion(question Question) api.Question {
