@@ -187,6 +187,51 @@ own graphs, against the bundled runtime's sequential rate in the same session
   dominate: one request at a time, +36–49% for single requests and +22–27% for
   router requests; at C = 16, +3–22% and +8–17%.
 
+### What per-model kernel choices cost (review P1-4)
+
+Since `be29b9be8` every FLA autotuner routes its lookups to the scoped model's
+configurations (design §11), and every device call runs inside the model's
+scope. A graph replay launches nothing from Python, so the cost falls on
+eager forwards only.
+
+- **Per launch** (microbenchmark, the two cache lookups Triton makes per
+  autotuned launch): 188 ns inside a pinned scope against 57 ns for a plain
+  dict, and 129 ns to enter and leave a scope once per device call. An eager
+  Eos forward makes about 126 autotuned launches, so about 17 µs of about
+  20 ms.
+- **Eager forwards on ROCm:** the decoder loaded through `Decision1Family` and
+  the native engine with graphs off (fused layers on), pinned as each commit
+  pins, then `run` on the exact batches of 400 typed-final requests (one
+  Choice question each, synchronized per request; one untimed pass, one timed
+  pass). One process per run, staging `7511ad785` against `64d6046ad`,
+  alternating first each round, on one MI325X of node C:
+
+  | Model | Metric | `7511ad785` | `64d6046ad` | Difference, 95% CI | Rounds |
+  | --- | --- | --- | --- | --- | --- |
+  | Eos-0.8B | p50 ms | 19.68 | 19.76 | +0.40% [−1.96, +2.76] | 10 |
+  |  | requests/s | 50.37 | 49.32 | −2.09% [−6.78, +2.60] | 10 |
+  | Lux-9B | p50 ms | 19.75 | 20.09 | +1.70% [+0.93, +2.48] | 10 |
+  |  | requests/s | 49.81 | 47.09 | −5.45% [−10.54, −0.36] | 10 |
+
+  Eos is level: its intervals straddle zero after ten rounds, the most the
+  16:53 standard adds. **Lux is slower,** wholly: p50 by 0.34 ms in every one of
+  the ten rounds, and its throughput also by a few tail spikes of the newer
+  commit (its mean rose in four rounds). A first 10-round Eos series at
+  `8fc0bf02b`, with the slower lookups, gave p50 +0.22% [−0.68, +1.11].
+- **How much of that is the routing:** in one process, alternating per
+  request between the routed caches and plain dicts that hold the same
+  resolved configurations (300 pairs each, the same 100 requests), the routing
+  costs a median 0.10 ms per Lux forward (19.84 against 19.76 ms) and 0.08 ms
+  per Eos forward (19.17 against 19.04 ms): 0.4–0.5%. Every lookup hits its
+  memo (168 per Lux request, one key per kernel). The rest of the
+  cross-process difference is not in the lookups.
+- **Why the routing stays:** a per-scope swap of the autotuners' caches would
+  make the lookups free, but it is safe only while one process serves a single
+  GPU, and resolving a new key would then go through FLA's config files and its
+  environment variable again. On the gate rows the cost is smaller still,
+  because the exact decoders replay graphs for every shape they have seen
+  twice.
+
 ## CPU
 
 ### Single request, exact

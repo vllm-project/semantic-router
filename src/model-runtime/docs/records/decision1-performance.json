@@ -13397,6 +13397,1086 @@
      "bytes": 1323565056
     }
    }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r1.64d6046ad",
+   "round": 1,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.2766,
+    "p95_ms": 32.4413,
+    "mean_ms": 23.4096,
+    "requests_per_second": 42.7175
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r1.7511ad785",
+   "round": 1,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 18.7397,
+    "p95_ms": 19.8659,
+    "mean_ms": 18.9203,
+    "requests_per_second": 52.8532
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r10.64d6046ad",
+   "round": 10,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.1131,
+    "p95_ms": 21.7304,
+    "mean_ms": 20.1179,
+    "requests_per_second": 49.7071
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r10.7511ad785",
+   "round": 10,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.0396,
+    "p95_ms": 21.0619,
+    "mean_ms": 20.0901,
+    "requests_per_second": 49.7758
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r2.64d6046ad",
+   "round": 2,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.3102,
+    "p95_ms": 20.8133,
+    "mean_ms": 19.5341,
+    "requests_per_second": 51.1925
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r2.7511ad785",
+   "round": 2,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.4518,
+    "p95_ms": 20.9456,
+    "mean_ms": 19.6752,
+    "requests_per_second": 50.8254
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r3.64d6046ad",
+   "round": 3,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.7124,
+    "p95_ms": 22.7555,
+    "mean_ms": 20.2751,
+    "requests_per_second": 49.3216
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r3.7511ad785",
+   "round": 3,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.1406,
+    "p95_ms": 21.2952,
+    "mean_ms": 20.253,
+    "requests_per_second": 49.3754
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r4.64d6046ad",
+   "round": 4,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.8104,
+    "p95_ms": 21.2557,
+    "mean_ms": 20.0572,
+    "requests_per_second": 49.8573
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r4.7511ad785",
+   "round": 4,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.75,
+    "p95_ms": 21.1238,
+    "mean_ms": 20.2412,
+    "requests_per_second": 49.4042
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r5.64d6046ad",
+   "round": 5,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.1574,
+    "p95_ms": 19.5516,
+    "mean_ms": 19.196,
+    "requests_per_second": 52.0942
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r5.7511ad785",
+   "round": 5,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 18.9779,
+    "p95_ms": 20.5043,
+    "mean_ms": 19.2157,
+    "requests_per_second": 52.0408
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r6.64d6046ad",
+   "round": 6,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.1224,
+    "p95_ms": 19.5166,
+    "mean_ms": 19.1497,
+    "requests_per_second": 52.22
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r6.7511ad785",
+   "round": 6,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.0428,
+    "p95_ms": 19.4138,
+    "mean_ms": 19.0951,
+    "requests_per_second": 52.3696
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r7.64d6046ad",
+   "round": 7,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.6362,
+    "p95_ms": 21.1542,
+    "mean_ms": 19.9416,
+    "requests_per_second": 50.1464
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r7.7511ad785",
+   "round": 7,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.1843,
+    "p95_ms": 20.5475,
+    "mean_ms": 19.6475,
+    "requests_per_second": 50.897
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r8.64d6046ad",
+   "round": 8,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.9887,
+    "p95_ms": 22.8893,
+    "mean_ms": 20.4342,
+    "requests_per_second": 48.9377
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r8.7511ad785",
+   "round": 8,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 21.0108,
+    "p95_ms": 23.2675,
+    "mean_ms": 21.1061,
+    "requests_per_second": 47.3796
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r9.64d6046ad",
+   "round": 9,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.4399,
+    "p95_ms": 25.8596,
+    "mean_ms": 21.2897,
+    "requests_per_second": 46.9712
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-and-lux-5",
+   "run": "eager.r9.7511ad785",
+   "round": 9,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.4457,
+    "p95_ms": 21.7753,
+    "mean_ms": 20.503,
+    "requests_per_second": 48.7735
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r1.64d6046ad",
+   "round": 1,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.831,
+    "p95_ms": 20.5061,
+    "mean_ms": 20.1792,
+    "requests_per_second": 49.556
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r1.7511ad785",
+   "round": 1,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.7084,
+    "p95_ms": 20.4597,
+    "mean_ms": 20.1112,
+    "requests_per_second": 49.7235
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r10.64d6046ad",
+   "round": 10,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.4191,
+    "p95_ms": 27.5854,
+    "mean_ms": 21.4973,
+    "requests_per_second": 46.5175
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r10.7511ad785",
+   "round": 10,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.7377,
+    "p95_ms": 21.9805,
+    "mean_ms": 20.1129,
+    "requests_per_second": 49.7193
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r2.64d6046ad",
+   "round": 2,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.2511,
+    "p95_ms": 39.7299,
+    "mean_ms": 24.5795,
+    "requests_per_second": 40.6844
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r2.7511ad785",
+   "round": 2,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.8589,
+    "p95_ms": 20.9909,
+    "mean_ms": 20.0102,
+    "requests_per_second": 49.9746
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r3.64d6046ad",
+   "round": 3,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.8867,
+    "p95_ms": 21.5297,
+    "mean_ms": 20.248,
+    "requests_per_second": 49.3877
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r3.7511ad785",
+   "round": 3,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.604,
+    "p95_ms": 20.3103,
+    "mean_ms": 19.8451,
+    "requests_per_second": 50.3903
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r4.64d6046ad",
+   "round": 4,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.0106,
+    "p95_ms": 21.6765,
+    "mean_ms": 21.6293,
+    "requests_per_second": 46.2336
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r4.7511ad785",
+   "round": 4,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.5051,
+    "p95_ms": 20.0356,
+    "mean_ms": 19.8071,
+    "requests_per_second": 50.4868
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r5.64d6046ad",
+   "round": 5,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.04,
+    "p95_ms": 20.8018,
+    "mean_ms": 20.1928,
+    "requests_per_second": 49.5225
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r5.7511ad785",
+   "round": 5,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.8559,
+    "p95_ms": 24.9556,
+    "mean_ms": 20.3324,
+    "requests_per_second": 49.1827
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r6.64d6046ad",
+   "round": 6,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.9263,
+    "p95_ms": 21.9389,
+    "mean_ms": 20.2744,
+    "requests_per_second": 49.3233
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r6.7511ad785",
+   "round": 6,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.716,
+    "p95_ms": 24.5538,
+    "mean_ms": 20.166,
+    "requests_per_second": 49.5884
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r7.64d6046ad",
+   "round": 7,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.3279,
+    "p95_ms": 20.7775,
+    "mean_ms": 20.3701,
+    "requests_per_second": 49.0916
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r7.7511ad785",
+   "round": 7,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.6782,
+    "p95_ms": 20.995,
+    "mean_ms": 19.9571,
+    "requests_per_second": 50.1074
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r8.64d6046ad",
+   "round": 8,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.3458,
+    "p95_ms": 35.3964,
+    "mean_ms": 24.4971,
+    "requests_per_second": 40.8211
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r8.7511ad785",
+   "round": 8,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.084,
+    "p95_ms": 21.6744,
+    "mean_ms": 20.3365,
+    "requests_per_second": 49.1726
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r9.64d6046ad",
+   "round": 9,
+   "commit": "64d6046ad",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.8395,
+    "p95_ms": 21.4496,
+    "mean_ms": 20.0859,
+    "requests_per_second": 49.7861
+   },
+   "graphs": false
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "lux-10",
+   "run": "eager.r9.7511ad785",
+   "round": 9,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.7644,
+    "p95_ms": 21.6145,
+    "mean_ms": 20.1189,
+    "requests_per_second": 49.7044
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r1.7511ad785",
+   "round": 1,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.581,
+    "p95_ms": 20.8761,
+    "mean_ms": 19.6786,
+    "requests_per_second": 50.8167
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r1.8fc0bf02b",
+   "round": 1,
+   "commit": "8fc0bf02b",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.3913,
+    "p95_ms": 21.6938,
+    "mean_ms": 19.8086,
+    "requests_per_second": 50.4832
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r10.7511ad785",
+   "round": 10,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.4497,
+    "p95_ms": 24.077,
+    "mean_ms": 20.4511,
+    "requests_per_second": 48.8972
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r10.8fc0bf02b",
+   "round": 10,
+   "commit": "8fc0bf02b",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.7301,
+    "p95_ms": 21.8303,
+    "mean_ms": 20.0769,
+    "requests_per_second": 49.8086
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r2.7511ad785",
+   "round": 2,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.1934,
+    "p95_ms": 21.4538,
+    "mean_ms": 20.2152,
+    "requests_per_second": 49.4678
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r2.8fc0bf02b",
+   "round": 2,
+   "commit": "8fc0bf02b",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.1835,
+    "p95_ms": 21.5053,
+    "mean_ms": 20.4678,
+    "requests_per_second": 48.8572
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r3.7511ad785",
+   "round": 3,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 20.9944,
+    "p95_ms": 23.6358,
+    "mean_ms": 21.1968,
+    "requests_per_second": 47.1769
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r3.8fc0bf02b",
+   "round": 3,
+   "commit": "8fc0bf02b",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 21.0537,
+    "p95_ms": 30.1076,
+    "mean_ms": 21.5549,
+    "requests_per_second": 46.3931
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r4.7511ad785",
+   "round": 4,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.3128,
+    "p95_ms": 21.3083,
+    "mean_ms": 19.6241,
+    "requests_per_second": 50.9578
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r4.8fc0bf02b",
+   "round": 4,
+   "commit": "8fc0bf02b",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.5976,
+    "p95_ms": 21.5486,
+    "mean_ms": 20.0384,
+    "requests_per_second": 49.9043
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r5.7511ad785",
+   "round": 5,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.3948,
+    "p95_ms": 20.3751,
+    "mean_ms": 19.449,
+    "requests_per_second": 51.4165
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r5.8fc0bf02b",
+   "round": 5,
+   "commit": "8fc0bf02b",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.4765,
+    "p95_ms": 19.9876,
+    "mean_ms": 19.5458,
+    "requests_per_second": 51.1619
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r6.7511ad785",
+   "round": 6,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.6256,
+    "p95_ms": 21.1377,
+    "mean_ms": 19.951,
+    "requests_per_second": 50.1229
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r6.8fc0bf02b",
+   "round": 6,
+   "commit": "8fc0bf02b",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.4005,
+    "p95_ms": 20.6236,
+    "mean_ms": 19.6223,
+    "requests_per_second": 50.9625
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r7.7511ad785",
+   "round": 7,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.6827,
+    "p95_ms": 21.1035,
+    "mean_ms": 19.8865,
+    "requests_per_second": 50.2854
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r7.8fc0bf02b",
+   "round": 7,
+   "commit": "8fc0bf02b",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.2889,
+    "p95_ms": 20.9996,
+    "mean_ms": 19.59,
+    "requests_per_second": 51.0465
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r8.7511ad785",
+   "round": 8,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 18.9922,
+    "p95_ms": 20.0699,
+    "mean_ms": 19.1809,
+    "requests_per_second": 52.1352
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r8.8fc0bf02b",
+   "round": 8,
+   "commit": "8fc0bf02b",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.2076,
+    "p95_ms": 20.4497,
+    "mean_ms": 19.3983,
+    "requests_per_second": 51.551
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r9.7511ad785",
+   "round": 9,
+   "commit": "7511ad785",
+   "pinning": "config-files",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.3855,
+    "p95_ms": 21.4472,
+    "mean_ms": 19.6877,
+    "requests_per_second": 50.793
+   },
+   "graphs": false
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "set": "bench-rocm-p14-cost",
+   "series": "eos-8fc0bf02b",
+   "run": "eager.r9.8fc0bf02b",
+   "round": 9,
+   "commit": "8fc0bf02b",
+   "pinning": "scope",
+   "requests": 400,
+   "single": {
+    "p50_ms": 19.7106,
+    "p95_ms": 20.386,
+    "mean_ms": 19.8591,
+    "requests_per_second": 50.3546
+   },
+   "graphs": false
   }
  ]
 }
