@@ -148,9 +148,9 @@ def test_encoder_runs_the_readout_in_the_family(models) -> None:
     )
 
 
-@pytest.mark.parametrize("name", DECODERS)
-def test_decoder_questions_do_not_depend_on_each_other(models, name) -> None:
-    model = models[name]
+@pytest.mark.parametrize("decoder", DECODERS)
+def test_decoder_questions_do_not_depend_on_each_other(models, decoder) -> None:
+    model = models[decoder]
     together = ask(model, GOLDEN_STATE, GOLDEN_QUESTIONS)
     for name in ("domain", "urgency"):
         alone = ask(model, GOLDEN_STATE, {name: GOLDEN_QUESTIONS[name]})

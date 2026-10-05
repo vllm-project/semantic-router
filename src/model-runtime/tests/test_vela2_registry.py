@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
 
@@ -55,7 +56,7 @@ def test_the_table_pins_every_size() -> None:
         assert model.access == "private"
         assert builtin.lookup(model.repo_id.split("/", 1)[1]) is model
         assert builtin.by_identity(model.model_sha256) is model
-    for smaller, larger in zip(MODELS, MODELS[1:]):
+    for smaller, larger in itertools.pairwise(MODELS):
         assert smaller.loaded_parameters < larger.loaded_parameters
         assert smaller.min_device_memory_gib <= larger.min_device_memory_gib
 
