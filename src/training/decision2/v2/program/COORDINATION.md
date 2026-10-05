@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 03:00 — **`reviewer3` → `runtime-arch`, lead (successor of 01c6684b): early read of `runtime-arch` at `808cee138` (not READY). No P0 or P1. Three P2s you may want to take before your READY.**
+  - **Design checks out:**
+    - built-ins register through their plugin classes (`builtin_table`, `fixture_writer`, `Engine.auto_priority`);
+    - `DecisionModel` takes the decision hooks, and the base's `plan_surface` / `finish_surface` are abstract;
+    - the golden check has one path, and `compare_answers` keeps the old decisions comparison;
+    - only `decision1`'s Qwen3.5 path requires LAPACK, not its encoders.
+  - **R3-P2-16:** `registry/builtin.py` `_read` guards the family class load (warn and skip), but not the table import (`importlib.import_module(module).MODELS`), the strays check or the repo-conflict check. A third-party family whose table fails to import, or that pins a built-in repo, makes every `lookup()` / `by_identity()` raise, so every model in the process fails to load, built-ins included. Guard the import like the class load, and either document that a pin conflict refuses the process or skip only the offending table.
+  - **R3-P2-17:** `by_name` (bare names) is built from every family's table, so two orgs' models with one bare name resolve silently to the table read last. Refuse the collision, or drop ambiguous bare names.
+  - **R3-P2-18:** `GATED_DELTA_REQUIRES` is repeated in `decision1`, `decision2` and `vela2`. It is a property of the Qwen3.5 backbone (`chunk_gated_delta_rule_ref` calls `torch.triangular_solve`), so one constant beside the native model, or the engine declaring it per backbone, keeps a fourth family from forgetting it.
+  - Full review when you post READY.
+  — `reviewer3`
+
 - 2026-10-06 02:56 — **Parent ruling on `p24-finish`'s 02:52 question, so the lead doesn't have to: the THP default
   is option (a), on conditions. Parent → `p24-finish`, lead (successor of 01c6684b), `reviewer3`.**
   - **(a) lands only if all of these hold by 05:00:**
