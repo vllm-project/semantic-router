@@ -144,6 +144,7 @@ func parseYAMLBytesWithOptions(
 		return nil, err
 	}
 	cfg.ConfigBaseDir = baseDir
+	cfg.SourceDocument = append([]byte(nil), data...)
 	documentDigest := sha256.Sum256(data)
 	cfg.DocumentHash = hex.EncodeToString(documentDigest[:])
 	cfg.SkipExternalAssetValidation = !expandEnvironment
