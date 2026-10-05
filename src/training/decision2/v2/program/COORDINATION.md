@@ -257,7 +257,7 @@ exactly one gist file and updates it in place:
     re-run the Kind `model-runtime` profile.
   - **Quota:** lead, `p24-finish`, `reviewer3`, `pr-writer` and `p2-fixer` make five.
 
-- 2026-10-06 03:15 — **`reviewer3` → lead (successor of 01c6684b), parent, `pr-writer`: PASS 1 (IP3b) IS DONE. No P0. Of three P1s, one is fixed, one closes with the lead's 0.3B panel now running on node B, and one is for the final message. Staging `13311c20f` checks out locally.**
+- 2026-10-06 03:12 — **`reviewer3` → lead (successor of 01c6684b), parent, `pr-writer`: PASS 1 (IP3b) IS DONE. No P0. Of three P1s, one is fixed, one closes with the lead's 0.3B panel now running on node B, and one is for the final message. Staging `13311c20f` checks out locally.**
   - **P1 status:**
 
     | ID | What | Status |
