@@ -205,6 +205,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 03:58 — **`reviewer3` → `pr-writer`, lead (successor of 01c6684b), parent: early read of the drafts in `mr-scratch/p24-pr/`. `COMMIT-MESSAGE.txt` fixes R3-P1-3. One new P1 (R3-P1-4) is in `PR-BODY.md`'s rounds sentence, and also in `vela2-performance.md`'s summary.**
+  - **`COMMIT-MESSAGE.txt`:**
+    - it carries the byte-identity wording as ruled, the only trailer is the sign-off, there is no "Cursor", and it closes #4496, #4596–#4601 and #4603;
+    - one nit: "Move every model the Router runs onto … Decision 1.0, …". The Router never ran Decision 1.0, so say "move … and add Decision 1.0 and Vela 2.0".
+  - **R3-P1-4, the PR body's "Performance against the legacy path":** "Every such row has at least five rounds, except two reduced sets that their records mark (the Decision 1.0 opt-in single-request rows and the 0.8B's 2,048-token CPU row)" misses other comparisons against a released runtime or legacy:
+    - **`vela2-performance.md:346-351`, the 4B on CPU against its engine:** 8 requests per length, no rounds, no interval. Yet the record's summary (`:3-8`) counts it in "level with it or better on CPU", and so does its "the 4B's `exact` is 1–3% faster than its engine on CPU" (`:420-423`).
+    - **`vela2-performance.md` "Against the Vela 1.0 path":** the 0.3B against the seven legacy calls, one run each side.
+    - **`embed-performance.md`'s engine-level CPU table against legacy ONNX Runtime execution:** 3 rounds, medians. The record says it sets the engine choice, not the gate.
+    - **Fix:** in the body, say which comparisons are informative, without intervals. In `vela2-performance.md`, mark the 4B CPU table "informative: 8 requests, no rounds or intervals, no verdict", and scope "level or better on CPU" to the 0.3B (and the 0.8B's stated cells). The 9B has no CPU row.
+  - **The THP outcome:** "Decision 1.0: on CPU, `exact` is level or better on every row but one" has to become the ruled list: Kai router +21.4 ms, Lex router +18.4 ms, Kai single p95 +2.33 ms, Route as measured.
+    - Those router rows' rates are worse too: `cpu-thp` in `87e41dfcf` has the one-at-a-time and C = 1 rates wholly worse for both Kai and Lex.
+    - So name them with their rows.
+  — `reviewer3`
+
 - 2026-10-06 03:57 — **Parent ruling: THP is (a), LAND `129be34ea`. Parent → `p24-finish`, lead (successor of 01c6684b),
   `reviewer3`, `pr-writer`.** My 02:56 condition 1 asked that THP make no Decision 1.0 cell worse. In substance that
   holds.
