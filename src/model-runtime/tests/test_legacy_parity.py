@@ -1,6 +1,7 @@
 """The legacy parity driver's job selection and comparison rules (``tools/legacy_parity.py``)."""
 
 import argparse
+import asyncio
 import importlib.util
 import json
 from pathlib import Path
@@ -184,6 +185,80 @@ def test_the_ab_summary_reports_paired_intervals_and_every_load_window(lp):
         low, high = row["ci95"][name]
         assert 2.8 < low <= high < 3.2
     assert row["ci95"] == lp.ab_summary(report)["domain"]["ci95"]
+
+
+def test_ab_rounds_save_each_finished_round_and_resume_the_rotation(lp, tmp_path):
+    specs = [sequence_spec(["a", "b"]), {**sequence_spec(["c"]), "Job": "pii"}]
+    raw = tmp_path / "ab.raw.json"
+    orders, windows = [], []
+
+    def save(state):
+        raw.write_text(json.dumps(state))
+
+    async def pair(spec, item, runtime_first):
+        if item["id"] == "b" and len(orders) == 4:
+            raise RuntimeError("interrupted")
+        orders.append((item["id"], runtime_first))
+        return 3_000, 1_000
+
+    async def window(side, spec):
+        windows.append((spec["Job"], side))
+        return 10.0
+
+    def run(state, rounds, use_windows=True):
+        asyncio.run(
+            lp.ab_rounds(
+                state,
+                specs,
+                rounds,
+                pair,
+                ["legacy", "exact", "batching"],
+                window if use_windows else None,
+                lambda: save(state),
+            )
+        )
+
+    fresh = {"pair_rounds": 0, "window_rounds": 0, "report": {}}
+    with pytest.raises(RuntimeError, match="interrupted"):
+        run(fresh, 2)
+    state = json.loads(raw.read_text())
+    assert (state["pair_rounds"], state["window_rounds"]) == (1, 0)
+    assert state["report"]["domain"]["legacy"] == [3_000, 3_000]
+    run(state, 2, use_windows=False)
+    assert orders == [
+        ("a", False),
+        ("b", False),
+        ("c", False),
+        ("a", True),
+        ("a", True),
+        ("b", True),
+        ("c", True),
+    ]
+    assert not windows and state["report"]["domain"]["ratio"] == [3.0] * 4
+    run(state, 3)
+    assert orders[-3:] == [("a", False), ("b", False), ("c", False)]
+    assert windows[:3] == [
+        ("domain", "legacy"),
+        ("domain", "exact"),
+        ("domain", "batching"),
+    ]
+    assert windows[6:9] == [
+        ("domain", "exact"),
+        ("domain", "batching"),
+        ("domain", "legacy"),
+    ]
+    assert windows[12:15] == [
+        ("domain", "batching"),
+        ("domain", "legacy"),
+        ("domain", "exact"),
+    ]
+    assert json.loads(raw.read_text()) == state
+    assert (state["pair_rounds"], state["window_rounds"]) == (3, 3)
+    assert state["report"]["pii"]["throughput"] == {
+        "legacy": [10.0] * 3,
+        "exact": [10.0] * 3,
+        "batching": [10.0] * 3,
+    }
 
 
 def test_inputs_both_sides_reject_are_counted_not_compared(lp):

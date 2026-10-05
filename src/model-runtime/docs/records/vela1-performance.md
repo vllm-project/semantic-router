@@ -5,15 +5,28 @@ model faster than the router path it replaces, per request (p50 and p95) and
 under load, on CPU and on ROCm. Answers are the ones `vela1-parity.md`
 records; raw results are in `vela1-performance.json`.
 
-- **Date:** 2026-10-04. **Runtime commit:** `0a2ced483`, unless a row
-  names another.
+- **Date:** 2026-10-05. **Runtime commits**, unless a row names another:
+  - CPU: `efb5ec4d7`, the staging head `b604edeab` with `vela1`'s A/B tool
+    commit merged. On it, `exact` lets rows of every length share a batch on
+    models that pack rows.
+  - ROCm: `35ff3a8a5`, which adds the fixes for a shared GPU process and
+    leaves the CPU code as it was, in the router's ROCm image stack (Python
+    3.12.14, PyTorch 2.12.0+rocm7.2, HIP 7.2.53211, Triton 3.7.0, fla-core
+    0.5.2), as its user (uid 65532).
+  - The router's ROCm image as built at `be7366c49` has these pins plus
+    `causal-conv1d`, which these models don't run, and Python 3.12.15. It
+    answers byte for byte alike (`vela1-parity.md`), so the ROCm rows hold for
+    it.
+  - The final head is `35ff3a8a5` with these records on top, so every
+    row holds for it.
 - **Legacy side:** the router's native facade at `61aa7eb2d`
   (`tools/legacy_parity.py`). On CPU that is the CPU recipe (candle). On
   ROCm it is the AMD recipe (`config/recipes/vela-amd`: ONNX Runtime
   MIGraphX / ROCm EP).
 - **Hardware:**
-  - CPU: AMD EPYC 9575F, 16 pinned vCPUs (node B 96–111) shared by both
-    sides, with the node's 1-minute load logged every 30 s;
+  - CPU: AMD EPYC 9575F, node B vCPUs 96–111 for both sides, in one cgroup
+    cpuset (its effective cpuset is logged), with the node's 1-minute load
+    logged every 30 s;
   - ROCm: one AMD Instinct MI325X with 8 pinned host vCPUs.
 - **Runtime side:** `Runtime.call` as the HTTP server calls it: one event
   loop, the encoded body size passed so small requests plan inline, result
@@ -22,46 +35,85 @@ records; raw results are in `vela1-performance.json`.
 ## CPU, interleaved with the legacy facade
 
 A shared node's load moves faster than a run lasts, so `tools/legacy_parity.py
-ab` runs both sides on the same 16 vCPUs at once:
+ab` runs both sides on the same 16 vCPUs at once, in one cgroup cpuset, with
+threads capped at 16: the systemd scope `vela1-ab-efb5ec4d7-021909`
+(`systemd-run --scope -p AllowedCPUs=96-111`), whose effective cpuset read
+96-111.
 
 - **Per input:** the facade's test binary, in serve mode, answers one
   input, then the runtime answers the same input. The order flips each
-  round, over 2 rounds of all 547 / 64 inputs.
+  round, over 5 rounds of all 547 / 64 inputs.
 - **Under load:** 20 s windows of 4 closed-loop callers then rotate over the
   legacy facade, the runtime's `exact` profile and its `batching` profile
-  (2 rounds; medians).
+  (5 rounds, the order shifting by one each round; medians).
 
 `exact` batches the requests queued together, because the CPU forward is
 batch-invariant (next section), so its answers stay those of a request
-alone. The node's 1-minute load stayed at or below 61 (median 37) on 160 vCPUs during the run.
+alone. The forward packs rows without padding, so rows of every length share
+those batches. The node's 1-minute load stayed at or below 84 (median 46) on
+160 vCPUs during the run.
 
-| Job | Pairs | p50 legacy → runtime (ms) | p95 legacy → runtime (ms) | Median per-input speedup | 4 callers, calls/s: legacy → `exact` (`batching`) |
-| --- | --- | --- | --- | --- | --- |
-| domain | 1,094 | 35.32 → 11.31 | 199.75 → 32.19 | 3.20× | 40.6 → 70.5 (101.5) |
-| guard | 1,090 | 35.29 → 11.22 | 195.05 → 29.53 | 3.18× | 18.5 → 43.4 (49.0) |
-| safety | 1,094 | 33.40 → 10.68 | 195.15 → 28.84 | 3.27× | 39.5 → 73.1 (109.2) |
-| shield | 1,094 | 34.56 → 11.24 | 201.44 → 30.36 | 3.20× | 38.4 → 68.2 (106.7) |
-| factcheck | 1,094 | 34.68 → 11.47 | 196.32 → 30.92 | 3.17× | 39.8 → 70.6 (110.6) |
-| feedback | 1,094 | 34.27 → 11.30 | 205.47 → 30.38 | 3.26× | 40.5 → 66.3 (104.7) |
-| modality | 1,094 | 33.80 → 11.05 | 200.75 → 29.91 | 3.25× | 39.4 → 67.8 (104.8) |
-| hazard | 1,094 | 34.47 → 11.36 | 201.95 → 30.91 | 3.25× | 12.5 → 29.6 (18.5) |
-| pii | 1,094 | 33.43 → 10.84 | 190.25 → 28.43 | 3.16× | 18.3 → 30.9 (20.2) |
-| pii_truncate | 1,094 | 84.70 → 11.42 | 254.88 → 30.75 | 7.08× | 28.0 → 77.5 (114.3) |
-| halu | 128 | 1343.81 → 135.59 | 40,269.44 → 2,753.80 | 10.23× | 1.5 → 3.5 (2.5) |
+The intervals are 95%:
 
-Under load, `exact` serves 1.6–2.8× legacy's calls per second.
+- **Latency:** each ratio is legacy / runtime, so above 1 means the runtime
+  is faster. The p50 and p95 ratios and the median per-input speedup
+  bootstrap the input pairs (2,000 resamples).
+- **Throughput:** each rate is runtime / legacy calls per second, so above 1
+  means the runtime serves more. It is a geometric mean with a t-interval
+  over the 5 rounds, each round pairing the sides' windows.
+
+A row passes when its whole interval is at or above 1.
+
+| Job | Pairs | p50 legacy → runtime (ms) [legacy / runtime, 95% CI] | p95 legacy → runtime (ms) [legacy / runtime, 95% CI] | Median per-input speedup (95% CI) | 4 callers, calls/s: legacy → `exact` | `exact` / legacy rate (95% CI) |
+| --- | --- | --- | --- | --- | --- | --- |
+| domain | 2,735 | 37.86 → 12.50 [3.00, 3.08] | 215.42 → 83.61 [2.31, 2.99] | 3.08× [3.05, 3.11] | 40.6 → 78.8 | 1.91× [1.80, 2.02] |
+| guard | 2,725 | 37.88 → 12.57 [2.97, 3.05] | 209.66 → 33.27 [5.96, 6.55] | 3.14× [3.11, 3.17] | 18.8 → 48.8 | 2.58× [2.43, 2.74] |
+| safety | 2,735 | 37.52 → 12.21 [3.04, 3.10] | 214.23 → 34.29 [6.02, 6.77] | 3.15× [3.11, 3.18] | 41.3 → 79.1 | 1.89× [1.76, 2.03] |
+| shield | 2,735 | 38.21 → 12.53 [3.02, 3.08] | 220.52 → 35.18 [5.96, 6.87] | 3.16× [3.13, 3.20] | 41.2 → 75.7 | 1.86× [1.77, 1.96] |
+| factcheck | 2,735 | 37.62 → 12.54 [2.97, 3.04] | 215.13 → 34.00 [5.93, 6.91] | 3.10× [3.06, 3.12] | 40.9 → 77.5 | 1.90× [1.82, 1.99] |
+| feedback | 2,735 | 37.72 → 12.49 [2.99, 3.05] | 212.20 → 34.76 [5.93, 6.76] | 3.11× [3.08, 3.15] | 40.6 → 74.5 | 1.88× [1.77, 2.01] |
+| modality | 2,735 | 40.16 → 13.07 [3.03, 3.12] | 229.33 → 41.58 [5.22, 5.92] | 3.17× [3.14, 3.21] | 40.6 → 73.7 | 1.83× [1.72, 1.93] |
+| hazard | 2,735 | 36.97 → 12.39 [2.95, 3.02] | 215.54 → 34.76 [5.88, 6.77] | 3.10× [3.07, 3.14] | 14.3 → 32.0 | 2.26× [2.06, 2.50] |
+| pii | 2,735 | 37.37 → 12.50 [2.95, 3.03] | 211.39 → 34.45 [5.80, 6.87] | 3.10× [3.06, 3.12] | 18.7 → 36.6 | 1.90× [1.62, 2.22] |
+| pii_truncate | 2,735 | 93.28 → 13.60 [6.78, 6.99] | 284.17 → 57.07 [4.22, 5.76] | 6.94× [6.92, 6.97] | 27.1 → 79.8 | 2.93× [2.84, 3.01] |
+| halu | 320 | 1414.38 → 148.30 [8.91, 10.06] | 41,279.77 → 3,149.38 [8.28, 13.95] | 9.54× [9.28, 9.77] | 1.6 → 3.2 | 2.06× [1.85, 2.29] |
+
+Under load, `exact` serves 1.8–2.9× legacy's calls per second.
 
 - **Windowed jobs (Guard, Hazard, PII) and Halu:** they scan long prompts
   in full. The scheduler (design section 9) answers each job as soon as its
   own batches have run and runs short work first, so a short call no longer
-  waits behind a long windowed one (Guard 2.3×, Hazard 2.4×, PII 1.7×, Halu 2.4× legacy).
+  waits behind a long windowed one (Guard 2.6×, Hazard 2.2×, PII 2.0×, Halu
+  2.0× legacy).
 - **Short prompts:** the scheduler plans the jobs it takes between two
   forwards on their own. With 4 closed-loop callers that is usually one new
-  request, so concurrent short calls rarely share a forward (66–78
+  request, so concurrent short calls rarely share a forward (74–80
   calls/s). `batching` waits up to 2 ms for company and serves
-  102–114 calls/s on the same prompts. At `93a3492c0`, before
+  108–114 calls/s on the same prompts. At `93a3492c0`, before
   this scheduler, `exact` merged everything queued (102–110/s on
   them) but left PII and Hazard at 1.1× and 1.5× legacy.
+
+`batching` is opt-in; the router deploys `exact`. It waits up to 2 ms for
+concurrent requests and fills each forward up to 65,536 tokens, where
+`exact` caps a shared batch at 512. That pays on short prompts. On windowed
+jobs, a short call then shares its forward with a long scan's windows:
+
+| Job | 4 callers, calls/s: legacy → `batching` | `batching` / legacy rate (95% CI) | `batching` / `exact` |
+| --- | --- | --- | --- |
+| domain | 40.6 → 109.7 | 2.73× [2.62, 2.84] | 1.39× |
+| guard | 18.8 → 53.8 | 2.79× [2.57, 3.03] | 1.10× |
+| safety | 41.3 → 113.7 | 2.70× [2.58, 2.83] | 1.44× |
+| shield | 41.2 → 112.0 | 2.69× [2.55, 2.85] | 1.48× |
+| factcheck | 40.9 → 111.2 | 2.66× [2.49, 2.85] | 1.44× |
+| feedback | 40.6 → 108.3 | 2.69× [2.54, 2.85] | 1.45× |
+| modality | 40.6 → 108.2 | 2.65× [2.40, 2.91] | 1.47× |
+| hazard | 14.3 → 18.6 | 1.36× [1.21, 1.54] | 0.58× |
+| pii | 18.7 → 19.9 | 1.09× [0.99, 1.20] | 0.54× |
+| pii_truncate | 27.1 → 110.3 | 4.00× [3.65, 4.39] | 1.38× |
+| halu | 1.6 → 2.6 | 1.64× [1.56, 1.73] | 0.81× |
+
+Every other `batching` row's interval lies above legacy; PII's at 1.09× [0.99,
+1.20] (`exact`, the default: 1.9×) is level with it, its interval reaching 1.
 
 ## ROCm
 
@@ -69,38 +121,59 @@ One MI325X, the same inputs. The AMD recipe compiles one fixed
 8,192-token ONNX Runtime session per model, so every legacy request is an
 8K forward (Hazard's operating point compiles 2,048-token windows).
 
+The two sides take turns on the same GPU (node B GPU1) and the
+same 8 host vCPUs, 72–79, over 5 rounds, with the
+order flipping each round. Each process runs in its container's own cgroup
+cpuset (`docker run --cpuset-cpus`), and a container started this way on
+node B reads `cpuset.cpus.effective` 72–79.
+The node's 1-minute load stayed at or below 62 (median 27) on 160 vCPUs during
+the rounds.
+
+- In each round, a fresh legacy process and a fresh runtime process
+  answer every AMD-recipe input once, so the runtime's numbers include
+  its graph captures.
+- Each then serves one 20 s window of 4 callers per model.
+- The two documents over 8,192 tokens, which both sides reject, are left
+  out.
+
+The intervals are computed as on CPU.
+
+| Job | Pairs | p50 legacy → runtime (ms) [legacy / runtime, 95% CI] | p95 legacy → runtime (ms) [legacy / runtime, 95% CI] | Median per-input speedup (95% CI) | 4 callers, calls/s: legacy → `exact` | `exact` / legacy rate (95% CI) |
+| --- | --- | --- | --- | --- | --- | --- |
+| domain | 2,725 | 153.55 → 1.90 [80.66, 81.01] | 155.86 → 3.73 [30.34, 43.32] | 80.74× [80.56, 80.86] | 6.5 → 417.9 | 64.14× [61.56, 66.82] |
+| guard (ROCm EP) | 2,725 | 245.24 → 1.90 [128.49, 129.06] | 253.64 → 3.83 [52.01, 69.98] | 128.84× [128.45, 129.04] | 4.1 → 426.2 | 100.01× [89.02, 112.35] |
+| safety | 2,725 | 160.25 → 1.84 [86.70, 87.07] | 165.05 → 3.69 [33.55, 46.42] | 86.77× [86.61, 86.91] | 6.1 → 439.1 | 71.50× [70.29, 72.74] |
+| factcheck | 2,725 | 158.94 → 1.83 [86.49, 86.80] | 167.79 → 3.68 [34.44, 47.43] | 86.71× [86.56, 86.81] | 6.2 → 439.7 | 70.54× [68.67, 72.46] |
+| feedback | 2,725 | 159.04 → 1.91 [83.14, 83.46] | 164.99 → 3.83 [33.81, 45.21] | 83.31× [83.14, 83.46] | 6.2 → 427.6 | 68.76× [68.06, 69.46] |
+| modality | 2,725 | 158.99 → 1.87 [84.84, 85.33] | 165.03 → 3.68 [33.23, 46.08] | 85.06× [84.80, 85.40] | 6.2 → 444.5 | 85.58× [51.67, 141.75] |
+| hazard | 2,735 | 13.28 → 1.87 [7.06, 7.11] | 13.52 → 4.73 [2.64, 3.74] | 7.07× [7.05, 7.09] | 70.3 → 372.2 | 5.27× [5.14, 5.41] |
+| pii | 2,725 | 132.95 → 1.95 [68.20, 68.52] | 133.64 → 3.98 [27.10, 35.08] | 68.20× [68.06, 68.36] | 7.5 → 413.8 | 55.08× [53.55, 56.66] |
+
+Shield is outside the AMD recipe. Its row comes from the parity run alone,
+and is timing only: its package's ONNX graph answers differently from its
+checkpoint (`vela1-parity.md`).
+
 | Job | p50 legacy → runtime (ms) | p95 legacy → runtime (ms) | 4 callers, calls/s |
 | --- | --- | --- | --- |
-| domain | 154.06 → 1.79 | 155.91 → 3.01 | 6.0 → 424.5 |
-| guard (ROCm EP) | 245.81 → 1.90 | 258.07 → 3.30 | 4.1 → 418.0 |
-| safety | 155.26 → 1.74 | 164.00 → 3.03 | 6.4 → 439.1 |
-| factcheck | 158.24 → 1.82 | 163.86 → 3.22 | 6.3 → 437.6 |
-| feedback | 157.93 → 1.83 | 164.11 → 3.14 | 6.0 → 424.0 |
-| modality | 158.56 → 1.86 | 167.20 → 3.12 | 6.2 → 421.6 |
-| hazard | 13.38 → 1.80 | 14.13 → 3.08 | 61.3 → 341.1 |
-| pii | 134.03 → 1.87 | 136.05 → 3.17 | 7.4 → 400.2 |
-| shield (ORT graph ≠ checkpoint, timing only) | 151.22 → 1.74 | 157.22 → 2.99 | 6.5 → 450.1 |
-
-Shield's ORT row is timing only: its package's ONNX graph answers
-differently from its checkpoint (`vela1-parity.md`).
+| shield (legacy ORT MIGraphX) | 151.22 → 1.80 | 157.22 → 3.44 | 6.5 → 431.9 |
 
 Some deployments move from the router's CPU defaults to a GPU. On the same
 inputs, against legacy candle on CPU:
 
-- Halu: p50 1,424 → 9.2 ms and p95 38.7 s → 69 ms;
+- Halu: p50 1,424 → 7.7 ms and p95 38.7 s → 56 ms;
 - sequence models: p50 33–40 → 1.8–1.9 ms, and 4-caller throughput
-  35–41 → 436–473 calls/s.
+  35–41 → 431–478 calls/s.
 
 Profiles on ROCm (AMD-recipe inputs, 4 callers):
 
 | Profile | Domain p50 / p95 (ms) | Calls/s, sequence models | Values |
 | --- | --- | --- | --- |
-| `exact` | 1.79 / 3.01 | 422–439 | the parity record's |
-| `batching` (`b1eafc87a`) | 3.98 / 5.13 | 596–619 | identical to `exact` one request at a time |
-| `max_speed`, BF16 copy (`973842d9e`, records only) | 6.69 / 11.00 | 437–468 | fails the 99% floor for PII and Halu |
+| `exact` (`35ff3a8a5`, the router image's stack) | 1.88 / 3.51 | 413–439 | the parity record's |
+| `batching` (`35ff3a8a5`, the router image's stack) | 3.98 / 5.56 | 601–612 | identical to `exact` one request at a time |
+| `max_speed`, BF16 copy (`973842d9e`, release image, records only) | 6.69 / 11.00 | 437–468 | fails the 99% floor for PII and Halu |
 
 `batching` waits up to 2 ms for concurrent requests, so a lone request pays
-the window, and under load it serves a third more. The BF16 copy adds a
+the window, and under load it serves about 40% more. The BF16 copy adds a
 cast per linear to a launch-bound forward and is slower still, so the
 family consents to none (`vela1-parity.md`).
 
@@ -140,14 +213,21 @@ Every number below is Vela 307M in FP32.
   it pads at most 25% of the real tokens or is launch-bound (≤ 1,024
   tokens); other batches run packed. The fused gfx942 rotary kernel
   (`embed`) runs inside.
+- **GPU: one model's device work at a time.** Models capture their bucket
+  graphs while serving, and a capture fails when another model launches on
+  the device meanwhile. So the models of a process run their device work one
+  at a time per GPU (design section 9). That also pays: five Vela encoders
+  on one MI325X, called concurrently with graphs off, serve 208
+  calls/s against 92 with overlapping launches, and 458
+  with graphs (5 rotated rounds, medians).
 - **CPU: oneDNN's packed FP32 linears.** GEMMs are 80% of a short forward,
   and `F.linear` (MKL on EPYC) streams the weights at ~37 GB/s. oneDNN with
   weights reordered once is 2.5–4.4× faster per GEMM (768 → 2,304: M = 10
   71 → 23 µs, M = 512 1,098 → 426 µs), and gives a row the same result in
-  any batch. Whole forward, one row, interleaved: 10 tokens 14.5 → 6.8 ms,
-  32 tokens 19.4 → 9.7, 64 27.1 → 14.1, 128 84 → 66, 512 153 → 118, 1,024
-  288 → 275. At 256 tokens MKL is ahead, 86 against 95 ms, the one length
-  where it is.
+  any batch. A whole one-row forward, measured in steady state (one backbone
+  per process, no page faults, as in a serving process), is 1.7–2.3× faster
+  at every length: 10 tokens 15.6 → 6.7 ms, 64 29.5 → 14.6, 128 42.8 → 21.9,
+  256 65.6 → 34.5, 512 112 → 62, 1,024 206 → 116, 2,048 413 → 250.
 - **CPU: `exact` batches concurrent requests without changing an answer.**
   Each row's forward is bit-identical alone or inside any batch, given:
   - packed linears;
@@ -171,7 +251,15 @@ Every number below is Vela 307M in FP32.
 ```bash
 python3 tools/legacy_parity.py build-legacy --recipe cpu --tree <legacy tree> \
   --cache <hf cache> --flat <dir> --out legacy-cpu.test      # in the bindings' userland
-taskset -c 96-111 python3 tools/legacy_parity.py ab --binary legacy-cpu.test \
-  --tree <legacy tree> --cache <hf cache> --threads 16 --rounds 2 --concurrency 4 \
+sudo systemd-run --scope -p AllowedCPUs=96-111 --uid=$(id -u) --gid=$(id -g) \
+  python3 tools/legacy_parity.py ab --binary legacy-cpu.test \
+  --tree <legacy tree> --cache <hf cache> --threads 16 --rounds 5 --concurrency 4 \
   --seconds 20 --profile batching --out ab.json
+# a stopped run, or more rounds: the same command with --rounds N --resume ab.raw.json
+
+# ROCm, each round on one GPU and the same host cores, the order flipping each round:
+python3 tools/legacy_parity.py legacy --recipe amd --inputs legacy-amd.jobs.json \
+  --repeats 1 --concurrency 4 --out legacy-rN.jsonl ...       # in the legacy ROCm image
+python3 tools/legacy_parity.py runtime --recipe amd --inputs legacy-amd.jobs.json \
+  --device rocm:0 --repeats 1 --concurrency 4 --out runtime-rN.jsonl ...   # in the router's ROCm image
 ```

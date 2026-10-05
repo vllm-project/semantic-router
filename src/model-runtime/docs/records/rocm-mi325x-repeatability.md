@@ -1,6 +1,6 @@
 # ROCm golden answers and cross-process repeatability (MI325X)
 
-> **Phase 1 record** (Decision 2.0, [#4481](https://github.com/vllm-project/semantic-router/pull/4481) and its follow-ups). The Phases 2–4 records are the `decision1-*`, `vela1-*`, `vela2-*`, `embed-*`, `stores-*`, `router-latency-cpu*` and `removal-footprint*` files.
+> **Phase 1 record** (Decision 2.0, [#4481](https://github.com/vllm-project/semantic-router/pull/4481) and its follow-ups). The Phases 2–4 records are the `decision1-*`, `vela1-*`, `vela2-*`, `embed-*`, `stores-*`, `router-latency-cpu*`, `router-latency-rocm*`, `rocm-router-image` and `removal-footprint*` files.
 
 Readiness on ROCm now checks reference answers for all six Decision 2.0
 models, and every process on gfx942 answers the Qwen3.5 sizes bit for bit

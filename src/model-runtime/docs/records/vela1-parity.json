@@ -7,8 +7,8 @@
     "baseline": "the runtime's exact profile on the same GPU and inputs",
     "candidate": "the batching profile, one request at a time",
     "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
-    "runtime_commit": "b1eafc87ad1f961c99234ccc72c9a2d555ceca1a",
-    "runtime_env": "decision20-lux-runtime image: PyTorch 2.12.0 ROCm 7.2"
+    "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764",
+    "runtime_env": "the router ROCm image stage on python 3.12-slim-bookworm, as uid 65532: stack B uid 65532 python 3.12.14 torch 2.12.0+rocm7.2 hip 7.2.53211 triton 3.7.0 fla-core 0.5.2 numpy 2.5.3 tokenizers 0.23.2"
    },
    "device_class": "rocm",
    "inputs_sha256": "8d5a8a550efa8ce709922b3e55189504c6ef55c32f0bf91e53eee5971e09b9ce",
@@ -23,12 +23,12 @@
      "job": "domain",
      "latency_ms": {
       "legacy": {
-       "p50": 1.785442,
-       "p95": 2.983537
+       "p50": 1.883352,
+       "p95": 3.50689
       },
       "runtime": {
-       "p50": 3.981716,
-       "p95": 5.127721
+       "p50": 3.975166,
+       "p95": 5.563101
       }
      },
      "max_abs_delta": 0.0,
@@ -53,12 +53,12 @@
      "job": "guard",
      "latency_ms": {
       "legacy": {
-       "p50": 1.856201,
-       "p95": 3.088354
+       "p50": 1.875562,
+       "p95": 3.533429
       },
       "runtime": {
-       "p50": 3.976046,
-       "p95": 5.173351
+       "p50": 3.944496,
+       "p95": 5.527502
       }
      },
      "max_abs_delta": 0.0,
@@ -83,12 +83,12 @@
      "job": "safety",
      "latency_ms": {
       "legacy": {
-       "p50": 1.722923,
-       "p95": 2.946718
+       "p50": 1.820844,
+       "p95": 3.50541
       },
       "runtime": {
-       "p50": 3.857708,
-       "p95": 5.039164
+       "p50": 3.883077,
+       "p95": 5.552091
       }
      },
      "max_abs_delta": 0.0,
@@ -113,12 +113,12 @@
      "job": "factcheck",
      "latency_ms": {
       "legacy": {
-       "p50": 1.784593,
-       "p95": 3.024496
+       "p50": 1.817064,
+       "p95": 3.478301
       },
       "runtime": {
-       "p50": 3.875318,
-       "p95": 5.135122
+       "p50": 3.843488,
+       "p95": 5.466144
       }
      },
      "max_abs_delta": 0.0,
@@ -143,12 +143,12 @@
      "job": "feedback",
      "latency_ms": {
       "legacy": {
-       "p50": 1.868361,
-       "p95": 3.113124
+       "p50": 1.888222,
+       "p95": 3.547699
       },
       "runtime": {
-       "p50": 3.993005,
-       "p95": 5.219111
+       "p50": 3.941227,
+       "p95": 5.531823
       }
      },
      "max_abs_delta": 0.0,
@@ -173,12 +173,12 @@
      "job": "modality",
      "latency_ms": {
       "legacy": {
-       "p50": 1.741873,
-       "p95": 2.958197
+       "p50": 1.825884,
+       "p95": 3.498309
       },
       "runtime": {
-       "p50": 3.888789,
-       "p95": 5.141382
+       "p50": 3.842598,
+       "p95": 5.495515
       }
      },
      "max_abs_delta": 0.0,
@@ -203,12 +203,12 @@
      "job": "hazard",
      "latency_ms": {
       "legacy": {
-       "p50": 1.798102,
-       "p95": 3.036416
+       "p50": 1.840163,
+       "p95": 3.531949
       },
       "runtime": {
-       "p50": 3.874818,
-       "p95": 5.064253
+       "p50": 3.911868,
+       "p95": 5.486333
       }
      },
      "max_abs_delta": 0.0,
@@ -233,12 +233,12 @@
      "job": "pii",
      "latency_ms": {
       "legacy": {
-       "p50": 1.8845,
-       "p95": 3.235382
+       "p50": 1.933942,
+       "p95": 3.699465
       },
       "runtime": {
-       "p50": 4.014235,
-       "p95": 5.323028
+       "p50": 4.024514,
+       "p95": 5.737418
       }
      },
      "max_abs_delta": 0.0,
@@ -2324,7 +2324,7 @@
     "legacy_commit": "61aa7eb2db0cfd9f00bfa06abd4944b3864cf38d",
     "legacy_env": "Go 1.25 test binary of pkg/modelruntime/native, bindings built in golang:1.25-bookworm",
     "legacy_recipe": "cpu (candle; Hazard and Halu through their operating point / grounded facades)",
-    "runtime_commit": "0a2ced48322e5b90ed78ae7cbb9425ee51139bc8",
+    "runtime_commit": "efb5ec4d71cf349d57ef16b200f86382e9eedcc5",
     "runtime_env": "Python 3.12.3, torch 2.10.0+cpu, profile exact (FP32, oneDNN packed linears)",
     "threads": 16
    },
@@ -2345,8 +2345,8 @@
        "p95": 213.646947
       },
       "runtime": {
-       "p50": 7.67557,
-       "p95": 22.892999
+       "p50": 8.210568,
+       "p95": 25.185195
       }
      },
      "max_abs_delta": 0.0001515711791991725,
@@ -2375,8 +2375,8 @@
        "p95": 210.521999
       },
       "runtime": {
-       "p50": 7.347336,
-       "p95": 22.244604
+       "p50": 7.984122,
+       "p95": 23.609526
       }
      },
      "max_abs_delta": 2.9398009033204664e-05,
@@ -2405,8 +2405,8 @@
        "p95": 215.500156
       },
       "runtime": {
-       "p50": 7.654411,
-       "p95": 23.840351
+       "p50": 8.07024,
+       "p95": 24.641967
       }
      },
      "max_abs_delta": 3.4832360076952895e-05,
@@ -2435,8 +2435,8 @@
        "p95": 218.322018
       },
       "runtime": {
-       "p50": 7.692729,
-       "p95": 23.41155
+       "p50": 7.562162,
+       "p95": 24.603325
       }
      },
      "max_abs_delta": 4.622952346799991e-05,
@@ -2465,8 +2465,8 @@
        "p95": 232.021212
       },
       "runtime": {
-       "p50": 7.698078,
-       "p95": 23.565127
+       "p50": 7.693959,
+       "p95": 23.460199
       }
      },
      "max_abs_delta": 2.163727741241739e-05,
@@ -2495,8 +2495,8 @@
        "p95": 209.347372
       },
       "runtime": {
-       "p50": 7.635931,
-       "p95": 23.536829
+       "p50": 7.436703,
+       "p95": 23.048015
       }
      },
      "max_abs_delta": 9.661537094118877e-05,
@@ -2525,8 +2525,8 @@
        "p95": 213.461511
       },
       "runtime": {
-       "p50": 7.617711,
-       "p95": 23.513869
+       "p50": 7.710288,
+       "p95": 23.681483
       }
      },
      "max_abs_delta": 5.778193206795734e-06,
@@ -2555,8 +2555,8 @@
        "p95": 213.884898
       },
       "runtime": {
-       "p50": 7.747579,
-       "p95": 23.51236
+       "p50": 9.564222,
+       "p95": 28.674054
       }
      },
      "max_abs_delta": 9.568565368600623e-06,
@@ -2585,8 +2585,8 @@
        "p95": 211.875789
       },
       "runtime": {
-       "p50": 7.905446,
-       "p95": 23.51685
+       "p50": 10.474754,
+       "p95": 30.108026
       }
      },
      "max_abs_delta": 9.189390411379339e-05,
@@ -2615,8 +2615,8 @@
        "p95": 244.355667
       },
       "runtime": {
-       "p50": 8.967834,
-       "p95": 25.805463
+       "p50": 10.057221,
+       "p95": 27.162665
       }
      },
      "max_abs_delta": 7.235566772462176e-05,
@@ -2645,8 +2645,8 @@
        "p95": 38738.255569
       },
       "runtime": {
-       "p50": 118.970761,
-       "p95": 2456.872441
+       "p50": 110.375244,
+       "p95": 2808.694282
       }
      },
      "max_abs_delta": 4.387160934449241e-05,
@@ -2676,8 +2676,8 @@
     "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
     "legacy_commit": "61aa7eb2db0cfd9f00bfa06abd4944b3864cf38d",
     "legacy_env": "Dockerfile.extproc-rocm at 61aa7eb2d: ONNX Runtime MIGraphX / ROCm EP (config/recipes/vela-amd)",
-    "runtime_commit": "0a2ced48322e5b90ed78ae7cbb9425ee51139bc8",
-    "runtime_env": "decision20-lux-runtime image: PyTorch 2.12.0 ROCm 7.2, profile exact (FP32), encoder graphs and fused rotary on"
+    "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764",
+    "runtime_env": "the router ROCm image stage on python 3.12-slim-bookworm, as uid 65532: stack B uid 65532 python 3.12.14 torch 2.12.0+rocm7.2 hip 7.2.53211 triton 3.7.0 fla-core 0.5.2 numpy 2.5.3 tokenizers 0.23.2"
    },
    "device_class": "rocm",
    "inputs_sha256": "8d5a8a550efa8ce709922b3e55189504c6ef55c32f0bf91e53eee5971e09b9ce",
@@ -2696,8 +2696,8 @@
        "p95": 155.905885
       },
       "runtime": {
-       "p50": 1.791013,
-       "p95": 3.012639
+       "p50": 1.883352,
+       "p95": 3.50689
       }
      },
      "max_abs_delta": 0.00018008482093812006,
@@ -2726,11 +2726,11 @@
        "p95": 258.071691
       },
       "runtime": {
-       "p50": 1.902941,
-       "p95": 3.302052
+       "p50": 1.875562,
+       "p95": 3.533429
       }
      },
-     "max_abs_delta": 6.024973983764781e-05,
+     "max_abs_delta": 4.677909011840953e-05,
      "mode": "sequence",
      "model": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
      "near_ties": 0,
@@ -2756,11 +2756,11 @@
        "p95": 163.997636
       },
       "runtime": {
-       "p50": 1.740104,
-       "p95": 3.029418
+       "p50": 1.820844,
+       "p95": 3.50541
       }
      },
-     "max_abs_delta": 3.2231813049676816e-06,
+     "max_abs_delta": 3.5212045288446348e-06,
      "mode": "sequence",
      "model": "vllm-sr/Vela-1.0-Encoder-307M-Safety",
      "near_ties": 0,
@@ -2786,8 +2786,8 @@
        "p95": 163.860647
       },
       "runtime": {
-       "p50": 1.821733,
-       "p95": 3.217779
+       "p50": 1.817064,
+       "p95": 3.478301
       }
      },
      "max_abs_delta": 0.00011330739425663428,
@@ -2816,8 +2816,8 @@
        "p95": 164.111395
       },
       "runtime": {
-       "p50": 1.830504,
-       "p95": 3.144651
+       "p50": 1.888222,
+       "p95": 3.547699
       }
      },
      "max_abs_delta": 0.00011458729789731725,
@@ -2846,8 +2846,8 @@
        "p95": 167.204505
       },
       "runtime": {
-       "p50": 1.856554,
-       "p95": 3.115482
+       "p50": 1.825884,
+       "p95": 3.498309
       }
      },
      "max_abs_delta": 5.454315624237038e-06,
@@ -2876,8 +2876,8 @@
        "p95": 14.126868
       },
       "runtime": {
-       "p50": 1.795636,
-       "p95": 3.076995
+       "p50": 1.840163,
+       "p95": 3.531949
       }
      },
      "max_abs_delta": 2.5059732055576767e-06,
@@ -2943,11 +2943,11 @@
        "p95": 136.054453
       },
       "runtime": {
-       "p50": 1.866214,
-       "p95": 3.173822
+       "p50": 1.933942,
+       "p95": 3.699465
       }
      },
-     "max_abs_delta": 1.719885200501814e-05,
+     "max_abs_delta": 2.4442363662724453e-05,
      "mode": "tokens",
      "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
      "near_ties": 0,
@@ -2976,8 +2976,8 @@
     "legacy_device": "AMD EPYC 9575F, 16 pinned cores",
     "legacy_env": "Go 1.25 test binary of pkg/modelruntime/native, bindings built in golang:1.25-bookworm",
     "legacy_recipe": "cpu (candle; Hazard and Halu through their operating point / grounded facades)",
-    "runtime_commit": "0a2ced48322e5b90ed78ae7cbb9425ee51139bc8",
-    "runtime_env": "decision20-lux-runtime image: PyTorch 2.12.0 ROCm 7.2, profile exact (FP32), encoder graphs and fused rotary on"
+    "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764",
+    "runtime_env": "the router ROCm image stage on python 3.12-slim-bookworm, as uid 65532: stack B uid 65532 python 3.12.14 torch 2.12.0+rocm7.2 hip 7.2.53211 triton 3.7.0 fla-core 0.5.2 numpy 2.5.3 tokenizers 0.23.2"
    },
    "device_class": "rocm",
    "inputs_sha256": "7f23ef849f53270436f8b094aa963eb6f5a8ecae0a3120d3ef0239598caff4cd",
@@ -2996,8 +2996,8 @@
        "p95": 213.646947
       },
       "runtime": {
-       "p50": 1.861136,
-       "p95": 3.133744
+       "p50": 1.889532,
+       "p95": 3.529929
       }
      },
      "max_abs_delta": 0.00035768482093812004,
@@ -3026,11 +3026,11 @@
        "p95": 210.521999
       },
       "runtime": {
-       "p50": 1.963482,
-       "p95": 3.227951
+       "p50": 1.902252,
+       "p95": 3.558928
       }
      },
-     "max_abs_delta": 8.732130859373521e-05,
+     "max_abs_delta": 4.9800184707626816e-05,
      "mode": "sequence_windows",
      "model": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
      "near_ties": 0,
@@ -3056,8 +3056,8 @@
        "p95": 215.500156
       },
       "runtime": {
-       "p50": 1.761509,
-       "p95": 3.057837
+       "p50": 1.794704,
+       "p95": 3.391352
       }
      },
      "max_abs_delta": 3.549291233062579e-05,
@@ -3086,8 +3086,8 @@
        "p95": 218.322018
       },
       "runtime": {
-       "p50": 1.881925,
-       "p95": 3.259722
+       "p50": 1.820094,
+       "p95": 3.482471
       }
      },
      "max_abs_delta": 4.6527546691876864e-05,
@@ -3116,8 +3116,8 @@
        "p95": 232.021212
       },
       "runtime": {
-       "p50": 1.776887,
-       "p95": 3.045656
+       "p50": 1.815998,
+       "p95": 3.486361
       }
      },
      "max_abs_delta": 7.062739425656162e-05,
@@ -3146,8 +3146,8 @@
        "p95": 209.347372
       },
       "runtime": {
-       "p50": 1.898875,
-       "p95": 3.192943
+       "p50": 1.880947,
+       "p95": 3.638168
       }
      },
      "max_abs_delta": 9.201277278900188e-05,
@@ -3176,8 +3176,8 @@
        "p95": 213.461511
       },
       "runtime": {
-       "p50": 1.891785,
-       "p95": 3.170296
+       "p50": 1.839159,
+       "p95": 3.518074
       }
      },
      "max_abs_delta": 8.876766204868325e-06,
@@ -3206,8 +3206,8 @@
        "p95": 213.884898
       },
       "runtime": {
-       "p50": 1.875677,
-       "p95": 3.214414
+       "p50": 1.834461,
+       "p95": 3.504186
       }
      },
      "max_abs_delta": 1.028382110590531e-05,
@@ -3236,11 +3236,11 @@
        "p95": 211.875789
       },
       "runtime": {
-       "p50": 1.986734,
-       "p95": 3.404761
+       "p50": 1.953877,
+       "p95": 3.74336
       }
      },
-     "max_abs_delta": 0.0003610287379455235,
+     "max_abs_delta": 0.00015336615554806254,
      "mode": "token_windows",
      "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
      "near_ties": 0,
@@ -3266,11 +3266,11 @@
        "p95": 244.355667
       },
       "runtime": {
-       "p50": 1.952435,
-       "p95": 3.44684
+       "p50": 1.922719,
+       "p95": 3.660964
       }
      },
-     "max_abs_delta": 4.688563842769611e-05,
+     "max_abs_delta": 6.28000785827254e-05,
      "mode": "tokens",
      "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
      "near_ties": 0,
@@ -3296,11 +3296,11 @@
        "p95": 38738.255569
       },
       "runtime": {
-       "p50": 9.174547,
-       "p95": 68.987702
+       "p50": 7.721229,
+       "p95": 56.147697
       }
      },
-     "max_abs_delta": 3.9872916564931415e-05,
+     "max_abs_delta": 7.24170526122947e-05,
      "mode": "grounded",
      "model": "vllm-sr/Vela-1.0-Encoder-307M-Halu",
      "near_ties": 0,
@@ -3325,11 +3325,10 @@
    "baseline": "legacy",
    "context": {
     "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
-    "driver_commit": "d59b7be03799d79b9adbcc73c13df63936e7cc83",
     "legacy_commit": "61aa7eb2db0cfd9f00bfa06abd4944b3864cf38d",
-    "legacy_env": "Dockerfile.extproc-rocm at 61aa7eb2d: ONNX Runtime MIGraphX EP on the package's onnx/model.onnx (Shield is outside config/recipes/vela-amd; same ORT path and 8K session)",
-    "runtime_commit": "0a2ced48322e5b90ed78ae7cbb9425ee51139bc8",
-    "runtime_env": "decision20-lux-runtime image: PyTorch 2.12.0 ROCm 7.2, profile exact (FP32), encoder graphs and fused rotary on"
+    "legacy_env": "Dockerfile.extproc-rocm at 61aa7eb2d: ONNX Runtime MIGraphX / ROCm EP (config/recipes/vela-amd)",
+    "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764",
+    "runtime_env": "the router ROCm image stage on python 3.12-slim-bookworm, as uid 65532: stack B uid 65532 python 3.12.14 torch 2.12.0+rocm7.2 hip 7.2.53211 triton 3.7.0 fla-core 0.5.2 numpy 2.5.3 tokenizers 0.23.2"
    },
    "device_class": "rocm",
    "inputs_sha256": "f7475ac802d785e55a5dedec3e9822966905d55370fb24bb9ad7e6334798e22f",
@@ -3561,7 +3560,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.024961943551424025,
+       "delta": 0.024961926727294914,
        "id": "p0078",
        "reason": "probability"
       },
@@ -3596,7 +3595,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.038518833201366426,
+       "delta": 0.03851892633362389,
        "id": "p0090",
        "reason": "probability"
       },
@@ -3636,7 +3635,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.036483917289684295,
+       "delta": 0.03648396134490972,
        "id": "p0104",
        "reason": "probability"
       },
@@ -3666,7 +3665,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.04977925913766479,
+       "delta": 0.0497794677539215,
        "id": "p0113",
        "reason": "probability"
       },
@@ -3701,7 +3700,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.033126710924303054,
+       "delta": 0.033126785430109024,
        "id": "p0123",
        "reason": "probability"
       },
@@ -3726,7 +3725,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.0292526777361393,
+       "delta": 0.029252713417816212,
        "id": "p0131",
        "reason": "probability"
       },
@@ -3791,7 +3790,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.025462294651794393,
+       "delta": 0.025462175442504842,
        "id": "p0154",
        "reason": "probability"
       },
@@ -3806,7 +3805,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.04991289304341507,
+       "delta": 0.049912873988189665,
        "id": "p0158",
        "reason": "probability"
       },
@@ -3826,7 +3825,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.026634360849762007,
+       "delta": 0.02663434114627838,
        "id": "p0163",
        "reason": "probability"
       },
@@ -3846,7 +3845,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.18763852831748962,
+       "delta": 0.18763888114303584,
        "id": "p0174",
        "reason": "probability"
       },
@@ -3856,7 +3855,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.18184851554718018,
+       "delta": 0.18184810331466675,
        "id": "p0177",
        "reason": "probability"
       },
@@ -3866,12 +3865,12 @@
        "reason": "probability"
       },
       {
-       "delta": 0.05575911429551697,
+       "delta": 0.055759217702484154,
        "id": "p0180",
        "reason": "probability"
       },
       {
-       "delta": 0.05580669739501953,
+       "delta": 0.05580675699966431,
        "id": "p0182",
        "reason": "probability"
       },
@@ -3901,7 +3900,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.03904964763488772,
+       "delta": 0.03904952842559817,
        "id": "p0189",
        "reason": "probability"
       },
@@ -3916,7 +3915,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.0467829692367554,
+       "delta": 0.046782983841400144,
        "id": "p0192",
        "reason": "probability"
       },
@@ -3926,7 +3925,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.04780883625519409,
+       "delta": 0.047808899459838905,
        "id": "p0196",
        "reason": "probability"
       },
@@ -3941,7 +3940,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.03326600806717682,
+       "delta": 0.03326603041891861,
        "id": "p0201",
        "reason": "probability"
       },
@@ -3981,7 +3980,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.037598503409158705,
+       "delta": 0.037598522288513236,
        "id": "p0219",
        "reason": "probability"
       },
@@ -3996,7 +3995,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.028986834417390823,
+       "delta": 0.02898681579093933,
        "id": "p0223",
        "reason": "probability"
       },
@@ -4011,7 +4010,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.10273576068489076,
+       "delta": 0.10273555206863405,
        "id": "p0227",
        "reason": "probability"
       },
@@ -4066,7 +4065,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.02817018850616455,
+       "delta": 0.02817016615442276,
        "id": "p0252",
        "reason": "probability"
       },
@@ -4081,7 +4080,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.0427154264900208,
+       "delta": 0.0427157841178894,
        "id": "p0255",
        "reason": "probability"
       },
@@ -4161,7 +4160,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.08985737186506271,
+       "delta": 0.08985716089706419,
        "id": "p0279",
        "reason": "probability"
       },
@@ -4176,7 +4175,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.02489094612318897,
+       "delta": 0.02489097406286621,
        "id": "p0284",
        "reason": "probability"
       },
@@ -4231,7 +4230,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.3517039735127258,
+       "delta": 0.3517037050941467,
        "id": "p0317",
        "reason": "probability"
       },
@@ -4241,7 +4240,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.029393044268953325,
+       "delta": 0.029393070345985414,
        "id": "p0319",
        "reason": "probability"
       },
@@ -4266,7 +4265,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.39691656856140134,
+       "delta": 0.39691603211959836,
        "id": "p0325",
        "reason": "probability"
       },
@@ -4492,23 +4491,23 @@
        "reason": "probability"
       },
       {
-       "delta": 0.28363501001663205,
+       "delta": 0.2836353378421783,
        "id": "p0397",
        "near_tie": false,
        "reason": "label"
       },
       {
-       "delta": 0.28363501001663205,
+       "delta": 0.2836353378421783,
        "id": "p0397",
        "reason": "probability"
       },
       {
-       "delta": 0.15372934187698364,
+       "delta": 0.15372952069091794,
        "id": "p0398",
        "reason": "probability"
       },
       {
-       "delta": 0.023311318464660613,
+       "delta": 0.023311437673950164,
        "id": "p0400",
        "reason": "probability"
       },
@@ -4719,7 +4718,7 @@
        "reason": "probability"
       },
       {
-       "delta": 0.05333064694441223,
+       "delta": 0.05333055753744507,
        "id": "p0457",
        "reason": "probability"
       },
@@ -5056,49 +5055,49 @@
        "reason": "probability"
       },
       {
-       "delta": 0.03927600123932648,
+       "delta": 0.03927610254745484,
        "id": "l00",
        "reason": "probability"
       },
       {
-       "delta": 0.33006695196243285,
+       "delta": 0.33006674334617614,
        "id": "l01",
        "reason": "probability"
       },
       {
-       "delta": 0.2151271968095398,
+       "delta": 0.215127673646698,
        "id": "l02",
        "near_tie": false,
        "reason": "label"
       },
       {
-       "delta": 0.2151271968095398,
+       "delta": 0.215127673646698,
        "id": "l02",
        "reason": "probability"
       },
       {
-       "delta": 0.5442637033590698,
+       "delta": 0.5442629284986877,
        "id": "l03",
        "near_tie": false,
        "reason": "label"
       },
       {
-       "delta": 0.5442637033590698,
+       "delta": 0.5442629284986877,
        "id": "l03",
        "reason": "probability"
       },
       {
-       "delta": 0.3281836697601318,
+       "delta": 0.32818384857406613,
        "id": "l04",
        "reason": "probability"
       },
       {
-       "delta": 0.30917471157714843,
+       "delta": 0.3091748011817932,
        "id": "l05",
        "reason": "probability"
       },
       {
-       "delta": 0.02743303057188797,
+       "delta": 0.027432978417823793,
        "id": "l06",
        "reason": "probability"
       },
@@ -5116,8 +5115,8 @@
        "p95": 157.224368
       },
       "runtime": {
-       "p50": 1.738004,
-       "p95": 2.989548
+       "p50": 1.802264,
+       "p95": 3.442511
       }
      },
      "max_abs_delta": 0.806571880725193,
@@ -5142,5 +5141,326 @@
     "spans": 0.98
    }
   }
+ },
+ "rocm_cross_process_stack_b": {
+  "context": {
+   "method": "separate processes (fresh containers) answer the same inputs; every other process is compared with the first, answer by answer (canonical JSON)",
+   "runtime_commits": ["efb5ec4d71cf349d57ef16b200f86382e9eedcc5", "35ff3a8a5c914b38d1746b0de987b52691396764"]
+  },
+  "panels": {
+   "amd_recipe": {
+    "answers": 4376,
+    "identical": true,
+    "processes": 7,
+    "runs": "the five A/B rounds and the parity runs at efb5ec4d7 and 35ff3a8a5"
+   },
+   "cpu_recipe": {
+    "answers": 5534,
+    "identical": true,
+    "processes": 3,
+    "runs": "the parity runs at efb5ec4d7 and 35ff3a8a5, and one with an empty Triton cache"
+   },
+   "shield": {
+    "answers": 547,
+    "identical": true,
+    "processes": 3,
+    "runs": "the parity runs at efb5ec4d7 and 35ff3a8a5, and one with an empty Triton cache"
+   }
+  }
+ },
+ "rocm_golden_answers": {
+  "device_class": "rocm",
+  "file": "vllm_sr_runtime/registry/golden_answers_vela1.json",
+  "models": ["Qwen/Qwen3-Embedding-0.6B", "vllm-sr/Vela-1.0-Encoder-307M-Domain", "vllm-sr/Vela-1.0-Encoder-307M-Embedding", "vllm-sr/Vela-1.0-Encoder-307M-FactCheck", "vllm-sr/Vela-1.0-Encoder-307M-Feedback", "vllm-sr/Vela-1.0-Encoder-307M-Guard", "vllm-sr/Vela-1.0-Encoder-307M-Halu", "vllm-sr/Vela-1.0-Encoder-307M-Hazard", "vllm-sr/Vela-1.0-Encoder-307M-Modality", "vllm-sr/Vela-1.0-Encoder-307M-PII", "vllm-sr/Vela-1.0-Encoder-307M-Reranker", "vllm-sr/Vela-1.0-Encoder-307M-Safety", "vllm-sr/Vela-1.0-Encoder-307M-Shield"],
+  "note": "tools/golden_answers.py --family task_heads --device rocm:0, one fresh process per run; every recorded value is byte-identical, so the file is unchanged",
+  "re_recorded": false,
+  "runs": [
+   {
+    "byte_identical_to_the_file": true,
+    "stack": "the router's ROCm image stack, empty Triton cache"
+   },
+   {
+    "byte_identical_to_the_file": true,
+    "stack": "the router's ROCm image stack"
+   },
+   {
+    "byte_identical_to_the_file": true,
+    "stack": "the router's ROCm image stack"
+   },
+   {
+    "byte_identical_to_the_file": true,
+    "stack": "the packages' release image"
+   }
+  ],
+  "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764"
+ },
+ "rocm_router_image": {
+  "golden_answers_byte_identical": [true, true, true],
+  "golden_readiness": ["matched"],
+  "image": "Dockerfile.extproc at be7366c499551ce5566a5ec3168f1a27050a86e3 (target extproc, ACCELERATOR=rocm)",
+  "method": "the image's own Python and libraries with this commit's package installed over its own (--no-deps); node B GPU0, host vCPUs 64-71",
+  "panels_byte_identical_to_the_stack": {
+   "amd": {
+    "answers": 4376,
+    "identical": 4376
+   },
+   "amd-shield": {
+    "answers": 547,
+    "identical": 547
+   },
+   "cpu-recipe": {
+    "answers": 5534,
+    "identical": 5534
+   }
+  },
+  "passed_against_legacy": {
+   "rocm_vs_legacy_amd": true,
+   "rocm_vs_legacy_cpu": true
+  },
+  "pip_freeze_differences_from_the_stack": {
+   "image_only": ["Python 3.12.15", "causal_conv1d @ file:///tmp/wheels/causal_conv1d-1.7.0-cp312-cp312-linux_x86_64.whl#sha256=58d292e607483d44fa4b29d94b70c0ac4a337b14b3dafcb332b1158851b67687", "httptools==0.8.0", "pillow==12.3.0", "uvloop==0.23.0"],
+   "stack_only": ["Python 3.12.14"]
+  },
+  "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764"
+ },
+ "rocm_stack_vs_release_image": {
+  "context": {
+   "baseline": "the packages' release image: PyTorch 2.12.0+git6bbd260 (built from source), HIP 7.2.53211, Triton 3.7.1, fla-core 0.5.2",
+   "baseline_commit": "efb5ec4d71cf349d57ef16b200f86382e9eedcc5",
+   "candidate": "the router's ROCm image stack: PyTorch 2.12.0+rocm7.2 (the official rocm7.2 wheel), HIP 7.2.53211, Triton 3.7.0, fla-core 0.5.2",
+   "device": "AMD Instinct MI325X (node B GPU0), host threads on vCPUs 64-71",
+   "note": "byte-identical compares each answer's canonical JSON; inputs_up_to_200_chars counts the inputs of at most 200 characters and how many of them are byte-identical",
+   "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764"
+  },
+  "jobs": [
+   {
+    "differ": 83,
+    "differ_median_chars": 415,
+    "identical": 464,
+    "identical_median_chars": 54.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "domain",
+    "label_changes": 0,
+    "max_abs_delta": 3.4570693969726562e-06
+   },
+   {
+    "differ": 76,
+    "differ_median_chars": 413.5,
+    "identical": 471,
+    "identical_median_chars": 55,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "guard",
+    "label_changes": 0,
+    "max_abs_delta": 1.3470649719238281e-05
+   },
+   {
+    "differ": 73,
+    "differ_median_chars": 427,
+    "identical": 474,
+    "identical_median_chars": 55.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "safety",
+    "label_changes": 0,
+    "max_abs_delta": 1.3113021850585938e-06
+   },
+   {
+    "differ": 66,
+    "differ_median_chars": 394.0,
+    "identical": 481,
+    "identical_median_chars": 55,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 447,
+    "job": "factcheck",
+    "label_changes": 0,
+    "max_abs_delta": 3.129243850708008e-06
+   },
+   {
+    "differ": 82,
+    "differ_median_chars": 421.0,
+    "identical": 465,
+    "identical_median_chars": 54,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "feedback",
+    "label_changes": 0,
+    "max_abs_delta": 9.03010368347168e-06
+   },
+   {
+    "differ": 79,
+    "differ_median_chars": 415,
+    "identical": 468,
+    "identical_median_chars": 55.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "modality",
+    "label_changes": 0,
+    "max_abs_delta": 1.1920928955078125e-07
+   },
+   {
+    "differ": 85,
+    "differ_median_chars": 427,
+    "identical": 462,
+    "identical_median_chars": 54.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "hazard",
+    "label_changes": 0,
+    "max_abs_delta": 1.1026859283447266e-06
+   },
+   {
+    "differ": 69,
+    "differ_median_chars": 415,
+    "identical": 478,
+    "identical_median_chars": 55.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "pii",
+    "label_changes": 0,
+    "max_abs_delta": 4.3272972106933594e-05
+   },
+   {
+    "differ": 85,
+    "differ_median_chars": 427,
+    "identical": 462,
+    "identical_median_chars": 54.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "domain",
+    "label_changes": 0,
+    "max_abs_delta": 6.079673767089844e-06
+   },
+   {
+    "differ": 78,
+    "differ_median_chars": 421.0,
+    "identical": 469,
+    "identical_median_chars": 55,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "guard",
+    "label_changes": 0,
+    "max_abs_delta": 3.7550926208496094e-05
+   },
+   {
+    "differ": 78,
+    "differ_median_chars": 445.5,
+    "identical": 469,
+    "identical_median_chars": 55,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "safety",
+    "label_changes": 0,
+    "max_abs_delta": 1.3113021850585938e-06
+   },
+   {
+    "differ": 76,
+    "differ_median_chars": 439.5,
+    "identical": 471,
+    "identical_median_chars": 55,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "shield",
+    "label_changes": 0,
+    "max_abs_delta": 5.662441253662109e-07
+   },
+   {
+    "differ": 64,
+    "differ_median_chars": 379.0,
+    "identical": 483,
+    "identical_median_chars": 55,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 447,
+    "job": "factcheck",
+    "label_changes": 0,
+    "max_abs_delta": 3.129243850708008e-06
+   },
+   {
+    "differ": 84,
+    "differ_median_chars": 432.0,
+    "identical": 463,
+    "identical_median_chars": 54,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "feedback",
+    "label_changes": 0,
+    "max_abs_delta": 5.602836608886719e-06
+   },
+   {
+    "differ": 82,
+    "differ_median_chars": 432.0,
+    "identical": 465,
+    "identical_median_chars": 54,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "modality",
+    "label_changes": 0,
+    "max_abs_delta": 1.1920928955078125e-07
+   },
+   {
+    "differ": 85,
+    "differ_median_chars": 427,
+    "identical": 462,
+    "identical_median_chars": 54.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "hazard",
+    "label_changes": 0,
+    "max_abs_delta": 1.1026859283447266e-06
+   },
+   {
+    "differ": 71,
+    "differ_median_chars": 437,
+    "identical": 476,
+    "identical_median_chars": 55.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "pii",
+    "label_changes": 0,
+    "max_abs_delta": 0.00020766258239746094
+   },
+   {
+    "differ": 71,
+    "differ_median_chars": 437,
+    "identical": 476,
+    "identical_median_chars": 55.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "pii_truncate",
+    "label_changes": 0,
+    "max_abs_delta": 3.403425216674805e-05
+   },
+   {
+    "differ": 44,
+    "differ_median_chars": 3492.0,
+    "identical": 20,
+    "identical_median_chars": 3340.0,
+    "inputs": 64,
+    "inputs_up_to_200_chars": 0,
+    "inputs_up_to_200_chars_identical": 0,
+    "job": "halu",
+    "label_changes": 0,
+    "max_abs_delta": 3.254413604736328e-05
+   }
+  ]
  }
 }

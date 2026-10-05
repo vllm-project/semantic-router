@@ -759,6 +759,16 @@ still loads, with golden `unverified` and the reason in its health and card.
 `--autotune-cache` still persists Triton's compiled kernels and the tuning of
 models without choices.
 
+The ROCm router image takes PyTorch from the rocm7.2 wheels (the rocm7.1
+build crashes replaying the encoders' HIP graphs) and builds causal-conv1d
+1.7.0 against it with ROCm 7.2.3's compiler, the one the released wheel was
+built with, so its gfx942 machine code is the released build's. It carries
+code for gfx90a, gfx942 and gfx950 (Instinct MI200, MI300 and MI350;
+`CAUSAL_CONV1D_ARCHS` builds others), since a decoder fails on a GPU it has no
+code for rather than falling back. Triton's compiled kernels and
+MIOpen's databases live in the model volume, since the charts run the router
+on a read-only root without a home directory.
+
 The oneDNN linear is a kernel variant a family opts into
 (`ModelSpec.kernel_variants`): Vela 1.0 task heads use it on `exact`, since
 their reference is the legacy path's recorded agreement, not a bit pattern;
@@ -791,10 +801,13 @@ embedding host start alike. `vllm-sr-runtime fixture OUTPUT --family F
 --variant V` writes a tiny random-weight package of any built-in family; the
 writer is `testing/<family>.py`.
 
-Importing `vllm_sr_runtime` sets two environment defaults, `GOMP_SPINCOUNT`
-and `ONEDNN_PRIMITIVE_CACHE_CAPACITY`. They take effect only when PyTorch
-loads, and the plugin base layer imports PyTorch, so they cannot wait for
-`main`. A value the caller set is kept.
+Importing `vllm_sr_runtime` sets four environment defaults:
+`GOMP_SPINCOUNT`, `ONEDNN_PRIMITIVE_CACHE_CAPACITY`, and MIOpen's
+`MIOPEN_FIND_MODE=FAST` with `MIOPEN_LOG_LEVEL=3`. MIOpen's default find mode
+times each new convolution shape's solvers, so cold processes picked different
+ones and answered differently; FAST never times. They take effect only when
+PyTorch loads, and the plugin base layer imports PyTorch, so they cannot wait
+for `main`. A value the caller set is kept.
 
 ## 13. Router integration
 
@@ -897,7 +910,10 @@ the same `process` share one process and one bundle.
   without an `endpoint` into processes: by `process` when set; else each GPU
   device gets one process, and each CPU model its own process (`cpu-0`,
   `cpu-1`, ...; at most half the cores, capped by
-  `VLLM_SR_RUNTIME_CPU_PROCESSES`; `1` folds them into one). A CPU process
+  `VLLM_SR_RUNTIME_CPU_PROCESSES`; `1` folds them into one). Deployments on
+  `device: auto` share one process, `auto`, wherever the runtime places them,
+  so on a CPU-only host they take turns on one device thread; name `cpu` (or
+  a `process`) to give CPU models processes of their own. A CPU process
   runs `ceil(cores / processes)` threads, unpinned, so a busy model can use
   the cores an idle one leaves: on 16 cores and five task models, one shared
   process served 11.1 requests/s, pinned disjoint shares 15.6, unpinned
@@ -1116,7 +1132,7 @@ hardware, with the records in `docs/records/<workstream>-*`. The techniques:
 | Decision models | exact-shape HIP / CUDA graphs with host-built masks, bit-exact fused Triton kernels (FP32 and BF16 streams on gfx942), lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard; Decision 1.0 encoders keep one graph set and one reduced copy per layer stack | `rocm-mi325x-*`, `decision1-performance.md`, `vela2-performance.md` |
 | Runtime core | one bundled call per request and process; a bundle's tasks for one model as one job group (one forward for every head reading the same input); per-model content-hash result cache; shortest-expected-finish scheduling that answers each job when its own batches ran and lets short requests run between the windows of a long one (section 9); package files verified in parallel | `router-latency-cpu.md` |
 | Encoders | packed (varlen) attention in length groups; banded local attention for long rows (from 1,024 tokens on CPU, 2,048 on GPU); oneDNN pre-packed FP32 linears on CPU `exact`, batch-invariant as probed at load, so `exact` batches concurrent requests; dynamic cross-request batching (`batching`); encoder graphs per shape bucket on GPU, replayed only when padding stays small; a fused gfx942 rotary kernel; reduced-precision copies under `max_speed` only where the records show at least 99% agreement (CPU `float32-packed` for Decision 1.0 Kai, Lex and Route and the Vela 2.0 0.3B; BF16 and int8 measured and refused elsewhere); an ONNX Runtime engine with one shared thread pool (Omni); per-hardware kernel registry | `vela1-performance.md`, `embed-performance.md`, `decision1-performance.md`, `vela2-performance.md` |
-| Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; one CPU process per model with thread shares; deadlines and fail-open; pure-Go keyword scoring and model selectors (an AVX2 / FMA dot kernel with a pure-Go fallback) | `router-latency-cpu.md`, `stores-algorithms.md`, `stores-consumers.md` |
+| Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; one CPU process per model with thread shares; deadlines and fail-open; pure-Go keyword scoring and model selectors (AVX2 / FMA and NEON dot kernels with a pure-Go fallback) | `router-latency-cpu.md`, `router-latency-rocm.md`, `stores-algorithms.md`, `stores-consumers.md` |
 
 ## 19. Phase 1 follow-ups and later work
 

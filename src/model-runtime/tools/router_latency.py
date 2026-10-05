@@ -307,7 +307,9 @@ def cmd_rounds(args: argparse.Namespace) -> None:
         for metric in METRICS:
             a = [base[r]["passes"][name][metric] for r in rounds]
             b = [new[r]["passes"][name][metric] for r in rounds]
-            mean, low, high = paired_interval([y - x for x, y in zip(a, b)])
+            mean, low, high = paired_interval(
+                [y - x for x, y in zip(a, b, strict=True)]
+            )
             report["passes"][name][metric] = {
                 args.base: a,
                 args.new: b,
