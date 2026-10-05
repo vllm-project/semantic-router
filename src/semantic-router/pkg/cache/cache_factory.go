@@ -104,7 +104,7 @@ func GetAvailableCacheBackends() []CacheBackendInfo {
 		{
 			Type:         InMemoryCacheType,
 			Name:         "In-Memory Cache",
-			Description:  "High-performance in-memory semantic cache with BERT embeddings",
+			Description:  "High-performance in-memory semantic cache with model runtime embeddings",
 			Capabilities: CapabilitiesForBackend(InMemoryCacheType),
 			Features: []string{
 				"Fast access",

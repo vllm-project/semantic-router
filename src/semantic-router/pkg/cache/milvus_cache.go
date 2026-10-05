@@ -34,7 +34,7 @@ type MilvusCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
-	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	embeddingModel      string // "mmbert" (default), "qwen3" or "multimodal"
 }
 
 // MilvusCacheOptions contains configuration parameters for Milvus cache initialization
