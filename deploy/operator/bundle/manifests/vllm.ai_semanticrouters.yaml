@@ -1679,11 +1679,6 @@ spec:
                             minimum: 0
                             type: integer
                         type: object
-                      gemma_model_path:
-                        description: |-
-                          Path to EmbeddingGemma-300M model directory
-                          Gemma provides 8K context and fast embeddings (768 dimensions)
-                        type: string
                       mmbert_model_path:
                         description: |-
                           Path to mmBERT 2D Matryoshka embedding model directory

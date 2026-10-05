@@ -19,7 +19,7 @@ from typing import Any
 import torch
 
 from ...errors import PackageError
-from ...plugins.base import RenderedItem
+from ...plugins.decisions import RenderedItem
 from ...text import segments
 from .questions import NoulDefaults, Row
 

@@ -38,6 +38,9 @@ type Manager struct {
 	cacheDir   string
 	cores      int
 	closed     bool
+
+	autoOnce sync.Once
+	auto     string
 }
 
 // NewManager prepares a manager; Acquire and Reconcile start processes.
@@ -62,7 +65,7 @@ func (m *Manager) Acquire(cfg *config.RouterConfig) (*Lease, error) {
 
 // AcquireDeployments returns a lease on an explicit set of deployments.
 func (m *Manager) AcquireDeployments(deployments map[string]config.ModelDeployment) (*Lease, error) {
-	plans := planProcesses(deployments, m.command, m.cacheDir, m.cores)
+	plans := planProcesses(deployments, m.command, m.cacheDir, m.cores, m.resolveAuto(deployments))
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -91,7 +94,8 @@ func (m *Manager) AcquireDeployments(deployments map[string]config.ModelDeployme
 
 // extend adds one deployment to a lease in a process of its own.
 func (m *Manager) extend(lease *Lease, name string, deployment config.ModelDeployment) error {
-	plan := planProcesses(map[string]config.ModelDeployment{name: deployment}, m.command, m.cacheDir, m.cores)[0]
+	single := map[string]config.ModelDeployment{name: deployment}
+	plan := planProcesses(single, m.command, m.cacheDir, m.cores, m.resolveAuto(single))[0]
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -118,6 +122,32 @@ func (m *Manager) extend(lease *Lease, name string, deployment config.ModelDeplo
 		"deployment": name, "process": plan.name,
 	})
 	return nil
+}
+
+// resolveAuto returns the device that managed deployments on auto are planned
+// on: the runtime's answer, asked the first time one is planned and kept for
+// the manager's lifetime, so plans stay stable. It is empty when the runtime
+// could not answer; those deployments then share one process.
+func (m *Manager) resolveAuto(deployments map[string]config.ModelDeployment) string {
+	for _, deployment := range deployments {
+		deployment = deployment.WithDefaults()
+		if !deployment.Managed() || deployment.Device != autoDevice {
+			continue
+		}
+		m.autoOnce.Do(func() {
+			device, err := queryAutoDevice(m.command)
+			if err != nil {
+				logging.ComponentWarnEvent("model_runtime", "auto_device_unresolved", map[string]interface{}{
+					"error": err.Error(), "fallback": "deployments on auto share one process",
+				})
+				return
+			}
+			m.auto = device
+			logging.ComponentEvent("model_runtime", "auto_device_resolved", map[string]interface{}{"device": device})
+		})
+		return m.auto
+	}
+	return ""
 }
 
 func (m *Manager) startGroupLocked(plan *processPlan) (*group, error) {

@@ -29,7 +29,12 @@ from typing import Any
 
 from .accel.autotune import KernelChoices, freeze_autotune
 from .config import ModelConfig, ServeConfig
-from .errors import PackageError, RuntimeServiceError, VerificationError
+from .errors import (
+    PackageError,
+    RuntimeServiceError,
+    UnsupportedDeviceError,
+    VerificationError,
+)
 from .placement import Placement, device_kind, place
 from .plugins import registry
 from .plugins.base import (
@@ -60,19 +65,32 @@ log = logging.getLogger("vllm_sr_runtime")
 AUTO_ENGINE = "auto"
 
 
+def _auto_rank(engine: str, preferred: str | None) -> tuple[int, int, str]:
+    """Where ``auto`` tries an engine: ``preferred``, then by ``Engine.auto_priority``, then by name.
+
+    An engine whose plugin fails to load ranks last, so only reaching it fails.
+    """
+    if engine == preferred:
+        return 0, 0, engine
+    try:
+        priority = registry.plugin("engines", engine).load().auto_priority
+    except Exception:
+        priority = None
+    return (1, priority, engine) if priority is not None else (2, 0, engine)
+
+
 def choose_engine(
     name: str, spec: ModelSpec, device: DeviceInfo, preferred: str | None = None
 ) -> tuple[str, Any]:
     """The named engine, or for ``auto`` the first that runs the spec on the device.
 
     ``auto`` tries ``preferred`` (the built-in table's engine for the device
-    class) first, then native, then every other engine by name.
+    class) first, then the engines in ``_auto_rank`` order.
     """
     candidates = [name]
     if name == AUTO_ENGINE:
-        order = {preferred: 0, "native": 1}
         candidates = sorted(
-            registry.names("engines"), key=lambda n: (order.get(n, 2), n)
+            registry.names("engines"), key=lambda n: _auto_rank(n, preferred)
         )
     reasons = []
     for candidate in candidates:
@@ -400,10 +418,10 @@ class ServedModel:
         self.health.set("warming", "running the golden check")
         assert self.family is not None and self.package is not None
         self.health.golden = golden_check(
-            self.golden_decisions,
+            self.golden_surface,
+            model.golden_compare,
             self.family.golden(self.package),
             placement.device.accelerator,
-            run_surface=self.golden_surface,
         )
         if self.health.golden.status == "failed":
             raise VerificationError(self.health.golden.detail or "golden check failed")
@@ -476,14 +494,8 @@ class ServedModel:
         results = self.submit_items(plan.items, None, "exact").result()
         return self.model.finish_surface(plan, results)
 
-    def golden_decisions(self, state: Any, questions: dict[str, Any]) -> dict[str, Any]:
-        """Answers to a golden decisions request."""
-        response = self._golden("decisions", {"state": state, "questions": questions})
-        answers: dict[str, Any] = response["answers"]
-        return answers
-
-    def golden_surface(self, surface: str, body: dict[str, Any]) -> dict[str, float]:
-        """The numbers of a golden surface response."""
+    def golden_surface(self, surface: str, body: dict[str, Any]) -> dict[str, Any]:
+        """The comparable values of a golden response (``LoadedModel.golden_values``)."""
         assert self.model is not None
         return self.model.golden_values(surface, self._golden(surface, body))
 
@@ -734,8 +746,9 @@ class Runtime:
     def _load_all(self) -> None:
         """Load every model in order, then reload the ones that failed with back-off.
 
-        A model whose package or golden answers are wrong stays failed at
-        once. Any other failure (no device with enough free memory, a
+        A model whose package or golden answers are wrong, or that no
+        device it may use can serve (``UnsupportedDeviceError``), stays failed
+        at once. Any other failure (no device with enough free memory, a
         download, a busy device) is retried ``load_attempts`` times in all,
         waiting ``load_retry_seconds`` and doubling up to 300 s, while the
         model reports ``loading``; the other models serve meanwhile. Every pass
@@ -752,7 +765,7 @@ class Runtime:
                     return
                 try:
                     served.load()
-                except (PackageError, VerificationError) as exc:
+                except (PackageError, UnsupportedDeviceError, VerificationError) as exc:
                     log.error("loading %s failed: %s", served.label, exc)
                     served.health.set("failed", f"{type(exc).__name__}: {exc}")
                 except Exception as exc:
@@ -898,12 +911,8 @@ class Runtime:
         served, request, plan = prepared.served, prepared.request, prepared.plan
         assert served.model is not None
         body = served.model.finish_surface(plan, results)
-        if request.surface == "decisions":
-            for answer in body.get("answers", {}).values():
-                self.metrics.questions.labels(
-                    type=str(answer.get("type")),
-                    outcome=answer.get("error", "answered"),
-                ).inc()
+        for kind, outcome in served.model.outcomes(request.surface, body):
+            self.metrics.questions.labels(type=kind, outcome=outcome).inc()
         response: dict[str, Any] = {"model": served.served_id, **body}
         response.setdefault(
             "usage", {"input_tokens": plan.input_tokens, "output_tokens": 0}

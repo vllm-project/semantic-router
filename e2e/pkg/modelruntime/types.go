@@ -11,8 +11,9 @@ package modelruntime
 
 // ModelList is the body of GET /v1/models.
 type ModelList struct {
-	Data   []ModelCard    `json:"data"`
-	Limits *ProcessLimits `json:"limits"`
+	APIVersion string         `json:"api_version"`
+	Data       []ModelCard    `json:"data"`
+	Limits     *ProcessLimits `json:"limits"`
 }
 
 // ProcessLimits is what one request to a runtime process may hold.
@@ -98,9 +99,16 @@ type PluginInfo struct {
 
 // Health is the body of GET /health.
 type Health struct {
-	Status string                 `json:"status"`
-	Reason *string                `json:"reason"`
-	Models map[string]ModelHealth `json:"models"`
+	APIVersion string                 `json:"api_version"`
+	Status     string                 `json:"status"`
+	Reason     *string                `json:"reason"`
+	Models     map[string]ModelHealth `json:"models"`
+}
+
+// Liveness is the body of GET /health/live.
+type Liveness struct {
+	APIVersion string `json:"api_version"`
+	Status     string `json:"status"`
 }
 
 // ModelHealth is one model's state in a multi-model process.

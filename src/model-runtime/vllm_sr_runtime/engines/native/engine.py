@@ -430,6 +430,7 @@ class NativeEngineModel(EngineModel):
 
 class NativeEngine(Engine):
     name = "native"
+    auto_priority = 0
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:

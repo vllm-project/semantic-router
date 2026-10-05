@@ -15,7 +15,7 @@ from typing import Any
 REMOVED_PROVIDERS = frozenset({"candle", "ort", "openvino"})
 REMOVED_EMBEDDING_BACKENDS = frozenset({"candle", "openvino"})
 # EmbeddingGemma and MiniLM have no runtime family; Vela Embedding (mmbert)
-# replaces them. Empty path keys stay accepted.
+# replaces them. Their path keys are refused even when empty.
 RETIRED_EMBEDDING_TYPES = frozenset({"gemma", "bert"})
 RETIRED_EMBEDDING_PATHS = ("gemma_model_path", "bert_model_path")
 # A remote hallucination detector is a hallucination_detector binding; the
@@ -116,12 +116,11 @@ def retired_model_fields(data: dict[str, Any]) -> list[str]:
 def _retired_embedding_models(
     root: dict[str, Any], semantic: dict[str, Any], embedding_config: dict[str, Any]
 ) -> list[str]:
-    """Settings that select the retired gemma or bert embedding models."""
-    removed = [
-        f"global.model_catalog.embeddings.semantic.{field}"
-        for field in RETIRED_EMBEDDING_PATHS
-        if isinstance(semantic.get(field), str) and semantic[field].strip()
-    ]
+    """Settings that select the retired gemma or bert embedding models, and
+    their path keys."""
+    removed = _present(
+        "global.model_catalog.embeddings.semantic", semantic, RETIRED_EMBEDDING_PATHS
+    )
     selections = [
         (
             "global.model_catalog.embeddings.semantic.embedding_config.model_type",

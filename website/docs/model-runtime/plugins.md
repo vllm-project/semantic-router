@@ -92,11 +92,27 @@ A plugin is an ordinary Python distribution.
 Declare the endpoints you serve in `surfaces` and describe the plugin in
 `descriptor()`; `/v1/models` shows it to clients.
 
+A family that answers questions on `/v1/decisions` subclasses `DecisionModel`
+from `vllm_sr_runtime.plugins.decisions` instead of `LoadedModel`. It writes
+`plan` (turn a request's questions into work items) and `answer` (one
+question's answer from its result); `DecisionModel` serves the endpoint, its
+startup self-check and its per-question metrics.
+
+A family can also ship models of its own, pinned to a revision: name a module
+whose `MODELS` lists them (`BuiltinModel` entries with the repository,
+revision, identity and recorded golden answers) in `builtin_table`. The
+runtime then serves them by name and checks their answers at startup. Name the
+module that writes tiny test packages in `fixture_writer`, and
+`vllm-sr-runtime fixture --family <name>` writes one. The built-in families
+declare both the same way.
+
 **2. The engine, if you need one.** Most families reuse the built-in `native`
 (PyTorch) or `onnxruntime` engine by describing their network in the
 `ModelSpec`. Write an engine (`Engine` and `EngineModel`: `supports`, `load`,
 `forward` or `encode`) only for a new kind of network or a new execution
-library.
+library. Set `auto_priority` if `engine: auto` should try your engine before
+others (lower first; the built-in `native` engine is 0); without it, `auto`
+tries it after the engines that set one, by name.
 
 **3. An accelerator or a profile, if you need one.** For new hardware,
 subclass `Accelerator` (`available`, `devices`, `torch_device`, `kernels`), and

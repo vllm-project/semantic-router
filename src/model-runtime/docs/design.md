@@ -127,17 +127,19 @@ src/model-runtime/
     heads/                  # shared readout heads (candidate, sequence, scores, token, pooled, relevance, span)
     plugins/
       base.py               # ModelFamily, LoadedModel, Engine, EngineModel, Accelerator, Profile, specs
+      decisions.py          # DecisionModel: the decisions surface, golden comparison and outcomes per question
       registry.py           # entry-point discovery and selection
     registry/
       resolve.py            # local directory or Hub repo at a pinned 40-hex revision, cache
       artifacts.py          # file inventories and hash verification for packages without a manifest
-      builtin.py            # the first-party model table (aggregates registry/tables/*)
-      tables/               # one table per family: decision2.py, decision1.py, vela1.py, vela2.py, omni.py
+      builtin.py            # the first-party models: the tables the installed families name
+      tables/               # the built-in families' tables: decision2.py, decision1.py, vela1.py, vela2.py, omni.py
       golden_answers*.json  # golden references per family, per device class
       kernel_choices.json   # pinned autotuned kernel choices (Decision 2.0)
       policy.py             # licence and access policy, token handling
     scheduler/              # planner, scheduler (one per model)
     placement.py            # device choice and memory budget
+    devices.py              # `vllm-sr-runtime devices`: the host's devices and the one auto takes
     supervision/            # readiness (golden answers), metrics
     families/               # package formats, rendering and answer assembly only
       decision2/            # Decision 2.0 (Phase 1)
@@ -151,7 +153,8 @@ src/model-runtime/
     accel/                  # cpu, cuda, rocm, xpu, mps; kernels.py
     profiles/               # exact, shared_context, batching, max_speed
     testing/
-      fixtures.py           # tiny random-weight packages for every family, and a tiny tokenizer
+      fixtures.py           # tiny random-weight packages through each family's writer, and a tiny tokenizer
+      <family>.py           # the built-in families' fixture writers
   examples/third_party_plugin/  # a documented out-of-tree family, engine, accelerator and profile, installed by the tests
   tests/                    # unit, contract, registry, scheduler, server and integration tests
   tools/                    # golden answers, parity drivers (GPU, legacy), benchmarks
@@ -179,6 +182,15 @@ surfaces and package formats, an engine's architectures and outputs, an
 accelerator's validation status, a profile's numerics. `/v1/models` lists
 each active plugin with its distribution, version and descriptor.
 
+Everything else the runtime needs from a plugin is declared on its class, so
+no central list names a built-in: a family names its table of pinned models
+(`ModelFamily.builtin_table`, section 7.3) and the module that writes its tiny
+test packages (`ModelFamily.fixture_writer`); an engine and an accelerator
+declare where `auto` tries them (`auto_priority`). The runtime reads these
+when it first needs them, at load time, never per request. A new built-in
+family is its own package plus an entry point in `pyproject.toml`, exactly
+like a third-party one.
+
 ### 5.1 ModelFamily
 
 A family owns the task contract of a model format: how a package is
@@ -196,6 +208,8 @@ class ModelFamily(ABC):
     def describe(self, package: VerifiedPackage) -> ModelSpec: ...  # model options: RegistryOptions.model_options
     def load(self, package, spec, engine_model) -> LoadedModel: ...
     def golden(self, package) -> list[GoldenCase]: ...              # per-surface golden requests
+    builtin_table: ClassVar[str | None]    # module whose MODELS lists the family's pinned models
+    fixture_writer: ClassVar[str | None]   # module with write_fixture(output, variant, seed) and VARIANTS
 ```
 
 A loaded model plans, runs and finishes requests per surface. The scheduler
@@ -210,6 +224,9 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):  # ItemT satisfies WorkItem
     def run(self, items: list[ItemT]) -> list[ResultT]: ...                         # one forward + readout
     def run_shared(self, items: list[ItemT], shared_prefix: int) -> list[ResultT]: ...  # decoders' shared-context batches
     def finish_surface(self, plan: SurfacePlan[ItemT], results: Results[ResultT]) -> dict: ...  # the response body
+    def golden_values(self, surface: str, response: dict) -> dict: ...             # comparable values (default: numbers)
+    def golden_compare(self, surface, values, reference, tolerance) -> tuple[int, int] | None: ...  # (checked, matched)
+    def outcomes(self, surface: str, body: dict) -> Iterable[tuple[str, str]]: ...  # (type, outcome) per item
 ```
 
 A work item (`WorkItem`) has `ids` (its token IDs) and may have `cost`, the
@@ -221,12 +238,16 @@ expired item or plan. Results are shared with the cache, so `finish_surface`
 never mutates them. `mypy --strict` checks the plugin interfaces, the
 scheduler, the profiles and the runtime core in `make model-runtime-test`.
 
-The Phase 1 decision methods (`plan`, `answer`) remain and back
-`plan_surface("decisions", ...)`, so Decision 2.0 is untouched. `ModelInfo`
-grows the descriptors the router needs before it routes: `heads` (name, kind,
-labels, default threshold, overflow and window policy), `embedding`
-(dimensions, layer exits, modalities, normalisation, representation identity)
-and `rerank` (pair-scorer exits).
+Decision families subclass `DecisionModel` (`plugins/decisions.py`), the
+decisions mixin: it serves `/v1/decisions` through the family's `plan` (render
+every question) and `answer` (one question's readout), compares golden
+answers question by question and reports each question's type and outcome for
+the metrics. `decision1`, `decision2` and `vela2` use it (`vela2` assembles a
+request's answers in its own `finish_surface`); the generic base has no
+decisions method. `ModelInfo` grows the descriptors the router needs before
+it routes: `heads` (name, kind, labels, default threshold, overflow and window
+policy), `embedding` (dimensions, layer exits, modalities, normalisation,
+representation identity) and `rerank` (pair-scorer exits).
 
 `ModelSpec` is the hand-off to an engine: the backbone architecture and
 config, the weight files (or ONNX graphs), head and LoRA tensors, the dtype
@@ -258,9 +279,10 @@ family, and the family records which one it used.
 The engine defaults to `auto`: a built-in model's preferred engine for the
 placed device class (`BuiltinModel.engines`, set where an interleaved
 measurement shows it faster), else the first registered engine whose
-`supports()` accepts the model on the device, native first. A load that no
-engine accepts fails with every engine's reason; cards, response meta and
-metrics name the engine chosen. `--engine NAME` pins one.
+`supports()` accepts the model on the device, in the order of their
+`auto_priority` (`native` 0), then by name for engines without one. A load
+that no engine accepts fails with every engine's reason; cards, response meta
+and metrics name the engine chosen. `--engine NAME` pins one.
 
 ### 5.3 Accelerator
 
@@ -303,7 +325,11 @@ different targets, refuses a class that does not subclass its group's base or
 carries another name, and lists every active plugin with its distribution,
 version and descriptor in `/v1/models`. The built-in plugins are the runtime's
 own entry points; run uninstalled from a source tree, it reads them from its
-`pyproject.toml`. A profile builds itself from the process options
+`pyproject.toml`. A family's pinned models and fixture writer, and an engine's
+`auto` priority, come from the same class declarations for built-in and
+third-party plugins; a test installs a temporary distribution whose family,
+table, fixture writer and engine the runtime finds only through its entry
+points. A profile builds itself from the process options
 (`Profile.from_config`), and the CLI accepts any registered profile and
 device. Plugins run in the runtime process; the runtime never executes code
 from a model package. `examples/third_party_plugin` is a complete, documented
@@ -460,10 +486,14 @@ deadline applies to every task unless a task's own deadline is earlier.
 labels), embedding and rerank descriptors, limits, licence, profiles, engine,
 accelerator, device, dtype, plugin versions, and per-model readiness and
 golden status, plus the process's `limits` (`max_bundle_tasks`,
-`max_request_bytes`). `/health` returns 200 only when every model is ready, and lists
-per-model states otherwise; `/health/live` returns 200 while the process
-serves HTTP. All three report `api_version`, the contract version
-(`info.version`); a client refuses a runtime of another major version.
+`max_request_bytes`). `/health` is readiness (`Health`): 200 only when every
+model is ready, with the process state (`starting`, `loading`, `warming`,
+`ready`, `degraded`, `failed`) and, when the process serves several models,
+each model's state. `/health/live` is
+liveness (`Liveness`): 200 with `status: alive` while the process serves
+HTTP, whatever its models' states. All three report `api_version`, the
+contract version (`info.version`); a client refuses a runtime of another
+major version.
 `/metrics` is Prometheus text with a `model` label on every model-scoped
 series.
 
@@ -509,10 +539,14 @@ Before any model code runs, the family verifies the package:
 | `vela2` | `vllm-sr/Vela-2.0-{0.3B, 0.8B, 4B, 9B}` (private preview) | 0.3B `a3209a50`, 0.8B `a778eb2a`, 4B `c1e64d4f`, 9B `bc876163` |
 | `multimodal_embedding` | `vllm-sr/Vela-1.0-Omni-{Nano, Mini}` | Nano `2ff2d663`, Mini `801bae3a` (prepared graphs, section 8.5) |
 
-`registry/tables/<family>.py` carries the full revisions, file digests, the
-expected identity and parameter count, and the golden requests; reference
-answers per device class live in `registry/golden_answers*.json`. A new
-revision is a new entry; the runtime never follows a moving branch.
+Each family names its table (`ModelFamily.builtin_table`); the built-in
+families keep theirs in `registry/tables/<family>.py`, with the full
+revisions, file digests, the expected identity and parameter count, and
+reference answers per device class in `registry/golden_answers*.json`.
+`registry.builtin` reads the tables of the installed families once, in
+family-name order; a repository two tables pin, or a table entry of another
+family, is refused. A new revision is a new entry; the runtime never follows
+a moving branch.
 
 ### 7.4 Licence and access
 
@@ -690,7 +724,14 @@ CUDA, then the CPU; an accelerator without one, such as XPU, MPS or a
 third-party plugin by default, serves only when named) and takes the first
 available device with enough free memory. The memory estimate is the weight
 bytes under the dtype policy plus the activation bound; `--memory-budget`
-caps it per model.
+caps it per model. A model names the device capabilities it requires per
+accelerator (`ModelSpec.requires`), and placement refuses a device whose
+accelerator does not report one, before any weights load. The Qwen3.5
+decoders require `lapack` on the CPU, since their gated-delta kernel solves
+triangular systems there: a PyTorch built without LAPACK (the ROCm image's)
+refuses them with that cause and the fix (a PyTorch with LAPACK, such as the
+CPU image, or a GPU device). When every device the model may use lacks a
+capability, the failure is final instead of retried.
 
 ### 10.2 Readiness and health
 
@@ -698,7 +739,10 @@ Per model: `loading` (resolve, verify, load, identity) → `warming` (golden
 answers) → `ready`, or `failed` with a reason. Readiness is gated on golden
 answers per surface: every built-in revision carries golden requests with
 reference answers per device class (1e-3 on CPU, 0.02 on GPUs; encoder
-embeddings compare by cosine). Without a reference the runtime checks
+embeddings compare by cosine). Every golden request runs through its
+surface the same way: the loaded model's `golden_values` and `golden_compare`
+say what to compare and how, so decisions count questions and the other
+surfaces count values. Without a reference the runtime checks
 determinism and well-formed answers and reports `golden: unverified`. A
 failed model does not stop the others; `/health` reports the process
 degraded and the router treats only that model's deployments as unavailable.
@@ -804,8 +848,13 @@ file in managed mode). The other options are as in Phase 1. `vllm-sr serve`
 without `MODEL` keeps its router-mode behaviour. Every serve option's default
 is the `ServeConfig` / `ModelConfig` field default, so the CLI and an
 embedding host start alike. `vllm-sr-runtime fixture OUTPUT --family F
---variant V` writes a tiny random-weight package of any built-in family; the
-writer is `testing/<family>.py`.
+--variant V` writes a tiny random-weight package of any installed family
+that names a writer (`ModelFamily.fixture_writer`; the built-in families'
+writers are `testing/<family>.py`). `vllm-sr-runtime devices` prints, as JSON,
+the devices of the available accelerators (`devices`) and the one
+`--device auto` tries first (`auto`: the first device of the first available
+accelerator in `auto_priority` order); the router reads `auto` before it
+groups its processes (section 13.4).
 
 Importing `vllm_sr_runtime` sets five environment defaults:
 `GOMP_SPINCOUNT`, `THP_MEM_ALLOC_ENABLE=1`, `ONEDNN_PRIMITIVE_CACHE_CAPACITY`,
@@ -921,11 +970,19 @@ the same `process` share one process and one bundle.
   without an `endpoint` into processes: by `process` when set; else each GPU
   device gets one process, and each CPU model its own process (`cpu-0`,
   `cpu-1`, ...; at most half the cores, capped by
-  `VLLM_SR_RUNTIME_CPU_PROCESSES`; `1` folds them into one). Deployments on
-  `device: auto` share one process, `auto`, wherever the runtime places them,
-  so on a CPU-only host they take turns on one device thread; name `cpu` (or
-  a `process`) to give CPU models processes of their own. A CPU process
-  runs `ceil(cores / processes)` threads, unpinned, so a busy model can use
+  `VLLM_SR_RUNTIME_CPU_PROCESSES`; `1` folds them into one). A deployment on
+  `device: auto` is grouped by the device `auto` takes on the host, which the
+  router asks the runtime once (`vllm-sr-runtime devices`, section 12) and
+  keeps: on the CPU it is planned as a `cpu` deployment, so on a host without
+  a GPU each `auto` model gets a CPU process and thread share of its own; on a
+  GPU it joins that device's process (`rocm:0`, ...), and the runtime still
+  places it by free memory; one it then places on the CPU runs in that
+  process without a thread share. If the runtime cannot answer, the `auto`
+  deployments share one process, `auto`, until the router restarts, and the
+  router logs why: a later reload does not ask again, so a slow query (bounded
+  at two minutes) holds up only the first plan, and plans do not change under
+  a running router. A
+  CPU process runs `ceil(cores / processes)` threads, unpinned, so a busy model can use
   the cores an idle one leaves: on 16 cores and five task models, one shared
   process served 11.1 requests/s, pinned disjoint shares 15.6, unpinned
   shares 20.3 (`docs/records/router-latency-cpu.md`). For each group it

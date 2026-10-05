@@ -44,10 +44,14 @@ vllm-sr-runtime serve /tmp/keywords --engine example_counts --device example_hos
 
 1. Subclass `ModelFamily` (`detect`, `verify`, `describe`, `load`) and
    `LoadedModel` (`plan_surface`, `run`, `finish_surface`) from
-   `vllm_sr_runtime.plugins.base`. Declare the surfaces you serve and a
-   `descriptor()`.
+   `vllm_sr_runtime.plugins.base`, or `DecisionModel` (`plan`, `run`,
+   `answer`) from `vllm_sr_runtime.plugins.decisions` for `/v1/decisions`.
+   Declare the surfaces you serve and a `descriptor()`; name a table of pinned
+   models in `builtin_table` and a test-package writer in `fixture_writer` if
+   you ship them.
 2. Reuse a built-in engine through `ModelSpec`, or subclass `Engine` and
-   `EngineModel` (`supports`, `load`, `forward` or `encode`).
+   `EngineModel` (`supports`, `load`, `forward` or `encode`); set
+   `auto_priority` if `--engine auto` may try it before the others.
 3. For new hardware, subclass `Accelerator` (`available`, `devices`,
    `torch_device`, `kernels`); set `auto_priority` if `--device auto` may pick
    it. For a new batching policy, subclass `Profile` (`plan`, and `bind` for

@@ -44,10 +44,8 @@ configOverride:
       embeddings:
         semantic:
           qwen3_model_path: ""
-          gemma_model_path: ""
           mmbert_model_path: ""
           multimodal_model_path: ""
-          bert_model_path: ""
           embedding_config:
             preload_embeddings: false
             enable_soft_matching: false

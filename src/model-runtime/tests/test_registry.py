@@ -92,7 +92,7 @@ def test_licence_policy():
 
 
 def test_every_builtin_model_has_cpu_and_rocm_golden_answers():
-    from vllm_sr_runtime.supervision.readiness import well_formed
+    from vllm_sr_runtime.plugins.decisions import well_formed
 
     for model in builtin.all_models("decision2"):
         for device_class in ("cpu", "rocm"):

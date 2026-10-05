@@ -9,10 +9,12 @@ from vllm_sr_runtime.plugins.base import (
     RegistryOptions,
     VerifiedPackage,
 )
+from vllm_sr_runtime.plugins.decisions import compare_answers
 from vllm_sr_runtime.registry import builtin
 from vllm_sr_runtime.supervision.readiness import (
     CPU_TOLERANCE,
     GPU_TOLERANCE,
+    compare_numbers,
     golden_check,
 )
 
@@ -32,13 +34,29 @@ def answers(noul):
     return {"q": {"type": "noul", "noul": noul}}
 
 
-def check(produced, reference, device_class):
-    golden = {
-        "state": "s",
-        "questions": QUESTIONS,
-        "expected": {device_class: reference},
+def answers_of(produced):
+    return lambda surface, body: produced
+
+
+def decisions(surface, values, reference, tolerance):
+    return compare_answers(values, reference, tolerance)
+
+
+def numbers(surface, values, reference, tolerance):
+    return compare_numbers(values, reference, tolerance)
+
+
+def decisions_golden(expected):
+    return {
+        "surface": "decisions",
+        "body": {"state": "s", "questions": QUESTIONS},
+        "expected": expected,
     }
-    return golden_check(lambda state, questions: produced, [golden], device_class)
+
+
+def check(produced, reference, device_class):
+    golden = decisions_golden({device_class: reference})
+    return golden_check(answers_of(produced), decisions, [golden], device_class)
 
 
 def test_cpu_references_allow_instruction_set_rounding():
@@ -61,13 +79,9 @@ def test_gpu_references_use_the_gpu_tolerance():
 
 
 def test_a_device_class_without_a_reference_is_unverified():
-    other_class_only = {
-        "state": "s",
-        "questions": QUESTIONS,
-        "expected": {"rocm": answers(0.9)},
-    }
+    other_class_only = decisions_golden({"rocm": answers(0.9)})
     result = golden_check(
-        lambda state, questions: answers(0.5), [other_class_only], "cuda"
+        answers_of(answers(0.5)), decisions, [other_class_only], "cuda"
     )
     assert result.status == "unverified"
     assert result.checked == 0
@@ -141,17 +155,15 @@ def test_surface_goldens_compare_flattened_values():
     }
     golden = {"surface": "classify", "body": {}, "expected": {"cpu": values}}
     assert (
-        golden_check(None, [golden], "cpu", run_surface=lambda s, b: values).status
-        == "matched"
+        golden_check(answers_of(values), numbers, [golden], "cpu").status == "matched"
     )
     shifted = {key: value + 2 * CPU_TOLERANCE for key, value in values.items()}
     assert (
-        golden_check(None, [golden], "cpu", run_surface=lambda s, b: shifted).status
-        == "failed"
+        golden_check(answers_of(shifted), numbers, [golden], "cpu").status == "failed"
     )
     assert (
         golden_check(
-            None, [{**golden, "expected": {}}], "cpu", run_surface=lambda s, b: values
+            answers_of(values), numbers, [{**golden, "expected": {}}], "cpu"
         ).status
         == "unverified"
     )

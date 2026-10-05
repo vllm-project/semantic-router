@@ -107,6 +107,22 @@ global:
 			},
 		},
 		{
+			name: "the retired embedding path keys, even empty",
+			yaml: `
+global:
+  model_catalog:
+    embeddings:
+      semantic:
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
+        gemma_model_path: ""
+        bert_model_path: ""
+`,
+			want: []string{
+				"global.model_catalog.embeddings.semantic.gemma_model_path",
+				"global.model_catalog.embeddings.semantic.bert_model_path",
+			},
+		},
+		{
 			name: "NLI routing fields in routing and recipes",
 			yaml: `
 routing:
@@ -176,8 +192,6 @@ global:
     embeddings:
       semantic:
         mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-        gemma_model_path: ""
-        bert_model_path: ""
   stores:
     memory:
       embedding_model: mmbert
@@ -187,5 +201,23 @@ global:
 	}
 	if err := rejectRemovedModelExecutionFields(raw); err != nil {
 		t.Fatalf("canonical fields rejected: %v", err)
+	}
+}
+
+func TestParseRefusesAnEmptyRetiredEmbeddingPathWithTheMigratePointer(t *testing.T) {
+	for _, field := range removedEmbeddingPaths {
+		_, err := ParseYAMLBytes([]byte(`version: v0.3
+global:
+  model_catalog:
+    embeddings:
+      semantic:
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
+        ` + field + `: ""
+`))
+		if err == nil || strings.Contains(err.Error(), "unknown fields") ||
+			!strings.Contains(err.Error(), "global.model_catalog.embeddings.semantic."+field) ||
+			!strings.Contains(err.Error(), "vllm-sr config migrate") {
+			t.Fatalf("an empty %s must be refused by path with the migrate pointer, got %v", field, err)
+		}
 	}
 }

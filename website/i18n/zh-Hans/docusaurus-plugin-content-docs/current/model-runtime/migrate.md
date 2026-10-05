@@ -67,6 +67,7 @@ Changes to review
 | 计算图 `head`，例如 `onnx/model_fa.onnx` | 移除：运行时自行选择模型的计算图 |
 | `artifact: models/Vela-1.0-Encoder-307M-...` | `artifact: vllm-sr/Vela-1.0-Encoder-307M-...`，即 Hub 仓库 |
 | `embedding_config.backend: candle` 或 `openvino` | 移除 |
+| `gemma_model_path` 或 `bert_model_path`（即使为空） | 移除：运行时没有 EmbeddingGemma 或 MiniLM 系列，由 Vela Embedding（`mmbert_model_path`）替代 |
 | 响应缓存、记忆或向量存储上的 `embedding_model: bert` 或 `gemma`，或在 MiniLM 为默认值时未设置 `embedding_model` | `embedding_model: mmbert`（Vela Embedding）；重新向量化已存储的向量 |
 | 使用 `mmbert` 的存储上设置了 Vela Embedding 不提供的向量维度（例如 MiniLM 的 384） | 记忆使用 256，响应缓存和向量存储使用 768；按该维度重新创建集合或索引 |
 | `model_selection.ml.model_type: bert` 或 `gemma` | `model_type: mmbert`；用 Vela Embedding 向量重新训练选择模型 |
@@ -242,3 +243,9 @@ global:
 路由器镜像不再包含原生库。它们包含 CPU 运行时，因此托管模型开箱即用。
 请删除仅为 candle、ONNX Runtime 或 OpenVINO 存在的环境变量、init 容器或卷。
 需要 GPU 时，运行 GPU 运行时并让路由器连接它；见[与路由器一起运行](model-runtime/deploy.md#on-kubernetes)。
+
+如果使用 operator 部署，请在升级前从 `SemanticRouter` 资源中删除 `embedding_models.gemma_model_path`。
+资源定义已不再包含该字段：kubectl 默认的严格校验会拒绝仍设置它的清单（`unknown field`），
+而升级前已存储的资源会丢失该字段，如同从未设置过：其路由器使用资源其余部分配置的 embedding 模型，
+例如通过 `mmbert_model_path` 配置的 Vela Embedding。
+请重新向量化由 EmbeddingGemma 存储的向量（见[更换 embedding 模型时重新向量化](#re-embed-when-the-embedding-model-changes)）。

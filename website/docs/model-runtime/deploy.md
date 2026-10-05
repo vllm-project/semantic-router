@@ -96,10 +96,17 @@ default where you can: in one process, an ONNX Runtime model such as Vela Omni
 and a PyTorch model share the CPU's threads, and one of them answers more
 slowly under load.
 
-Deployments on `device: auto` (the default) all share one process, wherever
-the runtime places them. On a host without a GPU they then take turns on the
-CPU instead of answering in parallel, so name `device: cpu`, or give them a
-`process`, to spread CPU models over processes of their own.
+Deployments on `device: auto` (the default) are grouped by the device `auto`
+picks on the router's host. On a host without a GPU that is the CPU, so each
+of them gets a CPU process of its own, as with `device: cpu`. On a GPU host
+they share the process of the first GPU, such as `rocm:0`, with the
+deployments you put on that GPU; the runtime may still place a model on
+another device when that GPU lacks the memory, and a model it places on the
+CPU there may use every core the router has. `vllm-sr-runtime devices` shows
+the device `auto` picks first. The router asks once, the first time it runs a
+deployment on `auto`; if the runtime cannot answer, the `auto` deployments
+share one process until the router restarts, and the router logs
+`auto_device_unresolved`.
 
 Give a deployment its own `process` name when it should not share a fault
 domain or memory with the others, for example a large decision model:
@@ -161,6 +168,11 @@ For most Vela task models that build fails the runtime's load-time check that
 a model answers the same alone and in a batch, so under `exact` they answer
 queued requests one at a time: the same answers, with less throughput under
 load. A router whose models all run on the CPU should use the CPU image.
+The ROCm image's PyTorch has no CPU LAPACK, so decoders with gated delta rule
+layers (the Qwen3.5-based models, such as Decision 2.0 Lux-9B or Vela 2.0 4B)
+can't load on its CPU: the runtime refuses `device: cpu` for them at startup,
+before their weights load, and names the cause. Serve them on the GPU, or
+from the CPU image.
 
 To share GPU models between several routers, run the runtime as its own
 Deployment from the same image and attach every router to its Service. The

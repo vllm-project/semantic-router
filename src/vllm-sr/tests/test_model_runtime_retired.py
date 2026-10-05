@@ -194,6 +194,40 @@ def test_migration_leaves_no_retired_setting():
     assert retired_model_fields(migrated) == []
 
 
+def test_empty_retired_embedding_paths_are_refused_until_migrated(tmp_path):
+    semantic = {"mmbert_model_path": "models/Vela-1.0-Encoder-307M-Embedding"}
+    document = {
+        "version": "v0.3",
+        "listeners": [],
+        "providers": {"defaults": {"model": "general"}},
+        "global": {
+            "model_catalog": {
+                "embeddings": {
+                    "semantic": {
+                        **semantic,
+                        **dict.fromkeys(RETIRED_EMBEDDING_PATHS, ""),
+                    }
+                }
+            }
+        },
+    }
+    path = tmp_path / "empty-paths.yaml"
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
+
+    with pytest.raises(ConfigParseError) as refused:
+        parse_user_config(str(path), log_summary=False)
+
+    message = str(refused.value)
+    for field in RETIRED_EMBEDDING_PATHS:
+        assert f"global.model_catalog.embeddings.semantic.{field}" in message
+    assert f"vllm-sr config migrate --config {path}" in message
+
+    migrated = migrate_config_data(document, MigrationNotes())
+    assert migrated["global"]["model_catalog"]["embeddings"]["semantic"] == semantic
+    path.write_text(yaml.safe_dump(migrated, sort_keys=False))
+    parse_user_config(str(path), log_summary=False)
+
+
 def test_the_inventory_is_the_router_parsers():
     """The router's parser and the CLI refuse the same settings."""
     source = ROUTER_PARSER.read_text(encoding="utf-8")

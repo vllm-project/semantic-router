@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .errors import PlacementError
+from .errors import PlacementError, UnsupportedDeviceError
 from .plugins import registry
 from .plugins.base import Accelerator, DeviceInfo, ModelSpec
 
@@ -74,6 +74,7 @@ def place(
         )
     candidates = auto_order() if kind == "auto" else [kind]
     reasons = []
+    unsupported = []
     for name in candidates:
         try:
             accelerator = registry.instantiate("accelerators", name)
@@ -86,7 +87,14 @@ def place(
         devices = accelerator.devices()
         if index is not None:
             devices = [d for d in devices if d.index == index]
+        required = spec.requires.get(name, ())
         for info in devices:
+            if required:
+                offered = accelerator.capabilities(info)
+                lacking = [need for need in required if not offered.get(need)]
+                if lacking:
+                    unsupported += [accelerator.lacks(info, need) for need in lacking]
+                    continue
             if name != "cpu" and spec.dtype.autocast == "bfloat16" and not info.bf16:
                 reasons.append(f"{info.label}: no BF16 support")
                 continue
@@ -108,4 +116,7 @@ def place(
                 if index is not None
                 else f"{name}: no devices"
             )
-    raise PlacementError(f"no device can serve {spec.name}: " + "; ".join(reasons))
+    message = f"no device can serve {spec.name}: " + "; ".join(reasons + unsupported)
+    if unsupported and not reasons:
+        raise UnsupportedDeviceError(message)
+    raise PlacementError(message)

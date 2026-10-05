@@ -11,9 +11,12 @@ release image.
 - **Date:** 2026-10-05.
 - **Device:** AMD Instinct MI325X (gfx942).
 - **Image:** `Dockerfile.extproc`, `ACCELERATOR=rocm`, target `extproc`, built
-  from an exact checkout of `a580be6b9` (35.3 GB). The images before it took
-  PyTorch from the official rocm7.2 wheel: `af71d5e82` (24.8 GB) and, without
-  the MIOpen paths below, `be7366c49`.
+  from an exact checkout of `a580be6b9`, then slimmed at `31d00387c` (below):
+  14.4 GB of image content, against 25.5 GB at `a580be6b9` and 17.2 GB for
+  `af71d5e82` (content summed from `docker history`; a containerd image store
+  also counts the compressed layers, so `docker images` shows more). The
+  images before `a580be6b9` took PyTorch from the official rocm7.2 wheel:
+  `af71d5e82` and, without the MIOpen paths below, `be7366c49`.
 - **Reference:** the packages' release image, where every ROCm golden answer
   and parity reference of Phase 1 was recorded: PyTorch 2.12.0 built from
   source on ROCm 7.2.3, Triton 3.7.1, FLA 0.5.2, causal-conv1d 1.7.0.
@@ -41,11 +44,49 @@ release image.
 - **Triton 3.7.0 against 3.7.1** changes no answer: a Triton 3.7.1 venv gives the
   3.7.0 answers to the last digit for Decision 1.0, Vela 1.0 and Vela 2.0, and
   the decoders run their pinned FLA kernel choices on either.
+- **No CPU LAPACK:** this PyTorch build has neither LAPACK nor MKL
+  (`torch._C.has_lapack` is false). The Qwen3.5-based decoders' CPU path
+  calls `torch.triangular_solve`, so such a model can't run on `cpu` in this
+  image. The runtime refuses that placement before any weights load: the CPU
+  accelerator reports `lapack` among its capabilities, these families
+  require it on the CPU (`ModelSpec.requires`), and the model fails at once
+  with the cause and the fix. Serve it on the GPU, or run CPU models from the
+  CPU image.
+
+## What the image leaves out
+
+The `rocm-lib-slim` stage copies only what the serving stack can load from
+the release image's ROCm tree, each file unchanged. Of `a580be6b9`'s files it
+leaves out 3,353, about 11 GB:
+
+| Left out | Size | Why nothing needs it |
+| --- | --- | --- |
+| Static libraries (`*.a`) outside LLVM, mostly composable_kernel's device-op archives | 4.9 GB | build-time only |
+| ROCm's LLVM (`lib/llvm`, with its static libraries) | 2.4 GB | Triton links with its own `ld.lld`; comgr carries its compiler |
+| rocFFT's kernel cache | 1.8 GB | rocFFT compiles what it misses, and no model runs an FFT |
+| rocALUTION, hipTensor | 0.7 GB | no library in the image links them |
+| rocBLAS, hipBLASLt and hipSPARSELt kernels, and MIOpen databases, of GPUs outside `ROCM_GPU_ARCHS` | 1.3 GB | the image serves gfx90a, gfx942 and gfx950, as `CAUSAL_CONV1D_ARCHS` |
+
+Checked against `a580be6b9` on an MI325X (gfx942):
+
+- **Files:** SHA-256 over every file under `/opt/rocm-7.2.3` and PyTorch's
+  package: 17,607 kept, none changed or added.
+- **Golden answers** recorded in the slim image equal the committed files in
+  every value: Decision 1.0 (seven), Decision 2.0 (all six), Vela 1.0 (all 13 `task_heads` built-ins:
+  the ten text models, Vela Embedding, Vela Reranker and Qwen3-Embedding), Vela 2.0 (all four sizes).
+- **Panels**, the runtime at one commit, maximum drift 0.0: Vela 2.0 4B
+  answers its 360 requests identically to `a580be6b9`, and 0.3B to the
+  release image; Vela 1.0's AMD recipe gives its 4,376 answers identically
+  to the release image (`vela1-parity.md`).
+- **GPU smoke** (below): 7 of 7 ready in 36 s, 280 / 280 requests.
+
+So the timing records stand as timed in `a580be6b9`.
 
 ## causal-conv1d
 
 PyPI publishes no ROCm wheel. The `causal-conv1d-rocm` build stage compiles
-the 1.7.0 sdist (sha256 `3202758494eaa7b5…`) against the image's own PyTorch,
+the 1.7.0 sdist (sha256 `3202758494eaa7b5…`) against the official rocm7.2
+PyTorch wheel (the stage's base; the image then serves with the release's),
 with ROCm 7.2.3's compiler (AMD clang 22.0.0git, roc-7.2.3 26084) and the
 release build's tools (setuptools 79.0.1, wheel 0.48.0, ninja 1.13.2), for
 `CAUSAL_CONV1D_ARCHS`. The image installs only the wheel; its extension is
@@ -88,6 +129,7 @@ encoders (Domain, PII, Guard, FactCheck, Feedback) on `rocm:0`, `exact`.
 | `be7366c49` | 6 of 7; Vela 2.0 4B failed 5 / 5 loads (`miopenStatusUnknownError`) | `matched`, 6 / 6 | 240 / 240 |
 | `af71d5e82` | 7 of 7, in 40 s | `matched`, 7 / 7 | 280 / 280 |
 | `a580be6b9` | 7 of 7, in 35 s | `matched`, 7 / 7 | 280 / 280 |
+| `31d00387c` (slim) | 7 of 7, in 36 s | `matched`, 7 / 7 | 280 / 280 |
 
 - **The `be7366c49` failure:** Vela 2.0's forest forward runs `F.conv1d`,
   which goes through MIOpen. MIOpen keeps its databases and lock files under

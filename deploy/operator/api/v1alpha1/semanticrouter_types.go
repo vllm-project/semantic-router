@@ -1049,11 +1049,6 @@ type EmbeddingModelsConfig struct {
 	// +optional
 	Qwen3ModelPath string `json:"qwen3_model_path,omitempty"`
 
-	// Path to EmbeddingGemma-300M model directory
-	// Gemma provides 8K context and fast embeddings (768 dimensions)
-	// +optional
-	GemmaModelPath string `json:"gemma_model_path,omitempty"`
-
 	// Path to mmBERT 2D Matryoshka embedding model directory
 	// Supports layer early exit (3/6/11/22) and dimension reduction (64-768)
 	// +optional

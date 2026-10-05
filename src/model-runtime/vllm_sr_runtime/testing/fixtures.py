@@ -19,6 +19,7 @@ import torch
 
 from ..families.decision2 import package as pkg
 from ..heads.candidate import CandidateHead
+from ..plugins import registry
 from ..registry.artifacts import safetensors_elements, sha256_file
 from ..systemone import MAX_OPTIONS
 
@@ -205,17 +206,18 @@ def save(tensors: dict[str, torch.Tensor], path: Path) -> None:
 def write_fixture(
     output: str | Path, *, family: str, variant: str | None = None, seed: int = 0
 ) -> Path:
-    """Write a tiny package of ``family``; each family's writer lives in ``testing/<family>.py``.
+    """Write a tiny package of an installed ``family`` with the writer it names (``ModelFamily.fixture_writer``).
 
     A writer module exposes ``write_fixture(output, variant, seed) -> Path``
     and lists its variants in ``VARIANTS`` (the first is the default).
     """
     try:
-        module = importlib.import_module(f"{__package__}.{family}")
-    except ImportError as exc:
-        raise ValueError(f"no fixture writer for the {family!r} family") from exc
-    if module.__name__ == __name__ or not hasattr(module, "write_fixture"):
+        target = registry.plugin("families", family).load().fixture_writer
+    except KeyError:
+        target = None
+    if not target:
         raise ValueError(f"no fixture writer for the {family!r} family")
+    module = importlib.import_module(target)
     variants = tuple(getattr(module, "VARIANTS", ()))
     if variant is not None and variants and variant not in variants:
         raise ValueError(

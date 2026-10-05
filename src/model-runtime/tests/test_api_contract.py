@@ -366,8 +366,8 @@ def test_models_health_metrics_and_openapi(client):
     assert health.status_code == 200
     check("Health", health.json())
     live = client.get("/health/live").json()
-    check("Health", live)
-    assert live["status"] == "alive"
+    check("Liveness", live)
+    assert live == {"api_version": API_VERSION, "status": "alive"}
     assert (
         API_VERSION
         == SPEC["info"]["version"]
@@ -403,7 +403,18 @@ def test_unready_runtime_answers_503(qwen3_package):
     health = unready.get("/health")
     assert health.status_code == 503
     check("Health", health.json())
+    live = unready.get("/health/live")
+    assert live.status_code == 200
+    check("Liveness", live.json())
     check("ModelList", unready.get("/v1/models").json())
+
+
+@pytest.mark.parametrize(
+    "name, status", [("Health", "alive"), ("Liveness", "ready"), ("Liveness", "failed")]
+)
+def test_liveness_and_readiness_states_do_not_mix(name, status):
+    with pytest.raises(jsonschema.ValidationError):
+        check(name, {"api_version": API_VERSION, "status": status})
 
 
 def test_request_size_limit(qwen3_runtime):
