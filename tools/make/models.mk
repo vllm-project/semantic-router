@@ -9,6 +9,7 @@ ifneq ($(PREBUILT_NATIVE_LIBS),1)
 	@cargo test --locked --manifest-path ml-binding/Cargo.toml
 endif
 	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_native_parity.py
+	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_service_boundary.py
 
 .PHONY: test-model-selection-parity
 
@@ -32,6 +33,7 @@ test-training-contracts: harness-venv-install ## Run dependency-light model trai
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_eval/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/kv_mapper/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m pytest -q \
+		bench/redteam \
 		src/training/model_eval/test_provenance.py \
 		src/training/model_eval/test_artifact_inventory.py \
 		src/training/model_eval/test_baseline_artifact.py \
@@ -41,7 +43,7 @@ test-training-contracts: harness-venv-install ## Run dependency-light model trai
 # For testing, we use the router's --download-only flag to download models and exit.
 
 # Hugging Face org for mmBERT models
-HF_ORG := llm-semantic-router
+HF_ORG := vllm-sr
 MODELS_DIR := models
 
 # The checked-in reference suite targets
@@ -422,7 +424,7 @@ clean-mmbert: ## Remove downloaded mmBERT models
 
 # ======== mmBERT-32K Training ========
 # Training targets for mmBERT-32K-YaRN fine-tuned models
-# Base model: llm-semantic-router/mmbert-32k-yarn (32K context, multilingual)
+# Base model: vllm-sr/mmbert-32k-yarn (32K context, multilingual)
 
 ##@ mmBERT-32K Training
 
@@ -458,7 +460,7 @@ PII_LORA_RANK ?= 48
 PII_LORA_ALPHA ?= 96
 
 # Note: Intent training includes supplement data (653 casual "other" samples)
-# from LLM-Semantic-Router/category-classifier-supplement
+# from vllm-sr/category-classifier-supplement
 # Note: PII training uses AI4Privacy + Presidio combined dataset with char offset alignment
 
 # Training script paths
@@ -470,7 +472,7 @@ MMBERT32K_MODELS_DIR := models/mmbert32k
 
 train-mmbert32k-all: ## Train remaining legacy mmBERT-32K tasks (Guard retired)
 	@echo "🚀 Training all mmBERT-32K models..."
-	@echo "   Base model: llm-semantic-router/mmbert-32k-yarn"
+	@echo "   Base model: vllm-sr/mmbert-32k-yarn"
 	@echo "   Epochs: $(TRAIN_EPOCHS), Batch size: $(TRAIN_BATCH_SIZE)"
 	@echo ""
 	@$(MAKE) train-mmbert32k-feedback
@@ -489,7 +491,7 @@ train-mmbert32k-feedback: ## Train Feedback Detector (4-class satisfaction)
 	@echo "   (Higher rank needed for 4-class classification)"
 	@mkdir -p models
 	python $(TRAINING_DIR)/model_classifier/user_feedback_classifier/train_feedback_detector.py \
-		--model_name llm-semantic-router/mmbert-32k-yarn \
+		--model_name vllm-sr/mmbert-32k-yarn \
 		--output_dir models/mmbert32k-feedback-detector \
 		--epochs $(FEEDBACK_EPOCHS) \
 		--batch_size $(TRAIN_BATCH_SIZE) \
@@ -617,7 +619,7 @@ merge-mmbert32k-intent: ## Merge Intent Classifier LoRA adapter
 		python -c "from src.training.model_classifier.classifier_model_fine_tuning_lora.ft_linear_lora import merge_lora_adapter_to_full_model; \
 			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/intent-classifier-lora', \
 				'$(MMBERT32K_MODELS_DIR)/intent-classifier-merged', \
-				'llm-semantic-router/mmbert-32k-yarn')"; \
+				'vllm-sr/mmbert-32k-yarn')"; \
 	else \
 		echo "   ⚠️  LoRA adapter not found, skipping..."; \
 	fi
@@ -628,7 +630,7 @@ merge-mmbert32k-pii: ## Merge PII Detector LoRA adapter
 		python -c "from src.training.model_classifier.pii_model_fine_tuning_lora.pii_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
 			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/pii-detector-lora', \
 				'$(MMBERT32K_MODELS_DIR)/pii-detector-merged', \
-				'llm-semantic-router/mmbert-32k-yarn')"; \
+				'vllm-sr/mmbert-32k-yarn')"; \
 	else \
 		echo "   ⚠️  LoRA adapter not found, skipping..."; \
 	fi
@@ -639,7 +641,7 @@ merge-mmbert32k-jailbreak: ## Merge Jailbreak Detector LoRA adapter
 		python -c "from src.training.model_classifier.prompt_guard_fine_tuning_lora.jailbreak_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
 			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/jailbreak-detector-lora', \
 				'$(MMBERT32K_MODELS_DIR)/jailbreak-detector-merged', \
-				'llm-semantic-router/mmbert-32k-yarn')"; \
+				'vllm-sr/mmbert-32k-yarn')"; \
 	else \
 		echo "   ⚠️  LoRA adapter not found, skipping..."; \
 	fi
@@ -650,7 +652,7 @@ merge-mmbert32k-factcheck: ## Merge Fact Check Classifier LoRA adapter
 		python -c "from src.training.model_classifier.fact_check_fine_tuning_lora.fact_check_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
 			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/fact-check-lora', \
 				'$(MMBERT32K_MODELS_DIR)/fact-check-merged', \
-				'llm-semantic-router/mmbert-32k-yarn')"; \
+				'vllm-sr/mmbert-32k-yarn')"; \
 	else \
 		echo "   ⚠️  LoRA adapter not found, skipping..."; \
 	fi
