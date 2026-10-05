@@ -3,16 +3,19 @@
 The `decision1` family against each Decision 1.0 package's bundled runtime,
 on the same node, inputs and devices.
 
-- **On CPU, exact is level with the bundled runtime or better on every row but
-  one: Kai's router requests are 7.6% slower at p50, wholly, and open** (CPU
-  section). Every CPU row is an interleaved A/B with a 95% interval on the
-  difference: single requests on uniform and mixed lengths for all seven
-  models, their throughput, and router requests. Both sides run the same FP32
-  math through the same MKL kernels, so exact can't be much faster; the single
-  requests are level on all seven models, and the decoders' rates are a little
-  better where the interval says so (Eos +0.23 requests/s [+0.07, +0.39] and
-  Sol +0.09 [+0.01, +0.17] on mixed lengths, Nox +0.02 [+0.00, +0.04] at C =
-  1).
+- **On CPU, exact is level with the bundled runtime or better on every row of
+  the tables but one, Kai's router requests (7.6% slower at p50, wholly). With
+  the huge-page default (`129be34ea`) the slow mode behind it is gone;
+  re-timed alone, Kai's, Lex's and Route's router requests are 3.3%, 2.6% and
+  2.1% slower at p50 and Kai's single-request p95 2.8%, wholly, and open**
+  (CPU section).
+  Every CPU row is an interleaved A/B with a 95% interval on the difference:
+  single requests on uniform and mixed lengths for all seven models, their
+  throughput, and router requests. Both sides run the same FP32 math through
+  the same MKL kernels, so exact can't be much faster; the single requests are
+  level on all seven models, and the decoders' rates are a little better where
+  the interval says so (Eos +0.23 requests/s [+0.07, +0.39] and Sol +0.09
+  [+0.01, +0.17] on mixed lengths, Nox +0.02 [+0.00, +0.04] at C = 1).
 - **On CPU the encoders' opt-in profiles win.** For six router signals about
   one prompt, `batching` answers 3.0–3.3× and `max_speed` 4.8–5.3× faster at
   p50 than the bundled runtime, and they serve 3.0–3.3× and 4.8–5.3× its
@@ -48,9 +51,12 @@ on the same node, inputs and devices.
   bookkeeping (`1ce0bafc9`: one `cancelled()` check per answered job, one
   `done()` check per planned job). The device lock, the per-model kernel
   choices and the thread-local graph capture are GPU-only, and load retries,
-  placement by plugin name and the advertised limits run at load. `a1e1b4ccb` also freezes the heap after each load pass, which leaves fewer
-objects for a request's garbage collections to walk: it can only shorten
-  pauses. So the run stands for the head. The ROCm rows' commits are in their section.
+  placement by plugin name and the advertised limits run at load. `a1e1b4ccb`
+  also freezes the heap after each load pass, which leaves fewer objects for a
+  request's garbage collections to walk: it can only shorten pauses. So the
+  run stands for the head, except where the huge-page default (`129be34ea`)
+  changes how CPU memory is allocated: the rows re-timed under it are in the
+  CPU section. The ROCm rows' commits are in their section.
 - **Raw results:** `decision1-performance.json`: every run without paths
   (the CPU A/B is set `bench-cpu-ab`), and under `intervals` each A/B row's
   means, difference, interval, rounds and verdict.
@@ -103,16 +109,18 @@ the decoders' `shared_context`.
 ## ROCm
 
 Every row is the 16:53-standard A/B in the router's ROCm image,
-`Dockerfile.extproc` at `a580be6b9` (`ACCELERATOR=rocm`): PyTorch 2.12.0+git6bbd260 (AOTriton
-0.13.50) and the ROCm 7.2.3 libraries from vLLM's ROCm image, Triton 3.7.0,
-FLA 0.5.2 and `causal-conv1d` 1.7.0. Both sides run in that image, with
-Transformers 5.17.0 and `regex` appended to `PYTHONPATH` for the bundled side.
-The runtime is `1bd99cd37`, one AMD Instinct MI325X (gfx942) per run. On this
-image the runtime's answers are byte-identical to the release (parity record).
-These rows replace the same rows timed on the official-wheel stack
-(`be7366c49`, the packages of `af71d5e82`, runtime `a1c7a284e`), which were
-level or better everywhere too; their runs and intervals stay in
-`decision1-performance.json` (`intervals` keys `rocm-official-wheel*`).
+`Dockerfile.extproc` at `a580be6b9` (`ACCELERATOR=rocm`): PyTorch
+2.12.0+git6bbd260 (AOTriton 0.13.50) and the ROCm 7.2.3 libraries from vLLM's
+ROCm image, Triton 3.7.0, FLA 0.5.2 and `causal-conv1d` 1.7.0. Both sides run
+in that image, with Transformers 5.17.0 and `regex` appended to `PYTHONPATH`
+for the bundled side. The runtime is `1bd99cd37`, one AMD Instinct MI325X
+(gfx942) per run. On this image the runtime's answers are byte-identical to
+the release (parity record). These rows replace the same rows timed on the
+official-wheel stack (`be7366c49`, the packages of `af71d5e82`, runtime
+`a1c7a284e`), which were level or better everywhere too; their runs and
+intervals stay in `decision1-performance.json` (`intervals` keys
+`rocm-official-wheel*`). They ran before the huge-page default (`129be34ea`),
+which changes only CPU-side allocations on a GPU.
 
 - **Cores:** each GPU's host threads run in a docker cgroup cpuset of 8 cores
   on the GPU's own NUMA node that no other timed job used (GPU1 0–7, GPU2
@@ -120,13 +128,13 @@ level or better everywhere too; their runs and intervals stay in
 - **Sides:** the bundled runtime, the runtime's exact profile and its
   approximate profile, each in its own process, the order rotated every round.
   Five rounds per row, the standard's minimum: no row read worse, so none got
-  rounds 6–10. A CPU job of the re-timing's own overlapped the first 1.5
-  minutes of GPU5's round 1 inside its host cores, so that round of Kai's
-  many-question rows ran again after the queue; the overlapped files are not
-  used. From 17:54 to 17:58 UTC another job loaded an image on node C. The
-  rounds with a side that started then are kept: many questions, Nox-4B and
-  Lux-9B round 5; router throughput, Eos-0.8B rounds 4–5, Kai-0.6B rounds
-  2–3, Lex-0.6B round 2, Lux-9B and Route-0.6B rounds 1–2, and Sol-2B round 4.
+  rounds 6–10. Two sets of rounds ran again after the queue, on their own GPUs
+  and host cores, and their first runs are not used: GPU5's round 1 of Kai's
+  many-question rows, which a CPU job of the re-timing's own overlapped; and
+  every round with a side that started from 17:54 to 17:58 UTC, while another
+  job loaded an image on node C (many questions, Nox-4B and Lux-9B round 5;
+  router throughput, Eos-0.8B rounds 4–5, Kai-0.6B rounds 2–3, Lex-0.6B round
+  2, Lux-9B and Route-0.6B rounds 1–2, and Sol-2B round 4).
 
 ### Single requests
 
@@ -215,30 +223,30 @@ Router requests:
 
 | Model | Profile | Bundled | C = 1 | C = 4 | C = 16 | Rounds | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Kai-0.6B | `exact` | 35.4 | 43.3, +7.9 [+7.3, +8.4] | 40.0, +4.6 [−1.2, +10.4] | 39.5, +4.1 [−2.5, +10.7] | 5 | level |
-|  | `batching` | 35.4 | 68.2, +32.8 [+22.7, +42.9] | 102.6, +67.2 [+54.8, +79.6] | 132.2, +96.8 [+94.6, +99.0] | 5 | better |
-| Lex-0.6B | `exact` | 32.7 | 42.2, +9.5 [+3.9, +15.1] | 44.0, +11.3 [+7.3, +15.2] | 44.2, +11.5 [+7.5, +15.6] | 5 | better |
-|  | `batching` | 32.7 | 68.7, +36.0 [+27.4, +44.7] | 100.3, +67.6 [+54.5, +80.8] | 125.6, +92.9 [+74.6, +111.2] | 5 | better |
-| Route-0.6B | `exact` | 33.5 | 41.0, +7.6 [−3.7, +18.8] | 43.4, +9.9 [+5.4, +14.5] | 40.0, +6.6 [+1.6, +11.5] | 5 | level |
-|  | `batching` | 33.5 | 66.5, +33.0 [+23.7, +42.3] | 92.1, +58.6 [+33.0, +84.2] | 111.6, +78.1 [+45.5, +110.8] | 5 | better |
-| Eos-0.8B | `exact` | 19.2 | 21.9, +2.6 [+0.3, +5.0] | 23.5, +4.2 [+0.1, +8.4] | 25.5, +6.2 [+2.9, +9.6] | 5 | better |
-|  | `shared_context` | 19.2 | 33.9, +14.6 [+11.7, +17.6] | 33.0, +13.8 [+9.1, +18.4] | 33.3, +14.0 [+8.9, +19.2] | 5 | better |
-| Sol-2B | `exact` | 14.9 | 18.0, +3.1 [+0.9, +5.3] | 17.9, +3.0 [+1.0, +5.1] | 15.7, +0.8 [−5.2, +6.7] | 5 | level |
-|  | `shared_context` | 14.9 | 24.9, +10.0 [+5.9, +14.1] | 26.1, +11.2 [+6.7, +15.6] | 27.3, +12.4 [+9.8, +15.1] | 5 | better |
+| Kai-0.6B | `exact` | 32.4 | 43.5, +11.1 [+2.1, +20.2] | 38.9, +6.5 [−6.4, +19.5] | 38.0, +5.7 [−5.6, +16.9] | 5 | level |
+|  | `batching` | 32.4 | 72.1, +39.7 [+30.5, +49.0] | 106.4, +74.0 [+65.4, +82.6] | 132.6, +100.3 [+90.6, +110.0] | 5 | better |
+| Lex-0.6B | `exact` | 34.0 | 40.3, +6.4 [−0.8, +13.5] | 44.0, +10.0 [+6.2, +13.8] | 44.2, +10.3 [+6.5, +14.0] | 5 | level |
+|  | `batching` | 34.0 | 68.0, +34.0 [+27.0, +41.1] | 101.1, +67.1 [+54.3, +80.0] | 125.0, +91.1 [+74.0, +108.1] | 5 | better |
+| Route-0.6B | `exact` | 33.2 | 41.0, +7.7 [−3.5, +19.0] | 39.4, +6.1 [−6.9, +19.2] | 37.4, +4.2 [−3.2, +11.5] | 5 | level |
+|  | `batching` | 33.2 | 62.3, +29.1 [+14.4, +43.7] | 88.7, +55.5 [+28.4, +82.6] | 112.6, +79.4 [+46.9, +111.9] | 5 | better |
+| Eos-0.8B | `exact` | 19.3 | 22.4, +3.1 [−1.0, +7.3] | 24.6, +5.3 [+3.1, +7.5] | 23.6, +4.3 [−1.6, +10.2] | 5 | level |
+|  | `shared_context` | 19.3 | 33.7, +14.5 [+11.5, +17.5] | 32.7, +13.4 [+9.1, +17.8] | 33.1, +13.9 [+8.7, +19.0] | 5 | better |
+| Sol-2B | `exact` | 14.9 | 17.0, +2.1 [−1.1, +5.2] | 18.5, +3.6 [+2.9, +4.3] | 16.5, +1.6 [−4.6, +7.8] | 5 | level |
+|  | `shared_context` | 14.9 | 24.9, +10.0 [+5.9, +14.1] | 25.9, +11.0 [+6.7, +15.4] | 27.2, +12.4 [+9.8, +14.9] | 5 | better |
 | Nox-4B | `exact` | 7.26 | 8.49, +1.24 [+0.77, +1.71] | 8.52, +1.26 [+0.80, +1.73] | 8.57, +1.31 [+0.83, +1.79] | 5 | better |
 |  | `shared_context` | 7.26 | 15.07, +7.8 [+7.7, +7.9] | 14.68, +7.4 [+6.1, +8.7] | 15.37, +8.1 [+8.0, +8.2] | 5 | better |
-| Lux-9B | `exact` | 4.91 | 5.53, +0.62 [+0.16, +1.08] | 5.23, +0.32 [+0.07, +0.57] | 5.50, +0.60 [+0.29, +0.90] | 5 | better |
-|  | `shared_context` | 4.91 | 10.52, +5.6 [+3.8, +7.4] | 10.83, +5.9 [+5.1, +6.8] | 10.76, +5.9 [+4.8, +6.9] | 5 | better |
+| Lux-9B | `exact` | 4.93 | 5.51, +0.58 [+0.35, +0.80] | 5.44, +0.51 [+0.06, +0.95] | 5.71, +0.78 [+0.59, +0.97] | 5 | better |
+|  | `shared_context` | 4.93 | 11.44, +6.5 [+6.2, +6.8] | 10.77, +5.8 [+4.9, +6.7] | 11.21, +6.3 [+5.3, +7.3] | 5 | better |
 
 - Exact runs one request per forward, so concurrency adds little to it.
 - `batching` coalesces the questions of concurrent requests, and the encoders
   pack them without padding. `shared_context` doesn't coalesce requests.
 - At C = 1, exact serves single requests at 1.4–1.6× the bundled rate on the
-  encoders and 1.6–3.1× on the decoders, and router requests at 1.1–1.3×. At C
-  = 16 `batching` reaches 4.8–5.3× on single requests and 3.3–3.8× on router
-  requests, and `shared_context` serves router requests at 1.7–2.1× from C =
-  1. The three level rows, Kai's, Route's and Sol's exact router rows,
-  straddle zero at one or two concurrencies.
+  encoders and 1.6–3.1× on the decoders, and router requests at 1.1–1.3×. At
+  C = 16 `batching` reaches 4.8–5.3× on single requests and 3.4–4.1× on router
+  requests, and `shared_context` serves router requests at 1.7–2.3× from
+  C = 1. The five level rows, the encoders', Eos's and Sol's exact router rows,
+  each straddle zero at one to three of the concurrencies.
 
 ### Many questions about one input
 
@@ -277,21 +285,21 @@ questions, 20 runs per side and round:
 |  | 64 | `shared_context` | 335.0 → 85.2 | −249.8 [−388.6, −111.0] | 378.7 → 90.2 | −288.5 [−494.4, −82.6] | 5 | better |
 |  | 128 | `exact` | 608.0 → 442.2 | −165.8 [−278.8, −52.8] | 626.2 → 511.2 | −115.0 [−293.6, +63.5] | 5 | level |
 |  | 128 | `shared_context` | 608.0 → 157.9 | −450.1 [−562.8, −337.5] | 626.2 → 164.2 | −462.0 [−583.8, −340.3] | 5 | better |
-| Nox-4B | 16 | `exact` | 156.0 → 118.7 | −37.2 [−71.1, −3.4] | 183.5 → 119.9 | −63.6 [−117.1, −10.1] | 5 | better |
-|  | 16 | `shared_context` | 156.0 → 54.8 | −101.2 [−135.1, −67.3] | 183.5 → 58.4 | −125.1 [−177.6, −72.5] | 5 | better |
-|  | 64 | `exact` | 570.3 → 470.3 | −99.9 [−101.4, −98.5] | 591.6 → 610.2 | +18.6 [−190.3, +227.5] | 5 | level |
-|  | 64 | `shared_context` | 570.3 → 184.5 | −385.7 [−434.6, −336.9] | 591.6 → 206.5 | −385.1 [−433.4, −336.9] | 5 | better |
-|  | 128 | `exact` | 1,141 → 940 | −201 [−218, −183] | 1,305 → 1,235 | −69 [−621, +483] | 5 | level |
-|  | 128 | `shared_context` | 1,141 → 342 | −799 [−874, −724] | 1,305 → 399 | −906 [−1,233, −579] | 5 | better |
-| Lux-9B | 16 | `exact` | 205.6 → 215.9 | +10.3 [−54.3, +74.9] | 217.9 → 240.6 | +22.7 [−45.0, +90.5] | 5 | level |
-|  | 16 | `shared_context` | 205.6 → 83.1 | −122.5 [−141.0, −104.1] | 217.9 → 104.7 | −113.2 [−141.2, −85.2] | 5 | better |
-|  | 64 | `exact` | 817.2 → 712.7 | −104.5 [−105.7, −103.3] | 863.8 → 948.0 | +84.3 [−248.1, +416.6] | 5 | level |
-|  | 64 | `shared_context` | 817.2 → 275.6 | −541.6 [−615.6, −467.5] | 863.8 → 295.8 | −568.0 [−701.7, −434.2] | 5 | better |
-|  | 128 | `exact` | 1,641 → 1,414 | −226 [−232, −221] | 1,942 → 1,618 | −324 [−1,016, +369] | 5 | level |
-|  | 128 | `shared_context` | 1,641 → 437 | −1,204 [−1,208, −1,200] | 1,942 → 483 | −1,459 [−1,933, −984] | 5 | better |
+| Nox-4B | 16 | `exact` | 156.0 → 118.7 | −37.3 [−71.1, −3.5] | 183.3 → 120.7 | −62.6 [−117.5, −7.7] | 5 | better |
+|  | 16 | `shared_context` | 156.0 → 54.9 | −101.1 [−135.1, −67.1] | 183.3 → 58.7 | −124.5 [−177.8, −71.3] | 5 | better |
+|  | 64 | `exact` | 570.1 → 470.7 | −99.3 [−99.9, −98.7] | 589.0 → 609.3 | +20.3 [−186.7, +227.3] | 5 | level |
+|  | 64 | `shared_context` | 570.1 → 184.5 | −385.6 [−434.4, −336.8] | 589.0 → 204.8 | −384.2 [−431.6, −336.8] | 5 | better |
+|  | 128 | `exact` | 1,140 → 939 | −201 [−219, −183] | 1,298 → 1,222 | −76 [−631, +479] | 5 | level |
+|  | 128 | `shared_context` | 1,140 → 315 | −825 [−827, −823] | 1,298 → 370 | −928 [−1,238, −618] | 5 | better |
+| Lux-9B | 16 | `exact` | 205.6 → 215.8 | +10.1 [−54.6, +74.9] | 218.1 → 225.3 | +7.2 [−61.1, +75.4] | 5 | level |
+|  | 16 | `shared_context` | 205.6 → 83.1 | −122.5 [−141.0, −104.1] | 218.1 → 95.9 | −122.3 [−143.9, −100.6] | 5 | better |
+|  | 64 | `exact` | 817.4 → 712.2 | −105.2 [−108.0, −102.5] | 841.0 → 947.8 | +106.8 [−189.4, +402.9] | 5 | level |
+|  | 64 | `shared_context` | 817.4 → 275.4 | −542.0 [−616.6, −467.5] | 841.0 → 295.5 | −545.4 [−647.4, −443.5] | 5 | better |
+|  | 128 | `exact` | 1,639 → 1,412 | −226 [−232, −220] | 1,975 → 1,579 | −396 [−950, +159] | 5 | level |
+|  | 128 | `shared_context` | 1,639 → 437 | −1,202 [−1,207, −1,196] | 1,975 → 477 | −1,498 [−1,949, −1,046] | 5 | better |
 
 - Exact is level or better at every size. At 128 questions `shared_context`
-  answers 2.9–3.9× faster at p50 on the decoders (Eos 407 → 141 ms, Lux 1,641
+  answers 2.9–3.9× faster at p50 on the decoders (Eos 407 → 141 ms, Lux 1,639
   → 437) and `batching` 1.3–1.5× on the encoders. Positive point estimates
   appear only in five exact cells, all level: Kai's and Nox's p95 at 64
   questions, Lux's p50 and p95 at 16 and its p95 at 64.
@@ -447,8 +455,8 @@ Throughput, requests/s, as above:
   (+56.7 ms [−55.6, +169.0]) and Route (+70.3 ms [−20.1, +160.7]) lean the
   same way, about 7%, and are level; the four decoders are level, Sol's
   point estimate on the better side. The encoders' single requests, one
-  question through the same stacks, are level, so the gap is in how a
-  six-question request runs; where it goes is not found yet. This is open.
+  question through the same stacks, are level. The cause, and what is left
+  of the gap, follow.
 - **Kai, a second series.** A separate 10-round A/B on 16 cores with no other
   timed work on their NUMA node (node C 16–31, the first 30 router prompts,
   C = 1, the node's 1-minute load at most 44) reads it worse too: p50 +65.3 ms
@@ -458,6 +466,64 @@ Throughput, requests/s, as above:
   runtime's was 651–677 ms in seven rounds (1–5% slower) and 807–834 ms in
   three (24–29% slower), so some fresh runtime processes run these requests in
   a slower mode.
+- **The slow mode, and the huge-page default (`129be34ea`).** The runtime
+  copies a model's weights into process memory at load (`69ae2d0c5`), on
+  4 KiB pages whose physical placement differs from process to process; the
+  bundled runtime reads its weights from the checkpoint's page-cache pages,
+  the same physical pages in every process. In diagnostic runs on node D (16
+  cores, the first 30 router prompts, C = 1), Kai's runtime processes ran
+  650–680 ms or 820–870 ms at p50, slow in 4 of 7 and in 2 of 6; the bundled
+  runtime never was. The OpenMP spin count, a second OpenMP team and the
+  address layout (ASLR off) did not decide the mode. With
+  `THP_MEM_ALLOC_ENABLE=1`, which puts PyTorch's CPU allocations of 2 MiB or
+  more on madvised transparent huge pages, 6 of 6 processes ran 659–682 ms.
+  Importing the package now sets it (design §12). Re-timed under it, on node
+  C's NUMA node 0 with the bundled side's huge pages off as before, 10 rounds,
+  load at most 49:
+
+  | Row | With the default, runtime − bundled [95% CI] | Before it |
+  | --- | --- | --- |
+  | Kai router, p50 | +21.4 ms [+11.3, +31.6] (646.5 → 667.9), worse | +66.1 [+5.1, +127.1] four lanes; +65.3 [+10.4, +120.2] alone |
+  | Kai router, p95 | +17.0 ms [−17.1, +51.2], level | +74.6 [+11.2, +138.1]; +33.5 [−7.0, +74.0] |
+  | Kai router, one at a time | −0.04 requests/s [−0.06, −0.01], worse | −0.07 [−0.11, −0.02]; −0.11 [−0.19, −0.03] |
+  | Kai router, C = 1 | −0.04 requests/s [−0.06, −0.01], worse | −0.06 [−0.13, −0.00]; −0.11 [−0.20, −0.02] |
+  | Lex router, p50 | +18.4 ms [+10.9, +26.0] (700.8 → 719.2), worse | +56.7 [−55.6, +169.0], level |
+  | Lex router, p95 | +52.7 ms [−2.7, +108.0], level | +47.6 [−70.4, +165.5], level |
+  | Lex router, one at a time | −0.04 requests/s [−0.06, −0.01], worse | −0.05 [−0.14, +0.03], level |
+  | Lex router, C = 1 | −0.03 requests/s [−0.05, −0.00], worse | −0.06 [−0.14, +0.02], level |
+  | Route router, p50 | +13.4 ms [+6.2, +20.6] (646.6 → 660.0), worse | +70.3 [−20.1, +160.7], level |
+  | Route router, p95 | +34.0 ms [−8.5, +76.4], level | +116.6 [−26.0, +259.2], level |
+  | Route router, one at a time | −0.04 requests/s [−0.07, −0.01], worse | −0.07 [−0.17, +0.03], level |
+  | Route router, C = 1 | −0.03 requests/s [−0.06, −0.01], worse | −0.08 [−0.16, +0.00], level |
+  | Kai single, p50 | −0.05 ms [−1.21, +1.11], level | −0.21 [−2.78, +2.35], level |
+  | Kai single, p95 | +2.3 ms [+0.1, +4.6] (83.9 → 86.2), worse | +3.75 [−5.15, +12.65], level |
+
+  Kai's router row ran alone on 16–31; then Lex's router row (32–47) and Kai's
+  single requests (48–63, C = 1 / 4 / 16 level or better) ran side by side. No
+  runtime process fell into the slow mode. Lex's router row and Kai's
+  single-request p95 read worse now because the slow mode's variance left
+  their intervals, not because they got slower. On node D, Lex's runtime read
+  +76.8 ms [−15.8, +169.4] without huge pages, 2 of 6 processes slow, and
+  +10.3 [+5.5, +15.1] with them; Kai's single requests with huge pages on
+  against off were p50 −0.07 ms [−0.67, +0.52] and p95 +0.42 [−2.49, +3.32].
+  Outside Decision 1.0, 5 rounds on against off: Vela Embedding p50 −0.09 ms
+  [−0.41, +0.23] and Vela Domain −0.24 [−0.69, +0.21], p95 level for both; a
+  process's RSS grows by 1.5–23 MiB (0.1–1.3%). Re-timed under the default:
+  Decision 1.0's Kai, Lex and Route on CPU (Route's router row alone on 16–31
+  after the others, load at most 27), and the Vela Embedding and Vela Domain
+  spot checks. Not re-timed under it: the decoders' CPU rows, Vela 2.0 (the
+  0.8B's `exact` cells included) and Decision 2.0 on CPU, and the ROCm rows,
+  where it changes only CPU-side allocations (the weights and forwards run on
+  the GPU).
+- **What is left goes away with a longer OpenMP spin.** On node D with huge
+  pages, Kai's router row read +11.7 ms [+2.4, +21.1] on the runtime's
+  `GOMP_SPINCOUNT=10000` and +1.9 [−4.1, +7.9] on libgomp's default 300,000.
+  `tools/decision1_bench.py` imports the runtime package on the bundled side
+  too, so both sides of every series here run with 10,000; the runtime's
+  forward pays more for the short spin. The runtime keeps 10,000 because
+  longer-spinning PyTorch threads slowed an ONNX Runtime run that followed
+  a native forward in the same process (`d2e3e5d21`), and libgomp reads the
+  value before the process knows what it serves. These cells are open.
 - **Nox, a second series.** Its C = 1 rate read wholly worse at 5 and 7
   rounds in the four-lane series, then level at 8–10. Three checks looked for
   a runtime cost and found none:
