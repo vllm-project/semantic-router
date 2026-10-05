@@ -3068,6 +3068,830 @@
     }
    },
    "engine": null
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Sol-2B",
+    "Decision-1.0-Nox-4B",
+    "Decision-1.0-Lux-9B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Sol-2B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "ed4c500cc",
+   "served_before": [
+    "Decision-1.0-Sol-2B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 75,
+     "questions": 6547,
+     "decision_changes": 39,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.08670604228973389
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 2275,
+     "decision_changes": 3,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0685591246692484
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 0,
+     "questions": 231,
+     "decision_changes": 2,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.025269670627194596
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 30,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.09961378916370389
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "64d6046ad",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B",
+    "Decision-1.0-Sol-2B",
+    "Decision-1.0-Nox-4B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B",
+    "Decision-1.0-Sol-2B",
+    "Decision-1.0-Nox-4B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "ed4c500cc",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6530,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.015630451610106344
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Nox-4B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "ed4c500cc",
+   "served_before": [
+    "Decision-1.0-Nox-4B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 163,
+     "questions": 6547,
+     "decision_changes": 26,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.09891176223754883
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 2275,
+     "decision_changes": 2,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.08831104957768132
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 36,
+     "questions": 231,
+     "decision_changes": 1,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.031943798554801006
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 9,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.14794302356459355
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B",
+    "Decision-1.0-Sol-2B",
+    "Decision-1.0-Lux-9B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Lux-9B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "ed4c500cc",
+   "served_before": [
+    "Decision-1.0-Lux-9B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 163,
+     "questions": 6547,
+     "decision_changes": 35,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.06685614685499885
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 2275,
+     "decision_changes": 3,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.06291954178030568
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 36,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.043655795103268835
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 27,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.06972065568214791
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B",
+    "Decision-1.0-Nox-4B",
+    "Decision-1.0-Lux-9B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "64d6046ad",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "8fc0bf02b",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "ed4c500cc",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 75,
+     "questions": 6547,
+     "decision_changes": 37,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.05325248993678411
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 2275,
+     "decision_changes": 6,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.08546296395988884
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 0,
+     "questions": 231,
+     "decision_changes": 2,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.05111707004702376
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 0,
+     "questions": 2000,
+     "decision_changes": 34,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.19266973306950474
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "ed4c500cc",
+   "served_before": [],
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
   }
  ]
 }

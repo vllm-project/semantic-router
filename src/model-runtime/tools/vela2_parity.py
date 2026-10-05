@@ -276,17 +276,27 @@ def load_reference(package: Path, device: str, backend: str = "torch") -> Any:
 
 
 def pin_choices(package: Path, device: str) -> bool:
-    """Pin a built-in model's FLA kernel choices for this process, as the runtime does at load.
+    """Run this thread's FLA kernels on a built-in model's recorded choices, as the runtime does.
 
-    Must run before anything imports FLA; both sides then run the same kernels.
+    Both sides answer on this thread, so they run the same kernels.
     """
-    from vllm_sr_runtime.accel.autotune import pin_kernel_choices
+    from vllm_sr_runtime.accel.autotune import KernelChoices
+    from vllm_sr_runtime.registry import builtin
 
     accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
     info = accelerator.devices()[int(device.split(":")[1]) if ":" in device else 0]
     family = Vela2Family()
-    choices = family.kernel_choices(family.verify(PackageRef(package)), info)
-    return bool(choices) and pin_kernel_choices(choices) is not None
+    verified = family.verify(PackageRef(package))
+    recorded = builtin.kernel_choices(
+        verified.model_sha256, info.accelerator, info.arch
+    ) or family.kernel_choices(verified, info)
+    if not recorded:
+        return False
+    choices = KernelChoices(recorded)
+    if choices.install() is not None:
+        return False
+    choices.pin_thread()
+    return True
 
 
 def device_executor(device: str) -> Any:
