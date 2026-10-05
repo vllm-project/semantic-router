@@ -542,6 +542,7 @@ func DefaultRegistry() *CapabilityRegistry {
 		SupportedHardware: []CapabilityID{"hardware/cpu@v1", "hardware/cuda@v1", "hardware/rocm@v1"},
 		IsolationLevel:    "container",
 	})
+
 	// Architectures
 	_ = r.RegisterArchitecture(ArchitectureDriverDescriptor{
 		ID:                 "architecture/hf-modernbert@v1",
