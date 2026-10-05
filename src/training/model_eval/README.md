@@ -153,6 +153,13 @@ rows whose label the artifact does not define - is dropped before scoring, and
 the result's `dataset.dropped_rows` names those labels with the row count each
 dropped, so the scored row count is never read as the size of the split.
 
+The `domain-conversational` task scores the same Domain artifact on
+StackExchange question titles, labeled by the site they were posted on. It
+takes 300 titles for each of ten academic labels and 38 `other` titles from each of
+eight non-academic sites, at a pinned revision with a fixed shuffle. It covers
+history, law, philosophy and `other`, which the `domain` task cannot measure.
+Health, business and psychology have no matching site.
+
 The baseline runner's historical `jailbreak` dataset is restricted to the
 explicit original mmBERT merged/adapter artifacts. It rejects current Guard
 before accessing that dataset. Use the custom-data collection evaluator above
