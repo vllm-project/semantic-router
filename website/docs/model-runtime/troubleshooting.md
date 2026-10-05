@@ -82,6 +82,33 @@ the router from starting. The common reasons:
 When one model of a process fails, the other models in that process keep
 serving.
 
+## A ready model's self-check says `unverified`
+
+`GET /v1/models` shows each model's self-check under `golden`. `matched`
+means its answers equal the released answers for that kind of device.
+`unverified` means the model serves, but the runtime can't vouch for that:
+
+- **No `reason`, and `golden.reference` is empty:** there are no released
+  answers for this device, for example for a model that is not built in or a
+  GPU without a validated record (CUDA). The runtime checked only that the
+  answers are well formed and the same on every run.
+- **`reason` starts with `kernel choices not applied`:** on AMD Instinct
+  MI300X and MI325X GPUs, Decision 2.0 and Vela 2.0 run their kernels with
+  the configurations their release recorded with FLA 0.5.2, so every process
+  gives the same answers. When those can't run here, the model still loads,
+  the log says `... runs without its recorded kernel choices: ...`, and its
+  answers may differ from the released ones.
+
+| `reason` says | Do this |
+| --- | --- |
+| `FLA is not installed` | Install `fla-core==0.5.2`, or use the router's ROCm image, which has it. |
+| `they were recorded with FLA 0.5.2, not ...` | Install `fla-core==0.5.2`. |
+| `failed to import` | Repair the FLA installation; the message names the error. |
+| `has no autotuned kernel ...` | Install `fla-core==0.5.2`. |
+
+`--autotune-cache` keeps compiled kernels across restarts; it does not
+replace the recorded configurations.
+
 ## The router refuses the configuration
 
 | Message mentions | Do this |
