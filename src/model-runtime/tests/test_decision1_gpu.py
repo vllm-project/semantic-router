@@ -6,17 +6,20 @@ is the reference; the other copy runs the fused layers through the graph runner 
 second captured, third replayed) and must equal it (``torch.equal``). The Eos case also selects its
 released FP64 convolution variant, whose gated-delta blocks run eagerly inside the fused layers,
 and which hands shapes it does not cover to the default kernel. The Vela encoders' three layer
-stacks each replay their own bucket graphs.
+stacks each replay their own bucket graphs. Two decoders sharing one GPU process answer concurrent
+requests while each captures graphs.
 """
 
 from __future__ import annotations
 
+import asyncio
 import copy
 
 import pytest
 
 torch = pytest.importorskip("torch")
 
+from vllm_sr_runtime.config import ModelConfig, ServeConfig  # noqa: E402
 from vllm_sr_runtime.engines.native import fast, models  # noqa: E402
 from vllm_sr_runtime.engines.native.engine import NativeEngine  # noqa: E402
 from vllm_sr_runtime.engines.native.weights import cast_parameters  # noqa: E402
@@ -27,6 +30,7 @@ from vllm_sr_runtime.plugins.base import (  # noqa: E402
     EngineOptions,
     PackageRef,
 )
+from vllm_sr_runtime.runtime import Runtime  # noqa: E402
 from vllm_sr_runtime.testing.decision1 import write_package  # noqa: E402
 
 from .test_gpu_fast_path import LENGTHS, _device, batch, qwen3_5  # noqa: E402
@@ -127,3 +131,51 @@ def test_every_encoder_stack_replays_its_own_graphs(tmp_path):
     for stats in (receipt, *receipt["branches"].values()):
         assert (stats["captures"], stats["replays"], stats["failed"]) == (1, 3, 0)
     assert set(receipt["branches"]) == {"choice", "score"}
+
+
+def test_decoders_sharing_a_gpu_answer_concurrent_requests_while_they_capture(tmp_path):
+    _device()
+    names = ("first", "second")
+    runtime = Runtime(
+        ServeConfig(
+            models=tuple(
+                ModelConfig(
+                    model=str(
+                        write_package(tmp_path / name, seed=seed, model_name=name)
+                    ),
+                    device="rocm:0",
+                    name=name,
+                )
+                for seed, name in enumerate(names)
+            ),
+            exit_on_device_error=False,
+        )
+    )
+    runtime.start(background=False)
+    question = {"q": {"type": "noul", "instructions": "Is this about cooking?"}}
+
+    async def wave(words: int) -> list:
+        calls = [
+            runtime.call(
+                "decisions",
+                {
+                    "model": name,
+                    "state": "word " * (words + extra),
+                    "questions": question,
+                },
+            )
+            for extra in range(4)
+            for name in names
+        ]
+        return await asyncio.gather(*calls)
+
+    try:
+        for words in [1, 9, 17, 25] * 3:
+            results = asyncio.run(wave(words))
+            assert [status for status, _ in results] == [200] * len(results), results
+        for served in runtime.served:
+            assert served.health.state == "ready"
+            assert served.device_failure() is None
+            assert served.model.engine_model.receipt()["graphs"]["captures"] > 0
+    finally:
+        runtime.stop()
