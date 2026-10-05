@@ -117,7 +117,7 @@ type HybridCacheOptions struct {
 	Milvus *config.MilvusConfig
 
 	// Embedding settings
-	EmbeddingModel string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	EmbeddingModel string // "mmbert" (default), "qwen3" or "multimodal"
 
 	// (Deprecated) Milvus settings configuration path
 	MilvusConfigPath string
