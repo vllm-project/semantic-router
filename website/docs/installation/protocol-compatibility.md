@@ -200,6 +200,10 @@ schema, streaming, tools, or error translation.
   Explicit null needs no diagnostic; a `stop_sequence` stop reason still
   requires a non-empty matched sequence, and terminal deltas still require
   `stop_reason`.
+- When an OpenAI-compatible Chat provider names the matched stop string in
+  `choices[].stop_reason`, as vLLM does, Anthropic Messages clients receive a
+  `stop_sequence` stop reason with that sequence. Chat and Responses clients
+  are unaffected.
 - `x-vsr-client-protocol`, `x-vsr-upstream-protocol`, and
   `x-vsr-protocol-warnings` expose translation details when applicable. See
   [VSR routing headers](../troubleshooting/vsr-headers).

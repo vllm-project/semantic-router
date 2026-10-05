@@ -3476,7 +3476,7 @@ func BenchmarkMmBert2DMatryoshka(b *testing.B) {
 
 // ================================================================================================
 // mmBERT-32K (32K CONTEXT, YARN ROPE SCALING) TESTS
-// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+// Reference: https://huggingface.co/vllm-sr/mmbert-32k-yarn
 // ================================================================================================
 
 // getMmBert32KModelPath returns path for mmBERT-32K models from env
