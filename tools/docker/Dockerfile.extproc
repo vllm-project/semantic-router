@@ -166,10 +166,13 @@ RUN mkdir -p /app/config /app/models && \
     useradd --uid 65532 --no-create-home --shell /usr/sbin/nologin vllm-sr
 ENV USER=vllm-sr
 # Models the managed runtime downloads persist in the model volume, and so do
-# Triton's compiled kernels: the charts' root filesystem is read-only and the
-# router's uid has no home directory.
+# Triton's compiled kernels and MIOpen's databases and lock files (a ROCm
+# convolution fails without them): the charts' root filesystem is read-only and
+# the router's uid has no home directory.
 ENV VLLM_SR_RUNTIME_CACHE_DIR=/app/models/model-runtime \
-    TRITON_CACHE_DIR=/app/models/triton
+    TRITON_CACHE_DIR=/app/models/triton \
+    MIOPEN_USER_DB_PATH=/app/models/miopen \
+    MIOPEN_CUSTOM_CACHE_DIR=/app/models/miopen
 COPY --link --from=vela-omni /opt/router-model-artifacts/ /opt/router-model-artifacts/
 COPY --link --from=image-routing-assets /out/ /app/share/image-routing/
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
