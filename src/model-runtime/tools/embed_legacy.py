@@ -871,7 +871,9 @@ def intervals(values: dict[str, Any], replicates: int = 2000) -> dict[str, list[
                 )
         out |= {name: bounds(found) for name, found in draws.items()}
     windows = values.get("throughput", {})
-    rounds = list(zip(windows.get("legacy", []), windows.get("runtime", [])))
+    rounds = list(
+        zip(windows.get("legacy", []), windows.get("runtime", []), strict=True)
+    )
     if len(rounds) > 1:
         found = []
         for _ in range(replicates):
