@@ -5,7 +5,8 @@ On the exact profile (answers identical to the packages' engine,
 every measured row on ROCm (15–30% at the median with one caller, 1.2–1.6×
 the requests per second with four) and level with it or better on CPU,
 where both run the same operations on MKL, except the 0.8B at 32 and 512
-tokens (0.3–2.5% slower, open). The opt-in approximate profiles serve the
+tokens (0.3–2.5% slower, open; its 2,048-token CPU row ran 3 rounds and is
+indicative). The opt-in approximate profiles serve the
 0.8B 1.6–2.4× and the 4B and 9B 1.8–2.8× faster than the engine on ROCm, the
 4B 1.5× and the 0.8B 1.2× on CPU, and the 0.3B up to 1.9× the engine's
 throughput with four callers. On CPU, `max_speed` runs the 0.3B on a
@@ -15,7 +16,10 @@ Vela 2.0 0.3B request also replaces the seven Vela 1.0 classifier calls a
 router request made: on CPU it is 2.2× faster than their sum at the median
 and 10× at p95, and 3.2× at the median under `max_speed`.
 
-- **Dates:** each section gives its own (2026-10-04 to 2026-10-06).
+- **Dates:** each section gives its own (2026-10-04 to 2026-10-06). Every
+  run predates `freeze_heap` after each load pass (`a1e1b4ccb`), which leaves
+  a request's garbage collections less to walk and so can only shorten their
+  pauses; no verdict below depends on it.
 - **Devices:** ROCm: one AMD Instinct MI325X (gfx942) per run, 8–16 host
   cores, in the router's ROCm image for the timed A/B sections (the
   reduced-copy and Vela 1.0 comparisons ran in the Decision 2.0 release
@@ -99,8 +103,8 @@ Requests per second:
 ## Vela-2.0-0.3B on CPU
 
 - **Date:** 2026-10-05, at `d4c6d9a50`. Later commits change no CPU forward
-  or batching path (only cancellation bookkeeping, load retries and the GPU
-  device lock).
+  or batching path (only cancellation bookkeeping, load retries, the GPU
+  device lock and the heap freeze above).
 - **Setup:** 16 cores of an AMD EPYC 9575F in a `systemd-run` scope
   (effective cpuset logged), threads capped at 16, PyTorch 2.10's CPU build
   for both sides; node load at most 68.
@@ -414,13 +418,15 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
   caller; at 32–512 tokens 2 warm-up requests, then 6 per round over 5
   interleaved rounds; at 2,048 tokens 1 warm-up request, then 3 per round
   over 3 rounds.
-- **Reading:** `shared_context` and `batching` are 15–19% faster than the
-  engine at the median at every length, with every interval on the better
-  side. `exact` is level at 128 and 2,048 tokens and slightly slower at 32
-  and 512 (+2.5% [+1.6, +3.5] and +0.3% [+0.1, +0.5] at the median), with
-  those intervals on the worse side: an open cell, not yet explained (the
-  4B's `exact` is 1–3% faster than its engine on CPU). The 0.3B is the size
-  to serve on a CPU.
+- **Reading:** at 32–512 tokens `shared_context` and `batching` are 15–19%
+  faster than the engine at the median, with every interval on the better
+  side. `exact` is level at 128 tokens and slightly slower at 32 and 512
+  (+2.5% [+1.6, +3.5] and +0.3% [+0.1, +0.5] at the median), with those
+  intervals on the worse side: an open cell, not yet explained (the 4B's
+  `exact` is 1–3% faster than its engine on CPU). The 2,048-token row ran 3
+  rounds, fewer than the 5 of the shorter rows, so it is indicative, not a
+  verdict: `exact` +3.2% [−4.9, +11.3] and the approximate profiles 18%
+  faster at the median. The 0.3B is the size to serve on a CPU.
 
 0.8B on CPU, p50 ms, engine and Δ against it (mean [95% interval]):
 
