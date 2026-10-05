@@ -107,13 +107,12 @@ func TestPreparedInventoryDoesNotInferReadinessFromConstructedClassifier(t *test
 	cfg.CategoryModel = config.CategoryModel{ModelID: "models/custom-domain", CategoryMappingPath: "unused-domain-mapping.json"}
 	cfg.PIIModel = config.PIIModel{ModelID: "models/custom-pii", PIIMappingPath: "unused-pii-mapping.json"}
 	cfg.PromptGuard = config.PromptGuardConfig{Enabled: true, ModelID: "models/custom-guard", JailbreakMappingPath: "unused-guard-mapping.json"}
-	cfg.BertModelPath = "models/custom-embedding"
 	cfg, service := preparedInventoryService(t, serving.New(nil, nil), cfg)
 	if !service.HasClassifier() {
 		t.Fatal("fixture must contain a constructed classifier")
 	}
-	if previous := appendConfiguredModels(nil, cfg, classifierModelAvailability{core: true}); len(previous) != 4 {
-		t.Fatalf("fixture must reproduce the four configured, unused core models: %+v", previous)
+	if previous := appendConfiguredModels(nil, cfg, classifierModelAvailability{core: true}); len(previous) != 3 {
+		t.Fatalf("fixture must reproduce the three configured, unused core models: %+v", previous)
 	}
 	api := &ClassificationAPIServer{config: cfg, classificationSvc: service}
 	response := api.buildModelsInfoResponse()

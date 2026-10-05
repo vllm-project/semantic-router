@@ -146,7 +146,6 @@ func writeModelFile(t *testing.T, dir, name, contents string) {
 
 const (
 	testQwen3ModelPath      = "models/mom-embedding-pro"
-	testGemmaModelPath      = "models/mom-embedding-flash"
 	testMultiModalModelPath = "models/mom-embedding-multimodal"
 )
 
@@ -155,14 +154,12 @@ func newLocalEmbeddingConfig() *config.RouterConfig {
 		MoMRegistry: map[string]string{
 			testEmbeddingModelPath:  testEmbeddingRepoID,
 			testQwen3ModelPath:      "vllm-sr/mom-embedding-pro",
-			testGemmaModelPath:      "vllm-sr/mom-embedding-flash",
 			testMultiModalModelPath: "vllm-sr/mom-embedding-multimodal",
 		},
 		InlineModels: config.InlineModels{
 			EmbeddingModels: config.EmbeddingModels{
 				MmBertModelPath:     testEmbeddingModelPath,
 				Qwen3ModelPath:      testQwen3ModelPath,
-				GemmaModelPath:      testGemmaModelPath,
 				MultiModalModelPath: testMultiModalModelPath,
 			},
 		},
@@ -172,15 +169,14 @@ func newLocalEmbeddingConfig() *config.RouterConfig {
 	cfg.SemanticCache.Enabled = true
 	cfg.SemanticCache.EmbeddingModel = "mmbert"
 	cfg.Memory.Enabled = true
-	cfg.Memory.EmbeddingModel = "gemma"
+	cfg.Memory.EmbeddingModel = "qwen3"
 	cfg.VectorStore = &config.VectorStoreConfig{Enabled: true, EmbeddingModel: "multimodal"}
 	return cfg
 }
 
 // TestBuildModelSpecsRequiresRuntimeFilesPerModel guards #2531: every local
-// embedding path (qwen3, gemma, multimodal), not only mmbert (#2195), must require the
-// files its runtime hard-loads so partial downloads self-heal. Gemma additionally
-// hard-loads the 2_Dense/3_Dense bottleneck weights.
+// embedding path (qwen3, multimodal), not only mmbert (#2195), must require the
+// files its runtime hard-loads so partial downloads self-heal.
 func TestBuildModelSpecsRequiresRuntimeFilesPerModel(t *testing.T) {
 	specs, err := BuildModelSpecs(newLocalEmbeddingConfig())
 	if err != nil {
@@ -193,10 +189,6 @@ func TestBuildModelSpecsRequiresRuntimeFilesPerModel(t *testing.T) {
 	}{
 		{testEmbeddingModelPath, []string{"config.json", "model.safetensors", "tokenizer.json"}},
 		{testQwen3ModelPath, []string{"config.json", "model.safetensors", "tokenizer.json"}},
-		{testGemmaModelPath, []string{
-			"config.json", "model.safetensors", "tokenizer.json",
-			"2_Dense/model.safetensors", "3_Dense/model.safetensors",
-		}},
 		{testMultiModalModelPath, []string{"config.json", "model.safetensors", "tokenizer.json"}},
 	}
 
@@ -239,44 +231,6 @@ func TestOnnxOnlyEmbeddingDirsReportedIncomplete(t *testing.T) {
 		if complete {
 			t.Errorf("ONNX-only dir for %q reported complete; expected incomplete", path)
 		}
-	}
-}
-
-// TestGemmaDirWithoutDenseWeightsReportedIncomplete guards the gemma-specific slice of
-// #2531: root weights and tokenizer alone are not enough, the dense-bottleneck weights the
-// runtime hard-loads must be present before the model reads as complete.
-func TestGemmaDirWithoutDenseWeightsReportedIncomplete(t *testing.T) {
-	specs, err := BuildModelSpecs(newLocalEmbeddingConfig())
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
-	}
-	spec, ok := findSpecByPath(specs, testGemmaModelPath)
-	if !ok {
-		t.Fatalf("BuildModelSpecs() did not produce a spec for %q", testGemmaModelPath)
-	}
-
-	dir := t.TempDir()
-	writeModelFile(t, dir, "config.json", "{}")
-	writeModelFile(t, dir, "model.safetensors", "weights")
-	writeModelFile(t, dir, "tokenizer.json", "{}")
-
-	complete, err := IsModelComplete(dir, spec.RequiredFiles)
-	if err != nil {
-		t.Fatalf("IsModelComplete() error = %v", err)
-	}
-	if complete {
-		t.Fatalf("gemma dir without dense weights reported complete; RequiredFiles = %#v", spec.RequiredFiles)
-	}
-
-	writeModelFile(t, filepath.Join(dir, "2_Dense"), "model.safetensors", "dense-2")
-	writeModelFile(t, filepath.Join(dir, "3_Dense"), "model.safetensors", "dense-3")
-
-	complete, err = IsModelComplete(dir, spec.RequiredFiles)
-	if err != nil {
-		t.Fatalf("IsModelComplete() error = %v", err)
-	}
-	if !complete {
-		t.Fatalf("full gemma dir reported incomplete; RequiredFiles = %#v", spec.RequiredFiles)
 	}
 }
 

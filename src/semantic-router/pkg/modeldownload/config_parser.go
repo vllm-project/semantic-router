@@ -11,7 +11,7 @@ import (
 )
 
 // ExtractModelPaths extracts canonical local model paths from the configuration.
-// It recursively searches for fields named "ModelID", "Qwen3ModelPath", "GemmaModelPath",
+// It recursively searches for fields named "ModelID", "Qwen3ModelPath",
 // or any field ending with "ModelPath" (but excludes non-model paths like mapping_path, tools_db_path)
 func ExtractModelPaths(cfg *config.RouterConfig) []string {
 	var paths []string
@@ -86,7 +86,6 @@ func recordModelPath(fieldName string, field reflect.Value, paths *[]string, see
 func isModelPathField(fieldName string) bool {
 	return fieldName == "ModelID" ||
 		fieldName == "Qwen3ModelPath" ||
-		fieldName == "GemmaModelPath" ||
 		strings.HasSuffix(fieldName, "ModelPath")
 }
 
@@ -109,15 +108,8 @@ func isModelDirectory(path string) bool {
 // the safetensors/tokenizer download is never triggered, leaving embedding_ready=false (#2172).
 var embeddingModelWeightFiles = []string{"model.safetensors", "tokenizer.json"}
 
-// gemmaDenseWeightFiles are the dense-bottleneck weights the gemma embedding model
-// additionally hard-loads at startup (its 2_Dense + 3_Dense layers).
-var gemmaDenseWeightFiles = []string{
-	"2_Dense/model.safetensors",
-	"3_Dense/model.safetensors",
-}
-
 // embeddingModelRequiredFiles returns, per canonical embedding model path, the files the
-// runtime hard-loads at startup. The qwen3, gemma, and multimodal paths share the
+// runtime hard-loads at startup. The qwen3 and multimodal paths share the
 // non-healing completeness defect fixed for mmbert in #2195 (#2531).
 func embeddingModelRequiredFiles(cfg *config.RouterConfig) map[string][]string {
 	required := make(map[string][]string)
@@ -132,8 +124,6 @@ func embeddingModelRequiredFiles(cfg *config.RouterConfig) map[string][]string {
 
 	add(cfg.MmBertModelPath, embeddingModelWeightFiles)
 	add(cfg.Qwen3ModelPath, embeddingModelWeightFiles)
-	add(cfg.GemmaModelPath, embeddingModelWeightFiles)
-	add(cfg.GemmaModelPath, gemmaDenseWeightFiles)
 	add(cfg.MultiModalModelPath, embeddingModelWeightFiles)
 	return required
 }
