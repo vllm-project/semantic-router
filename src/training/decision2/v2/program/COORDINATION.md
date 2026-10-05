@@ -205,6 +205,48 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 02:46 — **INTEGRATION READY router-r2p27 `3601d9502`** (`xunzhuo/model-runtime-p24-router-r2p27`, pushed, clean; contains staging `4df250299` and merges cleanly into staging `56523591b`). `router` (successor of cab0e94a) → lead (successor of 01c6684b), parent: **R2-P2-7 ([#4598](https://github.com/vllm-project/semantic-router/issues/4598)). The router plans managed `device: auto` deployments on the device the runtime resolves `auto` to. On a host without a GPU, N `auto` deployments now start like N `cpu` ones: a process each, with thread shares. On a GPU host they share the first GPU's process.**
+  - **Commits** (five, and the staging merge `a77108744`):
+    - `c37f773bf` [Feature] model-runtime: a new `vllm-sr-runtime devices` command prints JSON. `auto` is the device `--device auto` tries first on the host, and `devices` lists the devices of every available accelerator. It lives in a new module, `vllm_sr_runtime/devices.py`, which calls `placement.device_kind` and the accelerator registry, so it follows `auto_priority` and plugins. `cli.py` only registers the command.
+    - `1ed973bad` [Feature] router: `pkg/modelservice` runs `<runtime command> devices` once, the first time a managed deployment is on `auto`, and keeps the answer for the manager's lifetime, so plans stay stable across reloads.
+    - `7f82f3087` and `3601d9502` [Test] E2E; `8cf51cc57` [Docs].
+  - **Planning rules:**
+    - `auto` resolves to `cpu`: the deployment is planned as a `cpu` deployment. It joins the per-model CPU processes (`cpu-0` …), gets the `ceil(cores / n)` thread share, and shares one loaded model with a `cpu` deployment of the same model. Its models file says `cpu`.
+    - `auto` resolves to a GPU (`rocm:0`, `cuda:0`, …): the deployment joins that device's process, beside the deployments named on it. Its models file keeps `auto`, so the runtime still places each model by free memory and BF16.
+    - An explicit `process` still decides the process. On a CPU host that process now gets a thread share too.
+    - The query fails: today's single `auto` process, and one `auto_device_unresolved` warning.
+  - **Unit tests:**
+    - Router: planning table tests for five cases (CPU-only host; GPU host; an explicit process and device on each; a failed query). Manager tests through the fake runtime: one query across reloads, models files with `cpu` and a 4-thread share of 8 cores, and a failed query that keeps one `auto` process and is not repeated. Also the query's refusal of answers that aren't a device. With the resolution disabled, the four resolution cases and the CPU manager test fail.
+    - Runtime: `tests/test_devices.py` covers a host without GPUs, ROCm before CUDA by `auto_priority`, `auto` only for an accelerator that has an `auto_priority`, and a device without an index. The suite: 612 passed, with the 18 GPU cases deselected. mypy is clean.
+  - **E2E (Kind `model-runtime`, CPU-only; node A cores 0–15, exact mirrors, `e2e-docs`' scripts):** `vela-embedding` is now on `device: auto`. The lifecycle case requires it to run in the `cpu` group, no process to be named `auto`, and every managed process to be started with `--threads` (read from the runtime's command line in the router container).
+    - `a77108744`: 10 / 10 PASS in 343 s. The router logged `auto_device_resolved device=cpu` 16 s after its manager started; the query also wrote the fixture packages, which the first runtime process used to write. Then it started process `cpu` with all six device-group deployments, `vela-embedding` included. `cpu` and `decisions` both ran at `--threads 1` (2 cores, 2 CPU processes).
+    - `3601d9502`, the READY head (it adds only a description string and a comment): `model-runtime` 10 / 10 PASS in 345 s, with the same log lines, processes and thread shares. `envoy-ai-gateway`, the other profile impact selects: 40 / 40 PASS in 365 s.
+  - **Checks:**
+    - `make impact`: documentation, router-core, model-runtime, e2e-framework and e2e-unit.
+    - `make check` at `a77108744`: PASS. That covers pre-commit, ruff, golangci-lint (0 new issues), translation coverage (0 regressions), the router suite, the config schema, the runtime suite, the client check, `build-e2e` and the E2E units (155 / 155).
+    - Node D exact-mirror check of `a77108744`: PASS for router build, vet and tests, the schema, API docs, the operator, CRD docs, vet of dashboard / e2e / perf, golangci-lint against `origin/main` (0 issues), go-tools (0) and the E2E units (155 / 155). The only failure is `TestDashboardDevLauncherPassesSharedAssetRoot`, the known `/data` symlink case on that node.
+  - **Docs:** design §4 (layout), §12 (the `devices` command) and §13.4 (the rule); `website/docs/model-runtime/deploy.md` and `reference.md`. Neither page has a zh-Hans copy (both fall back to English; translation coverage shows 0 regressions), so there is nothing to translate.
+  - **Merges:** clean into staging `56523591b` (the head contains `4df250299`; your two slim-image commits touch only the ROCm stages, the image record and the deploy guide's ROCm section, so the CPU image the Kind runs used is the same). Also clean with `contracts`' READY `69ab7e6d7`: the merged E2E module builds, and its lifecycle, helper and profile units pass.
+  - **Behaviour changes to know (no decision needed):**
+    - On a GPU host, `auto` deployments now share the first GPU's process with the deployments named on that GPU, as #4598's acceptance asks, instead of a separate `auto` process. A deployment that needs its own fault domain names a `process`.
+    - On a CPU host, an `auto` model now runs a thread share instead of every core, as a `cpu` model does.
+    - A router with managed `auto` deployments starts its processes after the query, which imports PyTorch (a few seconds).
+  - **Released:** node D 64–95 (02:30) and node A 0–31 (02:45). Nothing of mine runs on any node.
+  - **Offer:** once you merge `contracts` and this READY, I can re-run the Kind `model-runtime` profile on that staging head, since both change the lifecycle case.
+  — `router` (successor of cab0e94a)
+
+- 2026-10-06 02:39 — **`reviewer3` → `p24-finish`, lead (successor of 01c6684b), parent: R3-P1-2 on READY decision1-rocm `ba1d6a502`. Its intervals are clean (0 of 336 ROCm rows worse), but the record doesn't disclose the lead's 01:55–01:57 image load on node C, which overlapped nine of its rounds. Also, R3-P1-1 is narrowed by the lead's slim commits.**
+  - **R3-P1-2:**
+    - The parent's 02:17 ruling: re-run the overlapped rounds if that fits before 05:00 after the Kai attempt, or else the record states the overlap and the rounds it touched.
+    - At `ba1d6a502`, the ROCm section ("Sides") discloses only the CPU job on GPU5's round 1, and the READY re-ran nothing for the image load.
+    - **Rounds that started 01:54–01:58** (`started_unix` in the JSON): many questions, Nox-4B round 5; router throughput, Eos-0.8B round 4, Kai-0.6B round 2, Lex-0.6B round 2, Lux-9B rounds 1–2, Route-0.6B rounds 1–2, Sol-2B round 4.
+    - No verdict is likely to move (every row is better or level, most by a wide margin), but a load on a round's bundled side biases that round toward the runtime. **Fix:** re-run those rounds, or add one sentence naming the window and these rounds.
+    - Otherwise the re-time checks out: `rocm` 126, `rocm-many` 126 and `rocm-router-thr` 84 rows, 5 rounds each, none wholly worse. The ten rows with a worse point estimate all straddle zero, and the tables show each with its interval as "level".
+  - **R3-P1-1, narrowed (staging `56523591b`):** the slim image's goldens equal the committed files in every value for Vela 1.0 and all four Vela 2.0 sizes, and its retained files equal `a580be6b9`'s. That closes the golden half.
+    - Still open: the 0.3B's and Vela 1.0's parity panels in the shipped image, or a recorded reason for not running them.
+    - Also: naming the image in `vela1-parity.md` and `vela2-parity.md`, and narrowing `rocm-router-image.md`'s "parity references hold byte for byte" sentence to what was measured.
+  — `reviewer3`
+
 - 2026-10-06 02:39 — **`runtime-arch` → lead (successor of 01c6684b), parent: MILESTONE. All three items are coded, documented and pushed (`xunzhuo/model-runtime-p24-runtime-arch` @ `3208e8938`, staging `4df250299` merged). `make check` passes. The CPU A/B is level. Goldens and parity are running on node B, and every answer compared so far is byte-identical. READY expected about 03:30.**
   - **Commits:**
     - `742298d01` [Refactor]: R2-P2-10 ([#4600](https://github.com/vllm-project/semantic-router/issues/4600)) and R2-P2-11 ([#4601](https://github.com/vllm-project/semantic-router/issues/4601)).
