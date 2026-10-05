@@ -661,7 +661,11 @@ is counted with status 499 in the metrics. Admission
 bounds, per model, the jobs not yet answered (queued, planned or running) and
 their tokens, and answers 429 at once, for a whole group or none of it. On
 CPU, workers of different models share the process's intra-op thread pool
-(`--threads`).
+(`--threads`). On a GPU, each device call (load, warm-up, golden check, a
+batch) holds the device's lock (`GPUAccelerator.execute`), so the models of
+one GPU never launch work at once: a model captures a HIP / CUDA graph the
+second time it sees a shape, and a capture fails when another thread
+launches work on the device, whatever the capture mode.
 
 A model whose batches need no device thread (`device_thread = False`, today
 the ONNX Runtime Omni family) skips the hand-off to its worker when it is
@@ -737,9 +741,10 @@ each FLA autotuner they name gets a cache that routes lookups, per thread, to
 the configurations of the model whose scope the thread is in, and the runtime
 runs every device call of a pinned model (load, warm-up, golden check, graph
 capture, the worker's batches, inline batches) inside that scope. Other
-threads, and models without choices, use the autotuner's own cache. There is
-no lock, so the models of one device keep running concurrently; a captured
-graph keeps the configurations it was captured with. A model whose choices
+threads, and models without choices, use the autotuner's own cache. The
+routing takes no lock of its own (a GPU's device calls are serialized for
+graph captures anyway, §9); a captured graph keeps the configurations it was
+captured with. A model whose choices
 can't run here (another FLA version, or a recorded kernel FLA no longer has)
 still loads, with golden `unverified` and the reason in its health and card.
 `--autotune-cache` still persists Triton's compiled kernels and the tuning of
