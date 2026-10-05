@@ -17,7 +17,7 @@ import io
 import json
 import math
 import wave
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 from typing import Any
 
 import numpy as np
@@ -260,7 +260,10 @@ class OmniModel(LoadedModel):
     up to ``CONCURRENT_INPUTS`` text and audio inputs at once on their graphs'
     ONNX Runtime pools (one short input's run leaves most of a pool idle).
     Images run one after another beside them: one image's run keeps every
-    core busy, and two at once only contend for the cores.
+    core busy, and two at once only contend for the cores. An input that
+    raises fails the whole batch, as any other model's failed forward does:
+    ``run`` cancels the batch's inputs that haven't started and waits for the
+    running ones before it raises, so none of them runs beside the next batch.
     """
 
     device_thread = False
@@ -335,20 +338,25 @@ class OmniModel(LoadedModel):
     def run(self, items: list[Any]) -> list[Any]:
         if len(items) == 1:
             return [self._embed(items[0])]
-        shared = {
-            index: self.inputs.submit(self._embed, item)
-            for index, item in enumerate(items)
-            if item.modality != "image"
-        }
-        images = {
-            index: self._embed(item)
-            for index, item in enumerate(items)
-            if item.modality == "image"
-        }
-        return [
-            images[index] if index in images else shared[index].result()
-            for index in range(len(items))
-        ]
+        shared: dict[int, Future[list[float] | None]] = {}
+        try:
+            for index, item in enumerate(items):
+                if item.modality != "image":
+                    shared[index] = self.inputs.submit(self._embed, item)
+            images = {
+                index: self._embed(item)
+                for index, item in enumerate(items)
+                if item.modality == "image"
+            }
+            return [
+                images[index] if index in images else shared[index].result()
+                for index in range(len(items))
+            ]
+        except BaseException:
+            for future in shared.values():
+                future.cancel()
+            wait(shared.values())
+            raise
 
     def finish_surface(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:
         return embedding.finish(plan, results)

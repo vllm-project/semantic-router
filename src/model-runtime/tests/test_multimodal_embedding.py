@@ -346,6 +346,88 @@ def test_a_batch_runs_its_images_one_at_a_time_beside_text_and_audio(
     assert all(name.startswith("vllm-sr-omni_") for name in shared)
 
 
+@pytest.mark.parametrize("failing", ["image", "text"])
+def test_a_failed_input_fails_its_batch_and_leaves_none_of_it_running(
+    model, monkeypatch, failing
+):
+    image = base64.b64encode(golden_image()).decode()
+    picture = {
+        "type": "image_url",
+        "image_url": {"url": f"data:image/png;base64,{image}"},
+    }
+    inputs = [picture, *(f"request number {n}" for n in range(7))]
+    plan = model.plan_surface("embeddings", request({"input": inputs}))
+    target = next(item for item in plan.items if item.modality == failing)
+    lock = threading.Lock()
+    started, running = [], [0]
+
+    def embed(self, item):
+        with lock:
+            started.append(item)
+            running[0] += 1
+        try:
+            time.sleep(0.01 if item is target else 0.05)
+            if item is target:
+                raise RuntimeError(f"the {failing} graph failed")
+            return [0.0]
+        finally:
+            with lock:
+                running[0] -= 1
+
+    monkeypatch.setattr(type(model), "_embed", embed)
+    with pytest.raises(RuntimeError, match=f"the {failing} graph failed"):
+        model.run(plan.items)
+    with lock:
+        left_running, started_by_then = running[0], len(started)
+    time.sleep(0.2)
+    assert left_running == 0
+    assert len(started) == started_by_then
+    if failing == "image":
+        # Four texts were running when the image failed; the other three never start.
+        assert started_by_then <= 5
+
+
+def test_a_failed_image_fails_only_its_request_and_the_model_keeps_serving(
+    tmp_path, monkeypatch
+):
+    from vllm_sr_runtime.config import ModelConfig, ServeConfig
+    from vllm_sr_runtime.families.multimodal_embedding.family import OmniModel
+    from vllm_sr_runtime.runtime import Runtime
+
+    source = {"repo_id": "example/omni-fixture", "revision": "0" * 40}
+    bundle = omni.write_bundle(tmp_path / "omni", source=source)
+    served = ModelConfig(model=str(bundle), name="omni", device="cpu")
+    runtime = Runtime(ServeConfig(models=(served,), result_cache_entries=0))
+    image = base64.b64encode(golden_image()).decode()
+    picture = {
+        "type": "image_url",
+        "image_url": {"url": f"data:image/png;base64,{image}"},
+    }
+    body = {"model": "omni", "input": ["route this request", picture, "a second one"]}
+    embed = OmniModel._embed
+
+    def failing(self, item):
+        if item.modality == "image":
+            raise RuntimeError("the image graph failed")
+        return embed(self, item)
+
+    runtime.start(background=False)
+    try:
+        before = asyncio.run(runtime.call("embeddings", body))
+        monkeypatch.setattr(OmniModel, "_embed", failing)
+        failed = asyncio.run(runtime.call("embeddings", body))
+        monkeypatch.undo()
+        after = asyncio.run(runtime.call("embeddings", body))
+        state = runtime.lookup("omni").health.state
+    finally:
+        runtime.stop()
+    assert failed[0] == 500
+    assert failed[1]["error"]["code"] == "internal_error"
+    assert "the image graph failed" in failed[1]["error"]["message"]
+    assert state == "ready"
+    assert before[0] == after[0] == 200 and after[1] == before[1]
+
+
 def test_media_inputs_carry_a_scheduler_cost_and_text_counts_its_tokens(model):
     from vllm_sr_runtime.families.multimodal_embedding.family import MEDIA_COST
     from vllm_sr_runtime.scheduler.planner import cost
