@@ -75,7 +75,9 @@ ENV PIP_NO_CACHE_DIR=1 \
 # PyTorch per accelerator, in its own layer: the largest and least often
 # changed part of every image. GPU images add FLA's Triton kernels (fla-core,
 # the version the runtime's pinned kernel choices were recorded with), which
-# import packaging without declaring it.
+# import packaging without declaring it. Triton compiles each kernel's launcher
+# with the C compiler and Python's headers when the kernel first runs, so GPU
+# images carry gcc and libc6-dev, and the build checks both are usable.
 FROM python-base AS torch-cpu
 ARG TORCH_CPU=torch==2.10.0
 RUN pip install --index-url https://download.pytorch.org/whl/cpu "$TORCH_CPU" && \
@@ -87,20 +89,24 @@ ARG TORCH_ROCM=torch==2.12.0
 ARG TORCH_ROCM_INDEX=https://download.pytorch.org/whl/rocm7.1
 RUN test "$TARGETARCH" = amd64 || { echo "ACCELERATOR=rocm supports linux/amd64 only" >&2; exit 1; }
 # The ROCm wheels link libatomic, which the slim base does not carry.
-RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 && \
+RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 gcc libc6-dev && \
     rm -rf /var/lib/apt/lists/*
 RUN pip install --index-url "$TORCH_ROCM_INDEX" "$TORCH_ROCM" && \
     pip install fla-core==0.5.2 packaging && \
-    python -c "import torch, fla.ops.gated_delta_rule"
+    python -c "import torch, fla.ops.gated_delta_rule" && \
+    printf '#include <Python.h>\n' | cc -fsyntax-only -x c -I "$(python -c 'import sysconfig; print(sysconfig.get_paths()["include"])')" -
 
 FROM python-base AS torch-cuda
 ARG TARGETARCH
 ARG TORCH_CUDA=torch==2.10.0
 ARG TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu128
 RUN test "$TARGETARCH" = amd64 || { echo "ACCELERATOR=cuda supports linux/amd64 only" >&2; exit 1; }
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && \
+    rm -rf /var/lib/apt/lists/*
 RUN pip install --index-url "$TORCH_CUDA_INDEX" "$TORCH_CUDA" && \
     pip install fla-core==0.5.2 packaging && \
-    python -c "import torch, fla.ops.gated_delta_rule"
+    python -c "import torch, fla.ops.gated_delta_rule" && \
+    printf '#include <Python.h>\n' | cc -fsyntax-only -x c -I "$(python -c 'import sysconfig; print(sysconfig.get_paths()["include"])')" -
 
 # The model runtime: its third-party dependencies in one layer and the package
 # in the next, so a runtime code change does not reinstall its dependencies.
@@ -128,8 +134,11 @@ WORKDIR /app
 RUN mkdir -p /app/config /app/models && \
     useradd --uid 65532 --no-create-home --shell /usr/sbin/nologin vllm-sr
 ENV USER=vllm-sr
-# Models the managed runtime downloads persist in the model volume.
-ENV VLLM_SR_RUNTIME_CACHE_DIR=/app/models/model-runtime
+# Models the managed runtime downloads persist in the model volume, and so do
+# Triton's compiled kernels: the charts' root filesystem is read-only and the
+# router's uid has no home directory.
+ENV VLLM_SR_RUNTIME_CACHE_DIR=/app/models/model-runtime \
+    TRITON_CACHE_DIR=/app/models/triton
 COPY --link --from=vela-omni /opt/router-model-artifacts/ /opt/router-model-artifacts/
 COPY --link --from=image-routing-assets /out/ /app/share/image-routing/
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
