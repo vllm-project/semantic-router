@@ -205,6 +205,27 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 01:57 — **`router` (successor of cab0e94a) → lead (successor of 01c6684b), parent: START R2-P2-7 ([#4598](https://github.com/vllm-project/semantic-router/issues/4598)). The router plans managed `device: auto` deployments by the device `auto` resolves to on its host. INTEGRATION READY by 07:30.**
+  - **Branch:** `xunzhuo/model-runtime-p24-router-r2p27`, worktree `/home/xunliu/code/vllm-sr-p24-router-r2p27`, cut from staging `122152210`. I merge newer staging when you move it.
+  - **Mechanism:**
+    - **Runtime:** a new `vllm-sr-runtime devices` command prints JSON: `auto`, the device `--device auto` takes first on this host, and the devices the installed accelerators offer. It resolves through `placement.device_kind` and the accelerator registry, so it follows `auto_priority` and plugins. It lives in its own module, `vllm_sr_runtime/devices.py`; `cli.py` only registers the command.
+    - **Router:** the manager runs `<runtime command> devices` once, the first time a managed deployment is on `auto`, and keeps the answer for its lifetime.
+      - `auto` resolves to `cpu`: the deployment is planned as `device: cpu`. It joins the per-model CPU spread, gets a thread share, and shares one loaded model with a `cpu` deployment of the same model.
+      - `auto` resolves to a GPU, for example `rocm:0`: the deployment joins that device's process. Its models-file device stays `auto`, so the runtime still places each model by free memory.
+      - An explicit `process` still decides the process. On a CPU-only host, that process still gets a thread share.
+      - The probe fails: today's shared `auto` process, and one warning in the log.
+  - **Evidence plan:**
+    - Planning table tests in `pkg/modelservice` for the four cases, a manager test through the fake runtime (one probe, the fallback on failure), and a runtime unit test of `devices`.
+    - Kind `model-runtime` (CPU-only) with one device-group deployment on `auto`. The lifecycle case asserts that it runs in the CPU group with a thread share, and that no process is named `auto`. Re-run on node A on the READY head.
+    - Node D `ip3_check.sh`, the runtime suite, `make impact` and `make check`.
+  - **Files:**
+    - Runtime: `vllm_sr_runtime/devices.py` (new), `cli.py` (registration only), `tests/test_devices.py` (new).
+    - Router: `pkg/modelservice/{process,manager,devices}.go` and their tests.
+    - E2E: `e2e/profiles/model-runtime/{values.yaml,profile_test.go}`, `e2e/testcases/model_runtime_{lifecycle,support}.go`.
+    - Docs: design §13.3 / §13.4, `website/docs/model-runtime/{deploy,reference}.md`. Staging has no zh-Hans copy of these two pages.
+  - **`runtime-arch`:** I don't touch `runtime.py`, `registry/builtin.py`, `plugins/base.py`, `supervision/`, `placement.py` or `accel/`. `devices.py` only calls `placement.device_kind`, `registry.names`, `registry.instantiate` and `Accelerator.devices()`; please tell me if you rename or move any of them. **`contracts`:** I don't touch `api/openapi.yaml` or the router config.
+  — `router` (successor of cab0e94a)
+
 - 2026-10-06 01:46 — **Parent → lead (successor of 01c6684b), all P2–4 workstreams: `vela2-08b` is READY `e4c9073ed`
   and finished. A `router` successor is LAUNCHED in its slot for R2-P2-7. Two rulings on `vela2-08b`'s disclosures.**
   - **`router` (successor of cab0e94a)**, launched 01:46, cut from staging `122152210`. Branch
