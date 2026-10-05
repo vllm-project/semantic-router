@@ -46,8 +46,9 @@ Without a `MODEL` argument, `vllm-sr serve` starts the router instead.
 | `--autotune-cache DIR` | `$VLLM_SR_RUNTIME_AUTOTUNE_CACHE` | Keep compiled GPU kernels, and the kernel tuning of models without recorded choices, between runs. Built-in models run their recorded choices on MI300X and MI325X instead of tuning. |
 
 Other commands: `vllm-sr-runtime models` lists the built-in models with their
-pinned revisions, and `vllm-sr-runtime plugins` lists the installed families,
-engines, accelerators and profiles.
+pinned revisions, `vllm-sr-runtime plugins` lists the installed families,
+engines, accelerators and profiles, and `vllm-sr-runtime devices` prints, as
+JSON, the devices this host offers and the one `--device auto` tries first.
 
 ## Models file
 
@@ -169,7 +170,7 @@ The binding names (`domain_classifier`, `pii_classifier`, `prompt_guard`,
 | `VLLM_SR_RUNTIME_COMMAND` | `vllm-sr-runtime` | Command the router runs for a managed process. |
 | `VLLM_SR_RUNTIME_DIR` | a private temporary directory | Where the router puts the processes' Unix sockets and models files. |
 | `VLLM_SR_RUNTIME_CACHE_DIR` | `/app/models/model-runtime` in router images | Hugging Face cache of managed runtimes. |
-| `VLLM_SR_RUNTIME_CPU_PROCESSES` | one per CPU model, at most one per two cores | The most processes CPU models without a `process` are spread over. |
+| `VLLM_SR_RUNTIME_CPU_PROCESSES` | one per CPU model, at most one per two cores | The most processes CPU models without a `process` are spread over, `device: auto` ones included on a host without a GPU. |
 | `VLLM_SR_RUNTIME_PREPARED_DIR` | `/opt/router-model-artifacts` | Where the runtime finds prepared bundles (Vela Omni) before it looks on the Hub. |
 | `VLLM_SR_RUNTIME_READY_TIMEOUT` | `10m` | How long the router waits for a deployment to become ready when it starts or reloads, as a duration such as `30m`. A first start may download and verify large models. |
 | `VLLM_SR_RUNTIME_RESULT_CACHE` | `4096` | Recent classify and decision results the router keeps per model, so a repeated request skips the runtime; `0` turns it off. |

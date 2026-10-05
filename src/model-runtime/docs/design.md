@@ -138,6 +138,7 @@ src/model-runtime/
       policy.py             # licence and access policy, token handling
     scheduler/              # planner, scheduler (one per model)
     placement.py            # device choice and memory budget
+    devices.py              # `vllm-sr-runtime devices`: the host's devices and the one auto takes
     supervision/            # readiness (golden answers), metrics
     families/               # package formats, rendering and answer assembly only
       decision2/            # Decision 2.0 (Phase 1)
@@ -805,7 +806,11 @@ without `MODEL` keeps its router-mode behaviour. Every serve option's default
 is the `ServeConfig` / `ModelConfig` field default, so the CLI and an
 embedding host start alike. `vllm-sr-runtime fixture OUTPUT --family F
 --variant V` writes a tiny random-weight package of any built-in family; the
-writer is `testing/<family>.py`.
+writer is `testing/<family>.py`. `vllm-sr-runtime devices` prints, as JSON,
+the devices of the available accelerators (`devices`) and the one
+`--device auto` tries first (`auto`: the first device of the first available
+accelerator in `auto_priority` order); the router reads `auto` before it
+groups its processes (section 13.4).
 
 Importing `vllm_sr_runtime` sets four environment defaults:
 `GOMP_SPINCOUNT`, `ONEDNN_PRIMITIVE_CACHE_CAPACITY`, and MIOpen's
@@ -916,11 +921,15 @@ the same `process` share one process and one bundle.
   without an `endpoint` into processes: by `process` when set; else each GPU
   device gets one process, and each CPU model its own process (`cpu-0`,
   `cpu-1`, ...; at most half the cores, capped by
-  `VLLM_SR_RUNTIME_CPU_PROCESSES`; `1` folds them into one). Deployments on
-  `device: auto` share one process, `auto`, wherever the runtime places them,
-  so on a CPU-only host they take turns on one device thread; name `cpu` (or
-  a `process`) to give CPU models processes of their own. A CPU process
-  runs `ceil(cores / processes)` threads, unpinned, so a busy model can use
+  `VLLM_SR_RUNTIME_CPU_PROCESSES`; `1` folds them into one). A deployment on
+  `device: auto` is grouped by the device `auto` takes on the host, which the
+  router asks the runtime once (`vllm-sr-runtime devices`, section 12) and
+  keeps: on the CPU it is planned as a `cpu` deployment, so on a host without
+  a GPU each `auto` model gets a CPU process and thread share of its own; on a
+  GPU it joins that device's process (`rocm:0`, ...), and the runtime still
+  places it by free memory. If the runtime cannot answer, the `auto`
+  deployments share one process, `auto`, and the router logs why. A CPU
+  process runs `ceil(cores / processes)` threads, unpinned, so a busy model can use
   the cores an idle one leaves: on 16 cores and five task models, one shared
   process served 11.1 requests/s, pinned disjoint shares 15.6, unpinned
   shares 20.3 (`docs/records/router-latency-cpu.md`). For each group it
