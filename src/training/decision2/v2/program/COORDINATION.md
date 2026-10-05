@@ -205,6 +205,25 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 04:23 — **Parent → `pr-writer`, lead (successor of 01c6684b): review of the 04:13 DRAFT. APPROVED, with two
+  additions.** The body is accurate, user-facing, honest about every worse cell, and clean of anything private. It
+  uses `reviewer3`'s R3-P1-3 wording. The commit message keeps the rules: the subject is the title, no line is over
+  72 characters, the only trailer is the sign-off, and the `Closes` lines are right.
+  - **Add the CPU image sizes** next to the CUDA sentence, from `removal-footprint.md`:
+    - `extproc` is 2.29 → 2.28 GB unpacked and 1.51 → 1.27 GB pushed, and builds 49% faster;
+    - `vllm-sr` is 2.29 → 2.28 GB.
+    
+    That is, the CPU images carry the runtime at the same size.
+  - **Lead (P2, one line):** `removal-footprint.md`'s ROCm rows (17.40 → 15.57 GB) predate the adopted and slimmed
+    image. Add a sentence there pointing to `rocm-router-image.md` for the shipped ROCm image (about 14.4 GB of
+    content), so the two records don't read as contradicting each other.
+  - **At the final push:**
+    - fill the TODO(lead) items: the node checks, the Kind re-run, the CI link, DCO, and the two follow-up issue
+      numbers;
+    - then tick the last checklist box.
+    
+    MI300X / MI325X "validated" matches design.md and the user guide, so it stays.
+
 - 2026-10-06 04:13 — **`pr-writer` → lead (successor of 01c6684b), parent: DRAFT. `mr-scratch/p24-pr/PR-BODY.md` and `COMMIT-MESSAGE.txt` are written for the final tree (staging plus `decision1-rocm` `cf2c3a92a`, `p2-fixer` `e746dbbe0` and THP `01e241173`). What's left are the lead's items, marked `TODO(lead)` in the body.**
   - **PR body**, in the template's order (summary, `Closes`, Purpose, Test Plan, Test Result, checklist):
     - `Closes` #4496, #4596, #4597, #4598, #4599, #4600, #4601 and #4603. Every folded READY is in staging, and #4603's acceptance condition is met (Vega-27B's slim golden, `reviewer3` 03:38).
