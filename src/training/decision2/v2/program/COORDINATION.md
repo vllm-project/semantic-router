@@ -205,6 +205,40 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 05:26 — **`reviewer3` → lead (successor of 01c6684b), parent: the FINAL PUSH `d3511b983` CHECKS OUT. Both passes are DONE with no P0 open and every P1 closed. `reviewer3` is finished.**
+  - **`d3511b983`:**
+    - one commit; its parent is `origin/main` `72eb30c9a` (still `main`'s head), and its tree is staging `fd0cca8c2`'s (`27ce1a1b1`, empty diff);
+    - author and committer Xunzhuo Liu; the only trailer is the sign-off, and there is no "Cursor";
+    - the message equals `COMMIT-MESSAGE.txt`, and it closes #4496, #4596–#4601 and #4603.
+  - **Live PR body:** no TODO left; follow-ups #4611 and #4612 are open and linked. No private value, IP, path, Cursor or reasoning-model mention.
+  - **P1s:** R3-P1-1 (`cff67c555`), R3-P1-2 (`cf2c3a92a`), R3-P1-3 (this push) and R3-P1-4 (`fd0cca8c2`) are fixed. The second review's P0 / P1 are all fixed or recorded as accepted.
+  - **Not reviewed by me:** the CI run on `d3511b983`, which started at 05:25. The lead's body line tracks it.
+  - **Report:** `mr-scratch/p24-review3/REVIEW.md`; handoff `HANDOFF.md`. Nothing of mine runs, I hold no lease, and my worktree is detached with no commits.
+  — `reviewer3`
+
+- 2026-10-06 05:30 — **Lead (successor of 01c6684b) → parent, `reviewer3`, user: FINAL PUSH DONE. #4512 is ONE commit, `d3511b983`, on `main` `72eb30c9a`, with staging `fd0cca8c2`'s tree. The PR body is applied. CI is running.**
+  - **R3-P1-4 and R3-P2-22, before the push (`fd0cca8c2`):** `vela2-performance.md` now marks its informative comparisons:
+    - the 4B on CPU is "informative: no rounds or intervals, no verdict";
+    - the summary's CPU claim is the 0.3B's;
+    - the 0.8B reading's 4B aside is marked informative;
+    - "Against the Vela 1.0 path" is "one run per side: informative, no verdict".
+    - In `decision1-performance.md`, Kai's worse router row now reads "Before the huge-page default".
+    - `make check CHANGED_FILES=<the two records>` passes, and so does pre-commit.
+  - **Node A on `cf261818a`** (the final tree except those two records): `make check` exit 0, harness-check exit 0, fresh smoke exit 0, Kind `model-runtime` and `envoy-ai-gateway` status 0.
+  - **The commit:**
+    - built with `git commit-tree fd0cca8c2^{tree} -p upstream/main -F COMMIT-MESSAGE.txt`;
+    - author and committer are Xunzhuo Liu;
+    - the trailers are only the sign-off; "Cursor" and "Made-with" appear nowhere in the message;
+    - the tree diff against staging is empty.
+    - Pushed with `--force-with-lease` on `0cd854858`.
+    - Backups `p24-prehead-47c948da2` and `p24-ip3b-squash` are kept (local).
+  - **Follow-ups opened:** #4611 (the OpenMP spin count chosen per process) and #4612 (weights read before the device lock, plus R3-P2-18 and R3-P2-21). #4602 stays open.
+  - **PR body:** the TODOs are filled (node checks, Kind, DCO, #4611 / #4612), and the last checklist box is ticked. The size line now uses the recorded figure (17.2 GB for the earlier official-wheel image) instead of the unsourced 17.3 GB. The CI line gets the run link and its result when the run is green.
+  - **Design gist** `0daab6d0…` matches the final `design.md`.
+  - **`reviewer3`:** `check_squash.sh` on `d3511b983`, please.
+  - **Next:** watch CI. Cancelled jobs get `gh run rerun --failed`; real failures are amended into the one commit.
+  — lead (successor of 01c6684b)
+
 - 2026-10-06 05:24 — **`reviewer3` → lead (successor of 01c6684b), parent: R3-P1-4 is CLOSED by staging `fd0cca8c2`, and so is R3-P2-22. Every P0 / P1 of both passes is now closed in the tree. What's left is the squash check on the final push.**
   - **`fd0cca8c2` (docs only):**
     - The 4B CPU table is labelled informative (no rounds or intervals, no verdict), and so is the "Against the Vela 1.0 path" comparison (one run per side).
