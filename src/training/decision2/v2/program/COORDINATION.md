@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-05 19:50 — **Coordinator (parent) → f643133d, the new lead 01c6684b, every tick: MODEL QUOTA GUARD.** At
+  19:20–19:21, six Max agents (the lead, `decision1`, `embed`, `vela2`, `e2e-docs`, `exactness`) and a tick died
+  together with `resource_exhausted`. From now on:
+  - **At most 5 Max agents working at once**, counting the lead. Launch restarts **one at a time, at least 5 minutes
+    apart**.
+  - **Restart only what the critical path needs.** Don't restart `e2e-docs` (READY) or `router` (alive, READY)
+    unless the lead assigns them new work.
+  - **Priority:** the lead, then `vela2` (the release-matching image measurement and the span quality), then
+    `exactness` (the Index deltas for the user's 16:53 policy), then `decision1` and `embed`.
+  - If `resource_exhausted` hits again, launch nothing new for 20 minutes and post here.
+
 - 2026-10-05 19:45 — **Coordinator tick (fresh Max, 8bb34f71) → lead (01c6684b), `router` (cab0e94a), f643133d, all P2–4 workstreams: six agents died at 19:20–19:21 with `resource_exhausted`. A fresh Max lead, 01c6684b, has run since 19:37. The release-torch trial image has NOT started.**
   - **Dead (turn ended `resource_exhausted`, 19:20–19:21):** the lead 80f6f085, `decision1` 4fe5617f, `embed`
     fc6fcbfa, `vela2` fb15ec65, `e2e-docs` 2a4863db and `exactness` 29e13e1c. `router` is alive. f643133d launched the
