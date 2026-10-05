@@ -39,7 +39,7 @@ and 10× at p95, and 3.2× at the median under `max_speed`.
 - **Date:** 2026-10-05, at `fa4baf009` (the per-device lock, graph captures
   in thread-local mode, MIOpen's FAST find mode; the 0.3B captures no graph).
 - **Stack:** the router's ROCm image built from `a580be6b9`, which the PR
-  ships: vLLM's ROCm PyTorch `2.12.0+git6bbd260` (AOTriton 0.13.50, ROCm
+  ships slimmed (`31d00387c`; every file it keeps is unchanged): vLLM's ROCm PyTorch `2.12.0+git6bbd260` (AOTriton 0.13.50, ROCm
   7.2.3), Triton 3.7.0, FLA 0.5.2, `causal-conv1d` 1.7.0
   (`rocm-router-image.md`), on one AMD Instinct MI325X (gfx942), both sides in
   one process. The engine side's `transformers` 5.17.0, which the image
@@ -100,9 +100,11 @@ Requests per second:
 
 - **Date:** 2026-10-05, at `d4c6d9a50`. Later commits change no CPU forward
   or batching path (only cancellation bookkeeping, load retries and the GPU
-  device lock). `a1e1b4ccb` also freezes the heap after each load pass, which leaves fewer
-objects for a request's garbage collections to walk: it can only shorten
-  pauses.
+  device lock). `a1e1b4ccb` also freezes the heap after each load pass,
+  which leaves fewer objects for a request's garbage collections to walk: it
+  can only shorten pauses. The huge-page default (`129be34ea`) came later
+  too and changes how CPU weight copies are laid out; these rows were not
+  re-timed under it (`decision1-performance.md` re-times Decision 1.0).
 - **Setup:** 16 cores of an AMD EPYC 9575F in a `systemd-run` scope
   (effective cpuset logged), threads capped at 16, PyTorch 2.10's CPU build
   for both sides; node load at most 68.
@@ -181,7 +183,9 @@ accuracy, and `vela2-reduced.json` the raw summaries of both records.
 
 - **Date:** 2026-10-04, at `7b76fdd29` (the IP2 staging head merged, with
   its scheduler changes). A first run at `10ca64d02` agrees within the node's
-  noise; `vela2-reduced.json` has both.
+  noise; `vela2-reduced.json` has both. The CPU rows predate the heap freeze
+  (`a1e1b4ccb`) and the huge-page default (`129be34ea`) and were not
+  re-timed under them.
 - **Sides:** `exact` and `batching` on one model without a copy, and one
   `max_speed` model per copy kind (consented for the run), all in one process
   (`tools/vela2_bench.py --sides runtime,runtime-batching,max_speed:KIND`).
@@ -427,9 +431,10 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
   has 3 rounds, below the standard's 5, and gives no verdict; with 6
   requests per round no row reports a p95. The 0.3B is the size to serve on
   a CPU.
-- **Later commits:** `a1e1b4ccb` also freezes the heap after each load pass, which leaves fewer
-objects for a request's garbage collections to walk: it can only shorten
-  pauses, so the run stands for the head.
+- **Later commits:** `a1e1b4ccb` freezes the heap after each load pass,
+  which leaves fewer objects for a request's garbage collections to walk: it
+  can only shorten pauses. The huge-page default (`129be34ea`) changes how
+  CPU weight copies are laid out; these rows were not re-timed under it.
 
 0.8B on CPU, p50 ms, engine and Δ against it (mean [95% interval]):
 
