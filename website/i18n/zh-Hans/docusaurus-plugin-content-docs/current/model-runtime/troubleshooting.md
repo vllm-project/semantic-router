@@ -3,7 +3,7 @@ title: 故障排查与常见问题
 sidebar_label: 故障排查与常见问题
 description: 修复模型运行时的常见问题，并解答常见疑问。
 translation:
-  source_commit: "c9a7834d0efbacc16cc293a3230dfef109be267b"
+  source_commit: "d881c88086b060c5f5ff9d3d881c6f7bbd9e1c9b"
   source_file: "docs/model-runtime/troubleshooting.md"
   outdated: false
 ---
@@ -68,6 +68,26 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 | a licence must be accepted | 该模型的许可证限制了使用。确认你可以使用后，传入 `--accept-licence <id>`。 |
 
 同一进程中一个模型失败时，该进程中的其他模型继续提供服务。
+
+## 已就绪模型的自检显示 `unverified` {#a-ready-models-self-check-says-unverified}
+
+`GET /v1/models` 在 `golden` 下给出每个模型的自检结果。`matched` 表示它的回答与该类设备上发布版的回答一致。
+`unverified` 表示模型可以提供服务，但运行时无法担保这一点：
+
+- **没有 `reason`，且 `golden.reference` 为空：** 该设备没有发布版的回答，例如非内置模型，或没有验证记录的 GPU（CUDA）。
+  运行时只检查了回答格式正确，且每次运行都相同。
+- **`reason` 以 `kernel choices not applied` 开头：** 在 AMD Instinct MI300X 和 MI325X GPU 上，Decision 2.0 和 Vela 2.0
+  使用发布时用 FLA 0.5.2 记录的内核配置运行，因此每个进程给出相同的回答。这些配置无法在当前环境运行时，模型仍会加载，
+  日志会写 `... runs without its recorded kernel choices: ...`，它的回答可能与发布版不同。
+
+| `reason` 提示 | 处理方法 |
+| --- | --- |
+| `FLA is not installed` | 安装 `fla-core==0.5.2`，或使用自带它的路由器 ROCm 镜像。 |
+| `they were recorded with FLA 0.5.2, not ...` | 安装 `fla-core==0.5.2`。 |
+| `failed to import` | 修复 FLA 安装；消息中给出了具体错误。 |
+| `has no autotuned kernel ...` | 安装 `fla-core==0.5.2`。 |
+
+`--autotune-cache` 会在重启之间保留已编译的内核，但不能代替记录的配置。
 
 ## 路由器拒绝配置 {#the-router-refuses-the-configuration}
 

@@ -20,6 +20,7 @@ from cli.model_runtime_retired import REMOVED_EMBEDDING_BACKENDS
 RETIRED_EMBEDDING_TYPES = frozenset({"gemma", "bert"})
 VELA_EMBEDDING = "mmbert"
 VELA_EMBEDDING_PATH = "models/Vela-1.0-Encoder-307M-Embedding"
+VELA_EMBEDDING_DIMENSIONS = (768, 512, 256, 128, 64)
 
 _SEMANTIC = "global.model_catalog.embeddings.semantic"
 _RETIRED_PATH_SLOTS = ("gemma_model_path", "bert_model_path")
@@ -36,6 +37,21 @@ _STORE_BACKEND_FIELDS = {
     "response_cache": "backend_type",
     "memory": "backend",
     "vector_store": "backend_type",
+}
+# Where each store sets its vector size, and the size the router gives Vela
+# Embedding there when none is set. The router refuses any other size.
+_STORE_WIDTHS = {
+    "response_cache": (
+        (("redis", "index", "vector_field", "dimension"), 768),
+        (("valkey", "index", "vector_field", "dimension"), 768),
+        (("milvus", "collection", "vector_field", "dimension"), 768),
+    ),
+    "memory": (
+        (("milvus", "dimension"), 256),
+        (("valkey", "dimension"), 256),
+        (("qdrant", "dimension"), 256),
+    ),
+    "vector_store": ((("embedding_dimension",), 768),),
 }
 # RAG backends that embed the query with the router's default embedding model.
 _RAG_EMBEDDING_BACKENDS = frozenset({"milvus", "qdrant", "hybrid"})
@@ -106,33 +122,70 @@ def _migrate_stores(
     for name, store in stores.items():
         if not isinstance(store, dict):
             continue
-        configured = str(store.get("embedding_model") or "").strip().lower()
-        if configured:
-            previous = configured
-        elif name in _STORE_BACKEND_FIELDS and store.get("enabled"):
-            previous = "bert" if name == "vector_store" else fallback
-        else:
+        _leave_retired_model(name, store, fallback, notes)
+        if _store_model(name, store, fallback) == VELA_EMBEDDING:
+            _fit_store_widths(name, store, notes)
+
+
+def _leave_retired_model(
+    name: str, store: dict[str, Any], fallback: str, notes: MigrationNotes
+) -> None:
+    configured = str(store.get("embedding_model") or "").strip().lower()
+    if configured:
+        previous = configured
+    elif name in _STORE_BACKEND_FIELDS and store.get("enabled"):
+        previous = "bert" if name == "vector_store" else fallback
+    else:
+        return
+    if previous not in RETIRED_EMBEDDING_TYPES:
+        return
+    store["embedding_model"] = VELA_EMBEDDING
+    path = f"global.stores.{name}.embedding_model"
+    change = f"{previous} -> mmbert (Vela Embedding)"
+    if not configured:
+        change += f"; {previous} was this store's default"
+    backend = str(store.get(_STORE_BACKEND_FIELDS.get(name, "backend")) or "")
+    if backend.strip().lower() in {"", "memory"} and name == "response_cache":
+        notes.changed(
+            path,
+            change + "; in-memory entries refill with new traffic, "
+            "re-check similarity_threshold",
+        )
+    else:
+        notes.action(
+            path,
+            change + "; re-embed the stored vectors with Vela Embedding "
+            "and re-check similarity thresholds",
+        )
+
+
+def _store_model(name: str, store: dict[str, Any], fallback: str) -> str:
+    """The embedding model the router gives the store after migration."""
+    configured = str(store.get("embedding_model") or "").strip().lower()
+    if configured:
+        return configured
+    if name == "vector_store" or fallback in RETIRED_EMBEDDING_TYPES:
+        return VELA_EMBEDDING
+    return fallback
+
+
+def _fit_store_widths(name: str, store: dict[str, Any], notes: MigrationNotes) -> None:
+    """Give a Vela Embedding store a vector size the model serves."""
+    for keys, default in _STORE_WIDTHS.get(name, ()):
+        parent = dict_at(store, *keys[:-1]) if len(keys) > 1 else store
+        if parent is None:
             continue
-        if previous not in RETIRED_EMBEDDING_TYPES:
+        width = parent.get(keys[-1])
+        if isinstance(width, bool) or not isinstance(width, int):
             continue
-        store["embedding_model"] = VELA_EMBEDDING
-        path = f"global.stores.{name}.embedding_model"
-        change = f"{previous} -> mmbert (Vela Embedding)"
-        if not configured:
-            change += f"; {previous} was this store's default"
-        backend = str(store.get(_STORE_BACKEND_FIELDS.get(name, "backend")) or "")
-        if backend.strip().lower() in {"", "memory"} and name == "response_cache":
-            notes.changed(
-                path,
-                change + "; in-memory entries refill with new traffic, "
-                "re-check similarity_threshold",
-            )
-        else:
-            notes.action(
-                path,
-                change + "; re-embed the stored vectors with Vela Embedding "
-                "and re-check similarity thresholds",
-            )
+        if width <= 0 or width in VELA_EMBEDDING_DIMENSIONS:
+            continue
+        parent[keys[-1]] = default
+        notes.action(
+            ".".join(("global.stores", name, *keys)),
+            f"{width} -> {default}: Vela Embedding serves 64, 128, 256, 512 or 768 "
+            f"dimensions; re-create the collection or index at {default}",
+        )
 
 
 def _migrate_model_selection(canonical: dict[str, Any], notes: MigrationNotes) -> None:
