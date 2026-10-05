@@ -81,6 +81,8 @@ func (r *OpenAIRouter) retrieveFromQdrant(traceCtx context.Context, ctx *Request
 		return "", fmt.Errorf("no results above similarity threshold %.3f", threshold)
 	}
 
+	ctx.RAGResultCount = len(contextParts)
+	ctx.RAGResultCountReported = true
 	bestScore := float32(0.0)
 	if len(scores) > 0 {
 		bestScore = scores[0]

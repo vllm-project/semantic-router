@@ -123,6 +123,27 @@ func TestRAGVectorStoreEmbedsAShortQueryOnce(t *testing.T) {
 	}
 }
 
+func TestRAGVectorStoreReportsAnEmptyResultSet(t *testing.T) {
+	embedder := &windowedRAGEmbedder{windowSize: 4096}
+	router, storeID := ragVectorStoreFixture(t, embedder)
+	rag := ragPluginConfig(storeID, 2, 1.1)
+	request := &RequestContext{UserContent: "how long does a refund take"}
+
+	retrieved, err := router.retrieveFromVectorStore(context.Background(), request, rag)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if retrieved != "" {
+		t.Fatalf("retrieved %q, want no context", retrieved)
+	}
+	if !request.RAGResultCountReported {
+		t.Fatal("empty result set was not marked as reported")
+	}
+	if request.RAGResultCount != 0 {
+		t.Fatalf("result count = %d, want 0", request.RAGResultCount)
+	}
+}
+
 // plainRAGEmbedder has no token windows of its own, the way a remote embedding
 // service does not.
 type plainRAGEmbedder struct{ calls int }
