@@ -46,33 +46,76 @@ sum at the median and 10× at p95, and 3.2× at the median under `max_speed`.
 
 ## Vela-2.0-0.3B on CPU
 
-| Tokens | exact p50 / p95 | batching p50 / p95 | engine p50 / p95 |
-| --- | --- | --- | --- |
-| 32 | 123.4 / 125.2 | 125.6 / 127.5 | 124.5 / 126.4 |
-| 128 | 142.3 / 143.9 | 144.6 / 146.5 | 143.8 / 145.8 |
-| 512 | 229.8 / 232.9 | 211.6 / 213.9 | 232.8 / 236.4 |
-| 2,048 | 882.6 / 922.7 | 712.1 / 738.4 | 875.6 / 912.1 |
+- **Date:** 2026-10-05, at `d4c6d9a50`. Later commits change no CPU forward
+  or batching path (only cancellation bookkeeping, load retries and the GPU
+  device lock).
+- **Setup:** 16 cores of an AMD EPYC 9575F in a `systemd-run` scope
+  (effective cpuset logged), threads capped at 16, PyTorch 2.10's CPU build
+  for both sides; node load at most 68.
+- **Rounds:** 10 interleaved rounds, side order rotated per round; each cell
+  is 10 warm-up requests, then 30 requests at 1 or 4 concurrent callers. The
+  engine serves concurrent callers in arrival order, as its HTTP server does.
+  `max_speed` runs the consented `float32-packed` copy.
+- **Reading:** a row passes when its 95% interval on the difference is at or
+  better than the engine. No row's interval lies on the worse side. Where
+  the point estimate is worse (`exact` at 32 × 4 and 2,048 × 4, `batching`
+  at 32 × 1 and its 32 × 4 p95), the interval straddles zero after the
+  10-round cap: these rows are level with the engine, within the intervals
+  shown.
 
-| Tokens | exact req/s | batching req/s | engine req/s |
-| --- | --- | --- | --- |
-| 32 | 8.11 | 8.36 | 8.04 |
-| 128 | 7.01 | 6.96 | 6.93 |
-| 512 | 4.34 | 3.21 | 4.28 |
-| 2,048 | 1.15 | 1.21 | 1.11 |
+p50 ms, engine and Δ against it (mean [95% interval]):
 
-- The exact path runs the engine's operations on the same MKL build, and its
-  latency is the engine's within 1%: the sides alternate per request, so the
-  machine's drift reaches both alike (separate runs on this shared node vary
-  by up to 25%).
+| Tokens × callers | engine | exact | batching | max_speed |
+| --- | --- | --- | --- | --- |
+| 32 × 1 | 153.3 | −1.2 [−1.9, −0.4] | +0.6 [−0.3, +1.5] | −57.1 [−59.4, −54.9] |
+| 32 × 4 | 605.8 | +4.5 [−27.0, +36.0] | −45.4 [−71.5, −19.4] | −269.1 [−298.9, −239.3] |
+| 128 × 1 | 175.4 | −2.8 [−3.6, −1.9] | −0.8 [−1.6, −0.0] | −66.1 [−67.2, −65.0] |
+| 128 × 4 | 682.8 | −12.0 [−21.7, −2.2] | −42.1 [−65.4, −18.8] | −270.2 [−288.7, −251.7] |
+| 512 × 1 | 263.7 | −4.8 [−5.9, −3.8] | −28.9 [−31.4, −26.4] | −115.1 [−119.8, −110.5] |
+| 512 × 4 | 1,047.8 | −9.3 [−40.1, +21.5] | −114.2 [−155.1, −73.3] | −455.8 [−500.6, −411.1] |
+| 2,048 × 1 | 785.7 | −11.1 [−12.8, −9.5] | −210.9 [−213.5, −208.2] | −414.2 [−417.2, −411.2] |
+| 2,048 × 4 | 3,124.7 | +16.8 [−52.3, +85.9] | −842.3 [−891.3, −793.2] | −1,653.6 [−1,706.4, −1,600.8] |
+
+p95 ms:
+
+| Tokens × callers | engine | exact | batching | max_speed |
+| --- | --- | --- | --- | --- |
+| 32 × 1 | 166.3 | +0.9 [−5.8, +7.7] | +7.0 [−2.3, +16.4] | −54.8 [−60.5, −49.0] |
+| 32 × 4 | 631.6 | +13.5 [−21.6, +48.7] | +50.7 [−23.6, +125.0] | −248.0 [−277.3, −218.7] |
+| 128 × 1 | 184.7 | −2.9 [−5.3, −0.6] | −0.5 [−2.7, +1.6] | −67.4 [−70.3, −64.6] |
+| 128 × 4 | 703.4 | −10.9 [−23.9, +2.1] | −36.6 [−56.0, −17.3] | −273.6 [−291.6, −255.7] |
+| 512 × 1 | 282.9 | −6.9 [−9.6, −4.3] | −31.3 [−34.7, −28.0] | −123.2 [−130.7, −115.7] |
+| 512 × 4 | 1,079.5 | −10.5 [−47.1, +26.1] | −116.2 [−166.5, −65.8] | −474.8 [−527.6, −421.9] |
+| 2,048 × 1 | 815.8 | −14.5 [−25.0, −4.0] | −219.7 [−228.9, −210.5] | −413.5 [−426.5, −400.5] |
+| 2,048 × 4 | 3,200.3 | +12.4 [−82.0, +106.7] | −852.4 [−931.5, −773.3] | −1,669.9 [−1,759.7, −1,580.0] |
+
+Requests per second:
+
+| Tokens × callers | engine | exact | batching | max_speed |
+| --- | --- | --- | --- | --- |
+| 32 × 1 | 6.47 | +0.07 [+0.03, +0.10] | −0.04 [−0.11, +0.03] | +3.76 [+3.52, +4.00] |
+| 32 × 4 | 6.61 | −0.07 [−0.39, +0.26] | +0.44 [+0.13, +0.75] | +5.07 [+4.65, +5.48] |
+| 128 × 1 | 5.71 | +0.08 [+0.04, +0.12] | +0.01 [−0.02, +0.03] | +3.39 [+3.26, +3.52] |
+| 128 × 4 | 5.85 | +0.10 [+0.03, +0.18] | +0.37 [+0.21, +0.53] | +3.82 [+3.50, +4.14] |
+| 512 × 1 | 3.76 | +0.07 [+0.05, +0.09] | +0.46 [+0.43, +0.49] | +2.96 [+2.78, +3.13] |
+| 512 × 4 | 3.82 | +0.03 [−0.07, +0.13] | +0.45 [+0.30, +0.60] | +2.99 [+2.77, +3.21] |
+| 2,048 × 1 | 1.27 | +0.02 [+0.02, +0.02] | +0.46 [+0.46, +0.47] | +1.39 [+1.37, +1.41] |
+| 2,048 × 4 | 1.27 | −0.00 [−0.03, +0.02] | +0.47 [+0.44, +0.50] | +1.42 [+1.35, +1.48] |
+
+- The exact path runs the engine's operations on the same MKL build, so its
+  latency is the engine's or slightly better.
 - On the parity requests, whose long documents run in windows with spans
   over thousands of words, the exact path took 1,476 s against the engine's
   1,836 s for 300 requests (sides alternating per request): the span
   decoding the engine runs word by word in Python is vectorized here.
 - The approximate profiles run packed sequences with local layers in query
-  blocks from 1,024 tokens: 9% faster per request at 512 prompt tokens, 19% at
-  2,048. `batching` (and `max_speed`) also merge concurrent requests, which a
-  CPU does not run faster (one request already keeps the 16 cores busy) and
-  which costs a quarter of the throughput at 512 tokens.
+  blocks from 1,024 tokens. `batching` and `max_speed` also merge concurrent
+  requests into one forward, but on CPU only up to 2,048 tokens per forward:
+  measured with `vela2_bench --trace` at an earlier head, 2.7 packed
+  2,048-token sequences cost 379 µs per token against 267 µs for one, and
+  without the budget `batching` served 0.95 against the engine's 1.15
+  requests per second at 2,048 × 4. Short sequences of several requests still
+  share a forward; GPUs and the 4B / 9B have no budget.
 
 ## Vela-2.0-0.3B reduced copies (`max_speed`)
 
