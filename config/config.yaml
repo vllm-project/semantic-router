@@ -2221,7 +2221,7 @@ global:
         timeout: 10
         collection_prefix: "mem:"
         index_name: mem_idx
-        dimension: 384
+        dimension: 256
         metric_type: COSINE
         index_m: 16
         index_ef_construction: 200
@@ -2231,7 +2231,7 @@ global:
       milvus:
         address: milvus:19530
         collection: agentic_memory
-        dimension: 384
+        dimension: 256
         num_partitions: 32
       qdrant:
         host: qdrant
@@ -2240,7 +2240,7 @@ global:
         use_tls: false
         connect_timeout: 10
         collection: agentic_memory
-        dimension: 384
+        dimension: 256
       redis_cache:
         enabled: false
         address: "localhost:6379"
@@ -2250,7 +2250,7 @@ global:
         password: ""
       embedding_model: mmbert
       default_retrieval_limit: 10
-      # Calibrated for mom-embedding-light with weighted hybrid scoring.
+      # Weighted hybrid scoring. The value predates Vela Embedding; check it on your own data.
       default_similarity_threshold: 0.40
       hybrid_search: true
       hybrid_mode: weighted
@@ -2475,10 +2475,8 @@ global:
     embeddings:
       semantic:
         qwen3_model_path: models/mom-embedding-pro
-        gemma_model_path: models/mom-embedding-flash
         mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         multimodal_model_path: models/vela-1.0-omni-nano
-        bert_model_path: models/mom-embedding-light
         use_cpu: true
         embedding_config:
           full_context: false

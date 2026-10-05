@@ -54,18 +54,24 @@ type Runtime struct {
 	bundles    int
 	tasks      int
 	surfaces   map[string]int
+	limits     api.ProcessLimits
 }
 
 // APIVersion is the contract version the fake serves unless SetAPIVersion
 // changes it.
 const APIVersion = "2.0.0"
 
-// processLimits are the limits /v1/models reports: the runtime's defaults.
-var processLimits = api.ProcessLimits{MaxBundleTasks: 64, MaxRequestBytes: 8 << 20}
+// defaultLimits are the runtime's default process limits. Like the runtime,
+// the fake reports its limits in /v1/models and refuses a larger bundle or
+// request body whole.
+var defaultLimits = api.ProcessLimits{MaxBundleTasks: 64, MaxRequestBytes: 8 << 20}
+
+// maxInputs is the classify input cap of a task_heads card.
+var maxInputs = 2048
 
 // New serves models, all ready.
 func New(models ...Model) *Runtime {
-	r := &Runtime{models: make(map[string]Model), ready: make(map[string]bool), failed: make(map[string]string), apiVersion: APIVersion, surfaces: make(map[string]int)}
+	r := &Runtime{models: make(map[string]Model), ready: make(map[string]bool), failed: make(map[string]string), apiVersion: APIVersion, surfaces: make(map[string]int), limits: defaultLimits}
 	for _, model := range models {
 		if model.MaxInputTokens == 0 {
 			model.MaxInputTokens = 8192
@@ -125,8 +131,35 @@ func (r *Runtime) Calls(surface string) int {
 	return r.surfaces[surface]
 }
 
+// SetLimits changes the limits the fake reports and enforces, as the
+// runtime's --max-bundle-tasks and --max-request-bytes do.
+func (r *Runtime) SetLimits(limits api.ProcessLimits) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.limits = limits
+}
+
+func (r *Runtime) processLimits() api.ProcessLimits {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.limits
+}
+
 // Handler serves the contract.
 func (r *Runtime) Handler() http.Handler {
+	mux := r.routes()
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		limit := int64(r.processLimits().MaxRequestBytes)
+		if req.ContentLength > limit {
+			write(w, http.StatusRequestEntityTooLarge, nil, &api.ErrorBody{Code: "request_too_large", Message: "request body over the process limit"})
+			return
+		}
+		req.Body = http.MaxBytesReader(w, req.Body, limit)
+		mux.ServeHTTP(w, req)
+	})
+}
+
+func (r *Runtime) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", r.health)
 	mux.HandleFunc("/v1/models", r.listModels)
@@ -215,13 +248,13 @@ func (r *Runtime) listModels(w http.ResponseWriter, _ *http.Request) {
 	}
 	apiVersion := r.apiVersion
 	r.mu.Unlock()
-	write(w, http.StatusOK, api.ModelList{ApiVersion: apiVersion, Object: "list", Data: cards, Limits: processLimits}, nil)
+	write(w, http.StatusOK, api.ModelList{ApiVersion: apiVersion, Object: "list", Data: cards, Limits: r.processLimits()}, nil)
 }
 
 func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 	sha := strings.Repeat("0", 64-len(model.ID)%64) + strings.Repeat("a", len(model.ID)%64)
 	device, dtype, profile := model.Device, "float32", "exact"
-	limits := api.ModelLimits{MaxInputTokens: &model.MaxInputTokens}
+	limits := api.ModelLimits{MaxInputTokens: &model.MaxInputTokens, MaxInputs: &maxInputs}
 	card := api.ModelCard{Id: model.ID, Object: "model", Family: "task_heads", Ready: ready, ModelSha256: &sha, Device: &device, Dtype: &dtype, Profile: &profile, Limits: &limits}
 	switch {
 	case model.Embedding != nil:
@@ -266,6 +299,10 @@ func (r *Runtime) bundle(w http.ResponseWriter, req *http.Request) {
 	r.tasks += len(body.Tasks)
 	delay := r.delay
 	r.mu.Unlock()
+	if len(body.Tasks) > r.processLimits().MaxBundleTasks {
+		write(w, http.StatusRequestEntityTooLarge, nil, &api.ErrorBody{Code: "request_too_large", Message: "too many bundle tasks"})
+		return
+	}
 	time.Sleep(delay)
 	results := make([]api.BundleResult, len(body.Tasks))
 	for i, task := range body.Tasks {

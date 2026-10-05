@@ -1407,8 +1407,9 @@ name or a local package directory; MODEL@REVISION pins a revision, and several
 MODELs share one process. --models lists models with their own name,
 revision, device and profile. In engine mode --profile selects the numerics
 profile: exact (default, identical to the released package), shared_context,
-batching or max_speed. Router mode starts managed runtimes itself for
-model_runtime deployments in the config.
+batching, max_speed, or one a plugin installs (vllm-sr-runtime plugins lists
+them). Router mode starts managed runtimes itself for model_runtime
+deployments in the config.
 
 | Parameter | Description |
 | --- | --- |
@@ -1424,12 +1425,12 @@ model_runtime deployments in the config.
 | `--readonly` | Run dashboard in read-only mode (disable config editing, allow playground only) Default: false. |
 | `--minimal` | Start in minimal mode: only router + envoy, no dashboard or observability (Jaeger, Prometheus, Grafana) Default: false. |
 | `--log-level CHOICE` | Router log level override (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
-| `--platform TEXT` | Platform for local Docker GPU deployments: 'amd' enables ROCm passthrough, 'nvidia' enables NVIDIA GPU passthrough (--gpus all). Serve defaults to the matching GPU image (ROCm / CUDA) unless --image or VLLM_SR_IMAGE is provided. Internal models default to GPU, except AMD semantic embeddings retain their configured use_cpu value (default true). MIGraphX mmBERT embeddings require an explicit model binding and deployment with an input token budget. Set VLLM_SR_&lt;PLATFORM&gt;_PRESERVE_CPU=1 to keep CPU settings. For Kubernetes, configure GPU images and resources through a Helm profile or the operator. |
+| `--platform TEXT` | Platform for local Docker GPU deployments: 'amd' enables ROCm passthrough, 'nvidia' enables NVIDIA GPU passthrough (--gpus all). Serve defaults to the matching GPU image (ROCm / CUDA) unless --image or VLLM_SR_IMAGE is provided. Internal models default to GPU, except AMD semantic embeddings retain their configured use_cpu value (default true). Set VLLM_SR_&lt;PLATFORM&gt;_PRESERVE_CPU=1 to keep CPU settings. For Kubernetes, configure GPU images and resources through a Helm profile or the operator. |
 | `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. |
 | `--target TEXT` | Deployment target: docker, k8s (default: docker) |
 | `--namespace TEXT` | Kubernetes namespace (k8s target only) |
 | `--context TEXT` | kubectl / Helm context (k8s target only) |
-| `--profile TEXT` | Deployment profile: dev, prod (k8s target only). Selects values-&lt;profile&gt;.yaml defaults. With MODEL: the runtime numerics profile (exact, shared_context, batching, max_speed). |
+| `--profile TEXT` | Deployment profile: dev, prod (k8s target only). Selects values-&lt;profile&gt;.yaml defaults. With MODEL: the runtime numerics profile (default exact; vllm-sr-runtime plugins lists the installed ones). |
 | `--chart-dir TEXT` | Path to Helm chart directory (k8s target only) |
 | `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
 | `--recipe-env NAME` | Explicitly bind one host environment variable for the active Recipe. Repeat for multiple names; NAME=value is rejected. May be repeated. |

@@ -9,6 +9,9 @@ run     sends each input to POST /api/v1/routing/preview of a running router
         sequentially and then at each requested concurrency.
 compare reads two run files and prints p50 / p95 / p99, throughput and every
         input whose decision differs.
+rounds  reads interleaved rounds (r<N>-<side>.json in one directory) of a base and
+        a new side and reports each side's median per pass and metric and the
+        paired difference new - base per round with a 95% t interval.
 """
 
 from __future__ import annotations
@@ -254,6 +257,81 @@ def cmd_compare(args: argparse.Namespace) -> None:
         )
 
 
+# Two-sided 95% t quantiles by degrees of freedom (rounds - 1).
+T975 = {
+    1: 12.706,
+    2: 4.303,
+    3: 3.182,
+    4: 2.776,
+    5: 2.571,
+    6: 2.447,
+    7: 2.365,
+    8: 2.306,
+    9: 2.262,
+}
+METRICS = ("p50_ms", "p95_ms", "p99_ms", "throughput_rps")
+
+
+def paired_interval(diffs: list[float]) -> list[float]:
+    mean = statistics.fmean(diffs)
+    if len(diffs) < 2:
+        return [mean, float("nan"), float("nan")]
+    half = T975[len(diffs) - 1] * statistics.stdev(diffs) / len(diffs) ** 0.5
+    return [mean, mean - half, mean + half]
+
+
+def cmd_rounds(args: argparse.Namespace) -> None:
+    directory = Path(args.dir)
+
+    def side(name: str) -> dict[int, dict[str, Any]]:
+        return {
+            int(path.name[1:].split("-")[0]): json.loads(
+                path.read_text(encoding="utf-8")
+            )
+            for path in directory.glob(f"r*-{name}.json")
+        }
+
+    base, new = side(args.base), side(args.new)
+    rounds = sorted(set(base) & set(new))
+    if not rounds:
+        raise SystemExit(
+            f"no paired rounds of {args.base} and {args.new} in {directory}"
+        )
+    report: dict[str, Any] = {"rounds": rounds, "passes": {}, "decisions_same": []}
+    print(
+        f"| Pass | Metric | {args.base} | {args.new} | {args.new} - {args.base}, mean [95% CI] |"
+    )
+    print("| --- | --- | --- | --- | --- |")
+    for name in new[rounds[0]]["passes"]:
+        report["passes"][name] = {}
+        for metric in METRICS:
+            a = [base[r]["passes"][name][metric] for r in rounds]
+            b = [new[r]["passes"][name][metric] for r in rounds]
+            mean, low, high = paired_interval(
+                [y - x for x, y in zip(a, b, strict=True)]
+            )
+            report["passes"][name][metric] = {
+                args.base: a,
+                args.new: b,
+                "median": [statistics.median(a), statistics.median(b)],
+                "difference": {"mean": mean, "ci95": [low, high]},
+            }
+            print(
+                f"| {name} | {metric} | {statistics.median(a):.2f} | {statistics.median(b):.2f} | {mean:+.2f} [{low:+.2f}, {high:+.2f}] |"
+            )
+    for r in rounds:
+        same = sum(
+            (x["decision"], x["model"]) == (y["decision"], y["model"])
+            for x, y in zip(base[r]["outcomes"], new[r]["outcomes"], strict=True)
+        )
+        report["decisions_same"].append(same)
+    print(
+        f"same decision and model per round: {report['decisions_same']} of {len(new[rounds[0]]['outcomes'])}"
+    )
+    if args.out:
+        Path(args.out).write_text(json.dumps(report, indent=1), encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -274,8 +352,18 @@ def main() -> None:
     compare.add_argument("--new", required=True)
     compare.add_argument("--corpus", required=True)
     compare.add_argument("--show", type=int, default=20)
+    rounds = sub.add_parser("rounds")
+    rounds.add_argument("--dir", required=True)
+    rounds.add_argument("--base", required=True)
+    rounds.add_argument("--new", required=True)
+    rounds.add_argument("--out", default="")
     args = parser.parse_args()
-    {"corpus": cmd_corpus, "run": cmd_run, "compare": cmd_compare}[args.command](args)
+    {
+        "corpus": cmd_corpus,
+        "run": cmd_run,
+        "compare": cmd_compare,
+        "rounds": cmd_rounds,
+    }[args.command](args)
 
 
 if __name__ == "__main__":

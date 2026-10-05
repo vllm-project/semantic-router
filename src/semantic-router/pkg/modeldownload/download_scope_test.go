@@ -20,7 +20,6 @@ func TestBuildModelSpecsExcludesOnnxWeightsForLocalEmbeddingModels(t *testing.T)
 	for _, modelPath := range []string{
 		testEmbeddingModelPath,
 		testQwen3ModelPath,
-		testGemmaModelPath,
 		testMultiModalModelPath,
 	} {
 		spec, ok := findSpecByPath(specs, modelPath)
@@ -74,28 +73,18 @@ func TestBuildModelSpecsExcludesOnnxWeightsForAliasedEmbeddingModel(t *testing.T
 	}
 }
 
-// TestBuildModelSpecsLeavesNonEmbeddingModelsUnfiltered limits the blast radius to the
+// TestEmbeddingExcludePatternsLeaveOtherModelsUnfiltered limits the blast radius to the
 // embedding runtime: other locally provisioned models keep the full snapshot until their
 // own runtime contract is encoded.
-func TestBuildModelSpecsLeavesNonEmbeddingModelsUnfiltered(t *testing.T) {
-	const bertModelPath = "models/all-MiniLM-L12-v2"
+func TestEmbeddingExcludePatternsLeaveOtherModelsUnfiltered(t *testing.T) {
 	cfg := newEmbeddingOnlyConfig()
-	cfg.MoMRegistry[bertModelPath] = "sentence-transformers/all-MiniLM-L12-v2"
-	cfg.BertModelPath = bertModelPath
-	cfg.Memory.Enabled = true
-	cfg.Memory.EmbeddingModel = "bert"
-
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
+	cfg.CategoryModel.ModelID = "models/mom-domain-classifier"
+	excluded := embeddingModelExcludePatterns(cfg)
+	if patterns, ok := excluded["models/mom-domain-classifier"]; ok {
+		t.Fatalf("a classifier snapshot is filtered: %#v", patterns)
 	}
-
-	spec, ok := findSpecByPath(specs, config.ResolveModelPath(bertModelPath))
-	if !ok {
-		t.Fatalf("BuildModelSpecs() did not produce a spec for %q; got %#v", bertModelPath, specs)
-	}
-	if len(spec.ExcludePatterns) != 0 {
-		t.Fatalf("%s ExcludePatterns = %#v, want none", bertModelPath, spec.ExcludePatterns)
+	if got := excluded[config.ResolveModelPath(testEmbeddingModelPath)]; !reflect.DeepEqual(got, onnxWeightExcludePatterns) {
+		t.Fatalf("embedding ExcludePatterns = %#v", got)
 	}
 }
 

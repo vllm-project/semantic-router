@@ -50,7 +50,6 @@ func migrateLegacyBertModelForTest(raw map[string]interface{}) bool {
 	}
 
 	embeddingModels := ensureLegacyEmbeddingModelsForTest(raw)
-	copyLegacyBertModelField(legacyBert, embeddingModels, "model_id", "bert_model_path")
 	copyLegacyBertModelField(legacyBert, embeddingModels, "use_cpu", "use_cpu")
 	copyLegacyBertThresholdForTest(legacyBert, embeddingModels)
 	delete(raw, "bert_model")
@@ -255,7 +254,6 @@ tools:
 				Expect(cfg).NotTo(BeNil())
 
 				// Verify migrated similarity embedding config
-				Expect(cfg.EmbeddingModels.BertModelPath).To(Equal("test-bert-model"))
 				Expect(cfg.EmbeddingModels.MinSimilarityThreshold()).To(Equal(float32(0.8)))
 				Expect(cfg.EmbeddingModels.UseCPU).To(BeTrue())
 
@@ -527,7 +525,6 @@ bert_model:
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg).NotTo(BeNil())
-				Expect(cfg.EmbeddingModels.BertModelPath).To(BeEmpty())
 				Expect(cfg.DefaultModel).To(BeEmpty())
 			})
 		})
@@ -964,7 +961,6 @@ categories:
 
 			cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.EmbeddingModels.BertModelPath).To(Equal("model/with/slashes"))
 			Expect(cfg.DefaultModel).To(Equal("model-with-hyphens_and_underscores"))
 			Expect(cfg.Categories[0].Name).To(Equal("category with spaces"))
 		})
@@ -2002,7 +1998,6 @@ default_model: "gpt-4"
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify migrated similarity embedding config
-				Expect(cfg.EmbeddingModels.BertModelPath).To(Equal("sentence-transformers/all-MiniLM-L12-v2"))
 				Expect(cfg.EmbeddingModels.MinSimilarityThreshold()).To(Equal(float32(0.6)))
 				Expect(cfg.EmbeddingModels.UseCPU).To(BeFalse())
 

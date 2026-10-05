@@ -253,12 +253,12 @@ func TestGlobalServiceDownloadsIgnoreRecipeOverrides(t *testing.T) {
 				"models/global-embedding": "test/global-embedding",
 				"models/recipe-embedding": "test/recipe-embedding",
 			}}
-			cfg.BertModelPath = "models/global-embedding"
-			cfg.EmbeddingConfig.ModelType = "bert"
+			cfg.MmBertModelPath = "models/global-embedding"
+			cfg.EmbeddingConfig.ModelType = "mmbert"
 			cfg.EmbeddingModels.UseCPU = true
 			cfg.Tools.Enabled = true
 			cfg.SemanticCache.Enabled = true
-			cfg.SemanticCache.EmbeddingModel = "bert"
+			cfg.SemanticCache.EmbeddingModel = "mmbert"
 			cfg.ModelDeployments = map[string]config.ModelDeployment{
 				"global-embedding": {Provider: config.ModelRuntimeProvider, Device: "cpu", Artifact: "models/global-embedding"},
 				"recipe-embedding": {Provider: config.ModelRuntimeProvider, Device: "rocm:7", Artifact: "models/recipe-embedding"},
@@ -268,7 +268,7 @@ func TestGlobalServiceDownloadsIgnoreRecipeOverrides(t *testing.T) {
 			}
 			if explicit {
 				cfg.GlobalModelBindings = map[string]config.ModelBinding{
-					"embedding": {Deployment: "global-embedding", Adapter: "bert", Contract: "embedding.v1"},
+					"embedding": {Deployment: "global-embedding", Adapter: "mmbert", Contract: "embedding.v1"},
 				}
 			}
 			specs, err := BuildModelSpecs(cfg)

@@ -23,10 +23,8 @@ var optionalModelFeatureGates = []modelFeatureGate{
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{
 				cfg.Qwen3ModelPath,
-				cfg.GemmaModelPath,
 				cfg.MmBertModelPath,
 				cfg.MultiModalModelPath,
-				cfg.BertModelPath,
 			}
 		},
 	},

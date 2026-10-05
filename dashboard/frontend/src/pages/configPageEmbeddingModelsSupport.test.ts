@@ -40,16 +40,22 @@ describe('embedding models config support', () => {
     expect(editData.provider_type).toBe('local')
   })
 
-  it('saves a retired local backend as the model runtime', () => {
+  it('refuses to save a retired local backend instead of migrating it', () => {
     const editData = embeddingModelsEditData({
       semantic: { embedding_config: { backend: 'candle', model_type: 'mmbert' } },
     })
-    const saved = embeddingModelsCatalogValue(editData)
 
     expect(editData.provider_type).toBe('local')
-    expect((saved.semantic as Record<string, unknown>).embedding_config).toEqual(
-      expect.objectContaining({ backend: 'model_runtime', model_type: 'mmbert' }),
-    )
+    expect(() => embeddingModelsCatalogValue(editData)).toThrow(/candle is retired.*vllm-sr config migrate/)
+  })
+
+  it('offers only the embedding families the model runtime serves', () => {
+    const names = embeddingModelsFields().map((field) => field.name)
+
+    expect(names).toEqual(expect.arrayContaining(['qwen3_model_path', 'mmbert_model_path', 'multimodal_model_path']))
+    expect(names).not.toContain('gemma_model_path')
+    expect(names).not.toContain('bert_model_path')
+    expect(embeddingModelsCatalogValue(embeddingModelsEditData(localCatalog))).not.toHaveProperty('bert')
   })
 
   it('shows provider-specific fields for local and remote modes', () => {

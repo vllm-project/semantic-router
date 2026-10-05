@@ -35,27 +35,16 @@ func TestExtractModelPaths(t *testing.T) {
 			expected: []string{"models/mom-embedding-pro"},
 		},
 		{
-			name: "Extract GemmaModelPath",
-			config: &config.RouterConfig{
-				InlineModels: config.InlineModels{
-					EmbeddingModels: config.EmbeddingModels{
-						GemmaModelPath: "models/mom-embedding-flash",
-					},
-				},
-			},
-			expected: []string{"models/mom-embedding-flash"},
-		},
-		{
 			name: "Extract both embedding models",
 			config: &config.RouterConfig{
 				InlineModels: config.InlineModels{
 					EmbeddingModels: config.EmbeddingModels{
-						Qwen3ModelPath: "models/mom-embedding-pro",
-						GemmaModelPath: "models/mom-embedding-flash",
+						Qwen3ModelPath:  "models/mom-embedding-pro",
+						MmBertModelPath: "models/mmbert-embed-32k-2d-matryoshka",
 					},
 				},
 			},
-			expected: []string{"models/mom-embedding-pro", "models/mom-embedding-flash"},
+			expected: []string{"models/mom-embedding-pro", "models/mmbert-embed-32k-2d-matryoshka"},
 		},
 		{
 			name: "Extract ModelID from classifier",

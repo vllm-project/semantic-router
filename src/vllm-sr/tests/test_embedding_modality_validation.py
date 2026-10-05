@@ -71,7 +71,7 @@ global:
 
 
 def test_text_modality_passes_with_any_model_type():
-    for model_type in ("qwen3", "gemma", "mmbert", "multimodal"):
+    for model_type in ("qwen3", "mmbert", "multimodal"):
         config = _parse_config_from_yaml(
             _base_config_with_embeddings(query_modality="text", model_type=model_type)
         )

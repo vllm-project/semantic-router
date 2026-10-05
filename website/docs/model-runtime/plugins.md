@@ -23,11 +23,13 @@ classifiers and embedding models; those load as they are.
 The repository contains a complete plugin small enough to read in one
 sitting:
 [`src/model-runtime/examples/third_party_plugin`](https://github.com/vllm-project/semantic-router/tree/main/src/model-runtime/examples/third_party_plugin).
-It adds a keyword "model" family and the engine that runs it. A package is one
-JSON file that maps labels to keywords; the family answers `/v1/classify`,
+It adds a keyword "model" family and the engine that runs it, plus an
+accelerator and a profile, so it shows all four kinds of plugin. A package is
+one JSON file that maps labels to keywords; the family answers `/v1/classify`,
 `/v1/embeddings` and `/v1/rerank` from keyword counts. The runtime's test
 suite builds and installs its wheel, discovers it through its entry points and
-serves it next to a decision model in one process, on every endpoint.
+serves it next to a decision model in one process, on every endpoint, and on
+the example's own accelerator and profile.
 
 Try it:
 
@@ -47,8 +49,18 @@ vllm-sr-runtime plugins
 ```
 
 The first request returns `billing` for the first text and `shipping` for the
-second. `vllm-sr-runtime plugins` and `GET /v1/models` list
-`example_keywords` and `example_counts` with their distribution and version.
+second. `vllm-sr-runtime plugins` lists `example_keywords` among the families,
+`example_counts` among the engines, `example_host` among the accelerators and
+`example_one_by_one` among the profiles; `GET /v1/models` also shows the
+distribution and version each came from.
+
+The example's accelerator offers the host CPU as a device of its own, and its
+profile runs every request alone, in arrival order. Name them like the
+built-in ones:
+
+```bash
+vllm-sr-runtime serve /tmp/keywords --engine example_counts --device example_host --profile example_one_by_one --port 8100
+```
 
 ## Write your own
 
@@ -76,7 +88,13 @@ Declare the endpoints you serve in `surfaces` and describe the plugin in
 `forward` or `encode`) only for a new kind of network or a new execution
 library.
 
-**3. Register it** in your `pyproject.toml`:
+**3. An accelerator or a profile, if you need one.** For new hardware,
+subclass `Accelerator` (`available`, `devices`, `torch_device`, `kernels`), and
+set `auto_priority` if `device: auto` may pick it; without it, only a request
+that names the device uses it. For a new way to run requests together,
+subclass `Profile` (`plan`, and `bind` for what it reads from the model).
+
+**4. Register it** in your `pyproject.toml`:
 
 ```toml
 [project.entry-points."vllm_sr_runtime.families"]
@@ -84,20 +102,26 @@ example_keywords = "vllm_sr_example.family:KeywordFamily"
 
 [project.entry-points."vllm_sr_runtime.engines"]
 example_counts = "vllm_sr_example.engine:CountsEngine"
+
+[project.entry-points."vllm_sr_runtime.accelerators"]
+example_host = "vllm_sr_example.accelerator:HostAccelerator"
+
+[project.entry-points."vllm_sr_runtime.profiles"]
+example_one_by_one = "vllm_sr_example.profile:OneByOneProfile"
 ```
 
 The groups are `vllm_sr_runtime.families`, `vllm_sr_runtime.engines`,
 `vllm_sr_runtime.accelerators` and `vllm_sr_runtime.profiles`. A name that is
 already taken is refused at startup.
 
-**4. Make it fast.** Two flags turn on the runtime's shared optimizations:
+**5. Make it fast.** Two flags turn on the runtime's shared optimizations:
 
 - set `cache_key` on work items whose result depends only on their content,
   so repeated inputs are answered from the result cache;
 - set `fuse_bundled_jobs = True` on the loaded model when one pass can serve
   several requests that arrive together in a bundle.
 
-**5. Test it** the way the example is tested: install the distribution, start
+**6. Test it** the way the example is tested: install the distribution, start
 a runtime on a small package and check every endpoint against the OpenAPI
 contract
 ([`tests/test_third_party_plugin.py`](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/tests/test_third_party_plugin.py)).
@@ -119,7 +143,10 @@ global:
 
 A custom classifier signal can then read its labels; see
 [Classify requests](./guides/classify.md#use-your-own-classifier). The router
-checks the binding against the labels your model reports in `/v1/models`.
+checks the binding against the labels your model reports in `/v1/models`. A
+deployment names your accelerator in `device` and your profile in `profile`
+the same way; the router checks only their form, and the runtime refuses a
+name it has no plugin for and lists the names it has.
 
 ## Rules for plugins
 

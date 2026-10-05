@@ -638,7 +638,11 @@ class Graphs:
                 torch.cuda.current_stream().wait_stream(stream)
                 torch.cuda.synchronize()
                 graph = torch.cuda.CUDAGraph()
-                with torch.cuda.graph(graph, pool=self.pool):
+                # Device work is serialized, but other threads may still query the device
+                # meanwhile (placement); global capture mode would fail them and the capture.
+                with torch.cuda.graph(
+                    graph, pool=self.pool, capture_error_mode="thread_local"
+                ):
                     output = body()
             torch.cuda.synchronize()
         except Exception:

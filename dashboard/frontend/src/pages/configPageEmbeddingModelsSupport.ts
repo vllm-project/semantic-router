@@ -71,19 +71,15 @@ function compactValue(value: unknown, fallback = 'Not set'): string {
 function inferLocalModelType(semantic: Record<string, unknown>): string {
   if (trimmedString(semantic.mmbert_model_path)) return 'mmbert'
   if (trimmedString(semantic.qwen3_model_path)) return 'qwen3'
-  if (trimmedString(semantic.gemma_model_path)) return 'gemma'
   if (trimmedString(semantic.multimodal_model_path)) return 'multimodal'
-  if (trimmedString(semantic.bert_model_path)) return 'bert'
   return DEFAULT_LOCAL_MODEL_TYPE
 }
 
 function localModelPath(semantic: Record<string, unknown>, modelType: string): unknown {
   const pathByType: Record<string, unknown> = {
     qwen3: semantic.qwen3_model_path,
-    gemma: semantic.gemma_model_path,
     mmbert: semantic.mmbert_model_path,
     multimodal: semantic.multimodal_model_path,
-    bert: semantic.bert_model_path,
   }
   return pathByType[modelType] ?? semantic.mmbert_model_path ?? semantic.qwen3_model_path
 }
@@ -164,7 +160,7 @@ export function embeddingModelsFields(): FieldConfig[] {
       type: 'text',
       placeholder: 'mmbert',
       description:
-        'Embedding model family used by local consumers, such as mmbert, qwen3, gemma, multimodal, or bert.',
+        'Embedding model family used by local consumers: mmbert, qwen3 or multimodal.',
       shouldHide: hideForRemote,
     },
     {
@@ -172,13 +168,6 @@ export function embeddingModelsFields(): FieldConfig[] {
       label: 'Qwen3 Model Path',
       type: 'text',
       placeholder: 'models/mom-embedding-pro',
-      shouldHide: hideForRemote,
-    },
-    {
-      name: 'gemma_model_path',
-      label: 'Gemma Model Path',
-      type: 'text',
-      placeholder: 'models/mom-embedding-flash',
       shouldHide: hideForRemote,
     },
     {
@@ -193,13 +182,6 @@ export function embeddingModelsFields(): FieldConfig[] {
       label: 'Multimodal Model Path',
       type: 'text',
       placeholder: 'models/vela-1.0-omni-nano',
-      shouldHide: hideForRemote,
-    },
-    {
-      name: 'bert_model_path',
-      label: 'BERT Model Path',
-      type: 'text',
-      placeholder: 'models/mom-embedding-bert',
       shouldHide: hideForRemote,
     },
     { name: 'use_cpu', label: 'Use CPU', type: 'boolean', shouldHide: hideForRemote },
@@ -230,7 +212,6 @@ export function embeddingModelsEditData(data: unknown): EditFormData {
     model_type: localModelType,
     embedding_config: optimization,
     endpoint: semantic.endpoint,
-    bert: asRecord(catalog.bert) ?? {},
     __catalog: catalog,
     __embedding_config: embeddingConfig,
   }
@@ -280,7 +261,6 @@ export function embeddingModelsCatalogValue(rawData: EditFormData): Record<strin
   const rawModelType = normalized.model_type
   const rawOptimization = normalized.embedding_config
   const rawEndpoint = normalized.endpoint
-  const bert = normalized.bert
   const catalogValue = normalized.__catalog
   const existingEmbeddingConfigValue = normalized.__embedding_config
   const semanticFields = { ...normalized }
@@ -290,12 +270,17 @@ export function embeddingModelsCatalogValue(rawData: EditFormData): Record<strin
   delete semanticFields.model_type
   delete semanticFields.embedding_config
   delete semanticFields.endpoint
-  delete semanticFields.bert
   delete semanticFields.__catalog
   delete semanticFields.__embedding_config
   const catalog = asRecord(catalogValue) ?? {}
   const existingSemantic = asRecord(catalog.semantic) ?? {}
   const existingEmbeddingConfig = asRecord(existingEmbeddingConfigValue) ?? {}
+  const existingBackend = trimmedString(existingEmbeddingConfig.backend).toLocaleLowerCase()
+  if (existingBackend && existingBackend !== DEFAULT_LOCAL_BACKEND && existingBackend !== REMOTE_BACKEND) {
+    throw new Error(
+      `Embedding backend ${existingBackend} is retired; run vllm-sr config migrate to move this config to the model runtime.`,
+    )
+  }
   const optimization = {
     ...existingEmbeddingConfig,
     ...(asRecord(rawOptimization) ?? {}),
@@ -315,6 +300,5 @@ export function embeddingModelsCatalogValue(rawData: EditFormData): Record<strin
       embedding_config: optimization,
       ...(endpoint ? { endpoint: remote ? normalizedRemoteEndpoint(endpoint) : endpoint } : {}),
     },
-    bert: asRecord(bert) ?? {},
   }
 }

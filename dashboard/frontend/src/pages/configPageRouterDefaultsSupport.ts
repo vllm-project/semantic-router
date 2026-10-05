@@ -642,7 +642,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'enabled', label: 'Enable Memory', type: 'boolean' },
         { name: 'auto_store', label: 'Auto Store Facts', type: 'boolean' },
         routerStructuredField(key, 'milvus'),
-        { name: 'embedding_model', label: 'Embedding Model', type: 'text', placeholder: 'bert' },
+        { name: 'embedding_model', label: 'Embedding Model', type: 'text', placeholder: 'mmbert' },
         {
           name: 'default_retrieval_limit',
           label: 'Default Retrieval Limit',
@@ -719,13 +719,13 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'embedding_model',
           label: 'Embedding Model',
           type: 'select',
-          options: ['bert', 'qwen3', 'gemma', 'mmbert', 'multimodal'],
+          options: ['mmbert', 'qwen3', 'multimodal'],
         },
         {
           name: 'embedding_dimension',
           label: 'Embedding Dimension',
           type: 'number',
-          placeholder: '384',
+          placeholder: 'model default',
         },
         { name: 'ingestion_workers', label: 'Ingestion Workers', type: 'number', placeholder: '2' },
         {
