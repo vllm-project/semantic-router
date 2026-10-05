@@ -3,7 +3,7 @@ title: 故障排查与常见问题
 sidebar_label: 故障排查与常见问题
 description: 修复模型运行时的常见问题，并解答常见疑问。
 translation:
-  source_commit: "3613d30adcaea668d0f0d4722364c2272777ba5e"
+  source_commit: "c9a7834d0efbacc16cc293a3230dfef109be267b"
   source_file: "docs/model-runtime/troubleshooting.md"
   outdated: false
 ---
@@ -48,13 +48,14 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 - **没有网络：** 运行时从 Hugging Face Hub 下载。离线时，先把模型复制到缓存中，或把 `artifact` 指向本地副本。
 - **CPU 上长时间处于 `warming`：** 自检会让模型跑几次请求。大型决策模型在 CPU 上很慢；
   请使用 GPU 或 `vllm-sr/Decision-2.0-Kai-0.6B`。
+- **`loading` 且原因中有 "retrying after ..."：** 模型因可能自行消失的原因加载失败，例如 GPU 被占用、可用内存不足或下载中断。运行时最多重试五次，首次等待 5 秒，之后每次加倍，期间同一进程中的其他模型照常服务（`--load-attempts`、`--load-retry-seconds`）。包损坏或自检失败会立即报告 `failed`。
 
 ## 运行时报告 `failed` {#the-runtime-reports-failed}
 
 `GET /v1/models` 会给出每个模型失败的原因。由路由器运行模型时，路由器日志会带有同样的原因，例如
 `model runtime is not ready: model @domain_classifier failed to load: ...`。
 路由器运行的某个运行时进程中所有模型都加载失败时，路由器会重启该进程（首次等待 1 秒，之后最长间隔 60 秒），
-因此 GPU 被占用、磁盘已满这类暂时性原因消除后，模型会自行恢复。重试三次仍然失败的任务模型会让路由器无法启动。常见原因：
+因此 GPU 被占用、磁盘已满这类暂时性原因消除后，模型会自行恢复。与仍在服务的模型同处一个进程的模型加载失败时，由运行时自己重试，该进程会继续运行。重试三次仍然失败的任务模型会让路由器无法启动。常见原因：
 
 | 原因提示 | 处理方法 |
 | --- | --- |
