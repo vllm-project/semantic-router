@@ -1,8 +1,8 @@
 ---
 translation:
-  source_commit: "bd165583b47ccf9640f66790945985d60c40c0dc"
+  source_commit: "cd975c6129460d700dd9c116ddd3356cdd90e915"
   source_file: "docs/tutorials/global/api-and-observability.md"
-  outdated: false
+  outdated: true
 ---
 
 # API 与可观测性
