@@ -7,10 +7,12 @@ test written into a copy of that commit's tree with its built bindings (the
 setup of ``tools/legacy_parity.py``). The runtime side serves the same
 packages in-process through ``Runtime.call`` with its result cache off, timed
 inside an event loop that runs forever on its own thread, as the server's
-handler is. Both
+handler is. Both sides build every input's request before timing. Both
 answer one request at a time (one text per embedding call, a query with its
 documents per rerank call), repeated, on the same inputs; ``--concurrency``
-adds a timed closed-loop load on both.
+adds a timed closed-loop load on both: goroutines on the legacy side, and
+on the runtime side concurrent requests on that event loop, as the server
+serves concurrent connections.
 
     python3 tools/embed_legacy.py legacy --tree TREE --cache HF --flat DIR --out legacy.jsonl
     python3 tools/embed_legacy.py runtime --cache HF --prepared DIR --out runtime.jsonl [--device rocm:0]
@@ -545,6 +547,23 @@ def wire_size(body: dict[str, Any]) -> int:
     return len(json.dumps(body, separators=(",", ":")).encode("utf-8"))
 
 
+class Request(NamedTuple):
+    """One input's ``Runtime.call`` arguments; the server reads the size off the request it received."""
+
+    surface: str
+    body: dict[str, Any]
+    size: int
+
+
+def runtime_requests(spec: dict[str, Any], model: str) -> list[Request]:
+    """Every input's request, built before any timing, as the legacy side's inputs are."""
+    requests = []
+    for item in spec["Inputs"]:
+        surface, body = runtime_request(spec, item, model)
+        requests.append(Request(surface, body, wire_size(body)))
+    return requests
+
+
 class LoopThread:
     """An event loop running forever on its own thread, as the server's does; calls are timed inside it.
 
@@ -558,17 +577,20 @@ class LoopThread:
         self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
         self.thread.start()
 
-    def call(
-        self, runtime: Any, surface: str, body: dict[str, Any]
-    ) -> tuple[int, int, dict[str, Any]]:
+    def run(self, coroutine: Any) -> Any:
+        return asyncio.run_coroutine_threadsafe(coroutine, self.loop).result()
+
+    def call(self, runtime: Any, request: Request) -> tuple[int, int, dict[str, Any]]:
         """(nanoseconds inside the loop, HTTP status, body) of one ``Runtime.call``."""
 
         async def timed() -> tuple[int, int, dict[str, Any]]:
             start = time.perf_counter_ns()
-            status, out = await runtime.call(surface, body, wire_size(body))
+            status, out = await runtime.call(
+                request.surface, request.body, request.size
+            )
             return time.perf_counter_ns() - start, status, out
 
-        return asyncio.run_coroutine_threadsafe(timed(), self.loop).result()
+        return self.run(timed())
 
     def close(self) -> None:
         self.loop.call_soon_threadsafe(self.loop.stop)
@@ -614,31 +636,31 @@ def run_runtime(args: argparse.Namespace) -> None:
     runtime, names = serve_runtime(args, specs)
     loop = LoopThread()
 
-    def call(spec: dict[str, Any], item: dict[str, Any]) -> tuple[int, dict[str, Any]]:
-        surface, body = runtime_request(spec, item, names[spec["Repo"]])
-        elapsed, status, out = loop.call(runtime, surface, body)
+    def call(request: Request) -> tuple[int, dict[str, Any]]:
+        elapsed, status, out = loop.call(runtime, request)
         if status != 200:
             raise RuntimeError(json.dumps(out))
         return elapsed, out
 
     with open(args.out, "w", encoding="utf-8") as stream:
         for spec in specs:
+            requests = runtime_requests(spec, names[spec["Repo"]])
             for _ in range(3):
-                call(spec, spec["Inputs"][0])
-            for item in spec["Inputs"]:
+                call(requests[0])
+            for item, request in zip(spec["Inputs"], requests, strict=True):
                 line: dict[str, Any] = {
                     "job": spec["Job"],
                     "id": item["id"],
                     "latency_ns": [],
                 }
                 for repeat in range(max(args.repeats, 1)):
-                    elapsed, out = call(spec, item)
+                    elapsed, out = call(request)
                     line["latency_ns"].append(elapsed)
                     if repeat == 0:
                         line["result"] = runtime_result(spec, out)
                 stream.write(json.dumps(line) + "\n")
             if args.concurrency:
-                load = runtime_load(runtime, loop, spec, names[spec["Repo"]], args)
+                load = runtime_load(runtime, loop, spec["Job"], requests, args)
                 stream.write(json.dumps(load) + "\n")
     loop.close()
     runtime.stop()
@@ -647,40 +669,36 @@ def run_runtime(args: argparse.Namespace) -> None:
 def runtime_load(
     runtime: Any,
     loop: LoopThread,
-    spec: dict[str, Any],
-    model: str,
+    job: str,
+    requests: list[Request],
     args: argparse.Namespace,
 ) -> dict[str, Any]:
-    """The legacy load's closed loop: ``concurrency`` callers for ``seconds``, on one loop as the server's."""
-    deadline = time.monotonic() + args.seconds
-    latencies: list[int] = []
-    lock = threading.Lock()
+    """The legacy load's closed loop: ``concurrency`` callers for ``seconds``, as concurrent requests on the server's loop."""
 
-    def worker(index: int) -> None:
-        position = index
-        while time.monotonic() < deadline:
-            item = spec["Inputs"][position % len(spec["Inputs"])]
-            surface, body = runtime_request(spec, item, model)
-            elapsed, _, _ = loop.call(runtime, surface, body)
-            with lock:
-                latencies.append(elapsed)
-            position += args.concurrency
+    async def load() -> dict[str, Any]:
+        deadline = time.monotonic() + args.seconds
+        latencies: list[int] = []
 
-    began = time.monotonic()
-    threads = [
-        threading.Thread(target=worker, args=(i,)) for i in range(args.concurrency)
-    ]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-    return {
-        "job": spec["Job"],
-        "concurrency": args.concurrency,
-        "calls": len(latencies),
-        "seconds": time.monotonic() - began,
-        "latency_ns": latencies,
-    }
+        async def caller(index: int) -> None:
+            position = index
+            while time.monotonic() < deadline:
+                request = requests[position % len(requests)]
+                start = time.perf_counter_ns()
+                await runtime.call(request.surface, request.body, request.size)
+                latencies.append(time.perf_counter_ns() - start)
+                position += args.concurrency
+
+        began = time.monotonic()
+        await asyncio.gather(*(caller(index) for index in range(args.concurrency)))
+        return {
+            "job": job,
+            "concurrency": args.concurrency,
+            "calls": len(latencies),
+            "seconds": time.monotonic() - began,
+            "latency_ns": latencies,
+        }
+
+    return loop.run(load())
 
 
 def legacy_command(binary: str, cpus: int | None) -> list[str]:
@@ -722,21 +740,21 @@ def run_ab(args: argparse.Namespace) -> None:
             raise SystemExit("the legacy binary exited before it was ready")
     runtime, names = serve_runtime(args, specs)
     loop = LoopThread()
+    requests = {
+        spec["Job"]: runtime_requests(spec, names[spec["Repo"]]) for spec in specs
+    }
 
-    def call_legacy(spec: dict[str, Any], item: dict[str, Any]) -> int:
-        legacy.stdin.write(f"call\t{spec['Job']}\t{item['id']}\n")
+    def call_legacy(spec: dict[str, Any], index: int) -> int:
+        legacy.stdin.write(f"call\t{spec['Job']}\t{spec['Inputs'][index]['id']}\n")
         return int(legacy.stdout.readline())
 
-    def call_runtime(spec: dict[str, Any], item: dict[str, Any]) -> int:
-        surface, body = runtime_request(spec, item, names[spec["Repo"]])
-        elapsed, status, _ = loop.call(runtime, surface, body)
+    def call_runtime(spec: dict[str, Any], index: int) -> int:
+        elapsed, status, _ = loop.call(runtime, requests[spec["Job"]][index])
         return elapsed if status == 200 else -1
 
     calls = {"legacy": call_legacy, "runtime": call_runtime}
 
-    def pair(
-        spec: dict[str, Any], item: dict[str, Any], legacy_first: bool
-    ) -> tuple[int, int]:
+    def pair(spec: dict[str, Any], index: int, legacy_first: bool) -> tuple[int, int]:
         """One legacy and one runtime call, each ``--gap-ms`` after the previous call.
 
         ONNX Runtime workers spin for milliseconds after a run; the gap keeps
@@ -746,20 +764,20 @@ def run_ab(args: argparse.Namespace) -> None:
         elapsed = {}
         for side in sides:
             time.sleep(args.gap_ms / 1000)
-            elapsed[side] = calls[side](spec, item)
+            elapsed[side] = calls[side](spec, index)
         return elapsed["legacy"], elapsed["runtime"]
 
     report: dict[str, Any] = {}
     for spec in specs:
         for _ in range(3):
-            call_runtime(spec, spec["Inputs"][0])
+            call_runtime(spec, 0)
     for round_index in range(args.rounds):
         for spec in specs:
             entry = report.setdefault(
                 spec["Job"], {"legacy": [], "runtime": [], "ratio": []}
             )
-            for item in spec["Inputs"]:
-                legacy_ns, runtime_ns = pair(spec, item, round_index % 2 == 0)
+            for index in range(len(spec["Inputs"])):
+                legacy_ns, runtime_ns = pair(spec, index, round_index % 2 == 0)
                 if legacy_ns > 0 and runtime_ns > 0:
                     entry["legacy"].append(legacy_ns)
                     entry["runtime"].append(runtime_ns)
@@ -781,7 +799,7 @@ def run_ab(args: argparse.Namespace) -> None:
                     window = json.loads(legacy.stdout.readline())
                 else:
                     window = runtime_load(
-                        runtime, loop, spec, names[spec["Repo"]], args
+                        runtime, loop, spec["Job"], requests[spec["Job"]], args
                     )
                 rates[side].append(window["calls"] / window["seconds"])
     legacy.stdin.close()

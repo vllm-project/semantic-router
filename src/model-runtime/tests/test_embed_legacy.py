@@ -1,7 +1,10 @@
-"""The embed A/B tool's confidence intervals (``tools/embed_legacy.py``)."""
+"""The embed A/B tool (``tools/embed_legacy.py``): its confidence intervals and the runtime side's load."""
 
+import asyncio
 import importlib.util
+import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -33,3 +36,35 @@ def test_intervals_straddle_zero_when_the_sides_match(el):
     same = el.intervals({"legacy": calls, "runtime": calls[1:] + calls[:1]})
     assert same["p50_ms"][0] <= 0 <= same["p50_ms"][1]
     assert "per_s" not in same
+
+
+def test_the_runtime_load_is_concurrent_requests_on_the_servers_loop(el):
+    class Runtime:
+        def __init__(self):
+            self.active = self.peak = 0
+            self.threads, self.sizes = set(), []
+
+        async def call(self, surface, body, size):
+            self.threads.add(threading.get_ident())
+            self.sizes.append((surface, body["input"], size))
+            self.active += 1
+            self.peak = max(self.peak, self.active)
+            await asyncio.sleep(0.002)
+            self.active -= 1
+            return 200, {}
+
+    runtime, loop = Runtime(), el.LoopThread()
+    requests = [
+        el.Request("embeddings", {"input": "a"}, 11),
+        el.Request("embeddings", {"input": "bb"}, 12),
+    ]
+    try:
+        window = el.runtime_load(
+            runtime, loop, "job", requests, SimpleNamespace(concurrency=3, seconds=0.1)
+        )
+    finally:
+        loop.close()
+    assert window["job"] == "job" and window["concurrency"] == 3
+    assert window["calls"] == len(window["latency_ns"]) == len(runtime.sizes) > 3
+    assert runtime.peak == 3 and runtime.threads == {loop.thread.ident}
+    assert set(runtime.sizes) == {("embeddings", "a", 11), ("embeddings", "bb", 12)}
