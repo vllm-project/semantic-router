@@ -345,8 +345,9 @@ baseline, the test split, and the minimum macro-F1 deltas:
 Evaluate the pinned baseline and the frozen candidate on the same test file,
 and run `make qualify-candle-cpu` on the frozen candidate with the task's
 qualification suite. Then decide. The gate refuses evaluations of different
-data or rows, rejects any failed runtime check, and records the agreement
-between the two prediction sets:
+data or rows, accepts only a compatibility receipt, rejects any failed or
+missing runtime check, and records the agreement between the two prediction
+sets:
 
 ```bash
 python -m src.training.model_classifier.sequence_repair.promotion_gate \

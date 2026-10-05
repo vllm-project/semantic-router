@@ -4,7 +4,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
 
-from src.training.model_classifier.sequence_repair.promotion_gate import decide
+from src.training.model_classifier.sequence_repair.promotion_gate import (
+    RECEIPT_SCHEMA,
+    REQUIRED_CHECKS,
+    decide,
+)
 
 GATE = {
     "promote_if": {
@@ -29,7 +33,17 @@ def evaluation(macro, languages, data=DATA):
 
 BASELINE = evaluation(0.80, {"en": 0.82, "fr": 0.78})
 SAME = {"a": 1, "b": 2, "c": 3, "d": 4}
-PASSED = {"checks": [{"name": "label_parity", "passed": True}]}
+
+
+def conformance(passed, failed=()):
+    return {
+        "schema_version": RECEIPT_SCHEMA,
+        "checks": [{"name": name, "passed": True} for name in passed]
+        + [{"name": name, "passed": False} for name in failed],
+    }
+
+
+PASSED = conformance(REQUIRED_CHECKS)
 
 
 class PromotionGateTests(unittest.TestCase):
@@ -53,10 +67,33 @@ class PromotionGateTests(unittest.TestCase):
         self.assertEqual(receipt["failures"], ["language:fr"])
 
     def test_rejects_a_failed_runtime_check(self):
-        failed = {"checks": [{"name": "label_parity", "passed": False}]}
+        failed = conformance(REQUIRED_CHECKS - {"label_parity"}, ["label_parity"])
         receipt = decide(GATE, BASELINE, BASELINE, SAME, SAME, failed)
         self.assertEqual(receipt["decision"], "reject")
         self.assertEqual(receipt["failures"], ["conformance:label_parity"])
+
+    def test_rejects_missing_runtime_checks(self):
+        receipt = decide(GATE, BASELINE, BASELINE, SAME, SAME, conformance([]))
+        self.assertEqual(receipt["decision"], "reject")
+        self.assertEqual(
+            receipt["failures"],
+            [f"conformance:{name}" for name in sorted(REQUIRED_CHECKS)],
+        )
+        partial = conformance(["label_parity"])
+        receipt = decide(GATE, BASELINE, BASELINE, SAME, SAME, partial)
+        self.assertEqual(receipt["decision"], "reject")
+        self.assertEqual(
+            receipt["failures"],
+            [
+                "conformance:deadline_behavior",
+                "conformance:input_bounds",
+                "conformance:unavailable_behavior",
+            ],
+        )
+
+    def test_refuses_a_conformance_file_that_is_not_a_receipt(self):
+        with self.assertRaisesRegex(ValueError, "not a compatibility receipt"):
+            decide(GATE, BASELINE, BASELINE, SAME, SAME, {"checks": []})
 
     def test_reports_prediction_agreement(self):
         changed = {**SAME, "a": 0}
