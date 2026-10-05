@@ -24,7 +24,6 @@ const baseFormValues: ServerFormValues = {
   url: '',
   headers: {},
   timeout: '30000',
-  autoReconnect: true,
 }
 
 function makeTool(index: number, sourceType: UnifiedTool['sourceType']): UnifiedTool {

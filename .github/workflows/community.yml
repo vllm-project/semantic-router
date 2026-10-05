@@ -97,7 +97,7 @@ jobs:
         run: python3 tools/ci/community_lifecycle.py sync-issue-kind --event "$GITHUB_EVENT_PATH"
 
   issue-acceptance:
-    name: Accept scoped issue
+    name: Reconcile accepted issues
     if: >-
       github.event_name == 'issue_comment'
       && github.event.issue.pull_request == null
@@ -110,7 +110,7 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
 
-      - name: Apply the explicit acceptance transition
+      - name: Reconcile every explicit acceptance decision
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 tools/ci/community_lifecycle.py accept-issue --event "$GITHUB_EVENT_PATH"

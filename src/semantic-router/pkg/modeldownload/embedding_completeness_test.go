@@ -11,7 +11,7 @@ import (
 
 const (
 	testEmbeddingModelPath = "models/mmbert-embed-32k-2d-matryoshka"
-	testEmbeddingRepoID    = "llm-semantic-router/mmbert-embed-32k-2d-matryoshka"
+	testEmbeddingRepoID    = "vllm-sr/mmbert-embed-32k-2d-matryoshka"
 )
 
 func newEmbeddingOnlyConfig() *config.RouterConfig {
@@ -164,9 +164,9 @@ func newCandleEmbeddingConfig() *config.RouterConfig {
 	cfg := &config.RouterConfig{
 		MoMRegistry: map[string]string{
 			testEmbeddingModelPath:  testEmbeddingRepoID,
-			testQwen3ModelPath:      "llm-semantic-router/mom-embedding-pro",
-			testGemmaModelPath:      "llm-semantic-router/mom-embedding-flash",
-			testMultiModalModelPath: "llm-semantic-router/mom-embedding-multimodal",
+			testQwen3ModelPath:      "vllm-sr/mom-embedding-pro",
+			testGemmaModelPath:      "vllm-sr/mom-embedding-flash",
+			testMultiModalModelPath: "vllm-sr/mom-embedding-multimodal",
 		},
 		InlineModels: config.InlineModels{
 			EmbeddingModels: config.EmbeddingModels{

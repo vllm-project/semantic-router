@@ -139,7 +139,7 @@ Router 把头分到两个面：
 | ------ | ----------- |
 | `x-vsr-kv-source-pod` | 持有源模型 KV 缓存的 Pod 的 gRPC 地址。 |
 | `x-vsr-kv-cache-id` | 源 KV 块的不透明会话或缓存标识。 |
-| `x-vsr-kv-mapper-id` | 为源→目标模型对发布的 ridge-mapper 产物。 |
+| `x-vsr-kv-mapper-id` | 为源→目标模型对发布的映射器产物，即 ridge 拟合或其蒸馏精修版本。 |
 
 **响应（后端 → Router）：**
 

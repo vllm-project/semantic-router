@@ -1541,3 +1541,105 @@
     verification: imported
     source: https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning
     redistributable: true
+- id: deepseek/deepseek-v4.1-flash-model-card-max-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v4.1-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4.1-Flash
+    reasoning_effort: max
+    model_revision: dba1be0a40aa45a94ad051997016db3960a90277
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.909
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md
+    redistributable: true
+- id: deepseek/deepseek-v4.1-flash-model-card-max-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v4.1-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-no-tools
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4.1-Flash
+    reasoning_effort: max
+    hle_mode: no_tools
+    model_revision: dba1be0a40aa45a94ad051997016db3960a90277
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.368
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md
+    redistributable: true
+- id: deepseek/deepseek-v4.1-flash-model-card-max-terminal-bench@2.1.0
+  model: deepseek/deepseek-v4.1-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4.1-Flash
+    reasoning_effort: max
+    harness: DeepSeek Harness Minimal
+    attempts_per_task: 3
+    model_revision: dba1be0a40aa45a94ad051997016db3960a90277
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.906
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md
+    redistributable: true
+- id: deepseek/deepseek-v4.1-flash-model-card-max-deep-swe@1.1.0
+  model: deepseek/deepseek-v4.1-flash
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4.1-Flash
+    reasoning_effort: max
+    harness: mini-swe-agent
+    attempts_per_task: 8
+    model_revision: dba1be0a40aa45a94ad051997016db3960a90277
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.742
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md
+    redistributable: true
+- id: deepseek/deepseek-v4.1-flash-tech-report-max-automation-bench@1.0.6
+  model: deepseek/deepseek-v4.1-flash
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4.1-Flash
+    reasoning_effort: max
+    subset: public
+    harness: official AutomationBench scaffold
+    model_revision: dba1be0a40aa45a94ad051997016db3960a90277
+    source_kind: official_technical_report
+  metrics:
+    score: 0.548
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/DeepSeek_V41_Tech_Report.pdf
+    redistributable: true

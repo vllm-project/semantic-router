@@ -600,6 +600,7 @@ func apiMemoryRoutes() []apiRoute {
 					queryParameter("user_id", "Development fallback identity when x-authz-user-id is unavailable.", "string"),
 					queryParameter("type", "Comma-separated memory types: semantic, procedural, or episodic.", "string"),
 					queryParameter("limit", "Maximum results; defaults to 20 and is capped at 100.", "integer"),
+					queryParameter("offset", "Rows to skip after created_at descending, id descending. Best-effort under concurrent writes. Defaults to 0.", "integer"),
 				},
 			},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityConfig},
