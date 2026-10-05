@@ -759,10 +759,15 @@ still loads, with golden `unverified` and the reason in its health and card.
 `--autotune-cache` still persists Triton's compiled kernels and the tuning of
 models without choices.
 
-The ROCm router image takes PyTorch from the rocm7.2 wheels (the rocm7.1
-build crashes replaying the encoders' HIP graphs) and builds causal-conv1d
-1.7.0 against it with ROCm 7.2.3's compiler, the one the released wheel was
-built with, so its gfx942 machine code is the released build's. It carries
+The ROCm router image serves with the PyTorch of vLLM's ROCm image, pinned by
+digest (2.12.0 built on ROCm 7.2.3, with AOTriton 0.13.50), and that image's
+ROCm 7.2.3 libraries. The released decoders were recorded on that build: the
+official rocm7.2 wheel bundles AOTriton 0.11.2, whose attention rounds
+differently and moves about 5% of Vela 2.0 4B / 9B span sets, while this build
+answers their panels byte for byte. The official wheel still provides torch's
+Python dependencies and Triton. causal-conv1d 1.7.0 is built against it with
+ROCm 7.2.3's compiler, the one the released wheel was built with, so its gfx942
+machine code is the released build's. It carries
 code for gfx90a, gfx942 and gfx950 (Instinct MI200, MI300 and MI350;
 `CAUSAL_CONV1D_ARCHS` builds others), since a decoder fails on a GPU it has no
 code for rather than falling back. Triton's compiled kernels and
