@@ -3,6 +3,14 @@ import hashlib
 import json
 from pathlib import Path
 
+RECEIPT_SCHEMA = "semantic-router.compatibility-receipt/v1"
+REQUIRED_CHECKS = {
+    "label_parity",
+    "input_bounds",
+    "deadline_behavior",
+    "unavailable_behavior",
+}
+
 
 def read_predictions(evaluation_path):
     path = Path(evaluation_path).with_suffix(".predictions.jsonl")
@@ -19,6 +27,8 @@ def decide(
         raise ValueError("Candidate and baseline were evaluated on different data")
     if candidate_predictions.keys() != baseline_predictions.keys():
         raise ValueError("Candidate and baseline predictions cover different rows")
+    if conformance.get("schema_version") != RECEIPT_SCHEMA:
+        raise ValueError("Conformance is not a compatibility receipt")
     rules = gate["promote_if"]
     macro_delta = candidate["macro_f1"] - baseline["macro_f1"]
     language_deltas = {
@@ -32,11 +42,10 @@ def decide(
         for language, delta in language_deltas.items()
         if delta < rules["per_language_macro_f1_min_delta"]
     ]
-    failures += [
-        f"conformance:{check['name']}"
-        for check in conformance["checks"]
-        if not check["passed"]
-    ]
+    checks = conformance["checks"]
+    failed = {check["name"] for check in checks if not check["passed"]}
+    missing = REQUIRED_CHECKS - {check["name"] for check in checks}
+    failures += [f"conformance:{name}" for name in sorted(failed | missing)]
     agreement = sum(
         candidate_predictions[key] == baseline_predictions[key]
         for key in baseline_predictions
