@@ -22,7 +22,6 @@ const (
 
 	typeAvailableSemanticRouter   = "Available"
 	typeProgressingSemanticRouter = "Progressing"
-	typeDegradedSemanticRouter    = "Degraded"
 )
 
 // Default values for SemanticRouter resources

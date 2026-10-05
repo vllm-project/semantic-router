@@ -110,6 +110,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
     'svm',
     'mlp',
     'multi_factor',
+    'decision',
   ],
 
   booleans: ['true', 'false'],
@@ -325,6 +326,7 @@ const ALGO_TYPE_SUGGESTIONS = [
   { label: 'svm', detail: 'SVM model-selection classifier' },
   { label: 'mlp', detail: 'MLP model-selection classifier' },
   { label: 'multi_factor', detail: 'Quality/latency/cost/load scoring' },
+  { label: 'decision', detail: 'Decision model chooses a candidate' },
 ]
 
 /**

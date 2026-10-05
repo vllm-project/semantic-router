@@ -538,60 +538,7 @@ vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@"$(AGENT_PYTHON)" -m pip install -e "src/vllm-sr[bench]"
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
-	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
-		src/vllm-sr/tests/test_container_images.py \
-		src/vllm-sr/tests/test_container_log_spool.py \
-		src/vllm-sr/tests/test_dashboard_dockerfile_surface.py \
-		src/vllm-sr/tests/test_embedding_api_config.py \
-		src/vllm-sr/tests/test_envoy_identity_and_local_bindings.py \
-		src/vllm-sr/tests/test_evaluation_cli.py \
-		src/vllm-sr/tests/test_sr_bench.py \
-		src/vllm-sr/tests/test_sr_bench_accounting.py \
-		src/vllm-sr/tests/test_sr_bench_activity.py \
-		src/vllm-sr/tests/test_sr_bench_client.py \
-		src/vllm-sr/tests/test_sr_bench_collection.py \
-		src/vllm-sr/tests/test_sr_bench_datasets.py \
-		src/vllm-sr/tests/test_sr_bench_dataset_validation.py \
-		src/vllm-sr/tests/test_sr_bench_dataset_fingerprints.py \
-		src/vllm-sr/tests/test_sr_bench_large_datasets.py \
-		src/vllm-sr/tests/test_sr_bench_large_plans.py \
-		src/vllm-sr/tests/test_sr_bench_experiments.py \
-		src/vllm-sr/tests/test_sr_bench_experiment_deletion.py \
-		src/vllm-sr/tests/test_sr_bench_experiment_admin.py \
-		src/vllm-sr/tests/test_routing_preview.py \
-		src/vllm-sr/tests/test_sr_bench_grading.py \
-		src/vllm-sr/tests/test_sr_bench_harness.py \
-		src/vllm-sr/tests/test_sr_bench_history_exclusions.py \
-		src/vllm-sr/tests/test_sr_bench_bridge.py \
-		src/vllm-sr/tests/test_sr_bench_native_output.py \
-		src/vllm-sr/tests/test_sr_bench_plan_hash.py \
-		src/vllm-sr/tests/test_sr_bench_preparation_cli.py \
-		src/vllm-sr/tests/test_sr_bench_preparation_collections.py \
-		src/vllm-sr/tests/test_sr_bench_preparation_sources.py \
-		src/vllm-sr/tests/test_sr_bench_preparations.py \
-		src/vllm-sr/tests/test_sr_bench_recovery.py \
-		src/vllm-sr/tests/test_sr_bench_replay.py \
-		src/vllm-sr/tests/test_sr_bench_reporting.py \
-		src/vllm-sr/tests/test_sr_bench_request_fields.py \
-		src/vllm-sr/tests/test_sr_bench_run_options.py \
-		src/vllm-sr/tests/test_sr_bench_setup.py \
-		src/vllm-sr/tests/test_sr_bench_snapshots.py \
-		src/vllm-sr/tests/test_sr_bench_sources.py \
-		src/vllm-sr/tests/test_sr_bench_runtime.py \
-		src/vllm-sr/tests/test_sr_bench_shutdown.py \
-		src/vllm-sr/tests/test_install_package_resolution.py \
-		src/vllm-sr/tests/test_install_runtime_behavior.py \
-		src/vllm-sr/tests/test_install_script_surface.py \
-		src/vllm-sr/tests/test_model_binding_contract.py \
-		src/vllm-sr/tests/test_recipe_builtin.py \
-		src/vllm-sr/tests/test_reasoning_controls.py \
-		src/vllm-sr/tests/test_route_command.py \
-		src/vllm-sr/tests/test_runtime_lifecycle.py \
-		src/vllm-sr/tests/test_runtime_lifecycle_lock.py \
-		src/vllm-sr/tests/test_runtime_observability.py \
-		src/vllm-sr/tests/test_setup_bootstrap.py \
-		src/vllm-sr/tests/test_split_runtime_backend_provisioning.py \
-		src/vllm-sr/tests/test_split_runtime_stack.py
+	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q src/vllm-sr/tests
 
 vllm-sr-test-integration: ## Run CLI integration tests (requires local runtime images)
 vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-provider-mocker
