@@ -160,7 +160,11 @@ Models you keep on the CPU in the ROCm image run on its ROCm build of PyTorch.
 For most Vela task models that build fails the runtime's load-time check that
 a model answers the same alone and in a batch, so under `exact` they answer
 queued requests one at a time: the same answers, with less throughput under
-load. A router whose models all run on the CPU should use the CPU image.
+load. That build also has no CPU LAPACK, which the Qwen3.5-based models
+(Decision 2.0 and 1.0 from Eos-0.8B up, Vela 2.0 from 0.8B up) need on a CPU,
+so the runtime refuses `device: cpu` for them in this image at startup and
+says to use the CPU image or a GPU device. A router whose models all run on
+the CPU should use the CPU image.
 
 To share GPU models between several routers, run the runtime as its own
 Deployment from the same image and attach every router to its Service. The
