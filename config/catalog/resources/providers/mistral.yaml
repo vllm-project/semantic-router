@@ -54,3 +54,13 @@ models:
     status: claimed
     verified_at: 2026-09-07
     source: https://docs.mistral.ai/models/mistral-large-3-25-12
+- catalog: mistral/ministral-3-14b-instruct
+  relationship: first_party
+  id: ministral-14b-2512
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://docs.mistral.ai/models/ministral-3-14b-25-12
