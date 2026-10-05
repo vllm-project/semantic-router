@@ -349,12 +349,15 @@ def test_bad_inputs_fail_in_place(model):
         model.plan_surface("embeddings", request({"input": "hello", "layer": 3}))
 
 
-def test_images_of_any_mode_become_normalized_channels_first_pixels(nano):
+def test_images_of_any_mode_and_size_become_normalized_channels_first_pixels(nano):
     from PIL import Image
 
     processor = ImageProcessor(bundles.load(nano))
-    for mode in ("RGB", "L", "RGBA", "P", "CMYK"):
-        data = png(37, 21, mode)
+    photo = io.BytesIO()
+    noise = np.random.default_rng(7).integers(0, 256, (97, 151, 3), dtype=np.uint8)
+    Image.fromarray(noise).save(photo, format="JPEG", quality=90)
+    cases = [png(37, 21, mode) for mode in ("RGB", "L", "RGBA", "P", "CMYK")]
+    for data in [*cases, png(1, 143), png(1031, 777), photo.getvalue()]:
         pixels = processor.pixels(data)
         assert pixels.shape == (1, 3, 512, 512) and pixels.dtype == np.float32
         assert pixels.min() >= -1.0 and pixels.max() <= 1.0
@@ -366,6 +369,7 @@ def test_images_of_any_mode_become_normalized_channels_first_pixels(nano):
         reference = ((scaled - processor.mean) / processor.std).transpose(2, 0, 1)
         assert np.array_equal(pixels[0], reference)
     assert processor.pixels(b"\x89PNG broken") == "invalid_input"
+    processor.close()
 
 
 def test_deadlines_and_non_unit_outputs(tmp_path, model):

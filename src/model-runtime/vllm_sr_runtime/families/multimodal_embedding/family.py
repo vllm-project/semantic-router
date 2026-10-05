@@ -325,6 +325,7 @@ class OmniModel(LoadedModel):
 
     def close(self) -> None:
         self.inputs.shutdown(wait=True)
+        self.image.close()
         super().close()
 
     def _graph(
