@@ -187,8 +187,7 @@ class Scheduler:
     ) -> list[Future[Results[Any]]] | None:
         """Run a group on the calling thread if the scheduler is idle, else None.
 
-        Batches run before it returns, so the event loop calls it only for
-        what a model's ``inline_cost`` covers. When
+        Never call it from the event loop: batches run before it returns. When
         other jobs arrive meanwhile, the worker runs the group's remaining
         batches in order with theirs and answers the futures. Models whose
         batches go to a device thread always answer None.

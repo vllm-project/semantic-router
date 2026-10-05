@@ -50,7 +50,6 @@ from .plugins.base import (
 )
 from .registry import builtin
 from .registry.resolve import resolve
-from .scheduler.planner import cost
 from .scheduler.scheduler import Scheduler, SchedulerLimits
 from .supervision.metrics import RuntimeMetrics
 from .supervision.readiness import STATES, Health, golden_check
@@ -901,21 +900,11 @@ class Runtime:
             return _error_outcome(exc)
 
     def _prepare_and_run(
-        self, surface: str, body: Any, received: float, on_loop: bool = False
+        self, surface: str, body: Any, received: float
     ) -> tuple[Prepared | tuple[int, dict[str, Any]], _Lookup | None]:
-        """Plan one request and run it on this thread if its model is idle.
-
-        On the event loop it runs here only if its model's ``inline_cost``
-        covers the plan.
-        """
+        """Plan one request off the event loop and run it here if its model is idle."""
         prepared = self._prepare_outcome(surface, body, received)
         if not isinstance(prepared, Prepared):
-            return prepared, None
-        model = prepared.served.model
-        if on_loop and (
-            model is None
-            or sum(cost(item) for item in prepared.plan.items) > model.inline_cost
-        ):
             return prepared, None
         lookup = self._lookup([(0, prepared)])
         lookup.submitted = time.monotonic()
@@ -935,18 +924,12 @@ class Runtime:
         """Plan every request, run each model's share as one job group, finish in order.
 
         A group holds a model's tasks of one profile, whatever their deadlines:
-        each job keeps its own. A lone request runs on its planning thread when
-        its model's scheduler is idle: off the event loop always, on it only
-        within the model's ``inline_cost``.
+        each job keeps its own. A lone request planned off the event loop runs
+        on its planning thread when its model's scheduler is idle.
         """
         received = time.monotonic()
         lookups: list[_Lookup | None] = [None] * len(requests)
-        if size is not None and size <= INLINE_PLAN_BYTES and len(requests) == 1:
-            prepared, lookups[0] = self._prepare_and_run(
-                *requests[0], received, on_loop=True
-            )
-            planned = [prepared]
-        elif size is not None and size <= INLINE_PLAN_BYTES:
+        if size is not None and size <= INLINE_PLAN_BYTES:
             planned = [
                 self._prepare_outcome(surface, body, received)
                 for surface, body in requests
