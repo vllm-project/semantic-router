@@ -413,6 +413,20 @@ def test_request_size_limit(qwen3_runtime):
         object.__setattr__(qwen3_runtime, "config", original)
 
 
+def test_models_report_the_process_limits_a_bundle_must_fit(client, qwen3_runtime):
+    config = qwen3_runtime.config
+    limits = client.get("/v1/models").json()["limits"]
+    assert limits == {
+        "max_bundle_tasks": config.max_bundle_tasks,
+        "max_request_bytes": config.max_request_bytes,
+    }
+    task = {"decisions": {"state": STATE, "questions": QUESTIONS}}
+    tasks = [{"id": str(i), **task} for i in range(limits["max_bundle_tasks"] + 1)]
+    response = client.post("/v1/bundle", json={"tasks": tasks})
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "request_too_large"
+
+
 @pytest.mark.parametrize("path", ["/v1/classify", "/v1/bundle"])
 def test_a_client_that_disconnects_cancels_its_call(path):
     import asyncio

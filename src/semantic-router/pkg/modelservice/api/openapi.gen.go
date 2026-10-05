@@ -634,7 +634,11 @@ type ModelList struct {
 	// ApiVersion The version of this contract the runtime serves (`info.version`); a client refuses another major version.
 	ApiVersion string      `json:"api_version"`
 	Data       []ModelCard `json:"data"`
-	Object     string      `json:"object"`
+
+	// Limits What one request to this process may hold; a larger one is answered 413 request_too_large as a whole, so a
+	// client splits its work to fit.
+	Limits ProcessLimits `json:"limits"`
+	Object string        `json:"object"`
 }
 
 // PluginInfo defines model for PluginInfo.
@@ -646,6 +650,16 @@ type PluginInfo struct {
 	Group        string                  `json:"group"`
 	Name         string                  `json:"name"`
 	Version      *string                 `json:"version"`
+}
+
+// ProcessLimits What one request to this process may hold; a larger one is answered 413 request_too_large as a whole, so a
+// client splits its work to fit.
+type ProcessLimits struct {
+	// MaxBundleTasks Most tasks one POST /v1/bundle carries.
+	MaxBundleTasks int `json:"max_bundle_tasks"`
+
+	// MaxRequestBytes Largest request body, in bytes.
+	MaxRequestBytes int `json:"max_request_bytes"`
 }
 
 // ProfileInfo defines model for ProfileInfo.
