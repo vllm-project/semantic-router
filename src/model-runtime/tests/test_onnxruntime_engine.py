@@ -120,19 +120,22 @@ def test_gpu_sessions_never_fall_back_to_the_cpu():
 
 
 @pytest.mark.parametrize(
-    ("neighbors", "spin"),
+    ("neighbors", "graph_spin", "spin"),
     [
-        (False, providers.SPIN_US),
-        (True, providers.NEIGHBOR_SPIN_US),
+        (False, None, providers.SPIN_US),
+        (False, 10_000, 10_000),
+        (True, None, providers.NEIGHBOR_SPIN_US),
+        (True, 10_000, providers.NEIGHBOR_SPIN_US),
     ],
 )
-def test_cpu_sessions_get_own_pools_whose_idle_threads_spin_briefly(neighbors, spin):
+def test_cpu_sessions_get_own_pools_whose_idle_threads_spin_briefly(
+    neighbors, graph_spin, spin
+):
     choice = providers.ProviderChoice("CPUExecutionProvider")
-    options = providers.session_options(choice, 2, neighbors)
+    options = providers.session_options(choice, 2, neighbors, graph_spin)
     assert options.use_per_session_threads is True
     assert options.intra_op_num_threads == 2 and options.inter_op_num_threads == 1
-    entry = options.get_session_config_entry("session.intra_op.spin_duration_us")
-    assert entry == str(spin)
+    assert options.get_session_config_entry(providers.SPIN_ENTRY) == str(spin)
 
 
 @pytest.mark.parametrize(
@@ -150,16 +153,18 @@ def test_each_graph_gets_its_own_capped_pool(
     seen = {}
     options = providers.session_options
 
-    def recording(choice, threads, cpu_neighbors=False):
+    def recording(choice, threads, cpu_neighbors=False, spin_us=None):
         seen[threads] = cpu_neighbors
-        return options(choice, threads, cpu_neighbors)
+        return options(choice, threads, cpu_neighbors, spin_us)
 
     monkeypatch.setattr(providers, "session_options", recording)
     paths = {
         "text": onnx_graphs.token_graph(tmp_path / "text.onnx"),
         "image": onnx_graphs.token_graph(tmp_path / "image.onnx"),
     }
-    model_spec = dataclasses.replace(spec(paths), graph_threads={"text": 1})
+    model_spec = dataclasses.replace(
+        spec(paths), graph_threads={"text": 1}, graph_spin_us={"text": 10_000}
+    )
     model = OnnxRuntimeEngine().load(
         model_spec,
         CPUAccelerator(),
@@ -168,6 +173,12 @@ def test_each_graph_gets_its_own_capped_pool(
     )
     assert seen == {1: beside_another_engine, 2: beside_another_engine}
     assert model.receipt()["threads"] == {"text": 1, "image": 2}
+    neighbor = providers.NEIGHBOR_SPIN_US
+    assert model.receipt()["spin_us"] == (
+        {"text": neighbor, "image": neighbor}
+        if beside_another_engine
+        else {"text": 10_000, "image": providers.SPIN_US}
+    )
 
 
 def test_unsupported_specs_say_why(tmp_path):

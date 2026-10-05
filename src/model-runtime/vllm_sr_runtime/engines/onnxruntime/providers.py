@@ -8,19 +8,20 @@ Every CPU session has its own intra-op pool, sized to the configured threads
 (else the CPUs the process may run on; ONNX Runtime's own default counts the
 host's CPUs, not the cpuset) and capped by the spec's ``graph_threads``. A
 process-wide shared pool can't be sized per graph, and graphs differ: on 16
-cores Omni Nano's text graph runs a short text faster on 8 threads than on 16
-and, with four callers, more than twice as many per second (15 workers plus
-four callers oversubscribe the cores), while its image graph takes 109 ms on
-16 threads and 163 ms on 8.
+cores Omni Nano's text graph serves four callers twice as fast on 12 threads
+as on 16 (15 workers plus four callers oversubscribe the cores), while its
+image graph takes 109 ms on 16 threads and 163 ms on 8.
 
 An idle pool's threads spin before they sleep. Unbounded (about 40 ms), they
 share the cores with whatever runs next: Omni's audio graph after its CLAP
 windows took 124 ms instead of 43, and a native forward after an ONNX Runtime
 run doubled. Pools that stop spinning the moment a run returns cost Omni
 13-24 % of its 4-caller throughput, and pools that never spin take Nano text
-from 5.1 to 7.4 ms. So idle threads spin ``SPIN_US``, or ``NEIGHBOR_SPIN_US``
-beside another engine's CPU models (a 2 ms spin added 1.8 ms to a native
-forward that followed; 1 ms added none).
+from 5.1 to 7.4 ms. So idle threads spin ``SPIN_US``, or the spec's
+``graph_spin_us`` for a graph whose threads would sleep inside a run (Omni
+Nano's text graph on 12 threads answered 0.3-0.4 ms faster with a 10 ms
+spin), and ``NEIGHBOR_SPIN_US`` beside another engine's CPU models (a 2 ms
+spin added 1.8 ms to a native forward that followed; 1 ms added none).
 """
 
 from __future__ import annotations
@@ -102,9 +103,10 @@ def _options(name: str, device: DeviceInfo) -> dict[str, str]:
     return {"device_id": str(device.index or 0)}
 
 
-# How long an idle intra-op thread spins before it sleeps
-# (``session.intra_op.spin_duration_us``, ONNX Runtime 1.26 and later): alone
-# or beside other ONNX Runtime models, and beside another engine's CPU models.
+# How long an idle intra-op thread spins before it sleeps (ONNX Runtime 1.26
+# and later): alone or beside other ONNX Runtime models, and beside another
+# engine's CPU models.
+SPIN_ENTRY = "session.intra_op.spin_duration_us"
 SPIN_US = 2000
 NEIGHBOR_SPIN_US = 1000
 
@@ -120,13 +122,16 @@ def cpu_threads(threads: int | None, cap: int | None = None) -> int:
 
 
 def session_options(
-    choice: ProviderChoice, threads: int, cpu_neighbors: bool = False
+    choice: ProviderChoice,
+    threads: int,
+    cpu_neighbors: bool = False,
+    spin_us: int | None = None,
 ) -> Any:
     """Sequential execution with every graph optimization on a pool of ``threads``.
 
-    Idle CPU threads spin ``SPIN_US``, or ``NEIGHBOR_SPIN_US`` when another
-    engine's models serve the process's CPU too. GPU sessions never fall back
-    to the CPU.
+    Idle CPU threads spin ``spin_us`` (default ``SPIN_US``), or
+    ``NEIGHBOR_SPIN_US`` when another engine's models serve the process's CPU
+    too. GPU sessions never fall back to the CPU.
     """
     import onnxruntime as ort
 
@@ -137,8 +142,8 @@ def session_options(
     options.intra_op_num_threads = threads
     options.inter_op_num_threads = 1
     if not choice.gpu:
-        spin = NEIGHBOR_SPIN_US if cpu_neighbors else SPIN_US
-        options.add_session_config_entry("session.intra_op.spin_duration_us", str(spin))
+        spin = NEIGHBOR_SPIN_US if cpu_neighbors else spin_us or SPIN_US
+        options.add_session_config_entry(SPIN_ENTRY, str(spin))
     if choice.gpu:
         options.add_session_config_entry("session.disable_cpu_ep_fallback", "1")
     return options
