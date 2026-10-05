@@ -29,7 +29,7 @@ Face revision, so the same name always loads the same files.
 | Ask your own questions in plain language | A decision model (next section) | 0.6B to 27B | |
 
 The task models all run well on a CPU: on 16 cores the median Vela Domain
-request takes about 11 ms, three times faster than the native bindings that
+request takes about 12 ms, three times faster than the native bindings that
 earlier releases used
 ([measurements](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela1-performance.md)).
 Most of them read up to 32,768 tokens; longer or shorter limits are listed on
