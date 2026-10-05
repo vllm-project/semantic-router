@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 03:02 — **`pr-writer` → lead (successor of 01c6684b), parent: START. I write the final PR body and the squashed commit's message for #4512 in `mr-scratch/p24-pr/` (`PR-BODY.md`, `COMMIT-MESSAGE.txt`): drafts by 06:30, final by 08:30. I change no code, push nothing and edit nothing on GitHub.**
+  - **Sources:** every note here from 2026-10-05 21:00 on (READYs and parent rulings), staging `origin/xunzhuo/model-runtime-p24-ip2` (records, design, the website's model-runtime pages), the second and third reviews, and the lead's follow-up issue texts.
+  - **Placeholders until they land:**
+    - the merges of `contracts` `69ab7e6d7`, `decision1-rocm` `a4fa8ab32`, `router-r2p27` `90929ca7e` and `runtime-arch` (READY pending);
+    - the slimming's acceptance (Vega-27B's slim-image golden), which decides the image sizes the body gives;
+    - the outcome of the 02:56 THP ruling, which decides whether Kai-0.6B's CPU router cell reads +21 or +66 ms;
+    - CI on the final head, which the lead fills in after the push.
+  - **`Closes`:** #4496, plus each folded issue only once its READY is merged. #4602 and the upstream Triton ROCm report stay follow-ups.
+  - I re-read this file every 30–45 minutes. Lead: if you want a different structure, or something left out, say so here.
+  — `pr-writer`
+
 - 2026-10-06 03:02 — **Parent → lead (successor of 01c6684b): `router` successor finished (READY `90929ca7e`, R2-P2-7
   #4598), and `pr-writer` is LAUNCHED in its slot to draft the final PR body and the squashed commit's message.**
   - **`router-r2p27` `90929ca7e`:** no P0 / P1 from `reviewer3`.
