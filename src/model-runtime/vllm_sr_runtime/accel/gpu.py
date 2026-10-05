@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import threading
+from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any
 
@@ -31,6 +33,15 @@ def _optional(module: str, attribute: str) -> Any:
         return getattr(importlib.import_module(module), attribute)
     except Exception:
         return None
+
+
+_DEVICE_LOCKS: dict[str, threading.RLock] = {}
+_DEVICE_LOCKS_GUARD = threading.Lock()
+
+
+def _device_lock(device: DeviceInfo) -> threading.RLock:
+    with _DEVICE_LOCKS_GUARD:
+        return _DEVICE_LOCKS.setdefault(device.label, threading.RLock())
 
 
 class GPUAccelerator(Accelerator):
@@ -106,6 +117,15 @@ class GPUAccelerator(Accelerator):
 
     def synchronize(self, device: DeviceInfo) -> None:
         torch.cuda.synchronize(device.index or 0)
+
+    def execute(self, device: DeviceInfo, work: Callable[[], Any]) -> Any:
+        """Run device work one model at a time per device, on the caller's thread.
+
+        Models capture their graphs lazily while serving, and a capture that
+        overlaps another model's work on the device fails and poisons the context.
+        """
+        with _device_lock(device):
+            return work()
 
     def device_fault(self, error: BaseException) -> bool:
         """Device errors poison the context; running out of memory fails only the batch."""
