@@ -13,9 +13,7 @@
 //	annotate / filter  optional, behind --arms
 //
 // It wires the REAL candle NLI (the same scorer the router uses) so arm C/D
-// reflect the shipped path. Grading + the KEEP/KILL verdict live in Python
-// (bench/grounded_fusion/grade_only.py + compare_multiarm.py), which read the
-// answers_{arm}.jsonl this driver emits.
+// reflect the shipped path. It writes ungraded answers_{arm}.jsonl.
 //
 // Build/run (needs the candle lib + NLI model + a running Ollama):
 //
@@ -67,8 +65,7 @@ type options struct {
 	maxItems    int
 }
 
-// item is one evaluation question. The Python side (datasets.py) owns DRACO
-// parsing and dumps these via `python -m bench.grounded_fusion.items`.
+// item is one evaluation question, one line of the --items JSONL.
 type item struct {
 	ID       string `json:"id"`
 	Domain   string `json:"domain"`
@@ -124,7 +121,7 @@ type panelRec struct {
 	Flagged        []string `json:"flagged"`
 }
 
-// answerRecord is the pre-grading output consumed by grade_only.py.
+// answerRecord is one line of the ungraded answers_{arm}.jsonl.
 type answerRecord struct {
 	ID               string     `json:"id"`
 	Domain           string     `json:"domain"`
@@ -153,7 +150,7 @@ func parseFlags() options {
 		panel = flag.String("panel", "qwen3:8b,llama3.1:8b,gemma3:12b", "comma-separated panel (analysis) models")
 	)
 	opt := options{}
-	flag.StringVar(&opt.itemsPath, "items", "", "path to items JSONL ({id,domain,question,context}) — dump via bench.grounded_fusion.items")
+	flag.StringVar(&opt.itemsPath, "items", "", "path to items JSONL ({id,domain,question,context})")
 	flag.StringVar(&opt.panelCache, "panel-cache", "", "panel cache JSONL path (default <out-dir>/panel_cache.jsonl)")
 	flag.StringVar(&opt.outDir, "out-dir", "results", "output directory for answers_{arm}.jsonl")
 	flag.StringVar(&opt.judge, "judge", "qwen3:14b", "judge / synthesis model")
@@ -232,7 +229,7 @@ func run(opt options) error {
 			return fmt.Errorf("arm %s: %w", arm, err)
 		}
 	}
-	fmt.Println("done. grade with: python -m bench.grounded_fusion.grade_only ...")
+	fmt.Printf("done. answers in %s\n", opt.outDir)
 	return nil
 }
 

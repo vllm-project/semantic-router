@@ -22,7 +22,7 @@ For an interpretation of maintained benchmark coverage, see the
 | Does a backend report prompt-cache usage through the router? | `cache_token_probe.py` |
 | How fast does Router Memory cover a new user, and how often is the retrieved memory wrong? | [`memory_coldstart/`](#router-memory-cold-start) |
 | Do Router Flow arms improve answer quality? | [`router_flow/`](router_flow/README.md) |
-| Does grounding-aware fusion help on DRACO? | [`grounded_fusion/`](grounded_fusion/README.md) |
+| How do Fusion grounding policies compare on a shared panel? | [`grounded_fusion/`](grounded_fusion/README.md) |
 | How do hallucination detectors compare? | [`hallucination/`](hallucination/README.md) |
 | What is the signal latency across CPU, GPU, attention, and body modes? | [`cpu-vs-gpu/`](cpu-vs-gpu/README.md) |
 
@@ -259,7 +259,6 @@ Run the lightweight benchmark tests without starting model servers:
 ```bash
 python -m pytest \
   bench/test_*.py \
-  bench/grounded_fusion/test_*.py \
   bench/router_flow/real_eval/test_*.py
 ```
 

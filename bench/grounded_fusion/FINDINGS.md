@@ -5,6 +5,8 @@ the Fusion looper. It is historical, directional evidence rather than a current
 release benchmark: the run did not capture immutable source, dataset, or model
 revisions, and its sample was small.
 
+The Python runners and scripts that produced these results are intact at [41c0903b9](https://github.com/vllm-project/semantic-router/tree/41c0903b95489e1285c0c7866ceee1f650801119/bench/grounded_fusion); check out that commit to rerun them.
+
 ## Evaluation identity
 
 | Dimension | Value recorded by the run |
