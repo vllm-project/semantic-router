@@ -5,7 +5,8 @@ Decision 1.0 package's bundled runtime, for all seven packages. On ROCm this
 holds on all four scored panels, on CPU on subsets of them. That is design
 §17's bar for Decision 1.0: bit-identical on the same device class.
 
-- **Date:** 2026-10-04; the P1-4 runs on 2026-10-05.
+- **Date:** 2026-10-04; the P1-4 runs and the `dc81682bb` column on
+  2026-10-05.
 - **ROCm:** one AMD Instinct MI325X (gfx942) per run, in the image the packages
   were released with: PyTorch 2.12 (ROCm), Transformers 5.17, Triton 3.7.1, FLA
   0.5.2, causal-conv1d 1.7.0.
@@ -36,20 +37,22 @@ Panels: typed-final (1,600 requests), css15 (6,547), public231 (231) and
 mlx-diag (2,275), 10,653 in all. "Identical" means 0 decision changes, 0 error
 mismatches and max |Δp| 0.0.
 
-| Model | Runtime | Revision | `046f27883` | `11ab95952` | `d5b985e43` |
-| --- | --- | --- | --- | --- | --- |
-| Kai-0.6B | vela-encoder | `79263ba4` | identical | identical | identical |
-| Lex-0.6B | vela-encoder | `a5ba6895` | identical | identical | identical |
-| Route-0.6B | vela-encoder | `deed1f29` | identical | identical | identical |
-| Eos-0.8B | qwen3.5-decision | `2ca39a23` | identical | identical | identical |
-| Sol-2B | qwen3.5-decision | `5c698b1a` | identical | identical | identical |
-| Nox-4B | qwen3.5-decision | `7f65e1db` | identical | identical | identical |
-| Lux-9B | qwen3.5-decision | `2064c84d` | identical | identical | identical |
+| Model | Runtime | Revision | `046f27883` | `11ab95952` | `d5b985e43` | `dc81682bb` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Kai-0.6B | vela-encoder | `79263ba4` | identical | identical | identical | identical |
+| Lex-0.6B | vela-encoder | `a5ba6895` | identical | identical | identical | identical |
+| Route-0.6B | vela-encoder | `deed1f29` | identical | identical | identical | identical |
+| Eos-0.8B | qwen3.5-decision | `2ca39a23` | identical | identical | identical | identical |
+| Sol-2B | qwen3.5-decision | `5c698b1a` | identical | identical | identical | identical |
+| Nox-4B | qwen3.5-decision | `7f65e1db` | identical | identical | identical | identical |
+| Lux-9B | qwen3.5-decision | `2064c84d` | identical | identical | identical | identical |
 
 - **`046f27883`:** the first full runs.
 - **`11ab95952`:** the fused gfx942 layers run the BF16 residual stream
   (`8bc857d6f`), and the foundation and `vela1` are merged in.
 - **`d5b985e43`:** the PR head merged in (`dcaf8a0b9`).
+- **`dc81682bb`:** with the built-in kernel-choice table and per-model kernel
+  choices (P1-4), the per-device GPU lock (P0-3) and IP3a merged in.
 - **What runs on the GPU** (from the receipts): the decoders run every layer
   on the fused path (24 layers for Eos and Sol, 32 for Nox and Lux) and replay
   HIP graphs of exact shapes. Eos's causal convolution is the FP64-accumulating
@@ -106,6 +109,7 @@ models' batches and graph captures meet:
 | --- | --- | --- | --- | --- |
 | `d7b06a6f9` (no device lock) | 1 / 10,653 | 10,652 / 10,652 | both degraded | 1 capture, failed |
 | `79908fad8` (device lock) | 10,653 / 10,653 | 0 / 0 | both ready | 118 captures, 10,430 replays, 0 failed |
+| `f25dae5dd` (and thread-local capture) | 10,653 / 10,653 | 0 / 0 | both ready | 118 captures, 10,430 replays, 0 failed |
 
 - **Before the lock**, one model's graph capture (a shape's second use) ran
   while the other model launched work on the device; ROCm invalidated the
@@ -113,7 +117,17 @@ models' batches and graph captures meet:
   both models degraded. A runtime that may exit on a device error exits.
 - **With the lock** (`GPUAccelerator.execute` serializes a GPU's device calls,
   design §9), Sol stays byte-identical on its own kernel choices while Eos
-  runs its own, at the same time.
+  runs its own, at the same time. From `f25dae5dd` the decoders capture in
+  thread-local mode, so a device query from another thread (placement's, for a
+  model loading next to served ones) can't invalidate a capture either.
+- **Three encoders in one process** (`f25dae5dd`, Kai with Lex and Route, 8
+  prompts at a time to all three): on `exact`, where encoders run eagerly,
+  Kai's 10,653 answers stay identical. On `batching`, every model replays its
+  own per-stack graphs (Kai's trunk: 10 captures, 341 replays, none failed),
+  and Kai has 0 decision changes against its reference (max |Δp| 1.2e-5, the
+  profile's approximation; 640 requests byte-identical, fewer than one at a
+  time because concurrent requests coalesce). On both, no request failed and
+  all three stayed ready.
 
 ## Exact profile, CPU
 
