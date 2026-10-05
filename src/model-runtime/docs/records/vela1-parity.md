@@ -185,7 +185,16 @@ The router's CPU options, legacy candle on CPU, the runtime on MI325X:
 
 ### The router image's stack against the release image
 
-The router's ROCm image installs the official PyTorch wheel. The ROCm
+Since `a580be6b9` the router's ROCm image serves with the release image's
+PyTorch and ROCm libraries (`rocm-router-image.md`). In the shipped (slim)
+image `31d00387c`, `vela1`'s own ROCm runner gives every one of the AMD
+recipe's 4,376 answers byte-identically to the release image's (eight jobs of
+547; `legacy_parity.py compare --baseline runtime` agreement 1.0, max |Δ| 0.0),
+and readiness's golden answers for all 13 `task_heads` built-ins (the ten
+text models, Vela Embedding, Vela Reranker and Qwen3-Embedding) equal the
+committed file in every value.
+
+Before that, the image installed the official PyTorch wheel. The ROCm
 records before it ran in the packages' release image, where readiness's
 golden answers were recorded:
 

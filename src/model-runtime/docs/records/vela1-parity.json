@@ -1085,7 +1085,7 @@
     "candidate": "max_speed with a BF16 copy of the linears (heads FP32), recorded before any consent",
     "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
     "runtime_commit": "973842d9edf7172097a9b7f1b1bff076d1e78056",
-    "runtime_env": "decision20-lux-runtime image: PyTorch 2.12.0 ROCm 7.2"
+    "runtime_env": "the Decision 2.0 track's runtime image: PyTorch 2.12.0 ROCm 7.2"
    },
    "device_class": "rocm",
    "inputs_sha256": "4f5ab88eb4d6d9c38de1f9ea8415ef5f2b2d72e847bd59ad65a486c0e286e395",
@@ -1524,7 +1524,7 @@
     "candidate": "max_speed with a BF16 copy of the linears (heads FP32), recorded before any consent",
     "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
     "runtime_commit": "973842d9edf7172097a9b7f1b1bff076d1e78056",
-    "runtime_env": "decision20-lux-runtime image: PyTorch 2.12.0 ROCm 7.2"
+    "runtime_env": "the Decision 2.0 track's runtime image: PyTorch 2.12.0 ROCm 7.2"
    },
    "device_class": "rocm",
    "inputs_sha256": "4f5ab88eb4d6d9c38de1f9ea8415ef5f2b2d72e847bd59ad65a486c0e286e395",

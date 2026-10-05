@@ -110,7 +110,7 @@ statements or hard-coded UI enums. Capability IDs follow `<domain>/<name>@<versi
 
 Training hardware requirements remain distinct from inference qualification hardware requirements:
 a neural model trained on CUDA/ROCm GPUs may be planned and qualified across multiple runtime targets
-(such as `runtime/model-runtime@v1`, the model runtime's OpenAPI 2.x contract, on a CPU or a GPU).
+(such as `runtime/model-runtime@v1`, the model runtime's OpenAPI 2.x contract, on a CPU or an AMD GPU).
 The built-in catalog qualifies ModernBERT label-score and span classifiers from Safetensors
 checkpoints on the model runtime and selectors on the native runtime. When a registered runtime
 accepts only another format, the planner schedules the conversion a registered rule provides.

@@ -19,7 +19,7 @@
  "inputs": 539,
  "shipped_image": {
   "commit": "a580be6b9 (staging; the runtime and router in the image)",
-  "image": "mr-p24-lead/extproc-rocm72rt:a580be6b9 (sha256:578df96a7715; Dockerfile.extproc at a580be6b9: the PyTorch 2.12.0+git6bbd260 of vllm/vllm-openai-rocm@sha256:1fd21abe..., AOTriton 0.13.50, its ROCm 7.2.3 userspace, Triton 3.7.0, fla-core 0.5.2, causal-conv1d 1.7.0)",
+  "image": "the router's ROCm image (sha256:578df96a7715; Dockerfile.extproc at a580be6b9: the PyTorch 2.12.0+git6bbd260 of vllm/vllm-openai-rocm@sha256:1fd21abe..., AOTriton 0.13.50, its ROCm 7.2.3 userspace, Triton 3.7.0, fla-core 0.5.2, causal-conv1d 1.7.0)",
   "rounds": [
    {
     "round": 1,
@@ -575,7 +575,7 @@
  },
  "stack_b_image": {
   "commit": "efc68a81ceebaf59b12f323441a567f98663be4a",
-  "image": "mr-p24-router/extproc-rocm72:efc68a81c (sha256:6132ace6f458; Dockerfile.extproc target extproc, ACCELERATOR=rocm, TORCH_ROCM_INDEX rocm7.2: PyTorch 2.12.0+rocm7.2, HIP 7.2.53211, triton-rocm 3.7.0, fla-core 0.5.2; no causal-conv1d)",
+  "image": "the router's ROCm image at efc68a81c (sha256:6132ace6f458; Dockerfile.extproc target extproc, ACCELERATOR=rocm, TORCH_ROCM_INDEX rocm7.2: PyTorch 2.12.0+rocm7.2, HIP 7.2.53211, triton-rocm 3.7.0, fla-core 0.5.2; no causal-conv1d)",
   "rounds": [
    {
     "round": 1,
@@ -1596,7 +1596,7 @@
    }
   },
   "cpu_image_diagnostic": {
-   "image": "mr-p24-router/extproc-cpu:efc68a81c (sha256:48e2fbebcee4; Dockerfile.extproc target extproc, ACCELERATOR=cpu: PyTorch 2.10.0+cpu), same tree, cores, config and corpus",
+   "image": "the router's CPU image at efc68a81c (sha256:48e2fbebcee4; Dockerfile.extproc target extproc, ACCELERATOR=cpu: PyTorch 2.10.0+cpu), same tree, cores, config and corpus",
    "method": "two rounds alternating cpuimg (the CPU image) and cpu (this record's CPU side), order rotated; indicative only: the node's load was higher during the cpu passes",
    "rounds": [
     {
