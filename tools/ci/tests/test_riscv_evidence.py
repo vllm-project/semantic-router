@@ -199,7 +199,7 @@ class RISCVTests(unittest.TestCase):
             directory = Path(folder)
             model = {
                 "name": "Domain",
-                "repo_id": "llm-semantic-router/Vela-1.0-Encoder-307M-Domain",
+                "repo_id": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
                 "revision": SHA,
                 "path": "/models/candle/" + SHA,
             }
