@@ -107,15 +107,22 @@ def test_the_refusal_comes_before_any_weights_load_and_is_final(
     from vllm_sr_runtime.engines.native.engine import NativeEngine
     from vllm_sr_runtime.runtime import Runtime
 
+    import vllm_sr_runtime.runtime as runtime_module
+
     monkeypatch.setattr(torch._C, "has_lapack", False)
-    loads = []
-    load = NativeEngine.load
+    loads, placements = [], []
+    load, placed = NativeEngine.load, runtime_module.place
 
     def counted(self, spec, *args, **kwargs):
         loads.append(spec.name)
         return load(self, spec, *args, **kwargs)
 
+    def placing(spec, *args, **kwargs):
+        placements.append(spec.name)
+        return placed(spec, *args, **kwargs)
+
     monkeypatch.setattr(NativeEngine, "load", counted)
+    monkeypatch.setattr(runtime_module, "place", placing)
     models = (
         ModelConfig(model=str(qwen35_package), name="gated", device="cpu"),
         ModelConfig(model=str(qwen3_package), name="dense", device="cpu"),
@@ -130,6 +137,7 @@ def test_the_refusal_comes_before_any_weights_load_and_is_final(
         assert "built without LAPACK" in gated.health.reason
         assert dense.health.ready
         assert loads == ["Decision-2.0-Tiny-Qwen3"]
+        assert placements.count("Decision-2.0-Tiny-Qwen3.5") == 1
     finally:
         runtime.stop()
 
