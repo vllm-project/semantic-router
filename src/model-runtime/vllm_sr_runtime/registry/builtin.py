@@ -74,7 +74,11 @@ def _read(families: dict[str, registry.PluginEntry]) -> _Table:
             continue
         if not module:
             continue
-        pinned = tuple(importlib.import_module(module).MODELS)
+        try:
+            pinned = tuple(importlib.import_module(module).MODELS)
+        except Exception as exc:  # a table that can't load pins nothing
+            log.warning("family %s's table %s is not loadable: %s", name, module, exc)
+            continue
         strays = sorted({model.family for model in pinned} - {name})
         if strays:
             raise registry.PluginError(

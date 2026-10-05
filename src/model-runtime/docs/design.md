@@ -544,9 +544,11 @@ families keep theirs in `registry/tables/<family>.py`, with the full
 revisions, file digests, the expected identity and parameter count, and
 reference answers per device class in `registry/golden_answers*.json`.
 `registry.builtin` reads the tables of the installed families once, in
-family-name order; a repository two tables pin, or a table entry of another
-family, is refused. A new revision is a new entry; the runtime never follows
-a moving branch.
+family-name order. A table that fails to import pins nothing and is logged,
+as a family that fails to load serves nothing. A repository two tables pin,
+or a table entry of another family, is refused, and with it every model of
+the process, built-ins included: no family may take over another's pin. A new
+revision is a new entry; the runtime never follows a moving branch.
 
 ### 7.4 Licence and access
 

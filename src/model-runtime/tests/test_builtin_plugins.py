@@ -11,6 +11,7 @@ runtime finds them through the entry points and the classes' declarations.
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 import sys
 import textwrap
@@ -259,3 +260,19 @@ def test_a_table_pins_only_its_family_and_a_repository_once(monkeypatch):
     twin = entry("twin", f"{__name__}:TwinFamily")
     with pytest.raises(registry.PluginConflictError, match="decision2 and twin"):
         builtin._read({"decision2": decision2, "twin": twin})
+
+
+class BrokenTableFamily(Decision2Family):
+    name = "broken"
+    builtin_table = "a_table_that_does_not_import"
+
+
+def test_a_table_that_fails_to_import_pins_nothing_and_spares_the_others(caplog):
+    decision2 = registry.discover()["families"]["decision2"]
+    broken = registry.PluginEntry(
+        "families", "broken", f"{__name__}:BrokenTableFamily", None, None
+    )
+    with caplog.at_level(logging.WARNING, logger="vllm_sr_runtime"):
+        table = builtin._read({"broken": broken, "decision2": decision2})
+    assert table.models == builtin.all_models("decision2")
+    assert "a_table_that_does_not_import" in caplog.text

@@ -101,10 +101,13 @@ startup self-check and its per-question metrics.
 A family can also ship models of its own, pinned to a revision: name a module
 whose `MODELS` lists them (`BuiltinModel` entries with the repository,
 revision, identity and recorded golden answers) in `builtin_table`. The
-runtime then serves them by name and checks their answers at startup. Name the
-module that writes tiny test packages in `fixture_writer`, and
-`vllm-sr-runtime fixture --family <name>` writes one. The built-in families
-declare both the same way.
+runtime then serves them by name and checks their answers at startup. A table
+that fails to import pins nothing, and the runtime logs why. A table that pins
+a repository another family's table pins, or lists another family's model,
+stops every model of the process from loading, built-in ones included, until
+you remove the conflict. Name the module that writes tiny test packages in
+`fixture_writer`, and `vllm-sr-runtime fixture --family <name>` writes one.
+The built-in families declare both the same way.
 
 **2. The engine, if you need one.** Most families reuse the built-in `native`
 (PyTorch) or `onnxruntime` engine by describing their network in the
