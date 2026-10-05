@@ -310,7 +310,7 @@ components:
           description: exact, or the profile the server enabled for this model.
         return_meta:
           type: boolean
-          description: Include meta in the response (default true).
+          description: Include meta in the response (default false).
     DecisionResponse:
       type: object
       required: [model, answers, usage]

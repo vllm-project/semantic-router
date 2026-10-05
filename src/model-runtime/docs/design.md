@@ -318,7 +318,10 @@ The contract is `vllm_sr_runtime/api/openapi.yaml` (OpenAPI 3.0.3), served at
 `GET /openapi.yaml`, checked by contract tests on both sides, and the source of
 the Go client in `pkg/modelservice/api`. Every surface takes an optional
 `model` (the served model ID, required when a process serves several models)
-and `options` with `deadline_ms` and `return_meta`. A request-level error uses
+and `options` with `deadline_ms` and `return_meta` (the runtime's `meta`:
+revision, profile, numerics, engine, device and timings, only when asked;
+a family's own fields such as `meta.representation` are always returned).
+A request-level error uses
 an HTTP status with `{"error": {"code", "message"}}`: 400 `invalid_request`,
 404 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface`
 (the model does not serve this surface), 429 `overloaded`, 503 `not_ready`.

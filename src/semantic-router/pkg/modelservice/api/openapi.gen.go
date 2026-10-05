@@ -589,7 +589,7 @@ type RequestOptions struct {
 	// Profile exact, or the profile the server enabled for this model.
 	Profile *string `json:"profile,omitempty"`
 
-	// ReturnMeta Include meta in the response (default true).
+	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
 }
 

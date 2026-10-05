@@ -724,7 +724,7 @@ class Runtime:
                 "invalid_request",
                 f"options.profile must be one of {sorted(served.profiles) or ['exact']}",
             )
-        return_meta = options.get("return_meta", True)
+        return_meta = options.get("return_meta", False)
         if not isinstance(return_meta, bool):
             raise RuntimeServiceError(
                 "invalid_request", "options.return_meta must be a boolean"

@@ -66,12 +66,11 @@ func (c *Client) Decide(ctx context.Context, request Request) (Response, error) 
 	if err != nil {
 		return Response{}, err
 	}
-	returnMeta := true
 	body := api.DecisionRequest{
 		Model:     optionalString(request.Model),
 		State:     request.State,
 		Questions: make(map[string]api.Question, len(request.Questions)),
-		Options:   &api.RequestOptions{ReturnMeta: &returnMeta, DeadlineMs: deadline},
+		Options:   &api.RequestOptions{DeadlineMs: deadline},
 	}
 	for _, question := range request.Questions {
 		body.Questions[question.ID] = encodeQuestion(question)
@@ -113,9 +112,6 @@ func encodeQuestion(question Question) api.Question {
 
 func decodeResponse(body api.DecisionResponse) Response {
 	decoded := Response{Model: body.Model, Answers: make(map[string]Answer, len(body.Answers)), InputTokens: body.Usage.InputTokens}
-	if body.Meta != nil && body.Meta.Revision != nil {
-		decoded.Revision = *body.Meta.Revision
-	}
 	for id, answer := range body.Answers {
 		decoded.Answers[id] = decodeAnswer(answer)
 	}
