@@ -80,8 +80,8 @@ os.kill(pid, signal.SIGKILL)
 print(pid)
 `
 
-// runtimeArgs prints, as JSON, the command line the Router started the
-// runtime process that serves one socket with.
+// runtimeArgs prints, as JSON, the command line of the runtime process that
+// serves one socket.
 const runtimeArgs = findRuntime + `
 import json, sys
 print(json.dumps(runtime(sys.argv[1])[1]))

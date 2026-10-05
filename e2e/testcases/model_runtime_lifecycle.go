@@ -17,7 +17,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("model-runtime-lifecycle", pkgtestcases.TestCase{
-		Description: "The Router starts its managed runtimes in process groups, each with a share of its cores and a deployment on device auto in the CPU group on a node without a GPU, attaches to an external runtime by served name, and reports each deployment's readiness",
+		Description: "The Router starts its managed runtimes in process groups, each with a share of its cores (on a node without a GPU, a deployment on device auto joins the CPU group), attaches to an external runtime by served name, and reports each deployment's readiness",
 		Tags:        []string{"model-runtime", "lifecycle", "managed", "attached"},
 		Fn:          testModelRuntimeLifecycle,
 	})
