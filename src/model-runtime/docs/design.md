@@ -627,9 +627,15 @@ own, measured from when the HTTP request arrived). Decision models still run
 each task as its own batch (their released numerics), and a family that sets
 `fuse_bundled_jobs` (encoders) runs the group as one batch, so one forward
 serves every head and consumer that reads the same input. On a batch-invariant model, `exact` runs the queued jobs
-of concurrent requests in shared batches: one length class (power-of-two band
-of padded length) per batch, at most 512 padded tokens, rows with the same
-token IDs always together so the family computes them once. Repeated cacheable
+of concurrent requests in shared batches of at most 512 padded tokens, rows
+with the same token IDs always together so the family computes them once. A
+model that pads its rows (multimodal Omni) keeps one length class
+(power-of-two band of padded length) per batch; a model that packs its rows
+back to back (`packs_rows`: the native encoders of `task_heads`) mixes lengths
+freely, since a packed row costs no padding, and closed-loop callers' short
+texts of different lengths then still share forwards. Either way each row's
+answer is the one it gets alone, which the load-time probe checks on a batch
+that spans several length classes. Repeated cacheable
 items are answered from the model's result cache (`--result-cache-entries`,
 keyed by profile and content).
 
