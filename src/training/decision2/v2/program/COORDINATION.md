@@ -205,6 +205,46 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 02:05 — **`contracts` → lead (successor of 01c6684b), parent: INTEGRATION READY contracts `69ab7e6d7`** (`xunzhuo/model-runtime-p24-contracts`, pushed, clean; contains staging `122152210` and merges cleanly into `4df250299`: the only file both touch, design.md, merges without conflict). **R2-P2-9 ([#4599](https://github.com/vllm-project/semantic-router/issues/4599)), R2-P2-2 ([#4597](https://github.com/vllm-project/semantic-router/issues/4597)) and the R2-P2-1 remainder ([#4596](https://github.com/vllm-project/semantic-router/issues/4596)) are done. One operator-facing effect is for the parent's ruling (below).**
+  - **R2-P2-9, liveness and readiness (`ef6d65d63`):**
+    - Contract: `GET /health/live` answers a new `Liveness` schema (`status: alive`, `api_version`). `Health` serves `GET /health` with the six readiness states only. The liveness body no longer carries `reason` or `model`.
+    - **Version: stays 2.0.0.** #4512 introduces 2.0.0 and it is unreleased (`main` serves 1.0.0). The tests define the version as `info.version`, equal to the served `api_version`, and the router refuses only another major.
+    - Generated: the router's Go client (`GetLivenessResponse.JSON200` is a `*Liveness`; `HealthStatus` loses `alive`). The router reads only `/health`, so no router code changes.
+    - Tests: the contract tests check each endpoint against its own schema, that liveness answers 200 while the runtime isn't ready, and that each schema refuses the other's states. **E2E:** the `model-runtime` lifecycle case requires the attached runtime to answer liveness `alive` and readiness `ready` under the `api_version` its `/v1/models` reports.
+    - Docs: the HTTP reference and design §6.6 (the reference has no zh-Hans copy).
+  - **R2-P2-2, training contract (`3bd102e1f`, `69ab7e6d7`): `semantic-router.training/v1` becomes `v2`.**
+    - One `runtime/model-runtime@v1` (connector `sr.model-runtime.openapi.v2`) replaces `runtime/candle@v1` and `runtime/onnxruntime@v1`. It serves label-score and span classifiers from ModernBERT Safetensors checkpoints, FP32, on CPU, CUDA, ROCm and Apple GPUs.
+    - Removed with them, because no Router runtime serves them now: `architecture/hf-bert@v1`, `format/onnx@v1`, `executor/onnx-exporter@v1` and the Safetensors-to-ONNX rule. ModernBERT lists the runtime's required files.
+    - **Why v2:** v1 shipped on `main`, and removing built-in capabilities breaks v1 clients. The files are now `training-v2.{schema.json,openapi.yaml}`, the base path is `/api/training/v2`, and a v1 document is refused (a shared invalid fixture that Go and Python both check).
+    - Generated: the schema, `testdata/capabilities.json` and the Console's `generated/trainingContract.ts`.
+    - Tests: the planner plans classifiers against the model runtime (one Safetensors variant, no export), refuses FP16 on it and refuses `runtime/candle@v1` as unknown. Conversions are tested with runtimes and rules registered out of tree. The Console test requires classifiers to qualify on the model runtime only.
+    - Consumers and docs: `src/training/control_plane` (contracts and tests), the Console test, `src/training/README.md`. No public website page documents this contract.
+  - **R2-P2-1 remainder, retired path keys (`d7ebc4bfa`, `d3e764371`):**
+    - Router: `EmbeddingModels.Retired{Gemma,Bert}ModelPath` and the schema's `maxLength: 0` properties are gone. The loader refuses the key itself, empty or set, by path with the `vllm-sr config migrate` pointer, before the unknown-field check; a `ParseYAMLBytes` test pins it. The dashboard's router-config TS never had these fields.
+    - CLI: `models.py` drops both fields, and the raw check refuses the key even when empty.
+    - **Migration:** `vllm-sr config migrate` already dropped both keys, empty or set. A new test migrates a config with empty keys and parses the result.
+    - Operator: `v1alpha1` `EmbeddingModelsConfig.GemmaModelPath` is removed. The CRD, the OLM bundle (`make bundle`, validated) and `crd-reference.md` are regenerated. A new test prunes a CR that carries the key with both generated CRD copies, through the API server's own pruning code.
+    - Configs: `bench/agent_crew/configs/crew.yaml` and `responses-state.yaml` drop the empty keys.
+    - Docs: the migration guide (en, zh-Hans) lists the keys in its review table and tells operator users what to do.
+  - **For the parent's ruling, the effect on operator users (recommendation: accept, as documented):**
+    - Once the new CRD is installed, the API server prunes `spec.config.embedding_models.gemma_model_path`.
+    - kubectl's default strict field validation refuses a manifest that still sets it, as `unknown field`, without the migrate pointer.
+    - A CR stored before the upgrade loses the field as if it had never been set; its router embeds with whatever else the CR configures (for example Vela Embedding through `mmbert_model_path`). Vectors stored by EmbeddingGemma must be re-embedded, as the guide says.
+    - On this branch a non-empty value already made the router refuse the config, and no released operator sample ever set the field.
+    - The only alternative is to keep the field as a deprecated stub with a CEL refusal, which is a compatibility shim in the API, against the instruction.
+  - **Checks:**
+    - **Node A, exact checkout of `69ab7e6d7`, precommit image (96–127):** `make check CHANGED_FILES=<the 48 files over staging>` exit 0. It ran codespell, pre-commit, ruff, golangci-lint, translation coverage, `docs-cli-check` / `docs-cli-test`, `docs-crd-check`, `training-contract-check`, `generated-contract-check`, `test-semantic-router`, `config-schema-check`, `test-e2e-profile-multimodal`, `vllm-sr-test` (3,160 passed), `model-runtime-test` (592), `model-runtime-client-check`, `dashboard-check` (204 files), `generate-api-check`, `build-e2e`, `test-e2e-unit` and `test-training-contracts` (108).
+    - **Kind on node A (0–31)** on `d3e764371`, whose tree differs from the READY head by one blank line in `capability.go`: `model-runtime` 10/10, including the lifecycle case with the new assertion; `external-gateway-responses` 3/3.
+    - Operator: `make manifests generate`, `make bundle` (validated), `make docs-crd`, `go test ./...`.
+    - Not run: `make harness-check` (no registry or harness change).
+    - **Lead, FYI:** `make test-e2e-profile-multimodal` is a Go unit test of the profile package (`cd e2e && go test ./profiles/multimodal-routing/`). It needs no Kind, and `make check` runs it.
+  - **`router` (successor of cab0e94a), FYI:** this branch changes the runtime's `api/openapi.yaml` (`Health`, the new `Liveness`) and regenerates `pkg/modelservice/api/openapi.gen.go`. If R2-P2-7 adds to the contract, merge staging after this lands and regenerate the client (`make model-runtime-client-generate`) rather than hand-merging it.
+  - **Released:** nothing of mine runs on any node; node A 0–31 and 96–127 are free. Handoff: `mr-scratch/p24-contracts/HANDOFF.md`.
+  — `contracts`
+
+- 2026-10-06 02:02 — **Model-runtime P2–4 lead (successor of 01c6684b) → `p24-finish`, parent: DISCLOSURE, node C. At about 01:55–01:57 the lead loaded a 14 GB image there (`docker load` from the network, about 90 s of disk and CPU) during your timed decoder A/B. Please re-run any round that overlapped that window, or state it in the record. Nothing else of the lead's runs or lands on node C before 03:00.** Also: `vela2-08b` READY `e4c9073ed` is merged, and staging is `4df250299` (node A check and smoke running). Slimming: the image from `31d00387c` (staging plus the slim commit) has 14.4 GB of content, and every retained file is identical to `a580be6b9`'s. Decision 1.0 / 2.0 (except Vega-27B, which has no cache on node D) and the embed ROCm goldens are identical values in it. The Vela goldens, the 4B panel and the GPU smoke run on node B now.
+  — lead (successor of 01c6684b)
+
 - 2026-10-06 02:02 — **`p24-finish` → parent, lead (successor of 01c6684b): Kai-0.6B's CPU router cell has a FOUND CAUSE and a candidate fix, being verified now. The ROCm re-time is ahead of schedule.**
   - **Cause (diagnostic runs on node D 32–47, not records):** the runtime's CPU forward runs in one of two modes per fresh process.
     - Kai's router requests (30 prompts, C = 1) take about 650–680 ms at p50 in some processes and about 820–870 ms in others: 4 of 7 slow in one batch, 2 of 6 in another. The bundled runtime ran 641–654 ms in every one of its processes.
