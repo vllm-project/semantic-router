@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/runtimetest"
 )
 
@@ -41,12 +43,17 @@ func TestMain(m *testing.M) {
 
 func serveManagedFake(args []string) {
 	socket, modelsFile := "", ""
+	limits := api.ProcessLimits{MaxBundleTasks: DefaultBundleTasks, MaxRequestBytes: 8 << 20}
 	for index := 0; index+1 < len(args); index++ {
 		switch args[index] {
 		case "--uds":
 			socket = args[index+1]
 		case "--models":
 			modelsFile = args[index+1]
+		case "--max-bundle-tasks":
+			limits.MaxBundleTasks, _ = strconv.Atoi(args[index+1])
+		case "--max-request-bytes":
+			limits.MaxRequestBytes, _ = strconv.Atoi(args[index+1])
 		}
 	}
 	data, err := os.ReadFile(modelsFile)
@@ -64,6 +71,7 @@ func serveManagedFake(args []string) {
 		os.Exit(2)
 	}
 	fake := fakeModels(document.Models)
+	fake.SetLimits(limits)
 	failed := os.Getenv(fakeRuntimeFailAlwaysEnv) == "1"
 	if marker := os.Getenv(fakeRuntimeFailOnceEnv); marker != "" {
 		_, statErr := os.Stat(marker)
@@ -345,6 +353,38 @@ func managedFakeLease(t *testing.T) *Lease {
 		t.Fatal(err)
 	}
 	return lease
+}
+
+// TestManagedProcessesTakeTheRouterLimits sends a body between the runtime's
+// default 8 MiB bound and the managed one through a managed process, which
+// was started with the router's --max-request-bytes and --max-bundle-tasks;
+// the client learns the bundle cap from the process.
+func TestManagedProcessesTakeTheRouterLimits(t *testing.T) {
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(fakeRuntimeEnv, "1")
+	t.Setenv(RuntimeCommandEnv, binary)
+	t.Setenv(RuntimeDirEnv, filepath.Join(t.TempDir(), "run"))
+	manager := NewManager()
+	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
+	lease, err := manager.Acquire(runtimeConfig(map[string]config.ModelDeployment{
+		"domain": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Domain", Device: "cpu"},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitReady(t, lease, "domain")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	response, err := lease.Classify(ctx, "domain", ClassifyRequest{Inputs: []ClassifyInput{{Text: strings.Repeat("a", 16<<20)}}})
+	if err != nil || len(response.Results) != 1 {
+		t.Fatalf("a 16 MiB request must fit a managed process: %v", err)
+	}
+	if limit := lease.members["domain"].group.client.bundleTasks.Load(); limit != managedBundleTasks {
+		t.Fatalf("the client's bundle cap is %d, want the managed %d", limit, managedBundleTasks)
+	}
 }
 
 func TestSupervisorRestartsAProcessWhoseEveryModelFailedToLoad(t *testing.T) {

@@ -503,10 +503,8 @@ export interface EmbeddingEndpointConfig {
 
 export interface EmbeddingModelsConfig {
   qwen3_model_path?: string
-  gemma_model_path?: string
   mmbert_model_path?: string
   multimodal_model_path?: string
-  bert_model_path?: string
   use_cpu?: boolean
   embedding_config?: EmbeddingOptimizationConfig
   endpoint?: EmbeddingEndpointConfig

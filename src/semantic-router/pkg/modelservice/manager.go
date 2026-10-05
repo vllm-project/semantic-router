@@ -148,7 +148,6 @@ func (m *Manager) startGroupLocked(plan *processPlan) (*group, error) {
 	if err != nil {
 		return nil, err
 	}
-	client.bundleTasks = managedBundleTasks
 	g := newGroup(plan, client, true)
 	g.modelsFile = modelsFile
 	g.supervisor = &supervisor{

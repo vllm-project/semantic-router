@@ -384,7 +384,7 @@ def _execute_serve(
     help=(
         "Deployment profile: dev, prod (k8s target only). Selects "
         "values-<profile>.yaml defaults. With MODEL: the runtime numerics profile "
-        "(exact, shared_context, batching, max_speed)."
+        "(default exact; vllm-sr-runtime plugins lists the installed ones)."
     ),
 )
 @click.option(

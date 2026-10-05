@@ -184,22 +184,22 @@ func (p *processPlan) writeModelsFile(path string) error {
 	return os.WriteFile(path, append(data, '\n'), 0o600)
 }
 
-// managedRequestBytes bounds a managed runtime's request bodies. The runtime
+// ManagedRequestBytes bounds a managed runtime's request bodies. The runtime
 // serves the router alone over its private socket, so the bound only has to
 // hold the largest request the router sends: a request stage's bundle, which
 // can carry images (two at the 20 MB per-image cap of the common chat APIs,
 // base64-encoded, fit).
-const managedRequestBytes = 64 << 20
+const ManagedRequestBytes = 64 << 20
 
 // managedBundleTasks caps the tasks of a managed runtime's bundles. A request
 // stage sends each process one bundle with every call it makes, and PII alone
-// makes a call per text chunk, so the cap is far above the runtime's default;
-// a stage with more calls is split at it.
+// makes a call per text chunk, so the cap is far above the runtime's default.
+// The runtime reports it in /v1/models, and a stage with more calls is split.
 const managedBundleTasks = 1024
 
 func managedCommand(base []string, socket, modelsFile, cacheDir string, threads int) []string {
 	command := append(append([]string(nil), base...), "serve", "--models", modelsFile, "--uds", socket,
-		"--max-request-bytes", strconv.Itoa(managedRequestBytes), "--max-bundle-tasks", strconv.Itoa(managedBundleTasks))
+		"--max-request-bytes", strconv.Itoa(ManagedRequestBytes), "--max-bundle-tasks", strconv.Itoa(managedBundleTasks))
 	if cacheDir != "" {
 		command = append(command, "--cache-dir", cacheDir)
 	}

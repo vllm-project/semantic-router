@@ -131,8 +131,6 @@ func SemanticCacheEmbeddingModel(cfg *RouterConfig) string {
 		return "multimodal"
 	case cfg.Qwen3ModelPath != "":
 		return "qwen3"
-	case cfg.GemmaModelPath != "":
-		return "gemma"
 	default:
 		return DefaultEmbeddingModel
 	}
@@ -151,8 +149,6 @@ func MemoryEmbeddingModel(cfg *RouterConfig) string {
 		return "multimodal"
 	case cfg.Qwen3ModelPath != "":
 		return "qwen3"
-	case cfg.GemmaModelPath != "":
-		return "gemma"
 	default:
 		return DefaultEmbeddingModel
 	}

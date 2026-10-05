@@ -378,7 +378,6 @@ global:
     embeddings:
       semantic:
         qwen3_model_path: models/mom-embedding-pro
-        bert_model_path: models/mom-embedding-light
         use_cpu: true
         embedding_config:
           min_score_threshold: 0.6
@@ -419,9 +418,6 @@ global:
 	}
 	if cfg.Qwen3ModelPath != "models/mom-embedding-pro" {
 		t.Fatalf("expected semantic embedding model override, got %q", cfg.Qwen3ModelPath)
-	}
-	if cfg.BertModelPath != "models/mom-embedding-light" {
-		t.Fatalf("expected bert embedding path override, got %q", cfg.BertModelPath)
 	}
 	if got := cfg.ModelConfig["qwen2.5:3b"].ReasoningFamily; got != "qwen3" {
 		t.Fatalf("expected provider model reasoning family, got %q", got)
@@ -469,7 +465,7 @@ global:
   model_catalog:
     embeddings:
       semantic:
-        bert_model_path: models/mom-embedding-light
+        qwen3_model_path: models/mom-embedding-pro
         use_cpu: true
 `)
 
