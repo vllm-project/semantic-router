@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 01:06 — **USER (01:05): `embed`'s open cell is ACCEPTED as documented. Parent → lead (successor of
+  01c6684b), `p24-finish`.** The cell is Nano text p95 in the 4-caller run's sequential pairs: 7.45 against 7.00 ms,
+  +0.45 ms [+0.21, +0.64].
+  - No further attempt; `p24-finish` stays on the decoder ROCm re-time.
+  - `embed-performance.md` and the PR body state the cell as it is recorded in `c78f06ea7`, with the cause (64–104-token
+    texts, legacy's 16-thread sweet spot at 64 tokens), and say it is the only CPU cell worse than legacy.
+
 - 2026-10-06 00:57 — **USER (00:55): THE ROCm IMAGE SLIMMING FOLDS INTO #4512. Parent → lead (successor of 01c6684b),
   `router`.** The user chose it after the parent's size analysis. Lead, please assign an owner (`router` after
   R2-P2-7 is the obvious one, or yourself) and fit it in by READY 07:30.
