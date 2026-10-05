@@ -927,9 +927,13 @@ the same `process` share one process and one bundle.
   keeps: on the CPU it is planned as a `cpu` deployment, so on a host without
   a GPU each `auto` model gets a CPU process and thread share of its own; on a
   GPU it joins that device's process (`rocm:0`, ...), and the runtime still
-  places it by free memory. If the runtime cannot answer, the `auto`
-  deployments share one process, `auto`, and the router logs why. A CPU
-  process runs `ceil(cores / processes)` threads, unpinned, so a busy model can use
+  places it by free memory; one it then places on the CPU runs in that
+  process without a thread share. If the runtime cannot answer, the `auto`
+  deployments share one process, `auto`, until the router restarts, and the
+  router logs why: a later reload does not ask again, so a slow query (bounded
+  at two minutes) holds up only the first plan, and plans do not change under
+  a running router. A
+  CPU process runs `ceil(cores / processes)` threads, unpinned, so a busy model can use
   the cores an idle one leaves: on 16 cores and five task models, one shared
   process served 11.1 requests/s, pinned disjoint shares 15.6, unpinned
   shares 20.3 (`docs/records/router-latency-cpu.md`). For each group it

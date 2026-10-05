@@ -101,8 +101,12 @@ picks on the router's host. On a host without a GPU that is the CPU, so each
 of them gets a CPU process of its own, as with `device: cpu`. On a GPU host
 they share the process of the first GPU, such as `rocm:0`, with the
 deployments you put on that GPU; the runtime may still place a model on
-another device when that GPU lacks the memory. `vllm-sr-runtime devices`
-shows the device `auto` picks first.
+another device when that GPU lacks the memory, and a model it places on the
+CPU there may use every core the router has. `vllm-sr-runtime devices` shows
+the device `auto` picks first. The router asks once, the first time it runs a
+deployment on `auto`; if the runtime cannot answer, the `auto` deployments
+share one process until the router restarts, and the router logs
+`auto_device_unresolved`.
 
 Give a deployment its own `process` name when it should not share a fault
 domain or memory with the others, for example a large decision model:
