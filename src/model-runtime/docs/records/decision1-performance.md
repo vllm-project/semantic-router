@@ -6,8 +6,9 @@ on the same node, inputs and devices.
 - **On CPU, exact is level with the bundled runtime or better on every row of
   the tables but one, Kai's router requests (7.6% slower at p50, wholly). With
   the huge-page default (`129be34ea`) the slow mode behind it is gone;
-  re-timed alone, Kai's and Lex's router requests are 3.3% and 2.6% slower at
-  p50 and Kai's single-request p95 2.8%, wholly, and open** (CPU section).
+  re-timed alone, Kai's, Lex's and Route's router requests are 3.3%, 2.6% and
+  2.1% slower at p50 and Kai's single-request p95 2.8%, wholly, and open**
+  (CPU section).
   Every CPU row is an interleaved A/B with a 95% interval on the difference:
   single requests on uniform and mixed lengths for all seven models, their
   throughput, and router requests. Both sides run the same FP32 math through
@@ -108,16 +109,18 @@ the decoders' `shared_context`.
 ## ROCm
 
 Every row is the 16:53-standard A/B in the router's ROCm image,
-`Dockerfile.extproc` at `a580be6b9` (`ACCELERATOR=rocm`): PyTorch 2.12.0+git6bbd260 (AOTriton
-0.13.50) and the ROCm 7.2.3 libraries from vLLM's ROCm image, Triton 3.7.0,
-FLA 0.5.2 and `causal-conv1d` 1.7.0. Both sides run in that image, with
-Transformers 5.17.0 and `regex` appended to `PYTHONPATH` for the bundled side.
-The runtime is `1bd99cd37`, one AMD Instinct MI325X (gfx942) per run. On this
-image the runtime's answers are byte-identical to the release (parity record).
-These rows replace the same rows timed on the official-wheel stack
-(`be7366c49`, the packages of `af71d5e82`, runtime `a1c7a284e`), which were
-level or better everywhere too; their runs and intervals stay in
-`decision1-performance.json` (`intervals` keys `rocm-official-wheel*`).
+`Dockerfile.extproc` at `a580be6b9` (`ACCELERATOR=rocm`): PyTorch
+2.12.0+git6bbd260 (AOTriton 0.13.50) and the ROCm 7.2.3 libraries from vLLM's
+ROCm image, Triton 3.7.0, FLA 0.5.2 and `causal-conv1d` 1.7.0. Both sides run
+in that image, with Transformers 5.17.0 and `regex` appended to `PYTHONPATH`
+for the bundled side. The runtime is `1bd99cd37`, one AMD Instinct MI325X
+(gfx942) per run. On this image the runtime's answers are byte-identical to
+the release (parity record). These rows replace the same rows timed on the
+official-wheel stack (`be7366c49`, the packages of `af71d5e82`, runtime
+`a1c7a284e`), which were level or better everywhere too; their runs and
+intervals stay in `decision1-performance.json` (`intervals` keys
+`rocm-official-wheel*`). They ran before the huge-page default (`129be34ea`),
+which changes only CPU-side allocations on a GPU.
 
 - **Cores:** each GPU's host threads run in a docker cgroup cpuset of 8 cores
   on the GPU's own NUMA node that no other timed job used (GPU1 0–7, GPU2
@@ -488,22 +491,30 @@ Throughput, requests/s, as above:
   | Lex router, p95 | +52.7 ms [−2.7, +108.0], level | +47.6 [−70.4, +165.5], level |
   | Lex router, one at a time | −0.04 requests/s [−0.06, −0.01], worse | −0.05 [−0.14, +0.03], level |
   | Lex router, C = 1 | −0.03 requests/s [−0.05, −0.00], worse | −0.06 [−0.14, +0.02], level |
+  | Route router, p50 | +13.4 ms [+6.2, +20.6] (646.6 → 660.0), worse | +70.3 [−20.1, +160.7], level |
+  | Route router, p95 | +34.0 ms [−8.5, +76.4], level | +116.6 [−26.0, +259.2], level |
+  | Route router, one at a time | −0.04 requests/s [−0.07, −0.01], worse | −0.07 [−0.17, +0.03], level |
+  | Route router, C = 1 | −0.03 requests/s [−0.06, −0.01], worse | −0.08 [−0.16, +0.00], level |
   | Kai single, p50 | −0.05 ms [−1.21, +1.11], level | −0.21 [−2.78, +2.35], level |
   | Kai single, p95 | +2.3 ms [+0.1, +4.6] (83.9 → 86.2), worse | +3.75 [−5.15, +12.65], level |
 
-  Kai's router row ran alone on 16–31; then Lex's router row (32–47) and
-  Kai's single requests (48–63, C = 1 / 4 / 16 level or better) ran side by
-  side. No runtime process fell into the slow mode. Lex's router row and
-  Kai's single-request p95 read worse now because the slow mode's variance
-  left their intervals, not because they got slower. On node D, Lex's
-  runtime read +76.8 ms [−15.8, +169.4] without huge pages, 2 of 6 processes
-  slow, and +10.3 [+5.5, +15.1] with them; Kai's single requests with huge
-  pages on against off were p50 −0.07 ms [−0.67, +0.52] and p95 +0.42
-  [−2.49, +3.32]. Outside Decision 1.0, 5 rounds on against off: Vela
-  Embedding p50 −0.09 ms [−0.41, +0.23] and Vela Domain −0.24 [−0.69,
-  +0.21], p95 level for both; a process's RSS grows by 1.5–23 MiB
-  (0.1–1.3%). Route's router row, the decoders' rows, Vela 2.0 0.3B and
-  Decision 2.0 on CPU were not re-timed under it.
+  Kai's router row ran alone on 16–31; then Lex's router row (32–47) and Kai's
+  single requests (48–63, C = 1 / 4 / 16 level or better) ran side by side. No
+  runtime process fell into the slow mode. Lex's router row and Kai's
+  single-request p95 read worse now because the slow mode's variance left
+  their intervals, not because they got slower. On node D, Lex's runtime read
+  +76.8 ms [−15.8, +169.4] without huge pages, 2 of 6 processes slow, and
+  +10.3 [+5.5, +15.1] with them; Kai's single requests with huge pages on
+  against off were p50 −0.07 ms [−0.67, +0.52] and p95 +0.42 [−2.49, +3.32].
+  Outside Decision 1.0, 5 rounds on against off: Vela Embedding p50 −0.09 ms
+  [−0.41, +0.23] and Vela Domain −0.24 [−0.69, +0.21], p95 level for both; a
+  process's RSS grows by 1.5–23 MiB (0.1–1.3%). Re-timed under the default:
+  Decision 1.0's Kai, Lex and Route on CPU (Route's router row alone on 16–31
+  after the others, load at most 27), and the Vela Embedding and Vela Domain
+  spot checks. Not re-timed under it: the decoders' CPU rows, Vela 2.0 (the
+  0.8B's `exact` cells included) and Decision 2.0 on CPU, and the ROCm rows,
+  where it changes only CPU-side allocations (the weights and forwards run on
+  the GPU).
 - **What is left goes away with a longer OpenMP spin.** On node D with huge
   pages, Kai's router row read +11.7 ms [+2.4, +21.1] on the runtime's
   `GOMP_SPINCOUNT=10000` and +1.9 [−4.1, +7.9] on libgomp's default 300,000.
