@@ -82,7 +82,29 @@ def choose_engine(
     raise RuntimeError(f"no engine can run {spec.name}: {'; '.join(reasons)}")
 
 
-__all__ = ["DEADLINE", "Runtime", "ServedModel", "with_overrides"]
+def planned_engine(config: ModelConfig) -> str:
+    """The engine a served model will run on the CPU, known before anything loads; ``auto`` if only loading can tell.
+
+    A named engine stands. A built-in model's ``auto`` is what
+    ``choose_engine`` will pick: the table's CPU engine, else its family's only
+    engine (the descriptor's ``engines``).
+    """
+    if config.engine != AUTO_ENGINE:
+        return config.engine
+    known = builtin.lookup(config.model)
+    if known is None:
+        return AUTO_ENGINE
+    if "cpu" in known.engines:
+        return known.engines["cpu"]
+    try:
+        family = registry.plugin("families", known.family).load()
+    except (KeyError, ImportError):
+        return AUTO_ENGINE
+    engines = family.descriptor().get("engines", [])
+    return engines[0] if len(engines) == 1 else AUTO_ENGINE
+
+
+__all__ = ["DEADLINE", "Runtime", "ServedModel", "planned_engine", "with_overrides"]
 
 GENERIC_OPTIONS = {"deadline_ms", "profile", "return_meta"}
 SURFACE_FIELDS = {
@@ -259,9 +281,13 @@ class ServedModel:
         )
         profiles = self._profiles()
         default = profiles[config.profile]
-        cpu_models = sum(served.device == "cpu" for served in process.served_models())
+        neighbors = frozenset(
+            planned_engine(served)
+            for served in process.served_models()
+            if served is not config and served.device == "cpu"
+        )
         engine_options = default.engine_options(
-            EngineOptions(threads=process.threads, exclusive_cpu=cpu_models <= 1)
+            EngineOptions(threads=process.threads, cpu_neighbors=neighbors)
         )
         self.health.set("loading", f"loading weights on {placement.device.label}")
 

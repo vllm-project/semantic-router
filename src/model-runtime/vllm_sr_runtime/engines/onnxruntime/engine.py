@@ -245,7 +245,7 @@ class OnnxRuntimeEngine(Engine):
                 name,
                 Path(path),
                 providers.session_options(
-                    choice, options.threads, options.exclusive_cpu
+                    choice, options.threads, not options.cpu_neighbors
                 ),
                 choice,
                 weights,

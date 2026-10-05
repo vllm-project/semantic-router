@@ -156,7 +156,10 @@ def test_the_engine_tells_sessions_whether_the_process_shares_the_cpu(
             spec({"default": path}),
             CPUAccelerator(),
             CPU,
-            EngineOptions(threads=2, exclusive_cpu=exclusive),
+            EngineOptions(
+                threads=2,
+                cpu_neighbors=frozenset() if exclusive else frozenset({"native"}),
+            ),
         )
     assert seen == [True, False]
 

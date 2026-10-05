@@ -251,10 +251,10 @@ class EngineOptions:
     """Execution switches a profile may change. Defaults are the exact path.
 
     ``reduced_precision`` loads, next to the exact weights, the reduced copy the
-    model's ``DtypePolicy`` consents to on its device. ``exclusive_cpu`` is False
-    when the process serves other CPU models: an engine then must not leave
-    threads spinning on the cores after a run, since they slow the next model's
-    forward.
+    model's ``DtypePolicy`` consents to on its device. ``cpu_neighbors`` names
+    the engines of the process's other CPU models (``auto`` where only loading
+    can tell): threads an engine leaves spinning after a run slow another
+    engine's next forward on those cores.
     """
 
     graphs: bool = True
@@ -263,7 +263,7 @@ class EngineOptions:
     merge_lora: bool = False
     reduced_precision: bool = False
     threads: int | None = None
-    exclusive_cpu: bool = True
+    cpu_neighbors: frozenset[str] = frozenset()
     extra: dict[str, Any] = field(default_factory=dict)
 
 

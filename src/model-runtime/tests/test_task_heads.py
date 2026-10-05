@@ -280,10 +280,12 @@ def test_one_forward_reads_every_repeat_and_bundled_task(monkeypatch, client, ru
     assert len(calls) == 1 and len(calls[0]) == 2
 
 
-def test_engines_learn_whether_their_process_shares_the_cpu(packages, monkeypatch):
+def test_engines_learn_the_engines_of_their_processs_other_cpu_models(
+    packages, monkeypatch
+):
     import vllm_sr_runtime.runtime as runtime_module
 
-    seen = {}
+    seen = []
     choose = runtime_module.choose_engine
 
     def recording(name, spec, device, preferred=None):
@@ -291,24 +293,43 @@ def test_engines_learn_whether_their_process_shares_the_cpu(packages, monkeypatc
         load = engine.load
 
         def load_and_record(spec, accelerator, device, options):
-            seen[spec.name] = options.exclusive_cpu
+            seen.append(options.cpu_neighbors)
             return load(spec, accelerator, device, options)
 
         engine.load = load_and_record
         return chosen, engine
 
     monkeypatch.setattr(runtime_module, "choose_engine", recording)
-    alone, other = list(packages.items())[:2]
-    for served in ((alone,), (alone, other)):
-        models = tuple(
-            ModelConfig(model=str(path), name=name, device="cpu")
-            for name, path in served
-        )
+    (name, path), (other, other_path) = list(packages.items())[:2]
+    alone = ModelConfig(model=str(path), name=name, device="cpu")
+    native = ModelConfig(
+        model=str(other_path), name=other, device="cpu", engine="native"
+    )
+    for models, expected in (
+        ((alone,), [frozenset()]),
+        ((alone, native), [frozenset({"native"}), frozenset({"auto"})]),
+    ):
         runtime = Runtime(ServeConfig(models=models, result_cache_entries=0))
         runtime.start(background=False)
         runtime.stop()
-        assert set(seen.values()) == {len(served) == 1}
+        assert seen == expected
         seen.clear()
+
+
+def test_planned_engines_need_nothing_loaded():
+    from vllm_sr_runtime.runtime import planned_engine
+
+    assert (
+        planned_engine(ModelConfig(model="/x", engine="onnxruntime")) == "onnxruntime"
+    )
+    assert planned_engine(ModelConfig(model="/no/such/package")) == "auto"
+    assert (
+        planned_engine(ModelConfig(model="vllm-sr/Vela-1.0-Omni-Nano")) == "onnxruntime"
+    )
+    assert (
+        planned_engine(ModelConfig(model="vllm-sr/Vela-1.0-Encoder-307M-Domain"))
+        == "auto"
+    )
 
 
 @pytest.mark.parametrize("profile", ["shared_context", "batching", "max_speed"])
