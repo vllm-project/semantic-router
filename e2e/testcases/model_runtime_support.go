@@ -179,10 +179,15 @@ type routingPreview struct {
 
 // preview evaluates one user message without generating an answer.
 func (s *modelRuntimeSession) preview(ctx context.Context, text string) (routingPreview, error) {
+	return s.previewConversation(ctx, []map[string]string{{"role": "user", "content": text}})
+}
+
+// previewConversation evaluates a whole conversation without generating an answer.
+func (s *modelRuntimeSession) previewConversation(ctx context.Context, messages []map[string]string) (routingPreview, error) {
 	var preview routingPreview
 	err := s.postAPI(ctx, "/api/v1/routing/preview?trace=true", map[string]interface{}{
 		"model":    "auto",
-		"messages": []map[string]string{{"role": "user", "content": text}},
+		"messages": messages,
 	}, &preview)
 	return preview, err
 }

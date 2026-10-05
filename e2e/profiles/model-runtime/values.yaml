@@ -57,8 +57,11 @@ config:
         - {name: physics, description: Physics, mmlu_categories: [physics]}
         - {name: psychology, description: Psychology, mmlu_categories: [psychology]}
       pii:
+        # testcases/model_runtime_long_history.go needs include_history: each
+        # turn of its history is one more PII task.
         - name: personal_data
           threshold: 0.5
+          include_history: true
           description: Any personal information.
       jailbreak:
         - name: prompt_attack
