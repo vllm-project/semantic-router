@@ -13,7 +13,6 @@ import (
 
 const (
 	gatewayAPICRDsURL           = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml"
-	timeoutAgentGatewayInstall  = 10 * time.Minute
 	timeoutSemanticRouterDeploy = 20 * time.Minute
 	timeoutDemoLLMDeploy        = 10 * time.Minute
 	gatewayAPIInstallAttempts   = 3
@@ -85,7 +84,7 @@ func (p *Profile) deployDemoLLM(ctx context.Context, deployer *helm.Deployer, op
 func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {
 	release := helm.SemanticRouterRelease.Clone()
 	release.Namespace = agentGatewayNamespace
-	release.ValuesFiles = []string{semanticRouterValuesFile}
+	release.ValuesFiles = []string{semanticRouterValuesFile, e2eValuesFile}
 	// The profile owns readiness diagnostics below; avoiding Helm's opaque
 	// release-wide wait keeps failures bounded and surfaces pod state.
 	release.Wait = false
@@ -104,6 +103,21 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 	return deployer.WaitForDeployment(ctx, agentGatewayNamespace, semanticRouterDeployment, timeoutSemanticRouterDeploy)
 }
 
+// deployFullDuplexGateway deploys the PreRouting full-duplex gateway and its
+// two backends for agentgateway-full-duplex-routing. The testcase waits for
+// the gateway Service, which the controller creates.
+func (p *Profile) deployFullDuplexGateway(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {
+	if err := p.applyManifest(ctx, opts.KubeConfig, fullDuplexFile); err != nil {
+		return err
+	}
+	for _, deployment := range []string{"full-duplex-selected", "full-duplex-default"} {
+		if err := deployer.WaitForDeployment(ctx, agentGatewayNamespace, deployment, timeoutDemoLLMDeploy); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (p *Profile) failSetup(ctx context.Context, opts *framework.SetupOptions, state *setupState, err error) error {
 	p.log("ERROR: %v", err)
 	p.cleanupPartialDeployment(ctx, opts, state)
@@ -116,6 +130,7 @@ func (p *Profile) cleanupPartialDeployment(ctx context.Context, opts *framework.
 		_ = p.deleteManifest(ctx, opts.KubeConfig, "deploy/kubernetes/agentgateway/extproc-policy.yaml")
 	}
 	if state.routingResourcesApplied {
+		_ = p.deleteManifest(ctx, opts.KubeConfig, fullDuplexFile)
 		_ = p.deleteManifest(ctx, opts.KubeConfig, "deploy/kubernetes/agentgateway/routing-resources.yaml")
 	}
 	if state.semanticRouterDeployed {
