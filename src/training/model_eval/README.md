@@ -33,7 +33,18 @@ without compatible data.
 
 ```bash
 cd src/training/model_eval
-pip install -r requirements.txt
+uv sync --locked
+```
+
+`pyproject.toml` bounds each dependency and `uv.lock` pins the exact versions, so a clean checkout resolves
+to the same environment every time. `uv run python <script>` runs a script in it. The locked `torch` is
+the default PyPI build, which is the CUDA build on Linux.
+
+The tests import `src.training.model_eval`, so run them from the repository root:
+
+```bash
+uv run --project src/training/model_eval python -m unittest discover \
+  -s src/training/model_eval/tests -p 'test_*.py'
 ```
 
 ## Run
@@ -113,12 +124,12 @@ the result.
 
 ```
 python src/training/model_eval/quality_baseline.py \
-    --task fact-check --device cuda --output-dir baseline/fact-check
+    --task domain --device cuda --output-dir baseline/domain
 
 # From src/training/model_eval. The served artifacts predate the training-run
 # manifests, so this reports one missing run_ref per artifact until a run
 # publishes one. Everything else has to pass.
-python -m provenance.cli validate baseline/fact-check/manifests
+python -m provenance.cli validate baseline/domain/manifests
 
 python src/training/model_eval/gap_report.py \
     --baseline baseline/*/*_baseline.json --output baseline/gap-report.md
@@ -129,10 +140,28 @@ python src/training/model_eval/gap_report.py \
 before anything is published. Both are recorded in the result, so a candidate
 number is never mistaken for the baseline.
 
+The `domain` task scores the MMLU-Pro test questions that do not come from MMLU
+(`src` not starting with `ori_mmlu`). Vela Domain's recipe trains on the MMLU
+material behind the others, and the legacy intent classifier trained on MMLU-Pro
+itself, so the runner refuses that artifact for this task. The kept questions
+cover nine of the fourteen categories, since health, history, law, other and
+philosophy come only from MMLU. A label with no rows keeps its per-label entry
+with support 0, is left out of macro F1, and is listed in the result's
+`unsupported_labels` and as unmeasured in the gap report.
+
 The baseline runner's historical `jailbreak` dataset is restricted to the
 explicit original mmBERT merged/adapter artifacts. It rejects current Guard
 before accessing that dataset. Use the custom-data collection evaluator above
 for reviewed instruction-attack annotations.
+
+The `fact-check` and `feedback` datasets are restricted the same way, to the
+mmBERT checkpoints trained on them. Their labels can be read without the text:
+each fact-check source corpus carries one label, and the feedback SAT class is a
+few templates, each with `!`, that appear in both train and validation. Vela
+FactCheck and Vela Feedback need held-out sets from other corpora. A legacy
+checkpoint's label order is checked against the legacy registry, and a gap
+report counts coverage per served artifact, so it still lists Vela FactCheck and
+Vela Feedback as unmeasured when only these results are passed.
 
 A referenced manifest supplies the identity every number is published under, so
 it also selects the bytes: the run downloads the repository and revision the
@@ -183,7 +212,7 @@ rather than a constant kept here.
 
 ```bash
 python src/training/model_eval/jailbreak_guard_eval.py \
-    --model llm-semantic-router/Vela-1.0-Encoder-307M-Guard \
+    --model vllm-sr/Vela-1.0-Encoder-307M-Guard \
     --dataset local:guard-eval-v1.json --dataset-version v1 \
     --label-col attack --slice-col source --slice-col language \
     --dev-dataset local:guard-dev-v1.json --budget 0.01 \

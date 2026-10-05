@@ -216,7 +216,9 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	if policyErr := r.applyPromptCachePolicy(&dispatchRequest, ctx, format); policyErr != nil {
 		return nil, policyErr
 	}
-	dispatchRequest, projectionDiagnostics, err := r.projectRequestForBackendWithDiagnostics(dispatchRequest, ctx.RequestModel, format)
+	dispatchRequest, projectionDiagnostics, err := r.projectRequestForBackendWithDiagnostics(
+		dispatchRequest, ctx.backendModelForCandidate(ctx.RequestModel), format,
+	)
 	if err != nil {
 		return nil, err
 	}

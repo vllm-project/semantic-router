@@ -54,6 +54,11 @@ type Policy struct {
 	// ResponseVendor permits provider-specific fields at the response boundary.
 	// Empty keeps strict canonical decoding.
 	ResponseVendor ResponseVendor
+	// ProviderStopSequences lets a decoder report a provider's non-standard
+	// matched stop sequence (vLLM's choices[].stop_reason) as a stop_sequence
+	// terminal. TranslateResponse and NewStreamWithMutation set it only when
+	// the target wire format can carry a matched stop sequence.
+	ProviderStopSequences bool
 }
 
 type Limits struct {

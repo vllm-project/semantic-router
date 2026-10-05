@@ -11,7 +11,7 @@ import (
 
 func TestBuiltInReleaseSkipsTrainingArtifactsWithoutExcludingRuntimeWeights(t *testing.T) {
 	const path = "models/Vela-1.0-Encoder-307M-Feedback"
-	const repo = "llm-semantic-router/Vela-1.0-Encoder-307M-Feedback"
+	const repo = "vllm-sr/Vela-1.0-Encoder-307M-Feedback"
 	cfg := &config.RouterConfig{
 		MoMRegistry: config.ToLegacyRegistry(),
 		IntelligentRouting: config.IntelligentRouting{
