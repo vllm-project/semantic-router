@@ -31,7 +31,9 @@ type OperatingPointResult struct {
 }
 
 // OperatingPoint binds a scores head with a packaged operating point. labels
-// must equal the head's labels in order: thresholds are positional.
+// must equal the head's labels in order: thresholds are positional. A binding
+// that pins operating_point.sha256 accepts only the policy file the runtime
+// verified with that digest.
 func (r *Runtime) OperatingPoint(ctx context.Context, spec config.ResolvedModelBinding, labels []string) (_ *OperatingPointScorer, callErr error) {
 	defer func() { observePreparationFailure(spec, callErr) }()
 	ctx, cancel := preparationContext(ctx)
@@ -46,6 +48,13 @@ func (r *Runtime) OperatingPoint(ctx context.Context, spec config.ResolvedModelB
 	}
 	if !slices.Equal(head.Labels, labels) || len(head.Thresholds) != len(head.Labels) || head.Window == nil || (head.Reduction != "" && head.Reduction != "max") {
 		return nil, fmt.Errorf("%w: head %q has no operating point for the rule's labels (one threshold per label, a window and a per-label maximum)", binding.ErrCapability, head.Name)
+	}
+	if pinned := spec.Binding.OperatingPoint; pinned != nil && pinned.SHA256 != head.OperatingPointSHA256 {
+		served := "no verified policy file"
+		if head.OperatingPointSHA256 != "" {
+			served = "sha256 " + head.OperatingPointSHA256
+		}
+		return nil, fmt.Errorf("%w: binding %q pins operating point sha256 %s, but deployment %q serves %s", binding.ErrCapability, spec.Name, pinned.SHA256, spec.Binding.Deployment, served)
 	}
 	window := tasks.TextWindowsRequest{Size: head.Window.Tokens, Overlap: head.Window.Overlap}
 	handle, err := r.scoreWindowsTask(ctx, spec, window)

@@ -13,11 +13,21 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/runtimetest"
 )
 
 const fakeRuntimeEnv = "MODELSERVICE_FAKE_RUNTIME"
+
+// fakeRuntimeFailOnceEnv names a marker file: the first fake process to start
+// creates it and reports every model failed; later processes load normally.
+// fakeRuntimeFailAlwaysEnv makes every fake process report its models failed.
+const (
+	fakeRuntimeFailOnceEnv   = "MODELSERVICE_FAKE_FAIL_ONCE"
+	fakeRuntimeFailAlwaysEnv = "MODELSERVICE_FAKE_FAIL_ALWAYS"
+)
 
 // TestMain lets the test binary act as a managed runtime process:
 // <binary> serve --models FILE --uds PATH serves the fake contract on the socket.
@@ -53,7 +63,18 @@ func serveManagedFake(args []string) {
 	if err != nil {
 		os.Exit(2)
 	}
-	_ = http.Serve(listener, fakeModels(document.Models).Handler())
+	fake := fakeModels(document.Models)
+	failed := os.Getenv(fakeRuntimeFailAlwaysEnv) == "1"
+	if marker := os.Getenv(fakeRuntimeFailOnceEnv); marker != "" {
+		_, statErr := os.Stat(marker)
+		failed = errors.Is(statErr, os.ErrNotExist) && os.WriteFile(marker, nil, 0o600) == nil
+	}
+	if failed {
+		for _, entry := range document.Models {
+			fake.SetFailed(entry.Name, "fake load failure")
+		}
+	}
+	_ = http.Serve(listener, fake.Handler())
 }
 
 func sampleRequest(state string) Request {
@@ -305,6 +326,53 @@ func TestManagerSharesProcessesByCompositionAndSupervisesThem(t *testing.T) {
 	}
 }
 
+// managedFakeLease serves one managed fake deployment, "kai", from this test binary.
+func managedFakeLease(t *testing.T) *Lease {
+	t.Helper()
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(fakeRuntimeEnv, "1")
+	t.Setenv(RuntimeCommandEnv, binary)
+	t.Setenv(RuntimeDirEnv, filepath.Join(t.TempDir(), "run"))
+	manager := NewManager()
+	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
+	lease, err := manager.Acquire(runtimeConfig(map[string]config.ModelDeployment{
+		"kai": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Device: "cpu"},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return lease
+}
+
+func TestSupervisorRestartsAProcessWhoseEveryModelFailedToLoad(t *testing.T) {
+	t.Setenv(fakeRuntimeFailOnceEnv, filepath.Join(t.TempDir(), "failed-once"))
+	lease := managedFakeLease(t)
+	waitReady(t, lease, "kai")
+	if statuses := lease.Statuses(); len(statuses) != 1 || statuses[0].Restarts != 1 || !statuses[0].Ready {
+		t.Fatalf("one recycle restarts the process: %+v", statuses)
+	}
+}
+
+func TestCardFailsAfterRepeatedFailedLoads(t *testing.T) {
+	t.Setenv(fakeRuntimeFailAlwaysEnv, "1")
+	lease := managedFakeLease(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	started := time.Now()
+	if _, err := lease.Card(ctx, "kai"); !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "failed to load 3 times") {
+		t.Fatalf("repeated failed loads must fail preparation, got %v", err)
+	}
+	if time.Since(started) > 20*time.Second {
+		t.Fatal("the failure must not wait for the deadline")
+	}
+	if statuses := lease.Statuses(); statuses[0].Restarts < 2 {
+		t.Fatalf("the supervisor retried before giving up: %+v", statuses)
+	}
+}
+
 func TestCardFailsFastWhenTheRuntimeCommandCannotRun(t *testing.T) {
 	t.Setenv(RuntimeCommandEnv, filepath.Join(t.TempDir(), "missing-runtime"))
 	t.Setenv(RuntimeDirEnv, filepath.Join(t.TempDir(), "run"))
@@ -324,6 +392,57 @@ func TestCardFailsFastWhenTheRuntimeCommandCannotRun(t *testing.T) {
 	}
 	if time.Since(started) > 5*time.Second {
 		t.Fatal("the failure must not wait for the deadline")
+	}
+}
+
+func TestCardRefusesARuntimeOfAnotherContractMajor(t *testing.T) {
+	for _, version := range []string{"3.0.0", ""} {
+		runtime := fakeModels([]modelEntry{{Name: "decider", Model: "vllm-sr/Decision-2.0-Kai-0.6B"}})
+		runtime.SetAPIVersion(version)
+		server := httptest.NewServer(runtime.Handler())
+		manager := NewManager()
+		lease, err := manager.Acquire(runtimeConfig(map[string]config.ModelDeployment{
+			"decider": {Provider: config.ModelRuntimeProvider, Endpoint: server.URL},
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		started := time.Now()
+		_, err = lease.Card(ctx, "decider")
+		cancel()
+		if !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "this router speaks "+RuntimeAPIMajor+".x") {
+			t.Fatalf("api_version %q must be refused, got %v", version, err)
+		}
+		if time.Since(started) > 5*time.Second {
+			t.Fatal("the refusal must not wait for the deadline")
+		}
+		if statuses := lease.Statuses(); statuses[0].Ready || statuses[0].State != "incompatible" {
+			t.Fatalf("the deployment reports the incompatible contract: %+v", statuses)
+		}
+		_ = manager.Shutdown(context.Background())
+		server.Close()
+	}
+}
+
+func TestRuntimeAPIMajorIsTheContractsMajor(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "model-runtime", "vllm_sr_runtime", "api", "openapi.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec struct {
+		Info struct {
+			Version string `yaml:"version"`
+		} `yaml:"info"`
+	}
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if major, _, _ := strings.Cut(spec.Info.Version, "."); major != RuntimeAPIMajor {
+		t.Fatalf("openapi.yaml info.version %s: RuntimeAPIMajor is %s; regenerate the client and move the constant together", spec.Info.Version, RuntimeAPIMajor)
+	}
+	if major, _, _ := strings.Cut(runtimetest.APIVersion, "."); major != RuntimeAPIMajor {
+		t.Fatalf("the fake serves %s", runtimetest.APIVersion)
 	}
 }
 

@@ -113,48 +113,28 @@ func NewEndpointHallucinationDetector(cfg *config.HallucinationModelConfig, mode
 	runtime := consumerModelRuntime(models)
 	spec, declared := runtime.plan.Lookup(runtime.recipe, "hallucination_detector")
 	if !declared {
-		// A classifier assembled without a compiled plan still desugars the
-		// legacy scalars exactly as CompileModelBindings does.
-		decl, deployment, legacy, err := config.LegacyHallucinationBinding(cfg)
-		if err != nil {
-			return nil, err
-		}
-		if !legacy {
-			return nil, fmt.Errorf("endpoint hallucination detector requires a hallucination_detector binding or backend: endpoint")
-		}
-		spec = config.ResolvedModelBinding{Recipe: runtime.recipe, Name: "hallucination_detector", Binding: decl, Deployment: deployment.WithDefaults(), Admission: runtime.cfg.ModelAdmission["hallucination_detector"]}
+		return nil, fmt.Errorf("endpoint hallucination detector requires a hallucination_detector binding")
 	}
 	if spec.Deployment.Provider != "http" {
 		return nil, fmt.Errorf("endpoint hallucination detector requires HTTP deployment")
 	}
-	var external *config.ExternalModelConfig
-	var endpoint string
-	if spec.Deployment.ExternalModel == config.LegacyHallucinationEndpointModel {
-		external = config.LegacyHallucinationExternalModel(cfg)
-		endpoint = external.ModelEndpoint.Address
-	} else {
-		backend := &config.RemoteClassifierBackend{Model: spec.Deployment.ExternalModel, Protocol: spec.Binding.Adapter, Contract: spec.Binding.Contract}
-		resolved, err := config.ResolveRemoteClassifierBackend(runtime.cfg, backend, config.ModelRoleClassification, config.RemoteClassifierContractTokenSpans)
-		if err != nil {
-			return nil, err
-		}
-		external = resolved
-		scheme := external.ModelEndpoint.Protocol
-		if scheme == "" {
-			scheme = "http"
-		}
-		endpoint = fmt.Sprintf("%s://%s:%d", scheme, external.ModelEndpoint.Address, external.ModelEndpoint.Port)
-		if spec.Binding.Adapter == config.RemoteClassifierProtocolHTTPChat {
-			endpoint += "/v1"
-		}
-		copied := *cfg
-		copied.ModelID = external.ModelName
-		copied.Endpoint = endpoint
-		cfg = &copied
+	backend := &config.RemoteClassifierBackend{Model: spec.Deployment.ExternalModel, Protocol: spec.Binding.Adapter, Contract: spec.Binding.Contract}
+	external, err := config.ResolveRemoteClassifierBackend(runtime.cfg, backend, config.ModelRoleClassification, config.RemoteClassifierContractTokenSpans)
+	if err != nil {
+		return nil, err
 	}
-	if endpoint == "" {
-		return nil, fmt.Errorf("hallucination endpoint is required when backend is endpoint")
+	scheme := external.ModelEndpoint.Protocol
+	if scheme == "" {
+		scheme = "http"
 	}
+	endpoint := fmt.Sprintf("%s://%s:%d", scheme, external.ModelEndpoint.Address, external.ModelEndpoint.Port)
+	if spec.Binding.Adapter == config.RemoteClassifierProtocolHTTPChat {
+		endpoint += "/v1"
+	}
+	copied := *cfg
+	copied.ModelID = external.ModelName
+	copied.Endpoint = endpoint
+	cfg = &copied
 	if cfg.ModelID == "" {
 		return nil, fmt.Errorf("hallucination model_id is required")
 	}

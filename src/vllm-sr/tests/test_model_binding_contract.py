@@ -206,8 +206,8 @@ def test_classification_budget_is_checked_against_actual_loaded_checkpoint(limit
     "changes,fragment",
     [
         ({"provider": "unknown"}, "Unsupported provider"),
-        ({"device": "migraphx:0"}, "device must be"),
-        ({"profile": "fastest"}, "profile must be"),
+        ({"device": "rocm:x"}, "device must be"),
+        ({"profile": "Fastest"}, "profile must be"),
         ({"input": {"max_tokens": -1}}, "negative"),
         ({"external_model": "remote"}, "cannot set external_model"),
     ],

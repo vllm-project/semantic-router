@@ -14,7 +14,10 @@ import (
 var (
 	removedModelProviders    = map[string]bool{"candle": true, "ort": true, "openvino": true}
 	removedEmbeddingBackends = map[string]bool{"candle": true, "openvino": true}
-	removedDeploymentFields  = []string{"precision", "custom_ops_profile", "compilation_cache_dir"}
+	// A remote hallucination detector is a hallucination_detector binding;
+	// the `backend: endpoint` shorthand was desugared into one.
+	removedDetectorBackends = map[string]bool{"candle": true, "endpoint": true}
+	removedDeploymentFields = []string{"precision", "custom_ops_profile", "compilation_cache_dir"}
 	// Module paths under global.model_catalog.modules and their removed fields.
 	removedModuleFields = []struct {
 		path   []string
@@ -51,9 +54,10 @@ func rejectRemovedModelExecutionFields(raw map[string]interface{}) error {
 		removed = appendPresent(removed, "global.model_catalog.modules."+strings.Join(module.path, "."), block, module.fields...)
 	}
 	detector := nestedStringMap(nestedStringMap(modules["hallucination_mitigation"])["detector"])
-	if backend, _ := detector["backend"].(string); strings.EqualFold(strings.TrimSpace(backend), "candle") {
-		removed = append(removed, "global.model_catalog.modules.hallucination_mitigation.detector.backend: candle")
+	if backend, _ := detector["backend"].(string); removedDetectorBackends[strings.ToLower(strings.TrimSpace(backend))] {
+		removed = append(removed, "global.model_catalog.modules.hallucination_mitigation.detector.backend: "+backend)
 	}
+	removed = appendPresent(removed, "global.model_catalog.modules.hallucination_mitigation.detector", detector, "endpoint")
 	embeddingConfig := nestedStringMap(nestedStringMap(nestedStringMap(catalog["embeddings"])["semantic"])["embedding_config"])
 	if backend, _ := embeddingConfig["backend"].(string); removedEmbeddingBackends[strings.ToLower(strings.TrimSpace(backend))] {
 		removed = append(removed, "global.model_catalog.embeddings.semantic.embedding_config.backend: "+backend)
@@ -70,7 +74,7 @@ func rejectRemovedModelExecutionFields(raw map[string]interface{}) error {
 		return nil
 	}
 	return fmt.Errorf(
-		"removed model execution fields are no longer supported: %s; local models are served by the built-in model runtime (provider: model_runtime), which detects the package format and owns numerics, and the NLI explainer is retired; run `vllm-sr config migrate --config old-config.yaml`",
+		"removed model execution fields are no longer supported: %s; local models are served by the built-in model runtime (provider: model_runtime), which detects the package format and owns numerics; a remote hallucination detector is a hallucination_detector binding to an http deployment; and the NLI explainer is retired; run `vllm-sr config migrate --config old-config.yaml`",
 		strings.Join(removed, ", "),
 	)
 }

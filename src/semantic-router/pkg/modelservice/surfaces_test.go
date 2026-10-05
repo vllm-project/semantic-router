@@ -104,7 +104,7 @@ func (s *surfaceRuntime) answer(surface string, body map[string]interface{}) (in
 				"input":   map[string]interface{}{"tokens": 6, "processed_tokens": 6, "truncated": false, "windows": 1},
 			}
 		}
-		return http.StatusOK, map[string]interface{}{"model": model, "head": "default", "kind": "sequence", "labels": []string{"billing", "other"}, "results": results, "usage": usage, "meta": map[string]interface{}{"revision": "abc"}}
+		return http.StatusOK, map[string]interface{}{"model": model, "head": "default", "kind": "sequence", "labels": []string{"billing", "other"}, "results": results, "usage": usage}
 	case "embeddings":
 		raw := make([]byte, 8)
 		binary.LittleEndian.PutUint32(raw, math.Float32bits(0.6))
@@ -166,9 +166,6 @@ func TestClassifyEncodesInputsAndDecodesResults(t *testing.T) {
 	if options["overflow"] != "window" || options["deadline_ms"] == nil || options["window"].(map[string]interface{})["overlap"] != 64.0 {
 		t.Fatalf("options were not sent: %v", options)
 	}
-	if _, asked := options["return_meta"]; asked {
-		t.Fatalf("the router reads no runtime meta, so it must not ask for it: %v", options)
-	}
 	inputs := body["input"].([]interface{})
 	if inputs[0].(map[string]interface{})["text"] != "Tom" || inputs[1].(map[string]interface{})["answer"] != "a" {
 		t.Fatalf("inputs were not sent as objects: %v", inputs)
@@ -201,8 +198,30 @@ func TestEmbedDecodesBase64AndFloatVectorsByIndex(t *testing.T) {
 	if got := response.Embeddings[1]; got[0] != 1 || got[1] != 0 {
 		t.Fatalf("float vector decoded as %v", got)
 	}
-	if response.Representation == nil || response.Representation.Layer != 22 || !response.Representation.Normalized {
-		t.Fatalf("representation was not decoded: %+v", response.Representation)
+}
+
+func TestSurfacesDoNotAskForMeta(t *testing.T) {
+	runtime := &surfaceRuntime{}
+	client := newSurfaceClient(t, runtime)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := client.Classify(ctx, "m", ClassifyRequest{Inputs: []ClassifyInput{{Text: "x"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Embed(ctx, "m", EmbedRequest{Inputs: []EmbedInput{{Text: "a"}, {Text: "b"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Rerank(ctx, "m", RerankRequest{Query: "q", Documents: []string{"a", "b"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(runtime.seen) != 3 {
+		t.Fatalf("got %d surface calls, want 3", len(runtime.seen))
+	}
+	for _, body := range runtime.seen {
+		options, _ := body["options"].(map[string]interface{})
+		if _, asked := options["return_meta"]; asked || options["deadline_ms"] == nil {
+			t.Fatalf("options = %v, want a deadline and no return_meta", options)
+		}
 	}
 }
 

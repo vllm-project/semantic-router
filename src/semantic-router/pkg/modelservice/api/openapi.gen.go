@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/oapi-codegen/runtime"
 )
 
 // Defines values for ClassifyOptionsOverflow.
@@ -26,6 +28,13 @@ const (
 	ClassifyResponseKindScores   ClassifyResponseKind = "scores"
 	ClassifyResponseKindSequence ClassifyResponseKind = "sequence"
 	ClassifyResponseKindToken    ClassifyResponseKind = "token"
+)
+
+// Defines values for ContentPartType.
+const (
+	ImageUrl   ContentPartType = "image_url"
+	InputAudio ContentPartType = "input_audio"
+	Text       ContentPartType = "text"
 )
 
 // Defines values for EmbeddingsOptionsOverflow.
@@ -72,6 +81,19 @@ const (
 	HeadCardKindToken    HeadCardKind = "token"
 )
 
+// Defines values for HeadCardOverflow.
+const (
+	HeadCardOverflowReject   HeadCardOverflow = "reject"
+	HeadCardOverflowTruncate HeadCardOverflow = "truncate"
+	HeadCardOverflowWindow   HeadCardOverflow = "window"
+)
+
+// Defines values for HeadCardReduction.
+const (
+	Max       HeadCardReduction = "max"
+	SpanUnion HeadCardReduction = "span_union"
+)
+
 // Defines values for HealthStatus.
 const (
 	HealthStatusAlive    HealthStatus = "alive"
@@ -93,14 +115,24 @@ const (
 	Unavailable        ItemError = "unavailable"
 )
 
+// Defines values for ModelCardStatus.
+const (
+	ModelCardStatusDegraded ModelCardStatus = "degraded"
+	ModelCardStatusFailed   ModelCardStatus = "failed"
+	ModelCardStatusLoading  ModelCardStatus = "loading"
+	ModelCardStatusReady    ModelCardStatus = "ready"
+	ModelCardStatusStarting ModelCardStatus = "starting"
+	ModelCardStatusWarming  ModelCardStatus = "warming"
+)
+
 // Defines values for ModelHealthStatus.
 const (
-	Degraded ModelHealthStatus = "degraded"
-	Failed   ModelHealthStatus = "failed"
-	Loading  ModelHealthStatus = "loading"
-	Ready    ModelHealthStatus = "ready"
-	Starting ModelHealthStatus = "starting"
-	Warming  ModelHealthStatus = "warming"
+	ModelHealthStatusDegraded ModelHealthStatus = "degraded"
+	ModelHealthStatusFailed   ModelHealthStatus = "failed"
+	ModelHealthStatusLoading  ModelHealthStatus = "loading"
+	ModelHealthStatusReady    ModelHealthStatus = "ready"
+	ModelHealthStatusStarting ModelHealthStatus = "starting"
+	ModelHealthStatusWarming  ModelHealthStatus = "warming"
 )
 
 // Defines values for ProfileInfoNumerics.
@@ -113,6 +145,12 @@ const (
 const (
 	Broad  QuestionHead = "broad"
 	Router QuestionHead = "router"
+)
+
+// Defines values for RerankOptionsOverflow.
+const (
+	RerankOptionsOverflowReject   RerankOptionsOverflow = "reject"
+	RerankOptionsOverflowTruncate RerankOptionsOverflow = "truncate"
 )
 
 // Answer One answer. Choice: choice, probabilities, confidence. Noul: noul (P(true)). Score: score (the expected
@@ -129,6 +167,17 @@ type Answer struct {
 	Score              *float64            `json:"score,omitempty"`
 	Type               *string             `json:"type"`
 }
+
+// AudioPart defines model for AudioPart.
+type AudioPart struct {
+	Data string `json:"data"`
+
+	// Format The audio container (default wav).
+	Format *string `json:"format,omitempty"`
+}
+
+// Base64Vector defines model for Base64Vector.
+type Base64Vector = []byte
 
 // BundleRequest defines model for BundleRequest.
 type BundleRequest struct {
@@ -171,6 +220,24 @@ type ChoiceOption struct {
 	Key         string       `json:"key"`
 }
 
+// ClassifyInput A string, a list of strings, or a list of items: `{text, text_pair}` pairs or grounded
+// `{context, question, answer}` items (the head's `inputs` in /v1/models say which it accepts).
+type ClassifyInput struct {
+	union json.RawMessage
+}
+
+// ClassifyItem One classify input in object form.
+type ClassifyItem struct {
+	Answer   *string `json:"answer,omitempty"`
+	Context  *string `json:"context,omitempty"`
+	Question *string `json:"question,omitempty"`
+	Text     *string `json:"text,omitempty"`
+	TextPair *string `json:"text_pair,omitempty"`
+}
+
+// ClassifyItemList defines model for ClassifyItemList.
+type ClassifyItemList = []ClassifyItem
+
 // ClassifyOptions defines model for ClassifyOptions.
 type ClassifyOptions struct {
 	DeadlineMs *float64 `json:"deadline_ms,omitempty"`
@@ -180,7 +247,9 @@ type ClassifyOptions struct {
 
 	// Overflow What happens to an input longer than max_tokens (default the head's declared policy, usually reject). Nothing is cut silently.
 	Overflow *ClassifyOptionsOverflow `json:"overflow,omitempty"`
-	Profile  *string                  `json:"profile,omitempty"`
+
+	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
+	Profile *ProfileName `json:"profile,omitempty"`
 
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
@@ -201,9 +270,9 @@ type ClassifyRequest struct {
 	// Head The head to run (default the model's primary head).
 	Head *string `json:"head,omitempty"`
 
-	// Input A string, a list of strings, a list of `{text, text_pair}` pairs, or a list of grounded items
-	// `{context, question, answer}` (the head's `inputs` in /v1/models say which it accepts).
-	Input   interface{}      `json:"input"`
+	// Input A string, a list of strings, or a list of items: `{text, text_pair}` pairs or grounded
+	// `{context, question, answer}` items (the head's `inputs` in /v1/models say which it accepts).
+	Input   ClassifyInput    `json:"input"`
 	Model   *string          `json:"model,omitempty"`
 	Options *ClassifyOptions `json:"options,omitempty"`
 }
@@ -252,6 +321,22 @@ type ClassifyWindow struct {
 	Start         int        `json:"start"`
 }
 
+// ContentPart `{type: text, text}`, `{type: image_url, image_url: {url}}` (a base64 data URL) or
+// `{type: input_audio, input_audio: {data, format}}` (base64 WAV), for models whose `embedding.modalities`
+// include the part's modality.
+type ContentPart struct {
+	ImageUrl   *ImagePart      `json:"image_url,omitempty"`
+	InputAudio *AudioPart      `json:"input_audio,omitempty"`
+	Text       *string         `json:"text,omitempty"`
+	Type       ContentPartType `json:"type"`
+}
+
+// ContentPartType defines model for ContentPart.Type.
+type ContentPartType string
+
+// ContentPartList defines model for ContentPartList.
+type ContentPartList = []ContentPart
+
 // DecisionRequest defines model for DecisionRequest.
 type DecisionRequest struct {
 	// Model Served model ID. Optional while a runtime serves one model.
@@ -290,10 +375,10 @@ type DecisionResponse struct {
 
 // Embedding defines model for Embedding.
 type Embedding struct {
-	// Embedding A list of floats, or a base64 string of little-endian float32 values with encoding_format base64.
-	Embedding *interface{} `json:"embedding,omitempty"`
-	Error     *ItemError   `json:"error,omitempty"`
-	Index     int          `json:"index"`
+	// Embedding A list of floats, or with encoding_format base64 a base64 string of little-endian float32 values.
+	Embedding *EmbeddingVector `json:"embedding,omitempty"`
+	Error     *ItemError       `json:"error,omitempty"`
+	Index     int              `json:"index"`
 
 	// Input Tokenizer facts of one input, including special tokens.
 	Input  *InputUsage `json:"input,omitempty"`
@@ -302,12 +387,22 @@ type Embedding struct {
 
 // EmbeddingCard defines model for EmbeddingCard.
 type EmbeddingCard struct {
-	Dimensions []int     `json:"dimensions"`
-	InputTypes *[]string `json:"input_types,omitempty"`
-	Layers     []int     `json:"layers"`
-	Modalities *[]string `json:"modalities,omitempty"`
-	Normalized *bool     `json:"normalized,omitempty"`
-	Pooling    *string   `json:"pooling,omitempty"`
+	Dimensions []int    `json:"dimensions"`
+	InputTypes []string `json:"input_types"`
+	Layers     []int    `json:"layers"`
+	Modalities []string `json:"modalities"`
+	Normalized bool     `json:"normalized"`
+	Pooling    string   `json:"pooling"`
+}
+
+// EmbeddingVector A list of floats, or with encoding_format base64 a base64 string of little-endian float32 values.
+type EmbeddingVector struct {
+	union json.RawMessage
+}
+
+// EmbeddingsInput A string, a list of strings, or a list of content parts.
+type EmbeddingsInput struct {
+	union json.RawMessage
 }
 
 // EmbeddingsOptions defines model for EmbeddingsOptions.
@@ -315,7 +410,9 @@ type EmbeddingsOptions struct {
 	DeadlineMs *float64                   `json:"deadline_ms,omitempty"`
 	MaxTokens  *int                       `json:"max_tokens,omitempty"`
 	Overflow   *EmbeddingsOptionsOverflow `json:"overflow,omitempty"`
-	Profile    *string                    `json:"profile,omitempty"`
+
+	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
+	Profile *ProfileName `json:"profile,omitempty"`
 
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
@@ -330,10 +427,8 @@ type EmbeddingsRequest struct {
 	Dimensions     *int                             `json:"dimensions,omitempty"`
 	EncodingFormat *EmbeddingsRequestEncodingFormat `json:"encoding_format,omitempty"`
 
-	// Input A string, a list of strings, or a list of content parts `{type: text, text}`,
-	// `{type: image_url, image_url: {url}}` (a data URL) or `{type: input_audio, input_audio: {data, format}}`
-	// (base64 WAV), for models whose `embedding.modalities` include them.
-	Input interface{} `json:"input"`
+	// Input A string, a list of strings, or a list of content parts.
+	Input EmbeddingsInput `json:"input"`
 
 	// InputType The role of the input for instructed embedders.
 	InputType *EmbeddingsRequestInputType `json:"input_type,omitempty"`
@@ -380,6 +475,9 @@ type ErrorResponse struct {
 	Error ErrorBody `json:"error"`
 }
 
+// FloatVector defines model for FloatVector.
+type FloatVector = []float32
+
 // GoldenStatus defines model for GoldenStatus.
 type GoldenStatus struct {
 	Checked   *int               `json:"checked,omitempty"`
@@ -396,23 +494,40 @@ type HeadCard struct {
 	DefaultThreshold *float64 `json:"default_threshold"`
 
 	// Inputs Accepted inputs (text, pair, grounded).
-	Inputs    *[]string    `json:"inputs,omitempty"`
-	Kind      HeadCardKind `json:"kind"`
-	Labels    []string     `json:"labels"`
-	Name      string       `json:"name"`
-	Overflow  *string      `json:"overflow,omitempty"`
-	Reduction *string      `json:"reduction"`
+	Inputs *[]string    `json:"inputs,omitempty"`
+	Kind   HeadCardKind `json:"kind"`
+	Labels []string     `json:"labels"`
+	Name   string       `json:"name"`
+
+	// OperatingPointSha256 SHA-256 of the verified operating_point.json the head applies.
+	OperatingPointSha256 *string            `json:"operating_point_sha256"`
+	Overflow             *HeadCardOverflow  `json:"overflow,omitempty"`
+	Reduction            *HeadCardReduction `json:"reduction"`
 
 	// Thresholds The packaged operating point, one threshold per label.
 	Thresholds *[]float64 `json:"thresholds"`
-	Window     *struct {
-		Overlap *int `json:"overlap,omitempty"`
-		Tokens  *int `json:"tokens,omitempty"`
-	} `json:"window"`
+
+	// Window The windows the head reads a long input in by default; null when it declares none.
+	Window *HeadWindow `json:"window"`
 }
 
 // HeadCardKind defines model for HeadCard.Kind.
 type HeadCardKind string
+
+// HeadCardOverflow defines model for HeadCard.Overflow.
+type HeadCardOverflow string
+
+// HeadCardReduction defines model for HeadCard.Reduction.
+type HeadCardReduction string
+
+// HeadWindow The windows the head reads a long input in by default; null when it declares none.
+type HeadWindow struct {
+	// Overlap Content tokens shared by neighbouring windows.
+	Overlap int `json:"overlap"`
+
+	// Tokens Window size including special tokens.
+	Tokens int `json:"tokens"`
+}
 
 // Health defines model for Health.
 type Health struct {
@@ -428,6 +543,14 @@ type Health struct {
 
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
+
+// ImagePart defines model for ImagePart.
+type ImagePart struct {
+	Url string `json:"url"`
+}
+
+// InputText defines model for InputText.
+type InputText = string
 
 // InputUsage Tokenizer facts of one input, including special tokens.
 type InputUsage struct {
@@ -477,10 +600,13 @@ type ModelCard struct {
 	Rerank        *RerankCard    `json:"rerank,omitempty"`
 	Revision      *string        `json:"revision"`
 
-	// Status This model's state (starting, loading, warming, ready, degraded, failed).
-	Status   *string  `json:"status,omitempty"`
-	Surfaces []string `json:"surfaces"`
+	// Status This model's state.
+	Status   *ModelCardStatus `json:"status,omitempty"`
+	Surfaces []string         `json:"surfaces"`
 }
+
+// ModelCardStatus This model's state.
+type ModelCardStatus string
 
 // ModelHealth defines model for ModelHealth.
 type ModelHealth struct {
@@ -531,6 +657,9 @@ type ProfileInfo struct {
 
 // ProfileInfoNumerics defines model for ProfileInfo.Numerics.
 type ProfileInfoNumerics string
+
+// ProfileName exact, or a profile the server enabled for this model (its card's `profiles`).
+type ProfileName = string
 
 // Question One question. `instructions` is required unless `preset` names a question the model defines (see
 // `presets` in /v1/models). Every family validates System One fields the same way: a question takes only
@@ -590,8 +719,8 @@ type RequestOptions struct {
 	// DeadlineMs Work not started by the deadline is not run; its items return deadline_exceeded.
 	DeadlineMs *float64 `json:"deadline_ms,omitempty"`
 
-	// Profile exact, or the profile the server enabled for this model.
-	Profile *string `json:"profile,omitempty"`
+	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
+	Profile *ProfileName `json:"profile,omitempty"`
 
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
@@ -609,6 +738,24 @@ type RerankExit struct {
 	Layer     int `json:"layer"`
 }
 
+// RerankOptions defines model for RerankOptions.
+type RerankOptions struct {
+	DeadlineMs *float64 `json:"deadline_ms,omitempty"`
+	MaxTokens  *int     `json:"max_tokens,omitempty"`
+
+	// Overflow What happens to a query-document pair longer than max_tokens (default reject).
+	Overflow *RerankOptionsOverflow `json:"overflow,omitempty"`
+
+	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
+	Profile *ProfileName `json:"profile,omitempty"`
+
+	// ReturnMeta Include meta in the response (default false).
+	ReturnMeta *bool `json:"return_meta,omitempty"`
+}
+
+// RerankOptionsOverflow What happens to a query-document pair longer than max_tokens (default reject).
+type RerankOptionsOverflow string
+
 // RerankRequest defines model for RerankRequest.
 type RerankRequest struct {
 	// Dimensions Pair-scorer exit dimension, one the model declares.
@@ -616,12 +763,12 @@ type RerankRequest struct {
 	Documents  []string `json:"documents"`
 
 	// Layer Pair-scorer exit layer, one the model declares (default the served exit).
-	Layer           *int               `json:"layer,omitempty"`
-	Model           *string            `json:"model,omitempty"`
-	Options         *EmbeddingsOptions `json:"options,omitempty"`
-	Query           string             `json:"query"`
-	ReturnDocuments *bool              `json:"return_documents,omitempty"`
-	TopN            *int               `json:"top_n,omitempty"`
+	Layer           *int           `json:"layer,omitempty"`
+	Model           *string        `json:"model,omitempty"`
+	Options         *RerankOptions `json:"options,omitempty"`
+	Query           string         `json:"query"`
+	ReturnDocuments *bool          `json:"return_documents,omitempty"`
+	TopN            *int           `json:"top_n,omitempty"`
 }
 
 // RerankResponse defines model for RerankResponse.
@@ -684,6 +831,9 @@ type Span struct {
 	Text        string  `json:"text"`
 }
 
+// TextList defines model for TextList.
+type TextList = []string
+
 // TokenProbabilities defines model for TokenProbabilities.
 type TokenProbabilities struct {
 	End           int       `json:"end"`
@@ -726,6 +876,244 @@ type CreateRerankJSONRequestBody = RerankRequest
 
 // CreateSystemOneJSONRequestBody defines body for CreateSystemOne for application/json ContentType.
 type CreateSystemOneJSONRequestBody = DecisionRequest
+
+// AsInputText returns the union data inside the ClassifyInput as a InputText
+func (t ClassifyInput) AsInputText() (InputText, error) {
+	var body InputText
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInputText overwrites any union data inside the ClassifyInput as the provided InputText
+func (t *ClassifyInput) FromInputText(v InputText) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInputText performs a merge with any union data inside the ClassifyInput, using the provided InputText
+func (t *ClassifyInput) MergeInputText(v InputText) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTextList returns the union data inside the ClassifyInput as a TextList
+func (t ClassifyInput) AsTextList() (TextList, error) {
+	var body TextList
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTextList overwrites any union data inside the ClassifyInput as the provided TextList
+func (t *ClassifyInput) FromTextList(v TextList) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTextList performs a merge with any union data inside the ClassifyInput, using the provided TextList
+func (t *ClassifyInput) MergeTextList(v TextList) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsClassifyItemList returns the union data inside the ClassifyInput as a ClassifyItemList
+func (t ClassifyInput) AsClassifyItemList() (ClassifyItemList, error) {
+	var body ClassifyItemList
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromClassifyItemList overwrites any union data inside the ClassifyInput as the provided ClassifyItemList
+func (t *ClassifyInput) FromClassifyItemList(v ClassifyItemList) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeClassifyItemList performs a merge with any union data inside the ClassifyInput, using the provided ClassifyItemList
+func (t *ClassifyInput) MergeClassifyItemList(v ClassifyItemList) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ClassifyInput) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *ClassifyInput) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsFloatVector returns the union data inside the EmbeddingVector as a FloatVector
+func (t EmbeddingVector) AsFloatVector() (FloatVector, error) {
+	var body FloatVector
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromFloatVector overwrites any union data inside the EmbeddingVector as the provided FloatVector
+func (t *EmbeddingVector) FromFloatVector(v FloatVector) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeFloatVector performs a merge with any union data inside the EmbeddingVector, using the provided FloatVector
+func (t *EmbeddingVector) MergeFloatVector(v FloatVector) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsBase64Vector returns the union data inside the EmbeddingVector as a Base64Vector
+func (t EmbeddingVector) AsBase64Vector() (Base64Vector, error) {
+	var body Base64Vector
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromBase64Vector overwrites any union data inside the EmbeddingVector as the provided Base64Vector
+func (t *EmbeddingVector) FromBase64Vector(v Base64Vector) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeBase64Vector performs a merge with any union data inside the EmbeddingVector, using the provided Base64Vector
+func (t *EmbeddingVector) MergeBase64Vector(v Base64Vector) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t EmbeddingVector) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *EmbeddingVector) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsInputText returns the union data inside the EmbeddingsInput as a InputText
+func (t EmbeddingsInput) AsInputText() (InputText, error) {
+	var body InputText
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromInputText overwrites any union data inside the EmbeddingsInput as the provided InputText
+func (t *EmbeddingsInput) FromInputText(v InputText) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeInputText performs a merge with any union data inside the EmbeddingsInput, using the provided InputText
+func (t *EmbeddingsInput) MergeInputText(v InputText) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTextList returns the union data inside the EmbeddingsInput as a TextList
+func (t EmbeddingsInput) AsTextList() (TextList, error) {
+	var body TextList
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTextList overwrites any union data inside the EmbeddingsInput as the provided TextList
+func (t *EmbeddingsInput) FromTextList(v TextList) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTextList performs a merge with any union data inside the EmbeddingsInput, using the provided TextList
+func (t *EmbeddingsInput) MergeTextList(v TextList) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsContentPartList returns the union data inside the EmbeddingsInput as a ContentPartList
+func (t EmbeddingsInput) AsContentPartList() (ContentPartList, error) {
+	var body ContentPartList
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromContentPartList overwrites any union data inside the EmbeddingsInput as the provided ContentPartList
+func (t *EmbeddingsInput) FromContentPartList(v ContentPartList) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeContentPartList performs a merge with any union data inside the EmbeddingsInput, using the provided ContentPartList
+func (t *EmbeddingsInput) MergeContentPartList(v ContentPartList) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t EmbeddingsInput) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *EmbeddingsInput) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error

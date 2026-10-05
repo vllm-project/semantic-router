@@ -27,6 +27,8 @@ def schema(name):
             node = {key: resolve(value) for key, value in node.items()}
             if node.pop("nullable", False) and "type" in node:
                 node["type"] = [node["type"], "null"]
+                if "enum" in node:
+                    node["enum"] = [*node["enum"], None]
             return node
         if isinstance(node, list):
             return [resolve(item) for item in node]
@@ -281,6 +283,62 @@ def test_body_that_is_not_json(client):
         "/v1/decisions", content=b"{", headers={"content-type": "application/json"}
     )
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "name, body",
+    [
+        ("ClassifyRequest", {"input": "one text"}),
+        ("ClassifyRequest", {"input": ["a", "b"]}),
+        ("ClassifyRequest", {"input": [{"text": "query", "text_pair": "document"}]}),
+        (
+            "ClassifyRequest",
+            {"input": [{"context": "c", "question": "q", "answer": "a"}]},
+        ),
+        ("EmbeddingsRequest", {"input": "one text"}),
+        ("EmbeddingsRequest", {"input": ["a", "b"]}),
+        (
+            "EmbeddingsRequest",
+            {
+                "input": [
+                    {"type": "text", "text": "a"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,AA=="},
+                    },
+                    {
+                        "type": "input_audio",
+                        "input_audio": {"data": "AA==", "format": "wav"},
+                    },
+                ]
+            },
+        ),
+        ("Embedding", {"object": "embedding", "index": 0, "embedding": [0.5, -0.5]}),
+        ("Embedding", {"object": "embedding", "index": 0, "embedding": "AAAAPw=="}),
+    ],
+)
+def test_surface_payloads_match_the_contract(name, body):
+    check(name, body)
+
+
+@pytest.mark.parametrize(
+    "name, body",
+    [
+        ("ClassifyRequest", {"input": []}),
+        ("ClassifyRequest", {"input": [1]}),
+        ("ClassifyRequest", {"input": [{"txt": "a"}]}),
+        ("EmbeddingsRequest", {"input": [{"type": "video_url"}]}),
+        ("EmbeddingsRequest", {"input": [{"type": "image_url", "image_url": {}}]}),
+        ("Embedding", {"object": "embedding", "index": 0, "embedding": ["a"]}),
+        (
+            "RerankRequest",
+            {"query": "q", "documents": ["d"], "options": {"profile": "Fast!"}},
+        ),
+    ],
+)
+def test_malformed_surface_payloads_fail_the_contract(name, body):
+    with pytest.raises(jsonschema.ValidationError):
+        check(name, body)
 
 
 def test_models_health_metrics_and_openapi(client):
