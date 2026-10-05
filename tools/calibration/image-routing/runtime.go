@@ -13,9 +13,9 @@ import (
 
 const omniDeployment = "omni-calibration"
 
-// runtimeImageBudget is the largest image the runtime's default 8 MiB request
-// body accepts once base64-encoded, leaving room for the JSON envelope.
-const runtimeImageBudget = (8<<20)*3/4 - 64<<10
+// runtimeImageBudget is the largest image the managed runtime's request body
+// accepts once base64-encoded, leaving room for the JSON envelope.
+const runtimeImageBudget = modelservice.ManagedRequestBytes*3/4 - 64<<10
 
 // omniEmbedding serves the prepared bundle from a model runtime this process
 // starts (VLLM_SR_RUNTIME_COMMAND, else vllm-sr-runtime on PATH) and returns
