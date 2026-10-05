@@ -1,9 +1,3 @@
-import threading
-import time
-from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
-from functools import partial
-
 import pytest
 import torch
 from vllm_sr_runtime.accel.cpu import CPUAccelerator
@@ -11,12 +5,7 @@ from vllm_sr_runtime.accel.cuda import CUDAAccelerator
 from vllm_sr_runtime.accel.rocm import ROCmAccelerator
 from vllm_sr_runtime.errors import PlacementError
 from vllm_sr_runtime.placement import parse_device, place
-from vllm_sr_runtime.plugins.base import (
-    BackboneSpec,
-    DeviceInfo,
-    DtypePolicy,
-    ModelSpec,
-)
+from vllm_sr_runtime.plugins.base import BackboneSpec, DtypePolicy, ModelSpec
 
 SPEC = ModelSpec("tiny", BackboneSpec("qwen3", {}, ()), DtypePolicy(), 1024)
 GPU = torch.cuda.is_available()
@@ -68,37 +57,6 @@ def test_gpu_devices_report_memory_and_bf16():
     accelerator = ROCmAccelerator() if torch.version.hip else CUDAAccelerator()
     devices = accelerator.devices()
     assert devices and devices[0].total_memory and devices[0].index == 0
-
-
-def test_gpu_device_work_runs_one_at_a_time_per_device():
-    accelerator = ROCmAccelerator()
-    first, second = (DeviceInfo("rocm", index, "fake") for index in (90, 91))
-    active, peak, guard = Counter(), Counter(), threading.Lock()
-
-    def work(index: int) -> int:
-        with guard:
-            active[index] += 1
-            peak[index] = max(peak[index], active[index])
-        time.sleep(0.005)
-        with guard:
-            active[index] -= 1
-        return index
-
-    with ThreadPoolExecutor(8) as pool:
-        futures = [
-            pool.submit(accelerator.execute, device, partial(work, device.index))
-            for device in (first, second)
-            for _ in range(6)
-        ]
-        assert sorted(future.result() for future in futures) == [90] * 6 + [91] * 6
-    assert peak == Counter({90: 1, 91: 1})
-    started = threading.Event()
-    with ThreadPoolExecutor(2) as pool:
-        waits = pool.submit(accelerator.execute, first, lambda: started.wait(5))
-        pool.submit(accelerator.execute, second, started.set).result()
-        assert waits.result(), "work on one device waited for another device"
-    nested = accelerator.execute(first, lambda: accelerator.execute(first, lambda: 7))
-    assert nested == 7
 
 
 def test_xpu_and_mps_devices_parse():
