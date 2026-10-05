@@ -13,6 +13,10 @@ records; raw results are in `vela1-performance.json`.
     leaves the CPU code as it was, in the router's ROCm image stack (Python
     3.12.14, PyTorch 2.12.0+rocm7.2, HIP 7.2.53211, Triton 3.7.0, fla-core
     0.5.2), as its user (uid 65532).
+  - The router's ROCm image as built at `be7366c49` has these pins plus
+    `causal-conv1d`, which these models don't run, and Python 3.12.15. It
+    answers byte for byte alike (`vela1-parity.md`), so the ROCm rows hold for
+    it.
   - The final head is `35ff3a8a5` with these records on top, so every
     row holds for it.
 - **Legacy side:** the router's native facade at `61aa7eb2d`
