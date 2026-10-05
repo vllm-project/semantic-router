@@ -3,7 +3,7 @@ title: 从原生绑定迁移
 sidebar_label: 从原生绑定迁移
 description: 更新使用了 candle、ONNX Runtime 或 OpenVINO 后端、旧模型名或 NLI 解释器的配置。
 translation:
-  source_commit: "4769baf6b108e8eeb35cfc9ea0ed62a14ad5e429"
+  source_commit: "d7ebc4bfa89a8be759f7a6eaa77b2defd9cb9ccb"
   source_file: "docs/model-runtime/migrate.md"
   outdated: false
 ---
