@@ -111,7 +111,7 @@ def system_one(
         indices = [index for _, part in batch.parts for index in part]
         items = [plan.items[i] for i in indices]
         if batch.shared_prefix:
-            values = model.run(items, shared_prefix=batch.shared_prefix)
+            values = model.run_shared(items, batch.shared_prefix)
         else:
             values = model.run(items)
         for index, value in zip(indices, values, strict=True):

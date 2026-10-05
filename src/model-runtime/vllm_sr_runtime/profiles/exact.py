@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..plugins.base import Batch, Job, LoadedModel, Profile
 from ..scheduler.planner import cost, exact_split, length_class, padded
 
@@ -23,14 +25,13 @@ class ExactProfile(Profile):
         self.fuse = False
         self.merge = False
         self.banded = True
-        self.model: LoadedModel | None = None
+        self.model: LoadedModel[Any, Any] | None = None
 
-    def available(self, model: LoadedModel) -> str | None:
-        self.fuse = bool(getattr(model, "fuse_bundled_jobs", False))
-        self.merge = bool(getattr(model, "batch_invariant", False))
-        self.banded = not getattr(model, "packs_rows", False)
+    def bind(self, model: LoadedModel[Any, Any]) -> None:
+        self.fuse = model.fuse_bundled_jobs
+        self.merge = model.batch_invariant
+        self.banded = not model.packs_rows
         self.model = model
-        return None
 
     def plan(self, jobs: list[Job], token_budget: int | None) -> list[Batch]:
         """One request (or, for models that fuse bundles, one bundle group) per batch.

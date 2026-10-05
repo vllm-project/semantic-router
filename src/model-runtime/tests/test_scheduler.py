@@ -353,11 +353,11 @@ def test_exact_runs_queued_requests_together_only_on_a_batch_invariant_model():
         Job([item("b", 13)], None, 0.0, "exact"),
     ]
     profile = ExactProfile()
-    profile.available(FakeModel())
+    profile.bind(FakeModel())
     assert len(profile.plan(jobs, None)) == 2
     invariant = FakeModel()
     invariant.batch_invariant = True
-    profile.available(invariant)
+    profile.bind(invariant)
     (batch,) = profile.plan(jobs, None)
     assert [job for job, _ in batch.parts] == jobs and batch.exact
 
@@ -411,13 +411,13 @@ def test_exact_bands_lengths_only_for_models_that_pad():
     packed_model.batch_invariant = True
     packed_model.packs_rows = True
     profile = ExactProfile()
-    profile.available(padded_model)
+    profile.bind(padded_model)
     assert [names(batch) for batch in profile.plan(jobs, None)] == [["a"], ["b"]]
-    profile.available(packed_model)
+    profile.bind(packed_model)
     assert [names(batch) for batch in profile.plan(jobs, None)] == [["a", "b"]]
     uninvariant = FakeModel()
     uninvariant.packs_rows = True
-    profile.available(uninvariant)
+    profile.bind(uninvariant)
     assert len(profile.plan(jobs, None)) == 2
 
 
@@ -427,7 +427,7 @@ def test_concurrent_requests_of_different_lengths_share_one_forward_on_a_packed_
     model.batch_invariant = True
     model.packs_rows = True
     profile = ExactProfile()
-    profile.available(model)
+    profile.bind(model)
     scheduler = Scheduler(model, {"exact": profile})
     scheduler.start()
     try:
@@ -692,10 +692,10 @@ def test_exact_runs_a_bundle_group_as_one_batch_only_when_the_model_fuses():
         Job([item("c", 5)], None, 0.0, "exact"),
     ]
     separate = ExactProfile()
-    separate.available(FakeModel())
+    separate.bind(FakeModel())
     assert len(separate.plan(jobs, None)) == 3
     fused = ExactProfile()
-    fused.available(FusingModel())
+    fused.bind(FusingModel())
     batches = fused.plan(jobs, None)
     assert [
         [job.items[0].question_id for job, _ in batch.parts] for batch in batches
@@ -708,7 +708,7 @@ def test_exact_runs_a_bundle_group_as_one_batch_only_when_the_model_fuses():
 def test_a_group_is_queued_at_once_and_answered_per_job():
     model = FusingModel()
     exact = ExactProfile()
-    exact.available(model)
+    exact.bind(model)
     scheduler = Scheduler(model, {"exact": exact})
     scheduler.start()
     try:

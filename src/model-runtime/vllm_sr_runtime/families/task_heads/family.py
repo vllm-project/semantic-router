@@ -301,9 +301,7 @@ class TaskHeadsModel(LoadedModel):
         """``run`` on the engine's reduced copy of the backbone, where it loaded one (``max_speed``)."""
         return self.run(items, reduced=True)
 
-    def run(
-        self, items: list[Item], shared_prefix: int = 0, reduced: bool = False
-    ) -> list[Any]:
+    def run(self, items: list[Item], reduced: bool = False) -> list[Any]:
         """One packed forward over the distinct sequences of ``items``; each head reads its rows."""
         if not self.engine_model.hidden_states:
             return self._run_graphs(items)

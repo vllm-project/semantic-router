@@ -13,11 +13,21 @@ register through the same entry points as third-party ones
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Literal
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Final,
+    Generic,
+    Literal,
+    Protocol,
+    TypeVar,
+    final,
+)
 
 if TYPE_CHECKING:
     import torch
@@ -28,8 +38,43 @@ if TYPE_CHECKING:
 # The API surfaces a model may serve (``/v1/<surface>``).
 SURFACES = ("decisions", "classify", "embeddings", "rerank")
 
-# A job whose deadline passed in the queue resolves to this instead of results.
-DEADLINE = object()
+
+@final
+class Expired:
+    """What a job resolves to, instead of results, when its deadline passed in the queue (``DEADLINE``)."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "DEADLINE"
+
+
+DEADLINE: Final = Expired()
+
+# ``HeadInfo`` fields, as the OpenAPI ``HeadCard`` declares them.
+HeadKind = Literal["sequence", "scores", "token"]
+Overflow = Literal["reject", "truncate", "window"]
+Reduction = Literal["max", "span_union"]
+
+
+class WorkItem(Protocol):
+    """A plan's item as the scheduler and the result cache read it.
+
+    ``ids`` (its token IDs) bound admission and batches. An item may also
+    carry ``cost``, the tokens it costs a forward when it has no token IDs
+    (images, audio), and ``cache_key``, a content hash of everything its
+    result depends on; both are optional attributes.
+    """
+
+    @property
+    def ids(self) -> Sequence[int]: ...
+
+
+ItemT = TypeVar("ItemT", bound=WorkItem)
+ResultT = TypeVar("ResultT")
+# A plan's results: one per item in order, ``DEADLINE`` for an item that
+# expired while others were cached, or ``DEADLINE`` for the whole plan.
+Results = list[ResultT | Expired] | Expired
 
 
 class UnsupportedSurfaceError(Exception):
@@ -325,12 +370,21 @@ class EngineModel(ABC):
     device: torch.device
     device_info: DeviceInfo
     hidden_states: ClassVar[bool] = True
+    # Whether ``forward`` runs a batch's ``shared_prefix`` once, as a shared-context tree.
+    supports_shared_context: ClassVar[bool] = False
+    # The spec an engine that builds the backbone loaded; profiles read its config.
+    spec: ModelSpec | None = None
     # Set at load when every encoder forward returns each row the same alone or in any batch.
     batch_invariant: bool = False
 
-    @abstractmethod
+    @property
+    def replays_graphs(self) -> bool:
+        """Whether decoder forwards replay captured device graphs."""
+        return False
+
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
-        """Run the backbone and gather the requested rows (on the device)."""
+        """Run a decoder backbone and gather the requested rows (on the device)."""
+        raise NotImplementedError(f"{type(self).__name__} has no decoder forward")
 
     def encode(self, batch: EncoderBatch) -> EncoderOutput:
         """Run an encoder and return hidden states at the requested exits or graph outputs."""
@@ -468,14 +522,14 @@ class HeadInfo:
     """
 
     name: str
-    kind: str
+    kind: HeadKind
     labels: tuple[str, ...]
     inputs: tuple[str, ...] = ("text",)
     default_threshold: float | None = None
     thresholds: tuple[float, ...] | None = None
-    overflow: str = "reject"
+    overflow: Overflow = "reject"
     window: tuple[int, int] | None = None
-    reduction: str | None = None
+    reduction: Reduction | None = None
 
 
 @dataclass(frozen=True)
@@ -543,21 +597,20 @@ class SurfaceRequest:
 
 
 @dataclass
-class SurfacePlan:
+class SurfacePlan(Generic[ItemT]):
     """A rendered request: work items for the scheduler and private assembly state.
 
-    Every item has ``ids`` (its token IDs), which bound admission and batches;
     ``run`` receives the items and ``finish_surface`` their results in order.
     """
 
     surface: str
-    items: list[Any]
+    items: list[ItemT]
     input_tokens: int
     state: Any = None
 
 
-class LoadedModel(ABC):
-    """A family's model bound to an engine model.
+class LoadedModel(ABC, Generic[ItemT, ResultT]):
+    """A family's model bound to an engine model, generic over its plan items and their results.
 
     The runtime calls ``plan_surface`` on the request thread, the scheduler
     calls ``run`` on the model's worker with micro-batches of the plan's
@@ -600,13 +653,20 @@ class LoadedModel(ABC):
         raise UnsupportedSurfaceError("decisions", self.info.id)
 
     @abstractmethod
-    def run(self, items: list[Any], shared_prefix: int = 0) -> list[Any]:
-        """One forward over ``items`` in order; per item its readout (decisions: option logits).
+    def run(self, items: list[ItemT]) -> list[ResultT]:
+        """One forward over ``items`` in order; per item its readout (decisions: option logits)."""
 
-        ``shared_prefix`` > 0 runs the items as one shared-context tree (see ``ForwardBatch``).
+    def run_shared(self, items: list[ItemT], shared_prefix: int) -> list[ResultT]:
+        """``run`` for a shared-context batch: the items' first ``shared_prefix`` tokens run once.
+
+        Only a family whose ``shared_context`` returns positive prefixes runs
+        such batches (decoders, as one tree: see ``ForwardBatch``).
         """
+        raise NotImplementedError(
+            f"{type(self).__name__} has no shared-context forward"
+        )
 
-    def run_approximate(self, items: list[Any]) -> list[Any]:
+    def run_approximate(self, items: list[ItemT]) -> list[ResultT]:
         """``run`` for a batch of an approximate profile, where a family may trade exactness for speed."""
         return self.run(items)
 
@@ -614,8 +674,11 @@ class LoadedModel(ABC):
         """The API answer for one decision item."""
         raise UnsupportedSurfaceError("decisions", self.info.id)
 
-    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan:
-        """Validate and render a request; per-item failures stay in the plan."""
+    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan[ItemT]:
+        """Validate and render a request; per-item failures stay in the plan.
+
+        By default the decisions surface, whose items ``plan`` renders.
+        """
         if surface != "decisions" or "decisions" not in self.info.surfaces:
             raise UnsupportedSurfaceError(surface, self.info.id)
         body = request.body
@@ -629,22 +692,26 @@ class LoadedModel(ABC):
         ):
             raise ValueError("questions must be a nonempty mapping of question IDs")
         plan = self.plan(body["state"], questions)
-        return SurfacePlan("decisions", list(plan.items), plan.input_tokens, plan)
+        items: list[Any] = list(plan.items)
+        return SurfacePlan("decisions", items, plan.input_tokens, plan)
 
-    def finish_surface(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:
+    def finish_surface(
+        self, plan: SurfacePlan[ItemT], results: Results[ResultT]
+    ) -> dict[str, Any]:
         """The response body without ``model``, ``usage`` and ``meta`` (the runtime adds those)."""
         from ..errors import DEADLINE_EXCEEDED
 
         request_plan: RequestPlan = plan.state
         answered: dict[str, dict[str, Any]] = {}
         for index, item in enumerate(request_plan.items):
-            if results is DEADLINE:
+            if isinstance(results, Expired):
                 answered[item.question_id] = {
                     "type": item.task_type,
                     "error": DEADLINE_EXCEEDED,
                 }
             else:
-                answered[item.question_id] = self.answer(item, results[index])
+                logits: Any = results[index]
+                answered[item.question_id] = self.answer(item, logits)
         return {
             "answers": {
                 question_id: request_plan.errors.get(question_id)
@@ -663,16 +730,18 @@ class LoadedModel(ABC):
         """Most padded tokens one forward may hold; None when nothing limits it."""
         return None
 
-    def shared_context(self, items: list[Any], token_budget: int | None) -> int | None:
+    def shared_context(
+        self, items: list[ItemT], token_budget: int | None
+    ) -> int | None:
         """How a job's items share context on the shared-context path.
 
-        A positive value runs them through ``run(items, shared_prefix=value)``,
+        A positive value runs them through ``run_shared(items, value)``,
         0 runs them exactly, and None lets the profile find the common token
         prefix of decision items itself.
         """
         return None
 
-    def exact_batches(self, items: list[Any]) -> list[list[int]] | None:
+    def exact_batches(self, items: list[ItemT]) -> list[list[int]] | None:
         """How the released runtime splits one request's items into forwards (indices into ``items``).
 
         None (the default) is one padded batch, split only by the forward
@@ -722,7 +791,7 @@ class ModelFamily(ABC):
     @abstractmethod
     def load(
         self, package: VerifiedPackage, spec: ModelSpec, engine_model: EngineModel
-    ) -> LoadedModel: ...
+    ) -> LoadedModel[Any, Any]: ...
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
         """Golden requests ({state, questions, expected?}) that gate readiness."""
@@ -731,13 +800,12 @@ class ModelFamily(ABC):
     def kernel_choices(
         self, package: VerifiedPackage, device: DeviceInfo
     ) -> dict[str, Any]:
-        """Recorded autotuned-kernel configurations for this model on the device's class, if any."""
-        from ..registry import builtin
+        """Autotuned-kernel configurations this family recorded for the model on the device's class.
 
-        known = builtin.by_identity(package.model_sha256)
-        if known is None or not device.arch:
-            return {}
-        return known.kernel_choices.get(f"{device.accelerator}:{device.arch}", {})
+        The runtime pins a built-in model's recorded choices itself; a family
+        overrides this only for packages that carry their own.
+        """
+        return {}
 
 
 # ---------------------------------------------------------------------------
@@ -754,7 +822,7 @@ class Job:
     (``LoadedModel.fuse_bundled_jobs``).
     """
 
-    items: list[Any]
+    items: list[WorkItem]
     deadline: float | None
     enqueued: float
     profile: str
@@ -774,7 +842,7 @@ class Batch:
     shared_prefix: int = 0
     exact: bool = True
 
-    def items(self) -> list[RenderedItem]:
+    def items(self) -> list[WorkItem]:
         return [job.items[index] for job, indices in self.parts for index in indices]
 
 
@@ -804,9 +872,12 @@ class Profile(ABC):
     def engine_options(self, base: EngineOptions) -> EngineOptions:
         return base
 
-    def available(self, model: LoadedModel) -> str | None:
+    def available(self, model: LoadedModel[Any, Any]) -> str | None:
         """None when the profile can run on ``model``, else the reason it cannot."""
         return None
+
+    def bind(self, model: LoadedModel[Any, Any]) -> None:  # noqa: B027 - optional hook
+        """Take what planning needs from the model this instance serves, once ``available`` passed."""
 
     @abstractmethod
     def plan(self, jobs: list[Job], token_budget: int | None) -> list[Batch]:

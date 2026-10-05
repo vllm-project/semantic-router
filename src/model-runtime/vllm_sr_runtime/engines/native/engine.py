@@ -186,6 +186,10 @@ class NativeEngineModel(EngineModel):
 
     supports_shared_context = True
 
+    @property
+    def replays_graphs(self) -> bool:
+        return self.graphs is not None
+
     def _run_tree(
         self, prefix: torch.Tensor, suffixes: list[torch.Tensor], padded_exact: bool
     ) -> torch.Tensor:

@@ -179,7 +179,7 @@ def test_exact_profile_runs_the_released_physical_batches(runtimes):
     model = model_of(runtimes["vela"])
     plan = model.plan(STATE, MANY)
     profile = ExactProfile()
-    profile.available(model)
+    profile.bind(model)
     job = Job(
         items=plan.items, deadline=None, enqueued=time.monotonic(), profile="exact"
     )
@@ -205,7 +205,7 @@ def test_vela_coalesces_within_the_cpu_budget_while_exact_keeps_its_batches(runt
         rows = batch.items()
         assert len(rows) * padded(max(len(row.ids) for row in rows)) <= budget
     exact = ExactProfile()
-    exact.available(model)
+    exact.bind(model)
     batches = exact.plan(jobs[:1], budget)
     assert [indices for batch in batches for _, indices in batch.parts] == released
 

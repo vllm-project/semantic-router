@@ -203,18 +203,23 @@ only sees work items with token IDs, so every family uses the same admission,
 deadlines and profiles:
 
 ```python
-class LoadedModel(ABC):
+class LoadedModel(ABC, Generic[ItemT, ResultT]):  # ItemT satisfies WorkItem
     info: ModelInfo                        # identity, surfaces, heads, limits, licence
     fuse_bundled_jobs: ClassVar[bool]      # exact may run one bundle's jobs as one batch
-    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan: ...  # validate + render
-    def run(self, items: list[WorkItem], shared_prefix: int = 0) -> list: ...  # one forward + readout
-    def finish_surface(self, plan: SurfacePlan, results) -> dict: ...      # the surface response body
+    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan[ItemT]: ...  # validate + render
+    def run(self, items: list[ItemT]) -> list[ResultT]: ...                         # one forward + readout
+    def run_shared(self, items: list[ItemT], shared_prefix: int) -> list[ResultT]: ...  # decoders' shared-context batches
+    def finish_surface(self, plan: SurfacePlan[ItemT], results: Results[ResultT]) -> dict: ...  # the response body
 ```
 
-A work item has `ids` (its token IDs) and may have `cache_key`, a content
-hash of everything its result depends on: the runtime then answers a repeated
-item from the model's result cache without a forward. Results are shared with
-the cache, so `finish_surface` never mutates them.
+A work item (`WorkItem`) has `ids` (its token IDs) and may have `cost`, the
+tokens it costs a forward when it has no token IDs (images, audio), and
+`cache_key`, a content hash of everything its result depends on: the runtime
+then answers a repeated item from the model's result cache without a forward.
+`Results` are one value per item or `DEADLINE` (the `Expired` instance) for an
+expired item or plan. Results are shared with the cache, so `finish_surface`
+never mutates them. `mypy --strict` checks the plugin interfaces, the
+scheduler, the profiles and the runtime core in `make model-runtime-test`.
 
 The Phase 1 decision methods (`plan`, `answer`) remain and back
 `plan_surface("decisions", ...)`, so Decision 2.0 is untouched. `ModelInfo`

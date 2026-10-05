@@ -39,7 +39,7 @@ from functools import partial
 from typing import Any
 
 from ..errors import RuntimeServiceError
-from ..plugins.base import DEADLINE, Batch, Job, LoadedModel, Profile
+from ..plugins.base import DEADLINE, Batch, Job, LoadedModel, Profile, Results
 from .planner import cost
 
 __all__ = ["DEADLINE", "Scheduler", "SchedulerLimits"]
@@ -60,7 +60,7 @@ class SchedulerLimits:
 @dataclass
 class _Pending:
     job: Job
-    future: Future
+    future: Future[Results[Any]]
     tokens: int
     results: list[Any] = field(default_factory=list)
     remaining: int = 0
@@ -81,7 +81,7 @@ class _Planned:
 class Scheduler:
     def __init__(
         self,
-        model: LoadedModel,
+        model: LoadedModel[Any, Any],
         profiles: dict[str, Profile],
         limits: SchedulerLimits | None = None,
         observe: Callable[[str, dict[str, Any]], None] | None = None,
@@ -143,7 +143,7 @@ class Scheduler:
 
     def submit(
         self, items: list[Any], *, deadline: float | None, profile: str
-    ) -> Future:
+    ) -> Future[Results[Any]]:
         return self.submit_group([items], deadlines=[deadline], profile=profile)[0]
 
     def submit_group(
@@ -152,7 +152,7 @@ class Scheduler:
         *,
         deadlines: list[float | None],
         profile: str,
-    ) -> list[Future]:
+    ) -> list[Future[Results[Any]]]:
         """Queue one job per item list at once, as one group (a bundle's tasks for this model).
 
         ``deadlines`` holds each job's own deadline. Admission counts every
@@ -184,7 +184,7 @@ class Scheduler:
         *,
         deadlines: list[float | None],
         profile: str,
-    ) -> list[Future] | None:
+    ) -> list[Future[Results[Any]]] | None:
         """Run a group on the calling thread if the scheduler is idle, else None.
 
         Never call it from the event loop: batches run before it returns. When
@@ -217,12 +217,12 @@ class Scheduler:
         item_lists: list[list[Any]],
         deadlines: list[float | None],
         profile: str,
-    ) -> tuple[list[Future], list[_Pending]]:
+    ) -> tuple[list[Future[Results[Any]]], list[_Pending]]:
         if profile not in self.profiles:
             raise RuntimeServiceError(
                 "invalid_request", f"profile {profile!r} is not enabled"
             )
-        futures: list[Future] = [Future() for _ in item_lists]
+        futures: list[Future[Results[Any]]] = [Future() for _ in item_lists]
         pending = []
         enqueued = time.monotonic()
         with self._lock:
@@ -249,7 +249,7 @@ class Scheduler:
             self._pending_tokens += entry.tokens
             entry.future.add_done_callback(partial(self._settle, entry.tokens))
 
-    def _settle(self, tokens: int, _future: Future) -> None:
+    def _settle(self, tokens: int, _future: Future[Results[Any]]) -> None:
         with self._lock:
             self._pending_jobs -= 1
             self._pending_tokens -= tokens
@@ -383,7 +383,7 @@ class Scheduler:
                 self.observe("queue", {"seconds": started - pending.job.enqueued})
         try:
             if batch.shared_prefix:
-                work = partial(self.model.run, items, shared_prefix=batch.shared_prefix)
+                work = partial(self.model.run_shared, items, batch.shared_prefix)
             elif not batch.exact:
                 work = partial(self.model.run_approximate, items)
             else:
