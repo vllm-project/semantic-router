@@ -22,9 +22,13 @@ const (
 	stableRunDuration = 2 * time.Minute
 )
 
+// errRecycled marks the exit of a process the group recycled.
+var errRecycled = errors.New("recycled after every model failed to load")
+
 // supervisor runs one Router-managed runtime process and restarts it with
-// exponential back-off until its context is cancelled. onExit reports every
-// exit (or failure to start) with how long the process ran.
+// exponential back-off until its context is cancelled: after it exits, and
+// after the group recycles a process whose every model failed to load. onExit
+// reports every exit (or failure to start) with how long the process ran.
 type supervisor struct {
 	process     string
 	deployments []string
@@ -33,8 +37,9 @@ type supervisor struct {
 	socket      string
 	onExit      func(err error, ran time.Duration)
 
-	mu      sync.Mutex
-	running *os.Process
+	mu       sync.Mutex
+	running  *os.Process
+	recycled *os.Process
 }
 
 func (s *supervisor) run(ctx context.Context) {
@@ -97,6 +102,11 @@ func (s *supervisor) runOnce(ctx context.Context) error {
 	s.mu.Lock()
 	s.running = cmd.Process
 	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.running = nil
+		s.mu.Unlock()
+	}()
 	logging.ComponentEvent("model_runtime", "runtime_process_started", map[string]interface{}{
 		"process": s.process, "deployments": s.deployments, "pid": cmd.Process.Pid,
 	})
@@ -105,6 +115,12 @@ func (s *supervisor) runOnce(ctx context.Context) error {
 	go func() { done <- cmd.Wait() }()
 	select {
 	case err := <-done:
+		s.mu.Lock()
+		recycled := s.recycled == cmd.Process
+		s.mu.Unlock()
+		if recycled {
+			return errRecycled
+		}
 		return err
 	case <-ctx.Done():
 		s.terminate(done)
@@ -127,6 +143,30 @@ func (s *supervisor) terminate(done <-chan error) {
 		_ = syscall.Kill(-process.Pid, syscall.SIGKILL)
 		<-done
 	}
+}
+
+// recycle stops the running process as an exit would, so run starts a new one
+// after its back-off: SIGTERM, then SIGKILL after the grace period. It acts
+// once per process and reports whether it did.
+func (s *supervisor) recycle() bool {
+	s.mu.Lock()
+	process := s.running
+	if process == nil || process == s.recycled {
+		s.mu.Unlock()
+		return false
+	}
+	s.recycled = process
+	s.mu.Unlock()
+	_ = syscall.Kill(-process.Pid, syscall.SIGTERM)
+	time.AfterFunc(stopGracePeriod, func() {
+		s.mu.Lock()
+		running := s.running == process
+		s.mu.Unlock()
+		if running {
+			_ = syscall.Kill(-process.Pid, syscall.SIGKILL)
+		}
+	})
+	return true
 }
 
 func (s *supervisor) forwardLogs(reader io.Reader) {

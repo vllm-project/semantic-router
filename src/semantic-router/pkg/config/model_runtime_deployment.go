@@ -15,8 +15,10 @@ import (
 const ModelRuntimeProvider = "model_runtime"
 
 var (
-	modelRuntimeProfiles = []string{"exact", "shared_context", "batching", "max_speed"}
-	modelRuntimeDevice   = regexp.MustCompile(`^(auto|cpu|mps|(cuda|rocm|xpu)(:[0-9]+)?)$`)
+	// The runtime owns profile and accelerator names, plugins' included: the
+	// Router checks their shape and leaves an unknown name to the runtime.
+	modelRuntimeProfile  = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	modelRuntimeDevice   = regexp.MustCompile(`^[a-z][a-z0-9_]*(:[0-9]+)?$`)
 	modelRuntimeRevision = regexp.MustCompile(`^[0-9a-f]{40}$`)
 	modelRuntimeProcess  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
 	hubRepositoryID      = regexp.MustCompile(`^[A-Za-z0-9][\w.-]*/[\w.-]+$`)
@@ -198,10 +200,10 @@ func (d ModelDeployment) validateModelRuntime() error {
 		return fmt.Errorf("unsupported input.overflow %q", d.Input.Overflow)
 	}
 	if !modelRuntimeDevice.MatchString(d.Device) {
-		return fmt.Errorf("device must be auto, cpu, mps, cuda[:N], rocm[:N] or xpu[:N]")
+		return fmt.Errorf("device must be an accelerator name with an optional index, such as cpu, cuda:0 or rocm:1")
 	}
-	if !stringSliceContains(modelRuntimeProfiles, d.Profile) {
-		return fmt.Errorf("profile must be one of %s", strings.Join(modelRuntimeProfiles, ", "))
+	if !modelRuntimeProfile.MatchString(d.Profile) {
+		return fmt.Errorf("profile must be a profile name, such as exact or batching")
 	}
 	if d.Revision != "" && !modelRuntimeRevision.MatchString(d.Revision) {
 		return fmt.Errorf("revision must be a 40-hex commit")

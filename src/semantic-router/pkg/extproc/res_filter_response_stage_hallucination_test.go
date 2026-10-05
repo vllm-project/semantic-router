@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"sync/atomic"
 	"testing"
 
@@ -53,15 +55,21 @@ func newHallucinationEndpointServer(t *testing.T, spans []string, fail bool) (*h
 	return server, &calls
 }
 
-// hallucinationSignalConfig points the hallucination detector at server over
-// the endpoint backend.
+// hallucinationSignalConfig binds the hallucination detector of every recipe
+// to server, an http_chat deployment.
 func hallucinationSignalConfig(server *httptest.Server) *config.RouterConfig {
-	cfg := &config.RouterConfig{}
-	cfg.HallucinationMitigation.HallucinationModel = config.HallucinationModelConfig{
-		Backend:  config.HallucinationBackendEndpoint,
-		Endpoint: server.URL + "/v1",
-		ModelID:  "stub-detector",
+	parsed, err := url.Parse(server.URL)
+	if err != nil {
+		panic(err)
 	}
+	port, err := strconv.Atoi(parsed.Port())
+	if err != nil {
+		panic(err)
+	}
+	cfg := &config.RouterConfig{}
+	cfg.ExternalModels = []config.ExternalModelConfig{{Name: "detector", ModelName: "stub-detector", ModelRole: config.ModelRoleClassification, ModelEndpoint: config.ClassifierVLLMEndpoint{Address: parsed.Hostname(), Port: port, Protocol: parsed.Scheme}}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"detector": {Provider: "http", ExternalModel: "detector"}}
+	cfg.GlobalModelBindings = map[string]config.ModelBinding{"hallucination_detector": {Deployment: "detector", Adapter: config.RemoteClassifierProtocolHTTPChat, Contract: config.RemoteClassifierContractTokenSpans}}
 	return cfg
 }
 

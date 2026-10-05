@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 import torch
 from starlette.testclient import TestClient
@@ -78,12 +80,26 @@ def served(runtime, name):
 
 
 def test_cards_list_each_head(client):
-    cards = {card["id"]: card for card in client.get("/v1/models").json()["data"]}
+    models = client.get("/v1/models").json()
+    check("ModelList", models)
+    cards = {card["id"]: card for card in models["data"]}
     assert cards["sequence"]["heads"][0]["kind"] == "sequence"
+    assert cards["sequence"]["heads"][0]["window"] is None
     assert cards["scores"]["heads"][0]["window"] == {"tokens": 64, "overlap": 16}
     assert len(cards["scores"]["heads"][0]["thresholds"]) == 12
     assert cards["grounded"]["heads"][0]["inputs"] == ["grounded"]
     assert all(card["status"] == "ready" for card in cards.values())
+
+
+def test_cards_pin_the_operating_point_each_head_applies(client, packages):
+    cards = {card["id"]: card for card in client.get("/v1/models").json()["data"]}
+    for name in ("scores", "grounded"):
+        policy = (packages[name] / "operating_point.json").read_bytes()
+        assert (
+            cards[name]["heads"][0]["operating_point_sha256"]
+            == hashlib.sha256(policy).hexdigest()
+        )
+    assert cards["sequence"]["heads"][0]["operating_point_sha256"] is None
 
 
 @pytest.mark.reference
@@ -280,7 +296,21 @@ def test_one_forward_reads_every_repeat_and_bundled_task(monkeypatch, client, ru
     assert len(calls) == 1 and len(calls[0]) == 2
 
 
-def test_engines_learn_whether_their_process_shares_the_cpu(packages, monkeypatch):
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "auto",
+            marks=pytest.mark.skipif(
+                torch.cuda.is_available(), reason="auto must land on the CPU"
+            ),
+        ),
+    ],
+)
+def test_engines_learn_whether_their_process_shares_the_cpu(
+    packages, monkeypatch, device
+):
     import vllm_sr_runtime.runtime as runtime_module
 
     seen = {}
@@ -301,7 +331,7 @@ def test_engines_learn_whether_their_process_shares_the_cpu(packages, monkeypatc
     alone, other = list(packages.items())[:2]
     for served in ((alone,), (alone, other)):
         models = tuple(
-            ModelConfig(model=str(path), name=name, device="cpu")
+            ModelConfig(model=str(path), name=name, device=device)
             for name, path in served
         )
         runtime = Runtime(ServeConfig(models=models, result_cache_entries=0))

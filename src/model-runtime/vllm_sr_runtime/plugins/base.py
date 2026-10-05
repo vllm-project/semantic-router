@@ -440,13 +440,20 @@ class Engine(ABC):
 
 
 class Accelerator(ABC):
+    """Devices of one kind, named on ``--device`` as ``<name>[:N]``.
+
+    ``auto_priority`` places the accelerator in ``--device auto``'s order,
+    lowest first; None (the default) serves only devices named explicitly.
+    """
+
     name: ClassVar[str]
     validated: ClassVar[bool]
+    auto_priority: ClassVar[int | None] = None
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
         """Capability descriptor listed in ``/v1/models``; per-device facts come from ``capabilities``."""
-        return {"validated": cls.validated}
+        return {"validated": cls.validated, "auto_priority": cls.auto_priority}
 
     @abstractmethod
     def available(self) -> bool: ...
@@ -522,7 +529,8 @@ class HeadInfo:
     and / or ``grounded``. ``thresholds`` is a packaged operating point (one
     threshold per label); ``window`` the default ``(tokens, overlap)`` for
     ``overflow: window``; ``reduction`` how windows combine when the head
-    declares one (``max``, ``span_union``).
+    declares one (``max``, ``span_union``). ``operating_point_sha256`` is the
+    digest of the verified policy file the head applies, if any.
     """
 
     name: str
@@ -534,6 +542,7 @@ class HeadInfo:
     overflow: Overflow = "reject"
     window: tuple[int, int] | None = None
     reduction: Reduction | None = None
+    operating_point_sha256: str | None = None
 
 
 @dataclass(frozen=True)

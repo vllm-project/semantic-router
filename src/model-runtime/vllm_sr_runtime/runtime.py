@@ -28,7 +28,7 @@ from typing import Any
 from .accel.autotune import freeze_autotune, pin_kernel_choices
 from .config import ModelConfig, ServeConfig
 from .errors import RuntimeServiceError
-from .placement import Placement, place
+from .placement import Placement, device_kind, place
 from .plugins import registry
 from .plugins.base import (
     DEADLINE,
@@ -259,7 +259,9 @@ class ServedModel:
         )
         profiles = self._profiles()
         default = profiles[config.profile]
-        cpu_models = sum(served.device == "cpu" for served in process.served_models())
+        cpu_models = sum(
+            device_kind(served.device) == "cpu" for served in process.served_models()
+        )
         engine_options = default.engine_options(
             EngineOptions(threads=process.threads, exclusive_cpu=cpu_models <= 1)
         )
@@ -529,6 +531,7 @@ class ServedModel:
                         else None
                     ),
                     "reduction": head.reduction,
+                    "operating_point_sha256": head.operating_point_sha256,
                 }
                 for head in info.heads
             ]
@@ -724,7 +727,7 @@ class Runtime:
                 "invalid_request",
                 f"options.profile must be one of {sorted(served.profiles) or ['exact']}",
             )
-        return_meta = options.get("return_meta", True)
+        return_meta = options.get("return_meta", False)
         if not isinstance(return_meta, bool):
             raise RuntimeServiceError(
                 "invalid_request", "options.return_meta must be a boolean"

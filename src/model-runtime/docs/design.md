@@ -318,7 +318,10 @@ The contract is `vllm_sr_runtime/api/openapi.yaml` (OpenAPI 3.0.3), served at
 `GET /openapi.yaml`, checked by contract tests on both sides, and the source of
 the Go client in `pkg/modelservice/api`. Every surface takes an optional
 `model` (the served model ID, required when a process serves several models)
-and `options` with `deadline_ms` and `return_meta`. A request-level error uses
+and `options` with `deadline_ms` and `return_meta` (the runtime's `meta`:
+revision, profile, numerics, engine, device and timings, only when asked;
+a family's own fields such as `meta.representation` are always returned).
+A request-level error uses
 an HTTP status with `{"error": {"code", "message"}}`: 400 `invalid_request`,
 404 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface`
 (the model does not serve this surface), 429 `overloaded`, 503 `not_ready`.
@@ -444,8 +447,10 @@ schedulers at once (so tasks for different models run in parallel and tasks for
 one model share its batching), and returns `results` in task order:
 `{id, status, <surface>: <response body>}` or `{id, status, error}` with the
 status the task would have had alone. The bundle itself fails only when it is
-malformed (400) or too large (413). The bundle deadline applies to every task
-unless a task's own deadline is earlier.
+malformed (400) or too large (413): more tasks than `--max-bundle-tasks` (64
+by default) or a body over `--max-request-bytes`. `/v1/models` reports both as
+`limits`, so a client splits larger work into several bundles. The bundle
+deadline applies to every task unless a task's own deadline is earlier.
 
 ### 6.6 `GET /v1/models`, `GET /health`, `GET /metrics`
 
@@ -453,7 +458,8 @@ unless a task's own deadline is earlier.
 `model_sha256`, `manifest_sha256`, surfaces, question types, heads (with
 labels), embedding and rerank descriptors, limits, licence, profiles, engine,
 accelerator, device, dtype, plugin versions, and per-model readiness and
-golden status. `/health` returns 200 only when every model is ready, and lists
+golden status, plus the process's `limits` (`max_bundle_tasks`,
+`max_request_bytes`). `/health` returns 200 only when every model is ready, and lists
 per-model states otherwise; `/health/live` returns 200 while the process
 serves HTTP. All three report `api_version`, the contract version
 (`info.version`); a client refuses a runtime of another major version.
@@ -1009,7 +1015,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 
 | Surface | Today | Target |
 | --- | --- | --- |
-| Images | `tools/docker/Dockerfile.extproc{,-rocm}`, `src/vllm-sr/Dockerfile{,.cuda,.rocm}`, `deploy/operator/Dockerfile`, `onnx-binding/Dockerfile.rocm`, `openvino-binding/Dockerfile` build Rust bindings, ORT, MIGraphX or OpenVINO | Pure-Go router; the runtime with CPU, ROCm or CUDA PyTorch; the Omni bundle stage stays; binding images deleted |
+| Images | `tools/docker/Dockerfile.extproc{,-rocm}`, `src/vllm-sr/Dockerfile{,.cuda,.rocm}`, `deploy/operator/Dockerfile`, `onnx-binding/Dockerfile.rocm`, `openvino-binding/Dockerfile` build Rust bindings, ORT, MIGraphX or OpenVINO | Pure-Go router; the runtime with CPU, ROCm or CUDA PyTorch; the Omni bundle stage stays; binding images deleted. One `tools/docker/Dockerfile.extproc` builds all five images (`ACCELERATOR`, targets `extproc` and `vllm-sr`); sizes, build times and startup in `docs/records/removal-footprint.md` |
 | Make | `rust.mk`, `openvino.mk`, `build-run-test.mk` binding targets, `models.mk` native model tests, `common.mk` library paths | Deleted or pointed at the runtime |
 | Workflows | `test-native.yml`, `build-native.yml`, `publish-crate.yml`, the native lanes of `ci.yml`, `performance-test.yml`, Rust hooks in `pre-commit.yml` | Deleted, or replaced by the model-runtime lanes |
 | Helm and operator | model download init containers, native library environment, provider settings | The runtime ships in the router image; optional attached runtime sidecar values |

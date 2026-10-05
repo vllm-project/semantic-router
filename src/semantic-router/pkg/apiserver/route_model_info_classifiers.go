@@ -153,9 +153,9 @@ func buildHallucinationModels(
 		"lifecycle":  "router_local",
 	}
 	if remote, ok := remoteHallucinationBinding(cfg); ok {
-		// The binding plan is the source of truth for a remote detector: the
-		// legacy scalar desugars into it, and a recipe may bind a token_spans
-		// service (http_classify) that is not an OpenAI-compatible endpoint.
+		// The binding plan is the source of truth for a remote detector: a
+		// recipe may bind a chat service (http_chat) or a token_spans service
+		// (http_classify) that is not an OpenAI-compatible endpoint.
 		metadata = map[string]string{
 			"backend":    routerconfig.HallucinationBackendEndpoint,
 			"model_type": "openai_compatible_endpoint",
@@ -272,9 +272,6 @@ func remoteHallucinationBinding(cfg *routerconfig.RouterConfig) (routerconfig.Re
 	}
 	plan, err := routerconfig.CompileModelBindings(cfg)
 	if err != nil {
-		if cfg.HallucinationMitigation.HallucinationModel.NormalizedBackend() == routerconfig.HallucinationBackendEndpoint {
-			return routerconfig.ResolvedModelBinding{Binding: routerconfig.ModelBinding{Adapter: routerconfig.RemoteClassifierProtocolHTTPChat, Contract: routerconfig.RemoteClassifierContractTokenSpans}}, true
-		}
 		return routerconfig.ResolvedModelBinding{}, false
 	}
 	spec, ok := plan.Lookup(recipe, "hallucination_detector")

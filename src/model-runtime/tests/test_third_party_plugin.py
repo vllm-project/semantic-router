@@ -20,6 +20,7 @@ import pytest
 from starlette.testclient import TestClient
 from vllm_sr_runtime.api.app import create_app
 from vllm_sr_runtime.config import ModelConfig, ServeConfig
+from vllm_sr_runtime.placement import auto_order
 from vllm_sr_runtime.plugins import registry
 from vllm_sr_runtime.runtime import Runtime
 
@@ -134,12 +135,61 @@ def test_models_describe_both_models_and_the_plugins(client):
     assert health["status"] == "ready" and set(health["models"]) == {"keywords", "kai"}
 
 
+def test_a_third_party_accelerator_and_profile_serve_a_model(
+    example_plugin, keyword_package
+):
+    assert "example_host" in registry.names("accelerators")
+    assert "example_host" not in auto_order()
+    config = ModelConfig(
+        model=str(keyword_package),
+        name="keywords",
+        device="example_host",
+        engine="example_counts",
+        profile="example_one_by_one",
+    )
+    runtime = Runtime(ServeConfig(models=(config,)))
+    runtime.start(background=False)
+    try:
+        client = TestClient(create_app(runtime))
+        (card,) = client.get("/v1/models").json()["data"]
+        assert (
+            card["accelerator"] == "example_host" and card["device"] == "example_host"
+        )
+        assert card["profile"] == "example_one_by_one"
+        plugins = {(p["group"], p["name"]): p for p in card["plugins"]}
+        assert plugins[("vllm_sr_runtime.accelerators", "example_host")][
+            "capabilities"
+        ] == {"validated": False, "auto_priority": None}
+        assert (
+            plugins[("vllm_sr_runtime.profiles", "example_one_by_one")]["capabilities"][
+                "numerics"
+            ]
+            == "exact"
+        )
+        body = client.post(
+            "/v1/classify",
+            json={
+                "input": ["Please refund the invoice", "Where is my parcel?"],
+                "options": {"profile": "example_one_by_one", "return_meta": True},
+            },
+        ).json()
+        assert [result["label"] for result in body["results"]] == [
+            "billing",
+            "shipping",
+        ]
+        assert body["meta"]["profile"] == "example_one_by_one"
+        assert body["meta"]["accelerator"] == "example_host"
+    finally:
+        runtime.stop()
+
+
 def test_classify_embeddings_and_rerank_answer_by_contract(client):
     classified = client.post(
         "/v1/classify",
         json={
             "model": "keywords",
             "input": ["Please refund the invoice", "Where is my parcel?"],
+            "options": {"return_meta": True},
         },
     )
     assert classified.status_code == 200
@@ -155,6 +205,7 @@ def test_classify_embeddings_and_rerank_answer_by_contract(client):
     check("EmbeddingsResponse", embedded)
     vectors = [item["embedding"] for item in embedded["data"]]
     assert all(abs(sum(v * v for v in vector) - 1) < 1e-9 for vector in vectors)
+    assert embedded["meta"] == {"representation": embedded["meta"]["representation"]}
     assert embedded["meta"]["representation"]["dimension"] == 3
 
     ranked = client.post(

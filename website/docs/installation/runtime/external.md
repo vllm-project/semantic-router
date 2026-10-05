@@ -91,9 +91,9 @@ endpoint to check capacity.
   chat service receives all three in the prompt. Span labels come from the
   binding's `mapping_path`, or from the built-in set (`HALLUCINATED`,
   `unsupported`, `contradicted`, `unverifiable`, and the chat taxonomy
-  categories). The older `backend: endpoint` form with `endpoint` and
-  `model_id` is shorthand for an `http_chat` binding and keeps working; an
-  explicit `hallucination_detector` binding takes precedence.
+  categories). The retired `backend: endpoint` form with `endpoint` and
+  `model_id` is refused; `vllm-sr config migrate` rewrites it into a
+  `hallucination_detector` binding to an `http_chat` deployment.
 - Configure timeouts, response-size limits, and service credentials. Enforce
   token limits in the service; local tokenizer `input` settings do not apply.
 - A classify request contains text but no model name. Use separate endpoints

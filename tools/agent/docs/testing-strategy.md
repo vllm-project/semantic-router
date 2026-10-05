@@ -17,9 +17,6 @@ local pre-commit and core baseline; published-model inference and deployment
 suites still require their explicit commands below. An ordinary core pass does
 not qualify every model or deployment.
 
-A failed Clippy invocation fails the changed-file check even when its diagnostics
-point outside the edited files.
-
 An explicit `BASE_REF` or `--base-ref` must resolve to a commit. An invalid value
 fails the check rather than silently selecting a different comparison.
 

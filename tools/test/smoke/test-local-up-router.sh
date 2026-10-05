@@ -12,6 +12,7 @@ ROUTER_CONFIG=${ROUTER_CONFIG:-"e2e/config/config.e2e.yaml"}
 MOCK_PYTHON=${MOCK_PYTHON:-"python3"}
 MOCK_PORT=8000
 ENVOY_PORT=8801
+ROUTER_API_PORT=8080
 WAIT_STARTUP_SECS=${WAIT_STARTUP_SECS:-900}
 WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/local-up-smoke.XXXXXX")
 
@@ -42,6 +43,10 @@ cleanup() {
   fi
 }
 trap cleanup EXIT INT TERM
+
+runtime_bin=${VLLM_SR_RUNTIME_COMMAND%% *}
+command -v "${runtime_bin}" >/dev/null 2>&1 ||
+  fail "model runtime command ${runtime_bin} not found; run make harness-venv-install model-runtime-install or set VLLM_SR_RUNTIME_COMMAND"
 
 log "Setting up provider mocker backend venv..."
 "${MOCK_PYTHON}" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else "provider-mocker requires Python 3.11+; set MOCK_PYTHON")'
@@ -79,6 +84,16 @@ until grep -q "The local semantic router is running" "${WORK_DIR}/harness.log" 2
   sleep 5
 done
 log "Harness is up."
+
+# /health answers once the router process listens; /ready only after every
+# model the config needs is loaded, which on a fresh host includes downloads.
+until curl -sf "http://127.0.0.1:${ROUTER_API_PORT}/ready" >/dev/null 2>&1; do
+  kill -0 "${HARNESS_PID}" 2>/dev/null || fail "harness exited before the router became ready"
+  [[ ${SECONDS} -ge ${deadline} ]] &&
+    fail "router not ready after ${WAIT_STARTUP_SECS}s; startup status: $(curl -s "http://127.0.0.1:${ROUTER_API_PORT}/startup-status" | head -c 2000)"
+  sleep 5
+done
+log "Router is ready."
 
 log "Sending /v1/chat/completions through Envoy (:${ENVOY_PORT})..."
 status=""

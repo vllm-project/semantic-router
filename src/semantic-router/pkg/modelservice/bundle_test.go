@@ -120,6 +120,27 @@ func TestBundleSendsOneCallPerRuntime(t *testing.T) {
 	}
 }
 
+func TestBundleSplitsAStageAtTheRuntimeTaskCap(t *testing.T) {
+	runtime := &surfaceRuntime{maxTasks: DefaultBundleTasks}
+	client := newSurfaceClient(t, runtime)
+	ctx, bundle := WithBundle(context.Background(), time.Second)
+	leave := bundle.Join()
+	calls := 2*DefaultBundleTasks + 2
+	errs := make([]error, calls)
+	Fan(ctx, calls, func(i int) {
+		_, errs[i] = client.Classify(ctx, "vela-pii", ClassifyRequest{Inputs: []ClassifyInput{{Text: "x"}}})
+	})
+	leave()
+	for index, err := range errs {
+		if err != nil {
+			t.Fatalf("call %d: %v", index, err)
+		}
+	}
+	if runtime.bundles.Load() != 3 || runtime.tasks.Load() != int64(calls) || bundle.Flushes() != 1 {
+		t.Fatalf("bundles=%d tasks=%d flushes=%d, want one flush in 3 bundles of at most %d tasks", runtime.bundles.Load(), runtime.tasks.Load(), bundle.Flushes(), DefaultBundleTasks)
+	}
+}
+
 func TestBundleTaskErrorsStayWithTheirCaller(t *testing.T) {
 	client := newSurfaceClient(t, &surfaceRuntime{})
 	ctx, bundle := WithBundle(context.Background(), time.Second)
