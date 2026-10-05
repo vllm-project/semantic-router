@@ -206,21 +206,6 @@ func buildFeedbackAndSimilarityModels(
 		})
 	}
 
-	bertModelPath := cfg.BertModelPath
-	if bertModelPath != "" {
-		models = append(models, ModelInfo{
-			Name:      "bert_similarity_model",
-			Type:      "similarity",
-			Loaded:    availability.core,
-			ModelPath: bertModelPath,
-			Metadata: map[string]string{
-				"model_type": "sentence_transformer",
-				"threshold":  fmt.Sprintf("%.2f", cfg.MinSimilarityThreshold()),
-				"use_cpu":    fmt.Sprintf("%t", cfg.UseCPU),
-			},
-		})
-	}
-
 	return models
 }
 

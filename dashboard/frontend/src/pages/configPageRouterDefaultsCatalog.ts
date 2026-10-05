@@ -179,10 +179,8 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   } satisfies CanonicalSystemModels,
   embedding_models: {
     qwen3_model_path: '',
-    gemma_model_path: '',
     mmbert_model_path: 'models/Vela-1.0-Encoder-307M-Embedding',
     multimodal_model_path: 'models/vela-1.0-omni-nano',
-    bert_model_path: '',
     use_cpu: true,
     embedding_config: {
       backend: 'model_runtime',

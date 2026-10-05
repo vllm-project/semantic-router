@@ -208,6 +208,7 @@ func validSHA256(value string) bool {
 	decoded, err := hex.DecodeString(value)
 	return err == nil && len(decoded) == 32 && strings.ToLower(value) == value
 }
+
 func (p *Policy) Window() tasks.TextWindowsRequest {
 	w := p.definition.Input
 	return tasks.TextWindowsRequest{Size: w.WindowTokens, Overlap: w.Overlap}
