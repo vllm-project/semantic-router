@@ -211,9 +211,9 @@ class ModelSpec:
     the device runs its reference. ``graph_threads`` caps a named graph's CPU
     intra-op threads where more of them only add wake-ups (a few-millisecond
     forward); other graphs use every configured thread. ``graph_spin_us``
-    sets how long a named graph's idle CPU threads spin before they sleep,
-    where the engine's default bound lets them sleep inside a run; the
-    engine may shorten it beside other engines' CPU models. ``requires``
+    sets how long a named graph's idle CPU threads spin before they sleep
+    (0: never), where the engine's default bound lets them sleep inside a
+    run; the engine may shorten it beside other engines' CPU models. ``requires``
     names, per accelerator, the capabilities its devices must report
     (``Accelerator.capabilities``) to serve the model; placement refuses a
     device that lacks one.

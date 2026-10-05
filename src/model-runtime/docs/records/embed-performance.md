@@ -251,7 +251,7 @@ The policy (`engines/onnxruntime/providers.py`):
   family (`ModelSpec.graph_threads`: Omni Nano's text graph 12).
 - **Idle threads spin 2 ms before they sleep,** or as long as the family sets
   per graph (`ModelSpec.graph_spin_us`: Omni Nano's text graph 10 ms), and
-  1 ms whenever another engine's models serve the process's CPU too
+  at most 1 ms whenever another engine's models serve the process's CPU too
   (`EngineOptions.cpu_neighbors`, which the runtime fills before anything
   loads). The model receipt reports each graph's threads and spin.
 

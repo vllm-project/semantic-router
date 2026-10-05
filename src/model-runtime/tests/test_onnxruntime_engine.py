@@ -124,8 +124,11 @@ def test_gpu_sessions_never_fall_back_to_the_cpu():
     [
         (False, None, providers.SPIN_US),
         (False, 10_000, 10_000),
+        (False, 0, 0),
         (True, None, providers.NEIGHBOR_SPIN_US),
         (True, 10_000, providers.NEIGHBOR_SPIN_US),
+        (True, 500, 500),
+        (True, 0, 0),
     ],
 )
 def test_cpu_sessions_get_own_pools_whose_idle_threads_spin_briefly(
@@ -136,6 +139,21 @@ def test_cpu_sessions_get_own_pools_whose_idle_threads_spin_briefly(
     assert options.use_per_session_threads is True
     assert options.intra_op_num_threads == 2 and options.inter_op_num_threads == 1
     assert options.get_session_config_entry(providers.SPIN_ENTRY) == str(spin)
+
+
+def test_a_negative_spin_is_refused_rather_than_left_to_onnxruntimes_default():
+    choice = providers.ProviderChoice("CPUExecutionProvider")
+    with pytest.raises(ValueError, match="0 or more"):
+        providers.session_options(choice, 2, False, -1)
+
+
+def test_a_graph_that_asks_for_no_spin_never_spins(tmp_path):
+    paths = {"text": onnx_graphs.token_graph(tmp_path / "text.onnx")}
+    model_spec = dataclasses.replace(spec(paths), graph_spin_us={"text": 0})
+    model = OnnxRuntimeEngine().load(
+        model_spec, CPUAccelerator(), CPU, EngineOptions(threads=2)
+    )
+    assert model.receipt()["spin_us"] == {"text": 0}
 
 
 @pytest.mark.parametrize(

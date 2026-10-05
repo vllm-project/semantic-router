@@ -20,8 +20,8 @@ run doubled. Pools that stop spinning the moment a run returns cost Omni
 from 5.1 to 7.4 ms. So idle threads spin ``SPIN_US``, or the spec's
 ``graph_spin_us`` for a graph whose threads would sleep inside a run (Omni
 Nano's text graph on 12 threads answered 0.3-0.4 ms faster with a 10 ms
-spin), and ``NEIGHBOR_SPIN_US`` beside another engine's CPU models (a 2 ms
-spin added 1.8 ms to a native forward that followed; 1 ms added none).
+spin), and at most ``NEIGHBOR_SPIN_US`` beside another engine's CPU models (a
+2 ms spin added 1.8 ms to a native forward that followed; 1 ms added none).
 """
 
 from __future__ import annotations
@@ -129,12 +129,17 @@ def session_options(
 ) -> Any:
     """Sequential execution with every graph optimization on a pool of ``threads``.
 
-    Idle CPU threads spin ``spin_us`` (default ``SPIN_US``), or
-    ``NEIGHBOR_SPIN_US`` when another engine's models serve the process's CPU
-    too. GPU sessions never fall back to the CPU.
+    Idle CPU threads spin ``spin_us`` (``SPIN_US`` when it is ``None``; 0
+    never spins), at most ``NEIGHBOR_SPIN_US`` when another engine's models
+    serve the process's CPU too. GPU sessions never fall back to the CPU.
     """
     import onnxruntime as ort
 
+    if spin_us is not None and spin_us < 0:
+        # ONNX Runtime reads a negative duration as its own unbounded default.
+        raise ValueError(
+            f"a graph's idle spin must be 0 or more microseconds, not {spin_us}"
+        )
     options = ort.SessionOptions()
     options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
     options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
@@ -142,7 +147,9 @@ def session_options(
     options.intra_op_num_threads = threads
     options.inter_op_num_threads = 1
     if not choice.gpu:
-        spin = NEIGHBOR_SPIN_US if cpu_neighbors else spin_us or SPIN_US
+        spin = SPIN_US if spin_us is None else spin_us
+        if cpu_neighbors:
+            spin = min(spin, NEIGHBOR_SPIN_US)
         options.add_session_config_entry(SPIN_ENTRY, str(spin))
     if choice.gpu:
         options.add_session_config_entry("session.disable_cpu_ep_fallback", "1")
