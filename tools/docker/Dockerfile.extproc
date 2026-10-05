@@ -105,7 +105,7 @@ RUN pip install --index-url "$TORCH_ROCM_INDEX" "$TORCH_ROCM" && \
 # decoders' convolution identical to their released answers. Without it they
 # fall back to a reference convolution that misses them. Only the wheel leaves
 # this stage. AMD's packages are pinned over Debian's older ROCm of the same
-# names.
+# names, and ROCm's lld needs libxml2, which they don't declare.
 FROM torch-rocm-base AS causal-conv1d-rocm
 ARG ROCM_SDK=7.2.3
 ARG CAUSAL_CONV1D=causal-conv1d==1.7.0
@@ -116,7 +116,7 @@ RUN mkdir -p /etc/apt/keyrings && \
       > /etc/apt/sources.list.d/rocm.list && \
     printf 'Package: *\nPin: release o=repo.radeon.com\nPin-Priority: 600\n' > /etc/apt/preferences.d/rocm && \
     apt-get update && \
-    apt-get install -y --no-install-recommends g++ hipcc hip-dev rocm-llvm rocm-device-libs hipcub-dev rocprim-dev && \
+    apt-get install -y --no-install-recommends g++ libxml2 hipcc hip-dev rocm-llvm rocm-device-libs hipcub-dev rocprim-dev && \
     rm -rf /var/lib/apt/lists/*
 RUN pip install setuptools==79.0.1 wheel==0.48.0 ninja==1.13.2 && \
     CAUSAL_CONV1D_FORCE_BUILD=TRUE HIP_ARCHITECTURES="$CAUSAL_CONV1D_ARCHS" ROCM_PATH=/opt/rocm \
