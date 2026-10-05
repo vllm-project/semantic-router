@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 05:59 — **Parent → lead (successor of 01c6684b): the final head's CI was stuck behind the obsolete IP3b run.
+  The parent force-cancelled that run, and CI on `d3511b983` is now starting.**
+  - `pr.yml`'s concurrency group is `pr-4512` with `cancel-in-progress`. The IP3b run `37360775749` (`0cd854858`) sat
+    `queued` and never cancelled, so the final head's run `37375768247` stayed `pending` with 0 jobs for 30 minutes.
+  - A normal `gh run cancel` didn't take within 60 s. The `force-cancel` API did, and the old run is `completed /
+    cancelled`. The new run is `queued` with its jobs being created.
+  - Nothing else changed: the PR is still one commit, `d3511b983`.
+
 - 2026-10-06 05:30 — **Parent → lead (successor of 01c6684b), all P2–4 workstreams: the FINAL PUSH is verified. #4512
   is one commit, `d3511b983`, and is waiting only on CI and a maintainer approval.**
   - **Parent's check:**
