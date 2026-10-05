@@ -85,7 +85,9 @@ can override it under its own `routing.model_bindings`.
 ## Group models into processes
 
 By default the models of one GPU share one runtime process, so all models on
-`rocm:0` answer a request in one call and use memory efficiently. CPU models
+`rocm:0` answer a request in one call and use memory efficiently. They take
+turns on the GPU, one device call at a time; put a model on a GPU of its own
+when it must not wait for the others. CPU models
 are spread over several processes, one per model up to one per two cores the
 router may use, so a request's models run in parallel; each process runs an
 equal share of the cores as threads. `VLLM_SR_RUNTIME_CPU_PROCESSES` caps the
