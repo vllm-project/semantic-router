@@ -160,8 +160,9 @@ func prepareExplicitEmbedding(ctx context.Context, cfg *config.RouterConfig, run
 // type: the configured package served by the model runtime as
 // "@embedding.<model>", on CPU unless use_cpu is false. Inputs over budget are
 // truncated, as embeddings always were. Concurrent requests share batches:
-// embeddings feed similarity thresholds, not bit-exact answers, and one exact
-// forward at a time cannot keep up with concurrent short texts.
+// embeddings feed similarity thresholds, not bit-exact answers, and exact,
+// which shares a forward only between requests planned together, cannot keep
+// up with concurrent short texts.
 func implicitEmbeddingSpec(cfg *config.RouterConfig, recipe config.RecipeName, model string) (config.ResolvedModelBinding, error) {
 	path, served := embeddingModels[model]
 	if !served {

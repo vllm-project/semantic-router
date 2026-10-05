@@ -353,11 +353,11 @@ def test_exact_runs_queued_requests_together_only_on_a_batch_invariant_model():
         Job([item("b", 13)], None, 0.0, "exact"),
     ]
     profile = ExactProfile()
-    profile.available(FakeModel())
+    profile.bind(FakeModel())
     assert len(profile.plan(jobs, None)) == 2
     invariant = FakeModel()
     invariant.batch_invariant = True
-    profile.available(invariant)
+    profile.bind(invariant)
     (batch,) = profile.plan(jobs, None)
     assert [job for job, _ in batch.parts] == jobs and batch.exact
 
@@ -387,6 +387,65 @@ def test_shared_batches_hold_one_length_class_within_the_cap():
         ["w1"],
         ["w2"],
     ]
+
+
+def test_packed_rows_share_batches_across_length_classes_within_the_cap():
+    short = Job([item("s", 9)], None, 0.0, "exact")
+    medium = Job([item("m", 20)], None, 0.0, "exact")
+    longer = Job([item("l", 40)], None, 0.0, "exact")
+    windows = Job(
+        [window(f"w{i}", 512, 1000 * i) for i in range(2)], None, 0.0, "exact"
+    )
+    batches = merged([longer, windows, short, medium], cap=512, banded=False)
+    assert [names(batch) for batch in batches] == [["l", "m", "s"], ["w0"], ["w1"]]
+
+
+def test_exact_bands_lengths_only_for_models_that_pad():
+    jobs = [
+        Job([item(name, length)], None, 0.0, "exact")
+        for name, length in (("a", 9), ("b", 40))
+    ]
+    padded_model = FakeModel()
+    padded_model.batch_invariant = True
+    packed_model = FakeModel()
+    packed_model.batch_invariant = True
+    packed_model.packs_rows = True
+    profile = ExactProfile()
+    profile.bind(padded_model)
+    assert [names(batch) for batch in profile.plan(jobs, None)] == [["a"], ["b"]]
+    profile.bind(packed_model)
+    assert [names(batch) for batch in profile.plan(jobs, None)] == [["a", "b"]]
+    uninvariant = FakeModel()
+    uninvariant.packs_rows = True
+    profile.bind(uninvariant)
+    assert len(profile.plan(jobs, None)) == 2
+
+
+def test_concurrent_requests_of_different_lengths_share_one_forward_on_a_packed_model():
+    gate = threading.Event()
+    model = GatedModel(gates={"blocker": gate})
+    model.batch_invariant = True
+    model.packs_rows = True
+    profile = ExactProfile()
+    profile.bind(model)
+    scheduler = Scheduler(model, {"exact": profile})
+    scheduler.start()
+    try:
+        scheduler.submit([item("blocker", 8)], deadline=None, profile="exact")
+        assert model.entered.wait(5)
+        lengths = {"r9": 9, "r20": 20, "r40": 40, "r70": 70}
+        futures = {
+            name: scheduler.submit([item(name, length)], deadline=None, profile="exact")
+            for name, length in lengths.items()
+        }
+        gate.set()
+        for name, future in futures.items():
+            assert future.result(timeout=5) == [[0.0, float(lengths[name])]]
+        assert model.calls[0] == ["blocker"]
+        assert [sorted(call) for call in model.calls[1:]] == [sorted(lengths)]
+    finally:
+        gate.set()
+        scheduler.stop()
 
 
 def test_shared_batches_keep_identical_sequences_together():
@@ -633,10 +692,10 @@ def test_exact_runs_a_bundle_group_as_one_batch_only_when_the_model_fuses():
         Job([item("c", 5)], None, 0.0, "exact"),
     ]
     separate = ExactProfile()
-    separate.available(FakeModel())
+    separate.bind(FakeModel())
     assert len(separate.plan(jobs, None)) == 3
     fused = ExactProfile()
-    fused.available(FusingModel())
+    fused.bind(FusingModel())
     batches = fused.plan(jobs, None)
     assert [
         [job.items[0].question_id for job, _ in batch.parts] for batch in batches
@@ -649,7 +708,7 @@ def test_exact_runs_a_bundle_group_as_one_batch_only_when_the_model_fuses():
 def test_a_group_is_queued_at_once_and_answered_per_job():
     model = FusingModel()
     exact = ExactProfile()
-    exact.available(model)
+    exact.bind(model)
     scheduler = Scheduler(model, {"exact": exact})
     scheduler.start()
     try:

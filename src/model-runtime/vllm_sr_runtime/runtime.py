@@ -36,11 +36,14 @@ from .plugins.base import (
     SURFACES,
     DeviceInfo,
     EngineOptions,
+    Expired,
     LoadedModel,
     ModelFamily,
     ModelSpec,
+    PackageRef,
     Profile,
     RegistryOptions,
+    Results,
     SurfacePlan,
     SurfaceRequest,
     UnsupportedSurfaceError,
@@ -125,7 +128,7 @@ class Prepared:
 
     served: ServedModel
     request: SurfaceRequest
-    plan: SurfacePlan
+    plan: SurfacePlan[Any]
 
 
 @dataclass
@@ -140,7 +143,7 @@ class _Lookup:
     misses: list[list[Any]]
     slots: list[list[tuple[int, int, str | None]]]
     submitted: float | None = None
-    futures: list[Future] | BaseException | None = None
+    futures: list[Future[Results[Any]]] | BaseException | None = None
 
 
 class ResultCache:
@@ -185,7 +188,7 @@ class ServedModel:
         self.health = Health()
         self.family: ModelFamily | None = None
         self.package: VerifiedPackage | None = None
-        self.model: LoadedModel | None = None
+        self.model: LoadedModel[Any, Any] | None = None
         self.placement: Placement | None = None
         self.engine = config.engine
         self.profiles: dict[str, Profile] = {}
@@ -244,7 +247,13 @@ class ServedModel:
         parameters = package.loaded_parameters or 0
         budget = config.memory_budget_gib or process.memory_budget_gib
         placement = place(spec, config.device, parameters, budget)
-        self._pin(family.kernel_choices(package, placement.device))
+        device = placement.device
+        self._pin(
+            builtin.kernel_choices(
+                package.model_sha256, device.accelerator, device.arch
+            )
+            or family.kernel_choices(package, device)
+        )
         known = builtin.lookup(package.ref.repo_id or "")
         preferred = None
         if known is not None and known.revision == package.ref.revision:
@@ -326,6 +335,8 @@ class ServedModel:
                         f"profile {name!r} is unavailable: {unavailable}"
                     )
                 profiles.pop(name)
+                continue
+            profile.bind(model)
         self.profiles = profiles
         self.scheduler = Scheduler(
             model,
@@ -392,12 +403,12 @@ class ServedModel:
                     "%s: a forward is still running; the model stays open", self.label
                 )
 
-    def _family(self, ref, options: RegistryOptions) -> ModelFamily:
+    def _family(self, ref: PackageRef, options: RegistryOptions) -> ModelFamily:
         names = (
             [self.config.family] if self.config.family else registry.names("families")
         )
         for name in names:
-            family = registry.plugin("families", name).load()(options)
+            family: ModelFamily = registry.plugin("families", name).load()(options)
             if family.detect(ref):
                 return family
         raise RuntimeError(
@@ -424,9 +435,9 @@ class ServedModel:
 
     def golden_decisions(self, state: Any, questions: dict[str, Any]) -> dict[str, Any]:
         """Answers to a golden decisions request."""
-        return self._golden("decisions", {"state": state, "questions": questions})[
-            "answers"
-        ]
+        response = self._golden("decisions", {"state": state, "questions": questions})
+        answers: dict[str, Any] = response["answers"]
+        return answers
 
     def golden_surface(self, surface: str, body: dict[str, Any]) -> dict[str, float]:
         """The numbers of a golden surface response."""
@@ -443,7 +454,7 @@ class ServedModel:
 
     def submit_items(
         self, items: list[Any], deadline: float | None, profile: str
-    ) -> Future:
+    ) -> Future[Results[Any]]:
         return self.submit_items_group([items], [deadline], profile)[0]
 
     def submit_items_group(
@@ -451,7 +462,7 @@ class ServedModel:
         item_lists: list[list[Any]],
         deadlines: list[float | None],
         profile: str,
-    ) -> list[Future]:
+    ) -> list[Future[Results[Any]]]:
         if self.scheduler is None:
             raise RuntimeServiceError("not_ready", f"the model is {self.health.state}")
         return self.scheduler.submit_group(
@@ -463,7 +474,7 @@ class ServedModel:
         item_lists: list[list[Any]],
         deadlines: list[float | None],
         profile: str,
-    ) -> list[Future] | None:
+    ) -> list[Future[Results[Any]]] | None:
         """Run the group on this thread if the model's scheduler is idle (never on the event loop)."""
         if self.scheduler is None:
             return None
@@ -750,7 +761,7 @@ class Runtime:
                 "invalid_request",
                 f"options.profile must be one of {sorted(served.profiles) or ['exact']}",
             )
-        return_meta = options.get("return_meta", True)
+        return_meta = options.get("return_meta", False)
         if not isinstance(return_meta, bool):
             raise RuntimeServiceError(
                 "invalid_request", "options.return_meta must be a boolean"
@@ -914,8 +925,10 @@ class Runtime:
                 )
             )
         if lookups[0] is not None:
+            first = planned[0]
+            assert isinstance(first, Prepared)
             outcomes: list[tuple[int, dict[str, Any]] | None] = [None]
-            await self._run_group([(0, planned[0])], outcomes, lookups[0])
+            await self._run_group([(0, first)], outcomes, lookups[0])
             return [outcome for outcome in outcomes if outcome is not None]
         outcomes = [None] * len(requests)
         groups: dict[tuple[int, str], list[tuple[int, Prepared]]] = {}
@@ -1002,7 +1015,9 @@ class Runtime:
                 continue
             for offset, (_, position, key) in enumerate(slots[member]):
                 value = (
-                    DEADLINE if member_results is DEADLINE else member_results[offset]
+                    DEADLINE
+                    if isinstance(member_results, Expired)
+                    else member_results[offset]
                 )
                 values[(member, position)] = value
                 if key is not None and value is not DEADLINE and value is not None:

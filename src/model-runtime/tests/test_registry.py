@@ -31,7 +31,7 @@ def test_every_family_reads_package_json_one_way(tmp_path):
     (tmp_path / "list.json").write_text("[1]", encoding="utf-8")
     (tmp_path / "bad.json").write_text("{", encoding="utf-8")
     assert read_json(tmp_path / "list.json") == [1]
-    with pytest.raises(PackageError, match="list.json must hold a JSON object"):
+    with pytest.raises(PackageError, match=r"list\.json must hold a JSON object"):
         read_json(tmp_path / "list.json", mapping=True)
     for name in ("bad.json", "missing.json"):
         with pytest.raises(PackageError, match=f"cannot read {name}"):

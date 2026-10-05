@@ -315,7 +315,7 @@ class OmniModel(LoadedModel):
         cost = self.media_cost["audio"]
         return embedding.EmbedItem(entry.index, "audio", [], key, by_graph, cost), None
 
-    def run(self, items: list[Any], shared_prefix: int = 0) -> list[Any]:
+    def run(self, items: list[Any]) -> list[Any]:
         if len(items) == 1:
             return [self._embed(items[0])]
         return list(self.inputs.map(self._embed, items))

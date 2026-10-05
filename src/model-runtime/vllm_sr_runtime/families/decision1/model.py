@@ -150,9 +150,7 @@ class VelaDecisionModel(Decision1Model):
         """Coalesced batches on CPUs stay within ``vela.CPU_BATCH_TOKENS``; exact keeps the released batches."""
         return vela.CPU_BATCH_TOKENS if self.engine_model.device.type == "cpu" else None
 
-    def run(
-        self, items: list[RenderedItem], shared_prefix: int = 0
-    ) -> list[list[float] | None]:
+    def run(self, items: list[RenderedItem]) -> list[list[float] | None]:
         with torch.inference_mode():
             scores = vela.marker_logits(
                 self.engine_model.encode,
@@ -243,8 +241,11 @@ class QwenDecisionModel(Decision1Model):
     def forward_token_budget(self) -> int | None:
         return self.engine_model.max_forward_tokens()
 
-    def run(
-        self, items: list[RenderedItem], shared_prefix: int = 0
+    def run(self, items: list[RenderedItem]) -> list[list[float] | None]:
+        return self.run_shared(items, 0)
+
+    def run_shared(
+        self, items: list[RenderedItem], shared_prefix: int
     ) -> list[list[float] | None]:
         batch = segments.collate(items, self.tokenizer.pad_id, qwen.PAD_MULTIPLE)
         scores = forward_logits(

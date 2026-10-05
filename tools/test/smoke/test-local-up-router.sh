@@ -43,6 +43,10 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+runtime_bin=${VLLM_SR_RUNTIME_COMMAND%% *}
+command -v "${runtime_bin}" >/dev/null 2>&1 ||
+  fail "model runtime command ${runtime_bin} not found; run make harness-venv-install model-runtime-install or set VLLM_SR_RUNTIME_COMMAND"
+
 log "Setting up provider mocker backend venv..."
 "${MOCK_PYTHON}" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else "provider-mocker requires Python 3.11+; set MOCK_PYTHON")'
 "${MOCK_PYTHON}" -m venv "${WORK_DIR}/mock-venv"

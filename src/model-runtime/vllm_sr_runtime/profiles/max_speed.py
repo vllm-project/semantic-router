@@ -11,6 +11,7 @@ changes and accuracy of each part are recorded per size in ``docs/records/``.
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any
 
 from ..plugins.base import Batch, EngineOptions, Job, LoadedModel
 from .batching import DEFAULT_MAX_BATCH_TOKENS, BatchingProfile
@@ -33,9 +34,11 @@ class MaxSpeedProfile(BatchingProfile):
     def engine_options(self, base: EngineOptions) -> EngineOptions:
         return replace(base, exact_kernels_only=False, reduced_precision=True)
 
-    def available(self, model: LoadedModel) -> str | None:
+    def bind(self, model: LoadedModel[Any, Any]) -> None:
+        super().bind(model)
         self.trees = self.shared.available(model) is None
-        return None
+        if self.trees:
+            self.shared.bind(model)
 
     def plan(self, jobs: list[Job], token_budget: int | None) -> list[Batch]:
         trees: list[Batch] = []

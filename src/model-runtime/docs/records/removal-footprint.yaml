@@ -1,0 +1,106 @@
+version: v0.3
+
+listeners:
+  - name: "footprint-http"
+    address: "0.0.0.0"
+    port: 8899
+    timeout: "60s"
+
+providers:
+  defaults:
+    model: "footprint-model"
+  models:
+    - name: "footprint-model"
+      provider_model_id: "footprint-model"
+      backend_refs:
+        - name: "primary"
+          provider: vllm
+          weight: 100
+          endpoint: "127.0.0.1:8000/v1"
+          protocol: "http"
+
+routing:
+  modelCards:
+    - name: "footprint-model"
+      modality: "text"
+  signals:
+    domains:
+      - name: "computer science"
+        description: Computer science and engineering prompts.
+        mmlu_categories: ["computer science"]
+      - name: other
+        description: General fallback traffic.
+        mmlu_categories: [other]
+    jailbreak:
+      - name: prompt_injection
+        threshold: 0.8
+        description: Prompt-injection or jailbreak attempts.
+    pii:
+      - name: restricted_pii
+        threshold: 0.85
+        pii_types_allowed: [EMAIL_ADDRESS]
+        description: Sensitive prompts.
+    embeddings:
+      - name: technical_support
+        threshold: 0.75
+        aggregation_method: max
+        candidates:
+          - how to configure the system
+          - installation guide
+          - troubleshooting steps
+  decisions:
+    - name: "guarded-cs"
+      description: Computer-science traffic without prompt attacks or PII.
+      priority: 200
+      rules:
+        operator: "AND"
+        conditions:
+          - type: domain
+            name: "computer science"
+          - type: embedding
+            name: technical_support
+      modelRefs:
+        - model: "footprint-model"
+          use_reasoning: false
+    - name: "blocked"
+      description: Prompt attacks or restricted PII.
+      priority: 300
+      rules:
+        operator: "OR"
+        conditions:
+          - type: jailbreak
+            name: prompt_injection
+          - type: pii
+            name: restricted_pii
+      modelRefs:
+        - model: "footprint-model"
+          use_reasoning: false
+    - name: "default-route"
+      description: Fallback route.
+      priority: 10
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "footprint-model"
+          use_reasoning: false
+
+global:
+  router:
+    auto_model_names:
+      - "vllm-sr/auto"
+    model_selection:
+      enabled: false
+  services:
+    response_api:
+      enabled: false
+    router_replay:
+      enabled: false
+    startup_status:
+      store_backend: file
+    observability:
+      tracing:
+        enabled: false
+  stores:
+    response_cache:
+      enabled: false

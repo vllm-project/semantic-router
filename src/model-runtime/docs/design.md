@@ -203,18 +203,23 @@ only sees work items with token IDs, so every family uses the same admission,
 deadlines and profiles:
 
 ```python
-class LoadedModel(ABC):
+class LoadedModel(ABC, Generic[ItemT, ResultT]):  # ItemT satisfies WorkItem
     info: ModelInfo                        # identity, surfaces, heads, limits, licence
     fuse_bundled_jobs: ClassVar[bool]      # exact may run one bundle's jobs as one batch
-    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan: ...  # validate + render
-    def run(self, items: list[WorkItem], shared_prefix: int = 0) -> list: ...  # one forward + readout
-    def finish_surface(self, plan: SurfacePlan, results) -> dict: ...      # the surface response body
+    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan[ItemT]: ...  # validate + render
+    def run(self, items: list[ItemT]) -> list[ResultT]: ...                         # one forward + readout
+    def run_shared(self, items: list[ItemT], shared_prefix: int) -> list[ResultT]: ...  # decoders' shared-context batches
+    def finish_surface(self, plan: SurfacePlan[ItemT], results: Results[ResultT]) -> dict: ...  # the response body
 ```
 
-A work item has `ids` (its token IDs) and may have `cache_key`, a content
-hash of everything its result depends on: the runtime then answers a repeated
-item from the model's result cache without a forward. Results are shared with
-the cache, so `finish_surface` never mutates them.
+A work item (`WorkItem`) has `ids` (its token IDs) and may have `cost`, the
+tokens it costs a forward when it has no token IDs (images, audio), and
+`cache_key`, a content hash of everything its result depends on: the runtime
+then answers a repeated item from the model's result cache without a forward.
+`Results` are one value per item or `DEADLINE` (the `Expired` instance) for an
+expired item or plan. Results are shared with the cache, so `finish_surface`
+never mutates them. `mypy --strict` checks the plugin interfaces, the
+scheduler, the profiles and the runtime core in `make model-runtime-test`.
 
 The Phase 1 decision methods (`plan`, `answer`) remain and back
 `plan_surface("decisions", ...)`, so Decision 2.0 is untouched. `ModelInfo`
@@ -313,7 +318,10 @@ The contract is `vllm_sr_runtime/api/openapi.yaml` (OpenAPI 3.0.3), served at
 `GET /openapi.yaml`, checked by contract tests on both sides, and the source of
 the Go client in `pkg/modelservice/api`. Every surface takes an optional
 `model` (the served model ID, required when a process serves several models)
-and `options` with `deadline_ms` and `return_meta`. A request-level error uses
+and `options` with `deadline_ms` and `return_meta` (the runtime's `meta`:
+revision, profile, numerics, engine, device and timings, only when asked;
+a family's own fields such as `meta.representation` are always returned).
+A request-level error uses
 an HTTP status with `{"error": {"code", "message"}}`: 400 `invalid_request`,
 404 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface`
 (the model does not serve this surface), 429 `overloaded`, 503 `not_ready`.
@@ -630,9 +638,15 @@ own, measured from when the HTTP request arrived). Decision models still run
 each task as its own batch (their released numerics), and a family that sets
 `fuse_bundled_jobs` (encoders) runs the group as one batch, so one forward
 serves every head and consumer that reads the same input. On a batch-invariant model, `exact` runs the queued jobs
-of concurrent requests in shared batches: one length class (power-of-two band
-of padded length) per batch, at most 512 padded tokens, rows with the same
-token IDs always together so the family computes them once. Repeated cacheable
+of concurrent requests in shared batches of at most 512 padded tokens, rows
+with the same token IDs always together so the family computes them once. A
+model that pads its rows (multimodal Omni) keeps one length class
+(power-of-two band of padded length) per batch; a model that packs its rows
+back to back (`packs_rows`: the native encoders of `task_heads`) mixes lengths
+freely, since a packed row costs no padding, and closed-loop callers' short
+texts of different lengths then still share forwards. Either way each row's
+answer is the one it gets alone, which the load-time probe checks on a batch
+that spans several length classes. Repeated cacheable
 items are answered from the model's result cache (`--result-cache-entries`,
 keyed by profile and content).
 
@@ -1006,7 +1020,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 
 | Surface | Today | Target |
 | --- | --- | --- |
-| Images | `tools/docker/Dockerfile.extproc{,-rocm}`, `src/vllm-sr/Dockerfile{,.cuda,.rocm}`, `deploy/operator/Dockerfile`, `onnx-binding/Dockerfile.rocm`, `openvino-binding/Dockerfile` build Rust bindings, ORT, MIGraphX or OpenVINO | Pure-Go router; the runtime with CPU, ROCm or CUDA PyTorch; the Omni bundle stage stays; binding images deleted |
+| Images | `tools/docker/Dockerfile.extproc{,-rocm}`, `src/vllm-sr/Dockerfile{,.cuda,.rocm}`, `deploy/operator/Dockerfile`, `onnx-binding/Dockerfile.rocm`, `openvino-binding/Dockerfile` build Rust bindings, ORT, MIGraphX or OpenVINO | Pure-Go router; the runtime with CPU, ROCm or CUDA PyTorch; the Omni bundle stage stays; binding images deleted. One `tools/docker/Dockerfile.extproc` builds all five images (`ACCELERATOR`, targets `extproc` and `vllm-sr`); sizes, build times and startup in `docs/records/removal-footprint.md` |
 | Make | `rust.mk`, `openvino.mk`, `build-run-test.mk` binding targets, `models.mk` native model tests, `common.mk` library paths | Deleted or pointed at the runtime |
 | Workflows | `test-native.yml`, `build-native.yml`, `publish-crate.yml`, the native lanes of `ci.yml`, `performance-test.yml`, Rust hooks in `pre-commit.yml` | Deleted, or replaced by the model-runtime lanes |
 | Helm and operator | model download init containers, native library environment, provider settings | The runtime ships in the router image; optional attached runtime sidecar values |
