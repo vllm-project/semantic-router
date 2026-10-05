@@ -210,7 +210,10 @@ class ModelSpec:
     runtime ran (``KernelSet.use_variants``); a slot without that variant on
     the device runs its reference. ``graph_threads`` caps a named graph's CPU
     intra-op threads where more of them only add wake-ups (a few-millisecond
-    forward); other graphs use every configured thread.
+    forward); other graphs use every configured thread. ``graph_spin_us``
+    sets how long a named graph's idle CPU threads spin before they sleep,
+    where the engine's default bound lets them sleep inside a run; the
+    engine may shorten it beside other engines' CPU models.
     """
 
     name: str
@@ -221,6 +224,7 @@ class ModelSpec:
     encoder: bool = False
     kernel_variants: Mapping[str, str] = field(default_factory=dict)
     graph_threads: Mapping[str, int] = field(default_factory=dict)
+    graph_spin_us: Mapping[str, int] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
