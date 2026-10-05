@@ -11,8 +11,8 @@ on the same node, inputs and devices.
   math through the same MKL kernels, so exact can't be much faster; the single
   requests are level on all seven models, and the decoders' rates are a little
   better where the interval says so (Eos +0.23 requests/s [+0.07, +0.39] and
-  Sol +0.09 [+0.01, +0.17] on mixed lengths, Nox +0.02 [+0.00, +0.04] at C =
-  1).
+  Sol +0.09 [+0.01, +0.17] on mixed lengths, Nox +0.02 [+0.00, +0.04] at
+  C = 1).
 - **On CPU the encoders' opt-in profiles win.** For six router signals about
   one prompt, `batching` answers 3.0–3.3× and `max_speed` 4.8–5.3× faster at
   p50 than the bundled runtime, and they serve 3.0–3.3× and 4.8–5.3× its
@@ -20,16 +20,13 @@ on the same node, inputs and devices.
   runs the encoders on `float32-packed` copies of their three stacks: single
   requests 1.2–1.4× faster at p50, up to 2.0× the bundled throughput, and no
   decision changes in 1,431 requests per encoder.
-- **On ROCm, exact and faster, on the official-wheel stack:** in interleaved
-  A/Bs (5 rounds, 95% intervals) in `be7366c49`, which has the packages of
-  `af71d5e82` (the official PyTorch 2.12.0 wheel, whose attention rounds
-  differently from the release's), no row is worse. Exact serves a single
-  request 1.2–1.3× faster at p50 on the encoders and 1.5–3.1× on the decoders,
-  end to end through the API; for six router signals about one prompt,
-  `batching` cuts the encoders' p95 by 35–38% and `shared_context` the
-  decoders' by 51–74%. These rows were not re-timed on the adopted router
-  image `a580be6b9` (vLLM's ROCm PyTorch), on which exact answers
-  byte-identically to the release (parity record).
+- **On ROCm, exact and faster, in the router's image:** in interleaved A/Bs (5
+  rounds, 95% intervals) in `a580be6b9` (vLLM's ROCm PyTorch, on which the
+  runtime answers byte-identically to the release), no row is worse. Exact
+  serves a single request 1.5–1.7× faster at p50 on the encoders and 1.3–3.1×
+  on the decoders, end to end through the API; for six router signals about
+  one prompt, `batching` cuts the encoders' p95 by 43–48% and `shared_context`
+  the decoders' by 46–76%.
 
 - **CPU:** node C, 16 cores of an AMD EPYC 9575F (Zen 5) per run, each side
   in its own docker cgroup cpuset (the effective cpuset is logged), CPU
@@ -37,13 +34,11 @@ on the same node, inputs and devices.
   bundled side, 16 threads on both sides (`OMP_NUM_THREADS` and
   `MKL_NUM_THREADS` too).
 - **ROCm:** one AMD Instinct MI325X (gfx942) per run, on 8 host cores of the
-  GPU's NUMA node, in `mr-p24-lead/extproc-rocm72cc:be7366c49` with
-  `transformers==5.17.0` added for the bundled side: the official PyTorch
-  2.12.0 wheel from the rocm7.2 index, Triton 3.7.0, FLA 0.5.2 and
-  causal-conv1d 1.7.0, the packages of the image tag `af71d5e82`. The adopted
-  router image `a580be6b9` takes PyTorch, AOTriton and the ROCm 7.2.3
-  libraries from vLLM's ROCm image instead; these rows were not re-timed on
-  it.
+  GPU's NUMA node, in the router's ROCm image
+  `mr-p24-lead/extproc-rocm72rt:a580be6b9`: PyTorch 2.12.0+git6bbd260 with
+  AOTriton 0.13.50 and the ROCm 7.2.3 libraries from vLLM's ROCm image, Triton
+  3.7.0, FLA 0.5.2 and causal-conv1d 1.7.0, with Transformers 5.17.0 added for
+  the bundled side.
 - **Bundled side:** the package's runtime (Transformers remote code,
   `system_one`), a library that answers one request at a time, so its
   sequential rate is its throughput. On ROCm it runs the same FLA kernel
@@ -106,17 +101,17 @@ the decoders' `shared_context`.
 
 ## ROCm
 
-Every row is the 16:53-standard A/B on the official-wheel ROCm stack, image
-`mr-p24-lead/extproc-rocm72cc:be7366c49`: the official PyTorch 2.12.0 wheel from
-the rocm7.2 index (HIP 7.2, AOTriton 0.11.2), Triton 3.7.0, FLA 0.5.2 and
-`causal-conv1d` 1.7.0 built for gfx942. The image tag `af71d5e82` has the same
-packages. Both sides run in that image, with `transformers==5.17.0` added for
-the bundled side; pip added only Transformers and its pure-Python
-dependencies. The runtime is `a1c7a284e`, one AMD Instinct MI325X (gfx942) per
-run. **These rows were not re-timed on the router image adopted afterwards**
-(`a580be6b9`), which takes PyTorch, AOTriton 0.13.50 and the ROCm 7.2.3
-libraries from vLLM's ROCm image: its attention is the release's, not this
-stack's.
+Every row is the 16:53-standard A/B in the router's ROCm image,
+`mr-p24-lead/extproc-rocm72rt:a580be6b9`: PyTorch 2.12.0+git6bbd260 (AOTriton
+0.13.50) and the ROCm 7.2.3 libraries from vLLM's ROCm image, Triton 3.7.0,
+FLA 0.5.2 and `causal-conv1d` 1.7.0. Both sides run in that image, with
+Transformers 5.17.0 and `regex` appended to `PYTHONPATH` for the bundled side.
+The runtime is `1bd99cd37`, one AMD Instinct MI325X (gfx942) per run. On this
+image the runtime's answers are byte-identical to the release (parity record).
+These rows replace the same rows timed on the official-wheel stack
+(`be7366c49`, the packages of `af71d5e82`, runtime `a1c7a284e`), which were
+level or better everywhere too; their runs and intervals stay in
+`decision1-performance.json` (`intervals` keys `rocm-official-wheel*`).
 
 - **Cores:** each GPU's host threads run in a docker cgroup cpuset of 8 cores
   on the GPU's own NUMA node that no other timed job used (GPU1 0–7, GPU2
@@ -124,13 +119,13 @@ stack's.
 - **Sides:** the bundled runtime, the runtime's exact profile and its
   approximate profile, each in its own process, the order rotated every round.
   Five rounds per row, the standard's minimum: no row read worse, so none got
-  rounds 6–10. From 11:44 to 12:01 UTC the lead's trial images were built on
-  node C's other cores while GPU5 and GPU7 ran their many-question rounds 2
-  and 3 (node load 16–34); those rounds are kept.
-- **Numerics on this stack:** exact answers byte-identically across cold
-  processes, and the bundled runtime and the runtime run the same kernels; the
-  release image's answers differ by rounding. On the adopted image they are
-  byte-identical to the release (parity record).
+  rounds 6–10. Two sets of rounds ran again after the queue, on their own GPUs
+  and host cores, and their first runs are not used: GPU5's round 1 of Kai's
+  many-question rows, which a CPU job of the re-timing's own overlapped; and
+  every round with a side that started from 17:54 to 17:58 UTC, while another
+  job loaded an image on node C (many questions, Nox-4B and Lux-9B round 5;
+  router throughput, Eos-0.8B rounds 4–5, Kai-0.6B rounds 2–3, Lex-0.6B round
+  2, Lux-9B and Route-0.6B rounds 1–2, and Sol-2B round 4).
 
 ### Single requests
 
@@ -138,26 +133,27 @@ The first 400 typed-final prompts, one Choice question each:
 
 | Model | Profile | p50 bundled → runtime | p50 Δ [95% CI] | p95 bundled → runtime | p95 Δ [95% CI] | Rounds | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Kai-0.6B | `exact` | 7.98 → 6.29 | −1.69 [−2.04, −1.35] | 16.9 → 11.1 | −5.8 [−15.7, +4.1] | 5 | level |
-|  | `batching` | 7.98 → 6.97 | −1.01 [−1.56, −0.46] | 16.9 → 16.3 | −0.6 [−9.1, +7.8] | 5 | level |
-| Lex-0.6B | `exact` | 7.52 → 6.15 | −1.37 [−1.94, −0.79] | 9.16 → 9.83 | +0.67 [−2.31, +3.65] | 5 | level |
-|  | `batching` | 7.52 → 6.93 | −0.59 [−1.11, −0.07] | 9.16 → 8.67 | −0.49 [−3.24, +2.25] | 5 | level |
-| Route-0.6B | `exact` | 7.41 → 6.15 | −1.26 [−1.72, −0.80] | 8.44 → 8.55 | +0.10 [−2.95, +3.15] | 5 | level |
-|  | `batching` | 7.41 → 6.90 | −0.51 [−1.02, +0.00] | 8.44 → 7.25 | −1.19 [−1.71, −0.67] | 5 | level |
-| Eos-0.8B | `exact` | 22.7 → 8.4 | −14.3 [−15.2, −13.4] | 25.6 → 12.1 | −13.5 [−21.6, −5.4] | 5 | better |
-|  | `shared_context` | 22.7 → 8.1 | −14.6 [−15.0, −14.1] | 25.6 → 10.2 | −15.4 [−18.5, −12.2] | 5 | better |
-| Sol-2B | `exact` | 23.9 → 7.7 | −16.2 [−19.5, −13.0] | 31.3 → 13.0 | −18.3 [−30.0, −6.5] | 5 | better |
-|  | `shared_context` | 23.9 → 7.6 | −16.3 [−19.6, −13.1] | 31.3 → 11.0 | −20.3 [−33.7, −6.8] | 5 | better |
-| Nox-4B | `exact` | 29.2 → 13.2 | −16.0 [−16.4, −15.5] | 32.1 → 15.6 | −16.5 [−21.6, −11.4] | 5 | better |
-|  | `shared_context` | 29.2 → 13.3 | −15.9 [−16.3, −15.6] | 32.1 → 15.5 | −16.6 [−21.8, −11.4] | 5 | better |
-| Lux-9B | `exact` | 31.4 → 20.3 | −11.1 [−19.8, −2.4] | 38.9 → 23.0 | −15.8 [−33.4, +1.7] | 5 | level |
-|  | `shared_context` | 31.4 → 18.6 | −12.8 [−19.2, −6.5] | 38.9 → 26.6 | −12.3 [−40.8, +16.3] | 5 | level |
+| Kai-0.6B | `exact` | 9.03 → 6.10 | −2.92 [−3.12, −2.72] | 14.2 → 8.1 | −6.1 [−14.2, +2.0] | 5 | level |
+|  | `batching` | 9.03 → 6.68 | −2.34 [−2.53, −2.16] | 14.2 → 7.0 | −7.2 [−14.2, −0.2] | 5 | better |
+| Lex-0.6B | `exact` | 10.4 → 6.1 | −4.2 [−8.0, −0.5] | 14.9 → 10.8 | −4.1 [−13.4, +5.2] | 5 | level |
+|  | `batching` | 10.4 → 6.8 | −3.6 [−7.4, +0.2] | 14.9 → 8.6 | −6.3 [−11.2, −1.4] | 5 | level |
+| Route-0.6B | `exact` | 8.94 → 6.06 | −2.88 [−3.10, −2.65] | 11.4 → 7.9 | −3.5 [−8.0, +0.9] | 5 | level |
+|  | `batching` | 8.94 → 6.76 | −2.17 [−2.41, −1.94] | 11.4 → 11.6 | +0.1 [−6.3, +6.6] | 5 | level |
+| Eos-0.8B | `exact` | 23.0 → 8.1 | −14.9 [−15.8, −14.0] | 30.4 → 11.4 | −19.0 [−26.5, −11.4] | 5 | better |
+|  | `shared_context` | 23.0 → 9.6 | −13.4 [−17.8, −9.0] | 30.4 → 16.1 | −14.4 [−32.3, +3.6] | 5 | level |
+| Sol-2B | `exact` | 23.5 → 7.6 | −15.9 [−17.8, −13.9] | 28.6 → 12.6 | −16.0 [−26.0, −6.0] | 5 | better |
+|  | `shared_context` | 23.5 → 7.6 | −15.9 [−17.7, −14.1] | 28.6 → 11.2 | −17.4 [−25.0, −9.7] | 5 | better |
+| Nox-4B | `exact` | 29.3 → 14.9 | −14.5 [−19.5, −9.4] | 35.4 → 18.6 | −16.8 [−33.6, +0.0] | 5 | level |
+|  | `shared_context` | 29.3 → 14.9 | −14.4 [−19.1, −9.8] | 35.4 → 17.2 | −18.1 [−23.6, −12.6] | 5 | better |
+| Lux-9B | `exact` | 29.5 → 22.2 | −7.3 [−13.3, −1.3] | 36.7 → 29.8 | −7.0 [−21.2, +7.3] | 5 | level |
+|  | `shared_context` | 29.5 → 18.5 | −10.9 [−11.3, −10.6] | 36.7 → 21.1 | −15.6 [−27.5, −3.7] | 5 | better |
 
-- Every exact p50 interval is on the runtime's side: 1.2–1.3× faster on the
-  encoders (Kai 7.98 → 6.29 ms) and 1.5–3.1× on the decoders (Eos 22.7 → 8.4,
-  Sol 23.9 → 7.7, Nox 29.2 → 13.2, Lux 31.4 → 20.3). The level rows are level
-  on p95 only. The two positive point estimates, Lex's and Route's exact p95
-  (+0.67 and +0.10 ms), are level.
+- Every exact p50 interval is on the runtime's side: 1.5–1.7× faster on the
+  encoders (Kai 9.03 → 6.10 ms) and 1.3–3.1× on the decoders (Eos 23.0 → 8.1,
+  Sol 23.5 → 7.6, Nox 29.3 → 14.9, Lux 29.5 → 22.2). The level verdicts come
+  from p95 intervals that straddle zero, and from Lex's `batching` p50 (−3.6
+  ms [−7.4, +0.2]). The one positive point estimate, Route's `batching` p95
+  (+0.1 ms), is level.
 
 ### Router requests
 
@@ -165,20 +161,20 @@ The six router signals about each of the 231 public231 prompts:
 
 | Model | Profile | p50 bundled → runtime | p50 Δ [95% CI] | p95 bundled → runtime | p95 Δ [95% CI] | Rounds | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Kai-0.6B | `exact` | 24.3 → 20.6 | −3.7 [−14.5, +7.1] | 50.5 → 45.1 | −5.4 [−19.0, +8.1] | 5 | level |
-|  | `batching` | 24.3 → 13.8 | −10.4 [−15.4, −5.5] | 50.5 → 33.0 | −17.5 [−27.3, −7.8] | 5 | better |
-| Lex-0.6B | `exact` | 22.6 → 17.6 | −5.0 [−7.8, −2.3] | 50.4 → 40.8 | −9.6 [−16.6, −2.5] | 5 | better |
-|  | `batching` | 22.6 → 12.4 | −10.2 [−13.2, −7.2] | 50.4 → 31.3 | −19.1 [−24.9, −13.3] | 5 | better |
-| Route-0.6B | `exact` | 26.6 → 20.7 | −5.9 [−10.8, −1.0] | 55.2 → 47.6 | −7.6 [−10.3, −4.8] | 5 | better |
-|  | `batching` | 26.6 → 14.0 | −12.5 [−23.0, −2.0] | 55.2 → 35.4 | −19.8 [−33.6, −6.0] | 5 | better |
-| Eos-0.8B | `exact` | 31.6 → 24.7 | −7.0 [−15.0, +1.1] | 156.9 → 148.3 | −8.7 [−33.4, +16.1] | 5 | level |
-|  | `shared_context` | 31.6 → 24.0 | −7.6 [−13.0, −2.3] | 156.9 → 76.7 | −80.2 [−102.0, −58.4] | 5 | better |
-| Sol-2B | `exact` | 46.3 → 36.2 | −10.1 [−25.8, +5.7] | 204.5 → 177.5 | −27.0 [−73.3, +19.2] | 5 | level |
-|  | `shared_context` | 46.3 → 36.2 | −10.1 [−22.5, +2.3] | 204.5 → 72.1 | −132.4 [−163.7, −101.1] | 5 | level |
-| Nox-4B | `exact` | 75.7 → 64.0 | −11.8 [−22.7, −0.8] | 461.5 → 393.0 | −68.6 [−144.9, +7.7] | 5 | level |
-|  | `shared_context` | 75.7 → 58.1 | −17.7 [−21.8, −13.5] | 461.5 → 119.5 | −342.1 [−413.7, −270.4] | 5 | better |
-| Lux-9B | `exact` | 123.3 → 105.1 | −18.2 [−53.7, +17.2] | 665.5 → 618.5 | −47.1 [−176.9, +82.8] | 5 | level |
-|  | `shared_context` | 123.3 → 95.4 | −27.9 [−39.8, −16.0] | 665.5 → 178.4 | −487.1 [−590.6, −383.6] | 5 | better |
+| Kai-0.6B | `exact` | 27.0 → 22.7 | −4.3 [−9.2, +0.5] | 63.6 → 48.9 | −14.7 [−26.3, −3.1] | 5 | level |
+|  | `batching` | 27.0 → 15.6 | −11.4 [−16.6, −6.2] | 63.6 → 33.2 | −30.4 [−44.0, −16.9] | 5 | better |
+| Lex-0.6B | `exact` | 30.0 → 32.2 | +2.2 [−4.8, +9.2] | 67.6 → 73.3 | +5.7 [−24.4, +35.8] | 5 | level |
+|  | `batching` | 30.0 → 15.3 | −14.7 [−20.0, −9.3] | 67.6 → 36.6 | −30.9 [−53.9, −7.9] | 5 | better |
+| Route-0.6B | `exact` | 28.5 → 21.0 | −7.5 [−11.7, −3.3] | 61.9 → 52.3 | −9.6 [−32.3, +13.1] | 5 | level |
+|  | `batching` | 28.5 → 14.1 | −14.4 [−20.9, −7.9] | 61.9 → 35.3 | −26.6 [−44.6, −8.7] | 5 | better |
+| Eos-0.8B | `exact` | 26.9 → 24.5 | −2.4 [−9.8, +5.0] | 144.1 → 140.2 | −3.8 [−33.6, +25.9] | 5 | level |
+|  | `shared_context` | 26.9 → 23.4 | −3.5 [−8.4, +1.5] | 144.1 → 78.5 | −65.5 [−72.2, −58.9] | 5 | level |
+| Sol-2B | `exact` | 42.2 → 27.8 | −14.4 [−22.5, −6.4] | 209.4 → 168.3 | −41.1 [−100.4, +18.2] | 5 | level |
+|  | `shared_context` | 42.2 → 34.9 | −7.4 [−13.4, −1.3] | 209.4 → 71.1 | −138.2 [−164.6, −111.9] | 5 | better |
+| Nox-4B | `exact` | 82.6 → 68.5 | −14.1 [−38.5, +10.3] | 488.7 → 356.0 | −132.6 [−187.8, −77.4] | 5 | level |
+|  | `shared_context` | 82.6 → 59.9 | −22.6 [−45.4, +0.1] | 488.7 → 117.9 | −370.8 [−418.9, −322.7] | 5 | level |
+| Lux-9B | `exact` | 121.0 → 107.3 | −13.7 [−57.4, +30.0] | 660.0 → 570.5 | −89.4 [−220.3, +41.4] | 5 | level |
+|  | `shared_context` | 121.0 → 92.7 | −28.3 [−38.2, −18.3] | 660.0 → 168.2 | −491.8 [−584.9, −398.7] | 5 | better |
 
 - Exact runs the released shapes, so on the encoders it does the bundled
   runtime's work: every question type present runs its stack over all six
@@ -186,10 +182,11 @@ The six router signals about each of the 231 public231 prompts:
   layer stack replays its own bucket graphs.
 - `shared_context` computes the prompt once for all six questions. The
   decoders' long prompts are where the bundled runtime's p95 comes from.
-- Exact is level or better on every model, with p50 15–22% below the bundled
-  runtime's. `batching` cuts the encoders' p95 by 35–38% and `shared_context`
-  the decoders' by 51–74% (Lux 665.5 → 178.4 ms); Sol's `shared_context` row
-  is level only on p50.
+- Exact is level or better on every model, with p50 9–34% below the bundled
+  runtime's, except Lex's: +2.2 ms [−4.8, +9.2] at p50 and +5.7 ms [−24.4,
+  +35.8] at p95, level, the section's only positive point estimates.
+  `batching` cuts the encoders' p95 by 43–48% and `shared_context` the
+  decoders' by 46–76% (Lux 660.0 → 168.2 ms).
 
 ### Throughput (requests/s)
 
@@ -198,48 +195,49 @@ runtime's sequential rate in the same round:
 
 | Model | Profile | Bundled | C = 1 | C = 4 | C = 16 | Rounds | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Kai-0.6B | `exact` | 102.3 | 148.2, +45.8 [+23.5, +68.2] | 152.6, +50.3 [+28.1, +72.5] | 159.1, +56.8 [+33.1, +80.5] | 5 | better |
-|  | `batching` | 102.3 | 123.6, +21.2 [−7.5, +49.9] | 299.9, +197.6 [+153.1, +242.1] | 575.3, +472.9 [+408.3, +537.6] | 5 | level |
-| Lex-0.6B | `exact` | 126.2 | 155.7, +29.4 [+18.3, +40.6] | 154.9, +28.7 [+14.7, +42.7] | 159.1, +32.9 [+8.8, +57.0] | 5 | better |
-|  | `batching` | 126.2 | 132.4, +6.2 [−22.1, +34.5] | 298.9, +172.7 [+75.5, +269.9] | 595.5, +469.2 [+379.4, +559.1] | 5 | level |
-| Route-0.6B | `exact` | 129.9 | 148.5, +18.6 [+4.4, +32.9] | 145.5, +15.6 [−7.4, +38.6] | 144.0, +14.1 [−19.0, +47.2] | 5 | level |
-|  | `batching` | 129.9 | 127.5, −2.4 [−29.0, +24.3] | 277.9, +148.0 [+37.2, +258.7] | 532.4, +402.5 [+221.8, +583.3] | 5 | level |
-| Eos-0.8B | `exact` | 43.5 | 115.8, +72.4 [+59.5, +85.3] | 118.6, +75.1 [+62.9, +87.4] | 119.5, +76.1 [+65.4, +86.7] | 5 | better |
-|  | `shared_context` | 43.5 | 116.0, +72.6 [+61.3, +83.9] | 121.5, +78.1 [+75.4, +80.8] | 118.5, +75.1 [+58.7, +91.5] | 5 | better |
-| Sol-2B | `exact` | 40.3 | 126.3, +86.0 [+68.5, +103.6] | 126.6, +86.3 [+70.8, +101.9] | 128.2, +87.9 [+74.6, +101.2] | 5 | better |
-|  | `shared_context` | 40.3 | 108.6, +68.3 [+48.0, +88.6] | 112.4, +72.1 [+54.0, +90.2] | 123.0, +82.7 [+68.2, +97.2] | 5 | better |
-| Nox-4B | `exact` | 33.8 | 71.2, +37.4 [+28.0, +46.7] | 75.1, +41.3 [+40.7, +41.9] | 74.6, +40.8 [+38.4, +43.1] | 5 | better |
-|  | `shared_context` | 33.8 | 74.8, +41.0 [+40.7, +41.3] | 72.5, +38.7 [+29.0, +48.4] | 69.8, +36.0 [+24.7, +47.3] | 5 | better |
-| Lux-9B | `exact` | 31.6 | 51.6, +20.0 [+12.0, +28.1] | 53.6, +22.0 [+16.5, +27.5] | 50.0, +18.4 [+7.0, +29.8] | 5 | better |
-|  | `shared_context` | 31.6 | 51.3, +19.8 [+11.4, +28.1] | 50.7, +19.1 [+11.7, +26.5] | 52.0, +20.4 [+17.5, +23.3] | 5 | better |
+| Kai-0.6B | `exact` | 100.1 | 157.4, +57.3 [+37.3, +77.4] | 154.7, +54.6 [+22.2, +87.0] | 157.2, +57.1 [+18.0, +96.1] | 5 | better |
+|  | `batching` | 100.1 | 140.3, +40.2 [+13.0, +67.3] | 312.4, +212.3 [+154.8, +269.8] | 500.2, +400.1 [+319.5, +480.7] | 5 | better |
+| Lex-0.6B | `exact` | 95.3 | 135.4, +40.1 [+0.9, +79.4] | 162.0, +66.7 [+47.6, +85.9] | 164.7, +69.4 [+46.8, +92.1] | 5 | better |
+|  | `batching` | 95.3 | 131.3, +36.0 [+5.4, +66.7] | 319.6, +224.3 [+171.3, +277.3] | 508.1, +412.8 [+340.5, +485.2] | 5 | better |
+| Route-0.6B | `exact` | 105.3 | 160.0, +54.7 [+43.8, +65.5] | 154.1, +48.8 [+28.0, +69.5] | 154.4, +49.1 [+25.3, +72.9] | 5 | better |
+|  | `batching` | 105.3 | 146.8, +41.5 [+37.1, +45.9] | 336.8, +231.5 [+221.7, +241.4] | 509.0, +403.7 [+336.5, +470.9] | 5 | better |
+| Eos-0.8B | `exact` | 41.1 | 115.6, +74.4 [+59.0, +89.9] | 117.6, +76.4 [+65.5, +87.4] | 111.3, +70.2 [+44.6, +95.7] | 5 | better |
+|  | `shared_context` | 41.1 | 121.7, +80.6 [+76.3, +84.9] | 124.6, +83.5 [+81.6, +85.4] | 119.0, +77.8 [+57.6, +98.1] | 5 | better |
+| Sol-2B | `exact` | 41.5 | 129.5, +88.0 [+81.1, +94.9] | 133.4, +91.9 [+88.2, +95.7] | 127.6, +86.1 [+68.1, +104.1] | 5 | better |
+|  | `shared_context` | 41.5 | 129.1, +87.6 [+83.0, +92.2] | 131.8, +90.3 [+84.2, +96.4] | 134.8, +93.3 [+90.2, +96.4] | 5 | better |
+| Nox-4B | `exact` | 32.9 | 63.9, +31.0 [+16.5, +45.4] | 74.0, +41.1 [+38.6, +43.6] | 75.2, +42.2 [+40.4, +44.0] | 5 | better |
+|  | `shared_context` | 32.9 | 61.3, +28.3 [+12.0, +44.7] | 74.3, +41.4 [+38.8, +44.0] | 69.3, +36.3 [+23.7, +49.0] | 5 | better |
+| Lux-9B | `exact` | 32.3 | 50.4, +18.1 [+11.2, +24.9] | 48.5, +16.2 [+8.0, +24.4] | 53.2, +20.9 [+18.0, +23.8] | 5 | better |
+|  | `shared_context` | 32.3 | 50.8, +18.5 [+16.5, +20.4] | 44.4, +12.1 [+4.5, +19.7] | 50.3, +18.0 [+13.2, +22.8] | 5 | better |
 
 Router requests:
 
 | Model | Profile | Bundled | C = 1 | C = 4 | C = 16 | Rounds | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Kai-0.6B | `exact` | 44.4 | 47.5, +3.1 [−8.3, +14.5] | 53.6, +9.2 [+8.7, +9.7] | 50.4, +6.0 [−3.8, +15.8] | 5 | level |
-|  | `batching` | 44.4 | 78.2, +33.8 [+32.9, +34.7] | 120.0, +75.6 [+72.7, +78.6] | 155.8, +111.4 [+108.0, +114.9] | 5 | better |
-| Lex-0.6B | `exact` | 37.2 | 53.1, +15.8 [+8.1, +23.5] | 53.7, +16.4 [+8.5, +24.3] | 54.2, +17.0 [+8.3, +25.7] | 5 | better |
-|  | `batching` | 37.2 | 78.1, +40.9 [+32.2, +49.5] | 119.9, +82.7 [+74.8, +90.6] | 157.2, +120.0 [+111.4, +128.5] | 5 | better |
-| Route-0.6B | `exact` | 44.3 | 53.0, +8.7 [+7.6, +9.8] | 52.1, +7.8 [+3.7, +11.8] | 51.2, +6.8 [−0.9, +14.5] | 5 | level |
-|  | `batching` | 44.3 | 77.0, +32.6 [+31.5, +33.8] | 116.5, +72.2 [+67.6, +76.7] | 155.0, +110.6 [+103.3, +118.0] | 5 | better |
-| Eos-0.8B | `exact` | 20.1 | 22.6, +2.5 [+0.5, +4.4] | 22.8, +2.7 [+0.2, +5.1] | 23.5, +3.4 [+1.5, +5.3] | 5 | better |
-|  | `shared_context` | 20.1 | 30.4, +10.3 [+7.6, +13.0] | 32.3, +12.2 [+10.1, +14.3] | 32.7, +12.6 [+10.2, +15.0] | 5 | better |
-| Sol-2B | `exact` | 14.0 | 16.9, +2.9 [−0.7, +6.6] | 17.7, +3.7 [−0.0, +7.4] | 19.1, +5.2 [+3.1, +7.2] | 5 | level |
-|  | `shared_context` | 14.0 | 27.7, +13.7 [+11.8, +15.6] | 26.4, +12.4 [+10.3, +14.5] | 24.3, +10.4 [+7.3, +13.5] | 5 | better |
-| Nox-4B | `exact` | 7.06 | 8.42, +1.36 [+0.70, +2.02] | 8.51, +1.45 [+0.82, +2.08] | 8.50, +1.44 [+0.77, +2.12] | 5 | better |
-|  | `shared_context` | 7.06 | 15.07, +8.0 [+7.8, +8.3] | 14.91, +7.9 [+7.0, +8.7] | 14.79, +7.7 [+6.2, +9.2] | 5 | better |
-| Lux-9B | `exact` | 5.00 | 5.67, +0.67 [+0.66, +0.69] | 5.69, +0.70 [+0.68, +0.71] | 5.53, +0.54 [+0.25, +0.82] | 5 | better |
-|  | `shared_context` | 5.00 | 11.51, +6.5 [+6.4, +6.6] | 11.26, +6.3 [+5.3, +7.2] | 11.65, +6.7 [+6.6, +6.7] | 5 | better |
+| Kai-0.6B | `exact` | 32.4 | 43.5, +11.1 [+2.1, +20.2] | 38.9, +6.5 [−6.4, +19.5] | 38.0, +5.7 [−5.6, +16.9] | 5 | level |
+|  | `batching` | 32.4 | 72.1, +39.7 [+30.5, +49.0] | 106.4, +74.0 [+65.4, +82.6] | 132.6, +100.3 [+90.6, +110.0] | 5 | better |
+| Lex-0.6B | `exact` | 34.0 | 40.3, +6.4 [−0.8, +13.5] | 44.0, +10.0 [+6.2, +13.8] | 44.2, +10.3 [+6.5, +14.0] | 5 | level |
+|  | `batching` | 34.0 | 68.0, +34.0 [+27.0, +41.1] | 101.1, +67.1 [+54.3, +80.0] | 125.0, +91.1 [+74.0, +108.1] | 5 | better |
+| Route-0.6B | `exact` | 33.2 | 41.0, +7.7 [−3.5, +19.0] | 39.4, +6.1 [−6.9, +19.2] | 37.4, +4.2 [−3.2, +11.5] | 5 | level |
+|  | `batching` | 33.2 | 62.3, +29.1 [+14.4, +43.7] | 88.7, +55.5 [+28.4, +82.6] | 112.6, +79.4 [+46.9, +111.9] | 5 | better |
+| Eos-0.8B | `exact` | 19.3 | 22.4, +3.1 [−1.0, +7.3] | 24.6, +5.3 [+3.1, +7.5] | 23.6, +4.3 [−1.6, +10.2] | 5 | level |
+|  | `shared_context` | 19.3 | 33.7, +14.5 [+11.5, +17.5] | 32.7, +13.4 [+9.1, +17.8] | 33.1, +13.9 [+8.7, +19.0] | 5 | better |
+| Sol-2B | `exact` | 14.9 | 17.0, +2.1 [−1.1, +5.2] | 18.5, +3.6 [+2.9, +4.3] | 16.5, +1.6 [−4.6, +7.8] | 5 | level |
+|  | `shared_context` | 14.9 | 24.9, +10.0 [+5.9, +14.1] | 25.9, +11.0 [+6.7, +15.4] | 27.2, +12.4 [+9.8, +14.9] | 5 | better |
+| Nox-4B | `exact` | 7.26 | 8.49, +1.24 [+0.77, +1.71] | 8.52, +1.26 [+0.80, +1.73] | 8.57, +1.31 [+0.83, +1.79] | 5 | better |
+|  | `shared_context` | 7.26 | 15.07, +7.8 [+7.7, +7.9] | 14.68, +7.4 [+6.1, +8.7] | 15.37, +8.1 [+8.0, +8.2] | 5 | better |
+| Lux-9B | `exact` | 4.93 | 5.51, +0.58 [+0.35, +0.80] | 5.44, +0.51 [+0.06, +0.95] | 5.71, +0.78 [+0.59, +0.97] | 5 | better |
+|  | `shared_context` | 4.93 | 11.44, +6.5 [+6.2, +6.8] | 10.77, +5.8 [+4.9, +6.7] | 11.21, +6.3 [+5.3, +7.3] | 5 | better |
 
 - Exact runs one request per forward, so concurrency adds little to it.
 - `batching` coalesces the questions of concurrent requests, and the encoders
   pack them without padding. `shared_context` doesn't coalesce requests.
-- At C = 1, exact serves 1.1–1.4× the bundled rate on the encoders and
-  1.6–3.1× on the decoders. On single requests `batching` reaches 4.1–5.6× at
-  C = 16, and on router requests 3.5–4.2×; `shared_context` serves router
-  requests at 1.5–2.3× from C = 1. The `batching` single-request rows are
-  level only at C = 1, where it pays the batching window.
+- At C = 1, exact serves single requests at 1.4–1.6× the bundled rate on the
+  encoders and 1.6–3.1× on the decoders, and router requests at 1.1–1.3×. At
+  C = 16 `batching` reaches 4.8–5.3× on single requests and 3.4–4.1× on router
+  requests, and `shared_context` serves router requests at 1.7–2.3× from
+  C = 1. The five level rows, the encoders', Eos's and Sol's exact router rows,
+  each straddle zero at one to three of the concurrencies.
 
 ### Many questions about one input
 
@@ -248,54 +246,54 @@ questions, 20 runs per side and round:
 
 | Model | Questions | Profile | p50 bundled → runtime | p50 Δ [95% CI] | p95 bundled → runtime | p95 Δ [95% CI] | Rounds | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Kai-0.6B | 16 | `exact` | 48.7 → 44.5 | −4.2 [−10.4, +2.1] | 51.0 → 48.2 | −2.8 [−14.9, +9.3] | 5 | level |
-|  | 16 | `batching` | 48.7 → 30.6 | −18.1 [−21.4, −14.8] | 51.0 → 34.7 | −16.4 [−20.3, −12.5] | 5 | better |
-|  | 64 | `exact` | 127.0 → 91.7 | −35.3 [−67.2, −3.5] | 138.7 → 124.3 | −14.4 [−95.9, +67.1] | 5 | level |
-|  | 64 | `batching` | 127.0 → 90.1 | −36.9 [−90.4, +16.6] | 138.7 → 96.5 | −42.2 [−112.8, +28.4] | 5 | level |
-|  | 128 | `exact` | 218.1 → 174.0 | −44.1 [−84.7, −3.5] | 240.1 → 181.4 | −58.7 [−101.7, −15.7] | 5 | better |
-|  | 128 | `batching` | 218.1 → 154.5 | −63.5 [−82.3, −44.8] | 240.1 → 161.5 | −78.6 [−94.4, −62.7] | 5 | better |
-| Lex-0.6B | 16 | `exact` | 48.0 → 39.4 | −8.6 [−9.7, −7.5] | 49.1 → 41.1 | −8.0 [−9.5, −6.6] | 5 | better |
-|  | 16 | `batching` | 48.0 → 30.9 | −17.1 [−21.4, −12.7] | 49.1 → 33.1 | −16.0 [−23.0, −9.1] | 5 | better |
-|  | 64 | `exact` | 119.1 → 96.2 | −22.9 [−29.0, −16.9] | 130.3 → 106.1 | −24.2 [−44.5, −3.8] | 5 | better |
-|  | 64 | `batching` | 119.1 → 89.8 | −29.3 [−71.5, +12.9] | 130.3 → 92.7 | −37.6 [−80.3, +5.2] | 5 | level |
-|  | 128 | `exact` | 217.6 → 172.9 | −44.7 [−84.2, −5.2] | 268.9 → 183.0 | −85.9 [−142.5, −29.2] | 5 | better |
-|  | 128 | `batching` | 217.6 → 141.1 | −76.5 [−106.6, −46.5] | 268.9 → 144.9 | −124.0 [−183.3, −64.8] | 5 | better |
-| Route-0.6B | 16 | `exact` | 61.6 → 41.4 | −20.3 [−54.5, +14.0] | 68.2 → 44.1 | −24.0 [−72.4, +24.3] | 5 | level |
-|  | 16 | `batching` | 61.6 → 29.5 | −32.1 [−65.3, +1.0] | 68.2 → 32.5 | −35.7 [−80.7, +9.2] | 5 | level |
-|  | 64 | `exact` | 115.0 → 95.6 | −19.5 [−28.4, −10.6] | 150.9 → 99.6 | −51.3 [−130.3, +27.7] | 5 | level |
-|  | 64 | `batching` | 115.0 → 76.9 | −38.1 [−39.8, −36.5] | 150.9 → 82.2 | −68.6 [−146.6, +9.4] | 5 | level |
-|  | 128 | `exact` | 207.4 → 218.9 | +11.5 [−55.2, +78.1] | 222.6 → 228.6 | +6.0 [−79.1, +91.1] | 5 | level |
-|  | 128 | `batching` | 207.4 → 146.0 | −61.5 [−77.5, −45.4] | 222.6 → 151.3 | −71.3 [−98.3, −44.2] | 5 | better |
-| Eos-0.8B | 16 | `exact` | 57.7 → 44.7 | −13.1 [−18.9, −7.3] | 62.4 → 47.2 | −15.2 [−23.6, −6.8] | 5 | better |
-|  | 16 | `shared_context` | 57.7 → 45.4 | −12.4 [−19.5, −5.3] | 62.4 → 50.2 | −12.2 [−28.9, +4.5] | 5 | level |
-|  | 64 | `exact` | 201.8 → 175.2 | −26.6 [−40.0, −13.2] | 215.6 → 184.4 | −31.2 [−50.0, −12.3] | 5 | better |
-|  | 64 | `shared_context` | 201.8 → 75.5 | −126.3 [−129.0, −123.6] | 215.6 → 81.9 | −133.7 [−153.0, −114.4] | 5 | better |
-|  | 128 | `exact` | 402.0 → 360.1 | −42.0 [−92.3, +8.3] | 510.9 → 370.3 | −140.6 [−437.7, +156.4] | 5 | level |
-|  | 128 | `shared_context` | 402.0 → 138.5 | −263.6 [−273.1, −254.1] | 510.9 → 153.7 | −357.2 [−642.4, −72.1] | 5 | better |
-| Sol-2B | 16 | `exact` | 81.0 → 59.0 | −22.0 [−34.3, −9.7] | 84.8 → 61.5 | −23.3 [−37.5, −9.0] | 5 | better |
-|  | 16 | `shared_context` | 81.0 → 35.9 | −45.0 [−59.1, −31.0] | 84.8 → 39.3 | −45.5 [−61.8, −29.3] | 5 | better |
-|  | 64 | `exact` | 302.4 → 224.6 | −77.7 [−124.2, −31.3] | 310.4 → 236.4 | −73.9 [−106.5, −41.3] | 5 | better |
-|  | 64 | `shared_context` | 302.4 → 88.1 | −214.3 [−260.5, −168.1] | 310.4 → 94.0 | −216.4 [−259.2, −173.6] | 5 | better |
-|  | 128 | `exact` | 567.6 → 462.9 | −104.7 [−166.7, −42.7] | 580.5 → 476.9 | −103.6 [−170.0, −37.1] | 5 | better |
-|  | 128 | `shared_context` | 567.6 → 237.6 | −330.0 [−549.2, −110.9] | 580.5 → 292.7 | −287.8 [−632.8, +57.2] | 5 | level |
-| Nox-4B | 16 | `exact` | 165.1 → 119.0 | −46.2 [−82.6, −9.7] | 181.8 → 120.4 | −61.3 [−124.4, +1.8] | 5 | level |
-|  | 16 | `shared_context` | 165.1 → 55.6 | −109.6 [−145.8, −73.3] | 181.8 → 57.4 | −124.4 [−186.3, −62.5] | 5 | better |
-|  | 64 | `exact` | 612.1 → 490.0 | −122.1 [−250.3, +6.1] | 668.5 → 557.6 | −110.9 [−264.3, +42.6] | 5 | level |
-|  | 64 | `shared_context` | 612.1 → 167.5 | −444.6 [−555.9, −333.3] | 668.5 → 169.3 | −499.1 [−648.3, −350.0] | 5 | better |
-|  | 128 | `exact` | 1,143 → 994 | −149 [−266, −31] | 1,344 → 1,099 | −244 [−597, +109] | 5 | level |
-|  | 128 | `shared_context` | 1,143 → 327 | −816 [−852, −779] | 1,344 → 335 | −1,008 [−1,505, −512] | 5 | better |
-| Lux-9B | 16 | `exact` | 215.4 → 187.7 | −27.7 [−31.6, −23.8] | 218.4 → 189.5 | −28.9 [−30.1, −27.7] | 5 | better |
-|  | 16 | `shared_context` | 215.4 → 76.4 | −139.0 [−160.8, −117.3] | 218.4 → 78.5 | −139.9 [−164.5, −115.4] | 5 | better |
-|  | 64 | `exact` | 854.4 → 722.4 | −131.9 [−237.4, −26.5] | 878.1 → 828.1 | −50.0 [−312.1, +212.2] | 5 | level |
-|  | 64 | `shared_context` | 854.4 → 247.7 | −606.7 [−715.8, −497.5] | 878.1 → 292.7 | −585.4 [−778.2, −392.6] | 5 | better |
-|  | 128 | `exact` | 1,642 → 1,426 | −216 [−232, −200] | 1,751 → 1,584 | −168 [−516, +181] | 5 | level |
-|  | 128 | `shared_context` | 1,642 → 442 | −1,200 [−1,206, −1,195] | 1,751 → 469 | −1,283 [−1,512, −1,054] | 5 | better |
+| Kai-0.6B | 16 | `exact` | 59.5 → 49.0 | −10.5 [−15.8, −5.2] | 69.9 → 57.0 | −12.9 [−32.2, +6.5] | 5 | level |
+|  | 16 | `batching` | 59.5 → 37.0 | −22.5 [−28.7, −16.4] | 69.9 → 48.0 | −21.9 [−65.7, +21.8] | 5 | level |
+|  | 64 | `exact` | 144.1 → 121.7 | −22.3 [−52.5, +7.8] | 146.1 → 162.2 | +16.1 [−93.5, +125.8] | 5 | level |
+|  | 64 | `batching` | 144.1 → 100.4 | −43.6 [−61.3, −25.9] | 146.1 → 106.7 | −39.4 [−69.5, −9.3] | 5 | better |
+|  | 128 | `exact` | 270.0 → 199.1 | −70.9 [−88.4, −53.3] | 339.6 → 210.4 | −129.2 [−238.3, −20.1] | 5 | better |
+|  | 128 | `batching` | 270.0 → 197.8 | −72.2 [−108.9, −35.5] | 339.6 → 228.8 | −110.8 [−226.5, +5.0] | 5 | level |
+| Lex-0.6B | 16 | `exact` | 64.5 → 47.0 | −17.6 [−30.7, −4.5] | 74.7 → 47.4 | −27.3 [−44.6, −10.0] | 5 | better |
+|  | 16 | `batching` | 64.5 → 33.4 | −31.2 [−44.4, −18.0] | 74.7 → 33.7 | −41.0 [−58.6, −23.4] | 5 | better |
+|  | 64 | `exact` | 144.5 → 110.0 | −34.5 [−35.6, −33.4] | 164.2 → 110.7 | −53.5 [−85.8, −21.2] | 5 | better |
+|  | 64 | `batching` | 144.5 → 94.1 | −50.4 [−51.0, −49.8] | 164.2 → 102.1 | −62.1 [−102.4, −21.8] | 5 | better |
+|  | 128 | `exact` | 292.0 → 199.7 | −92.3 [−174.4, −10.2] | 346.5 → 221.5 | −125.0 [−307.3, +57.4] | 5 | level |
+|  | 128 | `batching` | 292.0 → 192.6 | −99.4 [−199.1, +0.3] | 346.5 → 218.9 | −127.6 [−321.4, +66.2] | 5 | level |
+| Route-0.6B | 16 | `exact` | 64.9 → 56.8 | −8.0 [−21.2, +5.2] | 72.0 → 61.5 | −10.5 [−30.3, +9.2] | 5 | level |
+|  | 16 | `batching` | 64.9 → 36.7 | −28.2 [−47.4, −9.0] | 72.0 → 37.7 | −34.3 [−56.5, −12.1] | 5 | better |
+|  | 64 | `exact` | 180.6 → 111.4 | −69.2 [−116.2, −22.2] | 204.3 → 122.6 | −81.7 [−153.2, −10.2] | 5 | better |
+|  | 64 | `batching` | 180.6 → 110.4 | −70.3 [−119.1, −21.4] | 204.3 → 163.1 | −41.2 [−196.9, +114.4] | 5 | level |
+|  | 128 | `exact` | 262.3 → 199.0 | −63.3 [−64.2, −62.4] | 282.1 → 202.1 | −80.0 [−101.5, −58.5] | 5 | better |
+|  | 128 | `batching` | 262.3 → 206.5 | −55.8 [−103.2, −8.3] | 282.1 → 219.1 | −63.0 [−118.3, −7.7] | 5 | better |
+| Eos-0.8B | 16 | `exact` | 56.0 → 47.8 | −8.1 [−12.9, −3.4] | 66.0 → 49.8 | −16.1 [−37.5, +5.3] | 5 | level |
+|  | 16 | `shared_context` | 56.0 → 48.0 | −8.0 [−26.5, +10.5] | 66.0 → 51.0 | −14.9 [−34.4, +4.6] | 5 | level |
+|  | 64 | `exact` | 226.0 → 193.4 | −32.6 [−70.1, +4.8] | 250.3 → 231.5 | −18.8 [−113.5, +75.9] | 5 | level |
+|  | 64 | `shared_context` | 226.0 → 77.5 | −148.5 [−197.2, −99.8] | 250.3 → 82.7 | −167.6 [−236.0, −99.2] | 5 | better |
+|  | 128 | `exact` | 406.9 → 330.6 | −76.3 [−94.0, −58.7] | 476.0 → 435.2 | −40.9 [−346.3, +264.6] | 5 | level |
+|  | 128 | `shared_context` | 406.9 → 140.5 | −266.4 [−295.9, −237.0] | 476.0 → 144.0 | −332.0 [−430.7, −233.4] | 5 | better |
+| Sol-2B | 16 | `exact` | 73.1 → 57.0 | −16.1 [−16.3, −15.9] | 73.8 → 58.3 | −15.5 [−16.4, −14.6] | 5 | better |
+|  | 16 | `shared_context` | 73.1 → 37.4 | −35.7 [−38.9, −32.5] | 73.8 → 44.7 | −29.1 [−36.2, −22.0] | 5 | better |
+|  | 64 | `exact` | 335.0 → 266.1 | −68.9 [−197.9, +60.0] | 378.7 → 290.6 | −88.2 [−250.0, +73.7] | 5 | level |
+|  | 64 | `shared_context` | 335.0 → 85.2 | −249.8 [−388.6, −111.0] | 378.7 → 90.2 | −288.5 [−494.4, −82.6] | 5 | better |
+|  | 128 | `exact` | 608.0 → 442.2 | −165.8 [−278.8, −52.8] | 626.2 → 511.2 | −115.0 [−293.6, +63.5] | 5 | level |
+|  | 128 | `shared_context` | 608.0 → 157.9 | −450.1 [−562.8, −337.5] | 626.2 → 164.2 | −462.0 [−583.8, −340.3] | 5 | better |
+| Nox-4B | 16 | `exact` | 156.0 → 118.7 | −37.3 [−71.1, −3.5] | 183.3 → 120.7 | −62.6 [−117.5, −7.7] | 5 | better |
+|  | 16 | `shared_context` | 156.0 → 54.9 | −101.1 [−135.1, −67.1] | 183.3 → 58.7 | −124.5 [−177.8, −71.3] | 5 | better |
+|  | 64 | `exact` | 570.1 → 470.7 | −99.3 [−99.9, −98.7] | 589.0 → 609.3 | +20.3 [−186.7, +227.3] | 5 | level |
+|  | 64 | `shared_context` | 570.1 → 184.5 | −385.6 [−434.4, −336.8] | 589.0 → 204.8 | −384.2 [−431.6, −336.8] | 5 | better |
+|  | 128 | `exact` | 1,140 → 939 | −201 [−219, −183] | 1,298 → 1,222 | −76 [−631, +479] | 5 | level |
+|  | 128 | `shared_context` | 1,140 → 315 | −825 [−827, −823] | 1,298 → 370 | −928 [−1,238, −618] | 5 | better |
+| Lux-9B | 16 | `exact` | 205.6 → 215.8 | +10.1 [−54.6, +74.9] | 218.1 → 225.3 | +7.2 [−61.1, +75.4] | 5 | level |
+|  | 16 | `shared_context` | 205.6 → 83.1 | −122.5 [−141.0, −104.1] | 218.1 → 95.9 | −122.3 [−143.9, −100.6] | 5 | better |
+|  | 64 | `exact` | 817.4 → 712.2 | −105.2 [−108.0, −102.5] | 841.0 → 947.8 | +106.8 [−189.4, +402.9] | 5 | level |
+|  | 64 | `shared_context` | 817.4 → 275.4 | −542.0 [−616.6, −467.5] | 841.0 → 295.5 | −545.4 [−647.4, −443.5] | 5 | better |
+|  | 128 | `exact` | 1,639 → 1,412 | −226 [−232, −220] | 1,975 → 1,579 | −396 [−950, +159] | 5 | level |
+|  | 128 | `shared_context` | 1,639 → 437 | −1,202 [−1,207, −1,196] | 1,975 → 477 | −1,498 [−1,949, −1,046] | 5 | better |
 
 - Exact is level or better at every size. At 128 questions `shared_context`
-  answers 2.4–3.7× faster at p50 on the decoders (Eos 402 → 139 ms, Lux 1,642
-  → 442) and `batching` 1.4–1.5× on the encoders. The only positive point
-  estimates, Route's exact p50 and p95 at 128 questions (+11.5 ms [−55.2,
-  +78.1] and +6.0 ms [−79.1, +91.1]), are level.
+  answers 2.9–3.9× faster at p50 on the decoders (Eos 407 → 141 ms, Lux 1,639
+  → 437) and `batching` 1.3–1.5× on the encoders. Positive point estimates
+  appear only in five exact cells, all level: Kai's and Nox's p95 at 64
+  questions, Lux's p50 and p95 at 16 and its p95 at 64.
 
 ### What per-model kernel choices cost (review P1-4)
 
