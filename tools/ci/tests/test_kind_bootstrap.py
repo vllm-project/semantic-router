@@ -1,3 +1,4 @@
+import re
 import unittest
 from pathlib import Path
 
@@ -103,3 +104,52 @@ class KindBootstrapContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+OPERATOR_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "operator-ci.yml"
+
+
+class OperatorRetryContractTests(unittest.TestCase):
+    """The operator job reaches the network, so one transient error must not fail it."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        workflow = yaml.safe_load(OPERATOR_WORKFLOW.read_text(encoding="utf-8"))
+        cls.steps = {
+            step["name"]: step.get("run", "")
+            for step in workflow["jobs"]["integration-test"]["steps"]
+            if "name" in step
+        }
+
+    def test_the_network_steps_use_the_shared_retry_helper(self) -> None:
+        for name in (
+            "Install kubectl",
+            "Create kind cluster",
+            "Install Gateway API CRDs",
+        ):
+            with self.subTest(step=name):
+                self.assertIn("source tools/ci/retry.sh", self.steps[name])
+                self.assertRegex(self.steps[name], r"retry_run [0-9]+ [0-9]+ ")
+
+    def test_the_kind_cluster_is_deleted_before_the_retry(self) -> None:
+        self.assertIn(
+            "RETRY_CLEANUP=delete_cluster retry_run 2 60 create_cluster",
+            self.steps["Create kind cluster"],
+        )
+
+    def test_the_retried_functions_chain_their_commands(self) -> None:
+        # bash suspends errexit inside the `if` that retry_run uses, so an
+        # unchained function reports the status of its last command only and the
+        # retry never fires.
+        for name, function in (
+            ("Install kubectl", "install_kubectl"),
+            ("Create kind cluster", "create_cluster"),
+        ):
+            with self.subTest(function=function):
+                body = re.search(
+                    rf"^{function}\(\) \{{(.*?)^\s*\}}$",
+                    self.steps[name],
+                    re.MULTILINE | re.DOTALL,
+                )
+                self.assertIsNotNone(body, f"{function} not found in {name}")
+                self.assertIn("&&", body.group(1))

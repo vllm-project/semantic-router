@@ -9,13 +9,13 @@ MODELS_DIR = os.environ.get("FA_MODELS_DIR", "/models")
 
 REPOS = {
     # Classification models (merged only)
-    "mmbert32k-intent-classifier-merged": "llm-semantic-router/mmbert32k-intent-classifier-merged",
-    "mmbert32k-jailbreak-detector-merged": "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
-    "mmbert32k-pii-detector-merged": "llm-semantic-router/mmbert32k-pii-detector-merged",
-    "mmbert32k-factcheck-classifier-merged": "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
-    "mmbert32k-feedback-detector-merged": "llm-semantic-router/mmbert32k-feedback-detector-merged",
+    "mmbert32k-intent-classifier-merged": "vllm-sr/mmbert32k-intent-classifier-merged",
+    "mmbert32k-jailbreak-detector-merged": "vllm-sr/mmbert32k-jailbreak-detector-merged",
+    "mmbert32k-pii-detector-merged": "vllm-sr/mmbert32k-pii-detector-merged",
+    "mmbert32k-factcheck-classifier-merged": "vllm-sr/mmbert32k-factcheck-classifier-merged",
+    "mmbert32k-feedback-detector-merged": "vllm-sr/mmbert32k-feedback-detector-merged",
     # Embedding models
-    "mmbert-embed-32k-2d-matryoshka": "llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
+    "mmbert-embed-32k-2d-matryoshka": "vllm-sr/mmbert-embed-32k-2d-matryoshka",
 }
 
 ALLOW_PATTERNS = [

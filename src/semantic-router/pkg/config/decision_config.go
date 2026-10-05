@@ -124,6 +124,7 @@ type AlgorithmConfig struct {
 	LatencyAware      *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
 	MultiFactor       *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
 	Prompt            *PromptSelectionConfig       `yaml:"prompt,omitempty"`
+	Decision          *DecisionSelectionConfig     `yaml:"decision,omitempty"`
 	SessionAware      *SessionAwareSelectionConfig `yaml:"-"`
 	OnError           string                       `yaml:"on_error,omitempty"`
 }
