@@ -6,7 +6,7 @@ status: Implemented
 translation:
   source_commit: "2b7519a84aec96963b02a3534e82908beba33f76"
   source_file: "docs/proposals/unified-config-contract-v0-3.md"
-  outdated: false
+  outdated: true
 ---
 
 > **状态：** 已实现 · **创建日期：** 2026-03-17

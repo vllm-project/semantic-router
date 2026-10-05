@@ -3,7 +3,7 @@ sidebar_position: 10
 translation:
   source_commit: "33349fdab9ad294da19ebd11588f8adbe8771b4a"
   source_file: "docs/installation/upgrade-rollback.md"
-  outdated: false
+  outdated: true
 ---
 
 # 升级与回滚

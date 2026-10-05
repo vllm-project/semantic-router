@@ -4,7 +4,7 @@ description: 检查就绪状态、查看实际路由信号并管理模型更新�
 translation:
   source_commit: "915ddf56e0335e2046c38aa17c4aec6233908039"
   source_file: "docs/installation/runtime/lifecycle-diagnostics.md"
-  outdated: false
+  outdated: true
 ---
 
 配置好[本地模型](in-process.md)或[外部服务](external.md)后，使用本页检查运行状态。

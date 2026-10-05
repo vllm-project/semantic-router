@@ -4,7 +4,7 @@ description: 发现、校验并扩展 canonical vLLM Semantic Router 配置，�
 translation:
   source_commit: "12c2aa4feb5c5d40d90104d8b09cade1facf0bf5"
   source_file: "docs/installation/configuration-contract.md"
-  outdated: false
+  outdated: true
 ---
 
 # 配置契约

@@ -5,7 +5,7 @@ description: 监控、更新、扩缩容并排查由 Kubernetes Operator 管理�
 translation:
   source_commit: "f8c1197a9ed47f7a265cbab83bf2d84eb5fa505e"
   source_file: "docs/installation/k8s/operator-operations.md"
-  outdated: false
+  outdated: true
 ---
 
 # 运维 Operator 部署

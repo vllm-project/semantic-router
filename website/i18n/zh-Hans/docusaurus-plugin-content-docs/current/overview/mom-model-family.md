@@ -5,7 +5,7 @@ description: 虚拟模型如何把共享的独立模型池变成稳定、面向�
 translation:
   source_commit: "6e177d91a30a4336a105ff82310f0f5d3a85b8dd"
   source_file: "docs/overview/mom-model-family.md"
-  outdated: false
+  outdated: true
 ---
 
 # 多模型混合

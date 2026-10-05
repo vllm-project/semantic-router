@@ -5,7 +5,7 @@ description: 验证网关可达性、直接模型请求、语义路由、响应�
 translation:
   source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/installation/k8s/gateway-testing.md"
-  outdated: false
+  outdated: true
 ---
 
 # 测试 Kubernetes Gateway 部署

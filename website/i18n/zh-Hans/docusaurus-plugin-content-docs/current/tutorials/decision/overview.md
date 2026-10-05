@@ -2,7 +2,7 @@
 translation:
   source_commit: "15a2f08f188b509dbe06132281a226d1cc6a665c"
   source_file: "docs/tutorials/decision/overview.md"
-  outdated: false
+  outdated: true
 ---
 
 # 决策

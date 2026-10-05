@@ -6,7 +6,7 @@ status: 提案
 translation:
   source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/proposals/model-execution-fallback.md"
-  outdated: false
+  outdated: true
 ---
 
 > **状态：** 提案 · **创建日期：** 2026-08-10

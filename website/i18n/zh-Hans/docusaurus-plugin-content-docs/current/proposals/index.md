@@ -4,7 +4,7 @@ description: vLLM Semantic Router 的设计提案、概念验证探索、实现�
 translation:
   source_commit: "2b7519a84aec96963b02a3534e82908beba33f76"
   source_file: "docs/proposals/index.md"
-  outdated: false
+  outdated: true
 ---
 
 本集合记录需要比功能指南更多上下文的想法和设计决策。各页上的状态区分了拟议工作、实验、已实现契约，以及有意限制产品范围的决策。

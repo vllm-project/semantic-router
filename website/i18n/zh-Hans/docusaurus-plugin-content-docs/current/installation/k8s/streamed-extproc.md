@@ -2,7 +2,7 @@
 translation:
   source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/installation/k8s/streamed-extproc.md"
-  outdated: false
+  outdated: true
 ---
 
 # 流式 ExtProc 与立即响应

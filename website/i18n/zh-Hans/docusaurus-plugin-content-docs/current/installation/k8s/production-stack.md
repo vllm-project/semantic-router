@@ -4,7 +4,7 @@ description: 将 Semantic Router 的模型池选择连接到由 vLLM Production 
 translation:
   source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
   source_file: "docs/installation/k8s/production-stack.md"
-  outdated: false
+  outdated: true
 ---
 
 # 与 vLLM Production Stack 集成

@@ -4,7 +4,7 @@ description: 将内置 Model Card 绑定到受支持的 Provider，而无需重�
 translation:
   source_commit: "6a4e51ad570a95c2a493ce4b1494bcedb525fa08"
   source_file: "docs/installation/catalog-backed-models.md"
-  outdated: false
+  outdated: true
 ---
 
 # 目录支持的模型

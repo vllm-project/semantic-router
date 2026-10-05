@@ -4,7 +4,7 @@ sidebar_position: 8
 translation:
   source_commit: "83f42330b6f1bfb65c743d4f6629382f4ec132c2"
   source_file: "docs/benchmarking/agent-routing-protection.md"
-  outdated: false
+  outdated: true
 ---
 
 # Agent 路由保护基线 {#agent-routing-protection-baseline}

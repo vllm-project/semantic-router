@@ -4,7 +4,7 @@ description: 选择目录支持或自定义模型，将其绑定到 provider，�
 translation:
   source_commit: "f8c1197a9ed47f7a265cbab83bf2d84eb5fa505e"
   source_file: "docs/installation/model-configuration.md"
-  outdated: false
+  outdated: true
 ---
 
 # 配置模型

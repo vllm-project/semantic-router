@@ -2,7 +2,7 @@
 translation:
   source_commit: "a40f020886bccb76b38e5e598b37b0b83910bc3b"
   source_file: "docs/tutorials/plugin/rag.md"
-  outdated: false
+  outdated: true
 ---
 
 # RAG

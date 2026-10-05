@@ -2,7 +2,7 @@
 translation:
   source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
   source_file: "docs/tutorials/algorithm/overview.md"
-  outdated: false
+  outdated: true
 ---
 
 # 算法

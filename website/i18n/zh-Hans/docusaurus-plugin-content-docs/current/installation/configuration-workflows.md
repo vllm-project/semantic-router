@@ -4,7 +4,7 @@ description: 选择 CLI、控制面板、Helm、Operator 和 DSL 如何编写并
 translation:
   source_commit: "8ded1a3c28a4af8358c8d638955b0318caeb8ed4"
   source_file: "docs/installation/configuration-workflows.md"
-  outdated: false
+  outdated: true
 ---
 
 # 配置工作流
