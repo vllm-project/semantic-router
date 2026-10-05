@@ -152,7 +152,7 @@ src/model-runtime/
     profiles/               # exact, shared_context, batching, max_speed
     testing/
       fixtures.py           # tiny random-weight packages for every family, and a tiny tokenizer
-  examples/third_party_plugin/  # a documented out-of-tree family and engine, installed by the tests
+  examples/third_party_plugin/  # a documented out-of-tree family, engine, accelerator and profile, installed by the tests
   tests/                    # unit, contract, registry, scheduler, server and integration tests
   tools/                    # golden answers, parity drivers (GPU, legacy), benchmarks
 ```
@@ -304,13 +304,14 @@ carries another name, and lists every active plugin with its distribution,
 version and descriptor in `/v1/models`. The built-in plugins are the runtime's
 own entry points; run uninstalled from a source tree, it reads them from its
 `pyproject.toml`. A profile builds itself from the process options
-(`Profile.from_config`), and the CLI accepts any registered profile. Plugins
-run in the runtime process; the runtime never executes code from a model
-package. `examples/third_party_plugin` is a complete, documented example (a
-keyword family and a counting engine). The test suite builds its wheel with its
-own build backend, installs it into a fresh directory, discovers it through the
-entry points its `pyproject.toml` declares and serves it on every surface next
-to a Decision 2.0 model.
+(`Profile.from_config`), and the CLI accepts any registered profile and
+device. Plugins run in the runtime process; the runtime never executes code
+from a model package. `examples/third_party_plugin` is a complete, documented
+example (a keyword family, a counting engine, a host accelerator and a
+one-by-one profile). The test suite builds its wheel with its own build
+backend, installs it into a fresh directory, discovers it through the entry
+points its `pyproject.toml` declares, serves it on every surface next to a
+Decision 2.0 model, and serves it on the example accelerator and profile.
 
 ## 6. API
 
@@ -656,8 +657,9 @@ each job is answered as soon as its own batches have run. The order of
 forwards never changes a batch's contents, so answers are unchanged. Deadlines
 travel with jobs; a job whose deadline passes before its next batch runs is
 answered `deadline_exceeded` and its remaining batches are skipped. A client
-that disconnects before its answer cancels its jobs the same way; the request
-is counted with status 499 in the metrics. Admission
+that disconnects before its answer cancels its jobs the same way: they leave
+the queue at once and stop counting against admission, and the request is
+counted with status 499 in the metrics. Admission
 bounds, per model, the jobs not yet answered (queued, planned or running) and
 their tokens, and answers 429 at once, for a whole group or none of it. On
 CPU, workers of different models share the process's intra-op thread pool
@@ -680,11 +682,15 @@ worker runs the rest in expected-finish order with the new arrivals.
 
 ### 10.1 Placement
 
-Each model is placed on its own device: `--device auto` picks the first
-available validated GPU with enough free memory, else `cpu`; an explicit
-`cpu`, `cuda:N`, `rocm:N`, `xpu:N` or `mps` is honoured or fails. The memory
-estimate is the weight bytes under the dtype policy plus the activation bound;
-`--memory-budget` caps it per model.
+Each model is placed on its own device. `--device` names `auto` or any
+installed accelerator plugin with an optional `:N` (`cpu`, `cuda`, `rocm`,
+`xpu` and `mps` are built in); an explicit device is honoured or fails.
+`auto` tries the accelerators in the order of their `auto_priority` (ROCm,
+CUDA, then the CPU; an accelerator without one, such as XPU, MPS or a
+third-party plugin by default, serves only when named) and takes the first
+available device with enough free memory. The memory estimate is the weight
+bytes under the dtype policy plus the activation bound; `--memory-budget`
+caps it per model.
 
 ### 10.2 Readiness and health
 
@@ -702,7 +708,11 @@ ROCm: a CUDA or HIP error, a device-side assert or an illegal memory access;
 running out of memory is not). Any other error in a forward fails only the
 requests whose jobs were in that batch, as `internal_error`, and so does an
 answer holding NaN or infinity; the model keeps serving. A model that fails
-to load releases its worker and device memory.
+to load releases its worker and device memory. A package or golden-answer
+failure is final; any other load failure (no device with enough free memory,
+a download, a busy device) is retried `--load-attempts` times in all (5),
+after `--load-retry-seconds` (5 s) doubling up to 300 s, while the model
+reports `loading` with the reason and the others serve.
 
 ### 10.3 Router-managed lifecycle
 
