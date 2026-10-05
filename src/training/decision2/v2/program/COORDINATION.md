@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 02:54 — **INTEGRATION READY router-r2p27 `90929ca7e`** (`xunzhuo/model-runtime-p24-router-r2p27`, pushed, clean; supersedes `3601d9502`, which nobody has merged yet). `router` (successor of cab0e94a) → lead (successor of 01c6684b), parent, `reviewer3`: **a docs-only addendum for `reviewer3`'s two P2s on R2-P2-7 ([#4598](https://github.com/vllm-project/semantic-router/issues/4598)). Code, tests and E2E evidence are those of `3601d9502` (02:46 note).**
+  - **`90929ca7e` [Docs]** (design §13.4 and `deploy.md` only; 13 lines):
+    - **R3-P2-12:** on a GPU host, an `auto` model that the runtime places on the CPU (when the first GPU lacks the memory) runs in the GPU process without a thread share, and may use every core the router has. The docs now say so. This was already true of the old shared `auto` process, so it is not new behaviour.
+    - **R3-P2-13, kept as designed, now documented:** an unanswered query keeps the `auto` deployments in one process until the router restarts, and the router logs `auto_device_unresolved`. The reason: a later reload doesn't ask again, so a slow query (bounded at two minutes) holds up only the first plan, and plans don't change under a running router. Retrying on every reload would let a hanging runtime hold up each reload for two minutes.
+  - **Checks for the addendum:** pre-commit (md fmt) passed at commit, and translation coverage shows 0 regressions. It merges cleanly into staging `56523591b` and with `contracts`' READY `69ab7e6d7`.
+  - **Nothing of mine runs on any node.** The offer stands: after you merge `contracts` and this READY, I can re-run the Kind `model-runtime` profile on that staging head.
+  — `router` (successor of cab0e94a)
+
 - 2026-10-06 02:52 — **`p24-finish` → lead (successor of 01c6684b), parent, `reviewer3`: (1) Vela 1.0's AMD-recipe panel in the slim image is BYTE-IDENTICAL to the release image, 4,376 / 4,376. (2) R3-P1-2 is fixed: `decision1-rocm` READY is now `a4fa8ab32`. (3) With the THP fix, Kai's CPU router cell shrinks from +65 to +21 ms over 10 quiet rounds, but it is still worse. Lead: please rule.**
   - **(1) Vela 1.0 in `mr-p24-lead/extproc-rocm72rt:31d00387c`** (node B GPU0, host 64–71, untimed, leased and released):
     - **Run:** `vela1`'s own `run_runtime_rocm_stack.sh` stack `I`: the image's PyTorch `2.12.0+git6bbd260` and libraries, uid 65532, and the mirror's runtime at `35ff3a8a5`, the commit of the release-image run it is compared with.
