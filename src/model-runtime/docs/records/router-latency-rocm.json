@@ -1,0 +1,713 @@
+{
+ "record": "router-latency-rocm",
+ "date": "2026-10-05",
+ "machine": "a VM with AMD EPYC 9575F vCPUs and AMD Instinct MI325X GPUs (gfx942); the router container (router and its runtime processes) pinned to 12 vCPUs (docker --cpuset-cpus 128-139), one GPU passed in for the ROCm side, the driver pinned to 4 other vCPUs (140-143)",
+ "commit": "efc68a81ceebaf59b12f323441a567f98663be4a",
+ "image": "mr-p24-router/extproc-rocm72:efc68a81c (sha256:6132ace6f458; Dockerfile.extproc target extproc, ACCELERATOR=rocm, TORCH_ROCM_INDEX rocm7.2: PyTorch 2.12.0+rocm7.2, HIP 7.2.53211, triton-rocm 3.7.0, fla-core 0.5.2; no causal-conv1d)",
+ "rocm": {
+  "config": "router-latency-cpu.yaml with use_cpu: false on the five models",
+  "device": "rocm:0 (one GPU)",
+  "profile": "exact",
+  "result_caches": "off (router and runtime)"
+ },
+ "cpu": {
+  "config": "router-latency-cpu.yaml",
+  "device": "cpu",
+  "profile": "exact",
+  "result_caches": "off (router and runtime)"
+ },
+ "method": "POST /api/v1/routing/preview; per pass 20 warm-up requests, then the corpus three times sequentially, at concurrency 4 and at 16; five rounds, CPU and ROCm alternating with the order rotated each round, a fresh router container per pass; per metric the median of the rounds and the paired difference ROCm - CPU with a 95% t interval",
+ "corpus_sha256": "dc81026ad0c9731ba7c10a36cd64a7fb2fe1434c94ba815a7f91e07380359def",
+ "inputs": 539,
+ "rounds": [
+  {
+   "round": 1,
+   "order": [
+    "rocm",
+    "cpu"
+   ],
+   "decisions_differing": 0,
+   "errors": {
+    "cpu_sequential": 0,
+    "cpu_concurrency_4": 0,
+    "cpu_concurrency_16": 0,
+    "rocm_sequential": 0,
+    "rocm_concurrency_4": 0,
+    "rocm_concurrency_16": 0
+   },
+   "cpu": {
+    "sequential": {
+     "p50_ms": 30.77,
+     "p95_ms": 80.71,
+     "p99_ms": 167.81,
+     "throughput_rps": 23.45
+    },
+    "concurrency_4": {
+     "p50_ms": 116.64,
+     "p95_ms": 314.21,
+     "p99_ms": 677.61,
+     "throughput_rps": 25.9
+    },
+    "concurrency_16": {
+     "p50_ms": 551.64,
+     "p95_ms": 1216.63,
+     "p99_ms": 1472.16,
+     "throughput_rps": 26.1
+    },
+    "load_1m_before_after": [
+     63.09,
+     68.92
+    ],
+    "effective_cpuset": "128-139",
+    "router_cores": {
+     "wall_s": 195.3,
+     "other_processes_vcpus": 0.18,
+     "steal_vcpus": 0.0
+    },
+    "runtime_processes": "6 runtime processes, 13392 MiB rss",
+    "runtime_restarts": 0,
+    "device_failures_logged": 0
+   },
+   "rocm": {
+    "sequential": {
+     "p50_ms": 10.05,
+     "p95_ms": 16.76,
+     "p99_ms": 34.63,
+     "throughput_rps": 86.83
+    },
+    "concurrency_4": {
+     "p50_ms": 31.0,
+     "p95_ms": 67.15,
+     "p99_ms": 167.96,
+     "throughput_rps": 110.72
+    },
+    "concurrency_16": {
+     "p50_ms": 135.79,
+     "p95_ms": 203.33,
+     "p99_ms": 376.57,
+     "throughput_rps": 107.77
+    },
+    "load_1m_before_after": [
+     68.69,
+     62.61
+    ],
+    "effective_cpuset": "128-139",
+    "router_cores": {
+     "wall_s": 48.7,
+     "other_processes_vcpus": 0.56,
+     "steal_vcpus": 0.0
+    },
+    "runtime_processes": "2 runtime processes, 6157 MiB rss",
+    "runtime_restarts": 0,
+    "device_failures_logged": 0,
+    "gpu_vram_used_gib": 13.29
+   }
+  },
+  {
+   "round": 2,
+   "order": [
+    "cpu",
+    "rocm"
+   ],
+   "decisions_differing": 0,
+   "errors": {
+    "cpu_sequential": 0,
+    "cpu_concurrency_4": 0,
+    "cpu_concurrency_16": 0,
+    "rocm_sequential": 0,
+    "rocm_concurrency_4": 0,
+    "rocm_concurrency_16": 0
+   },
+   "cpu": {
+    "sequential": {
+     "p50_ms": 35.06,
+     "p95_ms": 89.49,
+     "p99_ms": 167.32,
+     "throughput_rps": 20.59
+    },
+    "concurrency_4": {
+     "p50_ms": 136.14,
+     "p95_ms": 368.22,
+     "p99_ms": 836.8,
+     "throughput_rps": 22.16
+    },
+    "concurrency_16": {
+     "p50_ms": 638.36,
+     "p95_ms": 1396.19,
+     "p99_ms": 1781.47,
+     "throughput_rps": 22.33
+    },
+    "load_1m_before_after": [
+     69.59,
+     77.33
+    ],
+    "effective_cpuset": "128-139",
+    "router_cores": {
+     "wall_s": 225.8,
+     "other_processes_vcpus": 0.21,
+     "steal_vcpus": 0.0
+    },
+    "runtime_processes": "6 runtime processes, 13263 MiB rss",
+    "runtime_restarts": 0,
+    "device_failures_logged": 0
+   },
+   "rocm": {
+    "sequential": {
+     "p50_ms": 9.81,
+     "p95_ms": 16.3,
+     "p99_ms": 31.58,
+     "throughput_rps": 90.43
+    },
+    "concurrency_4": {
+     "p50_ms": 30.03,
+     "p95_ms": 64.52,
+     "p99_ms": 187.28,
+     "throughput_rps": 109.4
+    },
+    "concurrency_16": {
+     "p50_ms": 138.82,
+     "p95_ms": 196.82,
+     "p99_ms": 364.41,
+     "throughput_rps": 107.62
+    },
+    "load_1m_before_after": [
+     70.48,
+     73.14
+    ],
+    "effective_cpuset": "128-139",
+    "router_cores": {
+     "wall_s": 48.1,
+     "other_processes_vcpus": 0.38,
+     "steal_vcpus": 0.0
+    },
+    "runtime_processes": "2 runtime processes, 6270 MiB rss",
+    "runtime_restarts": 0,
+    "device_failures_logged": 0,
+    "gpu_vram_used_gib": 13.19
+   }
+  },
+  {
+   "round": 3,
+   "order": [
+    "rocm",
+    "cpu"
+   ],
+   "decisions_differing": 0,
+   "errors": {
+    "cpu_sequential": 0,
+    "cpu_concurrency_4": 0,
+    "cpu_concurrency_16": 0,
+    "rocm_sequential": 0,
+    "rocm_concurrency_4": 0,
+    "rocm_concurrency_16": 0
+   },
+   "cpu": {
+    "sequential": {
+     "p50_ms": 31.82,
+     "p95_ms": 86.69,
+     "p99_ms": 182.11,
+     "throughput_rps": 22.58
+    },
+    "concurrency_4": {
+     "p50_ms": 118.11,
+     "p95_ms": 330.23,
+     "p99_ms": 692.86,
+     "throughput_rps": 25.43
+    },
+    "concurrency_16": {
+     "p50_ms": 579.13,
+     "p95_ms": 1285.06,
+     "p99_ms": 1579.95,
+     "throughput_rps": 24.86
+    },
+    "load_1m_before_after": [
+     68.78,
+     62.66
+    ],
+    "effective_cpuset": "128-139",
+    "router_cores": {
+     "wall_s": 202.1,
+     "other_processes_vcpus": 0.2,
+     "steal_vcpus": 0.0
+    },
+    "runtime_processes": "6 runtime processes, 13340 MiB rss",
+    "runtime_restarts": 0,
+    "device_failures_logged": 0
+   },
+   "rocm": {
+    "sequential": {
+     "p50_ms": 10.03,
+     "p95_ms": 16.69,
+     "p99_ms": 34.52,
+     "throughput_rps": 87.94
+    },
+    "concurrency_4": {
+     "p50_ms": 31.74,
+     "p95_ms": 68.97,
+     "p99_ms": 203.82,
+     "throughput_rps": 105.82
+    },
+    "concurrency_16": {
+     "p50_ms": 134.71,
+     "p95_ms": 200.27,
+     "p99_ms": 359.25,
+     "throughput_rps": 109.1
+    },
+    "load_1m_before_after": [
+     72.13,
+     69.43
+    ],
+    "effective_cpuset": "128-139",
+    "router_cores": {
+     "wall_s": 49.0,
+     "other_processes_vcpus": 0.4,
+     "steal_vcpus": 0.0
+    },
+    "runtime_processes": "2 runtime processes, 6189 MiB rss",
+    "runtime_restarts": 0,
+    "device_failures_logged": 0,
+    "gpu_vram_used_gib": 13.39
+   }
+  },
+  {
+   "round": 4,
+   "order": [
+    "cpu",
+    "rocm"
+   ],
+   "decisions_differing": 0,
+   "errors": {
+    "cpu_sequential": 0,
+    "cpu_concurrency_4": 0,
+    "cpu_concurrency_16": 0,
+    "rocm_sequential": 0,
+    "rocm_concurrency_4": 0,
+    "rocm_concurrency_16": 0
+   },
+   "cpu": {
+    "sequential": {
+     "p50_ms": 23.71,
+     "p95_ms": 73.57,
+     "p99_ms": 145.96,
+     "throughput_rps": 28.3
+    },
+    "concurrency_4": {
+     "p50_ms": 95.83,
+     "p95_ms": 282.26,
+     "p99_ms": 633.65,
+     "throughput_rps": 30.61
+    },
+    "concurrency_16": {
+     "p50_ms": 468.14,
+     "p95_ms": 1147.36,
+     "p99_ms": 1322.24,
+     "throughput_rps": 30.31
+    },
+    "load_1m_before_after": [
+     67.5,
+     61.74
+    ],
+    "effective_cpuset": "128-139",
+    "router_cores": {
+     "wall_s": 164.7,
+     "other_processes_vcpus": 0.18,
+     "steal_vcpus": 0.0
+    },
+    "runtime_processes": "6 runtime processes, 13325 MiB rss",
+    "runtime_restarts": 0,
+    "device_failures_logged": 0
+   },
+   "rocm": {
+    "sequential": {
+     "p50_ms": 9.04,
+     "p95_ms": 15.27,
+     "p99_ms": 30.93,
+     "throughput_rps": 97.52
+    },
+    "concurrency_4": {
+     "p50_ms": 35.79,
+     "p95_ms": 89.92,
+     "p99_ms": 205.45,
+     "throughput_rps": 86.47
+    },
+    "concurrency_16": {
+     "p50_ms": 135.47,
+     "p95_ms": 212.91,
+     "p99_ms": 336.3,
+     "throughput_rps": 106.05
+    },
+    "load_1m_before_after": [
+     63.14,
+     69.46
+    ],
+    "effective_cpuset": "128-139",
+    "router_cores": {
+     "wall_s": 51.0,
+     "other_processes_vcpus": 0.47,
+     "steal_vcpus": 0.0
+    },
+    "runtime_processes": "2 runtime processes, 6205 MiB rss",
+    "runtime_restarts": 0,
+    "device_failures_logged": 0,
+    "gpu_vram_used_gib": 13.19
+   }
+  },
+  {
+   "round": 5,
+   "order": [
+    "rocm",
+    "cpu"
+   ],
+   "decisions_differing": 0,
+   "errors": {
+    "cpu_sequential": 0,
+    "cpu_concurrency_4": 0,
+    "cpu_concurrency_16": 0,
+    "rocm_sequential": 0,
+    "rocm_concurrency_4": 0,
+    "rocm_concurrency_16": 0
+   },
+   "cpu": {
+    "sequential": {
+     "p50_ms": 27.92,
+     "p95_ms": 81.44,
+     "p99_ms": 166.48,
+     "throughput_rps": 24.8
+    },
+    "concurrency_4": {
+     "p50_ms": 111.0,
+     "p95_ms": 298.53,
+     "p99_ms": 718.4,
+     "throughput_rps": 26.96
+    },
+    "concurrency_16": {
+     "p50_ms": 527.46,
+     "p95_ms": 877.34,
+     "p99_ms": 1201.11,
+     "throughput_rps": 28.73
+    },
+    "load_1m_before_after": [
+     60.85,
+     82.64
+    ],
+    "effective_cpuset": "128-139",
+    "router_cores": {
+     "wall_s": 183.1,
+     "other_processes_vcpus": 0.21,
+     "steal_vcpus": 0.0
+    },
+    "runtime_processes": "6 runtime processes, 13334 MiB rss",
+    "runtime_restarts": 0,
+    "device_failures_logged": 0
+   },
+   "rocm": {
+    "sequential": {
+     "p50_ms": 9.14,
+     "p95_ms": 15.58,
+     "p99_ms": 31.78,
+     "throughput_rps": 95.52
+    },
+    "concurrency_4": {
+     "p50_ms": 30.62,
+     "p95_ms": 62.38,
+     "p99_ms": 164.6,
+     "throughput_rps": 114.51
+    },
+    "concurrency_16": {
+     "p50_ms": 129.28,
+     "p95_ms": 181.57,
+     "p99_ms": 369.64,
+     "throughput_rps": 114.06
+    },
+    "load_1m_before_after": [
+     65.68,
+     59.88
+    ],
+    "effective_cpuset": "128-139",
+    "router_cores": {
+     "wall_s": 45.6,
+     "other_processes_vcpus": 0.55,
+     "steal_vcpus": 0.0
+    },
+    "runtime_processes": "2 runtime processes, 6181 MiB rss",
+    "runtime_restarts": 0,
+    "device_failures_logged": 0,
+    "gpu_vram_used_gib": 13.39
+   }
+  }
+ ],
+ "decision_differences": [],
+ "median": {
+  "cpu": {
+   "sequential": {
+    "p50_ms": 30.77,
+    "p95_ms": 81.44,
+    "p99_ms": 167.32,
+    "throughput_rps": 23.45
+   },
+   "concurrency_4": {
+    "p50_ms": 116.64,
+    "p95_ms": 314.21,
+    "p99_ms": 692.86,
+    "throughput_rps": 25.9
+   },
+   "concurrency_16": {
+    "p50_ms": 551.64,
+    "p95_ms": 1216.63,
+    "p99_ms": 1472.16,
+    "throughput_rps": 26.1
+   }
+  },
+  "rocm": {
+   "sequential": {
+    "p50_ms": 9.81,
+    "p95_ms": 16.3,
+    "p99_ms": 31.78,
+    "throughput_rps": 90.43
+   },
+   "concurrency_4": {
+    "p50_ms": 31.0,
+    "p95_ms": 67.15,
+    "p99_ms": 187.28,
+    "throughput_rps": 109.4
+   },
+   "concurrency_16": {
+    "p50_ms": 135.47,
+    "p95_ms": 200.27,
+    "p99_ms": 364.41,
+    "throughput_rps": 107.77
+   }
+  }
+ },
+ "difference_rocm_minus_cpu": {
+  "sequential": {
+   "p50_ms": {
+    "mean": -20.24,
+    "ci95": [
+     -25.08,
+     -15.4
+    ]
+   },
+   "p95_ms": {
+    "mean": -66.26,
+    "ci95": [
+     -73.36,
+     -59.16
+    ]
+   },
+   "p99_ms": {
+    "mean": -133.25,
+    "ci95": [
+     -147.75,
+     -118.74
+    ]
+   },
+   "throughput_rps": {
+    "mean": 67.7,
+    "ci95": [
+     63.77,
+     71.64
+    ]
+   }
+  },
+  "concurrency_4": {
+   "p50_ms": {
+    "mean": -83.71,
+    "ci95": [
+     -104.14,
+     -63.27
+    ]
+   },
+   "p95_ms": {
+    "mean": -248.1,
+    "ci95": [
+     -298.21,
+     -197.99
+    ]
+   },
+   "p99_ms": {
+    "mean": -526.04,
+    "ci95": [
+     -628.47,
+     -423.62
+    ]
+   },
+   "throughput_rps": {
+    "mean": 79.17,
+    "ci95": [
+     62.61,
+     95.74
+    ]
+   }
+  },
+  "concurrency_16": {
+   "p50_ms": {
+    "mean": -418.13,
+    "ci95": [
+     -494.22,
+     -342.05
+    ]
+   },
+   "p95_ms": {
+    "mean": -985.54,
+    "ci95": [
+     -1220.21,
+     -750.87
+    ]
+   },
+   "p99_ms": {
+    "mean": -1110.15,
+    "ci95": [
+     -1387.56,
+     -832.75
+    ]
+   },
+   "throughput_rps": {
+    "mean": 82.45,
+    "ci95": [
+     77.45,
+     87.46
+    ]
+   }
+  }
+ },
+ "cpu_side": {
+  "note": "the CPU side runs the ROCm image's PyTorch on CPU; exact batches concurrent CPU requests only for a model that passes the load-time batch-invariance probe",
+  "batch_invariant_on_cpu": {
+   "rocm image, PyTorch 2.12.0+rocm7.2": {
+    "Domain": false,
+    "Guard": false,
+    "PII": true,
+    "FactCheck": false,
+    "Feedback": false
+   },
+   "cpu image, PyTorch 2.10.0+cpu": {
+    "Domain": true,
+    "Guard": true,
+    "PII": true,
+    "FactCheck": true,
+    "Feedback": true
+   }
+  },
+  "cpu_image_diagnostic": {
+   "image": "mr-p24-router/extproc-cpu:efc68a81c (sha256:48e2fbebcee4; Dockerfile.extproc target extproc, ACCELERATOR=cpu: PyTorch 2.10.0+cpu), same tree, cores, config and corpus",
+   "method": "two rounds alternating cpuimg (the CPU image) and cpu (this record's CPU side), order rotated; indicative only: the node's load was higher during the cpu passes",
+   "rounds": [
+    {
+     "round": 1,
+     "order": [
+      "cpuimg",
+      "cpu"
+     ],
+     "cpuimg": {
+      "sequential": {
+       "p50_ms": 30.26,
+       "p95_ms": 83.27,
+       "p99_ms": 147.95,
+       "throughput_rps": 23.92
+      },
+      "concurrency_4": {
+       "p50_ms": 87.78,
+       "p95_ms": 300.07,
+       "p99_ms": 382.98,
+       "throughput_rps": 34.16
+      },
+      "concurrency_16": {
+       "p50_ms": 455.56,
+       "p95_ms": 1018.23,
+       "p99_ms": 1564.17,
+       "throughput_rps": 31.77
+      },
+      "errors": 0,
+      "load_1m_before_after": [
+       71.75,
+       88.8
+      ]
+     },
+     "cpu": {
+      "sequential": {
+       "p50_ms": 37.69,
+       "p95_ms": 95.98,
+       "p99_ms": 199.12,
+       "throughput_rps": 19.24
+      },
+      "concurrency_4": {
+       "p50_ms": 182.85,
+       "p95_ms": 488.65,
+       "p99_ms": 880.67,
+       "throughput_rps": 17.69
+      },
+      "concurrency_16": {
+       "p50_ms": 823.68,
+       "p95_ms": 1409.58,
+       "p99_ms": 1977.64,
+       "throughput_rps": 17.73
+      },
+      "errors": 0,
+      "load_1m_before_after": [
+       90.49,
+       91.69
+      ]
+     }
+    },
+    {
+     "round": 2,
+     "order": [
+      "cpu",
+      "cpuimg"
+     ],
+     "cpuimg": {
+      "sequential": {
+       "p50_ms": 23.96,
+       "p95_ms": 92.63,
+       "p99_ms": 153.95,
+       "throughput_rps": 25.64
+      },
+      "concurrency_4": {
+       "p50_ms": 69.26,
+       "p95_ms": 253.97,
+       "p99_ms": 330.75,
+       "throughput_rps": 43.37
+      },
+      "concurrency_16": {
+       "p50_ms": 318.59,
+       "p95_ms": 772.45,
+       "p99_ms": 1183.22,
+       "throughput_rps": 45.28
+      },
+      "errors": 0,
+      "load_1m_before_after": [
+       68.76,
+       76.77
+      ]
+     },
+     "cpu": {
+      "sequential": {
+       "p50_ms": 50.52,
+       "p95_ms": 129.69,
+       "p99_ms": 230.16,
+       "throughput_rps": 14.69
+      },
+      "concurrency_4": {
+       "p50_ms": 159.48,
+       "p95_ms": 403.77,
+       "p99_ms": 845.24,
+       "throughput_rps": 19.68
+      },
+      "concurrency_16": {
+       "p50_ms": 920.49,
+       "p95_ms": 1781.72,
+       "p99_ms": 2656.46,
+       "throughput_rps": 15.49
+      },
+      "errors": 0,
+      "load_1m_before_after": [
+       87.08,
+       69.83
+      ]
+     }
+    }
+   ]
+  }
+ }
+}
