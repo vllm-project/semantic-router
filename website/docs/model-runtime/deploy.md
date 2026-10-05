@@ -53,7 +53,7 @@ global:
 | `provider` | Always `model_runtime` for models the runtime serves. |
 | `artifact` | A Hugging Face repository, or an absolute path to a local copy. |
 | `revision` | The exact 40-character commit to load. Built-in models are already pinned; other repositories need one. |
-| `device` | `auto` (default), `cpu`, `cuda:N`, `rocm:N`, `xpu:N` or `mps`. |
+| `device` | `auto` (default), `cpu`, `cuda:N`, `rocm:N`, `xpu:N`, `mps`, or an accelerator a plugin adds. |
 | `profile` | `exact` (default) or an opt-in faster profile. See [Profiles](./profiles.md). |
 | `input` | For task models: the longest input in tokens (`max_tokens`) and what to do with longer input (`overflow`: `reject`, `truncate` or `window`). |
 | `process` | Runs deployments with the same name in one runtime process. |

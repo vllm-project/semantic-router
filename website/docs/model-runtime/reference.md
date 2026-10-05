@@ -19,11 +19,11 @@ Without a `MODEL` argument, `vllm-sr serve` starts the router instead.
 | `MODEL ...` | | Hub repositories, built-in model names or local package directories. Several models share one process. `MODEL@REVISION` pins a revision. |
 | `--models FILE` | | A models file instead of `MODEL` arguments. |
 | `--revision SHA` | | The 40-character commit to load, for one `MODEL`. |
-| `--device` | `auto` | `auto`, `cpu`, `cuda[:N]`, `rocm[:N]`, `xpu[:N]` or `mps`. |
+| `--device` | `auto` | `auto`, or an accelerator with an optional index: `cpu`, `cuda[:N]`, `rocm[:N]`, `xpu[:N]`, `mps`, or one a plugin adds. |
 | `--host` | `127.0.0.1` | Address to listen on. |
 | `--port` | `8100` | Port to listen on. |
 | `--uds PATH` | | Listen on a Unix socket instead of TCP. |
-| `--profile` | `exact` | `exact`, `shared_context`, `batching` or `max_speed`. |
+| `--profile` | `exact` | `exact`, `shared_context`, `batching`, `max_speed`, or one a plugin adds. |
 | `--engine` | `native` | Engine plugin: `native` (PyTorch) or `onnxruntime`. |
 | `--family` | detected | Force a model family plugin. |
 | `--served-model-name` | the model name | The model ID the API reports, for one `MODEL`. |
@@ -35,6 +35,8 @@ Without a `MODEL` argument, `vllm-sr serve` starts the router instead.
 | `--max-batch-tokens` | `65536` | Tokens per forward pass. |
 | `--max-request-bytes` | `8388608` | Largest request body. |
 | `--max-bundle-tasks` | `64` | Most tasks in one `/v1/bundle` request. |
+| `--load-attempts` | `5` | Loads of a model before it stays `failed`; a damaged package or a failed self-check is not retried. |
+| `--load-retry-seconds` | `5` | Wait before the first reload of a model that failed to load, doubling up to 300 s. |
 | `--result-cache-entries` | `16384` | Recent results each model keeps by content; `0` turns the cache off. |
 | `--cache-dir` | `HF_HUB_CACHE` | Hugging Face cache directory. |
 | `--offline` | off | Use only files already in the cache. |

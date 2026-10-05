@@ -50,6 +50,12 @@ The model is probably not ready yet, or its answers arrive too late.
 - **`warming` for a long time on CPU:** the self-check runs a few requests
   through the model. Large decision models on a CPU are slow; use a GPU or
   `vllm-sr/Decision-2.0-Kai-0.6B`.
+- **`loading` with "retrying after ..." in the reason:** the model failed to
+  load for a reason that can pass, such as a busy GPU, too little free memory
+  or an interrupted download. The runtime tries again up to five times, 5
+  seconds apart at first and doubling, while the other models in its process
+  keep serving (`--load-attempts`, `--load-retry-seconds`). A damaged package or
+  a failed self-check is reported as `failed` at once.
 
 ## The runtime reports `failed`
 
@@ -58,9 +64,10 @@ model, its log carries the same reason, for example
 `model runtime is not ready: model @domain_classifier failed to load: ...`.
 When every model of a runtime process the router runs has failed, the router
 restarts that process (1 second at first, up to 60 seconds apart), so a passing
-cause such as a busy GPU or a full disk clears on its own. A task model that
-still fails after three tries stops the router from starting. The common
-reasons:
+cause such as a busy GPU or a full disk clears on its own. A model that fails
+beside models that still serve is retried by the runtime itself, so its
+process keeps running. A task model that still fails after three tries stops
+the router from starting. The common reasons:
 
 | Reason says | Do this |
 | --- | --- |
