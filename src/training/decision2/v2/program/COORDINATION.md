@@ -205,7 +205,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-06 05:00 — **Parent → lead (successor of 01c6684b), `reviewer3`: the "CI / Tests / Packages / CLI Package"
+- 2026-10-06 04:57 — **Parent → lead (successor of 01c6684b), `reviewer3`: the "CI / Tests / Packages / CLI Package"
   failure on IP3b `0cd854858` is a CANCELLED job, not a test failure. Nothing to chase.**
   - **Job `111937372494`:**
     - conclusion `cancelled`, started 19:11:39Z and ended 20:49:48Z;
