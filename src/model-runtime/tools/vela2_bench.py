@@ -15,6 +15,9 @@ during the run reaches every side alike. ``--prompts`` runs
 given prompts (``{"id", "text"}`` lines) instead, and records each one's latency at
 concurrency 1, to pair with another runtime's per-prompt latencies.
 
+``--trace`` adds ``forwards``: per runtime side and row, the measured forwards' count, rows,
+tokens and time (how a profile batched the callers' requests).
+
 ``--rounds N`` repeats the measured requests N times after one warm-up; above
 concurrency 1 the sides run one after another in an order that rotates every
 round. ``intervals`` then holds, per row and side, the mean over the rounds of
@@ -252,7 +255,44 @@ def intervals(runs: list[dict[str, Any]], baselines: list[str]) -> list[dict[str
     return out
 
 
-def runtime_side(model: Any, profile: str, execute: Any) -> tuple[Any, Any]:
+def forwards(trace: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Per side, length and concurrency: the measured forwards' count, rows, tokens and time."""
+    groups: dict[tuple[str, Any, int], list[dict[str, Any]]] = {}
+    for event in trace:
+        if event.get("concurrency"):
+            key = (event["side"], event["length"], event["concurrency"])
+            groups.setdefault(key, []).append(event)
+    return [
+        {
+            "side": side,
+            "tokens": tokens,
+            "concurrency": clients,
+            "forwards": len(events),
+            "rows": round(statistics.fmean(e["rows"] for e in events), 2),
+            "tokens_per_forward": round(statistics.fmean(e["tokens"] for e in events)),
+            "ms_per_forward": round(
+                1000 * statistics.fmean(e["seconds"] for e in events), 2
+            ),
+            "us_per_token": round(
+                1e6
+                * sum(e["seconds"] for e in events)
+                / max(1, sum(e["tokens"] for e in events)),
+                2,
+            ),
+        }
+        for (side, tokens, clients), events in groups.items()
+    ]
+
+
+def runtime_side(
+    model: Any,
+    profile: str,
+    execute: Any,
+    trace: list[dict[str, Any]] | None = None,
+    phase: dict[str, Any] | None = None,
+    side: str = "",
+) -> tuple[Any, Any]:
+    """A side's caller; with ``trace``, every forward appends its rows, tokens and seconds under ``phase``."""
     profiles = {
         "exact": ExactProfile(),
         "shared_context": SharedContextProfile(),
@@ -262,8 +302,25 @@ def runtime_side(model: Any, profile: str, execute: Any) -> tuple[Any, Any]:
     for value in profiles.values():
         if value.available(model) is None:
             value.bind(model)
+
+    def observe(event: str, values: dict[str, Any]) -> None:
+        if trace is not None and event == "forward":
+            current = phase or {}
+            trace.append(
+                {
+                    "side": side,
+                    "length": current.get("tokens"),
+                    "concurrency": current.get("concurrency"),
+                    **values,
+                }
+            )
+
     scheduler = Scheduler(
-        model, profiles, SchedulerLimits(batch_window_ms=2.0), execute=execute
+        model,
+        profiles,
+        SchedulerLimits(batch_window_ms=2.0),
+        observe=observe,
+        execute=execute,
     )
     scheduler.start()
 
@@ -292,6 +349,11 @@ def main() -> int:
     parser.add_argument("--engine", default="native", help="runtime engine plugin")
     parser.add_argument("--rounds", type=int, default=1)
     parser.add_argument("--baselines", default="reference,runtime")
+    parser.add_argument(
+        "--trace",
+        action="store_true",
+        help="record each runtime side's forwards (rows, tokens, time) per row",
+    )
     args = parser.parse_args()
     sides = args.sides.split(",")
     lengths = [int(x) for x in args.tokens.split(",")]
@@ -301,6 +363,8 @@ def main() -> int:
     model = execute(lambda: load_runtime(args.package, args.device, args.engine))
     runs: list[dict[str, Any]] = []
     callers: dict[str, Any] = {}
+    trace: list[dict[str, Any]] | None = [] if args.trace else None
+    phase: dict[str, Any] = {}
     for side in sides:
         if side.startswith("max_speed:"):
             kind = side.split(":", maxsplit=1)[1]
@@ -309,12 +373,14 @@ def main() -> int:
                     args.package, args.device, args.engine, kind
                 )
             )
-            callers[side], _ = runtime_side(copy, "max_speed", execute)
+            callers[side], _ = runtime_side(
+                copy, "max_speed", execute, trace, phase, side
+            )
         elif side.startswith("runtime"):
             profile = {"runtime": "exact", "runtime-shared": "shared_context"}.get(
                 side, "batching"
             )
-            callers[side], _ = runtime_side(model, profile, execute)
+            callers[side], _ = runtime_side(model, profile, execute, trace, phase, side)
         else:
             backend = "onnx" if side == "reference-onnx" else "torch"
             engine, _ = execute(
@@ -348,6 +414,7 @@ def main() -> int:
             workloads.append((tokens, texts[: args.warmup], texts[args.warmup :], None))
     for tokens, warm, texts, ids in workloads:
         states = [{"request": text} for text in texts]
+        phase.update(tokens=tokens, concurrency=0)
         for side in sides:
             for text in warm:
                 callers[side]({"request": text})
@@ -355,11 +422,13 @@ def main() -> int:
         for turn in range(args.rounds):
             order = sides[turn % len(sides) :] + sides[: turn % len(sides)]
             if 1 in concurrency:
+                phase.update(concurrency=1)
                 for side, (result, latencies) in interleaved(
                     callers, states, turn
                 ).items():
                     measured.append((turn, side, 1, result, latencies))
             for clients in (c for c in concurrency if c != 1):
+                phase.update(concurrency=clients)
                 for side in order:
                     measured.append(
                         (turn, side, clients, *drive(callers[side], states, clients))
@@ -382,6 +451,8 @@ def main() -> int:
     }
     if args.rounds > 1:
         report["intervals"] = intervals(runs, args.baselines.split(","))
+    if trace is not None:
+        report["forwards"] = forwards(trace)
     args.output.write_text(
         json.dumps(report, indent=1) + "\n",
         encoding="utf-8",
