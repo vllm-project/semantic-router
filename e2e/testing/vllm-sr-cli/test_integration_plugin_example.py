@@ -19,10 +19,10 @@ import subprocess
 import sys
 import tempfile
 import time
-import tomllib
 import unittest
 from pathlib import Path
 
+import tomllib
 from runtime_http import HTTP_OK, ServeProcess, call, page_requests
 
 REPO = Path(__file__).resolve().parents[3]
@@ -85,8 +85,17 @@ class TestPluginExample(unittest.TestCase):
         )
         cls.site = cls.root / "site"
         subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--no-deps"]
-            + ["--no-build-isolation", "--target", str(cls.site), str(source)],
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--no-deps",
+                "--no-build-isolation",
+                "--target",
+                str(cls.site),
+                str(source),
+            ],
             check=True,
             capture_output=True,
             text=True,
@@ -188,7 +197,7 @@ class TestPluginExample(unittest.TestCase):
         }
         self.assertEqual(
             served,
-            {name: (project["name"], project["version"]) for name in declared},
+            dict.fromkeys(declared, (project["name"], project["version"])),
         )
 
 
