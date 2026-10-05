@@ -258,7 +258,8 @@ def runtime_side(model: Any, profile: str, execute: Any) -> tuple[Any, Any]:
         "max_speed": MaxSpeedProfile(),
     }
     for value in profiles.values():
-        value.available(model)
+        if value.available(model) is None:
+            value.bind(model)
     scheduler = Scheduler(
         model, profiles, SchedulerLimits(batch_window_ms=2.0), execute=execute
     )

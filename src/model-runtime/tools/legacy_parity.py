@@ -734,6 +734,69 @@ async def runtime_load(
     }
 
 
+def bootstrap_ci(
+    pairs: list[tuple[int, int]],
+    statistic: Callable[[list[int], list[int]], float],
+    resamples: int = 2000,
+    seed: int = 0,
+) -> list[float]:
+    """The 95% interval of ``statistic(legacy, runtime)`` over pairs resampled with replacement."""
+    rng = random.Random(seed)
+    values = []
+    for _ in range(resamples):
+        sample = [pairs[rng.randrange(len(pairs))] for _ in pairs]
+        values.append(statistic([a for a, _ in sample], [b for _, b in sample]))
+    values.sort()
+    return [values[int(0.025 * resamples)], values[int(0.975 * resamples) - 1]]
+
+
+def ab_summary(report: dict[str, Any]) -> dict[str, Any]:
+    """Each job's latencies, paired speedups with 95% intervals, and load-window rates.
+
+    The intervals resample the interleaved pairs (each input's legacy and
+    runtime call), so they hold the inputs fixed across both sides.
+    """
+    summary = {}
+    for job, values in report.items():
+        pairs = list(zip(values["legacy"], values["runtime"], strict=True))
+        windows = values.get("throughput", {})
+        row: dict[str, Any] = {
+            "pairs": len(pairs),
+            "legacy_ms": {
+                "p50": percentile(values["legacy"], 0.5),
+                "p95": percentile(values["legacy"], 0.95),
+            },
+            "runtime_ms": {
+                "p50": percentile(values["runtime"], 0.5),
+                "p95": percentile(values["runtime"], 0.95),
+            },
+            "median_speedup": (
+                statistics.median(values["ratio"]) if values["ratio"] else math.nan
+            ),
+            "throughput_per_s": {
+                side: statistics.median(rates) for side, rates in windows.items()
+            },
+            "throughput_windows_per_s": windows,
+        }
+        if pairs:
+            row["ci95"] = {
+                "median_speedup": bootstrap_ci(
+                    pairs,
+                    lambda a, b: statistics.median(
+                        x / y for x, y in zip(a, b, strict=True)
+                    ),
+                ),
+                "p50_ratio": bootstrap_ci(
+                    pairs, lambda a, b: percentile(a, 0.5) / percentile(b, 0.5)
+                ),
+                "p95_ratio": bootstrap_ci(
+                    pairs, lambda a, b: percentile(a, 0.95) / percentile(b, 0.95)
+                ),
+            }
+        summary[job] = row
+    return summary
+
+
 def run_ab(args: argparse.Namespace) -> None:
     """Alternate legacy and runtime work on the same cores, round after round.
 
@@ -815,27 +878,7 @@ def run_ab(args: argparse.Namespace) -> None:
     legacy.stdin.close()
     legacy.wait()
     runtime.stop()
-    summary = {
-        job: {
-            "pairs": len(values["ratio"]),
-            "legacy_ms": {
-                "p50": percentile(values["legacy"], 0.5),
-                "p95": percentile(values["legacy"], 0.95),
-            },
-            "runtime_ms": {
-                "p50": percentile(values["runtime"], 0.5),
-                "p95": percentile(values["runtime"], 0.95),
-            },
-            "median_speedup": (
-                statistics.median(values["ratio"]) if values["ratio"] else math.nan
-            ),
-            "throughput_per_s": {
-                side: statistics.median(windows)
-                for side, windows in values.get("throughput", {}).items()
-            },
-        }
-        for job, values in report.items()
-    }
+    summary = ab_summary(report)
     Path(args.out).write_text(json.dumps(summary, indent=1) + "\n", encoding="utf-8")
     for job, row in summary.items():
         rates = " ".join(

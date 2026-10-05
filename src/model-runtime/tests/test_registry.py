@@ -3,6 +3,7 @@ from dataclasses import replace
 import pytest
 from vllm_sr_runtime.errors import PackageError
 from vllm_sr_runtime.registry import builtin, policy
+from vllm_sr_runtime.registry.artifacts import read_json
 from vllm_sr_runtime.registry.resolve import pinned_revision, resolve
 
 
@@ -24,6 +25,17 @@ def test_builtin_table_pins_every_phase1_model():
         )
     assert builtin.lookup("decision-2.0-kai-0.6b").revision.startswith("cd49ea38")
     assert builtin.lookup("vllm-sr/Decision-2.0-Vega-27B").base[0] == "Qwen/Qwen3.8-27B"
+
+
+def test_every_family_reads_package_json_one_way(tmp_path):
+    (tmp_path / "list.json").write_text("[1]", encoding="utf-8")
+    (tmp_path / "bad.json").write_text("{", encoding="utf-8")
+    assert read_json(tmp_path / "list.json") == [1]
+    with pytest.raises(PackageError, match=r"list\.json must hold a JSON object"):
+        read_json(tmp_path / "list.json", mapping=True)
+    for name in ("bad.json", "missing.json"):
+        with pytest.raises(PackageError, match=f"cannot read {name}"):
+            read_json(tmp_path / name)
 
 
 def test_revisions_are_always_pinned():

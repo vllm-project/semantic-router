@@ -26,19 +26,20 @@ so arrivals still wait for one forward, not for the rest of the request.
 
 from __future__ import annotations
 
+import contextlib
 import heapq
 import itertools
 import threading
 import time
 from collections import deque
 from collections.abc import Callable
-from concurrent.futures import Future
+from concurrent.futures import Future, InvalidStateError
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
 
 from ..errors import RuntimeServiceError
-from ..plugins.base import DEADLINE, Batch, Job, LoadedModel, Profile
+from ..plugins.base import DEADLINE, Batch, Job, LoadedModel, Profile, Results
 from .planner import cost
 
 __all__ = ["DEADLINE", "Scheduler", "SchedulerLimits"]
@@ -59,7 +60,7 @@ class SchedulerLimits:
 @dataclass
 class _Pending:
     job: Job
-    future: Future
+    future: Future[Results[Any]]
     tokens: int
     results: list[Any] = field(default_factory=list)
     remaining: int = 0
@@ -80,7 +81,7 @@ class _Planned:
 class Scheduler:
     def __init__(
         self,
-        model: LoadedModel,
+        model: LoadedModel[Any, Any],
         profiles: dict[str, Profile],
         limits: SchedulerLimits | None = None,
         observe: Callable[[str, dict[str, Any]], None] | None = None,
@@ -142,7 +143,7 @@ class Scheduler:
 
     def submit(
         self, items: list[Any], *, deadline: float | None, profile: str
-    ) -> Future:
+    ) -> Future[Results[Any]]:
         return self.submit_group([items], deadlines=[deadline], profile=profile)[0]
 
     def submit_group(
@@ -151,7 +152,7 @@ class Scheduler:
         *,
         deadlines: list[float | None],
         profile: str,
-    ) -> list[Future]:
+    ) -> list[Future[Results[Any]]]:
         """Queue one job per item list at once, as one group (a bundle's tasks for this model).
 
         ``deadlines`` holds each job's own deadline. Admission counts every
@@ -183,7 +184,7 @@ class Scheduler:
         *,
         deadlines: list[float | None],
         profile: str,
-    ) -> list[Future] | None:
+    ) -> list[Future[Results[Any]]] | None:
         """Run a group on the calling thread if the scheduler is idle, else None.
 
         Never call it from the event loop: batches run before it returns. When
@@ -216,12 +217,12 @@ class Scheduler:
         item_lists: list[list[Any]],
         deadlines: list[float | None],
         profile: str,
-    ) -> tuple[list[Future], list[_Pending]]:
+    ) -> tuple[list[Future[Results[Any]]], list[_Pending]]:
         if profile not in self.profiles:
             raise RuntimeServiceError(
                 "invalid_request", f"profile {profile!r} is not enabled"
             )
-        futures: list[Future] = [Future() for _ in item_lists]
+        futures: list[Future[Results[Any]]] = [Future() for _ in item_lists]
         pending = []
         enqueued = time.monotonic()
         with self._lock:
@@ -248,7 +249,7 @@ class Scheduler:
             self._pending_tokens += entry.tokens
             entry.future.add_done_callback(partial(self._settle, entry.tokens))
 
-    def _settle(self, tokens: int, _future: Future) -> None:
+    def _settle(self, tokens: int, _future: Future[Results[Any]]) -> None:
         with self._lock:
             self._pending_jobs -= 1
             self._pending_tokens -= tokens
@@ -339,7 +340,7 @@ class Scheduler:
                 )
             except Exception as exc:
                 for pending in group:
-                    pending.future.set_exception(exc)
+                    _fail(pending.future, exc)
                 continue
             planned_rows = dict.fromkeys(owners, 0)
             for batch in batches:
@@ -357,8 +358,9 @@ class Scheduler:
                 )
             for key, rows in planned_rows.items():
                 if rows != owners[key].remaining:
-                    owners[key].future.set_exception(
-                        RuntimeError(f"profile {name!r} did not plan every item once")
+                    _fail(
+                        owners[key].future,
+                        RuntimeError(f"profile {name!r} did not plan every item once"),
                     )
 
     def _run(self, planned: _Planned) -> None:
@@ -381,7 +383,7 @@ class Scheduler:
                 self.observe("queue", {"seconds": started - pending.job.enqueued})
         try:
             if batch.shared_prefix:
-                work = partial(self.model.run, items, shared_prefix=batch.shared_prefix)
+                work = partial(self.model.run_shared, items, batch.shared_prefix)
             elif not batch.exact:
                 work = partial(self.model.run_approximate, items)
             else:
@@ -391,8 +393,7 @@ class Scheduler:
             if self.device_fault(exc):
                 self._failure = exc
             for pending in planned.owners:
-                if not pending.future.done():
-                    pending.future.set_exception(exc)
+                _fail(pending.future, exc)
             return
         seconds = time.monotonic() - started
         tokens = sum(cost(item) for item in items)
@@ -414,11 +415,11 @@ class Scheduler:
                 pending.results[index] = values[cursor]
                 cursor += 1
             pending.remaining -= len(indices)
-            if pending.remaining == 0 and not pending.future.done():
-                pending.future.set_result(pending.results)
+            if pending.remaining == 0:
+                _resolve(pending.future, pending.results)
 
     def _expire(self, pending: _Pending) -> None:
-        pending.future.set_result(DEADLINE)
+        _resolve(pending.future, DEADLINE)
         self.observe("deadline", {"questions": len(pending.job.items)})
 
     def _abandon(self) -> None:
@@ -432,5 +433,15 @@ class Scheduler:
         self._ready.clear()
         error = RuntimeServiceError("not_ready", "the runtime is shutting down")
         for pending in itertools.chain(queued, planned):
-            if not pending.future.done():
-                pending.future.set_exception(error)
+            _fail(pending.future, error)
+
+
+def _resolve(future: Future[Results[Any]], result: Results[Any]) -> None:
+    """Answer ``future`` unless it is answered or its caller cancelled it (the client left)."""
+    with contextlib.suppress(InvalidStateError):
+        future.set_result(result)
+
+
+def _fail(future: Future[Results[Any]], error: BaseException) -> None:
+    with contextlib.suppress(InvalidStateError):
+        future.set_exception(error)

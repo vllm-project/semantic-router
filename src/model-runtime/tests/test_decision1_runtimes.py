@@ -163,6 +163,20 @@ def test_qwen_exact_batches_keep_the_forward_token_budget(runtimes, monkeypatch)
     assert len(batches) > 2 and all(padded(batch) <= budget for batch in batches)
 
 
+def test_the_engine_sizes_gated_delta_forwards_on_gpu_only(runtimes, monkeypatch):
+    model = model_of(runtimes["qwen"])
+    engine = model.engine_model
+    assert engine.max_forward_tokens() is None
+    assert model.forward_token_budget() is None
+    config = engine.spec.backbone.config
+    width = config["linear_num_value_heads"] * max(
+        config["linear_key_head_dim"], config["linear_value_head_dim"]
+    )
+    monkeypatch.setattr(engine, "device", torch.device("cuda", 0))
+    assert model.forward_token_budget() == (2**30 - 1) // width
+    assert model_of(runtimes["vela"]).engine_model.max_forward_tokens() is None
+
+
 def test_vela_physical_batches_sort_by_type(runtimes):
     model = model_of(runtimes["vela"])
     plan = model.plan(STATE, MANY)
@@ -179,7 +193,7 @@ def test_exact_profile_runs_the_released_physical_batches(runtimes):
     model = model_of(runtimes["vela"])
     plan = model.plan(STATE, MANY)
     profile = ExactProfile()
-    profile.available(model)
+    profile.bind(model)
     job = Job(
         items=plan.items, deadline=None, enqueued=time.monotonic(), profile="exact"
     )
@@ -205,7 +219,7 @@ def test_vela_coalesces_within_the_cpu_budget_while_exact_keeps_its_batches(runt
         rows = batch.items()
         assert len(rows) * padded(max(len(row.ids) for row in rows)) <= budget
     exact = ExactProfile()
-    exact.available(model)
+    exact.bind(model)
     batches = exact.plan(jobs[:1], budget)
     assert [indices for batch in batches for _, indices in batch.parts] == released
 

@@ -208,12 +208,12 @@ def write_fixture(
     A writer module exposes ``write_fixture(output, variant, seed) -> Path``
     and lists its variants in ``VARIANTS`` (the first is the default).
     """
-    if family == "decision2":
-        return write_package(output, backbone=variant or "qwen3_5", seed=seed)
     try:
         module = importlib.import_module(f"{__package__}.{family}")
     except ImportError as exc:
         raise ValueError(f"no fixture writer for the {family!r} family") from exc
+    if module.__name__ == __name__ or not hasattr(module, "write_fixture"):
+        raise ValueError(f"no fixture writer for the {family!r} family")
     variants = tuple(getattr(module, "VARIANTS", ()))
     if variant is not None and variants and variant not in variants:
         raise ValueError(

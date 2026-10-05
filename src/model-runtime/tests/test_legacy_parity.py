@@ -165,6 +165,27 @@ def test_a_partial_scan_compares_with_a_truncated_answer(lp):
     assert report["disagreements"][0]["reason"] == "error" and not report["passed"]
 
 
+def test_the_ab_summary_reports_paired_intervals_and_every_load_window(lp):
+    legacy = [30e6, 32e6, 31e6, 29e6, 33e6]
+    runtime = [10e6, 11e6, 10.5e6, 9.5e6, 11.5e6]
+    windows = {"legacy": [40.0, 41.0], "exact": [110.0, 112.0]}
+    report = {
+        "domain": {
+            "legacy": legacy,
+            "runtime": runtime,
+            "ratio": [a / b for a, b in zip(legacy, runtime, strict=True)],
+            "throughput": windows,
+        }
+    }
+    row = lp.ab_summary(report)["domain"]
+    assert row["pairs"] == 5 and row["throughput_windows_per_s"] == windows
+    assert row["throughput_per_s"] == {"legacy": 40.5, "exact": 111.0}
+    for name in ("median_speedup", "p50_ratio", "p95_ratio"):
+        low, high = row["ci95"][name]
+        assert 2.8 < low <= high < 3.2
+    assert row["ci95"] == lp.ab_summary(report)["domain"]["ci95"]
+
+
 def test_inputs_both_sides_reject_are_counted_not_compared(lp):
     spec = sequence_spec(["short", "long"])
     legacy = {

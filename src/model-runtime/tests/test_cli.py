@@ -55,7 +55,7 @@ def test_models_and_fixture_commands(capsys, tmp_path):
     assert (
         "vllm-sr/Decision-2.0-Vega-27B@7aec49ae11a18741706da549ab626b9052795fe7" in out
     )
-    assert main(["fixture", str(tmp_path / "pkg"), "--backbone", "qwen3"]) == 0
+    assert main(["fixture", str(tmp_path / "pkg"), "--variant", "qwen3"]) == 0
     assert (tmp_path / "pkg" / "MODEL_MANIFEST.json").is_file()
     assert (
         main(
@@ -71,8 +71,34 @@ def test_models_and_fixture_commands(capsys, tmp_path):
         == 0
     )
     assert (tmp_path / "hybrid" / "MODEL_MANIFEST.json").is_file()
-    with pytest.raises(ValueError, match="no fixture writer"):
-        main(["fixture", str(tmp_path / "none"), "--family", "nobody"])
+    for family in ("nobody", "fixtures", "omni"):
+        with pytest.raises(ValueError, match="no fixture writer"):
+            main(["fixture", str(tmp_path / family), "--family", family])
+
+
+BUILTIN_FAMILIES = (
+    "decision1",
+    "decision2",
+    "multimodal_embedding",
+    "task_heads",
+    "vela2",
+)
+
+
+@pytest.mark.parametrize("family", BUILTIN_FAMILIES)
+def test_every_built_in_family_writes_fixtures_it_detects(family, tmp_path):
+    import importlib
+
+    from vllm_sr_runtime.plugins.base import PackageRef
+
+    assert set(BUILTIN_FAMILIES) <= set(registry.names("families"))
+    module = importlib.import_module(f"vllm_sr_runtime.testing.{family}")
+    loaded = registry.plugin("families", family).load()()
+    for variant in module.VARIANTS:
+        output = tmp_path / variant
+        args = ["fixture", str(output), "--family", family, "--variant", variant]
+        assert main(args) == 0
+        assert loaded.detect(PackageRef(output)), variant
 
 
 def test_several_models_share_the_process_options(tmp_path):

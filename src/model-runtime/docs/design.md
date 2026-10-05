@@ -203,18 +203,23 @@ only sees work items with token IDs, so every family uses the same admission,
 deadlines and profiles:
 
 ```python
-class LoadedModel(ABC):
+class LoadedModel(ABC, Generic[ItemT, ResultT]):  # ItemT satisfies WorkItem
     info: ModelInfo                        # identity, surfaces, heads, limits, licence
     fuse_bundled_jobs: ClassVar[bool]      # exact may run one bundle's jobs as one batch
-    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan: ...  # validate + render
-    def run(self, items: list[WorkItem], shared_prefix: int = 0) -> list: ...  # one forward + readout
-    def finish_surface(self, plan: SurfacePlan, results) -> dict: ...      # the surface response body
+    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan[ItemT]: ...  # validate + render
+    def run(self, items: list[ItemT]) -> list[ResultT]: ...                         # one forward + readout
+    def run_shared(self, items: list[ItemT], shared_prefix: int) -> list[ResultT]: ...  # decoders' shared-context batches
+    def finish_surface(self, plan: SurfacePlan[ItemT], results: Results[ResultT]) -> dict: ...  # the response body
 ```
 
-A work item has `ids` (its token IDs) and may have `cache_key`, a content
-hash of everything its result depends on: the runtime then answers a repeated
-item from the model's result cache without a forward. Results are shared with
-the cache, so `finish_surface` never mutates them.
+A work item (`WorkItem`) has `ids` (its token IDs) and may have `cost`, the
+tokens it costs a forward when it has no token IDs (images, audio), and
+`cache_key`, a content hash of everything its result depends on: the runtime
+then answers a repeated item from the model's result cache without a forward.
+`Results` are one value per item or `DEADLINE` (the `Expired` instance) for an
+expired item or plan. Results are shared with the cache, so `finish_surface`
+never mutates them. `mypy --strict` checks the plugin interfaces, the
+scheduler, the profiles and the runtime core in `make model-runtime-test`.
 
 The Phase 1 decision methods (`plan`, `answer`) remain and back
 `plan_surface("decisions", ...)`, so Decision 2.0 is untouched. `ModelInfo`
@@ -324,7 +329,13 @@ place and never fail sibling items.
 ### 6.1 `POST /v1/decisions`
 
 Phase 1's strict superset of System One, with `POST /v1/systemone` as an
-alias. Phases 2–4 add, for models that declare them:
+alias. Every family validates the System One fields through one reader
+(`systemone.read_question`): text is never blank, keys are unique non-blank
+strings, and a question takes only its type's fields plus those its family
+reads itself (`over`, `head`, `threshold`, `preset`); anything else is
+`invalid_question`, and the OpenAPI `Question` schema says so. Families add
+only their own types, presets and defaults. Phases 2–4 add, for models that
+declare them:
 
 - **Set** (`type: set`): independent labels, `criteria` as `{label: description}`.
   The response adds `sets.<id> = {selected, probabilities}` and one Noul answer
@@ -616,9 +627,15 @@ own, measured from when the HTTP request arrived). Decision models still run
 each task as its own batch (their released numerics), and a family that sets
 `fuse_bundled_jobs` (encoders) runs the group as one batch, so one forward
 serves every head and consumer that reads the same input. On a batch-invariant model, `exact` runs the queued jobs
-of concurrent requests in shared batches: one length class (power-of-two band
-of padded length) per batch, at most 512 padded tokens, rows with the same
-token IDs always together so the family computes them once. Repeated cacheable
+of concurrent requests in shared batches of at most 512 padded tokens, rows
+with the same token IDs always together so the family computes them once. A
+model that pads its rows (multimodal Omni) keeps one length class
+(power-of-two band of padded length) per batch; a model that packs its rows
+back to back (`packs_rows`: the native encoders of `task_heads`) mixes lengths
+freely, since a packed row costs no padding, and closed-loop callers' short
+texts of different lengths then still share forwards. Either way each row's
+answer is the one it gets alone, which the load-time probe checks on a batch
+that spans several length classes. Repeated cacheable
 items are answered from the model's result cache (`--result-cache-entries`,
 keyed by profile and content).
 
@@ -632,7 +649,9 @@ waits for the forward in flight, not for the remaining windows of a long one;
 each job is answered as soon as its own batches have run. The order of
 forwards never changes a batch's contents, so answers are unchanged. Deadlines
 travel with jobs; a job whose deadline passes before its next batch runs is
-answered `deadline_exceeded` and its remaining batches are skipped. Admission
+answered `deadline_exceeded` and its remaining batches are skipped. A client
+that disconnects before its answer cancels its jobs the same way; the request
+is counted with status 499 in the metrics. Admission
 bounds, per model, the jobs not yet answered (queued, planned or running) and
 their tokens, and answers 429 at once, for a whole group or none of it. On
 CPU, workers of different models share the process's intra-op thread pool
@@ -722,7 +741,16 @@ Several `MODEL` arguments share the process options; `MODEL@REVISION` pins a
 revision per model; `--models FILE` lists models with their own name,
 revision, device, profile, engine and family options (the router writes this
 file in managed mode). The other options are as in Phase 1. `vllm-sr serve`
-without `MODEL` keeps its router-mode behaviour.
+without `MODEL` keeps its router-mode behaviour. Every serve option's default
+is the `ServeConfig` / `ModelConfig` field default, so the CLI and an
+embedding host start alike. `vllm-sr-runtime fixture OUTPUT --family F
+--variant V` writes a tiny random-weight package of any built-in family; the
+writer is `testing/<family>.py`.
+
+Importing `vllm_sr_runtime` sets two environment defaults, `GOMP_SPINCOUNT`
+and `ONEDNN_PRIMITIVE_CACHE_CAPACITY`. They take effect only when PyTorch
+loads, and the plugin base layer imports PyTorch, so they cannot wait for
+`main`. A value the caller set is kept.
 
 ## 13. Router integration
 
@@ -798,6 +826,15 @@ Only model-backed signals join; keyword and heuristic signals never delay a
 flush. Calls outside a bundle go directly to their surface. The response
 stage (hallucination, response guard) opens its own bundle. Each call carries
 the smallest consumer timeout as its context deadline and `options.deadline_ms`.
+
+A bundle is per runtime process, not per request. The default process groups
+(section 13.4) give each CPU model its own process, up to the process cap, and
+one process to each GPU device. So a request whose signals read several CPU
+models makes one bundle call per model process, and those calls run in
+parallel. One CPU process runs one forward at a time, so a single shared
+process would serialize the stage: on 16 cores it served 11.1 requests/s
+against 20.3 for the split (`router-latency-cpu.md`). Deployments that name
+the same `process` share one process and one bundle.
 
 ### 13.4 Lifecycle: process groups and attached endpoints
 

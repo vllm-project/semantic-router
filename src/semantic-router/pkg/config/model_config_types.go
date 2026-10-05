@@ -271,36 +271,36 @@ type AdmissionConfig struct {
 }
 
 type ToolFilteringWeights struct {
-	Embed    *float32 `yaml:"embed,omitempty"`
-	Lexical  *float32 `yaml:"lexical,omitempty"`
-	Tag      *float32 `yaml:"tag,omitempty"`
-	Name     *float32 `yaml:"name,omitempty"`
-	Category *float32 `yaml:"category,omitempty"`
+	Embed    *float32 `json:"embed,omitempty" yaml:"embed,omitempty"`
+	Lexical  *float32 `json:"lexical,omitempty" yaml:"lexical,omitempty"`
+	Tag      *float32 `json:"tag,omitempty" yaml:"tag,omitempty"`
+	Name     *float32 `json:"name,omitempty" yaml:"name,omitempty"`
+	Category *float32 `json:"category,omitempty" yaml:"category,omitempty"`
 }
 
 type AdvancedToolFilteringConfig struct {
-	Enabled                     bool                              `yaml:"enabled"`
-	RetrievalStrategy           string                            `yaml:"retrieval_strategy,omitempty"`
-	CandidatePoolSize           *int                              `yaml:"candidate_pool_size,omitempty"`
-	MinLexicalOverlap           *int                              `yaml:"min_lexical_overlap,omitempty"`
-	MinCombinedScore            *float32                          `yaml:"min_combined_score,omitempty"`
-	Weights                     ToolFilteringWeights              `yaml:"weights,omitempty"`
-	UseCategoryFilter           *bool                             `yaml:"use_category_filter,omitempty"`
-	CategoryConfidenceThreshold *float32                          `yaml:"category_confidence_threshold,omitempty"`
-	AllowTools                  []string                          `yaml:"allow_tools,omitempty"`
-	BlockTools                  []string                          `yaml:"block_tools,omitempty"`
-	HybridHistory               *HybridHistoryToolRetrievalConfig `yaml:"hybrid_history,omitempty"`
+	Enabled                     bool                              `json:"enabled" yaml:"enabled"`
+	RetrievalStrategy           string                            `json:"retrieval_strategy,omitempty" yaml:"retrieval_strategy,omitempty"`
+	CandidatePoolSize           *int                              `json:"candidate_pool_size,omitempty" yaml:"candidate_pool_size,omitempty"`
+	MinLexicalOverlap           *int                              `json:"min_lexical_overlap,omitempty" yaml:"min_lexical_overlap,omitempty"`
+	MinCombinedScore            *float32                          `json:"min_combined_score,omitempty" yaml:"min_combined_score,omitempty"`
+	Weights                     ToolFilteringWeights              `json:"weights,omitempty" yaml:"weights,omitempty"`
+	UseCategoryFilter           *bool                             `json:"use_category_filter,omitempty" yaml:"use_category_filter,omitempty"`
+	CategoryConfidenceThreshold *float32                          `json:"category_confidence_threshold,omitempty" yaml:"category_confidence_threshold,omitempty"`
+	AllowTools                  []string                          `json:"allow_tools,omitempty" yaml:"allow_tools,omitempty"`
+	BlockTools                  []string                          `json:"block_tools,omitempty" yaml:"block_tools,omitempty"`
+	HybridHistory               *HybridHistoryToolRetrievalConfig `json:"hybrid_history,omitempty" yaml:"hybrid_history,omitempty"`
 }
 
 // HybridHistoryToolRetrievalConfig tunes hybrid_history retrieval (semantic + short history + priors + repetition).
 type HybridHistoryToolRetrievalConfig struct {
-	HistoryHorizon             *int     `yaml:"history_horizon,omitempty"`
-	MinHistorySteps            *int     `yaml:"min_history_steps,omitempty"`
-	HistoryConfidenceThreshold *float32 `yaml:"history_confidence_threshold,omitempty"`
-	WeightSemantic             *float32 `yaml:"weight_semantic,omitempty"`
-	WeightHistoryTransition    *float32 `yaml:"weight_history_transition,omitempty"`
-	WeightDecisionPrior        *float32 `yaml:"weight_decision_prior,omitempty"`
-	RepetitionPenaltyStrength  *float32 `yaml:"repetition_penalty_strength,omitempty"`
+	HistoryHorizon             *int     `json:"history_horizon,omitempty" yaml:"history_horizon,omitempty"`
+	MinHistorySteps            *int     `json:"min_history_steps,omitempty" yaml:"min_history_steps,omitempty"`
+	HistoryConfidenceThreshold *float32 `json:"history_confidence_threshold,omitempty" yaml:"history_confidence_threshold,omitempty"`
+	WeightSemantic             *float32 `json:"weight_semantic,omitempty" yaml:"weight_semantic,omitempty"`
+	WeightHistoryTransition    *float32 `json:"weight_history_transition,omitempty" yaml:"weight_history_transition,omitempty"`
+	WeightDecisionPrior        *float32 `json:"weight_decision_prior,omitempty" yaml:"weight_decision_prior,omitempty"`
+	RepetitionPenaltyStrength  *float32 `json:"repetition_penalty_strength,omitempty" yaml:"repetition_penalty_strength,omitempty"`
 }
 
 type ToolsConfig struct {
