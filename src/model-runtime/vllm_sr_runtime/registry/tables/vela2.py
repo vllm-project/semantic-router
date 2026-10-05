@@ -45,7 +45,7 @@ def _vela(
 MODELS: tuple[BuiltinModel, ...] = (
     _vela(
         "0.3B",
-        "13e85201312febce801f8311960096160a3490fe",
+        "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
         "7e786f91413961d76a8b85318f70fea1509124fe33709a8c12d6badf8d2ccda4",
         "",
         309_114_371,
@@ -79,7 +79,7 @@ MODELS: tuple[BuiltinModel, ...] = (
     ),
     _vela(
         "4B",
-        "756f4921f20a1377eb2eccab6574a544c6ebcc33",
+        "c1e64d4f872cb38bc58502e6888340100bab9d55",
         "c47ee0594199d66f924c81c1664cb97a9f2cfaeb12d484c232b3d6abe67ec07b",
         "3e5a26db6dd50cc3939502ec861cdc0e5f6a5de8947815d598d3aea6f4624a0c",
         4_213_980_675,
@@ -99,7 +99,7 @@ MODELS: tuple[BuiltinModel, ...] = (
     ),
     _vela(
         "9B",
-        "23b9a557393504d0ba5f271641137b740e3967bf",
+        "bc8761637d8788619dfbaf6d8890128efe85fd40",
         "76ac16a7231b02989465212389dc55d42a45655c4e574599be3abe35c0e56cd5",
         "8ccd2ccb2f91f7b4ee99df2e3bf885cb901f2567cfb0a6b6093778ba14dfc05f",
         7_949_850_627,
