@@ -2,14 +2,20 @@
 
 import argparse
 import ast
+import importlib
+import importlib.util
 import logging
+import sys
 import unittest
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import Mock
 
+from src.training.model_eval import gap_report
+from src.training.model_eval.artifact_inventory import REGISTRY_ALIASES
 from src.training.model_eval.constants import LEGACY_MODEL_REGISTRY, MODEL_REGISTRY
 from src.training.model_eval.dataset_contracts import (
     classification_label_id,
@@ -17,6 +23,23 @@ from src.training.model_eval.dataset_contracts import (
 )
 
 ROOT = Path(__file__).parents[1]
+DOMAIN_SUBSET = {"math": 0, "physics": 1, "law": 2}
+# Every law row here comes from MMLU, so the filtered split has none.
+PUBLISHED_DOMAIN_ROWS = [
+    {"question": "a", "category": "math", "src": "ori_mmlu-algebra"},
+    {"question": "b", "category": "physics", "src": "scibench"},
+    {"question": "c", "category": "law", "src": "ori_mmlu-jurisprudence"},
+    {"question": "d", "category": "math", "src": "theoremqa"},
+]
+GAP_BUDGETS = {
+    "ECE_BUDGET": 0.05,
+    "THRESHOLD_VALUE_BUDGET": 0.05,
+    "MIN_LABEL_RECALL": 0.7,
+    "MAX_SLICE_SPREAD": 0.1,
+    "MIN_COMPARISON_SIZE": 2,
+    "MIN_SLICE_ROWS": 30,
+    "MIN_GATE_RECALL": 0.7,
+}
 
 
 def load_definitions(filename, names, namespace):
@@ -31,6 +54,47 @@ def load_definitions(filename, names, namespace):
     ]
     exec(compile(ast.Module(selected, []), filename, "exec"), namespace)
     return namespace
+
+
+def label_order_check():
+    return load_definitions(
+        "baseline_tasks.py",
+        {"check_registry_label_order"},
+        {
+            "REGISTRY_ALIASES": REGISTRY_ALIASES,
+            "LEGACY_MODEL_REGISTRY": LEGACY_MODEL_REGISTRY,
+            "MODEL_REGISTRY": MODEL_REGISTRY,
+        },
+    )["check_registry_label_order"]
+
+
+def legacy_mapping(task):
+    return {
+        label: index
+        for index, label in enumerate(LEGACY_MODEL_REGISTRY[task]["labels"])
+    }
+
+
+def domain_baseline():
+    class Split(list):
+        def filter(self, keep):
+            return Split(row for row in self if keep(row))
+
+    return load_definitions(
+        "baseline_tasks.py",
+        {"TaskSpec", "TASK_SPECS", "load_rows"},
+        {
+            "dataclass": dataclass,
+            "LEGACY_MODEL_REGISTRY": LEGACY_MODEL_REGISTRY,
+            "BaselineError": ValueError,
+            "load_dataset": lambda repo, split: Split(PUBLISHED_DOMAIN_ROWS),
+            "np": SimpleNamespace(
+                array=lambda values, dtype: values, int64=int, ndarray=list
+            ),
+            "logger": logging.getLogger("test"),
+            "MAX_REPORTED_UNMAPPED": 10,
+        },
+    )
 
 
 class Rows:
@@ -91,6 +155,138 @@ class DatasetContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unrecognized"):
             load("jailbreak", args)
 
+    def test_fact_check_and_feedback_splits_only_score_their_legacy_checkpoints(self):
+        namespace = load_definitions(
+            "baseline_tasks.py",
+            {"TaskSpec", "TASK_SPECS"},
+            {
+                "dataclass": dataclass,
+                "LEGACY_MODEL_REGISTRY": LEGACY_MODEL_REGISTRY,
+                "BaselineError": ValueError,
+            },
+        )
+        specs = namespace["TASK_SPECS"]
+        for task in ("fact-check", "feedback"):
+            for key in ("id", "lora_id"):
+                specs[task].validate_artifact(LEGACY_MODEL_REGISTRY[task][key])
+            with self.assertRaisesRegex(ValueError, "only scores the checkpoint"):
+                specs[task].validate_artifact(MODEL_REGISTRY[task]["id"])
+
+    def test_legacy_checkpoints_are_checked_against_the_legacy_labels(self):
+        check = label_order_check()
+        mapping = legacy_mapping("feedback")
+        for key in ("id", "lora_id"):
+            self.assertEqual(
+                check("feedback", LEGACY_MODEL_REGISTRY["feedback"][key], mapping), []
+            )
+        # The served registry adds NO_FEEDBACK, which the legacy head never had.
+        served = check("feedback", MODEL_REGISTRY["feedback"]["id"], mapping)
+        self.assertIn("do not match the artifact labels", served[0])
+
+    def test_legacy_only_report_still_lists_the_served_artifacts_as_unmeasured(self):
+        check = label_order_check()
+        baselines = []
+        for task in ("fact-check", "feedback"):
+            repo = LEGACY_MODEL_REGISTRY[task]["id"]
+            mapping = legacy_mapping(task)
+            baselines.append(
+                {
+                    "task": task,
+                    "artifact": {"repo": repo, "is_served_artifact": False},
+                    "dataset": {
+                        "repo": "source",
+                        "split": "test",
+                        "split_rule": "predefined",
+                    },
+                    "metrics": {
+                        "rows": 1,
+                        "accuracy": 1.0,
+                        "macro_f1": 1.0,
+                        "per_label": {
+                            label: {"precision": 1.0, "recall": 1.0, "support": 1}
+                            for label in mapping
+                        },
+                    },
+                    "calibration": {"ece": 0.0, "mce": 0.0},
+                    "abstention": {"curve": []},
+                    "gaps": check(task, repo, mapping),
+                }
+            )
+        report = gap_report.render(baselines, gap_report.DEFAULT_CONFIG)
+        for task in ("fact-check", "feedback"):
+            served = MODEL_REGISTRY[task]["id"].split("/")[-1]
+            self.assertIn(
+                f"- {task}: no baseline has been measured for the served `{served}`",
+                report,
+            )
+        self.assertNotIn("the evaluation registry labels", report)
+
+    def test_domain_baseline_leaves_out_mmlu_rows_and_the_model_trained_on_them(self):
+        namespace = domain_baseline()
+        spec = namespace["TASK_SPECS"]["domain"]
+        self.assertEqual(spec.split_rule, "by_source")
+        texts, labels, available = namespace["load_rows"](spec, DOMAIN_SUBSET, None)
+        self.assertEqual((texts, labels, available), (["b", "d"], [1, 0], 2))
+        spec.validate_artifact(MODEL_REGISTRY["intent"]["id"])
+        for key in ("id", "lora_id"):
+            with self.assertRaisesRegex(
+                ValueError, "was trained on TIGER-Lab/MMLU-Pro"
+            ):
+                spec.validate_artifact(LEGACY_MODEL_REGISTRY["intent"][key])
+
+    def test_filtered_domain_report_leaves_labels_without_rows_unmeasured(self):
+        namespace = domain_baseline()
+        _, labels, _ = namespace["load_rows"](
+            namespace["TASK_SPECS"]["domain"], DOMAIN_SUBSET, None
+        )
+        # Perfect predictions on the rows the filter keeps.
+        metrics = load_definitions(
+            "provenance/metrics.py",
+            {"classification_metrics"},
+            {"Any": Any, "Sequence": Sequence},
+        )["classification_metrics"](labels, labels, DOMAIN_SUBSET)
+        self.assertEqual(metrics["per_label"]["law"]["support"], 0)
+        self.assertEqual(metrics["macro_f1"], 1.0)
+        report = load_definitions(
+            "gap_report.py",
+            {"_baseline_findings", "_threshold_findings"},
+            {"Any": Any, **GAP_BUDGETS},
+        )
+        findings = report["_baseline_findings"](
+            {
+                "task": "domain",
+                "artifact": {"repo": MODEL_REGISTRY["intent"]["id"]},
+                "metrics": metrics,
+                "calibration": {"ece": 0.0, "mce": 0.0},
+                "abstention": {"curve": []},
+                "slices": [],
+            }
+        )
+        self.assertEqual([kind for kind, _ in findings], ["coverage"])
+        self.assertIn("`law`", findings[0][1])
+        self.assertIn("unmeasured", findings[0][1])
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("torch") and importlib.util.find_spec("sklearn"),
+        "needs the training test requirements",
+    )
+    def test_baseline_summary_lists_labels_the_split_has_no_rows_for(self):
+        sys.path.insert(0, str(ROOT))
+        numpy = importlib.import_module("numpy")
+        summary = importlib.import_module("baseline_metrics").summarise(
+            numpy.array([[0.8, 0.1, 0.1], [0.1, 0.8, 0.1], [0.1, 0.8, 0.1]]),
+            numpy.array([0, 1, 1]),
+            ["short", "a longer question", "another question"],
+            DOMAIN_SUBSET,
+            [1.0, 1.0, 1.0],
+            10,
+            (0.0, 0.5),
+            0.0,
+        )
+        self.assertEqual(summary["unsupported_labels"], ["law"])
+        self.assertEqual(summary["metrics"]["macro_f1"], 1.0)
+        self.assertEqual(summary["metrics"]["per_label"]["law"]["support"], 0)
+
     def test_baseline_blocks_incompatible_gold_before_dataset_resolution(self):
         namespace = load_definitions(
             "baseline_tasks.py",
@@ -120,8 +316,8 @@ class DatasetContractTest(unittest.TestCase):
                 "load_config": Mock(),
                 "served_artifacts": lambda config: {"jailbreak": Mock()},
                 "TASK_SPECS": specs,
-                "resolve_measured_artifact": lambda *args: SimpleNamespace(
-                    repo=MODEL_REGISTRY["jailbreak"]["id"]
+                "resolve_measured_artifact": lambda args, served, validate_repo: (
+                    validate_repo(MODEL_REGISTRY["jailbreak"]["id"])
                 ),
                 "resolve_hf_revision": dataset_revision,
             },

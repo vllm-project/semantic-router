@@ -44,18 +44,27 @@ class TaskSpec:
     label_field: str
     split_rule: str = "predefined"
     compatible_artifact_repos: tuple[str, ...] = ()
+    # Why other artifacts are refused, completed with {repo}.
+    restriction: str = ""
+    # Rows whose ``exclude_prefix[0]`` value starts with ``exclude_prefix[1]`` are
+    # left out. ``trained_on_repos`` names artifacts trained on the dataset
+    # itself, for which none of its rows is held out.
+    exclude_prefix: tuple[str, str] | None = None
+    trained_on_repos: tuple[str, ...] = ()
 
     def validate_artifact(self, repo: str) -> None:
-        """Refuse source labels that describe a different classification task."""
+        """Refuse source labels that cannot rank this artifact."""
+        if repo in self.trained_on_repos:
+            raise BaselineError(
+                f"{repo} was trained on {self.dataset_repo}, so no split of it is "
+                "held out for this artifact."
+            )
         if (
             self.compatible_artifact_repos
             and repo not in self.compatible_artifact_repos
         ):
             raise BaselineError(
-                f"{self.dataset_repo} is a legacy toxicity/jailbreak diagnostic, "
-                f"not an instruction-attack benchmark for {repo}. Use "
-                "mom_collection_eval.py --custom_dataset with attack-reviewed "
-                "benign/jailbreak gold for Guard."
+                f"{self.dataset_repo} {self.restriction.format(repo=repo)}"
             )
 
 
@@ -64,37 +73,67 @@ class TaskSpec:
 # reported as coverage gaps rather than measured with a stand-in dataset.
 TASK_SPECS: dict[str, TaskSpec] = {
     "jailbreak": TaskSpec(
-        dataset_repo="llm-semantic-router/jailbreak-detection-dataset",
+        dataset_repo="vllm-sr/jailbreak-detection-dataset",
         split="test",
         text_field="text",
         label_field="label",
         compatible_artifact_repos=(
             LEGACY_MODEL_REGISTRY["jailbreak"]["id"],
             LEGACY_MODEL_REGISTRY["jailbreak"]["lora_id"],
-            "llm-semantic-router/mmbert-jailbreak-detector-merged",
-            "llm-semantic-router/mmbert-jailbreak-detector-lora",
+            "vllm-sr/mmbert-jailbreak-detector-merged",
+            "vllm-sr/mmbert-jailbreak-detector-lora",
+        ),
+        restriction=(
+            "is a legacy toxicity/jailbreak diagnostic, not an instruction-attack "
+            "benchmark for {repo}. Use mom_collection_eval.py --custom_dataset with "
+            "attack-reviewed benign/jailbreak gold for Guard."
         ),
     ),
     "fact-check": TaskSpec(
-        dataset_repo="llm-semantic-router/fact-check-classification-dataset",
+        dataset_repo="vllm-sr/fact-check-classification-dataset",
         split="test",
         text_field="text",
         label_field="label_id",
+        compatible_artifact_repos=(
+            LEGACY_MODEL_REGISTRY["fact-check"]["id"],
+            LEGACY_MODEL_REGISTRY["fact-check"]["lora_id"],
+        ),
+        restriction=(
+            "gives each source corpus one label, so the corpus alone predicts the "
+            "test label. It only scores the checkpoint trained on it, not {repo}."
+        ),
     ),
     "feedback": TaskSpec(
-        dataset_repo="llm-semantic-router/feedback-detector-dataset",
+        dataset_repo="vllm-sr/feedback-detector-dataset",
         split="validation",
         text_field="text",
         # The published split names this column label_name. The evaluation
         # registry declares "label" and only works through a silent auto-detect
         # fallback, so the field is pinned here instead.
         label_field="label_name",
+        compatible_artifact_repos=(
+            LEGACY_MODEL_REGISTRY["feedback"]["id"],
+            LEGACY_MODEL_REGISTRY["feedback"]["lora_id"],
+        ),
+        restriction=(
+            "repeats a few SAT templates, each with '!', in train and validation. "
+            "It only scores the checkpoint trained on it, not {repo}."
+        ),
     ),
+    # Vela Domain trains on Global-MMLU and moves the MMLU questions that match
+    # MMLU-Pro into training, so the MMLU-derived rows are left out. The legacy
+    # intent classifier trained on MMLU-Pro itself.
     "domain": TaskSpec(
         dataset_repo="TIGER-Lab/MMLU-Pro",
         split="test",
         text_field="question",
         label_field="category",
+        split_rule="by_source",
+        exclude_prefix=("src", "ori_mmlu"),
+        trained_on_repos=(
+            LEGACY_MODEL_REGISTRY["intent"]["id"],
+            LEGACY_MODEL_REGISTRY["intent"]["lora_id"],
+        ),
     ),
 }
 
@@ -154,14 +193,24 @@ def _mapping_from_sidecar(model_dir: Path) -> dict[str, int]:
     return {}
 
 
-def check_registry_label_order(task: str, mapping: dict[str, int]) -> list[str]:
-    """Compare the artifact's class order against the evaluation registry copy.
+def check_registry_label_order(
+    task: str, repo: str, mapping: dict[str, int]
+) -> list[str]:
+    """Compare the artifact's class order against its own registry copy.
 
     A permuted order still yields plausible accuracy, so this comparison is the
-    only place the mismatch becomes visible.
+    only place the mismatch becomes visible. A legacy checkpoint is compared
+    with the legacy registry, since the served model may add classes it never
+    had, as Vela Feedback adds NO_FEEDBACK.
     """
     registry_key = REGISTRY_ALIASES.get(task, task)
-    entry = MODEL_REGISTRY.get(registry_key)
+    legacy = LEGACY_MODEL_REGISTRY.get(registry_key, {})
+    registry = (
+        LEGACY_MODEL_REGISTRY
+        if repo in (legacy.get("id"), legacy.get("lora_id"))
+        else MODEL_REGISTRY
+    )
+    entry = registry.get(registry_key)
     if not entry:
         return [f"{task}: no evaluation registry entry to cross-check"]
     registry_labels = list(entry.get("labels", []))
@@ -192,6 +241,9 @@ def load_rows(
 ) -> tuple[list[str], np.ndarray, int]:
     """Load the held-out split and map every row onto the artifact's class order."""
     dataset = load_dataset(spec.dataset_repo, split=spec.split)
+    if spec.exclude_prefix is not None:
+        field, prefix = spec.exclude_prefix
+        dataset = dataset.filter(lambda row: not str(row[field]).startswith(prefix))
     available = len(dataset)
     if limit is not None:
         dataset = dataset.select(range(min(available, limit)))
