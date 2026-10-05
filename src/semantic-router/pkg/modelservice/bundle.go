@@ -182,8 +182,9 @@ func (b *Bundle) flushLocked() {
 	b.pending = make(map[*Client][]*bundleCall)
 	b.flushes++
 	for client, calls := range pending {
+		limit := int(client.bundleTasks.Load())
 		for len(calls) > 0 {
-			part := calls[:min(len(calls), client.bundleTasks)]
+			part := calls[:min(len(calls), limit)]
 			calls = calls[len(part):]
 			go b.send(client, part)
 		}

@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
 
-// DefaultBundleTasks is the runtime's default --max-bundle-tasks: it refuses a
-// larger /v1/bundle request as a whole (413).
+// DefaultBundleTasks is the runtime's default --max-bundle-tasks, the cap a
+// client assumes until /v1/models reports the process's own. A runtime
+// refuses a larger /v1/bundle request as a whole (413).
 const DefaultBundleTasks = 64
 
 // Client calls one runtime through the generated contract client.
@@ -18,7 +20,7 @@ type Client struct {
 	endpoint string
 	api      *api.ClientWithResponses
 	// bundleTasks is the most tasks one /v1/bundle request to this runtime carries.
-	bundleTasks int
+	bundleTasks atomic.Int64
 }
 
 // NewClient builds a client for unix:///path, http://host:port or https://host:port.
@@ -31,7 +33,9 @@ func NewClient(endpoint string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{endpoint: endpoint, api: generated, bundleTasks: DefaultBundleTasks}, nil
+	client := &Client{endpoint: endpoint, api: generated}
+	client.bundleTasks.Store(DefaultBundleTasks)
+	return client, nil
 }
 
 // Endpoint is the address the client calls.
@@ -52,7 +56,8 @@ func (c *Client) Ready(ctx context.Context) (bool, string, error) {
 	return response.StatusCode() == http.StatusOK, status, nil
 }
 
-// Models returns the runtime's model descriptions.
+// Models returns the runtime's model descriptions and records the bundle cap
+// the process reports.
 func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	response, err := c.api.ListModelsWithResponse(ctx)
 	if err != nil {
@@ -60,6 +65,9 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	}
 	if response.JSON200 == nil {
 		return nil, fmt.Errorf("%w: /v1/models returned %s", ErrFailed, response.Status())
+	}
+	if limit := response.JSON200.Limits.MaxBundleTasks; limit > 0 {
+		c.bundleTasks.Store(int64(limit))
 	}
 	return response.JSON200.Data, nil
 }

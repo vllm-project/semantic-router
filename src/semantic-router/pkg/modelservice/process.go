@@ -193,8 +193,8 @@ const managedRequestBytes = 64 << 20
 
 // managedBundleTasks caps the tasks of a managed runtime's bundles. A request
 // stage sends each process one bundle with every call it makes, and PII alone
-// makes a call per text chunk, so the cap is far above the runtime's default;
-// a stage with more calls is split at it.
+// makes a call per text chunk, so the cap is far above the runtime's default.
+// The runtime reports it in /v1/models, and a stage with more calls is split.
 const managedBundleTasks = 1024
 
 func managedCommand(base []string, socket, modelsFile, cacheDir string, threads int) []string {

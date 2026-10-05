@@ -45,6 +45,13 @@ func (s *surfaceRuntime) handler() http.Handler {
 			writeJSON(w, status, response)
 		}
 	}
+	mux.HandleFunc("/v1/models", func(w http.ResponseWriter, _ *http.Request) {
+		limit := s.maxTasks
+		if limit == 0 {
+			limit = DefaultBundleTasks
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"object": "list", "api_version": "2.0.0", "data": []interface{}{}, "limits": map[string]int{"max_bundle_tasks": limit, "max_request_bytes": 8 << 20}})
+	})
 	mux.HandleFunc("/v1/classify", surface("classify"))
 	mux.HandleFunc("/v1/embeddings", surface("embeddings"))
 	mux.HandleFunc("/v1/rerank", surface("rerank"))
