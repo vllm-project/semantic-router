@@ -175,6 +175,15 @@ def cache_key(identity: str, head: str, layer: int, ids: Sequence[int]) -> str:
     return digest.hexdigest()
 
 
+def positive_option(value: Any, name: str) -> int | None:
+    """A request's optional positive-integer field; None when absent."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError(f"{name} must be a positive integer")
+    return value
+
+
 @dataclass
 class Prepared:
     """One input made ready for a head: its items, usage and what ``result`` needs."""

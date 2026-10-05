@@ -54,6 +54,17 @@ MEDIA_COST = {
     "nano": {"image": 1200, "audio": 1600},
     "mini": {"image": 300, "audio": 550},
 }
+# CPU threads per graph (ModelSpec.graph_threads). Nano's text graph runs up
+# to CONCURRENT_INPUTS texts at once, and on 16 cores 12 threads leave a core
+# to each concurrent caller: 16 oversubscribe the cores (p50 +0.5 ms against
+# legacy, 3 % fewer texts per second with four callers), and 8 slow the texts
+# of 64-104 tokens that set its p95. Every other graph needs all 16 for one
+# request (Nano image 109 ms, 163 on 8; Mini text 33 ms, 41-45 on 8).
+GRAPH_THREADS: dict[str, dict[str, int]] = {"nano": {"text": 12}, "mini": {}}
+# Idle-thread spin per graph (ModelSpec.graph_spin_us): with the engine's 2 ms
+# some of Nano's 12 text threads sleep inside a 2-8 ms run (p50 0.3-0.4 ms
+# slower than with 10 ms).
+GRAPH_SPIN_US: dict[str, dict[str, int]] = {"nano": {"text": 10_000}, "mini": {}}
 # Import name -> distribution of the multimodal extra.
 EXTRA = {"onnxruntime": "onnxruntime", "PIL": "Pillow"}
 GOLDEN_TEXT = "Route this request to the model that answers it best."
@@ -170,6 +181,8 @@ class MultimodalEmbeddingFamily(ModelFamily):
             max_input_tokens=package.max_input_tokens,
             graphs=verified.graphs,
             encoder=True,
+            graph_threads=GRAPH_THREADS[verified.variant],
+            graph_spin_us=GRAPH_SPIN_US[verified.variant],
         )
 
     def load(
@@ -242,8 +255,10 @@ class OmniModel(LoadedModel):
 
     Every input runs its graphs alone, so its vector is the same in any batch:
     the ``exact`` profile hands every queued request to one ``run``, which runs
-    up to ``CONCURRENT_INPUTS`` inputs at once on the shared ONNX Runtime pool
-    (one short input's run leaves most of the pool idle).
+    up to ``CONCURRENT_INPUTS`` text and audio inputs at once on their graphs'
+    ONNX Runtime pools (one short input's run leaves most of a pool idle).
+    Images run one after another beside them: one image's run keeps every
+    core busy, and two at once only contend for the cores.
     """
 
     device_thread = False
@@ -318,13 +333,27 @@ class OmniModel(LoadedModel):
     def run(self, items: list[Any]) -> list[Any]:
         if len(items) == 1:
             return [self._embed(items[0])]
-        return list(self.inputs.map(self._embed, items))
+        shared = {
+            index: self.inputs.submit(self._embed, item)
+            for index, item in enumerate(items)
+            if item.modality != "image"
+        }
+        images = {
+            index: self._embed(item)
+            for index, item in enumerate(items)
+            if item.modality == "image"
+        }
+        return [
+            images[index] if index in images else shared[index].result()
+            for index in range(len(items))
+        ]
 
     def finish_surface(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:
         return embedding.finish(plan, results)
 
     def close(self) -> None:
         self.inputs.shutdown(wait=True)
+        self.image.close()
         super().close()
 
     def _graph(

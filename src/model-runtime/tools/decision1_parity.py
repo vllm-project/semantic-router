@@ -4,7 +4,7 @@
         --panel NAME:REQUESTS.jsonl:COUNT ... --answers REFERENCE.jsonl
     python3 tools/decision1_parity.py native --model REPO --revision REV --cache-dir DIR \\
         --device cpu|rocm:0 --panel NAME:REQUESTS.jsonl:COUNT ... --answers NATIVE.jsonl [--profile P] \\
-        [--also REPO ...]
+        [--also REPO ...] [--concurrent N]
     python3 tools/decision1_parity.py compare REFERENCE.jsonl NATIVE.jsonl --output parity.json
 
 ``reference`` loads the package with Transformers remote code (``system_one``), the
@@ -14,7 +14,10 @@ kernel choices, so they run the same kernels. ``native``
 serves the package through ``vllm_sr_runtime`` (verification, readiness, the
 scheduler) on one profile; ``--also`` serves more built-in models in the same
 process on the same device, loaded first, as one GPU process of the default
-layout does, and the panel still asks ``--model``. ``compare`` reports, per panel, the prompts whose
+layout does, and the panel still asks ``--model``; ``--concurrent N`` sends N
+prompts at a time, to ``--model`` and to every ``--also`` model at once, so
+their batches (and graph captures) meet, and counts the other models' failed
+requests. ``compare`` reports, per panel, the prompts whose
 answers are byte-identical (canonical JSON; a structured Score legend of the
 reference is compared as the canonical JSON the API contract returns), decision
 changes, error mismatches and the largest absolute difference of any number,
@@ -131,6 +134,7 @@ def run_native(args: argparse.Namespace) -> int:
         cache_dir=args.cache_dir,
         offline=True,
         threads=args.threads,
+        exit_on_device_error=False,
     )
     started = time.perf_counter()
     runtime = Runtime(config)
@@ -146,28 +150,49 @@ def run_native(args: argparse.Namespace) -> int:
             if other is not served
         },
     }
+
+    async def ask(model: str, prompt: dict[str, Any]) -> tuple[int, Any, float]:
+        body = {
+            "model": model,
+            "state": prompt["state"],
+            "questions": prompt["questions"],
+            "options": {"return_meta": False, "profile": args.profile},
+        }
+        started = time.perf_counter()
+        size = len(json.dumps(body, separators=(",", ":")).encode("utf-8"))
+        status, response = await runtime.call("decisions", body, size)
+        answers = (
+            response.get("answers") if status == 200 else {"request_error": status}
+        )
+        return status, answers, time.perf_counter() - started
+
+    async def wave(batch: list[tuple[str, dict[str, Any]]]) -> list:
+        calls = [ask(args.model, prompt) for _, prompt in batch]
+        if args.concurrent:
+            calls += [ask(repo, prompt) for _, prompt in batch for repo in args.also]
+        return await asyncio.gather(*calls)
+
+    rows = panels(args.panel)
+    size = max(args.concurrent, 1)
+    others_failed = 0
     loop = asyncio.new_event_loop()
     try:
         with open(args.answers, "x", encoding="utf-8") as sink:
-            for panel, prompt in panels(args.panel):
-                body = {
-                    "model": args.model,
-                    "state": prompt["state"],
-                    "questions": prompt["questions"],
-                    "options": {"return_meta": False, "profile": args.profile},
-                }
-                started = time.perf_counter()
-                size = len(json.dumps(body, separators=(",", ":")).encode("utf-8"))
-                status, response = loop.run_until_complete(
-                    runtime.call("decisions", body, size)
+            for start in range(0, len(rows), size):
+                batch = rows[start : start + size]
+                results = loop.run_until_complete(wave(batch))
+                mine = results[: len(batch)]
+                for (panel, prompt), (_, answers, seconds) in zip(
+                    batch, mine, strict=True
+                ):
+                    write(sink, panel, prompt, answers, seconds)
+                others_failed += sum(
+                    status != 200 for status, _, _ in results[len(batch) :]
                 )
-                answers = (
-                    response.get("answers")
-                    if status == 200
-                    else {"request_error": status}
-                )
-                write(sink, panel, prompt, answers, time.perf_counter() - started)
         receipt["engine"] = served.model.engine_model.receipt()
+        receipt["concurrent"] = args.concurrent
+        receipt["also_failed_requests"] = others_failed
+        receipt["health_after"] = {s.label: s.health.state for s in runtime.served}
     finally:
         loop.close()
         runtime.stop()
@@ -296,6 +321,13 @@ def main() -> int:
         default=[],
         metavar="REPO",
         help="another built-in model served in the same process, loaded first",
+    )
+    native.add_argument(
+        "--concurrent",
+        type=int,
+        default=0,
+        metavar="N",
+        help="ask N prompts at once, of --model and of every --also model together",
     )
     for command in (reference, native):
         command.add_argument("--device", default="cpu")

@@ -227,11 +227,9 @@ class Decision2Family(ModelFamily):
         return Decision2Model(info, engine_model, head, tokenizer, details)
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
-        known = builtin.by_identity(package.model_sha256)
-        expected = dict(known.golden_answers) if known else {}
-        return [
-            {"state": GOLDEN_STATE, "questions": GOLDEN_QUESTIONS, "expected": expected}
-        ]
+        return builtin.golden_decisions(
+            package.model_sha256, GOLDEN_STATE, GOLDEN_QUESTIONS
+        )
 
 
 def _model_type(config: dict[str, Any], declared: str) -> str:

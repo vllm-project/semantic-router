@@ -64,6 +64,16 @@ def test_a_missing_extra_names_its_install(nano, monkeypatch):
         family.describe(package)
 
 
+def test_nano_sizes_its_text_graph_pool(nano, tmp_path):
+    family = MultimodalEmbeddingFamily()
+    spec = family.describe(family.verify(PackageRef(nano)))
+    assert spec.graph_threads == {"text": 12}
+    assert spec.graph_spin_us == {"text": 10_000}
+    mini = omni.write_bundle(tmp_path / "vela-1.0-omni-mini", variant="mini")
+    mini_spec = family.describe(family.verify(PackageRef(mini)))
+    assert mini_spec.graph_threads == {} and mini_spec.graph_spin_us == {}
+
+
 def test_the_default_engine_serves_a_bundle_on_onnxruntime(tmp_path):
     from vllm_sr_runtime.config import ModelConfig, ServeConfig
     from vllm_sr_runtime.runtime import Runtime
@@ -104,6 +114,11 @@ def test_batches_never_run_on_the_cpu_device_thread(tmp_path, monkeypatch):
         threads.clear()
         body = {"model": "omni", "input": "hello", "options": {"overflow": "reject"}}
         inline = asyncio.run(runtime.call("embeddings", body, 64))
+        # The worker answers a job before it releases the model, and a caller
+        # runs a group only on a released model.
+        scheduler = runtime.lookup("omni").scheduler
+        with scheduler._lock:
+            assert scheduler._lock.wait_for(lambda: not scheduler._owned, timeout=30)
         body["input"] = "hello there"
         planned_off_loop = asyncio.run(runtime.call("embeddings", body))
     finally:
@@ -282,6 +297,55 @@ def test_a_batch_answers_every_input_as_it_answers_alone(model):
     assert model.run(plan.items) == [model.run([item])[0] for item in plan.items]
 
 
+def test_a_batch_runs_its_images_one_at_a_time_beside_text_and_audio(
+    model, monkeypatch
+):
+    image = base64.b64encode(golden_image()).decode()
+    sound = base64.b64encode(golden_audio()).decode()
+    picture = {
+        "type": "image_url",
+        "image_url": {"url": f"data:image/png;base64,{image}"},
+    }
+    inputs = [
+        picture,
+        "route this request",
+        picture,
+        {"type": "input_audio", "input_audio": {"data": sound, "format": "wav"}},
+        "a second request",
+        picture,
+    ]
+    plan = model.plan_surface("embeddings", request({"input": inputs}))
+    lock = threading.Lock()
+    images_running, most_images = [0], [0]
+    threads: dict[str, set[str]] = {}
+    embed = type(model)._embed
+
+    def recording(self, item):
+        with lock:
+            threads.setdefault(item.modality, set()).add(
+                threading.current_thread().name
+            )
+            if item.modality == "image":
+                images_running[0] += 1
+                most_images[0] = max(most_images[0], images_running[0])
+        try:
+            time.sleep(0.01)
+            return embed(self, item)
+        finally:
+            with lock:
+                if item.modality == "image":
+                    images_running[0] -= 1
+
+    monkeypatch.setattr(type(model), "_embed", recording)
+    vectors = model.run(plan.items)
+    monkeypatch.undo()
+    assert vectors == [model.run([item])[0] for item in plan.items]
+    assert most_images[0] == 1
+    assert threads["image"] == {threading.current_thread().name}
+    shared = threads["text"] | threads["audio"]
+    assert all(name.startswith("vllm-sr-omni_") for name in shared)
+
+
 def test_media_inputs_carry_a_scheduler_cost_and_text_counts_its_tokens(model):
     from vllm_sr_runtime.families.multimodal_embedding.family import MEDIA_COST
     from vllm_sr_runtime.scheduler.planner import cost
@@ -349,12 +413,15 @@ def test_bad_inputs_fail_in_place(model):
         model.plan_surface("embeddings", request({"input": "hello", "layer": 3}))
 
 
-def test_images_of_any_mode_become_normalized_channels_first_pixels(nano):
+def test_images_of_any_mode_and_size_become_normalized_channels_first_pixels(nano):
     from PIL import Image
 
     processor = ImageProcessor(bundles.load(nano))
-    for mode in ("RGB", "L", "RGBA", "P", "CMYK"):
-        data = png(37, 21, mode)
+    photo = io.BytesIO()
+    noise = np.random.default_rng(7).integers(0, 256, (97, 151, 3), dtype=np.uint8)
+    Image.fromarray(noise).save(photo, format="JPEG", quality=90)
+    cases = [png(37, 21, mode) for mode in ("RGB", "L", "RGBA", "P", "CMYK")]
+    for data in [*cases, png(1, 143), png(1031, 777), photo.getvalue()]:
         pixels = processor.pixels(data)
         assert pixels.shape == (1, 3, 512, 512) and pixels.dtype == np.float32
         assert pixels.min() >= -1.0 and pixels.max() <= 1.0
@@ -366,6 +433,7 @@ def test_images_of_any_mode_become_normalized_channels_first_pixels(nano):
         reference = ((scaled - processor.mean) / processor.std).transpose(2, 0, 1)
         assert np.array_equal(pixels[0], reference)
     assert processor.pixels(b"\x89PNG broken") == "invalid_input"
+    processor.close()
 
 
 def test_deadlines_and_non_unit_outputs(tmp_path, model):
