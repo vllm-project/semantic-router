@@ -274,11 +274,15 @@ def pin_choices(package: Path, device: str) -> bool:
     Both sides answer on this thread, so they run the same kernels.
     """
     from vllm_sr_runtime.accel.autotune import KernelChoices
+    from vllm_sr_runtime.registry import builtin
 
     accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
     info = accelerator.devices()[int(device.split(":")[1]) if ":" in device else 0]
     family = Vela2Family()
-    recorded = family.kernel_choices(family.verify(PackageRef(package)), info)
+    verified = family.verify(PackageRef(package))
+    recorded = builtin.kernel_choices(
+        verified.model_sha256, info.accelerator, info.arch
+    ) or family.kernel_choices(verified, info)
     if not recorded:
         return False
     choices = KernelChoices(recorded)

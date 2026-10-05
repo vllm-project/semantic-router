@@ -45,6 +45,7 @@ from vllm_sr_runtime.profiles.shared_context import (  # noqa: E402
     SharedContextProfile,
     SharePolicy,
 )
+from vllm_sr_runtime.registry import builtin  # noqa: E402
 
 ACCELERATORS = {"cpu": CPUAccelerator, "cuda": CUDAAccelerator, "rocm": ROCmAccelerator}
 PROFILES = {"exact": ExactProfile, "shared_context": SharedContextProfile}
@@ -91,7 +92,9 @@ def load(args: argparse.Namespace):
     accelerator = ACCELERATORS[kind]()
     devices = accelerator.devices()
     device = devices[int(index or 0)] if kind != "cpu" else devices[0]
-    recorded = family.kernel_choices(package, device)
+    recorded = builtin.kernel_choices(
+        package.model_sha256, device.accelerator, device.arch
+    ) or family.kernel_choices(package, device)
     if recorded:
         choices = KernelChoices(recorded)
         if choices.install() is None:
