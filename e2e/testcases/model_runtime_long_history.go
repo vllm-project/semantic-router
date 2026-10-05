@@ -14,7 +14,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("model-runtime-long-history", pkgtestcases.TestCase{
-		Description: "A conversation whose history sends one process more tasks than a runtime takes in one bundle by default is answered: no task is refused, and the PII signal over the whole history follows the runtime's spans",
+		Description: "A conversation whose history gives one process more tasks than a runtime takes in one bundle by default is answered with no task refused; the Router's managed runtimes take every history piece in one bundle, and the PII signal over the whole history follows the runtime's spans",
 		Tags:        []string{"model-runtime", "bundles", "pii", "history"},
 		Fn:          testModelRuntimeLongHistory,
 	})
@@ -41,14 +41,14 @@ func testModelRuntimeLongHistory(ctx context.Context, client *kubernetes.Clients
 	if err != nil {
 		return err
 	}
-	before, err := pii.Metrics(ctx)
-	if err != nil {
-		return err
-	}
-
 	messages, pieces := longHistory(fmt.Sprintf("%d", time.Now().UnixNano()))
 	if len(pieces) <= mrDefaultBundleTasks {
 		return fmt.Errorf("the conversation has %d PII pieces; it must exceed %d", len(pieces), mrDefaultBundleTasks)
+	}
+
+	before, err := pii.Metrics(ctx)
+	if err != nil {
+		return err
 	}
 	response, err := sendLocalChatConversation(ctx, session.gatewayPort, "auto", messages, mrRequestTimeout)
 	if err != nil {
@@ -63,12 +63,12 @@ func testModelRuntimeLongHistory(ctx context.Context, client *kubernetes.Clients
 	}
 	bundles := countDelta(before, after, runtimeRequestsMetric, map[string]string{"endpoint": "/v1/bundle"})
 	refused := countDelta(before, after, runtimeRequestsMetric, map[string]string{"status": "413"})
-	tasks := after.Sum(runtimeBundleTasksMetric+"_sum", nil) - before.Sum(runtimeBundleTasksMetric+"_sum", nil)
+	routed := after.Sum(runtimeBundleTasksMetric+"_sum", nil) - before.Sum(runtimeBundleTasksMetric+"_sum", nil)
 	if refused != 0 {
-		return fmt.Errorf("%s refused %v requests as too large", socket, refused)
+		return fmt.Errorf("%s refused %v of the Router's requests as too large", socket, refused)
 	}
-	if bundles < 1 || tasks < float64(len(pieces)) {
-		return fmt.Errorf("%s received %v bundles carrying %v tasks, want the %d PII pieces at least", socket, bundles, tasks, len(pieces))
+	if bundles < 1 || routed < float64(len(pieces)) {
+		return fmt.Errorf("%s received %v bundles carrying %v tasks, want the %d PII pieces at least", socket, bundles, routed, len(pieces))
 	}
 
 	preview, err := session.previewConversation(ctx, messages)
@@ -79,24 +79,33 @@ func testModelRuntimeLongHistory(ctx context.Context, client *kubernetes.Clients
 		return err
 	}
 
+	// How the Router's flushes group a stage depends on timing, so one bundle
+	// of every piece checks the cap the Router starts its runtimes with.
 	threshold := mrSignalThreshold
 	options := &modelruntime.ClassifyOptions{
 		Overflow: "window", MaxTokens: mrWindowBudget, Threshold: &threshold,
 		Window: &modelruntime.WindowOptions{Tokens: mrWindowTokens, Overlap: mrWindowOverlap},
 	}
-	classified, err := pii.Classify(ctx, modelruntime.ClassifyRequest{Model: mrPIIDeployment, Input: pieces, Options: options})
-	if err != nil {
-		return fmt.Errorf("%s: %w", mrPIIDeployment, err)
+	tasks := make([]modelruntime.BundleTask, len(pieces))
+	for index, piece := range pieces {
+		tasks[index] = modelruntime.BundleTask{
+			ID:       fmt.Sprintf("piece-%d", index),
+			Classify: &modelruntime.ClassifyRequest{Model: mrPIIDeployment, Input: []string{piece}, Options: options},
+		}
 	}
-	if len(classified.Results) != len(pieces) {
-		return fmt.Errorf("%s answered %d of %d pieces", mrPIIDeployment, len(classified.Results), len(pieces))
+	bundled, err := pii.Bundle(ctx, modelruntime.BundleRequest{Tasks: tasks})
+	if err != nil {
+		return fmt.Errorf("one /v1/bundle of %d PII tasks to %s: %w", len(tasks), socket, err)
+	}
+	if len(bundled.Results) != len(tasks) {
+		return fmt.Errorf("%s answered %d of %d bundled tasks", socket, len(bundled.Results), len(tasks))
 	}
 	withSpans := 0
-	for index, result := range classified.Results {
-		if result.Error != "" {
-			return fmt.Errorf("%s piece %d: %s", mrPIIDeployment, index, result.Error)
+	for index, result := range bundled.Results {
+		if result.Status != http.StatusOK || result.Classify == nil || len(result.Classify.Results) != 1 || result.Classify.Results[0].Error != "" {
+			return fmt.Errorf("%s bundled task %d answered status %d: %+v", socket, index, result.Status, result.Error)
 		}
-		if len(result.Spans) > 0 {
+		if len(result.Classify.Results[0].Spans) > 0 {
 			withSpans++
 		}
 	}
@@ -105,7 +114,8 @@ func testModelRuntimeLongHistory(ctx context.Context, client *kubernetes.Clients
 	}
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"pii_pieces": len(pieces), "pieces_with_spans": withSpans, "bundles": bundles, "bundled_tasks": tasks,
+			"pii_pieces": len(pieces), "pieces_with_spans": withSpans, "router_bundles": bundles,
+			"router_bundled_tasks": routed, "direct_bundle_tasks": len(tasks),
 			"decision": response.Headers.Get("x-vsr-selected-decision"),
 		})
 	}
