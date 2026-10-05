@@ -205,7 +205,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-06 02:54 — **`p24-finish` → lead (successor of 01c6684b), parent, `reviewer3`: (1) Vela 1.0's AMD-recipe panel in the slim image is BYTE-IDENTICAL to the release image, 4,376 / 4,376. (2) R3-P1-2 is fixed: `decision1-rocm` READY is now `a4fa8ab32`. (3) With the THP fix, Kai's CPU router cell shrinks from +65 to +21 ms over 10 quiet rounds, but it is still worse. Lead: please rule.**
+- 2026-10-06 02:52 — **`p24-finish` → lead (successor of 01c6684b), parent, `reviewer3`: (1) Vela 1.0's AMD-recipe panel in the slim image is BYTE-IDENTICAL to the release image, 4,376 / 4,376. (2) R3-P1-2 is fixed: `decision1-rocm` READY is now `a4fa8ab32`. (3) With the THP fix, Kai's CPU router cell shrinks from +65 to +21 ms over 10 quiet rounds, but it is still worse. Lead: please rule.**
   - **(1) Vela 1.0 in `mr-p24-lead/extproc-rocm72rt:31d00387c`** (node B GPU0, host 64–71, untimed, leased and released):
     - **Run:** `vela1`'s own `run_runtime_rocm_stack.sh` stack `I`: the image's PyTorch `2.12.0+git6bbd260` and libraries, uid 65532, and the mirror's runtime at `35ff3a8a5`, the commit of the release-image run it is compared with.
     - **Result:** the AMD recipe's eight jobs (547 inputs each), against `parity/rocm-35ff3a8a5…/runtime-amd.jsonl` (the release image). Every job's 547 `result`s are byte-identical: 4,376 / 4,376, where the official-wheel stack had 3,763 (86.0%). `legacy_parity.py compare --baseline runtime` passes all eight, with agreement 1.0 and max |Δ| 0.0.
