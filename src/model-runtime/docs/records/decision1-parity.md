@@ -5,15 +5,17 @@ Decision 1.0 package's bundled runtime, for all seven packages. On ROCm this
 holds on all four scored panels, on CPU on subsets of them. That is design
 §17's bar for Decision 1.0: bit-identical on the same device class.
 
-On the router's shipped ROCm stack (the official PyTorch wheel with
-`causal-conv1d`, below), the released answers move by rounding: about 11.5%
-of prompts stay byte-identical on the encoders, with no decision changed, and
-almost none on the decoders, where 0.3–0.6% of decisions change, each a
-near-tie. On that stack the runtime answers byte-identically across cold
-processes.
+On the router's ROCm image (`a580be6b9`, which serves with vLLM's ROCm
+PyTorch, the build the packages were released on), the runtime answers the
+released references byte for byte: all seven models, all four panels, and
+every router request, with the recorded golden answers reproduced in every
+value. On the official-wheel stack that image replaced (below), the released
+answers move by rounding: about 11.5% of prompts stay byte-identical on the
+encoders, with no decision changed, and almost none on the decoders, where
+0.3–0.6% of decisions change, each a near-tie.
 
 - **Date:** 2026-10-04; the P1-4 runs, the `dc81682bb` column and the
-  shipped ROCm stack on 2026-10-05.
+  official-wheel stack on 2026-10-05; the adopted image on 2026-10-06.
 - **ROCm:** one AMD Instinct MI325X (gfx942) per run, in the image the packages
   were released with: PyTorch 2.12 (ROCm), Transformers 5.17, Triton 3.7.1, FLA
   0.5.2, causal-conv1d 1.7.0.
@@ -37,7 +39,7 @@ processes.
   also carries what the engine ran: graph statistics per layer stack and the
   reduced copy. A P1-4 entry names the models served before it in the same
   process (`served_before`), and `concurrent` when they were asked at once.
-  The shipped-stack entries name the `stack` and the `reference` they compare
+  The stack entries name the `stack` and the `reference` they compare
   with (`released`, or the `stack`'s own one-model answers), and a
   `cross_process` entry holds the three cold processes.
 
@@ -139,16 +141,45 @@ models' batches and graph captures meet:
   time because concurrent requests coalesce). On both, no request failed and
   all three stayed ready.
 
-## The shipped ROCm stack: stack B plus `causal-conv1d`
+## The router's ROCm image: vLLM's ROCm PyTorch
 
-The router's ROCm image ships the official PyTorch 2.12.0 wheel from the
-rocm7.2 index (HIP 7.2, Triton 3.7.0) with FLA 0.5.2 and `causal-conv1d`
-1.7.0 built for gfx942. The references above, and the recorded ROCm golden
-answers, come from the packages' release image: a PyTorch 2.12 source build
-on ROCm 7.2 with Triton 3.7.1.
+`mr-p24-lead/extproc-rocm72rt:a580be6b9` takes PyTorch 2.12.0+git6bbd260
+(AOTriton 0.13.50) and the ROCm 7.2.3 libraries from vLLM's ROCm image,
+pinned by digest, with Triton 3.7.0, FLA 0.5.2 and `causal-conv1d` 1.7.0. At
+`1bd99cd37`, whose runtime code is the PR's (device lock and thread-local
+graph capture included), exact, on node C, every result is byte-identical:
+
+| Check | Kai | Lex | Route | Eos | Sol | Nox | Lux |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Four panels against the released references (10,653 prompts, 11,053 questions) | 10,653 | 10,653 | 10,653 | 10,653 | 10,653 | 10,653 | 10,653 |
+| Router requests against the bundled runtime in the image (231 requests, 1,386 questions) | 231 | 231 | 231 | 231 | 231 | 231 | 231 |
+| ROCm golden answers, two fresh processes, against the recorded file | equal | equal | equal | equal | equal | equal | equal |
+
+- **Panels:** 0 decision changes and max \|Δp\| 0.0 on every model; every
+  load matched its golden (3 of 3, Route 4 of 4). Three GPUs, one model at a
+  time per GPU.
+- **Router requests:** both sides in the image, with Transformers 5.17.0 (and
+  `regex`) appended to `PYTHONPATH` for the bundled side.
+- **Golden answers:** two processes, started together on two GPUs, recorded
+  the ROCm answers of all seven packages with `tools/golden_answers.py`; each
+  equals `registry/golden_answers_decision1.json` in every value.
+- **CPU in this image:** its PyTorch is built without LAPACK and MKL
+  (`torch._C.has_lapack` and `torch.backends.mkl.is_available()` are false).
+  Kai answers on its CPU path, within 8.3e-7 of the CPU golden answers
+  (matched). The Qwen3.5 decoders can't: their CPU gated-delta reference calls
+  `torch.triangular_solve`, which raises without LAPACK, so their golden check
+  fails at load. CPU deployments use the CPU image.
+
+## The official-wheel ROCm stack: stack B plus `causal-conv1d`
+
+Until `a580be6b9`, the router's ROCm image shipped the official PyTorch
+2.12.0 wheel from the rocm7.2 index (HIP 7.2, Triton 3.7.0) with FLA 0.5.2
+and `causal-conv1d` 1.7.0 built for gfx942. The references above, and the
+recorded ROCm golden answers, come from the packages' release image: a
+PyTorch 2.12 source build on ROCm 7.2 with Triton 3.7.1.
 
 At `a1c7a284e`, exact, the four scored panels (10,653 prompts, 11,053
-questions), against the released references. The shipped image
+questions), against the released references. The official-wheel image
 (`extproc-rocm72cc:be7366c49`) and `venv-rocm72-cc` (the image's pins with a
 `causal-conv1d` wheel whose gfx942 device code equals the image's and the
 release's) gave byte-identical answers on every prompt of all seven models:
@@ -198,7 +229,7 @@ signals about one prompt as one request: six questions of mixed types, which
 no scored panel has. Exact against the bundled runtime on such requests
 (public231's 231 prompts, each asking the six signals of Route's
 `QUESTIONS.json` as explicit questions, as `tools/decision1_bench.py --router`
-builds them) is byte-identical for all seven models on the shipped stack, both
+builds them) is byte-identical for all seven models on the official-wheel stack, both
 sides in the image plus Transformers 5.17 (231 / 231 requests, 1,386
 questions each). On CPU, Kai is 30 / 30 and Eos 10 / 10 (3 threads on both
 sides).
@@ -334,6 +365,11 @@ a tolerance rather than bit for bit.
 (`registry/golden_answers_decision1.json`). Every load checks them: a
 deployment whose answers move further from the record than the check's
 tolerance (1e-3 on CPU, 0.02 on a GPU) fails to load.
+
+At `1bd99cd37` the file is reproduced in every value: on ROCm by two fresh
+processes in the router's image (above), and on CPU in the CPU PyTorch
+2.10 image at 16 threads. At 4 threads the CPU answers match within 3.5e-7,
+since MKL's reductions depend on the thread count.
 
 ## Reproduce
 

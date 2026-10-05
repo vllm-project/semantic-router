@@ -7453,6 +7453,763 @@
      "max_abs_diff": 0.0
     }
    }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260, AOTriton 0.13.50)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "triton-gfx942-fp64",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260, AOTriton 0.13.50)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260, AOTriton 0.13.50)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260, AOTriton 0.13.50)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 32,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260, AOTriton 0.13.50)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 32,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260, AOTriton 0.13.50)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 4,
+    "matched": 4,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "encoder_graphs": {
+     "captures": 0,
+     "replays": 0,
+     "eager": 0,
+     "packed": 0,
+     "failed": 0,
+     "cached": 0,
+     "branches": {
+      "choice": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      },
+      "score": {
+       "captures": 0,
+       "replays": 0,
+       "eager": 0,
+       "packed": 0,
+       "failed": 0,
+       "cached": 0
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260, AOTriton 0.13.50)",
+   "reference": "released",
+   "golden": {
+    "status": "matched",
+    "checked": 3,
+    "matched": 3,
+    "reference": "rocm"
+   },
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": {
+    "kernels": {
+     "add_rmsnorm": "triton-gfx942",
+     "attn_prep": "triton-gfx942",
+     "causal_conv1d": "causal-conv1d",
+     "chunk_gated_delta_rule": "fla",
+     "gated_rmsnorm": "triton-gfx942",
+     "gdn_prep": "triton-gfx942",
+     "geglu": "torch-reference",
+     "linear": "torch-reference",
+     "residual_add": "triton-gfx942",
+     "rotary_half": "triton-gfx942",
+     "sdpa": "torch-reference",
+     "sigmoid_gate": "triton-gfx942",
+     "silu_mul": "triton-gfx942"
+    },
+    "fused_layers": 24,
+    "graphs": {
+     "captures": 118,
+     "replays": 10430,
+     "eager": 221,
+     "full": 0,
+     "failed": 0,
+     "cached": 118
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260) plus Transformers 5.17.0, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260) plus Transformers 5.17.0, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260) plus Transformers 5.17.0, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260) plus Transformers 5.17.0, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260) plus Transformers 5.17.0, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260) plus Transformers 5.17.0, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "router image a580be6b9 (vLLM's ROCm PyTorch 2.12.0+git6bbd260) plus Transformers 5.17.0, both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 1386,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "1bd99cd37",
+   "stack": "CPU PyTorch 2.10.0, 3 threads on both sides",
+   "reference": "bundled",
+   "workload": "router requests: public231 prompts, each asking Route's six router signals",
+   "panels": {
+    "router231": {
+     "prompts": 30,
+     "identical": 30,
+     "questions": 180,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
   }
  ]
 }
