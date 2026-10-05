@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,10 @@ class TaskSpec:
     # itself, for which none of its rows is held out.
     exclude_prefix: tuple[str, str] | None = None
     trained_on_repos: tuple[str, ...] = ()
+    served_task: str | None = None
+    revision: str | None = None
+    site_labels: tuple[tuple[str, str], ...] = ()
+    rows_per_label: int = 0
 
     def validate_artifact(self, repo: str) -> None:
         """Refuse source labels that cannot rank this artifact."""
@@ -134,6 +139,36 @@ TASK_SPECS: dict[str, TaskSpec] = {
             LEGACY_MODEL_REGISTRY["intent"]["id"],
             LEGACY_MODEL_REGISTRY["intent"]["lora_id"],
         ),
+    ),
+    "domain-conversational": TaskSpec(
+        dataset_repo="flax-sentence-embeddings/stackexchange_title_body_jsonl",
+        split="train",
+        text_field="texts",
+        label_field="site",
+        split_rule="by_source",
+        served_task="domain",
+        revision="a3d99bf21570ed043e19e41af46f3f19bf4e4bb6",
+        site_labels=(
+            ("biology", "biology"),
+            ("chemistry", "chemistry"),
+            ("cs", "computer science"),
+            ("economics", "economics"),
+            ("engineering", "engineering"),
+            ("history", "history"),
+            ("law", "law"),
+            ("math", "math"),
+            ("philosophy", "philosophy"),
+            ("physics", "physics"),
+            ("cooking", "other"),
+            ("gaming", "other"),
+            ("travel", "other"),
+            ("bicycles", "other"),
+            ("gardening", "other"),
+            ("music", "other"),
+            ("movies", "other"),
+            ("photo", "other"),
+        ),
+        rows_per_label=300,
     ),
 }
 
@@ -240,6 +275,8 @@ def load_rows(
     spec: TaskSpec, mapping: dict[str, int], limit: int | None
 ) -> tuple[list[str], np.ndarray, int]:
     """Load the held-out split and map every row onto the artifact's class order."""
+    if spec.site_labels:
+        return load_site_rows(spec, mapping, limit)
     dataset = load_dataset(spec.dataset_repo, split=spec.split)
     if spec.exclude_prefix is not None:
         field, prefix = spec.exclude_prefix
@@ -279,6 +316,45 @@ def load_rows(
             "dropped rows with labels the artifact does not define: %s",
             ", ".join(sorted(unmapped)[:MAX_REPORTED_UNMAPPED]),
         )
+    return texts, np.array(labels, dtype=np.int64), available
+
+
+def load_site_rows(
+    spec: TaskSpec, mapping: dict[str, int], limit: int | None
+) -> tuple[list[str], np.ndarray, int]:
+    sites: dict[str, list[str]] = {}
+    for site, label in spec.site_labels:
+        if label not in mapping:
+            raise BaselineError(f"{spec.dataset_repo}: the artifact has no {label!r}")
+        sites.setdefault(label, []).append(site)
+    seen: set[str] = set()
+    texts: list[str] = []
+    labels: list[int] = []
+    for label, names in sites.items():
+        quota = -(-spec.rows_per_label // len(names))
+        for site in names:
+            rows = load_dataset(
+                spec.dataset_repo,
+                data_files=f"{site}.stackexchange.com.jsonl.gz",
+                revision=spec.revision,
+                split=spec.split,
+            )
+            titles = [row[spec.text_field][0].strip() for row in rows]
+            random.Random(f"{spec.dataset_repo}:{site}").shuffle(titles)
+            taken = 0
+            for title in titles:
+                key = " ".join(title.casefold().split())
+                if taken == quota:
+                    break
+                if key in seen:
+                    continue
+                seen.add(key)
+                texts.append(title)
+                labels.append(mapping[label])
+                taken += 1
+    available = len(texts)
+    if limit is not None:
+        texts, labels = texts[:limit], labels[:limit]
     return texts, np.array(labels, dtype=np.int64), available
 
 
