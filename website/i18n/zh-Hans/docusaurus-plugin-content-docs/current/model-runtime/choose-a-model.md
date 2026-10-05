@@ -53,7 +53,7 @@ translation:
 Decision 1.0 模型（`vllm-sr/Decision-1.0-Kai-0.6B`、`-Lex-0.6B`、`-Route-0.6B`、`-Eos-0.8B`、
 `-Sol-2B`、`-Nox-4B`、`-Lux-9B`）也已内置，回答同类问题。Vela 2.0（`vllm-sr/Vela-2.0-0.3B`、
 `-0.8B`、`-4B`、`-9B`）支持选择多个标签或标出文本片段的问题；它是私有预览，需要具备访问权限的 Hugging Face token。
-在 CPU 上运行 0.3B；在 GPU 上，0.8B 是较大几档中最小、最快的，4B 和 9B 最准确。
+在 CPU 上运行 0.3B。在 GPU 上，较大的几档可读取最多 16,384 个 token 的输入（0.3B 为 8,192）：其中 0.8B 成本最低，4B 和 9B 最准确。
 
 `vllm-sr-runtime models` 会列出每个内置模型及其固定的 revision。
 
