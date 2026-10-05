@@ -205,6 +205,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 04:13 — **`pr-writer` → lead (successor of 01c6684b), parent: DRAFT. `mr-scratch/p24-pr/PR-BODY.md` and `COMMIT-MESSAGE.txt` are written for the final tree (staging plus `decision1-rocm` `cf2c3a92a`, `p2-fixer` `e746dbbe0` and THP `01e241173`). What's left are the lead's items, marked `TODO(lead)` in the body.**
+  - **PR body**, in the template's order (summary, `Closes`, Purpose, Test Plan, Test Result, checklist):
+    - `Closes` #4496, #4596, #4597, #4598, #4599, #4600, #4601 and #4603. Every folded READY is in staging, and #4603's acceptance condition is met (Vega-27B's slim golden, `reviewer3` 03:38).
+    - Purpose: the runtime core (with the huge-page CPU default), Phases 2–4, the ROCm image (about 14.4 GB of content against 17.3 GB for v0.4's `vllm-sr-rocm` and 25.5 GB unslimmed; no CPU LAPACK), eight breaking changes and the follow-ups.
+    - Test Result: exactness in the shipped image, claimed only where measured (R3-P1-1 as closed), and the performance summary. Every still-worse cell is stated with its number and cause, as ruled at 03:57 and 04:11: Kai, Lex and Route router p50 and Kai single p95; Omni Nano text p95; the 0.8B's CPU `exact`; the 0.8B approximate profiles' 9 / 360 near ties; and the opt-in `batching` single-caller window cost.
+    - R3-P1-4: the informative-only comparisons are named, and the 0.8B's 2,048-token row reads "indicative, no verdict".
+    - Follow-ups: #4602, the P2 issue, the OpenMP spin-count issue, the upstream Triton report, the zh-Hans `source_commit` re-point, and R3-P2-4 (one wheel download).
+  - **Commit message:** the subject is the PR title. The body has 25 lines wrapped at 72, with `reviewer3`'s R3-P1-3 wording and the "move … and add Decision 1.0 and Vela 2.0" fix, one line per breaking change and the eight `Closes` lines. `git interpret-trailers --parse` shows only the sign-off.
+  - **Placeholders (`TODO(lead)`):**
+    1. the numbers of the two follow-up issues you open at the final push (the P2 issue and the spin-count issue);
+    2. `make check`, `make harness-check` and the fresh smoke on the final head;
+    3. the Kind re-run on the final tree;
+    4. CI on the final head, its link and result;
+    5. DCO on the final head (it passes on `0cd854858`);
+    6. the checklist's last box, which I tick once 1–5 are in.
+  - **Leak guard:** `check_no_private.sh --strict` is clean on both files. They name no node, image tag, staging SHA, agent or review ID, and cite no exactness file of the kind the parent ruled out at 03:09.
+  - **FYI, lead (nothing I change):**
+    - `design.md`'s status row still says "Phases 2–4 in implementation (#4496)".
+    - The old body's design gist was last updated 2026-10-04, so the draft links the in-repo design instead.
+    - The seven folded issues carry `needs-acceptance` and no owner label. The PR check needs one accepted linked issue (#4496 with `wg/router-models-inference-runtime`), so the PR stays valid, and the merge closes all eight.
+    - `vela2-performance.md`'s summary still counts the 4B's informative CPU table in "level or better on CPU" (the record half of R3-P1-4). The body scopes it to the 0.3B.
+    - Not re-confirmed: the CUDA image size the body quotes (8.7 against 5.1 GB unpacked) is `removal-footprint.md`'s, measured at IP2b on 2026-10-04.
+  - **Next:** I re-read this file every 30 minutes and keep both files current. FINAL comes before your push target (the parent's 04:03 note says about 07:00), and by 08:30 at the latest. Lead, post the target time when you have it.
+  — `pr-writer`
+
 - 2026-10-06 04:11 — **Parent → lead (successor of 01c6684b), `pr-writer`, `reviewer3`: `p24-finish` is FINISHED. Its THP
   READY is `decision1` `01e241173`. One more follow-up issue. Three READYs to merge, then the early final push.**
   - **THP READY `01e241173`:**
