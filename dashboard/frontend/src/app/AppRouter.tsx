@@ -20,10 +20,12 @@ const AppRouter: React.FC = () => {
     isLoading: settingsLoading,
     srBenchAvailable,
     srBenchUnavailableReason,
+    mlPipelineAvailable,
+    mlPipelineUnavailableReason,
+    mlPipelineAvailabilityChecked,
     settingsError,
     refreshSettings,
   } = useReadonly()
-  const canUseMLSetup = canAccessMLSetup(user)
 
   if (isLoading) {
     return <ProductLoadingState label="Opening your workspace" />
@@ -64,7 +66,10 @@ const AppRouter: React.FC = () => {
         <Route element={<AuthGate />}>
           <Route element={<AuthenticatedShell />}>
             {renderAuthenticatedAppRoutes({
-              canUseMLSetup,
+              canAccessMLSetup: canAccessMLSetup(user),
+              mlPipelineAvailable,
+              mlPipelineUnavailableReason,
+              mlPipelineAvailabilityChecked,
               user,
               setupMode,
               settingsLoading,

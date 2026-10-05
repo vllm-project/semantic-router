@@ -243,3 +243,28 @@ func TestValidateYAMLBytesDeferringEnv(t *testing.T) {
 		})
 	}
 }
+
+func TestParseYAMLBytesDeferringEnvKeepsRoutingAsWritten(t *testing.T) {
+	t.Setenv("DEFER_PROBE_MAX", "not-a-count")
+	t.Setenv("DEFER_PROBE_HOST", "process-host")
+	document := strings.Replace(
+		string(deferredEnvDocument("${DEFER_PROBE_MAX:-64K}", "${DEFER_PROBE_KEY}")),
+		"endpoint: 127.0.0.1:8000", "endpoint: ${DEFER_PROBE_HOST:-127.0.0.1}:8000", 1,
+	)
+
+	cfg, err := ParseYAMLBytesDeferringEnv([]byte(document))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytesDeferringEnv() error = %v", err)
+	}
+	if got := cfg.ContextRules[0].MaxTokens; got != "${DEFER_PROBE_MAX:-64K}" {
+		t.Fatalf("max_tokens = %q, want the reference as written", got)
+	}
+	if got := cfg.VLLMEndpoints[0].Address; got != "127.0.0.1" {
+		t.Fatalf("backend address = %q, want the reference default", got)
+	}
+
+	_, err = ParseYAMLBytesDeferringEnv(deferredEnvDocument("${DEFER_PROBE_MAX:-lots}", "sk-probe"))
+	if err == nil || !strings.Contains(err.Error(), "invalid token count format: lots") {
+		t.Fatalf("ParseYAMLBytesDeferringEnv() error = %v, want the invalid default", err)
+	}
+}

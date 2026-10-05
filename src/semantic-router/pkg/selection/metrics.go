@@ -386,6 +386,7 @@ func preInitializeMetrics() {
 		"multi_factor",
 		"session_aware",
 		"prompt",
+		"decision",
 	}
 
 	// Initialize selection metrics for all methods

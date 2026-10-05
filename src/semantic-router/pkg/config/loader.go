@@ -118,14 +118,52 @@ func ParseYAMLBytesWithoutEnvExpansion(data []byte) (*RouterConfig, error) {
 // the other references either kept as written or empty. External assets are
 // checked as in ParseYAMLBytes.
 func ValidateYAMLBytesDeferringEnv(data []byte) error {
-	_, err := parseYAMLBytesWithOptions(data, "", &envExpander{lookup: noEnv, keepUnset: true})
-	if err == nil {
-		return nil
-	}
-	if _, unsetErr := parseYAMLBytesWithOptions(data, "", &envExpander{lookup: noEnv}); unsetErr == nil {
-		return nil
-	}
+	_, err := deferredEnvExpander(data)
 	return err
+}
+
+// ParseYAMLBytesDeferringEnv parses a config for an editor of its routing,
+// entrypoints and recipes, such as the DSL, when another process loads the
+// config with its own environment. It checks the config as
+// ValidateYAMLBytesDeferringEnv does. Those three sections keep ${VAR}
+// references and $$ escapes as written, so the editor can write them back;
+// the other sections resolve references as that check did.
+func ParseYAMLBytesDeferringEnv(data []byte) (*RouterConfig, error) {
+	env, err := deferredEnvExpander(data)
+	if err != nil {
+		return nil, err
+	}
+	// Only the resolved form is checked; references kept as written fail typed checks, such as a token count.
+	cfg, err := decodeYAMLBytes(data, func(raw map[string]interface{}) {
+		for key, value := range raw {
+			if !routingSections[key] {
+				raw[key] = env.expandValue(value)
+			}
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+	applyParsedConfigDefaults(cfg)
+	return cfg, nil
+}
+
+// routingSections are the top-level sections that hold routing state.
+var routingSections = map[string]bool{"routing": true, "entrypoints": true, "recipes": true}
+
+// deferredEnvExpander returns the expander with which data passes
+// ValidateYAMLBytesDeferringEnv.
+func deferredEnvExpander(data []byte) (*envExpander, error) {
+	keep := &envExpander{lookup: noEnv, keepUnset: true}
+	_, err := parseYAMLBytesWithOptions(data, "", keep)
+	if err == nil {
+		return keep, nil
+	}
+	empty := &envExpander{lookup: noEnv}
+	if _, emptyErr := parseYAMLBytesWithOptions(data, "", empty); emptyErr == nil {
+		return empty, nil
+	}
+	return nil, err
 }
 
 // parseYAMLBytesWithOptions keeps references as written and skips external
@@ -135,6 +173,30 @@ func parseYAMLBytesWithOptions(
 	baseDir string,
 	env *envExpander,
 ) (*RouterConfig, error) {
+	var expand func(map[string]interface{})
+	if env != nil {
+		expand = env.expandMap
+	}
+	cfg, err := decodeYAMLBytes(data, expand)
+	if err != nil {
+		return nil, err
+	}
+	cfg.ConfigBaseDir = baseDir
+	cfg.SkipExternalAssetValidation = env == nil
+	if err := finalizeParsedConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	logging.ComponentDebugEvent("config", "config_parse_complete", map[string]interface{}{
+		"decision_count": len(cfg.Decisions),
+		"base_dir":       baseDir,
+	})
+	return cfg, nil
+}
+
+// decodeYAMLBytes builds a config without the checks of finalizeParsedConfig.
+// A non-nil expand rewrites the raw document before it is decoded.
+func decodeYAMLBytes(data []byte, expand func(map[string]interface{})) (*RouterConfig, error) {
 	raw, err := parseRawConfigMap(data)
 	if err != nil {
 		return nil, err
@@ -143,8 +205,8 @@ func parseYAMLBytesWithOptions(
 		return nil, normalizeErr
 	}
 
-	if env != nil {
-		env.expandMap(raw)
+	if expand != nil {
+		expand(raw)
 	}
 	expandedData, marshalErr := yaml.Marshal(raw)
 	if marshalErr != nil {
@@ -161,18 +223,8 @@ func parseYAMLBytesWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	cfg.ConfigBaseDir = baseDir
 	documentDigest := sha256.Sum256(data)
 	cfg.DocumentHash = hex.EncodeToString(documentDigest[:])
-	cfg.SkipExternalAssetValidation = env == nil
-	if err := finalizeParsedConfig(cfg); err != nil {
-		return nil, err
-	}
-
-	logging.ComponentDebugEvent("config", "config_parse_complete", map[string]interface{}{
-		"decision_count": len(cfg.Decisions),
-		"base_dir":       baseDir,
-	})
 	return cfg, nil
 }
 
@@ -597,6 +649,17 @@ func canonicalConfigRequiredError(raw map[string]interface{}) error {
 }
 
 func finalizeParsedConfig(cfg *RouterConfig) error {
+	applyParsedConfigDefaults(cfg)
+	if err := validateConfigStructure(cfg); err != nil {
+		logging.ComponentDebugEvent("config", "config_validation_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return err
+	}
+	return nil
+}
+
+func applyParsedConfigDefaults(cfg *RouterConfig) {
 	logParsedDecisions(cfg)
 
 	// Apply default model registry if not specified in config.
@@ -608,13 +671,6 @@ func finalizeParsedConfig(cfg *RouterConfig) error {
 		cfg.VectorStore.ApplyDefaults()
 	}
 	applyBatchConcurrencyMigration(cfg)
-	if err := validateConfigStructure(cfg); err != nil {
-		logging.ComponentDebugEvent("config", "config_validation_failed", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return err
-	}
-	return nil
 }
 
 func logParsedDecisions(cfg *RouterConfig) {

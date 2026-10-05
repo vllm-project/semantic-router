@@ -36,6 +36,7 @@ type Registry struct {
 	configActivation      ConfigActivation
 	instanceID            string
 	startupStatus         *localStartupSnapshot
+	configListeners       []func(*config.RouterConfig)
 }
 
 // RouterRuntimeSnapshot is the router-owned management surface published as
@@ -165,6 +166,30 @@ func (r *Registry) UpdateConfig(cfg *config.RouterConfig) {
 	r.mu.Lock()
 	r.config = cfg
 	r.mu.Unlock()
+	r.notifyConfig(cfg)
+}
+
+// OnConfigPublished registers a listener that runs after every config
+// publication (startup, reload, refresh) with the published config.
+func (r *Registry) OnConfigPublished(listener func(*config.RouterConfig)) {
+	if r == nil || listener == nil {
+		return
+	}
+	r.mu.Lock()
+	r.configListeners = append(r.configListeners, listener)
+	r.mu.Unlock()
+}
+
+func (r *Registry) notifyConfig(cfg *config.RouterConfig) {
+	if cfg == nil {
+		return
+	}
+	r.mu.RLock()
+	listeners := append([]func(*config.RouterConfig){}, r.configListeners...)
+	r.mu.RUnlock()
+	for _, listener := range listeners {
+		listener(cfg)
+	}
 }
 
 func (r *Registry) ClassificationService() *services.ClassificationService {
@@ -402,6 +427,7 @@ func (r *Registry) PublishRouterRuntime(
 	r.memoryStore = memoryStore
 	r.acquireGeneration = nil
 	r.mu.Unlock()
+	r.notifyConfig(cfg)
 }
 
 func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) {
@@ -423,6 +449,7 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 	r.compressionRecovery = snapshot.CompressionRecovery
 	r.plugins = snapshot.Plugins
 	r.mu.Unlock()
+	r.notifyConfig(snapshot.Config)
 }
 
 func (r *Registry) RefreshRuntimeConfig(newCfg *config.RouterConfig) {
