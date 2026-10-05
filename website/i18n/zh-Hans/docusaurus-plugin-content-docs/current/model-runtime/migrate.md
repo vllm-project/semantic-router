@@ -3,7 +3,7 @@ title: 从原生绑定迁移
 sidebar_label: 从原生绑定迁移
 description: 更新使用了 candle、ONNX Runtime 或 OpenVINO 后端、旧模型名或 NLI 解释器的配置。
 translation:
-  source_commit: "3613d30adcaea668d0f0d4722364c2272777ba5e"
+  source_commit: "4769baf6b108e8eeb35cfc9ea0ed62a14ad5e429"
   source_file: "docs/model-runtime/migrate.md"
   outdated: false
 ---
@@ -68,6 +68,7 @@ Changes to review
 | `artifact: models/Vela-1.0-Encoder-307M-...` | `artifact: vllm-sr/Vela-1.0-Encoder-307M-...`，即 Hub 仓库 |
 | `embedding_config.backend: candle` 或 `openvino` | 移除 |
 | 响应缓存、记忆或向量存储上的 `embedding_model: bert` 或 `gemma`，或在 MiniLM 为默认值时未设置 `embedding_model` | `embedding_model: mmbert`（Vela Embedding）；重新向量化已存储的向量 |
+| 使用 `mmbert` 的存储上设置了 Vela Embedding 不提供的向量维度（例如 MiniLM 的 384） | 记忆使用 256，响应缓存和向量存储使用 768；按该维度重新创建集合或索引 |
 | `model_selection.ml.model_type: bert` 或 `gemma` | `model_type: mmbert`；用 Vela Embedding 向量重新训练选择模型 |
 | 模块上的 `variant`、`model_type`、`use_modernbert`、`use_mmbert_32k` | 移除：运行时从模型读取架构 |
 | 旧模型目录中的标签映射，例如 `category_mapping_path: models/mom-domain-classifier/category_mapping.json` | 移除：路由器读取所运行模型的标签 |

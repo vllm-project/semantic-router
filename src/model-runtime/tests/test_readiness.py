@@ -1,10 +1,5 @@
-import hashlib
-import json
 import os
-import sys
-import types
 
-from vllm_sr_runtime.accel import autotune
 from vllm_sr_runtime.accel.autotune import freeze_autotune
 from vllm_sr_runtime.cli import build_parser, config_from_args
 from vllm_sr_runtime.families.decision2.family import Decision2Family
@@ -85,44 +80,6 @@ def test_freeze_autotune_points_triton_at_one_cache(tmp_path, monkeypatch):
     assert path.is_dir()
     assert os.environ["TRITON_CACHE_DIR"] == str(path)
     assert os.environ["TRITON_CACHE_AUTOTUNING"] == "1"
-
-
-CHOICES = {
-    "fla": "0.5.2",
-    "triton": "3.7.1",
-    "kernels": {
-        "l2norm_fwd_kernel": [
-            {"key": [128, 1, "torch.bfloat16"], "config": {"kwargs": {"BT": 8}}},
-            {"key": [128, 2, "torch.bfloat16"], "config": {"kwargs": {"BT": 32}}},
-        ]
-    },
-}
-
-
-def test_pinned_kernel_choices_become_fla_config_files(monkeypatch):
-    monkeypatch.delitem(sys.modules, "fla", raising=False)
-    monkeypatch.setattr(autotune, "fla_version", lambda: "0.5.2")
-    monkeypatch.setenv("FLA_CONFIG_DIR", "")
-    monkeypatch.setenv("FLA_CACHE_MODE", "")
-    directory = autotune.pin_kernel_choices(CHOICES)
-    assert os.environ["FLA_CONFIG_DIR"] == str(directory)
-    assert os.environ["FLA_CACHE_MODE"] == "full"
-    document = json.loads((directory / "l2norm_fwd_kernel.json").read_text())
-    # FLA's AutotuneKey.key_hash: MD5 of the compact, key-sorted JSON of the tuning key.
-    digest = hashlib.md5(b'[128,2,"torch.bfloat16"]').hexdigest()
-    assert document["autotune_entries"][digest]["config"] == {"kwargs": {"BT": 32}}
-    assert document["default_config"] == {"kwargs": {"BT": 8}}
-
-
-def test_kernel_choices_need_the_recorded_fla_before_it_is_imported(monkeypatch):
-    monkeypatch.delenv("FLA_CONFIG_DIR", raising=False)
-    monkeypatch.setattr(autotune, "fla_version", lambda: "0.6.0")
-    monkeypatch.delitem(sys.modules, "fla", raising=False)
-    assert autotune.pin_kernel_choices(CHOICES) is None
-    monkeypatch.setattr(autotune, "fla_version", lambda: "0.5.2")
-    monkeypatch.setitem(sys.modules, "fla", types.ModuleType("fla"))
-    assert autotune.pin_kernel_choices(CHOICES) is None
-    assert "FLA_CONFIG_DIR" not in os.environ
 
 
 def test_built_in_models_pin_their_released_kernel_choices_on_gfx942(tmp_path):

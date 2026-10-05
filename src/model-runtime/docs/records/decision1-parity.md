@@ -5,15 +5,14 @@ Decision 1.0 package's bundled runtime, for all seven packages. On ROCm this
 holds on all four scored panels, on CPU on subsets of them. That is design
 §17's bar for Decision 1.0: bit-identical on the same device class.
 
-- **Date:** 2026-10-04.
+- **Date:** 2026-10-04; the P1-4 runs on 2026-10-05.
 - **ROCm:** one AMD Instinct MI325X (gfx942) per run, in the image the packages
   were released with: PyTorch 2.12 (ROCm), Transformers 5.17, Triton 3.7.1, FLA
   0.5.2, causal-conv1d 1.7.0.
 - **CPU:** 16 cores (a cpuset), CPU PyTorch 2.10 with MKL, Transformers 5.17.
 - **Reference:** the package's bundled runtime (Transformers remote code,
   `system_one`) on the same image, node and requests. On ROCm it runs with the
-  same FLA kernel choices as the native side (the built-in table's, pinned
-  before FLA is imported).
+  same FLA kernel choices as the native side (the built-in table's).
 - **Native side:** `tools/decision1_parity.py native`. It loads the package by
   repo id through `Decision1Family` (pinned revision, file digests), the native
   engine and the device's accelerator, with no package code. Requests go
@@ -28,7 +27,8 @@ holds on all four scored panels, on CPU on subsets of them. That is design
 - **Raw results:** `decision1-parity.json`, one entry per model, device,
   profile and commit, with every panel's counts. From `c22bb15cd` an entry
   also carries what the engine ran: graph statistics per layer stack and the
-  reduced copy.
+  reduced copy. A P1-4 entry names the models served before it in the same
+  process (`served_before`).
 
 ## Exact profile, ROCm, four scored panels
 
@@ -55,6 +55,48 @@ mismatches and max |Δp| 0.0.
   HIP graphs of exact shapes. Eos's causal convolution is the FP64-accumulating
   Triton kernel. The encoders run eagerly. Every load checked its ROCm golden
   answers (3 of 3 matched).
+
+## Several decoders in one GPU process (review P1-4)
+
+The default layout serves every model of a GPU in one runtime process, and
+FLA's autotuners are process-wide. Before per-model kernel choices
+(`accel/autotune.KernelChoices`, design §11), a decoder loaded after another
+FLA model ran the first model's choices, because FLA read one config
+directory per process. The released choices disagree on shared tuning keys
+for 47 of 55 pairs of built-in GPU models, and the wrong ones change answers.
+
+"B after A" serves Decision 1.0 A, then B, in one process on one MI325X
+(`decision1_parity.py native --also A`, exact), and compares B's answers on
+the four scored panels (10,653 requests) with B's bundled reference, which ran
+B's own choices. Before: `ed4c500cc`, the runtime before the fix. After:
+`8fc0bf02b`.
+
+| Model | Served before it | Before: identical | Decision changes | Max abs diff | After: identical |
+| --- | --- | --- | --- | --- | --- |
+| Sol-2B | none (control) | 10,653 | 0 | 0 | |
+| Sol-2B | Eos-0.8B | 75 | 79 | 0.193 | 10,653 |
+| Eos-0.8B | Sol-2B | 75 | 74 | 0.100 | 10,653 |
+| Lux-9B | Nox-4B | 199 | 38 | 0.148 | 10,653 |
+| Nox-4B | Lux-9B | 199 | 65 | 0.070 | 10,653 |
+| Lux-9B | Eos-0.8B | 10,636 | 0 | 0.016 | 10,653 |
+| Eos-0.8B | Sol-2B, Nox-4B, Lux-9B | | | | 10,653 |
+| Sol-2B | Eos-0.8B, Nox-4B, Lux-9B | | | | 10,653 |
+| Nox-4B | Eos-0.8B, Sol-2B, Lux-9B | | | | 10,653 |
+| Lux-9B | Eos-0.8B, Sol-2B, Nox-4B | | | | 10,653 |
+
+- **Before, the loss was silent:** every one of those runs passed its golden
+  check (3 of 3 within the GPU tolerance of 0.02). Lux after Eos differs least
+  because the two share only `l2norm_fwd_kernel` keys; a model's other keys
+  fell back to the first model's entries.
+- **After, every case is byte-identical**, including each decoder in a process
+  that serves all four, and no model ran unpinned. The last commit,
+  `64d6046ad` (cheaper lookups, same routing), repeats Sol after Eos and Lux
+  after the other three: identical.
+- **The GPU tests** (`tests/test_kernel_choices.py`, at both commits): the
+  resolver picks what FLA's own config-file lookup picks for every recorded
+  key of all seven built-in models and for unrecorded neighbours (other
+  numbers, flipped flags, another dtype), and two models' scopes alternate on
+  FLA's real gated delta rule, each launch running its own configuration.
 
 ## Exact profile, CPU
 
@@ -197,6 +239,9 @@ python3 tools/decision1_parity.py reference --package PACKAGE_DIR --repo vllm-sr
 python3 tools/decision1_parity.py native --model vllm-sr/Decision-1.0-Kai-0.6B --cache-dir HF_CACHE \
   --device rocm:0|cpu [--threads 16] [--profile batching] --panel ... --answers native.jsonl
 python3 tools/decision1_parity.py compare reference.jsonl native.jsonl --output compare.json
-pytest tests/test_decision1_*.py
-pytest -m gpu tests/test_decision1_gpu.py
+# P1-4: Sol served after Eos in one process, against Sol's reference
+python3 tools/decision1_parity.py native --model vllm-sr/Decision-1.0-Sol-2B --also vllm-sr/Decision-1.0-Eos-0.8B \
+  --cache-dir HF_CACHE --device rocm:0 --panel ... --answers sol-after-eos.jsonl
+pytest tests/test_decision1_*.py tests/test_kernel_choices.py
+pytest -m gpu tests/test_decision1_gpu.py tests/test_kernel_choices.py
 ```

@@ -46,13 +46,13 @@ def _try_it() -> tuple[list[str], dict[str, str], list[str]]:
     raise AssertionError(f"{GUIDE} has no block that serves the example")
 
 
-def _serve_commands() -> list[list[str]]:
-    """The arguments of every `vllm-sr-runtime serve` line in the guide."""
+def _serve_commands(command: str = "vllm-sr-runtime serve") -> list[list[str]]:
+    """The arguments of every line in the guide that runs ``command``."""
     return [
-        shlex.split(line)[2:]
+        shlex.split(line)[len(command.split()) :]
         for block in BASH_BLOCK.findall(GUIDE.read_text(encoding="utf-8"))
         for line in HEREDOC.sub("", block).splitlines()
-        if line.startswith("vllm-sr-runtime serve ")
+        if line.startswith(command + " ")
     ]
 
 
@@ -108,11 +108,15 @@ class TestPluginExample(unittest.TestCase):
             written.write_text(body, encoding="utf-8")
         cls.env = {"PYTHONPATH": str(cls.site)}
 
-    def _serve(self, serve_arguments: list[str] | None = None) -> ServeProcess:
+    def _serve(
+        self,
+        serve_arguments: list[str] | None = None,
+        command: str = "vllm-sr-runtime serve",
+    ) -> ServeProcess:
         serve_arguments = serve_arguments or self.serve_arguments
         arguments = [str(self.local), *_without_port(serve_arguments[1:])]
         runtime = ServeProcess(
-            ["vllm-sr-runtime", "serve", *arguments],
+            [*command.split(), *arguments],
             self.root / f"serve-{time.monotonic_ns()}.log",
             env=self.env,
         )
@@ -133,10 +137,18 @@ class TestPluginExample(unittest.TestCase):
         self.assertEqual([result["label"] for result in response["results"]], expected)
 
     def test_the_example_serves_on_its_own_accelerator_and_profile(self):
+        self._assert_serves_on_its_own_accelerator_and_profile("vllm-sr-runtime serve")
+
+    def test_vllm_sr_serve_passes_the_plugin_names_to_the_runtime(self):
+        self._assert_serves_on_its_own_accelerator_and_profile("vllm-sr serve")
+
+    def _assert_serves_on_its_own_accelerator_and_profile(self, command: str):
         (arguments,) = [
-            command for command in _serve_commands() if "--profile" in command
+            arguments
+            for arguments in _serve_commands(command)
+            if "--profile" in arguments
         ]
-        runtime = self._serve(arguments)
+        runtime = self._serve(arguments, command)
         prose = " ".join(GUIDE.read_text(encoding="utf-8").split())
         expected = list(OUTCOME.search(prose).groups())
 

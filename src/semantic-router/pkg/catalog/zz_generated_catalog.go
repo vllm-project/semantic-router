@@ -10695,6 +10695,133 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v4.1-flash-model-card-max-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.909
+      },
+      "model": "deepseek/deepseek-v4.1-flash",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "model_revision": "dba1be0a40aa45a94ad051997016db3960a90277",
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "variant": "DeepSeek-V4.1-Flash"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v4.1-flash-model-card-max-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.368
+      },
+      "model": "deepseek/deepseek-v4.1-flash",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "hle_mode": "no_tools",
+        "model_revision": "dba1be0a40aa45a94ad051997016db3960a90277",
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "variant": "DeepSeek-V4.1-Flash"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v4.1-flash-model-card-max-terminal-bench@2.1.0",
+      "metrics": {
+        "resolved": 0.906
+      },
+      "model": "deepseek/deepseek-v4.1-flash",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "attempts_per_task": 3,
+        "harness": "DeepSeek Harness Minimal",
+        "model_revision": "dba1be0a40aa45a94ad051997016db3960a90277",
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "variant": "DeepSeek-V4.1-Flash"
+      }
+    },
+    {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v4.1-flash-model-card-max-deep-swe@1.1.0",
+      "metrics": {
+        "resolved": 0.742
+      },
+      "model": "deepseek/deepseek-v4.1-flash",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "attempts_per_task": 8,
+        "harness": "mini-swe-agent",
+        "model_revision": "dba1be0a40aa45a94ad051997016db3960a90277",
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "variant": "DeepSeek-V4.1-Flash"
+      }
+    },
+    {
+      "benchmark": "zapier/automation-bench@1.0.6",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/DeepSeek_V41_Tech_Report.pdf",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v4.1-flash-tech-report-max-automation-bench@1.0.6",
+      "metrics": {
+        "score": 0.548
+      },
+      "model": "deepseek/deepseek-v4.1-flash",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "harness": "official AutomationBench scaffold",
+        "model_revision": "dba1be0a40aa45a94ad051997016db3960a90277",
+        "reasoning_effort": "max",
+        "source_kind": "official_technical_report",
+        "subset": "public",
+        "variant": "DeepSeek-V4.1-Flash"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/critpt@1.0.0",
       "benchmark_profile": "independent-standard",
       "evidence": {
@@ -18004,6 +18131,282 @@ const builtInCatalogJSON = `{
         "run_kind": "independent",
         "source_model": "Mistral Small 3.2",
         "source_model_slug": "mistral-small-3-2"
+      }
+    },
+    {
+      "benchmark": "hendrycks/math@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512/blob/29439f81c2be264d8d393273f99e7db9c0961120/README.md",
+        "verification": "claimed"
+      },
+      "id": "mistral/ministral-3-14b-instruct-model-card-math@1.0.0",
+      "metrics": {
+        "accuracy": 0.904
+      },
+      "model": "mistral/ministral-3-14b-instruct",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "aggregation": "maj@1",
+        "source_kind": "official_model_card",
+        "variant": "Ministral-3-14B-Instruct-2512"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/ministral-3-14b",
+        "verification": "imported"
+      },
+      "id": "independent/ministral-3-14b-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.571717171717172
+      },
+      "model": "mistral/ministral-3-14b-instruct",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Ministral 3 14B",
+        "source_model_slug": "ministral-3-14b"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-text-only",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/ministral-3-14b",
+        "verification": "imported"
+      },
+      "id": "independent/ministral-3-14b-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.046339202965709
+      },
+      "model": "mistral/ministral-3-14b-instruct",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Ministral 3 14B",
+        "source_model_slug": "ministral-3-14b"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/ministral-3-14b",
+        "verification": "imported"
+      },
+      "id": "independent/ministral-3-14b-scicode@1.0.0",
+      "metrics": {
+        "score": 0.238425925925926
+      },
+      "model": "mistral/ministral-3-14b-instruct",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Ministral 3 14B",
+        "source_model_slug": "ministral-3-14b"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/critpt@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/ministral-3-14b",
+        "verification": "imported"
+      },
+      "id": "independent/ministral-3-14b-critpt@1.0.0",
+      "metrics": {
+        "score": 0
+      },
+      "model": "mistral/ministral-3-14b-instruct",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Ministral 3 14B",
+        "source_model_slug": "ministral-3-14b"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/omniscience@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/ministral-3-14b",
+        "verification": "imported"
+      },
+      "id": "independent/ministral-3-14b-omniscience@1.0.0",
+      "metrics": {
+        "index": -66.36666666666666
+      },
+      "model": "mistral/ministral-3-14b-instruct",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Ministral 3 14B",
+        "source_model_slug": "ministral-3-14b"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/lcr@1.1.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/ministral-3-14b",
+        "verification": "imported"
+      },
+      "id": "independent/ministral-3-14b-artificial-analysis-long-context-reasoning@1.1.0",
+      "metrics": {
+        "score": 0.263333333333333
+      },
+      "model": "mistral/ministral-3-14b-instruct",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Ministral 3 14B",
+        "source_model_slug": "ministral-3-14b"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/ministral-3-14b",
+        "verification": "imported"
+      },
+      "id": "independent/ministral-3-14b-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.0973782771535581
+      },
+      "model": "mistral/ministral-3-14b-instruct",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Ministral 3 14B",
+        "source_model_slug": "ministral-3-14b"
+      }
+    },
+    {
+      "benchmark": "tau-bench/tau3-banking@1.0.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/ministral-3-14b",
+        "verification": "imported"
+      },
+      "id": "independent/ministral-3-14b-tau3-banking@1.0.0",
+      "metrics": {
+        "score": 0.065979381443299
+      },
+      "model": "mistral/ministral-3-14b-instruct",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Ministral 3 14B",
+        "source_model_slug": "ministral-3-14b"
+      }
+    },
+    {
+      "benchmark": "allenai/ifbench@1.0.0",
+      "benchmark_profile": "prompt-loose",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/ministral-3-14b",
+        "verification": "imported"
+      },
+      "id": "independent/ministral-3-14b-ifbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.320408163265306
+      },
+      "model": "mistral/ministral-3-14b-instruct",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Ministral 3 14B",
+        "source_model_slug": "ministral-3-14b"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/ministral-3-14b",
+        "verification": "imported"
+      },
+      "id": "independent/ministral-3-14b-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.3
+      },
+      "model": "mistral/ministral-3-14b-instruct",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Ministral 3 14B",
+        "source_model_slug": "ministral-3-14b"
+      }
+    },
+    {
+      "benchmark": "mmmu-benchmark/mmmu-pro@1.0.0",
+      "benchmark_profile": "standard-10",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/ministral-3-14b",
+        "verification": "imported"
+      },
+      "id": "independent/ministral-3-14b-mmmu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.498265895953757
+      },
+      "model": "mistral/ministral-3-14b-instruct",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Ministral 3 14B",
+        "source_model_slug": "ministral-3-14b"
       }
     },
     {
@@ -48622,6 +49025,485 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "deepseek/deepseek-v4.1-flash-model-card-max-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.909,
+          "status": "available",
+          "value": 0.909,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [
+        "deepseek/deepseek-v4.1-flash-model-card-max-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "deepseek/deepseek-v4.1-flash-model-card-max-terminal-bench@2.1.0",
+          "metric": "resolved",
+          "normalized": 0.906,
+          "status": "available",
+          "value": 0.906,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 90.60000000000001
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [
+        "deepseek/deepseek-v4.1-flash-model-card-max-terminal-bench@2.1.0"
+      ],
+      "reasoning_effort": "max",
+      "score": 90.60000000000001,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.9060000000000001,
+          "status": "available",
+          "value": 0.9060000000000001,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [
+        "deepseek/deepseek-v4.1-flash-model-card-max-gpqa-diamond@1.0.0",
+        "deepseek/deepseek-v4.1-flash-model-card-max-terminal-bench@2.1.0"
+      ],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "deepseek/deepseek-v4-pro",
       "provenance": [],
       "reasoning_effort": "low",
@@ -61684,6 +62566,343 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "disabled",
       "score": 30.987311078086567,
       "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "mistral/ministral-3-14b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "mistral/ministral-3-14b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "mistral/ministral-3-14b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "mistral/ministral-3-14b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "mistral/ministral-3-14b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "mistral/ministral-3-14b-instruct",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "independent/ministral-3-14b-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.571717171717172,
+          "status": "available",
+          "value": 0.571717171717172,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-text-only",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "evaluation": "independent/ministral-3-14b-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.046339202965709,
+          "status": "available",
+          "value": 0.046339202965709,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "frontier_reasoning": 4.6339202965709,
+        "scientific_reasoning": 57.1717171717172
+      },
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "mistral/ministral-3-14b-instruct",
+      "provenance": [
+        "independent/ministral-3-14b-gpqa-diamond@1.0.0",
+        "independent/ministral-3-14b-humanitys-last-exam@1.0.0"
+      ],
+      "reasoning_effort": "disabled",
+      "score": 30.90281873414405,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/ministral-3-14b-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.238425925925926,
+          "status": "available",
+          "value": 0.238425925925926,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "mistral/ministral-3-14b-instruct",
+      "provenance": [
+        "independent/ministral-3-14b-scicode@1.0.0"
+      ],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/ministral-3-14b-terminalbench-v2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.0973782771535581,
+          "status": "available",
+          "value": 0.0973782771535581,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 9.73782771535581
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "mistral/ministral-3-14b-instruct",
+      "provenance": [
+        "independent/ministral-3-14b-terminalbench-v2-1@1.0.0"
+      ],
+      "reasoning_effort": "disabled",
+      "score": 9.73782771535581,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": 0.3090281873414405,
+          "status": "available",
+          "value": 0.3090281873414405,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.0973782771535581,
+          "status": "available",
+          "value": 0.0973782771535581,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.6000000000000001,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "mistral/ministral-3-14b-instruct",
+      "provenance": [
+        "independent/ministral-3-14b-gpqa-diamond@1.0.0",
+        "independent/ministral-3-14b-humanitys-last-exam@1.0.0",
+        "independent/ministral-3-14b-scicode@1.0.0",
+        "independent/ministral-3-14b-terminalbench-v2-1@1.0.0"
+      ],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -92074,6 +93293,64 @@ const builtInCatalogJSON = `{
         "reasoning",
         "tools",
         "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "DeepSeek's multimodal V4.1 reasoning model for cost-efficient agentic workloads.",
+      "display_name": "DeepSeek V4.1 Flash",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
+        "type": "open_weights"
+      },
+      "family": "deepseek-v4.1",
+      "id": "deepseek/deepseek-v4.1-flash",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576,
+        "max_output_tokens": 393216
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "552B (8B prefill, 16B decode active)",
+      "presentation": {
+        "logo": "package:deepseek",
+        "monochrome": false,
+        "monogram": "D"
+      },
+      "publisher": "DeepSeek",
+      "reasoning_family": "deepseek",
+      "released_at": "2026-09-10",
+      "revision": "dba1be0a40aa45a94ad051997016db3960a90277",
+      "tags": [
+        "efficient",
+        "open_weights",
+        "reasoning",
+        "moe",
+        "multimodal",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "DeepSeek",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md",
+        "status": "claimed",
+        "verified_at": "2026-09-24"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
         "long_context"
       ],
       "description": "DeepSeek's high-capability V4 reasoning model.",
@@ -93694,6 +94971,59 @@ const builtInCatalogJSON = `{
         "source": "https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506",
         "status": "claimed",
         "verified_at": "2026-09-09"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "tools",
+        "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "Largest Ministral 3 instruction checkpoint, with vision, for edge and local deployment.",
+      "display_name": "Ministral 3 14B Instruct",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512",
+        "type": "open_weights"
+      },
+      "family": "ministral-3",
+      "id": "mistral/ministral-3-14b-instruct",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "14B",
+      "presentation": {
+        "logo": "package:mistral",
+        "monochrome": false,
+        "monogram": "M"
+      },
+      "publisher": "Mistral AI",
+      "released_at": "2025-12-02",
+      "revision": "29439f81c2be264d8d393273f99e7db9c0961120",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "dense",
+        "efficient"
+      ],
+      "verification": {
+        "authority": "Mistral AI",
+        "source": "https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512/blob/29439f81c2be264d8d393273f99e7db9c0961120/README.md",
+        "status": "claimed",
+        "verified_at": "2026-09-24"
       }
     },
     {
@@ -98116,8 +99446,8 @@ const builtInCatalogJSON = `{
       "id": "deepseek",
       "models": [
         {
-          "catalog": "deepseek/deepseek-v4-flash",
-          "id": "deepseek-v4-flash",
+          "catalog": "deepseek/deepseek-v4.1-flash",
+          "id": "deepseek-flash",
           "lifecycle": "active",
           "protocols": [
             "openai/chat-completions@1",
@@ -98127,7 +99457,7 @@ const builtInCatalogJSON = `{
           "verification": {
             "source": "https://api-docs.deepseek.com/quick_start/pricing",
             "status": "claimed",
-            "verified_at": "2026-09-05"
+            "verified_at": "2026-09-24"
           }
         },
         {
@@ -98820,6 +100150,20 @@ const builtInCatalogJSON = `{
             "source": "https://docs.mistral.ai/models/mistral-large-3-25-12",
             "status": "claimed",
             "verified_at": "2026-09-07"
+          }
+        },
+        {
+          "catalog": "mistral/ministral-3-14b-instruct",
+          "id": "ministral-14b-2512",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://docs.mistral.ai/models/ministral-3-14b-25-12",
+            "status": "claimed",
+            "verified_at": "2026-09-24"
           }
         }
       ],
@@ -101004,6 +102348,22 @@ const builtInCatalogJSON = `{
           }
         },
         {
+          "catalog": "deepseek/deepseek-v4.1-flash",
+          "id": "deepseek-ai/DeepSeek-V4.1-Flash",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "reasoning_transport": "top_level_effort",
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/tree/dba1be0a40aa45a94ad051997016db3960a90277",
+            "status": "claimed",
+            "verified_at": "2026-09-24"
+          }
+        },
+        {
           "catalog": "deepseek/deepseek-r1",
           "id": "deepseek-ai/DeepSeek-R1",
           "lifecycle": "active",
@@ -101716,6 +103076,21 @@ const builtInCatalogJSON = `{
             "source": "https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506",
             "status": "claimed",
             "verified_at": "2026-09-09"
+          }
+        },
+        {
+          "catalog": "mistral/ministral-3-14b-instruct",
+          "id": "mistralai/Ministral-3-14B-Instruct-2512",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512",
+            "status": "claimed",
+            "verified_at": "2026-09-24"
           }
         },
         {

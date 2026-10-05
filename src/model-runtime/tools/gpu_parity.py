@@ -28,7 +28,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from vllm_sr_runtime.accel.autotune import pin_kernel_choices  # noqa: E402
+from vllm_sr_runtime.accel.autotune import KernelChoices  # noqa: E402
 from vllm_sr_runtime.accel.cpu import CPUAccelerator  # noqa: E402
 from vllm_sr_runtime.accel.cuda import CUDAAccelerator  # noqa: E402
 from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
@@ -45,6 +45,7 @@ from vllm_sr_runtime.profiles.shared_context import (  # noqa: E402
     SharedContextProfile,
     SharePolicy,
 )
+from vllm_sr_runtime.registry import builtin  # noqa: E402
 
 ACCELERATORS = {"cpu": CPUAccelerator, "cuda": CUDAAccelerator, "rocm": ROCmAccelerator}
 PROFILES = {"exact": ExactProfile, "shared_context": SharedContextProfile}
@@ -91,9 +92,13 @@ def load(args: argparse.Namespace):
     accelerator = ACCELERATORS[kind]()
     devices = accelerator.devices()
     device = devices[int(index or 0)] if kind != "cpu" else devices[0]
-    choices = family.kernel_choices(package, device)
-    if choices:
-        pin_kernel_choices(choices)
+    recorded = builtin.kernel_choices(
+        package.model_sha256, device.accelerator, device.arch
+    ) or family.kernel_choices(package, device)
+    if recorded:
+        choices = KernelChoices(recorded)
+        if choices.install() is None:
+            choices.pin_thread()
     options = EngineOptions(graphs=not args.no_graphs, fused_kernels=not args.no_fused)
     engine_model = NativeEngine().load(spec, accelerator, device, options)
     return family.load(package, spec, engine_model)

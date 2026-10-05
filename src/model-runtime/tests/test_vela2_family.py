@@ -209,6 +209,37 @@ def test_shared_context_profile_packs_only_decoder_trees(models, name) -> None:
     ) == model.finish_surface(surface, model.run_shared(plan.items, 1))
 
 
+def test_coalescing_profiles_fill_a_cpu_forward_only_up_to_the_budget(models) -> None:
+    from vllm_sr_runtime.families.vela2.family import CPU_PACKED_TOKENS
+    from vllm_sr_runtime.plugins.base import Job
+    from vllm_sr_runtime.profiles.batching import BatchingProfile
+    from vllm_sr_runtime.profiles.exact import ExactProfile
+    from vllm_sr_runtime.scheduler.planner import padded
+
+    model = models["encoder"]
+    assert model.forward_token_budget() == CPU_PACKED_TOKENS
+    assert models["decoder"].forward_token_budget() is None
+    short = model.plan(GOLDEN_STATE, {"domain": GOLDEN_QUESTIONS["domain"]}).items
+    long = model.plan("A much longer request about billing. " * 60, GOLDEN_QUESTIONS)
+    jobs = [
+        Job(items=items, deadline=None, enqueued=0.0, profile="batching")
+        for items in [short] * 4 + [long.items] * 2
+    ]
+    exact = ExactProfile()
+    exact.bind(model)
+    planned = exact.plan(jobs, model.forward_token_budget())
+    assert [[len(i) for _, i in b.parts] for b in planned] == [
+        [len(job.items)] for job in jobs
+    ]
+    assert model.exact_batches([]) == []
+    batches = BatchingProfile().plan(jobs, model.forward_token_budget())
+    for batch in batches:
+        rows = [job.items[i] for job, indices in batch.parts for i in indices]
+        width = max(padded(len(row.ids)) for row in rows)
+        assert len(rows) == 1 or width * len(rows) <= CPU_PACKED_TOKENS
+    assert any(len(batch.parts) > 1 for batch in batches)
+
+
 def test_packed_encoder_batches_match_padded_ones(models) -> None:
     model = models["encoder"]
     plans = [

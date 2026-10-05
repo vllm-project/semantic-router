@@ -31,15 +31,20 @@ from ...plugins.base import (
     VerifiedPackage,
 )
 from ...registry import builtin, policy
+from ...systemone import MAX_LEVELS, MAX_OPTIONS, MIN_LEVELS, MIN_OPTIONS
 from .answers import Answerer
 from .encoder_layout import MARKERS
 from .layout import Row, Tokens, rows_of
 from .members import DecoderMember, EncoderMember
 from .package import DECODER, ENCODER, Vela2Package, member_of, verify
-from .request import MAX_LEVELS, MAX_OPTIONS, MIN_LEVELS, Plan, QuestionReader
+from .request import QUESTION_TYPES, Plan, QuestionReader
 
-QUESTION_TYPES = ("choice", "noul", "score", "set", "span")
 TOKEN_CACHE = 8192
+# On CPU, sequences packed into one 0.3B forward cost more per token together
+# than one by one once the forward holds more than about this many tokens, so
+# coalescing profiles pack short sequences of several requests and run long
+# ones alone.
+CPU_PACKED_TOKENS = 2048
 LICENCES = {
     ENCODER: {
         "spdx": "apache-2.0",
@@ -228,7 +233,7 @@ class Vela2Family(ModelFamily):
             question_types=QUESTION_TYPES,
             limits={
                 "max_input_tokens": package.max_input_tokens,
-                "min_options": 2,
+                "min_options": MIN_OPTIONS,
                 "max_options": MAX_OPTIONS,
                 "min_levels": MIN_LEVELS,
                 "max_levels": MAX_LEVELS,
@@ -290,8 +295,21 @@ class Vela2Model(LoadedModel):
         )
 
     def forward_token_budget(self) -> int | None:
-        """None: the members batch a request's sequences themselves, as the packages do."""
+        """``CPU_PACKED_TOKENS`` for the 0.3B on CPU, else None (nothing limits a forward).
+
+        Only the coalescing profiles plan with it: ``exact_batches`` keeps the
+        packages' own batching of each request.
+        """
+        if (
+            isinstance(self.member, EncoderMember)
+            and self.engine_model.device.type == "cpu"
+        ):
+            return CPU_PACKED_TOKENS
         return None
+
+    def exact_batches(self, items: list[Any]) -> list[list[int]]:
+        """One call per request: the members batch its sequences as the packages do."""
+        return [list(range(len(items)))] if items else []
 
     def plan(self, state: Any, questions: dict[str, Any]) -> Vela2Plan:
         request = self.reader.read(state, questions)
