@@ -389,6 +389,65 @@ def test_shared_batches_hold_one_length_class_within_the_cap():
     ]
 
 
+def test_packed_rows_share_batches_across_length_classes_within_the_cap():
+    short = Job([item("s", 9)], None, 0.0, "exact")
+    medium = Job([item("m", 20)], None, 0.0, "exact")
+    longer = Job([item("l", 40)], None, 0.0, "exact")
+    windows = Job(
+        [window(f"w{i}", 512, 1000 * i) for i in range(2)], None, 0.0, "exact"
+    )
+    batches = merged([longer, windows, short, medium], cap=512, banded=False)
+    assert [names(batch) for batch in batches] == [["l", "m", "s"], ["w0"], ["w1"]]
+
+
+def test_exact_bands_lengths_only_for_models_that_pad():
+    jobs = [
+        Job([item(name, length)], None, 0.0, "exact")
+        for name, length in (("a", 9), ("b", 40))
+    ]
+    padded_model = FakeModel()
+    padded_model.batch_invariant = True
+    packed_model = FakeModel()
+    packed_model.batch_invariant = True
+    packed_model.packs_rows = True
+    profile = ExactProfile()
+    profile.bind(padded_model)
+    assert [names(batch) for batch in profile.plan(jobs, None)] == [["a"], ["b"]]
+    profile.bind(packed_model)
+    assert [names(batch) for batch in profile.plan(jobs, None)] == [["a", "b"]]
+    uninvariant = FakeModel()
+    uninvariant.packs_rows = True
+    profile.bind(uninvariant)
+    assert len(profile.plan(jobs, None)) == 2
+
+
+def test_concurrent_requests_of_different_lengths_share_one_forward_on_a_packed_model():
+    gate = threading.Event()
+    model = GatedModel(gates={"blocker": gate})
+    model.batch_invariant = True
+    model.packs_rows = True
+    profile = ExactProfile()
+    profile.bind(model)
+    scheduler = Scheduler(model, {"exact": profile})
+    scheduler.start()
+    try:
+        scheduler.submit([item("blocker", 8)], deadline=None, profile="exact")
+        assert model.entered.wait(5)
+        lengths = {"r9": 9, "r20": 20, "r40": 40, "r70": 70}
+        futures = {
+            name: scheduler.submit([item(name, length)], deadline=None, profile="exact")
+            for name, length in lengths.items()
+        }
+        gate.set()
+        for name, future in futures.items():
+            assert future.result(timeout=5) == [[0.0, float(lengths[name])]]
+        assert model.calls[0] == ["blocker"]
+        assert [sorted(call) for call in model.calls[1:]] == [sorted(lengths)]
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
 def test_shared_batches_keep_identical_sequences_together():
     first = Job([item("a", 512)], None, 0.0, "exact")
     other = Job([item("b", 500)], None, 0.0, "exact")
@@ -451,6 +510,25 @@ def test_a_job_is_answered_as_soon_as_its_own_batches_ran():
         assert short.result(timeout=5) == [[0.0, 8.0]]
         long.result(timeout=5)
         assert model.calls == [["blocker"], ["short"], ["long"]]
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
+def test_cancelled_jobs_are_skipped_and_the_worker_keeps_serving():
+    gate = threading.Event()
+    model = GatedModel(gates={"blocker": gate})
+    scheduler = started(model)
+    try:
+        blocker = scheduler.submit([item("blocker", 8)], deadline=None, profile="exact")
+        assert model.entered.wait(5)
+        left = scheduler.submit([item("left", 8)], deadline=None, profile="exact")
+        assert left.cancel() and blocker.cancel()
+        gate.set()
+        after = scheduler.submit([item("after", 8)], deadline=None, profile="exact")
+        assert after.result(timeout=5) == [[0.0, 8.0]]
+        assert model.calls == [["blocker"], ["after"]]
+        wait_until(lambda: scheduler._pending_jobs == 0)
     finally:
         gate.set()
         scheduler.stop()

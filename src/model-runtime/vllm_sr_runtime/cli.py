@@ -10,10 +10,10 @@ import pwd
 import sys
 import tempfile
 from collections.abc import Sequence
+from dataclasses import fields
 
 from .accel.autotune import AUTOTUNE_ENV
 from .config import (
-    DEFAULT_PORT,
     ModelConfig,
     ServeConfig,
     load_models_file,
@@ -21,6 +21,9 @@ from .config import (
 )
 from .plugins import registry
 from .registry import builtin
+
+SERVE_DEFAULTS = ServeConfig()
+MODEL_DEFAULTS = {field.name: field.default for field in fields(ModelConfig)}
 
 
 def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
@@ -43,28 +46,30 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--device",
-        default="auto",
-        help="auto, cpu, cuda[:N], rocm[:N], xpu[:N] or mps (default: auto)",
+        default=MODEL_DEFAULTS["device"],
+        help="auto, cpu, cuda[:N], rocm[:N], xpu[:N] or mps (default: %(default)s)",
     )
     parser.add_argument(
-        "--host", default="127.0.0.1", help="TCP bind address (default: 127.0.0.1)"
+        "--host",
+        default=SERVE_DEFAULTS.host,
+        help="TCP bind address (default: %(default)s)",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=DEFAULT_PORT,
-        help=f"TCP port (default: {DEFAULT_PORT})",
+        default=SERVE_DEFAULTS.port,
+        help="TCP port (default: %(default)s)",
     )
     parser.add_argument("--uds", help="serve on this Unix domain socket instead of TCP")
     parser.add_argument(
         "--profile",
-        default="exact",
-        help="numerics profile plugin (default: exact)",
+        default=MODEL_DEFAULTS["profile"],
+        help="numerics profile plugin (default: %(default)s)",
     )
     parser.add_argument(
         "--engine",
-        default="auto",
-        help="engine plugin, or auto: the first that runs the model, native first (default: auto)",
+        default=MODEL_DEFAULTS["engine"],
+        help="engine plugin, or auto: the first that runs the model, native first (default: %(default)s)",
     )
     parser.add_argument(
         "--family", help="model family plugin (default: detected from the package)"
@@ -82,44 +87,47 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--max-queue",
         type=int,
-        default=256,
-        help="queued requests before 429 (default: 256)",
+        default=SERVE_DEFAULTS.max_queue,
+        help="queued requests before 429 (default: %(default)s)",
     )
     parser.add_argument(
         "--max-queued-tokens",
         type=int,
-        default=1 << 22,
-        help="queued tokens before 429",
+        default=SERVE_DEFAULTS.max_queued_tokens,
+        help="queued tokens before 429 (default: %(default)s)",
     )
     parser.add_argument(
         "--batch-window-ms",
         type=float,
-        default=2.0,
-        help="batching window of approximate profiles",
+        default=SERVE_DEFAULTS.batch_window_ms,
+        help="batching window of approximate profiles (default: %(default)s)",
     )
     parser.add_argument(
         "--max-batch-tokens",
         type=int,
-        default=65_536,
-        help="padded tokens per batched forward",
+        default=SERVE_DEFAULTS.max_batch_tokens,
+        help="padded tokens per batched forward (default: %(default)s)",
     )
     parser.add_argument(
         "--max-request-bytes",
         type=int,
-        default=8 << 20,
-        help="largest accepted request body",
+        default=SERVE_DEFAULTS.max_request_bytes,
+        help="largest accepted request body in bytes (default: %(default)s)",
     )
     parser.add_argument(
         "--max-bundle-tasks",
         type=int,
-        default=64,
-        help="most tasks one /v1/bundle request may carry (default: 64)",
+        default=SERVE_DEFAULTS.max_bundle_tasks,
+        help="most tasks one /v1/bundle request may carry (default: %(default)s)",
     )
     parser.add_argument(
         "--result-cache-entries",
         type=int,
-        default=16_384,
-        help="item results each model keeps by content hash, for families that allow it; 0 disables",
+        default=SERVE_DEFAULTS.result_cache_entries,
+        help=(
+            "item results each model keeps by content hash, for families that allow it; "
+            "0 disables (default: %(default)s)"
+        ),
     )
     parser.add_argument(
         "--cache-dir", help="Hugging Face cache directory (default: HF_HUB_CACHE)"
@@ -135,7 +143,9 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         help="accept a restricted licence identifier",
     )
     parser.add_argument(
-        "--log-level", default="info", choices=("debug", "info", "warning", "error")
+        "--log-level",
+        default=SERVE_DEFAULTS.log_level,
+        choices=("debug", "info", "warning", "error"),
     )
     parser.add_argument(
         "--autotune-cache",
@@ -247,11 +257,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--variant",
         help="family-specific variant, for example a backbone or a head kind",
     )
-    fixture.add_argument(
-        "--backbone",
-        choices=("qwen3", "qwen3_5"),
-        help="decision2 backbone (the same as --variant)",
-    )
     fixture.add_argument("--seed", type=int, default=0)
     return parser
 
@@ -310,10 +315,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "fixture":
         from .testing.fixtures import write_fixture
 
-        variant = args.variant or args.backbone
         print(
             write_fixture(
-                args.output, family=args.family, variant=variant, seed=args.seed
+                args.output, family=args.family, variant=args.variant, seed=args.seed
             )
         )
         return 0

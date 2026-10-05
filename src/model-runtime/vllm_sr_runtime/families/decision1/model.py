@@ -21,7 +21,6 @@ from ...plugins.base import (
     EngineModel,
     LoadedModel,
     ModelInfo,
-    ModelSpec,
     RenderedItem,
     RequestPlan,
 )
@@ -31,9 +30,6 @@ from ...text.tokenizer import Tokenizer
 from . import qwen, vela
 from .answers import answer
 from .questions import KINDS, NoulDefaults, Row, check_request, parse
-
-# Gated-delta q / k / v of one forward stay within 2**30 elements (FLA's 32-bit offsets).
-GATED_DELTA_ELEMENTS = 2**30 - 1
 
 
 class Decision1Model(LoadedModel):
@@ -222,13 +218,11 @@ class QwenDecisionModel(Decision1Model):
         head: torch.nn.Module,
         temperatures: dict[str, float],
         null_choice_as_key: bool,
-        spec: ModelSpec,
     ):
         super().__init__(info, engine_model, tokenizer, presets)
         self.head = head.to(engine_model.device)
         self.temperatures = temperatures
         self.null_choice_as_key = null_choice_as_key
-        self.spec = spec
 
     def render(
         self, row: Row, state: str, tokens: Callable[[str], list[int]]
@@ -245,14 +239,7 @@ class QwenDecisionModel(Decision1Model):
         return qwen.physical_batches(items, self.forward_token_budget())
 
     def forward_token_budget(self) -> int | None:
-        """GPU forwards keep the gated-delta q / k / v within FLA's 32-bit offsets (the 2 GiB guard)."""
-        if self.engine_model.device.type == "cpu":
-            return None
-        config = self.spec.backbone.config
-        width = config["linear_num_value_heads"] * max(
-            config["linear_key_head_dim"], config["linear_value_head_dim"]
-        )
-        return GATED_DELTA_ELEMENTS // width
+        return self.engine_model.max_forward_tokens()
 
     def run(self, items: list[RenderedItem]) -> list[list[float] | None]:
         return self.run_shared(items, 0)

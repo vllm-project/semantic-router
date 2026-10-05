@@ -157,6 +157,7 @@ def main() -> int:
     unavailable = profile.available(model)
     if unavailable:
         raise SystemExit(f"profile {args.profile} is unavailable: {unavailable}")
+    profile.bind(model)
     load_seconds = time.perf_counter() - started
     sink = args.answers.open("x", encoding="utf-8") if args.answers else None
     panels = {}

@@ -11,7 +11,6 @@ package's exit graphs returns the logits directly.
 
 from __future__ import annotations
 
-import json
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -29,7 +28,7 @@ from ..errors import (
     PackageError,
 )
 from ..plugins.base import DEADLINE, RerankInfo, SurfacePlan, SurfaceRequest
-from ..registry.artifacts import safetensors_header
+from ..registry.artifacts import read_json, safetensors_header
 from .task import Head, Item, Rows, cache_key
 
 MAX_DOCUMENTS = 1024
@@ -45,13 +44,6 @@ LAYOUT_FILE = "matryoshka_config.json"
 LOGITS = "logits"
 WEIGHT_DATA = "onnx/weights.data"
 _MIN_DIMENSION = 2
-
-
-def _json(path: Path) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise PackageError(f"unreadable {path.name}: {exc}") from exc
 
 
 def is_reranker(root: Path) -> bool:
@@ -85,7 +77,7 @@ class RelevanceLayout:
             or config.get("representation_contract") != CONTRACT
         ):
             raise PackageError("unsupported reranker representation contract")
-        layout = _json(root / LAYOUT_FILE)
+        layout = read_json(root / LAYOUT_FILE)
         hidden, layers = int(config["hidden_size"]), int(config["num_hidden_layers"])
         layer_indices, dim_indices = layout.get("layer_indices"), layout.get(
             "dim_indices"

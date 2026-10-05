@@ -400,6 +400,10 @@ class EngineModel(ABC):
     def memory_bytes(self) -> int:
         return 0
 
+    def max_forward_tokens(self) -> int | None:
+        """Most tokens one forward may hold on this device's kernels; None when they set no limit."""
+        return None
+
     def place(self, module: torch.nn.Module) -> torch.nn.Module:
         """A family's own module (a head) on this device, laid out as the backbone is."""
         return module.to(self.device)
@@ -631,7 +635,8 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     says every row's result on this device is the same alone or inside any
     batch (a test must show it); the ``exact`` profile then runs the jobs of
     concurrent requests that are queued together in shared batches, without
-    waiting for more.
+    waiting for more. ``packs_rows`` says ``run`` lays rows back to back with
+    no padding, so rows of any lengths share those batches at no extra cost.
 
     ``device_thread`` False says ``run`` never starts a parallel torch op (an
     ONNX Runtime engine with NumPy readouts): the scheduler then calls it on
@@ -645,6 +650,7 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     fuse_bundled_jobs: ClassVar[bool] = False
     device_thread: ClassVar[bool] = True
     batch_invariant: bool = False
+    packs_rows: bool = False
 
     def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan:
         """Validate and render every question; failures become per-question errors."""

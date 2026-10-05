@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from ...errors import PackageError
-from ...registry.artifacts import named_files, safe_relative, sha256_json
+from ...registry.artifacts import named_files, read_json, safe_relative, sha256_json
 from .calibration import Calibration
 
 ENCODER, DECODER = "vela2-unified", "vela2-decoder"
@@ -27,16 +27,6 @@ BROAD_HEAD_FILE = "broad_head.safetensors"
 MANIFEST_FILE = "MODEL_MANIFEST.json"
 SUMS_FILE = "SHA256SUMS"
 COMMON_FILES = ("config.json", "calibration.json", "tokenizer.json")
-
-
-def read_json(path: Path) -> dict[str, Any]:
-    try:
-        value = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise PackageError(f"cannot read {Path(path).name}: {exc}") from exc
-    if not isinstance(value, dict):
-        raise PackageError(f"{Path(path).name} must hold a JSON object")
-    return value
 
 
 def member_of(root: Path) -> str | None:
@@ -55,7 +45,7 @@ def weight_files(root: Path, member: str) -> list[str]:
     """The safetensors files that hold the model (index order for sharded decoders)."""
     if member == ENCODER:
         return ["model.safetensors"]
-    index = read_json(Path(root) / "model.safetensors.index.json")
+    index = read_json(Path(root) / "model.safetensors.index.json", mapping=True)
     shards = sorted(set(index.get("weight_map", {}).values()))
     if not shards or not all(isinstance(s, str) and safe_relative(s) for s in shards):
         raise PackageError("model.safetensors.index.json lists no valid shards")
@@ -130,7 +120,7 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela2Package:
     weights = weight_files(root, member)
     manifest_sha256 = ""
     if MANIFEST_FILE in files:
-        manifest = read_json(root / MANIFEST_FILE)
+        manifest = read_json(root / MANIFEST_FILE, mapping=True)
         listed = manifest.get("files_sha256") or {}
         stale = sorted(
             name for name in weights if listed.get(name) not in (None, files[name])
@@ -138,8 +128,8 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela2Package:
         if stale:
             raise PackageError(f"weights differ from {MANIFEST_FILE}: {stale}")
         manifest_sha256 = files[MANIFEST_FILE]
-    config = read_json(root / "config.json")
-    calibration = Calibration(read_json(root / "calibration.json"))
+    config = read_json(root / "config.json", mapping=True)
+    calibration = Calibration(read_json(root / "calibration.json", mapping=True))
     broad = root / BROAD_HEAD_FILE if BROAD_HEAD_FILE in files else None
     identity = {
         name: files[name] for name in weights + ([BROAD_HEAD_FILE] if broad else [])
