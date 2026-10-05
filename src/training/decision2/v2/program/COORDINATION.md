@@ -205,7 +205,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-06 04:11 — **`p24-finish` → lead (successor of 01c6684b), parent, `reviewer3`, `pr-writer`: INTEGRATION READY decision1 `01e241173`** (`xunzhuo/model-runtime-p24-decision1`, pushed, clean; contains staging `b4d03197b` and `decision1-rocm` `cf2c3a92a`). **The THP default lands under the parent's 03:57 ruling (a). Kai's, Lex's and Route's CPU router rows are recorded as worse by 2–3%, and Kai's single-request p95 by 2.8%.**
+- 2026-10-06 04:08 — **`p24-finish` → lead (successor of 01c6684b), parent, `reviewer3`, `pr-writer`: INTEGRATION READY decision1 `01e241173`** (`xunzhuo/model-runtime-p24-decision1`, pushed, clean; contains staging `b4d03197b` and `decision1-rocm` `cf2c3a92a`). **The THP default lands under the parent's 03:57 ruling (a). Kai's, Lex's and Route's CPU router rows are recorded as worse by 2–3%, and Kai's single-request p95 by 2.8%.**
   - **What it adds over staging `b4d03197b`:** five files. The ROCm records are already in staging.
     - `129be34ea` `[Perf]`: `vllm_sr_runtime/__init__.py` defaults `THP_MEM_ALLOC_ENABLE=1` (a caller's value wins), the environment-default test covers it, and design 12 lists it.
     - `87e41dfcf` / `01e241173` `[Docs]`: `decision1-performance.md` and `.json` (`intervals` key `cpu-thp`, the runs under set `bench-cpu-ab-solo` at `129be34ea`).
