@@ -150,7 +150,7 @@ curl --fail --include http://127.0.0.1:8899/v1/chat/completions \
 
 ## 在 AMD 上运行 Vela 路由模型 {#run-vela-routing-models-on-amd}
 
-Router 自身的模型（Vela 分类器、embedding、reranker 和决策模型）运行在[模型运行时](model-runtime/overview.md)中。在 AMD Instinct MI300X 和 MI325X GPU 上，运行时通过 ROCm 版 PyTorch 执行这些模型，该路径已经验证。`--platform amd` 选择 AMD 镜像，其中包含带 ROCm 版 PyTorch 的运行时，并把 GPU 传给 Router。
+Router 自身的模型（Vela 分类器、embedding、reranker 和决策模型）运行在[模型运行时](model-runtime/overview.md)中。在 AMD Instinct MI300X 和 MI325X GPU 上，运行时通过 ROCm 版 PyTorch 执行这些模型，该路径已经验证。`--platform amd` 选择 AMD 镜像，其中包含运行时和经过验证的软件栈（ROCm 7.2 版 PyTorch 2.12、FLA 0.5.2，以及为 ROCm 构建的 `causal-conv1d` 1.7.0），并把 GPU 传给 Router。每个模型加载时都会用在该栈上核验过的参考答案自检；见[选择模型](model-runtime/choose-a-model.md#hardware)。
 
 [Vela AMD 模型卡片](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)及完整配置把全部十个任务模型放在 `rocm:0` 上。连接已有的 OpenAI 兼容后端，使用 `--served-model-name vela-default`。配置预期地址是 `http://vllm:8000`：将后端接入 `vllm-sr-network` 并设置网络别名 `vllm`，或修改 endpoint。先用这个名称验证直连请求。为 Router 和生成后端保留足够内存与算力；选择 Router GPU 时使用 `VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES`，deployment 中索引 `0` 指向可见 GPU。
 
