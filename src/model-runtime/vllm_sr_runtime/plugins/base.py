@@ -208,7 +208,9 @@ class ModelSpec:
     marks a bidirectional encoder whose readout needs hidden states.
     ``kernel_variants`` maps a kernel slot to the variant the model's released
     runtime ran (``KernelSet.use_variants``); a slot without that variant on
-    the device runs its reference.
+    the device runs its reference. ``graph_threads`` caps a named graph's CPU
+    intra-op threads where more of them only add wake-ups (a few-millisecond
+    forward); other graphs use every configured thread.
     """
 
     name: str
@@ -218,6 +220,7 @@ class ModelSpec:
     graphs: Mapping[str, Path] = field(default_factory=dict)
     encoder: bool = False
     kernel_variants: Mapping[str, str] = field(default_factory=dict)
+    graph_threads: Mapping[str, int] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
