@@ -43,7 +43,7 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
-	github.com/valkey-io/valkey-glide/go/v2 v2.3.0 // indirect
+	github.com/valkey-io/valkey-glide/go/v2 v2.5.2 // indirect
 	github.com/vllm-project/semantic-router/candle-binding v0.0.0-00010101000000-000000000000 // indirect
 	github.com/vllm-project/semantic-router/onnx-binding v0.0.0-00010101000000-000000000000 // indirect
 	github.com/vllm-project/semantic-router/openvino-binding v0.0.0-00010101000000-000000000000 // indirect
