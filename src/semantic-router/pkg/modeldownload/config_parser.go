@@ -141,8 +141,8 @@ func embeddingModelRequiredFiles(cfg *config.RouterConfig) map[string][]string {
 // onnxWeightExcludePatterns match the ONNX inference exports published beside the
 // safetensors weights in the embedding model repositories. The runtime's native engine
 // never opens them, yet they dominate the snapshot size (about 4.3 GB of the 4.9 GB
-// mmbert-embed-32k-2d-matryoshka repository), so downloads skip them. Small manifests such as onnx/model_config.json, which
-// config.MmBertAvailableLayers reads, are not matched and stay in the snapshot.
+// mmbert-embed-32k-2d-matryoshka repository), so downloads skip them. Small manifests
+// such as onnx/model_config.json are not matched and stay in the snapshot.
 var onnxWeightExcludePatterns = []string{
 	"*.onnx",
 	"*.onnx.data",
