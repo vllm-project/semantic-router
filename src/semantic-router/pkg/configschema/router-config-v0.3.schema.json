@@ -87,6 +87,7 @@
           "enum": [
             "automix",
             "confidence",
+            "decision",
             "fusion",
             "hybrid",
             "kmeans",
@@ -138,6 +139,9 @@
         },
         "prompt": {
           "$ref": "#/$defs/PromptSelectionConfig"
+        },
+        "decision": {
+          "$ref": "#/$defs/DecisionSelectionConfig"
         },
         "on_error": {
           "type": "string"
@@ -1387,6 +1391,12 @@
             "$ref": "#/$defs/InputModalityRule"
           },
           "type": "array"
+        },
+        "decision": {
+          "items": {
+            "$ref": "#/$defs/DecisionSignalRule"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -1402,6 +1412,9 @@
         },
         "vector_store": {
           "$ref": "#/$defs/VectorStoreConfig"
+        },
+        "tool_sessions": {
+          "$ref": "#/$defs/ToolSessionStoreConfig"
         }
       },
       "additionalProperties": false,
@@ -2003,6 +2016,18 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "DecisionChoice": {
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "DecisionLearningAdaptationConfig": {
       "properties": {
         "mode": {
@@ -2370,6 +2395,75 @@
         "type",
         "configuration"
       ]
+    },
+    "DecisionQuestion": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/DecisionChoice"
+          },
+          "type": "array"
+        },
+        "levels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionSelectionConfig": {
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "candidates": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionSignalRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "question": {
+          "$ref": "#/$defs/DecisionQuestion"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "DynamicRetrievalConfig": {
       "properties": {
@@ -4185,6 +4279,12 @@
         },
         "input": {
           "$ref": "#/$defs/ModelInputBudget"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -4892,6 +4992,7 @@
             "conversation",
             "event",
             "input_modality",
+            "decision",
             "kb_metric",
             "projection"
           ]
@@ -6288,6 +6389,7 @@
             "complexity",
             "context",
             "conversation",
+            "decision",
             "domain",
             "embedding",
             "event",
@@ -6524,6 +6626,24 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "StickyToolSelectionConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_tools": {
+          "type": "integer"
+        },
+        "max_new_tools_per_turn": {
+          "type": "integer"
+        },
+        "pin_called_tools": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "StructureFeature": {
       "properties": {
         "type": {
@@ -6663,6 +6783,54 @@
         },
         "preserve_count": {
           "type": "integer"
+        },
+        "sticky": {
+          "$ref": "#/$defs/StickyToolSelectionConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolSessionRedisConfig": {
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "database": {
+          "type": "integer"
+        },
+        "key_prefix": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolSessionStoreConfig": {
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "ttl_seconds": {
+          "type": "integer"
+        },
+        "max_sessions": {
+          "type": "integer"
+        },
+        "max_sessions_per_identity": {
+          "type": "integer"
+        },
+        "max_state_bytes": {
+          "type": "integer"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        },
+        "redis": {
+          "$ref": "#/$defs/ToolSessionRedisConfig"
         }
       },
       "additionalProperties": false,
@@ -7469,6 +7637,15 @@
         "observation_key": "input_modality",
         "decision_referenceable": true,
         "schema_ref": "#/$defs/InputModalityRule"
+      },
+      {
+        "type": "decision",
+        "display_name": "Decision Model",
+        "collection": "decision",
+        "observation_key": "decision",
+        "decision_referenceable": true,
+        "reference_qualifier": "label",
+        "schema_ref": "#/$defs/DecisionSignalRule"
       }
     ],
     "algorithms": [
@@ -7606,6 +7783,16 @@
         "config_field": "prompt",
         "payload_shape": "nested",
         "schema_ref": "#/$defs/PromptSelectionConfig"
+      },
+      {
+        "type": "decision",
+        "display_name": "Decision Model",
+        "description": "Ask a decision model which declared candidate should answer.",
+        "tier": "supported",
+        "execution": "selector",
+        "config_field": "decision",
+        "payload_shape": "nested",
+        "schema_ref": "#/$defs/DecisionSelectionConfig"
       }
     ],
     "plugins": [
@@ -7738,6 +7925,7 @@
       "conversation",
       "event",
       "input_modality",
+      "decision",
       "kb_metric",
       "projection"
     ],
@@ -7847,6 +8035,15 @@
         "path": [
           "stores",
           "vector_store"
+        ]
+      },
+      {
+        "key": "tool_sessions",
+        "layer": "stores",
+        "display_name": "Tool Sessions",
+        "path": [
+          "stores",
+          "tool_sessions"
         ]
       },
       {
