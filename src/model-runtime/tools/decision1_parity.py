@@ -137,8 +137,9 @@ def run_native(args: argparse.Namespace) -> int:
                     "options": {"return_meta": False, "profile": args.profile},
                 }
                 started = time.perf_counter()
+                size = len(json.dumps(body, separators=(",", ":")).encode("utf-8"))
                 status, response = loop.run_until_complete(
-                    runtime.call("decisions", body)
+                    runtime.call("decisions", body, size)
                 )
                 answers = (
                     response.get("answers")

@@ -30,7 +30,14 @@ from ...plugins.base import (
 from ...registry import builtin, policy
 from ...registry.resolve import fetch
 from ...registry.tables.common import BuiltinModel
-from ...systemone import MAX_LEVELS, MAX_OPTIONS, MIN_LEVELS, MIN_OPTIONS
+from ...systemone import (
+    GOLDEN_STATE,
+    MAX_LEVELS,
+    MAX_OPTIONS,
+    MIN_LEVELS,
+    MIN_OPTIONS,
+    golden_questions,
+)
 from ...text.tokenizer import Tokenizer
 from . import package as pkg
 from . import qwen, vela
@@ -48,25 +55,8 @@ LICENCES = {
     },
     pkg.QWEN: {"spdx": "apache-2.0", "components": []},
 }
-GOLDEN_STATE = (
-    "Write a Python function that merges two sorted lists and explain its running time."
-)
-GOLDEN_QUESTIONS = {
-    "domain": {
-        "type": "choice",
-        "instructions": "Which domain does this request belong to?",
-        "criteria": {"code": "Programming", "math": "Mathematics", "other": None},
-    },
-    "reasoning": {
-        "type": "noul",
-        "instructions": "Does answering this request need multi-step reasoning?",
-    },
-    "difficulty": {
-        "type": "score",
-        "instructions": "How difficult is this request?",
-        "criteria": ["Trivial", "Moderate", "Hard"],
-    },
-}
+# The released golden answers were recorded with a null catch-all description.
+GOLDEN_QUESTIONS = golden_questions(None)
 
 
 def expected_parameters(details: pkg.Decision1Package) -> int | None:
@@ -258,7 +248,6 @@ class Decision1Family(ModelFamily):
             head=candidate,
             temperatures=details.temperatures,
             null_choice_as_key=files.model_name in qwen.NULL_CHOICE_AS_KEY,
-            spec=spec,
         )
 
     def _info(

@@ -12,6 +12,8 @@ computes the released numerics.
 
 from __future__ import annotations
 
+from typing import Any
+
 from .tables import decision1, decision2, omni, vela1, vela2
 from .tables.common import ORG, BuiltinModel, with_recorded
 
@@ -21,6 +23,7 @@ __all__ = [
     "BuiltinModel",
     "all_models",
     "by_identity",
+    "kernel_choices",
     "lookup",
     "with_recorded",
 ]
@@ -55,3 +58,14 @@ def all_models(family: str | None = None) -> tuple[BuiltinModel, ...]:
     if family is None:
         return MODELS
     return tuple(model for model in MODELS if model.family == family)
+
+
+def kernel_choices(
+    model_sha256: str, accelerator: str, arch: str | None
+) -> dict[str, Any]:
+    """The recorded kernel choices of a built-in model on one device class (``accelerator:arch``), if any."""
+    known = by_identity(model_sha256)
+    if known is None or not arch:
+        return {}
+    choices: dict[str, Any] = known.kernel_choices.get(f"{accelerator}:{arch}", {})
+    return choices

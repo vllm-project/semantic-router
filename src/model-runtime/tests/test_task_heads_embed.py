@@ -154,8 +154,8 @@ def test_native_cpu_embedders_and_rerankers_pass_the_batch_invariance_probe(
         _, _, model = load(root)
         assert model.batch_invariant
         profile = ExactProfile()
-        profile.available(model)
-        assert profile.merge
+        profile.bind(model)
+        assert profile.merge and model.packs_rows and not profile.banded
     _, package, model = load(embedder)
     head = model.heads["pooled@4"]
     readout = head.readout

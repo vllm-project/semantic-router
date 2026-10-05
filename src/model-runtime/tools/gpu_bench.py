@@ -104,6 +104,8 @@ def main() -> int:
     shared = SharedContextProfile()
     if shared.available(model):
         shared = None
+    else:
+        shared.bind(model)
     result["many"] = {}
     for n in (16, 64, 128):
         questions = dict(list(request["questions"].items())[:n])

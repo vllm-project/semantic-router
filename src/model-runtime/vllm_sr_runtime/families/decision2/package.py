@@ -19,6 +19,7 @@ from typing import Any
 from ...errors import PackageError
 from ...registry.artifacts import (
     inventory,
+    read_json,
     safetensors_elements,
     safetensors_header,
     sha256_file,
@@ -80,13 +81,6 @@ class Decision2Package:
     model_sha256: str
     temperatures: dict[str, float]
     score_bias: dict[int, list[float]] | None
-
-
-def read_json(path: Path) -> Any:
-    try:
-        return json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise PackageError(f"cannot read {Path(path).name}: {exc}") from exc
 
 
 def is_package(root: Path) -> bool:

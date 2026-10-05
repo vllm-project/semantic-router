@@ -237,9 +237,12 @@ components:
           $ref: '#/components/schemas/RequestOptions'
     Question:
       type: object
+      additionalProperties: false
       description: |
         One question. `instructions` is required unless `preset` names a question the model defines (see
-        `presets` in /v1/models).
+        `presets` in /v1/models). Every family validates System One fields the same way: a question takes only
+        its type's fields (`choices` for Choice and Noul, `levels` for Score, `over`, `head` and `threshold`
+        where the model reads them), and any other field is answered with invalid_question.
       properties:
         type:
           type: string
@@ -247,12 +250,13 @@ components:
             choice, noul or score; set and span where the model declares them (`question_types` in /v1/models).
             Unknown or undeclared types are answered with invalid_question.
         instructions:
-          description: The question; non-empty text, an object or an array.
+          description: The question; non-blank text, an object or an array.
         criteria:
           description: |
-            System One criteria. Choice: an object of 2..255 option keys to descriptions (descriptions may be
-            null). Noul: an optional object with only false and true. Score: an ordered list of 2..10 level
-            descriptions. Set and Span: an object of 1..255 labels to descriptions.
+            System One criteria. Choice: an object of 2..255 non-blank option keys to descriptions (descriptions
+            may be null). Noul: an optional object with only false and true (a null description takes the
+            model's default). Score: an ordered list of 2..10 level descriptions. Set and Span: an object of
+            1..255 labels to descriptions. Descriptions are non-blank text, an object or an array.
         choices:
           type: array
           description: Ordered Choice or Noul options, an alternative to a criteria object.

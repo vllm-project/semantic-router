@@ -1,5 +1,6 @@
 """Every response is validated against the checked-in OpenAPI contract."""
 
+import asyncio
 import copy
 from pathlib import Path
 
@@ -96,6 +97,110 @@ def test_per_question_errors_do_not_fail_siblings(client):
     assert body["answers"]["bad"] == {"type": "set", "error": "invalid_question"}
     assert body["answers"]["tiny"] == {"type": "choice", "error": "invalid_question"}
     assert "error" not in body["answers"]["domain"]
+
+
+CHOICES = [{"key": "a"}, {"key": "b"}]
+SYSTEM_ONE_CASES = {
+    "choice via choices": ("ok", {"type": "choice", "choices": CHOICES}),
+    "choice, null description": (
+        "ok",
+        {"type": "choice", "criteria": {"a": None, "b": "B"}},
+    ),
+    "score via levels": ("ok", {"type": "score", "levels": ["low", "mid", "high"]}),
+    "noul, bare": ("ok", {"type": "noul"}),
+    "noul, false and true": (
+        "ok",
+        {"type": "noul", "criteria": {"false": "n", "true": "y"}},
+    ),
+    "noul, null description": ("ok", {"type": "noul", "criteria": {"true": None}}),
+    "instructions as object": ("ok", {"type": "noul", "instructions": {"q": "Code?"}}),
+    "choice, one option": (
+        "invalid_question",
+        {"type": "choice", "criteria": {"a": "A"}},
+    ),
+    "choice, duplicate keys": (
+        "invalid_question",
+        {"type": "choice", "choices": [{"key": "a"}] * 2},
+    ),
+    "choice, blank key": (
+        "invalid_question",
+        {"type": "choice", "criteria": {" ": "A", "b": "B"}},
+    ),
+    "choice, empty description": (
+        "invalid_question",
+        {"type": "choice", "criteria": {"a": "", "b": "B"}},
+    ),
+    "choice, criteria and choices": (
+        "invalid_question",
+        {"type": "choice", "criteria": {"a": "A", "b": "B"}, "choices": CHOICES},
+    ),
+    "choice, levels": ("invalid_question", {"type": "choice", "levels": ["a", "b"]}),
+    "score, eleven levels": (
+        "invalid_question",
+        {"type": "score", "criteria": [str(i) for i in range(11)]},
+    ),
+    "score, null level": (
+        "invalid_question",
+        {"type": "score", "criteria": ["low", None]},
+    ),
+    "noul, other key": (
+        "invalid_question",
+        {"type": "noul", "criteria": {"maybe": "?"}},
+    ),
+    "blank instructions": ("invalid_question", {"type": "noul", "instructions": "   "}),
+    "no instructions": ("invalid_question", {"type": "noul", "instructions": None}),
+    "unknown field": ("invalid_question", {"type": "noul", "colour": "blue"}),
+    "no type": ("invalid_question", {}),
+}
+
+
+@pytest.fixture(scope="module")
+def decision_runtimes(tmp_path_factory, qwen3_runtime):
+    from vllm_sr_runtime.testing import decision1
+    from vllm_sr_runtime.testing.vela2 import write_encoder_package
+
+    root = tmp_path_factory.mktemp("systemone")
+    packages = {
+        "decision1-vela": decision1.write_fixture(root / "vela", "vela-encoder", 0),
+        "decision1-qwen": decision1.write_fixture(root / "qwen", None, 0),
+        "vela2": write_encoder_package(root / "vela2"),
+    }
+    started = {"decision2": qwen3_runtime}
+    for name, package in packages.items():
+        runtime = Runtime(
+            ServeConfig(models=(ModelConfig(model=str(package), device="cpu"),))
+        )
+        runtime.start(background=False)
+        started[name] = runtime
+    yield started
+    for name, runtime in started.items():
+        if name != "decision2":
+            runtime.stop()
+
+
+def test_every_family_validates_system_one_questions_alike(decision_runtimes):
+    questions = {
+        case: {"instructions": "Pick one", **question}
+        for case, (_, question) in SYSTEM_ONE_CASES.items()
+    }
+    expected = {case: outcome for case, (outcome, _) in SYSTEM_ONE_CASES.items()}
+    for name, runtime in decision_runtimes.items():
+        status, body = asyncio.run(
+            runtime.call("decisions", {"state": STATE, "questions": questions})
+        )
+        assert status == 200, name
+        check("DecisionResponse", body)
+        outcomes = {
+            case: answer.get("error", "ok") for case, answer in body["answers"].items()
+        }
+        assert outcomes == expected, name
+
+
+def test_the_contract_lists_every_question_field():
+    question = schema("Question")
+    assert question["additionalProperties"] is False
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.Draft4Validator(question).validate({"type": "noul", "colour": "x"})
 
 
 def test_overlong_question_is_rejected_not_truncated(client):
