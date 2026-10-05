@@ -313,7 +313,7 @@ components:
           $ref: '#/components/schemas/ProfileName'
         return_meta:
           type: boolean
-          description: Include meta in the response (default true).
+          description: Include meta in the response (default false).
     DecisionResponse:
       type: object
       required: [model, answers, usage]
@@ -535,6 +535,7 @@ components:
           $ref: '#/components/schemas/ProfileName'
         return_meta:
           type: boolean
+          description: Include meta in the response (default false).
         overflow:
           type: string
           enum: [reject, truncate, window]
@@ -767,6 +768,7 @@ components:
           $ref: '#/components/schemas/ProfileName'
         return_meta:
           type: boolean
+          description: Include meta in the response (default false).
         overflow:
           type: string
           enum: [reject, truncate]

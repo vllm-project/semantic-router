@@ -184,6 +184,7 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 		)
 	}
 	appendAnthropicPartialCacheOmission(&diagnostics, policy, envelope.Format, response.Usage)
+	appendAnthropicPartialOutputOmission(&diagnostics, policy, envelope.Format, response.Usage)
 	if len(response.Alternatives) > 0 {
 		if err := appendLossy(&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1, "response.alternatives", "Messages has one output sequence"); err != nil {
 			return nil, diagnostics, err

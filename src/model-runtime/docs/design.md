@@ -318,7 +318,10 @@ The contract is `vllm_sr_runtime/api/openapi.yaml` (OpenAPI 3.0.3), served at
 `GET /openapi.yaml`, checked by contract tests on both sides, and the source of
 the Go client in `pkg/modelservice/api`. Every surface takes an optional
 `model` (the served model ID, required when a process serves several models)
-and `options` with `deadline_ms` and `return_meta`. A request-level error uses
+and `options` with `deadline_ms` and `return_meta` (the runtime's `meta`:
+revision, profile, numerics, engine, device and timings, only when asked;
+a family's own fields such as `meta.representation` are always returned).
+A request-level error uses
 an HTTP status with `{"error": {"code", "message"}}`: 400 `invalid_request`,
 404 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface`
 (the model does not serve this surface), 429 `overloaded`, 503 `not_ready`.
@@ -1009,7 +1012,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 
 | Surface | Today | Target |
 | --- | --- | --- |
-| Images | `tools/docker/Dockerfile.extproc{,-rocm}`, `src/vllm-sr/Dockerfile{,.cuda,.rocm}`, `deploy/operator/Dockerfile`, `onnx-binding/Dockerfile.rocm`, `openvino-binding/Dockerfile` build Rust bindings, ORT, MIGraphX or OpenVINO | Pure-Go router; the runtime with CPU, ROCm or CUDA PyTorch; the Omni bundle stage stays; binding images deleted |
+| Images | `tools/docker/Dockerfile.extproc{,-rocm}`, `src/vllm-sr/Dockerfile{,.cuda,.rocm}`, `deploy/operator/Dockerfile`, `onnx-binding/Dockerfile.rocm`, `openvino-binding/Dockerfile` build Rust bindings, ORT, MIGraphX or OpenVINO | Pure-Go router; the runtime with CPU, ROCm or CUDA PyTorch; the Omni bundle stage stays; binding images deleted. One `tools/docker/Dockerfile.extproc` builds all five images (`ACCELERATOR`, targets `extproc` and `vllm-sr`); sizes, build times and startup in `docs/records/removal-footprint.md` |
 | Make | `rust.mk`, `openvino.mk`, `build-run-test.mk` binding targets, `models.mk` native model tests, `common.mk` library paths | Deleted or pointed at the runtime |
 | Workflows | `test-native.yml`, `build-native.yml`, `publish-crate.yml`, the native lanes of `ci.yml`, `performance-test.yml`, Rust hooks in `pre-commit.yml` | Deleted, or replaced by the model-runtime lanes |
 | Helm and operator | model download init containers, native library environment, provider settings | The runtime ships in the router image; optional attached runtime sidecar values |

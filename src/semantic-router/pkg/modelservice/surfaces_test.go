@@ -166,6 +166,9 @@ func TestClassifyEncodesInputsAndDecodesResults(t *testing.T) {
 	if options["overflow"] != "window" || options["deadline_ms"] == nil || options["window"].(map[string]interface{})["overlap"] != 64.0 {
 		t.Fatalf("options were not sent: %v", options)
 	}
+	if _, asked := options["return_meta"]; asked {
+		t.Fatalf("the router reads no runtime meta, so it must not ask for it: %v", options)
+	}
 	inputs := body["input"].([]interface{})
 	if inputs[0].(map[string]interface{})["text"] != "Tom" || inputs[1].(map[string]interface{})["answer"] != "a" {
 		t.Fatalf("inputs were not sent as objects: %v", inputs)

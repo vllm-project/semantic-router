@@ -249,8 +249,10 @@ type ClassifyOptions struct {
 	Overflow *ClassifyOptionsOverflow `json:"overflow,omitempty"`
 
 	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile    *ProfileName `json:"profile,omitempty"`
-	ReturnMeta *bool        `json:"return_meta,omitempty"`
+	Profile *ProfileName `json:"profile,omitempty"`
+
+	// ReturnMeta Include meta in the response (default false).
+	ReturnMeta *bool `json:"return_meta,omitempty"`
 
 	// ReturnTokens Token heads; include per-token label probabilities.
 	ReturnTokens *bool `json:"return_tokens,omitempty"`
@@ -410,8 +412,10 @@ type EmbeddingsOptions struct {
 	Overflow   *EmbeddingsOptionsOverflow `json:"overflow,omitempty"`
 
 	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile    *ProfileName `json:"profile,omitempty"`
-	ReturnMeta *bool        `json:"return_meta,omitempty"`
+	Profile *ProfileName `json:"profile,omitempty"`
+
+	// ReturnMeta Include meta in the response (default false).
+	ReturnMeta *bool `json:"return_meta,omitempty"`
 }
 
 // EmbeddingsOptionsOverflow defines model for EmbeddingsOptions.Overflow.
@@ -718,7 +722,7 @@ type RequestOptions struct {
 	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
 	Profile *ProfileName `json:"profile,omitempty"`
 
-	// ReturnMeta Include meta in the response (default true).
+	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
 }
 

@@ -7,12 +7,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// TestBuildModelSpecsExcludesOnnxWeightsForCandleEmbeddingModels guards the download
-// scope for the default local backend: the candle runtime loads model.safetensors +
+// TestBuildModelSpecsExcludesOnnxWeightsForLocalEmbeddingModels guards the download
+// scope for local embeddings: the model runtime loads model.safetensors +
 // tokenizer.json, so the multi-gigabyte ONNX exports shipped in the same repository
-// must not be fetched. Every candle embedding path gets the same narrowing.
-func TestBuildModelSpecsExcludesOnnxWeightsForCandleEmbeddingModels(t *testing.T) {
-	specs, err := BuildModelSpecs(newCandleEmbeddingConfig())
+// must not be fetched. Every local embedding path gets the same narrowing.
+func TestBuildModelSpecsExcludesOnnxWeightsForLocalEmbeddingModels(t *testing.T) {
+	specs, err := BuildModelSpecs(newLocalEmbeddingConfig())
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
@@ -99,11 +99,11 @@ func TestBuildModelSpecsLeavesNonEmbeddingModelsUnfiltered(t *testing.T) {
 	}
 }
 
-// TestOnnxWeightExcludePatternsNeverMatchCandleRequiredFiles keeps the exclude list
+// TestOnnxWeightExcludePatternsNeverMatchRuntimeRequiredFiles keeps the exclude list
 // and the completeness contract aligned: a pattern that matched a hard-loaded file
 // would make every download incomplete and loop forever.
-func TestOnnxWeightExcludePatternsNeverMatchCandleRequiredFiles(t *testing.T) {
-	required := embeddingModelRequiredFiles(newCandleEmbeddingConfig())
+func TestOnnxWeightExcludePatternsNeverMatchRuntimeRequiredFiles(t *testing.T) {
+	required := embeddingModelRequiredFiles(newLocalEmbeddingConfig())
 	protected := append([]string{}, DefaultRequiredFiles...)
 	protected = append(protected, "onnx/model_config.json")
 	for _, files := range required {
