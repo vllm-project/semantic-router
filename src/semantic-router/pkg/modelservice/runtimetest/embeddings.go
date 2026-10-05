@@ -231,12 +231,11 @@ func embeddingCard(embedder *Embedder) *api.EmbeddingCard {
 	if len(modalities) == 0 {
 		modalities = []string{"text"}
 	}
-	pooling, normalized := "mean", true
 	layers := slices.Clone(embedder.Layers)
 	if layers == nil {
 		layers = []int{}
 	}
-	return &api.EmbeddingCard{Dimensions: slices.Clone(embedder.Dimensions), Layers: layers, Modalities: &modalities, Normalized: &normalized, Pooling: &pooling}
+	return &api.EmbeddingCard{Dimensions: slices.Clone(embedder.Dimensions), Layers: layers, Modalities: modalities, Normalized: true, Pooling: "mean", InputTypes: []string{}}
 }
 
 func rerankCard(reranker *Reranker) *api.RerankCard {

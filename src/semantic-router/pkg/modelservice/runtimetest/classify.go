@@ -1,7 +1,6 @@
 package runtimetest
 
 import (
-	"encoding/json"
 	"net/http"
 	"slices"
 	"strings"
@@ -11,32 +10,27 @@ import (
 
 const specialTokens = 2
 
-// item is one decoded classify input.
-type item struct {
-	Text     string `json:"text"`
-	TextPair string `json:"text_pair"`
-	Context  string `json:"context"`
-	Question string `json:"question"`
-	Answer   string `json:"answer"`
-}
-
-func items(input interface{}) []item {
-	raw, _ := json.Marshal(input)
-	var text string
-	if json.Unmarshal(raw, &text) == nil {
-		return []item{{Text: text}}
+// items reads a classify input in any of its contract forms.
+func items(input api.ClassifyInput) []api.ClassifyItem {
+	if text, err := input.AsInputText(); err == nil {
+		return []api.ClassifyItem{{Text: &text}}
 	}
-	var texts []string
-	if json.Unmarshal(raw, &texts) == nil {
-		out := make([]item, len(texts))
-		for i, text := range texts {
-			out[i] = item{Text: text}
+	if texts, err := input.AsTextList(); err == nil {
+		out := make([]api.ClassifyItem, len(texts))
+		for i := range texts {
+			out[i] = api.ClassifyItem{Text: &texts[i]}
 		}
 		return out
 	}
-	var objects []item
-	_ = json.Unmarshal(raw, &objects)
+	objects, _ := input.AsClassifyItemList()
 	return objects
+}
+
+func field(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func (r *Runtime) classify(body api.ClassifyRequest) (int, api.ClassifyResponse, *api.ErrorBody) {
@@ -69,10 +63,10 @@ func (r *Runtime) classify(body api.ClassifyRequest) (int, api.ClassifyResponse,
 	return http.StatusOK, response, nil
 }
 
-func classifyOne(model Model, head Head, input item, options api.ClassifyOptions) api.ClassifyResult {
-	text := input.Text
-	if input.Answer != "" {
-		text = input.Answer
+func classifyOne(model Model, head Head, input api.ClassifyItem, options api.ClassifyOptions) api.ClassifyResult {
+	text := field(input.Text)
+	if answer := field(input.Answer); answer != "" {
+		text = answer
 	}
 	all := words(text)
 	tokens := len(all) + specialTokens
@@ -148,7 +142,7 @@ func classifyOne(model Model, head Head, input item, options api.ClassifyOptions
 }
 
 // readout reads one window of words with a head.
-func readout(head Head, input item, part []word) api.ClassifyResult {
+func readout(head Head, input api.ClassifyItem, part []word) api.ClassifyResult {
 	content := make([]string, len(part))
 	for i, w := range part {
 		content[i] = strings.ToLower(strings.Trim(w.text, ".,;:!?"))
@@ -180,9 +174,9 @@ func readout(head Head, input item, part []word) api.ClassifyResult {
 		return api.ClassifyResult{Scores: &scores}
 	default:
 		spans := []api.Span{}
-		grounded := strings.Fields(strings.ToLower(input.Context))
+		grounded := strings.Fields(strings.ToLower(field(input.Context)))
 		for i, w := range part {
-			if input.Answer != "" {
+			if field(input.Answer) != "" {
 				if !slices.Contains(grounded, content[i]) {
 					spans = append(spans, api.Span{Label: "hallucinated", Start: w.start, End: w.end, Text: w.text, Probability: 0.9})
 				}

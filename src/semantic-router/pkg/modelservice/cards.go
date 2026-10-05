@@ -50,26 +50,13 @@ type HeadCard struct {
 }
 
 // EmbeddingCard lists the dimensions and layer exits a pooled model serves.
-type EmbeddingCard struct {
-	Dimensions []int
-	Layers     []int
-	Modalities []string
-	InputTypes []string
-	Normalized bool
-	Pooling    string
-}
+type EmbeddingCard = api.EmbeddingCard
 
 // RerankCard lists the pair-scorer exits of a relevance model.
-type RerankCard struct {
-	Default RerankExit
-	Exits   []RerankExit
-}
+type RerankCard = api.RerankCard
 
 // RerankExit is one pair-scorer exit.
-type RerankExit struct {
-	Layer     int
-	Dimension int
-}
+type RerankExit = api.RerankExit
 
 // Serves reports whether the model serves a surface (classify, embeddings, ...).
 func (c ModelCard) Serves(surface string) bool {
@@ -118,35 +105,17 @@ func decodeCard(card api.ModelCard) ModelCard {
 			decoded.Heads = append(decoded.Heads, decodeHead(head))
 		}
 	}
-	if card.Embedding != nil {
-		decoded.Embedding = &EmbeddingCard{
-			Dimensions: append([]int(nil), card.Embedding.Dimensions...),
-			Layers:     append([]int(nil), card.Embedding.Layers...),
-			Modalities: derefSlice(card.Embedding.Modalities),
-			InputTypes: derefSlice(card.Embedding.InputTypes),
-			Normalized: deref(card.Embedding.Normalized),
-			Pooling:    deref(card.Embedding.Pooling),
-		}
-	}
-	if card.Rerank != nil {
-		decoded.Rerank = &RerankCard{Default: RerankExit{Layer: card.Rerank.Default.Layer, Dimension: card.Rerank.Default.Dimension}}
-		for _, exit := range card.Rerank.Exits {
-			decoded.Rerank.Exits = append(decoded.Rerank.Exits, RerankExit{Layer: exit.Layer, Dimension: exit.Dimension})
-		}
-	}
+	decoded.Embedding, decoded.Rerank = card.Embedding, card.Rerank
 	return decoded
 }
 
 func decodeHead(head api.HeadCard) HeadCard {
-	decoded := HeadCard{
+	return HeadCard{
 		Name: head.Name, Kind: string(head.Kind), Labels: append([]string(nil), head.Labels...),
 		Inputs: derefSlice(head.Inputs), DefaultThreshold: head.DefaultThreshold, Thresholds: derefSlice(head.Thresholds),
-		Overflow: string(deref(head.Overflow)), Reduction: string(deref(head.Reduction)), OperatingPointSHA256: deref(head.OperatingPointSha256),
+		Overflow: string(deref(head.Overflow)), Window: head.Window, Reduction: string(deref(head.Reduction)),
+		OperatingPointSHA256: deref(head.OperatingPointSha256),
 	}
-	if head.Window != nil && head.Window.Tokens != nil {
-		decoded.Window = &Window{Tokens: *head.Window.Tokens, Overlap: deref(head.Window.Overlap)}
-	}
-	return decoded
 }
 
 func deref[T any](value *T) T {

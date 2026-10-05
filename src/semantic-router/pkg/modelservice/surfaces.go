@@ -21,12 +21,10 @@ type ClassifyInput struct {
 	Answer   string
 }
 
-// Window asks for overlapping windows: Tokens includes special tokens,
-// Overlap counts content tokens shared by neighbouring windows.
-type Window struct {
-	Tokens  int
-	Overlap int
-}
+// Window is a head's declared windows, or the overlapping windows a classify
+// request asks for: Tokens includes special tokens, Overlap counts content
+// tokens shared by neighbouring windows.
+type Window = api.HeadWindow
 
 // ClassifyRequest runs one head of a model over its inputs.
 type ClassifyRequest struct {

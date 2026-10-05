@@ -29,7 +29,6 @@ type Head struct {
 	Labels               []string
 	Inputs               []string
 	Thresholds           []float64
-	Window               *api.WindowOptions
 	OperatingPointSHA256 string
 }
 
@@ -248,16 +247,6 @@ func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 		if head.OperatingPointSHA256 != "" {
 			digest := head.OperatingPointSHA256
 			heads[i].OperatingPointSha256 = &digest
-		}
-		if head.Window != nil {
-			tokens, overlap := head.Window.Tokens, 0
-			if head.Window.Overlap != nil {
-				overlap = *head.Window.Overlap
-			}
-			heads[i].Window = &struct {
-				Overlap *int `json:"overlap,omitempty"`
-				Tokens  *int `json:"tokens,omitempty"`
-			}{Overlap: &overlap, Tokens: &tokens}
 		}
 	}
 	card.Heads = &heads

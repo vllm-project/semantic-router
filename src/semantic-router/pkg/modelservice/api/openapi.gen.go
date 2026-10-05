@@ -385,12 +385,12 @@ type Embedding struct {
 
 // EmbeddingCard defines model for EmbeddingCard.
 type EmbeddingCard struct {
-	Dimensions []int     `json:"dimensions"`
-	InputTypes *[]string `json:"input_types,omitempty"`
-	Layers     []int     `json:"layers"`
-	Modalities *[]string `json:"modalities,omitempty"`
-	Normalized *bool     `json:"normalized,omitempty"`
-	Pooling    *string   `json:"pooling,omitempty"`
+	Dimensions []int    `json:"dimensions"`
+	InputTypes []string `json:"input_types"`
+	Layers     []int    `json:"layers"`
+	Modalities []string `json:"modalities"`
+	Normalized bool     `json:"normalized"`
+	Pooling    string   `json:"pooling"`
 }
 
 // EmbeddingVector A list of floats, or with encoding_format base64 a base64 string of little-endian float32 values.
@@ -502,10 +502,9 @@ type HeadCard struct {
 
 	// Thresholds The packaged operating point, one threshold per label.
 	Thresholds *[]float64 `json:"thresholds"`
-	Window     *struct {
-		Overlap *int `json:"overlap,omitempty"`
-		Tokens  *int `json:"tokens,omitempty"`
-	} `json:"window"`
+
+	// Window The windows the head reads a long input in by default; null when it declares none.
+	Window *HeadWindow `json:"window"`
 }
 
 // HeadCardKind defines model for HeadCard.Kind.
@@ -516,6 +515,15 @@ type HeadCardOverflow string
 
 // HeadCardReduction defines model for HeadCard.Reduction.
 type HeadCardReduction string
+
+// HeadWindow The windows the head reads a long input in by default; null when it declares none.
+type HeadWindow struct {
+	// Overlap Content tokens shared by neighbouring windows.
+	Overlap int `json:"overlap"`
+
+	// Tokens Window size including special tokens.
+	Tokens int `json:"tokens"`
+}
 
 // Health defines model for Health.
 type Health struct {
