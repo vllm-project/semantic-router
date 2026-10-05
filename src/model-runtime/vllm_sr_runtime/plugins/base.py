@@ -213,7 +213,10 @@ class ModelSpec:
     forward); other graphs use every configured thread. ``graph_spin_us``
     sets how long a named graph's idle CPU threads spin before they sleep,
     where the engine's default bound lets them sleep inside a run; the
-    engine may shorten it beside other engines' CPU models.
+    engine may shorten it beside other engines' CPU models. ``requires``
+    names, per accelerator, the capabilities its devices must report
+    (``Accelerator.capabilities``) to serve the model; placement refuses a
+    device that lacks one.
     """
 
     name: str
@@ -225,6 +228,7 @@ class ModelSpec:
     kernel_variants: Mapping[str, str] = field(default_factory=dict)
     graph_threads: Mapping[str, int] = field(default_factory=dict)
     graph_spin_us: Mapping[str, int] = field(default_factory=dict)
+    requires: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -484,6 +488,10 @@ class Accelerator(ABC):
 
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
         return {}
+
+    def lacks(self, device: DeviceInfo, capability: str) -> str:
+        """Why ``device`` can't serve a model that requires ``capability`` (``ModelSpec.requires``), and the remedy."""
+        return f"{device.label} lacks {capability}"
 
     def autocast(
         self, device: DeviceInfo, dtype: str | None

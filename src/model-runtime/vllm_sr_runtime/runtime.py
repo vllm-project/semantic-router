@@ -29,7 +29,12 @@ from typing import Any
 
 from .accel.autotune import KernelChoices, freeze_autotune
 from .config import ModelConfig, ServeConfig
-from .errors import PackageError, RuntimeServiceError, VerificationError
+from .errors import (
+    PackageError,
+    RuntimeServiceError,
+    UnsupportedDeviceError,
+    VerificationError,
+)
 from .placement import Placement, device_kind, place
 from .plugins import registry
 from .plugins.base import (
@@ -741,8 +746,9 @@ class Runtime:
     def _load_all(self) -> None:
         """Load every model in order, then reload the ones that failed with back-off.
 
-        A model whose package or golden answers are wrong stays failed at
-        once. Any other failure (no device with enough free memory, a
+        A model whose package or golden answers are wrong, or that no
+        device it may use can serve (``UnsupportedDeviceError``), stays failed
+        at once. Any other failure (no device with enough free memory, a
         download, a busy device) is retried ``load_attempts`` times in all,
         waiting ``load_retry_seconds`` and doubling up to 300 s, while the
         model reports ``loading``; the other models serve meanwhile. Every pass
@@ -759,7 +765,7 @@ class Runtime:
                     return
                 try:
                     served.load()
-                except (PackageError, VerificationError) as exc:
+                except (PackageError, UnsupportedDeviceError, VerificationError) as exc:
                     log.error("loading %s failed: %s", served.label, exc)
                     served.health.set("failed", f"{type(exc).__name__}: {exc}")
                 except Exception as exc:

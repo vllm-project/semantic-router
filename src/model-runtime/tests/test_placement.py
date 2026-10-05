@@ -3,7 +3,7 @@ import torch
 from vllm_sr_runtime.accel.cpu import CPUAccelerator
 from vllm_sr_runtime.accel.cuda import CUDAAccelerator
 from vllm_sr_runtime.accel.rocm import ROCmAccelerator
-from vllm_sr_runtime.errors import PlacementError
+from vllm_sr_runtime.errors import PlacementError, UnsupportedDeviceError
 from vllm_sr_runtime.placement import auto_order, device_kind, parse_device, place
 from vllm_sr_runtime.plugins.base import BackboneSpec, DtypePolicy, ModelSpec
 
@@ -72,3 +72,63 @@ def test_device_names_and_the_auto_order_come_from_the_accelerators():
     assert device_kind("rocm:1") == "rocm"
     if not GPU:
         assert device_kind("auto") == "cpu"
+
+
+GATED_DELTA = ModelSpec(
+    "Decision-2.0-Eos-0.8B",
+    BackboneSpec("qwen3_5_text", {}, ()),
+    DtypePolicy(),
+    1024,
+    requires={"cpu": ("lapack",)},
+)
+
+
+@pytest.mark.parametrize("lapack", [True, False])
+def test_a_cpu_without_lapack_refuses_models_that_require_it(monkeypatch, lapack):
+    monkeypatch.setattr(torch._C, "has_lapack", lapack)
+    (device,) = CPUAccelerator().devices()
+    assert CPUAccelerator().capabilities(device)["lapack"] is lapack
+    assert place(SPEC, "cpu", 1000).device.accelerator == "cpu"
+    if lapack:
+        assert place(GATED_DELTA, "cpu", 1000).device.accelerator == "cpu"
+        return
+    with pytest.raises(UnsupportedDeviceError) as refused:
+        place(GATED_DELTA, "cpu", 1000)
+    message = str(refused.value)
+    assert message.startswith("no device can serve Decision-2.0-Eos-0.8B: cpu: ")
+    assert "built without LAPACK" in message
+    assert "the router's CPU image" in message and "a GPU device" in message
+
+
+def test_the_refusal_comes_before_any_weights_load_and_is_final(
+    monkeypatch, qwen3_package, qwen35_package
+):
+    from vllm_sr_runtime.config import ModelConfig, ServeConfig
+    from vllm_sr_runtime.engines.native.engine import NativeEngine
+    from vllm_sr_runtime.runtime import Runtime
+
+    monkeypatch.setattr(torch._C, "has_lapack", False)
+    loads = []
+    load = NativeEngine.load
+
+    def counted(self, spec, *args, **kwargs):
+        loads.append(spec.name)
+        return load(self, spec, *args, **kwargs)
+
+    monkeypatch.setattr(NativeEngine, "load", counted)
+    models = (
+        ModelConfig(model=str(qwen35_package), name="gated", device="cpu"),
+        ModelConfig(model=str(qwen3_package), name="dense", device="cpu"),
+    )
+    runtime = Runtime(ServeConfig(models=models, load_retry_seconds=0.01))
+    runtime.start(background=True)
+    try:
+        runtime.wait(timeout=60)
+        gated, dense = runtime.lookup("gated"), runtime.lookup("dense")
+        assert gated.health.state == "failed"
+        assert gated.health.reason.startswith("UnsupportedDeviceError: ")
+        assert "built without LAPACK" in gated.health.reason
+        assert dense.health.ready
+        assert loads == ["Decision-2.0-Tiny-Qwen3"]
+    finally:
+        runtime.stop()

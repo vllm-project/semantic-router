@@ -57,6 +57,8 @@ LICENCES = {
 }
 # The released golden answers were recorded with a null catch-all description.
 GOLDEN_QUESTIONS = golden_questions(None)
+# Gated DeltaNet layers (Qwen3.5) solve triangular systems; on a CPU that needs LAPACK.
+GATED_DELTA_REQUIRES = {"cpu": ("lapack",)}
 
 
 def expected_parameters(details: pkg.Decision1Package) -> int | None:
@@ -201,6 +203,7 @@ class Decision1Family(ModelFamily):
             dtype=DtypePolicy(bf16_resident=False, gpu_weights="bfloat16"),
             max_input_tokens=package.max_input_tokens,
             kernel_variants=variants,
+            requires=GATED_DELTA_REQUIRES,
         )
 
     def load(
