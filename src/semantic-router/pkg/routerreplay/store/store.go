@@ -36,6 +36,7 @@ type Signal struct {
 	Metadata      []string `json:"metadata,omitempty"`
 	Classifier    []string `json:"classifier,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
+	Decision      []string `json:"decision,omitempty"`
 }
 
 // UsageCost captures token usage and pricing-derived cost details for a record.
@@ -575,6 +576,7 @@ func cloneSignal(signal Signal) Signal {
 		Metadata:      cloneStringSlice(signal.Metadata),
 		Classifier:    cloneStringSlice(signal.Classifier),
 		InputModality: cloneStringSlice(signal.InputModality),
+		Decision:      cloneStringSlice(signal.Decision),
 	}
 }
 
