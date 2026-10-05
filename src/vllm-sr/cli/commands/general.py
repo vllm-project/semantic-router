@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import click
@@ -17,6 +18,7 @@ from cli.commands.config import (
 )
 from cli.commands.config_management import CONFIG_MANAGEMENT_COMMANDS
 from cli.commands.validate import validate_command
+from cli.config_proposal import propose_config_command
 from cli.router_management_client import RouterManagementClient
 from cli.terminal import echo
 from cli.utils import get_logger
@@ -207,6 +209,45 @@ def config_import(
         target_path=target_path,
         force=force,
     )
+
+
+@config.command("propose")
+@click.option(
+    "--config",
+    "config_path",
+    required=True,
+    help="Path to a canonical v0.3 config file. The file is not modified.",
+)
+@click.option(
+    "--intent",
+    required=True,
+    help="Maintained proposal intent id, for example selection.latency-aware.",
+)
+@click.option(
+    "--decision",
+    default=None,
+    help="Name of an existing routing decision. Used by decision intents.",
+)
+@click.option(
+    "--recipe",
+    default=None,
+    help="Name of an existing recipe. Used by recipe intents.",
+)
+@exit_with_logged_error(log)
+def config_propose(
+    config_path: str, intent: str, decision: str | None, recipe: str | None
+) -> None:
+    """Print a reviewable config proposal. This command does not apply it.
+
+    Examples:
+        vllm-sr config propose --config config.yaml \\
+            --intent selection.latency-aware --decision default-route
+        vllm-sr config propose --config config.yaml \\
+            --intent recipe.privacy --recipe privacy-lane
+    """
+
+    if not propose_config_command(config_path, intent, decision, recipe):
+        sys.exit(1)
 
 
 @config.command("validate")

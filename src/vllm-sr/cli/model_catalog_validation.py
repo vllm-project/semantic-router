@@ -207,6 +207,25 @@ _SECRET_LITERAL_PATTERNS = (
 )
 
 
+def find_embedded_secret_literals(text: str) -> frozenset[str]:
+    """Return credential-like substrings maintained for catalog manifest checks."""
+
+    found: set[str] = set()
+    for pattern in _SECRET_LITERAL_PATTERNS:
+        for match in pattern.finditer(text):
+            found.add(match.group(0))
+    return frozenset(found)
+
+
+def redact_embedded_secret_literals(text: str) -> str:
+    """Mask credential-like literals using the same patterns as catalog validation."""
+
+    redacted = text
+    for pattern in _SECRET_LITERAL_PATTERNS:
+        redacted = pattern.sub("***", redacted)
+    return redacted
+
+
 def _compatibility(
     value: Any, component_versions: CatalogComponentVersions
 ) -> CatalogCompatibility:
