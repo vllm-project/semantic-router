@@ -179,17 +179,23 @@ def read_question(
             for key, value in (criteria or {}).items()
         }
         return Question(kind, instructions, given)
-    if (
-        not isinstance(criteria, dict)
-        or not MIN_OPTIONS <= len(criteria) <= MAX_OPTIONS
-    ):
-        raise _invalid(f"criteria must name {MIN_OPTIONS} to {MAX_OPTIONS} options")
+    return Question(kind, instructions, named_options(criteria))
+
+
+def named_options(criteria: Any, minimum: int = MIN_OPTIONS) -> dict[str, Any]:
+    """``{name: description}`` criteria: ``minimum`` to 255 non-blank names, descriptions content or null.
+
+    Choice options; families with their own labelled types (Set, Span) pass
+    their ``minimum``.
+    """
+    if not isinstance(criteria, dict) or not minimum <= len(criteria) <= MAX_OPTIONS:
+        raise _invalid(f"criteria must name {minimum} to {MAX_OPTIONS} options")
     options = {}
     for key, value in criteria.items():
         if not isinstance(key, str) or not key.strip():
             raise _invalid("option names must be nonempty strings")
         options[key] = content(value, f"criteria.{key}", nullable=True)
-    return Question(kind, instructions, options)
+    return options
 
 
 def _options(choices: Any, keys: tuple[str, ...] | None) -> dict[str, Any]:

@@ -3,7 +3,7 @@ title: 选择模型、规模和硬件
 sidebar_label: 选择模型
 description: 每个任务该用哪个模型，决策模型需要多大，以及用什么硬件运行。
 translation:
-  source_commit: "a8c166705a025fec6c9cd4bfe4251341f3a64196"
+  source_commit: "73936aeacee7fbbf670416aa6a75eaeacd436a03"
   source_file: "docs/model-runtime/choose-a-model.md"
   outdated: false
 ---
@@ -31,7 +31,7 @@ translation:
 | 把文本、图片和音频放进同一向量空间 | `vllm-sr/Vela-1.0-Omni-Nano` 或 `-Mini` | 164M / 1.36B | Mini 更准确，并接受更长的文本 |
 | 用自然语言提出你自己的问题 | 决策模型（见下一节） | 0.6B 到 27B | |
 
-任务模型在 CPU 上都运行良好：在 16 个核上，Vela Domain 请求的中位耗时约 11 ms，
+任务模型在 CPU 上都运行良好：在 16 个核上，Vela Domain 请求的中位耗时约 12 ms，
 比早期版本使用的原生绑定快三倍
 （[测量记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela1-performance.md)）。
 它们大多最多读取 32,768 个 token；更长或更短的上限列在每个模型卡片和 `GET /v1/models` 中。
@@ -65,6 +65,13 @@ Decision 1.0 模型（`vllm-sr/Decision-1.0-Kai-0.6B`、`-Lex-0.6B`、`-Route-0.
 | NVIDIA GPU | 可用，尚未验证 | 设置 `device: cuda:0`。`vllm-sr serve --platform nvidia` 自带 CUDA 版 PyTorch。 |
 | Intel GPU | 可用，尚未验证 | 设置 `device: xpu:0`，并把运行时安装在 XPU 版 PyTorch 旁边。 |
 | Apple 芯片 | 可用，尚未验证 | 设置 `device: mps`，并在 macOS 上安装运行时。 |
+
+在 AMD GPU 上，路由器镜像自带运行时经过验证的软件栈：ROCm 7.2 版 PyTorch 2.12、FLA 0.5.2，以及为 ROCm 构建的 `causal-conv1d` 1.7.0。
+其中的 `causal-conv1d` 也包含 MI200 和 MI350 GPU 的代码，因此用到它的模型在这些 GPU 上也能运行，但只有 MI300X 和 MI325X 经过验证。
+内置模型的 GPU 参考答案已在该栈上核验，每个模型加载时都会与它们对照自检。换用其他 PyTorch、ROCm 或内核构建时，
+模型可能无法通过自检，或报告 [`unverified`](model-runtime/troubleshooting.md#a-ready-models-self-check-says-unverified)。
+如果某个模型的参考答案需要在该栈上重新记录，其模型族的[记录](https://github.com/vllm-project/semantic-router/tree/main/src/model-runtime/docs/records)
+会说明这一点，并给出它与发布版答案的一致率。
 
 `device: auto`（默认）选择第一个有足够空闲显存的已验证 GPU，否则使用 CPU。
 你显式指定的 GPU 必须存在，否则模型会带着明确的原因加载失败，而不是悄悄在 CPU 上运行。

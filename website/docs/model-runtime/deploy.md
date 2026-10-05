@@ -96,6 +96,11 @@ default where you can: in one process, an ONNX Runtime model such as Vela Omni
 and a PyTorch model share the CPU's threads, and one of them answers more
 slowly under load.
 
+Deployments on `device: auto` (the default) all share one process, wherever
+the runtime places them. On a host without a GPU they then take turns on the
+CPU instead of answering in parallel, so name `device: cpu`, or give them a
+`process`, to spread CPU models over processes of their own.
+
 Give a deployment its own `process` name when it should not share a fault
 domain or memory with the others, for example a large decision model:
 
@@ -150,6 +155,12 @@ in any cluster. The ROCm router image,
 `ghcr.io/vllm-project/semantic-router/extproc-rocm`, contains the runtime with
 PyTorch for ROCm: give the router pod an AMD GPU and set `device: rocm:0` on a
 deployment, and the router runs that model on the GPU itself.
+
+Models you keep on the CPU in the ROCm image run on its ROCm build of PyTorch.
+For most Vela task models that build fails the runtime's load-time check that
+a model answers the same alone and in a batch, so under `exact` they answer
+queued requests one at a time: the same answers, with less throughput under
+load. A router whose models all run on the CPU should use the CPU image.
 
 To share GPU models between several routers, run the runtime as its own
 Deployment from the same image and attach every router to its Service. The

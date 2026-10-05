@@ -16,5 +16,12 @@ os.environ.setdefault("GOMP_SPINCOUNT", "10000")
 # new row count for almost every coalesced batch; at the default 1,024 entries
 # they recompiled kernels on most calls. A cached primitive costs about 26 KB.
 os.environ.setdefault("ONEDNN_PRIMITIVE_CACHE_CAPACITY", "8192")
+# MIOpen reads these at its first convolution. Its default find mode times the
+# candidate solvers of each new shape and keeps the fastest, so cold processes
+# started together pick different solvers and answer differently; FAST takes
+# the find database or the heuristic and never times. It then warns once per
+# new shape, so only errors are logged.
+os.environ.setdefault("MIOPEN_FIND_MODE", "FAST")
+os.environ.setdefault("MIOPEN_LOG_LEVEL", "3")
 
 __version__ = "0.2.0"

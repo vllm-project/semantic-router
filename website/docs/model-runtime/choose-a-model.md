@@ -29,7 +29,7 @@ Face revision, so the same name always loads the same files.
 | Ask your own questions in plain language | A decision model (next section) | 0.6B to 27B | |
 
 The task models all run well on a CPU: on 16 cores the median Vela Domain
-request takes about 11 ms, three times faster than the native bindings that
+request takes about 12 ms, three times faster than the native bindings that
 earlier releases used
 ([measurements](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela1-performance.md)).
 Most of them read up to 32,768 tokens; longer or shorter limits are listed on
@@ -67,6 +67,18 @@ is a private preview and needs a Hugging Face token with access.
 | NVIDIA GPUs | Works, not yet validated | Set `device: cuda:0`. `vllm-sr serve --platform nvidia` ships PyTorch for CUDA. |
 | Intel GPUs | Available, not yet validated | `device: xpu:0`, with the runtime installed next to an XPU build of PyTorch. |
 | Apple silicon | Available, not yet validated | `device: mps`, with the runtime installed on macOS. |
+
+On AMD GPUs the router images ship the stack the runtime is validated on:
+PyTorch 2.12 for ROCm 7.2, FLA 0.5.2, and `causal-conv1d` 1.7.0 built for
+ROCm. Its `causal-conv1d` also carries code for MI200 and MI350 GPUs, so the
+models that use it run there too, though only MI300X and MI325X are validated.
+The built-in models' GPU reference answers are checked on that stack,
+and every model compares itself with them when it loads. With another
+PyTorch, ROCm or kernel build, a model can fail that check or report
+[`unverified`](./troubleshooting.md#a-ready-models-self-check-says-unverified).
+If a model's reference answers had to be recorded again on this stack, its
+family's [record](https://github.com/vllm-project/semantic-router/tree/main/src/model-runtime/docs/records)
+says so and gives how often it agrees with the released answers.
 
 `device: auto` (the default) picks the first validated GPU with enough free
 memory and otherwise the CPU. A GPU you name explicitly must exist, or the

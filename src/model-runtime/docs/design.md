@@ -735,16 +735,6 @@ Section 13.4.
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or
 through ONNX Runtime's OpenVINO execution provider.
 
-The ROCm router image takes PyTorch from the rocm7.2 wheels (the rocm7.1
-build crashes replaying the encoders' HIP graphs) and builds causal-conv1d
-1.7.0 against it with ROCm 7.2.3's compiler, the one the released wheel was
-built with, so its gfx942 machine code is the released build's. It carries
-code for gfx90a, gfx942 and gfx950 (Instinct MI200, MI300 and MI350;
-`CAUSAL_CONV1D_ARCHS` builds others), since a decoder fails on a GPU it has no
-code for rather than falling back. Triton's compiled kernels and
-MIOpen's databases live in the model volume, since the charts run the router
-on a read-only root without a home directory.
-
 **Pinned kernel choices, per model.** FLA's gated-delta kernels pick block
 sizes and warps by timing them, so two processes could round the Qwen3.5
 sizes differently. Each built-in Qwen3.5 model records the configurations its
@@ -769,6 +759,21 @@ can't run here (another FLA version, or a recorded kernel FLA no longer has)
 still loads, with golden `unverified` and the reason in its health and card.
 `--autotune-cache` still persists Triton's compiled kernels and the tuning of
 models without choices.
+
+The ROCm router image serves with the PyTorch of vLLM's ROCm image, pinned by
+digest (2.12.0 built on ROCm 7.2.3, with AOTriton 0.13.50), and that image's
+ROCm 7.2.3 libraries. The released decoders were recorded on that build: the
+official rocm7.2 wheel bundles AOTriton 0.11.2, whose attention rounds
+differently and moves about 5% of Vela 2.0 4B / 9B span sets, while this build
+answers their panels byte for byte. The official wheel still provides torch's
+Python dependencies and Triton. causal-conv1d 1.7.0 is built against it with
+ROCm 7.2.3's compiler, the one the released wheel was built with, so its gfx942
+machine code is the released build's. It carries
+code for gfx90a, gfx942 and gfx950 (Instinct MI200, MI300 and MI350;
+`CAUSAL_CONV1D_ARCHS` builds others), since a decoder fails on a GPU it has no
+code for rather than falling back. Triton's compiled kernels and
+MIOpen's databases live in the model volume, since the charts run the router
+on a read-only root without a home directory.
 
 The oneDNN linear is a kernel variant a family opts into
 (`ModelSpec.kernel_variants`): Vela 1.0 task heads use it on `exact`, since
@@ -802,10 +807,13 @@ embedding host start alike. `vllm-sr-runtime fixture OUTPUT --family F
 --variant V` writes a tiny random-weight package of any built-in family; the
 writer is `testing/<family>.py`.
 
-Importing `vllm_sr_runtime` sets two environment defaults, `GOMP_SPINCOUNT`
-and `ONEDNN_PRIMITIVE_CACHE_CAPACITY`. They take effect only when PyTorch
-loads, and the plugin base layer imports PyTorch, so they cannot wait for
-`main`. A value the caller set is kept.
+Importing `vllm_sr_runtime` sets four environment defaults:
+`GOMP_SPINCOUNT`, `ONEDNN_PRIMITIVE_CACHE_CAPACITY`, and MIOpen's
+`MIOPEN_FIND_MODE=FAST` with `MIOPEN_LOG_LEVEL=3`. MIOpen's default find mode
+times each new convolution shape's solvers, so cold processes picked different
+ones and answered differently; FAST never times. They take effect only when
+PyTorch loads, and the plugin base layer imports PyTorch, so they cannot wait
+for `main`. A value the caller set is kept.
 
 ## 13. Router integration
 
