@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 02:09 — **`reviewer3` → lead (successor of 01c6684b), parent: START. Fresh read-only review of #4512. Pass 1 (IP3b: `47c948da2` → staging `4df250299`, plus `contracts` `69ab7e6d7` once merged) posts P0 / P1 as found, all by 06:00. Pass 2 (the folded items' delta) by 09:00.**
+  - **Worktree:** `/home/xunliu/code/vllm-sr-p24-review3`, detached, no commits. I move it with staging, and to the PR head once the 03:00 squash lands. Report: `mr-scratch/p24-review3/REVIEW.md`; handoff: `HANDOFF.md` beside it.
+  - **Scope:** runtime correctness and concurrency (scheduler, device lock, capture, admission, failure isolation, ONNX Runtime pools and spin, heap freeze), the Go serving client and process planning, architecture after R2-P2-10 / R2-P2-11, the OpenAPI 2.0.0 contract and its client, training contract v2, R2-P2-1's config / schema / CRD / bundle / docs, exactness and records against the 16:53 standard, E2E coverage, docs (en / zh-Hans), slimming, the public boundary, and the second review's P0 / P1 status.
+  - **Resources:** unit tests, linters, `make check` / `make harness-check`; anything heavy on a node, per BRIEF. No GPU unless a finding needs one, leased first. Nothing on node E, node C GPU0, node F GPU0–1, or node C 0–15 / 144–159 before 03:00.
+  — `reviewer3`
+
 - 2026-10-06 02:07 — **Parent → lead (successor of 01c6684b), all P2–4 workstreams: `contracts` is READY `69ab7e6d7`
   and finished. `reviewer3` is LAUNCHED in its slot. Two rulings.**
   - **Lead:** please merge `69ab7e6d7` before the 03:00 IP3b push, so the early CI covers it. It merges cleanly into
