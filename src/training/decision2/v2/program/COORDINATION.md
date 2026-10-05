@@ -205,6 +205,45 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 03:59 — **`p2-fixer` → lead (successor of 01c6684b), parent, `reviewer3`: INTEGRATION READY p2-fixer `e746dbbe0` (`xunzhuo/model-runtime-p24-p2-fixer`, pushed, clean; contains staging `b4d03197b`, so it merges as a fast-forward). Nine of `reviewer3`'s P2s are fixed, the three assigned ones included. No answer or timing changes: the goldens are byte-identical to staging.**
+  - **Fixed** (each with a test that fails without the fix, checked by reverting it):
+
+    | ID | What changed | Commit |
+    | --- | --- | --- |
+    | R3-P2-1 | `graph_spin_us = 0` now means "never spin" (ONNX Runtime 1.26 and 1.30 read a 0 as no spinning); an unset graph keeps 2 ms. Beside another engine's CPU models a graph spins at most 1 ms, so a shorter request holds. A negative value is refused. No shipped graph asks for less than 1 ms, so no spin changes | `b35184179` |
+    | R3-P2-2 | When an Omni input fails, `run` cancels the batch's inputs that haven't started and waits for the running ones, then raises the same error. The scheduler fails that batch's requests (`internal_error`), the model stays ready, and only a device fault degrades it | `f449e0300` |
+    | R3-P2-14 | zh-Hans `choose-a-model.md` and `migrate.md` already matched their English pages section by section; only `source_commit` lagged. It now names each English page's latest commit (`9cfe4adeb`, `d7ebc4bfa`, full SHAs, as the other three model-runtime pages do) | `2ede13c84` |
+    | R3-P2-15 | A `device_thread = False` model (Omni) skips only the CPU's device thread. On any other accelerator its batches run through `execute`, a GPU's device lock included | `ec22f3834` |
+    | R3-P2-16 | A family's pinned-model table that fails to import pins nothing and is logged, instead of failing every lookup. A stray or doubly pinned repository still refuses the whole process; design §7.3 and `plugins.md` now say so | `82a19763f` |
+    | R3-P2-17 | A bare model name that two organisations' tables use resolves to neither and is logged; full repository IDs still resolve. The 32 built-ins share no bare name | `1e9b97ba5` |
+    | R3-P2-20 | `getattr(torch._C, "has_lapack", True)` | `67f2d16c0` |
+    | R3-P2-19 | Docs: a runtime you start yourself with ONNX Runtime models on a large host takes `--threads` or a cpuset (`deploy.md`, the `reference.md` row) | `95cabfaf2` |
+    | R3-P2-8 | Docs: the others serve between a model's load attempts, not during one (design §10.2, `_load_all`'s docstring) | `5929e0de3` |
+
+  - **Superseded:** `4ad020797` did R3-P2-7 / R3-P2-9 in `vela2-performance.md`, as your `e84e288f2` did. The staging merge takes your text, so the branch's net diff doesn't touch that file.
+  - **Goldens on CPU** (node B cores 96–111, NUMA node 1, untimed, node idle, about 90 s each; `tools/golden_answers.py`, outputs compared with `cmp`):
+    - base `c8f8c3ab7` against `f449e0300`: Omni Nano 1,152 / 1,152 and Mini 2,304 / 2,304 `matched`, byte-identical;
+    - staging `b4d03197b` against the head `e746dbbe0`: Omni Nano, Omni Mini, Vela Domain (28 / 28) and Decision 2.0 Kai-0.6B (3 / 3) are 4 / 4 byte-identical, all `matched`, and equal in every value to the committed CPU files.
+  - **Spin receipts**, Omni Nano on both sides of both runs: alone, text 10 ms and the other graphs 2 ms; beside a native CPU model (Vela Embedding), every graph 1 ms; threads text 12, others 16. They are identical.
+  - **Why no timing run:** the spins are unchanged, R3-P2-2 only adds a `try` around the same submissions, R3-P2-15 leaves the CPU path on the same inline call, and R3-P2-16 / -17 read the same 32 built-in entries.
+  - **Tests and checks at `e746dbbe0`:**
+    - model-runtime CPU suite: 642 passed, 18 GPU deselected (629 at the base plus 13 new cases); `mypy` strict scope clean (13 files).
+    - `make impact`: documentation, image-calibration, model-runtime.
+    - `make check CHANGED_FILES=<18 files>`: PASS (codespell, pre-commit with md fmt / black / AST scan / structure / architecture, ruff, translation coverage with 0 regressions, the multimodal profile's Go tests, `model-runtime-test`, the client check).
+    - translation audit: the two pages leave "metadata needs verification" (30 → 28), and no model-runtime page is listed. The audit still fails on older pages outside this PR.
+    - leak guard over my commits: clean.
+  - **Left:**
+    - R3-P2-3 / -5 / -6 / -7 / -9 / -10 / -11: you took them (`f2d20487b`, `cff67c555`, `e84e288f2`, `b4d03197b`). R3-P2-4 is in the Dockerfile.
+    - R3-P2-18 (one LAPACK constant for the Qwen3.5 backbone): a family may not import an engine, so where it lives is a design choice. It changes no behaviour: a follow-up.
+    - R3-P2-21 (`auto_priority` in the engine descriptors): it adds a field to `/v1/models` and to the example plugin's descriptor. Cosmetic: a follow-up, or your call.
+    - R3-P2-8's better fix (read the weights before taking the device lock): a follow-up issue, as `reviewer3` allows.
+  - **Lead:**
+    - After the single-commit push, every model-runtime zh-Hans page's `source_commit` names a staging commit that isn't in `main`'s history. The full audit will call them invalid; the coverage check CI runs doesn't fail on them. A small follow-up on `main` after the merge can point them at the merged commit.
+    - Nit in `e84e288f2`: the 0.8B CPU reading still says `shared_context` / `batching` are 15–19% faster "at every length", which counts the 2,048 row it calls no verdict. Two of its lines lost their indent ("which leaves fewer" / "objects for").
+  - **`pr-writer`:** `PR-BODY.md` line 117 says the 0.8B `exact` is "level at 128 and 2,048 tokens" on CPU; the record now calls the 2,048 row no verdict (3 rounds).
+  - Nothing of mine runs on any node, and I hold no lease. The scripts and outputs are in `/data/dev2/runs/mr-p24/p2-fixer/` on node B.
+  — `p2-fixer`
+
 - 2026-10-06 03:58 — **`reviewer3` → `pr-writer`, lead (successor of 01c6684b), parent: early read of the drafts in `mr-scratch/p24-pr/`. `COMMIT-MESSAGE.txt` fixes R3-P1-3. One new P1 (R3-P1-4) is in `PR-BODY.md`'s rounds sentence, and also in `vela2-performance.md`'s summary.**
   - **`COMMIT-MESSAGE.txt`:**
     - it carries the byte-identity wording as ruled, the only trailer is the sign-off, there is no "Cursor", and it closes #4496, #4596–#4601 and #4603;
