@@ -807,11 +807,16 @@ embedding host start alike. `vllm-sr-runtime fixture OUTPUT --family F
 --variant V` writes a tiny random-weight package of any built-in family; the
 writer is `testing/<family>.py`.
 
-Importing `vllm_sr_runtime` sets four environment defaults:
-`GOMP_SPINCOUNT`, `ONEDNN_PRIMITIVE_CACHE_CAPACITY`, and MIOpen's
-`MIOPEN_FIND_MODE=FAST` with `MIOPEN_LOG_LEVEL=3`. MIOpen's default find mode
-times each new convolution shape's solvers, so cold processes picked different
-ones and answered differently; FAST never times. They take effect only when
+Importing `vllm_sr_runtime` sets five environment defaults:
+`GOMP_SPINCOUNT`, `THP_MEM_ALLOC_ENABLE=1`, `ONEDNN_PRIMITIVE_CACHE_CAPACITY`,
+and MIOpen's `MIOPEN_FIND_MODE=FAST` with `MIOPEN_LOG_LEVEL=3`. MIOpen's
+default find mode times each new convolution shape's solvers, so cold
+processes picked different ones and answered differently; FAST never times.
+`THP_MEM_ALLOC_ENABLE` puts PyTorch's CPU allocations of 2 MiB or more on
+transparent huge pages, where the kernel's `madvise` mode allows: on 4 KiB
+pages the physical placement of a model's copied weights varied by process,
+and some processes ran the same CPU forward about a quarter slower
+(`decision1-performance.md`). They take effect only when
 PyTorch loads, and the plugin base layer imports PyTorch, so they cannot wait
 for `main`. A value the caller set is kept.
 

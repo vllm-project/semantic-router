@@ -12,6 +12,12 @@ import os
 # submodule imports torch. A short spin keeps PyTorch's idle OpenMP threads off
 # the cores an ONNX Runtime run takes right after a native forward.
 os.environ.setdefault("GOMP_SPINCOUNT", "10000")
+# PyTorch's CPU allocator reads this when it loads. Models copy their weights
+# into process memory, and on 4 KiB pages where those land physically differs
+# from process to process: the same CPU forward ran about a quarter slower in
+# some processes. Allocations of 2 MiB or more then take transparent huge pages
+# (where the kernel's madvise mode allows), and every process lays them out alike.
+os.environ.setdefault("THP_MEM_ALLOC_ENABLE", "1")
 # oneDNN reads this when it creates its first primitive. Packed CPU linears see a
 # new row count for almost every coalesced batch; at the default 1,024 entries
 # they recompiled kernels on most calls. A cached primitive costs about 26 KB.
