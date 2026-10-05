@@ -83,6 +83,10 @@ several models. The contract is the OpenAPI document served at
 | `GET /health/live` | 200 while the process serves requests. |
 | `GET /metrics` | Prometheus metrics. |
 
+A response carries the answers and `usage`. Add
+`"options": {"return_meta": true}` to a request to also get `meta`: the
+revision, model digest, profile, engine, device and timings that answered it.
+
 A request that cannot be served at all returns an HTTP error with
 `{"error": {"code", "message"}}`: 400 `invalid_request`, 404
 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface` (the
@@ -112,8 +116,8 @@ Span offsets count Unicode code points, end exclusive.
 ```
 
 `dimensions` and `layer` select a smaller vector or an earlier layer when the
-model declares them. `meta.representation` in the response identifies the
-vector space, so vectors of different settings are never mixed.
+model declares them. With `return_meta`, `meta.representation` identifies the
+vector space, so you can keep vectors of different settings apart.
 
 ### Rerank
 
