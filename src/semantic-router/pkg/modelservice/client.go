@@ -21,6 +21,8 @@ type Client struct {
 	api      *api.ClientWithResponses
 	// bundleTasks is the most tasks one /v1/bundle request to this runtime carries.
 	bundleTasks atomic.Int64
+	// maxInputs is each served model's cap on the inputs of one surface request.
+	maxInputs atomic.Pointer[map[string]int]
 }
 
 // NewClient builds a client for unix:///path, http://host:port or https://host:port.
@@ -57,7 +59,7 @@ func (c *Client) Ready(ctx context.Context) (bool, string, error) {
 }
 
 // Models returns the runtime's model descriptions and records the bundle cap
-// the process reports.
+// and the per-model input caps the process reports.
 func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	response, err := c.api.ListModelsWithResponse(ctx)
 	if err != nil {
@@ -69,7 +71,32 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	if limit := response.JSON200.Limits.MaxBundleTasks; limit > 0 {
 		c.bundleTasks.Store(int64(limit))
 	}
+	inputs := make(map[string]int, len(response.JSON200.Data))
+	for _, card := range response.JSON200.Data {
+		if card.Limits != nil && card.Limits.MaxInputs != nil {
+			inputs[card.Id] = *card.Limits.MaxInputs
+		}
+	}
+	c.maxInputs.Store(&inputs)
 	return response.JSON200.Data, nil
+}
+
+// inputCap is the input cap of the served model a request names (the only
+// model when it names none), or 0 when the runtime has not reported one.
+func (c *Client) inputCap(model *string) int {
+	inputs := c.maxInputs.Load()
+	if inputs == nil {
+		return 0
+	}
+	if model != nil {
+		return (*inputs)[*model]
+	}
+	if len(*inputs) == 1 {
+		for _, limit := range *inputs {
+			return limit
+		}
+	}
+	return 0
 }
 
 // Decide sends every question in one /v1/decisions call, inside the

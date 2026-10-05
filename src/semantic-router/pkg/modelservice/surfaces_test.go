@@ -20,15 +20,17 @@ import (
 // surfaceRuntime answers the classify, embeddings, rerank and bundle surfaces
 // like the runtime does, and counts the calls each path received. A bundle
 // with more than maxTasks tasks (when set) is refused whole, as the runtime's
-// --max-bundle-tasks does.
+// --max-bundle-tasks does; /v1/models lists a card per maxInputs entry. Model
+// "echo" labels each classify input with its own text.
 type surfaceRuntime struct {
-	direct   atomic.Int64
-	bundles  atomic.Int64
-	tasks    atomic.Int64
-	delay    time.Duration
-	maxTasks int
-	mu       sync.Mutex
-	seen     []map[string]interface{}
+	direct    atomic.Int64
+	bundles   atomic.Int64
+	tasks     atomic.Int64
+	delay     time.Duration
+	maxTasks  int
+	maxInputs map[string]int
+	mu        sync.Mutex
+	seen      []map[string]interface{}
 }
 
 func (s *surfaceRuntime) handler() http.Handler {
@@ -50,7 +52,11 @@ func (s *surfaceRuntime) handler() http.Handler {
 		if limit == 0 {
 			limit = DefaultBundleTasks
 		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{"object": "list", "api_version": "2.0.0", "data": []interface{}{}, "limits": map[string]int{"max_bundle_tasks": limit, "max_request_bytes": 8 << 20}})
+		cards := []interface{}{}
+		for model, inputs := range s.maxInputs {
+			cards = append(cards, map[string]interface{}{"id": model, "object": "model", "family": "task_heads", "surfaces": []string{"classify"}, "ready": true, "limits": map[string]int{"max_inputs": inputs}})
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"object": "list", "api_version": "2.0.0", "data": cards, "limits": map[string]int{"max_bundle_tasks": limit, "max_request_bytes": 8 << 20}})
 	})
 	mux.HandleFunc("/v1/classify", surface("classify"))
 	mux.HandleFunc("/v1/embeddings", surface("embeddings"))
@@ -111,8 +117,12 @@ func (s *surfaceRuntime) answer(surface string, body map[string]interface{}) (in
 		inputs, _ := body["input"].([]interface{})
 		results := make([]map[string]interface{}, len(inputs))
 		for index := range inputs {
+			label := "billing"
+			if item, _ := inputs[index].(map[string]interface{}); model == "echo" && item != nil {
+				label, _ = item["text"].(string)
+			}
 			results[index] = map[string]interface{}{
-				"index": index, "label": "billing", "probabilities": []float64{0.9, 0.1},
+				"index": index, "label": label, "probabilities": []float64{0.9, 0.1},
 				"spans":   []map[string]interface{}{{"label": "PERSON", "start": 0, "end": 3, "text": "Tom", "probability": 0.99}},
 				"windows": []map[string]interface{}{{"start": 0, "end": 4, "probabilities": []float64{0.9, 0.1}}},
 				"input":   map[string]interface{}{"tokens": 6, "processed_tokens": 6, "truncated": false, "windows": 1},

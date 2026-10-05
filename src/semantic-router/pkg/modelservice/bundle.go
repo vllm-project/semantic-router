@@ -17,7 +17,8 @@ type bundleKey struct{}
 
 // Bundle coalesces the runtime calls of one request stage into one
 // /v1/bundle call per runtime process, or several when the stage has more
-// calls than the process takes in one bundle.
+// calls than the process takes in one bundle. Classify calls that differ only
+// in their inputs share one task (see fuse).
 //
 // The goroutines of the stage Join the bundle. A runtime call made with the
 // bundle's context parks in it. The bundle flushes when no participant can
@@ -182,28 +183,31 @@ func (b *Bundle) flushLocked() {
 	b.pending = make(map[*Client][]*bundleCall)
 	b.flushes++
 	for client, calls := range pending {
-		limit := int(client.bundleTasks.Load())
-		for len(calls) > 0 {
-			part := calls[:min(len(calls), limit)]
-			calls = calls[len(part):]
+		tasks := fuse(client, calls)
+		limit := max(1, int(client.bundleTasks.Load()))
+		for len(tasks) > 0 {
+			part := tasks[:min(len(tasks), limit)]
+			tasks = tasks[len(part):]
 			go b.send(client, part)
 		}
 	}
 }
 
 // send makes one /v1/bundle call; its context lasts as long as the latest caller waits.
-func (b *Bundle) send(client *Client, calls []*bundleCall) {
+func (b *Bundle) send(client *Client, tasks []*bundleTask) {
 	ctx := b.base
 	var latest time.Time
 	unbounded := false
-	for _, call := range calls {
-		deadline, ok := call.ctx.Deadline()
-		if !ok {
-			unbounded = true
-			continue
-		}
-		if deadline.After(latest) {
-			latest = deadline
+	for _, task := range tasks {
+		for _, call := range task.calls {
+			deadline, ok := call.ctx.Deadline()
+			if !ok {
+				unbounded = true
+				continue
+			}
+			if deadline.After(latest) {
+				latest = deadline
+			}
 		}
 	}
 	if !unbounded && !latest.IsZero() {
@@ -211,21 +215,20 @@ func (b *Bundle) send(client *Client, calls []*bundleCall) {
 		ctx, cancel = context.WithDeadline(b.base, latest)
 		defer cancel()
 	}
-	tasks := make([]api.BundleTask, len(calls))
-	for index, call := range calls {
-		tasks[index] = call.task
+	request := make([]api.BundleTask, len(tasks))
+	for index, task := range tasks {
+		request[index] = task.task
 	}
-	bundleTasks.Observe(float64(len(tasks)))
-	results, err := client.Bundle(ctx, tasks)
-	for index, call := range calls {
+	bundleTasks.Observe(float64(len(request)))
+	results, err := client.Bundle(ctx, request)
+	for index, task := range tasks {
 		switch {
 		case err != nil:
-			call.err = err
-		case results[index].Id != call.task.Id:
-			call.err = ErrFailed
+			task.answer(api.BundleResult{}, err)
+		case results[index].Id != task.task.Id:
+			task.answer(api.BundleResult{}, ErrFailed)
 		default:
-			call.result = results[index]
+			task.answer(results[index], nil)
 		}
-		close(call.done)
 	}
 }

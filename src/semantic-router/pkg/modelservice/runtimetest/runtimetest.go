@@ -61,7 +61,11 @@ type Runtime struct {
 const APIVersion = "2.0.0"
 
 // processLimits are the limits /v1/models reports: the runtime's defaults.
+// A larger bundle is refused whole, as the runtime does.
 var processLimits = api.ProcessLimits{MaxBundleTasks: 64, MaxRequestBytes: 8 << 20}
+
+// maxInputs is the classify input cap of a task_heads card.
+var maxInputs = 2048
 
 // New serves models, all ready.
 func New(models ...Model) *Runtime {
@@ -221,7 +225,7 @@ func (r *Runtime) listModels(w http.ResponseWriter, _ *http.Request) {
 func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 	sha := strings.Repeat("0", 64-len(model.ID)%64) + strings.Repeat("a", len(model.ID)%64)
 	device, dtype, profile := model.Device, "float32", "exact"
-	limits := api.ModelLimits{MaxInputTokens: &model.MaxInputTokens}
+	limits := api.ModelLimits{MaxInputTokens: &model.MaxInputTokens, MaxInputs: &maxInputs}
 	card := api.ModelCard{Id: model.ID, Object: "model", Family: "task_heads", Ready: ready, ModelSha256: &sha, Device: &device, Dtype: &dtype, Profile: &profile, Limits: &limits}
 	switch {
 	case model.Embedding != nil:
@@ -266,6 +270,10 @@ func (r *Runtime) bundle(w http.ResponseWriter, req *http.Request) {
 	r.tasks += len(body.Tasks)
 	delay := r.delay
 	r.mu.Unlock()
+	if len(body.Tasks) > processLimits.MaxBundleTasks {
+		write(w, http.StatusRequestEntityTooLarge, nil, &api.ErrorBody{Code: "request_too_large", Message: "too many bundle tasks"})
+		return
+	}
 	time.Sleep(delay)
 	results := make([]api.BundleResult, len(body.Tasks))
 	for i, task := range body.Tasks {
