@@ -524,7 +524,15 @@ ties, P(true), expected level, normalised-entropy confidence). The native
 engine implements the Qwen3 dense and Qwen3.5 hybrid backbones and Vega-27B's
 unmerged LoRA; on GPUs the backbone runs under BF16 autocast with BF16-resident
 Linear weights, FLA kernels with the released kernel choices pinned
-(`registry/kernel_choices.json`). Byte-identity is defined against the
+(`registry/kernel_choices.json`). The released models record different
+configurations for the same FLA tuning keys, and FLA's autotuners are
+process-wide, so each model's device work runs inside its own choice scope
+(`accel/autotune.KernelChoices`): every autotuner FLA's gated delta rule uses
+routes its lookups, per thread, to the configurations of the model the thread
+is running. Several pinned models therefore share one GPU process, each on
+its own choices, with no lock between them. A model whose choices can't run
+(another FLA version, or a recorded kernel FLA no longer has) still loads,
+with golden `unverified` and a warning. Byte-identity is defined against the
 released runtime on the same device class and recorded on the four scored
 panels (10,653 prompts).
 

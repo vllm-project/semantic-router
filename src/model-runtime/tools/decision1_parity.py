@@ -9,8 +9,8 @@
 
 ``reference`` loads the package with Transformers remote code (``system_one``), the
 runtime the packages ship; it is a separate tool process, so the runtime itself
-never imports package code. On a GPU both sides pin the built-in table's FLA
-kernel choices before FLA is imported, so they run the same kernels. ``native``
+never imports package code. On a GPU both sides run the built-in table's FLA
+kernel choices, so they run the same kernels. ``native``
 serves the package through ``vllm_sr_runtime`` (verification, readiness, the
 scheduler) on one profile; ``--also`` serves more built-in models in the same
 process on the same device, loaded first, as one GPU process of the default
@@ -35,7 +35,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from vllm_sr_runtime.accel.autotune import pin_kernel_choices  # noqa: E402
+from vllm_sr_runtime.accel.autotune import KernelChoices  # noqa: E402
 from vllm_sr_runtime.registry import builtin  # noqa: E402
 from vllm_sr_runtime.registry.artifacts import (  # noqa: E402
     canonical_json as canonical,
@@ -57,12 +57,18 @@ def panels(specs: list[str]) -> list[tuple[str, dict[str, Any]]]:
 
 
 def pin(repo: str | None, device: str) -> bool:
-    """Pin the built-in table's FLA choices for a GPU run (before FLA is imported)."""
+    """Run this thread's FLA kernels on the built-in table's choices for a GPU run."""
     if device == "cpu" or repo is None:
         return False
     known = builtin.lookup(repo)
-    choices = known.kernel_choices.get(DEVICE_CLASS) if known else None
-    return bool(choices) and pin_kernel_choices(choices) is not None
+    recorded = known.kernel_choices.get(DEVICE_CLASS) if known else None
+    if not recorded:
+        return False
+    choices = KernelChoices(recorded)
+    if choices.install() is not None:
+        return False
+    choices.pin_thread()
+    return True
 
 
 def write(

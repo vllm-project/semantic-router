@@ -100,15 +100,18 @@ They come from each model's release autotune cache
 later runtime-only revision's parity runs copied forward. The choices are
 identical across the release, hotfix and no-eviction revisions.
 
-Before FLA is imported, the runtime writes them as FLA config files and sets
-`FLA_CACHE_MODE=full`. A recorded key matches exactly. Any other key, for
-example a batch with more rows than the release saw, takes the first entry
-that differs from it only in numbers, else the kernel's first entry. No
-configuration depends on timing, so a pinned process tunes nothing (0
-autotune entries) and loads faster (Eos 22 s instead of 38 s cold). Choices
-apply only when the installed FLA is the
-recorded version (0.5.2); otherwise FLA keeps its per-process tuning. Kai
-(dense) has no autotuned kernels.
+The runtime resolves them as FLA's `FLA_CACHE_MODE=full` resolves the same
+entries written as config files. A recorded key matches exactly. Any other
+key, for example a batch with more rows than the release saw, takes the first
+entry, in key-hash order, that differs from it only in numbers, else the
+kernel's first entry. No configuration depends on timing, so a pinned process
+tunes nothing (0 autotune entries) and loads faster (Eos 22 s instead of 38 s
+cold). Choices apply only when the installed FLA is the recorded version
+(0.5.2); otherwise FLA keeps its per-process tuning and the model's golden
+result is `unverified`. Kai (dense) has no autotuned kernels. Since review
+P1-4 the choices are per model, not per process: each model's device work
+runs in its own choice scope, so models sharing a GPU process keep their own
+(the measurements behind that are in `decision1-parity.md`).
 
 `--autotune-cache` still persists Triton's compiled kernels and the tuning of
 any model without pinned choices.

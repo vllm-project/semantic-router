@@ -21,11 +21,12 @@ from collections import OrderedDict
 from collections.abc import Callable
 from concurrent.futures import Future
 from dataclasses import dataclass, replace
+from functools import partial
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
-from .accel.autotune import freeze_autotune, pin_kernel_choices
+from .accel.autotune import KernelChoices, freeze_autotune
 from .config import ModelConfig, ServeConfig
 from .errors import RuntimeServiceError
 from .placement import Placement, place
@@ -190,6 +191,8 @@ class ServedModel:
         self.profiles: dict[str, Profile] = {}
         self.scheduler: Scheduler | None = None
         self.cache = ResultCache(runtime.config.result_cache_entries)
+        self.kernel_choices: KernelChoices | None = None
+        self.unpinned: str | None = None
 
     # -- names ---------------------------------------------------------------
 
@@ -241,9 +244,7 @@ class ServedModel:
         parameters = package.loaded_parameters or 0
         budget = config.memory_budget_gib or process.memory_budget_gib
         placement = place(spec, config.device, parameters, budget)
-        choices = family.kernel_choices(package, placement.device)
-        if choices:
-            pin_kernel_choices(choices)
+        self._pin(family.kernel_choices(package, placement.device))
         known = builtin.lookup(package.ref.repo_id or "")
         preferred = None
         if known is not None and known.revision == package.ref.revision:
@@ -258,8 +259,11 @@ class ServedModel:
             EngineOptions(threads=process.threads, exclusive_cpu=cpu_models <= 1)
         )
         self.health.set("loading", f"loading weights on {placement.device.label}")
+        pinned = self.kernel_choices
 
         def execute(work: Any) -> Any:
+            if pinned is not None:
+                work = partial(pinned.run, work)
             return placement.accelerator.execute(placement.device, work)
 
         engine_model = execute(
@@ -332,7 +336,11 @@ class ServedModel:
                 batch_window_ms=process.batch_window_ms,
             ),
             observe=self.runtime.metrics.observe,
-            execute=execute if model.device_thread else None,
+            execute=(
+                execute
+                if model.device_thread or self.kernel_choices is not None
+                else None
+            ),
             device_fault=placement.accelerator.device_fault,
         )
         self.scheduler.start()
@@ -346,6 +354,32 @@ class ServedModel:
         )
         if self.health.golden.status == "failed":
             raise RuntimeError(self.health.golden.detail or "golden check failed")
+        if self.unpinned and self.health.golden.status == "matched":
+            self.health.golden = replace(
+                self.health.golden,
+                status="unverified",
+                detail=f"kernel choices not applied: {self.unpinned}",
+            )
+
+    def _pin(self, recorded: dict[str, Any]) -> None:
+        """Run the model's device work on its recorded kernel choices, or record why it can't.
+
+        A model whose choices can't be applied still loads, but its golden
+        result says ``unverified``: it can't vouch for the released answers.
+        """
+        self.kernel_choices = self.unpinned = None
+        if not recorded:
+            return
+        choices = KernelChoices(recorded)
+        self.unpinned = choices.install()
+        if self.unpinned is None:
+            self.kernel_choices = choices
+            return
+        log.warning(
+            "%s runs without its recorded kernel choices: %s",
+            self.label,
+            self.unpinned,
+        )
 
     def stop(self) -> None:
         """Stop the worker, then free the model once no forward can still use it."""

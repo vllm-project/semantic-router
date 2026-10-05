@@ -5,29 +5,41 @@ process. Two processes can therefore pick different configurations and answer
 the Qwen3.5 sizes differently by rounding. Sharing one autotune cache makes
 every process reuse the first process's choices; pinning a model's recorded
 choices makes every process run the same kernels without timing any.
+
+FLA's autotuners are process-wide objects, and the released models record
+different configurations for the same tuning keys. So pinning routes each
+autotuner's lookups per thread: a thread inside a model's ``KernelChoices.scope``
+gets that model's configurations, and any other thread the autotuner's own
+cache. Several pinned models then share one process, each on its own choices.
 """
 
 from __future__ import annotations
 
-import atexit
 import hashlib
+import importlib
 import importlib.util
 import json
 import logging
 import os
 import re
-import shutil
 import sys
-import tempfile
+import threading
+from collections.abc import Callable, Iterator, MutableMapping
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 log = logging.getLogger(__name__)
 
 AUTOTUNE_ENV = "VLLM_SR_RUNTIME_AUTOTUNE_CACHE"
-FLA_CONFIG_ENV = "FLA_CONFIG_DIR"
-FLA_MODE_ENV = "FLA_CACHE_MODE"
 VERSION = re.compile(r"^__version__\s*=\s*[\"']([^\"']+)[\"']", re.M)
+# The module whose import defines every autotuned kernel of the chunked gated delta rule.
+FLA_GATED_DELTA = "fla.ops.gated_delta_rule"
+
+T = TypeVar("T")
+
+_SCOPE = threading.local()
+_ROUTING = threading.Lock()
 
 
 def freeze_autotune(directory: str) -> Path:
@@ -47,52 +59,198 @@ def freeze_autotune(directory: str) -> Path:
     return path
 
 
-def pin_kernel_choices(choices: dict[str, Any]) -> Path | None:
-    """Run FLA's autotuned kernels with a model's recorded configurations instead of timing them.
+class KernelChoices:
+    """One model's recorded FLA kernel configurations, for every tuning key and without timing.
 
     ``choices`` is one device class's entry of ``registry/kernel_choices.json``:
     the FLA version the choices were recorded with and, per kernel, each
-    recorded tuning key with its configuration. Every kernel gets an FLA config
-    file (``FLA_CACHE_MODE=full``): recorded keys match exactly, and any other
-    key takes the first entry that differs from it only in numbers, else the
-    kernel's first entry, so no configuration depends on timing. FLA reads the
-    mode when it is imported, so this must run before FLA is imported. Returns
-    the config directory, or None when the choices do not apply to this process.
+    recorded tuning key with its configuration. A recorded key gets its
+    configuration. Any other key gets the first entry, in key-hash order, that
+    differs from it only in numbers, else the kernel's first entry. That is how
+    FLA's ``FLA_CACHE_MODE=full`` resolves the same entries written as its
+    config files, so the released runtime's choices stay the ones that run.
     """
-    if "fla" in sys.modules:
-        log.warning(
-            "FLA was imported before its kernel choices were pinned; its kernels keep per-process tuning"
-        )
-        return None
-    installed = fla_version()
-    if installed != choices["fla"]:
-        log.warning(
-            "kernel choices were recorded with FLA %s, not %s; FLA keeps per-process tuning",
-            choices["fla"],
-            installed,
-        )
-        return None
-    directory = Path(tempfile.mkdtemp(prefix="vllm-sr-runtime-fla-"))
-    atexit.register(shutil.rmtree, directory, True)
-    for name, entries in choices["kernels"].items():
-        document = {
-            "kernel_name": name,
-            "autotune_entries": {
-                fla_key_hash(entry["key"]): {
-                    "autotune_key": entry["key"],
-                    "config": entry["config"],
-                }
-                for entry in entries
-            },
-            "default_config": entries[0]["config"],
+
+    def __init__(self, choices: dict[str, Any]):
+        self.fla: str = choices["fla"]
+        self.kernels = {
+            name: PinnedKernel(entries) for name, entries in choices["kernels"].items()
         }
-        (directory / f"{name}.json").write_text(
-            json.dumps(document, sort_keys=True), encoding="utf-8"
+
+    def install(self) -> str | None:
+        """Route FLA's autotuners to these choices inside ``scope``; None, or why they can't run here."""
+        installed = fla_version()
+        if installed is None:
+            return "FLA is not installed"
+        if installed != self.fla:
+            return f"they were recorded with FLA {self.fla}, not {installed}"
+        try:
+            found = route_autotuners(self.kernels)
+        except Exception as exc:
+            return f"FLA {installed} failed to import ({type(exc).__name__}: {exc})"
+        missing = sorted(set(self.kernels) - found)
+        if missing:
+            return f"FLA {installed} has no autotuned kernel {', '.join(missing)}"
+        return None
+
+    @contextmanager
+    def scope(self) -> Iterator[None]:
+        """Run FLA's autotuned kernels launched on this thread with these configurations."""
+        previous = getattr(_SCOPE, "choices", None)
+        _SCOPE.choices = self
+        try:
+            yield
+        finally:
+            _SCOPE.choices = previous
+
+    def run(self, work: Callable[[], T]) -> T:
+        """``work()`` inside ``scope``."""
+        with self.scope():
+            return work()
+
+    def pin_thread(self) -> None:
+        """Keep these choices on the calling thread from now on (a tool answering one model)."""
+        _SCOPE.choices = self
+
+
+class PinnedKernel:
+    """One kernel's recorded entries, resolved per tuning key as described in ``KernelChoices``."""
+
+    def __init__(self, entries: list[dict[str, Any]]):
+        self.first = entries[0]["config"]
+        self.exact = {fla_key_hash(entry["key"]): entry["config"] for entry in entries}
+        self.ordered = sorted(entries, key=lambda entry: fla_key_hash(entry["key"]))
+        self.configs: dict[Any, Any] = {}
+
+    def resolve(self, key: Any) -> dict[str, Any]:
+        """The recorded configuration that runs ``key``."""
+        recorded = self.exact.get(fla_key_hash(key))
+        if recorded is not None:
+            return recorded
+        for entry in self.ordered:
+            if fuzzy_match(entry["key"], key):
+                return entry["config"]
+        return self.first
+
+    def config(self, key: Any) -> Any:
+        """The ``triton.Config`` that runs ``key``, built once per key."""
+        config = self.configs.get(key)
+        if config is None:
+            config = self.configs[key] = triton_config(self.resolve(key))
+        return config
+
+
+class RoutedCache(MutableMapping):
+    """An FLA autotuner's ``cache``: the scoped model's configurations, else the autotuner's own.
+
+    Triton asks ``key in cache`` and then ``cache[key]`` on every launch, and
+    FLA reads its config files only for a key missing from the cache, so a
+    pinned thread never times a configuration or reads a file.
+    """
+
+    def __init__(self, name: str, own: MutableMapping):
+        self.name = name
+        self.own = own
+
+    def pinned(self) -> PinnedKernel | None:
+        choices = getattr(_SCOPE, "choices", None)
+        return None if choices is None else choices.kernels.get(self.name)
+
+    def __contains__(self, key: object) -> bool:
+        return self.pinned() is not None or key in self.own
+
+    def __getitem__(self, key: Any) -> Any:
+        pinned = self.pinned()
+        return self.own[key] if pinned is None else pinned.config(key)
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        self.own[key] = value
+
+    def __delitem__(self, key: Any) -> None:
+        del self.own[key]
+
+    def __iter__(self) -> Iterator[Any]:
+        return iter(self.own)
+
+    def __len__(self) -> int:
+        return len(self.own)
+
+
+def route_autotuners(kernels: dict[str, Any]) -> set[str]:
+    """Give every FLA autotuner named in ``kernels`` a ``RoutedCache``; the names found.
+
+    FLA defines some kernel names in several modules and keys its config files
+    by name, so every autotuner of a name is routed, as FLA would apply a file.
+    """
+    found = set()
+    with _ROUTING:
+        for name, autotuners in fla_autotuners().items():
+            if name not in kernels:
+                continue
+            found.add(name)
+            for autotuner in autotuners:
+                if not isinstance(autotuner.cache, RoutedCache):
+                    autotuner.cache = RoutedCache(name, autotuner.cache)
+    return found
+
+
+def fla_autotuners() -> dict[str, list[Any]]:
+    """FLA's autotuned kernels by name, after importing the gated delta rule's modules."""
+    importlib.import_module(FLA_GATED_DELTA)
+    from triton.runtime.autotuner import Autotuner
+
+    found: dict[str, list[Any]] = {}
+    seen: set[int] = set()
+    for module_name, module in list(sys.modules.items()):
+        if module is None or not (
+            module_name == "fla" or module_name.startswith("fla.")
+        ):
+            continue
+        for value in list(vars(module).values()):
+            if isinstance(value, Autotuner) and id(value) not in seen:
+                seen.add(id(value))
+                found.setdefault(value.base_fn.__name__, []).append(value)
+    return found
+
+
+def triton_config(config: dict[str, Any]) -> Any:
+    """A recorded configuration as the ``triton.Config`` FLA builds from its config files."""
+    import triton
+    from packaging import version
+
+    extra = {}
+    if version.parse(triton.__version__) >= version.parse("3.5.1"):
+        extra = {
+            "num_ctas": config["num_ctas"],
+            "maxnreg": config.get("maxnreg"),
+            "pre_hook": None,
+            "ir_override": config.get("ir_override"),
+        }
+    return triton.Config(
+        config["kwargs"],
+        num_warps=config["num_warps"],
+        num_stages=config["num_stages"],
+        **extra,
+    )
+
+
+def fuzzy_match(recorded: Any, key: Any) -> bool:
+    """FLA's fuzzy key match: equal structure, and numbers match any number (booleans don't)."""
+    if _numeric(recorded) and _numeric(key):
+        return True
+    if isinstance(recorded, (list, tuple)) and isinstance(key, (list, tuple)):
+        return len(recorded) == len(key) and all(
+            fuzzy_match(a, b) for a, b in zip(recorded, key, strict=True)
         )
-    os.environ[FLA_CONFIG_ENV] = str(directory)
-    os.environ[FLA_MODE_ENV] = "full"
-    log.info("pinned FLA kernel choices for %d kernels", len(choices["kernels"]))
-    return directory
+    if isinstance(recorded, dict) and isinstance(key, dict):
+        return recorded.keys() == key.keys() and all(
+            fuzzy_match(recorded[name], key[name]) for name in recorded
+        )
+    return recorded == key
+
+
+def _numeric(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def fla_version() -> str | None:
@@ -104,7 +262,7 @@ def fla_version() -> str | None:
     return match.group(1) if match else None
 
 
-def fla_key_hash(key: list[Any]) -> str:
+def fla_key_hash(key: Any) -> str:
     """FLA's ``AutotuneKey.key_hash`` of a tuning key."""
     serialized = json.dumps(key, separators=(",", ":"), sort_keys=True)
     return hashlib.md5(serialized.encode(), usedforsecurity=False).hexdigest()
