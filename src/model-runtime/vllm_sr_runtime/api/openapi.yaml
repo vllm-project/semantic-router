@@ -991,7 +991,7 @@ components:
           type: string
     ModelList:
       type: object
-      required: [object, data, api_version]
+      required: [object, data, api_version, limits]
       properties:
         api_version:
           type: string
@@ -1002,6 +1002,23 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ModelCard'
+        limits:
+          $ref: '#/components/schemas/ProcessLimits'
+    ProcessLimits:
+      type: object
+      required: [max_bundle_tasks, max_request_bytes]
+      description: |
+        What one request to this process may hold; a larger one is answered 413 request_too_large as a whole, so a
+        client splits its work to fit.
+      properties:
+        max_bundle_tasks:
+          type: integer
+          minimum: 1
+          description: Most tasks one POST /v1/bundle carries.
+        max_request_bytes:
+          type: integer
+          minimum: 1
+          description: Largest request body, in bytes.
     ModelCard:
       type: object
       required: [id, object, family, surfaces, ready]

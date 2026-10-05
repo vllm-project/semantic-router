@@ -447,8 +447,10 @@ schedulers at once (so tasks for different models run in parallel and tasks for
 one model share its batching), and returns `results` in task order:
 `{id, status, <surface>: <response body>}` or `{id, status, error}` with the
 status the task would have had alone. The bundle itself fails only when it is
-malformed (400) or too large (413). The bundle deadline applies to every task
-unless a task's own deadline is earlier.
+malformed (400) or too large (413): more tasks than `--max-bundle-tasks` (64
+by default) or a body over `--max-request-bytes`. `/v1/models` reports both as
+`limits`, so a client splits larger work into several bundles. The bundle
+deadline applies to every task unless a task's own deadline is earlier.
 
 ### 6.6 `GET /v1/models`, `GET /health`, `GET /metrics`
 
@@ -456,7 +458,8 @@ unless a task's own deadline is earlier.
 `model_sha256`, `manifest_sha256`, surfaces, question types, heads (with
 labels), embedding and rerank descriptors, limits, licence, profiles, engine,
 accelerator, device, dtype, plugin versions, and per-model readiness and
-golden status. `/health` returns 200 only when every model is ready, and lists
+golden status, plus the process's `limits` (`max_bundle_tasks`,
+`max_request_bytes`). `/health` returns 200 only when every model is ready, and lists
 per-model states otherwise; `/health/live` returns 200 while the process
 serves HTTP. All three report `api_version`, the contract version
 (`info.version`); a client refuses a runtime of another major version.

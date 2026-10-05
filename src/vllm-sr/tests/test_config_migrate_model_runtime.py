@@ -15,8 +15,8 @@ if str(PROJECT_ROOT) not in sys.path:
 from cli.config_migration import migrate_config_data  # noqa: E402
 from cli.config_migration_model_runtime import runtime_device  # noqa: E402
 from cli.config_migration_notes import MigrationNotes  # noqa: E402
-from cli.model_runtime_retired import retired_model_fields  # noqa: E402
 from cli.main import main  # noqa: E402
+from cli.model_runtime_retired import retired_model_fields  # noqa: E402
 
 REMOVED_FIELDS = {"precision", "custom_ops_profile", "compilation_cache_dir"}
 REMOVED_PROVIDERS = {"candle", "ort", "openvino"}

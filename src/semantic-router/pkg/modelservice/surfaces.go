@@ -448,8 +448,8 @@ func decodeVector(value api.EmbeddingVector) ([]float32, error) {
 		return nil, fmt.Errorf("%w: embedding has an unknown encoding", ErrFailed)
 	}
 	if raw[0] != '"' {
-		vector, err := value.AsFloatVector()
-		if err != nil {
+		vector, decodeErr := value.AsFloatVector()
+		if decodeErr != nil {
 			return nil, fmt.Errorf("%w: embedding holds a non-number", ErrFailed)
 		}
 		return checkVector(vector)

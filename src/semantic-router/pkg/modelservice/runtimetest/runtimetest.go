@@ -60,6 +60,9 @@ type Runtime struct {
 // changes it.
 const APIVersion = "2.0.0"
 
+// processLimits are the limits /v1/models reports: the runtime's defaults.
+var processLimits = api.ProcessLimits{MaxBundleTasks: 64, MaxRequestBytes: 8 << 20}
+
 // New serves models, all ready.
 func New(models ...Model) *Runtime {
 	r := &Runtime{models: make(map[string]Model), ready: make(map[string]bool), failed: make(map[string]string), apiVersion: APIVersion, surfaces: make(map[string]int)}
@@ -212,7 +215,7 @@ func (r *Runtime) listModels(w http.ResponseWriter, _ *http.Request) {
 	}
 	apiVersion := r.apiVersion
 	r.mu.Unlock()
-	write(w, http.StatusOK, api.ModelList{ApiVersion: apiVersion, Object: "list", Data: cards}, nil)
+	write(w, http.StatusOK, api.ModelList{ApiVersion: apiVersion, Object: "list", Data: cards, Limits: processLimits}, nil)
 }
 
 func (r *Runtime) card(model Model, ready bool) api.ModelCard {
