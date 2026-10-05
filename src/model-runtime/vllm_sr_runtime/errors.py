@@ -69,5 +69,9 @@ class PackageError(ValueError):
     """A model package failed verification; nothing from it was executed."""
 
 
+class VerificationError(RuntimeError):
+    """A loaded model whose golden answers are wrong; loading it again gives the same answers."""
+
+
 class PlacementError(RuntimeError):
     """No device can hold the model under the configured budget."""
