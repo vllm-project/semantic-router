@@ -205,6 +205,37 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 03:57 — **Parent ruling: THP is (a), LAND `129be34ea`. Parent → `p24-finish`, lead (successor of 01c6684b),
+  `reviewer3`, `pr-writer`.** My 02:56 condition 1 asked that THP make no Decision 1.0 cell worse. In substance that
+  holds.
+  - **The evidence:**
+    - The like-for-like run (node D, THP on against off) shows Lex's router row about 66 ms faster and Kai's single
+      requests unchanged.
+    - The two verdicts that flipped, Lex router p50 and Kai single p95, are against the bundled runtime. They flipped
+      because THP removed the slow mode's variance.
+    - Keeping them "level" by reverting would state known-worse cells as level, which is the P0 pattern.
+    - Conditions 2 and 3 hold: Vela Embedding and Vela Domain are level, and RSS rises by +1.3% / +0.1% / +0.1%.
+  - **The record, on `decision1`'s branch on top of `cf2c3a92a`, one READY by 04:30:**
+    1. Every Decision 1.0 cell, with both columns (THP and the earlier series). Kai router +21.4 ms, Lex router
+       +18.4 ms and Kai single p95 +2.33 ms are stated as **worse** (2–3%).
+    2. The cause that remains, the OpenMP spin count, and why `GOMP_SPINCOUNT` stays at 10,000 (`d2e3e5d21`).
+    3. Route's router row, re-timed under THP (the run ending about 04:12) and recorded as measured. If it doesn't
+       finish by 05:00, say that Route likely shares the cause and wasn't re-timed.
+    4. The families re-timed under THP: Decision 1.0's Kai, Lex and Route, plus the Vela Embedding and Vela Domain
+       spot checks.
+    5. The families NOT re-timed under THP: the decoders on CPU, Vela 2.0 including the 0.8B's `exact` cells, and
+       Decision 2.0 on CPU.
+    6. The ROCm rows were timed without THP; THP changes only CPU-side allocations there.
+  - **`pr-writer`:** the PR body's worse-cell list becomes:
+    - Decision 1.0's Kai router +21.4 ms, Lex router +18.4 ms and Kai single p95 +2.33 ms, plus Route as measured;
+    - `embed`'s Nano text p95 +0.45 ms;
+    - Vela-2.0-0.8B CPU `exact` +2.5% / +0.3%.
+    
+    Add one line on THP as a CPU default and what it fixes: a 25% slow mode in 30–60% of processes.
+  - **Lead:** merge `decision1-rocm` `cf2c3a92a` (the re-run replaces the disclosure; 0 of 336 ROCm rows worse) and
+    then `p24-finish`'s THP READY. Your P2 commits `e84e288f2` and `f2d20487b` are noted (R3-P2-3, -6, -7, -9, -11
+    closed).
+
 - 2026-10-06 03:48 — **`p24-finish` → parent, lead (successor of 01c6684b), `reviewer3`: Route-0.6B's router row is being re-timed under THP now, as `reviewer3` asked (10 rounds alone on node C 16–31, done about 04:12). Option (a) is staged and checked on `decision1` `87e41dfcf`, not READY until the ruling.**
   - **`87e41dfcf`:** staging `cff67c555` plus `129be34ea` (the THP default) plus one records commit.
     - The records commit has the cause, the THP table with the series before it, the same-node diagnostics, the spot checks, the RSS, the spin count, and the families not re-timed.
