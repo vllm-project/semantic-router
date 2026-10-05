@@ -205,6 +205,43 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-05 09:48 — **USER (09:47): FILM APPROVED; RESTART THE MODEL-RUNTIME P2–4 REFACTOR NOW.** The user said:
+  "我确认片子已经 OK，请重启model runtime重构".
+  - **Lifted:** the pause, for **model-runtime P2–4 only**. A fresh Opus 5.5 Max restart coordinator brings the
+    track back: a fresh Max lead, fresh Max successors for every workstream with work left, the second read-only
+    reviewer, and a re-planned IP3. P2–4 gets every node, GPU and CPU range it needs.
+  - **Still deferred (01:31 note):** the reasoning track and the external-reference evals. Don't restart them.
+  - **Film:** a fresh Max agent renders the approved v3.1 at 4K on an untimed CPU block on node F or D, claimed here.
+    It never uses node B, and P2–4 wins any conflict.
+
+- 2026-10-05 06:58 — **vela2-film v3.1: delivered; node F vCPUs 32–127 released.** No vela2-film container or process
+  is running on node F, and its temporary renders are removed. Nothing ran on node B, and no GPUs were used. v3.1 goes
+  to the parent session for review. A 4K render, if accepted, will post a new claim.
+
+- 2026-10-05 05:55 — **vela2-film v3.1: node F vCPUs 32–127 claimed (untimed).** Four targeted fixes from the
+  parent's v3 review (edge coverage, the race rows, the 27.9 s beam, the end-card URL and licence), then the 1080p60
+  master and its QA (Remotion, ffmpeg). Measured idle at claim time (about 2%). Pinned with `docker --cpuset-cpus`;
+  no GPUs, nothing on node B. Released with a note when v3.1 is delivered.
+
+- 2026-10-05 05:43 — **vela2-film v3: delivered; node F vCPUs 32–127 released.** All film, score and QA jobs
+  have finished, and no vela2-film container or process is running on node F. The film track's original 96–127
+  claim is released too. Nothing ran on node B, and no GPUs were used. v3 now goes to the parent session for its
+  frame-by-frame review. A 4K render, if accepted, will post a new claim.
+
+- 2026-10-05 04:05 — **vela2-film v3: node F vCPUs 32–63 claimed (untimed)** in addition to 64–127, for one score
+  re-render (FluidSynth) and the final QA passes. Measured idle at claim time (about 2%). Pinned with
+  `docker --cpuset-cpus`; no GPUs, nothing on node B. Released with the rest when v3 is delivered.
+
+- 2026-10-05 03:03 — **vela2-film v3: concurrent edit detected.** Someone else edited the film source locally at
+  02:59 (`/home/xunliu/code/vela2-film/film/src/`). The edits were kept. If another agent is working on v3, please
+  write requests in `/home/xunliu/code/vela2-film/V3_IN_PROGRESS.md` instead of editing the same files.
+
+- 2026-10-05 02:03 — **vela2-film v3: node F vCPUs 64–127 claimed (untimed).** The v3 film agent takes over the
+  film track's node F 96–127 claim and adds 64–95 for parallel renders (Remotion, ffmpeg QA, FluidSynth, and a
+  short CPU-only run of the released Vela 2.0 models to record example outputs). Measured idle at claim time.
+  Every process is pinned (`docker --cpuset-cpus`, `taskset`); no GPUs, no leases, nothing on node B. Project dir
+  `/data/dev2/film/vela2/` on node F. I post a release note when v3 is done.
+
 - 2026-10-05 01:31 — **USER (01:31): REASONING DEFERRED; AFTER THE VELA 2.0 FILM, ONLY THE MODEL RUNTIME REFACTOR
   RESTARTS.** The user said: "reasoning 的任务后面也暂缓，等 vela 2.0 film 结束后就专注在推进 model runtime 重构的事".
   - **Stays paused until the user says otherwise:** the whole reasoning track (`reasoning` 40595ea4 and its successors)
