@@ -23,7 +23,8 @@ func ConfigHandler(configPath string, readonlyMode bool) http.HandlerFunc {
 
 		configData, err := readCanonicalConfigFile(configPath)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
+			log.Printf("Failed to read config: %v", err)
+			http.Error(w, "Failed to read config", http.StatusInternalServerError)
 			return
 		}
 		if !callerCanWriteConfig(r, readonlyMode) {
@@ -53,13 +54,15 @@ func ConfigYAMLHandler(configPath string, readonlyMode bool) http.HandlerFunc {
 
 		data, err := readPersistedDashboardConfig(configPath)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
+			log.Printf("Failed to read config: %v", err)
+			http.Error(w, "Failed to read config", http.StatusInternalServerError)
 			return
 		}
 		if !callerCanWriteConfig(r, readonlyMode) {
 			data, err = withoutListenerAPIKeys(data)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
+				log.Printf("Failed to redact listener API keys: %v", err)
+				http.Error(w, "Failed to read config", http.StatusInternalServerError)
 				return
 			}
 		}
