@@ -15,10 +15,9 @@ router-managed model runtime, so the flow can be exercised locally with
 `./bin/router -config=e2e/config/config.hallucination.yaml` once the runtime is
 installed (`make model-runtime-install`).
 
-The endpoint-backed detector
-(`global.model_catalog.modules.hallucination_mitigation.detector.backend: endpoint`)
-is exercised by the Kubernetes E2E `hallucination` profile
-(`e2e/profiles/hallucination/values.yaml`). That profile deploys an
+The endpoint-backed detector (a `hallucination_detector` binding to an
+`http_chat` deployment in `global.model_catalog.bindings`) is exercised by the
+Kubernetes E2E `hallucination` profile (`e2e/profiles/hallucination/values.yaml`). That profile deploys an
 OpenAI-compatible mock detector (`deploy/kubernetes/hallucination/mock-hallucination-detector.yaml`,
 served by the shared `tools/test/services/provider-mocker` image) and asserts the
 `x-vsr-response-warnings: hallucination` header. Run it with

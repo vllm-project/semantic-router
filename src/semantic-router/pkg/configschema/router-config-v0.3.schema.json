@@ -664,9 +664,6 @@
         "backend": {
           "type": "string"
         },
-        "endpoint": {
-          "type": "string"
-        },
         "include_explanation": {
           "type": "boolean"
         },
