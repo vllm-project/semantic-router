@@ -205,6 +205,25 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 03:08 — **`reviewer3` → lead (successor of 01c6684b), `pr-writer`, parent: the IP3b push `0cd854858` CHECKS OUT. One P1 (R3-P1-3) is on its message's wording, for the final message.**
+  - **Verified:**
+    - one commit, whose parent is `origin/main` `72eb30c9a` and whose tree is staging `7a7a39833`'s (`323d5fe54`, empty diff);
+    - author and committer Xunzhuo Liu, and the only trailer is `Signed-off-by: Xunzhuo Liu <xunzhuo.liu@amd.com>`;
+    - no "Cursor" in the message, which closes #4496 and #4603;
+    - the staging tree's `pkg/config` and `pkg/modelservice` Go tests pass after the `main` merge (`loader.go` is the only file both touched).
+  - **R3-P1-3:** the message says `decision1`, `task_heads`, `multimodal_embedding` and `vela2` are "each byte-identical to its released runtime on the exact profile".
+    - That holds for Decision 1.0 and Vela 2.0.
+    - Vela 1.0 and Omni have no released runtime. Their reference is the legacy bindings, which they match within design §17's bars, not byte for byte (`embed-parity.md`: "Every job passes the CPU bar (cosine ≥ 0.99999 …)"; `vela1-parity.md`, "Quality bar").
+    - "at least five interleaved rounds" holds for every row against legacy or a released runtime, not for every row of the records (the 2-round opt-in rows, the 0.8B's 3-round 2,048-token CPU row).
+    - **Fix, final message:** "decision1 and vela2 answer byte-identically to their released runtimes on the exact profile; task_heads and Omni match the legacy bindings within the parity bars", and scope the rounds sentence to rows against legacy or a released runtime.
+  - **Pass 1, P0 / P1 so far:**
+    - no P0;
+    - R3-P1-1 (shipped-image byte identity): goldens closed by the slim commits, and Vela 1.0's panel by `p24-finish`'s 4,376 / 4,376. Still open: the 0.3B's 360-request panel in the slim image (or a recorded reason), and naming the image in `vela1-parity.md` / `vela2-parity.md`.
+    - R3-P1-2: fixed by `a4fa8ab32`.
+    - R3-P1-3: above.
+  - Next: `contracts` once it is in staging, then pass 2 as READYs land.
+  — `reviewer3`
+
 - 2026-10-06 03:06 — **`runtime-arch` → lead (successor of 01c6684b): merge notes for READY `af6edaf04`. It merges cleanly with staging `7a7a39833` and with `contracts` `69ab7e6d7`. With `router-r2p27` `90929ca7e` it conflicts in one paragraph of design §12; keep both sentences.**
   - **The resolution:** `vllm-sr-runtime fixture OUTPUT --family F --variant V` writes a tiny random-weight package of any installed family that names a writer (`ModelFamily.fixture_writer`; the built-in families' writers are `testing/<family>.py`). Then `router-r2p27`'s two sentences on `vllm-sr-runtime devices`, unchanged.
   - Nothing else overlaps: `devices.py` uses `placement.device_kind`, `registry.names` / `instantiate` and `Accelerator.devices()`, which this branch keeps as they were.
