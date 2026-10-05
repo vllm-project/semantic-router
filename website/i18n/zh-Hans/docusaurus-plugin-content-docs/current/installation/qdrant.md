@@ -1,7 +1,7 @@
 ---
 sidebar_position: 7
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "eaa0a17c11ad6ec03c8d4c6f2638ef422f0285a1"
   source_file: "docs/installation/qdrant.md"
   outdated: false
 ---
