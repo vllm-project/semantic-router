@@ -2,7 +2,10 @@
 
 The `vela2` family answers exactly as the Vela 2.0 packages' own engine
 (`vela2_inference.py`) on the exact profile, on CPU and ROCm, for all three
-sizes. The opt-in approximate profiles change no Choice, Score, Noul or Set
+sizes, on the packages' release image and on the router image's ROCm stack.
+Between those two stacks the package's own answers differ, because their
+attention kernels round differently (section below). The opt-in approximate
+profiles change no Choice, Score, Noul or Set
 decision. On the 4B and 9B they change span sets in 6% of requests (short
 spans in long windowed documents) and move answers by up to 0.037, above the
 design's GPU bar of 0.02 (section 17); on the 0.3B they stay within 6e-6.
@@ -44,11 +47,11 @@ both sides render the same sequences: the token IDs of every 0.3B sequence and
 of every 4B / 9B part and block, and every position the readout reads,
 windows included.
 
-| Model | CPU | ROCm |
-| --- | --- | --- |
-| Vela-2.0-0.3B | 360 / 360 identical | 360 / 360 identical |
-| Vela-2.0-4B | 24 / 24 identical | 360 / 360 identical |
-| Vela-2.0-9B | 12 / 12 identical | 360 / 360 identical |
+| Model | CPU | ROCm, release image | ROCm, router image's stack |
+| --- | --- | --- | --- |
+| Vela-2.0-0.3B | 360 / 360 identical | 360 / 360 identical | 360 / 360 identical |
+| Vela-2.0-4B | 24 / 24 identical | 360 / 360 identical | 360 / 360 identical |
+| Vela-2.0-9B | 12 / 12 identical | 360 / 360 identical | 360 / 360 identical |
 
 - **Rows the engine rejects.** In 18 of the 360 0.3B requests one row's
   schema alone is longer than the model's 8,192 tokens. The engine rejects
@@ -66,6 +69,101 @@ windows included.
   gated-delta output norm), which equal the eager operations bit for bit
   (`tests/test_gpu_fast_path.py::test_fused_forest_equals_eager`); the ROCm
   results above include them.
+
+## The router image's ROCm stack
+
+The router's ROCm image runs PyTorch's official wheel (`2.12.0+rocm7.2`,
+Triton 3.7.0, FLA 0.5.2) with `causal-conv1d` 1.7.0 built for gfx942. The
+ROCm column above comes from the packages' release image, a PyTorch 2.12
+source build on ROCm 7.2.3 with Triton 3.7.1. On the router image's stack
+the runtime still answers exactly as the engine does, and every process
+answers alike, but the package itself rounds attention differently there,
+so no 4B or 9B request is byte-identical to the release image's answers.
+
+- **Date:** 2026-10-05, at `fb67e3bb3`; one MI325X per process, node C.
+- **Stack:** `venv-rocm72-cc` (manifest `875eeb85865e`): the image's packages
+  plus the comparator's Transformers 5.17. Its `causal-conv1d` wheel holds
+  the image's gfx942 device code. The image itself
+  (`mr-p24-lead/extproc-rocm72cc:af71d5e82`) repeats the cross-process runs
+  and the golden answers below.
+- **Requests:** the 360 generated requests above (seeds 1 and 2). The
+  reference is the release image's engine, compared with `vela2_parity.py`'s
+  rules (its `--answers` files of both stacks).
+
+| Model | Runtime vs engine, same stack | Identical to the release | Requests with a changed decision | Max \|Δp\| answers / spans |
+| --- | --- | --- | --- | --- |
+| Vela-2.0-0.3B | 360 / 360 | 1 / 360 | 0 | 4.8e-6 / 4.0e-6 |
+| Vela-2.0-4B | 360 / 360 | 0 / 360 | 22 | 0.014 / 0.045 |
+| Vela-2.0-9B | 360 / 360 | 0 / 360 | 27 | 0.017 / 0.19 |
+
+Questions whose decision equals the release image's, per answer type:
+
+| Model | Choice | Noul | Score | Span |
+| --- | --- | --- | --- | --- |
+| Vela-2.0-0.3B | 391 / 391 | 978 / 978 | 289 / 289 | 441 / 441 |
+| Vela-2.0-4B | 391 / 391 | 977 / 978 | 288 / 289 | 439 / 464 (94.6%) |
+| Vela-2.0-9B | 391 / 391 | 977 / 978 | 288 / 289 | 437 / 464 (94.2%) |
+| 4B, release image with MATH attention | 391 / 391 | 978 / 978 | 289 / 289 | 442 / 464 (95.3%) |
+| 9B, release image with MATH attention | 391 / 391 | 978 / 978 | 288 / 289 | 437 / 464 (94.2%) |
+
+- **Why: attention.** On fixed inputs (seeded CPU generators, outputs
+  compared by sha256), every operation the backbone runs gives byte-identical
+  outputs on the two stacks: BF16 and FP32 GEMMs at the 4B's widths, the
+  depthwise `F.conv1d`, the norms, the element-wise steps, FLA's chunked
+  gated delta rule and `causal-conv1d`'s kernels. The one exception is
+  `F.scaled_dot_product_attention`. Both builds default to AOTriton's
+  efficient attention, but the wheel ships AOTriton 0.11.2 and the release
+  build AOTriton 0.13.50. Only PyTorch's MATH attention agrees across the
+  two, and neither uses it by default. Against an FP64 reference both
+  AOTriton builds are equally accurate (the same largest error, mean errors
+  within 1%).
+- **The engine moves exactly as the runtime does,** and `causal-conv1d`
+  changes nothing here: the exact 4B / 9B forest convolves with `F.conv1d`,
+  as the engine does; only the approximate profiles' packed trees call it.
+- **The size of the move is attention-rounding noise.** The last two rows
+  are the release image itself with only its attention switched to MATH
+  (flash and efficient SDPA off): its span sets move as much, 95.3% and 94.2%
+  of span questions unchanged, with spans moving by up to 0.085 (4B) and
+  0.22 (9B).
+- **What changes:** span sets in long, windowed documents, where a span's
+  mean probability sits at its threshold (4B: 19 PII, 4 hallucination and
+  2 entity span sets; 9B: 20 PII, 6 entity and 1 hallucination), and two
+  exact ties per model: a Noul at 0.500 (4B jailbreak 0.5004 → 0.4989, 9B
+  fact-check 0.5022 → 0.4977) and a Score whose two top levels differ by at
+  most 0.0002.
+- **Every process answers alike in the stack's environment.** Three cold
+  processes per model, started together on two GPUs with one empty autotune
+  cache (`tools/cross_process.py`), answered the 360 requests
+  byte-identically (each pair 360 / 360). Each matched its golden answers
+  (7 / 7, against the release goldens, within the GPU tolerance) and tuned
+  nothing (0 autotune entries before and after: FLA runs its pinned choices
+  on Triton 3.7.0).
+- **In the image, MIOpen's search had to be fixed.** `F.conv1d` goes to
+  MIOpen, whose default find mode times its convolution solvers in each
+  process. In a fresh container (empty MIOpen database) with two processes
+  per GPU, the timings picked different solvers: under that default the
+  4B's three processes answered 337, 360 and 333 of 360 requests as the
+  environment above does, the 9B's 357, 360 and 356, the 0.3B's 360 each.
+  The runtime now sets `MIOPEN_FIND_MODE=FAST` at import unless the
+  deployment sets it (design section 12). With it every 4B and 9B process
+  in the image answers alike (each pair 360 / 360), and P1-4 passes in both
+  load orders. FAST picks other solvers than the timed search, so its
+  answers differ from the table's runs (default find mode) in 25 of 360
+  requests (largest move 0.011 on the 4B, 0.0066 on the 9B) and agree with
+  the release as they do: span questions 94.6% and 94.2% unchanged, 22 and
+  26 requests with a changed decision (the 9B's fact-check tie keeps its
+  side).
+- **Golden answers.** The registry keeps the release image's golden answers.
+  On this stack, in the image and outside it, in either find mode, fresh
+  processes record the same goldens, which differ from the registry's by at
+  most 7.3e-7 (0.3B), 2.7e-4 (4B) and 1.9e-3 (9B), inside the GPU tolerance
+  of 0.02, so readiness passes. The 4B and 9B miss the family bar of 99%
+  unchanged span decisions against the release by the margin the release
+  image's own MATH-attention run shows; whether the stack's answers replace
+  the release's is open, so nothing is re-recorded here.
+- **Two models in one process (P1-4):** the 4B and the 9B in one `Runtime`,
+  in both load orders, answer 60 / 60 requests identically to each one's
+  engine and to its single-package run.
 
 ## ONNX Runtime engine (0.3B)
 
