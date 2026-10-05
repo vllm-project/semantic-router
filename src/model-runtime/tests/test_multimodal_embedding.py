@@ -104,6 +104,11 @@ def test_batches_never_run_on_the_cpu_device_thread(tmp_path, monkeypatch):
         threads.clear()
         body = {"model": "omni", "input": "hello", "options": {"overflow": "reject"}}
         inline = asyncio.run(runtime.call("embeddings", body, 64))
+        # The worker answers a job before it releases the model, and a caller
+        # runs a group only on a released model.
+        scheduler = runtime.lookup("omni").scheduler
+        with scheduler._lock:
+            assert scheduler._lock.wait_for(lambda: not scheduler._owned, timeout=30)
         body["input"] = "hello there"
         planned_off_loop = asyncio.run(runtime.call("embeddings", body))
     finally:
