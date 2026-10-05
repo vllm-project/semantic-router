@@ -3,7 +3,8 @@
     python3 tools/decision1_parity.py reference --package DIR --repo REPO --device cpu|cuda:0 \\
         --panel NAME:REQUESTS.jsonl:COUNT ... --answers REFERENCE.jsonl
     python3 tools/decision1_parity.py native --model REPO --revision REV --cache-dir DIR \\
-        --device cpu|rocm:0 --panel NAME:REQUESTS.jsonl:COUNT ... --answers NATIVE.jsonl [--profile P]
+        --device cpu|rocm:0 --panel NAME:REQUESTS.jsonl:COUNT ... --answers NATIVE.jsonl [--profile P] \\
+        [--also REPO ...]
     python3 tools/decision1_parity.py compare REFERENCE.jsonl NATIVE.jsonl --output parity.json
 
 ``reference`` loads the package with Transformers remote code (``system_one``), the
@@ -11,7 +12,9 @@ runtime the packages ship; it is a separate tool process, so the runtime itself
 never imports package code. On a GPU both sides pin the built-in table's FLA
 kernel choices before FLA is imported, so they run the same kernels. ``native``
 serves the package through ``vllm_sr_runtime`` (verification, readiness, the
-scheduler) on one profile. ``compare`` reports, per panel, the prompts whose
+scheduler) on one profile; ``--also`` serves more built-in models in the same
+process on the same device, loaded first, as one GPU process of the default
+layout does, and the panel still asks ``--model``. ``compare`` reports, per panel, the prompts whose
 answers are byte-identical (canonical JSON; a structured Score legend of the
 reference is compared as the canonical JSON the API contract returns), decision
 changes, error mismatches and the largest absolute difference of any number,
@@ -105,8 +108,13 @@ def run_native(args: argparse.Namespace) -> int:
     from vllm_sr_runtime.config import ModelConfig, ServeConfig
     from vllm_sr_runtime.runtime import Runtime
 
+    others = tuple(
+        ModelConfig(model=repo, device=args.device, profile=args.profile)
+        for repo in args.also
+    )
     config = ServeConfig(
         models=(
+            *others,
             ModelConfig(
                 model=args.model,
                 revision=args.revision,
@@ -121,17 +129,23 @@ def run_native(args: argparse.Namespace) -> int:
     started = time.perf_counter()
     runtime = Runtime(config)
     runtime.start(background=False)
-    served = runtime.lookup(None)
+    served = runtime.lookup(args.model)
     receipt = {
         "load_seconds": time.perf_counter() - started,
         "health": served.health.state,
         "golden": served.health.golden.describe(),
+        "also": {
+            other.label: other.health.golden.describe()
+            for other in runtime.served
+            if other is not served
+        },
     }
     loop = asyncio.new_event_loop()
     try:
         with open(args.answers, "x", encoding="utf-8") as sink:
             for panel, prompt in panels(args.panel):
                 body = {
+                    "model": args.model,
                     "state": prompt["state"],
                     "questions": prompt["questions"],
                     "options": {"return_meta": False, "profile": args.profile},
@@ -270,6 +284,13 @@ def main() -> int:
     native.add_argument("--revision")
     native.add_argument("--cache-dir")
     native.add_argument("--profile", default="exact")
+    native.add_argument(
+        "--also",
+        action="append",
+        default=[],
+        metavar="REPO",
+        help="another built-in model served in the same process, loaded first",
+    )
     for command in (reference, native):
         command.add_argument("--device", default="cpu")
         command.add_argument("--panel", action="append", required=True)
