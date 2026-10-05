@@ -18,6 +18,7 @@ from vllm_sr_runtime.families.task_heads.family import (
     batch_invariant,
     length_buckets,
 )
+from vllm_sr_runtime.heads.task import identical
 from vllm_sr_runtime.plugins.base import (
     DeviceInfo,
     EngineOptions,
@@ -145,17 +146,41 @@ def test_native_reranker_serves_every_trained_exit(reranker):
         load(reranker, pair_scorer=[{"layer": 2}])
 
 
-def test_native_cpu_embedders_and_rerankers_pass_the_batch_invariance_probe(
+def test_exact_merges_native_cpu_embedders_and_rerankers_where_the_probe_holds(
     embedder, reranker
 ):
     if not onednn.available():
         pytest.skip("oneDNN's packed linear needs an x86 CPU")
-    for root in (embedder, reranker):
+    docs = ["open settings security", "offices are closed today", "the router"]
+    bodies = {
+        "embeddings": [
+            {"input": text}
+            for text in ("hi", "reset my password", "the router " * 40, "a cat")
+        ],
+        "rerank": [
+            {"query": "reset my password", "documents": docs},
+            {"query": "when do the offices open", "documents": docs[:1]},
+        ],
+    }
+    for root, surface in ((embedder, "embeddings"), (reranker, "rerank")):
         _, _, model = load(root)
-        assert model.batch_invariant
         profile = ExactProfile()
         profile.bind(model)
-        assert profile.merge and model.packs_rows and not profile.banded
+        assert profile.merge == model.batch_invariant
+        assert model.packs_rows and not profile.banded
+        if not model.batch_invariant:
+            continue
+        plans = [
+            model.plan_surface(
+                surface,
+                SurfaceRequest(surface, body, None, "exact", True, time.monotonic()),
+            )
+            for body in bodies[surface]
+        ]
+        alone = [value for plan in plans[::-1] for value in model.run(plan.items)]
+        together = model.run([item for plan in plans[::-1] for item in plan.items])
+        assert len(together) == len(alone)
+        assert all(map(identical, alone, together))
     _, package, model = load(embedder)
     head = model.heads["pooled@4"]
     readout = head.readout

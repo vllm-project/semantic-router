@@ -208,7 +208,12 @@ class ModelSpec:
     marks a bidirectional encoder whose readout needs hidden states.
     ``kernel_variants`` maps a kernel slot to the variant the model's released
     runtime ran (``KernelSet.use_variants``); a slot without that variant on
-    the device runs its reference.
+    the device runs its reference. ``graph_threads`` caps a named graph's CPU
+    intra-op threads where more of them only add wake-ups (a few-millisecond
+    forward); other graphs use every configured thread. ``graph_spin_us``
+    sets how long a named graph's idle CPU threads spin before they sleep,
+    where the engine's default bound lets them sleep inside a run; the
+    engine may shorten it beside other engines' CPU models.
     """
 
     name: str
@@ -218,6 +223,8 @@ class ModelSpec:
     graphs: Mapping[str, Path] = field(default_factory=dict)
     encoder: bool = False
     kernel_variants: Mapping[str, str] = field(default_factory=dict)
+    graph_threads: Mapping[str, int] = field(default_factory=dict)
+    graph_spin_us: Mapping[str, int] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -251,10 +258,10 @@ class EngineOptions:
     """Execution switches a profile may change. Defaults are the exact path.
 
     ``reduced_precision`` loads, next to the exact weights, the reduced copy the
-    model's ``DtypePolicy`` consents to on its device. ``exclusive_cpu`` is False
-    when the process serves other CPU models: an engine then must not leave
-    threads spinning on the cores after a run, since they slow the next model's
-    forward.
+    model's ``DtypePolicy`` consents to on its device. ``cpu_neighbors`` names
+    the engines of the process's other CPU models (``auto`` where only loading
+    can tell): threads an engine leaves spinning after a run slow another
+    engine's next forward on those cores.
     """
 
     graphs: bool = True
@@ -263,7 +270,7 @@ class EngineOptions:
     merge_lora: bool = False
     reduced_precision: bool = False
     threads: int | None = None
-    exclusive_cpu: bool = True
+    cpu_neighbors: frozenset[str] = frozenset()
     extra: dict[str, Any] = field(default_factory=dict)
 
 

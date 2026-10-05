@@ -74,6 +74,11 @@ class GraphSession:
 
         self.name = name
         self.path = path
+        self.spin_us = (
+            None
+            if provider.gpu
+            else int(options.get_session_config_entry(providers.SPIN_ENTRY))
+        )
         self.facts = graph_files.read_graph(path)
         if self.facts.externals:
             # ONNX Runtime keeps the arrays referenced, not copied; they live as long as the session.
@@ -147,7 +152,7 @@ class OnnxRuntimeModel(EngineModel):
         graphs: dict[str, GraphSession],
         choice: providers.ProviderChoice,
         device_info: DeviceInfo,
-        threads: int | None,
+        threads: dict[str, int],
     ):
         self.graphs = graphs
         self.choice = choice
@@ -173,17 +178,17 @@ class OnnxRuntimeModel(EngineModel):
         return 4 * self.parameter_count()
 
     def receipt(self) -> dict[str, Any]:
-        """What runs this model: the provider, its options and the loaded graphs."""
+        """What runs this model: the provider, its options, the loaded graphs and their CPU pools."""
         return {
             "provider": self.choice.name,
             "provider_options": dict(self.choice.options),
             "validated": self.choice.validated,
             "threads": self.threads,
-            "shared_cpu_pool": (
-                None
-                if self.choice.gpu
-                else providers.shared_pool(providers.cpu_threads(self.threads))
-            ),
+            "spin_us": {
+                name: graph.spin_us
+                for name, graph in self.graphs.items()
+                if graph.spin_us is not None
+            },
             "graphs": {name: graph.path.name for name, graph in self.graphs.items()},
         }
 
@@ -239,17 +244,18 @@ class OnnxRuntimeEngine(Engine):
         )
         if isinstance(choice, str):
             raise RuntimeError(choice)
-        weights = graph_files.WeightFiles()
-        graphs = {
-            name: GraphSession(
-                name,
-                Path(path),
-                providers.session_options(
-                    choice, options.threads, options.exclusive_cpu
-                ),
-                choice,
-                weights,
+        neighbors = bool(options.cpu_neighbors - {self.name})
+        threads = {
+            name: providers.cpu_threads(
+                options.threads, None if choice.gpu else spec.graph_threads.get(name)
             )
-            for name, path in spec.graphs.items()
+            for name in spec.graphs
         }
-        return OnnxRuntimeModel(graphs, choice, device, options.threads)
+        weights = graph_files.WeightFiles()
+        graphs = {}
+        for name, path in spec.graphs.items():
+            session = providers.session_options(
+                choice, threads[name], neighbors, spec.graph_spin_us.get(name)
+            )
+            graphs[name] = GraphSession(name, Path(path), session, choice, weights)
+        return OnnxRuntimeModel(graphs, choice, device, threads)
