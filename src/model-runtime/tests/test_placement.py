@@ -103,11 +103,10 @@ def test_a_cpu_without_lapack_refuses_models_that_require_it(monkeypatch, lapack
 def test_the_refusal_comes_before_any_weights_load_and_is_final(
     monkeypatch, qwen3_package, qwen35_package
 ):
+    import vllm_sr_runtime.runtime as runtime_module
     from vllm_sr_runtime.config import ModelConfig, ServeConfig
     from vllm_sr_runtime.engines.native.engine import NativeEngine
     from vllm_sr_runtime.runtime import Runtime
-
-    import vllm_sr_runtime.runtime as runtime_module
 
     monkeypatch.setattr(torch._C, "has_lapack", False)
     loads, placements = [], []
