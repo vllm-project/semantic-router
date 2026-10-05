@@ -70,7 +70,7 @@ global:
       milvus:
         address: milvus:19530
         collection: agentic_memory
-        dimension: 384
+        dimension: 256
 ```
 
 **Valkey 后端**（需要带 Search 模块的 Valkey）：
@@ -84,7 +84,7 @@ global:
       valkey:
         host: valkey
         port: 6379
-        dimension: 384
+        dimension: 256
         collection_prefix: "mem:"
         index_name: mem_idx
         metric_type: COSINE
@@ -102,14 +102,15 @@ global:
         host: qdrant
         port: 6334
         collection: agentic_memory
-        dimension: 384
-      embedding_model: bert
+        dimension: 256
+      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.30
 ```
 
-此 Qdrant 示例对 `bert`（`mom-embedding-light`）使用原始余弦分数。
-0.30 仅是小规模冷启动召回测试的起点，不适用于其他嵌入模型；上线前还需检查无关查询和已更正的旧事实。
+三个示例都使用默认的 `mmbert`（Vela Embedding）生成嵌入，因此 `dimension` 取其提供的维度之一：64、128、256、512 或 768。
+若设为其他值，Router 会记录 `Failed to create memory store: … Memory will be disabled`，并在没有记忆的情况下运行。
+Qdrant 示例的 0.30 阈值基于原始余弦分数，只是起点，而不是校准值；上线前还需检查无关查询和已更正的旧事实。
 
 完整部署说明见：
 
