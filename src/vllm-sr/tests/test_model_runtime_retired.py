@@ -205,7 +205,7 @@ def test_empty_retired_embedding_paths_are_refused_until_migrated(tmp_path):
                 "embeddings": {
                     "semantic": {
                         **semantic,
-                        **{field: "" for field in RETIRED_EMBEDDING_PATHS},
+                        **dict.fromkeys(RETIRED_EMBEDDING_PATHS, ""),
                     }
                 }
             }
