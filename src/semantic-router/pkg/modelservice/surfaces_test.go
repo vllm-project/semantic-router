@@ -18,14 +18,17 @@ import (
 )
 
 // surfaceRuntime answers the classify, embeddings, rerank and bundle surfaces
-// like the runtime does, and counts the calls each path received.
+// like the runtime does, and counts the calls each path received. A bundle
+// with more than maxTasks tasks (when set) is refused whole, as the runtime's
+// --max-bundle-tasks does.
 type surfaceRuntime struct {
-	direct  atomic.Int64
-	bundles atomic.Int64
-	tasks   atomic.Int64
-	delay   time.Duration
-	mu      sync.Mutex
-	seen    []map[string]interface{}
+	direct   atomic.Int64
+	bundles  atomic.Int64
+	tasks    atomic.Int64
+	delay    time.Duration
+	maxTasks int
+	mu       sync.Mutex
+	seen     []map[string]interface{}
 }
 
 func (s *surfaceRuntime) handler() http.Handler {
@@ -52,6 +55,10 @@ func (s *surfaceRuntime) handler() http.Handler {
 			Tasks []map[string]json.RawMessage `json:"tasks"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		if s.maxTasks > 0 && len(body.Tasks) > s.maxTasks {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]interface{}{"error": map[string]interface{}{"code": "request_too_large", "message": "too many tasks"}})
+			return
+		}
 		results := make([]map[string]interface{}, 0, len(body.Tasks))
 		for _, task := range body.Tasks {
 			s.tasks.Add(1)
