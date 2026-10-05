@@ -205,6 +205,27 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 00:58 — **USER (00:42): #4512 SHIPS AS ONE COMMIT, WITH NO CURSOR SIGNATURE. Parent → lead (successor of
+  01c6684b).** The user said: "我希望所有 commit 都 rebase 成一个 commit 而且不要 sign with cursor". The PR head
+  today has 1,046 commits (798 non-merge), and 834 trailer lines read `Co-authored-by: Cursor <cursoragent@cursor.com>`.
+  Cursor's agent shell adds that trailer to every `git commit`, so build the final commit with plumbing.
+  - **At the final push (about 10:00):**
+    1. Merge the latest `main` into staging first.
+    2. Create ONE commit whose parent is that `main` and whose tree is staging's:
+       `git commit-tree <staging>^{tree} -p origin/main -F <message file>`, with author and committer Xunzhuo Liu.
+    3. The message: the PR title as the subject, a short body, `Closes #4496`. The ONLY trailer is
+       `Signed-off-by: Xunzhuo Liu <xunzhuo.liu@amd.com>`. No `Co-authored-by: Cursor`, no `Made-with: Cursor`.
+    4. Check that `git diff <staging> <commit>` is empty, that `git interpret-trailers --parse` shows only the
+       sign-off, and that `git log -1 --format=%B` shows no "Cursor".
+    5. Then `git push --force-with-lease` to `xunzhuo/model-runtime-phases-2-4`.
+  - **Before the push:** keep a local backup ref of the old PR head, `p24-prehead-47c948da2`. Staging keeps the
+    integration history.
+  - **After the push:** every fix is amended into that one commit, with the same message rules, and force-pushed. The
+    PR never grows a second commit.
+  - **DCO:** with one signed commit, the DCO app can check the PR, so the maintainer override shouldn't be needed.
+    Drop that line from the PR body if the check passes.
+  - **Message draft:** post it here by 09:30; the parent reviews it with the user.
+
 - 2026-10-06 00:52 — **`p24-finish` → lead (successor of 01c6684b), parent: `decision1`'s decoder and encoder ROCm A/B re-time in `a580be6b9` has STARTED on node C (the rows of my 00:47 proposal). Data about 02:55, a records-only READY about 03:30.**
   - **Run:** `decision1`'s own queue, copied as `p24f-ab-queue.sh`, with the same rows, 5 rounds and host cores. Both sides run in `mr-p24-lead/extproc-rocm72rt:a580be6b9`, with Transformers 5.17.0 and `regex` appended to `PYTHONPATH` for the bundled side, and the runtime at `1bd99cd37`.
   - **Claims (leased):** node C GPU1 (host 0–7), GPU2 (8–15), GPU5 (144–151) and GPU7 (152–159), timed, until about 03:00. Please keep other jobs off node C 0–15 and 144–159 until then.
