@@ -1,72 +1,130 @@
 """First-party models the runtime serves out of the box, pinned by revision and identity.
 
+Each family plugin names its table (``ModelFamily.builtin_table``, a module
+whose ``MODELS`` lists its pinned packages; the built-in families keep theirs
+in ``registry/tables``). The runtime reads the tables of the installed
+families once, at first use, and again only after plugin discovery is
+refreshed; families are taken in name order, each table in its own order.
 A new model revision is a new entry; a built-in model is never resolved
-through a moving branch. Each family keeps its table in ``registry/tables``.
-Golden requests gate readiness; their reference answers per device class live
-in ``golden_answers*.json``, recorded with ``tools/golden_answers.py`` for the
-pinned revision. ``kernel_choices.json`` holds, per device class, the
-autotuned kernel configurations the released runtime ran with
-(``tools/kernel_choices.py``); the runtime pins them so every process
-computes the released numerics.
+through a moving branch. Golden requests gate readiness; their reference
+answers per device class live in ``golden_answers*.json``, recorded with
+``tools/golden_answers.py`` for the pinned revision. ``kernel_choices.json``
+holds, per device class, the autotuned kernel configurations the released
+runtime ran with (``tools/kernel_choices.py``); the runtime pins them so
+every process computes the released numerics.
 """
 
 from __future__ import annotations
 
+import importlib
+import logging
+from dataclasses import dataclass
 from typing import Any
 
-from .tables import decision1, decision2, omni, vela1, vela2
+from ..plugins import registry
 from .tables.common import ORG, BuiltinModel, with_recorded
 
 __all__ = [
-    "DECISION2_MODELS",
     "ORG",
     "BuiltinModel",
     "all_models",
     "by_identity",
+    "golden",
     "kernel_choices",
     "lookup",
     "with_recorded",
 ]
 
-DECISION2_MODELS = decision2.MODELS
-MODELS: tuple[BuiltinModel, ...] = (
-    *decision2.MODELS,
-    *decision1.MODELS,
-    *vela1.MODELS,
-    *vela2.MODELS,
-    *omni.MODELS,
-)
+log = logging.getLogger("vllm_sr_runtime")
 
-_BY_REPO = {model.repo_id.lower(): model for model in MODELS}
-_BY_NAME = {model.repo_id.split("/", 1)[1].lower(): model for model in MODELS}
+
+@dataclass(frozen=True)
+class _Table:
+    """The built-in models of the installed families, indexed."""
+
+    models: tuple[BuiltinModel, ...]
+    by_repo: dict[str, BuiltinModel]
+    by_name: dict[str, BuiltinModel]
+    by_identity: dict[str, BuiltinModel]
+
+
+_cached: tuple[object, _Table] | None = None
+
+
+def _table() -> _Table:
+    """The table of the families plugin discovery found (``registry.discover``), read once per discovery."""
+    global _cached  # noqa: PLW0603 - one table per discovery result
+    found = registry.discover()
+    cached = _cached
+    if cached is None or cached[0] is not found:
+        cached = (found, _read(found["families"]))
+        _cached = cached
+    return cached[1]
+
+
+def _read(families: dict[str, registry.PluginEntry]) -> _Table:
+    models: list[BuiltinModel] = []
+    for name in sorted(families):
+        try:
+            module = families[name].load().builtin_table
+        except (
+            Exception
+        ) as exc:  # a family that can't load serves nothing, pinned or not
+            log.warning("family %s is not loadable: %s", name, exc)
+            continue
+        if not module:
+            continue
+        pinned = tuple(importlib.import_module(module).MODELS)
+        strays = sorted({model.family for model in pinned} - {name})
+        if strays:
+            raise registry.PluginError(
+                f"the {name} family's table {module} pins models of {', '.join(strays)}"
+            )
+        models.extend(pinned)
+    by_repo: dict[str, BuiltinModel] = {}
+    for model in models:
+        key = model.repo_id.lower()
+        if key in by_repo:
+            raise registry.PluginConflictError(
+                f"{model.repo_id} is pinned by the {by_repo[key].family} and {model.family} families"
+            )
+        by_repo[key] = model
+    by_identity: dict[str, BuiltinModel] = {}
+    for model in models:
+        by_identity.setdefault(model.model_sha256, model)
+    return _Table(
+        models=tuple(models),
+        by_repo=by_repo,
+        by_name={model.repo_id.split("/", 1)[1].lower(): model for model in models},
+        by_identity=by_identity,
+    )
 
 
 def lookup(model: str) -> BuiltinModel | None:
     """A built-in model by repository ID or bare model name (case-insensitive)."""
     key = model.strip().lower()
-    return _BY_REPO.get(key) or _BY_NAME.get(key)
+    known = _table()
+    return known.by_repo.get(key) or known.by_name.get(key)
 
 
 def by_identity(model_sha256: str) -> BuiltinModel | None:
-    for model in MODELS:
-        if model.model_sha256 == model_sha256:
-            return model
-    return None
+    return _table().by_identity.get(model_sha256)
 
 
-def golden_decisions(
-    model_sha256: str, state: Any, questions: dict[str, Any]
+def golden(
+    model_sha256: str, surface: str, body: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    """A decisions readiness request expecting the built-in model's released answers (none for another model)."""
+    """A readiness request expecting the built-in model's recorded answers (none for another model)."""
     known = by_identity(model_sha256)
     expected = dict(known.golden_answers) if known else {}
-    return [{"state": state, "questions": questions, "expected": expected}]
+    return [{"surface": surface, "body": body, "expected": expected}]
 
 
 def all_models(family: str | None = None) -> tuple[BuiltinModel, ...]:
+    models = _table().models
     if family is None:
-        return MODELS
-    return tuple(model for model in MODELS if model.family == family)
+        return models
+    return tuple(model for model in models if model.family == family)
 
 
 def kernel_choices(

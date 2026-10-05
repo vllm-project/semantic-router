@@ -103,6 +103,8 @@ def golden_audio(rate: int = 16000, seconds: float = 0.5) -> bytes:
 class MultimodalEmbeddingFamily(ModelFamily):
     name = "multimodal_embedding"
     surfaces = frozenset({"embeddings"})
+    builtin_table = "vllm_sr_runtime.registry.tables.omni"
+    fixture_writer = "vllm_sr_runtime.testing.multimodal_embedding"
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:

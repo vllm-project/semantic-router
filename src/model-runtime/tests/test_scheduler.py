@@ -4,7 +4,8 @@ import time
 
 import pytest
 from vllm_sr_runtime.errors import RuntimeServiceError
-from vllm_sr_runtime.plugins.base import Job, LoadedModel, RenderedItem
+from vllm_sr_runtime.plugins.base import Job
+from vllm_sr_runtime.plugins.decisions import DecisionModel, RenderedItem
 from vllm_sr_runtime.profiles.batching import BatchingProfile
 from vllm_sr_runtime.profiles.exact import ExactProfile, merged
 from vllm_sr_runtime.profiles.shared_context import SharedContextProfile
@@ -25,7 +26,7 @@ def item(name, length):
     )
 
 
-class FakeModel(LoadedModel):
+class FakeModel(DecisionModel):
     def __init__(self, budget=None, gate=None, fail=False):
         self.calls = []
         self.budget = budget

@@ -17,13 +17,8 @@ import torch
 
 from ...errors import INVALID_QUESTION, MAX_LENGTH_EXCEEDED, QuestionError
 from ...heads.candidate import forward_logits
-from ...plugins.base import (
-    EngineModel,
-    LoadedModel,
-    ModelInfo,
-    RenderedItem,
-    RequestPlan,
-)
+from ...plugins.base import EngineModel, ModelInfo
+from ...plugins.decisions import DecisionModel, RenderedItem, RequestPlan
 from ...systemone import canonical
 from ...text import segments
 from ...text.tokenizer import Tokenizer
@@ -32,7 +27,7 @@ from .answers import answer
 from .questions import KINDS, NoulDefaults, Row, check_request, parse
 
 
-class Decision1Model(LoadedModel):
+class Decision1Model(DecisionModel):
     """A loaded Decision 1.0 model; ``render``, ``physical_batches`` and ``run`` are per runtime."""
 
     noul_defaults: ClassVar[NoulDefaults]

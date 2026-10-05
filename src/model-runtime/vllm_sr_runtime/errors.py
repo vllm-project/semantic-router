@@ -75,3 +75,7 @@ class VerificationError(RuntimeError):
 
 class PlacementError(RuntimeError):
     """No device can hold the model under the configured budget."""
+
+
+class UnsupportedDeviceError(PlacementError):
+    """Every device the model may use lacks a capability it requires; loading again changes nothing."""

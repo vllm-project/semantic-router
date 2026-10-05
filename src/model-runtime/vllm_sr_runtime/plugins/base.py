@@ -13,7 +13,7 @@ register through the same entry points as third-party ones
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -213,7 +213,10 @@ class ModelSpec:
     forward); other graphs use every configured thread. ``graph_spin_us``
     sets how long a named graph's idle CPU threads spin before they sleep,
     where the engine's default bound lets them sleep inside a run; the
-    engine may shorten it beside other engines' CPU models.
+    engine may shorten it beside other engines' CPU models. ``requires``
+    names, per accelerator, the capabilities its devices must report
+    (``Accelerator.capabilities``) to serve the model; placement refuses a
+    device that lacks one.
     """
 
     name: str
@@ -225,6 +228,7 @@ class ModelSpec:
     kernel_variants: Mapping[str, str] = field(default_factory=dict)
     graph_threads: Mapping[str, int] = field(default_factory=dict)
     graph_spin_us: Mapping[str, int] = field(default_factory=dict)
+    requires: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -425,7 +429,15 @@ class EngineModel(ABC):
 
 
 class Engine(ABC):
+    """Runs backbones that ``supports`` accepts on an accelerator's devices.
+
+    ``auto_priority`` places the engine in ``--engine auto``'s order, lowest
+    first, after the engine a built-in model's table prefers for the device
+    class; engines without one (the default) follow, by name.
+    """
+
     name: ClassVar[str]
+    auto_priority: ClassVar[int | None] = None
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
@@ -477,6 +489,10 @@ class Accelerator(ABC):
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
         return {}
 
+    def lacks(self, device: DeviceInfo, capability: str) -> str:
+        """Why ``device`` can't serve a model that requires ``capability`` (``ModelSpec.requires``), and the remedy."""
+        return f"{device.label} lacks {capability}"
+
     def autocast(
         self, device: DeviceInfo, dtype: str | None
     ) -> AbstractContextManager[Any]:
@@ -502,29 +518,6 @@ class Accelerator(ABC):
 # ---------------------------------------------------------------------------
 # Families
 # ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class RenderedItem:
-    """One question rendered to model inputs."""
-
-    question_id: str
-    task_type: str
-    ids: list[int]
-    gather: list[int]
-    query: int
-    keys: list[str]
-    descriptions: list[Any]
-
-
-@dataclass
-class RequestPlan:
-    """A request after validation and rendering, before execution."""
-
-    question_ids: list[str]
-    items: list[RenderedItem]
-    errors: dict[str, dict[str, Any]]
-    input_tokens: int
 
 
 @dataclass(frozen=True)
@@ -640,9 +633,11 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     others were cached is ``DEADLINE`` in the list. Results are shared with
     the cache, so ``finish_surface`` must not mutate them. An item that sets
     ``cache_key`` (a content hash of everything its result depends on) may be
-    answered from the per-model result cache instead of a forward. The default
-    surface methods serve ``/v1/decisions`` through ``plan`` and ``answer``,
-    the decision families' hooks, which encoder families need not implement.
+    answered from the per-model result cache instead of a forward. Decision
+    families subclass ``plugins.decisions.DecisionModel``, which serves
+    ``/v1/decisions`` through their ``plan`` and ``answer``. The golden check
+    and the item metrics read every surface through ``golden_values``,
+    ``golden_compare`` and ``outcomes``.
 
     ``fuse_bundled_jobs`` lets the ``exact`` profile run the jobs of one
     bundle as one batch, so a family can compute each distinct input once for
@@ -668,9 +663,9 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     batch_invariant: bool = False
     packs_rows: bool = False
 
-    def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan:
-        """Validate and render every question; failures become per-question errors."""
-        raise UnsupportedSurfaceError("decisions", self.info.id)
+    @abstractmethod
+    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan[ItemT]:
+        """Validate and render a request; per-item failures stay in the plan."""
 
     @abstractmethod
     def run(self, items: list[ItemT]) -> list[ResultT]:
@@ -690,61 +685,46 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
         """``run`` for a batch of an approximate profile, where a family may trade exactness for speed."""
         return self.run(items)
 
-    def answer(self, item: RenderedItem, logits: list[float] | None) -> dict[str, Any]:
-        """The API answer for one decision item."""
-        raise UnsupportedSurfaceError("decisions", self.info.id)
-
-    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan[ItemT]:
-        """Validate and render a request; per-item failures stay in the plan.
-
-        By default the decisions surface, whose items ``plan`` renders.
-        """
-        if surface != "decisions" or "decisions" not in self.info.surfaces:
-            raise UnsupportedSurfaceError(surface, self.info.id)
-        body = request.body
-        if "state" not in body:
-            raise ValueError("state is required")
-        questions = body.get("questions")
-        if (
-            not isinstance(questions, dict)
-            or not questions
-            or any(not isinstance(key, str) or not key.strip() for key in questions)
-        ):
-            raise ValueError("questions must be a nonempty mapping of question IDs")
-        plan = self.plan(body["state"], questions)
-        items: list[Any] = list(plan.items)
-        return SurfacePlan("decisions", items, plan.input_tokens, plan)
-
+    @abstractmethod
     def finish_surface(
         self, plan: SurfacePlan[ItemT], results: Results[ResultT]
     ) -> dict[str, Any]:
         """The response body without ``model``, ``usage`` and ``meta`` (the runtime adds those)."""
-        from ..errors import DEADLINE_EXCEEDED
 
-        request_plan: RequestPlan = plan.state
-        answered: dict[str, dict[str, Any]] = {}
-        for index, item in enumerate(request_plan.items):
-            if isinstance(results, Expired):
-                answered[item.question_id] = {
-                    "type": item.task_type,
-                    "error": DEADLINE_EXCEEDED,
-                }
-            else:
-                logits: Any = results[index]
-                answered[item.question_id] = self.answer(item, logits)
-        return {
-            "answers": {
-                question_id: request_plan.errors.get(question_id)
-                or answered[question_id]
-                for question_id in request_plan.question_ids
-            }
-        }
+    def golden_values(self, surface: str, response: dict[str, Any]) -> dict[str, Any]:
+        """A golden response's comparable values by stable key; by default its numbers (``readiness.flatten``).
 
-    def golden_values(self, surface: str, response: dict[str, Any]) -> dict[str, float]:
-        """Comparable numbers of a golden response (non-decision surfaces), by stable key."""
+        The golden check requires two runs to give equal values, and these are
+        what ``tools/golden_answers.py`` records as the reference.
+        """
         from ..supervision.readiness import flatten
 
         return flatten(surface, response)
+
+    def golden_compare(
+        self,
+        surface: str,
+        values: dict[str, Any],
+        reference: dict[str, Any],
+        tolerance: float,
+    ) -> tuple[int, int] | None:
+        """(checked, matched) of golden values against the device class's reference, or None if they are malformed.
+
+        ``reference`` is empty when none is recorded, which checks nothing.
+        By default every value must be a finite number, and each reference
+        value is matched within ``tolerance`` by the value of its key.
+        """
+        from ..supervision.readiness import compare_numbers
+
+        return compare_numbers(values, reference, tolerance)
+
+    def outcomes(self, surface: str, body: dict[str, Any]) -> Iterable[tuple[str, str]]:
+        """(type, outcome) of each item of a finished response body, for the runtime's item metrics.
+
+        The outcome is ``answered`` or the item's error code; a surface that
+        reports no items (the default) counts nothing.
+        """
+        return ()
 
     def forward_token_budget(self) -> int | None:
         """Most padded tokens one forward may hold; None when nothing limits it."""
@@ -776,8 +756,21 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
 
 
 class ModelFamily(ABC):
+    """A model format's task contract: recognise, verify, describe and load its packages.
+
+    ``builtin_table`` names the module whose ``MODELS`` lists the family's
+    pinned first-party models (``registry.tables.common.BuiltinModel``), which
+    the runtime resolves by name and gates on their recorded golden answers
+    (``registry.builtin``). ``fixture_writer`` names the module that writes the
+    family's tiny random-weight packages for tests and the CPU E2E profile:
+    ``write_fixture(output, variant, seed)`` and ``VARIANTS``, the first the
+    default. Both are imported only when first needed.
+    """
+
     name: ClassVar[str]
     surfaces: ClassVar[frozenset[str]]
+    builtin_table: ClassVar[str | None] = None
+    fixture_writer: ClassVar[str | None] = None
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
@@ -814,7 +807,7 @@ class ModelFamily(ABC):
     ) -> LoadedModel[Any, Any]: ...
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
-        """Golden requests ({state, questions, expected?}) that gate readiness."""
+        """Golden requests (``{surface, body, expected}``, ``expected`` by device class) that gate readiness."""
         return []
 
     def kernel_choices(

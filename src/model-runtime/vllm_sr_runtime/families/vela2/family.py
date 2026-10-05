@@ -21,15 +21,14 @@ from ...plugins.base import (
     BackboneSpec,
     DtypePolicy,
     EngineModel,
-    LoadedModel,
     ModelFamily,
     ModelInfo,
     ModelSpec,
     PackageRef,
-    RequestPlan,
     SurfacePlan,
     VerifiedPackage,
 )
+from ...plugins.decisions import DecisionModel, RequestPlan
 from ...registry import builtin, policy
 from ...systemone import MAX_LEVELS, MAX_OPTIONS, MIN_LEVELS, MIN_OPTIONS
 from .answers import Answerer
@@ -55,6 +54,8 @@ LICENCES = {
         "components": [{"name": "backbone", "licence": "apache-2.0"}],
     },
 }
+# Gated DeltaNet layers (Qwen3.5) solve triangular systems; on a CPU that needs LAPACK.
+GATED_DELTA_REQUIRES = {"cpu": ("lapack",)}
 GOLDEN_STATE = {
     "request": "Hi, I'm Tom Baker (tom.baker@example.com). What is the maximum daily dose of paracetamol for an adult?",
     "source": "For adults, the maximum dose of paracetamol is 4 grams in 24 hours.",
@@ -112,6 +113,8 @@ def _tokenizer(package: Vela2Package) -> Any:
 class Vela2Family(ModelFamily):
     name = "vela2"
     surfaces = frozenset({"decisions"})
+    builtin_table = "vllm_sr_runtime.registry.tables.vela2"
+    fixture_writer = "vllm_sr_runtime.testing.vela2"
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
@@ -182,16 +185,20 @@ class Vela2Family(ModelFamily):
             for k, v in config["backbone_config"].items()
             if k not in ("architectures", "transformers_version")
         }
+        backbone = BackboneSpec(
+            model_type=text.get("model_type", "qwen3_5_text"),
+            config=text,
+            weight_files=details.weights,
+            weight_prefix="backbone.",
+        )
         return ModelSpec(
             name=package.model_name,
-            backbone=BackboneSpec(
-                model_type=text.get("model_type", "qwen3_5_text"),
-                config=text,
-                weight_files=details.weights,
-                weight_prefix="backbone.",
-            ),
+            backbone=backbone,
             dtype=DtypePolicy(),
             max_input_tokens=details.max_input_tokens,
+            requires=(
+                GATED_DELTA_REQUIRES if backbone.model_type == "qwen3_5_text" else {}
+            ),
         )
 
     def load(
@@ -251,8 +258,10 @@ class Vela2Family(ModelFamily):
         )
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
-        return builtin.golden_decisions(
-            package.model_sha256, GOLDEN_STATE, GOLDEN_QUESTIONS
+        return builtin.golden(
+            package.model_sha256,
+            "decisions",
+            {"state": GOLDEN_STATE, "questions": GOLDEN_QUESTIONS},
         )
 
 
@@ -265,7 +274,7 @@ class Vela2Plan(RequestPlan):
     mapping: list[Any] = field(default_factory=list)
 
 
-class Vela2Model(LoadedModel):
+class Vela2Model(DecisionModel):
     """A Vela 2.0 package bound to an engine model."""
 
     def __init__(

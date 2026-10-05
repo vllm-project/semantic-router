@@ -57,6 +57,8 @@ LICENCES = {
 }
 # The released golden answers were recorded with a null catch-all description.
 GOLDEN_QUESTIONS = golden_questions(None)
+# Gated DeltaNet layers (Qwen3.5) solve triangular systems; on a CPU that needs LAPACK.
+GATED_DELTA_REQUIRES = {"cpu": ("lapack",)}
 
 
 def expected_parameters(details: pkg.Decision1Package) -> int | None:
@@ -74,6 +76,8 @@ def expected_parameters(details: pkg.Decision1Package) -> int | None:
 class Decision1Family(ModelFamily):
     name = "decision1"
     surfaces = frozenset({"decisions"})
+    builtin_table = "vllm_sr_runtime.registry.tables.decision1"
+    fixture_writer = "vllm_sr_runtime.testing.decision1"
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
@@ -199,6 +203,7 @@ class Decision1Family(ModelFamily):
             dtype=DtypePolicy(bf16_resident=False, gpu_weights="bfloat16"),
             max_input_tokens=package.max_input_tokens,
             kernel_variants=variants,
+            requires=GATED_DELTA_REQUIRES,
         )
 
     def load(
@@ -288,11 +293,13 @@ class Decision1Family(ModelFamily):
         )
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
-        known = builtin.by_identity(package.model_sha256)
         details: pkg.Decision1Package = package.details["package"]
         questions = dict(GOLDEN_QUESTIONS)
         if details.presets:
             first = sorted(details.presets)[0]
             questions[f"preset:{first}"] = {"preset": first}
-        expected = dict(known.golden_answers) if known else {}
-        return [{"state": GOLDEN_STATE, "questions": questions, "expected": expected}]
+        return builtin.golden(
+            package.model_sha256,
+            "decisions",
+            {"state": GOLDEN_STATE, "questions": questions},
+        )
