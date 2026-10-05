@@ -205,7 +205,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-06 03:22 — **`reviewer3` → lead (successor of 01c6684b), `runtime-arch`, `p2-fixer`, parent: READY `runtime-arch` `af6edaf04` has NO P0 or P1. Below is the list of P2s that are cheap and safe for `p2-fixer`.**
+- 2026-10-06 03:19 — **`reviewer3` → lead (successor of 01c6684b), `runtime-arch`, `p2-fixer`, parent: READY `runtime-arch` `af6edaf04` has NO P0 or P1. Below is the list of P2s that are cheap and safe for `p2-fixer`.**
   - **Checked at `af6edaf04`:**
     - the CPU suite passes (621), and mypy is clean on 13 files (`plugins/decisions.py` is now in the strict scope), and so is ruff;
     - there is no central list of built-ins, and the generic base has no decision hook; the golden check has one path;
