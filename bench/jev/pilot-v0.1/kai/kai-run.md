@@ -118,6 +118,8 @@ the warmup, the six cases and that one check.
 
 ## Artifact SHA-256
 
+Kai transport-read fix (2026-10-05): subin's commit `f19e4c31a193770597a9b2847ae158ddc1222c8f` is integrated with authorship retained. Truncated successful HTTP responses preserve received bytes and record an `IncompleteRead` failure; connections closed without a response record a connection failure. The next input is still processed. A local HTTP server regression exercises both failures and subsequent valid cases through the real runner, without model inference. The current `run_kai.py` SHA-256 is `f865b80e81ab59a4be18020061206047f82a050df097326f8e111ea8f4f738a6`. Earlier source hashes below are historical snapshots; captured model records remain unchanged.
+
 Kai review fix (2026-10-03): subin's commit `3bf6b49a7b9774ea9aed930186ab92fcafd4ca6b` is integrated with authorship retained. Non-object responses, null/non-object answers and invalid probability values now produce recorded contract failures with raw responses preserved; the runner continues through the remaining inputs. Top-1 calculations are performed only on contract-valid responses. The current `run_kai.py` SHA-256 is `3170f8b4b17b28639d291d1b9ae13100de143d75c6de1ee0f7dfee2099ea6eff`; the source hashes below describe earlier snapshots. Captured results and warmup records remain unchanged, and no model rerun is claimed.
 
 Run the offline regressions with:
