@@ -122,7 +122,10 @@ level or better everywhere too; their runs and intervals stay in
   rounds 6–10. A CPU job of the re-timing's own overlapped the first 1.5
   minutes of GPU5's round 1 inside its host cores, so that round of Kai's
   many-question rows ran again after the queue; the overlapped files are not
-  used.
+  used. From 17:54 to 17:58 UTC another job loaded an image on node C. The
+  rounds with a side that started then are kept: many questions, Nox-4B and
+  Lux-9B round 5; router throughput, Eos-0.8B rounds 4–5, Kai-0.6B rounds
+  2–3, Lex-0.6B round 2, Lux-9B and Route-0.6B rounds 1–2, and Sol-2B round 4.
 
 ### Single requests
 
