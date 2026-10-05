@@ -6,8 +6,9 @@ is the reference; the other copy runs the fused layers through the graph runner 
 second captured, third replayed) and must equal it (``torch.equal``). The Eos case also selects its
 released FP64 convolution variant, whose gated-delta blocks run eagerly inside the fused layers,
 and which hands shapes it does not cover to the default kernel. The Vela encoders' three layer
-stacks each replay their own bucket graphs. Two decoders sharing one GPU process answer concurrent
-requests while each captures graphs.
+stacks each replay their own bucket graphs. Two decoders in one process answer concurrent requests
+while each captures graphs (with these tiny fixtures it passes without the device lock too; the
+real-size reproduction is ``tools/decision1_parity.py native --also ... --concurrent``).
 """
 
 from __future__ import annotations

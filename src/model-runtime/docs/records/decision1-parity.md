@@ -5,7 +5,17 @@ Decision 1.0 package's bundled runtime, for all seven packages. On ROCm this
 holds on all four scored panels, on CPU on subsets of them. That is design
 §17's bar for Decision 1.0: bit-identical on the same device class.
 
-- **Date:** 2026-10-04; the P1-4 runs on 2026-10-05.
+On the router's ROCm image (`a580be6b9`, which serves with vLLM's ROCm
+PyTorch, the build the packages were released on), the runtime answers the
+released references byte for byte: all seven models, all four panels, and
+every router request, with the recorded golden answers reproduced in every
+value. On the official-wheel stack that image replaced (below), the released
+answers move by rounding: about 11.5% of prompts stay byte-identical on the
+encoders, with no decision changed, and almost none on the decoders, where
+0.3–0.6% of decisions change, each a near-tie.
+
+- **Date:** 2026-10-04; the P1-4 runs, the `dc81682bb` column and the
+  official-wheel stack on 2026-10-05; the adopted image on 2026-10-06.
 - **ROCm:** one AMD Instinct MI325X (gfx942) per run, in the image the packages
   were released with: PyTorch 2.12 (ROCm), Transformers 5.17, Triton 3.7.1, FLA
   0.5.2, causal-conv1d 1.7.0.
@@ -28,7 +38,10 @@ holds on all four scored panels, on CPU on subsets of them. That is design
   profile and commit, with every panel's counts. From `c22bb15cd` an entry
   also carries what the engine ran: graph statistics per layer stack and the
   reduced copy. A P1-4 entry names the models served before it in the same
-  process (`served_before`).
+  process (`served_before`), and `concurrent` when they were asked at once.
+  The stack entries name the `stack` and the `reference` they compare
+  with (`released`, or the `stack`'s own one-model answers), and a
+  `cross_process` entry holds the three cold processes.
 
 ## Exact profile, ROCm, four scored panels
 
@@ -36,20 +49,22 @@ Panels: typed-final (1,600 requests), css15 (6,547), public231 (231) and
 mlx-diag (2,275), 10,653 in all. "Identical" means 0 decision changes, 0 error
 mismatches and max |Δp| 0.0.
 
-| Model | Runtime | Revision | `046f27883` | `11ab95952` | `d5b985e43` |
-| --- | --- | --- | --- | --- | --- |
-| Kai-0.6B | vela-encoder | `79263ba4` | identical | identical | identical |
-| Lex-0.6B | vela-encoder | `a5ba6895` | identical | identical | identical |
-| Route-0.6B | vela-encoder | `deed1f29` | identical | identical | identical |
-| Eos-0.8B | qwen3.5-decision | `2ca39a23` | identical | identical | identical |
-| Sol-2B | qwen3.5-decision | `5c698b1a` | identical | identical | identical |
-| Nox-4B | qwen3.5-decision | `7f65e1db` | identical | identical | identical |
-| Lux-9B | qwen3.5-decision | `2064c84d` | identical | identical | identical |
+| Model | Runtime | Revision | `046f27883` | `11ab95952` | `d5b985e43` | `dc81682bb` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Kai-0.6B | vela-encoder | `79263ba4` | identical | identical | identical | identical |
+| Lex-0.6B | vela-encoder | `a5ba6895` | identical | identical | identical | identical |
+| Route-0.6B | vela-encoder | `deed1f29` | identical | identical | identical | identical |
+| Eos-0.8B | qwen3.5-decision | `2ca39a23` | identical | identical | identical | identical |
+| Sol-2B | qwen3.5-decision | `5c698b1a` | identical | identical | identical | identical |
+| Nox-4B | qwen3.5-decision | `7f65e1db` | identical | identical | identical | identical |
+| Lux-9B | qwen3.5-decision | `2064c84d` | identical | identical | identical | identical |
 
 - **`046f27883`:** the first full runs.
 - **`11ab95952`:** the fused gfx942 layers run the BF16 residual stream
   (`8bc857d6f`), and the foundation and `vela1` are merged in.
 - **`d5b985e43`:** the PR head merged in (`dcaf8a0b9`).
+- **`dc81682bb`:** with the built-in kernel-choice table and per-model kernel
+  choices (P1-4), the per-device GPU lock (P0-3) and IP3a merged in.
 - **What runs on the GPU** (from the receipts): the decoders run every layer
   on the fused path (24 layers for Eos and Sol, 32 for Nox and Lux) and replay
   HIP graphs of exact shapes. Eos's causal convolution is the FP64-accumulating
@@ -97,6 +112,127 @@ B's own choices. Before: `ed4c500cc`, the runtime before the fix. After:
   key of all seven built-in models and for unrecorded neighbours (other
   numbers, flipped flags, another dtype), and two models' scopes alternate on
   FLA's real gated delta rule, each launch running its own configuration.
+
+**Under concurrent requests.** The cases above ask one model at a time. With
+`--concurrent 8`, every 8 prompts go to Sol and to Eos at once, so the two
+models' batches and graph captures meet:
+
+| Commit | Sol identical | Failed requests (Sol / Eos) | Health after | Sol's graphs |
+| --- | --- | --- | --- | --- |
+| `d7b06a6f9` (no device lock) | 1 / 10,653 | 10,652 / 10,652 | both degraded | 1 capture, failed |
+| `79908fad8` (device lock) | 10,653 / 10,653 | 0 / 0 | both ready | 118 captures, 10,430 replays, 0 failed |
+| `f25dae5dd` (and thread-local capture) | 10,653 / 10,653 | 0 / 0 | both ready | 118 captures, 10,430 replays, 0 failed |
+
+- **Before the lock**, one model's graph capture (a shape's second use) ran
+  while the other model launched work on the device; ROCm invalidated the
+  capture (`hipErrorStreamCaptureInvalidated`), whatever the capture mode, and
+  both models degraded. A runtime that may exit on a device error exits.
+- **With the lock** (`GPUAccelerator.execute` serializes a GPU's device calls,
+  design §9), Sol stays byte-identical on its own kernel choices while Eos
+  runs its own, at the same time. From `f25dae5dd` the decoders capture in
+  thread-local mode, so a device query from another thread (placement's, for a
+  model loading next to served ones) can't invalidate a capture either.
+- **Three encoders in one process** (`f25dae5dd`, Kai with Lex and Route, 8
+  prompts at a time to all three): on `exact`, where encoders run eagerly,
+  Kai's 10,653 answers stay identical. On `batching`, every model replays its
+  own per-stack graphs (Kai's trunk: 10 captures, 341 replays, none failed),
+  and Kai has 0 decision changes against its reference (max |Δp| 1.2e-5, the
+  profile's approximation; 640 requests byte-identical, fewer than one at a
+  time because concurrent requests coalesce). On both, no request failed and
+  all three stayed ready.
+
+## The router's ROCm image: vLLM's ROCm PyTorch
+
+`mr-p24-lead/extproc-rocm72rt:a580be6b9` takes PyTorch 2.12.0+git6bbd260
+(AOTriton 0.13.50) and the ROCm 7.2.3 libraries from vLLM's ROCm image,
+pinned by digest, with Triton 3.7.0, FLA 0.5.2 and `causal-conv1d` 1.7.0. At
+`1bd99cd37`, whose runtime code is the PR's (device lock and thread-local
+graph capture included), exact, on node C, every result is byte-identical:
+
+| Check | Kai | Lex | Route | Eos | Sol | Nox | Lux |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Four panels against the released references (10,653 prompts, 11,053 questions) | 10,653 | 10,653 | 10,653 | 10,653 | 10,653 | 10,653 | 10,653 |
+| Router requests against the bundled runtime in the image (231 requests, 1,386 questions) | 231 | 231 | 231 | 231 | 231 | 231 | 231 |
+| ROCm golden answers, two fresh processes, against the recorded file | equal | equal | equal | equal | equal | equal | equal |
+
+- **Panels:** 0 decision changes and max \|Δp\| 0.0 on every model; every
+  load matched its golden (3 of 3, Route 4 of 4). Three GPUs, one model at a
+  time per GPU.
+- **Router requests:** both sides in the image, with Transformers 5.17.0 (and
+  `regex`) appended to `PYTHONPATH` for the bundled side.
+- **Golden answers:** two processes, started together on two GPUs, recorded
+  the ROCm answers of all seven packages with `tools/golden_answers.py`; each
+  equals `registry/golden_answers_decision1.json` in every value.
+- **CPU in this image:** its PyTorch is built without LAPACK and MKL
+  (`torch._C.has_lapack` and `torch.backends.mkl.is_available()` are false).
+  Kai answers on its CPU path, within 8.3e-7 of the CPU golden answers
+  (matched). The Qwen3.5 decoders can't: their CPU gated-delta reference calls
+  `torch.triangular_solve`, which raises without LAPACK, so their golden check
+  fails at load. CPU deployments use the CPU image.
+
+## The official-wheel ROCm stack: stack B plus `causal-conv1d`
+
+Until `a580be6b9`, the router's ROCm image shipped the official PyTorch
+2.12.0 wheel from the rocm7.2 index (HIP 7.2, Triton 3.7.0) with FLA 0.5.2
+and `causal-conv1d` 1.7.0 built for gfx942. The references above, and the
+recorded ROCm golden answers, come from the packages' release image: a
+PyTorch 2.12 source build on ROCm 7.2 with Triton 3.7.1.
+
+At `a1c7a284e`, exact, the four scored panels (10,653 prompts, 11,053
+questions), against the released references. The official-wheel image
+(`extproc-rocm72cc:be7366c49`) and `venv-rocm72-cc` (the image's pins with a
+`causal-conv1d` wheel whose gfx942 device code equals the image's and the
+release's) gave byte-identical answers on every prompt of all seven models:
+
+| Model | Byte-identical prompts | Decisions changed | Max abs diff | Release golden |
+| --- | --- | --- | --- | --- |
+| Kai-0.6B | 1,241 / 10,653 (11.6%) | 0 / 11,053 | 1.0e-5 | matched 3 / 3 |
+| Lex-0.6B | 1,260 / 10,653 (11.8%) | 0 / 11,053 | 9.8e-6 | matched 3 / 3 |
+| Route-0.6B | 1,228 / 10,653 (11.5%) | 0 / 11,053 | 1.3e-5 | matched 4 / 4 |
+| Eos-0.8B | 21 / 10,653 (0.2%) | 52 / 11,053 (0.47%) | 0.036 | matched 3 / 3 |
+| Sol-2B | 14 / 10,653 (0.1%) | 67 / 11,053 (0.61%) | 0.17 | matched 3 / 3 |
+| Nox-4B | 4 / 10,653 (0.04%) | 62 / 11,053 (0.56%) | 0.073 | matched 3 / 3 |
+| Lux-9B | 4 / 10,653 (0.04%) | 31 / 11,053 (0.28%) | 0.084 | matched 3 / 3 |
+
+- **Every changed decision is a near-tie** in the released answer: the median
+  top-two margin is 0.003–0.005, the largest 0.017 (Eos), 0.036 (Lux), 0.058
+  (Nox) and 0.062 (Sol). Of each decoder's changes, 4–15 are Score or Noul
+  answers; the rest are Choice.
+- **Why:** `causal-conv1d` closes part of the decoders' gap. Without it, Sol
+  had 4 identical prompts, 95 changed decisions and a max diff of 0.46. The
+  rest is the PyTorch build: the official wheel and the release image's source
+  build compute some kernels differently. Kai runs no convolution and no FLA
+  kernel, and it still differs by up to 1e-5 on every official wheel. Vela 1.0
+  and Vela 2.0 show the same on this stack.
+- **Readiness passes on either record:** every load on stack B matched the
+  release goldens within the GPU tolerance (0.02).
+
+**On the stack itself, exact holds.** Three cold processes started together,
+one per GPU (node C GPU1, GPU2 and GPU5), sharing one empty autotune cache and
+one empty Triton cache, each answered the four panels
+(`tools/cross_process.py`), in the venv and again in the image. For every
+model, each pair of processes is 10,653 / 10,653 identical. Every process
+matched its golden and tuned nothing (0 autotune entries before and after):
+the decoders run their pinned choices on Triton 3.7.0.
+
+**Several models in one GPU process, on stack B** (in the venv and in the
+image, alike), each against the stack's own one-model answers:
+
+| Model | Served before it | Identical | Concurrent |
+| --- | --- | --- | --- |
+| Sol-2B | Eos-0.8B | 10,653 / 10,653 | no |
+| Lux-9B | Eos-0.8B, Sol-2B, Nox-4B | 10,653 / 10,653 | no |
+| Sol-2B | Eos-0.8B | 10,653 / 10,653 | 8 prompts at a time to both |
+
+**Router requests.** The router asks a Decision 1.0 model its six router
+signals about one prompt as one request: six questions of mixed types, which
+no scored panel has. Exact against the bundled runtime on such requests
+(public231's 231 prompts, each asking the six signals of Route's
+`QUESTIONS.json` as explicit questions, as `tools/decision1_bench.py --router`
+builds them) is byte-identical for all seven models on the official-wheel stack, both
+sides in the image plus Transformers 5.17 (231 / 231 requests, 1,386
+questions each). On CPU, Kai is 30 / 30 and Eos 10 / 10 (3 threads on both
+sides).
 
 ## Exact profile, CPU
 
@@ -230,6 +366,11 @@ a tolerance rather than bit for bit.
 deployment whose answers move further from the record than the check's
 tolerance (1e-3 on CPU, 0.02 on a GPU) fails to load.
 
+At `1bd99cd37` the file is reproduced in every value: on ROCm by two fresh
+processes in the router's image (above), and on CPU in the CPU PyTorch
+2.10 image at 16 threads. At 4 threads the CPU answers match within 3.5e-7,
+since MKL's reductions depend on the thread count.
+
 ## Reproduce
 
 ```bash
@@ -239,7 +380,7 @@ python3 tools/decision1_parity.py reference --package PACKAGE_DIR --repo vllm-sr
 python3 tools/decision1_parity.py native --model vllm-sr/Decision-1.0-Kai-0.6B --cache-dir HF_CACHE \
   --device rocm:0|cpu [--threads 16] [--profile batching] --panel ... --answers native.jsonl
 python3 tools/decision1_parity.py compare reference.jsonl native.jsonl --output compare.json
-# P1-4: Sol served after Eos in one process, against Sol's reference
+# P1-4: Sol served after Eos in one process, against Sol's reference (add --concurrent 8 to ask both at once)
 python3 tools/decision1_parity.py native --model vllm-sr/Decision-1.0-Sol-2B --also vllm-sr/Decision-1.0-Eos-0.8B \
   --cache-dir HF_CACHE --device rocm:0 --panel ... --answers sol-after-eos.jsonl
 pytest tests/test_decision1_*.py tests/test_kernel_choices.py
