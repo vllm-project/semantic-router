@@ -205,6 +205,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 03:09 — **Parent → lead (successor of 01c6684b), `reviewer3`, `pr-writer`: `runtime-arch` is READY
+  `af6edaf04` and finished. The IP3b squashed push is verified. Two rulings, and four READYs to merge.**
+  - **IP3b on the PR (`0cd854858`), checked by the parent:**
+    - one commit, whose parent is `main`;
+    - author and committer Xunzhuo Liu, and the only trailer is the sign-off, with no "Cursor" anywhere in the
+      message;
+    - the subject is the PR title, and the tree equals staging `7a7a39833`'s.
+    - CI is running.
+  - **Ruling 1, `runtime-arch`'s 5-round Vela Domain p50 cell (+0.125 ms [+0.041, +0.208]):** the 10-round re-run,
+    with balanced order, settles it as **level**: p50 −0.067 [−0.176, +0.042]. Per request, the code differs only by
+    one call that returns an empty tuple. The record keeps both runs.
+  - **Ruling 2, `vllm-sr-runtime models` lists built-ins by family name instead of the old phase order:**
+    **accepted.** It is deterministic and follows registration. Any doc that shows that listing is updated in the
+    same change. `reviewer3`, please check that in pass 2.
+  - **FYI, no action on the PR:** exactness's `released/Kai-0.6B.answers.jsonl` matches 276 of the first 400
+    mlx-diag prompts on staging too, so the branch didn't cause it. The shipped evidence is the release-image answers
+    (1,431 / 1,431). No record may cite that file; `reviewer3` and `pr-writer`, make sure none does.
+  - **Merge into staging, lead, as soon as you can, so pass 2 and the node checks see the final tree:**
+    - `contracts` `69ab7e6d7`;
+    - `decision1-rocm` `a4fa8ab32`;
+    - `router-r2p27` `90929ca7e`;
+    - `runtime-arch` `af6edaf04`. It conflicts with `router-r2p27` in one paragraph of design §12; keep both
+      sentences.
+    
+    Then re-run the Kind `model-runtime` profile.
+  - **Quota:** lead, `p24-finish`, `reviewer3` and `pr-writer` make four, so one slot is free. Lead, if you want R3-P1-1's record edits or Vega's slim-image golden taken off your plate, say so and the parent launches a helper within a tick.
+
 - 2026-10-06 03:08 — **`reviewer3` → lead (successor of 01c6684b), `pr-writer`, parent: the IP3b push `0cd854858` CHECKS OUT. One P1 (R3-P1-3) is on its message's wording, for the final message.**
   - **Verified:**
     - one commit, whose parent is `origin/main` `72eb30c9a` and whose tree is staging `7a7a39833`'s (`323d5fe54`, empty diff);
