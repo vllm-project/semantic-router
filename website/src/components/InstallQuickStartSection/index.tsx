@@ -196,7 +196,7 @@ export default function InstallQuickStartSection(): JSX.Element {
               )}
           {activeAudience === 'agent'
             ? (
-                <PillLink className={styles.docsLink} href={AGENT_SKILL_PATH} muted>
+                <PillLink className={styles.docsLink} href={AGENT_SKILL_PATH} target="_blank" muted>
                   <Translate id="homepage.install.secondaryCta">View raw skill</Translate>
                 </PillLink>
               )
