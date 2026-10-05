@@ -1,4 +1,4 @@
-"""The span head (Vela 2.0 4B / 9B): word x label scores, in FP32 outside autocast.
+"""The span head (Vela 2.0 decoders): word x label scores, in FP32 outside autocast.
 
 Words are layer-normed and mean-centred over the block; labels are
 layer-normed block means plus a label-slot embedding, mean-centred when there

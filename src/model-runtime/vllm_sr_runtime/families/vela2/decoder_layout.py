@@ -1,4 +1,4 @@
-"""The Vela 2.0 4B / 9B layout: the parts once, then one block per question (a tree).
+"""The Vela 2.0 decoder layout: the parts once, then one block per question (a tree).
 
 The parts are ``Context:\\n`` and, per part, ``<segment role="R">\\n`` TEXT
 ``\\n</segment>\\n``. A Choice, Noul, Score or Set block is

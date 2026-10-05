@@ -1,4 +1,4 @@
-"""Which span head reads a span question (4B and 9B releases with a broad head).
+"""Which span head reads a span question (decoder releases with a broad head).
 
 First match wins: the question's ``head``; the calibration key ``pii``,
 ``halu`` or ``toxic``; a label set equal to one the router head was trained

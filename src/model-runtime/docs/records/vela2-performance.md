@@ -4,16 +4,18 @@ On the exact profile (answers identical to the packages' engine,
 `vela2-parity.md`) the `vela2` family is faster than the Vela 2.0 engine on
 every measured row on ROCm (15–30% at the median with one caller, 1.2–1.6×
 the requests per second with four) and level with it or better on CPU,
-where both run the same operations on MKL. The opt-in approximate profiles
-serve the 4B and 9B 1.8–2.8× faster than the engine on ROCm and 1.5× on
-CPU, and the 0.3B up to 1.9× the engine's throughput with four callers. On
-CPU, `max_speed` runs the 0.3B on a `float32-packed` copy of its linear
-layers, 1.6–1.7× faster than `exact` at every length. One Vela 2.0 0.3B
-request also replaces the seven Vela 1.0
-classifier calls a router request made: on CPU it is 2.2× faster than their
-sum at the median and 10× at p95, and 3.2× at the median under `max_speed`.
+where both run the same operations on MKL, except the 0.8B at 32 and 512
+tokens (0.3–2.5% slower, open). The opt-in approximate profiles serve the
+0.8B 1.6–2.4× and the 4B and 9B 1.8–2.8× faster than the engine on ROCm, the
+4B 1.5× and the 0.8B 1.2× on CPU, and the 0.3B up to 1.9× the engine's
+throughput with four callers. On CPU, `max_speed` runs the 0.3B on a
+`float32-packed` copy of its linear layers, 1.6–1.7× faster than `exact` at
+every length. One
+Vela 2.0 0.3B request also replaces the seven Vela 1.0 classifier calls a
+router request made: on CPU it is 2.2× faster than their sum at the median
+and 10× at p95, and 3.2× at the median under `max_speed`.
 
-- **Dates:** each section gives its own (2026-10-04 or 2026-10-05).
+- **Dates:** each section gives its own (2026-10-04 to 2026-10-06).
 - **Devices:** ROCm: one AMD Instinct MI325X (gfx942) per run, 8–16 host
   cores, in the router's ROCm image for the timed A/B sections (the
   reduced-copy and Vela 1.0 comparisons ran in the Decision 2.0 release
@@ -345,6 +347,98 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
 | --- | --- | --- | --- |
 | 128 | 30.1 | 19.9 | 30.4 |
 | 512 | 55.7 | 36.4 | 57.3 |
+
+## Vela-2.0-0.8B on ROCm
+
+- **Date:** 2026-10-06, at `bd9cbeeb9` (staging `d9fbd0115` with the 0.8B's
+  registry entry), in the router's ROCm image as above, with
+  `MIOPEN_FIND_MODE=FAST`.
+- **Setup:** one MI325X, 8 host cores in the container's cpuset, threads
+  capped at 8; node load at most 18 (other workloads on the node's other GPUs
+  and cores). 10 interleaved rounds, side order rotated per round; each cell
+  is 20 warm-up requests, then 30 requests at 1 or 4 concurrent callers. A
+  first run read the same except for single slow rounds while models loaded
+  on another GPU; this run replaces it (`vela2-reduced.json` keeps both).
+- **Reading:** every profile is faster than the engine on every row, with
+  every interval on the better side. With one caller `exact` is 22–30%
+  faster at the median, and `shared_context` and `batching` are 1.6–2.3×
+  faster; with 4 callers they serve 1.35–1.45× (`exact`) and 1.8–2.4× the
+  engine's requests per second.
+
+0.8B, p50 ms, engine and Δ against it (mean [95% interval]):
+
+| Tokens × callers | engine | exact | shared_context | batching |
+| --- | --- | --- | --- | --- |
+| 32 × 1 | 54.3 | −11.8 [−12.4, −11.2] | −22.3 [−22.8, −21.8] | −21.3 [−21.8, −20.8] |
+| 32 × 4 | 227.1 | −59.9 [−80.6, −39.2] | −101.6 [−122.5, −80.7] | −107.2 [−128.7, −85.8] |
+| 128 × 1 | 56.1 | −12.7 [−13.2, −12.2] | −22.8 [−23.1, −22.5] | −22.6 [−23.1, −22.1] |
+| 128 × 4 | 233.0 | −61.3 [−76.0, −46.6] | −103.9 [−118.2, −89.7] | −115.2 [−129.1, −101.4] |
+| 512 × 1 | 78.5 | −23.5 [−24.0, −23.0] | −44.3 [−44.7, −43.9] | −44.0 [−44.4, −43.7] |
+| 512 × 4 | 317.6 | −99.9 [−111.3, −88.6] | −183.9 [−195.1, −172.7] | −187.1 [−198.6, −175.5] |
+| 2,048 × 1 | 168.2 | −50.6 [−51.1, −50.1] | −72.3 [−72.6, −72.0] | −72.9 [−73.5, −72.4] |
+| 2,048 × 4 | 664.7 | −198.5 [−220.0, −177.0] | −286.9 [−308.0, −265.8] | −290.6 [−313.4, −267.8] |
+
+0.8B, p95 ms:
+
+| Tokens × callers | engine | exact | shared_context | batching |
+| --- | --- | --- | --- | --- |
+| 32 × 1 | 58.3 | −12.9 [−15.0, −10.8] | −25.3 [−31.3, −19.2] | −24.4 [−30.4, −18.4] |
+| 32 × 4 | 247.4 | −78.1 [−122.7, −33.4] | −120.2 [−165.5, −75.0] | −79.3 [−123.9, −34.8] |
+| 128 × 1 | 60.2 | −14.1 [−16.1, −12.0] | −26.0 [−31.1, −20.8] | −25.8 [−31.3, −20.3] |
+| 128 × 4 | 239.6 | −64.5 [−83.3, −45.6] | −107.6 [−125.2, −90.1] | −55.5 [−77.9, −33.2] |
+| 512 × 1 | 83.1 | −25.5 [−28.4, −22.6] | −47.8 [−52.6, −42.9] | −47.5 [−52.7, −42.4] |
+| 512 × 4 | 322.4 | −102.5 [−116.9, −88.0] | −187.2 [−201.5, −173.0] | −160.4 [−174.7, −146.0] |
+| 2,048 × 1 | 172.5 | −51.6 [−52.9, −50.3] | −73.5 [−78.4, −68.5] | −75.6 [−80.6, −70.6] |
+| 2,048 × 4 | 684.6 | −214.9 [−251.0, −178.7] | −302.4 [−338.0, −266.7] | −301.8 [−337.9, −265.6] |
+
+0.8B, requests per second:
+
+| Tokens × callers | engine | exact | shared_context | batching |
+| --- | --- | --- | --- | --- |
+| 32 × 1 | 18.01 | +5.19 [+4.85, +5.53] | +13.01 [+12.48, +13.54] | +12.14 [+11.47, +12.80] |
+| 32 × 4 | 17.61 | +6.21 [+4.73, +7.68] | +14.07 [+12.56, +15.59] | +14.44 [+12.85, +16.03] |
+| 128 × 1 | 17.66 | +5.03 [+4.79, +5.26] | +12.28 [+11.95, +12.61] | +12.05 [+11.45, +12.66] |
+| 128 × 4 | 17.21 | +5.94 [+4.94, +6.94] | +13.46 [+12.55, +14.37] | +14.44 [+13.49, +15.39] |
+| 512 × 1 | 12.63 | +5.37 [+5.24, +5.50] | +16.49 [+16.32, +16.66] | +16.23 [+15.94, +16.53] |
+| 512 × 4 | 12.58 | +5.72 [+5.25, +6.18] | +17.09 [+16.60, +17.57] | +18.00 [+17.45, +18.55] |
+| 2,048 × 1 | 5.91 | +2.50 [+2.37, +2.62] | +4.46 [+4.39, +4.53] | +4.56 [+4.48, +4.64] |
+| 2,048 × 4 | 5.99 | +2.57 [+2.37, +2.77] | +4.55 [+4.36, +4.74] | +4.65 [+4.42, +4.88] |
+
+## Vela-2.0-0.8B on CPU
+
+- **Date:** 2026-10-06, at `bd9cbeeb9`.
+- **Setup:** 16 cores of an AMD EPYC 9575F on one NUMA node, in a
+  `systemd-run` scope (effective cpuset logged), threads capped at 16,
+  PyTorch 2.10's CPU build for both sides; node load at most 19. A decoder
+  request takes 4–18 s on CPU, so the grid is smaller than on ROCm: one
+  caller; at 32–512 tokens 2 warm-up requests, then 6 per round over 5
+  interleaved rounds; at 2,048 tokens 1 warm-up request, then 3 per round
+  over 3 rounds.
+- **Reading:** `shared_context` and `batching` are 15–19% faster than the
+  engine at the median at every length, with every interval on the better
+  side. `exact` is level at 128 and 2,048 tokens and slightly slower at 32
+  and 512 (+2.5% [+1.6, +3.5] and +0.3% [+0.1, +0.5] at the median), with
+  those intervals on the worse side: an open cell, not yet explained (the
+  4B's `exact` is 1–3% faster than its engine on CPU). The 0.3B is the size
+  to serve on a CPU.
+
+0.8B on CPU, p50 ms, engine and Δ against it (mean [95% interval]):
+
+| Tokens | engine | exact | shared_context | batching |
+| --- | --- | --- | --- | --- |
+| 32 | 4,614 | +117 [+73, +162] | −786 [−891, −682] | −785 [−844, −726] |
+| 128 | 6,619 | +76 [−178, +330] | −992 [−1,219, −766] | −1,042 [−1,313, −771] |
+| 512 | 10,587 | +33 [+8, +58] | −2,032 [−2,127, −1,938] | −1,878 [−2,218, −1,539] |
+| 2,048 | 17,288 | +553 [−844, +1,949] | −3,108 [−5,550, −667] | −3,121 [−5,964, −278] |
+
+0.8B on CPU, requests per second:
+
+| Tokens | engine | exact | shared_context | batching |
+| --- | --- | --- | --- | --- |
+| 32 | 0.216 | −0.005 [−0.007, −0.004] | +0.044 [+0.042, +0.046] | +0.044 [+0.041, +0.047] |
+| 128 | 0.148 | +0.001 [−0.003, +0.004] | +0.029 [+0.023, +0.035] | +0.028 [+0.024, +0.033] |
+| 512 | 0.094 | −0.001 [−0.001, +0.000] | +0.023 [+0.020, +0.025] | +0.022 [+0.019, +0.024] |
+| 2,048 | 0.057 | −0.001 [−0.003, +0.000] | +0.014 [+0.002, +0.027] | +0.014 [+0.000, +0.028] |
 
 ## Against the Vela 1.0 path
 

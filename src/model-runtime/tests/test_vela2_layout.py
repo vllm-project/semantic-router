@@ -1,4 +1,4 @@
-"""Vela 2.0 layouts: truncation, 0.3B marker sequences and windows, 4B / 9B trees and span windows."""
+"""Vela 2.0 layouts: truncation, 0.3B marker sequences and windows, decoder trees and span windows."""
 
 from __future__ import annotations
 
