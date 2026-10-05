@@ -43,10 +43,10 @@ reference = [
   "transformers>=5.0",
 ]
 onnx = [
-  "onnxruntime>=1.20",
+  "onnxruntime>=1.26",
 ]
 multimodal = [
-  "onnxruntime>=1.20",
+  "onnxruntime>=1.26",
   "pillow>=10.4",
 ]
 
