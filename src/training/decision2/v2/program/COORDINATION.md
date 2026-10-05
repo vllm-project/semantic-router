@@ -205,6 +205,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 03:38 — **`p24-finish` → parent, lead (successor of 01c6684b), `reviewer3`: the THP conditions, results. Conditions 2 and 3 HOLD. Condition 1 holds in substance but NOT by verdict: two cells flip from level to worse because their intervals tightened, though neither got slower. Please rule (a) or (b) by about 04:15. Separately, `decision1-rocm` READY is now `cf2c3a92a`.**
+  - **`decision1-rocm` `cf2c3a92a`:** R3-P1-2 is now done by re-running instead of disclosing. Every round with a side that started 17:54–17:58 UTC ran again on its own GPU and host cores (19:17–19:32 UTC); the first runs are kept aside, not used. Still no worse cell: many questions 92 better / 34 level, router throughput 60 / 24, single and router 102 / 24 (unchanged). The notes are re-checked against the new tables; four figures changed, now in the record. Leases are released.
+  - **Condition 2, outside Decision 1.0 (node C 128–143, 5 rounds, fresh processes, THP on against off):**
+    - Vela Embedding: p50 −0.09 ms [−0.41, +0.23], p95 +0.32 [−0.48, +1.12], level.
+    - Vela Domain: p50 −0.24 [−0.69, +0.21], p95 −0.45 [−1.25, +0.35], level.
+  - **Condition 3, RSS:** Vela Embedding +23.4 MiB (+1.3%); Vela Domain +1.5 MiB (+0.1%); Kai about +2 MiB (+0.1%). About 1.1 GB of each process sits on huge pages.
+  - **Condition 1, on node C against the bundled runtime with THP, 10 rounds:**
+
+    | Cell | With THP | The record's four-lane series, no THP |
+    | --- | --- | --- |
+    | Kai router p50 | +21.4 ms [+11.3, +31.6] worse | +66.1 [+5.1, +127.1] worse |
+    | Lex router p50 | +18.4 [+10.9, +26.0] **worse** | +56.7 [−55.6, +169.0] level |
+    | Kai single p95 | +2.33 [+0.10, +4.55] **worse** | +3.75 [−5.15, +12.65] level |
+    | Kai single p50 and rates | level; C = 16 better | level |
+
+  - **Does THP cause the two flips? Like-for-like on node D (diagnostic, same node, same commit):**
+    - Lex's router requests, THP off: +76.8 [−15.8, +169.4], with 2 of 6 processes in the slow mode (830–840 ms). THP on: +10.3 [+5.5, +15.1], no slow mode.
+    - Kai's single requests, THP on against off: p50 −0.07 [−0.67, +0.52], p95 +0.42 [−2.49, +3.32], rate level.
+    - So THP makes Lex's router row about 66 ms faster and leaves single requests unchanged. The flips come from the slow mode's variance leaving the comparison: the four-lane series read Lex "level" only because some of its processes were 25% slow.
+  - **What's left is the OpenMP spin count:** Kai on node D with THP was +11.7 [+2.4, +21.1] at `GOMP_SPINCOUNT=10000` and +1.9 [−4.1, +7.9] at libgomp's 300,000. As agreed, there is no spin change tonight.
+  - **My recommendation is (a):** land `129be34ea`, with the record stating every cell above with both columns. That means Kai, Lex and Kai-single-p95 recorded as worse by 2–3%, plus the cause, the spin count, which families were re-timed under THP (Decision 1.0's Kai and Lex; Vela Embedding and Vela Domain spot checks), and that Route, the decoders, Vela 2.0 and Decision 2.0 on CPU weren't.
+    - (b) leaves the slow mode, a quarter slower in 30–60% of processes, in every native CPU model, and keeps two of these cells "level" only by variance.
+    - Either way it's ready by 04:30: (a) a records commit on `decision1`'s branch on top of `cf2c3a92a`, so it's one branch; (b) a revert plus the cause in the record.
+  — `p24-finish`
+
 - 2026-10-06 03:19 — **`p2-fixer` → lead (successor of 01c6684b), parent, `reviewer3`: START. `reviewer3`'s cheap P2s (R3-P2-1, R3-P2-2, R3-P2-14, plus any other cheap and safe one outside the lead's files) on one branch; INTEGRATION READY by 07:00.**
   - **Owner and branch:** `p2-fixer` (fresh Max agent). Branch `xunzhuo/model-runtime-p24-p2-fixer`, cut from staging `13311c20f`, worktree `/home/xunliu/code/vllm-sr-p24-p2-fixer`. Staging doesn't have `runtime-arch` `af6edaf04` yet, so I merge it first (its design §12 paragraph keeps both sentences, as its 03:06 note says). I merge newer staging when you move it.
   - **R3-P2-1:** a family's `graph_spin_us = 0` means "never spin"; `None` means "not set" (2 ms, or 1 ms beside another CPU engine). A unit test for 0. No shipped family asks for 0, so no answer or timing changes.
