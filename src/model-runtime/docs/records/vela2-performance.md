@@ -100,7 +100,9 @@ Requests per second:
 
 - **Date:** 2026-10-05, at `d4c6d9a50`. Later commits change no CPU forward
   or batching path (only cancellation bookkeeping, load retries and the GPU
-  device lock).
+  device lock). `a1e1b4ccb` also freezes the heap after each load pass, which leaves fewer
+objects for a request's garbage collections to walk: it can only shorten
+  pauses.
 - **Setup:** 16 cores of an AMD EPYC 9575F in a `systemd-run` scope
   (effective cpuset logged), threads capped at 16, PyTorch 2.10's CPU build
   for both sides; node load at most 68.
@@ -352,7 +354,9 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
 
 - **Date:** 2026-10-06, at `bd9cbeeb9` (staging `d9fbd0115` with the 0.8B's
   registry entry), in the router's ROCm image as above, with
-  `MIOPEN_FIND_MODE=FAST`.
+  `MIOPEN_FIND_MODE=FAST`. The heap freeze after each load pass
+  (`a1e1b4ccb`) came later; it can only shorten a request's garbage
+  collection pauses.
 - **Setup:** one MI325X, 8 host cores in the container's cpuset, threads
   capped at 8; node load at most 18 (other workloads on the node's other GPUs
   and cores). 10 interleaved rounds, side order rotated per round; each cell
@@ -416,11 +420,16 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
   over 3 rounds.
 - **Reading:** `shared_context` and `batching` are 15–19% faster than the
   engine at the median at every length, with every interval on the better
-  side. `exact` is level at 128 and 2,048 tokens and slightly slower at 32
+  side. `exact` is level at 128 tokens and slightly slower at 32
   and 512 (+2.5% [+1.6, +3.5] and +0.3% [+0.1, +0.5] at the median), with
   those intervals on the worse side: an open cell, not yet explained (the
-  4B's `exact` is 1–3% faster than its engine on CPU). The 0.3B is the size
-  to serve on a CPU.
+  4B's `exact` is 1–3% faster than its engine on CPU). The 2,048-token row
+  has 3 rounds, below the standard's 5, and gives no verdict; with 6
+  requests per round no row reports a p95. The 0.3B is the size to serve on
+  a CPU.
+- **Later commits:** `a1e1b4ccb` also freezes the heap after each load pass, which leaves fewer
+objects for a request's garbage collections to walk: it can only shorten
+  pauses, so the run stands for the head.
 
 0.8B on CPU, p50 ms, engine and Δ against it (mean [95% interval]):
 

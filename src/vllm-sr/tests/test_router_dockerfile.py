@@ -249,3 +249,10 @@ def test_rocm_image_keeps_the_gemm_kernels_of_every_gpu_it_serves() -> None:
     for kept in ("lib/rocblas/library", "lib/hipblaslt/library", "share/miopen/db"):
         assert kept in slim
     assert "find lib -xtype l -delete" in slim
+
+
+def test_rocm_image_holds_the_cxx_runtime_it_replaces() -> None:
+    torch_rocm = stages()["torch-rocm"][1]
+    assert "apt-mark hold libstdc++6 libgcc-s1 libgomp1" in torch_rocm
+    vllm_sr = stages()["vllm-sr"][1]
+    assert vllm_sr.index('python -c "import torch"') > vllm_sr.index("apt-get install")

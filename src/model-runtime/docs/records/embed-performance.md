@@ -28,7 +28,7 @@ whose interval straddles zero is level.
   workloads, on other vCPUs).
 - **ROCm:** one AMD Instinct MI325X (gfx942, node B GPU2) for both sides, with
   host vCPUs 80–87 in docker cgroup cpusets. The runtime side runs in the
-  router's ROCm image, `mr-p24-lead/extproc-rocm72rt:a580be6b9`: vLLM's ROCm
+  router's ROCm image, `Dockerfile.extproc` at `a580be6b9` (`ACCELERATOR=rocm`): vLLM's ROCm
   PyTorch 2.12.0+git6bbd260 (AOTriton 0.13.50, ROCm 7.2.3) and Triton 3.7.0.
   The legacy side runs in the legacy router image: ONNX Runtime 1.22.1 ROCm
   with the CK flash-attention operator library. Host load 2–11 of 160.

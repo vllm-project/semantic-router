@@ -143,7 +143,7 @@ models' batches and graph captures meet:
 
 ## The router's ROCm image: vLLM's ROCm PyTorch
 
-`mr-p24-lead/extproc-rocm72rt:a580be6b9` takes PyTorch 2.12.0+git6bbd260
+The router's ROCm image, `Dockerfile.extproc` at `a580be6b9` (`ACCELERATOR=rocm`), takes PyTorch 2.12.0+git6bbd260
 (AOTriton 0.13.50) and the ROCm 7.2.3 libraries from vLLM's ROCm image,
 pinned by digest, with Triton 3.7.0, FLA 0.5.2 and `causal-conv1d` 1.7.0. At
 `1bd99cd37`, whose runtime code is the PR's (device lock and thread-local

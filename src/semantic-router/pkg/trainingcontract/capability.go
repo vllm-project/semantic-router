@@ -509,13 +509,15 @@ func DefaultRegistry() *CapabilityRegistry {
 	// The built-in model runtime (src/model-runtime) serves Router classifiers
 	// over its OpenAPI 2.x contract: ModernBERT sequence and token checkpoints
 	// loaded from safetensors, with FP32 weights and heads on every device.
+	// Only the devices with readiness references qualify a classifier; the
+	// runtime's CUDA and Metal paths are unvalidated (design section 11).
 	_ = r.RegisterRuntime(RuntimeAdapterDescriptor{
 		ID:                  "runtime/model-runtime@v1",
 		Component:           Component{Name: "model-runtime", Version: "1"},
 		DisplayName:         "vLLM Semantic Router Model Runtime",
 		SupportedTargets:    []Target{LabelScores, Spans},
 		AcceptedFormats:     []CapabilityID{"format/safetensors@v1"},
-		SupportedHardware:   []CapabilityID{"hardware/cpu@v1", "hardware/cuda@v1", "hardware/rocm@v1", "hardware/metal@v1"},
+		SupportedHardware:   []CapabilityID{"hardware/cpu@v1", "hardware/rocm@v1"},
 		SupportedPrecisions: []CapabilityID{"precision/fp32@v1"},
 		Connector:           "sr.model-runtime.openapi.v2",
 	})

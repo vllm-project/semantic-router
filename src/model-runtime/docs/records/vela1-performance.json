@@ -921,7 +921,7 @@
    },
    "rounds": 5,
    "runtime_commit": "a580be6b9b15fecdbdfab102dbc8429f97db5b82",
-   "runtime_env": "the router's shipped ROCm image mr-p24-lead/extproc-rocm72rt:a580be6b9 (vLLM's ROCm PyTorch, AOTriton 0.13.50, ROCm 7.2.3 userspace), its own runtime package, as uid 65532: stack I uid 65532 python 3.12.15 torch 2.12.0+git6bbd260 hip 7.2.53211 triton 3.7.0 fla-core 0.5.2 numpy 2.5.3 tokenizers 0.23.2"
+   "runtime_env": "the router's shipped ROCm image, Dockerfile.extproc at a580be6b9 with ACCELERATOR=rocm (vLLM's ROCm PyTorch, AOTriton 0.13.50, ROCm 7.2.3 userspace), its own runtime package, as uid 65532: stack I uid 65532 python 3.12.15 torch 2.12.0+git6bbd260 hip 7.2.53211 triton 3.7.0 fla-core 0.5.2 numpy 2.5.3 tokenizers 0.23.2"
   },
   "jobs": {
    "domain": {
@@ -1400,7 +1400,7 @@
     "candidate": "max_speed with a BF16 copy of the linears (heads FP32), recorded before any consent",
     "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
     "runtime_commit": "973842d9edf7172097a9b7f1b1bff076d1e78056",
-    "runtime_env": "decision20-lux-runtime image: PyTorch 2.12.0 ROCm 7.2"
+    "runtime_env": "the Decision 2.0 track's runtime image: PyTorch 2.12.0 ROCm 7.2"
    },
    "jobs": {
     "domain": {

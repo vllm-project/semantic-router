@@ -37,7 +37,7 @@ on the same node, inputs and devices.
   `MKL_NUM_THREADS` too).
 - **ROCm:** one AMD Instinct MI325X (gfx942) per run, on 8 host cores of the
   GPU's NUMA node, in the router's ROCm image
-  `mr-p24-lead/extproc-rocm72rt:a580be6b9`: PyTorch 2.12.0+git6bbd260 with
+  `Dockerfile.extproc` at `a580be6b9` (`ACCELERATOR=rocm`): PyTorch 2.12.0+git6bbd260 with
   AOTriton 0.13.50 and the ROCm 7.2.3 libraries from vLLM's ROCm image, Triton
   3.7.0, FLA 0.5.2 and causal-conv1d 1.7.0, with Transformers 5.17.0 added for
   the bundled side.
@@ -50,8 +50,10 @@ on the same node, inputs and devices.
   bookkeeping (`1ce0bafc9`: one `cancelled()` check per answered job, one
   `done()` check per planned job). The device lock, the per-model kernel
   choices and the thread-local graph capture are GPU-only, and load retries,
-  placement by plugin name and the advertised limits run at load, so the run
-  stands for the head, except where the huge-page default (`129be34ea`)
+  placement by plugin name and the advertised limits run at load. `a1e1b4ccb`
+  also freezes the heap after each load pass, which leaves fewer objects for a
+  request's garbage collections to walk: it can only shorten pauses. So the
+  run stands for the head, except where the huge-page default (`129be34ea`)
   changes how CPU memory is allocated: the rows re-timed under it are in the
   CPU section. The ROCm rows' commits are in their section.
 - **Raw results:** `decision1-performance.json`: every run without paths
@@ -106,7 +108,7 @@ the decoders' `shared_context`.
 ## ROCm
 
 Every row is the 16:53-standard A/B in the router's ROCm image,
-`mr-p24-lead/extproc-rocm72rt:a580be6b9`: PyTorch 2.12.0+git6bbd260 (AOTriton
+`Dockerfile.extproc` at `a580be6b9` (`ACCELERATOR=rocm`): PyTorch 2.12.0+git6bbd260 (AOTriton
 0.13.50) and the ROCm 7.2.3 libraries from vLLM's ROCm image, Triton 3.7.0,
 FLA 0.5.2 and `causal-conv1d` 1.7.0. Both sides run in that image, with
 Transformers 5.17.0 and `regex` appended to `PYTHONPATH` for the bundled side.

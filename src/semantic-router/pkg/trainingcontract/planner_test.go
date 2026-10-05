@@ -160,11 +160,20 @@ func TestPlanSupportedNeuralQualifiesOnTheModelRuntime(t *testing.T) {
 	}
 
 	req.QualificationTargets = []QualificationTargetRequest{
-		{Key: "runtime-fp16", Runtime: "runtime/model-runtime@v1", Hardware: "hardware/cuda@v1", Precision: "precision/fp16@v1"},
+		{Key: "runtime-fp16", Runtime: "runtime/model-runtime@v1", Hardware: "hardware/rocm@v1", Precision: "precision/fp16@v1"},
 	}
 	resp = planner.Plan(req)
 	if resp.Valid || len(resp.Diagnostics) != 1 || resp.Diagnostics[0].Code != CodeIncompatiblePrecision {
 		t.Fatalf("the model runtime serves classifiers in FP32 only, got valid=%v diagnostics=%+v", resp.Valid, resp.Diagnostics)
+	}
+
+	for _, hardware := range []CapabilityID{"hardware/cuda@v1", "hardware/metal@v1"} {
+		req.QualificationTargets = []QualificationTargetRequest{
+			{Key: "runtime-unvalidated", Runtime: "runtime/model-runtime@v1", Hardware: hardware, Precision: "precision/fp32@v1"},
+		}
+		if resp = planner.Plan(req); resp.Valid {
+			t.Fatalf("the model runtime has no readiness reference on %s, but the plan is valid", hardware)
+		}
 	}
 }
 
@@ -351,7 +360,7 @@ func TestExtensionWithoutEditingSwitchStatement(t *testing.T) {
 			{
 				Key:       "model-runtime",
 				Runtime:   "runtime/model-runtime@v1",
-				Hardware:  "hardware/cuda@v1",
+				Hardware:  "hardware/rocm@v1",
 				Precision: "precision/fp32@v1",
 			},
 		},
@@ -426,7 +435,7 @@ func TestPlanEnforcesDescriptorConstraints(t *testing.T) {
 			TrainingPrecision: "precision/fp16@v1",
 			Parameters:        map[string]any{"k": 8.0, "layers": []any{256.0, 128.0}},
 			QualificationTargets: []QualificationTargetRequest{{
-				Key: "runtime-cuda", Runtime: "runtime/model-runtime@v1", Hardware: "hardware/cuda@v1", Precision: "precision/fp32@v1",
+				Key: "runtime-rocm", Runtime: "runtime/model-runtime@v1", Hardware: "hardware/rocm@v1", Precision: "precision/fp32@v1",
 			}},
 		}
 	}
