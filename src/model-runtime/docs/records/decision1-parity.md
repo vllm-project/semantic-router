@@ -28,7 +28,7 @@ holds on all four scored panels, on CPU on subsets of them. That is design
   profile and commit, with every panel's counts. From `c22bb15cd` an entry
   also carries what the engine ran: graph statistics per layer stack and the
   reduced copy. A P1-4 entry names the models served before it in the same
-  process (`served_before`).
+  process (`served_before`), and `concurrent` when they were asked at once.
 
 ## Exact profile, ROCm, four scored panels
 
@@ -97,6 +97,23 @@ B's own choices. Before: `ed4c500cc`, the runtime before the fix. After:
   key of all seven built-in models and for unrecorded neighbours (other
   numbers, flipped flags, another dtype), and two models' scopes alternate on
   FLA's real gated delta rule, each launch running its own configuration.
+
+**Under concurrent requests.** The cases above ask one model at a time. With
+`--concurrent 8`, every 8 prompts go to Sol and to Eos at once, so the two
+models' batches and graph captures meet:
+
+| Commit | Sol identical | Failed requests (Sol / Eos) | Health after | Sol's graphs |
+| --- | --- | --- | --- | --- |
+| `d7b06a6f9` (no device lock) | 1 / 10,653 | 10,652 / 10,652 | both degraded | 1 capture, failed |
+| `79908fad8` (device lock) | 10,653 / 10,653 | 0 / 0 | both ready | 118 captures, 10,430 replays, 0 failed |
+
+- **Before the lock**, one model's graph capture (a shape's second use) ran
+  while the other model launched work on the device; ROCm invalidated the
+  capture (`hipErrorStreamCaptureInvalidated`), whatever the capture mode, and
+  both models degraded. A runtime that may exit on a device error exits.
+- **With the lock** (`GPUAccelerator.execute` serializes a GPU's device calls,
+  design §9), Sol stays byte-identical on its own kernel choices while Eos
+  runs its own, at the same time.
 
 ## Exact profile, CPU
 
@@ -239,7 +256,7 @@ python3 tools/decision1_parity.py reference --package PACKAGE_DIR --repo vllm-sr
 python3 tools/decision1_parity.py native --model vllm-sr/Decision-1.0-Kai-0.6B --cache-dir HF_CACHE \
   --device rocm:0|cpu [--threads 16] [--profile batching] --panel ... --answers native.jsonl
 python3 tools/decision1_parity.py compare reference.jsonl native.jsonl --output compare.json
-# P1-4: Sol served after Eos in one process, against Sol's reference
+# P1-4: Sol served after Eos in one process, against Sol's reference (add --concurrent 8 to ask both at once)
 python3 tools/decision1_parity.py native --model vllm-sr/Decision-1.0-Sol-2B --also vllm-sr/Decision-1.0-Eos-0.8B \
   --cache-dir HF_CACHE --device rocm:0 --panel ... --answers sol-after-eos.jsonl
 pytest tests/test_decision1_*.py tests/test_kernel_choices.py

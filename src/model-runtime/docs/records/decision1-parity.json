@@ -3892,6 +3892,104 @@
     }
    },
    "engine": null
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "79908fad8",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "concurrent": 8,
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d7b06a6f9",
+   "served_before": [
+    "Decision-1.0-Eos-0.8B"
+   ],
+   "concurrent": 8,
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 0,
+     "questions": 13094,
+     "decision_changes": 6547,
+     "error_mismatches": 4,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 0,
+     "questions": 4550,
+     "decision_changes": 2275,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 0,
+     "questions": 462,
+     "decision_changes": 231,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1,
+     "questions": 3599,
+     "decision_changes": 1999,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   },
+   "engine": null
   }
  ]
 }
