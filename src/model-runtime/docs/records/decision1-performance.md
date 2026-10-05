@@ -446,7 +446,8 @@ Throughput, requests/s, as above:
   (parity record). On the encoders every question type present runs its
   stack over all six rows; on the decoders the six questions are one padded
   batch of six rows, as the bundled runtime runs them.
-- **One exact router row is worse: Kai's.** At 10 rounds its p50 is
+- **Before the huge-page default (below), one exact router row is worse:
+  Kai's.** At 10 rounds its p50 is
   +66.1 ms [+5.1, +127.1] (867.8 → 933.9 ms, +7.6%) and its p95 +74.6 ms
   [+11.2, +138.1]; one at a time it serves −0.07 requests/s [−0.11, −0.02],
   at C = 1 −0.06 [−0.13, −0.00], and at C = 4 and 16 it is level. The

@@ -3,9 +3,10 @@
 On the exact profile (answers identical to the packages' engine,
 `vela2-parity.md`) the `vela2` family is faster than the Vela 2.0 engine on
 every measured row on ROCm (15–30% at the median with one caller, 1.2–1.6×
-the requests per second with four) and level with it or better on CPU,
-where both run the same operations on MKL, except the 0.8B at 32 and 512
-tokens (0.3–2.5% slower, open). The opt-in approximate profiles serve the
+the requests per second with four). On CPU, where both run the same
+operations on MKL, the 0.3B is level with it or better; the 0.8B is 0.3–2.5%
+slower at 32 and 512 tokens (open), and the 4B's CPU timings are informative
+only. The opt-in approximate profiles serve the
 0.8B 1.6–2.4× and the 4B and 9B 1.8–2.8× faster than the engine on ROCm, the
 4B 1.5× and the 0.8B 1.2× on CPU, and the 0.3B up to 1.9× the engine's
 throughput with four callers. On CPU, `max_speed` runs the 0.3B on a
@@ -347,7 +348,8 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
   forward as the engine does, and the approximate profiles run the packed
   trees, `batching` also several requests per forward.
 
-4B on CPU (16 cores, 8 requests per length, concurrency 1, seconds):
+4B on CPU (16 cores, 8 requests per length, concurrency 1, seconds;
+informative: no rounds or intervals, no verdict):
 
 | Tokens | exact | shared_context | engine |
 | --- | --- | --- | --- |
@@ -427,7 +429,8 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
   side. `exact` is level at 128 tokens and slightly slower at 32
   and 512 (+2.5% [+1.6, +3.5] and +0.3% [+0.1, +0.5] at the median), with
   those intervals on the worse side: an open cell, not yet explained (the
-  4B's `exact` is 1–3% faster than its engine on CPU). The 2,048-token row
+  4B's `exact` reads 1–3% faster than its engine on CPU, an informative
+  timing without rounds). The 2,048-token row
   has 3 rounds, below the standard's 5, and gives no verdict; with 6
   requests per round no row reports a p95. The 0.3B is the size to serve on
   a CPU.
@@ -463,7 +466,8 @@ the router's legacy runtime at `61aa7eb2d` (`tools/legacy_parity.py legacy`)
 on its 547-input corpus: the repository's E2E prompts plus long inputs
 derived from them. The Vela 2.0 0.3B answers the same inputs, one request
 each, at concurrency 1 (`tools/vela2_bench.py --prompts`); the legacy column
-is the sum of a prompt's seven calls.
+is the sum of a prompt's seven calls. One run per side: informative, no
+verdict.
 
 CPU (the legacy candle path, 16 cores; the 545 inputs on which all seven
 legacy calls succeeded):
