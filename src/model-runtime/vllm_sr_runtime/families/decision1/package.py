@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from ...errors import PackageError
-from ...registry.artifacts import named_files, safe_relative, sha256_json
+from ...registry.artifacts import named_files, read_json, safe_relative, sha256_json
 
 POINTER = {"decision_format": "vllm-sr-decision", "format_version": 1}
 VELA = "vela-encoder"
@@ -82,13 +82,6 @@ class Decision1Package:
 
     def path(self, name: str) -> Path:
         return self.root / name
-
-
-def read_json(path: Path) -> Any:
-    try:
-        return json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise PackageError(f"cannot read {Path(path).name}: {exc}") from exc
 
 
 def read_pointer(root: Path) -> dict[str, Any] | None:

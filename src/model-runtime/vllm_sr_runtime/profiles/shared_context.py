@@ -16,9 +16,9 @@ differ from the exact path by rounding.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
-from ..plugins.base import Batch, Job, LoadedModel, Profile, RenderedItem
+from ..plugins.base import Batch, Job, LoadedModel, Profile, RenderedItem, WorkItem
 from ..scheduler.planner import exact_split, padded
 
 # Shared-prefix tokens a request must save before tree mode pays off, as
@@ -78,31 +78,30 @@ class SharedContextProfile(Profile):
     def __init__(self, policy: SharePolicy | None = None):
         self.policy = policy or SharePolicy()
         self.threshold = self.policy.min_shared_tokens
-        self.model: LoadedModel | None = None
+        self.model: LoadedModel[Any, Any] | None = None
 
-    def available(self, model: LoadedModel) -> str | None:
-        engine = model.engine_model
-        if not getattr(engine, "supports_shared_context", False):
+    def available(self, model: LoadedModel[Any, Any]) -> str | None:
+        if not model.engine_model.supports_shared_context:
             return "the loaded engine model has no shared-context forward"
         if self.policy.mode != "tree" or self.policy.tau > 0:
             return "only tree mode with tau 0 is implemented"
-        self.model = model
-        if self.threshold is None:
-            spec = getattr(model, "spec", None)
-            config = spec.backbone.config if spec is not None else {}
-            self.threshold = auto_shared_tokens(
-                config, getattr(engine, "graphs", None) is not None
-            )
         return None
 
-    def share(self, items: list[RenderedItem], token_budget: int | None) -> int:
+    def bind(self, model: LoadedModel[Any, Any]) -> None:
+        self.model = model
+        engine = model.engine_model
+        if self.threshold is None:
+            config = engine.spec.backbone.config if engine.spec is not None else {}
+            self.threshold = auto_shared_tokens(config, engine.replays_graphs)
+
+    def share(self, items: list[WorkItem], token_budget: int | None) -> int:
         """The prefix this job shares, or 0 when it runs exactly."""
         decided = self.model.shared_context(items, token_budget) if self.model else None
         if decided is not None:
             return decided
         if len(items) < self.policy.min_questions:
             return 0
-        prefix = shared_prefix(items, self.policy.align)
+        prefix = shared_prefix(cast("list[RenderedItem]", items), self.policy.align)
         if prefix < MIN_SHARED_PREFIX or (len(items) - 1) * prefix < (
             self.threshold or 0
         ):

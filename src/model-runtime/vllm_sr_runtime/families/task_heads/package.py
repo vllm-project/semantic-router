@@ -14,7 +14,6 @@ code and training artifacts are never read.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -22,7 +21,7 @@ from typing import Any
 from ...errors import PackageError
 from ...heads.pooled import PooledLayout, is_pooled
 from ...heads.relevance import RelevanceLayout, is_reranker
-from ...registry.artifacts import sha256_json
+from ...registry.artifacts import read_json, sha256_json
 
 MODEL_TYPE = "modernbert"
 DECODER_TYPE = "qwen3"
@@ -54,16 +53,6 @@ FETCH_PATTERNS = (
     "onnx/model_layer_*.onnx",
     "onnx/weights.data",
 )
-
-
-def read_json(path: Path) -> dict[str, Any]:
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise PackageError(f"{path.name} is not readable JSON: {exc}") from exc
-    if not isinstance(value, dict):
-        raise PackageError(f"{path.name} must hold a JSON object")
-    return value
 
 
 def is_bio(labels: tuple[str, ...]) -> bool:
@@ -128,7 +117,7 @@ def labels_of(config: dict[str, Any]) -> tuple[str, ...]:
 def detect(root: Path) -> bool:
     """Cheap ownership test: a ModernBERT task checkpoint, embedder or reranker, or a Qwen3 embedder."""
     try:
-        config = read_json(root / "config.json")
+        config = read_json(root / "config.json", mapping=True)
     except PackageError:
         return False
     model_type, architectures = config.get("model_type"), set(
@@ -146,7 +135,7 @@ def read(root: Path, selection: tuple[int, int] | None = None) -> TaskPackage:
 
     ``selection`` pins a reranker's served pair-scorer exit.
     """
-    config = read_json(root / "config.json")
+    config = read_json(root / "config.json", mapping=True)
     if config.get("model_type") in (MODEL_TYPE, DECODER_TYPE) and not set(
         config.get("architectures") or ()
     ) & set(ARCHITECTURES):
@@ -167,7 +156,7 @@ def read(root: Path, selection: tuple[int, int] | None = None) -> TaskPackage:
         )
     labels = labels_of(config)
     path = root / OPERATING_POINT
-    policy = read_json(path) if path.is_file() else None
+    policy = read_json(path, mapping=True) if path.is_file() else None
     if architectures[0] == SEQUENCE:
         problem = config.get("problem_type") or "single_label_classification"
         kinds = {

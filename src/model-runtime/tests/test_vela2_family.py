@@ -182,7 +182,7 @@ def test_decoder_shared_context_path_runs_one_parts_pass(models, monkeypatch) ->
         model.engine_model, "tree", lambda batch: calls.append(batch) or tree(batch)
     )
     exact = model.run(plan.items)
-    packed = model.run(plan.items, shared_prefix=1)
+    packed = model.run_shared(plan.items, 1)
     assert [c.layout for c in calls] == ["rows", "packed"]
     assert len(calls[0].prefixes) == 2 and len(calls[1].prefixes) == 1
     for exact_tree, packed_tree in zip(exact, packed, strict=True):
@@ -198,6 +198,7 @@ def test_shared_context_profile_packs_only_decoder_trees(models, name) -> None:
     model = models[name]
     profile = SharedContextProfile()
     assert profile.available(model) is None
+    profile.bind(model)
     plan = model.plan(GOLDEN_STATE, GOLDEN_QUESTIONS)
     job = Job(items=plan.items, deadline=None, enqueued=0.0, profile=profile.name)
     batches = profile.plan([job], model.forward_token_budget())
@@ -205,7 +206,7 @@ def test_shared_context_profile_packs_only_decoder_trees(models, name) -> None:
     surface = SurfacePlan("decisions", plan.items, plan.input_tokens, plan)
     assert model.finish_surface(
         surface, model.run_approximate(plan.items)
-    ) == model.finish_surface(surface, model.run(plan.items, shared_prefix=1))
+    ) == model.finish_surface(surface, model.run_shared(plan.items, 1))
 
 
 def test_packed_encoder_batches_match_padded_ones(models) -> None:
