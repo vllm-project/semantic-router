@@ -64,11 +64,14 @@ def test_a_missing_extra_names_its_install(nano, monkeypatch):
         family.describe(package)
 
 
-def test_nano_caps_its_text_graph_threads(nano, tmp_path):
+def test_nano_sizes_its_text_graph_pool(nano, tmp_path):
     family = MultimodalEmbeddingFamily()
-    assert family.describe(family.verify(PackageRef(nano))).graph_threads == {"text": 8}
+    spec = family.describe(family.verify(PackageRef(nano)))
+    assert spec.graph_threads == {"text": 12}
+    assert spec.graph_spin_us == {"text": 10_000}
     mini = omni.write_bundle(tmp_path / "vela-1.0-omni-mini", variant="mini")
-    assert family.describe(family.verify(PackageRef(mini))).graph_threads == {}
+    mini_spec = family.describe(family.verify(PackageRef(mini)))
+    assert mini_spec.graph_threads == {} and mini_spec.graph_spin_us == {}
 
 
 def test_the_default_engine_serves_a_bundle_on_onnxruntime(tmp_path):
@@ -292,6 +295,55 @@ def test_a_batch_answers_every_input_as_it_answers_alone(model):
     plan = model.plan_surface("embeddings", request({"input": inputs}))
     assert model.batch_invariant
     assert model.run(plan.items) == [model.run([item])[0] for item in plan.items]
+
+
+def test_a_batch_runs_its_images_one_at_a_time_beside_text_and_audio(
+    model, monkeypatch
+):
+    image = base64.b64encode(golden_image()).decode()
+    sound = base64.b64encode(golden_audio()).decode()
+    picture = {
+        "type": "image_url",
+        "image_url": {"url": f"data:image/png;base64,{image}"},
+    }
+    inputs = [
+        picture,
+        "route this request",
+        picture,
+        {"type": "input_audio", "input_audio": {"data": sound, "format": "wav"}},
+        "a second request",
+        picture,
+    ]
+    plan = model.plan_surface("embeddings", request({"input": inputs}))
+    lock = threading.Lock()
+    images_running, most_images = [0], [0]
+    threads: dict[str, set[str]] = {}
+    embed = type(model)._embed
+
+    def recording(self, item):
+        with lock:
+            threads.setdefault(item.modality, set()).add(
+                threading.current_thread().name
+            )
+            if item.modality == "image":
+                images_running[0] += 1
+                most_images[0] = max(most_images[0], images_running[0])
+        try:
+            time.sleep(0.01)
+            return embed(self, item)
+        finally:
+            with lock:
+                if item.modality == "image":
+                    images_running[0] -= 1
+
+    monkeypatch.setattr(type(model), "_embed", recording)
+    vectors = model.run(plan.items)
+    monkeypatch.undo()
+    assert vectors == [model.run([item])[0] for item in plan.items]
+    assert most_images[0] == 1
+    assert threads["image"] == {threading.current_thread().name}
+    shared = threads["text"] | threads["audio"]
+    assert all(name.startswith("vllm-sr-omni_") for name in shared)
 
 
 def test_media_inputs_carry_a_scheduler_cost_and_text_counts_its_tokens(model):
