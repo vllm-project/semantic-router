@@ -87,7 +87,7 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 		mcpManager:    mcpManager,
 		Close: func() error {
 			if mcpManager != nil {
-				mcpManager.DisconnectAll()
+				mcpManager.Close()
 			}
 			var projectionClose error
 			if cp != nil {

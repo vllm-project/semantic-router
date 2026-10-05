@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
+
+var errManagerClosed = errors.New("MCP manager is closed")
 
 // Manager is the MCP client manager. Server configs are persisted in workflowstore;
 // active client connections remain in memory only.
@@ -19,6 +22,8 @@ type Manager struct {
 	connectAttempts    map[string]*clientConnectAttempt
 	configs            map[string]*ServerConfig
 	store              *workflowstore.Store
+	closed             bool
+	connectWG          sync.WaitGroup
 	connectClientFn    func(context.Context, *Client) error
 	disconnectClientFn func(*Client) error
 }
@@ -323,6 +328,10 @@ func (m *Manager) TestConnection(ctx context.Context, config *ServerConfig) erro
 // ConnectEnabled connects to all enabled servers
 func (m *Manager) ConnectEnabled(ctx context.Context) {
 	m.mu.RLock()
+	if m.closed {
+		m.mu.RUnlock()
+		return
+	}
 	configs := make([]*ServerConfig, 0)
 	for _, config := range m.configs {
 		if config.Enabled {
@@ -333,13 +342,35 @@ func (m *Manager) ConnectEnabled(ctx context.Context) {
 
 	for _, config := range configs {
 		go func(c *ServerConfig) {
-			if err := m.Connect(ctx, c.ID); err != nil {
-				log.Printf("[MCP-Manager] ConnectEnabled failed: error_class=%T", err)
-			} else {
+			err := m.Connect(ctx, c.ID)
+			if err == nil {
 				log.Printf("[MCP-Manager] ConnectEnabled succeeded")
+				return
+			}
+			if !errors.Is(err, errManagerClosed) {
+				log.Printf("[MCP-Manager] ConnectEnabled failed: error_class=%T", err)
 			}
 		}(config)
 	}
+}
+
+// Close permanently stops new connections, cancels active connection attempts,
+// disconnects published clients, and waits for all connection goroutines to
+// finish their cleanup before returning.
+func (m *Manager) Close() {
+	m.mu.Lock()
+	if !m.closed {
+		m.closed = true
+		for id := range m.clients {
+			_ = m.disconnectClientLocked(id)
+		}
+	}
+	m.mu.Unlock()
+
+	// Connect adds to connectWG while holding m.mu, and rejects new work after
+	// m.closed is set. Waiting after releasing m.mu lets in-flight Connect calls
+	// acquire the lock to retire their stale generations.
+	m.connectWG.Wait()
 }
 
 // DisconnectAll disconnects all connections

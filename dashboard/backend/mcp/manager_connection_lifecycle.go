@@ -16,6 +16,10 @@ type clientConnectAttempt struct {
 // Connect establishes a connection to the specified server generation.
 func (m *Manager) Connect(ctx context.Context, id string) error {
 	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return errManagerClosed
+	}
 	config, ok := m.configs[id]
 	if !ok {
 		m.mu.Unlock()
@@ -35,7 +39,9 @@ func (m *Manager) Connect(ctx context.Context, id string) error {
 	attempt := &clientConnectAttempt{client: client, cancel: cancel}
 	m.clients[id] = client
 	m.connectAttempts[id] = attempt
+	m.connectWG.Add(1)
 	m.mu.Unlock()
+	defer m.connectWG.Done()
 
 	connectErr := m.connectClient(connectCtx, client)
 	cancel()
