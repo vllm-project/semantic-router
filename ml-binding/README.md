@@ -80,8 +80,16 @@ understand the version 2 SVM parameters.
   Unversioned KNN files use these corrected rules too. Revalidate held-out
   routing results when upgrading: old Rust used raw Euclidean distance and
   dataset-relative latency scaling, which disagreed with Python training.
+- KMeans version 2 stores a score per (cluster, candidate). The loader checks
+  the candidate set and objective ids, feature dimension, distance, tie-break,
+  fallback cells and finiteness once. Scoring is a linear scan over centroids
+  with squared L2 summed in index order, so the cluster matches Python bit for
+  bit; ties go to the lowest cluster or candidate index. `Score` returns the
+  cluster id and every candidate's score, and the router picks the best one
+  present in the request. Unversioned files load with a score of 1 for each
+  cluster's model and 0 for the rest.
 
-The KNN/SVM loaders reject malformed feature shapes, nonfinite values, and
+The KNN/SVM/KMeans loaders reject malformed feature shapes, nonfinite values, and
 inconsistent sample or support counts. Their request feature-dimension
 mismatches return an inference error through the Go/C ABI instead of reaching
 a matrix-operation panic.

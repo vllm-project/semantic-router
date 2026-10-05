@@ -30,6 +30,8 @@ void* ml_knn_from_json(char* json);
 void* ml_kmeans_new(int num_clusters);
 void ml_kmeans_free(void* handle);
 char* ml_kmeans_select(void* handle, double* query, size_t query_len);
+int ml_kmeans_score(void* handle, double* query, size_t query_len, double* scores, size_t scores_len);
+char* ml_kmeans_candidates(void* handle);
 int ml_kmeans_is_trained(void* handle);
 char* ml_kmeans_to_json(void* handle);
 void* ml_kmeans_from_json(char* json);
@@ -49,6 +51,7 @@ void ml_free_string(char* ptr);
 import "C"
 
 import (
+	"encoding/json"
 	"errors"
 	"sync"
 	"unsafe"
@@ -196,6 +199,49 @@ func (s *KMeansSelector) Select(query []float64) (string, error) {
 	defer C.ml_free_string(result)
 
 	return C.GoString(result), nil
+}
+
+// Score writes one score per candidate, in Candidates order, and returns the nearest cluster id.
+func (s *KMeansSelector) Score(query, scores []float64) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.handle == nil {
+		return 0, errors.New("selector not initialized")
+	}
+	if len(query) == 0 || len(scores) == 0 {
+		return 0, errors.New("KMeans scoring needs a query and a score buffer")
+	}
+
+	// float64 and C.double share a layout, so both slices are passed without copying.
+	cluster := C.ml_kmeans_score(s.handle,
+		(*C.double)(unsafe.Pointer(&query[0])), C.size_t(len(query)),
+		(*C.double)(unsafe.Pointer(&scores[0])), C.size_t(len(scores)))
+	if cluster < 0 {
+		return 0, errors.New("KMeans scoring failed")
+	}
+	return int(cluster), nil
+}
+
+// Candidates returns the trained candidate set in score order.
+func (s *KMeansSelector) Candidates() ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.handle == nil {
+		return nil, errors.New("selector not initialized")
+	}
+
+	result := C.ml_kmeans_candidates(s.handle)
+	if result == nil {
+		return nil, errors.New("KMeans candidates unavailable")
+	}
+	defer C.ml_free_string(result)
+
+	var names []string
+	if err := json.Unmarshal([]byte(C.GoString(result)), &names); err != nil {
+		return nil, err
+	}
+	return names, nil
 }
 
 // IsTrained returns whether the model has been loaded

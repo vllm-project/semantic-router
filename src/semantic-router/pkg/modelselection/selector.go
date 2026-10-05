@@ -34,6 +34,7 @@ package modelselection
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -45,6 +46,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
+
+// ErrNoEligibleCandidate means none of the request's refs is in the trained candidate set.
+var ErrNoEligibleCandidate = errors.New("no requested model is in the trained candidate set")
 
 // UseLinfa enables Rust/Linfa implementations for KNN, KMeans, SVM.
 // When true, uses ml-binding (faster, battle-tested Linfa algorithms).
@@ -510,6 +514,7 @@ type SavedModelData struct {
 	Kernel        string                         `json:"kernel,omitempty"`
 	EffWeight     float64                        `json:"efficiency_weight,omitempty"`
 	Gamma         float64                        `json:"gamma,omitempty"`
+	FormatVersion int                            `json:"format_version,omitempty"` // v2 artifacts must load natively
 }
 
 // loadBaseTrainingData loads training data from JSON into the base selector
@@ -682,6 +687,7 @@ type KMeansSelector struct {
 	numClusters      int
 	efficiencyWeight float64
 	mlKMeans         *ml_binding.KMeansSelector
+	candidates       []string // trained candidate set, in native score order
 }
 
 // NewKMeansSelector creates a new KMeans selector using Linfa
@@ -707,6 +713,12 @@ func NewKMeansSelectorWithEfficiency(numClusters int, efficiencyWeight float64) 
 func (s *KMeansSelector) replaceMLKMeans(next *ml_binding.KMeansSelector) {
 	previous := s.mlKMeans
 	s.mlKMeans = next
+	s.candidates = nil
+	if next != nil && next.IsTrained() {
+		if names, err := next.Candidates(); err == nil {
+			s.candidates = names
+		}
+	}
 
 	if previous != nil && previous != next {
 		previous.Close()
@@ -737,6 +749,9 @@ func (s *KMeansSelector) LoadFromJSON(data []byte) error {
 	// Also load into ml-binding
 	kmeans, err := ml_binding.KMeansFromJSON(string(data))
 	if err != nil {
+		if modelData.FormatVersion >= 2 {
+			return fmt.Errorf("KMeans v%d artifact failed native validation: %w", modelData.FormatVersion, err)
+		}
 		// Fallback: train ml-binding from loaded training data
 		s.trainMLBinding()
 		return nil
@@ -792,21 +807,32 @@ func (s *KMeansSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (
 	// Build feature vector: embedding + category one-hot (matches Python training format)
 	// Uses CombineEmbeddingWithCategory from features.go to ensure consistency
 	featureVector := CombineEmbeddingWithCategory(ctx.QueryEmbedding, ctx.CategoryName)
+	return s.selectFeatures(featureVector, refs)
+}
 
-	// Use ml-binding for selection
-	selectedModel, err := s.mlKMeans.Select(featureVector)
+// selectFeatures picks the best-scoring candidate present in refs, lowest candidate index on ties.
+func (s *KMeansSelector) selectFeatures(features []float64, refs []config.ModelRef) (*config.ModelRef, error) {
+	if s.mlKMeans == nil || len(s.candidates) == 0 {
+		return nil, fmt.Errorf("KMeans: model not trained - load pretrained model first")
+	}
+	scores := make([]float64, len(s.candidates))
+	cluster, err := s.mlKMeans.Score(features, scores)
 	if err != nil {
-		return nil, fmt.Errorf("KMeans (Linfa) selection failed: %w", err)
+		return nil, fmt.Errorf("KMeans (Linfa) scoring failed: %w", err)
 	}
 
-	// Find the selected model in refs
 	modelIndex := buildModelIndex(refs)
-	if idx, ok := modelIndex[selectedModel]; ok {
-		logging.Infof("KMeans (Linfa) selected model %s", selectedModel)
-		return &refs[idx], nil
+	best := -1
+	for i, name := range s.candidates {
+		if _, ok := modelIndex[name]; ok && (best < 0 || scores[i] > scores[best]) {
+			best = i
+		}
 	}
-
-	return nil, fmt.Errorf("KMeans: selected model %s not found in available refs", selectedModel)
+	if best < 0 {
+		return nil, fmt.Errorf("KMeans: %w", ErrNoEligibleCandidate)
+	}
+	logging.Infof("KMeans (Linfa) selected model %s from cluster %d", s.candidates[best], cluster)
+	return &refs[modelIndex[s.candidates[best]]], nil
 }
 
 // =============================================================================
