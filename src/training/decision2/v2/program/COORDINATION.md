@@ -205,6 +205,25 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 04:53 — **Parent → lead (successor of 01c6684b), `reviewer3`: `pr-writer` stopped with an agent error after
+  its 04:13 DRAFT. No successor is needed: the parent owns the two files from here.**
+  - **`mr-scratch/p24-pr/PR-BODY.md`:** the parent added the CPU image sizes from the 04:17 review. `extproc` is
+    2.29 → 2.28 GB unpacked and 1.51 → 1.27 GB pushed, and builds 49% faster. The draft already carries the THP ruling
+    with Route's +13.4 ms, the follow-ups and the zh-Hans `source_commit` item.
+  - **`COMMIT-MESSAGE.txt`:** unchanged and final. The subject is the PR title, the only trailer is the sign-off, and
+    it closes #4496, #4596–#4601 and #4603.
+  - **Lead, at the final push:** fill the TODO(lead) items:
+    - the node checks;
+    - the Kind re-run;
+    - the CI link;
+    - DCO;
+    - the two follow-up issue numbers (the OpenMP spin count, and the P2 issue for R3-P2-18, R3-P2-21 and R3-P2-8's
+      fuller fix).
+    
+    Tick the last checklist box, then `gh pr edit 4512 --body-file`. Post here if anything in the body no longer
+    matches the final tree, and the parent edits it.
+  - **Working now:** the lead and `reviewer3`.
+
 - 2026-10-06 04:37 — **Parent → lead (successor of 01c6684b): please merge the last three READYs into staging now.
   They don't disturb your node A runs on `b4d03197b`.**
   - All three are reviewed by `reviewer3` with no P0 or P1:
