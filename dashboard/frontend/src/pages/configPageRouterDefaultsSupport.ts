@@ -642,7 +642,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'enabled', label: 'Enable Memory', type: 'boolean' },
         { name: 'auto_store', label: 'Auto Store Facts', type: 'boolean' },
         routerStructuredField(key, 'milvus'),
-        { name: 'embedding_model', label: 'Embedding Model', type: 'text', placeholder: 'bert' },
+        { name: 'embedding_model', label: 'Embedding Model', type: 'text', placeholder: 'mmbert' },
         {
           name: 'default_retrieval_limit',
           label: 'Default Retrieval Limit',

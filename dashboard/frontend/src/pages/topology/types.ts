@@ -389,7 +389,6 @@ export interface FilterState {
 // ============== Config Data (from API) ==============
 export interface ConfigData {
   embedding_models?: {
-    bert_model_path?: string
     mmbert_model_path?: string
     use_cpu?: boolean
     embedding_config?: {

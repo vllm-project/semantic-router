@@ -132,8 +132,8 @@ func TestFanCountsTheCallerAsBlockedWhileItsWorkParks(t *testing.T) {
 	if labels[0] != "math" || labels[1] != "law" || labels[2] != "other" {
 		t.Fatalf("labels = %v", labels)
 	}
-	if calls, tasks := encoders.Bundles(); calls != 1 || tasks != 3 || time.Since(started) > 500*time.Millisecond {
-		t.Fatalf("a fan-out of three calls is one bundle: %d calls, %d tasks", calls, tasks)
+	if calls, tasks := encoders.Bundles(); calls != 1 || tasks != 1 || time.Since(started) > 500*time.Millisecond {
+		t.Fatalf("a fan-out of three calls to one head is one bundle of one fused task: %d calls, %d tasks", calls, tasks)
 	}
 }
 

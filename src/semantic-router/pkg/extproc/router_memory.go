@@ -337,9 +337,6 @@ func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {
 	case embeddingModels.Qwen3ModelPath != "":
 		logging.Infof("Memory: Auto-selected qwen3 from embedding_models config")
 		return "qwen3"
-	case embeddingModels.GemmaModelPath != "":
-		logging.Infof("Memory: Auto-selected gemma from embedding_models config")
-		return "gemma"
 	default:
 		logging.Infof("Memory: No embedding model configured, using the built-in %s", config.DefaultEmbeddingModel)
 		return config.DefaultEmbeddingModel
