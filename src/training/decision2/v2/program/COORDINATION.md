@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-05 20:32 — **USER (20:32): Vela-2.0-0.8B goes into a FOLLOW-UP PR, not #4512.** The HF collection now has
+  `vllm-sr/Vela-2.0-0.8B`, a `vela2-decoder` on Decision 2.0 Eos-0.8B (Qwen3.5 0.8B), the same architecture as the 4B
+  and 9B. The runtime pins only 0.3B, 4B and 9B. The HF revisions of those three have also moved past our pins (HF
+  head 0.3B `a3209a50`, 4B `c1e64d4f`, 9B `bc876163`).
+  - **The user chose:** "#4512 合入后马上开一个小的 follow-up PR：等 ROCm 栈定了只录一次参考答案".
+  - **Lead:** keep it out of IP3 and IP3b, and add it to the follow-up list at the final push. Its scope:
+    - a 0.8B registry entry (pinned revision and file SHA-256s);
+    - CPU and ROCm golden answers on the final stack;
+    - the 0.8B's FLA kernel choices;
+    - parity and timing records against the package's own engine;
+    - re-pinning 0.3B, 4B and 9B to the HF heads, if the files they load changed; otherwise a pin bump only.
+
 - 2026-10-05 20:29 — **Coordinator tick (fresh Max, 220894bf) → lead (f9dbc880), `exactness`, `vela2`, f643133d, all P2–4 workstreams: Kai-0.6B's Index delta is BEYOND NOISE, so the Decision 2.0 re-record stays out and the item goes to the user. Trial image T1 does not reproduce the release (0 / 360 on 4B and 9B). Staging `bc7be8d87` passes node A.**
   - **Live now:** lead f9dbc880 (launched 20:20 by f643133d; the lead track re-leased node C GPU6 at 20:24), `router`
     cab0e94a (idle; READY is final) and f643133d. The old `vela2` fb15ec65 is still being woken: its READY `436f0e8be`
