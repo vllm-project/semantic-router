@@ -205,6 +205,68 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 03:04 — **INTEGRATION READY runtime-arch `af6edaf04`** (`xunzhuo/model-runtime-p24-runtime-arch`, pushed, clean; contains staging `56523591b`). `runtime-arch` → lead (successor of 01c6684b), parent: **R2-P2-10 ([#4600](https://github.com/vllm-project/semantic-router/issues/4600)) and R2-P2-11 ([#4601](https://github.com/vllm-project/semantic-router/issues/4601)) are a pure refactor. Every golden answer (62 / 62) and every parity spot check is byte-identical to staging, on CPU and in `a580be6b9`. The CPU-LAPACK refusal is the only intended behaviour change. The PR closes #4600 and #4601.**
+  - **R2-P2-10, built-ins register through the plugin classes, with no central list:**
+    - A family names its pinned-model table (`ModelFamily.builtin_table`, a module whose `MODELS` lists them) and its fixture writer (`ModelFamily.fixture_writer`). An engine declares its `auto` priority (`Engine.auto_priority`; `native` 0, as accelerators do).
+    - `registry/builtin.py` no longer imports any table. It reads the tables of the discovered families (in name order) once per discovery result, at load time. It refuses a table entry of another family and a repository that two tables pin. `golden(sha, surface, body)` replaces `golden_decisions`, and the `DECISION2_MODELS` export is gone.
+    - `choose_engine` ranks engines with `_auto_rank`: the table's engine for the device class, then `auto_priority`, then name. That is today's order exactly. `testing/fixtures.write_fixture` asks the family plugin for its writer.
+    - The five built-in families declare their tables (still in `registry/tables/`) and writers (`testing/<family>.py`). **The entry-point groups are unchanged** (`vllm_sr_runtime.{families,engines,accelerators,profiles}`), and so is `pyproject.toml`.
+    - **`tests/test_builtin_plugins.py`:** it writes a temporary distribution, a family `tiny_decisions` with its own table, golden answers and fixture writer, plus an engine `tiny_native` at priority −1. It builds the wheel with the distribution's build backend and installs it into a fresh directory. The runtime then:
+      - finds the model by name, identity and family;
+      - writes the family's fixture, through `write_fixture` and through the `fixture` and `models` commands;
+      - picks `tiny_native` under `auto` (the table's preference still wins);
+      - gates readiness on the pinned answers (`matched` 3 / 3);
+      - forgets the model once the distribution is gone.
+  - **R2-P2-11, decision hooks leave the generic base:**
+    - `plugins/decisions.py` holds `DecisionModel`, the decisions mixin: `plan`, `answer`, the decisions `plan_surface` / `finish_surface`, and the per-question golden comparison and outcomes. `RenderedItem`, `RequestPlan`, `well_formed` and `compare_answers` live there too. `decision1`, `decision2` and `vela2` subclass it.
+    - `plugins/base.py` has no decisions method: `plan_surface` / `finish_surface` are abstract, and `golden_values`, `golden_compare` and `outcomes` are surface-generic.
+    - **One golden path:** decision goldens are `{surface, body, expected}` like the others. `golden_check(run, compare, goldens, device_class)` runs every surface the same way, so decisions still count questions and other surfaces count values. `ServedModel.golden_decisions` is gone, and `tools/golden_answers.py` has one path.
+    - **Metrics:** `Runtime.finish` counts `model.outcomes(surface, body)` and no longer special-cases decisions. The label values are unchanged.
+  - **The capability check (the 01:20 ruling, `eaf4cb30d`):**
+    - The CPU accelerator reports `lapack` (`torch._C.has_lapack`) in `capabilities()`, and `Accelerator.lacks()` explains a missing capability.
+    - `ModelSpec.requires` names capabilities per accelerator. The Qwen3.5 backbones of `decision1`, `decision2` and `vela2` require `{"cpu": ("lapack",)}`; their encoders and Qwen3 require nothing.
+    - `place()` refuses such a device before any weights load. When every candidate device lacks a capability, it raises `UnsupportedDeviceError`, a final failure that isn't retried. The message: "cpu: this PyTorch is built without LAPACK, which the model's CPU kernels need; serve it with a PyTorch that has LAPACK (the router's CPU image) or on a GPU device".
+    - **Tests:** placement (with and without LAPACK), every family's declaration, a runtime test (no weights load, one placement attempt, a dense neighbour still serves; it fails if the loader retries), and a `vllm-sr-runtime serve` process test (`/health` 503 `failed`, the card's reason).
+    - No answer changes: every other model, and every device with LAPACK, places as before.
+  - **Goldens (`tools/golden_answers.py`, offline, both sides' outputs compared with `cmp`):** staging `4df250299` against `3208e8938`. Since then the runtime code hasn't changed, only tests, docs and the staging merge.
+    - All 32 built-in models on CPU (PyTorch 2.10, 16 cores) and the 30 GPU models in `a580be6b9` on node B GPU0–3: **62 / 62 byte-identical**, readiness included, every one `matched`.
+    - The ROCm values equal the committed golden files in every value.
+    - On CPU, 27 equal the committed files and 5 are within 4.8e-7: the host's rounding, the same on both sides.
+  - **Parity spot checks, one model per family, staging and the branch:**
+    - **`decision2` Kai-0.6B** (`gpu_parity.py`, `a580be6b9`, node D GPU6, 1,431 requests over the four panels): the answer files are byte-identical. Against exactness's release-image runtime answers they are 1,431 / 1,431.
+    - **`decision1` Kai-0.6B** (bundled runtime, CPU, public231): 231 / 231 identical, max 0.0, on both sides.
+    - **`vela2` 0.3B** (the package's engine, CPU, 60 generated requests): 60 / 60 identical, 0 rendering mismatches, max 0.0. The answer files are byte-identical.
+    - **`task_heads` Vela Embedding** (Transformers FP32, every exit) and **`multimodal_embedding` Omni Nano** (the bundle's reference goldens): both pass. The results are equal except the timings.
+  - **CPU A/B of the request path:**
+    - **Run 1, `742298d01` against staging `122152210`:** node B, NUMA node 1 (80–95), a `systemd-run` scope, 5 interleaved rounds.
+      - Kai-0.6B through `Runtime.call` (80 public231 requests): every row is level, for example p50 −0.11 ms [−2.5, +2.3], p95 −0.8 [−6.5, +4.9], the 4-wide rate +0.3% [−0.9, +1.5].
+      - Domain: p95 and the rate are level, but **p50 was +0.125 ms [+0.041, +0.208] (+1.7%).**
+    - **Run 2, Domain at the READY code `3208e8938` against staging `4df250299`, 10 rounds, each side first in 5 of them:** level. p50 −0.067 ms [−0.176, +0.042], p95 −0.33 [−0.76, +0.09], the rate +4.6 req/s [−0.3, +9.5].
+    - **Why I read run 1's cell as noise:**
+      - Per request, the code differs only by one call that returns an empty tuple.
+      - Staging with the branch's extra load-time imports is level as well.
+      - In run 1 the second run of each round was slower, and the branch went second in 3 of the 5 rounds.
+      - Discovery and the mixin dispatch happen at load: the request path has no entry-point or table lookup.
+  - **Checks:**
+    - `make impact`: documentation, image-calibration, model-runtime.
+    - `make check CHANGED_FILES=<35 files>` at `af6edaf04`: PASS. That covers pre-commit, ruff (repo config), translation coverage (0 regressions), the multimodal profile's Go tests, `model-runtime-test` (`mypy --strict` clean on 13 files, 623 tests, the third-party plugin test included) and the client check.
+    - The GPU-marked runtime tests in `a580be6b9` on node B GPU0: 18 passed on staging and on the branch.
+    - `make harness-check` isn't needed: no harness file changed.
+  - **Docs:**
+    - Design §4, §5, §5.1, §5.2, §5.5, §7.3, §10.1, §10.2 and §12.
+    - "Add your own model family" and the example's README: `DecisionModel`, `builtin_table`, `fixture_writer` and `auto_priority`.
+    - Deploy: one paragraph with your no-LAPACK sentence, merged at `e7ae3442e`.
+    - Troubleshooting, en and zh-Hans: the refusal's row. Staging has no zh-Hans deploy page.
+    - `rocm-router-image.md`: one sentence beside your note (`798c301d6`).
+  - **For the parent:**
+    - Please rule that run 2 settles run 1's Domain p50 cell. Both runs are stated here, and no record file is added; I can add one if the lead wants it.
+    - `vllm-sr-runtime models` now lists built-in models in family-name order; before, it listed them in phase order. Nothing else is visible apart from the intended refusal.
+  - **For the lead:**
+    - `router-r2p27`'s `devices.py` uses only names I kept (`placement.device_kind`, `registry.names` / `instantiate`, `Accelerator.devices`).
+    - FYI (02:39): exactness's `released/Kai-0.6B.answers.jsonl` matches only 276 of mlx-diag's first 400 prompts, on staging as on the branch. The record's reference matches.
+  - **Leases:** node B GPU0–3 and node D GPU6 are released. Nothing of mine runs on any node.
+  — `runtime-arch`
+
 - 2026-10-06 03:02 — **`pr-writer` → lead (successor of 01c6684b), parent: START. I write the final PR body and the squashed commit's message for #4512 in `mr-scratch/p24-pr/` (`PR-BODY.md`, `COMMIT-MESSAGE.txt`): drafts by 06:30, final by 08:30. I change no code, push nothing and edit nothing on GitHub.**
   - **Sources:** every note here from 2026-10-05 21:00 on (READYs and parent rulings), staging `origin/xunzhuo/model-runtime-p24-ip2` (records, design, the website's model-runtime pages), the second and third reviews, and the lead's follow-up issue texts.
   - **Placeholders until they land:**
