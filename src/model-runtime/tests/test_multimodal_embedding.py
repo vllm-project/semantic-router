@@ -84,7 +84,10 @@ def test_the_default_engine_serves_a_bundle_on_onnxruntime(tmp_path):
 
 def test_batches_never_run_on_the_cpu_device_thread(tmp_path, monkeypatch):
     from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.families.multimodal_embedding.family import OmniModel
+    from vllm_sr_runtime.families.multimodal_embedding.family import (
+        INLINE_COST,
+        OmniModel,
+    )
     from vllm_sr_runtime.runtime import Runtime
 
     threads: list[str] = []
@@ -100,23 +103,32 @@ def test_batches_never_run_on_the_cpu_device_thread(tmp_path, monkeypatch):
     served = ModelConfig(model=str(bundle), name="omni", device="cpu")
     runtime = Runtime(ServeConfig(models=(served,)))
     runtime.start(background=False)
-    try:
-        threads.clear()
-        body = {"model": "omni", "input": "hello", "options": {"overflow": "reject"}}
-        inline = asyncio.run(runtime.call("embeddings", body, 64))
+    scheduler = runtime.lookup("omni").scheduler
+    assert runtime.lookup("omni").model.inline_cost == INLINE_COST["nano"] < 42
+
+    def call(text, size):
+        body = {"model": "omni", "input": text, "options": {"overflow": "reject"}}
+        status, _ = asyncio.run(runtime.call("embeddings", body, size))
         # The worker answers a job before it releases the model, and a caller
         # runs a group only on a released model.
-        scheduler = runtime.lookup("omni").scheduler
         with scheduler._lock:
             assert scheduler._lock.wait_for(lambda: not scheduler._owned, timeout=30)
-        body["input"] = "hello there"
-        planned_off_loop = asyncio.run(runtime.call("embeddings", body))
+        return status
+
+    try:
+        threads.clear()
+        statuses = [
+            call("hello", 64),
+            call("hello " * 40, 300),
+            call("hello there", None),
+        ]
     finally:
         runtime.stop()
-    assert inline[0] == planned_off_loop[0] == 200
-    assert threads[0] == "vllm-sr-runtime-worker"
-    assert threads[1] not in ("vllm-sr-runtime-worker", "vllm-sr-cpu")
-    assert threads[1] != threading.main_thread().name
+    assert statuses == [200, 200, 200]
+    loop, worker, planner = threads
+    assert loop == threading.main_thread().name
+    assert worker == "vllm-sr-runtime-worker"
+    assert planner not in ("vllm-sr-runtime-worker", "vllm-sr-cpu", loop)
 
 
 @pytest.fixture(scope="module")
