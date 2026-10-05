@@ -132,3 +132,26 @@ def test_the_refusal_comes_before_any_weights_load_and_is_final(
         assert loads == ["Decision-2.0-Tiny-Qwen3"]
     finally:
         runtime.stop()
+
+
+@pytest.mark.parametrize(
+    ("family", "variant", "requires"),
+    [
+        ("decision2", "qwen3_5", {"cpu": ("lapack",)}),
+        ("decision2", "qwen3", {}),
+        ("decision1", "qwen3.5-decision", {"cpu": ("lapack",)}),
+        ("decision1", "vela-encoder", {}),
+        ("vela2", "decoder", {"cpu": ("lapack",)}),
+        ("vela2", "encoder", {}),
+    ],
+)
+def test_the_qwen3_5_families_require_lapack_on_the_cpu(
+    tmp_path, family, variant, requires
+):
+    from vllm_sr_runtime.plugins import registry
+    from vllm_sr_runtime.plugins.base import PackageRef
+    from vllm_sr_runtime.testing.fixtures import write_fixture
+
+    package = write_fixture(tmp_path / "package", family=family, variant=variant)
+    plugin = registry.plugin("families", family).load()()
+    assert plugin.describe(plugin.verify(PackageRef(package))).requires == requires
