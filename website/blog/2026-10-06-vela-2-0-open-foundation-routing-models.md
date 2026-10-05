@@ -57,7 +57,7 @@ This is what makes one model practical for a router. The questions a deployment 
 
 ## Spans inside a decision model
 
-A span question is a grid of yes/no decisions: one for every word of the text and every label in the question. Is `Tom` part of a PERSON? Is `tom.baker@example.com` an EMAIL_ADDRESS? Words that say yes for the same label and sit next to each other become one span, with character offsets into the original text. Alongside the spans, the question also gets a Noul answer: does the text contain any such span at all.
+A span question is a grid of yes/no decisions: one for every word of the text and every label in the question. Is `Tom` part of a PERSON? Is `tom.baker@example.com` an EMAIL_ADDRESS? Words that say yes for the same label and sit next to each other become one span, with character offsets into the original text. The question's entry in `answers` is a Noul taken from the same grid: its highest word probability, which is above the threshold exactly when at least one span was found.
 
 A span question looks like any other question, with a label block in place of options:
 
