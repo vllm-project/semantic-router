@@ -847,6 +847,17 @@ flush. Calls outside a bundle go directly to their surface. The response
 stage (hallucination, response guard) opens its own bundle. Each call carries
 the smallest consumer timeout as its context deadline and `options.deadline_ms`.
 
+A flush fuses the classify calls that differ only in their inputs and deadline
+(one per PII or jailbreak chunk, one per message a history rule reads) into
+one task per model, head and options, up to the card's `limits.max_inputs`,
+and hands each caller its own results; a fused task carries the latest of its
+callers' deadlines, and each caller still stops at its own. So a long prompt
+is one runtime job, not one per chunk. The flush then splits each process's
+tasks into bundles of at most the process's `limits.max_bundle_tasks` (64
+until `/v1/models` has been read); the router starts managed runtimes with
+`--max-bundle-tasks 1024` and `--max-request-bytes` 64 MiB, so a stage
+normally stays one call.
+
 A bundle is per runtime process, not per request. The default process groups
 (section 13.4) give each CPU model its own process, up to the process cap, and
 one process to each GPU device. So a request whose signals read several CPU
