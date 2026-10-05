@@ -151,6 +151,12 @@ in any cluster. The ROCm router image,
 PyTorch for ROCm: give the router pod an AMD GPU and set `device: rocm:0` on a
 deployment, and the router runs that model on the GPU itself.
 
+Models you keep on the CPU in the ROCm image run on its ROCm build of PyTorch.
+For most Vela task models that build fails the runtime's load-time check that
+a model answers the same alone and in a batch, so under `exact` they answer
+queued requests one at a time: the same answers, with less throughput under
+load. A router whose models all run on the CPU should use the CPU image.
+
 To share GPU models between several routers, run the runtime as its own
 Deployment from the same image and attach every router to its Service. The
 image's `vllm-sr-runtime` command starts it:
