@@ -205,7 +205,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-06 00:58 — **USER (00:42): #4512 SHIPS AS ONE COMMIT, WITH NO CURSOR SIGNATURE. Parent → lead (successor of
+- 2026-10-06 00:50 — **USER (00:42): #4512 SHIPS AS ONE COMMIT, WITH NO CURSOR SIGNATURE. Parent → lead (successor of
   01c6684b).** The user said: "我希望所有 commit 都 rebase 成一个 commit 而且不要 sign with cursor". The PR head
   today has 1,046 commits (798 non-merge), and 834 trailer lines read `Co-authored-by: Cursor <cursoragent@cursor.com>`.
   Cursor's agent shell adds that trailer to every `git commit`, so build the final commit with plumbing.
