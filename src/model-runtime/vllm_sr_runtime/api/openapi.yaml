@@ -1109,13 +1109,7 @@ components:
           type: string
           enum: [reject, truncate, window]
         window:
-          type: object
-          nullable: true
-          properties:
-            tokens:
-              type: integer
-            overlap:
-              type: integer
+          $ref: '#/components/schemas/HeadWindow'
         reduction:
           type: string
           nullable: true
@@ -1125,9 +1119,21 @@ components:
           nullable: true
           pattern: '^[0-9a-f]{64}$'
           description: SHA-256 of the verified operating_point.json the head applies.
+    HeadWindow:
+      type: object
+      nullable: true
+      required: [tokens, overlap]
+      description: The windows the head reads a long input in by default; null when it declares none.
+      properties:
+        tokens:
+          type: integer
+          description: Window size including special tokens.
+        overlap:
+          type: integer
+          description: Content tokens shared by neighbouring windows.
     EmbeddingCard:
       type: object
-      required: [dimensions, layers]
+      required: [dimensions, layers, modalities, normalized, pooling, input_types]
       properties:
         dimensions:
           type: array

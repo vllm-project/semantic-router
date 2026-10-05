@@ -80,8 +80,11 @@ def served(runtime, name):
 
 
 def test_cards_list_each_head(client):
-    cards = {card["id"]: card for card in client.get("/v1/models").json()["data"]}
+    models = client.get("/v1/models").json()
+    check("ModelList", models)
+    cards = {card["id"]: card for card in models["data"]}
     assert cards["sequence"]["heads"][0]["kind"] == "sequence"
+    assert cards["sequence"]["heads"][0]["window"] is None
     assert cards["scores"]["heads"][0]["window"] == {"tokens": 64, "overlap": 16}
     assert len(cards["scores"]["heads"][0]["thresholds"]) == 12
     assert cards["grounded"]["heads"][0]["inputs"] == ["grounded"]
