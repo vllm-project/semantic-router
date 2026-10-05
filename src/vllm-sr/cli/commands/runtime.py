@@ -356,8 +356,6 @@ def _execute_serve(
     "Serve defaults to the matching GPU image (ROCm / CUDA) unless --image or "
     "VLLM_SR_IMAGE is provided. Internal models default to GPU, except AMD "
     "semantic embeddings retain their configured use_cpu value (default true). "
-    "MIGraphX mmBERT embeddings require an explicit model binding and deployment "
-    "with an input token budget. "
     "Set VLLM_SR_<PLATFORM>_PRESERVE_CPU=1 to keep CPU settings. "
     "For Kubernetes, configure GPU images and resources through a Helm profile "
     "or the operator.",
