@@ -71,6 +71,7 @@ or stored vectors to re-embed because their embedding model changed (see
 | a graph `head` such as `onnx/model_fa.onnx` | removed: the runtime picks the model's graphs |
 | `artifact: models/Vela-1.0-Encoder-307M-...` | `artifact: vllm-sr/Vela-1.0-Encoder-307M-...`, the Hub repository |
 | `embedding_config.backend: candle` or `openvino` | removed |
+| `gemma_model_path` or `bert_model_path`, even empty | removed: the runtime has no EmbeddingGemma or MiniLM family, and Vela Embedding (`mmbert_model_path`) replaces them |
 | `embedding_model: bert` or `gemma` on the response cache, memory or vector store, or no `embedding_model` where MiniLM was the default | `embedding_model: mmbert` (Vela Embedding); re-embed stored vectors |
 | a vector size Vela Embedding does not serve (such as MiniLM's 384) on a store that embeds with `mmbert` | 256 for memory, 768 for the response cache and the vector store; re-create the collection or index at that size |
 | `model_selection.ml.model_type: bert` or `gemma` | `model_type: mmbert`; retrain the selection models on Vela Embedding vectors |
@@ -261,3 +262,13 @@ runtime, so managed models work out of the box. Remove any environment
 variables, init containers or volumes that existed only for candle, ONNX
 Runtime or OpenVINO. For GPUs, run a GPU runtime and attach to it; see
 [Run it with the router](./deploy.md#on-kubernetes).
+
+If you deploy with the operator, remove `embedding_models.gemma_model_path`
+from your `SemanticRouter` resources before you upgrade. The resource
+definition no longer has the field: kubectl's default strict validation
+refuses a manifest that still sets it (`unknown field`), and a resource stored
+before the upgrade loses the field, as if it had never been set: its router
+embeds with the model the rest of the resource configures, such as Vela
+Embedding through `mmbert_model_path`. Re-embed the vectors that EmbeddingGemma
+stored (see
+[Re-embed when the embedding model changes](#re-embed-when-the-embedding-model-changes)).

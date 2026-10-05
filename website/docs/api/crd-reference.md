@@ -261,7 +261,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `qwen3_model_path` _string_ | Path to Qwen3-Embedding-0.6B model directory<br />Qwen3 provides 32K context and high quality embeddings (1024 dimensions) |  | Optional: \{\} <br /> |
-| `gemma_model_path` _string_ | Path to EmbeddingGemma-300M model directory<br />Gemma provides 8K context and fast embeddings (768 dimensions) |  | Optional: \{\} <br /> |
 | `mmbert_model_path` _string_ | Path to mmBERT 2D Matryoshka embedding model directory<br />Supports layer early exit (3/6/11/22) and dimension reduction (64-768) |  | Optional: \{\} <br /> |
 | `use_cpu` _boolean_ | Use CPU for inference (default: true) | true | Optional: \{\} <br /> |
 | `embedding_config` _[HNSWEmbeddingConfig](#hnswembeddingconfig)_ | Embedding configuration for embedding-based classification |  | Optional: \{\} <br /> |
