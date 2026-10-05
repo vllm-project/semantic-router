@@ -2,9 +2,9 @@
 # (runtime_with_fixtures.py writes them; nothing is downloaded):
 #
 # - managed: the Router starts two runtime processes itself, the device
-#   group (domain, PII and guard classifiers, an embedder and a reranker) and
-#   the "decisions" process group (a Decision 2.0 model), through
-#   VLLM_SR_RUNTIME_COMMAND;
+#   group (domain, PII, guard and modality classifiers, an embedder and a
+#   reranker) and the "decisions" process group (a Decision 2.0 model),
+#   through VLLM_SR_RUNTIME_COMMAND;
 # - attached: model-runtime-attached serves a decision model and a feedback
 #   classifier in one process, selected by served_name;
 # - fail-open: decision-offline points at a Service with no pods.
@@ -68,6 +68,11 @@ config:
         - name: user_reaction
           type: local
           labels: [SAT, NEED_CLARIFICATION, WRONG_ANSWER, WANT_DIFFERENT, NO_FEEDBACK]
+      # The modality fixture's labels, the only names the Router accepts.
+      modality:
+        - {name: AR, description: Text answers}
+        - {name: DIFFUSION, description: Image generation}
+        - {name: BOTH, description: Text and image generation}
       keywords:
         - name: rerank_probe
           operator: OR
@@ -217,6 +222,10 @@ config:
             - {type: decision, name: request_kind, label: code}
             - {type: decision, name: request_kind, label: math}
             - {type: decision, name: request_kind, label: chat}
+            # A BOTH condition needs an AR and a diffusion model; the BOTH rule
+            # still reports a BOTH answer.
+            - {type: modality, name: AR}
+            - {type: modality, name: DIFFUSION}
         modelRefs:
           - model: general-expert
             use_reasoning: false
@@ -284,6 +293,13 @@ config:
           input:
             max_tokens: 512
             overflow: reject
+        vela-modality:
+          provider: model_runtime
+          artifact: /tmp/vsr-fixtures/modality
+          device: cpu
+          input:
+            max_tokens: 512
+            overflow: truncate
         # Attached: one runtime process serving two models.
         attached-decisions:
           provider: model_runtime
@@ -312,6 +328,9 @@ config:
         embedding:
           deployment: vela-embedding
           contract: embedding.v1
+        modality_detector:
+          deployment: vela-modality
+          contract: label_distribution.v1
       # No mapping files: the modules take their labels from the cards the
       # runtimes serve for the fixtures.
       modules:
@@ -331,6 +350,15 @@ config:
             overlap: 16
         hallucination_mitigation:
           enabled: false
+        # The binding above serves the model; the validator still asks for a
+        # model_path and a threshold, which method classifier does not apply.
+        modality_detector:
+          enabled: true
+          method: classifier
+          confidence_threshold: 0.5
+          classifier:
+            model_path: /tmp/vsr-fixtures/modality
+            use_cpu: true
     services:
       api:
         # Makes the global embedding binding a prepared service.

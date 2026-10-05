@@ -32,6 +32,7 @@ PACKAGES = {
     "decision-attached": ("decision2", "qwen3", 5),
     "embedding": ("task_heads", "embedding", 6),
     "reranker": ("task_heads", "reranker", 7),
+    "modality": ("task_heads", "modality", 8),
 }
 
 

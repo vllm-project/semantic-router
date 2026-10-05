@@ -14,7 +14,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("model-runtime-bundles", pkgtestcases.TestCase{
-		Description: "One request reaches each runtime process once per request stage: a process's domain, PII and guard tasks of the signal stage arrive as one /v1/bundle",
+		Description: "One request reaches each runtime process once per request stage: a process's domain, PII, guard and modality tasks of the signal stage arrive as one /v1/bundle",
 		Tags:        []string{"model-runtime", "bundles", "performance"},
 		Fn:          testModelRuntimeBundles,
 	})
@@ -27,7 +27,7 @@ const (
 )
 
 // mrSignalStageModels answer the signal stage of every request.
-var mrSignalStageModels = []string{mrDomainDeployment, mrGuardDeployment, mrPIIDeployment}
+var mrSignalStageModels = []string{mrDomainDeployment, mrGuardDeployment, mrModalityDeployment, mrPIIDeployment}
 
 // signalProcess is one managed process serving signal-stage models.
 type signalProcess struct {

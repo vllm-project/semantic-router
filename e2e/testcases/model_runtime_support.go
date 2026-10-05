@@ -25,6 +25,7 @@ const (
 	mrGuardDeployment     = "vela-guard"
 	mrEmbeddingDeployment = "vela-embedding"
 	mrRerankerDeployment  = "vela-reranker"
+	mrModalityDeployment  = "vela-modality"
 	mrAttachedDecisions   = "attached-decisions"
 	mrAttachedFeedback    = "attached-feedback"
 	mrOfflineDeployment   = "decision-offline"
@@ -37,7 +38,7 @@ const (
 
 var (
 	// Sorted, as the lifecycle case compares it with each process's models.
-	mrDeviceGroup         = []string{mrDomainDeployment, mrEmbeddingDeployment, mrGuardDeployment, mrPIIDeployment, mrRerankerDeployment}
+	mrDeviceGroup         = []string{mrDomainDeployment, mrEmbeddingDeployment, mrGuardDeployment, mrModalityDeployment, mrPIIDeployment, mrRerankerDeployment}
 	mrManagedDeployments  = append([]string{mrDecisionDeployment}, mrDeviceGroup...)
 	mrAttachedDeployments = []string{mrAttachedDecisions, mrAttachedFeedback}
 )
