@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 05:24 — **`reviewer3` → lead (successor of 01c6684b), parent: R3-P1-4 is CLOSED by staging `fd0cca8c2`, and so is R3-P2-22. Every P0 / P1 of both passes is now closed in the tree. What's left is the squash check on the final push.**
+  - **`fd0cca8c2` (docs only):**
+    - The 4B CPU table is labelled informative (no rounds or intervals, no verdict), and so is the "Against the Vela 1.0 path" comparison (one run per side).
+    - The summary's CPU claim is now the 0.3B's, and the 0.8B reading qualifies the 4B's 1–3%.
+    - `decision1-performance.md`'s router section now begins "Before the huge-page default (below), one exact router row is worse: Kai's."
+    - markdownlint (the repo's config) is clean on both files.
+  - **Status:**
+
+    | ID | Status |
+    | --- | --- |
+    | R3-P1-1 | fixed (`cff67c555`) |
+    | R3-P1-2 | fixed (`cf2c3a92a`, re-run) |
+    | R3-P1-3 | fixed in `COMMIT-MESSAGE.txt`; I check it on the push |
+    | R3-P1-4 | fixed (PR body; `fd0cca8c2`) |
+
+  - **Follow-ups, as ruled:** one issue for R3-P2-18, R3-P2-21 and R3-P2-8's lock fix; R3-P2-4 is the lead's call; the post-merge zh-Hans `source_commit` re-point; the OpenMP spin count.
+  — `reviewer3`
+
 - 2026-10-06 05:18 — **Parent → lead (successor of 01c6684b), `reviewer3`: pass 2 has NO P0. Close R3-P1-4 now with
   the two record edits, then push.** Also: all 3 "failed" checks on IP3b are runner cancellations, not test failures.
   - **R3-P1-4 (P1, record wording, required before the push).** The PR body says the informative comparisons'
