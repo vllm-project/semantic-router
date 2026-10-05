@@ -27,6 +27,7 @@ from ..errors import (
     MAX_LENGTH_EXCEEDED,
 )
 from ..plugins.base import DEADLINE, EmbeddingInfo, SurfacePlan, SurfaceRequest
+from .task import positive_option
 
 MAX_INPUTS = 2048
 MAX_MEDIA_BYTES = 16 << 20
@@ -88,14 +89,6 @@ class EmbeddingPlanState:
     slots: list[int | str]
     usages: list[dict[str, Any] | None]
     representation: dict[str, Any]
-
-
-def _int_option(value: Any, name: str) -> int | None:
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise ValueError(f"{name} must be a positive integer")
-    return value
 
 
 def _media(index: int, part: dict[str, Any]) -> EmbeddingInput:
@@ -164,10 +157,12 @@ def parse_request(
 ) -> EmbeddingRequest:
     """Validate an embeddings request against the model's descriptor (``ValueError`` -> 400)."""
     body, options = request.body, request.options
-    dimension = _int_option(body.get("dimensions"), "dimensions") or info.dimensions[0]
+    dimension = (
+        positive_option(body.get("dimensions"), "dimensions") or info.dimensions[0]
+    )
     if dimension not in info.dimensions:
         raise ValueError(f"dimensions must be one of {list(info.dimensions)}")
-    layer = _int_option(body.get("layer"), "layer")
+    layer = positive_option(body.get("layer"), "layer")
     if not info.layers:
         if layer is not None:
             raise ValueError("this model has no layer exits")
@@ -189,7 +184,7 @@ def parse_request(
     overflow = options.get("overflow", "reject")
     if overflow not in OVERFLOWS:
         raise ValueError(f"options.overflow must be one of {list(OVERFLOWS)}")
-    max_tokens = _int_option(options.get("max_tokens"), "options.max_tokens")
+    max_tokens = positive_option(options.get("max_tokens"), "options.max_tokens")
     if max_tokens is not None and max_tokens > max_input_tokens:
         raise ValueError(f"options.max_tokens must be at most {max_input_tokens}")
     return EmbeddingRequest(

@@ -246,11 +246,9 @@ class Vela2Family(ModelFamily):
         )
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
-        known = builtin.by_identity(package.model_sha256)
-        expected = dict(known.golden_answers) if known else {}
-        return [
-            {"state": GOLDEN_STATE, "questions": GOLDEN_QUESTIONS, "expected": expected}
-        ]
+        return builtin.golden_decisions(
+            package.model_sha256, GOLDEN_STATE, GOLDEN_QUESTIONS
+        )
 
 
 @dataclass

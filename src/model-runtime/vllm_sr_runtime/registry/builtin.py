@@ -54,6 +54,15 @@ def by_identity(model_sha256: str) -> BuiltinModel | None:
     return None
 
 
+def golden_decisions(
+    model_sha256: str, state: Any, questions: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """A decisions readiness request expecting the built-in model's released answers (none for another model)."""
+    known = by_identity(model_sha256)
+    expected = dict(known.golden_answers) if known else {}
+    return [{"state": state, "questions": questions, "expected": expected}]
+
+
 def all_models(family: str | None = None) -> tuple[BuiltinModel, ...]:
     if family is None:
         return MODELS
