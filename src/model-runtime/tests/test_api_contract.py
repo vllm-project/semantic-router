@@ -194,6 +194,15 @@ def test_every_family_validates_system_one_questions_alike(decision_runtimes):
         assert outcomes == expected, name
 
 
+def test_every_family_refuses_blank_question_ids(decision_runtimes):
+    questions = {"   ": {"type": "noul", "instructions": "Pick one"}}
+    for name, runtime in decision_runtimes.items():
+        status, body = asyncio.run(
+            runtime.call("decisions", {"state": STATE, "questions": questions})
+        )
+        assert (status, body["error"]["code"]) == (400, "invalid_request"), name
+
+
 def test_the_contract_lists_every_question_field():
     question = schema("Question")
     assert question["additionalProperties"] is False

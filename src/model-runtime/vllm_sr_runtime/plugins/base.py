@@ -692,7 +692,7 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
         if (
             not isinstance(questions, dict)
             or not questions
-            or any(not isinstance(key, str) or not key for key in questions)
+            or any(not isinstance(key, str) or not key.strip() for key in questions)
         ):
             raise ValueError("questions must be a nonempty mapping of question IDs")
         plan = self.plan(body["state"], questions)
