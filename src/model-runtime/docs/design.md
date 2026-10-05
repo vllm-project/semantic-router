@@ -881,7 +881,10 @@ the same `process` share one process and one bundle.
   without an `endpoint` into processes: by `process` when set; else each GPU
   device gets one process, and each CPU model its own process (`cpu-0`,
   `cpu-1`, ...; at most half the cores, capped by
-  `VLLM_SR_RUNTIME_CPU_PROCESSES`; `1` folds them into one). A CPU process
+  `VLLM_SR_RUNTIME_CPU_PROCESSES`; `1` folds them into one). Deployments on
+  `device: auto` share one process, `auto`, wherever the runtime places them,
+  so on a CPU-only host they take turns on one device thread; name `cpu` (or
+  a `process`) to give CPU models processes of their own. A CPU process
   runs `ceil(cores / processes)` threads, unpinned, so a busy model can use
   the cores an idle one leaves: on 16 cores and five task models, one shared
   process served 11.1 requests/s, pinned disjoint shares 15.6, unpinned
