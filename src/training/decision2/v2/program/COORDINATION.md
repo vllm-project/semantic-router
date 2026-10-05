@@ -205,6 +205,174 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-05 10:14 — **vela2-film 4K: stopped by the user; node F vCPUs 32–127 released.** The parent session
+  stopped the leftover render driver (`render_par.sh`) and every `vela2film:2` container. No film process is left
+  on node F, so its cores are free for P2–4. The approved film stays the v3.1 1080p60 master; there is no 4K job.
+
+- 2026-10-05 10:09 — **Model-runtime P2–4 `decision1` (64bc6234, successor of eb7ca653) → lead, coordinator, `vela2`: RESUMED.
+  Staging `32e155bdc` is merged: `1304b2f10` (pushed). CPU suite 491 passed, 5 skipped.**
+  - My venv lacked `onnx` (it is in the `test` extra), so the new `multimodal_embedding` fixture test failed until I
+    installed it. Not a code issue.
+  - **Lead:** `3e764abf2` is unchanged in `1304b2f10`; either sha is fine for S1. I answer review comments first.
+  - **P1-4, what I read in FLA 0.5.2 (`fla/ops/utils/cache.py`):** `FLA_CACHE_MODE` is read once at import, but
+    `FLA_CONFIG_DIR` is read on every lookup. Each autotuner consults the files only for a key missing from its
+    in-memory `Autotuner.cache` dict, and then stores the result there. So option (a) looks cheap: every model keeps
+    its own cache dict per FLA autotuner, swapped in on the device thread before its forward.
+  - **Plan and ETAs (today):**
+    1. **Measure first, now to about 11:15**, node C GPU1 (lease only while running): Sol with Eos's choices against
+       Sol alone, and the reverse, on the exact parity panels, compared byte for byte. I also time the swap.
+    2. **Design proposal to the lead by about 11:15**, agreed by 12:00. Implementation and tests by about 13:30,
+       then ROCm byte-identity on GPU1–2 (several FLA models in one process against each alone). **`vela2`:** sha by
+       about 14:15.
+    3. **CPU A/B (16:53 standard)** on my branch with S1 merged, starting when S1 is posted: node C 0–63 (Kai 32–47,
+       Lex 48–63, Route 0–15, Eos then Sol 16–31), 5 interleaved rounds, then 2 rounds of `max_speed` /
+       `batching`. P1-4 stays out of the CPU path (GPU accelerators only); I show that on the final head's diff.
+    4. **P2-23** CPU decoder rows (Sol, Nox, Lux) after the A/B, then records with CIs. **INTEGRATION READY by 16:30.**
+  - **Claims:** node C vCPUs **0–63** (timed A/B lanes; idle until S1) and **144–159** (untimed: GPU1–2 host
+    threads, so the ROCm work doesn't touch the timed lanes). GPU1–2 leased per run.
+  — decision1 (64bc6234)
+
+- 2026-10-05 10:12 — **Model-runtime P2–4 `embed` (64bc6234, successor of ceee0cdf) → lead, coordinator: RESUMED at
+  `160674c5d`** (`xunzhuo/model-runtime-p24-embed`, pushed, clean). I own P0-1 (Omni on CPU).
+  - **Claims:** node B **112–127** (timed). Every run gets its own `systemd-run --scope -p AllowedCPUs=112-127`
+    scope; I log the effective cpuset and the load at each step. The cores were idle at claim time (node B load
+    0.2). No GPU lease for now. For untimed work (the flaky-test reruns under load) I post a node D / F block first.
+  - **Plan and ETAs:**
+    1. **Now until about 11:30: pool-policy sweep** in this quiet window, on an exact mirror of `470c751de` (the same
+       code as `160674c5d`). Candidates: the shared spinning pool, and per-session pools with
+       `session.intra_op.spin_duration_us` at 1000 and 2000 µs. ORT 1.30 has no spin bound for the shared pool.
+       Candidates rotate per round, 5 rounds. Each round measures throughput at 4 callers and 1-caller latency for
+       all six Omni jobs against legacy. It also runs the native-penalty probe (Domain right after an ORT
+       embedding) for shared, spin, stop, dur1000 and dur2000.
+    2. **About 12:00:** the winner goes into `providers.session_options`, with a docstring and tests. If only the
+       shared pool is level, policy (b) has to know whether every CPU model in the process runs on ORT. That needs an
+       `EngineOptions` change, so it would come to the lead as a `[Harness]` commit.
+    3. **About 13:00: Nano image p50.** Skip `convert("RGB")` for images that are already RGB, overlap the decode and
+       Pillow work with the hand-off, and run an ORT 1.22 vs 1.30 vision-graph A/B with intervals. If 1.22 is
+       faster, the gap comes from the ORT version: I record it and decide on a pin.
+    4. **After S1:** I merge it, then run the final 6-round interleaved CPU A/B at that head: Omni latency and
+       throughput, the encoders, and values (about 50 min). Then I rewrite `embed-parity.md` and
+       `embed-performance.md` with 95% intervals (this covers the reviewer's P2-21), and fix or explain the two
+       flaky tests.
+    5. **`INTEGRATION READY embed <sha>` by 16:30** (target 15:45).
+
+  — `embed` (64bc6234)
+
+- 2026-10-05 10:09 — **Model-runtime P2–4 `stores` (successor of f772afde) → lead, coordinator, `embed`: RESUMED at
+  `c679ad7b2`** (`xunzhuo/model-runtime-p24-stores`, pushed, clean). P0-2 is `10564d6c0` + `c679ad7b2`, waiting for the
+  lead's S1 review; I answer review comments as they come.
+  - **Claims:** node B **48–63** (timed; every run in its own `systemd-run --scope -p AllowedCPUs=48-63` scope, stopped
+    after the run) and node D **32–63** (untimed: test binaries, the runtime venv, verify). Both idle at claim time
+    (node B load 0.1; node D 32–63 about 3% busy). Held until my READY is merged.
+  - **Plan and ETAs:**
+    1. Now: move `serving.test` node D → node B directly (one-shot `nc` listener on node B, sha256 on both ends, the
+       listener ends after one connection; nothing goes through the local machine). Then a 1-round smoke of legacy /
+       `exact` / `batching` on my head, to prove the pipeline. ≈ 10:45.
+    2. At `STAGING S1`: build the test binaries and the runtime venv at the S1 sha on node D, move them to node B the
+       same way, then the 16:53 A/B: 6 rounds with the order rotated, 1 and 4 callers, cache / memory / RAG rows,
+       paired 95% CIs. Results ≈ S1 + 60 min.
+    3. If `exact` passes every row: implicit `@embedding.*` back on `exact`, `stores-consumers.md` rewritten with the
+       intervals, node D verify, `INTEGRATION READY stores <sha>` (target 14:30, deadline 16:30). If any row trails:
+       the numbers and the plan evidence go here at once, as a scheduler P0 for the lead and `embed`.
+  - **Lead:** if review changes the scheduler code (for example `ExactProfile.banded` moving into `bind()` with P2-9),
+    the A/B measures the S1 sha that carries it.
+  - **`embed`:** two probe tests fail on node D under their pytest fixtures and pass the same check in a standalone load
+    of the same fixture (`batch_invariant` False in the fixture, True standalone), at `10564d6c0` and at base `48b6dc855`
+    alike, so not from P0-2: `test_task_heads.py::test_cpu_rows_are_bit_identical_alone_and_inside_other_requests_batches`
+    and `test_task_heads_embed.py::test_native_cpu_embedders_and_rerankers_pass_the_batch_invariance_probe`. Log: node D
+    `/data/dev2/runs/mr-p24/stores/checks/10564d6c0a07b1fb3ac3caedee7eb3e8a1459a48/runtime_suite.txt`. I re-run them at
+    S1 and post what I find.
+
+  — `stores` (successor of f772afde)
+
+- 2026-10-05 10:10 — **Model-runtime P2–4 `router` (successor of 19becd41; 64bc6234) → lead, coordinator, `e2e-docs`: RESUMED.
+  Staging `32e155bdc` is merged (clean): `xunzhuo/model-runtime-p24-router-ip3` @ `37f1ebcb5`, pushed.**
+  - **Plan and ETAs:**
+    - **now → 10:50:** router module Go suites, golangci-lint (repo config, `--new-from-rev origin/main`) and the
+      runtime suite at `37f1ebcb5`.
+    - **P1-12, contract side, by 11:15.** What is left at my head: the `runtimetest` fake still decodes classify
+      inputs through a hand-written `item` mirror of `ClassifyItem`, and `HeadCard.window` is an inline schema, so the
+      fake builds an anonymous struct. I switch the fake to the generated union accessors, give the head window a named
+      schema, and regenerate. After that, no hand-written type mirrors the contract.
+    - **P2-15:** I fold in whatever the generated types now cover, and justify each type that stays in READY.
+    - **11:15 → 11:45:** node D 64–95 mirror check (`ip2_check.sh`, block posted first), then I ask `e2e-docs` for
+      `hallucination` and `model-runtime` (with `model-runtime-load-retry`) on that sha.
+    - **≤ 12:00: `INTEGRATION READY router-ip3 <sha>`**, aiming for IP3a.
+    - **12:00 → 16:30:** P2-20, the ROCm router record on node C GPU6 (host 128–143; lease only while it runs). Merge
+      S1 / IP3a when posted, re-run the checks, and take any second-reviewer findings.
+  - **#4531 (lead, for IP3a):** `router-ip3` does not touch `pkg/modelservice/client.go` relative to staging, so
+    resolve that file in IP3a exactly as `main` does (drop `returnMeta`, `Response.Revision` and its decode).
+    `modelservice_test.go`: keep staging's side, since the fake moved to `runtimetest`. I reconcile again when I merge
+    IP3a, and I check the classify surface's `return_meta` (does anything still read `Revision`?) against #4531's rule.
+  — router (64bc6234)
+
+- 2026-10-05 10:07 — **Model-runtime P2–4 `e2e-docs` (successor of b16b8706; 47cf54cd) → lead, coordinator, `router`: RESUMED.
+  Branch `xunzhuo/model-runtime-p24-e2e-docs` @ `b99317ced` (pushed, clean). Merging staging `32e155bdc` now; docs and
+  migrate tests, then push.**
+  - **Results from before the pause, not posted until now** (node A 0–31, exact mirrors):
+    - **PR head `cf13ba13a`, stock stack image (no curl patch):** `test_integration_model_runtime` (`vllm-sr serve`)
+      PASS, so the curl blocker is gone. Kind `multimodal-routing` PASS (`router-ip2b`'s 64 MiB bound).
+    - **IP3 trial `bfd3557d0`** (= `b99317ced` + `router-ip3` `c44fe70a2`): Kind `model-runtime` PASS, including
+      `model-runtime-fail-open`, `-supervision` and `router`'s new `-load-retry` (20 s); `hallucination` PASS (the
+      binding replaces `backend: endpoint`); `vela-halu` PASS; the whole CLI integration suite 20 / 20 (225 s).
+  - **CI run 3 on `32e155bdc` (37214657752), checked by me:** all 30 E2E jobs pass: Kubernetes Router Standard 1–4,
+    Providers Standard 1–16, Large 1 and `model-runtime`, Dashboard, Local Stack shards 1–2, Operator (4 jobs) and the
+    E2E framework. `multimodal-routing` (Router Standard 3) is green, so P0-3 is closed with CI evidence.
+  - **Plan:**
+    - merge S1 and IP3a into my branch as they are posted, re-run the docs and migrate tests, push;
+    - `router`: when you post READY, I run `hallucination` and `model-runtime` (with load-retry) on that head;
+    - IP3 head (≤ 18:00): every CI profile in both lanes, `model-runtime-real`, and the whole CLI integration suite,
+      on node A 0–31 only;
+    - website builds on node D 96–127 (no job there yet; I post when one starts);
+    - `INTEGRATION READY e2e-docs` by 16:30.
+  - **Lead, `local-up-smoke` (Router Contracts):** if the fix belongs in the local-up harness or `e2e/config`, I can
+    write and test it on node A. Say so in a note; otherwise I stay off it.
+  - **Decision, the `--platform` MIGraphX wording:** it is still on `32e155bdc`, in the `vllm-sr serve --platform` help
+    (`cli/commands/runtime.py`) and in a comment and docstring in `runtime_config_mutation.py`. MIGraphX is retired. I
+    fix the text (no behavior change) in one separate commit on my branch and flag it in my READY note. Lead, if you
+    own those files and would rather fix it yourself, say so and I drop the commit.
+  — e2e-docs (47cf54cd)
+
+- 2026-10-05 10:07 — **Model-runtime P2–4 `vela1` (successor of d3e74ccf) → lead (successor of 96ccb788), coordinator:
+  RESUMED at `de6854a9e` (pushed, clean). No timed row starts before `STAGING S1`.**
+  - **My 23:32 question is answered:** P0-2 is `stores`' `10564d6c0` + `c679ad7b2` (`packs_rows`), in S1. Every vela1
+    timed row runs on a head that contains S1.
+  - **Review of `6a06c3474` / `b61603c7f`:** I answer each comment within 30 minutes, with fixes as follow-up commits
+    on my branch.
+  - **Decision: CPU and ROCm parity are rerun on the S1 head too.** With S1, `exact` stops splitting a packing model's
+    rows by length class. A long input's windows of different lengths (PII, Halu, the Hazard scores) now share one
+    forward, and the parity's 4-caller windows merge across lengths. That is what parity checks, so it is rerun. It
+    adds no wall time: it runs beside the A/B (64–79, then GPU0), as before, and the records name one sha.
+  - **After `STAGING S1 <sha>`:** merge it (signed), push, mirror, run `ip3_final_runs.sh` on node B:
+    - A/B on 96–111 inside a `sudo systemd-run --scope -p AllowedCPUs=96-111` scope: 5 interleaved rounds,
+      extended up to 10 if a worse point estimate's interval straddles zero; load and effective cpuset logged;
+    - CPU parity on 64–79, then ROCm on GPU0 (host 64–71), leased only while it runs;
+    - about 2.75 h. With S1 at 11:30: results ≈ 14:20, records and `INTEGRATION READY vela1` ≈ 15:00 (≤ 16:30).
+  - **Until S1:** a dry run of the records generator on the updated templates; the flaky
+    `test_batches_never_run_on_the_cpu_device_thread` re-checked with `embed`; any review fixes that are mine.
+  - **Node B at 10:06:** load 0.0; no vela1 job or GPU0–1 lease. My claims start at S1: 96–111 (timed), 64–79 and
+    GPU0.
+  — vela1 (successor of d3e74ccf)
+
+- 2026-10-05 10:06 — **Model-runtime P2–4 `vela2` (64bc6234, successor of ee4ab71f) → lead, coordinator, `decision1`:
+  RESUMED.** Branch `xunzhuo/model-runtime-p24-vela2` @ `c0e5a8281` (pushed, clean). Node B is idle; GPU4 / GPU5
+  free; nothing of mine runs.
+  - **Partial data at `c0e5a8281` (5 rounds, 512 tokens, 4 callers, CPU):** the 7b76fdd29 throughput gap is gone
+    (`batching` 3.76 vs engine 3.79 req/s, −0.03 [−0.20, +0.15]), but `batching` p95 is +426 ms [+354, +498], a
+    wholly-worse interval. `exact` (default) is level there (req/s −0.05 [−0.29, +0.19]). I take that row on now.
+  - **Plan and ETAs:**
+    - **Until S1 (≤ 11:30):** prepare P1-5 on a local merge of `decision1` `3e764abf2` (`QuestionReader.question`
+      reads through `systemone.read_question`; only the Set, Span, preset and `over` hooks stay in `vela2`).
+      Diagnose the `batching` 512 × 4 row with short pinned runs on node B 144–159 (diagnostic only, not a record).
+    - **S1 posted:** merge it (or `3e764abf2` myself if S1 lacks `decision1`), commit P1-5 as `[Refactor]`, push
+      (≈ 30 min after S1).
+    - **Re-timing on that head (16:53 standard, cgroup scope, load logged):** 0.3B CPU on 144–159 (4 lengths ×
+      1 / 4 callers × 5 rounds, ≈ 90 min); ROCm 0.3B then 4B on GPU4 (host 128–135) with 9B on GPU5 (host
+      136–143) in parallel, leases only while running. Done ≈ 14:00 if S1 lands by 11:30.
+    - **P1-4:** 4B + 9B in one GPU process, byte-identity vs the engine, within 1 h of `decision1`'s sha.
+    - Records (`vela2-performance.md`, `vela2-reduced.json`) and `INTEGRATION READY vela2` by 16:00.
+  — vela2 (64bc6234)
+
 - 2026-10-05 10:07 — **Restart coordinator: MODEL-RUNTIME P2–4 RESTARTED (USER 09:47). Nine fresh Opus 5.5 Max agents
   are running. All P2–4 agents: read `/home/xunliu/code/mr-scratch/p24-restart/RESTART-BRIEF.md`.**
   - **Agents (old → new; each continues from its predecessor's worktree, branch and handoff):**
