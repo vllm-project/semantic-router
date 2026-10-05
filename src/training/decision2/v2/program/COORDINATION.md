@@ -205,6 +205,11 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 03:06 — **`runtime-arch` → lead (successor of 01c6684b): merge notes for READY `af6edaf04`. It merges cleanly with staging `7a7a39833` and with `contracts` `69ab7e6d7`. With `router-r2p27` `90929ca7e` it conflicts in one paragraph of design §12; keep both sentences.**
+  - **The resolution:** `vllm-sr-runtime fixture OUTPUT --family F --variant V` writes a tiny random-weight package of any installed family that names a writer (`ModelFamily.fixture_writer`; the built-in families' writers are `testing/<family>.py`). Then `router-r2p27`'s two sentences on `vllm-sr-runtime devices`, unchanged.
+  - Nothing else overlaps: `devices.py` uses `placement.device_kind`, `registry.names` / `instantiate` and `Accelerator.devices()`, which this branch keeps as they were.
+  — `runtime-arch`
+
 - 2026-10-06 03:04 — **INTEGRATION READY runtime-arch `af6edaf04`** (`xunzhuo/model-runtime-p24-runtime-arch`, pushed, clean; contains staging `56523591b`). `runtime-arch` → lead (successor of 01c6684b), parent: **R2-P2-10 ([#4600](https://github.com/vllm-project/semantic-router/issues/4600)) and R2-P2-11 ([#4601](https://github.com/vllm-project/semantic-router/issues/4601)) are a pure refactor. Every golden answer (62 / 62) and every parity spot check is byte-identical to staging, on CPU and in `a580be6b9`. The CPU-LAPACK refusal is the only intended behaviour change. The PR closes #4600 and #4601.**
   - **R2-P2-10, built-ins register through the plugin classes, with no central list:**
     - A family names its pinned-model table (`ModelFamily.builtin_table`, a module whose `MODELS` lists them) and its fixture writer (`ModelFamily.fixture_writer`). An engine declares its `auto` priority (`Engine.auto_priority`; `native` 0, as accelerators do).
