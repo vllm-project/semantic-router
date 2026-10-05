@@ -64,6 +64,13 @@ def test_a_missing_extra_names_its_install(nano, monkeypatch):
         family.describe(package)
 
 
+def test_nano_caps_its_text_graph_threads(nano, tmp_path):
+    family = MultimodalEmbeddingFamily()
+    assert family.describe(family.verify(PackageRef(nano))).graph_threads == {"text": 8}
+    mini = omni.write_bundle(tmp_path / "vela-1.0-omni-mini", variant="mini")
+    assert family.describe(family.verify(PackageRef(mini))).graph_threads == {}
+
+
 def test_the_default_engine_serves_a_bundle_on_onnxruntime(tmp_path):
     from vllm_sr_runtime.config import ModelConfig, ServeConfig
     from vllm_sr_runtime.runtime import Runtime

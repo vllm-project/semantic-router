@@ -54,6 +54,12 @@ MEDIA_COST = {
     "nano": {"image": 1200, "audio": 1600},
     "mini": {"image": 300, "audio": 550},
 }
+# CPU threads per graph (ModelSpec.graph_threads). On 16 cores Nano's text
+# graph runs the 26-text corpus at p50 3.5-3.8 ms on 8 threads against 4.0 on
+# 16, and 670 against 300 per second with four callers. Every other graph
+# needs all 16 for one request (Nano image 109 ms, 163 on 8; Mini text 33 ms,
+# 41-45 on 8).
+GRAPH_THREADS: dict[str, dict[str, int]] = {"nano": {"text": 8}, "mini": {}}
 # Import name -> distribution of the multimodal extra.
 EXTRA = {"onnxruntime": "onnxruntime", "PIL": "Pillow"}
 GOLDEN_TEXT = "Route this request to the model that answers it best."
@@ -170,6 +176,7 @@ class MultimodalEmbeddingFamily(ModelFamily):
             max_input_tokens=package.max_input_tokens,
             graphs=verified.graphs,
             encoder=True,
+            graph_threads=GRAPH_THREADS[verified.variant],
         )
 
     def load(
@@ -242,8 +249,8 @@ class OmniModel(LoadedModel):
 
     Every input runs its graphs alone, so its vector is the same in any batch:
     the ``exact`` profile hands every queued request to one ``run``, which runs
-    up to ``CONCURRENT_INPUTS`` inputs at once on the shared ONNX Runtime pool
-    (one short input's run leaves most of the pool idle).
+    up to ``CONCURRENT_INPUTS`` inputs at once on their graphs' ONNX Runtime
+    pools (one short input's run leaves most of a pool idle).
     """
 
     device_thread = False
