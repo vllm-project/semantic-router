@@ -348,3 +348,58 @@ def test_request_size_limit(qwen3_runtime):
         assert response.status_code == 413
     finally:
         object.__setattr__(qwen3_runtime, "config", original)
+
+
+@pytest.mark.parametrize("path", ["/v1/classify", "/v1/bundle"])
+def test_a_client_that_disconnects_cancels_its_call(path):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    cancelled = []
+
+    async def scenario():
+        started = asyncio.Event()
+
+        async def work(*args):
+            started.set()
+            try:
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                cancelled.append(path)
+                raise
+
+        runtime = SimpleNamespace(
+            config=SimpleNamespace(max_request_bytes=1024),
+            metrics=MagicMock(),
+            call=work,
+            bundle=work,
+        )
+        messages = [{"type": "http.request", "body": b"{}", "more_body": False}]
+
+        async def receive():
+            if messages:
+                return messages.pop()
+            await started.wait()
+            return {"type": "http.disconnect"}
+
+        sent = []
+
+        async def send(message):
+            sent.append(message)
+
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": path,
+            "headers": [],
+            "query_string": b"",
+            "root_path": "",
+        }
+        await create_app(runtime)(scope, receive, send)
+        return runtime, sent
+
+    runtime, sent = asyncio.run(scenario())
+    assert cancelled == [path]
+    assert sent[0]["status"] == 499
+    runtime.metrics.requests.labels.assert_called_with(endpoint=path, status="499")

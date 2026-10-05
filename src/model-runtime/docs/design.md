@@ -638,7 +638,9 @@ waits for the forward in flight, not for the remaining windows of a long one;
 each job is answered as soon as its own batches have run. The order of
 forwards never changes a batch's contents, so answers are unchanged. Deadlines
 travel with jobs; a job whose deadline passes before its next batch runs is
-answered `deadline_exceeded` and its remaining batches are skipped. Admission
+answered `deadline_exceeded` and its remaining batches are skipped. A client
+that disconnects before its answer cancels its jobs the same way; the request
+is counted with status 499 in the metrics. Admission
 bounds, per model, the jobs not yet answered (queued, planned or running) and
 their tokens, and answers 429 at once, for a whole group or none of it. On
 CPU, workers of different models share the process's intra-op thread pool
@@ -728,7 +730,16 @@ Several `MODEL` arguments share the process options; `MODEL@REVISION` pins a
 revision per model; `--models FILE` lists models with their own name,
 revision, device, profile, engine and family options (the router writes this
 file in managed mode). The other options are as in Phase 1. `vllm-sr serve`
-without `MODEL` keeps its router-mode behaviour.
+without `MODEL` keeps its router-mode behaviour. Every serve option's default
+is the `ServeConfig` / `ModelConfig` field default, so the CLI and an
+embedding host start alike. `vllm-sr-runtime fixture OUTPUT --family F
+--variant V` writes a tiny random-weight package of any built-in family; the
+writer is `testing/<family>.py`.
+
+Importing `vllm_sr_runtime` sets two environment defaults, `GOMP_SPINCOUNT`
+and `ONEDNN_PRIMITIVE_CACHE_CAPACITY`. They take effect only when PyTorch
+loads, and the plugin base layer imports PyTorch, so they cannot wait for
+`main`. A value the caller set is kept.
 
 ## 13. Router integration
 
@@ -804,6 +815,15 @@ Only model-backed signals join; keyword and heuristic signals never delay a
 flush. Calls outside a bundle go directly to their surface. The response
 stage (hallucination, response guard) opens its own bundle. Each call carries
 the smallest consumer timeout as its context deadline and `options.deadline_ms`.
+
+A bundle is per runtime process, not per request. The default process groups
+(section 13.4) give each CPU model its own process, up to the process cap, and
+one process to each GPU device. So a request whose signals read several CPU
+models makes one bundle call per model process, and those calls run in
+parallel. One CPU process runs one forward at a time, so a single shared
+process would serialize the stage: on 16 cores it served 11.1 requests/s
+against 20.3 for the split (`router-latency-cpu.md`). Deployments that name
+the same `process` share one process and one bundle.
 
 ### 13.4 Lifecycle: process groups and attached endpoints
 

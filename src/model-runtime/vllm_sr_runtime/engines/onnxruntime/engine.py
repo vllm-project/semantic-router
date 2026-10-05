@@ -166,10 +166,6 @@ class OnnxRuntimeModel(EngineModel):
             )
         return EncoderOutput(outputs=graph.run(batch))
 
-    def graph_metadata(self, name: str) -> dict[str, str]:
-        """The custom metadata a loaded graph declares (for example a pair scorer's exit)."""
-        return dict(self.graphs[name].facts.metadata)
-
     def parameter_count(self) -> int:
         return graph_files.parameters(graph.facts for graph in self.graphs.values())
 
