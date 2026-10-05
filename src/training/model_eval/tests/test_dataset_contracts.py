@@ -354,7 +354,9 @@ class DatasetContractTest(unittest.TestCase):
                 "random": random,
                 "BaselineError": ValueError,
                 "load_dataset": load,
-                "np": SimpleNamespace(array=lambda values, dtype: values, int64=int),
+                "np": SimpleNamespace(
+                    array=lambda values, dtype: values, int64=int, ndarray=list
+                ),
             },
         )
         spec = namespace["TaskSpec"](
