@@ -738,8 +738,10 @@ through ONNX Runtime's OpenVINO execution provider.
 The ROCm router image takes PyTorch from the rocm7.2 wheels (the rocm7.1
 build crashes replaying the encoders' HIP graphs) and builds causal-conv1d
 1.7.0 against it with ROCm 7.2.3's compiler, the one the released wheel was
-built with, so its gfx942 machine code is the released build's
-(`CAUSAL_CONV1D_ARCHS` builds other GPUs). Triton's compiled kernels and
+built with, so its gfx942 machine code is the released build's. It carries
+code for gfx90a, gfx942 and gfx950 (Instinct MI200, MI300 and MI350;
+`CAUSAL_CONV1D_ARCHS` builds others), since a decoder fails on a GPU it has no
+code for rather than falling back. Triton's compiled kernels and
 MIOpen's databases live in the model volume, since the charts run the router
 on a read-only root without a home directory.
 
