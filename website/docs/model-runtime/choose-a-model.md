@@ -68,6 +68,16 @@ is a private preview and needs a Hugging Face token with access.
 | Intel GPUs | Available, not yet validated | `device: xpu:0`, with the runtime installed next to an XPU build of PyTorch. |
 | Apple silicon | Available, not yet validated | `device: mps`, with the runtime installed on macOS. |
 
+On AMD GPUs the router images ship the stack the runtime is validated on:
+PyTorch 2.12 for ROCm 7.2, FLA 0.5.2, and `causal-conv1d` 1.7.0 built for
+ROCm. The built-in models' GPU reference answers are checked on that stack,
+and every model compares itself with them when it loads. With another
+PyTorch, ROCm or kernel build, a model can fail that check or report
+[`unverified`](./troubleshooting.md#a-ready-models-self-check-says-unverified).
+If a model's reference answers had to be recorded again on this stack, its
+family's [record](https://github.com/vllm-project/semantic-router/tree/main/src/model-runtime/docs/records)
+says so and gives how often it agrees with the released answers.
+
 `device: auto` (the default) picks the first validated GPU with enough free
 memory and otherwise the CPU. A GPU you name explicitly must exist, or the
 model fails to load with a clear reason instead of quietly running on the CPU.

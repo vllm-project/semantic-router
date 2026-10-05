@@ -176,7 +176,11 @@ The Router's own models (the Vela classifiers, embeddings, reranker and
 decision models) run in the [model runtime](model-runtime/overview.md). On
 AMD Instinct MI300X and MI325X GPUs it runs them through PyTorch for ROCm,
 which is validated. `--platform amd` selects the AMD image, which ships the
-runtime with the ROCm build of PyTorch, and passes the GPUs to the Router.
+runtime with the validated stack (PyTorch 2.12 for ROCm 7.2, FLA 0.5.2, and
+`causal-conv1d` 1.7.0 built for ROCm), and passes the GPUs to the Router.
+Every model checks its answers against references verified on that stack
+when it loads; see
+[Choose a model](model-runtime/choose-a-model.md#hardware).
 
 The [Vela AMD Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)
 and complete config place all ten task models on `rocm:0`. Connect an existing
