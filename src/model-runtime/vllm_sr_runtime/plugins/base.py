@@ -653,7 +653,8 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     ONNX Runtime engine with NumPy readouts): the scheduler then calls it on
     the model's worker, or on the request's planning thread while the model is
     idle, instead of handing each batch to the CPU device thread, which saves a
-    thread wake-up each way.
+    thread wake-up each way. On any other device each batch still runs through
+    the accelerator's ``execute`` (a GPU's device lock).
     """
 
     info: ModelInfo

@@ -704,9 +704,11 @@ second time it sees a shape, and a capture fails when another thread
 launches work on the device, whatever the capture mode.
 
 A model whose batches need no device thread (`device_thread = False`, today
-the ONNX Runtime Omni family) skips the hand-off to its worker when it is
-idle: a lone request planned off the event loop runs on its planning thread
-when nothing is queued or planned and the worker is not running a batch. The
+the ONNX Runtime Omni family) runs them without the CPU's device thread (on
+a GPU they still hold the device's lock), and skips the hand-off to its worker
+when it is idle: a lone request planned off the event loop runs on its
+planning thread when nothing is queued or planned and the worker is not
+running a batch. The
 caller and the worker each own the model while they run batches, so one model
 never runs two forwards at once, and the event loop never runs one. Once
 another job is queued the caller stops after its forward in flight and the

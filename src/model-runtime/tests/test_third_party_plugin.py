@@ -184,6 +184,41 @@ def test_a_third_party_accelerator_and_profile_serve_a_model(
         runtime.stop()
 
 
+@pytest.mark.parametrize("device_thread", [True, False])
+def test_batches_off_the_cpu_run_through_the_accelerators_execute(
+    example_plugin, keyword_package, monkeypatch, device_thread
+):
+    from vllm_sr_example.accelerator import HostAccelerator
+    from vllm_sr_example.family import KeywordModel
+
+    executed = []
+    execute = HostAccelerator.execute
+
+    def recording(self, device, work):
+        executed.append(device.label)
+        return execute(self, device, work)
+
+    monkeypatch.setattr(HostAccelerator, "execute", recording)
+    monkeypatch.setattr(KeywordModel, "device_thread", device_thread)
+    config = ModelConfig(
+        model=str(keyword_package),
+        name="keywords",
+        device="example_host",
+        engine="example_counts",
+    )
+    runtime = Runtime(ServeConfig(models=(config,), result_cache_entries=0))
+    runtime.start(background=False)
+    try:
+        loaded = len(executed)
+        client = TestClient(create_app(runtime))
+        for text in ("Please refund the invoice", "Where is my parcel?"):
+            answer = client.post("/v1/classify", json={"input": [text]})
+            assert answer.status_code == 200
+    finally:
+        runtime.stop()
+    assert executed[loaded:] == ["example_host", "example_host"]
+
+
 def test_classify_embeddings_and_rerank_answer_by_contract(client):
     classified = client.post(
         "/v1/classify",

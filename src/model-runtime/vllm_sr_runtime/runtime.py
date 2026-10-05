@@ -411,7 +411,11 @@ class ServedModel:
                 batch_window_ms=process.batch_window_ms,
             ),
             observe=self.runtime.metrics.observe,
-            execute=execute if model.device_thread else self._inline(),
+            execute=(
+                execute
+                if model.device_thread or placement.device.accelerator != "cpu"
+                else self._inline()
+            ),
             device_fault=placement.accelerator.device_fault,
         )
         self.scheduler.start()
@@ -431,7 +435,7 @@ class ServedModel:
             )
 
     def _inline(self) -> Callable[[Callable[[], Any]], Any] | None:
-        """How a model without a device thread runs its batches: inline, in its choice scope if pinned."""
+        """How a model without a device thread runs its batches on the CPU: inline, in its choice scope if pinned."""
         return self.kernel_choices.run if self.kernel_choices is not None else None
 
     def _pin(self, recorded: dict[str, Any]) -> None:
