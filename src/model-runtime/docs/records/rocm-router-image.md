@@ -72,11 +72,12 @@ Checked against `a580be6b9` on an MI325X (gfx942):
 - **Files:** SHA-256 over every file under `/opt/rocm-7.2.3` and PyTorch's
   package: 17,607 kept, none changed or added.
 - **Golden answers** recorded in the slim image equal the committed files in
-  every value: Decision 1.0 (seven), Decision 2.0 (five; Vega-27B's package
-  wasn't on that node), Vela 1.0 (twelve encoders, with Embedding, Reranker
-  and Qwen3-Embedding), Vela 2.0 (all four sizes).
-- **Vela 2.0 4B panel:** the runtime at the same commit answers the 360
-  requests identically in both images (maximum drift 0.0).
+  every value: Decision 1.0 (seven), Decision 2.0 (all six), Vela 1.0 (all 13 `task_heads` built-ins:
+  the ten text models, Vela Embedding, Vela Reranker and Qwen3-Embedding), Vela 2.0 (all four sizes).
+- **Panels**, the runtime at one commit, maximum drift 0.0: Vela 2.0 4B
+  answers its 360 requests identically to `a580be6b9`, and 0.3B to the
+  release image; Vela 1.0's AMD recipe gives its 4,376 answers identically
+  to the release image (`vela1-parity.md`).
 - **GPU smoke** (below): 7 of 7 ready in 36 s, 280 / 280 requests.
 
 So the timing records stand as timed in `a580be6b9`.
@@ -84,7 +85,8 @@ So the timing records stand as timed in `a580be6b9`.
 ## causal-conv1d
 
 PyPI publishes no ROCm wheel. The `causal-conv1d-rocm` build stage compiles
-the 1.7.0 sdist (sha256 `3202758494eaa7b5…`) against the image's own PyTorch,
+the 1.7.0 sdist (sha256 `3202758494eaa7b5…`) against the official rocm7.2
+PyTorch wheel (the stage's base; the image then serves with the release's),
 with ROCm 7.2.3's compiler (AMD clang 22.0.0git, roc-7.2.3 26084) and the
 release build's tools (setuptools 79.0.1, wheel 0.48.0, ninja 1.13.2), for
 `CAUSAL_CONV1D_ARCHS`. The image installs only the wheel; its extension is

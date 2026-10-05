@@ -103,6 +103,11 @@ byte-identically to the release image, which the ROCm column above comes from.
   release's Triton 3.7.1 answered identically, so Triton plays no part.
 - The registry's golden answers (the release's) therefore hold byte for byte;
   the GPU smoke matches them in the image (`rocm-router-image.md`).
+- **The slim image** `31d00387c` (the shipped one; every file it keeps is
+  `a580be6b9`'s): the 0.3B answers the 360 requests byte-identically to the
+  release image, and the 4B to `a580be6b9` (max drift 0.0, the runtime at
+  one commit). The golden answers of all four sizes equal the committed
+  file in every value.
 - **The 0.8B** joined after the trial (on 2026-10-06, at `bd9cbeeb9`). In the
   shipped image its runtime and its engine each answer the 360 requests
   byte-identically to the release image's runtime and engine. Its ROCm golden
