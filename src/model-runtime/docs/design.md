@@ -756,7 +756,10 @@ to load releases its worker and device memory. A package or golden-answer
 failure is final; any other load failure (no device with enough free memory,
 a download, a busy device) is retried `--load-attempts` times in all (5),
 after `--load-retry-seconds` (5 s) doubling up to 300 s, while the model
-reports `loading` with the reason and the others serve.
+reports `loading` with the reason. The others serve between its attempts, not
+during one: an attempt, like the first load, runs as device work (section 9),
+so the other models of its GPU, or those on the CPU's device thread, wait for
+the whole attempt, reading the weights from disk included.
 
 ### 10.3 Router-managed lifecycle
 

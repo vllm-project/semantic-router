@@ -751,8 +751,9 @@ class Runtime:
         at once. Any other failure (no device with enough free memory, a
         download, a busy device) is retried ``load_attempts`` times in all,
         waiting ``load_retry_seconds`` and doubling up to 300 s, while the
-        model reports ``loading``; the other models serve meanwhile. Every pass
-        ends with ``freeze_heap``.
+        model reports ``loading``; the other models serve between attempts,
+        but each attempt is device work, so the models of its device wait for
+        it. Every pass ends with ``freeze_heap``.
         """
         if self.config.autotune_cache:
             freeze_autotune(self.config.autotune_cache)
