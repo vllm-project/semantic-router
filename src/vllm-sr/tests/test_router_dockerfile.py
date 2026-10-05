@@ -154,6 +154,13 @@ def test_router_images_share_the_model_assets() -> None:
     )
     assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in router
     assert "ENV VLLM_SR_RUNTIME_CACHE_DIR=/app/models/model-runtime" in router
+    # The charts' root filesystem is read-only: GPU caches live in the model volume.
+    for cache in (
+        "TRITON_CACHE_DIR=/app/models/triton",
+        "MIOPEN_USER_DB_PATH=/app/models/miopen",
+        "MIOPEN_CUSTOM_CACHE_DIR=/app/models/miopen",
+    ):
+        assert cache in router, cache
 
 
 def test_vllm_sr_image_ships_the_cli_runtime_sync_and_catalog() -> None:
