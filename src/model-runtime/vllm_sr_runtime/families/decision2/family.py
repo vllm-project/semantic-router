@@ -18,16 +18,14 @@ from ...plugins.base import (
     BackboneSpec,
     DtypePolicy,
     EngineModel,
-    LoadedModel,
     LoRASpec,
     ModelFamily,
     ModelInfo,
     ModelSpec,
     PackageRef,
-    RenderedItem,
-    RequestPlan,
     VerifiedPackage,
 )
+from ...plugins.decisions import DecisionModel, RenderedItem, RequestPlan
 
 __all__ = ["Decision2Family", "Decision2Model"]
 from ...heads.candidate import forward_logits, load_head
@@ -53,6 +51,8 @@ GOLDEN_QUESTIONS = golden_questions("Anything else")
 class Decision2Family(ModelFamily):
     name = "decision2"
     surfaces = frozenset({"decisions"})
+    builtin_table = "vllm_sr_runtime.registry.tables.decision2"
+    fixture_writer = "vllm_sr_runtime.testing.decision2"
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
@@ -227,8 +227,10 @@ class Decision2Family(ModelFamily):
         return Decision2Model(info, engine_model, head, tokenizer, details)
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
-        return builtin.golden_decisions(
-            package.model_sha256, GOLDEN_STATE, GOLDEN_QUESTIONS
+        return builtin.golden(
+            package.model_sha256,
+            "decisions",
+            {"state": GOLDEN_STATE, "questions": GOLDEN_QUESTIONS},
         )
 
 
@@ -243,7 +245,7 @@ def _model_type(config: dict[str, Any], declared: str) -> str:
     return model_type
 
 
-class Decision2Model(LoadedModel):
+class Decision2Model(DecisionModel):
     def __init__(
         self,
         info: ModelInfo,

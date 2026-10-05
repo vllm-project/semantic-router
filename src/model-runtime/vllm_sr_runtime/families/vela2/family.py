@@ -21,15 +21,14 @@ from ...plugins.base import (
     BackboneSpec,
     DtypePolicy,
     EngineModel,
-    LoadedModel,
     ModelFamily,
     ModelInfo,
     ModelSpec,
     PackageRef,
-    RequestPlan,
     SurfacePlan,
     VerifiedPackage,
 )
+from ...plugins.decisions import DecisionModel, RequestPlan
 from ...registry import builtin, policy
 from ...systemone import MAX_LEVELS, MAX_OPTIONS, MIN_LEVELS, MIN_OPTIONS
 from .answers import Answerer
@@ -112,6 +111,8 @@ def _tokenizer(package: Vela2Package) -> Any:
 class Vela2Family(ModelFamily):
     name = "vela2"
     surfaces = frozenset({"decisions"})
+    builtin_table = "vllm_sr_runtime.registry.tables.vela2"
+    fixture_writer = "vllm_sr_runtime.testing.vela2"
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
@@ -251,8 +252,10 @@ class Vela2Family(ModelFamily):
         )
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
-        return builtin.golden_decisions(
-            package.model_sha256, GOLDEN_STATE, GOLDEN_QUESTIONS
+        return builtin.golden(
+            package.model_sha256,
+            "decisions",
+            {"state": GOLDEN_STATE, "questions": GOLDEN_QUESTIONS},
         )
 
 
@@ -265,7 +268,7 @@ class Vela2Plan(RequestPlan):
     mapping: list[Any] = field(default_factory=list)
 
 
-class Vela2Model(LoadedModel):
+class Vela2Model(DecisionModel):
     """A Vela 2.0 package bound to an engine model."""
 
     def __init__(

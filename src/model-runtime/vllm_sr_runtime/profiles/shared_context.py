@@ -18,7 +18,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, cast
 
-from ..plugins.base import Batch, Job, LoadedModel, Profile, RenderedItem, WorkItem
+from ..plugins.base import Batch, Job, LoadedModel, Profile, WorkItem
+from ..plugins.decisions import RenderedItem
 from ..scheduler.planner import exact_split, padded
 
 # Shared-prefix tokens a request must save before tree mode pays off, as

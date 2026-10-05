@@ -417,6 +417,8 @@ class TaskHeadsModel(LoadedModel):
 class TaskHeadsFamily(ModelFamily):
     name = "task_heads"
     surfaces = frozenset({"classify", "embeddings", "rerank"})
+    builtin_table = "vllm_sr_runtime.registry.tables.vela1"
+    fixture_writer = "vllm_sr_runtime.testing.task_heads"
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
