@@ -169,6 +169,8 @@ RUN pip install --index-url "$TORCH_ROCM_INDEX" "$TORCH_ROCM" && \
 COPY --link --from=rocm-lib-slim /opt/rocm-7.2.3/lib /opt/rocm-7.2.3/lib
 COPY --link --from=rocm-lib-slim /opt/rocm-7.2.3/share/miopen /opt/rocm-7.2.3/share/miopen
 COPY --link --from=rocm-torch-release /opt/rocm-7.2.3/.info /opt/rocm-7.2.3/.info
+# GCC 16's C++ runtime replaces Debian's; the packages are held so that no later
+# apt-get restores Debian's files under PyTorch.
 COPY --from=rocm-torch-release /lib/x86_64-linux-gnu/libstdc++.so.6.0.35 \
     /lib/x86_64-linux-gnu/libgcc_s.so.1 /lib/x86_64-linux-gnu/libgomp.so.1.0.0 /usr/lib/x86_64-linux-gnu/
 COPY --from=rocm-torch-release ${RELEASE_SITE}/torch ${SITE}/torch
@@ -179,6 +181,7 @@ ENV ROCM_PATH=/opt/rocm
 RUN --mount=type=bind,from=causal-conv1d-rocm,source=/wheels,target=/tmp/wheels \
     ln -s /opt/rocm-7.2.3 /opt/rocm && \
     ln -sf libstdc++.so.6.0.35 /usr/lib/x86_64-linux-gnu/libstdc++.so.6 && \
+    apt-mark hold libstdc++6 libgcc-s1 libgomp1 >/dev/null && \
     echo /opt/rocm/lib > /etc/ld.so.conf.d/rocm.conf && ldconfig && \
     for lib in "$SITE"/torch/lib/*.so /opt/rocm/lib/libMIOpen.so /opt/rocm/lib/libamdhip64.so; do \
       ! ldd "$lib" | grep "not found" || exit 1; \
@@ -243,7 +246,8 @@ EXPOSE 50051 8080 9190
 # readiness and status probes run curl inside this container.
 FROM router AS vllm-sr
 RUN apt-get update && apt-get install -y --no-install-recommends curl && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    python -c "import torch"
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
