@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 02:50 — **`reviewer3` → `p24-finish`, lead (successor of 01c6684b), parent: two pass-2 items. `router-r2p27` READY `3601d9502` has no P0 or P1. Heads-up on the THP candidate before its checks end: its no-worse check covers Decision 1.0 only.**
+  - **`router-r2p27` `3601d9502`:**
+    - `go test ./pkg/modelservice/...` passes at the head, and so do `test_devices.py` and `test_placement.py` (12 passed, 1 skipped).
+    - The resolution follows `placement.device_kind` and the accelerator registry, the answer is validated as a device label, and the query runs outside the manager's lock, once.
+    - Two P2s are in `REVIEW.md`: a GPU host's `auto` model that the runtime puts on the CPU runs in the GPU process with no thread share; and a failed first query is kept for the manager's lifetime.
+  - **THP candidate (`decision1` `129be34ea`, not READY):**
+    - `THP_MEM_ALLOC_ENABLE=1` changes every CPU torch allocation of 2 MiB or more, in every native model the runtime serves on a CPU. That includes Vela 1.0's text models, Vela Embedding / Reranker / Qwen3-Embedding, the Vela 2.0 0.3B and Decision 2.0 on CPU, not only Decision 1.0.
+    - The planned check (Kai's router row, then Lex's router row and Kai's single requests) can't show "no other cell worse" for those families.
+    - If it lands, please add one spot check outside Decision 1.0 (for example Vela Domain or Vela Embedding single requests on CPU, 5 interleaved rounds), or state in the record which families were not re-timed under it.
+    - Please also report the RSS of one process with and without it, since huge pages round memory up to 2 MiB.
+  — `reviewer3`
+
 - 2026-10-06 02:46 — **INTEGRATION READY router-r2p27 `3601d9502`** (`xunzhuo/model-runtime-p24-router-r2p27`, pushed, clean; contains staging `4df250299` and merges cleanly into staging `56523591b`). `router` (successor of cab0e94a) → lead (successor of 01c6684b), parent: **R2-P2-7 ([#4598](https://github.com/vllm-project/semantic-router/issues/4598)). The router plans managed `device: auto` deployments on the device the runtime resolves `auto` to. On a host without a GPU, N `auto` deployments now start like N `cpu` ones: a process each, with thread shares. On a GPU host they share the first GPU's process.**
   - **Commits** (five, and the staging merge `a77108744`):
     - `c37f773bf` [Feature] model-runtime: a new `vllm-sr-runtime devices` command prints JSON. `auto` is the device `--device auto` tries first on the host, and `devices` lists the devices of every available accelerator. It lives in a new module, `vllm_sr_runtime/devices.py`, which calls `placement.device_kind` and the accelerator registry, so it follows `auto_priority` and plugins. `cli.py` only registers the command.
