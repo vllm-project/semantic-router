@@ -106,7 +106,7 @@ def main() -> None:
     parser.add_argument("--output-dir", required=True)
     parser.add_argument(
         "--repo-id",
-        default="llm-semantic-router/multi-modal-embed-small",
+        default="vllm-sr/multi-modal-embed-small",
     )
     parser.add_argument("--token")
     parser.add_argument("--upload", action="store_true")

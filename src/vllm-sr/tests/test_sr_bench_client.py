@@ -125,6 +125,34 @@ def test_failed_first_start_retains_receipt_and_cannot_repeat(tmp_path, monkeypa
     launch.assert_called_once()
 
 
+def test_readiness_failure_names_observed_version_mismatch(tmp_path, monkeypatch):
+    response = Mock(status_code=200)
+    response.json.return_value = {"version": "sr-bench-0.9-rc1"}
+    monkeypatch.setattr(client_module.requests, "get", Mock(return_value=response))
+    monkeypatch.setattr(client_module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(client_module.subprocess, "Popen", Mock())
+    with pytest.raises(ValueError) as readiness_failure:
+        Client(store=tmp_path).ensure()
+    message = str(readiness_failure.value)
+    assert "service reports version sr-bench-0.9-rc1" in message
+    assert f"expected {VERSION}" in message
+
+
+def test_readiness_failure_without_reported_version_keeps_original_message(
+    tmp_path, monkeypatch
+):
+    response = Mock(status_code=200)
+    response.json.return_value = {"status": "ready"}
+    monkeypatch.setattr(client_module.requests, "get", Mock(return_value=response))
+    monkeypatch.setattr(client_module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(client_module.subprocess, "Popen", Mock())
+    with pytest.raises(ValueError) as readiness_failure:
+        Client(store=tmp_path).ensure()
+    message = str(readiness_failure.value)
+    assert "version" not in message
+    assert message == "sr-bench service did not become ready; inspect service.log"
+
+
 def capture_client(monkeypatch):
     captured = {}
 
