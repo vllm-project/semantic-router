@@ -13981,6 +13981,395 @@
      }
     }
    }
+  },
+  "cpu_ab_08b": {
+   "date": "2026-10-06",
+   "commit": "bd9cbeeb94d383459b8c4314830b11c855bc6ef6",
+   "model": "vllm-sr/Vela-2.0-0.8B",
+   "revision": "a778eb2ae2304cfa72fca7e53a19136dea5be012",
+   "tool": [
+    "tools/vela2_bench.py --device cpu --tokens 32,128,512 --requests 6 --warmup 2 --concurrency 1 --rounds 5 --sides reference,runtime,runtime-shared,runtime-batching",
+    "tools/vela2_bench.py --device cpu --tokens 2048 --requests 3 --warmup 1 --concurrency 1 --rounds 3 --sides reference,runtime,runtime-shared,runtime-batching"
+   ],
+   "environment": "PyTorch 2.10 CPU build (MKL) for both sides, AMD EPYC 9575F, 16 cores (one NUMA node) in a systemd-run scope (effective cpuset 128-143), threads capped at 16; node load at most 19",
+   "rounds": {
+    "32,128,512": 5,
+    "2048": 3
+   },
+   "intervals": [
+    {
+     "tokens": 32,
+     "concurrency": 1,
+     "side": "runtime",
+     "baseline": "reference",
+     "rounds": 5,
+     "p50_ms": {
+      "baseline": 4613.956,
+      "diff": 117.472,
+      "low": 72.692,
+      "high": 162.252
+     },
+     "p95_ms": {
+      "baseline": 4775.962,
+      "diff": 128.76,
+      "low": 11.163,
+      "high": 246.357
+     },
+     "mean_ms": {
+      "baseline": 4629.784,
+      "diff": 113.598,
+      "low": 83.88,
+      "high": 143.316
+     },
+     "throughput_rps": {
+      "baseline": 0.216,
+      "diff": -0.005,
+      "low": -0.007,
+      "high": -0.004
+     }
+    },
+    {
+     "tokens": 32,
+     "concurrency": 1,
+     "side": "runtime-shared",
+     "baseline": "reference",
+     "rounds": 5,
+     "p50_ms": {
+      "baseline": 4613.956,
+      "diff": -786.434,
+      "low": -891.344,
+      "high": -681.524
+     },
+     "p95_ms": {
+      "baseline": 4775.962,
+      "diff": -713.584,
+      "low": -947.398,
+      "high": -479.77
+     },
+     "mean_ms": {
+      "baseline": 4629.784,
+      "diff": -783.102,
+      "low": -824.891,
+      "high": -741.313
+     },
+     "throughput_rps": {
+      "baseline": 0.216,
+      "diff": 0.044,
+      "low": 0.042,
+      "high": 0.046
+     }
+    },
+    {
+     "tokens": 32,
+     "concurrency": 1,
+     "side": "runtime-batching",
+     "baseline": "reference",
+     "rounds": 5,
+     "p50_ms": {
+      "baseline": 4613.956,
+      "diff": -784.766,
+      "low": -843.955,
+      "high": -725.577
+     },
+     "p95_ms": {
+      "baseline": 4775.962,
+      "diff": -752.016,
+      "low": -941.608,
+      "high": -562.424
+     },
+     "mean_ms": {
+      "baseline": 4629.784,
+      "diff": -784.912,
+      "low": -816.722,
+      "high": -753.102
+     },
+     "throughput_rps": {
+      "baseline": 0.216,
+      "diff": 0.044,
+      "low": 0.041,
+      "high": 0.047
+     }
+    },
+    {
+     "tokens": 128,
+     "concurrency": 1,
+     "side": "runtime",
+     "baseline": "reference",
+     "rounds": 5,
+     "p50_ms": {
+      "baseline": 6619.058,
+      "diff": 75.884,
+      "low": -177.867,
+      "high": 329.635
+     },
+     "p95_ms": {
+      "baseline": 7242.574,
+      "diff": -154.724,
+      "low": -439.782,
+      "high": 130.334
+     },
+     "mean_ms": {
+      "baseline": 6761.606,
+      "diff": -35.544,
+      "low": -206.04,
+      "high": 134.952
+     },
+     "throughput_rps": {
+      "baseline": 0.148,
+      "diff": 0.001,
+      "low": -0.003,
+      "high": 0.004
+     }
+    },
+    {
+     "tokens": 128,
+     "concurrency": 1,
+     "side": "runtime-shared",
+     "baseline": "reference",
+     "rounds": 5,
+     "p50_ms": {
+      "baseline": 6619.058,
+      "diff": -992.5,
+      "low": -1219.366,
+      "high": -765.634
+     },
+     "p95_ms": {
+      "baseline": 7242.574,
+      "diff": -1125.774,
+      "low": -1262.471,
+      "high": -989.077
+     },
+     "mean_ms": {
+      "baseline": 6761.606,
+      "diff": -1081.944,
+      "low": -1216.294,
+      "high": -947.594
+     },
+     "throughput_rps": {
+      "baseline": 0.148,
+      "diff": 0.029,
+      "low": 0.023,
+      "high": 0.035
+     }
+    },
+    {
+     "tokens": 128,
+     "concurrency": 1,
+     "side": "runtime-batching",
+     "baseline": "reference",
+     "rounds": 5,
+     "p50_ms": {
+      "baseline": 6619.058,
+      "diff": -1042.454,
+      "low": -1313.462,
+      "high": -771.446
+     },
+     "p95_ms": {
+      "baseline": 7242.574,
+      "diff": -1043.292,
+      "low": -1147.089,
+      "high": -939.495
+     },
+     "mean_ms": {
+      "baseline": 6761.606,
+      "diff": -1087.772,
+      "low": -1203.734,
+      "high": -971.81
+     },
+     "throughput_rps": {
+      "baseline": 0.148,
+      "diff": 0.028,
+      "low": 0.024,
+      "high": 0.033
+     }
+    },
+    {
+     "tokens": 512,
+     "concurrency": 1,
+     "side": "runtime",
+     "baseline": "reference",
+     "rounds": 5,
+     "p50_ms": {
+      "baseline": 10586.96,
+      "diff": 32.534,
+      "low": 7.505,
+      "high": 57.563
+     },
+     "p95_ms": {
+      "baseline": 11026.64,
+      "diff": 17.506,
+      "low": -36.28,
+      "high": 71.292
+     },
+     "mean_ms": {
+      "baseline": 10679.51,
+      "diff": 37.714,
+      "low": -3.566,
+      "high": 78.994
+     },
+     "throughput_rps": {
+      "baseline": 0.094,
+      "diff": -0.001,
+      "low": -0.001,
+      "high": 0.0
+     }
+    },
+    {
+     "tokens": 512,
+     "concurrency": 1,
+     "side": "runtime-shared",
+     "baseline": "reference",
+     "rounds": 5,
+     "p50_ms": {
+      "baseline": 10586.96,
+      "diff": -2032.426,
+      "low": -2126.707,
+      "high": -1938.145
+     },
+     "p95_ms": {
+      "baseline": 11026.64,
+      "diff": -2196.274,
+      "low": -2666.133,
+      "high": -1726.415
+     },
+     "mean_ms": {
+      "baseline": 10679.51,
+      "diff": -2099.374,
+      "low": -2350.991,
+      "high": -1847.757
+     },
+     "throughput_rps": {
+      "baseline": 0.094,
+      "diff": 0.023,
+      "low": 0.02,
+      "high": 0.025
+     }
+    },
+    {
+     "tokens": 512,
+     "concurrency": 1,
+     "side": "runtime-batching",
+     "baseline": "reference",
+     "rounds": 5,
+     "p50_ms": {
+      "baseline": 10586.96,
+      "diff": -1878.364,
+      "low": -2217.983,
+      "high": -1538.745
+     },
+     "p95_ms": {
+      "baseline": 11026.64,
+      "diff": -2025.6,
+      "low": -2265.818,
+      "high": -1785.382
+     },
+     "mean_ms": {
+      "baseline": 10679.51,
+      "diff": -1979.298,
+      "low": -2059.716,
+      "high": -1898.88
+     },
+     "throughput_rps": {
+      "baseline": 0.094,
+      "diff": 0.022,
+      "low": 0.019,
+      "high": 0.024
+     }
+    },
+    {
+     "tokens": 2048,
+     "concurrency": 1,
+     "side": "runtime",
+     "baseline": "reference",
+     "rounds": 3,
+     "p50_ms": {
+      "baseline": 17288.297,
+      "diff": 552.503,
+      "low": -843.662,
+      "high": 1948.669
+     },
+     "p95_ms": {
+      "baseline": 17716.67,
+      "diff": 448.123,
+      "low": -97.745,
+      "high": 993.991
+     },
+     "mean_ms": {
+      "baseline": 17370.23,
+      "diff": 397.277,
+      "low": -137.835,
+      "high": 932.388
+     },
+     "throughput_rps": {
+      "baseline": 0.057,
+      "diff": -0.001,
+      "low": -0.003,
+      "high": 0.0
+     }
+    },
+    {
+     "tokens": 2048,
+     "concurrency": 1,
+     "side": "runtime-shared",
+     "baseline": "reference",
+     "rounds": 3,
+     "p50_ms": {
+      "baseline": 17288.297,
+      "diff": -3108.34,
+      "low": -5549.932,
+      "high": -666.748
+     },
+     "p95_ms": {
+      "baseline": 17716.67,
+      "diff": -3327.483,
+      "low": -5555.749,
+      "high": -1099.218
+     },
+     "mean_ms": {
+      "baseline": 17370.23,
+      "diff": -3360.757,
+      "low": -5409.737,
+      "high": -1311.776
+     },
+     "throughput_rps": {
+      "baseline": 0.057,
+      "diff": 0.014,
+      "low": 0.002,
+      "high": 0.027
+     }
+    },
+    {
+     "tokens": 2048,
+     "concurrency": 1,
+     "side": "runtime-batching",
+     "baseline": "reference",
+     "rounds": 3,
+     "p50_ms": {
+      "baseline": 17288.297,
+      "diff": -3121.037,
+      "low": -5963.96,
+      "high": -278.113
+     },
+     "p95_ms": {
+      "baseline": 17716.67,
+      "diff": -3315.023,
+      "low": -5569.884,
+      "high": -1060.163
+     },
+     "mean_ms": {
+      "baseline": 17370.23,
+      "diff": -3358.713,
+      "low": -5729.098,
+      "high": -988.328
+     },
+     "throughput_rps": {
+      "baseline": 0.057,
+      "diff": 0.014,
+      "low": 0.0,
+      "high": 0.028
+     }
+    }
+   ]
   }
  }
 }
