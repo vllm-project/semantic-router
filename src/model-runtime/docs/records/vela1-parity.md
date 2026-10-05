@@ -8,13 +8,20 @@ native facade at `main` `61aa7eb2d`, driven as the router drives it; the
 runtime side is `Runtime.call`, as its HTTP server calls it. Raw results
 (every disagreement, contexts, thresholds) are in `vela1-parity.json`.
 
-- **Date:** 2026-10-04.
-- **Runtime commit:** `0a2ced483` for the CPU and ROCm comparisons. That is
-  `xunzhuo/model-runtime-p24-vela1` with the IP2 staging branch `cd73be9d4`
-  merged, the scheduler's shortest-first ordering included. Every answer is
-  bit-identical to the earlier runs at `93a3492c0` (max |Δp| 0 on the CPU
-  run's 11 jobs and on the ROCm runs' 19). The `batching` and reduced-copy rows name
-  their own commit.
+- **Date:** 2026-10-05.
+- **Runtime commits:**
+  - CPU: `efb5ec4d7`, the staging head `b604edeab` with `vela1`'s A/B tool
+    commit merged. On it, `exact` lets rows of every length share a batch on
+    models that pack rows, so a long input's windows of different lengths run
+    in one forward. Every answer is bit-identical to the earlier runs at
+    `93a3492c0` (max |Δp| 0 on all 11 jobs).
+  - ROCm: `35ff3a8a5`, which adds the fixes for a shared GPU process (device
+    work one model at a time, thread-local graph capture) and leaves the CPU
+    code as it was. Its answers against the packages' release image are
+    below.
+  - The `batching` and reduced-copy rows name their own commit.
+  - The final head is `35ff3a8a5` with these records on top, so both
+    comparisons hold for it.
 - **Packages:** the revisions `registry/tables/vela1.py` pins (Domain
   `f6354f54`, Guard `087f9e40`, Safety `6e70e725`, Shield `a981a99e`,
   FactCheck `99ede1ab`, Feedback `47434a7f`, Modality `5384b899`, Hazard
@@ -44,10 +51,13 @@ runtime side is `Runtime.call`, as its HTTP server calls it. Raw results
   - one request at a time, each input twice (the first answer is compared,
     the second timed), then 4 closed-loop callers for 20 s per model;
   - `exact` profile, FP32;
-  - CPU: 16 pinned EPYC 9575F cores (`torch` 2.10 CPU, oneDNN packed
-    linears);
-  - ROCm: one MI325X in the Decision 2.0 release image (PyTorch 2.12,
-    ROCm 7.2), with encoder graphs and the fused rotary kernel on.
+  - CPU: 16 EPYC 9575F cores pinned with `taskset` (node B 64–79; `torch`
+    2.10 CPU, oneDNN packed linears). These latencies are not the gate:
+    `vela1-performance.md` times both sides interleaved in one cgroup scope;
+  - ROCm: one MI325X, in the router's ROCm image stack (Python 3.12.14,
+    PyTorch 2.12.0+rocm7.2, HIP 7.2.53211, Triton 3.7.0, fla-core 0.5.2), as
+    its user (uid 65532), with encoder graphs and the fused
+    rotary kernel on.
 - **Inputs:**
   - 547 texts per sequence / token job: the 531 prompts of the e2e
     testdata, six edge cases and ten long documents of 8–384 prompts
@@ -89,17 +99,17 @@ throughput.
 
 | Job | Compared (both rejected) | Agreement | Max abs Δp | Bar | p50 legacy → runtime (ms) | p95 legacy → runtime (ms) |
 | --- | --- | --- | --- | --- | --- | --- |
-| domain | 547 (0) | 100.00% | 1.5e-04 | pass | 40.38 → 7.68 | 213.65 → 22.89 |
-| guard | 545 (2) | 100.00% | 2.9e-05 | pass | 37.28 → 7.35 | 210.52 → 22.24 |
-| safety | 547 (0) | 100.00% | 3.5e-05 | pass | 38.05 → 7.65 | 215.50 → 23.84 |
-| shield | 547 (0) | 100.00% | 4.6e-05 | pass | 34.35 → 7.69 | 218.32 → 23.41 |
-| factcheck | 547 (0) | 100.00% | 2.2e-05 | pass | 35.58 → 7.70 | 232.02 → 23.57 |
-| feedback | 547 (0) | 100.00% | 9.7e-05 | pass | 36.27 → 7.64 | 209.35 → 23.54 |
-| modality | 547 (0) | 100.00% | 5.8e-06 | pass | 32.57 → 7.62 | 213.46 → 23.51 |
-| hazard | 547 (0) | 100.00% | 9.6e-06 | pass | 33.93 → 7.75 | 213.88 → 23.51 |
-| pii | 547 (0) | 100.00% | 9.2e-05 | pass | 34.59 → 7.91 | 211.88 → 23.52 |
-| pii_truncate | 547 (0) | 100.00% | 7.2e-05 | pass | 82.45 → 8.97 | 244.36 → 25.81 |
-| halu | 64 (0) | 100.00% | 4.4e-05 | pass | 1424.37 → 118.97 | 38738.26 → 2456.87 |
+| domain | 547 (0) | 100.00% | 1.5e-04 | pass | 40.38 → 8.21 | 213.65 → 25.19 |
+| guard | 545 (2) | 100.00% | 2.9e-05 | pass | 37.28 → 7.98 | 210.52 → 23.61 |
+| safety | 547 (0) | 100.00% | 3.5e-05 | pass | 38.05 → 8.07 | 215.50 → 24.64 |
+| shield | 547 (0) | 100.00% | 4.6e-05 | pass | 34.35 → 7.56 | 218.32 → 24.60 |
+| factcheck | 547 (0) | 100.00% | 2.2e-05 | pass | 35.58 → 7.69 | 232.02 → 23.46 |
+| feedback | 547 (0) | 100.00% | 9.7e-05 | pass | 36.27 → 7.44 | 209.35 → 23.05 |
+| modality | 547 (0) | 100.00% | 5.8e-06 | pass | 32.57 → 7.71 | 213.46 → 23.68 |
+| hazard | 547 (0) | 100.00% | 9.6e-06 | pass | 33.93 → 9.56 | 213.88 → 28.67 |
+| pii | 547 (0) | 100.00% | 9.2e-05 | pass | 34.59 → 10.47 | 211.88 → 30.11 |
+| pii_truncate | 547 (0) | 100.00% | 7.2e-05 | pass | 82.45 → 10.06 | 244.36 → 27.16 |
+| halu | 64 (0) | 100.00% | 4.4e-05 | pass | 1424.37 → 110.38 | 38738.26 → 2808.69 |
 
 ## ROCm
 
@@ -109,14 +119,14 @@ ONNX Runtime MIGraphX / ROCm EP on the same GPU:
 
 | Job | Compared (both rejected) | Agreement | Max abs Δp | Bar | p50 legacy → runtime (ms) | p95 legacy → runtime (ms) |
 | --- | --- | --- | --- | --- | --- | --- |
-| domain | 545 (2) | 100.00% | 1.8e-04 | pass | 154.06 → 1.79 | 155.91 → 3.01 |
-| guard | 545 (2) | 100.00% | 6.0e-05 | pass | 245.81 → 1.90 | 258.07 → 3.30 |
-| safety | 545 (2) | 100.00% | 3.2e-06 | pass | 155.26 → 1.74 | 164.00 → 3.03 |
-| factcheck | 545 (2) | 100.00% | 1.1e-04 | pass | 158.24 → 1.82 | 163.86 → 3.22 |
-| feedback | 545 (2) | 100.00% | 1.1e-04 | pass | 157.93 → 1.83 | 164.11 → 3.14 |
-| modality | 545 (2) | 100.00% | 5.5e-06 | pass | 158.56 → 1.86 | 167.20 → 3.12 |
-| hazard | 547 (0) | 100.00% | 2.5e-06 | pass | 13.38 → 1.80 | 14.13 → 3.08 |
-| pii | 545 (2) | 98.90% | 1.7e-05 | pass | 134.03 → 1.87 | 136.05 → 3.17 |
+| domain | 545 (2) | 100.00% | 1.8e-04 | pass | 154.06 → 1.88 | 155.91 → 3.51 |
+| guard | 545 (2) | 100.00% | 4.7e-05 | pass | 245.81 → 1.88 | 258.07 → 3.53 |
+| safety | 545 (2) | 100.00% | 3.5e-06 | pass | 155.26 → 1.82 | 164.00 → 3.51 |
+| factcheck | 545 (2) | 100.00% | 1.1e-04 | pass | 158.24 → 1.82 | 163.86 → 3.48 |
+| feedback | 545 (2) | 100.00% | 1.1e-04 | pass | 157.93 → 1.89 | 164.11 → 3.55 |
+| modality | 545 (2) | 100.00% | 5.5e-06 | pass | 158.56 → 1.83 | 167.20 → 3.50 |
+| hazard | 547 (0) | 100.00% | 2.5e-06 | pass | 13.38 → 1.84 | 14.13 → 3.53 |
+| pii | 545 (2) | 98.90% | 2.4e-05 | pass | 134.03 → 1.93 | 136.05 → 3.70 |
 
 ### Shield on legacy ORT: its ONNX graph is not its checkpoint
 
@@ -143,17 +153,17 @@ The router's CPU options, legacy candle on CPU, the runtime on MI325X:
 
 | Job | Compared (both rejected) | Agreement | Max abs Δp | Bar | p50 legacy → runtime (ms) | p95 legacy → runtime (ms) |
 | --- | --- | --- | --- | --- | --- | --- |
-| domain | 547 (0) | 100.00% | 3.6e-04 | pass | 40.38 → 1.86 | 213.65 → 3.13 |
-| guard | 545 (2) | 100.00% | 8.7e-05 | pass | 37.28 → 1.96 | 210.52 → 3.23 |
-| safety | 547 (0) | 100.00% | 3.5e-05 | pass | 38.05 → 1.76 | 215.50 → 3.06 |
-| shield | 547 (0) | 100.00% | 4.7e-05 | pass | 34.35 → 1.88 | 218.32 → 3.26 |
-| factcheck | 547 (0) | 100.00% | 7.1e-05 | pass | 35.58 → 1.78 | 232.02 → 3.05 |
-| feedback | 547 (0) | 100.00% | 9.2e-05 | pass | 36.27 → 1.90 | 209.35 → 3.19 |
-| modality | 547 (0) | 100.00% | 8.9e-06 | pass | 32.57 → 1.89 | 213.46 → 3.17 |
-| hazard | 547 (0) | 100.00% | 1.0e-05 | pass | 33.93 → 1.88 | 213.88 → 3.21 |
-| pii | 547 (0) | 100.00% | 3.6e-04 | pass | 34.59 → 1.99 | 211.88 → 3.40 |
-| pii_truncate | 547 (0) | 100.00% | 4.7e-05 | pass | 82.45 → 1.95 | 244.36 → 3.45 |
-| halu | 64 (0) | 100.00% | 4.0e-05 | pass | 1424.37 → 9.17 | 38738.26 → 68.99 |
+| domain | 547 (0) | 100.00% | 3.6e-04 | pass | 40.38 → 1.89 | 213.65 → 3.53 |
+| guard | 545 (2) | 100.00% | 5.0e-05 | pass | 37.28 → 1.90 | 210.52 → 3.56 |
+| safety | 547 (0) | 100.00% | 3.5e-05 | pass | 38.05 → 1.79 | 215.50 → 3.39 |
+| shield | 547 (0) | 100.00% | 4.7e-05 | pass | 34.35 → 1.82 | 218.32 → 3.48 |
+| factcheck | 547 (0) | 100.00% | 7.1e-05 | pass | 35.58 → 1.82 | 232.02 → 3.49 |
+| feedback | 547 (0) | 100.00% | 9.2e-05 | pass | 36.27 → 1.88 | 209.35 → 3.64 |
+| modality | 547 (0) | 100.00% | 8.9e-06 | pass | 32.57 → 1.84 | 213.46 → 3.52 |
+| hazard | 547 (0) | 100.00% | 1.0e-05 | pass | 33.93 → 1.83 | 213.88 → 3.50 |
+| pii | 547 (0) | 100.00% | 1.5e-04 | pass | 34.59 → 1.95 | 211.88 → 3.74 |
+| pii_truncate | 547 (0) | 100.00% | 6.3e-05 | pass | 82.45 → 1.92 | 244.36 → 3.66 |
+| halu | 64 (0) | 100.00% | 7.2e-05 | pass | 1424.37 → 7.72 | 38738.26 → 56.15 |
 
 ### Disagreements
 
@@ -173,11 +183,74 @@ The router's CPU options, legacy candle on CPU, the runtime on MI325X:
   facade's partial result (a truncated scan with its spans) with the
   runtime's `input.truncated` answer.
 
+### The router image's stack against the release image
+
+The router's ROCm image installs the official PyTorch wheel. The ROCm
+records before it ran in the packages' release image, where readiness's
+golden answers were recorded:
+
+- the router image's stack: PyTorch 2.12.0+rocm7.2, HIP 7.2.53211, Triton
+  3.7.0, fla-core 0.5.2;
+- the release image: PyTorch 2.12.0+git6bbd260, built from source, HIP
+  7.2.53211, Triton 3.7.1, fla-core 0.5.2.
+
+On the same code, the router image's stack gives every label and span of
+the release image. Most answers are byte-identical, and the rest differ in
+their last bits:
+
+| Job | Inputs | Answers | Labels and spans | Byte-identical | Max abs Δp |
+| --- | --- | --- | --- | --- | --- |
+| domain | AMD recipe | 547 | 547 | 464 (84.8%) | 3.5e-06 |
+| guard | AMD recipe | 547 | 547 | 471 (86.1%) | 1.3e-05 |
+| safety | AMD recipe | 547 | 547 | 474 (86.7%) | 1.3e-06 |
+| factcheck | AMD recipe | 547 | 547 | 481 (87.9%) | 3.1e-06 |
+| feedback | AMD recipe | 547 | 547 | 465 (85.0%) | 9.0e-06 |
+| modality | AMD recipe | 547 | 547 | 468 (85.6%) | 1.2e-07 |
+| hazard | AMD recipe | 547 | 547 | 462 (84.5%) | 1.1e-06 |
+| pii | AMD recipe | 547 | 547 | 478 (87.4%) | 4.3e-05 |
+| **all** | AMD recipe | 4,376 | 4,376 | 3,763 (86.0%) | 4.3e-05 |
+| domain | CPU recipe | 547 | 547 | 462 (84.5%) | 6.1e-06 |
+| guard | CPU recipe | 547 | 547 | 469 (85.7%) | 3.8e-05 |
+| safety | CPU recipe | 547 | 547 | 469 (85.7%) | 1.3e-06 |
+| shield | CPU recipe | 547 | 547 | 471 (86.1%) | 5.7e-07 |
+| factcheck | CPU recipe | 547 | 547 | 483 (88.3%) | 3.1e-06 |
+| feedback | CPU recipe | 547 | 547 | 463 (84.6%) | 5.6e-06 |
+| modality | CPU recipe | 547 | 547 | 465 (85.0%) | 1.2e-07 |
+| hazard | CPU recipe | 547 | 547 | 462 (84.5%) | 1.1e-06 |
+| pii | CPU recipe | 547 | 547 | 476 (87.0%) | 2.1e-04 |
+| pii_truncate | CPU recipe | 547 | 547 | 476 (87.0%) | 3.4e-05 |
+| halu | CPU recipe | 64 | 64 | 20 (31.2%) | 3.3e-05 |
+| **all** | CPU recipe | 5,534 | 5,534 | 4,716 (85.2%) | 2.1e-04 |
+
+- **Where they differ:** on longer inputs. Answers to inputs of at most
+  200 characters are byte-identical on 446–447 of 450 per
+  job. The answers that differ have a median input of 379–446
+  characters, and Halu's grounded inputs run to thousands. The two builds'
+  kernels round some larger shapes differently.
+- **Golden answers:** readiness's ROCm references
+  (`registry/golden_answers_vela1.json`) are byte-identical on this stack
+  for all 13 `task_heads` built-ins: the ten text models,
+  Vela Embedding, Vela Reranker and Qwen3-Embedding. Three fresh processes
+  gave them, the first with an empty Triton cache. The release image gives
+  them byte for byte too, so no golden answer is re-recorded.
+- **Across processes:** separate processes on this stack answer byte for
+  byte alike:
+  - the AMD-recipe inputs' 4,376 answers in seven
+    processes: the five A/B rounds of `vela1-performance.md`, and the
+    parity runs at `efb5ec4d7` and `35ff3a8a5`;
+  - the CPU-recipe inputs' 5,534 answers and Shield's
+    547 in three processes, the third with an empty Triton
+    cache.
+- **Quality bar:** the Decision Index scores no Vela 1.0 model, so there
+  is no Index delta to measure. Vela 1.0's references are the legacy
+  answers, under design section 17's bars, and this stack passes them on
+  every job (above).
+
 ## Approximate profiles
 
 `batching` coalesces concurrent requests. A request alone runs as on
-`exact`, so its answers are the same (`b1eafc87a`, ROCm, AMD-recipe inputs:
-every value identical one request at a time).
+`exact`, so its answers are the same (`35ff3a8a5`, ROCm, AMD-recipe
+inputs: every value identical one request at a time).
 
 The `max_speed` reduced copies (design section 5.4) were recorded against
 `exact` on the whole corpus before any consent. Agreement counts the label,

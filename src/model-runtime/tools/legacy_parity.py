@@ -12,6 +12,9 @@ serves the same packages in-process and answers through its surface API.
            grounded inputs derived from them deterministically
   legacy   run the jobs on the legacy facade; write results and latencies
   runtime  run the jobs on the runtime; write results and latencies
+  build-legacy  compile the legacy side once, as a test binary ``ab`` serves
+  ab       alternate legacy and runtime calls on the same cores, round after
+           round; every finished round is saved, so a run resumes or grows
   compare  check design section 17's thresholds; write the parity record
 
 Results are JSON lines ``{job, id, result | error, latency_ns}``; offsets
@@ -32,7 +35,7 @@ import statistics
 import subprocess
 import sys
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -797,6 +800,50 @@ def ab_summary(report: dict[str, Any]) -> dict[str, Any]:
     return summary
 
 
+async def ab_rounds(
+    state: dict[str, Any],
+    specs: list[dict[str, Any]],
+    rounds: int,
+    pair: Callable[[dict[str, Any], dict[str, str], bool], Awaitable[tuple[int, int]]],
+    sides: list[str],
+    window: Callable[[str, dict[str, Any]], Awaitable[float]] | None,
+    save: Callable[[], None],
+) -> None:
+    """Run the rounds up to ``rounds`` that ``state`` has not finished, saving it after each.
+
+    ``state`` holds the finished pair and window rounds and their report, so an
+    interrupted run resumes where it stopped and a larger ``rounds`` adds
+    rounds to an earlier run, continuing its rotation. A pair round calls
+    ``pair(spec, item, runtime_first)`` for every input, with the order
+    flipping each round; a window round rotates ``sides`` by one each round
+    and records ``window(side, spec)``'s calls per second. Without ``window``
+    only pair rounds run.
+    """
+    report = state["report"]
+    for round_index in range(state["pair_rounds"], rounds):
+        for spec in specs:
+            entry = report.setdefault(
+                spec["Job"], {"legacy": [], "runtime": [], "ratio": []}
+            )
+            for item in spec["Inputs"]:
+                legacy_ns, runtime_ns = await pair(spec, item, bool(round_index % 2))
+                if legacy_ns < 0 or runtime_ns < 0:
+                    continue
+                entry["legacy"].append(legacy_ns)
+                entry["runtime"].append(runtime_ns)
+                entry["ratio"].append(legacy_ns / runtime_ns)
+        state["pair_rounds"] = round_index + 1
+        save()
+    for round_index in range(state["window_rounds"], rounds if window else 0):
+        shift = round_index % len(sides)
+        for spec in specs:
+            rates = report[spec["Job"]].setdefault("throughput", {})
+            for side in sides[shift:] + sides[:shift]:
+                rates.setdefault(side, []).append(await window(side, spec))
+        state["window_rounds"] = round_index + 1
+        save()
+
+
 def run_ab(args: argparse.Namespace) -> None:
     """Alternate legacy and runtime work on the same cores, round after round.
 
@@ -805,8 +852,15 @@ def run_ab(args: argparse.Namespace) -> None:
     flips every round); with ``--concurrency``, load windows of the legacy
     facade, the runtime's ``exact`` profile and the models' profile rotate.
     The legacy side is the ``build-legacy`` binary in serve mode, the runtime
-    side this process.
+    side this process. Every finished round goes to ``<out>.raw.json``, which
+    ``--resume`` continues.
     """
+    raw = Path(args.out).with_suffix(".raw.json")
+    state = (
+        json.loads(Path(args.resume).read_text(encoding="utf-8"))
+        if args.resume
+        else {"pair_rounds": 0, "window_rounds": 0, "report": {}}
+    )
     jobs = Path(args.binary).with_suffix(".jobs.json")
     specs = json.loads(jobs.read_text(encoding="utf-8"))
     legacy = subprocess.Popen(
@@ -835,50 +889,47 @@ def run_ab(args: argparse.Namespace) -> None:
         elapsed = time.perf_counter_ns() - start
         return elapsed if status == HTTPStatus.OK else -1
 
-    async def load(side: str, spec: dict[str, Any]) -> dict[str, Any]:
-        if side != "legacy":
-            return await runtime_load(runtime, spec, args, side)
-        legacy.stdin.write(f"load\t{spec['Job']}\t{args.concurrency}\t{args.seconds}\n")
-        return json.loads(legacy.stdout.readline())
+    async def pair(
+        spec: dict[str, Any], item: dict[str, str], runtime_first: bool
+    ) -> tuple[int, int]:
+        if runtime_first:
+            runtime_ns = await call_runtime(spec, item)
+            return call_legacy(spec, item), runtime_ns
+        legacy_ns = call_legacy(spec, item)
+        return legacy_ns, await call_runtime(spec, item)
 
-    async def measure() -> dict[str, Any]:
+    async def window(side: str, spec: dict[str, Any]) -> float:
+        if side != "legacy":
+            load = await runtime_load(runtime, spec, args, side)
+        else:
+            legacy.stdin.write(
+                f"load\t{spec['Job']}\t{args.concurrency}\t{args.seconds}\n"
+            )
+            load = json.loads(legacy.stdout.readline())
+        return load["calls"] / load["seconds"]
+
+    def save() -> None:
+        raw.write_text(json.dumps(state) + "\n", encoding="utf-8")
+
+    async def measure() -> None:
         for spec in specs:
             for _ in range(3):
                 await call_runtime(spec, spec["Inputs"][0])
-        report: dict[str, Any] = {}
-        for round_index in range(args.rounds):
-            for spec in specs:
-                entry = report.setdefault(
-                    spec["Job"], {"legacy": [], "runtime": [], "ratio": []}
-                )
-                for item in spec["Inputs"]:
-                    if round_index % 2:
-                        runtime_ns = await call_runtime(spec, item)
-                        legacy_ns = call_legacy(spec, item)
-                    else:
-                        legacy_ns = call_legacy(spec, item)
-                        runtime_ns = await call_runtime(spec, item)
-                    if legacy_ns < 0 or runtime_ns < 0:
-                        continue
-                    entry["legacy"].append(legacy_ns)
-                    entry["runtime"].append(runtime_ns)
-                    entry["ratio"].append(legacy_ns / runtime_ns)
-        for round_index in range(args.rounds if args.concurrency else 0):
-            shift = round_index % len(sides)
-            for spec in specs:
-                rates = report[spec["Job"]].setdefault("throughput", {})
-                for side in sides[shift:] + sides[:shift]:
-                    window = await load(side, spec)
-                    rates.setdefault(side, []).append(
-                        window["calls"] / window["seconds"]
-                    )
-        return report
+        await ab_rounds(
+            state,
+            specs,
+            args.rounds,
+            pair,
+            sides,
+            window if args.concurrency else None,
+            save,
+        )
 
-    report = asyncio.run(measure())
+    asyncio.run(measure())
     legacy.stdin.close()
     legacy.wait()
     runtime.stop()
-    summary = ab_summary(report)
+    summary = ab_summary(state["report"])
     Path(args.out).write_text(json.dumps(summary, indent=1) + "\n", encoding="utf-8")
     for job, row in summary.items():
         rates = " ".join(
@@ -1267,6 +1318,10 @@ def main(argv: Iterable[str] | None = None) -> int:
     )
     ab_parser.add_argument("--seconds", type=float, default=20.0)
     ab_parser.add_argument("--out", required=True)
+    ab_parser.add_argument(
+        "--resume",
+        help="an earlier run's .raw.json: keep its rounds, run the rest up to --rounds",
+    )
     compare = commands.add_parser("compare")
     compare.add_argument("--legacy", required=True, help="the baseline's results")
     compare.add_argument(
