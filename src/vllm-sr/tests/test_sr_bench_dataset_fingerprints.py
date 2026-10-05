@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 
 import pytest
-
 from cli.sr_bench import datasets
 from cli.sr_bench.datasets import DatasetReader
 from cli.sr_bench.sources import _write_dataset
