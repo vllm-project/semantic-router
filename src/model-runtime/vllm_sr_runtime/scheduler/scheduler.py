@@ -436,12 +436,12 @@ class Scheduler:
             _fail(pending.future, error)
 
 
-def _resolve(future: Future, result: Any) -> None:
+def _resolve(future: Future[Results[Any]], result: Results[Any]) -> None:
     """Answer ``future`` unless it is answered or its caller cancelled it (the client left)."""
     with contextlib.suppress(InvalidStateError):
         future.set_result(result)
 
 
-def _fail(future: Future, error: BaseException) -> None:
+def _fail(future: Future[Results[Any]], error: BaseException) -> None:
     with contextlib.suppress(InvalidStateError):
         future.set_exception(error)
