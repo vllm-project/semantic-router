@@ -54,10 +54,6 @@ MEDIA_COST = {
     "nano": {"image": 1200, "audio": 1600},
     "mini": {"image": 300, "audio": 550},
 }
-# Text tokens a lone request may cost to run on the event loop (LoadedModel.
-# inline_cost): Nano runs 32 tokens in about 6 ms on 16 cores; Mini takes
-# 25 ms for 8 tokens, longer than the loop may stall.
-INLINE_COST = {"nano": 32, "mini": 0}
 # Import name -> distribution of the multimodal extra.
 EXTRA = {"onnxruntime": "onnxruntime", "PIL": "Pillow"}
 GOLDEN_TEXT = "Route this request to the model that answers it best."
@@ -207,7 +203,7 @@ class MultimodalEmbeddingFamily(ModelFamily):
                 input_types=text.input_types,
             ),
         )
-        model = OmniModel(
+        return OmniModel(
             info,
             engine_model,
             text,
@@ -215,8 +211,6 @@ class MultimodalEmbeddingFamily(ModelFamily):
             AudioProcessor(verified, config),
             MEDIA_COST[verified.variant],
         )
-        model.inline_cost = INLINE_COST[verified.variant]
-        return model
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
         """One request through all four graphs; references per device class when recorded."""
