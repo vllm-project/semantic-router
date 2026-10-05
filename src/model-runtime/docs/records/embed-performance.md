@@ -149,14 +149,19 @@ rounds of both runs, the runtime wins the 45–57-token texts in 94 of 100
 pairs (medians −0.35 to −1.25 ms) and loses the 64–104-token ones (medians
 +0.02 to +0.70 ms), and those set the p95.
 
-The cell stays open in this PR, which lists it. The candidate left is the
-12-thread pool with ONNX Runtime's own spin: in the decision runs below it
-had the fastest runtime side (p50 4.36 ms and p95 6.87 ms, against 4.43 and
-7.06 ms with the 10 ms spin, in the same run) and the highest rate. Those
-runs had 3 rounds, though, and the 10 ms spin read level there (p95 −0.38
-[−0.84, +0.41]) before its 10-round run read worse. The engine at
-`e0e0e2850` reads every graph's spin setting for its receipt, so that pool
-needs an engine change before a 10-round A/B can measure it.
+The cell stays open in this PR, which lists it. No setting measured so far
+closes it without a cost elsewhere. The 12-thread pool with ONNX Runtime's
+own spin had the fastest runtime side in the decision runs below (p50
+4.36 ms and p95 6.87 ms, against 4.43 and 7.06 ms with the 10 ms spin, in
+the same run) and the highest rate. But that spin runs about 40 ms after
+every call and slows the next graph or model on the same cores (the probe
+below), which is why the spin is bounded. Those runs also had only 3
+rounds, and the 10 ms spin read level there (p95 −0.38 [−0.84, +0.41])
+before its 10-round run read worse. Two Nano text sessions, 16 threads for
+texts of 60 tokens or more, collapsed the 4-caller rate. The engine at
+`e0e0e2850` also reads every graph's spin setting for its receipt, so an
+unbounded pool would need an engine change before a 10-round A/B could
+measure it.
 
 **A re-check that was not quiet.** Ten rounds of the Nano text row alone,
 same cores, tool and pool, from 00:16 to 00:20 on 2026-10-06. Another
