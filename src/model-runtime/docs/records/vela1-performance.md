@@ -17,6 +17,9 @@ records; raw results are in `vela1-performance.json`.
     `causal-conv1d`, which these models don't run, and Python 3.12.15. It
     answers byte for byte alike (`vela1-parity.md`), so the ROCm rows hold for
     it.
+  - The interleaved ROCm A/B table is re-timed in the router's shipped ROCm
+    image (`a580be6b9`: vLLM's ROCm PyTorch 2.12.0+git6bbd260 with AOTriton
+    0.13.50); the other ROCm rows are stack B's.
   - The final head is `35ff3a8a5` with these records on top, so every
     row holds for it.
 - **Legacy side:** the router's native facade at `61aa7eb2d`
@@ -126,7 +129,10 @@ same 8 host vCPUs, 72–79, over 5 rounds, with the
 order flipping each round. Each process runs in its container's own cgroup
 cpuset (`docker run --cpuset-cpus`), and a container started this way on
 node B reads `cpuset.cpus.effective` 72–79.
-The node's 1-minute load stayed at or below 62 (median 27) on 160 vCPUs during
+The runtime side ran in the router's shipped ROCm image (`a580be6b9`: vLLM's
+ROCm PyTorch 2.12.0+git6bbd260 with AOTriton 0.13.50, Python 3.12.15), with its
+own runtime package, as uid 65532; the parity runs above are stack B's.
+The node's 1-minute load stayed at or below 25 (median 6) on 160 vCPUs during
 the rounds.
 
 - In each round, a fresh legacy process and a fresh runtime process
@@ -140,14 +146,14 @@ The intervals are computed as on CPU.
 
 | Job | Pairs | p50 legacy → runtime (ms) [legacy / runtime, 95% CI] | p95 legacy → runtime (ms) [legacy / runtime, 95% CI] | Median per-input speedup (95% CI) | 4 callers, calls/s: legacy → `exact` | `exact` / legacy rate (95% CI) |
 | --- | --- | --- | --- | --- | --- | --- |
-| domain | 2,725 | 153.55 → 1.90 [80.66, 81.01] | 155.86 → 3.73 [30.34, 43.32] | 80.74× [80.56, 80.86] | 6.5 → 417.9 | 64.14× [61.56, 66.82] |
-| guard (ROCm EP) | 2,725 | 245.24 → 1.90 [128.49, 129.06] | 253.64 → 3.83 [52.01, 69.98] | 128.84× [128.45, 129.04] | 4.1 → 426.2 | 100.01× [89.02, 112.35] |
-| safety | 2,725 | 160.25 → 1.84 [86.70, 87.07] | 165.05 → 3.69 [33.55, 46.42] | 86.77× [86.61, 86.91] | 6.1 → 439.1 | 71.50× [70.29, 72.74] |
-| factcheck | 2,725 | 158.94 → 1.83 [86.49, 86.80] | 167.79 → 3.68 [34.44, 47.43] | 86.71× [86.56, 86.81] | 6.2 → 439.7 | 70.54× [68.67, 72.46] |
-| feedback | 2,725 | 159.04 → 1.91 [83.14, 83.46] | 164.99 → 3.83 [33.81, 45.21] | 83.31× [83.14, 83.46] | 6.2 → 427.6 | 68.76× [68.06, 69.46] |
-| modality | 2,725 | 158.99 → 1.87 [84.84, 85.33] | 165.03 → 3.68 [33.23, 46.08] | 85.06× [84.80, 85.40] | 6.2 → 444.5 | 85.58× [51.67, 141.75] |
-| hazard | 2,735 | 13.28 → 1.87 [7.06, 7.11] | 13.52 → 4.73 [2.64, 3.74] | 7.07× [7.05, 7.09] | 70.3 → 372.2 | 5.27× [5.14, 5.41] |
-| pii | 2,725 | 132.95 → 1.95 [68.20, 68.52] | 133.64 → 3.98 [27.10, 35.08] | 68.20× [68.06, 68.36] | 7.5 → 413.8 | 55.08× [53.55, 56.66] |
+| domain | 2,725 | 153.27 → 1.89 [81.03, 81.34] | 154.87 → 3.28 [31.05, 49.07] | 81.15× [80.97, 81.30] | 6.5 → 436.7 | 67.73× [66.80, 68.68] |
+| guard (ROCm EP) | 2,725 | 243.05 → 1.87 [129.46, 129.97] | 253.82 → 3.29 [52.28, 80.42] | 130.15× [129.91, 130.39] | 4.1 → 430.8 | 105.66× [103.11, 108.28] |
+| safety | 2,725 | 158.99 → 1.81 [87.53, 87.88] | 166.02 → 3.19 [33.79, 53.69] | 87.74× [87.58, 87.87] | 6.2 → 448.1 | 56.78× [28.42, 113.42] |
+| factcheck | 2,725 | 160.88 → 1.83 [87.87, 88.21] | 167.06 → 8.25 [13.14, 31.28] | 87.82× [87.65, 88.01] | 6.2 → 443.0 | 81.66× [49.08, 135.87] |
+| feedback | 2,725 | 160.00 → 1.89 [84.28, 84.60] | 165.91 → 3.34 [33.60, 51.54] | 83.95× [83.80, 84.12] | 6.2 → 432.2 | 70.11× [69.23, 71.00] |
+| modality | 2,725 | 159.12 → 1.83 [86.60, 86.93] | 168.96 → 3.27 [34.23, 53.87] | 86.95× [86.83, 87.07] | 6.2 → 445.6 | 70.54× [66.09, 75.29] |
+| hazard | 2,735 | 13.28 → 1.85 [7.16, 7.20] | 13.55 → 4.77 [2.69, 4.27] | 7.17× [7.15, 7.18] | 70.6 → 350.4 | 4.98× [4.93, 5.03] |
+| pii | 2,725 | 132.97 → 1.95 [68.14, 68.43] | 133.58 → 3.53 [27.20, 39.76] | 68.14× [68.01, 68.28] | 7.5 → 417.5 | 55.66× [55.36, 55.95] |
 
 Shield is outside the AMD recipe. Its row comes from the parity run alone,
 and is timing only: its package's ONNX graph answers differently from its
