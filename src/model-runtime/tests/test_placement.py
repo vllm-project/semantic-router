@@ -100,6 +100,15 @@ def test_a_cpu_without_lapack_refuses_models_that_require_it(monkeypatch, lapack
     assert "the router's CPU image" in message and "a GPU device" in message
 
 
+def test_a_pytorch_without_the_private_lapack_flag_still_places_on_the_cpu(
+    monkeypatch,
+):
+    monkeypatch.delattr(torch._C, "has_lapack")
+    (device,) = CPUAccelerator().devices()
+    assert CPUAccelerator().capabilities(device)["lapack"] is True
+    assert place(GATED_DELTA, "cpu", 1000).device.accelerator == "cpu"
+
+
 def test_the_refusal_comes_before_any_weights_load_and_is_final(
     monkeypatch, qwen3_package, qwen35_package
 ):

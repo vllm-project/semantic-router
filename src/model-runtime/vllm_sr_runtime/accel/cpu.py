@@ -110,7 +110,9 @@ class CPUAccelerator(Accelerator):
             "native_bf16": device.bf16,
             "graphs": False,
             "triton": False,
-            "lapack": bool(torch._C.has_lapack),
+            # A private flag: a PyTorch that drops it is taken to have LAPACK,
+            # and a model that needs it still fails its golden check if not.
+            "lapack": bool(getattr(torch._C, "has_lapack", True)),
         }
 
     def lacks(self, device: DeviceInfo, capability: str) -> str:
