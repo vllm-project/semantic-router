@@ -9,6 +9,7 @@ then rescale in float64 and normalize in float32. Audio follows ``audio.py``.
 from __future__ import annotations
 
 import io
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
@@ -89,7 +90,11 @@ class ImageProcessor:
 
     A pixel's normalized value depends only on its byte and channel, so the
     rescale and normalization are one table of 256 values per channel,
-    computed with the processor's own float64 and float32 steps.
+    computed with the processor's own float64 and float32 steps. Pillow
+    resamples each band of an RGB image with the same integer arithmetic as a
+    one-band image, so the three bands resize and normalize at once, each on
+    its own thread and into its own plane, and the pixels are those of the
+    whole image's resize.
     """
 
     def __init__(self, bundle: OmniBundle):
@@ -100,6 +105,9 @@ class ImageProcessor:
         self.std = np.asarray(settings["std"], dtype=np.float32)
         scaled = (np.arange(256, dtype=np.float64) * (1 / 255)).astype(np.float32)
         self.table = np.ascontiguousarray(((scaled[:, None] - self.mean) / self.std).T)
+        self.bands = ThreadPoolExecutor(
+            max_workers=2, thread_name_prefix="vllm-sr-omni-pixels"
+        )
 
     def pixels(self, data: bytes) -> np.ndarray | str:
         """``[1, 3, size, size]`` float32, or ``invalid_input`` for an unreadable image."""
@@ -109,7 +117,8 @@ class ImageProcessor:
             with Image.open(io.BytesIO(data)) as image:
                 if image.width * image.height > MAX_IMAGE_PIXELS:
                     return INVALID_INPUT
-                rgb = image.convert("RGB")
+                image.load()
+                rgb = image if image.mode == "RGB" else image.convert("RGB")
         except (
             UnidentifiedImageError,
             OSError,
@@ -118,14 +127,23 @@ class ImageProcessor:
         ):
             return INVALID_INPUT
         resample = getattr(Image.Resampling, self.resample)
-        resized = np.asarray(
-            rgb.resize((self.size, self.size), resample=resample, reducing_gap=None)
-        )
+        bands = rgb.split()
         pixels = np.empty((1, 3, self.size, self.size), dtype=np.float32)
-        for channel in range(3):
-            # Indexing gathers twice as fast as np.take(..., out=) on strided channels.
-            pixels[0, channel] = self.table[channel][resized[..., channel]]
+
+        def channel(index: int) -> None:
+            resized = bands[index].resize(
+                (self.size, self.size), resample=resample, reducing_gap=None
+            )
+            pixels[0, index] = self.table[index][np.asarray(resized)]
+
+        others = [self.bands.submit(channel, index) for index in (1, 2)]
+        channel(0)
+        for other in others:
+            other.result()
         return pixels
+
+    def close(self) -> None:
+        self.bands.shutdown(wait=True)
 
 
 class AudioProcessor:

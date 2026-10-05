@@ -12,6 +12,7 @@ worker. Requests name their model (optional while a process serves one);
 from __future__ import annotations
 
 import asyncio
+import gc
 import logging
 import math
 import os
@@ -83,7 +84,48 @@ def choose_engine(
     raise RuntimeError(f"no engine can run {spec.name}: {'; '.join(reasons)}")
 
 
-__all__ = ["DEADLINE", "Runtime", "ServedModel", "with_overrides"]
+def planned_engine(config: ModelConfig) -> str:
+    """The engine a served model will run on the CPU, known before anything loads; ``auto`` if only loading can tell.
+
+    A named engine stands. A built-in model's ``auto`` is what
+    ``choose_engine`` will pick: the table's CPU engine, else its family's only
+    engine (the descriptor's ``engines``).
+    """
+    if config.engine != AUTO_ENGINE:
+        return config.engine
+    known = builtin.lookup(config.model)
+    if known is None:
+        return AUTO_ENGINE
+    if "cpu" in known.engines:
+        return known.engines["cpu"]
+    try:
+        family = registry.plugin("families", known.family).load()
+    except (KeyError, ImportError):
+        return AUTO_ENGINE
+    engines = family.descriptor().get("engines", [])
+    return engines[0] if len(engines) == 1 else AUTO_ENGINE
+
+
+def freeze_heap() -> None:
+    """Collect once, then leave every object that exists now out of later collections.
+
+    Loading leaves the frameworks', tokenizers' and models' long-lived objects
+    behind. A full collection walks all of them (83-131 ms in a process that
+    serves Omni Nano and Mini) and stalls whichever request triggers it; once
+    they are frozen it walks only what requests allocated since.
+    """
+    gc.collect()
+    gc.freeze()
+
+
+__all__ = [
+    "DEADLINE",
+    "Runtime",
+    "ServedModel",
+    "freeze_heap",
+    "planned_engine",
+    "with_overrides",
+]
 
 GENERIC_OPTIONS = {"deadline_ms", "profile", "return_meta"}
 SURFACE_FIELDS = {
@@ -263,11 +305,13 @@ class ServedModel:
         )
         profiles = self._profiles()
         default = profiles[config.profile]
-        cpu_models = sum(
-            device_kind(served.device) == "cpu" for served in process.served_models()
+        neighbors = frozenset(
+            planned_engine(served)
+            for served in process.served_models()
+            if served is not config and device_kind(served.device) == "cpu"
         )
         engine_options = default.engine_options(
-            EngineOptions(threads=process.threads, exclusive_cpu=cpu_models <= 1)
+            EngineOptions(threads=process.threads, cpu_neighbors=neighbors)
         )
         self.health.set("loading", f"loading weights on {placement.device.label}")
         pinned = self.kernel_choices
@@ -679,12 +723,13 @@ class Runtime:
             served.stop()
 
     def load(self) -> None:
-        """Load every model in order; the first failure is raised (foreground start)."""
+        """Load every model in order, then ``freeze_heap``; the first failure is raised (foreground start)."""
         if self.config.autotune_cache:
             freeze_autotune(self.config.autotune_cache)
         for served in self.served:
             served.load()
             self._ready_gauge()
+        freeze_heap()
 
     def _load_all(self) -> None:
         """Load every model in order, then reload the ones that failed with back-off.
@@ -693,7 +738,8 @@ class Runtime:
         once. Any other failure (no device with enough free memory, a
         download, a busy device) is retried ``load_attempts`` times in all,
         waiting ``load_retry_seconds`` and doubling up to 300 s, while the
-        model reports ``loading``; the other models serve meanwhile.
+        model reports ``loading``; the other models serve meanwhile. Every pass
+        ends with ``freeze_heap``.
         """
         if self.config.autotune_cache:
             freeze_autotune(self.config.autotune_cache)
@@ -724,6 +770,7 @@ class Runtime:
                         )
                         retry.append(served)
                 self._ready_gauge()
+            freeze_heap()
             if not retry:
                 return
             delay = min(self.config.load_retry_seconds * 2 ** (attempt - 1), 300.0)

@@ -544,3 +544,26 @@ def test_a_failed_load_is_retried_unless_the_answers_are_wrong(
             assert flaky_health.reason == "VerificationError: golden mismatch"
     finally:
         runtime.stop()
+
+
+@pytest.mark.parametrize("background", [False, True])
+def test_loading_freezes_the_heap(example_plugin, keyword_package, background):
+    import gc
+
+    models = (
+        ModelConfig(
+            model=str(keyword_package),
+            name="keywords",
+            device="cpu",
+            engine="example_counts",
+        ),
+    )
+    gc.unfreeze()
+    runtime = Runtime(ServeConfig(models=models))
+    try:
+        runtime.start(background=background)
+        assert runtime.wait(timeout=60)
+        assert gc.get_freeze_count() > 0
+    finally:
+        runtime.stop()
+        gc.unfreeze()

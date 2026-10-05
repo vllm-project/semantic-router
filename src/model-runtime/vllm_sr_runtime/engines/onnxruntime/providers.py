@@ -4,15 +4,24 @@ The CPU provider is validated. GPU providers run only when the installed
 onnxruntime build has them, never fall back to the CPU for a node they cannot
 run, and stay unvalidated until a record says otherwise.
 
-In a process that has the CPU to itself, CPU sessions share one intra-op pool
-(created before the first session): each session's own pool spins after a
-run, so graphs that run one after another (Omni's CLAP windows, then its audio
-graph) otherwise share the cores with the previous session's spinning threads;
-on 16 cores CLAP + audio took 124 ms with per-session pools and 43 ms with the
-shared one. Where the process serves other CPU models, the spinning would slow
-their forwards instead, so sessions get pools that don't spin. Pools are sized
-to the configured threads, else the CPUs the process may run on (ONNX
-Runtime's own default counts the host's CPUs, not the cpuset).
+Every CPU session has its own intra-op pool, sized to the configured threads
+(else the CPUs the process may run on; ONNX Runtime's own default counts the
+host's CPUs, not the cpuset) and capped by the spec's ``graph_threads``. A
+process-wide shared pool can't be sized per graph, and graphs differ: on 16
+cores Omni Nano's bare text graph serves four callers twice as fast on 12
+threads as on 16 (15 workers plus four callers oversubscribe the cores),
+while its image graph takes 109 ms on 16 threads and 163 ms on 8.
+
+An idle pool's threads spin before they sleep. Unbounded (about 40 ms), they
+share the cores with whatever runs next: Omni's audio graph after its CLAP
+windows took 124 ms instead of 43, and a native forward after an ONNX Runtime
+run doubled. Pools that stop spinning the moment a run returns cost Omni
+13-24 % of its 4-caller throughput, and pools that never spin take Nano text
+from 5.1 to 7.4 ms. So idle threads spin ``SPIN_US``, or the spec's
+``graph_spin_us`` for a graph whose threads would sleep inside a run (Omni
+Nano's text graph on 12 threads answered 0.3-0.4 ms faster with a 10 ms
+spin), and ``NEIGHBOR_SPIN_US`` beside another engine's CPU models (a 2 ms
+spin added 1.8 ms to a native forward that followed; 1 ms added none).
 """
 
 from __future__ import annotations
@@ -94,41 +103,35 @@ def _options(name: str, device: DeviceInfo) -> dict[str, str]:
     return {"device_id": str(device.index or 0)}
 
 
-_SHARED_POOL: dict[str, int] = {}
+# How long an idle intra-op thread spins before it sleeps (ONNX Runtime 1.26
+# and later): alone or beside other ONNX Runtime models, and beside another
+# engine's CPU models.
+SPIN_ENTRY = "session.intra_op.spin_duration_us"
+SPIN_US = 2000
+NEIGHBOR_SPIN_US = 1000
 
 
-def cpu_threads(threads: int | None) -> int:
-    """The intra-op pool size: as configured, else the CPUs this process may run on."""
+def cpu_threads(threads: int | None, cap: int | None = None) -> int:
+    """The intra-op pool size: as configured, else the CPUs this process may run on; at most ``cap``."""
     if threads:
-        return threads
-    affinity = getattr(os, "sched_getaffinity", None)
-    return len(affinity(0)) if affinity else os.cpu_count() or 1
-
-
-def shared_pool(threads: int) -> int | None:
-    """The size of the process's shared CPU pool, created on first use; None if ORT started without it."""
-    import onnxruntime as ort
-
-    if "size" not in _SHARED_POOL:
-        try:
-            ort.set_global_thread_pool_sizes(threads, 1)
-        except RuntimeError:
-            _SHARED_POOL["size"] = 0
-        else:
-            _SHARED_POOL["size"] = threads
-    return _SHARED_POOL["size"] or None
+        size = threads
+    else:
+        affinity = getattr(os, "sched_getaffinity", None)
+        size = len(affinity(0)) if affinity else os.cpu_count() or 1
+    return min(size, cap) if cap else size
 
 
 def session_options(
-    choice: ProviderChoice, threads: int | None, exclusive_cpu: bool = True
+    choice: ProviderChoice,
+    threads: int,
+    cpu_neighbors: bool = False,
+    spin_us: int | None = None,
 ) -> Any:
-    """Sequential execution with every graph optimization; GPU sessions never fall back to the CPU.
+    """Sequential execution with every graph optimization on a pool of ``threads``.
 
-    In a process that has the CPU to itself, CPU sessions run on the shared
-    pool. Where other CPU models share the process, each CPU session gets its
-    own pool of ``cpu_threads(threads)`` that doesn't spin: the shared pool
-    keeps its threads spinning after every run and ONNX Runtime offers no way
-    to stop that. Once the shared pool exists every CPU session must use it.
+    Idle CPU threads spin ``spin_us`` (default ``SPIN_US``), or
+    ``NEIGHBOR_SPIN_US`` when another engine's models serve the process's CPU
+    too. GPU sessions never fall back to the CPU.
     """
     import onnxruntime as ort
 
@@ -136,17 +139,11 @@ def session_options(
     options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
     options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
     options.log_severity_level = 3
-    size = cpu_threads(threads)
-    pooled = not choice.gpu and (
-        (exclusive_cpu and shared_pool(size)) or _SHARED_POOL.get("size")
-    )
-    if pooled:
-        options.use_per_session_threads = False
-    else:
-        options.intra_op_num_threads = size
-        options.inter_op_num_threads = 1
-    if not choice.gpu and not exclusive_cpu:
-        options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+    options.intra_op_num_threads = threads
+    options.inter_op_num_threads = 1
+    if not choice.gpu:
+        spin = NEIGHBOR_SPIN_US if cpu_neighbors else spin_us or SPIN_US
+        options.add_session_config_entry(SPIN_ENTRY, str(spin))
     if choice.gpu:
         options.add_session_config_entry("session.disable_cpu_ep_fallback", "1")
     return options

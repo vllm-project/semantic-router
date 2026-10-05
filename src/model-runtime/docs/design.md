@@ -755,9 +755,10 @@ each FLA autotuner they name gets a cache that routes lookups, per thread, to
 the configurations of the model whose scope the thread is in, and the runtime
 runs every device call of a pinned model (load, warm-up, golden check, graph
 capture, the worker's batches, inline batches) inside that scope. Other
-threads, and models without choices, use the autotuner's own cache. There is
-no lock, so the models of one device keep running concurrently; a captured
-graph keeps the configurations it was captured with. A model whose choices
+threads, and models without choices, use the autotuner's own cache. The
+routing takes no lock of its own (a GPU's device calls are serialized for
+graph captures anyway, §9); a captured graph keeps the configurations it was
+captured with. A model whose choices
 can't run here (another FLA version, or a recorded kernel FLA no longer has)
 still loads, with golden `unverified` and the reason in its health and card.
 `--autotune-cache` still persists Triton's compiled kernels and the tuning of

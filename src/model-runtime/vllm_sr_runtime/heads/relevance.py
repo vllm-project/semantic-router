@@ -29,7 +29,7 @@ from ..errors import (
 )
 from ..plugins.base import DEADLINE, RerankInfo, SurfacePlan, SurfaceRequest
 from ..registry.artifacts import read_json, safetensors_header
-from .task import Head, Item, Rows, cache_key
+from .task import Head, Item, Rows, cache_key, positive_option
 
 MAX_DOCUMENTS = 1024
 CONTRACT = {
@@ -236,8 +236,11 @@ class RerankSurface:
             raise ValueError("documents must be a nonempty list of strings")
         if len(documents) > MAX_DOCUMENTS:
             raise ValueError(f"documents holds at most {MAX_DOCUMENTS} items")
-        layer = _positive(body.get("layer"), "layer") or self.layout.default[0]
-        dim = _positive(body.get("dimensions"), "dimensions") or self.layout.default[1]
+        layer = positive_option(body.get("layer"), "layer") or self.layout.default[0]
+        dim = (
+            positive_option(body.get("dimensions"), "dimensions")
+            or self.layout.default[1]
+        )
         if (layer, dim) not in self.heads:
             served = ", ".join(
                 f"{exit_layer}/{exit_dim}" for exit_layer, exit_dim in self.heads
@@ -245,7 +248,7 @@ class RerankSurface:
             raise ValueError(
                 f"layer {layer} and dimensions {dim} are not a served pair scorer: {served}"
             )
-        top_n = _positive(body.get("top_n"), "top_n") or len(documents)
+        top_n = positive_option(body.get("top_n"), "top_n") or len(documents)
         return_documents = body.get("return_documents", False)
         if not isinstance(return_documents, bool):
             raise ValueError("return_documents must be a boolean")
@@ -254,7 +257,7 @@ class RerankSurface:
                 "pair scoring rejects over-long pairs (options.overflow: reject)"
             )
         max_tokens = (
-            _positive(options.get("max_tokens"), "options.max_tokens")
+            positive_option(options.get("max_tokens"), "options.max_tokens")
             or max_input_tokens
         )
         if max_tokens > max_input_tokens:
@@ -334,14 +337,6 @@ class RerankSurface:
             "usage": {"input_tokens": plan.input_tokens, "output_tokens": 0},
             "meta": {"pair_scorer": {"layer": layer, "dimension": dim}},
         }
-
-
-def _positive(value: Any, name: str) -> int | None:
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise ValueError(f"{name} must be a positive integer")
-    return value
 
 
 def _has_scorer(header: dict[str, Any], layer: int, dim: int) -> bool:
