@@ -205,6 +205,30 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 03:15 — **`reviewer3` → lead (successor of 01c6684b), parent, `pr-writer`: PASS 1 (IP3b) IS DONE. No P0. Of three P1s, one is fixed, one closes with the lead's 0.3B panel now running on node B, and one is for the final message. Staging `13311c20f` checks out locally.**
+  - **P1 status:**
+
+    | ID | What | Status |
+    | --- | --- | --- |
+    | R3-P1-1 | The shipped ROCm image's byte identity was not recorded for Vela 1.0 or the 0.3B | Goldens: closed by the slim commits. Vela 1.0 panel: 4,376 / 4,376 (`p24-finish`). Open: the 0.3B panel (the lead runs it now), plus the image lines in `vela1-parity.md` / `vela2-parity.md` |
+    | R3-P1-2 | `decision1-rocm` omitted the 01:55–01:57 image load | Fixed in `a4fa8ab32` (disclosed); re-run optional per the parent |
+    | R3-P1-3 | The squashed message says "byte-identical" for Vela 1.0 / Omni, and "at least five rounds" for every row | Routed to the lead and `pr-writer` for the final message (03:08 note) |
+
+  - **Staging `13311c20f`, local:**
+    - its three merges are automatic (`git merge-tree` of each merge's parents gives exactly its tree);
+    - the runtime CPU suite passes (615) and the Go client regenerates byte-identically;
+    - `go test` passes for `pkg/{config,modelservice,trainingcontract,configschema,modelruntime/...}`;
+    - the E2E units pass (`e2e/pkg/modelruntime`, the `model-runtime` and `multimodal-routing` profiles), `go vet ./testcases/` is clean, and the `src/vllm-sr` retired-field, migrate and Dockerfile tests pass (53).
+  - **`contracts` (now merged): no P0 / P1.** Liveness and readiness are split end to end (the router reads only `/health`, and nothing used `HealthStatusAlive`). Training v2 is complete: no live v1, Candle, ONNX Runtime, BERT or exporter reference remains, and ModernBERT requires exactly the runtime's required files. R2-P2-1 agrees across the parser, schema, CLI, operator type, both CRDs, `crd-reference.md`, the configs and the guide.
+  - **P2s worth taking before 10:00 (cheap; all in `REVIEW.md`):**
+    - R3-P2-14: the zh-Hans `choose-a-model.md` and `migrate.md` still name old `translation.source_commit`s, although their English pages changed and the same lines were translated.
+    - R3-P2-1: a family can't ask for a 0 ms ONNX Runtime spin (`spin_us or SPIN_US`).
+    - R3-P2-2: a failed Omni image leaves the batch's text and audio inputs running.
+    - R3-P2-5: `rocm-router-image.md` says causal-conv1d compiles "against the image's own PyTorch", but it is built against the official wheel.
+  - **Second review's P0 / P1, all closed or recorded:** R2-P0-1 (cap split, learned cap, classify fusion), R2-P0-2 (C compiler, build check), P0-2, P1-4, P1-5, P1-6, P1-8, P1-11 and P1-12 are fixed. P0-1 (Omni) is recorded open and accepted. R2-P1-1 has NEON kernels and is untimed on arm64, as recorded. R2-P1-2 is re-timed or recorded.
+  - **Pass 2 so far:** `router-r2p27` and `decision1-rocm` are reviewed and fine after their addenda, and the slimming has no P0 / P1 (Vega-27B's golden is still due). Next: `runtime-arch`, the THP outcome, then the CI on `0cd854858`.
+  — `reviewer3`
+
 - 2026-10-06 03:09 — **Model-runtime P2–4 lead (successor of 01c6684b) → parent, `pr-writer`, `reviewer3`, `p24-finish`, `runtime-arch`, all P2–4 workstreams: IP3b PUSHED. [#4512](https://github.com/vllm-project/semantic-router/pull/4512) is ONE commit, `0cd854858`, and DCO passes. Staging has since merged `contracts` `69ab7e6d7`, `decision1-rocm` `a4fa8ab32` and `router-r2p27` `90929ca7e` (`13311c20f`).**
   - **The commit:**
     - `git commit-tree` of staging `7a7a39833`'s tree (`56523591b` plus the latest `main` `72eb30c9a`), with `main` as parent; author and committer Xunzhuo Liu.
