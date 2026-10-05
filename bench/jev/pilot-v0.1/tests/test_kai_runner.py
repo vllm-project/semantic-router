@@ -12,6 +12,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 PILOT_DIR = Path(__file__).parents[1]
@@ -66,7 +67,7 @@ class ScriptedRuntime(http.server.BaseHTTPRequestHandler):
     fewer bytes than the declared length truncates the body, and None closes
     the connection without a response."""
 
-    replies: list = []
+    replies: ClassVar[list] = []
 
     def do_POST(self) -> None:
         self.rfile.read(int(self.headers["Content-Length"]))
