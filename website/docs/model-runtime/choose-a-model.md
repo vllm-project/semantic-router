@@ -70,7 +70,9 @@ is a private preview and needs a Hugging Face token with access.
 
 On AMD GPUs the router images ship the stack the runtime is validated on:
 PyTorch 2.12 for ROCm 7.2, FLA 0.5.2, and `causal-conv1d` 1.7.0 built for
-ROCm. The built-in models' GPU reference answers are checked on that stack,
+ROCm. Its `causal-conv1d` also carries code for MI200 and MI350 GPUs, so the
+models that use it run there too, though only MI300X and MI325X are validated.
+The built-in models' GPU reference answers are checked on that stack,
 and every model compares itself with them when it loads. With another
 PyTorch, ROCm or kernel build, a model can fail that check or report
 [`unverified`](./troubleshooting.md#a-ready-models-self-check-says-unverified).
