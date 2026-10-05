@@ -144,6 +144,14 @@ func apiClassifyRoutes() []apiRoute {
 			jsonBodyFor[CombinedClassificationRequest](),
 		),
 		managedRoute(
+			EndpointMetadata{Path: apiDiagnosticsPath + "/classify/combined/batch", Method: "POST", Description: "Perform combined intent, PII, and security classification for a batch of texts"},
+			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
+			(*ClassificationAPIServer).handleCombinedBatchClassification,
+			jsonResponse[CombinedClassificationBatchResponse](http.StatusOK, "Successful response"),
+			errorResponses(400, 413, 429, 500, 503),
+			jsonBodyFor[CombinedClassificationBatchRequest](),
+		),
+		managedRoute(
 			EndpointMetadata{Path: apiDiagnosticsPath + "/classify/batch", Method: "POST", Description: "Batch classification with configurable task_type parameter"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleBatchClassification,

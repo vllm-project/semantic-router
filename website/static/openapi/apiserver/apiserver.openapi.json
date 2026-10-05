@@ -8334,6 +8334,962 @@
         "x-vllm-sr-visibility": "advanced"
       }
     },
+    "/api/v1/diagnostics/classify/combined/batch": {
+      "post": {
+        "summary": "Perform combined intent, PII, and security classification for a batch of texts",
+        "description": "Perform combined intent, PII, and security classification for a batch of texts",
+        "operationId": "post_api_v1_diagnostics_classify_combined_batch",
+        "tags": [
+          "diagnostics"
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "processing_time_ms": {
+                      "type": "integer"
+                    },
+                    "recipe": {
+                      "type": "string"
+                    },
+                    "results": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "errors": {
+                            "nullable": true,
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "object",
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "message": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "code",
+                                "message"
+                              ]
+                            }
+                          },
+                          "index": {
+                            "type": "integer"
+                          },
+                          "intent": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "applied_unknown_policies": {
+                                "nullable": true,
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "classification": {
+                                "type": "object",
+                                "properties": {
+                                  "category": {
+                                    "type": "string"
+                                  },
+                                  "confidence": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "confidence_available": {
+                                    "nullable": true,
+                                    "type": "boolean"
+                                  },
+                                  "processing_time_ms": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "category",
+                                  "confidence",
+                                  "processing_time_ms"
+                                ]
+                              },
+                              "decision_result": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "confidence": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "confidence_available": {
+                                    "nullable": true,
+                                    "type": "boolean"
+                                  },
+                                  "decision_name": {
+                                    "type": "string"
+                                  },
+                                  "matched_rules": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "decision_name",
+                                  "confidence",
+                                  "matched_rules"
+                                ]
+                              },
+                              "matched_signals": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "authz": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "classifier": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "complexity": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "context": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "conversation": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "decision": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "domains": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "embeddings": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "event": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "fact_check": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "input_modality": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "jailbreak": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "kb": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "keywords": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "language": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "metadata": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "modality": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "pii": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "preferences": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "projection": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "reask": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "safety": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "structure": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "user_feedback": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              },
+                              "probabilities": {
+                                "nullable": true,
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "number"
+                                }
+                              },
+                              "probabilities_available": {
+                                "type": "boolean"
+                              },
+                              "recommended_model": {
+                                "type": "string"
+                              },
+                              "routing_decision": {
+                                "type": "string"
+                              },
+                              "signal_error_matches": {
+                                "nullable": true,
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "signal_errors": {
+                                "nullable": true,
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "probabilities_available",
+                              "classification"
+                            ]
+                          },
+                          "pii": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "entities": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "confidence": {
+                                      "type": "number"
+                                    },
+                                    "end_position": {
+                                      "nullable": true,
+                                      "type": "integer"
+                                    },
+                                    "masked_value": {
+                                      "type": "string"
+                                    },
+                                    "start_position": {
+                                      "nullable": true,
+                                      "type": "integer"
+                                    },
+                                    "type": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "value",
+                                    "confidence"
+                                  ]
+                                }
+                              },
+                              "has_pii": {
+                                "type": "boolean"
+                              },
+                              "masked_text": {
+                                "type": "string"
+                              },
+                              "processing_time_ms": {
+                                "type": "integer"
+                              },
+                              "recipe": {
+                                "type": "string"
+                              },
+                              "scan_incomplete": {
+                                "type": "boolean"
+                              },
+                              "security_recommendation": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "has_pii",
+                              "entities",
+                              "security_recommendation",
+                              "processing_time_ms"
+                            ]
+                          },
+                          "processing_time_ms": {
+                            "type": "integer"
+                          },
+                          "security": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "confidence": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "decision": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "categories": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "score": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "Value": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "Value"
+                                    ]
+                                  },
+                                  "score_semantics": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "Calibrated": {
+                                        "type": "boolean"
+                                      },
+                                      "Direction": {
+                                        "type": "string"
+                                      },
+                                      "Maximum": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      },
+                                      "Minimum": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      },
+                                      "Unit": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "Unit",
+                                      "Direction",
+                                      "Minimum",
+                                      "Maximum",
+                                      "Calibrated"
+                                    ]
+                                  },
+                                  "source_label": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "label"
+                                ]
+                              },
+                              "detection_types": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "is_jailbreak": {
+                                "type": "boolean"
+                              },
+                              "patterns_detected": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "processing_time_ms": {
+                                "type": "integer"
+                              },
+                              "reasoning": {
+                                "type": "string"
+                              },
+                              "recipe": {
+                                "type": "string"
+                              },
+                              "recommendation": {
+                                "type": "string"
+                              },
+                              "risk_score": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "scores_available": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "is_jailbreak",
+                              "risk_score",
+                              "detection_types",
+                              "confidence",
+                              "scores_available",
+                              "recommendation",
+                              "patterns_detected",
+                              "processing_time_ms"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "index",
+                          "intent",
+                          "pii",
+                          "security",
+                          "processing_time_ms"
+                        ]
+                      }
+                    },
+                    "total_count": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "results",
+                    "total_count",
+                    "processing_time_ms"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "description": "application/json request payload. Limit: 10485760 bytes.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "intent_options": {
+                    "nullable": true,
+                    "type": "object",
+                    "properties": {
+                      "confidence_threshold": {
+                        "type": "number"
+                      },
+                      "include_explanation": {
+                        "type": "boolean"
+                      },
+                      "return_probabilities": {
+                        "type": "boolean"
+                      },
+                      "trace": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "pii_options": {
+                    "nullable": true,
+                    "type": "object",
+                    "properties": {
+                      "confidence_threshold": {
+                        "type": "number"
+                      },
+                      "entity_types": {
+                        "nullable": true,
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "mask_entities": {
+                        "type": "boolean"
+                      },
+                      "return_positions": {
+                        "type": "boolean"
+                      },
+                      "reveal_entity_text": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "recipe": {
+                    "type": "string"
+                  },
+                  "security_options": {
+                    "nullable": true,
+                    "type": "object",
+                    "properties": {
+                      "detection_types": {
+                        "nullable": true,
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "include_reasoning": {
+                        "type": "boolean"
+                      },
+                      "sensitivity": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "texts": {
+                    "nullable": true,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "texts"
+                ]
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "classify.invoke",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-plane": "diagnostic",
+        "x-vllm-sr-audiences": [
+          "operator",
+          "internal"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-visibility": "advanced"
+      }
+    },
     "/api/v1/diagnostics/classify/fact-check": {
       "post": {
         "summary": "Classify if text needs fact-checking",

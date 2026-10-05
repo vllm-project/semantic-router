@@ -18,48 +18,52 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
-// writeClassificationError maps a classification service error to an HTTP
-// status code: empty/whitespace input or a model input limit is a client error
-// (400 INVALID_INPUT);
-// an unavailable classifier or unresolved decision under fail_request is a
-// service outage (503); anything else is treated as an
-// internal error (500 CLASSIFICATION_ERROR).
-func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter, err error) {
+type classificationErrorDetail struct {
+	status  int
+	code    string
+	message string
+}
+
+// classificationErrorDetails maps a classification service error to the HTTP
+// status, stable error code, and message used by the API response.
+func classificationErrorDetails(err error) classificationErrorDetail {
 	if errors.Is(err, services.ErrConfigHashMismatch) {
-		s.writeErrorResponse(w, http.StatusPreconditionFailed, "CONFIG_HASH_MISMATCH", err.Error())
-		return
+		return classificationErrorDetail{http.StatusPreconditionFailed, "CONFIG_HASH_MISMATCH", err.Error()}
 	}
 	if errors.Is(err, services.ErrConfigHashUnavailable) {
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CONFIG_HASH_UNAVAILABLE", err.Error())
-		return
+		return classificationErrorDetail{http.StatusServiceUnavailable, "CONFIG_HASH_UNAVAILABLE", err.Error()}
 	}
 	if errors.Is(err, services.ErrEmptyText) ||
 		errors.Is(err, services.ErrInvalidRequestFacts) ||
 		errors.Is(err, binding.ErrInputLimit) {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
-		return
+		return classificationErrorDetail{http.StatusBadRequest, "INVALID_INPUT", err.Error()}
 	}
 	if errors.Is(err, services.ErrUnknownDiagnosticRecipe) {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_RECIPE", err.Error())
-		return
+		return classificationErrorDetail{http.StatusBadRequest, "INVALID_RECIPE", err.Error()}
 	}
 	if errors.Is(err, services.ErrUnknownRoutingModel) {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_ROUTING_MODEL", err.Error())
-		return
+		return classificationErrorDetail{http.StatusBadRequest, "INVALID_ROUTING_MODEL", err.Error()}
 	}
 	if errors.Is(err, services.ErrClassifierUnavailable) {
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CLASSIFIER_UNAVAILABLE", err.Error())
-		return
+		return classificationErrorDetail{http.StatusServiceUnavailable, "CLASSIFIER_UNAVAILABLE", err.Error()}
 	}
 	if errors.Is(err, decision.ErrDecisionUnresolved) {
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "DECISION_UNRESOLVED", err.Error())
-		return
+		return classificationErrorDetail{http.StatusServiceUnavailable, "DECISION_UNRESOLVED", err.Error()}
 	}
 	if errors.Is(err, admission.ErrQueueFull) {
-		s.writeErrorResponse(w, http.StatusTooManyRequests, "OVERLOADED", err.Error())
-		return
+		return classificationErrorDetail{http.StatusTooManyRequests, "OVERLOADED", err.Error()}
 	}
-	s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+	return classificationErrorDetail{http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error()}
+}
+
+// writeClassificationError maps a classification service error to an HTTP
+// response: empty/whitespace input or a model input limit is a client error
+// (400 INVALID_INPUT); an unavailable classifier or unresolved decision under
+// fail_request is a service outage (503); anything else is treated as an
+// internal error (500 CLASSIFICATION_ERROR).
+func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter, err error) {
+	detail := classificationErrorDetails(err)
+	s.writeErrorResponse(w, detail.status, detail.code, detail.message)
 }
 
 // handleIntentClassification handles intent classification requests
@@ -190,43 +194,11 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(
 	r *http.Request,
 	maxBatchSize int,
 ) (BatchClassificationRequest, bool) {
-	body, err := readJSONRequestBody(r, defaultJSONRequestBodyLimit)
-	if err != nil {
-		metrics.RecordBatchClassificationError("unified", "read_body_failed")
-		s.writeJSONRequestError(w, err)
-		return BatchClassificationRequest{}, false
-	}
-
-	var rawReq map[string]json.RawMessage
-	if unmarshalErr := decodeJSONBody(body, &rawReq); unmarshalErr != nil {
-		metrics.RecordBatchClassificationError("unified", "invalid_json")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid JSON format")
-		return BatchClassificationRequest{}, false
-	}
-
-	if _, exists := rawReq["texts"]; !exists {
-		metrics.RecordBatchClassificationError("unified", "missing_texts_field")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts field is required")
-		return BatchClassificationRequest{}, false
-	}
-
 	var req BatchClassificationRequest
-	if parseErr := decodeJSONBody(body, &req); parseErr != nil {
-		metrics.RecordBatchClassificationError("unified", "parse_request_failed")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", parseErr.Error())
+	if !s.parseBatchRequestBody(w, r, "unified", &req) {
 		return BatchClassificationRequest{}, false
 	}
-
-	if len(req.Texts) == 0 {
-		metrics.RecordBatchClassificationError("unified", "empty_texts")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts array cannot be empty")
-		return BatchClassificationRequest{}, false
-	}
-
-	if maxBatchSize > 0 && len(req.Texts) > maxBatchSize {
-		metrics.RecordBatchClassificationError("unified", "batch_too_large")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT",
-			fmt.Sprintf("texts array exceeds max_batch_size %d", maxBatchSize))
+	if !s.validateBatchTexts(w, req.Texts, maxBatchSize, "unified") {
 		return BatchClassificationRequest{}, false
 	}
 
@@ -237,6 +209,58 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(
 	}
 
 	return req, true
+}
+
+func (s *ClassificationAPIServer) parseBatchRequestBody(
+	w http.ResponseWriter,
+	r *http.Request,
+	processingType string,
+	target interface{},
+) bool {
+	body, err := readJSONRequestBody(r, defaultJSONRequestBodyLimit)
+	if err != nil {
+		metrics.RecordBatchClassificationError(processingType, "read_body_failed")
+		s.writeJSONRequestError(w, err)
+		return false
+	}
+
+	var rawReq map[string]json.RawMessage
+	if unmarshalErr := decodeJSONBody(body, &rawReq); unmarshalErr != nil {
+		metrics.RecordBatchClassificationError(processingType, "invalid_json")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid JSON format")
+		return false
+	}
+	if _, exists := rawReq["texts"]; !exists {
+		metrics.RecordBatchClassificationError(processingType, "missing_texts_field")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts field is required")
+		return false
+	}
+	if parseErr := decodeJSONBody(body, target); parseErr != nil {
+		metrics.RecordBatchClassificationError(processingType, "parse_request_failed")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", parseErr.Error())
+		return false
+	}
+	return true
+}
+
+func (s *ClassificationAPIServer) validateBatchTexts(
+	w http.ResponseWriter,
+	texts []string,
+	maxBatchSize int,
+	processingType string,
+) bool {
+	if len(texts) == 0 {
+		metrics.RecordBatchClassificationError(processingType, "empty_texts")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts array cannot be empty")
+		return false
+	}
+	if maxBatchSize > 0 && len(texts) > maxBatchSize {
+		metrics.RecordBatchClassificationError(processingType, "batch_too_large")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT",
+			fmt.Sprintf("texts array exceeds max_batch_size %d", maxBatchSize))
+		return false
+	}
+	return true
 }
 
 func (s *ClassificationAPIServer) ensureUnifiedClassifierAvailable(w http.ResponseWriter, service classificationService) bool {

@@ -154,6 +154,7 @@ curl -sS http://localhost:8080/api/v1/diagnostics/classify/intent \
 | `POST` | `/api/v1/diagnostics/classify/fact-check` | Decide whether text needs fact checking |
 | `POST` | `/api/v1/diagnostics/classify/user-feedback` | Classify user feedback |
 | `POST` | `/api/v1/diagnostics/classify/combined` | Run intent, PII, and security classification |
+| `POST` | `/api/v1/diagnostics/classify/combined/batch` | Run intent, PII, and security classification over a batch |
 | `POST` | `/api/v1/diagnostics/classify/batch` | Run a selected classifier over a batch |
 | `POST` | `/api/v1/routing/preview` | Evaluate all configured signals |
 | `POST` | `/api/v1/diagnostics/nli` | Evaluate a premise/hypothesis pair |
@@ -630,6 +631,7 @@ Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, NLI, 
 | `POST` | `/api/v1/diagnostics/classify/fact-check` | Classify if text needs fact-checking |
 | `POST` | `/api/v1/diagnostics/classify/user-feedback` | Classify user feedback type (satisfied, need_clarification, wrong_answer, want_different) |
 | `POST` | `/api/v1/diagnostics/classify/combined` | Perform combined classification (intent, PII, and security) |
+| `POST` | `/api/v1/diagnostics/classify/combined/batch` | Perform combined intent, PII, and security classification for a batch of texts |
 | `POST` | `/api/v1/diagnostics/classify/batch` | Batch classification with configurable task_type parameter |
 | `POST` | `/api/v1/diagnostics/nli` | Natural language inference classification for premise and hypothesis pairs |
 | `POST` | `/api/v1/diagnostics/embeddings` | Generate text, image, and audio embeddings |

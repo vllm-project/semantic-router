@@ -78,6 +78,19 @@ func TestOpenAPISpecUsesRouteBodyMetadata(t *testing.T) {
 		t.Fatalf("text is optional when messages supply the signal input, got required=%v", intentSchema.Required)
 	}
 
+	combinedBatch := spec.Paths["/api/v1/diagnostics/classify/combined/batch"].Post
+	if combinedBatch == nil || combinedBatch.RequestBody == nil {
+		t.Fatal("expected combined batch classification operation and request body")
+	}
+	combinedBatchRequest := combinedBatch.RequestBody.Content[string(requestBodyJSON)].Schema
+	if combinedBatchRequest == nil || combinedBatchRequest.Properties["texts"].Type != "array" {
+		t.Fatalf("expected combined batch request to publish texts array, got %+v", combinedBatchRequest)
+	}
+	combinedBatchResponse := combinedBatch.Responses["200"].Content["application/json"].Schema
+	if combinedBatchResponse == nil || combinedBatchResponse.Properties["results"].Type != "array" {
+		t.Fatalf("expected combined batch response to publish results array, got %+v", combinedBatchResponse)
+	}
+
 	configPatch := spec.Paths["/api/v1/config"].Patch
 	configSchema := configPatch.RequestBody.Content[string(requestBodyJSON)].Schema
 	if configSchema == nil || configSchema.Properties["yaml"].Type != "string" {
@@ -471,6 +484,7 @@ func documentedOpenAPIPaths() []string {
 		"/startup-status",
 		"/api/v1",
 		"/api/v1/diagnostics/classify/batch",
+		"/api/v1/diagnostics/classify/combined/batch",
 		"/api/v1/routing/preview",
 		"/api/v1/diagnostics/nli",
 		"/api/v1/diagnostics/embeddings",

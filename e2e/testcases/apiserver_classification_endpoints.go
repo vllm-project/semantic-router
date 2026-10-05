@@ -78,12 +78,24 @@ func testAPIServerClassificationEndpoints(
 	if err != nil {
 		return err
 	}
+	combinedBatchTexts := []string{"Briefly explain what an API is.", "What is a batch request?"}
+	combinedBatchCount, err := fetchCombinedBatchClassification(
+		ctx,
+		httpClient,
+		session.URL("/api/v1/diagnostics/classify/combined/batch"),
+		map[string]interface{}{"texts": combinedBatchTexts},
+		len(combinedBatchTexts),
+	)
+	if err != nil {
+		return err
+	}
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"decision_count":     metricsDoc.DecisionCount,
-			"signal_group_count": metricsDoc.SignalGroupCount,
-			"router_config_api":  metricsDoc.RouterConfigAPI,
-			"combined_keys":      combinedKeys,
+			"decision_count":       metricsDoc.DecisionCount,
+			"signal_group_count":   metricsDoc.SignalGroupCount,
+			"router_config_api":    metricsDoc.RouterConfigAPI,
+			"combined_keys":        combinedKeys,
+			"combined_batch_count": combinedBatchCount,
 		})
 	}
 
@@ -166,6 +178,49 @@ func fetchCombinedClassificationKeys(
 		}
 	}
 	return keys, nil
+}
+
+func fetchCombinedBatchClassification(
+	ctx context.Context,
+	httpClient *http.Client,
+	url string,
+	payload map[string]interface{},
+	expectedCount int,
+) (int, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return 0, fmt.Errorf("marshal /api/v1/diagnostics/classify/combined/batch payload: %w", err)
+	}
+
+	resp, err := postJSON(ctx, httpClient, http.MethodPost, url, body)
+	if err != nil {
+		return 0, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("expected /api/v1/diagnostics/classify/combined/batch status 200, got %d: %s", resp.StatusCode, string(resp.Body))
+	}
+
+	var document struct {
+		TotalCount int `json:"total_count"`
+		Results    []struct {
+			Index    int             `json:"index"`
+			Intent   json.RawMessage `json:"intent"`
+			PII      json.RawMessage `json:"pii"`
+			Security json.RawMessage `json:"security"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(resp.Body, &document); err != nil {
+		return 0, fmt.Errorf("decode /api/v1/diagnostics/classify/combined/batch response: %w", err)
+	}
+	if document.TotalCount != expectedCount || len(document.Results) != expectedCount {
+		return 0, fmt.Errorf("combined batch total_count=%d, results=%d, expected=%d", document.TotalCount, len(document.Results), expectedCount)
+	}
+	for index, result := range document.Results {
+		if result.Index != index || len(result.Intent) == 0 || string(result.Intent) == "null" || len(result.PII) == 0 || string(result.PII) == "null" || len(result.Security) == 0 || string(result.Security) == "null" {
+			return 0, fmt.Errorf("combined batch result %d is missing ordered three-way results: %+v", index, result)
+		}
+	}
+	return len(document.Results), nil
 }
 
 func postJSON(
