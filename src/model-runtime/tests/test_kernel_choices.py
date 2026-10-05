@@ -345,7 +345,7 @@ def test_models_without_choices_never_enter_a_scope(tmp_path, monkeypatch):
     run = QwenDecisionModel.run_shared
 
     def forward(self, items, shared_prefix):
-        scopes.append(getattr(autotune._SCOPE, "choices", None))
+        scopes.append(autotune._SCOPE.choices)
         return run(self, items, shared_prefix)
 
     monkeypatch.setattr(QwenDecisionModel, "run_shared", forward)

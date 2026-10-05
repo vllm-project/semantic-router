@@ -38,7 +38,14 @@ FLA_GATED_DELTA = "fla.ops.gated_delta_rule"
 
 T = TypeVar("T")
 
-_SCOPE = threading.local()
+
+class _Scope(threading.local):
+    """The kernel choices of the model whose device work the thread runs, if any."""
+
+    choices: KernelChoices | None = None
+
+
+_SCOPE = _Scope()
 _ROUTING = threading.Lock()
 
 
@@ -96,17 +103,19 @@ class KernelChoices:
     @contextmanager
     def scope(self) -> Iterator[None]:
         """Run FLA's autotuned kernels launched on this thread with these configurations."""
-        previous = getattr(_SCOPE, "choices", None)
-        _SCOPE.choices = self
+        previous, _SCOPE.choices = _SCOPE.choices, self
         try:
             yield
         finally:
             _SCOPE.choices = previous
 
     def run(self, work: Callable[[], T]) -> T:
-        """``work()`` inside ``scope``."""
-        with self.scope():
+        """``work()`` inside ``scope`` (once per device call, so without a generator)."""
+        previous, _SCOPE.choices = _SCOPE.choices, self
+        try:
             return work()
+        finally:
+            _SCOPE.choices = previous
 
     def pin_thread(self) -> None:
         """Keep these choices on the calling thread from now on (a tool answering one model)."""
@@ -152,15 +161,15 @@ class RoutedCache(MutableMapping):
         self.name = name
         self.own = own
 
-    def pinned(self) -> PinnedKernel | None:
-        choices = getattr(_SCOPE, "choices", None)
-        return None if choices is None else choices.kernels.get(self.name)
-
     def __contains__(self, key: object) -> bool:
-        return self.pinned() is not None or key in self.own
+        choices = _SCOPE.choices
+        if choices is not None and self.name in choices.kernels:
+            return True
+        return key in self.own
 
     def __getitem__(self, key: Any) -> Any:
-        pinned = self.pinned()
+        choices = _SCOPE.choices
+        pinned = None if choices is None else choices.kernels.get(self.name)
         return self.own[key] if pinned is None else pinned.config(key)
 
     def __setitem__(self, key: Any, value: Any) -> None:
