@@ -26,13 +26,14 @@ so arrivals still wait for one forward, not for the rest of the request.
 
 from __future__ import annotations
 
+import contextlib
 import heapq
 import itertools
 import threading
 import time
 from collections import deque
 from collections.abc import Callable
-from concurrent.futures import Future
+from concurrent.futures import Future, InvalidStateError
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
@@ -339,7 +340,7 @@ class Scheduler:
                 )
             except Exception as exc:
                 for pending in group:
-                    pending.future.set_exception(exc)
+                    _fail(pending.future, exc)
                 continue
             planned_rows = dict.fromkeys(owners, 0)
             for batch in batches:
@@ -357,8 +358,9 @@ class Scheduler:
                 )
             for key, rows in planned_rows.items():
                 if rows != owners[key].remaining:
-                    owners[key].future.set_exception(
-                        RuntimeError(f"profile {name!r} did not plan every item once")
+                    _fail(
+                        owners[key].future,
+                        RuntimeError(f"profile {name!r} did not plan every item once"),
                     )
 
     def _run(self, planned: _Planned) -> None:
@@ -391,8 +393,7 @@ class Scheduler:
             if self.device_fault(exc):
                 self._failure = exc
             for pending in planned.owners:
-                if not pending.future.done():
-                    pending.future.set_exception(exc)
+                _fail(pending.future, exc)
             return
         seconds = time.monotonic() - started
         tokens = sum(cost(item) for item in items)
@@ -414,11 +415,11 @@ class Scheduler:
                 pending.results[index] = values[cursor]
                 cursor += 1
             pending.remaining -= len(indices)
-            if pending.remaining == 0 and not pending.future.done():
-                pending.future.set_result(pending.results)
+            if pending.remaining == 0:
+                _resolve(pending.future, pending.results)
 
     def _expire(self, pending: _Pending) -> None:
-        pending.future.set_result(DEADLINE)
+        _resolve(pending.future, DEADLINE)
         self.observe("deadline", {"questions": len(pending.job.items)})
 
     def _abandon(self) -> None:
@@ -432,5 +433,15 @@ class Scheduler:
         self._ready.clear()
         error = RuntimeServiceError("not_ready", "the runtime is shutting down")
         for pending in itertools.chain(queued, planned):
-            if not pending.future.done():
-                pending.future.set_exception(error)
+            _fail(pending.future, error)
+
+
+def _resolve(future: Future, result: Any) -> None:
+    """Answer ``future`` unless it is answered or its caller cancelled it (the client left)."""
+    with contextlib.suppress(InvalidStateError):
+        future.set_result(result)
+
+
+def _fail(future: Future, error: BaseException) -> None:
+    with contextlib.suppress(InvalidStateError):
+        future.set_exception(error)

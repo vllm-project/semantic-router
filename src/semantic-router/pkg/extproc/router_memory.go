@@ -3,6 +3,8 @@ package extproc
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/qdrant/go-client/qdrant"
@@ -14,16 +16,19 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-func createMemoryRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, *memory.MemoryExtractor) {
+func createMemoryRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, *memory.MemoryExtractor, error) {
+	if err := validateMemoryFilterAlgorithms(cfg); err != nil {
+		return nil, nil, err
+	}
 	if !isMemoryEnabled(cfg) {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	// publishRouterState publishes the store after the candidate commits.
 	memoryStore, err := createMemoryStore(cfg, sets...)
 	if err != nil {
 		logging.Warnf("Failed to create memory store: %v, Memory will be disabled", err)
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	backend := cfg.Memory.Backend
@@ -41,7 +46,49 @@ func createMemoryRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (memo
 		logging.Infof("Memory chunk store enabled (direct conversation storage)")
 	}
 
-	return memoryStore, memoryExtractor
+	return memoryStore, memoryExtractor, nil
+}
+
+// legacyMemoryFilterAlgorithms maps retired algorithm names to the filter they
+// always ran as.
+var legacyMemoryFilterAlgorithms = map[string]string{"recency_semantic": "heuristic"}
+
+// validateMemoryFilterAlgorithms rejects reflection algorithms that no filter is
+// registered for. The config package cannot import the registry, so the check
+// runs here once at startup. A decision's effective algorithm is its own
+// override or the global value, so checking both covers every decision.
+func validateMemoryFilterAlgorithms(cfg *config.RouterConfig) error {
+	if err := validateMemoryFilterAlgorithm(cfg.Memory.Reflection.Algorithm, "global.stores.memory.reflection.algorithm"); err != nil {
+		return err
+	}
+	for _, decision := range cfg.AllRoutingDecisions() {
+		memoryConfig := decision.GetMemoryConfig()
+		if memoryConfig == nil || memoryConfig.Reflection == nil {
+			continue
+		}
+		field := fmt.Sprintf("routing.decisions[%s].plugins[memory].reflection.algorithm", decision.Name)
+		if err := validateMemoryFilterAlgorithm(memoryConfig.Reflection.Algorithm, field); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateMemoryFilterAlgorithm(algorithm, field string) error {
+	if algorithm == "" {
+		return nil
+	}
+	registered := memory.RegisteredFilters()
+	if slices.Contains(registered, algorithm) {
+		return nil
+	}
+	slices.Sort(registered)
+	if replacement, ok := legacyMemoryFilterAlgorithms[algorithm]; ok {
+		return fmt.Errorf("%s %q is not a registered memory filter (registered: %s); use %q, which is how %q has always run",
+			field, algorithm, strings.Join(registered, ", "), replacement, algorithm)
+	}
+	return fmt.Errorf("%s %q is not a registered memory filter (registered: %s)",
+		field, algorithm, strings.Join(registered, ", "))
 }
 
 func isMemoryEnabled(cfg *config.RouterConfig) bool {

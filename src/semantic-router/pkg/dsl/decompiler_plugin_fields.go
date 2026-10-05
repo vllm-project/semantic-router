@@ -203,6 +203,9 @@ func pluginFieldsToolSelection(p *config.DecisionPlugin) map[string]Value {
 	if cfg.Strategy != "" {
 		fields["strategy"] = StringValue{V: cfg.Strategy}
 	}
+	if cfg.FallbackToEmpty != nil {
+		fields["fallback_to_empty"] = BoolValue{V: *cfg.FallbackToEmpty}
+	}
 	if cfg.RelevanceThreshold != nil {
 		fields["relevance_threshold"] = FloatValue{V: float64(*cfg.RelevanceThreshold)}
 	}
