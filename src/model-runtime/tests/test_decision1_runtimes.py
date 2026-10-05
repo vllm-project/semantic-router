@@ -20,7 +20,8 @@ from vllm_sr_runtime.families.decision1 import package as pkg
 from vllm_sr_runtime.families.decision1 import qwen, vela
 from vllm_sr_runtime.families.decision1.questions import KINDS
 from vllm_sr_runtime.heads.candidate import load_head, logits
-from vllm_sr_runtime.plugins.base import Job, RenderedItem
+from vllm_sr_runtime.plugins.base import Job
+from vllm_sr_runtime.plugins.decisions import RenderedItem
 from vllm_sr_runtime.profiles.batching import BatchingProfile
 from vllm_sr_runtime.profiles.exact import ExactProfile
 from vllm_sr_runtime.runtime import Runtime

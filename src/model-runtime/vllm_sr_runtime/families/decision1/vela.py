@@ -22,7 +22,8 @@ import torch
 
 from ...errors import INVALID_QUESTION, MAX_LENGTH_EXCEEDED, PackageError, QuestionError
 from ...heads.typed import TypeReadout
-from ...plugins.base import EncoderBatch, RenderedItem
+from ...plugins.base import EncoderBatch
+from ...plugins.decisions import RenderedItem
 from ...systemone import canonical
 from .questions import KINDS, NoulDefaults, Row
 

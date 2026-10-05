@@ -110,7 +110,17 @@ class CPUAccelerator(Accelerator):
             "native_bf16": device.bf16,
             "graphs": False,
             "triton": False,
+            "lapack": bool(torch._C.has_lapack),
         }
+
+    def lacks(self, device: DeviceInfo, capability: str) -> str:
+        if capability == "lapack":
+            return (
+                f"{device.label}: this PyTorch is built without LAPACK, which the "
+                "model's CPU kernels need; serve it with a PyTorch that has LAPACK "
+                "(the router's CPU image) or on a GPU device"
+            )
+        return super().lacks(device, capability)
 
     def execute(self, device: DeviceInfo, work: Callable[[], Any]) -> Any:
         if threading.current_thread().name.startswith("vllm-sr-cpu"):

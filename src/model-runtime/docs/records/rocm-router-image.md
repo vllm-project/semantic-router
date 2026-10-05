@@ -46,9 +46,12 @@ release image.
   the decoders run their pinned FLA kernel choices on either.
 - **No CPU LAPACK:** this PyTorch build has neither LAPACK nor MKL
   (`torch._C.has_lapack` is false). The Qwen3.5-based decoders' CPU path
-  calls `torch.triangular_solve`, so such a model placed on `cpu` in this
-  image fails at load. Serve it on the GPU, or run CPU models from the CPU
-  image.
+  calls `torch.triangular_solve`, so such a model can't run on `cpu` in this
+  image. The runtime refuses that placement before any weights load: the CPU
+  accelerator reports `lapack` among its capabilities, these families
+  require it on the CPU (`ModelSpec.requires`), and the model fails at once
+  with the cause and the fix. Serve it on the GPU, or run CPU models from the
+  CPU image.
 
 ## What the image leaves out
 

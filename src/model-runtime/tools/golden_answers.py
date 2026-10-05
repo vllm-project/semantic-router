@@ -45,12 +45,7 @@ def answers(
         assert served.family is not None and served.package is not None
         values: dict[str, Any] = {}
         for golden in served.family.golden(served.package):
-            if "surface" in golden:
-                values.update(served.golden_surface(golden["surface"], golden["body"]))
-            else:
-                values.update(
-                    served.golden_decisions(golden["state"], golden["questions"])
-                )
+            values.update(served.golden_surface(golden["surface"], golden["body"]))
         info = served.model.info
         return {
             "model": info.id,
