@@ -46,6 +46,20 @@ def _try_it() -> tuple[list[str], dict[str, str], list[str]]:
     raise AssertionError(f"{GUIDE} has no block that serves the example")
 
 
+def _serve_commands() -> list[list[str]]:
+    """The arguments of every `vllm-sr-runtime serve` line in the guide."""
+    return [
+        shlex.split(line)[2:]
+        for block in BASH_BLOCK.findall(GUIDE.read_text(encoding="utf-8"))
+        for line in HEREDOC.sub("", block).splitlines()
+        if line.startswith("vllm-sr-runtime serve ")
+    ]
+
+
+def _option(arguments: list[str], name: str) -> str:
+    return arguments[arguments.index(name) + 1]
+
+
 def _without_port(arguments: list[str]) -> list[str]:
     at = arguments.index("--port")
     return arguments[:at] + arguments[at + 2 :]
@@ -85,8 +99,9 @@ class TestPluginExample(unittest.TestCase):
             written.write_text(body, encoding="utf-8")
         cls.env = {"PYTHONPATH": str(cls.site)}
 
-    def _serve(self) -> ServeProcess:
-        arguments = [str(self.local), *_without_port(self.serve_arguments[1:])]
+    def _serve(self, serve_arguments: list[str] | None = None) -> ServeProcess:
+        serve_arguments = serve_arguments or self.serve_arguments
+        arguments = [str(self.local), *_without_port(serve_arguments[1:])]
         runtime = ServeProcess(
             ["vllm-sr-runtime", "serve", *arguments],
             self.root / f"serve-{time.monotonic_ns()}.log",
@@ -105,6 +120,31 @@ class TestPluginExample(unittest.TestCase):
             runtime.base, "/v1/classify", page_requests(GUIDE)["/v1/classify"]
         )
 
+        self.assertEqual(status, HTTP_OK, response)
+        self.assertEqual([result["label"] for result in response["results"]], expected)
+
+    def test_the_example_serves_on_its_own_accelerator_and_profile(self):
+        (arguments,) = [
+            command for command in _serve_commands() if "--profile" in command
+        ]
+        runtime = self._serve(arguments)
+        prose = " ".join(GUIDE.read_text(encoding="utf-8").split())
+        expected = list(OUTCOME.search(prose).groups())
+
+        status, models = call(runtime.base, "/v1/models")
+        self.assertEqual(status, HTTP_OK, models)
+        (card,) = models["data"]
+        self.assertEqual(
+            (card["accelerator"], card["device"], card["profile"]),
+            (
+                _option(arguments, "--device"),
+                _option(arguments, "--device"),
+                _option(arguments, "--profile"),
+            ),
+        )
+        status, response = call(
+            runtime.base, "/v1/classify", page_requests(GUIDE)["/v1/classify"]
+        )
         self.assertEqual(status, HTTP_OK, response)
         self.assertEqual([result["label"] for result in response["results"]], expected)
 
