@@ -109,7 +109,7 @@ def freeze_heap() -> None:
     """Collect once, then leave every object that exists now out of later collections.
 
     Loading leaves the frameworks', tokenizers' and models' long-lived objects
-    behind. A full collection walks all of them (90-130 ms in a process that
+    behind. A full collection walks all of them (83-131 ms in a process that
     serves Omni Nano and Mini) and stalls whichever request triggers it; once
     they are frozen it walks only what requests allocated since.
     """

@@ -8,9 +8,9 @@ Every CPU session has its own intra-op pool, sized to the configured threads
 (else the CPUs the process may run on; ONNX Runtime's own default counts the
 host's CPUs, not the cpuset) and capped by the spec's ``graph_threads``. A
 process-wide shared pool can't be sized per graph, and graphs differ: on 16
-cores Omni Nano's text graph serves four callers twice as fast on 12 threads
-as on 16 (15 workers plus four callers oversubscribe the cores), while its
-image graph takes 109 ms on 16 threads and 163 ms on 8.
+cores Omni Nano's bare text graph serves four callers twice as fast on 12
+threads as on 16 (15 workers plus four callers oversubscribe the cores),
+while its image graph takes 109 ms on 16 threads and 163 ms on 8.
 
 An idle pool's threads spin before they sleep. Unbounded (about 40 ms), they
 share the cores with whatever runs next: Omni's audio graph after its CLAP
