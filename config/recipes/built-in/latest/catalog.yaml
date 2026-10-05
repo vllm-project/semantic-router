@@ -2662,6 +2662,17 @@ providers:
   conformance:
     status: unverified
   models:
+  - catalog: stepfun/step-5-preview
+    relationship: first_party
+    id: step-5-preview
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: top_level_effort
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://platform.stepfun.ai/docs/en/guides/models/step-5-preview
   - catalog: stepfun/step-3.7-flash
     relationship: first_party
     id: step-3.7-flash
@@ -3173,6 +3184,20 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/moonshotai/Kimi-K3
+  - catalog: moonshot/kimi-linear-48b-a3b-instruct
+    relationship: self_hosted
+    id: moonshotai/Kimi-Linear-48B-A3B-Instruct
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    restrictions:
+      minimum_vllm_version: 0.11.1
+      trust_remote_code: true
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/blob/e1df551a447157d4658b573f9a695d57658590e9/README.md
   - catalog: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
     relationship: self_hosted
     id: nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
@@ -3720,6 +3745,17 @@ providers:
     verification:
       status: claimed
       verified_at: '2026-09-24'
+      source: https://www.volcengine.com/docs/82379/1330310
+  - catalog: bytedance/seed-2.0-lite
+    relationship: first_party
+    id: doubao-seed-2-0-lite-260428
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
       source: https://www.volcengine.com/docs/82379/1330310
 - id: writer
   display_name: Writer
@@ -5097,6 +5133,51 @@ models:
   - multimodal
   - agentic
   - frontier
+- id: bytedance/seed-2.0-lite
+  display_name: Seed2.0 Lite
+  description: General-purpose Seed2.0 production model that balances output quality and response speed, with image, video,
+    and audio input.
+  kind: physical
+  publisher: ByteDance / Seed
+  presentation:
+    logo: package:bytedance
+    monogram: S
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://seed.bytedance.com/en/seed2
+  family: seed-2.0
+  released_at: '2026-02-14'
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - video
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    - audio
+    output:
+    - text
+  verification:
+    authority: ByteDance Seed Team
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://seed.bytedance.com/en/seed2
+  tags:
+  - proprietary
+  - multimodal
+  - agentic
+  - efficient
 - id: bytedance/seed-oss-36b-instruct
   display_name: Seed OSS 36B Instruct
   description: Open-weight long-context reasoning model for coding, tools, and agentic tasks.
@@ -6773,6 +6854,45 @@ models:
   - moe
   - agentic
   released_at: '2026-01-27'
+- id: moonshot/kimi-linear-48b-a3b-instruct
+  display_name: Kimi Linear 48B A3B Instruct
+  description: Open-weight Kimi hybrid linear-attention MoE model for efficient long-context chat.
+  kind: physical
+  publisher: Moonshot / Kimi
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct
+    license: MIT
+  family: kimi-linear
+  parameter_size: 48B (3B active)
+  revision: e1df551a447157d4658b573f9a695d57658590e9
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/blob/e1df551a447157d4658b573f9a695d57658590e9/README.md
+  tags:
+  - open_weights
+  - moe
+  - hybrid_architecture
+  - efficient
+  released_at: '2025-10-30'
 - id: nvidia/nemotron-3.5-lightning
   display_name: NVIDIA Nemotron 3.5 Lightning
   description: Efficient open-weight NVIDIA reasoning model for fast agentic inference.
@@ -7831,6 +7951,51 @@ models:
   - moe
   - efficient
   released_at: '2025-07-29'
+- id: stepfun/step-5-preview
+  display_name: Step 5 Preview
+  description: StepFun flagship multimodal MoE preview for agentic software engineering and knowledge work.
+  kind: physical
+  publisher: StepFun
+  presentation:
+    logo: package:stepfun
+    monogram: S
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://platform.stepfun.ai/docs/en/guides/models/step-5-preview
+  family: step-5
+  reasoning_family: step-3.7
+  parameter_size: 600B (27B active)
+  lifecycle: experimental
+  limits:
+    context_window_size: 1000000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: StepFun
+    status: claimed
+    verified_at: '2026-09-24'
+    source: https://www.stepfun.com/step-5-preview
+  tags:
+  - proprietary
+  - reasoning
+  - multimodal
+  - agentic
+  - moe
+  - preview
+  released_at: '2026-09-18'
 - id: stepfun/step-3.7-flash
   display_name: Step 3.7 Flash
   description: Open-weight multimodal MoE model for efficient reasoning and agentic workflows.
@@ -15150,6 +15315,108 @@ evaluations:
     resolved: 0.469
   status: available
   observed_at: '2026-09-06'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://seed.bytedance.com/en/seed2
+    redistributable: true
+- id: bytedance/seed-2.0-lite-model-card-gpqa-diamond@1.0.0
+  model: bytedance/seed-2.0-lite
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Seed2.0 Lite 0428
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.884
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://seed.bytedance.com/en/seed2
+    redistributable: true
+- id: bytedance/seed-2.0-lite-model-card-supergpqa@1.0.0
+  model: bytedance/seed-2.0-lite
+  benchmark: supergpqa/supergpqa@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Seed2.0 Lite 0428
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.696
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://seed.bytedance.com/en/seed2
+    redistributable: true
+- id: bytedance/seed-2.0-lite-model-card-humanitys-last-exam@1.0.0
+  model: bytedance/seed-2.0-lite
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-no-tools
+  reasoning_effort: unspecified
+  subject:
+    variant: Seed2.0 Lite 0428
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.257
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://seed.bytedance.com/en/seed2
+    redistributable: true
+- id: bytedance/seed-2.0-lite-model-card-beyond-aime@1.0.0
+  model: bytedance/seed-2.0-lite
+  benchmark: bytedance-seed/beyond-aime@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Seed2.0 Lite 0428
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.79
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://seed.bytedance.com/en/seed2
+    redistributable: true
+- id: bytedance/seed-2.0-lite-model-card-swe-bench-pro@1.0.0
+  model: bytedance/seed-2.0-lite
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Seed2.0 Lite 0428
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.466
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://seed.bytedance.com/en/seed2
+    redistributable: true
+- id: bytedance/seed-2.0-lite-model-card-terminal-bench-2.0@1.0.0
+  model: bytedance/seed-2.0-lite
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Seed2.0 Lite 0428
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.433
+  status: available
+  observed_at: '2026-09-23'
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -24455,6 +24722,101 @@ evaluations:
     verification: imported
     source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
     redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-gpqa-diamond@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    samples_per_prompt: 8
+  metrics:
+    accuracy: 0.717
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
+    redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-mmlu-pro@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    metric_variant: exact_match
+  metrics:
+    accuracy: 0.727
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
+    redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-aime-2025@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    samples_per_prompt: 64
+  metrics:
+    pass_at_1: 0.586
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
+    redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-math-500@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: huggingfaceh4/math-500@1.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    reported_measure: accuracy
+  metrics:
+    pass_at_1: 0.946
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
+    redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-livecodebench-v6@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.457
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
+    redistributable: true
 - id: nvidia/nemotron-cascade-2-model-card-scicode@1.0.0
   model: nvidia/nemotron-cascade-2-30b-a3b
   benchmark: scicode-bench/scicode@1.0.0
@@ -33736,6 +34098,114 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning
+    redistributable: true
+- id: independent/step-5-preview-humanitys-last-exam@1.0.0
+  model: stepfun/step-5-preview
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: unspecified
+  subject:
+    source_model: Step 5 Preview
+    source_model_slug: step-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.464782205746061
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/step-5
+    redistributable: true
+- id: independent/step-5-preview-scicode@1.0.0
+  model: stepfun/step-5-preview
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: unspecified
+  subject:
+    source_model: Step 5 Preview
+    source_model_slug: step-5
+    run_kind: independent
+  metrics:
+    score: 0.58912037037037
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/step-5
+    redistributable: true
+- id: independent/step-5-preview-critpt@1.0.0
+  model: stepfun/step-5-preview
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: unspecified
+  subject:
+    source_model: Step 5 Preview
+    source_model_slug: step-5
+    run_kind: independent
+  metrics:
+    score: 0.208571428571429
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/step-5
+    redistributable: true
+- id: independent/step-5-preview-omniscience@1.0.0
+  model: stepfun/step-5-preview
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: unspecified
+  subject:
+    source_model: Step 5 Preview
+    source_model_slug: step-5
+    run_kind: independent
+  metrics:
+    index: 16.383333333333333
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/step-5
+    redistributable: true
+- id: independent/step-5-preview-lcr@1.1.0
+  model: stepfun/step-5-preview
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: unspecified
+  subject:
+    source_model: Step 5 Preview
+    source_model_slug: step-5
+    run_kind: independent
+  metrics:
+    score: 0.883333333333333
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/step-5
+    redistributable: true
+- id: independent/step-5-preview-mmmu-pro@1.0.0
+  model: stepfun/step-5-preview
+  benchmark: mmmu-benchmark/mmmu-pro@1.0.0
+  benchmark_profile: standard-10
+  reasoning_effort: unspecified
+  subject:
+    source_model: Step 5 Preview
+    source_model_slug: step-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.763583815028902
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/step-5
     redistributable: true
 - id: independent/step-3.7-flash-high-omniscience@1.0.0
   model: stepfun/step-3.7-flash
@@ -44077,6 +44547,28 @@ index_results:
   domains:
     frontier_reasoning: 13.1603336422614
     scientific_reasoning: 78.8888888888889
+- model: moonshot/kimi-linear-48b-a3b-instruct
+  reasoning_effort: default
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 72.7
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.727
+    normalized: 0.727
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: moonshot/kimi-linear-48b-a3b-instruct-report-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - moonshot/kimi-linear-48b-a3b-instruct-report-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 72.7
 - model: nvidia/nemotron-3.5-lightning
   reasoning_effort: enabled
   index: vllm-sr/general@1.0.0
