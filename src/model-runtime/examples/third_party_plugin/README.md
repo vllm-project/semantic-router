@@ -1,13 +1,15 @@
 # Example out-of-tree plugin
 
 A complete, minimal plugin for the vllm-sr model runtime, kept small enough to
-read in one sitting. It adds two plugins through Python entry points, the same
-way the built-in families and engines register:
+read in one sitting. It adds four plugins through Python entry points, the
+same way the built-in families, engines, accelerators and profiles register:
 
 | Entry point | Name | What it does |
 | --- | --- | --- |
 | `vllm_sr_runtime.families` | `example_keywords` | Reads a keyword package, renders text into keyword IDs, and reads label distributions, embeddings and relevance scores out of the engine's hidden states |
 | `vllm_sr_runtime.engines` | `example_counts` | Turns keyword IDs into one-hot label vectors on the CPU |
+| `vllm_sr_runtime.accelerators` | `example_host` | Offers the host CPU as its own device (`--device example_host`); `--device auto` never picks it |
+| `vllm_sr_runtime.profiles` | `example_one_by_one` | Runs every job alone, in arrival order (`--profile example_one_by_one`) |
 
 The family never runs the backbone and the engine never reads the package:
 that split is what lets a third-party family reuse a built-in engine, or a
@@ -30,7 +32,13 @@ curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
 curl -s localhost:8100/v1/models | jq '.data[0].plugins[] | select(.name | startswith("example"))'
 ```
 
-`/v1/models` lists both plugins with their capability descriptors.
+`/v1/models` lists the four plugins with their capability descriptors. To run
+the same model on the example accelerator and profile:
+
+```bash
+vllm-sr-runtime serve /tmp/keywords --engine example_counts --device example_host \
+  --profile example_one_by_one --port 8100
+```
 
 ## Write your own
 
@@ -40,8 +48,12 @@ curl -s localhost:8100/v1/models | jq '.data[0].plugins[] | select(.name | start
    `descriptor()`.
 2. Reuse a built-in engine through `ModelSpec`, or subclass `Engine` and
    `EngineModel` (`supports`, `load`, `forward` or `encode`).
-3. Register both under the entry-point groups in your `pyproject.toml`.
-4. Set `cache_key` on work items whose result depends only on their content,
+3. For new hardware, subclass `Accelerator` (`available`, `devices`,
+   `torch_device`, `kernels`); set `auto_priority` if `--device auto` may pick
+   it. For a new batching policy, subclass `Profile` (`plan`, and `bind` for
+   what it reads from the model).
+4. Register each under its entry-point group in your `pyproject.toml`.
+5. Set `cache_key` on work items whose result depends only on their content,
    so repeated inputs are answered from the result cache, and set
    `fuse_bundled_jobs` when one forward may serve several bundled requests.
 

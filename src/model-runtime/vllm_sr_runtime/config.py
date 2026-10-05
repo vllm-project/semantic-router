@@ -57,6 +57,8 @@ class ServeConfig:
     max_batch_tokens: int = 65_536
     max_request_bytes: int = 8 << 20
     max_bundle_tasks: int = 64
+    load_attempts: int = 5
+    load_retry_seconds: float = 5.0
     result_cache_entries: int = 16_384
     cache_dir: str | None = None
     offline: bool = False

@@ -47,7 +47,7 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--device",
         default=MODEL_DEFAULTS["device"],
-        help="auto, cpu, cuda[:N], rocm[:N], xpu[:N] or mps (default: %(default)s)",
+        help="auto, or an installed accelerator with an optional :N: cpu, cuda, rocm, xpu and mps are built in (default: %(default)s)",
     )
     parser.add_argument(
         "--host",
@@ -119,6 +119,18 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=SERVE_DEFAULTS.max_bundle_tasks,
         help="most tasks one /v1/bundle request may carry (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--load-attempts",
+        type=int,
+        default=SERVE_DEFAULTS.load_attempts,
+        help="loads of a model before it stays failed; package and golden failures are never retried (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--load-retry-seconds",
+        type=float,
+        default=SERVE_DEFAULTS.load_retry_seconds,
+        help="wait before the first reload of a model that failed to load, doubling up to 300 s (default: %(default)s)",
     )
     parser.add_argument(
         "--result-cache-entries",
@@ -210,6 +222,8 @@ def config_from_args(args: argparse.Namespace) -> ServeConfig:
         port=args.port,
         uds=args.uds,
         max_bundle_tasks=args.max_bundle_tasks,
+        load_attempts=args.load_attempts,
+        load_retry_seconds=args.load_retry_seconds,
         result_cache_entries=args.result_cache_entries,
         threads=args.threads,
         memory_budget_gib=args.memory_budget,

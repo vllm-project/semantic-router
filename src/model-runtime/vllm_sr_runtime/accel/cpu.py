@@ -57,6 +57,7 @@ def device_thread() -> ThreadPoolExecutor:
 class CPUAccelerator(Accelerator):
     name = "cpu"
     validated = True
+    auto_priority = 100
 
     def available(self) -> bool:
         return True

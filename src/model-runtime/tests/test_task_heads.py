@@ -296,8 +296,20 @@ def test_one_forward_reads_every_repeat_and_bundled_task(monkeypatch, client, ru
     assert len(calls) == 1 and len(calls[0]) == 2
 
 
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "auto",
+            marks=pytest.mark.skipif(
+                torch.cuda.is_available(), reason="auto must land on the CPU"
+            ),
+        ),
+    ],
+)
 def test_engines_learn_the_engines_of_their_processs_other_cpu_models(
-    packages, monkeypatch
+    packages, monkeypatch, device
 ):
     import vllm_sr_runtime.runtime as runtime_module
 
@@ -317,9 +329,9 @@ def test_engines_learn_the_engines_of_their_processs_other_cpu_models(
 
     monkeypatch.setattr(runtime_module, "choose_engine", recording)
     (name, path), (other, other_path) = list(packages.items())[:2]
-    alone = ModelConfig(model=str(path), name=name, device="cpu")
+    alone = ModelConfig(model=str(path), name=name, device=device)
     native = ModelConfig(
-        model=str(other_path), name=other, device="cpu", engine="native"
+        model=str(other_path), name=other, device=device, engine="native"
     )
     for models, expected in (
         ((alone,), [frozenset()]),

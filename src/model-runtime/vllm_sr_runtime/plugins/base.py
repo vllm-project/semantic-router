@@ -440,13 +440,20 @@ class Engine(ABC):
 
 
 class Accelerator(ABC):
+    """Devices of one kind, named on ``--device`` as ``<name>[:N]``.
+
+    ``auto_priority`` places the accelerator in ``--device auto``'s order,
+    lowest first; None (the default) serves only devices named explicitly.
+    """
+
     name: ClassVar[str]
     validated: ClassVar[bool]
+    auto_priority: ClassVar[int | None] = None
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
         """Capability descriptor listed in ``/v1/models``; per-device facts come from ``capabilities``."""
-        return {"validated": cls.validated}
+        return {"validated": cls.validated, "auto_priority": cls.auto_priority}
 
     @abstractmethod
     def available(self) -> bool: ...
