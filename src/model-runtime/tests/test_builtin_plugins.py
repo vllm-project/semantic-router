@@ -276,3 +276,30 @@ def test_a_table_that_fails_to_import_pins_nothing_and_spares_the_others(caplog)
         table = builtin._read({"broken": broken, "decision2": decision2})
     assert table.models == builtin.all_models("decision2")
     assert "a_table_that_does_not_import" in caplog.text
+
+
+class NamesakeFamily(Decision2Family):
+    name = "namesake"
+    builtin_table = "namesake_table"
+
+
+def test_a_bare_name_two_organisations_pin_resolves_to_neither(monkeypatch, caplog):
+    kai = builtin.lookup("vllm-sr/Decision-2.0-Kai-0.6B")
+    assert kai is not None
+    namesake = replace(
+        kai, repo_id="example-org/Decision-2.0-Kai-0.6B", family="namesake"
+    )
+    table_module = types.ModuleType("namesake_table")
+    table_module.MODELS = (namesake,)
+    monkeypatch.setitem(sys.modules, "namesake_table", table_module)
+    decision2 = registry.discover()["families"]["decision2"]
+    entry = registry.PluginEntry(
+        "families", "namesake", f"{__name__}:NamesakeFamily", None, None
+    )
+    with caplog.at_level(logging.WARNING, logger="vllm_sr_runtime"):
+        table = builtin._read({"decision2": decision2, "namesake": entry})
+    assert "decision-2.0-kai-0.6b" not in table.by_name
+    assert table.by_name["decision-2.0-lux-9b"].family == "decision2"
+    assert table.by_repo["vllm-sr/decision-2.0-kai-0.6b"] is kai
+    assert table.by_repo["example-org/decision-2.0-kai-0.6b"] is namesake
+    assert "named decision-2.0-kai-0.6b" in caplog.text

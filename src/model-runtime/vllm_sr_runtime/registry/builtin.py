@@ -96,10 +96,24 @@ def _read(families: dict[str, registry.PluginEntry]) -> _Table:
     by_identity: dict[str, BuiltinModel] = {}
     for model in models:
         by_identity.setdefault(model.model_sha256, model)
+    by_name: dict[str, BuiltinModel] = {}
+    ambiguous: set[str] = set()
+    for model in models:
+        name = model.repo_id.split("/", 1)[1].lower()
+        if name in by_name:
+            ambiguous.add(name)
+        by_name[name] = model
+    for name in sorted(ambiguous):
+        log.warning(
+            "built-in models of several organisations are named %s; "
+            "name them by repository",
+            name,
+        )
+        del by_name[name]
     return _Table(
         models=tuple(models),
         by_repo=by_repo,
-        by_name={model.repo_id.split("/", 1)[1].lower(): model for model in models},
+        by_name=by_name,
         by_identity=by_identity,
     )
 
