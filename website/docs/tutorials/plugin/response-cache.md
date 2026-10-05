@@ -76,6 +76,10 @@ When request controls are enabled, the configured header accepts the authorized
 directives. `max-age` bounds read freshness and `ttl` bounds write lifetime;
 caller TTL values are clamped to `max_ttl_seconds`.
 
+Exact-cache promotion from L2 to L1 retains the original entry age and backend
+expiry. An entry whose age is unknown can serve an unrestricted lookup, but it
+cannot satisfy a `max-age` freshness bound in either tier.
+
 ## Migration
 
 `semantic-cache`, `semantic_cache`, and `response-cache` are accepted as
