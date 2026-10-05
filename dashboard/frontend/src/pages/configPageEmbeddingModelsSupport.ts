@@ -240,7 +240,6 @@ export function embeddingModelsEditData(data: unknown): EditFormData {
     model_type: localModelType,
     embedding_config: optimization,
     endpoint: semantic.endpoint,
-    bert: asRecord(catalog.bert) ?? {},
     __catalog: catalog,
     __embedding_config: embeddingConfig,
   }
@@ -290,7 +289,6 @@ export function embeddingModelsCatalogValue(rawData: EditFormData): Record<strin
   const rawModelType = normalized.model_type
   const rawOptimization = normalized.embedding_config
   const rawEndpoint = normalized.endpoint
-  const bert = normalized.bert
   const catalogValue = normalized.__catalog
   const existingEmbeddingConfigValue = normalized.__embedding_config
   const semanticFields = { ...normalized }
@@ -301,7 +299,6 @@ export function embeddingModelsCatalogValue(rawData: EditFormData): Record<strin
   delete semanticFields.model_type
   delete semanticFields.embedding_config
   delete semanticFields.endpoint
-  delete semanticFields.bert
   delete semanticFields.__catalog
   delete semanticFields.__embedding_config
   const catalog = asRecord(catalogValue) ?? {}
@@ -326,6 +323,5 @@ export function embeddingModelsCatalogValue(rawData: EditFormData): Record<strin
       embedding_config: optimization,
       ...(endpoint ? { endpoint: remote ? normalizedRemoteEndpoint(endpoint) : endpoint } : {}),
     },
-    bert: asRecord(bert) ?? {},
   }
 }

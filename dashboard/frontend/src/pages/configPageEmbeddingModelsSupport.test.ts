@@ -149,6 +149,22 @@ describe('embedding models config support', () => {
     ).not.toThrow()
   })
 
+  it('saves the Router default top_k of 0, which keeps every accepted match', () => {
+    const saved = embeddingModelsCatalogValue(
+      embeddingModelsEditData({ semantic: { embedding_config: { top_k: 0 } } }),
+    )
+
+    expect((saved.semantic as Record<string, unknown>).embedding_config).toEqual(
+      expect.objectContaining({ top_k: 0 }),
+    )
+  })
+
+  it('does not add the removed embeddings.bert block, which the Router rejects', () => {
+    expect(embeddingModelsCatalogValue(embeddingModelsEditData(localCatalog))).not.toHaveProperty(
+      'bert',
+    )
+  })
+
   it('summarizes provider mode and remote model without exposing credentials', () => {
     const remote = embeddingModelsCatalogValue({
       ...embeddingModelsEditData(localCatalog),
