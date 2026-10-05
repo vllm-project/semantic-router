@@ -129,7 +129,7 @@ so no 4B or 9B request was byte-identical to the release image's answers.
 - **Stack:** `venv-rocm72-cc` (manifest `875eeb85865e`): the image's packages
   plus the comparator's Transformers 5.17. Its `causal-conv1d` wheel holds
   the image's gfx942 device code. The image itself
-  (`mr-p24-lead/extproc-rocm72cc:af71d5e82`) repeats the cross-process runs
+  (`Dockerfile.extproc` at `af71d5e82`, `ACCELERATOR=rocm`) repeats the cross-process runs
   and the golden answers below.
 - **Requests:** the 360 generated requests above (seeds 1 and 2). The
   reference is the release image's engine, compared with `vela2_parity.py`'s

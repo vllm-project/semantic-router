@@ -160,9 +160,27 @@ autotune caches):
   runtime and on the package's engine, maximum drift 0.0; its ROCm golden
   answers are recorded in this image;
 - Decision 2.0, all six models, the four scored panels: 10,653 / 10,653
-  identical.
+  identical (table below).
 - Decision 1.0, all seven packages: the ROCm golden answers recorded in this
   image equal the stored release goldens in every value.
 
 So the release image's golden answers and parity references hold byte for
 byte on this image, and no ROCm golden is re-recorded.
+
+Decision 2.0 in the release image against this image (2026-10-05; the
+runtime at `a580be6b9` on both sides, one cold process per model on one
+MI325X, `exact`, readiness `matched` on both sides). The panels are
+`typed-final` (1,600 prompts), `css15` (6,547), `public231` (231) and
+`mlx-diag` (2,275); a prompt is identical when every answer value is equal.
+
+| Model | Prompts | Identical | Decision changes | Max diff |
+| --- | --- | --- | --- | --- |
+| Kai-0.6B | 10,653 | 10,653 | 0 | 0.0 |
+| Eos-0.8B | 10,653 | 10,653 | 0 | 0.0 |
+| Sol-2B | 10,653 | 10,653 | 0 | 0.0 |
+| Nox-4B | 10,653 | 10,653 | 0 | 0.0 |
+| Lux-9B | 10,653 | 10,653 | 0 | 0.0 |
+| Vega-27B | 10,653 | 10,653 | 0 | 0.0 |
+
+The answers stay with the program's exactness runs, outside the repository,
+because the panels' prompts are not published.

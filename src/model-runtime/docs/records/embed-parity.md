@@ -74,7 +74,7 @@ golden file (`registry/golden_answers_vela1.json`, `_omni.json`):
 | Omni Nano | CPU only | matched, max \|Δ\| 1.1e-7 |
 | Omni Mini | CPU only | matched, max \|Δ\| 7.2e-8 |
 
-- **ROCm:** `mr-p24-lead/extproc-rocm72rt:a580be6b9` on node D GPU1;
+- **ROCm:** the router's ROCm image, `Dockerfile.extproc` at `a580be6b9` (`ACCELERATOR=rocm`), on node D GPU1;
   readiness `matched` in both processes, and every recorded value equals the
   file's `rocm` answers.
 - **CPU:** PyTorch 2.10.0 CPU and ONNX Runtime 1.30.0, the router CPU image's
