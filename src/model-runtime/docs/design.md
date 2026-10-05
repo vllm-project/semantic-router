@@ -663,7 +663,11 @@ counted with status 499 in the metrics. Admission
 bounds, per model, the jobs not yet answered (queued, planned or running) and
 their tokens, and answers 429 at once, for a whole group or none of it. On
 CPU, workers of different models share the process's intra-op thread pool
-(`--threads`).
+(`--threads`). On a GPU, each device call (load, warm-up, golden check, a
+batch) holds the device's lock (`GPUAccelerator.execute`), so the models of
+one GPU never launch work at once: a model captures a HIP / CUDA graph the
+second time it sees a shape, and a capture fails when another thread
+launches work on the device, whatever the capture mode.
 
 A model whose batches need no device thread (`device_thread = False`, today
 the ONNX Runtime Omni family) skips the hand-off to its worker when it is
