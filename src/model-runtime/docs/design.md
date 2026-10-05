@@ -777,10 +777,13 @@ embedding host start alike. `vllm-sr-runtime fixture OUTPUT --family F
 --variant V` writes a tiny random-weight package of any built-in family; the
 writer is `testing/<family>.py`.
 
-Importing `vllm_sr_runtime` sets two environment defaults, `GOMP_SPINCOUNT`
-and `ONEDNN_PRIMITIVE_CACHE_CAPACITY`. They take effect only when PyTorch
-loads, and the plugin base layer imports PyTorch, so they cannot wait for
-`main`. A value the caller set is kept.
+Importing `vllm_sr_runtime` sets four environment defaults:
+`GOMP_SPINCOUNT`, `ONEDNN_PRIMITIVE_CACHE_CAPACITY`, and MIOpen's
+`MIOPEN_FIND_MODE=FAST` with `MIOPEN_LOG_LEVEL=3`. MIOpen's default find mode
+times each new convolution shape's solvers, so cold processes picked different
+ones and answered differently; FAST never times. They take effect only when
+PyTorch loads, and the plugin base layer imports PyTorch, so they cannot wait
+for `main`. A value the caller set is kept.
 
 ## 13. Router integration
 
