@@ -3,16 +3,18 @@
 The `decision1` family against each Decision 1.0 package's bundled runtime,
 on the same node, inputs and devices.
 
-- **On CPU, exact is level with the bundled runtime or better on every row but
-  one: Kai's router requests are 7.6% slower at p50, wholly, and open** (CPU
-  section). Every CPU row is an interleaved A/B with a 95% interval on the
-  difference: single requests on uniform and mixed lengths for all seven
-  models, their throughput, and router requests. Both sides run the same FP32
-  math through the same MKL kernels, so exact can't be much faster; the single
-  requests are level on all seven models, and the decoders' rates are a little
-  better where the interval says so (Eos +0.23 requests/s [+0.07, +0.39] and
-  Sol +0.09 [+0.01, +0.17] on mixed lengths, Nox +0.02 [+0.00, +0.04] at
-  C = 1).
+- **On CPU, exact is level with the bundled runtime or better on every row of
+  the tables but one, Kai's router requests (7.6% slower at p50, wholly). With
+  the huge-page default (`129be34ea`) the slow mode behind it is gone;
+  re-timed alone, Kai's and Lex's router requests are 3.3% and 2.6% slower at
+  p50 and Kai's single-request p95 2.8%, wholly, and open** (CPU section).
+  Every CPU row is an interleaved A/B with a 95% interval on the difference:
+  single requests on uniform and mixed lengths for all seven models, their
+  throughput, and router requests. Both sides run the same FP32 math through
+  the same MKL kernels, so exact can't be much faster; the single requests are
+  level on all seven models, and the decoders' rates are a little better where
+  the interval says so (Eos +0.23 requests/s [+0.07, +0.39] and Sol +0.09
+  [+0.01, +0.17] on mixed lengths, Nox +0.02 [+0.00, +0.04] at C = 1).
 - **On CPU the encoders' opt-in profiles win.** For six router signals about
   one prompt, `batching` answers 3.0–3.3× and `max_speed` 4.8–5.3× faster at
   p50 than the bundled runtime, and they serve 3.0–3.3× and 4.8–5.3× its
@@ -49,7 +51,9 @@ on the same node, inputs and devices.
   `done()` check per planned job). The device lock, the per-model kernel
   choices and the thread-local graph capture are GPU-only, and load retries,
   placement by plugin name and the advertised limits run at load, so the run
-  stands for the head. The ROCm rows' commits are in their section.
+  stands for the head, except where the huge-page default (`129be34ea`)
+  changes how CPU memory is allocated: the rows re-timed under it are in the
+  CPU section. The ROCm rows' commits are in their section.
 - **Raw results:** `decision1-performance.json`: every run without paths
   (the CPU A/B is set `bench-cpu-ab`), and under `intervals` each A/B row's
   means, difference, interval, rounds and verdict.
@@ -446,8 +450,8 @@ Throughput, requests/s, as above:
   (+56.7 ms [−55.6, +169.0]) and Route (+70.3 ms [−20.1, +160.7]) lean the
   same way, about 7%, and are level; the four decoders are level, Sol's
   point estimate on the better side. The encoders' single requests, one
-  question through the same stacks, are level, so the gap is in how a
-  six-question request runs; where it goes is not found yet. This is open.
+  question through the same stacks, are level. The cause, and what is left
+  of the gap, follow.
 - **Kai, a second series.** A separate 10-round A/B on 16 cores with no other
   timed work on their NUMA node (node C 16–31, the first 30 router prompts,
   C = 1, the node's 1-minute load at most 44) reads it worse too: p50 +65.3 ms
@@ -457,6 +461,56 @@ Throughput, requests/s, as above:
   runtime's was 651–677 ms in seven rounds (1–5% slower) and 807–834 ms in
   three (24–29% slower), so some fresh runtime processes run these requests in
   a slower mode.
+- **The slow mode, and the huge-page default (`129be34ea`).** The runtime
+  copies a model's weights into process memory at load (`69ae2d0c5`), on
+  4 KiB pages whose physical placement differs from process to process; the
+  bundled runtime reads its weights from the checkpoint's page-cache pages,
+  the same physical pages in every process. In diagnostic runs on node D (16
+  cores, the first 30 router prompts, C = 1), Kai's runtime processes ran
+  650–680 ms or 820–870 ms at p50, slow in 4 of 7 and in 2 of 6; the bundled
+  runtime never was. The OpenMP spin count, a second OpenMP team and the
+  address layout (ASLR off) did not decide the mode. With
+  `THP_MEM_ALLOC_ENABLE=1`, which puts PyTorch's CPU allocations of 2 MiB or
+  more on madvised transparent huge pages, 6 of 6 processes ran 659–682 ms.
+  Importing the package now sets it (design §12). Re-timed under it, on node
+  C's NUMA node 0 with the bundled side's huge pages off as before, 10 rounds,
+  load at most 49:
+
+  | Row | With the default, runtime − bundled [95% CI] | Before it |
+  | --- | --- | --- |
+  | Kai router, p50 | +21.4 ms [+11.3, +31.6] (646.5 → 667.9), worse | +66.1 [+5.1, +127.1] four lanes; +65.3 [+10.4, +120.2] alone |
+  | Kai router, p95 | +17.0 ms [−17.1, +51.2], level | +74.6 [+11.2, +138.1]; +33.5 [−7.0, +74.0] |
+  | Kai router, one at a time | −0.04 requests/s [−0.06, −0.01], worse | −0.07 [−0.11, −0.02]; −0.11 [−0.19, −0.03] |
+  | Kai router, C = 1 | −0.04 requests/s [−0.06, −0.01], worse | −0.06 [−0.13, −0.00]; −0.11 [−0.20, −0.02] |
+  | Lex router, p50 | +18.4 ms [+10.9, +26.0] (700.8 → 719.2), worse | +56.7 [−55.6, +169.0], level |
+  | Lex router, p95 | +52.7 ms [−2.7, +108.0], level | +47.6 [−70.4, +165.5], level |
+  | Lex router, one at a time | −0.04 requests/s [−0.06, −0.01], worse | −0.05 [−0.14, +0.03], level |
+  | Lex router, C = 1 | −0.03 requests/s [−0.05, −0.00], worse | −0.06 [−0.14, +0.02], level |
+  | Kai single, p50 | −0.05 ms [−1.21, +1.11], level | −0.21 [−2.78, +2.35], level |
+  | Kai single, p95 | +2.3 ms [+0.1, +4.6] (83.9 → 86.2), worse | +3.75 [−5.15, +12.65], level |
+
+  Kai's router row ran alone on 16–31; then Lex's router row (32–47) and
+  Kai's single requests (48–63, C = 1 / 4 / 16 level or better) ran side by
+  side. No runtime process fell into the slow mode. Lex's router row and
+  Kai's single-request p95 read worse now because the slow mode's variance
+  left their intervals, not because they got slower. On node D, Lex's
+  runtime read +76.8 ms [−15.8, +169.4] without huge pages, 2 of 6 processes
+  slow, and +10.3 [+5.5, +15.1] with them; Kai's single requests with huge
+  pages on against off were p50 −0.07 ms [−0.67, +0.52] and p95 +0.42
+  [−2.49, +3.32]. Outside Decision 1.0, 5 rounds on against off: Vela
+  Embedding p50 −0.09 ms [−0.41, +0.23] and Vela Domain −0.24 [−0.69,
+  +0.21], p95 level for both; a process's RSS grows by 1.5–23 MiB
+  (0.1–1.3%). Route's router row, the decoders' rows, Vela 2.0 0.3B and
+  Decision 2.0 on CPU were not re-timed under it.
+- **What is left goes away with a longer OpenMP spin.** On node D with huge
+  pages, Kai's router row read +11.7 ms [+2.4, +21.1] on the runtime's
+  `GOMP_SPINCOUNT=10000` and +1.9 [−4.1, +7.9] on libgomp's default 300,000.
+  `tools/decision1_bench.py` imports the runtime package on the bundled side
+  too, so both sides of every series here run with 10,000; the runtime's
+  forward pays more for the short spin. The runtime keeps 10,000 because
+  longer-spinning PyTorch threads slowed an ONNX Runtime run that followed
+  a native forward in the same process (`d2e3e5d21`), and libgomp reads the
+  value before the process knows what it serves. These cells are open.
 - **Nox, a second series.** Its C = 1 rate read wholly worse at 5 and 7
   rounds in the four-lane series, then level at 8–10. Three checks looked for
   a runtime cost and found none:
