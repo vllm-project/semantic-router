@@ -261,7 +261,7 @@ example includes `identifier_document_imagery`,
 its candidates with examples from your deployment and recalibrate the
 threshold. The example values are not portable defaults.
 
-The maintained pack uses `llm-semantic-router/Vela-1.0-Omni-Nano`, snapshot
+The maintained pack uses `vllm-sr/Vela-1.0-Omni-Nano`, snapshot
 `2ff2d66385dbdd661a560ec3e8bcb45a0527d92e`, with the complete 384-dimensional
 output. The code rule uses seven positive image prototypes and 178 negative
 image prototypes. All prototypes come from the frozen development split of the

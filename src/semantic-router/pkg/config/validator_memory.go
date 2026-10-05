@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 )
 
@@ -46,6 +47,15 @@ func validateGlobalMemoryContracts(cfg *RouterConfig) error {
 	); err != nil {
 		return err
 	}
+	if err := validateMemoryRetrievalLimit(cfg.Memory.DefaultRetrievalLimit, false, "global memory default_retrieval_limit"); err != nil {
+		return err
+	}
+	if err := validateMemoryHybridMode(cfg.Memory.HybridMode, "global.stores.memory.hybrid_mode"); err != nil {
+		return err
+	}
+	if err := validateMemoryReflectionContracts(cfg.Memory.Reflection, "global memory reflection"); err != nil {
+		return err
+	}
 	return validateMemoryPersistence(cfg.Memory.Persistence)
 }
 
@@ -79,19 +89,65 @@ func validateDecisionMemoryContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	decisions := cfg.Decisions
+	decisions := cfg.AllRoutingDecisions()
 	for i := range decisions {
 		decision := &decisions[i]
 		pluginCfg := decision.GetMemoryConfig()
-		if pluginCfg == nil || pluginCfg.SimilarityThreshold == nil {
+		if pluginCfg == nil {
 			continue
 		}
-		scope := fmt.Sprintf("decision %q memory plugin similarity_threshold", decision.Name)
-		if err := validateMemorySimilarityThreshold(*pluginCfg.SimilarityThreshold, scope); err != nil {
+		if pluginCfg.SimilarityThreshold != nil {
+			scope := fmt.Sprintf("decision %q memory plugin similarity_threshold", decision.Name)
+			if err := validateMemorySimilarityThreshold(*pluginCfg.SimilarityThreshold, scope); err != nil {
+				return err
+			}
+		}
+		if pluginCfg.RetrievalLimit != nil {
+			scope := fmt.Sprintf("decision %q memory plugin retrieval_limit", decision.Name)
+			if err := validateMemoryRetrievalLimit(*pluginCfg.RetrievalLimit, true, scope); err != nil {
+				return err
+			}
+		}
+		field := fmt.Sprintf("routing.decisions[%s].plugins[memory].hybrid_mode", decision.Name)
+		if err := validateMemoryHybridMode(pluginCfg.HybridMode, field); err != nil {
 			return err
+		}
+		if pluginCfg.Reflection != nil {
+			scope := fmt.Sprintf("decision %q memory plugin reflection", decision.Name)
+			if err := validateMemoryReflectionContracts(*pluginCfg.Reflection, scope); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+// memoryHybridModes are the fusion methods the hybrid scorer implements. Empty
+// selects the default (weighted). Matching is exact because the scorer compares
+// the raw string.
+var memoryHybridModes = []string{"weighted", "rrf"}
+
+// legacyMemoryHybridModes maps retired values to the mode they always ran as.
+var legacyMemoryHybridModes = map[string]string{"rerank": "weighted"}
+
+// validateMemoryHybridMode rejects fusion methods the scorer does not
+// implement. Any value other than "rrf" used to run as weighted without a
+// warning, so a typo silently changed retrieval scoring.
+func validateMemoryHybridMode(mode, field string) error {
+	if mode == "" {
+		return nil
+	}
+	for _, accepted := range memoryHybridModes {
+		if mode == accepted {
+			return nil
+		}
+	}
+	accepted := `"", "` + strings.Join(memoryHybridModes, `", "`) + `"`
+	if replacement, ok := legacyMemoryHybridModes[mode]; ok {
+		return fmt.Errorf("%s %q is not supported (accepted: %s); use %q, which is how %q has always run",
+			field, mode, accepted, replacement, mode)
+	}
+	return fmt.Errorf("%s %q is not supported (accepted: %s)", field, mode, accepted)
 }
 
 // validateMemorySimilarityThreshold enforces that a configured memory similarity
@@ -101,6 +157,34 @@ func validateDecisionMemoryContracts(cfg *RouterConfig) error {
 func validateMemorySimilarityThreshold(threshold float32, scope string) error {
 	if threshold < 0.0 || threshold > 1.0 {
 		return fmt.Errorf("%s must be between 0.0 and 1.0, got %.2f", scope, threshold)
+	}
+	return nil
+}
+
+// validateMemoryRetrievalLimit rejects non-positive retrieval limits. The
+// global field is a plain int whose zero value means "unset" (runtime
+// default), while the decision plugin uses a pointer, where an explicit
+// zero or negative would reach the vector stores as an unbounded retrieval
+// ("a non-positive topK means unlimited results").
+func validateMemoryRetrievalLimit(limit int, explicit bool, scope string) error {
+	if limit == 0 && !explicit {
+		return nil
+	}
+	if limit <= 0 {
+		return fmt.Errorf("%s must be greater than 0, got %d", scope, limit)
+	}
+	return nil
+}
+
+func validateMemoryReflectionContracts(reflection MemoryReflectionConfig, scope string) error {
+	if reflection.DedupThreshold < 0.0 || reflection.DedupThreshold > 1.0 {
+		return fmt.Errorf("%s dedup_threshold must be between 0.0 and 1.0, got %.2f", scope, reflection.DedupThreshold)
+	}
+	if reflection.MaxInjectTokens < 0 {
+		return fmt.Errorf("%s max_inject_tokens must not be negative, got %d", scope, reflection.MaxInjectTokens)
+	}
+	if reflection.RecencyDecayDays < 0 {
+		return fmt.Errorf("%s recency_decay_days must not be negative, got %d", scope, reflection.RecencyDecayDays)
 	}
 	return nil
 }

@@ -16,6 +16,7 @@ MOM artifacts retain their original training owners.
 | `model_eval/` | cross-family evaluation utilities |
 | `model_experiment/` | experiments that are not release owners |
 | `model_selection/` | learned model-selection research |
+| `kv_mapper/` | cross-model KV mapper artifacts, ridge fit and distillation (#2976) |
 
 Each release-owning family has a focused directory with a README,
 machine-readable configuration, explicit data/output paths, train and export
@@ -98,11 +99,29 @@ resources, run output IDs and task outcome together. Evaluation and qualificatio
 reuse published variant IDs. A protocol-invalid final result becomes a failed
 attempt with diagnostics.
 
+### Capability catalog and planning
+
+The capability layer resolves a requested training outcome across independently extensible
+trainer, architecture, hardware, artifact, and runtime capabilities without central switch
+statements or hard-coded UI enums. Capability IDs follow `<domain>/<name>@<version>`
+(e.g. `trainer/hf-peft@v1`, `architecture/hf-modernbert@v1`, `hardware/rocm@v1`, `runtime/onnxruntime@v1`).
+
+Training hardware requirements remain distinct from inference qualification hardware requirements:
+a neural model trained on CUDA/ROCm GPUs may be planned and qualified across multiple runtime targets
+(such as CPU with Candle or GPU with ONNX Runtime), automatically scheduling format conversions
+(e.g. Safetensors to ONNX) when direct runtime loading is unavailable.
+
+Clients query `GET /capabilities` to discover supported descriptors and `POST /capabilities/plan`
+to validate proposed combinations. Unsupported combinations return stable machine-readable reason
+codes (such as `INCOMPATIBLE_HARDWARE`, `INCOMPATIBLE_ARCHITECTURE`, `UNSUPPORTED_TARGET`,
+`MISSING_FORMAT_CONVERSION`) and actionable remediation messages.
+
 ### Generate and verify
 
 From the repository root, run `make training-contract-generate` after changing Go
-types, then `make training-contract-check` to check generated drift, Go semantics,
-Python schema validation and provenance compatibility. In `dashboard/frontend`,
+types or the default capability descriptors, then `make training-contract-check`
+to check generated drift, Go semantics, Python schema validation and provenance
+compatibility. In `dashboard/frontend`,
 run `npx vitest run src/utils/trainingContract.test.ts` for Console consumption.
 
 The shared [selector and neural fixtures](../semantic-router/pkg/trainingcontract/testdata/)

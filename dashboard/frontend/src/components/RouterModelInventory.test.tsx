@@ -36,10 +36,10 @@ const models: RouterModelInfo[] = [
   loaded: true,
   model_path: `models/local-ckfa/${task}-0123456789ab`,
   registry: {
-    repo_id: `llm-semantic-router/Vela-1.0-Encoder-307M-${task}`,
+    repo_id: `vllm-sr/Vela-1.0-Encoder-307M-${task}`,
     revision: 'test-registry-revision',
     max_context_length: 32768,
-    model_card_url: `https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-${task}`,
+    model_card_url: `https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-${task}`,
   },
   metadata: {
     binding: name,
@@ -76,7 +76,7 @@ describe('router model presentation', () => {
       models.map((model) => model.registry!.repo_id!.split('/')[1]).sort(),
     )
     expect(headings(markup)).toHaveLength(8)
-    expect(markup.match(/>llm-semantic-router<\/p>/g)).toHaveLength(8)
+    expect(markup.match(/>vllm-sr<\/p>/g)).toHaveLength(8)
     expect(markup).not.toContain('Vela Embedding')
     expect(markup).not.toContain('0123456789ab')
     expect(markup).not.toContain('models/local-ckfa')
