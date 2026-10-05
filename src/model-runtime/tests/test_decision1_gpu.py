@@ -6,14 +6,16 @@ is the reference; the other copy runs the fused layers through the graph runner 
 second captured, third replayed) and must equal it (``torch.equal``). The Eos case also selects its
 released FP64 convolution variant, whose gated-delta blocks run eagerly inside the fused layers,
 and which hands shapes it does not cover to the default kernel. The Vela encoders' three layer
-stacks each replay their own bucket graphs. Two decoders sharing one GPU process answer concurrent
-requests while each captures graphs.
+stacks each replay their own bucket graphs. Two models sharing one GPU capture and replay graphs on
+two threads through ``GPUAccelerator.execute``, and two decoders in one process answer concurrent
+requests while each captures.
 """
 
 from __future__ import annotations
 
 import asyncio
 import copy
+import threading
 
 import pytest
 
@@ -131,6 +133,51 @@ def test_every_encoder_stack_replays_its_own_graphs(tmp_path):
     for stats in (receipt, *receipt["branches"].values()):
         assert (stats["captures"], stats["replays"], stats["failed"]) == (1, 3, 0)
     assert set(receipt["branches"]) == {"choice", "score"}
+
+
+def test_two_models_capture_and_replay_on_two_threads_of_one_gpu():
+    accelerator, device = _device()
+    make, variants = CASES["eos-dims"]
+    torch_device = accelerator.torch_device(device)
+    runners = []
+    for _ in range(2):
+        module = build(make(), variants, accelerator, device)
+        assert fast.install_fused(module) == len(module.layers)
+        runners.append(fast.Graphs(module, fast.Masks()))
+    failures: list[BaseException] = []
+
+    def serve(graphs: fast.Graphs, seed: int) -> None:
+        generator = torch.Generator().manual_seed(seed)
+        for _ in range(4):
+            for lengths in LENGTHS:
+                ids, mask = batch(lengths, generator, torch_device)
+
+                def forward(ids=ids, mask=mask, lengths=lengths) -> None:
+                    with torch.inference_mode(), torch.autocast(
+                        "cuda", dtype=torch.bfloat16
+                    ):
+                        graphs(ids, mask, lengths)
+                    torch.cuda.synchronize()
+
+                try:
+                    accelerator.execute(device, forward)
+                except Exception as exc:
+                    failures.append(exc)
+                    return
+
+    threads = [
+        threading.Thread(target=serve, args=(graphs, seed))
+        for seed, graphs in enumerate(runners)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert not failures, failures
+    for graphs in runners:
+        stats = graphs.receipt()
+        assert stats["captures"] > 0 and stats["replays"] > 0, stats
+        assert stats["failed"] == 0, stats
 
 
 def test_decoders_sharing_a_gpu_answer_concurrent_requests_while_they_capture(tmp_path):
