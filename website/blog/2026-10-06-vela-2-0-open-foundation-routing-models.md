@@ -11,7 +11,7 @@ import { ArticleChartGallery, ArticleFigure, ArticleMetrics, ArticleVideo } from
 
 <ArticleVideo
   src="/videos/vela-2-0/vela-2-0-launch.mp4"
-  poster="/img/blog/vela2-hero.jpg"
+  poster="/img/blog/vela-2-0/launch-poster.jpg"
   title="Vela 2.0: Towards Open Foundation Routing Models"
   landscape
 >
@@ -22,7 +22,7 @@ import { ArticleChartGallery, ArticleFigure, ArticleMetrics, ArticleVideo } from
 
 Is the request harmful? Which domain is it about? Which words are personal data? Which claims in the answer does the context not support? Vela 2.0 answers every one of these as a typed question, with Choice, yes/no and Score answers, plus labelled character spans for any label you name. It comes in four sizes: a 307M encoder that runs on CPU, and 0.8B, 4B and 9B decoders built on the open Decision 2.0 models.
 
-[**Explore the four models →**](https://huggingface.co/collections/vllm-sr/vela-20-towards-open-foundation-routing-models-6abfd3ba17c08e6d36a7e8c6) · [**Read about Decision →**](/blog/decision-models)
+[**Explore the four models →**](https://huggingface.co/collections/vllm-sr/vela-20) · [**Read about Decision →**](/blog/decision-models)
 
 <!-- truncate -->
 
@@ -297,7 +297,7 @@ python vela2_serve.py --model . --device cuda --port 8001
 
 Vela 2.0 is a step from a set of routing classifiers towards one routing model: a model that reads a request once, answers whatever the deployment asks, points at the exact words behind its answers, and takes new labels without retraining. The next step is to bring it into vLLM Semantic Router as a native signal backend, so that one Vela 2.0 call replaces the per-signal classifiers on the request path.
 
-- Models: [Vela 2.0 collection](https://huggingface.co/collections/vllm-sr/vela-20-towards-open-foundation-routing-models-6abfd3ba17c08e6d36a7e8c6) ([0.3B](https://huggingface.co/vllm-sr/Vela-2.0-0.3B), [0.8B](https://huggingface.co/vllm-sr/Vela-2.0-0.8B), [4B](https://huggingface.co/vllm-sr/Vela-2.0-4B), [9B](https://huggingface.co/vllm-sr/Vela-2.0-9B))
+- Models: [Vela 2.0 collection](https://huggingface.co/collections/vllm-sr/vela-20) ([0.3B](https://huggingface.co/vllm-sr/Vela-2.0-0.3B), [0.8B](https://huggingface.co/vllm-sr/Vela-2.0-0.8B), [4B](https://huggingface.co/vllm-sr/Vela-2.0-4B), [9B](https://huggingface.co/vllm-sr/Vela-2.0-9B))
 - Decision 2.0 bases: [Eos-0.8B](https://huggingface.co/vllm-sr/Decision-2.0-Eos-0.8B), [Nox-4B](https://huggingface.co/vllm-sr/Decision-2.0-Nox-4B), [Lux-9B](https://huggingface.co/vllm-sr/Decision-2.0-Lux-9B)
 - Paper: *Vela 2.0: Towards Open Foundation Routing Models*, forthcoming
 
