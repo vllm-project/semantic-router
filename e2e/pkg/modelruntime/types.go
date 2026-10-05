@@ -38,6 +38,7 @@ type ModelCard struct {
 	Device      string         `json:"device"`
 	Ready       bool           `json:"ready"`
 	Status      string         `json:"status"`
+	Reason      string         `json:"reason"`
 	Golden      GoldenStatus   `json:"golden"`
 	Plugins     []PluginInfo   `json:"plugins"`
 }
