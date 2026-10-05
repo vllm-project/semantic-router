@@ -5,8 +5,15 @@ Decision 1.0 package's bundled runtime, for all seven packages. On ROCm this
 holds on all four scored panels, on CPU on subsets of them. That is design
 §17's bar for Decision 1.0: bit-identical on the same device class.
 
-- **Date:** 2026-10-04; the P1-4 runs and the `dc81682bb` column on
-  2026-10-05.
+On the router's shipped ROCm stack (the official PyTorch wheel with
+`causal-conv1d`, below), the released answers move by rounding: about 11.5%
+of prompts stay byte-identical on the encoders, with no decision changed, and
+almost none on the decoders, where 0.3–0.6% of decisions change, each a
+near-tie. On that stack the runtime answers byte-identically across cold
+processes.
+
+- **Date:** 2026-10-04; the P1-4 runs, the `dc81682bb` column and the
+  shipped ROCm stack on 2026-10-05.
 - **ROCm:** one AMD Instinct MI325X (gfx942) per run, in the image the packages
   were released with: PyTorch 2.12 (ROCm), Transformers 5.17, Triton 3.7.1, FLA
   0.5.2, causal-conv1d 1.7.0.
@@ -30,6 +37,9 @@ holds on all four scored panels, on CPU on subsets of them. That is design
   also carries what the engine ran: graph statistics per layer stack and the
   reduced copy. A P1-4 entry names the models served before it in the same
   process (`served_before`), and `concurrent` when they were asked at once.
+  The shipped-stack entries name the `stack` and the `reference` they compare
+  with (`released`, or the `stack`'s own one-model answers), and a
+  `cross_process` entry holds the three cold processes.
 
 ## Exact profile, ROCm, four scored panels
 
@@ -128,6 +138,70 @@ models' batches and graph captures meet:
   profile's approximation; 640 requests byte-identical, fewer than one at a
   time because concurrent requests coalesce). On both, no request failed and
   all three stayed ready.
+
+## The shipped ROCm stack: stack B plus `causal-conv1d`
+
+The router's ROCm image ships the official PyTorch 2.12.0 wheel from the
+rocm7.2 index (HIP 7.2, Triton 3.7.0) with FLA 0.5.2 and `causal-conv1d`
+1.7.0 built for gfx942. The references above, and the recorded ROCm golden
+answers, come from the packages' release image: a PyTorch 2.12 source build
+on ROCm 7.2 with Triton 3.7.1.
+
+At `a1c7a284e`, exact, the four scored panels (10,653 prompts, 11,053
+questions), against the released references. The shipped image
+(`extproc-rocm72cc:be7366c49`) and `venv-rocm72-cc` (the image's pins with a
+`causal-conv1d` wheel whose gfx942 device code equals the image's and the
+release's) gave byte-identical answers on every prompt of all seven models:
+
+| Model | Byte-identical prompts | Decisions changed | Max abs diff | Release golden |
+| --- | --- | --- | --- | --- |
+| Kai-0.6B | 1,241 / 10,653 (11.6%) | 0 / 11,053 | 1.0e-5 | matched 3 / 3 |
+| Lex-0.6B | 1,260 / 10,653 (11.8%) | 0 / 11,053 | 9.8e-6 | matched 3 / 3 |
+| Route-0.6B | 1,228 / 10,653 (11.5%) | 0 / 11,053 | 1.3e-5 | matched 4 / 4 |
+| Eos-0.8B | 21 / 10,653 (0.2%) | 52 / 11,053 (0.47%) | 0.036 | matched 3 / 3 |
+| Sol-2B | 14 / 10,653 (0.1%) | 67 / 11,053 (0.61%) | 0.17 | matched 3 / 3 |
+| Nox-4B | 4 / 10,653 (0.04%) | 62 / 11,053 (0.56%) | 0.073 | matched 3 / 3 |
+| Lux-9B | 4 / 10,653 (0.04%) | 31 / 11,053 (0.28%) | 0.084 | matched 3 / 3 |
+
+- **Every changed decision is a near-tie** in the released answer: the median
+  top-two margin is 0.003–0.005, the largest 0.017 (Eos), 0.036 (Lux), 0.058
+  (Nox) and 0.062 (Sol). Of each decoder's changes, 4–15 are Score or Noul
+  answers; the rest are Choice.
+- **Why:** `causal-conv1d` closes part of the decoders' gap. Without it, Sol
+  had 4 identical prompts, 95 changed decisions and a max diff of 0.46. The
+  rest is the PyTorch build: the official wheel and the release image's source
+  build compute some kernels differently. Kai runs no convolution and no FLA
+  kernel, and it still differs by up to 1e-5 on every official wheel. Vela 1.0
+  and Vela 2.0 show the same on this stack.
+- **Readiness passes on either record:** every load on stack B matched the
+  release goldens within the GPU tolerance (0.02).
+
+**On the stack itself, exact holds.** Three cold processes started together,
+one per GPU (node C GPU1, GPU2 and GPU5), sharing one empty autotune cache and
+one empty Triton cache, each answered the four panels
+(`tools/cross_process.py`), in the venv and again in the image. For every
+model, each pair of processes is 10,653 / 10,653 identical. Every process
+matched its golden and tuned nothing (0 autotune entries before and after):
+the decoders run their pinned choices on Triton 3.7.0.
+
+**Several models in one GPU process, on stack B** (in the venv and in the
+image, alike), each against the stack's own one-model answers:
+
+| Model | Served before it | Identical | Concurrent |
+| --- | --- | --- | --- |
+| Sol-2B | Eos-0.8B | 10,653 / 10,653 | no |
+| Lux-9B | Eos-0.8B, Sol-2B, Nox-4B | 10,653 / 10,653 | no |
+| Sol-2B | Eos-0.8B | 10,653 / 10,653 | 8 prompts at a time to both |
+
+**Router requests.** The router asks a Decision 1.0 model its six router
+signals about one prompt as one request: six questions of mixed types, which
+no scored panel has. Exact against the bundled runtime on such requests
+(public231's 231 prompts, each asking the six signals of Route's
+`QUESTIONS.json` as explicit questions, as `tools/decision1_bench.py --router`
+builds them) is byte-identical for all seven models on the shipped stack, both
+sides in the image plus Transformers 5.17 (231 / 231 requests, 1,386
+questions each). On CPU, Kai is 30 / 30 and Eos 10 / 10 (3 threads on both
+sides).
 
 ## Exact profile, CPU
 
