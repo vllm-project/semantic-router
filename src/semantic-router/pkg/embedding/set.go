@@ -93,9 +93,9 @@ func (s *Set) Select(text string, quality, latency float32, dimension int) (stri
 	// policy; whitespace counts here only guide the existing model preference.
 	preferred := "qwen3"
 	if (words <= 512 && quality <= 0.7 && latency > 0.7) || (words > 512 && words <= 2048) || (dimension > 0 && dimension < 768 && latency > 0.5) {
-		preferred = "gemma"
+		preferred = "mmbert"
 	}
-	order := []string{preferred, "mmbert", "gemma", "qwen3"}
+	order := []string{preferred, "mmbert", "qwen3"}
 	for _, model := range order {
 		if s.Has(model) {
 			return model, nil

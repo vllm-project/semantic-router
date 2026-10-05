@@ -35,7 +35,7 @@ type RedisCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
-	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	embeddingModel      string // "mmbert" (default), "qwen3" or "multimodal"
 }
 
 // RedisCacheOptions contains configuration parameters for Redis cache initialization

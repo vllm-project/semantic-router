@@ -41,7 +41,7 @@ func TestRedisSemanticPolarityIntegration(t *testing.T) {
 	cfg.Development.AutoCreateIndex = true
 	backend, err := NewRedisCache(RedisCacheOptions{
 		Enabled: true, Config: cfg, TTLSeconds: 60, SimilarityThreshold: .8,
-		EmbeddingModel: "bert", EmbeddingProvider: redisValkeyPolarityVectors(),
+		EmbeddingModel: "qwen3", EmbeddingProvider: redisValkeyPolarityVectors(),
 	})
 	if err != nil {
 		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis vector search unavailable: %v", err))
