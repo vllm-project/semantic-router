@@ -62,7 +62,12 @@ def test_decisions_response_matches_the_contract(client):
         "2": "Hard",
     }
     assert body["usage"]["input_tokens"] > 0 and body["usage"]["output_tokens"] == 0
-    assert body["meta"]["profile"] == "exact" and body["meta"]["numerics"] == "exact"
+    assert "meta" not in body
+    meta = post(
+        client,
+        {"state": STATE, "questions": QUESTIONS, "options": {"return_meta": True}},
+    ).json()["meta"]
+    assert meta["profile"] == "exact" and meta["numerics"] == "exact"
 
 
 def test_systemone_alias_answers_identically(client):

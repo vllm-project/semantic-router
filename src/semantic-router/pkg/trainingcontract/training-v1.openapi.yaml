@@ -531,6 +531,42 @@ paths:
         schema:
           type: string
           pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+  /capabilities:
+    get:
+      operationId: getCapabilities
+      description: >-
+        Discover supported target contracts, trainers, architectures, hardware providers,
+        artifact formats, runtimes, and precision modes.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/CapabilityCatalog
+        default:
+          $ref: '#/components/responses/Error'
+  /capabilities/plan:
+    post:
+      operationId: planTraining
+      description: >-
+        Resolve a requested training combination into an explainable, deterministic plan
+        or structured rejection diagnostics across independently extensible capabilities.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./training-v1.schema.json#/$defs/TrainingPlanRequest
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/TrainingPlanResponse
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearerAuth:

@@ -18,6 +18,53 @@
         "message"
       ]
     },
+    "ArchitectureDriverDescriptor": {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "family": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "supported_targets": {
+          "items": {
+            "$ref": "#/$defs/Target"
+          },
+          "type": "array"
+        },
+        "supported_formats": {
+          "items": {
+            "$ref": "#/$defs/CapabilityID"
+          },
+          "type": "array"
+        },
+        "supported_runtimes": {
+          "items": {
+            "$ref": "#/$defs/CapabilityID"
+          },
+          "type": "array"
+        },
+        "required_model_files": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "family",
+        "display_name",
+        "supported_targets",
+        "supported_formats",
+        "supported_runtimes"
+      ]
+    },
     "Artifact": {
       "properties": {
         "schema_version": {
@@ -49,6 +96,40 @@
         "created_at",
         "provenance",
         "profile"
+      ]
+    },
+    "ArtifactFormatDescriptor": {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "component": {
+          "$ref": "#/$defs/Component"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "file_extensions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "direct_runtimes": {
+          "items": {
+            "$ref": "#/$defs/CapabilityID"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "component",
+        "display_name",
+        "file_extensions",
+        "direct_runtimes"
       ]
     },
     "ArtifactResult": {
@@ -260,6 +341,87 @@
         "name"
       ]
     },
+    "CapabilityCatalog": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "targets": {
+          "items": {
+            "$ref": "#/$defs/TargetDescriptor"
+          },
+          "type": "array"
+        },
+        "trainers": {
+          "items": {
+            "$ref": "#/$defs/TrainerDescriptor"
+          },
+          "type": "array"
+        },
+        "architectures": {
+          "items": {
+            "$ref": "#/$defs/ArchitectureDriverDescriptor"
+          },
+          "type": "array"
+        },
+        "executors": {
+          "items": {
+            "$ref": "#/$defs/ExecutorDescriptor"
+          },
+          "type": "array"
+        },
+        "formats": {
+          "items": {
+            "$ref": "#/$defs/ArtifactFormatDescriptor"
+          },
+          "type": "array"
+        },
+        "runtimes": {
+          "items": {
+            "$ref": "#/$defs/RuntimeAdapterDescriptor"
+          },
+          "type": "array"
+        },
+        "precisions": {
+          "items": {
+            "$ref": "#/$defs/PrecisionDescriptor"
+          },
+          "type": "array"
+        },
+        "hardware": {
+          "items": {
+            "$ref": "#/$defs/HardwareProviderDescriptor"
+          },
+          "type": "array"
+        },
+        "conversions": {
+          "items": {
+            "$ref": "#/$defs/ConversionRule"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "targets",
+        "trainers",
+        "architectures",
+        "executors",
+        "formats",
+        "runtimes",
+        "precisions",
+        "hardware"
+      ]
+    },
+    "CapabilityID": {
+      "type": "string",
+      "pattern": "^[a-z]+/[a-z0-9._-]+@v[0-9]+$"
+    },
     "Catalog": {
       "properties": {
         "asset_request": {
@@ -333,6 +495,15 @@
         },
         "worker_submission": {
           "$ref": "#/$defs/WorkerSubmission"
+        },
+        "capability_catalog": {
+          "$ref": "#/$defs/CapabilityCatalog"
+        },
+        "plan_request": {
+          "$ref": "#/$defs/TrainingPlanRequest"
+        },
+        "plan_response": {
+          "$ref": "#/$defs/TrainingPlanResponse"
         }
       },
       "additionalProperties": false,
@@ -361,7 +532,10 @@
         "validation_response",
         "error",
         "event_page",
-        "worker_submission"
+        "worker_submission",
+        "capability_catalog",
+        "plan_request",
+        "plan_response"
       ]
     },
     "ClassifierProfile": {
@@ -448,6 +622,33 @@
       "required": [
         "name",
         "version"
+      ]
+    },
+    "ConversionRule": {
+      "properties": {
+        "source_format": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "target_format": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "executor": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "hardware": {
+          "items": {
+            "$ref": "#/$defs/CapabilityID"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "source_format",
+        "target_format",
+        "executor",
+        "hardware"
       ]
     },
     "DataAsset": {
@@ -551,6 +752,27 @@
         "upload_handle",
         "profile",
         "content"
+      ]
+    },
+    "DiagnosticCode": {
+      "type": "string",
+      "enum": [
+        "UNSUPPORTED_TARGET",
+        "UNKNOWN_CAPABILITY",
+        "INCOMPATIBLE_ARCHITECTURE",
+        "INCOMPATIBLE_EXECUTOR",
+        "INCOMPATIBLE_HARDWARE",
+        "INCOMPATIBLE_PRECISION",
+        "MISSING_FORMAT_CONVERSION",
+        "UNSUPPORTED_QUALIFICATION",
+        "INVALID_PARAMETER"
+      ]
+    },
+    "DiagnosticSeverity": {
+      "type": "string",
+      "enum": [
+        "error",
+        "warning"
       ]
     },
     "Evaluation": {
@@ -682,6 +904,40 @@
       "required": [
         "events",
         "next_after"
+      ]
+    },
+    "ExecutorDescriptor": {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "component": {
+          "$ref": "#/$defs/Component"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "supported_hardware": {
+          "items": {
+            "$ref": "#/$defs/CapabilityID"
+          },
+          "type": "array"
+        },
+        "min_memory_bytes": {
+          "type": "integer"
+        },
+        "isolation_level": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "component",
+        "display_name",
+        "supported_hardware",
+        "isolation_level"
       ]
     },
     "Experiment": {
@@ -830,6 +1086,37 @@
         "proposal"
       ]
     },
+    "HardwareProviderDescriptor": {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "device_type": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "supported_precisions": {
+          "items": {
+            "$ref": "#/$defs/CapabilityID"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "provider",
+        "device_type",
+        "display_name",
+        "supported_precisions"
+      ]
+    },
     "ModelRef": {
       "properties": {
         "repository": {
@@ -848,8 +1135,145 @@
         "revision"
       ]
     },
+    "ParameterConstraint": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "default": true,
+        "description": {
+          "type": "string"
+        },
+        "enum": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "minimum": {
+          "type": "number"
+        },
+        "maximum": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "required"
+      ]
+    },
     "Parameters": {
       "type": "object"
+    },
+    "PlanDiagnostic": {
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/DiagnosticCode"
+        },
+        "severity": {
+          "$ref": "#/$defs/DiagnosticSeverity"
+        },
+        "field": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "remediation": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ]
+    },
+    "PlannedQualification": {
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "task_key": {
+          "type": "string"
+        },
+        "runtime": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "hardware": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "precision": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "connector": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key",
+        "task_key",
+        "runtime",
+        "hardware",
+        "precision",
+        "connector"
+      ]
+    },
+    "PlannedVariant": {
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "producing_task": {
+          "type": "string"
+        },
+        "qualifications": {
+          "items": {
+            "$ref": "#/$defs/PlannedQualification"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key",
+        "format",
+        "producing_task",
+        "qualifications"
+      ]
+    },
+    "PrecisionDescriptor": {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "name": {
+          "type": "string"
+        },
+        "bits_per_element": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "bits_per_element"
+      ]
     },
     "Profile": {
       "oneOf": [
@@ -1016,6 +1440,79 @@
         "receipt"
       ]
     },
+    "QualificationTargetRequest": {
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "runtime": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "hardware": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "precision": {
+          "$ref": "#/$defs/CapabilityID"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key",
+        "runtime",
+        "hardware",
+        "precision"
+      ]
+    },
+    "ResolvedTrainingPlan": {
+      "properties": {
+        "target_contract": {
+          "$ref": "#/$defs/Target"
+        },
+        "trainer": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "architecture": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "executor": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "training_hardware": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "training_precision": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/TaskSpec"
+          },
+          "type": "array"
+        },
+        "artifact_variants": {
+          "items": {
+            "$ref": "#/$defs/PlannedVariant"
+          },
+          "type": "array"
+        },
+        "resolved_parameters": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "target_contract",
+        "trainer",
+        "executor",
+        "training_hardware",
+        "training_precision",
+        "tasks",
+        "artifact_variants",
+        "resolved_parameters"
+      ]
+    },
     "RunGraph": {
       "properties": {
         "run": {
@@ -1159,6 +1656,58 @@
         "attempts"
       ]
     },
+    "RuntimeAdapterDescriptor": {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "component": {
+          "$ref": "#/$defs/Component"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "supported_targets": {
+          "items": {
+            "$ref": "#/$defs/Target"
+          },
+          "type": "array"
+        },
+        "accepted_formats": {
+          "items": {
+            "$ref": "#/$defs/CapabilityID"
+          },
+          "type": "array"
+        },
+        "supported_hardware": {
+          "items": {
+            "$ref": "#/$defs/CapabilityID"
+          },
+          "type": "array"
+        },
+        "supported_precisions": {
+          "items": {
+            "$ref": "#/$defs/CapabilityID"
+          },
+          "type": "array"
+        },
+        "connector": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "component",
+        "display_name",
+        "supported_targets",
+        "accepted_formats",
+        "supported_hardware",
+        "supported_precisions",
+        "connector"
+      ]
+    },
     "SelectorProfile": {
       "properties": {
         "candidate_models": {
@@ -1287,6 +1836,29 @@
         "signal.spans/v1"
       ]
     },
+    "TargetDescriptor": {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "target_contract": {
+          "$ref": "#/$defs/Target"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "target_contract",
+        "display_name"
+      ]
+    },
     "TaskSpec": {
       "properties": {
         "key": {
@@ -1309,6 +1881,147 @@
       "required": [
         "key",
         "executor"
+      ]
+    },
+    "TrainerDescriptor": {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "component": {
+          "$ref": "#/$defs/Component"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "supported_targets": {
+          "items": {
+            "$ref": "#/$defs/Target"
+          },
+          "type": "array"
+        },
+        "supported_architectures": {
+          "items": {
+            "$ref": "#/$defs/CapabilityID"
+          },
+          "type": "array"
+        },
+        "supported_executors": {
+          "items": {
+            "$ref": "#/$defs/CapabilityID"
+          },
+          "type": "array"
+        },
+        "supported_hardware": {
+          "items": {
+            "$ref": "#/$defs/CapabilityID"
+          },
+          "type": "array"
+        },
+        "supported_precisions": {
+          "items": {
+            "$ref": "#/$defs/CapabilityID"
+          },
+          "type": "array"
+        },
+        "produced_formats": {
+          "items": {
+            "$ref": "#/$defs/CapabilityID"
+          },
+          "type": "array"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ParameterConstraint"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "component",
+        "display_name",
+        "supported_targets",
+        "supported_executors",
+        "supported_hardware",
+        "supported_precisions",
+        "produced_formats"
+      ]
+    },
+    "TrainingPlanRequest": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "target_contract": {
+          "$ref": "#/$defs/Target"
+        },
+        "architecture": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "trainer": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "executor": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "training_hardware": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "training_precision": {
+          "$ref": "#/$defs/CapabilityID"
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "qualification_targets": {
+          "items": {
+            "$ref": "#/$defs/QualificationTargetRequest"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "target_contract",
+        "trainer",
+        "training_hardware",
+        "training_precision"
+      ]
+    },
+    "TrainingPlanResponse": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "valid": {
+          "type": "boolean"
+        },
+        "plan": {
+          "$ref": "#/$defs/ResolvedTrainingPlan"
+        },
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/PlanDiagnostic"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "valid"
       ]
     },
     "TrainingRun": {
