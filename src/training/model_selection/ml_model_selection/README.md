@@ -155,6 +155,16 @@ adopt the corrected selection rules. See the [native artifact compatibility
 reference](../../../../ml-binding/README.md#artifact-compatibility-and-prediction-rules)
 for migration details and the treatment of native-only legacy SVM classifiers.
 
+KMeans exports also declare `format_version: 2`. The trainer fits one point per
+unique query, stores the mean objective score and support for each cluster and
+candidate, and uses the candidate's global train mean below `min_support`.
+`cluster_models` keeps each cluster's best candidate, so a runtime without v2
+support still loads the file. Check the Python contract with:
+
+```bash
+python -m pytest src/training/model_selection/ml_model_selection/tests/test_kmeans_selector.py -q
+```
+
 The small checked-in Rust fixtures can be regenerated after an intentional
 training-contract change with:
 
@@ -162,6 +172,15 @@ training-contract change with:
 python src/training/model_selection/ml_model_selection/tests/generate_native_fixtures.py
 cargo test --manifest-path ml-binding/Cargo.toml
 ```
+
+The generator also writes `ml-binding/tests/fixtures/python_kmeans.json`, the
+KMeans v2 cases for the native loader.
+
+`evaluation.py` scores a selector on the test split against the strongest, cheapest,
+global-best, random and (optionally) current-router baselines and against the oracle,
+reporting quality, latency, cost, regret, coverage, route share and per-category slices.
+Baselines learn from the train split only. A selector is a function from a query and its
+eligible models to one of them, or `None` to abstain.
 
 Use a held-out split and report the dataset, candidate models, scoring method,
 embedding model, selector parameters, random seed, and quality/latency tradeoff.
