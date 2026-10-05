@@ -10,7 +10,7 @@ On the router's shipped ROCm stack (the official PyTorch wheel with
 of prompts stay byte-identical on the encoders, with no decision changed, and
 almost none on the decoders, where 0.3–0.6% of decisions change, each a
 near-tie. On that stack the runtime answers byte-identically across cold
-processes.
+processes, and the ROCm golden answers are recorded there.
 
 - **Date:** 2026-10-04; the P1-4 runs, the `dc81682bb` column and the
   shipped ROCm stack on 2026-10-05.
@@ -331,9 +331,32 @@ a tolerance rather than bit for bit.
 ## Golden answers
 
 `tools/golden_answers.py` recorded CPU and ROCm answers for all seven packages
-(`registry/golden_answers_decision1.json`). Every load checks them: a
-deployment whose answers move further from the record than the check's
-tolerance (1e-3 on CPU, 0.02 on a GPU) fails to load.
+(`registry/golden_answers_decision1.json`): the CPU answers on CPU PyTorch
+2.10, and since 2026-10-05 the ROCm answers on the shipped ROCm stack (below;
+before, on the release image). Every load checks them: a deployment whose
+answers move further from the record than the check's tolerance (1e-3 on
+CPU, 0.02 on a GPU) fails to load.
+
+**ROCm, re-recorded on the shipped stack.** In the image
+`extproc-rocm72cc:af71d5e82`, `golden_answers.py --family decision1 --device
+rocm:0 --record` ran in three fresh processes (GPU1 and GPU2 together, then
+GPU1 again), and the three files came out byte for byte the same.
+
+- **What moved, `rocm` only:** Kai and Lex nothing (their golden requests are
+  byte-identical on this stack too), Route at most 3e-8, Eos, Sol and Nox at
+  most 0.0029, Lux at most 1.2e-4. Every one of those loads matched the
+  previous record within the tolerance. The CPU answers and the revisions
+  stay.
+- **Why:** the router's ROCm image ships this stack. On it no Decision 1.0
+  model reproduces the release image's answers byte for byte (the agreement
+  table above), while each reproduces its own answers in every cold process.
+  Under the user's policy of 2026-10-05, the shipped stack's answers are the
+  reference, so readiness now compares a deployment with what the shipped stack
+  computes, not with another build's answers inside the tolerance. The lead
+  signed it off with three conditions: the image confirms the venv table and
+  the cold start, the record comes from three fresh image processes that agree,
+  and the IX1 kit's paired Index delta of this stack against the release image
+  stays within noise for every model (`rocm-stack-b-exactness.md`).
 
 ## Reproduce
 
