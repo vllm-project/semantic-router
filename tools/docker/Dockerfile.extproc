@@ -136,6 +136,21 @@ RUN pip install setuptools==79.0.1 wheel==0.48.0 ninja==1.13.2 && \
 # the same image and replaces Debian's older one (both are backward compatible).
 FROM ${IMAGE_REGISTRY}${ROCM_TORCH_IMAGE} AS rocm-torch-release
 
+# Only the ROCm files the serving stack can load leave the release image, each
+# unchanged. Left behind: static and Fortran libraries, ROCm's LLVM (Triton
+# links with its own ld.lld; comgr carries its compiler), rocFFT's kernel
+# cache (rocFFT compiles what it misses), rocALUTION and hipTensor (nothing
+# links them), and the GEMM kernels and MIOpen databases of GPUs outside
+# ROCM_GPU_ARCHS, which must name every GPU in CAUSAL_CONV1D_ARCHS.
+FROM rocm-torch-release AS rocm-lib-slim
+ARG ROCM_GPU_ARCHS=gfx90a,gfx942,gfx950
+RUN cd /opt/rocm-7.2.3 && \
+    find lib -name '*.a' -delete && \
+    rm -rf lib/llvm lib/rocfft/rocfft_kernel_cache.db lib/librocalution* lib/libhiptensor* && \
+    find lib/rocblas/library lib/hipblaslt/library lib/hipsparselt/library share/miopen/db -type f -name '*gfx*' | \
+      awk -F/ -v keep="$(echo "$ROCM_GPU_ARCHS" | tr , '|')" '$NF !~ keep' | xargs -r rm -f && \
+    find lib -xtype l -delete
+
 FROM python-base AS torch-rocm
 ARG TARGETARCH
 ARG TORCH_ROCM=torch==2.12.0
@@ -151,8 +166,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 gcc 
 RUN pip install --index-url "$TORCH_ROCM_INDEX" "$TORCH_ROCM" && \
     pip install fla-core==0.5.2 packaging && \
     pip uninstall -y torch
-COPY --link --from=rocm-torch-release /opt/rocm-7.2.3/lib /opt/rocm-7.2.3/lib
-COPY --link --from=rocm-torch-release /opt/rocm-7.2.3/share/miopen /opt/rocm-7.2.3/share/miopen
+COPY --link --from=rocm-lib-slim /opt/rocm-7.2.3/lib /opt/rocm-7.2.3/lib
+COPY --link --from=rocm-lib-slim /opt/rocm-7.2.3/share/miopen /opt/rocm-7.2.3/share/miopen
 COPY --link --from=rocm-torch-release /opt/rocm-7.2.3/.info /opt/rocm-7.2.3/.info
 COPY --from=rocm-torch-release /lib/x86_64-linux-gnu/libstdc++.so.6.0.35 \
     /lib/x86_64-linux-gnu/libgcc_s.so.1 /lib/x86_64-linux-gnu/libgomp.so.1.0.0 /usr/lib/x86_64-linux-gnu/

@@ -16,6 +16,7 @@ STAGES = (
     "torch-rocm-base",
     "causal-conv1d-rocm",
     "rocm-torch-release",
+    "rocm-lib-slim",
     "torch-rocm",
     "torch-cuda",
     "runtime",
@@ -58,6 +59,7 @@ def test_every_router_image_comes_from_one_stage_graph() -> None:
         assert graph[stage][0] == "python-base", stage
     assert graph["causal-conv1d-rocm"][0] == "torch-rocm-base"
     assert graph["rocm-torch-release"][0] == "${IMAGE_REGISTRY}${ROCM_TORCH_IMAGE}"
+    assert graph["rocm-lib-slim"][0] == "rocm-torch-release"
     assert graph["torch-rocm"][0] == "python-base"
     assert graph["router"][0] == "runtime"
     assert graph["vllm-sr"][0] == "router"
@@ -228,12 +230,22 @@ def test_rocm_image_serves_with_the_pytorch_of_the_pinned_vllm_rocm_image() -> N
         router_dockerfile(),
         re.M,
     )
-    for path in (
-        "/opt/rocm-7.2.3/lib",
-        "/opt/rocm-7.2.3/share/miopen",
-        "${RELEASE_SITE}/torch",
-    ):
-        assert f"--from=rocm-torch-release {path} " in rocm, path
+    for path in ("/opt/rocm-7.2.3/lib", "/opt/rocm-7.2.3/share/miopen"):
+        assert f"--from=rocm-lib-slim {path} " in rocm, path
+    assert "--from=rocm-torch-release ${RELEASE_SITE}/torch " in rocm
     assert "pip uninstall -y torch" in rocm
     assert "torch.version.git_version.startswith('6bbd260')" in rocm
     assert "ldconfig" in rocm
+
+
+def test_rocm_image_keeps_the_gemm_kernels_of_every_gpu_it_serves() -> None:
+    dockerfile = router_dockerfile()
+    slim = stages()["rocm-lib-slim"][1]
+
+    archs = re.search(r"^ARG ROCM_GPU_ARCHS=(\S+)$", slim, re.M)
+    conv = re.search(r"^ARG CAUSAL_CONV1D_ARCHS=(\S+)$", dockerfile, re.M)
+    assert archs and conv
+    assert set(archs.group(1).split(",")) == set(conv.group(1).split(","))
+    for kept in ("lib/rocblas/library", "lib/hipblaslt/library", "share/miopen/db"):
+        assert kept in slim
+    assert "find lib -xtype l -delete" in slim
