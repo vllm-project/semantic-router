@@ -149,6 +149,54 @@
           "score": 0.3831308606098809,
           "type": "score"
         }
+      },
+      "rocm": {
+        "domain": {
+          "abstain_probability": 0.029708713033486038,
+          "choice": "health",
+          "confidence": 0.9438144319238722,
+          "probabilities": {
+            "health": 0.9702899965428174,
+            "math": 0.003234438838237201,
+            "other": 0.02647556461894533
+          },
+          "type": "choice"
+        },
+        "halu": {
+          "noul": 0.9967315319220758,
+          "type": "noul"
+        },
+        "jailbreak": {
+          "noul": 0.5598270492172556,
+          "type": "noul"
+        },
+        "pii": {
+          "noul": 0.9963511273050084,
+          "type": "noul"
+        },
+        "topics.billing": {
+          "noul": 7.55031970903507e-05,
+          "type": "noul"
+        },
+        "topics.medication": {
+          "noul": 0.9329364490981737,
+          "type": "noul"
+        },
+        "urgency": {
+          "confidence": 0.17927138087686856,
+          "legend": {
+            "0": "Routine",
+            "1": "Needs prompt attention",
+            "2": "Critical"
+          },
+          "probabilities": {
+            "0": 0.7708436479519969,
+            "1": 0.07389994100544632,
+            "2": 0.1552564110425567
+          },
+          "score": 0.3844127630905597,
+          "type": "score"
+        }
       }
     },
     "revision": "a778eb2ae2304cfa72fca7e53a19136dea5be012"
