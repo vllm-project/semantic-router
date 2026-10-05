@@ -7982,6 +7982,138 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://seed.bytedance.com/en/seed2",
+        "verification": "claimed"
+      },
+      "id": "bytedance/seed-2.0-lite-model-card-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.884
+      },
+      "model": "bytedance/seed-2.0-lite",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Seed2.0 Lite 0428"
+      }
+    },
+    {
+      "benchmark": "supergpqa/supergpqa@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://seed.bytedance.com/en/seed2",
+        "verification": "claimed"
+      },
+      "id": "bytedance/seed-2.0-lite-model-card-supergpqa@1.0.0",
+      "metrics": {
+        "accuracy": 0.696
+      },
+      "model": "bytedance/seed-2.0-lite",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Seed2.0 Lite 0428"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://seed.bytedance.com/en/seed2",
+        "verification": "claimed"
+      },
+      "id": "bytedance/seed-2.0-lite-model-card-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.257
+      },
+      "model": "bytedance/seed-2.0-lite",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Seed2.0 Lite 0428"
+      }
+    },
+    {
+      "benchmark": "bytedance-seed/beyond-aime@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://seed.bytedance.com/en/seed2",
+        "verification": "claimed"
+      },
+      "id": "bytedance/seed-2.0-lite-model-card-beyond-aime@1.0.0",
+      "metrics": {
+        "accuracy": 0.79
+      },
+      "model": "bytedance/seed-2.0-lite",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Seed2.0 Lite 0428"
+      }
+    },
+    {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://seed.bytedance.com/en/seed2",
+        "verification": "claimed"
+      },
+      "id": "bytedance/seed-2.0-lite-model-card-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.466
+      },
+      "model": "bytedance/seed-2.0-lite",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Seed2.0 Lite 0428"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://seed.bytedance.com/en/seed2",
+        "verification": "claimed"
+      },
+      "id": "bytedance/seed-2.0-lite-model-card-terminal-bench-2.0@1.0.0",
+      "metrics": {
+        "resolved": 0.433
+      },
+      "model": "bytedance/seed-2.0-lite",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Seed2.0 Lite 0428"
+      }
+    },
+    {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "published-unspecified",
       "evidence": {
@@ -31493,6 +31625,144 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-text-only",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/step-5",
+        "verification": "imported"
+      },
+      "id": "independent/step-5-preview-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.464782205746061
+      },
+      "model": "stepfun/step-5-preview",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Step 5 Preview",
+        "source_model_slug": "step-5"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/step-5",
+        "verification": "imported"
+      },
+      "id": "independent/step-5-preview-scicode@1.0.0",
+      "metrics": {
+        "score": 0.58912037037037
+      },
+      "model": "stepfun/step-5-preview",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Step 5 Preview",
+        "source_model_slug": "step-5"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/critpt@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/step-5",
+        "verification": "imported"
+      },
+      "id": "independent/step-5-preview-critpt@1.0.0",
+      "metrics": {
+        "score": 0.208571428571429
+      },
+      "model": "stepfun/step-5-preview",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Step 5 Preview",
+        "source_model_slug": "step-5"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/omniscience@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/step-5",
+        "verification": "imported"
+      },
+      "id": "independent/step-5-preview-omniscience@1.0.0",
+      "metrics": {
+        "index": 16.383333333333333
+      },
+      "model": "stepfun/step-5-preview",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Step 5 Preview",
+        "source_model_slug": "step-5"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/lcr@1.1.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/step-5",
+        "verification": "imported"
+      },
+      "id": "independent/step-5-preview-lcr@1.1.0",
+      "metrics": {
+        "score": 0.883333333333333
+      },
+      "model": "stepfun/step-5-preview",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Step 5 Preview",
+        "source_model_slug": "step-5"
+      }
+    },
+    {
+      "benchmark": "mmmu-benchmark/mmmu-pro@1.0.0",
+      "benchmark_profile": "standard-10",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/step-5",
+        "verification": "imported"
+      },
+      "id": "independent/step-5-preview-mmmu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.763583815028902
+      },
+      "model": "stepfun/step-5-preview",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Step 5 Preview",
+        "source_model_slug": "step-5"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/omniscience@1.0.0",
       "benchmark_profile": "independent-standard",
       "evidence": {
@@ -46691,6 +46961,322 @@ const builtInCatalogJSON = `{
       "model": "bytedance/seed-2.0-pro",
       "provenance": [
         "bytedance/seed-2.0-pro-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "bytedance/seed-2.0-lite",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "bytedance/seed-2.0-lite",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "bytedance/seed-2.0-lite",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "bytedance/seed-2.0-lite",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "bytedance/seed-2.0-lite",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "bytedance/seed-2.0-lite",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "bytedance/seed-2.0-lite-model-card-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.884,
+          "status": "available",
+          "value": 0.884,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "bytedance/seed-2.0-lite",
+      "provenance": [
+        "bytedance/seed-2.0-lite-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "bytedance/seed-2.0-lite",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "bytedance/seed-2.0-lite",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "bytedance/seed-2.0-lite",
+      "provenance": [
+        "bytedance/seed-2.0-lite-model-card-gpqa-diamond@1.0.0"
       ],
       "reasoning_effort": "unspecified",
       "score": null,
@@ -77847,6 +78433,637 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-text-only",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "evaluation": "independent/step-5-preview-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.464782205746061,
+          "status": "available",
+          "value": 0.464782205746061,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [
+        "independent/step-5-preview-humanitys-last-exam@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/step-5-preview-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.58912037037037,
+          "status": "available",
+          "value": 0.58912037037037,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [
+        "independent/step-5-preview-scicode@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "stepfun/step-5-preview",
+      "provenance": [
+        "independent/step-5-preview-humanitys-last-exam@1.0.0",
+        "independent/step-5-preview-scicode@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "stepfun/step-3.7-flash",
       "provenance": [],
       "reasoning_effort": "low",
@@ -90592,6 +91809,61 @@ const builtInCatalogJSON = `{
         "chat",
         "reasoning",
         "tools",
+        "structured_output",
+        "vision",
+        "video",
+        "audio",
+        "long_context"
+      ],
+      "description": "General-purpose Seed2.0 production model that balances output quality and response speed, with image, video, and audio input.",
+      "display_name": "Seed2.0 Lite",
+      "distribution": {
+        "source": "https://seed.bytedance.com/en/seed2",
+        "type": "proprietary_api"
+      },
+      "family": "seed-2.0",
+      "id": "bytedance/seed-2.0-lite",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video",
+          "audio"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "package:bytedance",
+        "monochrome": true,
+        "monogram": "S"
+      },
+      "publisher": "ByteDance / Seed",
+      "released_at": "2026-02-14",
+      "tags": [
+        "proprietary",
+        "multimodal",
+        "agentic",
+        "efficient"
+      ],
+      "verification": {
+        "authority": "ByteDance Seed Team",
+        "source": "https://seed.bytedance.com/en/seed2",
+        "status": "claimed",
+        "verified_at": "2026-09-23"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
         "long_context"
       ],
       "description": "Open-weight long-context reasoning model for coding, tools, and agentic tasks.",
@@ -94027,6 +95299,62 @@ const builtInCatalogJSON = `{
         "source": "https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507",
         "status": "claimed",
         "verified_at": "2026-09-09"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "StepFun flagship multimodal MoE preview for agentic software engineering and knowledge work.",
+      "display_name": "Step 5 Preview",
+      "distribution": {
+        "source": "https://platform.stepfun.ai/docs/en/guides/models/step-5-preview",
+        "type": "proprietary_api"
+      },
+      "family": "step-5",
+      "id": "stepfun/step-5-preview",
+      "kind": "physical",
+      "lifecycle": "experimental",
+      "limits": {
+        "context_window_size": 1000000
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "600B (27B active)",
+      "presentation": {
+        "logo": "package:stepfun",
+        "monochrome": false,
+        "monogram": "S"
+      },
+      "publisher": "StepFun",
+      "reasoning_family": "step-3.7",
+      "released_at": "2026-09-18",
+      "tags": [
+        "proprietary",
+        "reasoning",
+        "multimodal",
+        "agentic",
+        "moe",
+        "preview"
+      ],
+      "verification": {
+        "authority": "StepFun",
+        "source": "https://www.stepfun.com/step-5-preview",
+        "status": "claimed",
+        "verified_at": "2026-09-24"
       }
     },
     {
@@ -99170,6 +100498,21 @@ const builtInCatalogJSON = `{
       "id": "stepfun",
       "models": [
         {
+          "catalog": "stepfun/step-5-preview",
+          "id": "step-5-preview",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_transport": "top_level_effort",
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://platform.stepfun.ai/docs/en/guides/models/step-5-preview",
+            "status": "claimed",
+            "verified_at": "2026-09-24"
+          }
+        },
+        {
           "catalog": "stepfun/step-3.7-flash",
           "id": "step-3.7-flash",
           "lifecycle": "active",
@@ -100603,6 +101946,21 @@ const builtInCatalogJSON = `{
             "source": "https://www.volcengine.com/docs/82379/1330310",
             "status": "claimed",
             "verified_at": "2026-09-24"
+          }
+        },
+        {
+          "catalog": "bytedance/seed-2.0-lite",
+          "id": "doubao-seed-2-0-lite-260428",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://www.volcengine.com/docs/82379/1330310",
+            "status": "claimed",
+            "verified_at": "2026-09-23"
           }
         }
       ],
