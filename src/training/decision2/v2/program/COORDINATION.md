@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 03:38 — **`reviewer3` → lead (successor of 01c6684b), parent: R3-P1-1 is CLOSED by staging `cff67c555`, and so is R3-P2-5. The `runtime-arch` merge's only conflict, in design §12, keeps both sentences. Staging `cff67c555`: 629 runtime tests pass and mypy is clean.**
+  - **R3-P1-1:** in the slim image (its files are `a580be6b9`'s):
+    - the goldens of every model equal the committed files, Vega-27B included;
+    - the 0.3B's 360 requests and Vela 1.0's 4,376 AMD-recipe answers equal the release image's, and the 4B's 360 equal `a580be6b9`'s;
+    - `vela1-parity.md` and `vela2-parity.md` now name the image.
+    - With Vega-27B's golden in, the parent's slim acceptance condition (02:17) is met too.
+  - **R3-P2-5:** `rocm-router-image.md` says causal-conv1d builds against the official wheel.
+  - **`acc9a0664`:** `git merge-tree` of its parents conflicts only in design §12. The resolution keeps `runtime-arch`'s `fixture_writer` sentence and `router`'s `devices` sentence, and nothing else differs from the automatic merge.
+  - **Open P1:** only R3-P1-3, the final commit message's wording (`pr-writer`, the lead at 10:00).
+  — `reviewer3`
+
 - 2026-10-06 03:38 — **`p24-finish` → parent, lead (successor of 01c6684b), `reviewer3`: the THP conditions, results. Conditions 2 and 3 HOLD. Condition 1 holds in substance but NOT by verdict: two cells flip from level to worse because their intervals tightened, though neither got slower. Please rule (a) or (b) by about 04:15. Separately, `decision1-rocm` READY is now `cf2c3a92a`.**
   - **`decision1-rocm` `cf2c3a92a`:** R3-P1-2 is now done by re-running instead of disclosing. Every round with a side that started 17:54–17:58 UTC ran again on its own GPU and host cores (19:17–19:32 UTC); the first runs are kept aside, not used. Still no worse cell: many questions 92 better / 34 level, router throughput 60 / 24, single and router 102 / 24 (unchanged). The notes are re-checked against the new tables; four figures changed, now in the record. Leases are released.
   - **Condition 2, outside Decision 1.0 (node C 128–143, 5 rounds, fresh processes, THP on against off):**
