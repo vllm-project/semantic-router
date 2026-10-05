@@ -34,9 +34,11 @@ from ...heads.candidate import forward_logits, load_head
 from ...registry import builtin, policy
 from ...registry.resolve import download_base
 from ...systemone import (
+    GOLDEN_STATE,
     MAX_LEVELS,
     MAX_OPTIONS,
     MIN_LEVELS,
+    golden_questions,
     question_options,
     valid_state,
 )
@@ -45,30 +47,7 @@ from ...text.tokenizer import Tokenizer
 from . import package as pkg
 from .answers import apply_score_bias, product_answer
 
-INT32_MAX = 2**31 - 1
-GOLDEN_STATE = (
-    "Write a Python function that merges two sorted lists and explain its running time."
-)
-GOLDEN_QUESTIONS = {
-    "domain": {
-        "type": "choice",
-        "instructions": "Which domain does this request belong to?",
-        "criteria": {
-            "code": "Programming",
-            "math": "Mathematics",
-            "other": "Anything else",
-        },
-    },
-    "reasoning": {
-        "type": "noul",
-        "instructions": "Does answering this request need multi-step reasoning?",
-    },
-    "difficulty": {
-        "type": "score",
-        "instructions": "How difficult is this request?",
-        "criteria": ["Trivial", "Moderate", "Hard"],
-    },
-}
+GOLDEN_QUESTIONS = golden_questions("Anything else")
 
 
 class Decision2Family(ModelFamily):
@@ -245,7 +224,7 @@ class Decision2Family(ModelFamily):
             parameters=parameters,
             dtype=dtype,
         )
-        return Decision2Model(info, engine_model, head, tokenizer, details, spec)
+        return Decision2Model(info, engine_model, head, tokenizer, details)
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
         known = builtin.by_identity(package.model_sha256)
@@ -274,27 +253,15 @@ class Decision2Model(LoadedModel):
         head: torch.nn.Module,
         tokenizer: Tokenizer,
         details: pkg.Decision2Package,
-        spec: ModelSpec,
     ):
         self.info = info
         self.engine_model = engine_model
         self.head = head
         self.tokenizer = tokenizer
         self.details = details
-        self.spec = spec
 
     def forward_token_budget(self) -> int | None:
-        """GPU forwards keep gated-delta q/k/v tensors within 2**30 elements (32-bit offsets in FLA)."""
-        if self.engine_model.device.type == "cpu":
-            return None
-        config = self.spec.backbone.config
-        heads = config.get("linear_num_value_heads")
-        if not heads:
-            return None
-        width = heads * max(
-            config["linear_key_head_dim"], config["linear_value_head_dim"]
-        )
-        return (INT32_MAX // 2) // width
+        return self.engine_model.max_forward_tokens()
 
     def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan:
         if not valid_state(state):

@@ -72,12 +72,14 @@ The first requests of each panel; public231 in full.
 
 `51b6bd721` has the same `decision1` runtime code as `d5b985e43`.
 
-**At `89c4388aa`, `d3d1d7e68` and `69ae2d0c5`** (per-stack graphs and copies,
-the scheduler that answers each job when its own batches ran, the CPU-only
-changes to coalesced batches, and backbone weights copied into process memory
-instead of left as views of the checkpoint's file mapping), a spot check on
-ROCm and CPU: Kai and Eos on public231 and the first typed-final requests (400;
-Eos on CPU 200), every answer byte-identical.
+**At `89c4388aa`, `d3d1d7e68`, `69ae2d0c5`, `28d702760`, `2e0a87467` and
+`84f263b46`** (per-stack graphs and copies, the scheduler that answers each job
+when its own batches ran, the CPU-only changes to coalesced batches, backbone
+weights copied into process memory instead of left as views of the
+checkpoint's file mapping, oneDNN's larger primitive cache, and the runtime's
+decisions surface rebuilt on the common surface path), a spot check on ROCm
+and CPU: Kai and Eos on public231 and the first typed-final requests (400; Eos
+on CPU 200), every answer byte-identical.
 
 ## What exactness takes
 

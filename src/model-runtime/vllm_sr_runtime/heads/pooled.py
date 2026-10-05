@@ -16,7 +16,6 @@ when the response is assembled, so one cached forward serves every dimension.
 
 from __future__ import annotations
 
-import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -27,6 +26,7 @@ import torch
 
 from ..errors import PackageError
 from ..plugins.base import EmbeddingInfo, SurfacePlan, SurfaceRequest
+from ..registry.artifacts import read_json
 from . import embedding
 from .task import Head, Item, Rows, cache_key
 
@@ -54,13 +54,6 @@ _CONTRACT = {
     "pooling_accumulation_dtype": "float32",
     "truncate_before_l2_normalize": True,
 }
-
-
-def _json(path: Path) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise PackageError(f"unreadable {path.name}: {exc}") from exc
 
 
 def is_pooled(root: Path) -> bool:
@@ -91,11 +84,11 @@ class PooledLayout:
     @classmethod
     def read(cls, root: Path, config: dict[str, Any]) -> PooledLayout:
         """The layout of a sentence-transformers package; refuses what the head cannot reproduce."""
-        flags = _json(root / POOLING_FILE)
+        flags = read_json(root / POOLING_FILE)
         modes = [mode for key, mode in _POOLING_FLAGS.items() if flags.get(key)]
         if len(modes) != 1 or any(flags.get(key) for key in _UNSUPPORTED_FLAGS):
             raise PackageError(f"unsupported pooling configuration {flags}")
-        modules = {module.get("type") for module in _json(root / MODULES_FILE)}
+        modules = {module.get("type") for module in read_json(root / MODULES_FILE)}
         hidden = int(config["hidden_size"])
         if int(flags.get("word_embedding_dimension", hidden)) != hidden:
             raise PackageError(
@@ -129,7 +122,7 @@ class PooledLayout:
         files = [POOLING_FILE, MODULES_FILE]
         if (root / PROMPTS_FILE).is_file():
             files.append(PROMPTS_FILE)
-            declared = _json(root / PROMPTS_FILE).get("prompts") or {}
+            declared = read_json(root / PROMPTS_FILE).get("prompts") or {}
             prompts = {k: v for k, v in declared.items() if k in ("query", "document")}
         files += [path.relative_to(root).as_posix() for path in graphs.values()]
         if graphs and (root / WEIGHT_DATA).is_file():

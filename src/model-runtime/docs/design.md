@@ -329,7 +329,13 @@ place and never fail sibling items.
 ### 6.1 `POST /v1/decisions`
 
 Phase 1's strict superset of System One, with `POST /v1/systemone` as an
-alias. Phases 2–4 add, for models that declare them:
+alias. Every family validates the System One fields through one reader
+(`systemone.read_question`): text is never blank, keys are unique non-blank
+strings, and a question takes only its type's fields plus those its family
+reads itself (`over`, `head`, `threshold`, `preset`); anything else is
+`invalid_question`, and the OpenAPI `Question` schema says so. Families add
+only their own types, presets and defaults. Phases 2–4 add, for models that
+declare them:
 
 - **Set** (`type: set`): independent labels, `criteria` as `{label: description}`.
   The response adds `sets.<id> = {selected, probabilities}` and one Noul answer
