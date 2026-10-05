@@ -205,6 +205,206 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-05 23:35 — **USER (23:31, re-sent): DRIVE #4512 TO READY, AND Vela-2.0-0.8B IS IN THIS PR. Nobody has
+  owned it since 21:16, so the parent launches a dedicated Max agent for it now.** The user repeated: "先不管镜像的事 继续推进到 PR ready，把 0.8B 的 vela 2.0 也一并 include … 0.8B 不单独拆 follow up 了".
+  - **Image:** settled. The adopted release-environment image (`a580be6b9`) stands, and the user isn't asked about it
+    again. Slimming it is a follow-up.
+  - **New agent `vela2-08b`** (launched by the parent, fresh Opus 5.5 Max). Its own branch is
+    `xunzhuo/model-runtime-p24-vela2-08b`, cut from the lead's current staging; its own worktree is
+    `/home/xunliu/code/vllm-sr-p24-vela2-08b`. It doesn't touch the old `vela2` worktree. Scope:
+    1. a `registry/tables/vela2.py` entry for `vllm-sr/Vela-2.0-0.8B` (a `vela2-decoder` on Decision 2.0 Eos-0.8B):
+       the pinned revision and the SHA-256 of every loaded file;
+    2. its FLA kernel choices;
+    3. CPU and ROCm golden answers recorded **on the adopted image**;
+    4. parity against the package's own engine (byte identity expected on the adopted image);
+    5. timing records;
+    6. tests and user docs (every model table that lists Vela 2.0 sizes);
+    7. re-pinning 0.3B, 4B and 9B to the HF heads (0.3B `a3209a50`, 4B `c1e64d4f`, 9B `bc876163`) if the files they
+       load changed, with goldens re-checked; otherwise a pin bump only.
+    
+    It posts `INTEGRATION READY vela2-08b <sha>` for the lead's IP3b merge.
+  - **Lead:** please confirm this fits the final push (03:00). If it can't land by then, say so here, and the parent
+    takes it to the user.
+  - The quota guard (19:50) applies.
+
+- 2026-10-05 23:16 — **Model-runtime P2–4 lead (successor of 01c6684b) → `router` (cab0e94a), coordinator: YES to both offers, plus one more if you have room.**
+  - **Vela 1.0 ROCm rows:** yes, as you started (node B GPU1, host 64–79, records-only on your branch by 01:30).
+  - **`embed`'s Embedding / Reranker ROCm rows:** yes. No `embed` successor is working. Node B GPU2–3, host 80–95, in `mr-p24-lead/extproc-rocm72rt:a580be6b9`, with `embed`'s own A/B scripts and record format (`embed-performance` / `multimodal` records, whichever holds the ROCm rows), 5 interleaved rounds, records-only commit by 01:30. Don't touch `embed`'s open CPU P0-1 cell: that's code, and I decide it separately.
+  - **If you have room after those: `decision1`'s decoder ROCm A/B** in the same image. Its harness is `decision1`'s node C queue (`/data/dev2/runs/mr-p24/decision1/final-ab-queue.sh`, `rocm-img.sh` with `IMAGE=`), records in `decision1-performance.md`'s ROCm section (`mr-scratch/p24-decision1-notes/HANDOFF.md`, 19:07–19:16, has the pipeline). Node C GPU5 / GPU7, host 144–159. Tell me by 23:45 whether you take it; otherwise those rows are stated as timed on `af71d5e82`.
+  - Vela 2.0's 0.3B and 4B re-timing in the image are done on node B (GPU4–6); the 9B finishes about 23:25. I write that records commit.
+  — lead (successor of 01c6684b)
+
+- 2026-10-05 23:11 — **`router` (successor of ce54d321; cab0e94a) → lead (successor of 01c6684b), coordinator: I have STARTED the Vela 1.0 ROCm A/B in
+  the adopted image, so you can drop it from your queue. Data about 00:30; records-only commit about 01:10 (before
+  01:30).**
+  - **Run:** `vela1`'s own `rocm_ab.sh` (copied as `rocm_ab_router.sh`, so the lease names me), 5 interleaved rounds.
+    The AMD recipe (legacy ROCm image `61aa7eb2d`) runs against the runtime inside
+    `mr-p24-lead/extproc-rocm72rt:a580be6b9`, on node B GPU1 with host 72–79. That is the GPU and the cores of
+    `vela1`'s stack B A/B. The driver comes from the exact mirror of `a580be6b9`, and the runtime runs as uid 65532.
+  - **The only script change:** a stack `I` case in `vela1`'s `run_runtime_rocm_stack.sh` that runs a built image
+    with its own runtime package. A smoke in the image answered every job.
+  - **Then:** `vela1`'s records generator with these rounds as the ROCm input. The commit touches only
+    `vela1-performance.{md,json}`, on my branch.
+  - **`embed`:** I take its Embedding / Reranker ROCm rows only if you say so (node B GPU2–3, host 80–95).
+  - **Claims:** node B GPU1 (leased while the run lasts) and host 64–79 (`vela1`'s block, free since its handoff).
+  — `router` (successor of ce54d321; cab0e94a)
+
+- 2026-10-05 23:06 — **`router` (successor of ce54d321; cab0e94a) → lead (successor of 01c6684b), coordinator: thanks for the merge. I'm idle, so I
+  OFFER to take the Vela 1.0 ROCm rows in the adopted image, to keep them off your queue. No new agent is needed.**
+  - **The offer:** a 5-round run of `vela1`'s own interleaved A/B (its `rocm_ab.sh`, the AMD recipe against the runtime
+    in `mr-p24-lead/extproc-rocm72rt:a580be6b9`) on node B GPU0 or GPU1, with host 64–79 (`vela1`'s block, free since
+    its 18:44 handoff). Then a records-only commit to `vela1-performance.md` / `.json` on my branch by 01:30, keeping
+    `vela1`'s format.
+  - **Also, if `embed` has no successor working by 23:30:** its Embedding / Reranker ROCm rows in the same image, on node
+    B GPU2–3 (host 80–95).
+  - **Lead:** say yes or no for each. I read `vela1`'s handoff and scripts now, so I can start within minutes of a yes.
+  — `router` (successor of ce54d321; cab0e94a)
+
+- 2026-10-05 22:52 — **Model-runtime P2–4 lead (successor of 01c6684b) → coordinator, f643133d, parent, `router`, all P2–4 workstreams: every ROCm golden holds on the adopted image (Vega 10,653 / 10,653; Decision 1.0 all seven equal). `router`'s P2-20 is merged. No `vela2`, `decision1` or `embed` agent is working, so the lead is re-timing Vela 2.0 itself, and IP3b needs two relaunches now.**
+  - **Exactness, complete:** Decision 2.0 Vega-27B, release image against the adopted image: 10,653 / 10,653, which makes all six identical. Decision 1.0: ROCm goldens recorded in the adopted image equal the stored release goldens in every value, for all seven. **All re-record proposals (Vela 2.0, Decision 1.0, Decision 2.0) are withdrawn.** Records commit `67e17b092` (image record + design 11) is on staging.
+  - **Merged:** `router` `4c2c8cafe` (P2-20 on the adopted image: all 12 intervals on the ROCm side, 539 / 539 decisions identical) → `lead-ip3` `fa4baf009`. Thanks, `router`.
+  - **Vela 2.0 ROCm re-timing (lead, since `vela2` hasn't started):** running now in the adopted image on node B GPU4 (4B, host 128–135) and GPU5 (9B, 136–143). It uses `vela2_bench` with chain-bf's flags (10 rounds, four sides, FAST). The image has no `transformers` for the package's reference side, so `transformers` 5.17.0 and `regex` (the venv's versions) come from a mounted directory. Done about 23:45; I write the records commit.
+  - **Relaunch request (coordinator / f643133d; this lead has run 2.5 h without a quota death):** one per tick, now:
+    1. `decision1`: CPU records READY (its branch head), plus the decoder ROCm A/B re-timed in `mr-p24-lead/extproc-rocm72rt:a580be6b9` (on nodes B, C and D). Records-only by 01:30.
+    2. `embed`: the P0-1 open cell (Nano text p95, 4 callers), then its encoder / Omni ROCm rows in the same image, by 01:30.
+    If neither is working by 23:30, I merge `decision1`'s CPU records myself as they stand, and IP3b states that the decoder and encoder ROCm rows were timed on the official-wheel image `af71d5e82`, which differs only in the attention library.
+  - **Vela 1.0 ROCm rows:** `router`'s P2-20 re-time covers the five encoders in one process. If time allows, `vela1`'s own rows get one 5-round run by the lead; otherwise they're stated as above.
+  - **Reviewer:** coordinator, please confirm the read-only reviewer on `47c948da2` is running; its P0 / P1 are due by 00:30.
+  - **CI on `47c948da2`** ([run 37313887926](https://github.com/vllm-project/semantic-router/actions/runs/37313887926)): no failure so far; the Kubernetes lanes are finishing.
+  — lead (successor of 01c6684b)
+
+- 2026-10-05 22:34 — **`router` (successor of ce54d321; cab0e94a) → lead (successor of 01c6684b), coordinator: P2-20 is RE-TIMED on the
+  shipped ROCm image `a580be6b9`. Records-only head `4c2c8cafe` for IP3b: staging `a580be6b9` plus one commit,
+  `bcc49d419` (`router-latency-rocm.md` + `.json`).** Your 22:30 report settles my 21:37 question, so the record leads
+  with this image.
+  - **Run:** `mr-p24-lead/extproc-rocm72rt:a580be6b9` (PyTorch 2.12.0+git6bbd260, Triton 3.7.0, `fla-core` 0.5.2,
+    `causal-conv1d` 1.7.0) on node C GPU6. The router container ran on 128–139 and the driver on 140–143, five rounds
+    with the order rotated, the CPU record's corpus, 21:36–21:59. The node was quiet (load 5–24).
+
+    | Pass | Metric | CPU | ROCm | ROCm − CPU [95% CI] |
+    | --- | --- | --- | --- | --- |
+    | Sequential | p50 (ms) | 22.9 | 8.7 | −14.3 [−14.7, −13.9] |
+    | Sequential | req/s | 23.3 | 100.5 | +77.4 [+76.8, +78.1] |
+    | Concurrency 16 | p95 (ms) | 1,667.1 | 184.6 | −1,484.0 [−1,501.6, −1,466.4] |
+    | Concurrency 16 | req/s | 24.0 | 117.2 | +93.0 [+92.2, +93.8] |
+
+    - **All 12 intervals lie on the ROCm side.** Decisions are identical on 539 / 539 inputs in every round, with no
+      failed request, restart or device failure. The GPU process held 12.9–13.2 GiB.
+    - **Against the stack B rounds** (17:33–17:57, load 60–83), the shipped image is a little faster on ROCm:
+      sequential p50 8.7 against 9.8 ms, and 117 against 108 req/s at 16 callers. The two runs differ in node load,
+      so that is not an A/B.
+    - **Unchanged on CPU:** the shipped image's PyTorch fails the batch-invariance probe on the same four models as
+      stack B's (PII passes). That is checked in the image and stated in the record.
+  - **Released:** GPU6 (lease reads `released`). Nothing of mine runs on any node. I stay on for reviewer findings.
+  — `router` (successor of ce54d321; cab0e94a)
+
+- 2026-10-05 22:30 — **USER REPORT (closure; no decision needed). Model-runtime P2–4 lead (successor of 01c6684b) → coordinator: the ROCm exactness gap is FIXED. The router's ROCm image now runs the release's PyTorch, and it gives the released answers byte for byte for Vela 2.0 and Decision 2.0. No ROCm golden is re-recorded. Kai-0.6B's beyond-noise Index delta came from the old stack and goes away.**
+  - **What was wrong:** the image took PyTorch from the official `2.12.0+rocm7.2` wheel, which bundles AOTriton 0.11.2. The release was recorded on vLLM's ROCm PyTorch (`2.12.0+git6bbd260`, AOTriton 0.13.50). The two attention kernels round differently: across 63 probed ops, the 7 that differed were all attention. No official wheel carries 0.13.50.
+  - **The fix (`[Build]` `a580be6b9`, staging; ships at IP3b):** the ROCm stage takes torch, AOTriton, the ROCm 7.2.3 libraries and GCC 16's C++ runtime from the public `vllm/vllm-openai-rocm@sha256:1fd21abe…`. That is the release image's own base, and its files hash-equal the release image's. Triton 3.7.0, FLA 0.5.2 and our `causal-conv1d` build stay. Image `mr-p24-lead/extproc-rocm72rt:a580be6b9` (35.3 GB) is on nodes B, C and D.
+  - **Evidence:** release image against the adopted image, same runtime commit, cold processes.
+
+    | Model | Panel | Identical to the release |
+    | --- | --- | --- |
+    | Vela 2.0 4B / 9B | 360 requests | 360 / 360 each, max drift 0.0 (trial T1 three processes, and the built image) |
+    | Decision 2.0 Kai, Eos, Sol, Nox, Lux | four scored panels, 10,653 prompts | 10,653 / 10,653 each |
+    | Decision 2.0 Vega-27B | same | running; result in my next note (about 22:45) |
+    | GPU smoke, as the charts run it | 7 models | 7 / 7 ready in 35 s, golden `matched`, 280 / 280 requests |
+
+  - **Before the fix, for the record:**
+    - Vela 2.0 span-set agreement was 94.6% (4B) / 94.2% (9B). `vela2`'s span-quality run (20:48: Hallucination, RAGTruth, PII, toxic spans; paired 95% CIs) found no measurable quality change: every B − R interval contains 0 except one in B's favour, and no move is larger than 0.3 points.
+    - Kai-0.6B Index 0.2.1 B − R was −0.852 [−1.056, −0.699], driven by API-Bank. On the adopted image Kai's answers equal the release image's on all 10,653 panel prompts, so B − R is 0 by construction.
+  - **Consequences:**
+    - The Vela 2.0 and Decision 2.0 re-record proposals are WITHDRAWN: the release goldens hold. Decision 1.0's seven get the same check next. Its proposal is withdrawn if they match; any model that doesn't match is reported.
+    - `exactness`' IX1 B queue (old stack) no longer gates anything.
+    - Every ROCm timing row is re-timed on the adopted image before 03:00. Owners: `vela2` (node B GPU4–5), `router` (node C GPU6), and the `decision1` / `embed` successors.
+    - The 1,300 prompts per model that differ from the stored package-engine references (`typed-final` 600, `mlx-diag` 700) differ identically in the release image itself. They are a property of those references, not of the stack.
+  - **Recommendation:** none needed; this closes the 16:53 policy item for these families. Coordinator: please relay it to the user as information.
+  — lead (successor of 01c6684b)
+
+- 2026-10-05 21:37 — **`router` (successor of ce54d321; cab0e94a) → lead (successor of 01c6684b), coordinator: P2-20 re-time on
+  `mr-p24-lead/extproc-rocm72rt:a580be6b9` STARTED on node C GPU6 (host 128–143, 5 rounds, about 22:15), as your 21:30
+  note asks. One conflict to settle first, so I hold its record commit until then.**
+  - **Conflict:** the user's 20:58 directive (21:16 note) says #4512 ships on the current stack B image (official wheel
+    plus `causal-conv1d`), and the release-torch image is a follow-up. Your 21:30 note says IP3b ships `a580be6b9`'s
+    release-torch stack. Lead and coordinator: which image does #4512 ship?
+  - **If stack B:** P2-20 already covers it. `router-latency-rocm.md` holds the five rounds on the trial image plus the
+    A/B against `af71d5e82` (`4d1bf2467`, in my READY). The `a580be6b9` rounds then go to the follow-up issue.
+  - **If `a580be6b9`:** the rounds become a records-only commit on my branch by about 22:30.
+  - **Image check:** PyTorch `2.12.0+git6bbd260`, HIP 7.2.53211, Triton 3.7.0, `fla-core` 0.5.2, `causal-conv1d`
+    1.7.0, thread-local capture present. Node C is quiet now (load 21, only GPU1 busy), which suits the timing.
+  — `router` (successor of ce54d321; cab0e94a)
+
+- 2026-10-05 21:30 — **Model-runtime P2–4 lead (successor of 01c6684b) → coordinator, `vela2`, `router`, all P2–4 workstreams: the adopted ROCm image is BUILT from staging `a580be6b9`. It is loading on nodes B and C now. GPU smoke and the Decision 2.0 check against the release run on node D. Re-timing assignments below.**
+  - **`[Build]` `a580be6b9` (staging, pushed):** `Dockerfile.extproc` gives the ROCm stage the PyTorch of `vllm/vllm-openai-rocm@sha256:1fd21abe…` (`2.12.0+git6bbd260`, AOTriton 0.13.50), that image's ROCm 7.2.3 `lib` and `share/miopen`, and its GCC 16 C++ runtime. The official wheel still supplies torch's Python dependencies and Triton 3.7.0, and `causal-conv1d` is still built against it. Libraries are found through `ldconfig`, not `LD_LIBRARY_PATH`. On node D, the files copied from the public digest hash-equal the release image's (torch, AOTriton, MIOpen). The Dockerfile contract test is updated.
+  - **Image:** `mr-p24-lead/extproc-rocm72rt:a580be6b9`, ID `sha256:578df96a7715…`, 35.3 GB, built on node D in 14 minutes (untimed). Against T1, the one that reproduced:
+    - library resolution is identical up to path aliases;
+    - the freeze differs only in the `causal-conv1d` wheel: the three-arch build, whose gfx942 code equals the release's.
+  - **Running on node D (untimed; leases GPU1–3, host 64–87):**
+    - GPU smoke as the charts run it (7 models, goldens, concurrent calls).
+    - All six Decision 2.0 models on the four scored panels (10,653 prompts), compared byte for byte with the released references, plus the golden check. This decides `exactness`' re-record and **Kai-0.6B's beyond-noise Index delta**: if Kai is byte-identical to the release on this image, its B − R is 0 by construction and no user decision is needed. Results about 22:00–22:15.
+  - **Re-timing on this image (records-only commits by 01:30):**
+    - `vela2`: your offer is accepted. Re-time 0.3B, 4B and 9B on node B GPU4–5 (host 128–143, 10 rounds) once the image is loaded on node B (about 22:00; check `docker images`). Also add the trial result and the 20:48 quality table to `vela2-parity.md`.
+    - `router`: re-time P2-20 on node C GPU6 (host 128–143, 5 rounds) once it's loaded there.
+    - `decision1` and `embed`: their decoder and encoder ROCm rows go to their successors, once the ticks relaunch them.
+  - **Vela 2.0 `USER REPORT` (22:30):** closure report. The trial reproduces the release byte for byte, the quality deltas show no measurable change, and IP3b ships the reproducing stack, so no Vela 2.0 re-record is needed.
+  — lead (successor of 01c6684b)
+
+- 2026-10-05 21:16 — **USER (20:58): DRIVE #4512 TO READY; INCLUDE Vela-2.0-0.8B; IMAGE QUESTION SET ASIDE.**
+  (Corrected by the parent at 23:35; see the 23:35 note.) The user said: "先不管镜像的事 继续推进到 PR ready，把 0.8B 的
+  vela 2.0 也一并 include 包括 Vela 2.0 新环境上 span 的质量（F1 和 exact match）和发布版相比在噪声内，可以接，0.8B
+  不单独拆 follow up 了". It supersedes the 20:32 follow-up decision.
+  - **Image:** the user doesn't want to decide image questions now. The lead's adoption of the release-environment
+    PyTorch, taken from the public vLLM ROCm digest (`a580be6b9`, the lead's 22:30 report), stands, because it
+    restored exactness. Slimming the image is a follow-up, and READY and the push don't wait on it.
+  - **Vela-2.0-0.8B is IN #4512 (IP3b).** The scope is in the 23:35 note.
+  - **Vela 2.0 acceptance rule:** if a size is not byte-identical to its release on the adopted image, accept it when
+    its span F1 and exact match B − R (paired 95% CIs) are within noise. If it's worse beyond noise, report it to the
+    user before merging.
+
+- 2026-10-05 21:10 — **Model-runtime P2–4 lead (successor of 01c6684b) → coordinator, f643133d, `router`, `vela2`, all P2–4 workstreams: IP3 PUSHED at `47c948da2`, CI running. Vela 2.0 trial VERDICT: the release-torch image REPRODUCES the release byte for byte (4B and 9B, 360 / 360). IP3b ADOPTS it; the lead builds it.**
+  - **IP3:** PR head `47c948da2` = `cd3a4b324` + staging through `bf21aa40b` + `router-ip3` `82aa0391d` + `e2e-docs` `14be22f45` + `vela2` `436f0e8be` (with `decision1`'s P1-4 / kernel-choices commits, pre-reviewed 18:55) + `main` `963d80c37`. Node A on the exact sha: `make check` PASS, `make harness-check` PASS, fresh-environment smoke PASS. CI: [Pull Request run 37313887926](https://github.com/vllm-project/semantic-router/actions/runs/37313887926). PR description updated. **Coordinator: launch the read-only reviewer on `47c948da2`.**
+  - **Trial verdict (by `vela2`'s `chain-t`, node C GPU3 / GPU4, runtime at its mirror, FAST, three cold processes per GPU):** T1 (shipped image + the release's torch `2.12.0+git6bbd260` / AOTriton 0.13.50 / ROCm 7.2.3 userspace) and T2 (+ release Triton 3.7.1) each give **360 / 360 identical answers to the release image, max drift 0.0**, on 4B and on 9B. T1 and T2 also match each other 360 / 360, so our Triton 3.7.0, FLA 0.5.2 and `causal-conv1d` wheel can stay.
+  - **Correction to my 20:36 interim:** its "0 / 360" came from 01c6684b's chain, which set `PYTHONPATH` to the runtime tree and so dropped the release image's own `PYTHONPATH=/opt/decision-fla`. Its release side ran without FLA. `vela2`'s chain keeps each image's `PYTHONPATH`; that run counts and mine doesn't. The cold release re-run was identical to the first (360 / 360), and the attention probe (192 / 192) and conv solvers matched T1.
+  - **Ruling: IP3b adopts it.**
+    - The lead writes a `[Build]` commit: in `Dockerfile.extproc`, the ROCm stage takes torch, AOTriton and the ROCm 7.2.3 userspace (`lib`, `share/miopen`) plus the GCC runtime torch needs, all `COPY --from` the public digest `vllm/vllm-openai-rocm@sha256:1fd21abe…`, in one layer. It builds on node D (64–95, untimed), then gets the GPU smoke (7 models, goldens) by about 23:00. Tag follows in a note.
+    - **Vela 2.0:** the gap is closed, so no re-record: the release goldens hold byte for byte on the shipped image. `vela2`: **stop the span-quality runs** (B is no longer the shipped stack) and free those GPUs; also stop the default-mode / B-image comparisons. Please put the trial result into `vela2-parity.md` in a records commit on IP3b. The 22:30 `USER REPORT` becomes a closure report: no user decision is needed.
+    - **Decision 1.0 / 2.0 re-records: ON HOLD.** The new image likely removes their attention residue too. The GPU smoke and a full-panel run on the new image decide it: if they're byte-identical to the release, the re-records are dropped along with the Index-delta requirement for them. `exactness`' IX1 B queue (venv stack B) can finish, but it no longer gates a merge.
+    - **Re-timing on the new image before 03:00:** `router` P2-20 (node C GPU6, once the tag is posted), `vela2` 4B / 9B / 0.3B ROCm rows, then `decision1`'s decoder rows and `embed` / Vela 1.0 encoder rows.
+  - **Relaunches:** this lead has run since about 20:20 without a quota death. Ticks may resume one relaunch per tick, starting with `decision1` (decoder rows on the new image + CPU READY), then `embed` (P0-1 open cell, by 23:00). `exactness` only if a Decision 1.0 / 2.0 model still differs from the release on the new image.
+  — lead (successor of 01c6684b)
+
+- 2026-10-05 20:48 — **`vela2` (successor of 3673e5dc) → lead (successor of 80f6f085), coordinator: Vela 2.0 span quality, release image (R) against the router image `af71d5e82` (B), 4B and 9B. NO measurable quality change: every B − R 95% interval contains 0 except the 4B's PII short texts (+0.10 points [+0.01, +0.18], B ahead), and no delta is larger than 0.3 points. The harness reproduces the card on Hallucination and RAGTruth, but not on PII or toxic spans (rebuilt sets).**
+  - **Setup:** the same rows, the runtime at the pushed mirror `3c36d1427` in both images (FAST from the runtime), `exact`, full responses; node C GPU3 / GPU4, untimed. Every receipt shows golden matched and 14,098 / 14,098 requests answered. The card's eval files are private training-run paths, so the sets are rebuilt from public data. Hallucination: LettuceDetect prose + code test, 10,698. RAGTruth: its 2,700 rows in that set. PII: ai4privacy 300k validation, English, mapped to the 17 types (2,000 short; 200 documents each of 3.5–4K and 7–8K tokens). Toxic: SemEval-2021 test, 1,000, router span head. Paired bootstrap: examples resampled, 2,000 replicates, seed 20261002. B − R is in points.
+
+    | Set (metric) | Card 4B | 4B R | 4B B − R [95% CI] | Card 9B | 9B R | 9B B − R [95% CI] |
+    | --- | --- | --- | --- | --- | --- | --- |
+    | Hallucination, 10,698 (example F1) | 0.874 | 0.875 | +0.00 [−0.05, +0.06] | 0.885 | 0.886 | −0.02 [−0.06, +0.02] |
+    | RAGTruth, 2,700 (example F1) | 0.770 | 0.770 | +0.04 [−0.26, +0.35] | 0.774 | 0.775 | −0.07 [−0.19, +0.00] |
+    | PII short, 2,000 (entity F1) | 0.987 | 0.564 | +0.10 [+0.01, +0.18] | 0.985 | 0.530 | +0.00 [−0.11, +0.11] |
+    | PII 4K, 200 (entity F1) | 0.898 | 0.387 | +0.04 [−0.03, +0.10] | 0.965 | 0.412 | +0.01 [−0.05, +0.06] |
+    | PII 8K, 200 (entity F1) | 0.905 | 0.377 | −0.03 [−0.07, +0.02] | 0.940 | 0.405 | −0.01 [−0.05, +0.03] |
+    | Toxic spans, 1,000 (char F1) | 0.379 | 0.216 | −0.21 [−0.52, +0.04] | 0.446 | 0.196 | +0.01 [−0.02, +0.05] |
+
+  - **Span exact match** (the share of examples whose spans equal the gold): B − R between −0.30 and +0.01 points, with every interval containing 0. 4B: halu 0.383, RAGTruth 0.562, PII short 0.262, toxic 0.090. 9B: 0.397, 0.530, 0.237, 0.066. PII 4K / 8K are 0 on both sides.
+  - **Identical span sets, B vs R:** halu 95.2% / 94.5% (4B / 9B), RAGTruth 96.7% / 96.7%, PII short 96.6% / 96.9%, toxic 86.1% / 88.0%, PII 4K 15% / 17%, PII 8K 4% / 4.5%. Long documents carry many spans each, so one boundary word changes the set. Their F1 moves stay at or below 0.04 points.
+  - **Harness check:** Hallucination and RAGTruth reproduce the card within 0.1 points, so for those rows this is the card's harness in substance. PII and toxic do not. ai4privacy's conventions (split names, date fragments, unmappable labels) differ from the card's private PII sets, and the toxic question's wording is a guess. Read those rows as a paired B − R on the same rows, not as card values.
+  - **Files (node C, my work dir):** `quality/quality-{4b,9b}.json`, and `quality/{build,span_answer,score}.py` for the sets and harness. With the trial image verdict (20:39: T1 reproduces the release byte for byte), the user report has both halves. Node C GPU3–4 leases released.
+  — vela2 (successor of 3673e5dc)
+
+- 2026-10-05 20:39 — **`vela2` (successor of 3673e5dc) → lead (successor of 80f6f085), coordinator, recovery coordinator (f643133d), `router`: VERDICT, the release-torch trial image REPRODUCES the release. On the 4B and the 9B, T1 and T2 answer all 360 panel requests byte-identically to the release image (`cross_process.py compare` passes, max drift 0.0).**
+
+  | Model | T1 (`…reltorch:bf21aa40b-torch`, Triton 3.7.0) | T2 (`…:bf21aa40b-triton`, Triton 3.7.1) |
+  | --- | --- | --- |
+  | Vela-2.0-4B | 360 / 360 identical | 360 / 360 identical |
+  | Vela-2.0-9B | 360 / 360 identical | 360 / 360 identical |
+
+  - **How (`chain-t`, node C GPU3 / GPU4, untimed):** runtime at the pushed mirror `3c36d1427` in all three images (FAST from the runtime's import default). Each image keeps its own `PYTHONPATH` (the release image's FLA). Every process gets a cold MIOpen db and a cold autotune cache. The release image `decision20-train-fast:latest`, T1 and T2 run as three processes per GPU, started together. Every receipt shows golden matched 7 / 7 and autotune entries 0 → 0. Results: `trial/compare-{4B,9B}.json` in my node C work dir.
+  - **So attention was the whole gap.** T1 swaps only torch (AOTriton 0.13.50) and the ROCm 7.2.3 userspace into the shipped image, keeps its Triton 3.7.0, fla-core 0.5.2 and `causal-conv1d`, and closes the gap fully. T2's Triton 3.7.1 adds nothing, so T1 suffices.
+  - **Consequences if IP3b adopts T1:** the Vela 2.0 golden re-record question goes away (the release goldens stay exact in substance, and the agreement is 100%). My ROCm timing records (stack B, `venv-rocm72-cc`) would need re-timing on T1. That's mine: the 0.3B and 4B / 9B 10-round A/Bs on node B GPU4–5, host 128–143, about 75 minutes of GPU time for two GPUs. I can start as soon as T1 is on node B.
+  - **The lead's own 12:17 UTC chain stays void** (its release side had no FLA; see 20:25).
+  - **Span quality:** the R / B runs are almost done (9B R at 13.5k of 14,098); the final table goes up by 22:00.
+  — vela2 (successor of 3673e5dc)
+
 - 2026-10-05 20:32 — **USER (20:32): Vela-2.0-0.8B goes into a FOLLOW-UP PR, not #4512.** The HF collection now has
   `vllm-sr/Vela-2.0-0.8B`, a `vela2-decoder` on Decision 2.0 Eos-0.8B (Qwen3.5 0.8B), the same architecture as the 4B
   and 9B. The runtime pins only 0.3B, 4B and 9B. The HF revisions of those three have also moved past our pins (HF
