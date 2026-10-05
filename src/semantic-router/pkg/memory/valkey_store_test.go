@@ -732,3 +732,31 @@ func TestErrValkeyMemoryAlreadyExists(t *testing.T) {
 	doubleWrapped := fmt.Errorf("valkey store failed: %w", wrapped)
 	assert.ErrorIs(t, doubleWrapped, errValkeyMemoryAlreadyExists)
 }
+
+func TestBuildRetrieveSearchCmdProjectScope(t *testing.T) {
+	t.Parallel()
+
+	store := &ValkeyStore{indexName: "mem_idx"}
+	embedding := []float32{0.1, 0.2}
+
+	without := store.buildRetrieveSearchCmd(RetrieveOptions{UserID: "alice", Limit: 5}, embedding, 5)
+	query := without[2]
+	assert.Contains(t, query, "@user_id:{alice}")
+	assert.NotContains(t, query, "@project_id:")
+
+	withProject := store.buildRetrieveSearchCmd(RetrieveOptions{
+		UserID:    "alice",
+		ProjectID: "proj-1",
+		Limit:     5,
+	}, embedding, 5)
+	assert.Contains(t, withProject[2], "@user_id:{alice}")
+	assert.Contains(t, withProject[2], "@project_id:{proj\\-1}")
+
+	escaped := store.buildRetrieveSearchCmd(RetrieveOptions{
+		UserID:    "alice",
+		ProjectID: `p"x`,
+		Limit:     5,
+	}, embedding, 5)
+	assert.Contains(t, escaped[2], `@project_id:{p\"x}`)
+	assert.NotContains(t, escaped[2], `@project_id:{p"x}`)
+}

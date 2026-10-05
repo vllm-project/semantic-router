@@ -40,7 +40,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	searchResult, err := m.searchMemoryVectors(ctx, embedding, retrieveFilterExpr(opts.UserID, opts.Types), retrieveSearchTopK(limit, opts.HybridSearch))
+	searchResult, err := m.searchMemoryVectors(ctx, embedding, retrieveFilterExpr(opts.UserID, opts.ProjectID, opts.Types), retrieveSearchTopK(limit, opts.HybridSearch))
 	if err != nil {
 		status = "error"
 		return nil, err
@@ -83,8 +83,11 @@ func (m *MilvusStore) normalizeRetrieveOpts(opts RetrieveOptions) (limit int, th
 	return limit, threshold, nil
 }
 
-func retrieveFilterExpr(userID string, types []MemoryType) string {
+func retrieveFilterExpr(userID, projectID string, types []MemoryType) string {
 	filterExpr := milvusUserScopeFilter(userID)
+	if projectID != "" {
+		filterExpr = fmt.Sprintf("%s && project_id == %q", filterExpr, projectID)
+	}
 	if tf := buildTypeFilter(types); tf != "" {
 		filterExpr = fmt.Sprintf("%s && %s", filterExpr, tf)
 	}

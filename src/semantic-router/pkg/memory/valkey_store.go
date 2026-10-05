@@ -323,6 +323,10 @@ func (v *ValkeyStore) rerankAndFilter(candidates []*RetrieveResult, opts Retriev
 func (v *ValkeyStore) buildRetrieveSearchCmd(opts RetrieveOptions, embedding []float32, limit int) []string {
 	filterExpr := fmt.Sprintf("@user_id:{%s}", valkeyEscapeTagValue(opts.UserID))
 
+	if opts.ProjectID != "" {
+		filterExpr = fmt.Sprintf("%s @project_id:{%s}", filterExpr, valkeyEscapeTagValue(opts.ProjectID))
+	}
+
 	if len(opts.Types) > 0 {
 		typeValues := make([]string, len(opts.Types))
 		for i, memType := range opts.Types {

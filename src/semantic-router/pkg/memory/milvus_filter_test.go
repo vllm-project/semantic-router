@@ -31,3 +31,25 @@ func TestMilvusUserScopeFilterEscapesInjection(t *testing.T) {
 		t.Fatalf("backslash: got %q, want %q", got, `user_id == "a\\b"`)
 	}
 }
+
+func TestRetrieveFilterExprProjectScope(t *testing.T) {
+	without := retrieveFilterExpr("alice", "", nil)
+	if without != `user_id == "alice"` {
+		t.Fatalf("empty project: got %q", without)
+	}
+
+	withProject := retrieveFilterExpr("alice", "proj-1", []MemoryType{MemoryTypeSemantic})
+	want := `user_id == "alice" && project_id == "proj-1" && (memory_type == "semantic")`
+	if withProject != want {
+		t.Fatalf("project scope: got %q, want %q", withProject, want)
+	}
+
+	malicious := `p" || user_id != "x`
+	got := retrieveFilterExpr("alice", malicious, nil)
+	if strings.Contains(got, `" || user_id != "`) {
+		t.Fatalf("project id injection not neutralized: %s", got)
+	}
+	if !strings.Contains(got, `project_id == "p\" || user_id != \"x"`) {
+		t.Fatalf("unexpected project escaping: %s", got)
+	}
+}
