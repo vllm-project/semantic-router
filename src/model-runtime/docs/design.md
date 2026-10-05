@@ -460,10 +460,14 @@ deadline applies to every task unless a task's own deadline is earlier.
 labels), embedding and rerank descriptors, limits, licence, profiles, engine,
 accelerator, device, dtype, plugin versions, and per-model readiness and
 golden status, plus the process's `limits` (`max_bundle_tasks`,
-`max_request_bytes`). `/health` returns 200 only when every model is ready, and lists
-per-model states otherwise; `/health/live` returns 200 while the process
-serves HTTP. All three report `api_version`, the contract version
-(`info.version`); a client refuses a runtime of another major version.
+`max_request_bytes`). `/health` is readiness (`Health`): 200 only when every
+model is ready, with the process state (`starting`, `loading`, `warming`,
+`ready`, `degraded`, `failed`) and, when the process serves several models,
+each model's state. `/health/live` is
+liveness (`Liveness`): 200 with `status: alive` while the process serves
+HTTP, whatever its models' states. All three report `api_version`, the
+contract version (`info.version`); a client refuses a runtime of another
+major version.
 `/metrics` is Prometheus text with a `model` label on every model-scoped
 series.
 

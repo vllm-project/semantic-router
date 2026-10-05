@@ -3,6 +3,7 @@ package testcases
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -52,6 +53,9 @@ func testModelRuntimeLifecycle(ctx context.Context, client *kubernetes.Clientset
 	if strings.Join(served, ",") != "decision-a,feedback-a" {
 		return fmt.Errorf("the attached runtime serves %v, want decision-a and feedback-a", served)
 	}
+	if err = checkLivenessAndReadiness(ctx, session.attachedRuntime(), attached.APIVersion); err != nil {
+		return fmt.Errorf("attached runtime: %w", err)
+	}
 	inventory, err := checkInventory(ctx, session)
 	if err != nil {
 		return fmt.Errorf("model inventory: %w", err)
@@ -76,6 +80,25 @@ type mrInventoryDeployment struct {
 	Heads      []struct {
 		Labels []string `json:"labels"`
 	} `json:"heads"`
+}
+
+// checkLivenessAndReadiness requires a ready runtime to answer GET /health/live
+// as alive and GET /health as ready, both under the contract version its
+// /v1/models reports.
+func checkLivenessAndReadiness(ctx context.Context, runtime *modelruntime.Client, apiVersion string) error {
+	live, err := runtime.Liveness(ctx)
+	if err != nil {
+		return err
+	}
+	health, status, err := runtime.Health(ctx)
+	if err != nil {
+		return err
+	}
+	if apiVersion == "" || live.Status != "alive" || live.APIVersion != apiVersion ||
+		status != http.StatusOK || health.Status != "ready" || health.APIVersion != apiVersion {
+		return fmt.Errorf("/health/live is %+v and /health %d %+v, want alive and ready under api_version %q", live, status, health, apiVersion)
+	}
+	return nil
 }
 
 // checkInventory requires the Router's model inventory to list every

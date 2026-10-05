@@ -96,7 +96,6 @@ const (
 
 // Defines values for HealthStatus.
 const (
-	HealthStatusAlive    HealthStatus = "alive"
 	HealthStatusDegraded HealthStatus = "degraded"
 	HealthStatusFailed   HealthStatus = "failed"
 	HealthStatusLoading  HealthStatus = "loading"
@@ -113,6 +112,11 @@ const (
 	InvalidQuestion    ItemError = "invalid_question"
 	MaxLengthExceeded  ItemError = "max_length_exceeded"
 	Unavailable        ItemError = "unavailable"
+)
+
+// Defines values for LivenessStatus.
+const (
+	Alive LivenessStatus = "alive"
 )
 
 // Defines values for ModelCardStatus.
@@ -529,7 +533,7 @@ type HeadWindow struct {
 	Tokens int `json:"tokens"`
 }
 
-// Health defines model for Health.
+// Health Readiness of the process and its models (`GET /health`).
 type Health struct {
 	// ApiVersion The version of this contract the runtime serves (`info.version`); a client refuses another major version.
 	ApiVersion string  `json:"api_version"`
@@ -567,6 +571,16 @@ type InputUsage struct {
 
 // ItemError defines model for ItemError.
 type ItemError string
+
+// Liveness Liveness of the process (`GET /health/live`), whatever its models' readiness.
+type Liveness struct {
+	// ApiVersion The version of this contract the runtime serves (`info.version`); a client refuses another major version.
+	ApiVersion string         `json:"api_version"`
+	Status     LivenessStatus `json:"status"`
+}
+
+// LivenessStatus defines model for Liveness.Status.
+type LivenessStatus string
 
 // ModelCard defines model for ModelCard.
 type ModelCard struct {
@@ -1897,7 +1911,7 @@ func (r GetHealthResponse) StatusCode() int {
 type GetLivenessResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *Health
+	JSON200      *Liveness
 }
 
 // Status returns HTTPResponse.Status
@@ -2315,7 +2329,7 @@ func ParseGetLivenessResponse(rsp *http.Response) (*GetLivenessResponse, error) 
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Health
+		var dest Liveness
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

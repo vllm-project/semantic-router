@@ -82,8 +82,8 @@ several models. The contract is the OpenAPI document served at
 | `POST /v1/rerank` | Score documents against a query. |
 | `POST /v1/bundle` | Several of the above, for one or more models, in one call. |
 | `GET /v1/models` | What each model is, what it serves, its labels, limits, device and self-check status, and the process's `limits`: the most tasks one `/v1/bundle` may carry and the largest request body. With `/health` and `/health/live`, it reports the contract's `api_version`. |
-| `GET /health` | 200 when every model is ready, 503 with each model's state otherwise. |
-| `GET /health/live` | 200 while the process serves requests. |
+| `GET /health` | Readiness: 200 when every model is ready, 503 otherwise. `status` is `starting`, `loading`, `warming`, `ready`, `degraded` or `failed`, and a process that serves several models lists each model's state. |
+| `GET /health/live` | Liveness: 200 with `"status": "alive"` while the process serves requests, whether or not its models are ready. |
 | `GET /metrics` | Prometheus metrics. |
 
 A response carries the answers and `usage`. Add

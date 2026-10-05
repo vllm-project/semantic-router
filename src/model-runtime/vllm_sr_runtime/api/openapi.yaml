@@ -193,7 +193,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Health'
+                $ref: '#/components/schemas/Liveness'
   /metrics:
     get:
       operationId: getMetrics
@@ -1260,6 +1260,7 @@ components:
           additionalProperties: true
     Health:
       type: object
+      description: Readiness of the process and its models (`GET /health`).
       required: [status, api_version]
       properties:
         api_version:
@@ -1267,7 +1268,7 @@ components:
           description: The version of this contract the runtime serves (`info.version`); a client refuses another major version.
         status:
           type: string
-          enum: [starting, loading, warming, ready, degraded, failed, alive]
+          enum: [starting, loading, warming, ready, degraded, failed]
         reason:
           type: string
           nullable: true
@@ -1289,3 +1290,14 @@ components:
         reason:
           type: string
           nullable: true
+    Liveness:
+      type: object
+      description: Liveness of the process (`GET /health/live`), whatever its models' readiness.
+      required: [status, api_version]
+      properties:
+        api_version:
+          type: string
+          description: The version of this contract the runtime serves (`info.version`); a client refuses another major version.
+        status:
+          type: string
+          enum: [alive]

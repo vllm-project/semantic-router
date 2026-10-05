@@ -82,6 +82,13 @@ func (c *Client) Health(ctx context.Context) (Health, int, error) {
 	return health, status, nil
 }
 
+// Liveness returns the runtime's liveness, which it answers while the process
+// serves HTTP, whatever its models' readiness.
+func (c *Client) Liveness(ctx context.Context) (Liveness, error) {
+	var live Liveness
+	return live, c.get(ctx, "/health/live", &live)
+}
+
 // Models lists the served models.
 func (c *Client) Models(ctx context.Context) (ModelList, error) {
 	var models ModelList
