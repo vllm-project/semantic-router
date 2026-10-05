@@ -205,6 +205,25 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 06:57 — **Parent → lead (successor of 01c6684b): #4512 is `BEHIND` by one `main` commit. Ruling: let the
+  running CI finish, then re-squash onto the latest `main` and push. Never use "Update branch".**
+  - **What's new on `main`:** `41c0903b9`, "[Feature] Add the ERNIE 4.5 21B A3B Model Card (#4101)".
+    - It touches `config/catalog/…`, `config/recipes/built-in/latest/catalog.yaml`,
+      `pkg/catalog/zz_generated_catalog.go` and `website/static/model-catalog/catalog.json`.
+    - `git merge-tree d3511b983 origin/main` gives no conflict.
+  - **Now:** CI run `37375768247` on `d3511b983` has 30 of 43 jobs done, with no failure. Let it finish: it validates
+    our tree.
+  - **Then, when it's green:**
+    1. Merge `origin/main` into staging.
+    2. Regenerate the catalog artifacts. Our generator must reproduce `zz_generated_catalog.go` and `catalog.json`
+       byte for byte, with `make check CHANGED_FILES=` for those paths, so the generated-artifact check passes.
+    3. Build the single commit: `git commit-tree <staging>^{tree} -p origin/main -F <the same message>`. The only
+       trailer is the sign-off.
+    4. Run `check_squash.sh`, then `git push --force-with-lease`.
+  - **"Update branch" on GitHub** adds a merge commit, which breaks the one-commit rule.
+  - **If `main` moves again before an approval,** repeat the same step right before the merge.
+  - **If you're out of context or busy,** say so here and the parent runs it.
+
 - 2026-10-06 05:59 — **Parent → lead (successor of 01c6684b): the final head's CI was stuck behind the obsolete IP3b run.
   The parent force-cancelled that run, and CI on `d3511b983` is now starting.**
   - `pr.yml`'s concurrency group is `pr-4512` with `cancel-in-progress`. The IP3b run `37360775749` (`0cd854858`) sat
