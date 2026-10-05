@@ -11,7 +11,14 @@ package modelruntime
 
 // ModelList is the body of GET /v1/models.
 type ModelList struct {
-	Data []ModelCard `json:"data"`
+	Data   []ModelCard    `json:"data"`
+	Limits *ProcessLimits `json:"limits"`
+}
+
+// ProcessLimits is what one request to a runtime process may hold.
+type ProcessLimits struct {
+	MaxBundleTasks  int `json:"max_bundle_tasks"`
+	MaxRequestBytes int `json:"max_request_bytes"`
 }
 
 // ModelCard describes one served model.
@@ -31,6 +38,7 @@ type ModelCard struct {
 	Device      string         `json:"device"`
 	Ready       bool           `json:"ready"`
 	Status      string         `json:"status"`
+	Reason      string         `json:"reason"`
 	Golden      GoldenStatus   `json:"golden"`
 	Plugins     []PluginInfo   `json:"plugins"`
 }

@@ -37,7 +37,7 @@ type ToolsDatabase struct {
 	mu                  sync.RWMutex
 	similarityThreshold float32
 	enabled             bool
-	modelType           string // Model type to use for embeddings (e.g., "mmbert", "qwen3", "gemma")
+	modelType           string // Model type to use for embeddings (e.g., "mmbert", "qwen3")
 	targetDim           int    // Target dimension for embeddings
 	provider            embedding.Provider
 }

@@ -103,8 +103,9 @@ curl -s localhost:8100/v1/embeddings -H 'content-type: application/json' \
   -d '{"input": ["How do I reset my password?", "I forgot my login password."], "dimensions": 256}'
 ```
 
-The response is the OpenAI embeddings format, plus `meta.representation`:
-the model, layer and dimension that identify the vector space.
+The response is the OpenAI embeddings format. Add
+`"options": {"return_meta": true}` to also get `meta.representation`: the
+model, layer and dimension that identify the vector space.
 
 ## Change the model without mixing vectors
 

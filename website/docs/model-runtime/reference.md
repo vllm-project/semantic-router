@@ -19,11 +19,11 @@ Without a `MODEL` argument, `vllm-sr serve` starts the router instead.
 | `MODEL ...` | | Hub repositories, built-in model names or local package directories. Several models share one process. `MODEL@REVISION` pins a revision. |
 | `--models FILE` | | A models file instead of `MODEL` arguments. |
 | `--revision SHA` | | The 40-character commit to load, for one `MODEL`. |
-| `--device` | `auto` | `auto`, `cpu`, `cuda[:N]`, `rocm[:N]`, `xpu[:N]` or `mps`. |
+| `--device` | `auto` | `auto`, or an accelerator with an optional index: `cpu`, `cuda[:N]`, `rocm[:N]`, `xpu[:N]`, `mps`, or one a plugin adds. |
 | `--host` | `127.0.0.1` | Address to listen on. |
 | `--port` | `8100` | Port to listen on. |
 | `--uds PATH` | | Listen on a Unix socket instead of TCP. |
-| `--profile` | `exact` | `exact`, `shared_context`, `batching` or `max_speed`. |
+| `--profile` | `exact` | `exact`, `shared_context`, `batching`, `max_speed`, or one a plugin adds. |
 | `--engine` | `native` | Engine plugin: `native` (PyTorch) or `onnxruntime`. |
 | `--family` | detected | Force a model family plugin. |
 | `--served-model-name` | the model name | The model ID the API reports, for one `MODEL`. |
@@ -35,6 +35,8 @@ Without a `MODEL` argument, `vllm-sr serve` starts the router instead.
 | `--max-batch-tokens` | `65536` | Tokens per forward pass. |
 | `--max-request-bytes` | `8388608` | Largest request body. |
 | `--max-bundle-tasks` | `64` | Most tasks in one `/v1/bundle` request. |
+| `--load-attempts` | `5` | Loads of a model before it stays `failed`; a damaged package or a failed self-check is not retried. |
+| `--load-retry-seconds` | `5` | Wait before the first reload of a model that failed to load, doubling up to 300 s. |
 | `--result-cache-entries` | `16384` | Recent results each model keeps by content; `0` turns the cache off. |
 | `--cache-dir` | `HF_HUB_CACHE` | Hugging Face cache directory. |
 | `--offline` | off | Use only files already in the cache. |
@@ -78,10 +80,14 @@ several models. The contract is the OpenAPI document served at
 | `POST /v1/embeddings` | OpenAI-compatible embeddings of text, images and audio, with `dimensions` and `layer`. |
 | `POST /v1/rerank` | Score documents against a query. |
 | `POST /v1/bundle` | Several of the above, for one or more models, in one call. |
-| `GET /v1/models` | What each model is, what it serves, its labels, limits, device and self-check status. With `/health` and `/health/live`, it reports the contract's `api_version`. |
+| `GET /v1/models` | What each model is, what it serves, its labels, limits, device and self-check status, and the process's `limits`: the most tasks one `/v1/bundle` may carry and the largest request body. With `/health` and `/health/live`, it reports the contract's `api_version`. |
 | `GET /health` | 200 when every model is ready, 503 with each model's state otherwise. |
 | `GET /health/live` | 200 while the process serves requests. |
 | `GET /metrics` | Prometheus metrics. |
+
+A response carries the answers and `usage`. Add
+`"options": {"return_meta": true}` to a request to also get `meta`: the
+revision, model digest, profile, engine, device and timings that answered it.
 
 A request that cannot be served at all returns an HTTP error with
 `{"error": {"code", "message"}}`: 400 `invalid_request`, 404
@@ -112,8 +118,8 @@ Span offsets count Unicode code points, end exclusive.
 ```
 
 `dimensions` and `layer` select a smaller vector or an earlier layer when the
-model declares them. `meta.representation` in the response identifies the
-vector space, so vectors of different settings are never mixed.
+model declares them. With `return_meta`, `meta.representation` identifies the
+vector space, so you can keep vectors of different settings apart.
 
 ### Rerank
 
@@ -169,7 +175,10 @@ The binding names (`domain_classifier`, `pii_classifier`, `prompt_guard`,
 The router talks to managed runtimes only over Unix sockets in a directory only
 its own user can open (mode 0700). It restarts a process that exits, waiting 1
 second at first and up to 60 seconds after repeated failures, and stops every
-process (SIGTERM, then SIGKILL) when it exits.
+process (SIGTERM, then SIGKILL) when it exits. It also restarts a process in
+which every model failed to load, the same way, so a model that failed for a
+passing reason comes back without a configuration reload. A process that still
+serves any model keeps running.
 
 ## Metrics
 

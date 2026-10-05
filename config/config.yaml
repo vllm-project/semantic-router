@@ -2475,10 +2475,8 @@ global:
     embeddings:
       semantic:
         qwen3_model_path: models/mom-embedding-pro
-        gemma_model_path: models/mom-embedding-flash
         mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         multimodal_model_path: models/vela-1.0-omni-nano
-        bert_model_path: models/mom-embedding-light
         use_cpu: true
         embedding_config:
           full_context: false

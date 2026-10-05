@@ -8,7 +8,8 @@ from collections.abc import Callable, Sequence
 import click
 from click.core import ParameterSource
 
-ENGINE_PROFILES = ("exact", "shared_context", "batching", "max_speed")
+from cli.validator_decision_model import MODEL_RUNTIME_PROFILE
+
 ENGINE_OPTIONS = ("models_file", "revision", "device", "host", "port", "uds")
 ROUTER_OPTIONS = (
     "config",
@@ -64,8 +65,9 @@ name or a local package directory; MODEL@REVISION pins a revision, and several
 MODELs share one process. --models lists models with their own name,
 revision, device and profile. In engine mode --profile selects the numerics
 profile: exact (default, identical to the released package), shared_context,
-batching or max_speed. Router mode starts managed runtimes itself for
-model_runtime deployments in the config.
+batching, max_speed, or one a plugin installs (vllm-sr-runtime plugins lists
+them). Router mode starts managed runtimes itself for model_runtime
+deployments in the config.
 """
 
 
@@ -146,10 +148,9 @@ def run_engine_mode(
                 f"{_flag(name)} applies to router mode; engine mode serves only models",
                 ctx=ctx,
             )
-    if profile is not None and profile not in ENGINE_PROFILES:
+    if profile is not None and not MODEL_RUNTIME_PROFILE.match(profile):
         raise click.UsageError(
-            f"--profile {profile!r} is not a runtime profile; use one of "
-            + ", ".join(ENGINE_PROFILES),
+            f"--profile {profile!r} is not a profile name, such as exact or batching",
             ctx=ctx,
         )
     if models and models_file:

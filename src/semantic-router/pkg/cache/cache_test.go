@@ -57,7 +57,7 @@ var _ = Describe("Cache Package", func() {
 						SimilarityThreshold: 0.8,
 						MaxEntries:          1000,
 						TTLSeconds:          3600,
-						EmbeddingModel:      "bert",
+						EmbeddingModel:      "qwen3",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -74,7 +74,7 @@ var _ = Describe("Cache Package", func() {
 						SimilarityThreshold: 0.8,
 						MaxEntries:          1000,
 						TTLSeconds:          3600,
-						EmbeddingModel:      "bert",
+						EmbeddingModel:      "qwen3",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -91,7 +91,7 @@ var _ = Describe("Cache Package", func() {
 						SimilarityThreshold: 0.8,
 						MaxEntries:          500,
 						TTLSeconds:          1800,
-						EmbeddingModel:      "bert",
+						EmbeddingModel:      "qwen3",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -174,7 +174,7 @@ development:
 						SimilarityThreshold: 0.85,
 						TTLSeconds:          7200,
 						Milvus:              milvusConfig,
-						EmbeddingModel:      "bert",
+						EmbeddingModel:      "qwen3",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -206,7 +206,7 @@ development:
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
 						Milvus:              milvusConfig,
-						EmbeddingModel:      "bert",
+						EmbeddingModel:      "qwen3",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -260,7 +260,7 @@ development:
 						SimilarityThreshold: 0.85,
 						TTLSeconds:          7200,
 						Milvus:              milvusConfig,
-						EmbeddingModel:      "bert",
+						EmbeddingModel:      "qwen3",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -330,7 +330,7 @@ development:
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
 						Redis:               redisConfig,
-						EmbeddingModel:      "bert",
+						EmbeddingModel:      "qwen3",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -360,7 +360,7 @@ development:
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
 						Redis:               redisConfig,
-						EmbeddingModel:      "bert",
+						EmbeddingModel:      "qwen3",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -420,7 +420,7 @@ development:
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
 						Redis:               redisConfig,
-						EmbeddingModel:      "bert",
+						EmbeddingModel:      "qwen3",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -532,7 +532,7 @@ development:
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
-						EmbeddingModel:      "bert",
+						EmbeddingModel:      "qwen3",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -551,7 +551,7 @@ development:
 						SimilarityThreshold: -0.8, // invalid
 						MaxEntries:          10,
 						TTLSeconds:          -1, // invalid
-						EmbeddingModel:      "bert",
+						EmbeddingModel:      "qwen3",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -572,7 +572,7 @@ development:
 					SimilarityThreshold: 0.8,
 					MaxEntries:          1000,
 					TTLSeconds:          3600,
-					EmbeddingModel:      "bert",
+					EmbeddingModel:      "qwen3",
 					EvictionPolicy:      "lru",
 				}
 
@@ -601,7 +601,7 @@ development:
 					SimilarityThreshold: 1.5, // Invalid: > 1.0
 					MaxEntries:          1000,
 					TTLSeconds:          3600,
-					EmbeddingModel:      "bert",
+					EmbeddingModel:      "qwen3",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -617,7 +617,7 @@ development:
 					SimilarityThreshold: -0.1, // Invalid: < 0.0
 					MaxEntries:          1000,
 					TTLSeconds:          3600,
-					EmbeddingModel:      "bert",
+					EmbeddingModel:      "qwen3",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -633,7 +633,7 @@ development:
 					SimilarityThreshold: 0.8,
 					MaxEntries:          1000,
 					TTLSeconds:          -1, // Invalid: negative TTL
-					EmbeddingModel:      "bert",
+					EmbeddingModel:      "qwen3",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -649,7 +649,7 @@ development:
 					SimilarityThreshold: 0.8,
 					MaxEntries:          -1, // Invalid: negative max entries
 					TTLSeconds:          3600,
-					EmbeddingModel:      "bert",
+					EmbeddingModel:      "qwen3",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -665,7 +665,7 @@ development:
 					SimilarityThreshold: 0.8,
 					MaxEntries:          1000,
 					TTLSeconds:          3600,
-					EmbeddingModel:      "bert",
+					EmbeddingModel:      "qwen3",
 					EvictionPolicy:      "random", // unsupported
 				}
 
@@ -681,7 +681,7 @@ development:
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
 					TTLSeconds:          3600,
-					EmbeddingModel:      "bert",
+					EmbeddingModel:      "qwen3",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -696,7 +696,7 @@ development:
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
 					TTLSeconds:          3600,
-					EmbeddingModel:      "bert",
+					EmbeddingModel:      "qwen3",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -711,7 +711,7 @@ development:
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
 					TTLSeconds:          3600,
-					EmbeddingModel:      "bert",
+					EmbeddingModel:      "qwen3",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -741,7 +741,7 @@ development:
 					SimilarityThreshold: 1.0, // Valid: maximum threshold
 					MaxEntries:          10000,
 					TTLSeconds:          86400,
-					EmbeddingModel:      "bert",
+					EmbeddingModel:      "qwen3",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -812,7 +812,7 @@ development:
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
 				TTLSeconds:          300,
-				EmbeddingModel:      "bert",
+				EmbeddingModel:      "qwen3",
 			}
 			inMemoryCache = NewInMemoryCache(options)
 		})
@@ -821,7 +821,6 @@ development:
 			if inMemoryCache != nil {
 				inMemoryCache.Close()
 			}
-			// BERT model is initialized once per process, no need to reset
 		})
 
 		It("should implement CacheBackend interface", func() {
@@ -840,7 +839,7 @@ development:
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
 				TTLSeconds:          300,
-				EmbeddingModel:      "bert",
+				EmbeddingModel:      "qwen3",
 			}
 			disabledCache := NewInMemoryCache(disabledOptions)
 			defer disabledCache.Close()
@@ -910,7 +909,7 @@ development:
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
 				TTLSeconds:          1,
-				EmbeddingModel:      "bert",
+				EmbeddingModel:      "qwen3",
 			})
 
 			err := inMemoryCache.AddPendingRequest("expired-request-id", "test-model", "stale query", []byte("request"), -1)
@@ -935,7 +934,7 @@ development:
 				SimilarityThreshold: 0.99, // Very high threshold
 				MaxEntries:          100,
 				TTLSeconds:          300,
-				EmbeddingModel:      "bert",
+				EmbeddingModel:      "qwen3",
 			}
 			highThresholdCache := NewInMemoryCache(highThresholdOptions)
 			defer highThresholdCache.Close()
@@ -987,7 +986,7 @@ development:
 				SimilarityThreshold: 0.1,
 				MaxEntries:          10,
 				TTLSeconds:          1,
-				EmbeddingModel:      "bert",
+				EmbeddingModel:      "qwen3",
 			})
 			defer ttlCache.Close()
 
@@ -1028,7 +1027,7 @@ development:
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
 				TTLSeconds:          300,
-				EmbeddingModel:      "bert",
+				EmbeddingModel:      "qwen3",
 			}
 			disabledCache := NewInMemoryCache(disabledOptions)
 			defer disabledCache.Close()
@@ -1068,7 +1067,7 @@ development:
 				HNSWM:               4,
 				HNSWEfConstruction:  8,
 				HNSWEfSearch:        8,
-				EmbeddingModel:      "bert",
+				EmbeddingModel:      "qwen3",
 			})
 			defer cacheWithHNSW.Close()
 
@@ -1112,7 +1111,7 @@ development:
 				SimilarityThreshold: 0.9,
 				MaxEntries:          2000,
 				TTLSeconds:          7200,
-				EmbeddingModel:      "bert",
+				EmbeddingModel:      "qwen3",
 				Milvus:              &config.MilvusConfig{},
 			}
 

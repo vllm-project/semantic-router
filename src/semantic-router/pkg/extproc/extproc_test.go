@@ -496,8 +496,7 @@ func CreateTestConfig() *config.RouterConfig {
 	return &config.RouterConfig{
 		InlineModels: config.InlineModels{
 			EmbeddingModels: config.EmbeddingModels{
-				BertModelPath: "sentence-transformers/all-MiniLM-L6-v2",
-				UseCPU:        true,
+				UseCPU: true,
 				EmbeddingConfig: config.HNSWConfig{
 					ModelType:         "qwen3",
 					TargetDimension:   768,
@@ -1076,7 +1075,7 @@ var _ = Describe("ExtProc Package", func() {
 		It("should create test configuration successfully", func() {
 			cfg := CreateTestConfig()
 			Expect(cfg).NotTo(BeNil())
-			Expect(cfg.InlineModels.EmbeddingModels.BertModelPath).To(Equal("sentence-transformers/all-MiniLM-L6-v2"))
+			Expect(cfg.InlineModels.EmbeddingModels.UseCPU).To(BeTrue())
 			Expect(cfg.BackendModels.DefaultModel).To(Equal("model-b"))
 			Expect(len(cfg.IntelligentRouting.Categories)).To(Equal(1))
 			Expect(cfg.IntelligentRouting.Categories[0].CategoryMetadata.Name).To(Equal("coding"))
@@ -1112,7 +1111,6 @@ var _ = Describe("ExtProc Package", func() {
 			cfg := CreateTestConfig()
 
 			// Test essential fields are present
-			Expect(cfg.InlineModels.EmbeddingModels.BertModelPath).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.DefaultModel).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.ModelConfig).NotTo(BeEmpty())
 			Expect(cfg.BackendModels.ModelConfig).To(HaveKey("model-a"))

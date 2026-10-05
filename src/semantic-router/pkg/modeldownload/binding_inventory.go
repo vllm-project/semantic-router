@@ -78,7 +78,7 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 	needed := config.EmbeddingModelsNeeded(cfg, primary, sharedServices)
 	scoped := *cfg
 	scoped.Recipes, scoped.Entrypoints = nil, nil
-	paths := map[string]*string{"qwen3": &scoped.Qwen3ModelPath, "gemma": &scoped.GemmaModelPath, "mmbert": &scoped.MmBertModelPath, "multimodal": &scoped.MultiModalModelPath, "bert": &scoped.BertModelPath}
+	paths := map[string]*string{"qwen3": &scoped.Qwen3ModelPath, "mmbert": &scoped.MmBertModelPath, "multimodal": &scoped.MultiModalModelPath}
 	explicitEmbedding, hasEmbedding := plan.Lookup(cfg.RoutingScope, "embedding")
 	if global {
 		explicitEmbedding, hasEmbedding = plan.LookupGlobal("embedding")
