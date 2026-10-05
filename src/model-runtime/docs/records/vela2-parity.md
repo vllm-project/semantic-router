@@ -72,13 +72,34 @@ windows included.
 
 ## The router image's ROCm stack
 
-The router's ROCm image runs PyTorch's official wheel (`2.12.0+rocm7.2`,
-Triton 3.7.0, FLA 0.5.2) with `causal-conv1d` 1.7.0 built for gfx942. The
-ROCm column above comes from the packages' release image, a PyTorch 2.12
-source build on ROCm 7.2.3 with Triton 3.7.1. On the router image's stack
-the runtime still answers exactly as the engine does, and every process
-answers alike, but the package itself rounds attention differently there,
-so no 4B or 9B request is byte-identical to the release image's answers.
+The router's ROCm image (built from `a580be6b9`) serves with the release's
+PyTorch: vLLM's ROCm build `2.12.0+git6bbd260` (AOTriton 0.13.50) and its
+ROCm 7.2.3 libraries, with Triton 3.7.0, FLA 0.5.2 and `causal-conv1d` 1.7.0
+(`rocm-router-image.md`). There the runtime answers the 360 requests
+byte-identically to the release image, which the ROCm column above comes from.
+
+- **Date:** 2026-10-05; node C, one MI325X per process, cold MIOpen and
+  autotune caches, `MIOPEN_FIND_MODE=FAST` (the runtime's default) on both
+  sides, the runtime at one commit in both images, each image with its own
+  `PYTHONPATH` (the release image's FLA lives on it).
+
+| Model | Release-torch trial image, three processes | Shipped image `a580be6b9` |
+| --- | --- | --- |
+| Vela-2.0-4B | 360 / 360 each, max drift 0.0 | 360 / 360, max drift 0.0 |
+| Vela-2.0-9B | 360 / 360 each, max drift 0.0 | 360 / 360, max drift 0.0 |
+
+- The trial image was the official-wheel image below with only PyTorch,
+  AOTriton and the ROCm libraries swapped. A second trial that also took the
+  release's Triton 3.7.1 answered identically, so Triton plays no part.
+- The registry's golden answers (the release's) therefore hold byte for byte;
+  the GPU smoke matches them in the image (`rocm-router-image.md`).
+
+### Before: the official-wheel stack
+
+The images before `a580be6b9` ran PyTorch's official wheel (`2.12.0+rocm7.2`).
+There the runtime still answered exactly as the engine did, and every
+process answered alike, but the package itself rounded attention differently,
+so no 4B or 9B request was byte-identical to the release image's answers.
 
 - **Date:** 2026-10-05, at `fb67e3bb3`; one MI325X per process, node C.
 - **Stack:** `venv-rocm72-cc` (manifest `875eeb85865e`): the image's packages
@@ -157,10 +178,14 @@ Questions whose decision equals the release image's, per answer type:
   On this stack, in the image and outside it, in either find mode, fresh
   processes record the same goldens, which differ from the registry's by at
   most 7.3e-7 (0.3B), 2.7e-4 (4B) and 1.9e-3 (9B), inside the GPU tolerance
-  of 0.02, so readiness passes. The 4B and 9B miss the family bar of 99%
+  of 0.02, so readiness passes. The 4B and 9B missed the family bar of 99%
   unchanged span decisions against the release by the margin the release
-  image's own MATH-attention run shows; whether the stack's answers replace
-  the release's is open, so nothing is re-recorded here.
+  image's own MATH-attention run shows, which is why the shipped image moved
+  to the release's PyTorch.
+- **Span quality on that stack (B) against the release image (R)** showed no
+  measurable change on Hallucination, RAGTruth, PII and toxic-span sets
+  (paired 95% intervals): every B − R interval contains 0 except one in B's
+  favour, and no move is larger than 0.3 points.
 - **Two models in one process (P1-4):** the 4B and the 9B in one `Runtime`,
   in both load orders, answer 60 / 60 requests identically to each one's
   engine and to its single-package run.
