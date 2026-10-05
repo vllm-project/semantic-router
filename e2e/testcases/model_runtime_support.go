@@ -38,7 +38,10 @@ const (
 
 var (
 	// Sorted, as the lifecycle case compares it with each process's models.
-	mrDeviceGroup         = []string{mrDomainDeployment, mrEmbeddingDeployment, mrGuardDeployment, mrModalityDeployment, mrPIIDeployment, mrRerankerDeployment}
+	mrDeviceGroup = []string{mrDomainDeployment, mrEmbeddingDeployment, mrGuardDeployment, mrModalityDeployment, mrPIIDeployment, mrRerankerDeployment}
+	// The device group's deployments on device auto, which the node without a
+	// GPU resolves to the CPU.
+	mrAutoDeployments     = []string{mrEmbeddingDeployment}
 	mrManagedDeployments  = append([]string{mrDecisionDeployment}, mrDeviceGroup...)
 	mrAttachedDeployments = []string{mrAttachedDecisions, mrAttachedFeedback}
 )

@@ -1,10 +1,10 @@
 # The built-in model runtime end to end, on tiny random-weight fixture packages
 # (runtime_with_fixtures.py writes them; nothing is downloaded):
 #
-# - managed: the Router starts two runtime processes itself, the device
-#   group (domain, PII, guard and modality classifiers, an embedder and a
-#   reranker) and the "decisions" process group (a Decision 2.0 model),
-#   through VLLM_SR_RUNTIME_COMMAND;
+# - managed: the Router starts runtime processes itself, the cpu device
+#   group (domain, PII, guard and modality classifiers, an embedder on device
+#   auto and a reranker) and the "decisions" process group (a Decision 2.0
+#   model), through VLLM_SR_RUNTIME_COMMAND;
 # - attached: model-runtime-attached serves a decision model and a feedback
 #   classifier in one process, selected by served_name;
 # - fail-open: decision-offline points at a Service with no pods.
@@ -285,7 +285,9 @@ config:
         vela-embedding:
           provider: model_runtime
           artifact: /tmp/vsr-fixtures/embedding
-          device: cpu
+          # The Kind node has no GPU, so auto resolves to the CPU and this
+          # deployment joins the cpu device group.
+          device: auto
           input:
             max_tokens: 512
             overflow: truncate
