@@ -735,6 +735,14 @@ Section 13.4.
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or
 through ONNX Runtime's OpenVINO execution provider.
 
+The ROCm router image takes PyTorch from the rocm7.2 wheels (the rocm7.1
+build crashes replaying the encoders' HIP graphs) and builds causal-conv1d
+1.7.0 against it with ROCm 7.2.3's compiler, the one the released wheel was
+built with, so its gfx942 machine code is the released build's
+(`CAUSAL_CONV1D_ARCHS` builds other GPUs). Triton's compiled kernels and
+MIOpen's databases live in the model volume, since the charts run the router
+on a read-only root without a home directory.
+
 **Pinned kernel choices, per model.** FLA's gated-delta kernels pick block
 sizes and warps by timing them, so two processes could round the Qwen3.5
 sizes differently. Each built-in Qwen3.5 model records the configurations its
@@ -898,7 +906,10 @@ the same `process` share one process and one bundle.
   without an `endpoint` into processes: by `process` when set; else each GPU
   device gets one process, and each CPU model its own process (`cpu-0`,
   `cpu-1`, ...; at most half the cores, capped by
-  `VLLM_SR_RUNTIME_CPU_PROCESSES`; `1` folds them into one). A CPU process
+  `VLLM_SR_RUNTIME_CPU_PROCESSES`; `1` folds them into one). Deployments on
+  `device: auto` share one process, `auto`, wherever the runtime places them,
+  so on a CPU-only host they take turns on one device thread; name `cpu` (or
+  a `process`) to give CPU models processes of their own. A CPU process
   runs `ceil(cores / processes)` threads, unpinned, so a busy model can use
   the cores an idle one leaves: on 16 cores and five task models, one shared
   process served 11.1 requests/s, pinned disjoint shares 15.6, unpinned
@@ -1117,7 +1128,7 @@ hardware, with the records in `docs/records/<workstream>-*`. The techniques:
 | Decision models | exact-shape HIP / CUDA graphs with host-built masks, bit-exact fused Triton kernels (FP32 and BF16 streams on gfx942), lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard; Decision 1.0 encoders keep one graph set and one reduced copy per layer stack | `rocm-mi325x-*`, `decision1-performance.md`, `vela2-performance.md` |
 | Runtime core | one bundled call per request and process; a bundle's tasks for one model as one job group (one forward for every head reading the same input); per-model content-hash result cache; shortest-expected-finish scheduling that answers each job when its own batches ran and lets short requests run between the windows of a long one (section 9); package files verified in parallel | `router-latency-cpu.md` |
 | Encoders | packed (varlen) attention in length groups; banded local attention for long rows (from 1,024 tokens on CPU, 2,048 on GPU); oneDNN pre-packed FP32 linears on CPU `exact`, batch-invariant as probed at load, so `exact` batches concurrent requests; dynamic cross-request batching (`batching`); encoder graphs per shape bucket on GPU, replayed only when padding stays small; a fused gfx942 rotary kernel; reduced-precision copies under `max_speed` only where the records show at least 99% agreement (CPU `float32-packed` for Decision 1.0 Kai, Lex and Route and the Vela 2.0 0.3B; BF16 and int8 measured and refused elsewhere); an ONNX Runtime engine with one shared thread pool (Omni); per-hardware kernel registry | `vela1-performance.md`, `embed-performance.md`, `decision1-performance.md`, `vela2-performance.md` |
-| Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; one CPU process per model with thread shares; deadlines and fail-open; pure-Go keyword scoring and model selectors (an AVX2 / FMA dot kernel with a pure-Go fallback) | `router-latency-cpu.md`, `stores-algorithms.md`, `stores-consumers.md` |
+| Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; one CPU process per model with thread shares; deadlines and fail-open; pure-Go keyword scoring and model selectors (AVX2 / FMA and NEON dot kernels with a pure-Go fallback) | `router-latency-cpu.md`, `router-latency-rocm.md`, `stores-algorithms.md`, `stores-consumers.md` |
 
 ## 19. Phase 1 follow-ups and later work
 

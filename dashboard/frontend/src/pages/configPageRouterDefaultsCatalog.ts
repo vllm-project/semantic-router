@@ -87,7 +87,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     auto_store: false,
     milvus: {
       collection: 'agentic_memory',
-      dimension: 384,
     },
     default_retrieval_limit: 5,
     default_similarity_threshold: 0.7,
@@ -105,7 +104,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     file_storage_dir: '/var/lib/vsr/data',
     max_file_size_mb: 50,
     embedding_model: 'mmbert',
-    embedding_dimension: 384,
     ingestion_workers: 2,
     ingestion_drain_timeout_seconds: 25,
     supported_formats: ['.txt', '.md', '.json', '.csv', '.html'],
