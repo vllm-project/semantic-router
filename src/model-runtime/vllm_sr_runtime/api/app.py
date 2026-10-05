@@ -151,14 +151,7 @@ def create_app(runtime: Runtime) -> Starlette:
         return JSON(body, status_code=200 if runtime.health.ready else 503)
 
     async def live(request: Request) -> Response:
-        return JSON(
-            {
-                "api_version": API_VERSION,
-                "status": "alive",
-                "reason": None,
-                "model": only_model(),
-            }
-        )
+        return JSON({"api_version": API_VERSION, "status": "alive"})
 
     async def metrics(request: Request) -> Response:
         runtime.metrics.queue_depth.set(

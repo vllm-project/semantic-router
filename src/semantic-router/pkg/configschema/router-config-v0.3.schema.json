@@ -2497,14 +2497,6 @@
         "multimodal_model_path": {
           "type": "string"
         },
-        "gemma_model_path": {
-          "type": "string",
-          "maxLength": 0
-        },
-        "bert_model_path": {
-          "type": "string",
-          "maxLength": 0
-        },
         "use_cpu": {
           "type": "boolean"
         },

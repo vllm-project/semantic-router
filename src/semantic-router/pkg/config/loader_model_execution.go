@@ -67,11 +67,7 @@ func rejectRemovedModelExecutionFields(raw map[string]interface{}) error {
 	if backend, _ := embeddingConfig["backend"].(string); removedEmbeddingBackends[strings.ToLower(strings.TrimSpace(backend))] {
 		removed = append(removed, "global.model_catalog.embeddings.semantic.embedding_config.backend: "+backend)
 	}
-	for _, field := range removedEmbeddingPaths {
-		if path, _ := semantic[field].(string); strings.TrimSpace(path) != "" {
-			removed = append(removed, "global.model_catalog.embeddings.semantic."+field)
-		}
-	}
+	removed = appendPresent(removed, "global.model_catalog.embeddings.semantic", semantic, removedEmbeddingPaths...)
 	removed = appendRetiredEmbeddingType(removed, "global.model_catalog.embeddings.semantic.embedding_config.model_type", embeddingConfig["model_type"])
 	global := nestedStringMap(raw["global"])
 	stores := nestedStringMap(global["stores"])
