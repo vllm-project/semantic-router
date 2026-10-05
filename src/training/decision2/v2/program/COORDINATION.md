@@ -205,6 +205,80 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-05 17:20 — **Recovery coordinator (f643133d) → all P2–4 agents, lead: RECOVERED after the 13:27 reboot.
+  Eight fresh Opus 5.5 Max agents are running. Nothing was lost on disk; the image build never started; P0-1 is still
+  open. Every agent reads `/home/xunliu/code/mr-scratch/p24-recovery-1655/RECOVERY-BRIEF.md`.**
+  - **Agents (old → new; each continues from its predecessor's worktree, branch and notes):**
+
+    | Role | Old (died about 13:23) | New (about 17:20) | Launch brief |
+    | --- | --- | --- | --- |
+    | Lead (integration, PR, image) | fb0b920e | **80f6f085** | `p24-recovery-1655/launch-lead.md` |
+    | `decision1` | e24fc6ca | **4fe5617f** | `launch-decision1.md` |
+    | `vela1` | ea4d6f59 | **293963a2** | `launch-vela1.md` |
+    | `embed` (P0-1) | b9137d6a | **fc6fcbfa** | `launch-embed.md` |
+    | `vela2` (+ the `causal-conv1d` wheel) | 3673e5dc | **fb15ec65** | `launch-vela2.md` |
+    | `router` | ce54d321 | **cab0e94a** | `launch-router.md` |
+    | `e2e-docs` | 47cf54cd | **2a4863db** | `launch-e2e-docs.md` |
+    | **`exactness` (new)**: the user's 16:53 policy, Decision 2.0's stack check, IX1 Index deltas | — | **29e13e1c** | `launch-exactness.md` |
+
+  - **Not relaunched:** `stores` (both READYs are in staging `26a98c3d8`, nothing open, no claims; relaunch on demand).
+    The reasoning track and the external-reference evals stay deferred; the film is finished.
+  - **Lost:** about 3.5 hours of agent time and the unharvested analyses. **The lead's stack B plus `causal-conv1d`
+    image never started** (nothing in its node A dir after 12:33; no `causal-conv1d` wheel on any node). `router`'s
+    P2-20 rounds on stack B never started. Every worktree is clean and pushed; local `/tmp` was wiped.
+  - **Salvaged (every node job had finished by 15:40; nothing runs now):**
+    - `embed`: the 6-round Omni A/B at `0877e5ce7` (13:33, node B `embed/final-0877e5ce7/`).
+    - `vela1`: the stack B ROCm A/B at `35ff3a8a5`, 5 rounds (13:52, node B `vela1/ab/rocm-35ff3a8a5…-stackB/`), and the
+      stack B parity logs (13:09–13:16).
+    - `vela2`: 0.3B ROCm on stack B at `a9b9f2818`, 10 rounds, 240 rows (13:27, node B `vela2/results/hB-rocm10-03b-…`).
+    - `decision1`: the whole CPU A/B at `8fc0bf02b` (15:40, node C `decision1/bench-cpu-ab/8fc0bf02b/`), plus ROCm rounds
+      6–10, many-question and router-throughput A/Bs on the release image (diagnostic only after the 13:23 decision).
+    - `router`: the node D exact-mirror check of `a85c57f6e` passes (only the known dashboard `/data` symlink test
+      fails; lint 0 issues), and the stack B router image `extproc-rocm72:a85c57f6e` is on node C.
+  - **Leases and claims:** every P2–4 GPU lease reads `released` and every GPU is at 0%. I release the stale ad-hoc CPU
+    claims (`router` node D 64–95, `vela1` node F 64–95, `decision1`'s extra node C 112–127 / 144–159). The CPU table in
+    RESTART-BRIEF applies, with RECOVERY-BRIEF's amendments (`exactness`: node D GPU0–7 and 0–63, node F GPU2–7 and
+    32–127).
+  - **PR #4512, CI run 5 on `cd3a4b324`** (37264100053): 60 pass, 6 skipped, 5 running, 2 failed, plus DCO.
+    - `Operator / Source Contracts` failed only in its Codecov upload step (a TLS handshake error). Its tests and the
+      generated-artifacts check passed, so this is an infra flake; `Operator / Results` aggregates it. Owner: lead
+      (re-run, or IP3 supersedes it).
+    - Kubernetes Model Runtime CPU Standard 1, 4, 6, 8 and 15 waited about 2 h for runners and run since 16:45–16:52.
+    - DCO: the 250-commit limit; the user acts after the FINAL push.
+    - `main` moved to `304d3918c` (#4557, #4097); the PR is BEHIND but MERGEABLE. The lead merges it at IP3.
+  - **Open P0:**
+    - **P0-1 Omni CPU (`embed`), still open.** At `0877e5ce7` Nano text at 4 callers is fixed (req/s 10.2 better,
+      [7.4, 14.6]), but three cells read wholly worse: Nano text 1-caller p95 [0.12, 1.16] ms slower, Nano image
+      4-caller p95 [7.9, 28.3] ms slower, Mini image 4-caller req/s [0.02, 0.10] lower.
+    - **R2-P0-2 (lead):** the `Dockerfile.extproc` change to stack B plus `causal-conv1d` 1.7.0, built and smoked
+      (≤ 19:30); `vela2` builds the same wheel into `venv-rocm72-cc` (≤ 18:45) so decoder parity starts early.
+    - **P0-3:** the per-device lock is in the PR; the thread-local captures `f3c09121d` (`vela1`) and `f25dae5dd`
+      (`decision1`) land with their READYs.
+    - **R2-P0-1:** closes when `router-ip3` `a85c57f6e` merges and the long-history lane passes on the IP3 head.
+    - P0-2 passed (11:39).
+  - **USER POLICY (16:53) owners:** `decision1` (Decision 1.0), `vela2` (Vela 2.0), `vela1` (Vela 1.0), `embed` (if its
+    ROCm goldens move), `exactness` (Decision 2.0, cross-process 3 / 3, IX1 Index 0.2.1 deltas, the summary record).
+    The lead signs off every re-record. A beyond-noise Index delta becomes a `USER REPORT` note before that re-record
+    merges. Absolute Index scores stay private.
+  - **IP3 re-plan (UTC+8):**
+
+    | When | What | Owner |
+    | --- | --- | --- |
+    | ≤ 17:50 | `RESUMED` notes | all |
+    | ≤ 18:00 | CI run 5 triage; plan confirmed | lead |
+    | ≤ 18:45 | `causal-conv1d` wheel, `venv-rocm72-cc` on nodes B, C and D | `vela2` |
+    | ≤ 19:30 | Stack B plus `causal-conv1d` image, smoked | lead |
+    | ≤ 20:00 | Parity on the new stack, agreement rates, cross-process 3 / 3, re-record list | `decision1`, `vela2`, `vela1`, `exactness` |
+    | ≤ 20:30 | `INTEGRATION READY` (code, CPU records, encoder ROCm records) | every workstream |
+    | ≤ 21:30 | **IP3 push** (READYs, `main`, node A check and smoke); CI run 6 | lead |
+    | ~21:45 | Fresh read-only Max reviewer on the IP3 head | coordinator |
+    | ≤ 22:30 | Full E2E on the IP3 head | `e2e-docs` |
+    | ≤ 01:30 | Decoder ROCm A/B on the image, golden re-records, IX1 Index deltas | `decision1`, `vela2`, `exactness` |
+    | ≤ 03:00 | **IP3b = FINAL push**; CI run 7 | lead |
+    | ≤ 07:30 | Final full CI green (IP3c in reserve until 10:00) | lead |
+
+  — recovery coordinator (f643133d)
+
 - 2026-10-05 16:55 — **Coordinator (parent): RULE for every agent, protecting the local machine.** The local WSL VM
   has rebooted three times (10-04 about 05:40 and about 18:04, 10-05 13:27). It has 12 GB of RAM, and its `/tmp` is a
   5.9 GB RAM disk that earlier sessions filled to 97%.
