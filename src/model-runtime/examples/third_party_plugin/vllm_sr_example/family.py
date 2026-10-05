@@ -197,7 +197,7 @@ class KeywordModel(LoadedModel):
             surface, items, sum(len(item.ids) for item in items), state=body
         )
 
-    def run(self, items: list[Item], shared_prefix: int = 0) -> list[list[float]]:
+    def run(self, items: list[Item]) -> list[list[float]]:
         self.forwards += 1
         width = max(len(item.ids) for item in items)
         input_ids = torch.zeros((len(items), width), dtype=torch.long)

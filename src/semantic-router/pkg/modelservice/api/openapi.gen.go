@@ -179,9 +179,11 @@ type ClassifyOptions struct {
 	MaxTokens *int `json:"max_tokens,omitempty"`
 
 	// Overflow What happens to an input longer than max_tokens (default the head's declared policy, usually reject). Nothing is cut silently.
-	Overflow   *ClassifyOptionsOverflow `json:"overflow,omitempty"`
-	Profile    *string                  `json:"profile,omitempty"`
-	ReturnMeta *bool                    `json:"return_meta,omitempty"`
+	Overflow *ClassifyOptionsOverflow `json:"overflow,omitempty"`
+	Profile  *string                  `json:"profile,omitempty"`
+
+	// ReturnMeta Include meta in the response (default false).
+	ReturnMeta *bool `json:"return_meta,omitempty"`
 
 	// ReturnTokens Token heads; include per-token label probabilities.
 	ReturnTokens *bool `json:"return_tokens,omitempty"`
@@ -314,7 +316,9 @@ type EmbeddingsOptions struct {
 	MaxTokens  *int                       `json:"max_tokens,omitempty"`
 	Overflow   *EmbeddingsOptionsOverflow `json:"overflow,omitempty"`
 	Profile    *string                    `json:"profile,omitempty"`
-	ReturnMeta *bool                      `json:"return_meta,omitempty"`
+
+	// ReturnMeta Include meta in the response (default false).
+	ReturnMeta *bool `json:"return_meta,omitempty"`
 }
 
 // EmbeddingsOptionsOverflow defines model for EmbeddingsOptions.Overflow.
@@ -529,21 +533,24 @@ type ProfileInfo struct {
 type ProfileInfoNumerics string
 
 // Question One question. `instructions` is required unless `preset` names a question the model defines (see
-// `presets` in /v1/models).
+// `presets` in /v1/models). Every family validates System One fields the same way: a question takes only
+// its type's fields (`choices` for Choice and Noul, `levels` for Score, `over`, `head` and `threshold`
+// where the model reads them), and any other field is answered with invalid_question.
 type Question struct {
 	// Choices Ordered Choice or Noul options, an alternative to a criteria object.
 	Choices *[]ChoiceOption `json:"choices,omitempty"`
 
-	// Criteria System One criteria. Choice: an object of 2..255 option keys to descriptions (descriptions may be
-	// null). Noul: an optional object with only false and true. Score: an ordered list of 2..10 level
-	// descriptions. Set and Span: an object of 1..255 labels to descriptions.
+	// Criteria System One criteria. Choice: an object of 2..255 non-blank option keys to descriptions (descriptions
+	// may be null). Noul: an optional object with only false and true (a null description takes the
+	// model's default). Score: an ordered list of 2..10 level descriptions. Set and Span: an object of
+	// 1..255 labels to descriptions. Descriptions are non-blank text, an object or an array.
 	Criteria *interface{} `json:"criteria,omitempty"`
 
 	// Head Span questions on models with a broad span head: the head that answers (default: the model's routing,
 	// reported per question in `span_heads`). Models without one answer `broad` with invalid_question.
 	Head *QuestionHead `json:"head,omitempty"`
 
-	// Instructions The question; non-empty text, an object or an array.
+	// Instructions The question; non-blank text, an object or an array.
 	Instructions *interface{} `json:"instructions,omitempty"`
 
 	// Levels Ordered Score level descriptions, an alternative to a criteria list.
@@ -586,7 +593,7 @@ type RequestOptions struct {
 	// Profile exact, or the profile the server enabled for this model.
 	Profile *string `json:"profile,omitempty"`
 
-	// ReturnMeta Include meta in the response (default true).
+	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
 }
 

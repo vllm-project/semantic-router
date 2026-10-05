@@ -6,26 +6,27 @@ in the router process. The new side is this branch: the `serving` facade with
 a managed model runtime process.
 
 - **Date:** 2026-10-04.
-- **Machine:** node D, AMD EPYC 9575F. Both sides were pinned to the same 16
-  cores (`taskset -c 48-63`); the managed runtime inherits that affinity.
-  Other workloads ran on other cores; the host's 1-minute load was 29–42 of
-  160 during the runs.
+- **Machine:** node B, AMD EPYC 9575F. Each side ran in its own cgroup cpuset
+  scope on the same 16 cores (`systemd-run --scope -p AllowedCPUs=48-63`), so
+  the router process, the managed runtime it starts and every ORT, oneDNN or
+  candle thread stayed on them. `GOMAXPROCS`, `OMP_NUM_THREADS` and
+  `MKL_NUM_THREADS` were 16. The host's 1-minute load was 9–29 of 160 during
+  the runs.
 - **Commits:**
   - legacy: base `1c6d372ec`;
-  - serving: `edc1a2347`, which has the packed-linear `exact` encoders and the
-    uvloop server. The commit after it only changes which profile the router
-    asks for, and the harness sets the profile itself.
+  - serving: `80460bc67`, which has the batch-invariance probe for embedders
+    and rerankers (`ebecf9a3a`). The harness sets the embedding profile itself.
 
   Both are exact mirrors; a temporary harness was added to scratch copies.
-  The base links a stub ONNX Runtime library that fails every call: this node
-  cannot build ORT, and the candle path never calls it.
+  The base links a stub ONNX Runtime library that fails every call: the build
+  node cannot build ORT, and the candle path never calls it.
 - **Models (the same files on both sides):**
   - `vllm-sr/Vela-1.0-Encoder-307M-Embedding` at `1e57cebf`;
   - `vllm-sr/Vela-1.0-Encoder-307M-Reranker` at `a388e41c`.
 - **Runtime:** `vllm-sr-runtime` from the same mirror, `native` engine
-  (PyTorch 2.14.1 CPU), 16 threads. Embeddings run at the `batching` profile,
-  which the router's implicit embedding deployments use, and at `exact` for
-  comparison. The reranker runs at `exact`, as the maintained config declares it.
+  (PyTorch 2.14.1 CPU), 16 threads. Embeddings run at `batching`, which the
+  router's implicit embedding deployments use, and at `exact`. The reranker
+  runs at `exact`, as the maintained config declares it.
 - **Inputs:** 2,024 distinct, deterministic prompt-like texts of 15–60 words.
 
 ## Workloads
@@ -45,43 +46,60 @@ a managed model runtime process.
   under that load.
 
 Each sequential operation was timed on its own, after a 20-call warm-up. The
-tables show the mean of two interleaved rounds. Each round ran legacy, serving,
-serving without the vector cache, and serving with embeddings at `exact`.
+tables show the mean of two interleaved rounds (legacy, `exact`, `batching`);
+the rounds agree within 2 %.
 
-## One request at a time (ms per operation, p50 / p95)
+## One caller (ms per operation, p50 / p95)
 
-| Consumer | Legacy candle | Serving | Speed-up (p50) |
+| Consumer | Legacy candle | `exact` | `batching` |
 | --- | --- | --- | --- |
-| Cache write | 16.4 / 22.2 | 8.2 / 9.6 | 2.0× |
-| Cache lookup, new query | 16.7 / 22.4 | 8.4 / 10.1 | 2.0× |
-| Cache lookup, repeated query | 15.0 / 22.2 | 0.07 / 0.13 | 214× |
-| Memory write | 60.7 / 83.7 | 21.4 / 24.3 | 2.8× |
-| Memory retrieval | 63.7 / 84.7 | 22.0 / 24.9 | 2.9× |
-| RAG rerank, 20 documents | 2,036 / 2,629 | 205 / 250 | 9.9× |
+| Cache write | 15.1 / 20.9 | 5.9 / 6.8 | 7.9 / 9.0 |
+| Cache lookup, new query | 15.4 / 20.7 | 6.0 / 6.8 | 8.1 / 9.0 |
+| Cache lookup, repeated query | 13.4 / 20.8 | 0.07 / 0.13 | 0.07 / 0.12 |
+| Memory write | 55.1 / 76.6 | 18.5 / 21.0 | 20.4 / 22.7 |
+| Memory retrieval | 57.2 / 77.1 | 18.8 / 21.3 | 20.9 / 22.9 |
+| RAG rerank, 20 documents | 1,952 / 2,439 | 201 / 236 | 201 / 240 |
 
 ## Four concurrent callers (operations per second; p50 / p95 ms under load)
 
-| Consumer | Legacy candle | Serving | Speed-up |
+| Consumer | Legacy candle | `exact` | `batching` |
 | --- | --- | --- | --- |
-| Cache lookup, new query | 162 (24 / 34) | 249 (16 / 19) | 1.54× |
-| Memory retrieval | 46.3 (87 / 108) | 87.8 (44 / 51) | 1.90× |
-| RAG rerank, 20 documents | 1.40 (2,638 / 3,232) | 4.76 (806 / 987) | 3.4× |
+| Cache lookup, new query | 187 (21 / 27) | 159 (25 / 29) | 268 (15 / 17) |
+| Memory retrieval | 49.4 (82 / 101) | 53.6 (75 / 86) | 96.9 (41 / 49) |
+| RAG rerank, 20 documents | 1.45 (2,473 / 3,199) | 4.77 (828 / 945) | 4.82 (821 / 928) |
 
-## Embeddings at `exact`
+The RAG rerank row is the reranker at `exact` in every column; only the
+embedding profile changes.
 
-With the embedding deployment at `exact`, one request at a time is faster
-still (cache lookup 6.4 / 7.7 ms, memory retrieval 20.3 / 23.1 ms). Four
-callers, however, get 146 cache lookups/s, below legacy's 162, and 49.7
-memory retrievals/s. At `exact` the runtime merges concurrent jobs only for a
-model probed batch-invariant at load, and it probes the classification heads,
-not the pooled embedding heads, so every embedding forward runs alone. The
-router's implicit embedding deployments therefore use `batching`: embeddings
-feed similarity thresholds, not bit-exact answers. A deployment that declares
-`exact` keeps it.
+## Why embeddings stay at `batching`
+
+At this head the probe passes: the Vela Embedding package loads
+`batch_invariant`, so `exact` may share forwards between concurrent jobs.
+Four callers still get 159 cache lookups/s at `exact`, 15 % below legacy, and
+four callers' lookups take as long as four lone lookups (25 ms against 6 ms).
+An instrumented copy of the profile, which logged each plan's batch sizes,
+shows why: at `exact`, 3,223 of 3,225 plans held one row.
+
+Two things keep the rows apart:
+
+- The scheduler plans each take on its own. With closed-loop callers, a take
+  is usually the one request that just arrived.
+- `merged()` groups rows by power-of-two length class, and these texts span
+  several classes.
+
+With the length class removed from `merged()` (a scratch copy of the runtime;
+the same cores, two rounds), `exact` reaches 213 cache lookups/s (19 / 22 ms)
+and 87 memory retrievals/s, above legacy, with the same one-caller numbers. The
+probe already checks one mixed-length batch against each row alone. The native
+CPU forward is unpadded, so mixed lengths cost no padding.
+
+Until the scheduler change lands, the router's implicit embedding deployments
+use `batching`. Embeddings feed similarity thresholds, not bit-exact answers.
+A deployment that declares `exact` keeps it.
 
 Without the router's vector cache (`VLLM_SR_EMBEDDING_CACHE_MB=0`), a repeated
-query took 0.66 / 0.92 ms: one round trip answered by the runtime's own result
-cache. The other rows did not change beyond noise.
+query took 0.66 / 0.92 ms at the previous head (node D): one round trip
+answered by the runtime's own result cache.
 
 ## ROCm
 
@@ -92,19 +110,21 @@ those calls does not depend on the device.
 
 ## Reading
 
-- **The model work.** It moved out of process, and it got faster. The runtime's
-  PyTorch encoder runs the layer-6 exit and full depth well ahead of candle's
-  CPU path on the same cores, and its reranker scores a query's 20 documents in
-  one packed forward.
+- **The model work.** It moved out of process, and it got faster. The
+  runtime's PyTorch encoder runs the layer-6 exit and full depth well ahead of
+  candle's CPU path on the same cores. Its reranker scores a query's 20
+  documents in one packed forward.
 - **Concurrency.** `batching` coalesces concurrent embeddings into shared
-  forwards. That adds about 2 ms to a lone request (8.4 ms against 6.4 ms at
-  `exact`) and roughly doubles what four callers get.
+  forwards. That adds about 2 ms to a lone request (8.1 ms against 6.0 ms at
+  `exact`). It gets four callers 1.4× legacy's cache lookups and 2.0× its
+  memory retrievals.
 - **The round trip.** The runtime call (JSON over its socket) costs less than
   1 ms, as the uncached repeated-query lookup shows.
 - **Repeated text.** Legacy re-embeds a text it has seen before. The router's
   content-hash vector cache answers it in 0.07 ms, with no runtime call.
-- **Tail latency.** p95 / p50 is 1.1–1.2 on the serving path and 1.3–1.4 for
+- **Tail latency.** p95 / p50 is 1.1–1.2 on the serving path and 1.3–1.6 for
   legacy.
 
-No consumer regressed: every row is faster than legacy at p50, at p95 and in
-throughput.
+At the serving profile (`batching` embeddings, `exact` reranker), no consumer
+regressed: every row is faster than legacy at p50, at p95 and in throughput.
+At `exact` embeddings, only four callers' cache lookups fall short of legacy.

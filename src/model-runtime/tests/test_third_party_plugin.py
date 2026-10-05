@@ -140,6 +140,7 @@ def test_classify_embeddings_and_rerank_answer_by_contract(client):
         json={
             "model": "keywords",
             "input": ["Please refund the invoice", "Where is my parcel?"],
+            "options": {"return_meta": True},
         },
     )
     assert classified.status_code == 200
@@ -155,6 +156,7 @@ def test_classify_embeddings_and_rerank_answer_by_contract(client):
     check("EmbeddingsResponse", embedded)
     vectors = [item["embedding"] for item in embedded["data"]]
     assert all(abs(sum(v * v for v in vector) - 1) < 1e-9 for vector in vectors)
+    assert embedded["meta"] == {"representation": embedded["meta"]["representation"]}
     assert embedded["meta"]["representation"]["dimension"] == 3
 
     ranked = client.post(

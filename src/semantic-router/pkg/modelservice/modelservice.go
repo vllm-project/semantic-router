@@ -66,7 +66,6 @@ type Answer struct {
 // Response holds the answers by question ID.
 type Response struct {
 	Model       string
-	Revision    string
 	Answers     map[string]Answer
 	InputTokens int
 }

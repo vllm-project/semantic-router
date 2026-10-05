@@ -75,6 +75,9 @@ jobs:
           SR_TEST_MODE: "true"
           ROUTER_PROTECTION_REPORT: ${{ github.workspace }}/.agent-harness/agent-routing-protection/report.json
 
+      - name: Install the model runtime for the local smoke test
+        run: make harness-venv-install model-runtime-install
+
       - name: Local dev smoke test (no Authorino)
         run: |
           python3 -m pip install -U "huggingface_hub[cli]" hf_transfer

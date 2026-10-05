@@ -197,7 +197,9 @@ def test_named_graphs_share_external_weights_and_report_metadata(tmp_path):
     expected = hidden @ onnx_graphs.weights((4, 1), 1)
     np.testing.assert_allclose(logits.numpy(), expected, atol=1e-5)
     assert (
-        json.loads(model.graph_metadata("layer:2/dim:4")["semantic_router.pair_scorer"])
+        json.loads(
+            model.graphs["layer:2/dim:4"].facts.metadata["semantic_router.pair_scorer"]
+        )
         == SCORER
     )
     receipt = model.receipt()

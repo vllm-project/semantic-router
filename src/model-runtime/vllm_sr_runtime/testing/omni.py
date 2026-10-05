@@ -107,6 +107,7 @@ def write_bundle(
     variant: str = "nano",
     normalize: bool = True,
     source: dict[str, str] | None = None,
+    seed: int = 0,
 ) -> Path:
     """Write a verified bundle of ``variant``'s contract at ``root``.
 
@@ -131,9 +132,13 @@ def write_bundle(
             dimension,
         ),
     }
-    for seed, (name, (inputs, width)) in enumerate(graphs.items()):
+    for index, (name, (inputs, width)) in enumerate(graphs.items()):
         onnx_graphs.projection_graph(
-            root / f"onnx/{name}.onnx", inputs, width, seed=seed, normalize=normalize
+            root / f"onnx/{name}.onnx",
+            inputs,
+            width,
+            seed=seed + index,
+            normalize=normalize,
         )
     write_tokenizer(root / "components/text")
     (root / "processors").mkdir(exist_ok=True)

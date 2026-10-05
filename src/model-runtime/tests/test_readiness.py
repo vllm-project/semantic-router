@@ -137,11 +137,12 @@ def test_built_in_models_pin_their_released_kernel_choices_on_gfx942(tmp_path):
         max_input_tokens=4096,
         licence="apache-2.0",
     )
-    family = Decision2Family(RegistryOptions())
+    recorded = builtin.kernel_choices(known.model_sha256, "rocm", "gfx942")
+    assert recorded == known.kernel_choices["rocm:gfx942"]
+    assert builtin.kernel_choices(known.model_sha256, "rocm", "gfx90a") == {}
+    assert builtin.kernel_choices(known.model_sha256, "rocm", None) == {}
     gfx942 = DeviceInfo(accelerator="rocm", index=0, name="MI325X", arch="gfx942")
-    assert family.kernel_choices(package, gfx942) == known.kernel_choices["rocm:gfx942"]
-    other = DeviceInfo(accelerator="rocm", index=0, name="MI210", arch="gfx90a")
-    assert family.kernel_choices(package, other) == {}
+    assert Decision2Family(RegistryOptions()).kernel_choices(package, gfx942) == {}
     for model in builtin.all_models("decision2"):
         choices = model.kernel_choices.get("rocm:gfx942")
         if model.backbone == "qwen3":
