@@ -20,6 +20,7 @@ import pytest
 from starlette.testclient import TestClient
 from vllm_sr_runtime.api.app import create_app
 from vllm_sr_runtime.config import ModelConfig, ServeConfig
+from vllm_sr_runtime.errors import PlacementError, VerificationError
 from vllm_sr_runtime.placement import auto_order
 from vllm_sr_runtime.plugins import registry
 from vllm_sr_runtime.runtime import Runtime
@@ -493,5 +494,53 @@ def test_a_model_that_fails_to_load_leaves_the_others_serving(
         assert broken.status_code == 503
         cards = {card["id"]: card for card in client.get("/v1/models").json()["data"]}
         assert cards["broken"]["status"] == "failed" and not cards["broken"]["ready"]
+    finally:
+        runtime.stop()
+
+
+@pytest.mark.parametrize(
+    ("failure", "loads", "state"),
+    [
+        (PlacementError("rocm:0: 1.0 GiB free"), 3, "ready"),
+        (VerificationError("golden mismatch"), 1, "failed"),
+    ],
+)
+def test_a_failed_load_is_retried_unless_the_answers_are_wrong(
+    example_plugin, keyword_package, monkeypatch, failure, loads, state
+):
+    import vllm_sr_runtime.runtime as runtime_module
+
+    load = runtime_module.ServedModel.load
+    seen = []
+
+    def flaky(self):
+        if self.label == "flaky":
+            seen.append((self.health.state, self.health.reason))
+            if len(seen) < 3:
+                raise failure
+        return load(self)
+
+    monkeypatch.setattr(runtime_module.ServedModel, "load", flaky)
+    models = tuple(
+        ModelConfig(
+            model=str(keyword_package), name=name, device="cpu", engine="example_counts"
+        )
+        for name in ("keywords", "flaky")
+    )
+    runtime = Runtime(ServeConfig(models=models, load_retry_seconds=0.01))
+    runtime.start(background=True)
+    try:
+        runtime.wait(timeout=60)
+        assert len(seen) == loads
+        assert runtime.lookup("keywords").health.ready
+        flaky_health = runtime.lookup("flaky").health
+        assert flaky_health.state == state
+        if state == "ready":
+            assert seen[1] == (
+                "loading",
+                "retrying after PlacementError: rocm:0: 1.0 GiB free (attempt 1 of 5)",
+            )
+        else:
+            assert flaky_health.reason == "VerificationError: golden mismatch"
     finally:
         runtime.stop()
