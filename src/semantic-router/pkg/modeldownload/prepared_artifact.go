@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 const omniManifestName = "vela_omni_manifest.json"
@@ -57,7 +59,7 @@ func verifyPreparedArtifact(spec ModelSpec) (*preparedManifest, error) {
 		(manifest.Variant != "nano" && manifest.Variant != "mini") || !manifest.ReferenceParity.Passed {
 		return nil, fmt.Errorf("unsupported or unverified prepared artifact in %s", spec.LocalPath)
 	}
-	if manifest.Source.RepoID != spec.RepoID || !isImmutableRevision(manifest.Source.Revision) ||
+	if !config.SameModelRepo(manifest.Source.RepoID, spec.RepoID) || !isImmutableRevision(manifest.Source.Revision) ||
 		(spec.Revision != "" && manifest.Source.Revision != spec.Revision) {
 		return nil, fmt.Errorf("prepared source identity does not match %s at revision %s", spec.RepoID, spec.Revision)
 	}

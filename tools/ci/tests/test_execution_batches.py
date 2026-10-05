@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
-from ci_plan import digest, make_plan  # noqa: E402
+from ci_plan import digest, display_dispatch, make_plan  # noqa: E402
 from execution_batches import e2e_batches, validate_execution_batch  # noqa: E402
 from run_native_batch import run_batch, run_command  # noqa: E402
 
@@ -119,6 +119,21 @@ class ExecutionBatchTests(unittest.TestCase):
         self.assertTrue(
             {"e2e.vela-omni", "e2e.vela-halu", "e2e.multimodal-routing"} <= set(seen)
         )
+
+    def test_extra_fixture_profiles_keep_unique_matrix_labels(self):
+        plan = make_plan(
+            [],
+            source_sha="a" * 40,
+            requested=("e2e.envoy-ai-gateway", "e2e.decision-runtime"),
+        )
+        lane = [
+            row for row in plan["e2e_batches"] if row["dispatch_job"] == "e2e-fixtures"
+        ]
+        labels = [row["display_name"] for row in lane]
+        self.assertEqual(len(lane), 2)
+        self.assertEqual(len(set(labels)), 2)
+        self.assertTrue(any(label.endswith(" / model-runtime") for label in labels))
+        display_dispatch(plan)
 
     def test_large_resource_class_profiles_get_separate_workers(self):
         plan = make_plan([], source_sha="a" * 40, requested=("e2e.vela-omni",))

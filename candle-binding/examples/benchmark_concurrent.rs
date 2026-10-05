@@ -294,7 +294,7 @@ fn main() -> Result<()> {
         Device::Cpu
     };
 
-    let model_id = "llm-semantic-router/modernbert-base-32k";
+    let model_id = "vllm-sr/modernbert-base-32k";
     let repo = Repo::with_revision(model_id.to_string(), RepoType::Model, "main".to_string());
     let api = Api::new()?;
     let api = api.repo(repo);
