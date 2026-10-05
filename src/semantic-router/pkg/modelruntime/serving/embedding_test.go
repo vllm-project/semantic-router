@@ -366,7 +366,7 @@ func rerankSpec(deployment, overflow string, selection *config.PairScorerSelecti
 
 func TestRelevanceScoresPairsPerQueryAtTheSelectedExit(t *testing.T) {
 	card := modelservice.ModelCard{
-		ID: "reranker", ModelSHA256: strings.Repeat("ef", 32), Surfaces: []string{"rerank"}, MaxInputTokens: 512, Device: "cpu",
+		ID: "reranker", ModelSHA256: strings.Repeat("ef", 32), Surfaces: []string{"rerank"}, MaxInputTokens: 512, Device: "cpu", Dtype: "float32",
 		Rerank: &modelservice.RerankCard{Default: modelservice.RerankExit{Layer: 22, Dimension: 768}, Exits: []modelservice.RerankExit{{Layer: 6, Dimension: 256}}},
 	}
 	services := &embedServices{cards: map[string]modelservice.ModelCard{"reranker": card}}

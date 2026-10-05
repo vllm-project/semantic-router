@@ -9,10 +9,16 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
 
+// DefaultBundleTasks is the runtime's default --max-bundle-tasks: it refuses a
+// larger /v1/bundle request as a whole (413).
+const DefaultBundleTasks = 64
+
 // Client calls one runtime through the generated contract client.
 type Client struct {
 	endpoint string
 	api      *api.ClientWithResponses
+	// bundleTasks is the most tasks one /v1/bundle request to this runtime carries.
+	bundleTasks int
 }
 
 // NewClient builds a client for unix:///path, http://host:port or https://host:port.
@@ -25,7 +31,7 @@ func NewClient(endpoint string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{endpoint: endpoint, api: generated}, nil
+	return &Client{endpoint: endpoint, api: generated, bundleTasks: DefaultBundleTasks}, nil
 }
 
 // Endpoint is the address the client calls.

@@ -12,6 +12,7 @@ from .gpu import GPUAccelerator
 class CUDAAccelerator(GPUAccelerator):
     name = "cuda"
     validated = False
+    auto_priority = 1
     platform_attribute = "cuda"
 
     def available(self) -> bool:

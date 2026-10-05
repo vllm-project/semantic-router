@@ -24,12 +24,12 @@ import (
 
 // Head is one classify head of a fake model.
 type Head struct {
-	Name       string
-	Kind       string
-	Labels     []string
-	Inputs     []string
-	Thresholds []float64
-	Window     *api.WindowOptions
+	Name                 string
+	Kind                 string
+	Labels               []string
+	Inputs               []string
+	Thresholds           []float64
+	OperatingPointSHA256 string
 }
 
 // Model is one served model: classify with heads, embeddings with an
@@ -45,18 +45,27 @@ type Model struct {
 
 // Runtime is the fake runtime state; Handler serves it.
 type Runtime struct {
-	mu       sync.Mutex
-	models   map[string]Model
-	ready    map[string]bool
-	delay    time.Duration
-	bundles  int
-	tasks    int
-	surfaces map[string]int
+	mu         sync.Mutex
+	models     map[string]Model
+	ready      map[string]bool
+	failed     map[string]string
+	apiVersion string
+	delay      time.Duration
+	bundles    int
+	tasks      int
+	surfaces   map[string]int
 }
+
+// APIVersion is the contract version the fake serves unless SetAPIVersion
+// changes it.
+const APIVersion = "2.0.0"
+
+// processLimits are the limits /v1/models reports: the runtime's defaults.
+var processLimits = api.ProcessLimits{MaxBundleTasks: 64, MaxRequestBytes: 8 << 20}
 
 // New serves models, all ready.
 func New(models ...Model) *Runtime {
-	r := &Runtime{models: make(map[string]Model), ready: make(map[string]bool), surfaces: make(map[string]int)}
+	r := &Runtime{models: make(map[string]Model), ready: make(map[string]bool), failed: make(map[string]string), apiVersion: APIVersion, surfaces: make(map[string]int)}
 	for _, model := range models {
 		if model.MaxInputTokens == 0 {
 			model.MaxInputTokens = 8192
@@ -70,11 +79,28 @@ func New(models ...Model) *Runtime {
 	return r
 }
 
-// SetReady changes one model's readiness.
+// SetReady changes one model's readiness and clears a load failure.
 func (r *Runtime) SetReady(id string, ready bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.ready[id] = ready
+	delete(r.failed, id)
+}
+
+// SetFailed reports one model as failed to load, with a reason, as the
+// runtime does when loading raised.
+func (r *Runtime) SetFailed(id, reason string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ready[id] = false
+	r.failed[id] = reason
+}
+
+// SetAPIVersion changes the contract version /health and /v1/models report.
+func (r *Runtime) SetAPIVersion(version string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.apiVersion = version
 }
 
 // SetDelay delays every surface answer (deadline tests).
@@ -157,14 +183,18 @@ func (r *Runtime) health(w http.ResponseWriter, _ *http.Request) {
 	models := make(map[string]api.ModelHealth, len(r.models))
 	everyReady := true
 	for id := range r.models {
-		status := api.ModelHealthStatus("ready")
-		if !r.ready[id] {
-			status, everyReady = api.ModelHealthStatus("loading"), false
+		health := api.ModelHealth{Status: api.ModelHealthStatus("ready")}
+		if reason, failed := r.failed[id]; failed {
+			health.Status, health.Reason = api.ModelHealthStatus("failed"), &reason
+		} else if !r.ready[id] {
+			health.Status = api.ModelHealthStatus("loading")
 		}
-		models[id] = api.ModelHealth{Status: status}
+		everyReady = everyReady && health.Status == "ready"
+		models[id] = health
 	}
+	apiVersion := r.apiVersion
 	r.mu.Unlock()
-	health := api.Health{Status: api.HealthStatus("ready"), Models: &models}
+	health := api.Health{ApiVersion: apiVersion, Status: api.HealthStatus("ready"), Models: &models}
 	status := http.StatusOK
 	if !everyReady {
 		health.Status, status = api.HealthStatus("degraded"), http.StatusServiceUnavailable
@@ -183,8 +213,9 @@ func (r *Runtime) listModels(w http.ResponseWriter, _ *http.Request) {
 	for _, id := range ids {
 		cards = append(cards, r.card(r.models[id], r.ready[id]))
 	}
+	apiVersion := r.apiVersion
 	r.mu.Unlock()
-	write(w, http.StatusOK, api.ModelList{Object: "list", Data: cards}, nil)
+	write(w, http.StatusOK, api.ModelList{ApiVersion: apiVersion, Object: "list", Data: cards, Limits: processLimits}, nil)
 }
 
 func (r *Runtime) card(model Model, ready bool) api.ModelCard {
@@ -213,18 +244,12 @@ func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 		}
 		if len(head.Thresholds) > 0 {
 			thresholds := slices.Clone(head.Thresholds)
-			reduction := "max"
+			reduction := api.Max
 			heads[i].Thresholds, heads[i].Reduction = &thresholds, &reduction
 		}
-		if head.Window != nil {
-			tokens, overlap := head.Window.Tokens, 0
-			if head.Window.Overlap != nil {
-				overlap = *head.Window.Overlap
-			}
-			heads[i].Window = &struct {
-				Overlap *int `json:"overlap,omitempty"`
-				Tokens  *int `json:"tokens,omitempty"`
-			}{Overlap: &overlap, Tokens: &tokens}
+		if head.OperatingPointSHA256 != "" {
+			digest := head.OperatingPointSHA256
+			heads[i].OperatingPointSha256 = &digest
 		}
 	}
 	card.Heads = &heads

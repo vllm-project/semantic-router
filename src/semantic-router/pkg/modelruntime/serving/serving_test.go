@@ -84,7 +84,7 @@ func newFake() *fakeServices {
 	card := func(head modelservice.HeadCard) modelservice.ModelCard {
 		return modelservice.ModelCard{ID: "m", Family: "task_heads", ModelSHA256: strings.Repeat("a", 64), Surfaces: []string{"classify"}, Heads: []modelservice.HeadCard{head}, MaxInputTokens: 8192, Device: "cpu", Dtype: "float32", Ready: true}
 	}
-	hazard := card(modelservice.HeadCard{Name: "default", Kind: kindScores, Labels: []string{"violence", "self_harm"}, Thresholds: []float64{0.5, 0.6}, Window: &modelservice.Window{Tokens: 512, Overlap: 64}, Reduction: "max"})
+	hazard := card(modelservice.HeadCard{Name: "default", Kind: kindScores, Labels: []string{"violence", "self_harm"}, Thresholds: []float64{0.5, 0.6}, Window: &modelservice.Window{Tokens: 512, Overlap: 64}, Reduction: "max", OperatingPointSHA256: hazardPolicy})
 	hazard.MaxInputTokens = 32768
 	return &fakeServices{cards: map[string]modelservice.ModelCard{
 		"domain": card(modelservice.HeadCard{Name: "default", Kind: kindSequence, Labels: []string{"math", "law", "other"}}),
@@ -187,6 +187,23 @@ func TestPreparationRefusesBindingsTheCardCannotServe(t *testing.T) {
 	}
 	if _, err := New(nil, nil).Sequence(context.Background(), spec("domain", config.RemoteClassifierContractLabelDistribution, config.ModelInputBudget{})); !errors.Is(err, ErrNotConfigured) {
 		t.Fatalf("without services preparation must fail with ErrNotConfigured, got %v", err)
+	}
+}
+
+func TestPreparationRefusesACardWithoutDeviceOrDtype(t *testing.T) {
+	for _, field := range []string{"device", "dtype"} {
+		fake := newFake()
+		card := fake.cards["domain"]
+		if field == "device" {
+			card.Device = ""
+		} else {
+			card.Dtype = ""
+		}
+		fake.cards["domain"] = card
+		_, err := New(fake, binding.NewPool()).Sequence(context.Background(), spec("domain", config.RemoteClassifierContractLabelDistribution, config.ModelInputBudget{}))
+		if !errors.Is(err, binding.ErrCapability) || !strings.Contains(err.Error(), "reports no device or dtype") {
+			t.Fatalf("a card without %s must be refused, got %v", field, err)
+		}
 	}
 }
 
@@ -333,6 +350,29 @@ func TestOperatingPointUsesTheHeadThresholdsAndWindow(t *testing.T) {
 	}
 	if _, err := runtime.OperatingPoint(context.Background(), binding, []string{"self_harm", "violence"}); err == nil {
 		t.Fatal("thresholds are positional: the rule's labels must keep the head order")
+	}
+}
+
+// hazardPolicy is the digest the fake runtime reports for Hazard's verified policy file.
+const hazardPolicy = "e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5"
+
+func TestOperatingPointHonoursThePinnedPolicyDigest(t *testing.T) {
+	labels := []string{"violence", "self_harm"}
+	pinned := func(digest string) config.ResolvedModelBinding {
+		bound := spec("hazard", config.RemoteClassifierContractLabelScores, config.ModelInputBudget{MaxTokens: 32768})
+		bound.Binding.OperatingPoint = &config.OperatingPointReference{Path: "operating_point.json", SHA256: digest}
+		return bound
+	}
+	if _, err := New(newFake(), nil).OperatingPoint(context.Background(), pinned(hazardPolicy), labels); err != nil {
+		t.Fatalf("the served policy matches the pin: %v", err)
+	}
+	if _, err := New(newFake(), nil).OperatingPoint(context.Background(), pinned(strings.Repeat("0", 64)), labels); !errors.Is(err, binding.ErrCapability) {
+		t.Fatalf("a different policy digest is refused, got %v", err)
+	}
+	unverified := newFake()
+	unverified.cards["hazard"].Heads[0].OperatingPointSHA256 = ""
+	if _, err := New(unverified, nil).OperatingPoint(context.Background(), pinned(hazardPolicy), labels); !errors.Is(err, binding.ErrCapability) {
+		t.Fatalf("a pin needs a verified policy file, got %v", err)
 	}
 }
 

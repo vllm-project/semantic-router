@@ -14,6 +14,9 @@ from typing import Any
 
 REMOVED_PROVIDERS = frozenset({"candle", "ort", "openvino"})
 REMOVED_EMBEDDING_BACKENDS = frozenset({"candle", "openvino"})
+# A remote hallucination detector is a hallucination_detector binding; the
+# `backend: endpoint` shorthand was desugared into one.
+REMOVED_DETECTOR_BACKENDS = frozenset({"candle", "endpoint"})
 REMOVED_DEPLOYMENT_FIELDS = ("precision", "custom_ops_profile", "compilation_cache_dir")
 # Module paths under global.model_catalog.modules and their removed fields.
 REMOVED_MODULE_FIELDS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
@@ -55,10 +58,21 @@ def retired_model_fields(data: dict[str, Any]) -> list[str]:
         _mapping(modules.get("hallucination_mitigation")).get("detector")
     )
     backend = detector.get("backend")
-    if isinstance(backend, str) and backend.strip().lower() == "candle":
+    if (
+        isinstance(backend, str)
+        and backend.strip().lower() in REMOVED_DETECTOR_BACKENDS
+    ):
         removed.append(
-            "global.model_catalog.modules.hallucination_mitigation.detector.backend: candle"
+            "global.model_catalog.modules.hallucination_mitigation.detector.backend: "
+            + backend
         )
+    removed.extend(
+        _present(
+            "global.model_catalog.modules.hallucination_mitigation.detector",
+            detector,
+            ("endpoint",),
+        )
+    )
     embedding_config = _mapping(
         _mapping(_mapping(catalog.get("embeddings")).get("semantic")).get(
             "embedding_config"

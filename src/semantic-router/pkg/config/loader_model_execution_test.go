@@ -59,6 +59,24 @@ global:
 			},
 		},
 		{
+			name: "the hallucination endpoint shorthand",
+			yaml: `
+global:
+  model_catalog:
+    modules:
+      hallucination_mitigation:
+        detector:
+          backend: endpoint
+          endpoint: http://detector:8000/v1
+          model_id: lettucedect
+`,
+			want: []string{
+				"global.model_catalog.modules.hallucination_mitigation.detector.backend: endpoint",
+				"global.model_catalog.modules.hallucination_mitigation.detector.endpoint",
+				"a remote hallucination detector is a hallucination_detector binding",
+			},
+		},
+		{
 			name: "NLI routing fields in routing and recipes",
 			yaml: `
 routing:

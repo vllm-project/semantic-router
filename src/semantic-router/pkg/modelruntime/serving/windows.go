@@ -87,7 +87,7 @@ func (r *Runtime) TokenWindows(ctx context.Context, spec config.ResolvedModelBin
 		if err != nil {
 			return tasks.WindowedTokenClassification{}, err
 		}
-		if len(result.Windows) == 0 && (result.Input == nil || result.Input.Windows < 1) {
+		if len(result.Windows) == 0 && (result.Input == nil || result.Input.Windows == nil || *result.Input.Windows < 1) {
 			return tasks.WindowedTokenClassification{}, fmt.Errorf("%w: windowed result reports no windows", binding.ErrInvalidResult)
 		}
 		spans, err := tokenResult(input.Text, result)

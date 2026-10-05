@@ -417,8 +417,15 @@ func TestBuildHallucinationModelsReportsTokenSpansAdapter(t *testing.T) {
 
 func TestBuildHallucinationModelsOmitsLocalExplainerForEndpointBackend(t *testing.T) {
 	cfg := buildAuxiliaryModelsConfig()
-	cfg.HallucinationMitigation.HallucinationModel.Backend = config.HallucinationBackendEndpoint
-	cfg.HallucinationMitigation.HallucinationModel.Endpoint = "http://127.0.0.1:8077/v1"
+	cfg.ExternalModels = append(cfg.ExternalModels, config.ExternalModelConfig{Name: "detector", ModelName: "lettucedect", ModelRole: config.ModelRoleClassification, ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8077}})
+	if cfg.ModelDeployments == nil {
+		cfg.ModelDeployments = map[string]config.ModelDeployment{}
+	}
+	if cfg.ModelBindings == nil {
+		cfg.ModelBindings = map[string]config.ModelBinding{}
+	}
+	cfg.ModelDeployments["detector"] = config.ModelDeployment{Provider: "http", ExternalModel: "detector"}
+	cfg.ModelBindings["hallucination_detector"] = config.ModelBinding{Deployment: "detector", Adapter: config.RemoteClassifierProtocolHTTPChat, Contract: config.RemoteClassifierContractTokenSpans}
 
 	models := buildHallucinationModels(cfg, classifierModelAvailability{})
 	detector := requireModelInfo(t, models, "hallucination_detector")

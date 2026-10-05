@@ -31,6 +31,7 @@ FUSED_GATED_DELTA = ("gdn_prep",)
 class ROCmAccelerator(GPUAccelerator):
     name = "rocm"
     validated = True
+    auto_priority = 0
     platform_attribute = "hip"
 
     def arch(self, properties: Any) -> str | None:

@@ -191,9 +191,15 @@ func (p *processPlan) writeModelsFile(path string) error {
 // base64-encoded, fit).
 const managedRequestBytes = 64 << 20
 
+// managedBundleTasks caps the tasks of a managed runtime's bundles. A request
+// stage sends each process one bundle with every call it makes, and PII alone
+// makes a call per text chunk, so the cap is far above the runtime's default;
+// a stage with more calls is split at it.
+const managedBundleTasks = 1024
+
 func managedCommand(base []string, socket, modelsFile, cacheDir string, threads int) []string {
 	command := append(append([]string(nil), base...), "serve", "--models", modelsFile, "--uds", socket,
-		"--max-request-bytes", strconv.Itoa(managedRequestBytes))
+		"--max-request-bytes", strconv.Itoa(managedRequestBytes), "--max-bundle-tasks", strconv.Itoa(managedBundleTasks))
 	if cacheDir != "" {
 		command = append(command, "--cache-dir", cacheDir)
 	}

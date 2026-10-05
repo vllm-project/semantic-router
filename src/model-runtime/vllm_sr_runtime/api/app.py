@@ -128,6 +128,10 @@ def create_app(runtime: Runtime) -> Starlette:
                 "object": "list",
                 "api_version": API_VERSION,
                 "data": await run_in_threadpool(runtime.model_cards),
+                "limits": {
+                    "max_bundle_tasks": runtime.config.max_bundle_tasks,
+                    "max_request_bytes": runtime.config.max_request_bytes,
+                },
             }
         )
 
