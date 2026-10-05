@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import sys
 import threading
 
 import pytest
@@ -169,10 +170,17 @@ def test_two_models_capture_and_replay_on_two_threads_of_one_gpu():
         threading.Thread(target=serve, args=(graphs, seed))
         for seed, graphs in enumerate(runners)
     ]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+    # Hand the GIL over every 10 µs, so one thread's capture is interleaved with the
+    # other's launches as a 24-layer capture is under load.
+    interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-5)
+    try:
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    finally:
+        sys.setswitchinterval(interval)
     assert not failures, failures
     for graphs in runners:
         stats = graphs.receipt()
