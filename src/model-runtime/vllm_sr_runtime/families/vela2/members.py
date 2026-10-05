@@ -3,7 +3,7 @@
 The 0.3B member pads its marker sequences into one encoder batch; the engine
 returns the last hidden states (native) or the published graph's outputs
 (ONNX graph with the readout baked in), and the schema readout runs in the
-family. The 4B / 9B member runs each tree once on the engine's
+family. The decoder member (0.8B, 4B, 9B) runs each tree once on the engine's
 shared-context forward (the parts computed once, every block continuing from
 them) and reads the blocks with the candidate head and the span heads.
 """
@@ -32,7 +32,7 @@ GRAPH_OUTPUTS = ("opt_logits", "span_logits")
 INDEX_INPUTS = ("q_index", "opt_index", "unit_index", "ent_index")
 # The 0.3B engine's batching: padded tokens per forward by device class, and rows per forward.
 ENCODER_BUDGET = {"cpu": 16_384, "gpu": 32_768}
-# The 4B / 9B engine's batching: tokens per forward (whole trees), and rows per forward.
+# The decoders' engine batching: tokens per forward (whole trees), and rows per forward.
 DECODER_BUDGET = 24_576
 MAX_ROWS = 32
 
@@ -243,7 +243,7 @@ class EncoderMember:
 
 
 class DecoderMember:
-    """Vela 2.0 4B / 9B: trees through the engine's tree forward, candidate head and span heads.
+    """Vela 2.0 0.8B / 4B / 9B: trees through the engine's tree forward, candidate head and span heads.
 
     Exact: the packages' trees, batched as they batch them (rows' trees and
     window trees apart, by token count, under 24,576 tokens and 32 rows) and

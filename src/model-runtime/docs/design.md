@@ -143,7 +143,7 @@ src/model-runtime/
       decision2/            # Decision 2.0 (Phase 1)
       decision1/            # Decision 1.0: vela-encoder and qwen3.5-decision runtimes
       task_heads/           # HF encoder task models (Vela 1.0 and compatible ModernBERT models)
-      vela2/                # Vela 2.0 schema encoder (0.3B) and Qwen3.5 encoders (4B, 9B); Set and Span
+      vela2/                # Vela 2.0 schema encoder (0.3B) and Qwen3.5 encoders (0.8B, 4B, 9B); Set and Span
       multimodal_embedding/ # Vela 1.0 Omni: prepared text, image and audio graphs, processors
     engines/
       native/               # PyTorch: models/qwen3.py, qwen3_5.py, modernbert.py, lora.py, tree.py
@@ -506,7 +506,7 @@ Before any model code runs, the family verifies the package:
 | `decision2` | `vllm-sr/Decision-2.0-{Kai-0.6B, Eos-0.8B, Sol-2B, Nox-4B, Lux-9B, Vega-27B}` | Kai `cd49ea38`, Eos `3594047d`, Sol `64235bef`, Nox `25e8f67d`, Lux `78bf3c03`, Vega `7aec49ae` (runtime-only revisions of the Phase 1 pins, same weights and identity) |
 | `decision1` | `vllm-sr/Decision-1.0-{Kai-0.6B, Lex-0.6B, Route-0.6B}` (Vela encoder runtime); `{Eos-0.8B, Sol-2B, Nox-4B, Lux-9B}` (Qwen3.5 runtime) | Kai `79263ba4`, Lex `a5ba6895`, Route `deed1f29`, Eos `2ca39a23`, Sol `5c698b1a`, Nox `7f65e1db`, Lux `2064c84d` |
 | `task_heads` | `vllm-sr/Vela-1.0-Encoder-307M-{Domain, Guard, Safety, Shield, FactCheck, Feedback, Modality, Hazard, PII, Halu, Embedding, Reranker}`, `Qwen/Qwen3-Embedding-0.6B` | The revisions the router pinned (section 16.3), for example Domain `f6354f54`, PII `6d3300c4`, Halu `ca875312`, Embedding `1e57cebf`, Reranker `a388e41c` |
-| `vela2` | `vllm-sr/Vela-2.0-{0.3B, 4B, 9B}` (private preview) | 0.3B `13e85201`, 4B `756f4921`, 9B `23b9a557` |
+| `vela2` | `vllm-sr/Vela-2.0-{0.3B, 0.8B, 4B, 9B}` (private preview) | 0.3B `a3209a50`, 0.8B `a778eb2a`, 4B `c1e64d4f`, 9B `bc876163` |
 | `multimodal_embedding` | `vllm-sr/Vela-1.0-Omni-{Nano, Mini}` | Nano `2ff2d663`, Mini `801bae3a` (prepared graphs, section 8.5) |
 
 `registry/tables/<family>.py` carries the full revisions, file digests, the
@@ -597,7 +597,7 @@ Span questions over typed parts.
 | Model | Backbone | Context | How questions are read |
 | --- | --- | --- | --- |
 | `Vela-2.0-0.3B` | Vela 307M ModernBERT encoder with eight marker tokens | 8,192 tokens; longer labelled parts windowed with 512-token overlap | One sequence `<bos> ([Q] question ([O] option)* [ABS]?)* ([E] label)* [SEP_SCHEMA] ([SEG_role] part)* <eos>`; one extra sequence per extra span question |
-| `Vela-2.0-4B`, `Vela-2.0-9B` | Qwen3.5 (the Decision 2.0 base) used as an encoder | 16,384 tokens; span targets over 2,048 tokens in 1,800-token windows | The state once, then one block per question that sees the state and itself (the native engine's shared-context tree) |
+| `Vela-2.0-0.8B`, `Vela-2.0-4B`, `Vela-2.0-9B` | Qwen3.5 (the Decision 2.0 base) used as an encoder | 16,384 tokens; span targets over 2,048 tokens in 1,800-token windows | The state once, then one block per question that sees the state and itself (the native engine's shared-context tree) |
 
 The family reimplements the packages' engine (`vela2_inference.py`): marker
 insertion by token ID (user text can never create a marker), per-part pooling,
@@ -1071,7 +1071,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 | Qwen3Guard via `http_chat` | prompt guard | **Keep external** (unchanged) |
 | candle Qwen3 multi-LoRA, candle Qwen3Guard, DeBERTa `auto` | nothing wired | **Retire** |
 | Decision 1.0 (seven packages) | not served by the router today (proposal #4086) | **Add** via `decision1` |
-| Vela 2.0 0.3B, 4B, 9B | new | **Add** via `vela2` |
+| Vela 2.0 0.3B, 0.8B, 4B, 9B | new | **Add** via `vela2` |
 
 ### 16.4 Algorithms that leave the bindings
 

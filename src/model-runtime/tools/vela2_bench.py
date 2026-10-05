@@ -26,7 +26,7 @@ side minus baseline (p50, p95, mean, req/s) with its 95% t interval, for every
 
 Sides:
 - ``runtime``: the family on the exact profile through the runtime's scheduler;
-- ``runtime-shared``: the shared-context profile (4B / 9B: packed trees, one parts pass);
+- ``runtime-shared``: the shared-context profile (decoders: packed trees, one parts pass);
 - ``runtime-batching``: cross-request batching (2 ms window);
 - ``max_speed:KIND``: the max_speed profile on a model that loaded the KIND reduced copy
   (``float32-packed``, ``bfloat16``, ``int8``; consented for the run);

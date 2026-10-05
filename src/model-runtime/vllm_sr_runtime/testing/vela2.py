@@ -1,4 +1,4 @@
-"""Tiny random-weight Vela 2.0 packages for tests: a 0.3B-style encoder and a 4B-style decoder.
+"""Tiny random-weight Vela 2.0 packages for tests: a 0.3B-style encoder and a decoder (4B-style by default).
 
 Both follow the released layouts: ``config.json`` naming the member,
 ``calibration.json`` with the temperatures, thresholds, PII rule and schemas
@@ -198,16 +198,17 @@ def write_decoder_package(
     max_length: int = 4096,
     broad: bool = True,
     repeat_limit: int = 48,
+    backbone: dict[str, Any] | None = None,
 ) -> Path:
-    """A 4B-style package: a tiny Qwen3.5 backbone, the candidate and span heads, sharded."""
+    """A decoder package: a tiny Qwen3.5 backbone (4B-shaped unless ``backbone`` overrides its
+    config), the candidate and span heads, sharded."""
     root = Path(output)
     root.mkdir(parents=True, exist_ok=False)
     vocab = _tokenizer(root, ["<|endoftext|>"], markers=False)
-    backbone = qwen3_5_config(vocab)
-    hidden = backbone["hidden_size"]
+    config = qwen3_5_config(vocab, **(backbone or {}))
+    hidden = config["hidden_size"]
     tensors = {
-        f"backbone.{k}": v
-        for k, v in random_backbone("qwen3_5", backbone, seed).items()
+        f"backbone.{k}": v for k, v in random_backbone("qwen3_5", config, seed).items()
     }
     heads = _random(CandidateHead(hidden, PROJECTION), seed + 1, "head.")
     heads["set_bias"] = torch.tensor(0.3)
@@ -232,7 +233,7 @@ def write_decoder_package(
             "model_type": "vela2-decoder",
             "format_version": 1,
             "model_name": "vllm-sr-fixtures/Vela-2.0-Tiny",
-            "backbone_config": backbone,
+            "backbone_config": config,
             "head_dim": PROJECTION,
             "span_head": {"d": PROJECTION, "slots": SLOTS},
             "pad_token_id": 0,

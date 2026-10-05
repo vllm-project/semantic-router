@@ -7,11 +7,11 @@
 
 The reference is the package's engine, imported from the package directory by this tool only (the runtime
 never imports package code), on the same device class: FP32 on CPU; on GPUs the engine's defaults (BF16
-autocast for the 4B / 9B backbones, FP32 for the 0.3B encoder). The runtime side verifies and loads the
+autocast for the decoders' backbones, FP32 for the 0.3B encoder). The runtime side verifies and loads the
 package through the vela2 family, the native engine and the accelerator, and answers every request alone on
 the exact profile. Per request the tool compares:
 
-- **rendering:** the token IDs of every sequence (0.3B) or of the parts and every block (4B / 9B), and every
+- **rendering:** the token IDs of every sequence (0.3B) or of the parts and every block (decoders), and every
   position the readout reads (markers, pools, endpoints, label blocks, words), windows included;
 - **answers:** decisions (Choice / Score arg-max, Noul above 0.5, Set selections, Span sets of (label, start,
   end)) and the largest absolute difference of any probability, Noul, Score or span probability.
@@ -207,7 +207,7 @@ def generate(count: int, seed: int, scale: float = 1.0) -> list[dict[str, Any]]:
     """Deterministic synthetic requests covering every input path the family has.
 
     ``scale`` multiplies the long documents (about 80 tokens per repeat): at 1.0
-    they reach past the 0.3B's 8,192-token window and the 4B / 9B span windows.
+    they reach past the 0.3B's 8,192-token window and the decoders' span windows.
     """
     rng = random.Random(seed)
 

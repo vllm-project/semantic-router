@@ -1,4 +1,4 @@
-"""The Vela 2.0 heads against their formulas: the marker head (0.3B) and the span head (4B / 9B)."""
+"""The Vela 2.0 heads against their formulas: the marker head (0.3B) and the span head (decoders)."""
 
 from __future__ import annotations
 

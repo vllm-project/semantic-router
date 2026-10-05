@@ -53,8 +53,11 @@ smallest one that is accurate enough for your questions.
 Decision 1.0 models (`vllm-sr/Decision-1.0-Kai-0.6B`, `-Lex-0.6B`,
 `-Route-0.6B`, `-Eos-0.8B`, `-Sol-2B`, `-Nox-4B`, `-Lux-9B`) are also built in
 and answer the same kinds of questions. Vela 2.0 (`vllm-sr/Vela-2.0-0.3B`,
-`-4B`, `-9B`) adds questions that pick several labels or mark spans of text; it
-is a private preview and needs a Hugging Face token with access.
+`-0.8B`, `-4B`, `-9B`) adds questions that pick several labels or mark spans of
+text; it is a private preview and needs a Hugging Face token with access. On a
+CPU, run the 0.3B. On a GPU, the larger sizes read inputs of up to 16,384
+tokens (the 0.3B reads 8,192): the 0.8B costs the least of them, and the 4B and
+9B are the most accurate.
 
 `vllm-sr-runtime models` prints every built-in model with its pinned revision.
 

@@ -86,8 +86,8 @@ def qwen3_config(vocab: int) -> dict[str, Any]:
     }
 
 
-def qwen3_5_config(vocab: int) -> dict[str, Any]:
-    return {
+def qwen3_5_config(vocab: int, **overrides: Any) -> dict[str, Any]:
+    config = {
         "architectures": ["Qwen3_5TextModel"],
         "model_type": "qwen3_5_text",
         "attention_bias": False,
@@ -124,6 +124,8 @@ def qwen3_5_config(vocab: int) -> dict[str, Any]:
         "tie_word_embeddings": True,
         "vocab_size": vocab,
     }
+    config.update(overrides)
+    return config
 
 
 def modernbert_config(vocab: int, **overrides: Any) -> dict[str, Any]:
