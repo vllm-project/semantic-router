@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Training management contract
-  version: v1
+  version: v2
   description: >-
     Contract for the planned Go management API; these routes are not yet registered.
     Management assigns resource IDs and derives ownership from authenticated
@@ -10,7 +10,7 @@ info:
     alone does not establish access. Cookie requests follow Dashboard session and
     CSRF rules.
 servers:
-- url: /api/training/v1
+- url: /api/training/v2
 security:
 - bearerAuth: []
 - sessionCookie: []
@@ -27,7 +27,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/Upload
+                $ref: ./training-v2.schema.json#/$defs/Upload
         default:
           $ref: '#/components/responses/Error'
       requestBody:
@@ -46,7 +46,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/DataAsset
+                $ref: ./training-v2.schema.json#/$defs/DataAsset
         default:
           $ref: '#/components/responses/Error'
       requestBody:
@@ -54,7 +54,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ./training-v1.schema.json#/$defs/DataAssetSpec
+              $ref: ./training-v2.schema.json#/$defs/DataAssetSpec
   /data-assets/{id}:
     get:
       operationId: getDataAsset
@@ -64,7 +64,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/DataAsset
+                $ref: ./training-v2.schema.json#/$defs/DataAsset
         default:
           $ref: '#/components/responses/Error'
       parameters:
@@ -88,7 +88,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/DataSnapshot
+                $ref: ./training-v2.schema.json#/$defs/DataSnapshot
         default:
           $ref: '#/components/responses/Error'
       requestBody:
@@ -96,7 +96,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ./training-v1.schema.json#/$defs/SnapshotSpec
+              $ref: ./training-v2.schema.json#/$defs/SnapshotSpec
   /data-snapshots/{id}:
     get:
       operationId: getDataSnapshot
@@ -106,7 +106,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/DataSnapshot
+                $ref: ./training-v2.schema.json#/$defs/DataSnapshot
         default:
           $ref: '#/components/responses/Error'
       parameters:
@@ -125,7 +125,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/Experiment
+                $ref: ./training-v2.schema.json#/$defs/Experiment
         default:
           $ref: '#/components/responses/Error'
       requestBody:
@@ -133,7 +133,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ./training-v1.schema.json#/$defs/ExperimentSpec
+              $ref: ./training-v2.schema.json#/$defs/ExperimentSpec
   /experiments/{id}:
     get:
       operationId: getExperiment
@@ -143,7 +143,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/Experiment
+                $ref: ./training-v2.schema.json#/$defs/Experiment
         default:
           $ref: '#/components/responses/Error'
       parameters:
@@ -165,7 +165,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/BindingProposal
+                $ref: ./training-v2.schema.json#/$defs/BindingProposal
         default:
           $ref: '#/components/responses/Error'
       requestBody:
@@ -173,7 +173,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ./training-v1.schema.json#/$defs/BindingProposalSpec
+              $ref: ./training-v2.schema.json#/$defs/BindingProposalSpec
   /binding-proposals/{id}:
     get:
       operationId: getBindingProposal
@@ -183,7 +183,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/BindingProposal
+                $ref: ./training-v2.schema.json#/$defs/BindingProposal
         default:
           $ref: '#/components/responses/Error'
       parameters:
@@ -202,7 +202,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/Artifact
+                $ref: ./training-v2.schema.json#/$defs/Artifact
         default:
           $ref: '#/components/responses/Error'
       parameters:
@@ -221,7 +221,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/ArtifactVariant
+                $ref: ./training-v2.schema.json#/$defs/ArtifactVariant
         default:
           $ref: '#/components/responses/Error'
       parameters:
@@ -240,7 +240,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/Evaluation
+                $ref: ./training-v2.schema.json#/$defs/Evaluation
         default:
           $ref: '#/components/responses/Error'
       parameters:
@@ -259,7 +259,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/Qualification
+                $ref: ./training-v2.schema.json#/$defs/Qualification
         default:
           $ref: '#/components/responses/Error'
       parameters:
@@ -281,7 +281,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/ValidationResponse
+                $ref: ./training-v2.schema.json#/$defs/ValidationResponse
         default:
           $ref: '#/components/responses/Error'
       requestBody:
@@ -289,7 +289,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ./training-v1.schema.json#/$defs/ValidationRequest
+              $ref: ./training-v2.schema.json#/$defs/ValidationRequest
   /runs:
     post:
       operationId: submitRun
@@ -304,7 +304,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/RunGraph
+                $ref: ./training-v2.schema.json#/$defs/RunGraph
         default:
           $ref: '#/components/responses/Error'
       requestBody:
@@ -312,7 +312,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ./training-v1.schema.json#/$defs/SubmitRunRequest
+              $ref: ./training-v2.schema.json#/$defs/SubmitRunRequest
     get:
       operationId: listRuns
       responses:
@@ -323,7 +323,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: ./training-v1.schema.json#/$defs/TrainingRun
+                  $ref: ./training-v2.schema.json#/$defs/TrainingRun
         default:
           $ref: '#/components/responses/Error'
       parameters:
@@ -353,7 +353,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/RunGraph
+                $ref: ./training-v2.schema.json#/$defs/RunGraph
         default:
           $ref: '#/components/responses/Error'
       parameters:
@@ -378,7 +378,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/RunGraph
+                $ref: ./training-v2.schema.json#/$defs/RunGraph
         default:
           $ref: '#/components/responses/Error'
       parameters:
@@ -402,7 +402,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/RunGraph
+                $ref: ./training-v2.schema.json#/$defs/RunGraph
         default:
           $ref: '#/components/responses/Error'
       parameters:
@@ -425,7 +425,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/EventPage
+                $ref: ./training-v2.schema.json#/$defs/EventPage
         default:
           $ref: '#/components/responses/Error'
       parameters:
@@ -454,7 +454,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/ComparisonResponse
+                $ref: ./training-v2.schema.json#/$defs/ComparisonResponse
         default:
           $ref: '#/components/responses/Error'
       requestBody:
@@ -462,7 +462,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ./training-v1.schema.json#/$defs/ComparisonRequest
+              $ref: ./training-v2.schema.json#/$defs/ComparisonRequest
   /artifacts/{id}/variants:
     get:
       operationId: listArtifactVariants
@@ -482,7 +482,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: ./training-v1.schema.json#/$defs/ArtifactVariant
+                  $ref: ./training-v2.schema.json#/$defs/ArtifactVariant
         default:
           $ref: '#/components/responses/Error'
       parameters:
@@ -524,7 +524,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/CapabilityCatalog
+                $ref: ./training-v2.schema.json#/$defs/CapabilityCatalog
         default:
           $ref: '#/components/responses/Error'
   /capabilities/plan:
@@ -538,14 +538,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ./training-v1.schema.json#/$defs/TrainingPlanRequest
+              $ref: ./training-v2.schema.json#/$defs/TrainingPlanRequest
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: ./training-v1.schema.json#/$defs/TrainingPlanResponse
+                $ref: ./training-v2.schema.json#/$defs/TrainingPlanResponse
         default:
           $ref: '#/components/responses/Error'
 components:
@@ -562,11 +562,11 @@ components:
       description: >-
         APIError.code is an open string. Well-known codes are 400 invalid_request;
         401 unauthenticated; 403 forbidden; 404 not_found; 409 conflict;
-        500 internal_error. New codes may be added in v1 without a contract-version
+        500 internal_error. New codes may be added in v2 without a contract-version
         bump; existing codes retain their meanings. Clients must accept unknown
         codes and handle them as generic errors using HTTP status and message.
         Cookie requests also follow Dashboard CSRF protection.
       content:
         application/json:
           schema:
-            $ref: ./training-v1.schema.json#/$defs/APIError
+            $ref: ./training-v2.schema.json#/$defs/APIError
