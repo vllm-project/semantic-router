@@ -26,7 +26,6 @@ from data_loader import (
     print_data_stats,
 )
 from embeddings import generate_embeddings_for_queries
-
 from models import (
     TORCH_AVAILABLE,
     HierShrinkModel,
