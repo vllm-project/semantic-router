@@ -267,9 +267,8 @@ export interface DecisionCondition {
   conditions?: DecisionCondition[]
 }
 
-export interface DecisionRuleSet {
-  operator?: 'AND' | 'OR' | 'NOT'
-  conditions?: DecisionCondition[]
+// The root is a combination, a single leaf condition, or empty (unconditional).
+export interface DecisionRuleSet extends DecisionCondition {
   on_unknown?: 'no_match' | 'match' | 'fail_request'
 }
 

@@ -171,6 +171,8 @@ export interface RawRuleNode {
 }
 
 export interface RawRuleCombination {
+  type?: string
+  name?: string
   operator?: string
   conditions?: RawRuleNode[]
 }
