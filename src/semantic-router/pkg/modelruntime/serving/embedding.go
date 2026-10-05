@@ -116,7 +116,7 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 	}
 	width := len(warm[0].Embedding)
 	capability := binding.Capability{
-		Contract: spec.Binding.Contract, Provider: Provider, Device: card.Device, Precision: precision(card),
+		Contract: spec.Binding.Contract, Provider: Provider, Device: card.Device, Precision: card.Dtype,
 		Limits: binding.Limits{ModelTokens: card.MaxInputTokens, DeploymentTokens: input.MaxTokens, Overflow: template.Overflow},
 		Embedding: &binding.EmbeddingCapability{
 			AvailableDimensions: slices.Clone(card.Embedding.Dimensions), Dimension: width, Layer: layer,

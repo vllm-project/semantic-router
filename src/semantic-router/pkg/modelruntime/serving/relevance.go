@@ -68,7 +68,7 @@ func (r *Runtime) Relevance(ctx context.Context, spec config.ResolvedModelBindin
 		return nil, err
 	}
 	capability := binding.Capability{
-		Contract: spec.Binding.Contract, Provider: Provider, Device: card.Device, Precision: precision(card),
+		Contract: spec.Binding.Contract, Provider: Provider, Device: card.Device, Precision: card.Dtype,
 		Limits: binding.Limits{ModelTokens: card.MaxInputTokens, DeploymentTokens: input.MaxTokens, Overflow: input.Overflow},
 	}
 	deployment, services := spec.Binding.Deployment, r.services

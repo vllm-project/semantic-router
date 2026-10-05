@@ -18,14 +18,17 @@ import (
 )
 
 // surfaceRuntime answers the classify, embeddings, rerank and bundle surfaces
-// like the runtime does, and counts the calls each path received.
+// like the runtime does, and counts the calls each path received. A bundle
+// with more than maxTasks tasks (when set) is refused whole, as the runtime's
+// --max-bundle-tasks does.
 type surfaceRuntime struct {
-	direct  atomic.Int64
-	bundles atomic.Int64
-	tasks   atomic.Int64
-	delay   time.Duration
-	mu      sync.Mutex
-	seen    []map[string]interface{}
+	direct   atomic.Int64
+	bundles  atomic.Int64
+	tasks    atomic.Int64
+	delay    time.Duration
+	maxTasks int
+	mu       sync.Mutex
+	seen     []map[string]interface{}
 }
 
 func (s *surfaceRuntime) handler() http.Handler {
@@ -52,6 +55,10 @@ func (s *surfaceRuntime) handler() http.Handler {
 			Tasks []map[string]json.RawMessage `json:"tasks"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		if s.maxTasks > 0 && len(body.Tasks) > s.maxTasks {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]interface{}{"error": map[string]interface{}{"code": "request_too_large", "message": "too many tasks"}})
+			return
+		}
 		results := make([]map[string]interface{}, 0, len(body.Tasks))
 		for _, task := range body.Tasks {
 			s.tasks.Add(1)
@@ -104,7 +111,7 @@ func (s *surfaceRuntime) answer(surface string, body map[string]interface{}) (in
 				"input":   map[string]interface{}{"tokens": 6, "processed_tokens": 6, "truncated": false, "windows": 1},
 			}
 		}
-		return http.StatusOK, map[string]interface{}{"model": model, "head": "default", "kind": "sequence", "labels": []string{"billing", "other"}, "results": results, "usage": usage, "meta": map[string]interface{}{"revision": "abc"}}
+		return http.StatusOK, map[string]interface{}{"model": model, "head": "default", "kind": "sequence", "labels": []string{"billing", "other"}, "results": results, "usage": usage}
 	case "embeddings":
 		raw := make([]byte, 8)
 		binary.LittleEndian.PutUint32(raw, math.Float32bits(0.6))
@@ -166,9 +173,6 @@ func TestClassifyEncodesInputsAndDecodesResults(t *testing.T) {
 	if options["overflow"] != "window" || options["deadline_ms"] == nil || options["window"].(map[string]interface{})["overlap"] != 64.0 {
 		t.Fatalf("options were not sent: %v", options)
 	}
-	if _, asked := options["return_meta"]; asked {
-		t.Fatalf("the router reads no runtime meta, so it must not ask for it: %v", options)
-	}
 	inputs := body["input"].([]interface{})
 	if inputs[0].(map[string]interface{})["text"] != "Tom" || inputs[1].(map[string]interface{})["answer"] != "a" {
 		t.Fatalf("inputs were not sent as objects: %v", inputs)
@@ -201,8 +205,30 @@ func TestEmbedDecodesBase64AndFloatVectorsByIndex(t *testing.T) {
 	if got := response.Embeddings[1]; got[0] != 1 || got[1] != 0 {
 		t.Fatalf("float vector decoded as %v", got)
 	}
-	if response.Representation == nil || response.Representation.Layer != 22 || !response.Representation.Normalized {
-		t.Fatalf("representation was not decoded: %+v", response.Representation)
+}
+
+func TestSurfacesDoNotAskForMeta(t *testing.T) {
+	runtime := &surfaceRuntime{}
+	client := newSurfaceClient(t, runtime)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := client.Classify(ctx, "m", ClassifyRequest{Inputs: []ClassifyInput{{Text: "x"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Embed(ctx, "m", EmbedRequest{Inputs: []EmbedInput{{Text: "a"}, {Text: "b"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Rerank(ctx, "m", RerankRequest{Query: "q", Documents: []string{"a", "b"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(runtime.seen) != 3 {
+		t.Fatalf("got %d surface calls, want 3", len(runtime.seen))
+	}
+	for _, body := range runtime.seen {
+		options, _ := body["options"].(map[string]interface{})
+		if _, asked := options["return_meta"]; asked || options["deadline_ms"] == nil {
+			t.Fatalf("options = %v, want a deadline and no return_meta", options)
+		}
 	}
 }
 

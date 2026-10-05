@@ -66,11 +66,16 @@ func TestCompileModelBindingsRejectsInvalidPreparation(t *testing.T) {
 			d.Provider = "unknown"
 			cfg.ModelDeployments["shared-encoder"] = d
 		}, "unsupported provider"},
-		{"wrong device", func(cfg *RouterConfig) {
+		{"malformed device", func(cfg *RouterConfig) {
 			d := cfg.ModelDeployments["shared-encoder"]
-			d.Device = "migraphx:0"
+			d.Device = "CUDA 0"
 			cfg.ModelDeployments["shared-encoder"] = d
 		}, "device must be"},
+		{"malformed profile", func(cfg *RouterConfig) {
+			d := cfg.ModelDeployments["shared-encoder"]
+			d.Profile = "max-speed!"
+			cfg.ModelDeployments["shared-encoder"] = d
+		}, "profile must be"},
 		{"negative budget", func(cfg *RouterConfig) {
 			d := cfg.ModelDeployments["shared-encoder"]
 			d.Input.MaxTokens = -1
@@ -90,6 +95,16 @@ func TestCompileModelBindingsRejectsInvalidPreparation(t *testing.T) {
 				t.Fatalf("got %v, want %q", err, test.want)
 			}
 		})
+	}
+}
+
+func TestPluginAcceleratorAndProfileNamesAreTheRuntimes(t *testing.T) {
+	cfg := testDeploymentConfig()
+	d := cfg.ModelDeployments["shared-encoder"]
+	d.Device, d.Profile = "npu:1", "vendor_low_latency"
+	cfg.ModelDeployments["shared-encoder"] = d
+	if _, err := CompileModelBindings(cfg); err != nil {
+		t.Fatalf("a well-formed plugin accelerator and profile compile; the runtime decides whether it has them: %v", err)
 	}
 }
 

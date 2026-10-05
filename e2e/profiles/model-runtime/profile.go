@@ -110,6 +110,7 @@ func (p *Profile) GetTestCases() []string {
 		"model-runtime-long-history",
 		"model-runtime-fail-open",
 		"model-runtime-supervision",
+		"model-runtime-load-retry",
 	}
 }
 

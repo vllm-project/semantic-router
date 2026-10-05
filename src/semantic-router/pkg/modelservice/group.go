@@ -22,6 +22,9 @@ const (
 	// and before it was ever ready, fails the preparations waiting on it.
 	maxQuickExits   = 3
 	quickExitWindow = 30 * time.Second
+	// A managed process whose every model failed to load this many times in a
+	// row fails the preparations waiting on it; the supervisor keeps retrying.
+	maxFailedLoads = 3
 )
 
 // group is one runtime process: managed (supervised on a private socket) or
@@ -38,13 +41,14 @@ type group struct {
 	probe      chan struct{}
 	refs       int // guarded by Manager.mu
 
-	mu         sync.Mutex
-	changed    chan struct{}
-	models     map[string]*servedModel
-	failure    error
-	quickExits int
-	restarts   int
-	everReady  bool
+	mu          sync.Mutex
+	changed     chan struct{}
+	models      map[string]*servedModel
+	failure     error
+	quickExits  int
+	failedLoads int
+	restarts    int
+	everReady   bool
 }
 
 // servedModel is one model of a process and the deployments that call it.
@@ -190,6 +194,11 @@ func (g *group) refresh(ctx context.Context) {
 					"process": g.plan.name, "model": served.name, "deployments": served.deployments, "ready": ready, "state": state,
 				})
 			}
+			if state == "incompatible" && served.state != state {
+				logging.ComponentWarnEvent("model_runtime", "runtime_contract_incompatible", map[string]interface{}{
+					"process": g.plan.name, "model": served.name, "deployments": served.deployments, "reason": reason,
+				})
+			}
 			served.ready.Store(ready)
 			served.state, served.reason = state, reason
 			for _, deployment := range served.deployments {
@@ -199,11 +208,48 @@ func (g *group) refresh(ctx context.Context) {
 		if ready {
 			g.everReady = true
 			g.failure = nil
+			g.failedLoads = 0
 		}
 	}
 	if changed {
 		g.broadcastLocked()
 	}
+	g.recycleFailedLocked()
+}
+
+// recycleFailedLocked restarts a managed process in which every model failed
+// to load, through the supervisor's back-off. A process that still serves any
+// model keeps running.
+func (g *group) recycleFailedLocked() {
+	if !g.recyclesLocked() || !g.supervisor.recycle() {
+		return
+	}
+	reasons := make(map[string]string, len(g.models))
+	for _, served := range g.models {
+		reasons[served.name] = served.reason
+	}
+	g.failedLoads++
+	if g.failedLoads >= maxFailedLoads {
+		g.failure = fmt.Errorf("every model failed to load %d times in a row: %v", g.failedLoads, reasons)
+		g.broadcastLocked()
+	}
+	logging.ComponentWarnEvent("model_runtime", "runtime_process_recycled", map[string]interface{}{
+		"process": g.plan.name, "deployments": g.plan.deployments(), "failed": reasons, "failed_loads": g.failedLoads,
+	})
+}
+
+// recyclesLocked reports whether the group restarts its process for failed
+// loads: it is managed and every model failed.
+func (g *group) recyclesLocked() bool {
+	if g.supervisor == nil || len(g.models) == 0 {
+		return false
+	}
+	for _, served := range g.models {
+		if served.state != "failed" {
+			return false
+		}
+	}
+	return true
 }
 
 // needsCards reports whether a model is ready without a card yet.
@@ -235,6 +281,8 @@ func (g *group) processExited(err error, ran time.Duration) {
 	switch {
 	case errors.As(err, &execErr):
 		g.failure = fmt.Errorf("runtime command cannot run: %w", err)
+	case errors.Is(err, errRecycled):
+		// recycleFailedLocked counts failed loads.
 	case !g.everReady && ran < quickExitWindow:
 		g.quickExits++
 		if g.quickExits >= maxQuickExits {
@@ -249,8 +297,11 @@ func (g *group) broadcastLocked() {
 	g.changed = make(chan struct{})
 }
 
-// waitCard waits until a model is ready and returns its card; a failed model
-// or a process that cannot start ends the wait at once.
+// waitCard waits until a model is ready and returns its card. A failed model,
+// a runtime of another contract major, a process that cannot start, or
+// repeated failed loads end the wait at once;
+// only while the group recycles a process whose every model failed does the
+// wait continue.
 func (g *group) waitCard(ctx context.Context, model string) (ModelCard, error) {
 	for {
 		g.mu.Lock()
@@ -264,10 +315,15 @@ func (g *group) waitCard(ctx context.Context, model string) (ModelCard, error) {
 			g.mu.Unlock()
 			return card, nil
 		}
-		if served.state == "failed" {
+		if served.state == "failed" && !g.recyclesLocked() {
 			reason := served.reason
 			g.mu.Unlock()
 			return ModelCard{}, fmt.Errorf("%w: model %s failed to load: %s", ErrUnavailable, model, reason)
+		}
+		if served.state == "incompatible" {
+			reason := served.reason
+			g.mu.Unlock()
+			return ModelCard{}, fmt.Errorf("%w: model %s: %s", ErrUnavailable, model, reason)
 		}
 		if g.failure != nil {
 			err := g.failure
