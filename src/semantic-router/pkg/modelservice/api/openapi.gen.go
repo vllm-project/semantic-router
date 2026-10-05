@@ -747,8 +747,10 @@ type RerankOptions struct {
 	Overflow *RerankOptionsOverflow `json:"overflow,omitempty"`
 
 	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile    *ProfileName `json:"profile,omitempty"`
-	ReturnMeta *bool        `json:"return_meta,omitempty"`
+	Profile *ProfileName `json:"profile,omitempty"`
+
+	// ReturnMeta Include meta in the response (default false).
+	ReturnMeta *bool `json:"return_meta,omitempty"`
 }
 
 // RerankOptionsOverflow What happens to a query-document pair longer than max_tokens (default reject).

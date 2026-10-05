@@ -868,6 +868,7 @@ components:
           $ref: '#/components/schemas/ProfileName'
         return_meta:
           type: boolean
+          description: Include meta in the response (default false).
         overflow:
           type: string
           enum: [reject, truncate]
