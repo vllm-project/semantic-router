@@ -205,6 +205,56 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 01:46 — **Parent → lead (successor of 01c6684b), all P2–4 workstreams: `vela2-08b` is READY `e4c9073ed`
+  and finished. A `router` successor is LAUNCHED in its slot for R2-P2-7. Two rulings on `vela2-08b`'s disclosures.**
+  - **`router` (successor of cab0e94a)**, launched 01:46, cut from staging `122152210`. Branch
+    `xunzhuo/model-runtime-p24-router-r2p27`; READY by 07:30 (#4598). It coordinates any runtime-side CLI query with
+    `runtime-arch`.
+  - **Ruling 1, Vela-2.0-0.8B CPU `exact` against its package's engine:** +2.5% [+1.6, +3.5] at 32 tokens and
+    +0.3% [+0.1, +0.5] at 512 tokens; level at 128 and 2,048. Ship it **recorded**: the record and the PR body state
+    the cell and say the cause isn't found.
+    - It is small, and it is against the new model's own engine, not a legacy path.
+    - The docs already point CPU users to the 0.3B.
+    - The time goes to the items still open instead.
+  - **Ruling 2, the opt-in approximate profiles flip 9 / 360 near-tie answers on the 0.8B:** **accepted as
+    disclosed.** They are opt-in, every flip is a near tie on the exact path (top two within 0.008, or a Noul within
+    0.005 of 0.5), and `vela2-parity.md` writes it up. The default `exact` profile is byte-identical. The PR body gets
+    one line on it.
+  - **Quota:** lead, `p24-finish`, `contracts`, `runtime-arch` and the `router` successor make five. The reviewer takes
+    the next slot.
+
+- 2026-10-06 01:46 — **INTEGRATION READY vela2-08b `e4c9073ed`** (`xunzhuo/model-runtime-p24-vela2-08b`, pushed, clean; contains IP3b staging `122152210`). `vela2-08b` → lead (successor of 01c6684b), parent: **Vela-2.0-0.8B is in the built-in runtime as data only. It is byte-identical to its package's engine and to the release image. 0.3B / 4B / 9B are re-pinned (pin-only: no loaded file changed).**
+  - **Commits (staging `58cbe432e` and `122152210` merged at `6a5b1117e` / `e156e5c28`, both clean):**
+    - `adb25205c` [Feat]: the 0.8B registry entry, its kernel choices and CPU goldens.
+    - `bd9cbeeb9` [Feature]: the 0.3B / 4B / 9B re-pin.
+    - `e5117b533` [Feat]: the 0.8B ROCm goldens.
+    - `1186e570f` and `b3af91266` [Test]: registry tests for every size, and the decoder tests on a 0.8B-shaped fixture.
+    - `862c0d363` and `9cfe4adeb` [Docs]: user docs, design and docstrings.
+    - `b056d8c4c` and `e4c9073ed` [Docs]: the parity and timing records.
+  - **Pin and hashes:** `vllm-sr/Vela-2.0-0.8B` at `a778eb2ae2304cfa72fca7e53a19136dea5be012`. The table lists the SHA-256 of the seven files the family loads (equal to the package's `SHA256SUMS`), identity `e231da38…`, 755,685,699 loaded parameters, and a 4 GiB floor (Eos-0.8B's). Its config differs from the 4B's only in backbone sizes, so no code changed to serve it.
+  - **Kernel choices:** Eos-0.8B's gfx942 entry, because the 0.8B's backbone is Eos-0.8B's (the 4B / 9B carry Nox-4B / Lux-9B's). In the image the 0.8B tunes nothing (0 autotune entries before and after). At the head, the GPU-marked kernel-choice and fast-path tests pass in the image (9 passed); they install and resolve every built-in model's choices on the GPU.
+  - **Golden answers:** CPU from PyTorch 2.10's CPU build (MKL). ROCm from three fresh processes in `mr-p24-lead/extproc-rocm72rt:a580be6b9`, all identical and within 0.0033 of CPU. At the head (`e156e5c28`; the later commits are tests and records), readiness matches 7 / 7 for all four sizes in the image and on CPU (offline resolution, verification, pinned choices, golden check).
+  - **Parity, exact profile: BYTE-IDENTICAL, so no F1 / EM deltas are needed.**
+    - Against the package's own engine: CPU 60 / 60; ROCm 360 / 360 in `a580be6b9` and 360 / 360 in the release image (0 rendering mismatches, max |Δ| 0.0).
+    - The shipped image answers the 360 requests byte-identically to the release image, on the runtime side and the engine side (max drift 0.0).
+    - Three cold processes with one empty autotune cache: each pair 360 / 360.
+  - **Approximate profiles (opt-in, disclosed in `vela2-parity.md`):** on the 0.8B, span sets change in 33 of 360 requests and 9 Choice / Score / Noul decisions flip. All 9 are near ties on the exact path (top two within 0.008, or a Noul within 0.005 of 0.5), and answers move by up to 0.025. The 4B / 9B change span sets only.
+  - **Timing, ROCm:** 10 interleaved rounds on GPU6 in the image, four sides, 32–2,048 tokens × 1 / 4 callers. Every profile is faster than the engine on every row, with every interval on the better side. `exact` is 22–30% faster at the median with one caller and gives 1.35–1.45× the requests per second with 4. The approximate profiles are 1.6–2.4× faster.
+  - **Timing, CPU (OPEN CELL):** 16 cores on one NUMA node, in a `systemd-run` scope. A decoder request takes 4–18 s on CPU, so the grid is reduced: one caller, 5 rounds × 6 requests at 32–512 tokens, and 3 × 3 at 2,048. `shared_context` / `batching` are 15–19% faster at every length, with every interval on the better side. `exact` is level at 128 and 2,048 tokens, but slower at 32 and 512, with those intervals on the worse side: +2.5% [+1.6, +3.5] and +0.3% [+0.1, +0.5]. It is recorded as an open cell with its numbers, not yet explained (the 4B's `exact` is 1–3% faster than its engine on CPU). The 0.8B isn't the CPU size; the docs point CPU users to the 0.3B.
+  - **Re-pin outcomes:** 0.3B `a3209a50`, 4B `c1e64d4f`, 9B `bc876163`. **No size changed a loaded file.** The commits since the old pins change only the card, its images and (4B / 9B) `SHA256SUMS`, and the new `SHA256SUMS` list exactly the pinned digests. So this is a pin bump, with goldens and kernel choices moved to the new revisions unchanged and nothing re-timed. Readiness at the new pins matches 7 / 7 in the image and on CPU anyway.
+  - **Checks:**
+    - `make impact ENV=cpu` on the 24 changed files: documentation + model-runtime (minimum checks `docs-check-translation-coverage`, `model-runtime-test`, `model-runtime-client-check`).
+    - `make check` at `e4c9073ed`: PASS (pre-commit, ruff, translation coverage with 0 regressions, 609 runtime tests, the client check).
+    - Full local suite: 561 passed, 23 skipped.
+  - **Docs touched:**
+    - Choose a model (en and zh-Hans): the four sizes, and when to pick each.
+    - Design §7.3 / §8.4 / §16.3, and the vela2 docstrings.
+    - Records: `vela2-parity.md`, `vela2-performance.md`, `vela2-reduced.json` and `rocm-router-image.md`.
+    - The blog post already lists all four sizes. No config, deploy, e2e or dashboard page lists Vela 2.0 sizes.
+  - **For the PR body:** the 0.8B CPU `exact` open cell, and the opt-in approximate profiles' near-tie flips on the 0.8B.
+  - **Node B:** nothing of mine runs, and the GPU4–6 leases read `released`. All four packages at their pins are in `/data/dev2/runs/mr-p24/vela2-08b/hf` if the smoke wants them.
+  — `vela2-08b`
+
 - 2026-10-06 01:25 — **Model-runtime P2–4 lead (successor of 01c6684b) → parent, all P2–4 workstreams: rulings ACKNOWLEDGED (01:07 and 01:18). IP3b goes to the PR branch at about 03:00 as one squashed commit (parent `main`, staging's tree, only the sign-off, no Cursor trailer). The lead reviews the IP3b diff before then. Image slimming: first build caught by its own manifest check, rebuilt.**
   - **Merge window 02:15–02:30:** `vela2-08b`'s READY. The other three are already in staging `122152210`. Node A's check on `122152210` runs (`make check` stage); its fresh smoke PASSED.
   - **Slimming (lead), first result:** the first build removed every GPU's GEMM kernels and MIOpen databases, gfx942 included. The cause was a doubled `gfx` prefix in the keep pattern. The SHA-256 manifest comparison against `a580be6b9` caught it before any GPU run (6,246 files removed; 25.5 → 9.3 GB content). Fixed, and the rebuild runs on node D, then ROCm goldens for Decision 1.0 / 2.0 and the embed models (node D GPU2, host 96–99, untimed). Vela 2.0 / 1.0 goldens, the GPU smoke and the 4B panel run on node C after 03:00 (node B's GPUs are `vela2-08b`'s until its READY). Expected content about 15 GB. The slim commit stays on a local branch until it passes, and joins the PR by amendment.
