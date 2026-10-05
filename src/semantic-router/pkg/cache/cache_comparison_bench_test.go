@@ -10,7 +10,7 @@ import (
 
 // newInMemoryBench builds a local in-memory HNSW cache for benchmarking. Unlike
 // the remote stores it needs no server, so it never fails closed; it only needs
-// the BERT model, which it shares with the other backends.
+// the embedding provider, which it shares with the other backends.
 func newInMemoryBench(b *testing.B, size int) LegacyCacheBackend {
 	b.Helper()
 	maxEntries := size * 2
@@ -27,7 +27,7 @@ func newInMemoryBench(b *testing.B, size int) LegacyCacheBackend {
 		HNSWM:               16,
 		HNSWEfConstruction:  64,
 		HNSWEfSearch:        50,
-		EmbeddingModel:      "bert",
+		EmbeddingModel:      "qwen3",
 	})
 }
 

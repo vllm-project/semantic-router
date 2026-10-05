@@ -18,7 +18,7 @@ import (
 // a few MB even for 1024-dim models.
 const defaultEmbeddingMemoSize = 512
 
-// InMemoryCache provides a high-performance semantic cache using BERT embeddings in memory
+// InMemoryCache provides a high-performance semantic cache over embeddings held in memory
 type InMemoryCache struct {
 	embeddingProvider   embedding.Provider
 	entries             []CacheEntry
@@ -45,7 +45,7 @@ type InMemoryCache struct {
 	useHNSW          bool
 	hnswNeedsRebuild bool   // true while the HNSW graph is stale relative to entries
 	hnswEfSearch     int    // Search-time ef parameter
-	embeddingModel   string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	embeddingModel   string // "mmbert" (default), "qwen3" or "multimodal"
 
 	// embMemo deduplicates query-embedding inference: a cache-miss request
 	// otherwise embeds the same query twice (lookup + pending write), so the
@@ -75,7 +75,7 @@ type InMemoryCacheOptions struct {
 	HNSWM               int    // Number of bi-directional links (default: 16)
 	HNSWEfConstruction  int    // Size of dynamic candidate list during construction (default: 200)
 	HNSWEfSearch        int    // Size of dynamic candidate list during search (default: 50)
-	EmbeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	EmbeddingModel      string // "mmbert" (default), "qwen3" or "multimodal"
 }
 
 func attachInMemoryEvictionPolicy(cache *InMemoryCache, policy EvictionPolicyType) {

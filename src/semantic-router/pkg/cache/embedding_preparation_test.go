@@ -80,7 +80,7 @@ func TestOwnedCacheKeepsTruncatedQueriesOutOfSemanticEntries(t *testing.T) {
 
 func TestOwnedCacheTruncationCheckFailureSkipsSemanticAndPreservesExact(t *testing.T) {
 	provider := &truncatingProvider{err: context.DeadlineExceeded}
-	backend := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, EmbeddingModel: "bert", EmbeddingProvider: provider})
+	backend := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, EmbeddingModel: "qwen3", EmbeddingProvider: provider})
 	defer backend.Close()
 	adapter := NewLegacyBackendAdapter(backend, InMemoryCacheType).WithEmbeddingProvider(provider)
 	identity := CacheIdentity{Partition: CachePartition{RequestModel: "model"}, ExactFingerprint: "exact", SemanticQuery: "query"}
