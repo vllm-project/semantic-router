@@ -40,9 +40,10 @@ Without a `MODEL` argument, `vllm-sr serve` starts the router instead.
 | `--result-cache-entries` | `16384` | Recent results each model keeps by content; `0` turns the cache off. |
 | `--cache-dir` | `HF_HUB_CACHE` | Hugging Face cache directory. |
 | `--offline` | off | Use only files already in the cache. |
+| `--base-path DIR` | | A local copy of the pinned base model an adapter package needs, instead of a download. Its files are checked against the package's hashes. |
 | `--accept-licence ID` | | Accept a restricted licence (repeatable). |
 | `--log-level` | `info` | `debug`, `info`, `warning` or `error`. |
-| `--autotune-cache DIR` | | Keep GPU kernel tuning between runs. |
+| `--autotune-cache DIR` | `$VLLM_SR_RUNTIME_AUTOTUNE_CACHE` | Keep compiled GPU kernels, and the kernel tuning of models without recorded choices, between runs. Built-in models run their recorded choices on MI300X and MI325X instead of tuning. |
 
 Other commands: `vllm-sr-runtime models` lists the built-in models with their
 pinned revisions, and `vllm-sr-runtime plugins` lists the installed families,
@@ -170,6 +171,9 @@ The binding names (`domain_classifier`, `pii_classifier`, `prompt_guard`,
 | `VLLM_SR_RUNTIME_CACHE_DIR` | `/app/models/model-runtime` in router images | Hugging Face cache of managed runtimes. |
 | `VLLM_SR_RUNTIME_CPU_PROCESSES` | one per CPU model, at most one per two cores | The most processes CPU models without a `process` are spread over. |
 | `VLLM_SR_RUNTIME_PREPARED_DIR` | `/opt/router-model-artifacts` | Where the runtime finds prepared bundles (Vela Omni) before it looks on the Hub. |
+| `VLLM_SR_RUNTIME_READY_TIMEOUT` | `10m` | How long the router waits for a deployment to become ready when it starts or reloads, as a duration such as `30m`. A first start may download and verify large models. |
+| `VLLM_SR_RUNTIME_RESULT_CACHE` | `4096` | Recent classify and decision results the router keeps per model, so a repeated request skips the runtime; `0` turns it off. |
+| `VLLM_SR_RUNTIME_AUTOTUNE_CACHE` | | The `--autotune-cache` directory of a runtime. |
 | `HF_TOKEN` | | Token for gated or private repositories. |
 
 The router talks to managed runtimes only over Unix sockets in a directory only
