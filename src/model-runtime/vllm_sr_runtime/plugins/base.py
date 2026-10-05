@@ -644,7 +644,11 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     ONNX Runtime engine with NumPy readouts): the scheduler then calls it on
     the model's worker, or on the request's planning thread while the model is
     idle, instead of handing each batch to the CPU device thread, which saves a
-    thread wake-up each way.
+    thread wake-up each way. Such a model's ``inline_cost`` is the largest
+    planned cost of a lone request whose batch may run on the event loop that
+    planned it, while the model is idle, saving the hand-off to the worker and
+    back; the loop serves nothing else meanwhile, so keep it to forwards of a
+    few milliseconds.
     """
 
     info: ModelInfo
@@ -653,6 +657,7 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     device_thread: ClassVar[bool] = True
     batch_invariant: bool = False
     packs_rows: bool = False
+    inline_cost: int = 0
 
     def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan:
         """Validate and render every question; failures become per-question errors."""
