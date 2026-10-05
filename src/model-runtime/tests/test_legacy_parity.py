@@ -225,7 +225,11 @@ def test_ab_rounds_save_each_finished_round_and_resume_the_rotation(lp, tmp_path
     assert (state["pair_rounds"], state["window_rounds"]) == (1, 0)
     assert state["report"]["domain"]["legacy"] == [3_000, 3_000]
     run(state, 2, use_windows=False)
-    assert orders == [("a", False), ("b", False), ("c", False), ("a", True)] + [
+    assert orders == [
+        ("a", False),
+        ("b", False),
+        ("c", False),
+        ("a", True),
         ("a", True),
         ("b", True),
         ("c", True),
