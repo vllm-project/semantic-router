@@ -155,6 +155,12 @@ is down.
 A runtime started this way listens on `127.0.0.1` unless you pass `--host`.
 Expose it only on a private network: it has no authentication of its own.
 
+On a large host, give such a runtime `--threads`, or run it in a cpuset, when
+it serves an ONNX Runtime model such as Vela Omni: each graph of that model
+runs its own pool of up to `--threads` CPU threads, and without the option up
+to every CPU the process may run on (an Omni bundle has four graphs). The
+runtimes the router starts always get their share of the cores as `--threads`.
+
 ### On Kubernetes
 
 The router image already contains the CPU runtime, so managed deployments work

@@ -27,7 +27,7 @@ Without a `MODEL` argument, `vllm-sr serve` starts the router instead.
 | `--engine` | `native` | Engine plugin: `native` (PyTorch) or `onnxruntime`. |
 | `--family` | detected | Force a model family plugin. |
 | `--served-model-name` | the model name | The model ID the API reports, for one `MODEL`. |
-| `--threads` | all cores | CPU threads for the process. |
+| `--threads` | all cores | CPU threads for the process. Each graph of an ONNX Runtime model runs its own pool of up to this many threads, so set it on a large host. |
 | `--memory-budget GIB` | | Refuse to load a model estimated above this size. |
 | `--max-queue` | `256` | Queued requests per model before the runtime answers 429. |
 | `--max-queued-tokens` | `4194304` | Queued tokens per model before 429. |
