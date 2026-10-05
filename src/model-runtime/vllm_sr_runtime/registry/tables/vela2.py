@@ -1,9 +1,11 @@
-"""Vela 2.0 (Phase 3, private preview): 0.3B, 4B and 9B.
+"""Vela 2.0 (Phase 3, private preview): 0.3B, 0.8B, 4B and 9B.
 
 Entries pin a revision, the SHA-256 of every file the family loads, the
 expected identity and parameter count; references live in
-``registry/golden_answers_vela2.json`` and the 4B / 9B backbones' kernel
-choices in ``registry/kernel_choices.json``. ``reduced`` names the copy
+``registry/golden_answers_vela2.json`` and the decoders' (0.8B, 4B, 9B) kernel
+choices in ``registry/kernel_choices.json``: those of the Decision 2.0 model
+each one's backbone comes from (Eos-0.8B, Nox-4B, Lux-9B), the same tuning
+keys. ``reduced`` names the copy
 ``max_speed`` may load per device class, where ``docs/records/vela2-parity.md``
 and ``vela2-performance.md`` show it at the accuracy floor and faster. The
 repositories are private: a token with access is needed to download them.
@@ -43,7 +45,7 @@ def _vela(
 MODELS: tuple[BuiltinModel, ...] = (
     _vela(
         "0.3B",
-        "13e85201312febce801f8311960096160a3490fe",
+        "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
         "7e786f91413961d76a8b85318f70fea1509124fe33709a8c12d6badf8d2ccda4",
         "",
         309_114_371,
@@ -58,8 +60,26 @@ MODELS: tuple[BuiltinModel, ...] = (
         reduced={"cpu": "float32-packed"},
     ),
     _vela(
+        "0.8B",
+        "a778eb2ae2304cfa72fca7e53a19136dea5be012",
+        "e231da382b5d3d45f253e9b3ff12afe7044b56d95afa4c2c0ec412c036024949",
+        "a8fb5b188593463209475a7b51ceb97531b58bb1d7445b8b6a2e1a6333fd1ae2",
+        755_685_699,
+        "qwen3_5_text",
+        4,
+        {
+            "MODEL_MANIFEST.json": "a8fb5b188593463209475a7b51ceb97531b58bb1d7445b8b6a2e1a6333fd1ae2",
+            "broad_head.safetensors": "687d7a435d6de846796274e417b6333f83df3085a6e7c3bca4c01cb4d75a30f0",
+            "calibration.json": "d96e447962d0dc1d58fa8422dddbae8b99960e21fd75a10ef9b096f700a211f5",
+            "config.json": "0637ca193b9159b6ece25837913956477164d3392d9b5dd1e6b74b95a484004a",
+            "model-00001-of-00001.safetensors": "c70237ecd579c60289c177fa9806e71c24840c2fc557b5c76af1395dc3081fa6",
+            "model.safetensors.index.json": "b53d1c79219677289bdb1541a1373dfe53119884f248b23c94a27aef7338919d",
+            "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+        },
+    ),
+    _vela(
         "4B",
-        "756f4921f20a1377eb2eccab6574a544c6ebcc33",
+        "c1e64d4f872cb38bc58502e6888340100bab9d55",
         "c47ee0594199d66f924c81c1664cb97a9f2cfaeb12d484c232b3d6abe67ec07b",
         "3e5a26db6dd50cc3939502ec861cdc0e5f6a5de8947815d598d3aea6f4624a0c",
         4_213_980_675,
@@ -79,7 +99,7 @@ MODELS: tuple[BuiltinModel, ...] = (
     ),
     _vela(
         "9B",
-        "23b9a557393504d0ba5f271641137b740e3967bf",
+        "bc8761637d8788619dfbaf6d8890128efe85fd40",
         "76ac16a7231b02989465212389dc55d42a45655c4e574599be3abe35c0e56cd5",
         "8ccd2ccb2f91f7b4ee99df2e3bf885cb901f2567cfb0a6b6093778ba14dfc05f",
         7_949_850_627,

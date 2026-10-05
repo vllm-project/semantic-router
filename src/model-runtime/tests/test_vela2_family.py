@@ -26,6 +26,8 @@ from vllm_sr_runtime.plugins.base import (
 from vllm_sr_runtime.testing.vela2 import write_decoder_package, write_encoder_package
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
+# The 0.8B's backbone has as many gated-delta value heads as key heads; the 4B and 9B have twice as many.
+DECODERS = ("decoder", "decoder-08b")
 
 
 @pytest.fixture(scope="module")
@@ -34,6 +36,9 @@ def packages(tmp_path_factory) -> dict[str, Path]:
     return {
         "encoder": write_encoder_package(root / "encoder"),
         "decoder": write_decoder_package(root / "decoder"),
+        "decoder-08b": write_decoder_package(
+            root / "decoder-08b", seed=1, backbone={"linear_num_value_heads": 2}
+        ),
         "short": write_decoder_package(root / "short", max_length=200, broad=False),
     }
 
@@ -101,7 +106,7 @@ def test_bundled_engine_is_never_imported(models) -> None:
     assert "vela2_inference" not in sys.modules
 
 
-@pytest.mark.parametrize("name", ["encoder", "decoder"])
+@pytest.mark.parametrize("name", ["encoder", *DECODERS])
 def test_golden_request_answers_every_question_type(models, name) -> None:
     model = models[name]
     response = ask(model, GOLDEN_STATE, GOLDEN_QUESTIONS)
@@ -125,7 +130,7 @@ def test_golden_request_answers_every_question_type(models, name) -> None:
         "halu",
     }
     assert set(response["thresholds"]) == {"topics", "pii", "halu"}
-    assert ("span_heads" in response) == (name == "decoder")
+    assert ("span_heads" in response) == (name != "encoder")
     for span in response["spans"]["pii"]:
         assert GOLDEN_STATE["request"][span["start"] : span["end"]] == span["text"]
     assert response["usage"]["input_tokens"] > 0
@@ -143,8 +148,9 @@ def test_encoder_runs_the_readout_in_the_family(models) -> None:
     )
 
 
-def test_decoder_questions_do_not_depend_on_each_other(models) -> None:
-    model = models["decoder"]
+@pytest.mark.parametrize("decoder", DECODERS)
+def test_decoder_questions_do_not_depend_on_each_other(models, decoder) -> None:
+    model = models[decoder]
     together = ask(model, GOLDEN_STATE, GOLDEN_QUESTIONS)
     for name in ("domain", "urgency"):
         alone = ask(model, GOLDEN_STATE, {name: GOLDEN_QUESTIONS[name]})
@@ -166,8 +172,11 @@ def test_decoder_answers_a_halu_alias_with_the_callers_label(models) -> None:
     assert {span["label"] for span in response["spans"]["h"]} == {"Hallucinated"}
 
 
-def test_decoder_shared_context_path_runs_one_parts_pass(models, monkeypatch) -> None:
-    model = models["decoder"]
+@pytest.mark.parametrize("name", DECODERS)
+def test_decoder_shared_context_path_runs_one_parts_pass(
+    models, monkeypatch, name
+) -> None:
+    model = models[name]
     state = {"request": "Tom Baker wrote", "answer": "Adults may take 6 grams."}
     questions = {
         "pii": {"preset": "pii", "over": "request"},
@@ -357,9 +366,10 @@ def test_max_speed_runs_encoder_approximate_batches_on_the_copy(
             np.testing.assert_allclose(block, exact_block, atol=1e-4, rtol=1e-4)
 
 
+@pytest.mark.parametrize("name", DECODERS)
 @pytest.mark.parametrize("layout", ["rows", "packed"])
-def test_tree_blocks_equal_their_full_sequences(models, layout) -> None:
-    engine_model = models["decoder"].engine_model
+def test_tree_blocks_equal_their_full_sequences(models, layout, name) -> None:
+    engine_model = models[name].engine_model
     prefixes = [list(range(5, 25)), list(range(60, 73))]
     blocks = [list(range(30, 37)), list(range(40, 52)), list(range(80, 85))]
     owners = [0, 0, 1]

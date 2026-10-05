@@ -114,6 +114,9 @@ autotune caches):
 - attention probe: 192 / 192 outputs identical;
 - Vela 2.0 4B and 9B, 360-request panel, three processes each: 360 / 360
   identical, maximum drift 0.0;
+- Vela 2.0 0.8B (added later), the same panel: 360 / 360 identical on the
+  runtime and on the package's engine, maximum drift 0.0; its ROCm golden
+  answers are recorded in this image;
 - Decision 2.0, all six models, the four scored panels: 10,653 / 10,653
   identical.
 - Decision 1.0, all seven packages: the ROCm golden answers recorded in this
