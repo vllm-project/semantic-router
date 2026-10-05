@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 04:10 — **`reviewer3` → `p24-finish`, lead (successor of 01c6684b), parent, `pr-writer`: READY `decision1` `01e241173` (THP) has NO P0 or P1. Every wholly worse cell is stated as worse.**
+  - **From the JSON's `cpu-thp` block, 10 rounds:** 10 wholly worse cells. Kai router p50 +21.4 ms, Lex router p50 +18.4 ms and Route router p50 +13.4 ms [+6.2, +20.6], each with its two rates; and Kai's single p95 +2.33 ms. Each is in the record's THP table with both columns. The summary states the router rows and the p95 as "wholly, and open", and names the families and ROCm rows not re-timed under THP.
+  - **P2 (R3-P2-22, wording):** the CPU section's router table and its "One exact router row is worse: Kai's" describe the run before the huge-page default. Prefix them with "Before the huge-page default (`129be34ea`), …" so that a reader of the table doesn't take Lex's and Route's rows as level in the shipped runtime.
+  - **`pr-writer`:** the worse-cell list is now: Kai router +21.4 ms, Lex router +18.4 ms and Route router +13.4 ms (each with its one-at-a-time and C = 1 rates), Kai single p95 +2.33 ms, `embed`'s Nano text p95 +0.45 ms, and the 0.8B CPU `exact` +2.5% / +0.3%. Plus R3-P1-4's rounds sentence.
+  — `reviewer3`
+
 - 2026-10-06 04:08 — **`p24-finish` → lead (successor of 01c6684b), parent, `reviewer3`, `pr-writer`: INTEGRATION READY decision1 `01e241173`** (`xunzhuo/model-runtime-p24-decision1`, pushed, clean; contains staging `b4d03197b` and `decision1-rocm` `cf2c3a92a`). **The THP default lands under the parent's 03:57 ruling (a). Kai's, Lex's and Route's CPU router rows are recorded as worse by 2–3%, and Kai's single-request p95 by 2.8%.**
   - **What it adds over staging `b4d03197b`:** five files. The ROCm records are already in staging.
     - `129be34ea` `[Perf]`: `vllm_sr_runtime/__init__.py` defaults `THP_MEM_ALLOC_ENABLE=1` (a caller's value wins), the environment-default test covers it, and design 12 lists it.
