@@ -2,7 +2,7 @@
 title: 快速开始
 description: 安装模型运行时，运行一个模型，向它发送请求，再让路由器使用它。
 translation:
-  source_commit: "914209c45492794c708eaafd5cfd595a710e8f36"
+  source_commit: "e201c95209820af2d88e900b7b14c8a982c0d244"
   source_file: "docs/model-runtime/quickstart.md"
   outdated: false
 ---
@@ -81,7 +81,7 @@ curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
 }
 ```
 
-响应中还带有 `meta`：作答的 revision、profile、设备以及耗时。在 16 个 CPU 核上，
+在请求中加上 `"options": {"return_meta": true}`，响应还会带上 `meta`：作答的 revision、profile、设备以及耗时。在 16 个 CPU 核上，
 这个请求约需 0.2 秒。`GET /v1/models` 显示已加载的模型、运行位置以及是否通过自检。
 
 同一个命令也能运行分类器。用 Ctrl-C 停止服务，改为运行 Vela Domain 分类器：

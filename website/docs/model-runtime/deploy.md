@@ -53,7 +53,7 @@ global:
 | `provider` | Always `model_runtime` for models the runtime serves. |
 | `artifact` | A Hugging Face repository, or an absolute path to a local copy. |
 | `revision` | The exact 40-character commit to load. Built-in models are already pinned; other repositories need one. |
-| `device` | `auto` (default), `cpu`, `cuda:N`, `rocm:N`, `xpu:N` or `mps`. |
+| `device` | `auto` (default), `cpu`, `cuda:N`, `rocm:N`, `xpu:N`, `mps`, or an accelerator a plugin adds. |
 | `profile` | `exact` (default) or an opt-in faster profile. See [Profiles](./profiles.md). |
 | `input` | For task models: the longest input in tokens (`max_tokens`) and what to do with longer input (`overflow`: `reject`, `truncate` or `window`). |
 | `process` | Runs deployments with the same name in one runtime process. |
@@ -85,11 +85,16 @@ can override it under its own `routing.model_bindings`.
 ## Group models into processes
 
 By default the models of one GPU share one runtime process, so all models on
-`rocm:0` answer a request in one call and use memory efficiently. CPU models
+`rocm:0` answer a request in one call and use memory efficiently. They take
+turns on the GPU, one device call at a time; put a model on a GPU of its own
+when it must not wait for the others. CPU models
 are spread over several processes, one per model up to one per two cores the
 router may use, so a request's models run in parallel; each process runs an
 equal share of the cores as threads. `VLLM_SR_RUNTIME_CPU_PROCESSES` caps the
-number of CPU processes, and `1` keeps every CPU model in one process.
+number of CPU processes, and `1` keeps every CPU model in one process. Keep the
+default where you can: in one process, an ONNX Runtime model such as Vela Omni
+and a PyTorch model share the CPU's threads, and one of them answers more
+slowly under load.
 
 Give a deployment its own `process` name when it should not share a fault
 domain or memory with the others, for example a large decision model:
@@ -210,6 +215,7 @@ answer:
 | The answer arrives after the feature's timeout | Unknown |
 | The runtime is overloaded | Unknown |
 | The runtime process crashed | Unknown until the router has restarted it (back-off from 1 s to 60 s) |
+| Every model of a process failed to load | Unknown; the router restarts that process with the same back-off until the model loads |
 | The input is longer than the deployment allows and `overflow: reject` | An error for that input |
 
 An unknown signal does not match. A decision's `rules.on_unknown` chooses what

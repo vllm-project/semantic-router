@@ -13,6 +13,8 @@ STAGES = (
     "image-routing-assets",
     "python-base",
     "torch-cpu",
+    "torch-rocm-base",
+    "causal-conv1d-rocm",
     "torch-rocm",
     "torch-cuda",
     "runtime",
@@ -51,8 +53,10 @@ def test_every_router_image_comes_from_one_stage_graph() -> None:
     # extproc stays last: it is the default target of local and E2E builds.
     assert tuple(graph) == STAGES
     assert graph["runtime"][0] == "torch-${ACCELERATOR}"
-    for accelerator in ("cpu", "rocm", "cuda"):
-        assert graph[f"torch-{accelerator}"][0] == "python-base"
+    for stage in ("torch-cpu", "torch-rocm-base", "torch-cuda"):
+        assert graph[stage][0] == "python-base", stage
+    assert graph["causal-conv1d-rocm"][0] == "torch-rocm-base"
+    assert graph["torch-rocm"][0] == "torch-rocm-base"
     assert graph["router"][0] == "runtime"
     assert graph["vllm-sr"][0] == "router"
     assert graph["extproc"][0] == "router"
@@ -98,13 +102,34 @@ def test_runtime_takes_pytorch_from_the_accelerator_wheels() -> None:
     graph = stages()
 
     assert "https://download.pytorch.org/whl/cpu" in graph["torch-cpu"][1]
-    assert "https://download.pytorch.org/whl/rocm" in graph["torch-rocm"][1]
+    assert "https://download.pytorch.org/whl/rocm7.2" in graph["torch-rocm-base"][1]
     assert "https://download.pytorch.org/whl/cu" in graph["torch-cuda"][1]
     assert "fla-core" not in graph["torch-cpu"][1]
-    for accelerator in ("rocm", "cuda"):
-        body = graph[f"torch-{accelerator}"][1]
-        assert 'test "$TARGETARCH" = amd64' in body, accelerator
-        assert "fla-core==" in body, accelerator
+    for stage in ("torch-rocm-base", "torch-cuda"):
+        body = graph[stage][1]
+        assert 'test "$TARGETARCH" = amd64' in body, stage
+        assert "fla-core==" in body, stage
+
+
+def test_rocm_image_builds_causal_conv1d_with_the_released_rocm_sdk() -> None:
+    graph = stages()
+    build = graph["causal-conv1d-rocm"][1]
+
+    # The released decoders' wheel came from ROCm 7.2.3's compiler, which emits
+    # the GPU code their answers were recorded with.
+    assert "ARG ROCM_SDK=7.2.3" in build
+    assert "ARG CAUSAL_CONV1D=causal-conv1d==1.7.0" in build
+    assert "Pin: release o=repo.radeon.com" in build
+    assert "CAUSAL_CONV1D_FORCE_BUILD=TRUE" in build
+    assert "--no-build-isolation" in build
+    rocm = graph["torch-rocm"][1]
+    assert "from=causal-conv1d-rocm,source=/wheels" in rocm
+    assert "pip install --no-deps /tmp/wheels/causal_conv1d-" in rocm
+    assert "apt-get" not in rocm
+    mounts = [
+        name for name, (_, body) in graph.items() if "from=causal-conv1d-rocm" in body
+    ]
+    assert mounts == ["torch-rocm"]
 
 
 def test_runtime_dependencies_come_from_the_runtime_package() -> None:

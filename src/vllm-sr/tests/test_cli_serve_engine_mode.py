@@ -76,6 +76,17 @@ def test_engine_mode_delegates_to_the_runtime(runtime_calls, router_serve):
     assert router_serve == []
 
 
+def test_engine_mode_leaves_profile_names_to_the_runtime(runtime_calls):
+    result = CliRunner().invoke(
+        main, ["serve", "/models/kai", "--profile", "plugin_turbo"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert runtime_calls == [
+        ["serve", "/models/kai", "--device", "auto", "--profile", "plugin_turbo"]
+    ]
+
+
 def test_engine_mode_defaults_and_unix_socket(runtime_calls, tmp_path):
     socket = str(tmp_path / "runtime.sock")
     result = CliRunner().invoke(main, ["serve", "/models/kai", "--uds", socket])
@@ -101,7 +112,7 @@ def test_engine_mode_defaults_and_unix_socket(runtime_calls, tmp_path):
         (["--config", "my.yaml"], "--config applies to router mode"),
         (["--target", "k8s"], "--target applies to router mode"),
         (["--recipe-env", "TOKEN"], "--recipe-env applies to router mode"),
-        (["--profile", "dev"], "is not a runtime profile"),
+        (["--profile", "Fast!"], "is not a profile name"),
         (["--uds", "/tmp/r.sock", "--port", "1"], "--uds cannot be combined"),
     ],
 )

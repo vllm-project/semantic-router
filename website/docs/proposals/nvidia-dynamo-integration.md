@@ -84,7 +84,6 @@ global:
     modules:
       prompt_guard:
         enabled: true
-        variant: mmbert32k
         threshold: 0.7
 ```
 

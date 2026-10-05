@@ -77,6 +77,36 @@ global:
 			},
 		},
 		{
+			name: "the retired gemma and bert embedding models",
+			yaml: `
+global:
+  model_catalog:
+    embeddings:
+      semantic:
+        bert_model_path: models/all-MiniLM-L12-v2
+        gemma_model_path: models/embeddinggemma-300m
+        embedding_config:
+          model_type: gemma
+  stores:
+    semantic_cache:
+      embedding_model: bert
+    memory:
+      embedding_model: mmbert
+  router:
+    model_selection:
+      ml:
+        model_type: bert
+`,
+			want: []string{
+				"global.model_catalog.embeddings.semantic.gemma_model_path",
+				"global.model_catalog.embeddings.semantic.bert_model_path",
+				"global.model_catalog.embeddings.semantic.embedding_config.model_type: gemma",
+				"global.stores.semantic_cache.embedding_model: bert",
+				"global.router.model_selection.ml.model_type: bert",
+				"Vela Embedding (mmbert) replaces the gemma and bert embedding models",
+			},
+		},
+		{
 			name: "NLI routing fields in routing and recipes",
 			yaml: `
 routing:
@@ -143,6 +173,14 @@ global:
       domain:
         provider: model_runtime
         profile: max_speed
+    embeddings:
+      semantic:
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
+        gemma_model_path: ""
+        bert_model_path: ""
+  stores:
+    memory:
+      embedding_model: mmbert
 `))
 	if err != nil {
 		t.Fatal(err)

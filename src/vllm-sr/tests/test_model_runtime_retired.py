@@ -22,6 +22,8 @@ from cli.model_runtime_retired import (  # noqa: E402
     REMOVED_EMBEDDING_BACKENDS,
     REMOVED_MODULE_FIELDS,
     REMOVED_PROVIDERS,
+    RETIRED_EMBEDDING_PATHS,
+    RETIRED_EMBEDDING_TYPES,
     retired_model_fields,
 )
 from cli.parser import ConfigParseError, parse_user_config  # noqa: E402
@@ -65,7 +67,14 @@ def _legacy() -> dict:
             "model_catalog": {
                 "system": {"hallucination_explainer": "models/mom-halugate-explainer"},
                 "embeddings": {
-                    "semantic": {"embedding_config": {"backend": "OpenVINO"}}
+                    "semantic": {
+                        "gemma_model_path": "models/embeddinggemma-300m",
+                        "bert_model_path": "models/all-MiniLM-L12-v2",
+                        "embedding_config": {
+                            "backend": "OpenVINO",
+                            "model_type": "gemma",
+                        },
+                    }
                 },
                 "deployments": {
                     "candle-domain": {
@@ -121,9 +130,11 @@ def _legacy() -> dict:
             "stores": {
                 "response_cache": {
                     "enabled": True,
+                    "embedding_model": "bert",
                     "polarity_guard": {"mode": "lexical"},
                 }
             },
+            "router": {"model_selection": {"ml": {"model_type": "bert"}}},
         },
     }
 
@@ -147,6 +158,11 @@ def test_every_retired_setting_is_found_by_its_path():
         ),
         f"{modules}.hallucination_mitigation.detector.backend: candle",
         "global.model_catalog.embeddings.semantic.embedding_config.backend: OpenVINO",
+        "global.model_catalog.embeddings.semantic.gemma_model_path",
+        "global.model_catalog.embeddings.semantic.bert_model_path",
+        "global.model_catalog.embeddings.semantic.embedding_config.model_type: gemma",
+        "global.stores.response_cache.embedding_model: bert",
+        "global.router.model_selection.ml.model_type: bert",
         "global.model_catalog.system.hallucination_explainer",
         "global.stores.response_cache.polarity_guard",
     ]
@@ -188,6 +204,12 @@ def test_the_inventory_is_the_router_parsers():
         r"removedEmbeddingBackends\s*=\s*map\[string\]bool\{(.*?)\}", source
     )
     fields = re.search(r"removedDeploymentFields\s*=\s*\[\]string\{(.*?)\}", source)
+    retired_types = re.search(
+        r"retiredEmbeddingTypes\s*=\s*map\[string\]bool\{(.*?)\}", source
+    )
+    retired_paths = re.search(
+        r"removedEmbeddingPaths\s*=\s*\[\]string\{(.*?)\}", source
+    )
     modules = re.findall(r"\{\[\]string\{([^}]*)\}, \[\]string\{([^}]*)\}\}", source)
 
     def strings(text: str) -> tuple[str, ...]:
@@ -196,6 +218,11 @@ def test_the_inventory_is_the_router_parsers():
     assert providers and set(strings(providers.group(1))) == REMOVED_PROVIDERS
     assert embedding and set(strings(embedding.group(1))) == REMOVED_EMBEDDING_BACKENDS
     assert fields and strings(fields.group(1)) == REMOVED_DEPLOYMENT_FIELDS
+    assert (
+        retired_types
+        and set(strings(retired_types.group(1))) == RETIRED_EMBEDDING_TYPES
+    )
+    assert retired_paths and strings(retired_paths.group(1)) == RETIRED_EMBEDDING_PATHS
     assert tuple((strings(path), strings(names)) for path, names in modules) == (
         REMOVED_MODULE_FIELDS
     )

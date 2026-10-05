@@ -26,7 +26,8 @@ You need to migrate if your configuration contains any of these:
   `models/mmbert-embed-32k-2d-matryoshka` or `lettucedect`;
 - the NLI explainer (`hallucination_explainer`, `nli_model`,
   `enable_nli_filtering`, `use_nli`) or the response cache's `polarity_guard`
-  setting.
+  setting;
+- a hallucination detector with `backend: endpoint`.
 
 The router refuses these settings at startup and tells you to run the
 migration command.
@@ -76,6 +77,7 @@ or stored vectors to re-embed because their embedding model changed (see
 | a label map inside an older model's directory, such as `category_mapping_path: models/mom-domain-classifier/category_mapping.json` | removed: the router reads the labels of the model it runs |
 | `mlp.device` on the MLP selection algorithm | removed: the MLP selector runs in the router |
 | `grounding.nli_contradiction_penalty` of the fusion algorithm | `grounding.contradiction_penalty`: grounding now reads the hallucination detector |
+| a hallucination detector with `backend: endpoint`, `endpoint` and `model_id` | a `hallucination_detector` binding to that chat service; an endpoint whose path is not `/v1` has to be written by hand |
 
 ### Model names that changed
 

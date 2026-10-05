@@ -120,11 +120,12 @@ func TestImplicitEmbeddingSpecResolvesRegistryPackages(t *testing.T) {
 	}
 	if spec.Binding.Deployment != "@embedding.mmbert" || spec.Deployment.Artifact != "vllm-sr/Vela-1.0-Encoder-307M-Embedding" ||
 		len(spec.Deployment.Revision) != 40 || spec.Deployment.Device != "cpu" || spec.Deployment.Input.Overflow != "truncate" ||
-		spec.Deployment.Profile != "batching" {
+		spec.Deployment.Profile != "exact" {
 		t.Fatalf("mmbert spec %+v", spec)
 	}
 	cfg.EmbeddingModels.UseCPU = false
-	if spec, err = implicitEmbeddingSpec(cfg, config.DefaultRecipeName, "multimodal"); err != nil || spec.Deployment.Artifact != omni || spec.Deployment.Device != "auto" {
+	if spec, err = implicitEmbeddingSpec(cfg, config.DefaultRecipeName, "multimodal"); err != nil || spec.Deployment.Artifact != omni || spec.Deployment.Device != "auto" ||
+		spec.Deployment.Profile != "exact" {
 		t.Fatalf("multimodal spec %+v, %v", spec, err)
 	}
 	cfg.Qwen3ModelPath = "models/mom-embedding-light"
