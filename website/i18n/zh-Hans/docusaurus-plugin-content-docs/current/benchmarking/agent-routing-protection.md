@@ -2,7 +2,7 @@
 title: Agent 路由保护基线
 sidebar_position: 8
 translation:
-  source_commit: "83f42330b6f1bfb65c743d4f6629382f4ec132c2"
+  source_commit: "bd165583b47ccf9640f66790945985d60c40c0dc"
   source_file: "docs/benchmarking/agent-routing-protection.md"
   outdated: false
 ---
@@ -14,23 +14,23 @@ translation:
 
 ## 运行 {#run}
 
-在仓库根目录，并已安装常规 Go、Rust 和 C 构建工具：
+在仓库根目录，并已安装 Go：
 
 ```bash
 make bench-agent-routing-protection
 ```
 
-该目标会构建链接 router 包所需的 CPU 原生绑定。
+该目标运行 router `pkg/extproc` 包的学习会话测试。
 它不会下载模型权重、启动 Router 部署、联系模型 provider，也不需要外部状态存储。报告写入 `.agent-harness/agent-routing-protection/report.json`。
 
-构建原生绑定后，目标测试也可以直接运行：
+这些测试也可以直接运行：
 
 ```bash
 cd src/semantic-router
 go test ./pkg/extproc -run '^TestRouterLearningSession' -count=1 -v
 ```
 
-CI 在核心 `Test And Build` 作业中，于构建 CPU 绑定之后、启动外部服务或下载模型权重之前，显式运行 `make bench-agent-routing-protection`。其退出状态会卡住该作业。`agent-routing-protection` 产物包含 JSON 报告，契约回归时还包括每轮失败。即使失败也会尝试上传；若在报告产生前 setup 失败，上传会对缺失文件发出警告。
+CI 在 `Router Contracts` 作业中，于启动外部服务或下载模型权重之前，通过 `make test-core-unit` 运行这些测试，并设置 `ROUTER_PROTECTION_REPORT`。其退出状态会卡住该作业。`agent-routing-protection` 产物包含 JSON 报告，契约回归时还包括每轮失败。即使失败也会尝试上传；若在报告产生前 setup 失败，上传会对缺失文件发出警告。
 
 这些测试也会在常规核心 `make test-semantic-router` 门槛中运行。任何每轮模型、采样权限、硬锁定状态、preflight 原因、回放 action 或 reason 不匹配都会使门槛失败。每次运行执行语料两次并比较报告字节。
 
