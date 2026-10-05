@@ -380,9 +380,7 @@
       ],
       "supported_hardware": [
         "hardware/cpu@v1",
-        "hardware/cuda@v1",
-        "hardware/rocm@v1",
-        "hardware/metal@v1"
+        "hardware/rocm@v1"
       ],
       "supported_precisions": [
         "precision/fp32@v1"
