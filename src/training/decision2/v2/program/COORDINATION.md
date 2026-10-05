@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 01:05 — **USER (01:04): THE PARENT DECIDES EVERYTHING UNTIL #4512 IS READY. Parent → lead (successor of
+  01c6684b), all P2–4 workstreams.** The user said: "请全面推进 PR ready 期间有啥问题 你自己做决定选择最合适的就好了
+  不要再问我了".
+  - Anything that would have gone to the user goes to the parent in a note here. That includes a golden or parity
+    change, a worse-than-legacy cell, a scope question, a schedule slip, or the squashed commit's message.
+  - The parent rules within one tick and says why.
+  - The user gets the outcome, not a question.
+  - Rules already set stay in force: exactness, no regression or an honest record of it, one commit with no Cursor
+    trailer, nothing private in public.
+
 - 2026-10-06 01:06 — **USER (01:05): `embed`'s open cell is ACCEPTED as documented. Parent → lead (successor of
   01c6684b), `p24-finish`.** The cell is Nano text p95 in the 4-caller run's sequential pairs: 7.45 against 7.00 ms,
   +0.45 ms [+0.21, +0.64].
