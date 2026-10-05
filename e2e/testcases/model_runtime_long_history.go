@@ -14,7 +14,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("model-runtime-long-history", pkgtestcases.TestCase{
-		Description: "A conversation whose history gives one process more tasks than a runtime takes in one bundle by default is answered with no task refused; the Router's managed runtimes advertise a bundle cap that holds every history piece and take them in one bundle, and the PII signal over the whole history follows the runtime's spans",
+		Description: "A conversation whose history has more PII pieces than a runtime takes tasks in one bundle by default is answered with no task refused and every piece reaching the PII model; the Router's managed runtimes advertise a bundle cap that holds every history piece and take them in one bundle, and the PII signal over the whole history follows the runtime's spans",
 		Tags:        []string{"model-runtime", "bundles", "pii", "history"},
 		Fn:          testModelRuntimeLongHistory,
 	})
@@ -26,6 +26,10 @@ const (
 	mrHistoryTurns = 80
 	// vllm-sr-runtime's --max-bundle-tasks default.
 	mrDefaultBundleTasks = 64
+	// One lookup per input window a model is asked, hit or miss. Bundle tasks
+	// don't count pieces: the Router fuses a stage's calls to one model and
+	// head into one task of many inputs.
+	runtimeResultCacheMetric = "vllm_sr_runtime_result_cache_total"
 )
 
 func testModelRuntimeLongHistory(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -64,11 +68,13 @@ func testModelRuntimeLongHistory(ctx context.Context, client *kubernetes.Clients
 	bundles := countDelta(before, after, runtimeRequestsMetric, map[string]string{"endpoint": "/v1/bundle"})
 	refused := countDelta(before, after, runtimeRequestsMetric, map[string]string{"status": "413"})
 	routed := after.Sum(runtimeBundleTasksMetric+"_sum", nil) - before.Sum(runtimeBundleTasksMetric+"_sum", nil)
+	asked := countDelta(before, after, runtimeResultCacheMetric, map[string]string{"model": mrPIIDeployment})
 	if refused != 0 {
 		return fmt.Errorf("%s refused %v of the Router's requests as too large", socket, refused)
 	}
-	if bundles < 1 || routed < float64(len(pieces)) {
-		return fmt.Errorf("%s received %v bundles carrying %v tasks, want the %d PII pieces at least", socket, bundles, routed, len(pieces))
+	if bundles < 1 || asked < float64(len(pieces)) {
+		return fmt.Errorf("%s received %v bundles carrying %v tasks and asked %s %v inputs, want the %d PII pieces at least",
+			socket, bundles, routed, mrPIIDeployment, asked, len(pieces))
 	}
 
 	preview, err := session.previewConversation(ctx, messages)
@@ -122,7 +128,7 @@ func testModelRuntimeLongHistory(ctx context.Context, client *kubernetes.Clients
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"pii_pieces": len(pieces), "pieces_with_spans": withSpans, "router_bundles": bundles,
-			"router_bundled_tasks": routed, "direct_bundle_tasks": len(tasks),
+			"router_bundled_tasks": routed, "pii_inputs_asked": asked, "direct_bundle_tasks": len(tasks),
 			"advertised_max_bundle_tasks": served.Limits.MaxBundleTasks, "decision": response.Headers.Get("x-vsr-selected-decision"),
 		})
 	}

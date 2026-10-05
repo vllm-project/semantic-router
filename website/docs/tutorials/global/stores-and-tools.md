@@ -77,7 +77,7 @@ global:
       milvus:
         address: milvus:19530
         collection: agentic_memory
-        dimension: 384
+        dimension: 256
 ```
 
 **Valkey backend** (requires Valkey with Search module):
@@ -91,7 +91,7 @@ global:
       valkey:
         host: valkey
         port: 6379
-        dimension: 384
+        dimension: 256
         collection_prefix: "mem:"
         index_name: mem_idx
         metric_type: COSINE
@@ -109,16 +109,18 @@ global:
         host: qdrant
         port: 6334
         collection: agentic_memory
-        dimension: 384
-      embedding_model: bert
+        dimension: 256
+      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.30
 ```
 
-The Qdrant example uses plain cosine scores with `bert`
-(`mom-embedding-light`). Its 0.30 threshold is a starting point from a
-small cold-start recall check, not the default for other embedding models.
-Check unrelated queries and corrected facts before using it with your data.
+All three examples embed with `mmbert` (Vela Embedding), the default, so
+`dimension` is one of its sizes: 64, 128, 256, 512 or 768. With any other size
+the router logs `Failed to create memory store: … Memory will be disabled` and
+runs without memory. The Qdrant example's 0.30 threshold, on plain cosine
+scores, is a starting point, not a calibrated value. Check unrelated queries
+and corrected facts before using it with your data.
 
 For full deployment instructions, see:
 
