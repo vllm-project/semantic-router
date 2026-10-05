@@ -15,6 +15,7 @@ STAGES = (
     "torch-cpu",
     "torch-rocm-base",
     "causal-conv1d-rocm",
+    "rocm-torch-release",
     "torch-rocm",
     "torch-cuda",
     "runtime",
@@ -56,7 +57,8 @@ def test_every_router_image_comes_from_one_stage_graph() -> None:
     for stage in ("torch-cpu", "torch-rocm-base", "torch-cuda"):
         assert graph[stage][0] == "python-base", stage
     assert graph["causal-conv1d-rocm"][0] == "torch-rocm-base"
-    assert graph["torch-rocm"][0] == "torch-rocm-base"
+    assert graph["rocm-torch-release"][0] == "${IMAGE_REGISTRY}${ROCM_TORCH_IMAGE}"
+    assert graph["torch-rocm"][0] == "python-base"
     assert graph["router"][0] == "runtime"
     assert graph["vllm-sr"][0] == "router"
     assert graph["extproc"][0] == "router"
@@ -127,7 +129,6 @@ def test_rocm_image_builds_causal_conv1d_with_the_released_rocm_sdk() -> None:
     rocm = graph["torch-rocm"][1]
     assert "from=causal-conv1d-rocm,source=/wheels" in rocm
     assert "pip install --no-deps /tmp/wheels/causal_conv1d-" in rocm
-    assert "apt-get" not in rocm
     mounts = [
         name for name, (_, body) in graph.items() if "from=causal-conv1d-rocm" in body
     ]
@@ -214,3 +215,25 @@ def test_build_context_excludes_runtime_state() -> None:
 
     for pattern in ("**/.vllm-sr/", "**/milvus-data/", "**/etcd/", "**/postgres-data/"):
         assert pattern in content
+
+
+def test_rocm_image_serves_with_the_pytorch_of_the_pinned_vllm_rocm_image() -> None:
+    graph = stages()
+    rocm = graph["torch-rocm"][1]
+
+    # The official wheel's AOTriton misses the released decoders' attention
+    # answers; the pinned image's PyTorch and ROCm 7.2.3 libraries match them.
+    assert re.search(
+        r"^ARG ROCM_TORCH_IMAGE=vllm/vllm-openai-rocm@sha256:[0-9a-f]{64}$",
+        router_dockerfile(),
+        re.M,
+    )
+    for path in (
+        "/opt/rocm-7.2.3/lib",
+        "/opt/rocm-7.2.3/share/miopen",
+        "${RELEASE_SITE}/torch",
+    ):
+        assert f"--from=rocm-torch-release {path} " in rocm, path
+    assert "pip uninstall -y torch" in rocm
+    assert "torch.version.git_version.startswith('6bbd260')" in rocm
+    assert "ldconfig" in rocm

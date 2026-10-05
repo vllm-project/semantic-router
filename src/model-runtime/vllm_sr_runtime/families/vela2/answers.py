@@ -83,7 +83,7 @@ class Answerer:
                 "probabilities": probability,
                 **abstain,
             }
-        levels = [probability[name] for name in names]
+        levels = [float(p) for p in probabilities]
         mean = math.fsum(index * p for index, p in enumerate(levels))
         variance = math.fsum(p * (index - mean) ** 2 for index, p in enumerate(levels))
         return {

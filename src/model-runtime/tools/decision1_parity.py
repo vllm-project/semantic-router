@@ -3,15 +3,18 @@
     python3 tools/decision1_parity.py reference --package DIR --repo REPO --device cpu|cuda:0 \\
         --panel NAME:REQUESTS.jsonl:COUNT ... --answers REFERENCE.jsonl
     python3 tools/decision1_parity.py native --model REPO --revision REV --cache-dir DIR \\
-        --device cpu|rocm:0 --panel NAME:REQUESTS.jsonl:COUNT ... --answers NATIVE.jsonl [--profile P]
+        --device cpu|rocm:0 --panel NAME:REQUESTS.jsonl:COUNT ... --answers NATIVE.jsonl [--profile P] \\
+        [--also REPO ...]
     python3 tools/decision1_parity.py compare REFERENCE.jsonl NATIVE.jsonl --output parity.json
 
 ``reference`` loads the package with Transformers remote code (``system_one``), the
 runtime the packages ship; it is a separate tool process, so the runtime itself
-never imports package code. On a GPU both sides pin the built-in table's FLA
-kernel choices before FLA is imported, so they run the same kernels. ``native``
+never imports package code. On a GPU both sides run the built-in table's FLA
+kernel choices, so they run the same kernels. ``native``
 serves the package through ``vllm_sr_runtime`` (verification, readiness, the
-scheduler) on one profile. ``compare`` reports, per panel, the prompts whose
+scheduler) on one profile; ``--also`` serves more built-in models in the same
+process on the same device, loaded first, as one GPU process of the default
+layout does, and the panel still asks ``--model``. ``compare`` reports, per panel, the prompts whose
 answers are byte-identical (canonical JSON; a structured Score legend of the
 reference is compared as the canonical JSON the API contract returns), decision
 changes, error mismatches and the largest absolute difference of any number,
@@ -32,7 +35,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from vllm_sr_runtime.accel.autotune import pin_kernel_choices  # noqa: E402
+from vllm_sr_runtime.accel.autotune import KernelChoices  # noqa: E402
 from vllm_sr_runtime.registry import builtin  # noqa: E402
 from vllm_sr_runtime.registry.artifacts import (  # noqa: E402
     canonical_json as canonical,
@@ -54,12 +57,18 @@ def panels(specs: list[str]) -> list[tuple[str, dict[str, Any]]]:
 
 
 def pin(repo: str | None, device: str) -> bool:
-    """Pin the built-in table's FLA choices for a GPU run (before FLA is imported)."""
+    """Run this thread's FLA kernels on the built-in table's choices for a GPU run."""
     if device == "cpu" or repo is None:
         return False
     known = builtin.lookup(repo)
-    choices = known.kernel_choices.get(DEVICE_CLASS) if known else None
-    return bool(choices) and pin_kernel_choices(choices) is not None
+    recorded = known.kernel_choices.get(DEVICE_CLASS) if known else None
+    if not recorded:
+        return False
+    choices = KernelChoices(recorded)
+    if choices.install() is not None:
+        return False
+    choices.pin_thread()
+    return True
 
 
 def write(
@@ -105,8 +114,13 @@ def run_native(args: argparse.Namespace) -> int:
     from vllm_sr_runtime.config import ModelConfig, ServeConfig
     from vllm_sr_runtime.runtime import Runtime
 
+    others = tuple(
+        ModelConfig(model=repo, device=args.device, profile=args.profile)
+        for repo in args.also
+    )
     config = ServeConfig(
         models=(
+            *others,
             ModelConfig(
                 model=args.model,
                 revision=args.revision,
@@ -121,17 +135,23 @@ def run_native(args: argparse.Namespace) -> int:
     started = time.perf_counter()
     runtime = Runtime(config)
     runtime.start(background=False)
-    served = runtime.lookup(None)
+    served = runtime.lookup(args.model)
     receipt = {
         "load_seconds": time.perf_counter() - started,
         "health": served.health.state,
         "golden": served.health.golden.describe(),
+        "also": {
+            other.label: other.health.golden.describe()
+            for other in runtime.served
+            if other is not served
+        },
     }
     loop = asyncio.new_event_loop()
     try:
         with open(args.answers, "x", encoding="utf-8") as sink:
             for panel, prompt in panels(args.panel):
                 body = {
+                    "model": args.model,
                     "state": prompt["state"],
                     "questions": prompt["questions"],
                     "options": {"return_meta": False, "profile": args.profile},
@@ -270,6 +290,13 @@ def main() -> int:
     native.add_argument("--revision")
     native.add_argument("--cache-dir")
     native.add_argument("--profile", default="exact")
+    native.add_argument(
+        "--also",
+        action="append",
+        default=[],
+        metavar="REPO",
+        help="another built-in model served in the same process, loaded first",
+    )
     for command in (reference, native):
         command.add_argument("--device", default="cpu")
         command.add_argument("--panel", action="append", required=True)

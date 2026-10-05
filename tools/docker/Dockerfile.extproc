@@ -10,12 +10,14 @@
 #   docker build -f tools/docker/Dockerfile.extproc --build-arg ACCELERATOR=rocm -t extproc-rocm .
 #
 # ACCELERATOR is cpu (linux/amd64 and linux/arm64), rocm or cuda (linux/amd64).
-# GPU images take PyTorch from the official wheels, which carry their ROCm or
-# CUDA user-space libraries; the host supplies only the GPU driver. The ROCm
-# image also builds causal-conv1d for CAUSAL_CONV1D_ARCHS (default gfx90a,
-# gfx942 and gfx950: Instinct MI200, MI300 and MI350).
+# The CUDA image takes PyTorch from the official wheel, which carries its CUDA
+# user-space libraries. The ROCm image takes PyTorch and the ROCm user space
+# from vLLM's ROCm image (ROCM_TORCH_IMAGE, pinned by digest) and builds
+# causal-conv1d for CAUSAL_CONV1D_ARCHS (default gfx90a, gfx942 and gfx950:
+# Instinct MI200, MI300 and MI350). The host supplies only the GPU driver.
 ARG IMAGE_REGISTRY=docker.io/
 ARG PYTHON_IMAGE=library/python:3.12-slim-bookworm
+ARG ROCM_TORCH_IMAGE=vllm/vllm-openai-rocm@sha256:1fd21abe66455b4df5a2e83629e97cdcc9d58913b16052d8118b92b239792339
 ARG ACCELERATOR=cpu
 
 # The router is a Go binary. cgo links only valkey-glide's bundled static
@@ -100,9 +102,9 @@ RUN pip install --index-url "$TORCH_ROCM_INDEX" "$TORCH_ROCM" && \
     python -c "import torch, fla.ops.gated_delta_rule" && \
     printf '#include <Python.h>\n' | cc -fsyntax-only -x c -I "$(python -c 'import sysconfig; print(sysconfig.get_paths()["include"])')" -
 
-# causal-conv1d publishes no ROCm wheel, so it is built against the image's
-# PyTorch with the ROCm SDK and build tools the released decoders' wheel was
-# built with: the same compiler emits the same GPU code, which keeps the
+# causal-conv1d publishes no ROCm wheel, so it is built against the official
+# PyTorch wheel with the ROCm SDK and build tools the released decoders' wheel
+# was built with: the same compiler emits the same GPU code, which keeps the
 # decoders' convolution identical to their released answers. Without it they
 # fall back to a reference convolution that misses them. A GPU the wheel has no
 # code for fails at the decoders' first convolution instead, so
@@ -125,10 +127,50 @@ RUN pip install setuptools==79.0.1 wheel==0.48.0 ninja==1.13.2 && \
     CAUSAL_CONV1D_FORCE_BUILD=TRUE HIP_ARCHITECTURES="$CAUSAL_CONV1D_ARCHS" ROCM_PATH=/opt/rocm \
       pip wheel --no-build-isolation --no-deps --no-binary causal-conv1d --wheel-dir /wheels "$CAUSAL_CONV1D"
 
-FROM torch-rocm-base AS torch-rocm
+# The ROCm image serves with the PyTorch of vLLM's ROCm image, not the official
+# wheel: its AOTriton (0.13.50) and ROCm 7.2.3 libraries give the released
+# decoders' attention and convolution answers bit for bit, which the official
+# wheel's bundled AOTriton 0.11.2 misses. The official wheel above still
+# installs PyTorch's Python dependencies and Triton, and builds causal-conv1d.
+# Torch needs GCC 16's C++ runtime, which Debian doesn't ship, so it comes from
+# the same image and replaces Debian's older one (both are backward compatible).
+FROM ${IMAGE_REGISTRY}${ROCM_TORCH_IMAGE} AS rocm-torch-release
+
+FROM python-base AS torch-rocm
+ARG TARGETARCH
+ARG TORCH_ROCM=torch==2.12.0
+ARG TORCH_ROCM_INDEX=https://download.pytorch.org/whl/rocm7.2
+ARG ROCM_TORCH_DIST=torch-2.12.0+git6bbd260.dist-info
+ARG RELEASE_SITE=/usr/local/lib/python3.12/dist-packages
+ARG SITE=/usr/local/lib/python3.12/site-packages
+RUN test "$TARGETARCH" = amd64 || { echo "ACCELERATOR=rocm supports linux/amd64 only" >&2; exit 1; }
+RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 gcc libc6-dev \
+      libdrm2 libdrm-amdgpu1 libdw1 libelf1 libnuma1 libopenmpi3 libhwloc15 \
+      libevent-core-2.1-7 libevent-pthreads-2.1-7 libudev1 libexpat1 libgomp1 && \
+    rm -rf /var/lib/apt/lists/*
+RUN pip install --index-url "$TORCH_ROCM_INDEX" "$TORCH_ROCM" && \
+    pip install fla-core==0.5.2 packaging && \
+    pip uninstall -y torch
+COPY --link --from=rocm-torch-release /opt/rocm-7.2.3/lib /opt/rocm-7.2.3/lib
+COPY --link --from=rocm-torch-release /opt/rocm-7.2.3/share/miopen /opt/rocm-7.2.3/share/miopen
+COPY --link --from=rocm-torch-release /opt/rocm-7.2.3/.info /opt/rocm-7.2.3/.info
+COPY --from=rocm-torch-release /lib/x86_64-linux-gnu/libstdc++.so.6.0.35 \
+    /lib/x86_64-linux-gnu/libgcc_s.so.1 /lib/x86_64-linux-gnu/libgomp.so.1.0.0 /usr/lib/x86_64-linux-gnu/
+COPY --from=rocm-torch-release ${RELEASE_SITE}/torch ${SITE}/torch
+COPY --from=rocm-torch-release ${RELEASE_SITE}/${ROCM_TORCH_DIST} ${SITE}/${ROCM_TORCH_DIST}
+COPY --from=rocm-torch-release ${RELEASE_SITE}/torchgen ${SITE}/torchgen
+COPY --from=rocm-torch-release ${RELEASE_SITE}/functorch ${SITE}/functorch
+ENV ROCM_PATH=/opt/rocm
 RUN --mount=type=bind,from=causal-conv1d-rocm,source=/wheels,target=/tmp/wheels \
+    ln -s /opt/rocm-7.2.3 /opt/rocm && \
+    ln -sf libstdc++.so.6.0.35 /usr/lib/x86_64-linux-gnu/libstdc++.so.6 && \
+    echo /opt/rocm/lib > /etc/ld.so.conf.d/rocm.conf && ldconfig && \
+    for lib in "$SITE"/torch/lib/*.so /opt/rocm/lib/libMIOpen.so /opt/rocm/lib/libamdhip64.so; do \
+      ! ldd "$lib" | grep "not found" || exit 1; \
+    done && \
     pip install --no-deps /tmp/wheels/causal_conv1d-*.whl && \
-    python -c "import causal_conv1d"
+    python -c "import torch, causal_conv1d, fla.ops.gated_delta_rule; assert torch.version.git_version.startswith('6bbd260')" && \
+    printf '#include <Python.h>\n' | cc -fsyntax-only -x c -I "$(python -c 'import sysconfig; print(sysconfig.get_paths()["include"])')" -
 
 FROM python-base AS torch-cuda
 ARG TARGETARCH

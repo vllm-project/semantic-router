@@ -62,6 +62,16 @@ built-in ones:
 vllm-sr-runtime serve /tmp/keywords --engine example_counts --device example_host --profile example_one_by_one --port 8100
 ```
 
+`vllm-sr serve` passes the same names to the runtime, and the runtime picks
+the example's engine by itself:
+
+```bash
+vllm-sr serve /tmp/keywords --device example_host --profile example_one_by_one --port 8100
+```
+
+The CLI checks only that `--profile` is a profile name. The runtime refuses a
+device or profile it has no plugin for and lists the names it has.
+
 ## Write your own
 
 A plugin is an ordinary Python distribution.

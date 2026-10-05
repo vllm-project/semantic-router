@@ -535,10 +535,10 @@ the endpoint and query rows in FP32. Answers follow the released runtime
 ties, P(true), expected level, normalised-entropy confidence). The native
 engine implements the Qwen3 dense and Qwen3.5 hybrid backbones and Vega-27B's
 unmerged LoRA; on GPUs the backbone runs under BF16 autocast with BF16-resident
-Linear weights, FLA kernels with the released kernel choices pinned
-(`registry/kernel_choices.json`). Byte-identity is defined against the
-released runtime on the same device class and recorded on the four scored
-panels (10,653 prompts).
+Linear weights, FLA kernels with the released kernel choices pinned per model
+(`registry/kernel_choices.json`, §11), so models that share a GPU process each
+run their own. Byte-identity is defined against the released runtime on the
+same device class and recorded on the four scored panels (10,653 prompts).
 
 ### 8.2 Decision 1.0 (`decision1`, Phase 2)
 
@@ -735,10 +735,39 @@ Section 13.4.
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or
 through ONNX Runtime's OpenVINO execution provider.
 
-The ROCm router image takes PyTorch from the rocm7.2 wheels (the rocm7.1
-build crashes replaying the encoders' HIP graphs) and builds causal-conv1d
-1.7.0 against it with ROCm 7.2.3's compiler, the one the released wheel was
-built with, so its gfx942 machine code is the released build's. It carries
+**Pinned kernel choices, per model.** FLA's gated-delta kernels pick block
+sizes and warps by timing them, so two processes could round the Qwen3.5
+sizes differently. Each built-in Qwen3.5 model records the configurations its
+release ran (`registry/kernel_choices.json`, per device class), and the
+runtime runs those instead of timing: a recorded tuning key gets its
+configuration, and any other key the first entry, in key-hash order, that
+differs from it only in numbers, else the kernel's first entry. That is how
+FLA's `FLA_CACHE_MODE=full` resolves the same entries written as config files.
+The released models record different configurations for the same keys (47
+of 55 pairs of built-in GPU models disagree somewhere), and the wrong ones
+change answers (`decision1-parity.md`), while FLA's autotuners are
+process-wide. So the choices are per model (`accel/autotune.KernelChoices`):
+each FLA autotuner they name gets a cache that routes lookups, per thread, to
+the configurations of the model whose scope the thread is in, and the runtime
+runs every device call of a pinned model (load, warm-up, golden check, graph
+capture, the worker's batches, inline batches) inside that scope. Other
+threads, and models without choices, use the autotuner's own cache. There is
+no lock, so the models of one device keep running concurrently; a captured
+graph keeps the configurations it was captured with. A model whose choices
+can't run here (another FLA version, or a recorded kernel FLA no longer has)
+still loads, with golden `unverified` and the reason in its health and card.
+`--autotune-cache` still persists Triton's compiled kernels and the tuning of
+models without choices.
+
+The ROCm router image serves with the PyTorch of vLLM's ROCm image, pinned by
+digest (2.12.0 built on ROCm 7.2.3, with AOTriton 0.13.50), and that image's
+ROCm 7.2.3 libraries. The released decoders were recorded on that build: the
+official rocm7.2 wheel bundles AOTriton 0.11.2, whose attention rounds
+differently and moves about 5% of Vela 2.0 4B / 9B span sets, while this build
+answers their panels byte for byte. The official wheel still provides torch's
+Python dependencies and Triton. causal-conv1d 1.7.0 is built against it with
+ROCm 7.2.3's compiler, the one the released wheel was built with, so its gfx942
+machine code is the released build's. It carries
 code for gfx90a, gfx942 and gfx950 (Instinct MI200, MI300 and MI350;
 `CAUSAL_CONV1D_ARCHS` builds others), since a decoder fails on a GPU it has no
 code for rather than falling back. Triton's compiled kernels and
@@ -777,10 +806,13 @@ embedding host start alike. `vllm-sr-runtime fixture OUTPUT --family F
 --variant V` writes a tiny random-weight package of any built-in family; the
 writer is `testing/<family>.py`.
 
-Importing `vllm_sr_runtime` sets two environment defaults, `GOMP_SPINCOUNT`
-and `ONEDNN_PRIMITIVE_CACHE_CAPACITY`. They take effect only when PyTorch
-loads, and the plugin base layer imports PyTorch, so they cannot wait for
-`main`. A value the caller set is kept.
+Importing `vllm_sr_runtime` sets four environment defaults:
+`GOMP_SPINCOUNT`, `ONEDNN_PRIMITIVE_CACHE_CAPACITY`, and MIOpen's
+`MIOPEN_FIND_MODE=FAST` with `MIOPEN_LOG_LEVEL=3`. MIOpen's default find mode
+times each new convolution shape's solvers, so cold processes picked different
+ones and answered differently; FAST never times. They take effect only when
+PyTorch loads, and the plugin base layer imports PyTorch, so they cannot wait
+for `main`. A value the caller set is kept.
 
 ## 13. Router integration
 

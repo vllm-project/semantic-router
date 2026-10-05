@@ -1,17 +1,19 @@
 # The ROCm router image: PyTorch, causal-conv1d and a GPU smoke
 
 The ROCm router image (`extproc-rocm`, `vllm-sr-rocm`) serves every GPU model
-from the official PyTorch wheel for ROCm 7.2 and a causal-conv1d wheel it
-builds itself. Its causal-conv1d computes what the released decoders' build
-computes, instruction for instruction. One difference to the packages'
-release image remains, in attention, and the exactness records name it per
-model.
+with the PyTorch of vLLM's ROCm image (pinned by digest) and that image's ROCm
+7.2.3 libraries, plus a causal-conv1d wheel it builds itself. Its
+causal-conv1d computes what the released decoders' build computes,
+instruction for instruction, and its attention is the release's. Every
+decoder checked answers its full panel byte-identically to the packages'
+release image.
 
 - **Date:** 2026-10-05.
 - **Device:** AMD Instinct MI325X (gfx942).
 - **Image:** `Dockerfile.extproc`, `ACCELERATOR=rocm`, target `extproc`, built
-  from an exact checkout of `af71d5e82` (24.8 GB). The first build of the
-  same packages, at `be7366c49`, lacked the MIOpen paths below.
+  from an exact checkout of `a580be6b9` (35.3 GB). The images before it took
+  PyTorch from the official rocm7.2 wheel: `af71d5e82` (24.8 GB) and, without
+  the MIOpen paths below, `be7366c49`.
 - **Reference:** the packages' release image, where every ROCm golden answer
   and parity reference of Phase 1 was recorded: PyTorch 2.12.0 built from
   source on ROCm 7.2.3, Triton 3.7.1, FLA 0.5.2, causal-conv1d 1.7.0.
@@ -21,18 +23,21 @@ model.
 | Package | Image | Release image |
 | --- | --- | --- |
 | Python | 3.12.15 | 3.12.13 |
-| PyTorch | 2.12.0+rocm7.2, official wheel (HIP 7.2.53211, AOTriton 0.11.2) | 2.12.0, source build on ROCm 7.2.3 (HIP 7.2.53211, AOTriton 0.13.50) |
+| PyTorch | 2.12.0+git6bbd260 from `vllm/vllm-openai-rocm@sha256:1fd21abe…` (HIP 7.2.53211, AOTriton 0.13.50) | the same build (its base image) |
+| ROCm user space | 7.2.3 `lib` and `share/miopen` from the same image | 7.2.3 |
 | Triton | triton-rocm 3.7.0 | 3.7.1 |
 | FLA | fla-core 0.5.2 | 0.5.2 |
 | causal-conv1d | 1.7.0, built in the image (below) | 1.7.0, local build |
 
-- **Why the rocm7.2 wheel:** the rocm7.1 build of the same release crashes
-  replaying the encoders' HIP graphs (`CUDAGraph.replay`, and
-  `HSA_STATUS_ERROR_INVALID_PACKET_FORMAT` for the decoders at load). The
-  rocm7.2 wheel served the router's five Vela 1.0 encoders in one process with
-  16 callers and no device failure (`router-latency-rocm.md`).
-- **Why not the release image's PyTorch:** it is a private source build that
-  links the full ROCm 7.2.3 runtime; a public image can't reproduce it.
+- **Why vLLM's ROCm PyTorch:** the release image is built on
+  `vllm/vllm-openai-rocm` at that digest, a public image, and its PyTorch,
+  AOTriton and ROCm libraries are byte-identical to the release image's. The
+  official rocm7.2 wheel bundles AOTriton 0.11.2, whose attention rounds
+  differently (below). The official wheel still installs torch's Python
+  dependencies and Triton; the rocm7.1 build crashes replaying the encoders'
+  HIP graphs.
+- Torch needs GCC 16's C++ runtime (`GLIBCXX_3.4.32`), copied from the same
+  image over Debian's; ROCm's libraries are found through `ldconfig`.
 - **Triton 3.7.0 against 3.7.1** changes no answer: a Triton 3.7.1 venv gives the
   3.7.0 answers to the last digit for Decision 1.0, Vela 1.0 and Vela 2.0, and
   the decoders run their pinned FLA kernel choices on either.
@@ -82,6 +87,7 @@ encoders (Domain, PII, Guard, FactCheck, Feedback) on `rocm:0`, `exact`.
 | --- | --- | --- | --- |
 | `be7366c49` | 6 of 7; Vela 2.0 4B failed 5 / 5 loads (`miopenStatusUnknownError`) | `matched`, 6 / 6 | 240 / 240 |
 | `af71d5e82` | 7 of 7, in 40 s | `matched`, 7 / 7 | 280 / 280 |
+| `a580be6b9` | 7 of 7, in 35 s | `matched`, 7 / 7 | 280 / 280 |
 
 - **The `be7366c49` failure:** Vela 2.0's forest forward runs `F.conv1d`,
   which goes through MIOpen. MIOpen keeps its databases and lock files under
@@ -92,21 +98,26 @@ encoders (Domain, PII, Guard, FactCheck, Feedback) on `rocm:0`, `exact`.
   Golden `matched` is readiness (the 0.02 GPU tolerance); byte identity is the
   exactness check below.
 
-## What still differs from the release image
+## Against the release image
 
-Attention. A probe of 63 ops on fixed inputs (BF16 autocast and FP32 linears
-at the decoders' widths, `bmm`, depthwise `F.conv1d`, norms, softmax and the
-activations, reductions, `cumsum` and FLA's `chunk_gated_delta_rule`) finds 56
-byte-identical between the two stacks. The 7 that differ are all
-`scaled_dot_product_attention`. Both builds default to AOTriton's efficient
-attention, and AOTriton 0.11.2 and 0.13.50 round differently; only the math
-backend agrees, and neither build uses it. No official wheel carries AOTriton
-0.13.50 (2.12.0 and 2.12.1 bundle 0.11.2, 2.13.0 bundles 0.12.0, 2.14.1
-bundles 0.13.0).
+The official wheel's images (`af71d5e82`) differed from the release image in
+attention only. A probe of 63 ops on fixed inputs found 56 byte-identical; the
+7 that differed were all `scaled_dot_product_attention`, because AOTriton
+0.11.2 and 0.13.50 round differently. That moved 5.4% (4B) and 5.8% (9B) of
+Vela 2.0's span sets, with no measurable quality change (`vela2-parity.md`),
+and nearly every Decision 2.0 answer by a small amount.
 
-So every model with attention misses the release image's answers by a small
-amount on this stack, while each answers byte-identically across cold
-processes on it. Each family's parity record gives the agreement with the
-release image on its full panel, and each re-recorded golden names its
-reason; the user's acceptance of the new stack (2026-10-05) set the
-conditions.
+`a580be6b9` serves with the release's PyTorch. The runtime at the same commit,
+run in this image and in the release image (cold processes, cold MIOpen and
+autotune caches):
+
+- attention probe: 192 / 192 outputs identical;
+- Vela 2.0 4B and 9B, 360-request panel, three processes each: 360 / 360
+  identical, maximum drift 0.0;
+- Decision 2.0, all six models, the four scored panels: 10,653 / 10,653
+  identical.
+- Decision 1.0, all seven packages: the ROCm golden answers recorded in this
+  image equal the stored release goldens in every value.
+
+So the release image's golden answers and parity references hold byte for
+byte on this image, and no ROCm golden is re-recorded.

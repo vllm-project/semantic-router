@@ -3,6 +3,7 @@
     python3 tools/vela2_parity.py --package DIR --output OUT.json [--requests REQUESTS.jsonl | --generate N]
         [--device cpu|rocm:0|cuda:0] [--seed 0] [--answers OURS.jsonl] [--approximate]
         [--engine native|onnxruntime] [--reference-backend torch|onnx] [--reduced KIND[,KIND...]]
+        [--shared-with DIR ... --reference-answers ANSWERS.jsonl ...]
 
 The reference is the package's engine, imported from the package directory by this tool only (the runtime
 never imports package code), on the same device class: FP32 on CPU; on GPUs the engine's defaults (BF16
@@ -26,6 +27,12 @@ then (the package engine is not loaded): each KIND (``float32-packed``, ``bfloat
 ``max_speed`` loads it, consenting for the run, and answers through the approximate batches. Per KIND: the
 share of questions whose decision is unchanged, per question type (design section 5.4's floor: at least 99%
 each), and the largest probability differences.
+
+``--shared-with`` checks models that share one runtime process, as one device's models do in a deployment:
+one ``Runtime`` loads ``--package`` and every ``--shared-with`` package on ``--device`` in that order and
+answers each request on every model in turn (exact profile). Each response must be byte-identical to both
+responses of that package's single-package run of this tool (``--answers``, one file per package in the
+same order, given as ``--reference-answers``): the package engine's and the runtime's.
 """
 
 from __future__ import annotations
@@ -269,17 +276,27 @@ def load_reference(package: Path, device: str, backend: str = "torch") -> Any:
 
 
 def pin_choices(package: Path, device: str) -> bool:
-    """Pin a built-in model's FLA kernel choices for this process, as the runtime does at load.
+    """Run this thread's FLA kernels on a built-in model's recorded choices, as the runtime does.
 
-    Must run before anything imports FLA; both sides then run the same kernels.
+    Both sides answer on this thread, so they run the same kernels.
     """
-    from vllm_sr_runtime.accel.autotune import pin_kernel_choices
+    from vllm_sr_runtime.accel.autotune import KernelChoices
+    from vllm_sr_runtime.registry import builtin
 
     accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
     info = accelerator.devices()[int(device.split(":")[1]) if ":" in device else 0]
     family = Vela2Family()
-    choices = family.kernel_choices(family.verify(PackageRef(package)), info)
-    return bool(choices) and pin_kernel_choices(choices) is not None
+    verified = family.verify(PackageRef(package))
+    recorded = builtin.kernel_choices(
+        verified.model_sha256, info.accelerator, info.arch
+    ) or family.kernel_choices(verified, info)
+    if not recorded:
+        return False
+    choices = KernelChoices(recorded)
+    if choices.install() is not None:
+        return False
+    choices.pin_thread()
+    return True
 
 
 def device_executor(device: str) -> Any:
@@ -837,6 +854,136 @@ def run_reduced(args: argparse.Namespace, requests: list[dict[str, Any]]) -> int
     return 0 if all(s["floor_pass"] for s in summary["kinds"]) else 1
 
 
+def run_shared(args: argparse.Namespace, requests: list[dict[str, Any]]) -> int:
+    """``--shared-with``: every package in one runtime process, each against its single-package run."""
+    import asyncio
+
+    from vllm_sr_runtime.config import ModelConfig, ServeConfig
+    from vllm_sr_runtime.runtime import Runtime
+
+    packages = [args.package, *args.shared_with]
+    if len(args.reference_answers) != len(packages):
+        raise SystemExit(
+            "--reference-answers takes one file per package, --package's first"
+        )
+    saved = [
+        {
+            row["id"]: row
+            for row in map(json.loads, path.read_text(encoding="utf-8").splitlines())
+        }
+        for path in args.reference_answers
+    ]
+    names = [f"model-{index}" for index in range(len(packages))]
+    runtime = Runtime(
+        ServeConfig(
+            models=tuple(
+                ModelConfig(model=str(package), name=name, device=args.device)
+                for package, name in zip(packages, names, strict=True)
+            )
+        )
+    )
+    started = time.time()
+    runtime.start(background=False)
+    load_s = time.time() - started
+    records: list[list[dict[str, Any]]] = [[] for _ in packages]
+
+    async def serve() -> None:
+        for request in requests:
+            for index, name in enumerate(names):
+                record: dict[str, Any] = {"id": request["id"]}
+                try:
+                    single = saved[index][request["id"]]
+                    answered = {
+                        key
+                        for part in ("answers", "sets", "spans")
+                        for key in single["runtime"].get(part, {})
+                    }
+                    questions = {
+                        key: question
+                        for key, question in request["questions"].items()
+                        if key in answered
+                    }
+                    status, body = await runtime.call(
+                        "decisions",
+                        {
+                            "model": name,
+                            "state": request["state"],
+                            "questions": questions,
+                        },
+                    )
+                    if status != 200:
+                        raise RuntimeError(f"HTTP {status}: {body}")
+                    ours = {k: v for k, v in body.items() if k not in ("model", "meta")}
+                    record.update(compare(single["reference"], ours))
+                    record["identical_to_single_runtime"] = json.dumps(
+                        ours, sort_keys=True
+                    ) == json.dumps(single["runtime"], sort_keys=True)
+                except Exception as exc:  # recorded per request, the run goes on
+                    record["error"] = f"{type(exc).__name__}: {exc}"
+                records[index].append(record)
+            print(
+                json.dumps(
+                    {
+                        "id": request["id"],
+                        "identical": [
+                            per[-1].get("identical", per[-1].get("error"))
+                            for per in records
+                        ],
+                    }
+                ),
+                flush=True,
+            )
+
+    try:
+        asyncio.run(serve())
+    finally:
+        runtime.stop()
+    summary: dict[str, Any] = {
+        "device": args.device,
+        "path": "exact",
+        "load_s": round(load_s, 1),
+        "models": [],
+    }
+    for package, per in zip(packages, records, strict=True):
+        ok = [r for r in per if "error" not in r]
+        summary["models"].append(
+            {
+                "package": str(package),
+                "requests": len(per),
+                "errors": [r for r in per if "error" in r],
+                "identical_to_engine": sum(r["identical"] for r in ok),
+                "identical_to_single_runtime": sum(
+                    r["identical_to_single_runtime"] for r in ok
+                ),
+                "decision_changes": sum(bool(r["decision_changes"]) for r in ok),
+                "max_abs_diff": max((r["max_abs_diff"] for r in ok), default=0.0),
+                "records": per,
+            }
+        )
+    summary["pass"] = all(
+        not model["errors"]
+        and model["identical_to_engine"] == model["requests"]
+        and model["identical_to_single_runtime"] == model["requests"]
+        for model in summary["models"]
+    )
+    args.output.write_text(
+        json.dumps(summary, indent=1, default=str) + "\n", encoding="utf-8"
+    )
+    print(
+        json.dumps(
+            {
+                **{k: v for k, v in summary.items() if k != "models"},
+                "models": [
+                    {k: v for k, v in m.items() if k not in ("records", "errors")}
+                    for m in summary["models"]
+                ],
+            },
+            default=str,
+        )
+    )
+    return 0 if summary["pass"] else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--package", required=True, type=Path)
@@ -870,6 +1017,20 @@ def main() -> int:
         "--reduced",
         help="reduced copy kinds (comma-separated) to record against the exact path (max_speed)",
     )
+    parser.add_argument(
+        "--shared-with",
+        type=Path,
+        action="append",
+        default=[],
+        help="another package served by the same runtime process (repeatable)",
+    )
+    parser.add_argument(
+        "--reference-answers",
+        type=Path,
+        action="append",
+        default=[],
+        help="each package's single-package --answers file (--shared-with)",
+    )
     args = parser.parse_args()
     requests = (
         [
@@ -882,6 +1043,8 @@ def main() -> int:
     )
     if args.reduced:
         return run_reduced(args, requests)
+    if args.shared_with:
+        return run_shared(args, requests)
     import torch
 
     torch.manual_seed(0)
