@@ -57,19 +57,48 @@ This is what makes one model practical for a router. The questions a deployment 
 
 ## Spans inside a decision model
 
-Spans are the hard part in a decoder. Under a causal mask, a word's hidden state sees only the words to its left, which is the wrong view for deciding where an entity starts and ends. Vela 2.0 repeats the target text after the label block (up to 2,048 tokens) and reads every word from that second copy, whose states have already seen the whole target and every label. Longer targets are read in overlapping windows of up to 1,800 tokens, and word scores are averaged across windows.
+A span question is a grid of yes/no decisions: one for every word of the text and every label in the question. Is `Tom` part of a PERSON? Is `tom.baker@example.com` an EMAIL_ADDRESS? Words that say yes for the same label and sit next to each other become one span, with character offsets into the original text. Alongside the spans, the question also gets a Noul answer: does the text contain any such span at all.
 
-The labels need a full reading too. Each label is represented by the mean hidden state of its whole label block (its name and its description) plus a learned slot embedding. A bilinear + MLP scorer then rates every word × label pair in FP32, and neighbouring words above threshold become one span. Because the label is read from its description, a span question can use labels the model has never seen.
+A span question looks like any other question, with a label block in place of options:
+
+```python
+"pii": {"type": "span",
+        "instructions": "Which spans are personal information?",
+        "criteria": {"PERSON": "a person's name", "EMAIL_ADDRESS": "an email address"},
+        "over": "request"}
+```
+
+Inside a decoder, the question block is laid out as its instructions, then one label block per label (name and description), then a second copy of the text the question is asked over. One forward pass produces every vector the span head needs:
+
+1. **A vector per label.** The mean hidden state over the label's whole block (its name and its description), plus a learned slot embedding for its position in the question.
+2. **A vector per word.** The hidden state of the word's first sub-word token, read from the second copy of the text.
+3. **A score per word × label.** A bilinear + MLP scorer rates every pair in FP32.
+4. **Spans.** Pairs above the calibrated threshold are switched on, neighbouring words with the same label are merged, and word offsets become character offsets.
+
+```python
+h      = backbone(request_tokens)                    # one pass: state, question blocks, text copies
+labels = mean_pool(h, label_blocks) + slot_emb       # [L, d]  one vector per label
+words  = h[first_subword_of_each_word_in_copy]       # [W, d]  one vector per word
+grid   = scorer(words, labels)                       # [W, L]  bilinear + MLP, FP32
+spans  = merge_neighbours(grid > threshold)          # labelled character spans
+```
 
 <ArticleFigure
   src="/img/blog/vela2-span-heads.png"
   width={2880} height={1800}
   alt="Span head v2: label vectors from the label block, word vectors from the repeated target, a word-by-label score grid, and the rule that sends each span question to the router or the broad head."
 >
-  Left: the word × label span head. Right: the rule that picks a span head for each question.
+  Left: the word × label grid for <code>Hi, I'm Tom Baker (tom.baker@example.com)</code>. Right: the rule that picks a span head for each question.
 </ArticleFigure>
 
-On development data, the repeated target and the label-block reading together raise short-text PII F1 from 0.828 to 0.959, and PII F1 on long documents from about 0.06 to 0.94.
+Two choices make this work in a causal decoder:
+
+- **Read words from a second copy.** Under a causal mask, a word's state sees only the words to its left, which is the wrong view for deciding where an entity starts and ends. In the second copy, placed after the labels, every word has already seen the whole text and every label it is asked about. Texts up to 2,048 tokens are copied whole; longer ones are read in overlapping windows of up to 1,800 tokens, and word scores are averaged across windows.
+- **Read each label from its whole block.** Our first decoder span head read each label at a single marker token. The label vectors came out almost identical (pairwise cosine 0.997), so the head learned *whether* a word is an entity but not *which* one. Pooling over the name and description separates the labels, and it lets a question use labels the model has never seen: the label is understood from its description.
+
+On development data, the two changes together raise short-text PII F1 from 0.828 to 0.959, and PII F1 on long documents from about 0.06 to 0.94.
+
+The 0.3B encoder needs neither change. It reads the questions and the text in one bidirectional sequence, so every word already sees both sides and every label, and its span head scores word × label pairs by cosine similarity.
 
 ## Two span heads, chosen per question
 
@@ -111,6 +140,7 @@ Every comparison below is on identical rows, scored by one harness, with seeds, 
   { label: 'Safety', src: '/img/blog/vela-2-0/safety-family.png', width: 2448, height: 1496, alt: 'Macro AUC over 14 public safety sets: GLiNER2.5-Decide 0.704, Vela 2.0 0.3B 0.871, 0.8B 0.875, 4B 0.921, 9B 0.921.', children: 'Macro AUC over 14 public safety and prompt-attack sets. Vela 2.0 is trained on these signal families and Decide is not: this is what routing-specific training adds to a decision model.' },
   { label: 'Evidence', src: '/img/blog/vela-2-0/evidence.png', width: 2448, height: 1496, alt: 'ACL-Verbatim word-F1: Vela 2.0 9B 24.5, 4B 24.4, 0.8B 23.6, GLiFormer-large 7.0, GLiNER-large-v2.5 4.6, GLiNER2.5-small 4.6, GLiNER2.5-Decide 2.3.', children: 'The broad head finds the exact words that answer a question, on a set held out of training, at every decoder size.' },
   { label: 'Latency', src: '/img/blog/vela-2-0/latency.png', width: 2448, height: 1496, alt: 'Seconds per router request with seven questions on one A40: 0.3B 0.09, 0.8B 0.13, 4B 0.40 to 0.49, 9B 0.60 to 0.71.', children: 'One router request, seven questions including PII and hallucination spans, on one A40.' },
+  { label: 'General decisions', src: '/img/blog/vela-2-0/jev-index.png', width: 2448, height: 1496, alt: 'Jev Decision Index 0.2.1: Eos-0.8B 20.14 and Vela 2.0 0.8B 16.01; Nox-4B 42.55 and Vela 2.0 4B 31.63; Lux-9B 46.23 and Vela 2.0 9B 41.09.', children: 'The Jev Decision Index over 38 general decision benchmarks. Each Vela 2.0 decoder against the Decision 2.0 model it was fine-tuned from.' },
 ]} />
 
 **Router signals.** One 9B model is ahead of or level with every Vela 1.0 specialist on the specialist's own test rows, and clearly ahead where specialists generalise worst: prompt attacks from unseen families (0.792 → 0.989 AUC, paired 95% CI +15.4 to +23.9 points) and multilingual hate speech (0.646 → 0.855). It also leads on RTP-LX request harm (0.761 → 0.801), PII in 8K-token documents (0.908 → 0.940 F1), hallucination spans (0.875 → 0.885 example-F1) and domain (0.831 → 0.844 macro-F1). The 0.3B encoder reaches 0.995 F1 on short-text PII, ahead of the Vela 1.0 PII model (0.976), and runs on CPU.
@@ -122,6 +152,45 @@ Every comparison below is on identical rows, scored by one harness, with seeds, 
 **Open extraction.** ACL-Verbatim asks for the exact sentences in a paper that support an answer, and it was held out of training. The broad head reaches 23.6 to 24.5 word-F1 at all three decoder sizes; no GLiNER-family model exceeds 7.0.
 
 **Cost.** A full router request takes 0.09 s on an A40 for the 0.3B, 0.13 s for the 0.8B, 0.40–0.49 s for the 4B and 0.60–0.71 s for the 9B. That is one call for every signal, where Vela 1.0 needed one model per signal.
+
+**General decisions.** Vela 2.0 is fine-tuned for routing, and it keeps most of what its base can do. On the Jev Decision Index (edition 0.2.1, 38 general decision benchmarks), scored with a harness that reproduces the published Decision 2.0 scores within 0.1 points, the 9B reaches 41.09 against 46.23 for Lux-9B, keeping 89% of its base. The 4B keeps 74% (31.63 against 42.55 for Nox-4B) and the 0.8B 79% (16.01 against 20.14 for Eos-0.8B). On fast-decisions, the benchmark GLiNER2.5-Decide was built for, the 9B is level with Decide (62.5 against 62.9). A deployment that only needs general decisions is best served by Decision 2.0; a router that also needs safety, PII and hallucination signals and spans gets them from Vela 2.0 without giving up its general questions.
+
+<details>
+<summary>Full numbers</summary>
+
+Router signals against the Vela 1.0 specialists, on each specialist's own test rows. Differences are paired bootstraps over identical rows.
+
+| Task | Vela 1.0 | Vela 2.0 0.3B | Vela 2.0 9B | Δ 9B vs Vela 1.0 [95% CI] |
+| --- | ---: | ---: | ---: | ---: |
+| Prompt attacks, unseen families (AUC) | 0.792 (Guard) | 0.882 | **0.989** | +19.8 [+15.4, +23.9] |
+| Multilingual HateCheck (AUC) | 0.646 (Safety) | 0.662 | **0.855** | +20.9 [+20.3, +21.5] |
+| RTP-LX request harm (AUC) | 0.761 (Safety) | 0.728 | **0.801** | +4.0 [+3.4, +4.5] |
+| PII, short texts (F1) | 0.976 | **0.995** | 0.985 | +0.9 [+0.1, +1.9] |
+| PII, 8K-token documents (F1) | 0.908 | 0.894 | **0.940** | +3.2 [−1.1, +7.0] |
+| Hallucination, 10,698 examples (example-F1) | 0.875 | 0.848 | **0.885** | +1.0 [+0.4, +1.7] |
+| Domain (macro-F1) | 0.831 | 0.825 | **0.844** | +1.3 [−0.3, +2.8] |
+
+Open extraction with the broad head, every model scored by one harness. The harness reproduces the GLiFormer-base card on all seven NER sets and the GLiNER-large-v2.5 average within 0.2 points. Latency is the mean over 100 questions on one A40.
+
+| Model | Zero-shot NER, 7 sets (F1) | ACL-Verbatim evidence (word-F1) | ms per question, 3K-token context |
+| --- | ---: | ---: | ---: |
+| Vela 2.0 9B, broad head | 43.5 | **24.5** | 2,288 |
+| Vela 2.0 4B, broad head | 40.7 | 24.4 | 1,499 |
+| Vela 2.0 0.8B, broad head | 28.9 | 23.6 | 477 |
+| GLiFormer-large | **63.6** | 7.0 | 930 |
+| GLiNER-large-v2.5 | 61.3 | 4.6 | 496 |
+| GLiNER2.5-Decide | 51.5 | 2.3 | 415 |
+| GLiNER2.5-small | 42.5 | 4.6 | **197** |
+
+General decisions on the Jev Decision Index 0.2.1 (38 benchmarks).
+
+| Size | Decision 2.0 base | Vela 2.0 | Kept |
+| --- | ---: | ---: | ---: |
+| 0.8B | 20.14 (Eos-0.8B) | 16.01 | 79% |
+| 4B | 42.55 (Nox-4B) | 31.63 | 74% |
+| 9B | 46.23 (Lux-9B) | 41.09 | 89% |
+
+</details>
 
 ## Four sizes, one interface
 

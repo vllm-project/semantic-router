@@ -223,7 +223,46 @@ def latency():
     save(fig, "latency.png")
 
 
+def jev():
+    # Section "Where it gives ground": Jev Decision Index 0.2.1, 38 benchmarks, base vs Vela 2.0.
+    rows = [
+        ("0.8B", "Eos-0.8B", 20.14, 16.01),
+        ("4B", "Nox-4B", 42.55, 31.63),
+        ("9B", "Lux-9B", 46.23, 41.09),
+    ]
+    fig, ax = frame(
+        "General decisions, kept",
+        "Jev Decision Index 0.2.1, 38 benchmarks: Vela 2.0 against the Decision 2.0 model it starts from",
+        "Our harness reproduces the published Decision 2.0 index scores within 0.1 points. Measured for the Vela 2.0 release.",
+        top=0.8,
+    )
+    ax.set_position([0.12, 0.15, 0.82, 0.65])
+    for i, (size, base, b, v) in enumerate(reversed(rows)):
+        ax.barh(i + 0.2, b, height=0.36, color=PALE)
+        ax.barh(i - 0.2, v, height=0.36, color=ORANGE)
+        ax.text(
+            b + 0.5,
+            i + 0.2,
+            f"{b:.2f}  Decision 2.0 {base}",
+            va="center",
+            color=MUTED,
+            fontsize=16,
+        )
+        ax.text(
+            v + 0.5,
+            i - 0.2,
+            f"{v:.2f}  Vela 2.0 {size} · {v / b:.0%} kept",
+            va="center",
+            color=INK,
+            fontsize=16,
+            fontweight="bold",
+        )
+    ax.set_yticks(range(len(rows)), [f"{r[0]}" for r in reversed(rows)], fontsize=20)
+    ax.set_xlim(0, 75)
+    save(fig, "jev-index.png")
+
+
 if __name__ == "__main__":
-    for chart in (router_tasks, safety_family, evidence, latency):
+    for chart in (router_tasks, safety_family, evidence, latency, jev):
         chart()
     print("wrote", sorted(p.name for p in OUT.glob("*.png")))
