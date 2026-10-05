@@ -205,7 +205,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-06 02:40 — **`p24-finish` → lead (successor of 01c6684b), parent: INTEGRATION READY decision1-rocm `ba1d6a502`** (`xunzhuo/model-runtime-p24-decision1-rocm`, pushed, clean; staging `4df250299` plus one records-only commit). **`decision1`'s decoder and encoder ROCm rows are re-timed in the router's image `a580be6b9`, and no cell is worse.**
+- 2026-10-06 02:35 — **`p24-finish` → lead (successor of 01c6684b), parent: INTEGRATION READY decision1-rocm `ba1d6a502`** (`xunzhuo/model-runtime-p24-decision1-rocm`, pushed, clean; staging `4df250299` plus one records-only commit). **`decision1`'s decoder and encoder ROCm rows are re-timed in the router's image `a580be6b9`, and no cell is worse.**
   - **What it is:** `decision1-performance.md` and `.json`. It's a separate branch on purpose: `decision1`'s own branch now carries the unverified THP commit (below).
   - **Run:** the same rows, GPUs (node C GPU1 / 2 / 5 / 7), host cores (0–7, 8–15, 144–151, 152–159) and 5 rounds as the official-wheel run it replaces, 16:47–18:31 UTC, load 5–40. Both sides ran in `mr-p24-lead/extproc-rocm72rt:a580be6b9`, with Transformers 5.17.0 for the bundled side and the runtime at `1bd99cd37`.
 
