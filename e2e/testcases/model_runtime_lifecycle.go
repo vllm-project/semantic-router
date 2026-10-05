@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"k8s.io/client-go/kubernetes"
@@ -17,7 +18,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("model-runtime-lifecycle", pkgtestcases.TestCase{
-		Description: "The Router starts its managed runtimes in process groups, attaches to an external runtime by served name, and reports each deployment's readiness",
+		Description: "The Router starts its managed runtimes in process groups, each with a share of its cores (on a node without a GPU, a deployment on device auto joins the CPU group), attaches to an external runtime by served name, and reports each deployment's readiness",
 		Tags:        []string{"model-runtime", "lifecycle", "managed", "attached"},
 		Fn:          testModelRuntimeLifecycle,
 	})
@@ -186,11 +187,19 @@ func checkInventoryLabels(ctx context.Context, session *modelRuntimeSession, dep
 	return fmt.Errorf("no managed runtime serves %s", deployment.Name)
 }
 
+// mrManagedProcess is what the lifecycle case reports of one managed process.
+type mrManagedProcess struct {
+	Models  []string `json:"models"`
+	Threads int      `json:"threads"`
+}
+
 // checkManagedProcesses requires the "decisions" process group to serve the
-// decision fixture alone and the device's CPU models to run in one process
-// ("cpu") or spread over several ("cpu-0" …), each deployment in exactly one
-// process, ready, with the family and surfaces its fixture declares.
-func checkManagedProcesses(ctx context.Context, session *modelRuntimeSession) (map[string][]string, error) {
+// decision fixture alone and the device's CPU models, the ones on device auto
+// included, to run in one process ("cpu") or spread over several ("cpu-0" …),
+// each deployment in exactly one process, ready, with the family and surfaces
+// its fixture declares. Every model runs on the CPU of a node without a GPU,
+// so every process must run a share of the Router's cores.
+func checkManagedProcesses(ctx context.Context, session *modelRuntimeSession) (map[string]mrManagedProcess, error) {
 	var runtimes map[string][]string
 	err := modelruntime.Eventually(ctx, mrReadyTimeout, func(ctx context.Context) error {
 		var err error
@@ -210,12 +219,11 @@ func checkManagedProcesses(ctx context.Context, session *modelRuntimeSession) (m
 	if err != nil {
 		return nil, err
 	}
-	processes := map[string][]string{}
+	processes := map[string]mrManagedProcess{}
 	owner := map[string]string{}
 	for socket, models := range runtimes {
 		process := strings.SplitN(filepath.Base(socket), "-", 2)[0]
 		sort.Strings(models)
-		processes[filepath.Base(socket)] = models
 		for _, model := range models {
 			if previous, twice := owner[model]; twice {
 				return nil, fmt.Errorf("%s runs in two processes, %s and %s", model, previous, socket)
@@ -224,10 +232,17 @@ func checkManagedProcesses(ctx context.Context, session *modelRuntimeSession) (m
 			switch {
 			case process == mrDecisionsProcess && model == mrDecisionDeployment:
 			case process == mrDeviceProcess && slices.Contains(mrDeviceGroup, model):
+			case slices.Contains(mrAutoDeployments, model):
+				return nil, fmt.Errorf("process %s serves %s, which is on device auto: on a node without a GPU it belongs to the %s group", socket, model, mrDeviceProcess)
 			default:
 				return nil, fmt.Errorf("process %s serves %s, which belongs to another group", socket, model)
 			}
 		}
+		threads, err := threadShare(ctx, session, socket)
+		if err != nil {
+			return nil, err
+		}
+		processes[filepath.Base(socket)] = mrManagedProcess{Models: models, Threads: threads}
 		listed, err := modelruntime.NewClient(modelruntime.SocketTransport{Target: session.pod, Socket: socket}).Models(ctx)
 		if err != nil {
 			return nil, err
@@ -239,6 +254,23 @@ func checkManagedProcesses(ctx context.Context, session *modelRuntimeSession) (m
 		}
 	}
 	return processes, nil
+}
+
+// threadShare returns the --threads the Router started the process serving socket with.
+func threadShare(ctx context.Context, session *modelRuntimeSession, socket string) (int, error) {
+	argv, err := session.pod.RuntimeArgs(ctx, socket)
+	if err != nil {
+		return 0, err
+	}
+	index := slices.Index(argv, "--threads")
+	if index < 0 || index+1 == len(argv) {
+		return 0, fmt.Errorf("process %s runs without a share of the Router's cores: %q", socket, argv)
+	}
+	threads, err := strconv.Atoi(argv[index+1])
+	if err != nil || threads < 1 {
+		return 0, fmt.Errorf("process %s runs with --threads %q", socket, argv[index+1])
+	}
+	return threads, nil
 }
 
 func checkFixtureCard(card modelruntime.ModelCard) error {

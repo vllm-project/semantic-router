@@ -3,6 +3,7 @@ package modelruntime
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -51,22 +52,39 @@ for path in sorted(glob.glob(os.path.join(sys.argv[1], "**", "*"), recursive=Tru
         pass
 `
 
+// findRuntime defines runtime(socket_path): the PID and command line of the
+// runtime process that serves one socket.
+const findRuntime = `
+import os
+def runtime(socket_path):
+    for pid in sorted(int(p) for p in os.listdir("/proc") if p.isdigit()):
+        # This script's own command line names the socket and the runtime too.
+        if pid == os.getpid():
+            continue
+        try:
+            with open("/proc/%d/cmdline" % pid, "rb") as stream:
+                argv = stream.read().split(b"\0")
+        except OSError:
+            continue
+        if socket_path.encode() in argv and any(b"vllm-sr-runtime" in arg or b"vllm_sr_runtime" in arg for arg in argv):
+            return pid, [arg.decode() for arg in argv if arg]
+    raise SystemExit("no runtime process serves " + socket_path)
+`
+
 // killRuntime sends SIGKILL to the runtime process that serves one socket and
 // prints its PID, so a test can observe the supervisor restart it.
-const killRuntime = `
-import os, signal, sys
-socket_path = sys.argv[1]
-for pid in sorted(int(p) for p in os.listdir("/proc") if p.isdigit()):
-    try:
-        with open("/proc/%d/cmdline" % pid, "rb") as stream:
-            argv = stream.read().split(b"\0")
-    except OSError:
-        continue
-    if socket_path.encode() in argv and any(b"vllm-sr-runtime" in arg or b"vllm_sr_runtime" in arg for arg in argv):
-        os.kill(pid, signal.SIGKILL)
-        print(pid)
-        sys.exit(0)
-sys.exit("no runtime process serves " + socket_path)
+const killRuntime = findRuntime + `
+import signal, sys
+pid, _ = runtime(sys.argv[1])
+os.kill(pid, signal.SIGKILL)
+print(pid)
+`
+
+// runtimeArgs prints, as JSON, the command line of the runtime process that
+// serves one socket.
+const runtimeArgs = findRuntime + `
+import json, sys
+print(json.dumps(runtime(sys.argv[1])[1]))
 `
 
 // PodTarget names a container that can reach managed runtime sockets.
@@ -152,6 +170,19 @@ func (t PodTarget) KillRuntime(ctx context.Context, socket string) (int, error) 
 		return 0, err
 	}
 	return strconv.Atoi(strings.TrimSpace(string(output)))
+}
+
+// RuntimeArgs returns the command line of the runtime process serving socket.
+func (t PodTarget) RuntimeArgs(ctx context.Context, socket string) ([]string, error) {
+	output, err := t.Exec(ctx, []string{"python3", "-c", runtimeArgs, socket}, nil)
+	if err != nil {
+		return nil, err
+	}
+	var argv []string
+	if err := json.Unmarshal(output, &argv); err != nil {
+		return nil, fmt.Errorf("unexpected command line of the runtime serving %s: %w", socket, err)
+	}
+	return argv, nil
 }
 
 // ManagedRuntimes maps every managed runtime socket under dir to the IDs of

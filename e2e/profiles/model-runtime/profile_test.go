@@ -94,15 +94,17 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 	packages := fixturePackages(t)
 	deployments := profile.Config.Global.ModelCatalog.Deployments
 
-	// The names testcases/model_runtime_support.go relies on.
-	managed := map[string]string{
-		"decision-fixture": "decisions", "vela-domain": "", "vela-pii": "", "vela-guard": "",
-		"vela-embedding": "", "vela-reranker": "", "vela-modality": "",
+	// The names testcases/model_runtime_support.go relies on, with their
+	// process and device: the lifecycle case requires the one on auto to run
+	// in the cpu device group.
+	managed := map[string]struct{ process, device string }{
+		"decision-fixture": {"decisions", "cpu"}, "vela-domain": {"", "cpu"}, "vela-pii": {"", "cpu"}, "vela-guard": {"", "cpu"},
+		"vela-embedding": {"", "auto"}, "vela-reranker": {"", "cpu"}, "vela-modality": {"", "cpu"},
 	}
-	for name, process := range managed {
+	for name, want := range managed {
 		deployment, ok := deployments[name]
-		if !ok || deployment.Provider != "model_runtime" || deployment.Endpoint != "" || deployment.Device != "cpu" || deployment.Process != process {
-			t.Fatalf("%s must be a managed cpu deployment in process %q: %+v", name, process, deployment)
+		if !ok || deployment.Provider != "model_runtime" || deployment.Endpoint != "" || deployment.Device != want.device || deployment.Process != want.process {
+			t.Fatalf("%s must be a managed %s deployment in process %q: %+v", name, want.device, want.process, deployment)
 		}
 		directory := strings.TrimPrefix(deployment.Artifact, "/tmp/vsr-fixtures/")
 		if !packages[directory] {

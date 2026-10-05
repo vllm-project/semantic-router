@@ -257,6 +257,10 @@ def build_parser() -> argparse.ArgumentParser:
         "plugins",
         help="list the installed families, engines, accelerators and profiles",
     )
+    commands.add_parser(
+        "devices",
+        help="list, as JSON, the devices of this host and the one --device auto takes",
+    )
     fixture = commands.add_parser(
         "fixture",
         help="write a tiny random-weight package of a family (tests, E2E)",
@@ -325,6 +329,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 indent=2,
             )
         )
+        return 0
+    if args.command == "devices":
+        from .devices import report
+
+        print(json.dumps(report(), indent=2))
         return 0
     if args.command == "fixture":
         from .testing.fixtures import write_fixture

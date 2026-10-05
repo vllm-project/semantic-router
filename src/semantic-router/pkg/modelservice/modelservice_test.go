@@ -31,14 +31,45 @@ const (
 	fakeRuntimeFailAlwaysEnv = "MODELSERVICE_FAKE_FAIL_ALWAYS"
 )
 
+// fakeAutoEnv is the device the fake's devices command reports for auto;
+// unset, the command fails. fakeDevicesLogEnv names a file the command
+// appends a line to on every call.
+const (
+	fakeAutoEnv       = "MODELSERVICE_FAKE_AUTO"
+	fakeDevicesLogEnv = "MODELSERVICE_FAKE_DEVICES_LOG"
+)
+
 // TestMain lets the test binary act as a managed runtime process:
-// <binary> serve --models FILE --uds PATH serves the fake contract on the socket.
+// <binary> serve --models FILE --uds PATH serves the fake contract on the
+// socket, and <binary> devices answers the device query.
 func TestMain(m *testing.M) {
 	if os.Getenv(fakeRuntimeEnv) == "1" {
+		if len(os.Args) == 2 && os.Args[1] == "devices" {
+			fakeDevices()
+			return
+		}
 		serveManagedFake(os.Args[1:])
 		return
 	}
 	os.Exit(m.Run())
+}
+
+func fakeDevices() {
+	if path := os.Getenv(fakeDevicesLogEnv); path != "" {
+		file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+		if err != nil {
+			os.Exit(2)
+		}
+		_, _ = file.WriteString("devices\n")
+		_ = file.Close()
+	}
+	device := os.Getenv(fakeAutoEnv)
+	if device == "" {
+		_, _ = os.Stderr.WriteString("no accelerator plugin could be loaded\n")
+		os.Exit(1)
+	}
+	data, _ := json.Marshal(map[string]interface{}{"auto": device, "devices": []string{device}})
+	_, _ = os.Stdout.Write(append(data, '\n'))
 }
 
 func serveManagedFake(args []string) {
@@ -129,7 +160,7 @@ func TestPlanProcessesGroupsByDeviceAndProcessKey(t *testing.T) {
 		"remote":  {Provider: config.ModelRuntimeProvider, Endpoint: "http://shared:8100", ServedName: "vela-domain"},
 		"remote2": {Provider: config.ModelRuntimeProvider, Endpoint: "http://shared:8100"},
 	}
-	plans := planProcesses(deployments, []string{"vllm-sr-runtime"}, "", 0)
+	plans := planProcesses(deployments, []string{"vllm-sr-runtime"}, "", 0, "")
 	byName := map[string]*processPlan{}
 	for _, plan := range plans {
 		byName[plan.name] = plan
@@ -144,11 +175,11 @@ func TestPlanProcessesGroupsByDeviceAndProcessKey(t *testing.T) {
 	if attached := byName["attached"]; attached.members["remote"] != "vela-domain" || attached.members["remote2"] != "remote2" {
 		t.Fatalf("attached members select by served name: %+v", attached.members)
 	}
-	again := planProcesses(deployments, []string{"vllm-sr-runtime"}, "", 0)
+	again := planProcesses(deployments, []string{"vllm-sr-runtime"}, "", 0, "")
 	if again[0].key != plans[0].key {
 		t.Fatal("the same composition must keep its key so generations share the process")
 	}
-	changed := planProcesses(deployments, []string{"vllm-sr-runtime"}, "/cache", 0)
+	changed := planProcesses(deployments, []string{"vllm-sr-runtime"}, "/cache", 0, "")
 	for _, plan := range changed {
 		if plan.name == "cpu" && plan.key == cpu.key {
 			t.Fatal("a changed composition must start a new process")
@@ -165,7 +196,7 @@ func TestPlanProcessesSpreadsCPUModelsOverThreadShares(t *testing.T) {
 	for _, name := range []string{"Domain", "FactCheck", "Feedback", "Guard", "PII"} {
 		deployments[strings.ToLower(name)] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-" + name, Device: "cpu"}
 	}
-	plans := planProcesses(deployments, []string{"vllm-sr-runtime"}, "", 16)
+	plans := planProcesses(deployments, []string{"vllm-sr-runtime"}, "", 16, "")
 	byName := map[string]*processPlan{}
 	for _, plan := range plans {
 		byName[plan.name] = plan
@@ -183,7 +214,7 @@ func TestPlanProcessesSpreadsCPUModelsOverThreadShares(t *testing.T) {
 	}
 
 	t.Setenv(CPUProcessesEnv, "2")
-	capped := planProcesses(deployments, []string{"vllm-sr-runtime"}, "", 16)
+	capped := planProcesses(deployments, []string{"vllm-sr-runtime"}, "", 16, "")
 	names := map[string]int{}
 	for _, plan := range capped {
 		names[plan.name] = plan.threads
@@ -191,7 +222,7 @@ func TestPlanProcessesSpreadsCPUModelsOverThreadShares(t *testing.T) {
 	if len(capped) != 4 || names["cpu-0"] != 6 || names["cpu-1"] != 6 || names["safety"] != 6 {
 		t.Fatalf("the env caps spread processes: %v", names)
 	}
-	if single := planProcesses(deployments, nil, "", 2); len(single) != 3 {
+	if single := planProcesses(deployments, nil, "", 2, ""); len(single) != 3 {
 		t.Fatalf("two cores keep one spread CPU process: %d plans", len(single))
 	}
 }
@@ -206,7 +237,7 @@ func TestManagedCommandAndModelsFile(t *testing.T) {
 	}
 	plan := planProcesses(map[string]config.ModelDeployment{
 		"kai": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Revision: strings.Repeat("b", 40), Device: "cpu", Profile: "batching"},
-	}, nil, "", 0)[0]
+	}, nil, "", 0, "")[0]
 	path := filepath.Join(t.TempDir(), "models.json")
 	if err := plan.writeModelsFile(path); err != nil {
 		t.Fatal(err)
