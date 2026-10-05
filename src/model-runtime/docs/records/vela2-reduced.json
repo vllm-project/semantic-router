@@ -3226,6 +3226,7247 @@
      "median_speedup_vs_seven_calls": 3.53
     }
    }
+  },
+  "cpu_ab": {
+   "date": "2026-10-05",
+   "commit": "d4c6d9a508780dfaa5b0e79069f8bd53fc7640eb",
+   "tool": "tools/vela2_bench.py --device cpu --sides reference,runtime,runtime-batching,max_speed:float32-packed --tokens 32,128,512,2048 --requests 30 --warmup 10 --concurrency 1,4 --rounds 10 --trace",
+   "environment": "PyTorch 2.10 CPU build, AMD EPYC 9575F, 16 cores in a systemd-run scope (effective cpuset logged), node load at most 68",
+   "rounds": 10,
+   "intervals": [
+    {
+     "tokens": 32,
+     "concurrency": 1,
+     "side": "runtime",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 153.27,
+      "diff": -1.166,
+      "low": -1.893,
+      "high": -0.439
+     },
+     "p95_ms": {
+      "baseline": 166.291,
+      "diff": 0.943,
+      "low": -5.845,
+      "high": 7.731
+     },
+     "mean_ms": {
+      "baseline": 154.855,
+      "diff": -1.581,
+      "low": -2.571,
+      "high": -0.591
+     },
+     "throughput_rps": {
+      "baseline": 6.475,
+      "diff": 0.066,
+      "low": 0.027,
+      "high": 0.105
+     }
+    },
+    {
+     "tokens": 32,
+     "concurrency": 1,
+     "side": "runtime-batching",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 153.27,
+      "diff": 0.592,
+      "low": -0.345,
+      "high": 1.529
+     },
+     "p95_ms": {
+      "baseline": 166.291,
+      "diff": 7.038,
+      "low": -2.299,
+      "high": 16.375
+     },
+     "mean_ms": {
+      "baseline": 154.855,
+      "diff": 1.08,
+      "low": -0.62,
+      "high": 2.78
+     },
+     "throughput_rps": {
+      "baseline": 6.475,
+      "diff": -0.04,
+      "low": -0.107,
+      "high": 0.027
+     }
+    },
+    {
+     "tokens": 32,
+     "concurrency": 1,
+     "side": "max_speed:float32-packed",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 153.27,
+      "diff": -57.146,
+      "low": -59.356,
+      "high": -54.936
+     },
+     "p95_ms": {
+      "baseline": 166.291,
+      "diff": -54.777,
+      "low": -60.506,
+      "high": -49.048
+     },
+     "mean_ms": {
+      "baseline": 154.855,
+      "diff": -56.746,
+      "low": -58.401,
+      "high": -55.091
+     },
+     "throughput_rps": {
+      "baseline": 6.475,
+      "diff": 3.758,
+      "low": 3.519,
+      "high": 3.996
+     }
+    },
+    {
+     "tokens": 32,
+     "concurrency": 4,
+     "side": "runtime",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 605.777,
+      "diff": 4.485,
+      "low": -26.998,
+      "high": 35.968
+     },
+     "p95_ms": {
+      "baseline": 631.619,
+      "diff": 13.524,
+      "low": -21.613,
+      "high": 48.661
+     },
+     "mean_ms": {
+      "baseline": 578.332,
+      "diff": 6.095,
+      "low": -20.216,
+      "high": 32.406
+     },
+     "throughput_rps": {
+      "baseline": 6.608,
+      "diff": -0.067,
+      "low": -0.392,
+      "high": 0.257
+     }
+    },
+    {
+     "tokens": 32,
+     "concurrency": 4,
+     "side": "runtime-batching",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 605.777,
+      "diff": -45.441,
+      "low": -71.465,
+      "high": -19.417
+     },
+     "p95_ms": {
+      "baseline": 631.619,
+      "diff": 50.702,
+      "low": -23.64,
+      "high": 125.044
+     },
+     "mean_ms": {
+      "baseline": 578.332,
+      "diff": -27.457,
+      "low": -54.476,
+      "high": -0.438
+     },
+     "throughput_rps": {
+      "baseline": 6.608,
+      "diff": 0.44,
+      "low": 0.134,
+      "high": 0.747
+     }
+    },
+    {
+     "tokens": 32,
+     "concurrency": 4,
+     "side": "max_speed:float32-packed",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 605.777,
+      "diff": -269.11,
+      "low": -298.877,
+      "high": -239.343
+     },
+     "p95_ms": {
+      "baseline": 631.619,
+      "diff": -247.963,
+      "low": -277.253,
+      "high": -218.673
+     },
+     "mean_ms": {
+      "baseline": 578.332,
+      "diff": -248.584,
+      "low": -273.436,
+      "high": -223.732
+     },
+     "throughput_rps": {
+      "baseline": 6.608,
+      "diff": 5.066,
+      "low": 4.652,
+      "high": 5.48
+     }
+    },
+    {
+     "tokens": 128,
+     "concurrency": 1,
+     "side": "runtime",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 175.418,
+      "diff": -2.769,
+      "low": -3.638,
+      "high": -1.9
+     },
+     "p95_ms": {
+      "baseline": 184.743,
+      "diff": -2.923,
+      "low": -5.294,
+      "high": -0.552
+     },
+     "mean_ms": {
+      "baseline": 175.428,
+      "diff": -2.386,
+      "low": -3.498,
+      "high": -1.274
+     },
+     "throughput_rps": {
+      "baseline": 5.705,
+      "diff": 0.079,
+      "low": 0.04,
+      "high": 0.117
+     }
+    },
+    {
+     "tokens": 128,
+     "concurrency": 1,
+     "side": "runtime-batching",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 175.418,
+      "diff": -0.815,
+      "low": -1.603,
+      "high": -0.027
+     },
+     "p95_ms": {
+      "baseline": 184.743,
+      "diff": -0.526,
+      "low": -2.695,
+      "high": 1.643
+     },
+     "mean_ms": {
+      "baseline": 175.428,
+      "diff": -0.176,
+      "low": -1.036,
+      "high": 0.684
+     },
+     "throughput_rps": {
+      "baseline": 5.705,
+      "diff": 0.005,
+      "low": -0.023,
+      "high": 0.033
+     }
+    },
+    {
+     "tokens": 128,
+     "concurrency": 1,
+     "side": "max_speed:float32-packed",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 175.418,
+      "diff": -66.067,
+      "low": -67.175,
+      "high": -64.959
+     },
+     "p95_ms": {
+      "baseline": 184.743,
+      "diff": -67.446,
+      "low": -70.302,
+      "high": -64.59
+     },
+     "mean_ms": {
+      "baseline": 175.428,
+      "diff": -65.343,
+      "low": -66.901,
+      "high": -63.785
+     },
+     "throughput_rps": {
+      "baseline": 5.705,
+      "diff": 3.39,
+      "low": 3.263,
+      "high": 3.516
+     }
+    },
+    {
+     "tokens": 128,
+     "concurrency": 4,
+     "side": "runtime",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 682.784,
+      "diff": -11.965,
+      "low": -21.68,
+      "high": -2.25
+     },
+     "p95_ms": {
+      "baseline": 703.434,
+      "diff": -10.892,
+      "low": -23.85,
+      "high": 2.066
+     },
+     "mean_ms": {
+      "baseline": 649.747,
+      "diff": -10.925,
+      "low": -18.131,
+      "high": -3.719
+     },
+     "throughput_rps": {
+      "baseline": 5.852,
+      "diff": 0.105,
+      "low": 0.033,
+      "high": 0.177
+     }
+    },
+    {
+     "tokens": 128,
+     "concurrency": 4,
+     "side": "runtime-batching",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 682.784,
+      "diff": -42.087,
+      "low": -65.393,
+      "high": -18.781
+     },
+     "p95_ms": {
+      "baseline": 703.434,
+      "diff": -36.607,
+      "low": -55.957,
+      "high": -17.257
+     },
+     "mean_ms": {
+      "baseline": 649.747,
+      "diff": -33.188,
+      "low": -50.377,
+      "high": -15.999
+     },
+     "throughput_rps": {
+      "baseline": 5.852,
+      "diff": 0.373,
+      "low": 0.212,
+      "high": 0.533
+     }
+    },
+    {
+     "tokens": 128,
+     "concurrency": 4,
+     "side": "max_speed:float32-packed",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 682.784,
+      "diff": -270.218,
+      "low": -288.729,
+      "high": -251.707
+     },
+     "p95_ms": {
+      "baseline": 703.434,
+      "diff": -273.615,
+      "low": -291.563,
+      "high": -255.667
+     },
+     "mean_ms": {
+      "baseline": 649.747,
+      "diff": -252.314,
+      "low": -267.422,
+      "high": -237.206
+     },
+     "throughput_rps": {
+      "baseline": 5.852,
+      "diff": 3.821,
+      "low": 3.5,
+      "high": 4.142
+     }
+    },
+    {
+     "tokens": 512,
+     "concurrency": 1,
+     "side": "runtime",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 263.731,
+      "diff": -4.822,
+      "low": -5.87,
+      "high": -3.774
+     },
+     "p95_ms": {
+      "baseline": 282.912,
+      "diff": -6.915,
+      "low": -9.576,
+      "high": -4.254
+     },
+     "mean_ms": {
+      "baseline": 266.839,
+      "diff": -5.034,
+      "low": -6.303,
+      "high": -3.765
+     },
+     "throughput_rps": {
+      "baseline": 3.764,
+      "diff": 0.072,
+      "low": 0.054,
+      "high": 0.089
+     }
+    },
+    {
+     "tokens": 512,
+     "concurrency": 1,
+     "side": "runtime-batching",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 263.731,
+      "diff": -28.88,
+      "low": -31.382,
+      "high": -26.378
+     },
+     "p95_ms": {
+      "baseline": 282.912,
+      "diff": -31.332,
+      "low": -34.681,
+      "high": -27.983
+     },
+     "mean_ms": {
+      "baseline": 266.839,
+      "diff": -29.112,
+      "low": -31.63,
+      "high": -26.594
+     },
+     "throughput_rps": {
+      "baseline": 3.764,
+      "diff": 0.46,
+      "low": 0.428,
+      "high": 0.492
+     }
+    },
+    {
+     "tokens": 512,
+     "concurrency": 1,
+     "side": "max_speed:float32-packed",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 263.731,
+      "diff": -115.146,
+      "low": -119.832,
+      "high": -110.46
+     },
+     "p95_ms": {
+      "baseline": 282.912,
+      "diff": -123.176,
+      "low": -130.688,
+      "high": -115.664
+     },
+     "mean_ms": {
+      "baseline": 266.839,
+      "diff": -117.296,
+      "low": -122.706,
+      "high": -111.886
+     },
+     "throughput_rps": {
+      "baseline": 3.764,
+      "diff": 2.958,
+      "low": 2.782,
+      "high": 3.133
+     }
+    },
+    {
+     "tokens": 512,
+     "concurrency": 4,
+     "side": "runtime",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 1047.838,
+      "diff": -9.317,
+      "low": -40.108,
+      "high": 21.474
+     },
+     "p95_ms": {
+      "baseline": 1079.541,
+      "diff": -10.504,
+      "low": -47.098,
+      "high": 26.09
+     },
+     "mean_ms": {
+      "baseline": 1001.41,
+      "diff": -10.139,
+      "low": -38.153,
+      "high": 17.875
+     },
+     "throughput_rps": {
+      "baseline": 3.817,
+      "diff": 0.032,
+      "low": -0.065,
+      "high": 0.129
+     }
+    },
+    {
+     "tokens": 512,
+     "concurrency": 4,
+     "side": "runtime-batching",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 1047.838,
+      "diff": -114.194,
+      "low": -155.118,
+      "high": -73.27
+     },
+     "p95_ms": {
+      "baseline": 1079.541,
+      "diff": -116.175,
+      "low": -166.528,
+      "high": -65.822
+     },
+     "mean_ms": {
+      "baseline": 1001.41,
+      "diff": -108.333,
+      "low": -147.373,
+      "high": -69.293
+     },
+     "throughput_rps": {
+      "baseline": 3.817,
+      "diff": 0.451,
+      "low": 0.299,
+      "high": 0.604
+     }
+    },
+    {
+     "tokens": 512,
+     "concurrency": 4,
+     "side": "max_speed:float32-packed",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 1047.838,
+      "diff": -455.826,
+      "low": -500.589,
+      "high": -411.063
+     },
+     "p95_ms": {
+      "baseline": 1079.541,
+      "diff": -474.774,
+      "low": -527.631,
+      "high": -421.917
+     },
+     "mean_ms": {
+      "baseline": 1001.41,
+      "diff": -439.954,
+      "low": -480.56,
+      "high": -399.348
+     },
+     "throughput_rps": {
+      "baseline": 3.817,
+      "diff": 2.99,
+      "low": 2.767,
+      "high": 3.213
+     }
+    },
+    {
+     "tokens": 2048,
+     "concurrency": 1,
+     "side": "runtime",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 785.744,
+      "diff": -11.143,
+      "low": -12.755,
+      "high": -9.531
+     },
+     "p95_ms": {
+      "baseline": 815.795,
+      "diff": -14.465,
+      "low": -24.979,
+      "high": -3.951
+     },
+     "mean_ms": {
+      "baseline": 789.111,
+      "diff": -12.058,
+      "low": -14.327,
+      "high": -9.789
+     },
+     "throughput_rps": {
+      "baseline": 1.267,
+      "diff": 0.019,
+      "low": 0.016,
+      "high": 0.023
+     }
+    },
+    {
+     "tokens": 2048,
+     "concurrency": 1,
+     "side": "runtime-batching",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 785.744,
+      "diff": -210.883,
+      "low": -213.533,
+      "high": -208.233
+     },
+     "p95_ms": {
+      "baseline": 815.795,
+      "diff": -219.657,
+      "low": -228.854,
+      "high": -210.46
+     },
+     "mean_ms": {
+      "baseline": 789.111,
+      "diff": -211.472,
+      "low": -214.376,
+      "high": -208.568
+     },
+     "throughput_rps": {
+      "baseline": 1.267,
+      "diff": 0.464,
+      "low": 0.456,
+      "high": 0.472
+     }
+    },
+    {
+     "tokens": 2048,
+     "concurrency": 1,
+     "side": "max_speed:float32-packed",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 785.744,
+      "diff": -414.19,
+      "low": -417.197,
+      "high": -411.183
+     },
+     "p95_ms": {
+      "baseline": 815.795,
+      "diff": -413.502,
+      "low": -426.483,
+      "high": -400.521
+     },
+     "mean_ms": {
+      "baseline": 789.111,
+      "diff": -413.152,
+      "low": -416.768,
+      "high": -409.536
+     },
+     "throughput_rps": {
+      "baseline": 1.267,
+      "diff": 1.393,
+      "low": 1.373,
+      "high": 1.412
+     }
+    },
+    {
+     "tokens": 2048,
+     "concurrency": 4,
+     "side": "runtime",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 3124.728,
+      "diff": 16.817,
+      "low": -52.26,
+      "high": 85.894
+     },
+     "p95_ms": {
+      "baseline": 3200.288,
+      "diff": 12.374,
+      "low": -81.998,
+      "high": 106.746
+     },
+     "mean_ms": {
+      "baseline": 2981.758,
+      "diff": 6.445,
+      "low": -53.364,
+      "high": 66.254
+     },
+     "throughput_rps": {
+      "baseline": 1.274,
+      "diff": -0.001,
+      "low": -0.026,
+      "high": 0.024
+     }
+    },
+    {
+     "tokens": 2048,
+     "concurrency": 4,
+     "side": "runtime-batching",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 3124.728,
+      "diff": -842.251,
+      "low": -891.267,
+      "high": -793.235
+     },
+     "p95_ms": {
+      "baseline": 3200.288,
+      "diff": -852.418,
+      "low": -931.522,
+      "high": -773.314
+     },
+     "mean_ms": {
+      "baseline": 2981.758,
+      "diff": -800.077,
+      "low": -850.075,
+      "high": -750.079
+     },
+     "throughput_rps": {
+      "baseline": 1.274,
+      "diff": 0.468,
+      "low": 0.438,
+      "high": 0.497
+     }
+    },
+    {
+     "tokens": 2048,
+     "concurrency": 4,
+     "side": "max_speed:float32-packed",
+     "baseline": "reference",
+     "rounds": 10,
+     "p50_ms": {
+      "baseline": 3124.728,
+      "diff": -1653.575,
+      "low": -1706.351,
+      "high": -1600.799
+     },
+     "p95_ms": {
+      "baseline": 3200.288,
+      "diff": -1669.853,
+      "low": -1759.684,
+      "high": -1580.022
+     },
+     "mean_ms": {
+      "baseline": 2981.758,
+      "diff": -1568.438,
+      "low": -1620.557,
+      "high": -1516.319
+     },
+     "throughput_rps": {
+      "baseline": 1.274,
+      "diff": 1.419,
+      "low": 1.354,
+      "high": 1.484
+     }
+    }
+   ]
+  },
+  "rocm_ab": {
+   "date": "2026-10-05",
+   "commit": "fb67e3bb31d25abf742da7b90dc5d4e9a2b8d5b9",
+   "stack": "the router image's: PyTorch 2.12.0+rocm7.2 (official wheel), Triton 3.7.0, FLA 0.5.2, causal-conv1d 1.7.0 and the rest of extproc-rocm's freeze; venv-rocm72-cc, manifest 875eeb85865e (causal-conv1d wheel 86ed5a73, gfx942 device code identical to the image's 58d292e6 and to the release build's)",
+   "environment": "one AMD Instinct MI325X (gfx942) per model; host cores in a systemd-run scope (effective cpuset logged), threads capped at the range; node load at most 25; the 4B and 9B intervals with MIOPEN_FIND_MODE=FAST (the runtime sets it at import), default_find_mode their run under MIOpen's default",
+   "rounds": 10,
+   "models": {
+    "vllm-sr/Vela-2.0-0.3B": {
+     "tool": "tools/vela2_bench.py --device rocm:0 --tokens 32,128,512,2048 --requests 30 --warmup 20 --concurrency 1,4 --rounds 10 --sides reference,runtime,runtime-batching",
+     "host_cores": 16,
+     "intervals": [
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 8.966,
+        "diff": -0.814,
+        "low": -1.018,
+        "high": -0.61
+       },
+       "p95_ms": {
+        "baseline": 9.356,
+        "diff": -0.875,
+        "low": -1.041,
+        "high": -0.709
+       },
+       "mean_ms": {
+        "baseline": 8.986,
+        "diff": -0.894,
+        "low": -1.106,
+        "high": -0.682
+       },
+       "throughput_rps": {
+        "baseline": 111.433,
+        "diff": 12.259,
+        "low": 9.407,
+        "high": 15.111
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 8.966,
+        "diff": 1.219,
+        "low": 1.061,
+        "high": 1.377
+       },
+       "p95_ms": {
+        "baseline": 9.356,
+        "diff": 1.321,
+        "low": 1.215,
+        "high": 1.427
+       },
+       "mean_ms": {
+        "baseline": 8.986,
+        "diff": 1.202,
+        "low": 1.061,
+        "high": 1.343
+       },
+       "throughput_rps": {
+        "baseline": 111.433,
+        "diff": -13.135,
+        "low": -14.563,
+        "high": -11.707
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 8.152,
+        "diff": 2.033,
+        "low": 1.869,
+        "high": 2.197
+       },
+       "p95_ms": {
+        "baseline": 8.481,
+        "diff": 2.196,
+        "low": 1.978,
+        "high": 2.414
+       },
+       "mean_ms": {
+        "baseline": 8.092,
+        "diff": 2.096,
+        "low": 1.926,
+        "high": 2.266
+       },
+       "throughput_rps": {
+        "baseline": 123.692,
+        "diff": -25.394,
+        "low": -27.036,
+        "high": -23.752
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 37.067,
+        "diff": -7.236,
+        "low": -7.907,
+        "high": -6.565
+       },
+       "p95_ms": {
+        "baseline": 38.703,
+        "diff": -7.846,
+        "low": -9.528,
+        "high": -6.164
+       },
+       "mean_ms": {
+        "baseline": 35.446,
+        "diff": -6.837,
+        "low": -7.631,
+        "high": -6.043
+       },
+       "throughput_rps": {
+        "baseline": 106.717,
+        "diff": 25.526,
+        "low": 22.483,
+        "high": 28.568
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 37.067,
+        "diff": -19.613,
+        "low": -20.14,
+        "high": -19.086
+       },
+       "p95_ms": {
+        "baseline": 38.703,
+        "diff": -12.667,
+        "low": -16.05,
+        "high": -9.284
+       },
+       "mean_ms": {
+        "baseline": 35.446,
+        "diff": -16.758,
+        "low": -17.504,
+        "high": -16.012
+       },
+       "throughput_rps": {
+        "baseline": 106.717,
+        "diff": 96.718,
+        "low": 87.931,
+        "high": 105.504
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 29.831,
+        "diff": -12.377,
+        "low": -12.936,
+        "high": -11.818
+       },
+       "p95_ms": {
+        "baseline": 30.857,
+        "diff": -4.821,
+        "low": -8.818,
+        "high": -0.824
+       },
+       "mean_ms": {
+        "baseline": 28.609,
+        "diff": -9.921,
+        "low": -11.047,
+        "high": -8.795
+       },
+       "throughput_rps": {
+        "baseline": 132.243,
+        "diff": 71.192,
+        "low": 60.824,
+        "high": 81.56
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 10.134,
+        "diff": -1.09,
+        "low": -1.752,
+        "high": -0.428
+       },
+       "p95_ms": {
+        "baseline": 10.652,
+        "diff": -1.255,
+        "low": -1.878,
+        "high": -0.632
+       },
+       "mean_ms": {
+        "baseline": 10.21,
+        "diff": -1.2,
+        "low": -1.859,
+        "high": -0.541
+       },
+       "throughput_rps": {
+        "baseline": 98.683,
+        "diff": 12.365,
+        "low": 7.254,
+        "high": 17.476
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 10.134,
+        "diff": 0.927,
+        "low": 0.341,
+        "high": 1.513
+       },
+       "p95_ms": {
+        "baseline": 10.652,
+        "diff": 0.84,
+        "low": 0.276,
+        "high": 1.404
+       },
+       "mean_ms": {
+        "baseline": 10.21,
+        "diff": 0.848,
+        "low": 0.263,
+        "high": 1.433
+       },
+       "throughput_rps": {
+        "baseline": 98.683,
+        "diff": -8.162,
+        "low": -12.781,
+        "high": -3.543
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 9.044,
+        "diff": 2.017,
+        "low": 1.855,
+        "high": 2.179
+       },
+       "p95_ms": {
+        "baseline": 9.397,
+        "diff": 2.095,
+        "low": 1.849,
+        "high": 2.341
+       },
+       "mean_ms": {
+        "baseline": 9.01,
+        "diff": 2.048,
+        "low": 1.873,
+        "high": 2.223
+       },
+       "throughput_rps": {
+        "baseline": 111.048,
+        "diff": -20.527,
+        "low": -21.969,
+        "high": -19.084
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 42.145,
+        "diff": -9.305,
+        "low": -9.978,
+        "high": -8.632
+       },
+       "p95_ms": {
+        "baseline": 42.967,
+        "diff": -9.077,
+        "low": -9.902,
+        "high": -8.252
+       },
+       "mean_ms": {
+        "baseline": 40.171,
+        "diff": -8.613,
+        "low": -9.236,
+        "high": -7.99
+       },
+       "throughput_rps": {
+        "baseline": 94.02,
+        "diff": 25.77,
+        "low": 23.758,
+        "high": 27.781
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 42.145,
+        "diff": -20.252,
+        "low": -21.105,
+        "high": -19.399
+       },
+       "p95_ms": {
+        "baseline": 42.967,
+        "diff": -11.64,
+        "low": -13.053,
+        "high": -10.227
+       },
+       "mean_ms": {
+        "baseline": 40.171,
+        "diff": -17.107,
+        "low": -17.587,
+        "high": -16.627
+       },
+       "throughput_rps": {
+        "baseline": 94.02,
+        "diff": 70.611,
+        "low": 68.001,
+        "high": 73.22
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 32.84,
+        "diff": -10.947,
+        "low": -11.73,
+        "high": -10.164
+       },
+       "p95_ms": {
+        "baseline": 33.89,
+        "diff": -2.563,
+        "low": -3.65,
+        "high": -1.476
+       },
+       "mean_ms": {
+        "baseline": 31.558,
+        "diff": -8.494,
+        "low": -9.112,
+        "high": -7.876
+       },
+       "throughput_rps": {
+        "baseline": 119.789,
+        "diff": 44.841,
+        "low": 42.058,
+        "high": 47.624
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 14.383,
+        "diff": -1.937,
+        "low": -2.004,
+        "high": -1.87
+       },
+       "p95_ms": {
+        "baseline": 14.76,
+        "diff": -1.858,
+        "low": -1.9,
+        "high": -1.816
+       },
+       "mean_ms": {
+        "baseline": 14.373,
+        "diff": -1.98,
+        "low": -2.03,
+        "high": -1.93
+       },
+       "throughput_rps": {
+        "baseline": 69.588,
+        "diff": 11.122,
+        "low": 10.712,
+        "high": 11.532
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 14.383,
+        "diff": 0.298,
+        "low": 0.214,
+        "high": 0.382
+       },
+       "p95_ms": {
+        "baseline": 14.76,
+        "diff": 0.397,
+        "low": 0.32,
+        "high": 0.474
+       },
+       "mean_ms": {
+        "baseline": 14.373,
+        "diff": 0.262,
+        "low": 0.196,
+        "high": 0.328
+       },
+       "throughput_rps": {
+        "baseline": 69.588,
+        "diff": -1.247,
+        "low": -1.557,
+        "high": -0.938
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 12.446,
+        "diff": 2.235,
+        "low": 2.19,
+        "high": 2.28
+       },
+       "p95_ms": {
+        "baseline": 12.902,
+        "diff": 2.255,
+        "low": 2.152,
+        "high": 2.358
+       },
+       "mean_ms": {
+        "baseline": 12.393,
+        "diff": 2.242,
+        "low": 2.205,
+        "high": 2.279
+       },
+       "throughput_rps": {
+        "baseline": 80.71,
+        "diff": -12.37,
+        "low": -12.618,
+        "high": -12.122
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 59.527,
+        "diff": -13.541,
+        "low": -14.593,
+        "high": -12.489
+       },
+       "p95_ms": {
+        "baseline": 60.829,
+        "diff": -13.001,
+        "low": -14.407,
+        "high": -11.595
+       },
+       "mean_ms": {
+        "baseline": 56.941,
+        "diff": -12.33,
+        "low": -13.373,
+        "high": -11.287
+       },
+       "throughput_rps": {
+        "baseline": 66.35,
+        "diff": 18.369,
+        "low": 16.948,
+        "high": 19.79
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 59.527,
+        "diff": -20.734,
+        "low": -22.454,
+        "high": -19.014
+       },
+       "p95_ms": {
+        "baseline": 60.829,
+        "diff": -16.243,
+        "low": -18.276,
+        "high": -14.21
+       },
+       "mean_ms": {
+        "baseline": 56.941,
+        "diff": -19.236,
+        "low": -20.526,
+        "high": -17.946
+       },
+       "throughput_rps": {
+        "baseline": 66.35,
+        "diff": 35.5,
+        "low": 32.618,
+        "high": 38.381
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 45.986,
+        "diff": -7.193,
+        "low": -8.415,
+        "high": -5.971
+       },
+       "p95_ms": {
+        "baseline": 47.828,
+        "diff": -3.242,
+        "low": -5.07,
+        "high": -1.414
+       },
+       "mean_ms": {
+        "baseline": 44.611,
+        "diff": -6.906,
+        "low": -7.537,
+        "high": -6.275
+       },
+       "throughput_rps": {
+        "baseline": 84.719,
+        "diff": 17.131,
+        "low": 14.95,
+        "high": 19.312
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 35.885,
+        "diff": -8.301,
+        "low": -8.401,
+        "high": -8.201
+       },
+       "p95_ms": {
+        "baseline": 36.553,
+        "diff": -7.373,
+        "low": -7.699,
+        "high": -7.047
+       },
+       "mean_ms": {
+        "baseline": 35.931,
+        "diff": -8.189,
+        "low": -8.259,
+        "high": -8.119
+       },
+       "throughput_rps": {
+        "baseline": 27.862,
+        "diff": 8.261,
+        "low": 7.705,
+        "high": 8.817
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 35.885,
+        "diff": -12.537,
+        "low": -12.688,
+        "high": -12.386
+       },
+       "p95_ms": {
+        "baseline": 36.553,
+        "diff": -11.723,
+        "low": -12.095,
+        "high": -11.351
+       },
+       "mean_ms": {
+        "baseline": 35.931,
+        "diff": -12.354,
+        "low": -12.52,
+        "high": -12.188
+       },
+       "throughput_rps": {
+        "baseline": 27.862,
+        "diff": 14.699,
+        "low": 13.478,
+        "high": 15.92
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 27.584,
+        "diff": -4.236,
+        "low": -4.424,
+        "high": -4.048
+       },
+       "p95_ms": {
+        "baseline": 29.18,
+        "diff": -4.35,
+        "low": -4.532,
+        "high": -4.168
+       },
+       "mean_ms": {
+        "baseline": 27.742,
+        "diff": -4.165,
+        "low": -4.336,
+        "high": -3.994
+       },
+       "throughput_rps": {
+        "baseline": 36.123,
+        "diff": 6.438,
+        "low": 5.737,
+        "high": 7.138
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 143.384,
+        "diff": -38.819,
+        "low": -41.149,
+        "high": -36.489
+       },
+       "p95_ms": {
+        "baseline": 145.411,
+        "diff": -36.175,
+        "low": -43.26,
+        "high": -29.09
+       },
+       "mean_ms": {
+        "baseline": 136.414,
+        "diff": -35.658,
+        "low": -38.166,
+        "high": -33.15
+       },
+       "throughput_rps": {
+        "baseline": 27.808,
+        "diff": 10.029,
+        "low": 9.173,
+        "high": 10.885
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 143.384,
+        "diff": -64.64,
+        "low": -68.73,
+        "high": -60.55
+       },
+       "p95_ms": {
+        "baseline": 145.411,
+        "diff": -52.997,
+        "low": -65.826,
+        "high": -40.168
+       },
+       "mean_ms": {
+        "baseline": 136.414,
+        "diff": -58.135,
+        "low": -62.743,
+        "high": -53.527
+       },
+       "throughput_rps": {
+        "baseline": 27.808,
+        "diff": 21.396,
+        "low": 19.176,
+        "high": 23.616
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 104.565,
+        "diff": -25.821,
+        "low": -28.578,
+        "high": -23.064
+       },
+       "p95_ms": {
+        "baseline": 109.236,
+        "diff": -16.822,
+        "low": -23.075,
+        "high": -10.569
+       },
+       "mean_ms": {
+        "baseline": 100.756,
+        "diff": -22.477,
+        "low": -25.146,
+        "high": -19.808
+       },
+       "throughput_rps": {
+        "baseline": 37.837,
+        "diff": 11.367,
+        "low": 9.809,
+        "high": 12.926
+       }
+      }
+     ]
+    },
+    "vllm-sr/Vela-2.0-4B": {
+     "tool": "MIOPEN_FIND_MODE=FAST tools/vela2_bench.py --device rocm:0 --tokens 32,128,512,2048 --requests 30 --warmup 20 --concurrency 1,4 --rounds 10 --sides reference,runtime,runtime-shared,runtime-batching",
+     "host_cores": 8,
+     "intervals": [
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 117.409,
+        "diff": -34.594,
+        "low": -35.044,
+        "high": -34.144
+       },
+       "p95_ms": {
+        "baseline": 149.445,
+        "diff": -59.955,
+        "low": -113.84,
+        "high": -6.07
+       },
+       "mean_ms": {
+        "baseline": 122.518,
+        "diff": -38.366,
+        "low": -46.39,
+        "high": -30.342
+       },
+       "throughput_rps": {
+        "baseline": 8.238,
+        "diff": 3.657,
+        "low": 3.395,
+        "high": 3.92
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 117.409,
+        "diff": -68.979,
+        "low": -70.07,
+        "high": -67.888
+       },
+       "p95_ms": {
+        "baseline": 149.445,
+        "diff": -99.104,
+        "low": -161.674,
+        "high": -36.534
+       },
+       "mean_ms": {
+        "baseline": 122.518,
+        "diff": -73.847,
+        "low": -83.83,
+        "high": -63.864
+       },
+       "throughput_rps": {
+        "baseline": 8.238,
+        "diff": 12.328,
+        "low": 11.674,
+        "high": 12.982
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 117.409,
+        "diff": -67.44,
+        "low": -67.992,
+        "high": -66.888
+       },
+       "p95_ms": {
+        "baseline": 149.445,
+        "diff": -98.052,
+        "low": -160.442,
+        "high": -35.662
+       },
+       "mean_ms": {
+        "baseline": 122.518,
+        "diff": -72.366,
+        "low": -82.317,
+        "high": -62.415
+       },
+       "throughput_rps": {
+        "baseline": 8.238,
+        "diff": 11.705,
+        "low": 11.191,
+        "high": 12.219
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 82.815,
+        "diff": -34.385,
+        "low": -35.342,
+        "high": -33.428
+       },
+       "p95_ms": {
+        "baseline": 89.49,
+        "diff": -39.149,
+        "low": -48.06,
+        "high": -30.238
+       },
+       "mean_ms": {
+        "baseline": 84.152,
+        "diff": -35.481,
+        "low": -37.634,
+        "high": -33.328
+       },
+       "throughput_rps": {
+        "baseline": 11.895,
+        "diff": 8.671,
+        "low": 8.183,
+        "high": 9.159
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 82.815,
+        "diff": -32.846,
+        "low": -33.158,
+        "high": -32.534
+       },
+       "p95_ms": {
+        "baseline": 89.49,
+        "diff": -38.097,
+        "low": -46.657,
+        "high": -29.537
+       },
+       "mean_ms": {
+        "baseline": 84.152,
+        "diff": -34.0,
+        "low": -35.955,
+        "high": -32.045
+       },
+       "throughput_rps": {
+        "baseline": 11.895,
+        "diff": 8.048,
+        "low": 7.772,
+        "high": 8.324
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 611.281,
+        "diff": -282.963,
+        "low": -519.165,
+        "high": -46.761
+       },
+       "p95_ms": {
+        "baseline": 684.159,
+        "diff": -346.574,
+        "low": -660.437,
+        "high": -32.711
+       },
+       "mean_ms": {
+        "baseline": 584.687,
+        "diff": -270.784,
+        "low": -497.529,
+        "high": -44.039
+       },
+       "throughput_rps": {
+        "baseline": 7.546,
+        "diff": 4.556,
+        "low": 2.991,
+        "high": 6.12
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 611.281,
+        "diff": -424.941,
+        "low": -660.622,
+        "high": -189.26
+       },
+       "p95_ms": {
+        "baseline": 684.159,
+        "diff": -493.518,
+        "low": -807.096,
+        "high": -179.94
+       },
+       "mean_ms": {
+        "baseline": 584.687,
+        "diff": -406.343,
+        "low": -632.832,
+        "high": -179.854
+       },
+       "throughput_rps": {
+        "baseline": 7.546,
+        "diff": 13.74,
+        "low": 12.128,
+        "high": 15.351
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 611.281,
+        "diff": -428.033,
+        "low": -663.094,
+        "high": -192.972
+       },
+       "p95_ms": {
+        "baseline": 684.159,
+        "diff": -403.951,
+        "low": -716.35,
+        "high": -91.552
+       },
+       "mean_ms": {
+        "baseline": 584.687,
+        "diff": -401.337,
+        "low": -627.508,
+        "high": -175.166
+       },
+       "throughput_rps": {
+        "baseline": 7.546,
+        "diff": 13.724,
+        "low": 12.14,
+        "high": 15.309
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 328.318,
+        "diff": -141.978,
+        "low": -143.256,
+        "high": -140.7
+       },
+       "p95_ms": {
+        "baseline": 337.585,
+        "diff": -146.944,
+        "low": -148.948,
+        "high": -144.94
+       },
+       "mean_ms": {
+        "baseline": 313.903,
+        "diff": -135.559,
+        "low": -136.873,
+        "high": -134.245
+       },
+       "throughput_rps": {
+        "baseline": 12.102,
+        "diff": 9.184,
+        "low": 9.08,
+        "high": 9.288
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 328.318,
+        "diff": -145.07,
+        "low": -150.522,
+        "high": -139.618
+       },
+       "p95_ms": {
+        "baseline": 337.585,
+        "diff": -57.377,
+        "low": -61.355,
+        "high": -53.399
+       },
+       "mean_ms": {
+        "baseline": 313.903,
+        "diff": -130.553,
+        "low": -133.134,
+        "high": -127.972
+       },
+       "throughput_rps": {
+        "baseline": 12.102,
+        "diff": 9.169,
+        "low": 9.077,
+        "high": 9.261
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 134.449,
+        "diff": -36.096,
+        "low": -37.173,
+        "high": -35.019
+       },
+       "p95_ms": {
+        "baseline": 157.522,
+        "diff": -55.17,
+        "low": -90.334,
+        "high": -20.006
+       },
+       "mean_ms": {
+        "baseline": 137.202,
+        "diff": -38.141,
+        "low": -42.722,
+        "high": -33.56
+       },
+       "throughput_rps": {
+        "baseline": 7.312,
+        "diff": 2.788,
+        "low": 2.653,
+        "high": 2.924
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 134.449,
+        "diff": -81.346,
+        "low": -82.122,
+        "high": -80.57
+       },
+       "p95_ms": {
+        "baseline": 157.522,
+        "diff": -103.461,
+        "low": -145.254,
+        "high": -61.668
+       },
+       "mean_ms": {
+        "baseline": 137.202,
+        "diff": -83.994,
+        "low": -89.851,
+        "high": -78.137
+       },
+       "throughput_rps": {
+        "baseline": 7.312,
+        "diff": 11.489,
+        "low": 11.25,
+        "high": 11.728
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 134.449,
+        "diff": -79.068,
+        "low": -79.792,
+        "high": -78.344
+       },
+       "p95_ms": {
+        "baseline": 157.522,
+        "diff": -101.124,
+        "low": -142.9,
+        "high": -59.348
+       },
+       "mean_ms": {
+        "baseline": 137.202,
+        "diff": -81.623,
+        "low": -87.512,
+        "high": -75.734
+       },
+       "throughput_rps": {
+        "baseline": 7.312,
+        "diff": 10.688,
+        "low": 10.419,
+        "high": 10.957
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 98.353,
+        "diff": -45.25,
+        "low": -45.633,
+        "high": -44.867
+       },
+       "p95_ms": {
+        "baseline": 102.352,
+        "diff": -48.291,
+        "low": -54.956,
+        "high": -41.626
+       },
+       "mean_ms": {
+        "baseline": 99.061,
+        "diff": -45.853,
+        "low": -47.247,
+        "high": -44.459
+       },
+       "throughput_rps": {
+        "baseline": 10.1,
+        "diff": 8.701,
+        "low": 8.515,
+        "high": 8.886
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 98.353,
+        "diff": -42.972,
+        "low": -43.515,
+        "high": -42.429
+       },
+       "p95_ms": {
+        "baseline": 102.352,
+        "diff": -45.954,
+        "low": -52.604,
+        "high": -39.304
+       },
+       "mean_ms": {
+        "baseline": 99.061,
+        "diff": -43.482,
+        "low": -44.961,
+        "high": -42.003
+       },
+       "throughput_rps": {
+        "baseline": 10.1,
+        "diff": 7.9,
+        "low": 7.683,
+        "high": 8.116
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 606.372,
+        "diff": -214.366,
+        "low": -355.358,
+        "high": -73.374
+       },
+       "p95_ms": {
+        "baseline": 670.836,
+        "diff": -274.308,
+        "low": -479.501,
+        "high": -69.115
+       },
+       "mean_ms": {
+        "baseline": 596.914,
+        "diff": -223.46,
+        "low": -367.998,
+        "high": -78.922
+       },
+       "throughput_rps": {
+        "baseline": 6.81,
+        "diff": 3.363,
+        "low": 2.384,
+        "high": 4.342
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 606.372,
+        "diff": -394.064,
+        "low": -534.674,
+        "high": -253.454
+       },
+       "p95_ms": {
+        "baseline": 670.836,
+        "diff": -456.17,
+        "low": -660.207,
+        "high": -252.133
+       },
+       "mean_ms": {
+        "baseline": 596.914,
+        "diff": -394.75,
+        "low": -538.685,
+        "high": -250.815
+       },
+       "throughput_rps": {
+        "baseline": 6.81,
+        "diff": 11.982,
+        "low": 11.12,
+        "high": 12.843
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 606.372,
+        "diff": -396.076,
+        "low": -535.69,
+        "high": -256.462
+       },
+       "p95_ms": {
+        "baseline": 670.836,
+        "diff": -397.207,
+        "low": -603.721,
+        "high": -190.693
+       },
+       "mean_ms": {
+        "baseline": 596.914,
+        "diff": -388.862,
+        "low": -532.982,
+        "high": -244.742
+       },
+       "throughput_rps": {
+        "baseline": 6.81,
+        "diff": 11.833,
+        "low": 10.961,
+        "high": 12.705
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 392.006,
+        "diff": -179.698,
+        "low": -182.808,
+        "high": -176.588
+       },
+       "p95_ms": {
+        "baseline": 396.528,
+        "diff": -181.862,
+        "low": -185.298,
+        "high": -178.426
+       },
+       "mean_ms": {
+        "baseline": 373.454,
+        "diff": -171.29,
+        "low": -174.083,
+        "high": -168.497
+       },
+       "throughput_rps": {
+        "baseline": 10.173,
+        "diff": 8.619,
+        "low": 8.368,
+        "high": 8.87
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 392.006,
+        "diff": -181.71,
+        "low": -190.111,
+        "high": -173.309
+       },
+       "p95_ms": {
+        "baseline": 396.528,
+        "diff": -122.899,
+        "low": -132.357,
+        "high": -113.441
+       },
+       "mean_ms": {
+        "baseline": 373.454,
+        "diff": -165.402,
+        "low": -168.874,
+        "high": -161.93
+       },
+       "throughput_rps": {
+        "baseline": 10.173,
+        "diff": 8.47,
+        "low": 8.273,
+        "high": 8.668
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 203.327,
+        "diff": -44.262,
+        "low": -44.648,
+        "high": -43.876
+       },
+       "p95_ms": {
+        "baseline": 208.343,
+        "diff": -42.149,
+        "low": -43.52,
+        "high": -40.778
+       },
+       "mean_ms": {
+        "baseline": 203.946,
+        "diff": -43.36,
+        "low": -43.965,
+        "high": -42.755
+       },
+       "throughput_rps": {
+        "baseline": 4.904,
+        "diff": 1.324,
+        "low": 1.296,
+        "high": 1.352
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 203.327,
+        "diff": -130.572,
+        "low": -131.178,
+        "high": -129.966
+       },
+       "p95_ms": {
+        "baseline": 208.343,
+        "diff": -133.29,
+        "low": -136.918,
+        "high": -129.662
+       },
+       "mean_ms": {
+        "baseline": 203.946,
+        "diff": -130.864,
+        "low": -131.869,
+        "high": -129.859
+       },
+       "throughput_rps": {
+        "baseline": 4.904,
+        "diff": 8.781,
+        "low": 8.678,
+        "high": 8.885
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 203.327,
+        "diff": -128.294,
+        "low": -128.929,
+        "high": -127.659
+       },
+       "p95_ms": {
+        "baseline": 208.343,
+        "diff": -131.27,
+        "low": -135.279,
+        "high": -127.261
+       },
+       "mean_ms": {
+        "baseline": 203.946,
+        "diff": -128.52,
+        "low": -129.482,
+        "high": -127.558
+       },
+       "throughput_rps": {
+        "baseline": 4.904,
+        "diff": 8.356,
+        "low": 8.281,
+        "high": 8.431
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 159.065,
+        "diff": -86.31,
+        "low": -86.945,
+        "high": -85.675
+       },
+       "p95_ms": {
+        "baseline": 166.194,
+        "diff": -91.141,
+        "low": -95.549,
+        "high": -86.733
+       },
+       "mean_ms": {
+        "baseline": 160.586,
+        "diff": -87.504,
+        "low": -88.71,
+        "high": -86.298
+       },
+       "throughput_rps": {
+        "baseline": 6.228,
+        "diff": 7.457,
+        "low": 7.352,
+        "high": 7.562
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 159.065,
+        "diff": -84.032,
+        "low": -84.582,
+        "high": -83.482
+       },
+       "p95_ms": {
+        "baseline": 166.194,
+        "diff": -89.121,
+        "low": -93.967,
+        "high": -84.275
+       },
+       "mean_ms": {
+        "baseline": 160.586,
+        "diff": -85.16,
+        "low": -86.431,
+        "high": -83.889
+       },
+       "throughput_rps": {
+        "baseline": 6.228,
+        "diff": 7.031,
+        "low": 6.943,
+        "high": 7.12
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 837.808,
+        "diff": -200.154,
+        "low": -257.989,
+        "high": -142.319
+       },
+       "p95_ms": {
+        "baseline": 854.088,
+        "diff": -210.735,
+        "low": -289.638,
+        "high": -131.832
+       },
+       "mean_ms": {
+        "baseline": 790.898,
+        "diff": -184.477,
+        "low": -226.855,
+        "high": -142.099
+       },
+       "throughput_rps": {
+        "baseline": 4.826,
+        "diff": 1.438,
+        "low": 1.219,
+        "high": 1.656
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 837.808,
+        "diff": -548.707,
+        "low": -607.047,
+        "high": -490.367
+       },
+       "p95_ms": {
+        "baseline": 854.088,
+        "diff": -560.781,
+        "low": -640.112,
+        "high": -481.45
+       },
+       "mean_ms": {
+        "baseline": 790.898,
+        "diff": -515.136,
+        "low": -557.839,
+        "high": -472.433
+       },
+       "throughput_rps": {
+        "baseline": 4.826,
+        "diff": 8.953,
+        "low": 8.666,
+        "high": 9.241
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 837.808,
+        "diff": -547.19,
+        "low": -604.465,
+        "high": -489.915
+       },
+       "p95_ms": {
+        "baseline": 854.088,
+        "diff": -526.212,
+        "low": -617.266,
+        "high": -435.158
+       },
+       "mean_ms": {
+        "baseline": 790.898,
+        "diff": -508.677,
+        "low": -550.828,
+        "high": -466.526
+       },
+       "throughput_rps": {
+        "baseline": 4.826,
+        "diff": 8.897,
+        "low": 8.662,
+        "high": 9.132
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 637.654,
+        "diff": -348.553,
+        "low": -351.041,
+        "high": -346.065
+       },
+       "p95_ms": {
+        "baseline": 643.353,
+        "diff": -350.046,
+        "low": -352.42,
+        "high": -347.672
+       },
+       "mean_ms": {
+        "baseline": 606.421,
+        "diff": -330.659,
+        "low": -332.803,
+        "high": -328.515
+       },
+       "throughput_rps": {
+        "baseline": 6.264,
+        "diff": 7.516,
+        "low": 7.405,
+        "high": 7.627
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 637.654,
+        "diff": -347.036,
+        "low": -348.59,
+        "high": -345.482
+       },
+       "p95_ms": {
+        "baseline": 643.353,
+        "diff": -315.477,
+        "low": -340.497,
+        "high": -290.457
+       },
+       "mean_ms": {
+        "baseline": 606.421,
+        "diff": -324.2,
+        "low": -326.853,
+        "high": -321.547
+       },
+       "throughput_rps": {
+        "baseline": 6.264,
+        "diff": 7.46,
+        "low": 7.416,
+        "high": 7.503
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 410.353,
+        "diff": -84.773,
+        "low": -85.813,
+        "high": -83.733
+       },
+       "p95_ms": {
+        "baseline": 417.457,
+        "diff": -86.287,
+        "low": -87.838,
+        "high": -84.736
+       },
+       "mean_ms": {
+        "baseline": 411.455,
+        "diff": -83.935,
+        "low": -86.446,
+        "high": -81.424
+       },
+       "throughput_rps": {
+        "baseline": 2.43,
+        "diff": 0.623,
+        "low": 0.6,
+        "high": 0.647
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 410.353,
+        "diff": -201.625,
+        "low": -202.799,
+        "high": -200.451
+       },
+       "p95_ms": {
+        "baseline": 417.457,
+        "diff": -206.975,
+        "low": -216.501,
+        "high": -197.449
+       },
+       "mean_ms": {
+        "baseline": 411.455,
+        "diff": -202.261,
+        "low": -204.103,
+        "high": -200.419
+       },
+       "throughput_rps": {
+        "baseline": 2.43,
+        "diff": 2.35,
+        "low": 2.333,
+        "high": 2.367
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 410.353,
+        "diff": -199.401,
+        "low": -200.701,
+        "high": -198.101
+       },
+       "p95_ms": {
+        "baseline": 417.457,
+        "diff": -204.889,
+        "low": -214.264,
+        "high": -195.514
+       },
+       "mean_ms": {
+        "baseline": 411.455,
+        "diff": -200.201,
+        "low": -202.205,
+        "high": -198.197
+       },
+       "throughput_rps": {
+        "baseline": 2.43,
+        "diff": 2.303,
+        "low": 2.282,
+        "high": 2.325
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 325.58,
+        "diff": -116.852,
+        "low": -117.116,
+        "high": -116.588
+       },
+       "p95_ms": {
+        "baseline": 331.17,
+        "diff": -120.688,
+        "low": -130.039,
+        "high": -111.337
+       },
+       "mean_ms": {
+        "baseline": 327.52,
+        "diff": -118.326,
+        "low": -121.221,
+        "high": -115.431
+       },
+       "throughput_rps": {
+        "baseline": 3.054,
+        "diff": 1.727,
+        "low": 1.699,
+        "high": 1.754
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 325.58,
+        "diff": -114.628,
+        "low": -115.289,
+        "high": -113.967
+       },
+       "p95_ms": {
+        "baseline": 331.17,
+        "diff": -118.602,
+        "low": -127.774,
+        "high": -109.43
+       },
+       "mean_ms": {
+        "baseline": 327.52,
+        "diff": -116.266,
+        "low": -119.203,
+        "high": -113.329
+       },
+       "throughput_rps": {
+        "baseline": 3.054,
+        "diff": 1.68,
+        "low": 1.65,
+        "high": 1.71
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1649.893,
+        "diff": -350.632,
+        "low": -399.155,
+        "high": -302.109
+       },
+       "p95_ms": {
+        "baseline": 1730.401,
+        "diff": -414.742,
+        "low": -541.184,
+        "high": -288.3
+       },
+       "mean_ms": {
+        "baseline": 1587.019,
+        "diff": -349.036,
+        "low": -415.174,
+        "high": -282.898
+       },
+       "throughput_rps": {
+        "baseline": 2.403,
+        "diff": 0.667,
+        "low": 0.581,
+        "high": 0.753
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1649.893,
+        "diff": -816.553,
+        "low": -864.799,
+        "high": -768.307
+       },
+       "p95_ms": {
+        "baseline": 1730.401,
+        "diff": -893.922,
+        "low": -1028.86,
+        "high": -758.984
+       },
+       "mean_ms": {
+        "baseline": 1587.019,
+        "diff": -794.309,
+        "low": -862.233,
+        "high": -726.385
+       },
+       "throughput_rps": {
+        "baseline": 2.403,
+        "diff": 2.392,
+        "low": 2.309,
+        "high": 2.476
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1649.893,
+        "diff": -815.849,
+        "low": -863.923,
+        "high": -767.775
+       },
+       "p95_ms": {
+        "baseline": 1730.401,
+        "diff": -888.931,
+        "low": -1021.645,
+        "high": -756.217
+       },
+       "mean_ms": {
+        "baseline": 1587.019,
+        "diff": -783.833,
+        "low": -851.043,
+        "high": -716.623
+       },
+       "throughput_rps": {
+        "baseline": 2.403,
+        "diff": 2.383,
+        "low": 2.303,
+        "high": 2.463
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1299.261,
+        "diff": -465.921,
+        "low": -469.496,
+        "high": -462.346
+       },
+       "p95_ms": {
+        "baseline": 1315.659,
+        "diff": -479.18,
+        "low": -505.089,
+        "high": -453.271
+       },
+       "mean_ms": {
+        "baseline": 1237.983,
+        "diff": -445.273,
+        "low": -450.421,
+        "high": -440.125
+       },
+       "throughput_rps": {
+        "baseline": 3.07,
+        "diff": 1.725,
+        "low": 1.706,
+        "high": 1.745
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1299.261,
+        "diff": -465.217,
+        "low": -466.452,
+        "high": -463.982
+       },
+       "p95_ms": {
+        "baseline": 1315.659,
+        "diff": -474.189,
+        "low": -500.104,
+        "high": -448.274
+       },
+       "mean_ms": {
+        "baseline": 1237.983,
+        "diff": -434.797,
+        "low": -439.184,
+        "high": -430.41
+       },
+       "throughput_rps": {
+        "baseline": 3.07,
+        "diff": 1.716,
+        "low": 1.7,
+        "high": 1.731
+       }
+      }
+     ],
+     "default_find_mode": [
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 118.031,
+        "diff": -35.411,
+        "low": -35.87,
+        "high": -34.952
+       },
+       "p95_ms": {
+        "baseline": 148.499,
+        "diff": -58.469,
+        "low": -107.253,
+        "high": -9.685
+       },
+       "mean_ms": {
+        "baseline": 122.796,
+        "diff": -38.309,
+        "low": -45.085,
+        "high": -31.533
+       },
+       "throughput_rps": {
+        "baseline": 8.227,
+        "diff": 3.648,
+        "low": 3.536,
+        "high": 3.76
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 118.031,
+        "diff": -70.591,
+        "low": -71.187,
+        "high": -69.995
+       },
+       "p95_ms": {
+        "baseline": 148.499,
+        "diff": -99.725,
+        "low": -157.953,
+        "high": -41.497
+       },
+       "mean_ms": {
+        "baseline": 122.796,
+        "diff": -75.169,
+        "low": -85.016,
+        "high": -65.322
+       },
+       "throughput_rps": {
+        "baseline": 8.227,
+        "diff": 12.791,
+        "low": 12.374,
+        "high": 13.208
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 118.031,
+        "diff": -68.661,
+        "low": -69.261,
+        "high": -68.061
+       },
+       "p95_ms": {
+        "baseline": 148.499,
+        "diff": -97.76,
+        "low": -156.31,
+        "high": -39.21
+       },
+       "mean_ms": {
+        "baseline": 122.796,
+        "diff": -73.201,
+        "low": -83.005,
+        "high": -63.397
+       },
+       "throughput_rps": {
+        "baseline": 8.227,
+        "diff": 11.958,
+        "low": 11.55,
+        "high": 12.366
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 82.62,
+        "diff": -35.18,
+        "low": -35.461,
+        "high": -34.899
+       },
+       "p95_ms": {
+        "baseline": 90.03,
+        "diff": -41.256,
+        "low": -50.712,
+        "high": -31.8
+       },
+       "mean_ms": {
+        "baseline": 84.487,
+        "diff": -36.86,
+        "low": -39.956,
+        "high": -33.764
+       },
+       "throughput_rps": {
+        "baseline": 11.875,
+        "diff": 9.143,
+        "low": 8.817,
+        "high": 9.469
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 82.62,
+        "diff": -33.25,
+        "low": -33.494,
+        "high": -33.006
+       },
+       "p95_ms": {
+        "baseline": 90.03,
+        "diff": -39.291,
+        "low": -49.066,
+        "high": -29.516
+       },
+       "mean_ms": {
+        "baseline": 84.487,
+        "diff": -34.892,
+        "low": -37.946,
+        "high": -31.838
+       },
+       "throughput_rps": {
+        "baseline": 11.875,
+        "diff": 8.309,
+        "low": 7.994,
+        "high": 8.625
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 597.991,
+        "diff": -270.323,
+        "low": -489.632,
+        "high": -51.014
+       },
+       "p95_ms": {
+        "baseline": 671.761,
+        "diff": -334.182,
+        "low": -631.204,
+        "high": -37.16
+       },
+       "mean_ms": {
+        "baseline": 573.309,
+        "diff": -259.729,
+        "low": -471.608,
+        "high": -47.85
+       },
+       "throughput_rps": {
+        "baseline": 7.64,
+        "diff": 4.478,
+        "low": 3.06,
+        "high": 5.896
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 597.991,
+        "diff": -411.635,
+        "low": -630.991,
+        "high": -192.279
+       },
+       "p95_ms": {
+        "baseline": 671.761,
+        "diff": -480.611,
+        "low": -778.311,
+        "high": -182.911
+       },
+       "mean_ms": {
+        "baseline": 573.309,
+        "diff": -395.002,
+        "low": -607.133,
+        "high": -182.871
+       },
+       "throughput_rps": {
+        "baseline": 7.64,
+        "diff": 13.664,
+        "low": 12.411,
+        "high": 14.916
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 597.991,
+        "diff": -413.328,
+        "low": -634.468,
+        "high": -192.188
+       },
+       "p95_ms": {
+        "baseline": 671.761,
+        "diff": -426.853,
+        "low": -719.697,
+        "high": -134.009
+       },
+       "mean_ms": {
+        "baseline": 573.309,
+        "diff": -391.374,
+        "low": -603.521,
+        "high": -179.227
+       },
+       "throughput_rps": {
+        "baseline": 7.64,
+        "diff": 13.63,
+        "low": 12.359,
+        "high": 14.901
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 327.668,
+        "diff": -141.312,
+        "low": -143.821,
+        "high": -138.803
+       },
+       "p95_ms": {
+        "baseline": 337.579,
+        "diff": -146.429,
+        "low": -147.526,
+        "high": -145.332
+       },
+       "mean_ms": {
+        "baseline": 313.58,
+        "diff": -135.273,
+        "low": -137.21,
+        "high": -133.336
+       },
+       "throughput_rps": {
+        "baseline": 12.118,
+        "diff": 9.186,
+        "low": 8.917,
+        "high": 9.455
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 327.668,
+        "diff": -143.005,
+        "low": -148.021,
+        "high": -137.989
+       },
+       "p95_ms": {
+        "baseline": 337.579,
+        "diff": -92.671,
+        "low": -120.542,
+        "high": -64.8
+       },
+       "mean_ms": {
+        "baseline": 313.58,
+        "diff": -131.645,
+        "low": -132.366,
+        "high": -130.924
+       },
+       "throughput_rps": {
+        "baseline": 12.118,
+        "diff": 9.152,
+        "low": 8.897,
+        "high": 9.408
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 134.368,
+        "diff": -36.124,
+        "low": -36.957,
+        "high": -35.291
+       },
+       "p95_ms": {
+        "baseline": 145.944,
+        "diff": -42.282,
+        "low": -52.613,
+        "high": -31.951
+       },
+       "mean_ms": {
+        "baseline": 135.697,
+        "diff": -36.563,
+        "low": -37.918,
+        "high": -35.208
+       },
+       "throughput_rps": {
+        "baseline": 7.376,
+        "diff": 2.719,
+        "low": 2.657,
+        "high": 2.781
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 134.368,
+        "diff": -80.957,
+        "low": -81.746,
+        "high": -80.168
+       },
+       "p95_ms": {
+        "baseline": 145.944,
+        "diff": -91.354,
+        "low": -111.267,
+        "high": -71.441
+       },
+       "mean_ms": {
+        "baseline": 135.697,
+        "diff": -82.187,
+        "low": -85.624,
+        "high": -78.75
+       },
+       "throughput_rps": {
+        "baseline": 7.376,
+        "diff": 11.316,
+        "low": 11.036,
+        "high": 11.596
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 134.368,
+        "diff": -78.692,
+        "low": -79.779,
+        "high": -77.605
+       },
+       "p95_ms": {
+        "baseline": 145.944,
+        "diff": -89.196,
+        "low": -109.187,
+        "high": -69.205
+       },
+       "mean_ms": {
+        "baseline": 135.697,
+        "diff": -79.929,
+        "low": -83.513,
+        "high": -76.345
+       },
+       "throughput_rps": {
+        "baseline": 7.376,
+        "diff": 10.559,
+        "low": 10.251,
+        "high": 10.867
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 98.244,
+        "diff": -44.833,
+        "low": -45.291,
+        "high": -44.375
+       },
+       "p95_ms": {
+        "baseline": 103.662,
+        "diff": -49.072,
+        "low": -58.691,
+        "high": -39.453
+       },
+       "mean_ms": {
+        "baseline": 99.134,
+        "diff": -45.624,
+        "low": -47.891,
+        "high": -43.357
+       },
+       "throughput_rps": {
+        "baseline": 10.095,
+        "diff": 8.597,
+        "low": 8.294,
+        "high": 8.899
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 98.244,
+        "diff": -42.568,
+        "low": -43.397,
+        "high": -41.739
+       },
+       "p95_ms": {
+        "baseline": 103.662,
+        "diff": -46.914,
+        "low": -56.602,
+        "high": -37.226
+       },
+       "mean_ms": {
+        "baseline": 99.134,
+        "diff": -43.366,
+        "low": -45.784,
+        "high": -40.948
+       },
+       "throughput_rps": {
+        "baseline": 10.095,
+        "diff": 7.841,
+        "low": 7.506,
+        "high": 8.175
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 623.865,
+        "diff": -232.38,
+        "low": -379.357,
+        "high": -85.403
+       },
+       "p95_ms": {
+        "baseline": 680.882,
+        "diff": -277.984,
+        "low": -494.037,
+        "high": -61.931
+       },
+       "mean_ms": {
+        "baseline": 598.608,
+        "diff": -224.64,
+        "low": -368.468,
+        "high": -80.812
+       },
+       "throughput_rps": {
+        "baseline": 6.781,
+        "diff": 3.381,
+        "low": 2.344,
+        "high": 4.418
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 623.865,
+        "diff": -412.711,
+        "low": -559.367,
+        "high": -266.055
+       },
+       "p95_ms": {
+        "baseline": 680.882,
+        "diff": -466.967,
+        "low": -679.38,
+        "high": -254.554
+       },
+       "mean_ms": {
+        "baseline": 598.608,
+        "diff": -397.248,
+        "low": -540.431,
+        "high": -254.065
+       },
+       "throughput_rps": {
+        "baseline": 6.781,
+        "diff": 12.08,
+        "low": 11.031,
+        "high": 13.129
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 623.865,
+        "diff": -412.536,
+        "low": -559.594,
+        "high": -265.478
+       },
+       "p95_ms": {
+        "baseline": 680.882,
+        "diff": -398.679,
+        "low": -606.18,
+        "high": -191.178
+       },
+       "mean_ms": {
+        "baseline": 598.608,
+        "diff": -391.45,
+        "low": -534.968,
+        "high": -247.932
+       },
+       "throughput_rps": {
+        "baseline": 6.781,
+        "diff": 11.973,
+        "low": 10.911,
+        "high": 13.035
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 391.485,
+        "diff": -180.331,
+        "low": -181.467,
+        "high": -179.195
+       },
+       "p95_ms": {
+        "baseline": 402.898,
+        "diff": -188.983,
+        "low": -207.344,
+        "high": -170.622
+       },
+       "mean_ms": {
+        "baseline": 373.968,
+        "diff": -172.608,
+        "low": -176.316,
+        "high": -168.9
+       },
+       "throughput_rps": {
+        "baseline": 10.162,
+        "diff": 8.699,
+        "low": 8.582,
+        "high": 8.816
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 391.485,
+        "diff": -180.156,
+        "low": -182.327,
+        "high": -177.985
+       },
+       "p95_ms": {
+        "baseline": 402.898,
+        "diff": -120.695,
+        "low": -146.888,
+        "high": -94.502
+       },
+       "mean_ms": {
+        "baseline": 373.968,
+        "diff": -166.81,
+        "low": -169.756,
+        "high": -163.864
+       },
+       "throughput_rps": {
+        "baseline": 10.162,
+        "diff": 8.592,
+        "low": 8.522,
+        "high": 8.662
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 203.133,
+        "diff": -43.74,
+        "low": -44.095,
+        "high": -43.385
+       },
+       "p95_ms": {
+        "baseline": 231.691,
+        "diff": -54.465,
+        "low": -81.755,
+        "high": -27.175
+       },
+       "mean_ms": {
+        "baseline": 208.048,
+        "diff": -44.479,
+        "low": -46.181,
+        "high": -42.777
+       },
+       "throughput_rps": {
+        "baseline": 4.813,
+        "diff": 1.308,
+        "low": 1.274,
+        "high": 1.342
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 203.133,
+        "diff": -131.022,
+        "low": -131.453,
+        "high": -130.591
+       },
+       "p95_ms": {
+        "baseline": 231.691,
+        "diff": -154.063,
+        "low": -187.592,
+        "high": -120.534
+       },
+       "mean_ms": {
+        "baseline": 208.048,
+        "diff": -134.821,
+        "low": -139.777,
+        "high": -129.865
+       },
+       "throughput_rps": {
+        "baseline": 4.813,
+        "diff": 8.851,
+        "low": 8.698,
+        "high": 9.005
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 203.133,
+        "diff": -128.495,
+        "low": -128.704,
+        "high": -128.286
+       },
+       "p95_ms": {
+        "baseline": 231.691,
+        "diff": -152.175,
+        "low": -185.146,
+        "high": -119.204
+       },
+       "mean_ms": {
+        "baseline": 208.048,
+        "diff": -132.63,
+        "low": -137.563,
+        "high": -127.697
+       },
+       "throughput_rps": {
+        "baseline": 4.813,
+        "diff": 8.457,
+        "low": 8.263,
+        "high": 8.652
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 159.393,
+        "diff": -87.282,
+        "low": -87.72,
+        "high": -86.844
+       },
+       "p95_ms": {
+        "baseline": 177.226,
+        "diff": -99.598,
+        "low": -111.089,
+        "high": -88.107
+       },
+       "mean_ms": {
+        "baseline": 163.569,
+        "diff": -90.342,
+        "low": -93.677,
+        "high": -87.007
+       },
+       "throughput_rps": {
+        "baseline": 6.122,
+        "diff": 7.543,
+        "low": 7.418,
+        "high": 7.669
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 159.393,
+        "diff": -84.755,
+        "low": -85.098,
+        "high": -84.412
+       },
+       "p95_ms": {
+        "baseline": 177.226,
+        "diff": -97.71,
+        "low": -108.573,
+        "high": -86.847
+       },
+       "mean_ms": {
+        "baseline": 163.569,
+        "diff": -88.151,
+        "low": -91.45,
+        "high": -84.852
+       },
+       "throughput_rps": {
+        "baseline": 6.122,
+        "diff": 7.149,
+        "low": 6.979,
+        "high": 7.319
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 901.023,
+        "diff": -227.028,
+        "low": -375.862,
+        "high": -78.194
+       },
+       "p95_ms": {
+        "baseline": 958.551,
+        "diff": -212.412,
+        "low": -340.885,
+        "high": -83.939
+       },
+       "mean_ms": {
+        "baseline": 850.1,
+        "diff": -204.841,
+        "low": -293.52,
+        "high": -116.162
+       },
+       "throughput_rps": {
+        "baseline": 4.53,
+        "diff": 1.407,
+        "low": 0.917,
+        "high": 1.897
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 901.023,
+        "diff": -606.35,
+        "low": -725.385,
+        "high": -487.315
+       },
+       "p95_ms": {
+        "baseline": 958.551,
+        "diff": -639.28,
+        "low": -797.221,
+        "high": -481.339
+       },
+       "mean_ms": {
+        "baseline": 850.1,
+        "diff": -565.051,
+        "low": -651.904,
+        "high": -478.198
+       },
+       "throughput_rps": {
+        "baseline": 4.53,
+        "diff": 8.895,
+        "low": 7.948,
+        "high": 9.841
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 901.023,
+        "diff": -580.333,
+        "low": -715.584,
+        "high": -445.082
+       },
+       "p95_ms": {
+        "baseline": 958.551,
+        "diff": -544.837,
+        "low": -731.806,
+        "high": -357.868
+       },
+       "mean_ms": {
+        "baseline": 850.1,
+        "diff": -533.879,
+        "low": -641.111,
+        "high": -426.647
+       },
+       "throughput_rps": {
+        "baseline": 4.53,
+        "diff": 8.245,
+        "low": 6.583,
+        "high": 9.908
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 673.995,
+        "diff": -379.322,
+        "low": -457.225,
+        "high": -301.419
+       },
+       "p95_ms": {
+        "baseline": 746.139,
+        "diff": -426.868,
+        "low": -528.318,
+        "high": -325.418
+       },
+       "mean_ms": {
+        "baseline": 645.259,
+        "diff": -360.21,
+        "low": -408.727,
+        "high": -311.693
+       },
+       "throughput_rps": {
+        "baseline": 5.937,
+        "diff": 7.487,
+        "low": 6.65,
+        "high": 8.325
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 673.995,
+        "diff": -353.305,
+        "low": -447.843,
+        "high": -258.767
+       },
+       "p95_ms": {
+        "baseline": 746.139,
+        "diff": -332.425,
+        "low": -469.873,
+        "high": -194.977
+       },
+       "mean_ms": {
+        "baseline": 645.259,
+        "diff": -329.038,
+        "low": -402.188,
+        "high": -255.888
+       },
+       "throughput_rps": {
+        "baseline": 5.937,
+        "diff": 6.838,
+        "low": 5.223,
+        "high": 8.454
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 415.96,
+        "diff": -87.987,
+        "low": -88.681,
+        "high": -87.293
+       },
+       "p95_ms": {
+        "baseline": 456.019,
+        "diff": -101.038,
+        "low": -119.071,
+        "high": -83.005
+       },
+       "mean_ms": {
+        "baseline": 422.791,
+        "diff": -88.6,
+        "low": -91.163,
+        "high": -86.037
+       },
+       "throughput_rps": {
+        "baseline": 2.368,
+        "diff": 0.628,
+        "low": 0.612,
+        "high": 0.643
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 415.96,
+        "diff": -203.064,
+        "low": -203.585,
+        "high": -202.543
+       },
+       "p95_ms": {
+        "baseline": 456.019,
+        "diff": -224.161,
+        "low": -258.78,
+        "high": -189.542
+       },
+       "mean_ms": {
+        "baseline": 422.791,
+        "diff": -207.318,
+        "low": -214.231,
+        "high": -200.405
+       },
+       "throughput_rps": {
+        "baseline": 2.368,
+        "diff": 2.279,
+        "low": 2.194,
+        "high": 2.364
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 415.96,
+        "diff": -202.787,
+        "low": -203.142,
+        "high": -202.432
+       },
+       "p95_ms": {
+        "baseline": 456.019,
+        "diff": -224.821,
+        "low": -258.425,
+        "high": -191.217
+       },
+       "mean_ms": {
+        "baseline": 422.791,
+        "diff": -206.722,
+        "low": -213.304,
+        "high": -200.14
+       },
+       "throughput_rps": {
+        "baseline": 2.368,
+        "diff": 2.267,
+        "low": 2.18,
+        "high": 2.353
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 327.973,
+        "diff": -115.077,
+        "low": -116.058,
+        "high": -114.096
+       },
+       "p95_ms": {
+        "baseline": 354.981,
+        "diff": -123.123,
+        "low": -140.199,
+        "high": -106.047
+       },
+       "mean_ms": {
+        "baseline": 334.191,
+        "diff": -118.718,
+        "low": -123.965,
+        "high": -113.471
+       },
+       "throughput_rps": {
+        "baseline": 2.995,
+        "diff": 1.651,
+        "low": 1.569,
+        "high": 1.733
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 327.973,
+        "diff": -114.8,
+        "low": -115.609,
+        "high": -113.991
+       },
+       "p95_ms": {
+        "baseline": 354.981,
+        "diff": -123.783,
+        "low": -139.758,
+        "high": -107.808
+       },
+       "mean_ms": {
+        "baseline": 334.191,
+        "diff": -118.122,
+        "low": -123.183,
+        "high": -113.061
+       },
+       "throughput_rps": {
+        "baseline": 2.995,
+        "diff": 1.639,
+        "low": 1.556,
+        "high": 1.722
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1681.254,
+        "diff": -371.22,
+        "low": -439.565,
+        "high": -302.875
+       },
+       "p95_ms": {
+        "baseline": 1789.132,
+        "diff": -451.657,
+        "low": -644.887,
+        "high": -258.427
+       },
+       "mean_ms": {
+        "baseline": 1617.166,
+        "diff": -366.053,
+        "low": -451.205,
+        "high": -280.901
+       },
+       "throughput_rps": {
+        "baseline": 2.361,
+        "diff": 0.678,
+        "low": 0.566,
+        "high": 0.789
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1681.254,
+        "diff": -833.065,
+        "low": -906.188,
+        "high": -759.942
+       },
+       "p95_ms": {
+        "baseline": 1789.132,
+        "diff": -932.938,
+        "low": -1119.978,
+        "high": -745.898
+       },
+       "mean_ms": {
+        "baseline": 1617.166,
+        "diff": -809.872,
+        "low": -897.645,
+        "high": -722.099
+       },
+       "throughput_rps": {
+        "baseline": 2.361,
+        "diff": 2.349,
+        "low": 2.211,
+        "high": 2.487
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1681.254,
+        "diff": -836.456,
+        "low": -908.254,
+        "high": -764.658
+       },
+       "p95_ms": {
+        "baseline": 1789.132,
+        "diff": -925.9,
+        "low": -1099.981,
+        "high": -751.819
+       },
+       "mean_ms": {
+        "baseline": 1617.166,
+        "diff": -801.926,
+        "low": -885.493,
+        "high": -718.359
+       },
+       "throughput_rps": {
+        "baseline": 2.361,
+        "diff": 2.339,
+        "low": 2.226,
+        "high": 2.452
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1310.034,
+        "diff": -461.845,
+        "low": -472.227,
+        "high": -451.463
+       },
+       "p95_ms": {
+        "baseline": 1337.475,
+        "diff": -481.281,
+        "low": -509.767,
+        "high": -452.795
+       },
+       "mean_ms": {
+        "baseline": 1251.113,
+        "diff": -443.819,
+        "low": -452.898,
+        "high": -434.74
+       },
+       "throughput_rps": {
+        "baseline": 3.038,
+        "diff": 1.671,
+        "low": 1.629,
+        "high": 1.713
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1310.034,
+        "diff": -465.236,
+        "low": -474.4,
+        "high": -456.072
+       },
+       "p95_ms": {
+        "baseline": 1337.475,
+        "diff": -474.243,
+        "low": -512.915,
+        "high": -435.571
+       },
+       "mean_ms": {
+        "baseline": 1251.113,
+        "diff": -435.873,
+        "low": -448.569,
+        "high": -423.177
+       },
+       "throughput_rps": {
+        "baseline": 3.038,
+        "diff": 1.662,
+        "low": 1.615,
+        "high": 1.708
+       }
+      }
+     ]
+    },
+    "vllm-sr/Vela-2.0-9B": {
+     "tool": "MIOPEN_FIND_MODE=FAST tools/vela2_bench.py --device rocm:0 --tokens 32,128,512,2048 --requests 30 --warmup 20 --concurrency 1,4 --rounds 10 --sides reference,runtime,runtime-shared,runtime-batching",
+     "host_cores": 8,
+     "intervals": [
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 162.334,
+        "diff": -44.613,
+        "low": -45.35,
+        "high": -43.876
+       },
+       "p95_ms": {
+        "baseline": 213.27,
+        "diff": -87.24,
+        "low": -178.48,
+        "high": 4.0
+       },
+       "mean_ms": {
+        "baseline": 171.288,
+        "diff": -51.011,
+        "low": -66.755,
+        "high": -35.267
+       },
+       "throughput_rps": {
+        "baseline": 5.926,
+        "diff": 2.396,
+        "low": 2.105,
+        "high": 2.686
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 162.334,
+        "diff": -95.984,
+        "low": -96.54,
+        "high": -95.428
+       },
+       "p95_ms": {
+        "baseline": 213.27,
+        "diff": -145.388,
+        "low": -245.192,
+        "high": -45.584
+       },
+       "mean_ms": {
+        "baseline": 171.288,
+        "diff": -104.799,
+        "low": -123.357,
+        "high": -86.241
+       },
+       "throughput_rps": {
+        "baseline": 5.926,
+        "diff": 9.116,
+        "low": 8.624,
+        "high": 9.607
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 162.334,
+        "diff": -94.316,
+        "low": -94.901,
+        "high": -93.731
+       },
+       "p95_ms": {
+        "baseline": 213.27,
+        "diff": -143.543,
+        "low": -243.428,
+        "high": -43.658
+       },
+       "mean_ms": {
+        "baseline": 171.288,
+        "diff": -103.004,
+        "low": -121.682,
+        "high": -84.326
+       },
+       "throughput_rps": {
+        "baseline": 5.926,
+        "diff": 8.72,
+        "low": 8.204,
+        "high": 9.236
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 117.721,
+        "diff": -51.371,
+        "low": -51.7,
+        "high": -51.042
+       },
+       "p95_ms": {
+        "baseline": 126.03,
+        "diff": -58.148,
+        "low": -67.003,
+        "high": -49.293
+       },
+       "mean_ms": {
+        "baseline": 120.277,
+        "diff": -53.788,
+        "low": -56.627,
+        "high": -50.949
+       },
+       "throughput_rps": {
+        "baseline": 8.321,
+        "diff": 6.72,
+        "low": 6.511,
+        "high": 6.929
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 117.721,
+        "diff": -49.703,
+        "low": -50.229,
+        "high": -49.177
+       },
+       "p95_ms": {
+        "baseline": 126.03,
+        "diff": -56.303,
+        "low": -65.242,
+        "high": -47.364
+       },
+       "mean_ms": {
+        "baseline": 120.277,
+        "diff": -51.993,
+        "low": -54.979,
+        "high": -49.007
+       },
+       "throughput_rps": {
+        "baseline": 8.321,
+        "diff": 6.325,
+        "low": 6.087,
+        "high": 6.562
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 905.918,
+        "diff": -434.226,
+        "low": -853.233,
+        "high": -15.219
+       },
+       "p95_ms": {
+        "baseline": 1020.026,
+        "diff": -529.669,
+        "low": -1060.938,
+        "high": 1.6
+       },
+       "mean_ms": {
+        "baseline": 860.388,
+        "diff": -407.897,
+        "low": -796.942,
+        "high": -18.852
+       },
+       "throughput_rps": {
+        "baseline": 5.353,
+        "diff": 3.046,
+        "low": 1.851,
+        "high": 4.24
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 905.918,
+        "diff": -646.008,
+        "low": -1064.954,
+        "high": -227.062
+       },
+       "p95_ms": {
+        "baseline": 1020.026,
+        "diff": -756.099,
+        "low": -1287.427,
+        "high": -224.771
+       },
+       "mean_ms": {
+        "baseline": 860.388,
+        "diff": -612.357,
+        "low": -1001.176,
+        "high": -223.538
+       },
+       "throughput_rps": {
+        "baseline": 5.353,
+        "diff": 9.965,
+        "low": 8.761,
+        "high": 11.169
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 905.918,
+        "diff": -648.9,
+        "low": -1066.133,
+        "high": -231.667
+       },
+       "p95_ms": {
+        "baseline": 1020.026,
+        "diff": -673.703,
+        "low": -1214.532,
+        "high": -132.874
+       },
+       "mean_ms": {
+        "baseline": 860.388,
+        "diff": -607.27,
+        "low": -995.698,
+        "high": -218.842
+       },
+       "throughput_rps": {
+        "baseline": 5.353,
+        "diff": 9.962,
+        "low": 8.771,
+        "high": 11.152
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 471.692,
+        "diff": -211.782,
+        "low": -214.273,
+        "high": -209.291
+       },
+       "p95_ms": {
+        "baseline": 490.357,
+        "diff": -226.43,
+        "low": -228.704,
+        "high": -224.156
+       },
+       "mean_ms": {
+        "baseline": 452.491,
+        "diff": -204.46,
+        "low": -206.733,
+        "high": -202.187
+       },
+       "throughput_rps": {
+        "baseline": 8.399,
+        "diff": 6.919,
+        "low": 6.778,
+        "high": 7.06
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 471.692,
+        "diff": -214.674,
+        "low": -222.146,
+        "high": -207.202
+       },
+       "p95_ms": {
+        "baseline": 490.357,
+        "diff": -144.034,
+        "low": -187.098,
+        "high": -100.97
+       },
+       "mean_ms": {
+        "baseline": 452.491,
+        "diff": -199.373,
+        "low": -201.87,
+        "high": -196.876
+       },
+       "throughput_rps": {
+        "baseline": 8.399,
+        "diff": 6.916,
+        "low": 6.808,
+        "high": 7.025
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 192.173,
+        "diff": -41.529,
+        "low": -42.109,
+        "high": -40.949
+       },
+       "p95_ms": {
+        "baseline": 227.801,
+        "diff": -72.004,
+        "low": -135.964,
+        "high": -8.044
+       },
+       "mean_ms": {
+        "baseline": 196.772,
+        "diff": -45.407,
+        "low": -53.795,
+        "high": -37.019
+       },
+       "throughput_rps": {
+        "baseline": 5.1,
+        "diff": 1.507,
+        "low": 1.346,
+        "high": 1.668
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 192.173,
+        "diff": -116.915,
+        "low": -117.674,
+        "high": -116.156
+       },
+       "p95_ms": {
+        "baseline": 227.801,
+        "diff": -151.672,
+        "low": -223.414,
+        "high": -79.93
+       },
+       "mean_ms": {
+        "baseline": 196.772,
+        "diff": -121.491,
+        "low": -131.549,
+        "high": -111.433
+       },
+       "throughput_rps": {
+        "baseline": 5.1,
+        "diff": 8.185,
+        "low": 7.892,
+        "high": 8.477
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 192.173,
+        "diff": -115.388,
+        "low": -115.906,
+        "high": -114.87
+       },
+       "p95_ms": {
+        "baseline": 227.801,
+        "diff": -149.913,
+        "low": -221.378,
+        "high": -78.448
+       },
+       "mean_ms": {
+        "baseline": 196.772,
+        "diff": -119.818,
+        "low": -129.669,
+        "high": -109.967
+       },
+       "throughput_rps": {
+        "baseline": 5.1,
+        "diff": 7.895,
+        "low": 7.64,
+        "high": 8.151
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 150.644,
+        "diff": -75.386,
+        "low": -75.947,
+        "high": -74.825
+       },
+       "p95_ms": {
+        "baseline": 155.797,
+        "diff": -79.668,
+        "low": -87.466,
+        "high": -71.87
+       },
+       "mean_ms": {
+        "baseline": 151.365,
+        "diff": -76.084,
+        "low": -77.806,
+        "high": -74.362
+       },
+       "throughput_rps": {
+        "baseline": 6.607,
+        "diff": 6.678,
+        "low": 6.54,
+        "high": 6.815
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 150.644,
+        "diff": -73.859,
+        "low": -74.278,
+        "high": -73.44
+       },
+       "p95_ms": {
+        "baseline": 155.797,
+        "diff": -77.909,
+        "low": -85.422,
+        "high": -70.396
+       },
+       "mean_ms": {
+        "baseline": 151.365,
+        "diff": -74.411,
+        "low": -75.909,
+        "high": -72.913
+       },
+       "throughput_rps": {
+        "baseline": 6.607,
+        "diff": 6.388,
+        "low": 6.286,
+        "high": 6.49
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 926.839,
+        "diff": -327.602,
+        "low": -579.445,
+        "high": -75.759
+       },
+       "p95_ms": {
+        "baseline": 988.764,
+        "diff": -384.218,
+        "low": -708.351,
+        "high": -60.085
+       },
+       "mean_ms": {
+        "baseline": 880.174,
+        "diff": -309.741,
+        "low": -550.884,
+        "high": -68.598
+       },
+       "throughput_rps": {
+        "baseline": 4.681,
+        "diff": 1.98,
+        "low": 1.199,
+        "high": 2.761
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 926.839,
+        "diff": -630.662,
+        "low": -881.09,
+        "high": -380.234
+       },
+       "p95_ms": {
+        "baseline": 988.764,
+        "diff": -684.626,
+        "low": -1011.013,
+        "high": -358.239
+       },
+       "mean_ms": {
+        "baseline": 880.174,
+        "diff": -597.097,
+        "low": -837.898,
+        "high": -356.296
+       },
+       "throughput_rps": {
+        "baseline": 4.681,
+        "diff": 8.742,
+        "low": 7.946,
+        "high": 9.538
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 926.839,
+        "diff": -634.034,
+        "low": -891.652,
+        "high": -376.416
+       },
+       "p95_ms": {
+        "baseline": 988.764,
+        "diff": -595.573,
+        "low": -917.008,
+        "high": -274.138
+       },
+       "mean_ms": {
+        "baseline": 880.174,
+        "diff": -591.441,
+        "low": -831.061,
+        "high": -351.821
+       },
+       "throughput_rps": {
+        "baseline": 4.681,
+        "diff": 8.768,
+        "low": 8.012,
+        "high": 9.524
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 599.237,
+        "diff": -303.06,
+        "low": -305.496,
+        "high": -300.624
+       },
+       "p95_ms": {
+        "baseline": 604.546,
+        "diff": -300.408,
+        "low": -309.725,
+        "high": -291.091
+       },
+       "mean_ms": {
+        "baseline": 570.433,
+        "diff": -287.356,
+        "low": -289.432,
+        "high": -285.28
+       },
+       "throughput_rps": {
+        "baseline": 6.661,
+        "diff": 6.762,
+        "low": 6.661,
+        "high": 6.864
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 599.237,
+        "diff": -306.432,
+        "low": -313.714,
+        "high": -299.15
+       },
+       "p95_ms": {
+        "baseline": 604.546,
+        "diff": -211.355,
+        "low": -236.161,
+        "high": -186.549
+       },
+       "mean_ms": {
+        "baseline": 570.433,
+        "diff": -281.7,
+        "low": -283.858,
+        "high": -279.542
+       },
+       "throughput_rps": {
+        "baseline": 6.661,
+        "diff": 6.788,
+        "low": 6.714,
+        "high": 6.862
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 279.181,
+        "diff": -47.125,
+        "low": -47.461,
+        "high": -46.789
+       },
+       "p95_ms": {
+        "baseline": 316.66,
+        "diff": -78.446,
+        "low": -142.35,
+        "high": -14.542
+       },
+       "mean_ms": {
+        "baseline": 284.602,
+        "diff": -51.357,
+        "low": -59.779,
+        "high": -42.935
+       },
+       "throughput_rps": {
+        "baseline": 3.52,
+        "diff": 0.767,
+        "low": 0.684,
+        "high": 0.851
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 279.181,
+        "diff": -175.973,
+        "low": -176.649,
+        "high": -175.297
+       },
+       "p95_ms": {
+        "baseline": 316.66,
+        "diff": -211.188,
+        "low": -279.202,
+        "high": -143.174
+       },
+       "mean_ms": {
+        "baseline": 284.602,
+        "diff": -181.066,
+        "low": -190.73,
+        "high": -171.402
+       },
+       "throughput_rps": {
+        "baseline": 3.52,
+        "diff": 6.138,
+        "low": 6.04,
+        "high": 6.236
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 279.181,
+        "diff": -173.777,
+        "low": -174.312,
+        "high": -173.242
+       },
+       "p95_ms": {
+        "baseline": 316.66,
+        "diff": -209.188,
+        "low": -276.899,
+        "high": -141.477
+       },
+       "mean_ms": {
+        "baseline": 284.602,
+        "diff": -178.98,
+        "low": -188.437,
+        "high": -169.523
+       },
+       "throughput_rps": {
+        "baseline": 3.52,
+        "diff": 5.948,
+        "low": 5.862,
+        "high": 6.033
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 232.056,
+        "diff": -128.848,
+        "low": -129.451,
+        "high": -128.245
+       },
+       "p95_ms": {
+        "baseline": 238.214,
+        "diff": -132.742,
+        "low": -136.903,
+        "high": -128.581
+       },
+       "mean_ms": {
+        "baseline": 233.245,
+        "diff": -129.709,
+        "low": -131.034,
+        "high": -128.384
+       },
+       "throughput_rps": {
+        "baseline": 4.288,
+        "diff": 5.371,
+        "low": 5.342,
+        "high": 5.4
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 232.056,
+        "diff": -126.652,
+        "low": -127.077,
+        "high": -126.227
+       },
+       "p95_ms": {
+        "baseline": 238.214,
+        "diff": -130.742,
+        "low": -134.56,
+        "high": -126.924
+       },
+       "mean_ms": {
+        "baseline": 233.245,
+        "diff": -127.623,
+        "low": -128.76,
+        "high": -126.486
+       },
+       "throughput_rps": {
+        "baseline": 4.288,
+        "diff": 5.18,
+        "low": 5.143,
+        "high": 5.218
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1224.298,
+        "diff": -296.728,
+        "low": -510.548,
+        "high": -82.908
+       },
+       "p95_ms": {
+        "baseline": 1317.587,
+        "diff": -385.811,
+        "low": -733.268,
+        "high": -38.354
+       },
+       "mean_ms": {
+        "baseline": 1169.222,
+        "diff": -287.558,
+        "low": -485.849,
+        "high": -89.267
+       },
+       "throughput_rps": {
+        "baseline": 3.362,
+        "diff": 0.947,
+        "low": 0.59,
+        "high": 1.303
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1224.298,
+        "diff": -813.692,
+        "low": -1026.962,
+        "high": -600.422
+       },
+       "p95_ms": {
+        "baseline": 1317.587,
+        "diff": -900.554,
+        "low": -1248.961,
+        "high": -552.147
+       },
+       "mean_ms": {
+        "baseline": 1169.222,
+        "diff": -777.947,
+        "low": -976.101,
+        "high": -579.793
+       },
+       "throughput_rps": {
+        "baseline": 3.362,
+        "diff": 6.35,
+        "low": 5.994,
+        "high": 6.705
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1224.298,
+        "diff": -813.374,
+        "low": -1027.116,
+        "high": -599.632
+       },
+       "p95_ms": {
+        "baseline": 1317.587,
+        "diff": -853.546,
+        "low": -1193.698,
+        "high": -513.394
+       },
+       "mean_ms": {
+        "baseline": 1169.222,
+        "diff": -768.634,
+        "low": -967.841,
+        "high": -569.427
+       },
+       "throughput_rps": {
+        "baseline": 3.362,
+        "diff": 6.335,
+        "low": 5.967,
+        "high": 6.704
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 927.57,
+        "diff": -516.964,
+        "low": -519.187,
+        "high": -514.741
+       },
+       "p95_ms": {
+        "baseline": 931.776,
+        "diff": -514.743,
+        "low": -521.893,
+        "high": -507.593
+       },
+       "mean_ms": {
+        "baseline": 881.664,
+        "diff": -490.389,
+        "low": -491.346,
+        "high": -489.432
+       },
+       "throughput_rps": {
+        "baseline": 4.309,
+        "diff": 5.403,
+        "low": 5.371,
+        "high": 5.435
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 927.57,
+        "diff": -516.646,
+        "low": -518.467,
+        "high": -514.825
+       },
+       "p95_ms": {
+        "baseline": 931.776,
+        "diff": -467.735,
+        "low": -503.925,
+        "high": -431.545
+       },
+       "mean_ms": {
+        "baseline": 881.664,
+        "diff": -481.076,
+        "low": -485.577,
+        "high": -476.575
+       },
+       "throughput_rps": {
+        "baseline": 4.309,
+        "diff": 5.389,
+        "low": 5.318,
+        "high": 5.459
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 560.932,
+        "diff": -95.92,
+        "low": -96.704,
+        "high": -95.136
+       },
+       "p95_ms": {
+        "baseline": 568.936,
+        "diff": -96.774,
+        "low": -98.322,
+        "high": -95.226
+       },
+       "mean_ms": {
+        "baseline": 563.263,
+        "diff": -96.02,
+        "low": -98.212,
+        "high": -93.828
+       },
+       "throughput_rps": {
+        "baseline": 1.775,
+        "diff": 0.365,
+        "low": 0.354,
+        "high": 0.376
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 560.932,
+        "diff": -255.443,
+        "low": -255.875,
+        "high": -255.011
+       },
+       "p95_ms": {
+        "baseline": 568.936,
+        "diff": -260.831,
+        "low": -271.71,
+        "high": -249.952
+       },
+       "mean_ms": {
+        "baseline": 563.263,
+        "diff": -257.1,
+        "low": -259.352,
+        "high": -254.848
+       },
+       "throughput_rps": {
+        "baseline": 1.775,
+        "diff": 1.491,
+        "low": 1.478,
+        "high": 1.504
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 560.932,
+        "diff": -253.686,
+        "low": -254.397,
+        "high": -252.975
+       },
+       "p95_ms": {
+        "baseline": 568.936,
+        "diff": -259.312,
+        "low": -270.694,
+        "high": -247.93
+       },
+       "mean_ms": {
+        "baseline": 563.263,
+        "diff": -255.658,
+        "low": -258.582,
+        "high": -252.734
+       },
+       "throughput_rps": {
+        "baseline": 1.775,
+        "diff": 1.476,
+        "low": 1.462,
+        "high": 1.489
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 465.012,
+        "diff": -159.523,
+        "low": -160.481,
+        "high": -158.565
+       },
+       "p95_ms": {
+        "baseline": 472.162,
+        "diff": -164.057,
+        "low": -175.164,
+        "high": -152.95
+       },
+       "mean_ms": {
+        "baseline": 467.243,
+        "diff": -161.08,
+        "low": -163.626,
+        "high": -158.534
+       },
+       "throughput_rps": {
+        "baseline": 2.14,
+        "diff": 1.126,
+        "low": 1.116,
+        "high": 1.137
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 465.012,
+        "diff": -157.766,
+        "low": -158.931,
+        "high": -156.601
+       },
+       "p95_ms": {
+        "baseline": 472.162,
+        "diff": -162.538,
+        "low": -174.149,
+        "high": -150.927
+       },
+       "mean_ms": {
+        "baseline": 467.243,
+        "diff": -159.638,
+        "low": -162.985,
+        "high": -156.291
+       },
+       "throughput_rps": {
+        "baseline": 2.14,
+        "diff": 1.111,
+        "low": 1.095,
+        "high": 1.127
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 2322.475,
+        "diff": -464.945,
+        "low": -590.611,
+        "high": -339.279
+       },
+       "p95_ms": {
+        "baseline": 2507.381,
+        "diff": -644.136,
+        "low": -988.296,
+        "high": -299.976
+       },
+       "mean_ms": {
+        "baseline": 2244.405,
+        "diff": -477.887,
+        "low": -642.551,
+        "high": -313.223
+       },
+       "throughput_rps": {
+        "baseline": 1.709,
+        "diff": 0.443,
+        "low": 0.341,
+        "high": 0.544
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 2322.475,
+        "diff": -1100.984,
+        "low": -1227.543,
+        "high": -974.425
+       },
+       "p95_ms": {
+        "baseline": 2507.381,
+        "diff": -1279.976,
+        "low": -1626.347,
+        "high": -933.605
+       },
+       "mean_ms": {
+        "baseline": 2244.405,
+        "diff": -1082.352,
+        "low": -1248.089,
+        "high": -916.615
+       },
+       "throughput_rps": {
+        "baseline": 1.709,
+        "diff": 1.562,
+        "low": 1.46,
+        "high": 1.663
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 2322.475,
+        "diff": -1101.535,
+        "low": -1226.747,
+        "high": -976.323
+       },
+       "p95_ms": {
+        "baseline": 2507.381,
+        "diff": -1271.487,
+        "low": -1618.54,
+        "high": -924.434
+       },
+       "mean_ms": {
+        "baseline": 2244.405,
+        "diff": -1070.941,
+        "low": -1235.537,
+        "high": -906.345
+       },
+       "throughput_rps": {
+        "baseline": 1.709,
+        "diff": 1.561,
+        "low": 1.464,
+        "high": 1.658
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1857.53,
+        "diff": -636.039,
+        "low": -639.66,
+        "high": -632.418
+       },
+       "p95_ms": {
+        "baseline": 1863.245,
+        "diff": -635.84,
+        "low": -640.315,
+        "high": -631.365
+       },
+       "mean_ms": {
+        "baseline": 1766.518,
+        "diff": -604.465,
+        "low": -607.715,
+        "high": -601.215
+       },
+       "throughput_rps": {
+        "baseline": 2.151,
+        "diff": 1.119,
+        "low": 1.111,
+        "high": 1.126
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1857.53,
+        "diff": -636.59,
+        "low": -639.498,
+        "high": -633.682
+       },
+       "p95_ms": {
+        "baseline": 1863.245,
+        "diff": -627.351,
+        "low": -644.313,
+        "high": -610.389
+       },
+       "mean_ms": {
+        "baseline": 1766.518,
+        "diff": -593.054,
+        "low": -597.419,
+        "high": -588.689
+       },
+       "throughput_rps": {
+        "baseline": 2.151,
+        "diff": 1.118,
+        "low": 1.108,
+        "high": 1.129
+       }
+      }
+     ],
+     "default_find_mode": [
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 162.177,
+        "diff": -44.212,
+        "low": -44.5,
+        "high": -43.924
+       },
+       "p95_ms": {
+        "baseline": 215.074,
+        "diff": -44.012,
+        "low": -45.834,
+        "high": -42.19
+       },
+       "mean_ms": {
+        "baseline": 171.848,
+        "diff": -47.123,
+        "low": -54.877,
+        "high": -39.369
+       },
+       "throughput_rps": {
+        "baseline": 5.923,
+        "diff": 2.204,
+        "low": 2.09,
+        "high": 2.318
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 162.177,
+        "diff": -95.158,
+        "low": -95.378,
+        "high": -94.938
+       },
+       "p95_ms": {
+        "baseline": 215.074,
+        "diff": -146.87,
+        "low": -253.369,
+        "high": -40.371
+       },
+       "mean_ms": {
+        "baseline": 171.848,
+        "diff": -104.922,
+        "low": -124.862,
+        "high": -84.982
+       },
+       "throughput_rps": {
+        "baseline": 5.923,
+        "diff": 9.025,
+        "low": 8.605,
+        "high": 9.444
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 162.177,
+        "diff": -93.596,
+        "low": -94.027,
+        "high": -93.165
+       },
+       "p95_ms": {
+        "baseline": 215.074,
+        "diff": -144.932,
+        "low": -251.551,
+        "high": -38.313
+       },
+       "mean_ms": {
+        "baseline": 171.848,
+        "diff": -103.026,
+        "low": -122.968,
+        "high": -83.084
+       },
+       "throughput_rps": {
+        "baseline": 5.923,
+        "diff": 8.611,
+        "low": 8.205,
+        "high": 9.017
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 117.965,
+        "diff": -50.946,
+        "low": -51.239,
+        "high": -50.653
+       },
+       "p95_ms": {
+        "baseline": 171.062,
+        "diff": -102.858,
+        "low": -210.017,
+        "high": 4.301
+       },
+       "mean_ms": {
+        "baseline": 124.725,
+        "diff": -57.799,
+        "low": -69.995,
+        "high": -45.603
+       },
+       "throughput_rps": {
+        "baseline": 8.127,
+        "diff": 6.821,
+        "low": 6.3,
+        "high": 7.342
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 117.965,
+        "diff": -49.384,
+        "low": -49.828,
+        "high": -48.94
+       },
+       "p95_ms": {
+        "baseline": 171.062,
+        "diff": -100.92,
+        "low": -208.199,
+        "high": 6.359
+       },
+       "mean_ms": {
+        "baseline": 124.725,
+        "diff": -55.903,
+        "low": -68.095,
+        "high": -43.711
+       },
+       "throughput_rps": {
+        "baseline": 8.127,
+        "diff": 6.407,
+        "low": 5.895,
+        "high": 6.919
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 921.702,
+        "diff": -448.606,
+        "low": -889.509,
+        "high": -7.703
+       },
+       "p95_ms": {
+        "baseline": 1043.183,
+        "diff": -551.77,
+        "low": -1112.642,
+        "high": 9.102
+       },
+       "mean_ms": {
+        "baseline": 876.439,
+        "diff": -422.659,
+        "low": -832.882,
+        "high": -12.436
+       },
+       "throughput_rps": {
+        "baseline": 5.326,
+        "diff": 3.049,
+        "low": 1.878,
+        "high": 4.219
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 921.702,
+        "diff": -659.542,
+        "low": -1099.299,
+        "high": -219.785
+       },
+       "p95_ms": {
+        "baseline": 1043.183,
+        "diff": -758.827,
+        "low": -1327.662,
+        "high": -189.992
+       },
+       "mean_ms": {
+        "baseline": 876.439,
+        "diff": -623.883,
+        "low": -1033.915,
+        "high": -213.851
+       },
+       "throughput_rps": {
+        "baseline": 5.326,
+        "diff": 9.734,
+        "low": 8.599,
+        "high": 10.87
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 921.702,
+        "diff": -690.849,
+        "low": -1128.111,
+        "high": -253.587
+       },
+       "p95_ms": {
+        "baseline": 1043.183,
+        "diff": -694.538,
+        "low": -1238.849,
+        "high": -150.227
+       },
+       "mean_ms": {
+        "baseline": 876.439,
+        "diff": -621.23,
+        "low": -1030.638,
+        "high": -211.822
+       },
+       "throughput_rps": {
+        "baseline": 5.326,
+        "diff": 9.899,
+        "low": 8.845,
+        "high": 10.953
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 473.096,
+        "diff": -210.936,
+        "low": -213.251,
+        "high": -208.621
+       },
+       "p95_ms": {
+        "baseline": 491.413,
+        "diff": -207.057,
+        "low": -249.932,
+        "high": -164.182
+       },
+       "mean_ms": {
+        "baseline": 453.78,
+        "diff": -201.224,
+        "low": -207.827,
+        "high": -194.621
+       },
+       "throughput_rps": {
+        "baseline": 8.375,
+        "diff": 6.686,
+        "low": 6.313,
+        "high": 7.058
+       }
+      },
+      {
+       "tokens": 32,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 473.096,
+        "diff": -242.243,
+        "low": -264.383,
+        "high": -220.103
+       },
+       "p95_ms": {
+        "baseline": 491.413,
+        "diff": -142.768,
+        "low": -187.383,
+        "high": -98.153
+       },
+       "mean_ms": {
+        "baseline": 453.78,
+        "diff": -198.571,
+        "low": -200.455,
+        "high": -196.687
+       },
+       "throughput_rps": {
+        "baseline": 8.375,
+        "diff": 6.85,
+        "low": 6.702,
+        "high": 6.999
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 192.901,
+        "diff": -41.536,
+        "low": -42.314,
+        "high": -40.758
+       },
+       "p95_ms": {
+        "baseline": 257.985,
+        "diff": -79.37,
+        "low": -150.266,
+        "high": -8.474
+       },
+       "mean_ms": {
+        "baseline": 205.134,
+        "diff": -47.16,
+        "low": -56.234,
+        "high": -38.086
+       },
+       "throughput_rps": {
+        "baseline": 4.906,
+        "diff": 1.447,
+        "low": 1.251,
+        "high": 1.643
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 192.901,
+        "diff": -117.71,
+        "low": -118.756,
+        "high": -116.664
+       },
+       "p95_ms": {
+        "baseline": 257.985,
+        "diff": -169.334,
+        "low": -247.078,
+        "high": -91.59
+       },
+       "mean_ms": {
+        "baseline": 205.134,
+        "diff": -126.455,
+        "low": -137.216,
+        "high": -115.694
+       },
+       "throughput_rps": {
+        "baseline": 4.906,
+        "diff": 7.858,
+        "low": 7.393,
+        "high": 8.322
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 192.901,
+        "diff": -115.654,
+        "low": -116.564,
+        "high": -114.744
+       },
+       "p95_ms": {
+        "baseline": 257.985,
+        "diff": -167.273,
+        "low": -245.209,
+        "high": -89.337
+       },
+       "mean_ms": {
+        "baseline": 205.134,
+        "diff": -123.87,
+        "low": -134.793,
+        "high": -112.947
+       },
+       "throughput_rps": {
+        "baseline": 4.906,
+        "diff": 7.462,
+        "low": 6.936,
+        "high": 7.988
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 151.365,
+        "diff": -76.174,
+        "low": -76.788,
+        "high": -75.56
+       },
+       "p95_ms": {
+        "baseline": 178.615,
+        "diff": -89.964,
+        "low": -102.748,
+        "high": -77.18
+       },
+       "mean_ms": {
+        "baseline": 157.974,
+        "diff": -79.295,
+        "low": -82.843,
+        "high": -75.747
+       },
+       "throughput_rps": {
+        "baseline": 6.353,
+        "diff": 6.41,
+        "low": 6.083,
+        "high": 6.738
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 151.365,
+        "diff": -74.118,
+        "low": -74.676,
+        "high": -73.56
+       },
+       "p95_ms": {
+        "baseline": 178.615,
+        "diff": -87.903,
+        "low": -100.761,
+        "high": -75.045
+       },
+       "mean_ms": {
+        "baseline": 157.974,
+        "diff": -76.71,
+        "low": -80.021,
+        "high": -73.399
+       },
+       "throughput_rps": {
+        "baseline": 6.353,
+        "diff": 6.015,
+        "low": 5.634,
+        "high": 6.395
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 936.233,
+        "diff": -334.377,
+        "low": -601.085,
+        "high": -67.669
+       },
+       "p95_ms": {
+        "baseline": 1032.098,
+        "diff": -421.527,
+        "low": -759.992,
+        "high": -83.062
+       },
+       "mean_ms": {
+        "baseline": 897.797,
+        "diff": -323.67,
+        "low": -578.231,
+        "high": -69.109
+       },
+       "throughput_rps": {
+        "baseline": 4.617,
+        "diff": 2.002,
+        "low": 1.214,
+        "high": 2.791
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 936.233,
+        "diff": -638.494,
+        "low": -904.449,
+        "high": -372.539
+       },
+       "p95_ms": {
+        "baseline": 1032.098,
+        "diff": -728.997,
+        "low": -1066.662,
+        "high": -391.332
+       },
+       "mean_ms": {
+        "baseline": 897.797,
+        "diff": -613.811,
+        "low": -867.28,
+        "high": -360.342
+       },
+       "throughput_rps": {
+        "baseline": 4.617,
+        "diff": 8.761,
+        "low": 8.004,
+        "high": 9.517
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 936.233,
+        "diff": -640.834,
+        "low": -907.022,
+        "high": -374.646
+       },
+       "p95_ms": {
+        "baseline": 1032.098,
+        "diff": -636.968,
+        "low": -978.101,
+        "high": -295.835
+       },
+       "mean_ms": {
+        "baseline": 897.797,
+        "diff": -608.556,
+        "low": -862.477,
+        "high": -354.635
+       },
+       "throughput_rps": {
+        "baseline": 4.617,
+        "diff": 8.797,
+        "low": 7.987,
+        "high": 9.608
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 601.856,
+        "diff": -304.117,
+        "low": -305.865,
+        "high": -302.369
+       },
+       "p95_ms": {
+        "baseline": 610.571,
+        "diff": -307.47,
+        "low": -312.721,
+        "high": -302.219
+       },
+       "mean_ms": {
+        "baseline": 574.127,
+        "diff": -290.141,
+        "low": -293.125,
+        "high": -287.157
+       },
+       "throughput_rps": {
+        "baseline": 6.62,
+        "diff": 6.758,
+        "low": 6.696,
+        "high": 6.82
+       }
+      },
+      {
+       "tokens": 128,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 601.856,
+        "diff": -306.457,
+        "low": -308.588,
+        "high": -304.326
+       },
+       "p95_ms": {
+        "baseline": 610.571,
+        "diff": -215.441,
+        "low": -248.49,
+        "high": -182.392
+       },
+       "mean_ms": {
+        "baseline": 574.127,
+        "diff": -284.886,
+        "low": -286.932,
+        "high": -282.84
+       },
+       "throughput_rps": {
+        "baseline": 6.62,
+        "diff": 6.795,
+        "low": 6.709,
+        "high": 6.882
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 279.018,
+        "diff": -46.631,
+        "low": -47.091,
+        "high": -46.171
+       },
+       "p95_ms": {
+        "baseline": 316.894,
+        "diff": -75.538,
+        "low": -135.19,
+        "high": -15.886
+       },
+       "mean_ms": {
+        "baseline": 284.881,
+        "diff": -50.749,
+        "low": -58.636,
+        "high": -42.862
+       },
+       "throughput_rps": {
+        "baseline": 3.516,
+        "diff": 0.755,
+        "low": 0.678,
+        "high": 0.832
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 279.018,
+        "diff": -175.457,
+        "low": -175.879,
+        "high": -175.035
+       },
+       "p95_ms": {
+        "baseline": 316.894,
+        "diff": -211.119,
+        "low": -276.642,
+        "high": -145.596
+       },
+       "mean_ms": {
+        "baseline": 284.881,
+        "diff": -180.914,
+        "low": -190.123,
+        "high": -171.705
+       },
+       "throughput_rps": {
+        "baseline": 3.516,
+        "diff": 6.103,
+        "low": 6.007,
+        "high": 6.199
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 279.018,
+        "diff": -173.648,
+        "low": -174.099,
+        "high": -173.197
+       },
+       "p95_ms": {
+        "baseline": 316.894,
+        "diff": -207.882,
+        "low": -274.394,
+        "high": -141.37
+       },
+       "mean_ms": {
+        "baseline": 284.881,
+        "diff": -178.99,
+        "low": -188.238,
+        "high": -169.742
+       },
+       "throughput_rps": {
+        "baseline": 3.516,
+        "diff": 5.928,
+        "low": 5.827,
+        "high": 6.029
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 232.387,
+        "diff": -128.826,
+        "low": -129.0,
+        "high": -128.652
+       },
+       "p95_ms": {
+        "baseline": 241.356,
+        "diff": -135.581,
+        "low": -142.205,
+        "high": -128.957
+       },
+       "mean_ms": {
+        "baseline": 234.132,
+        "diff": -130.165,
+        "low": -131.565,
+        "high": -128.765
+       },
+       "throughput_rps": {
+        "baseline": 4.272,
+        "diff": 5.348,
+        "low": 5.307,
+        "high": 5.388
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 232.387,
+        "diff": -127.017,
+        "low": -127.219,
+        "high": -126.815
+       },
+       "p95_ms": {
+        "baseline": 241.356,
+        "diff": -132.344,
+        "low": -140.825,
+        "high": -123.863
+       },
+       "mean_ms": {
+        "baseline": 234.132,
+        "diff": -128.241,
+        "low": -129.725,
+        "high": -126.757
+       },
+       "throughput_rps": {
+        "baseline": 4.272,
+        "diff": 5.173,
+        "low": 5.126,
+        "high": 5.22
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1230.627,
+        "diff": -298.517,
+        "low": -509.826,
+        "high": -87.208
+       },
+       "p95_ms": {
+        "baseline": 1304.09,
+        "diff": -320.927,
+        "low": -537.069,
+        "high": -104.785
+       },
+       "mean_ms": {
+        "baseline": 1175.93,
+        "diff": -281.554,
+        "low": -470.383,
+        "high": -92.725
+       },
+       "throughput_rps": {
+        "baseline": 3.347,
+        "diff": 0.896,
+        "low": 0.619,
+        "high": 1.173
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1230.627,
+        "diff": -797.861,
+        "low": -967.304,
+        "high": -628.418
+       },
+       "p95_ms": {
+        "baseline": 1304.09,
+        "diff": -863.05,
+        "low": -1113.102,
+        "high": -612.998
+       },
+       "mean_ms": {
+        "baseline": 1175.93,
+        "diff": -762.954,
+        "low": -925.516,
+        "high": -600.392
+       },
+       "throughput_rps": {
+        "baseline": 3.347,
+        "diff": 5.979,
+        "low": 5.614,
+        "high": 6.343
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1230.627,
+        "diff": -815.408,
+        "low": -1020.157,
+        "high": -610.659
+       },
+       "p95_ms": {
+        "baseline": 1304.09,
+        "diff": -786.064,
+        "low": -1074.953,
+        "high": -497.175
+       },
+       "mean_ms": {
+        "baseline": 1175.93,
+        "diff": -771.723,
+        "low": -967.46,
+        "high": -575.986
+       },
+       "throughput_rps": {
+        "baseline": 3.347,
+        "diff": 6.234,
+        "low": 5.978,
+        "high": 6.49
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 932.11,
+        "diff": -499.344,
+        "low": -541.368,
+        "high": -457.32
+       },
+       "p95_ms": {
+        "baseline": 983.163,
+        "diff": -542.123,
+        "low": -581.559,
+        "high": -502.687
+       },
+       "mean_ms": {
+        "baseline": 894.376,
+        "diff": -481.4,
+        "low": -508.073,
+        "high": -454.727
+       },
+       "throughput_rps": {
+        "baseline": 4.243,
+        "diff": 5.083,
+        "low": 4.467,
+        "high": 5.698
+       }
+      },
+      {
+       "tokens": 512,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 932.11,
+        "diff": -516.891,
+        "low": -523.754,
+        "high": -510.028
+       },
+       "p95_ms": {
+        "baseline": 983.163,
+        "diff": -465.137,
+        "low": -547.894,
+        "high": -382.38
+       },
+       "mean_ms": {
+        "baseline": 894.376,
+        "diff": -490.169,
+        "low": -498.346,
+        "high": -481.992
+       },
+       "throughput_rps": {
+        "baseline": 4.243,
+        "diff": 5.338,
+        "low": 5.27,
+        "high": 5.406
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 564.894,
+        "diff": -94.989,
+        "low": -95.764,
+        "high": -94.214
+       },
+       "p95_ms": {
+        "baseline": 609.7,
+        "diff": -102.916,
+        "low": -113.561,
+        "high": -92.271
+       },
+       "mean_ms": {
+        "baseline": 571.246,
+        "diff": -95.521,
+        "low": -96.935,
+        "high": -94.107
+       },
+       "throughput_rps": {
+        "baseline": 1.751,
+        "diff": 0.352,
+        "low": 0.341,
+        "high": 0.363
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 564.894,
+        "diff": -253.418,
+        "low": -254.152,
+        "high": -252.684
+       },
+       "p95_ms": {
+        "baseline": 609.7,
+        "diff": -278.684,
+        "low": -320.237,
+        "high": -237.131
+       },
+       "mean_ms": {
+        "baseline": 571.246,
+        "diff": -257.324,
+        "low": -261.768,
+        "high": -252.88
+       },
+       "throughput_rps": {
+        "baseline": 1.751,
+        "diff": 1.436,
+        "low": 1.41,
+        "high": 1.461
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 564.894,
+        "diff": -252.449,
+        "low": -253.313,
+        "high": -251.585
+       },
+       "p95_ms": {
+        "baseline": 609.7,
+        "diff": -284.381,
+        "low": -340.346,
+        "high": -228.416
+       },
+       "mean_ms": {
+        "baseline": 571.246,
+        "diff": -256.577,
+        "low": -261.778,
+        "high": -251.376
+       },
+       "throughput_rps": {
+        "baseline": 1.751,
+        "diff": 1.428,
+        "low": 1.409,
+        "high": 1.446
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 469.905,
+        "diff": -158.429,
+        "low": -159.038,
+        "high": -157.82
+       },
+       "p95_ms": {
+        "baseline": 506.784,
+        "diff": -175.768,
+        "low": -207.854,
+        "high": -143.682
+       },
+       "mean_ms": {
+        "baseline": 475.725,
+        "diff": -161.803,
+        "low": -165.988,
+        "high": -157.618
+       },
+       "throughput_rps": {
+        "baseline": 2.103,
+        "diff": 1.084,
+        "low": 1.064,
+        "high": 1.104
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 1,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 469.905,
+        "diff": -157.46,
+        "low": -158.225,
+        "high": -156.695
+       },
+       "p95_ms": {
+        "baseline": 506.784,
+        "diff": -181.465,
+        "low": -227.691,
+        "high": -135.239
+       },
+       "mean_ms": {
+        "baseline": 475.725,
+        "diff": -161.056,
+        "low": -165.855,
+        "high": -156.257
+       },
+       "throughput_rps": {
+        "baseline": 2.103,
+        "diff": 1.076,
+        "low": 1.061,
+        "high": 1.09
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 2341.471,
+        "diff": -470.208,
+        "low": -615.316,
+        "high": -325.1
+       },
+       "p95_ms": {
+        "baseline": 2571.719,
+        "diff": -694.125,
+        "low": -1096.977,
+        "high": -291.273
+       },
+       "mean_ms": {
+        "baseline": 2279.511,
+        "diff": -499.746,
+        "low": -693.167,
+        "high": -306.325
+       },
+       "throughput_rps": {
+        "baseline": 1.688,
+        "diff": 0.448,
+        "low": 0.336,
+        "high": 0.56
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 2341.471,
+        "diff": -1104.205,
+        "low": -1252.536,
+        "high": -955.874
+       },
+       "p95_ms": {
+        "baseline": 2571.719,
+        "diff": -1328.943,
+        "low": -1735.061,
+        "high": -922.825
+       },
+       "mean_ms": {
+        "baseline": 2279.511,
+        "diff": -1102.64,
+        "low": -1298.139,
+        "high": -907.141
+       },
+       "throughput_rps": {
+        "baseline": 1.688,
+        "diff": 1.542,
+        "low": 1.428,
+        "high": 1.657
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "reference",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 2341.471,
+        "diff": -1103.76,
+        "low": -1252.455,
+        "high": -955.065
+       },
+       "p95_ms": {
+        "baseline": 2571.719,
+        "diff": -1324.46,
+        "low": -1729.741,
+        "high": -919.179
+       },
+       "mean_ms": {
+        "baseline": 2279.511,
+        "diff": -1089.174,
+        "low": -1285.572,
+        "high": -892.776
+       },
+       "throughput_rps": {
+        "baseline": 1.688,
+        "diff": 1.538,
+        "low": 1.423,
+        "high": 1.653
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-shared",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1871.263,
+        "diff": -633.997,
+        "low": -639.25,
+        "high": -628.744
+       },
+       "p95_ms": {
+        "baseline": 1877.594,
+        "diff": -634.818,
+        "low": -639.736,
+        "high": -629.9
+       },
+       "mean_ms": {
+        "baseline": 1779.765,
+        "diff": -602.894,
+        "low": -607.317,
+        "high": -598.471
+       },
+       "throughput_rps": {
+        "baseline": 2.135,
+        "diff": 1.094,
+        "low": 1.079,
+        "high": 1.109
+       }
+      },
+      {
+       "tokens": 2048,
+       "concurrency": 4,
+       "side": "runtime-batching",
+       "baseline": "runtime",
+       "rounds": 10,
+       "p50_ms": {
+        "baseline": 1871.263,
+        "diff": -633.552,
+        "low": -641.305,
+        "high": -625.799
+       },
+       "p95_ms": {
+        "baseline": 1877.594,
+        "diff": -630.335,
+        "low": -636.721,
+        "high": -623.949
+       },
+       "mean_ms": {
+        "baseline": 1779.765,
+        "diff": -589.428,
+        "low": -595.466,
+        "high": -583.39
+       },
+       "throughput_rps": {
+        "baseline": 2.135,
+        "diff": 1.09,
+        "low": 1.075,
+        "high": 1.105
+       }
+      }
+     ]
+    }
+   },
+   "replicate_stack_b": {
+    "model": "vllm-sr/Vela-2.0-0.3B",
+    "commit": "a9b9f28183fb09ce85b28bfc91da2ce77b5a19a8",
+    "stack": "stack B without causal-conv1d (venv-rocm72); the same GPU code; ModernBERT has no causal convolution",
+    "host_cores": 16,
+    "tool": "tools/vela2_bench.py --device rocm:0 --tokens 32,128,512,2048 --requests 30 --warmup 20 --concurrency 1,4 --rounds 10 --sides reference,runtime,runtime-batching",
+    "intervals": [
+     {
+      "tokens": 32,
+      "concurrency": 1,
+      "side": "runtime",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 8.2,
+       "diff": -1.279,
+       "low": -1.78,
+       "high": -0.778
+      },
+      "p95_ms": {
+       "baseline": 9.436,
+       "diff": -1.983,
+       "low": -2.669,
+       "high": -1.297
+      },
+      "mean_ms": {
+       "baseline": 8.472,
+       "diff": -1.441,
+       "low": -1.96,
+       "high": -0.922
+      },
+      "throughput_rps": {
+       "baseline": 119.877,
+       "diff": 23.362,
+       "low": 18.137,
+       "high": 28.588
+      }
+     },
+     {
+      "tokens": 32,
+      "concurrency": 1,
+      "side": "runtime-batching",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 8.2,
+       "diff": 0.624,
+       "low": -0.066,
+       "high": 1.314
+      },
+      "p95_ms": {
+       "baseline": 9.436,
+       "diff": -0.009,
+       "low": -1.103,
+       "high": 1.085
+      },
+      "mean_ms": {
+       "baseline": 8.472,
+       "diff": 0.394,
+       "low": -0.274,
+       "high": 1.062
+      },
+      "throughput_rps": {
+       "baseline": 119.877,
+       "diff": -6.958,
+       "low": -15.202,
+       "high": 1.286
+      }
+     },
+     {
+      "tokens": 32,
+      "concurrency": 1,
+      "side": "runtime-batching",
+      "baseline": "runtime",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 6.921,
+       "diff": 1.903,
+       "low": 1.618,
+       "high": 2.188
+      },
+      "p95_ms": {
+       "baseline": 7.453,
+       "diff": 1.974,
+       "low": 1.532,
+       "high": 2.416
+      },
+      "mean_ms": {
+       "baseline": 7.031,
+       "diff": 1.835,
+       "low": 1.488,
+       "high": 2.182
+      },
+      "throughput_rps": {
+       "baseline": 143.239,
+       "diff": -30.321,
+       "low": -37.64,
+       "high": -23.001
+      }
+     },
+     {
+      "tokens": 32,
+      "concurrency": 4,
+      "side": "runtime",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 33.226,
+       "diff": -6.266,
+       "low": -7.436,
+       "high": -5.096
+      },
+      "p95_ms": {
+       "baseline": 36.257,
+       "diff": -8.511,
+       "low": -12.96,
+       "high": -4.062
+      },
+      "mean_ms": {
+       "baseline": 31.936,
+       "diff": -6.12,
+       "low": -7.537,
+       "high": -4.703
+      },
+      "throughput_rps": {
+       "baseline": 119.365,
+       "diff": 27.086,
+       "low": 23.439,
+       "high": 30.732
+      }
+     },
+     {
+      "tokens": 32,
+      "concurrency": 4,
+      "side": "runtime-batching",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 33.226,
+       "diff": -16.883,
+       "low": -18.536,
+       "high": -15.23
+      },
+      "p95_ms": {
+       "baseline": 36.257,
+       "diff": -15.971,
+       "low": -19.603,
+       "high": -12.339
+      },
+      "mean_ms": {
+       "baseline": 31.936,
+       "diff": -15.522,
+       "low": -16.983,
+       "high": -14.061
+      },
+      "throughput_rps": {
+       "baseline": 119.365,
+       "diff": 111.337,
+       "low": 104.591,
+       "high": 118.084
+      }
+     },
+     {
+      "tokens": 32,
+      "concurrency": 4,
+      "side": "runtime-batching",
+      "baseline": "runtime",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 26.96,
+       "diff": -10.617,
+       "low": -11.495,
+       "high": -9.739
+      },
+      "p95_ms": {
+       "baseline": 27.746,
+       "diff": -7.46,
+       "low": -10.468,
+       "high": -4.452
+      },
+      "mean_ms": {
+       "baseline": 25.816,
+       "diff": -9.402,
+       "low": -9.875,
+       "high": -8.929
+      },
+      "throughput_rps": {
+       "baseline": 146.451,
+       "diff": 84.252,
+       "low": 78.884,
+       "high": 89.619
+      }
+     },
+     {
+      "tokens": 128,
+      "concurrency": 1,
+      "side": "runtime",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 9.069,
+       "diff": -1.543,
+       "low": -1.851,
+       "high": -1.235
+      },
+      "p95_ms": {
+       "baseline": 9.503,
+       "diff": -1.418,
+       "low": -1.64,
+       "high": -1.196
+      },
+      "mean_ms": {
+       "baseline": 9.042,
+       "diff": -1.521,
+       "low": -1.714,
+       "high": -1.328
+      },
+      "throughput_rps": {
+       "baseline": 111.092,
+       "diff": 22.562,
+       "low": 19.59,
+       "high": 25.534
+      }
+     },
+     {
+      "tokens": 128,
+      "concurrency": 1,
+      "side": "runtime-batching",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 9.069,
+       "diff": 0.579,
+       "low": 0.293,
+       "high": 0.865
+      },
+      "p95_ms": {
+       "baseline": 9.503,
+       "diff": 0.864,
+       "low": 0.637,
+       "high": 1.091
+      },
+      "mean_ms": {
+       "baseline": 9.042,
+       "diff": 0.621,
+       "low": 0.431,
+       "high": 0.811
+      },
+      "throughput_rps": {
+       "baseline": 111.092,
+       "diff": -7.277,
+       "low": -9.442,
+       "high": -5.112
+      }
+     },
+     {
+      "tokens": 128,
+      "concurrency": 1,
+      "side": "runtime-batching",
+      "baseline": "runtime",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 7.526,
+       "diff": 2.122,
+       "low": 1.971,
+       "high": 2.273
+      },
+      "p95_ms": {
+       "baseline": 8.085,
+       "diff": 2.282,
+       "low": 2.171,
+       "high": 2.393
+      },
+      "mean_ms": {
+       "baseline": 7.521,
+       "diff": 2.142,
+       "low": 2.104,
+       "high": 2.18
+      },
+      "throughput_rps": {
+       "baseline": 133.654,
+       "diff": -29.839,
+       "low": -32.797,
+       "high": -26.881
+      }
+     },
+     {
+      "tokens": 128,
+      "concurrency": 4,
+      "side": "runtime",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 37.635,
+       "diff": -7.516,
+       "low": -8.461,
+       "high": -6.571
+      },
+      "p95_ms": {
+       "baseline": 39.175,
+       "diff": -8.096,
+       "low": -9.183,
+       "high": -7.009
+      },
+      "mean_ms": {
+       "baseline": 35.771,
+       "diff": -6.912,
+       "low": -7.722,
+       "high": -6.102
+      },
+      "throughput_rps": {
+       "baseline": 106.006,
+       "diff": 25.664,
+       "low": 22.281,
+       "high": 29.047
+      }
+     },
+     {
+      "tokens": 128,
+      "concurrency": 4,
+      "side": "runtime-batching",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 37.635,
+       "diff": -19.11,
+       "low": -20.963,
+       "high": -17.257
+      },
+      "p95_ms": {
+       "baseline": 39.175,
+       "diff": -13.338,
+       "low": -16.313,
+       "high": -10.363
+      },
+      "mean_ms": {
+       "baseline": 35.771,
+       "diff": -16.498,
+       "low": -17.706,
+       "high": -15.29
+      },
+      "throughput_rps": {
+       "baseline": 106.006,
+       "diff": 92.52,
+       "low": 88.23,
+       "high": 96.809
+      }
+     },
+     {
+      "tokens": 128,
+      "concurrency": 4,
+      "side": "runtime-batching",
+      "baseline": "runtime",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 30.119,
+       "diff": -11.594,
+       "low": -13.231,
+       "high": -9.957
+      },
+      "p95_ms": {
+       "baseline": 31.079,
+       "diff": -5.242,
+       "low": -8.092,
+       "high": -2.392
+      },
+      "mean_ms": {
+       "baseline": 28.859,
+       "diff": -9.586,
+       "low": -10.849,
+       "high": -8.323
+      },
+      "throughput_rps": {
+       "baseline": 131.67,
+       "diff": 66.856,
+       "low": 61.172,
+       "high": 72.539
+      }
+     },
+     {
+      "tokens": 512,
+      "concurrency": 1,
+      "side": "runtime",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 12.928,
+       "diff": -2.405,
+       "low": -2.472,
+       "high": -2.338
+      },
+      "p95_ms": {
+       "baseline": 13.313,
+       "diff": -2.338,
+       "low": -2.454,
+       "high": -2.222
+      },
+      "mean_ms": {
+       "baseline": 12.961,
+       "diff": -2.455,
+       "low": -2.515,
+       "high": -2.395
+      },
+      "throughput_rps": {
+       "baseline": 77.213,
+       "diff": 18.096,
+       "low": 17.144,
+       "high": 19.048
+      }
+     },
+     {
+      "tokens": 512,
+      "concurrency": 1,
+      "side": "runtime-batching",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 12.928,
+       "diff": -0.258,
+       "low": -0.316,
+       "high": -0.2
+      },
+      "p95_ms": {
+       "baseline": 13.313,
+       "diff": -0.201,
+       "low": -0.312,
+       "high": -0.09
+      },
+      "mean_ms": {
+       "baseline": 12.961,
+       "diff": -0.291,
+       "low": -0.352,
+       "high": -0.23
+      },
+      "throughput_rps": {
+       "baseline": 77.213,
+       "diff": 1.788,
+       "low": 1.377,
+       "high": 2.199
+      }
+     },
+     {
+      "tokens": 512,
+      "concurrency": 1,
+      "side": "runtime-batching",
+      "baseline": "runtime",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 10.523,
+       "diff": 2.147,
+       "low": 2.109,
+       "high": 2.185
+      },
+      "p95_ms": {
+       "baseline": 10.975,
+       "diff": 2.137,
+       "low": 2.066,
+       "high": 2.208
+      },
+      "mean_ms": {
+       "baseline": 10.506,
+       "diff": 2.164,
+       "low": 2.129,
+       "high": 2.199
+      },
+      "throughput_rps": {
+       "baseline": 95.31,
+       "diff": -16.308,
+       "low": -16.976,
+       "high": -15.64
+      }
+     },
+     {
+      "tokens": 512,
+      "concurrency": 4,
+      "side": "runtime",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 54.466,
+       "diff": -13.148,
+       "low": -14.17,
+       "high": -12.126
+      },
+      "p95_ms": {
+       "baseline": 55.69,
+       "diff": -13.084,
+       "low": -13.979,
+       "high": -12.189
+      },
+      "mean_ms": {
+       "baseline": 52.096,
+       "diff": -12.15,
+       "low": -13.08,
+       "high": -11.22
+      },
+      "throughput_rps": {
+       "baseline": 72.708,
+       "diff": 22.174,
+       "low": 20.471,
+       "high": 23.877
+      }
+     },
+     {
+      "tokens": 512,
+      "concurrency": 4,
+      "side": "runtime-batching",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 54.466,
+       "diff": -21.084,
+       "low": -22.146,
+       "high": -20.022
+      },
+      "p95_ms": {
+       "baseline": 55.69,
+       "diff": -14.267,
+       "low": -15.809,
+       "high": -12.725
+      },
+      "mean_ms": {
+       "baseline": 52.096,
+       "diff": -18.899,
+       "low": -19.691,
+       "high": -18.107
+      },
+      "throughput_rps": {
+       "baseline": 72.708,
+       "diff": 42.608,
+       "low": 39.443,
+       "high": 45.772
+      }
+     },
+     {
+      "tokens": 512,
+      "concurrency": 4,
+      "side": "runtime-batching",
+      "baseline": "runtime",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 41.318,
+       "diff": -7.936,
+       "low": -9.291,
+       "high": -6.581
+      },
+      "p95_ms": {
+       "baseline": 42.606,
+       "diff": -1.183,
+       "low": -2.467,
+       "high": 0.101
+      },
+      "mean_ms": {
+       "baseline": 39.946,
+       "diff": -6.749,
+       "low": -7.801,
+       "high": -5.697
+      },
+      "throughput_rps": {
+       "baseline": 94.882,
+       "diff": 20.434,
+       "low": 17.25,
+       "high": 23.617
+      }
+     },
+     {
+      "tokens": 2048,
+      "concurrency": 1,
+      "side": "runtime",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 35.023,
+       "diff": -8.789,
+       "low": -8.919,
+       "high": -8.659
+      },
+      "p95_ms": {
+       "baseline": 35.789,
+       "diff": -8.044,
+       "low": -8.271,
+       "high": -7.817
+      },
+      "mean_ms": {
+       "baseline": 35.05,
+       "diff": -8.689,
+       "low": -8.779,
+       "high": -8.599
+      },
+      "throughput_rps": {
+       "baseline": 28.54,
+       "diff": 9.413,
+       "low": 9.189,
+       "high": 9.636
+      }
+     },
+     {
+      "tokens": 2048,
+      "concurrency": 1,
+      "side": "runtime-batching",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 35.023,
+       "diff": -12.516,
+       "low": -12.676,
+       "high": -12.356
+      },
+      "p95_ms": {
+       "baseline": 35.789,
+       "diff": -11.812,
+       "low": -12.083,
+       "high": -11.541
+      },
+      "mean_ms": {
+       "baseline": 35.05,
+       "diff": -12.436,
+       "low": -12.616,
+       "high": -12.256
+      },
+      "throughput_rps": {
+       "baseline": 28.54,
+       "diff": 15.714,
+       "low": 15.125,
+       "high": 16.303
+      }
+     },
+     {
+      "tokens": 2048,
+      "concurrency": 1,
+      "side": "runtime-batching",
+      "baseline": "runtime",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 26.234,
+       "diff": -3.727,
+       "low": -3.954,
+       "high": -3.5
+      },
+      "p95_ms": {
+       "baseline": 27.745,
+       "diff": -3.768,
+       "low": -4.055,
+       "high": -3.481
+      },
+      "mean_ms": {
+       "baseline": 26.361,
+       "diff": -3.747,
+       "low": -3.96,
+       "high": -3.534
+      },
+      "throughput_rps": {
+       "baseline": 37.953,
+       "diff": 6.301,
+       "low": 5.82,
+       "high": 6.782
+      }
+     },
+     {
+      "tokens": 2048,
+      "concurrency": 4,
+      "side": "runtime",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 139.654,
+       "diff": -37.859,
+       "low": -38.467,
+       "high": -37.251
+      },
+      "p95_ms": {
+       "baseline": 140.977,
+       "diff": -36.756,
+       "low": -37.275,
+       "high": -36.237
+      },
+      "mean_ms": {
+       "baseline": 132.816,
+       "diff": -35.267,
+       "low": -35.821,
+       "high": -34.713
+      },
+      "throughput_rps": {
+       "baseline": 28.53,
+       "diff": 10.479,
+       "low": 10.196,
+       "high": 10.763
+      }
+     },
+     {
+      "tokens": 2048,
+      "concurrency": 4,
+      "side": "runtime-batching",
+      "baseline": "reference",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 139.654,
+       "diff": -63.211,
+       "low": -64.742,
+       "high": -61.68
+      },
+      "p95_ms": {
+       "baseline": 140.977,
+       "diff": -55.45,
+       "low": -57.031,
+       "high": -53.869
+      },
+      "mean_ms": {
+       "baseline": 132.816,
+       "diff": -57.491,
+       "low": -58.813,
+       "high": -56.169
+      },
+      "throughput_rps": {
+       "baseline": 28.53,
+       "diff": 22.293,
+       "low": 21.399,
+       "high": 23.188
+      }
+     },
+     {
+      "tokens": 2048,
+      "concurrency": 4,
+      "side": "runtime-batching",
+      "baseline": "runtime",
+      "rounds": 10,
+      "p50_ms": {
+       "baseline": 101.795,
+       "diff": -25.352,
+       "low": -26.779,
+       "high": -23.925
+      },
+      "p95_ms": {
+       "baseline": 104.221,
+       "diff": -18.694,
+       "low": -20.221,
+       "high": -17.167
+      },
+      "mean_ms": {
+       "baseline": 97.549,
+       "diff": -22.224,
+       "low": -23.517,
+       "high": -20.931
+      },
+      "throughput_rps": {
+       "baseline": 39.009,
+       "diff": 11.814,
+       "low": 11.024,
+       "high": 12.604
+      }
+     }
+    ]
+   }
   }
  }
 }

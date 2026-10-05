@@ -5,11 +5,14 @@ The state becomes typed parts: a string is the user part; a JSON object maps
 ``response`` to the answer part and every other key to the context part (a
 part fed by several keys, or by an unknown key, is ``key:\\n<value>`` blocks
 joined by a blank line); an array is canonical JSON in the user part.
-Questions become the engine's typed questions: Noul is a two-option choice
-(``no`` / ``yes``), Choice and Noul show the abstain option, Score levels are
-the options in order, Set and Span take ``{label: description}``. ``over``
-names a state key, a part or a list of them. A question that does not
-validate gets ``invalid_question`` and never affects the others.
+Questions follow the shared System One rules (``systemone.read_question``)
+and become the engine's typed questions: Noul is a two-option choice (``no``
+/ ``yes``), Choice and Noul show the abstain option, Score levels are the
+options in order. Vela 2.0 adds Set and Span questions (``{label:
+description}`` with an optional ``threshold``; a Span may name its
+``head``), the package's presets, and ``over``, which names a state key, a
+part or a list of them. A question that does not validate gets
+``invalid_question`` and never affects the others.
 """
 
 from __future__ import annotations
@@ -20,7 +23,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ...errors import INVALID_QUESTION, QuestionError
-from ...systemone import canonical, json_payload
+from ...systemone import QUESTION_TYPES as SYSTEM_ONE_TYPES
+from ...systemone import canonical, content, json_payload, named_options, read_question
 from .calibration import SPAN_HEADS, Calibration
 
 ROLES = ("user", "context", "answer")
@@ -36,11 +40,16 @@ STATE_KEY_ROLES = {
     "answer": "answer",
     "response": "answer",
 }
-QUESTION_TYPES = ("noul", "choice", "score", "set", "span")
+LABELLED_TYPES = ("set", "span")
+QUESTION_TYPES = (*SYSTEM_ONE_TYPES, *LABELLED_TYPES)
+FAMILY_FIELDS = frozenset({"over", "preset"})
+LABELLED_FIELDS = {
+    "set": frozenset({"type", "instructions", "criteria", "threshold"}),
+    "span": frozenset({"type", "instructions", "criteria", "threshold", "head"}),
+}
 NOUL_DEFAULT_NO = "No. The statement or question is not satisfied."
 NOUL_DEFAULT_YES = "Yes. The statement or question is satisfied."
-MAX_OPTIONS = 255
-MIN_LEVELS, MAX_LEVELS = 2, 10
+NOUL_OPTIONS = (("no", "false", NOUL_DEFAULT_NO), ("yes", "true", NOUL_DEFAULT_YES))
 PRESETS = ("pii", "halu", "relevance")
 
 
@@ -76,8 +85,9 @@ class Question:
 
     ``type`` is the engine type (Noul is a ``choice``); ``kind`` the request
     type. ``options`` are ``(name, description)`` pairs in order (Span:
-    labels). ``key`` names the calibration entry (the question ID, or the
-    preset). ``span_range`` clips a span to one state key of a shared part.
+    labels; Score names may repeat, so answers read levels by position).
+    ``key`` names the calibration entry (the question ID, or the preset).
+    ``span_range`` clips a span to one state key of a shared part.
     """
 
     id: str
@@ -167,10 +177,6 @@ def _invalid(message: str) -> QuestionError:
     return QuestionError(INVALID_QUESTION, message)
 
 
-def _nonblank(value: Any) -> bool:
-    return not (isinstance(value, str) and not value.strip())
-
-
 def resolve_over(
     over: Any, state: State
 ) -> tuple[str | tuple[str, ...], tuple[int, int] | None]:
@@ -207,39 +213,26 @@ def _default_over(kind: str, state: State) -> str | tuple[str, ...]:
     return roles[0] if len(roles) == 1 else roles
 
 
-def _labelled(kind: str, criteria: Any) -> tuple[tuple[str, str], ...]:
-    low = 2 if kind == "choice" else 1
-    if not isinstance(criteria, dict) or not low <= len(criteria) <= MAX_OPTIONS:
-        raise _invalid(
-            f"{kind} criteria must be an object with {low} to {MAX_OPTIONS} entries"
-        )
-    options = []
-    for key, value in criteria.items():
-        if not isinstance(key, str) or not key.strip() or not _nonblank(value):
-            raise _invalid(
-                "option names and descriptions must not be empty or whitespace"
-            )
-        if value is not None and not json_payload(value):
-            raise _invalid("descriptions must be text or JSON values")
-        options.append((key, "" if value is None else content_text(value)))
-    return tuple(options)
+def _labelled(question: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
+    """A Set or Span question's instructions and ``{label: description}`` criteria (1 to 255 labels)."""
+    kind = question["type"]
+    unknown = set(question) - LABELLED_FIELDS[kind] - FAMILY_FIELDS
+    if unknown:
+        raise _invalid(f"{kind} questions do not take {sorted(unknown)}")
+    return (
+        content(question.get("instructions"), "instructions"),
+        named_options(question.get("criteria"), minimum=1),
+    )
 
 
-def _choices(choices: Any) -> dict[str, Any]:
-    if not isinstance(choices, list):
-        raise _invalid("choices must be a list of {key, description}")
-    criteria: dict[str, Any] = {}
-    for choice in choices:
-        if (
-            not isinstance(choice, dict)
-            or "key" not in choice
-            or set(choice) - {"key", "description"}
-        ):
-            raise _invalid("each choice is {key, description}")
-        if not isinstance(choice["key"], str) or choice["key"] in criteria:
-            raise _invalid("choice keys must be unique strings")
-        criteria[choice["key"]] = choice.get("description")
-    return criteria
+def _text(value: Any, default: str = "") -> str:
+    """A description as model text; null takes ``default``."""
+    return default if value is None else content_text(value)
+
+
+def _described(criteria: dict[str, Any]) -> tuple[tuple[str, str], ...]:
+    """Named options in order, a null description as empty text."""
+    return tuple((name, _text(value)) for name, value in criteria.items())
 
 
 class QuestionReader:
@@ -269,31 +262,37 @@ class QuestionReader:
         return plan
 
     def question(self, question_id: str, question: Any, state: State) -> Question:
-        """One question in the engine's form; ``QuestionError`` when it is invalid."""
-        if not question_id.strip():
-            raise _invalid("question IDs must not be empty or whitespace")
-        if not isinstance(question, dict):
-            raise _invalid("a question must be an object")
+        """One question in the engine's form; ``QuestionError`` when it is invalid.
+
+        System One types read through ``systemone.read_question``; Set and
+        Span, presets and ``over`` are the family's own.
+        """
         named = None
-        if question.get("preset") is not None:
+        if isinstance(question, dict) and question.get("preset") is not None:
             question, named = self._expand_preset(question)
-        kind = question.get("type")
-        if kind not in QUESTION_TYPES:
-            raise _invalid(f"type must be one of {list(QUESTION_TYPES)}")
-        allowed = {"type", "instructions", "criteria", "over", "preset"}
-        allowed |= {"choices"} if kind in ("choice", "noul") else set()
-        allowed |= {"levels"} if kind == "score" else set()
-        allowed |= {"threshold"} if kind in ("set", "span") else set()
-        allowed |= {"head"} if kind == "span" else set()
-        extra = sorted(set(question) - allowed)
-        if extra:
-            raise _invalid(f"{kind} questions do not take {extra}")
-        instructions = question.get("instructions")
-        if not json_payload(instructions, require_nonempty_text=True) or not _nonblank(
-            instructions
-        ):
-            raise _invalid("instructions must be non-empty text or JSON")
-        if "over" in question and question["over"] is not None:
+        if isinstance(question, dict) and question.get("type") in LABELLED_TYPES:
+            kind = question["type"]
+            instructions, criteria = _labelled(question)
+            options = _described(criteria)
+        else:
+            parsed = read_question(question, extra_fields=FAMILY_FIELDS)
+            kind, instructions, criteria = (
+                parsed.kind,
+                parsed.instructions,
+                parsed.criteria,
+            )
+            if kind == "noul":
+                options = tuple(
+                    (name, _text(criteria.get(key), default))
+                    for name, key, default in NOUL_OPTIONS
+                )
+            elif kind == "score":
+                levels = [content_text(level) for level in criteria]
+                descriptions = levels if named else [""] * len(levels)
+                options = tuple(zip(named or levels, descriptions, strict=True))
+            else:
+                options = _described(criteria)
+        if question.get("over") is not None:
             over, span_range = resolve_over(question["over"], state)
         else:
             over, span_range = _default_over(kind, state), None
@@ -301,67 +300,32 @@ class QuestionReader:
             span_range = None
         elif isinstance(over, tuple):
             raise _invalid("a span question reads one part")
-        fields: dict[str, Any] = {
-            "id": question_id,
-            "kind": kind,
-            "type": "choice" if kind == "noul" else kind,
-            "text": content_text(instructions),
-            "over": over,
-            "key": question.get("preset") or question_id,
-            "span_range": span_range,
-        }
-        criteria = question.get("criteria")
-        if kind in ("choice", "noul") and "choices" in question:
-            if criteria is not None:
-                raise _invalid("use criteria or choices, not both")
-            criteria = _choices(question["choices"])
-        if kind == "score" and "levels" in question:
-            if criteria is not None:
-                raise _invalid("use criteria or levels, not both")
-            criteria = question["levels"]
-        if kind == "noul":
-            criteria = self._noul(criteria)
-            fields["options"] = (
-                (
-                    "no",
-                    (
-                        NOUL_DEFAULT_NO
-                        if criteria.get("false") is None
-                        else content_text(criteria["false"])
-                    ),
-                ),
-                (
-                    "yes",
-                    (
-                        NOUL_DEFAULT_YES
-                        if criteria.get("true") is None
-                        else content_text(criteria["true"])
-                    ),
-                ),
-            )
-            fields["abstain"] = True
-        elif kind == "score":
-            fields["options"] = self._levels(criteria, named)
-        else:
-            fields["options"] = _labelled(kind, criteria)
-            fields["abstain"] = kind == "choice"
-        fields["criteria"] = criteria
-        if question.get("threshold") is not None:
-            threshold = question["threshold"]
-            if (
-                isinstance(threshold, bool)
-                or not isinstance(threshold, (int, float))
-                or not 0.0 <= threshold <= 1.0
-            ):
-                raise _invalid("threshold must be a number in [0, 1]")
-            fields["threshold"] = float(threshold)
-        if question.get("head") is not None:
-            if question["head"] not in SPAN_HEADS:
-                raise _invalid(f"head must be one of {list(SPAN_HEADS)}")
-            if question["head"] == "broad" and not self.broad_head:
-                raise _invalid("this model has no broad span head")
-            fields["head"] = question["head"]
-        return Question(**fields)
+        threshold = question.get("threshold")
+        if threshold is not None and (
+            isinstance(threshold, bool)
+            or not isinstance(threshold, (int, float))
+            or not 0.0 <= threshold <= 1.0
+        ):
+            raise _invalid("threshold must be a number in [0, 1]")
+        head = question.get("head")
+        if head is not None and head not in SPAN_HEADS:
+            raise _invalid(f"head must be one of {list(SPAN_HEADS)}")
+        if head == "broad" and not self.broad_head:
+            raise _invalid("this model has no broad span head")
+        return Question(
+            id=question_id,
+            kind=kind,
+            type="choice" if kind == "noul" else kind,
+            text=content_text(instructions),
+            over=over,
+            options=options,
+            criteria=criteria,
+            key=question.get("preset") or question_id,
+            abstain=kind in ("choice", "noul"),
+            threshold=None if threshold is None else float(threshold),
+            head=head,
+            span_range=span_range,
+        )
 
     def _expand_preset(
         self, question: dict[str, Any]
@@ -398,36 +362,3 @@ class QuestionReader:
             raise _invalid(f"preset {name} is a {expanded['type']} question")
         kept = {key: question[key] for key in ("over", "threshold") if key in question}
         return {**expanded, "preset": name, **kept}, named
-
-    @staticmethod
-    def _noul(criteria: Any) -> dict[str, Any]:
-        if criteria is not None and (
-            not isinstance(criteria, dict) or set(criteria) - {"true", "false"}
-        ):
-            raise _invalid("noul criteria is an object with optional true / false")
-        criteria = criteria or {}
-        for key in ("true", "false"):
-            value = criteria.get(key)
-            if not _nonblank(value) or (value is not None and not json_payload(value)):
-                raise _invalid("Noul criteria must be non-empty text or JSON")
-        return criteria
-
-    @staticmethod
-    def _levels(criteria: Any, named: list[str] | None) -> tuple[tuple[str, str], ...]:
-        if (
-            not isinstance(criteria, list)
-            or not MIN_LEVELS <= len(criteria) <= MAX_LEVELS
-        ):
-            raise _invalid(
-                f"score criteria must be a list of {MIN_LEVELS} to {MAX_LEVELS} levels"
-            )
-        names = []
-        for value in criteria:
-            if value is None or not _nonblank(value) or not json_payload(value):
-                raise _invalid("score levels must be non-empty text or JSON")
-            names.append(content_text(value))
-        if len(set(names)) != len(names):
-            raise _invalid("score levels must be distinct")
-        if named is not None:
-            return tuple(zip(named, names, strict=True))
-        return tuple((name, "") for name in names)

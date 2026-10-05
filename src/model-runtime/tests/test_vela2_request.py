@@ -115,7 +115,14 @@ def test_invalid_questions_fail_alone() -> None:
                 "threshold": 2,
             },
             "extra": {**CHOICE, "threshold": 0.5},
-            "levels": {"type": "score", "instructions": "x", "criteria": ["a", "a"]},
+            "levels": {"type": "score", "instructions": "x", "criteria": ["a", None]},
+            "labels": {"type": "set", "instructions": "x", "criteria": {}},
+            "unknown": {
+                "type": "span",
+                "instructions": "x",
+                "criteria": {"a": "b"},
+                "colour": 1,
+            },
             "head": {
                 "type": "span",
                 "instructions": "x",

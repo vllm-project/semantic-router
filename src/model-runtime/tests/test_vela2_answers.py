@@ -95,6 +95,21 @@ def test_choice_noul_and_score_answers() -> None:
     }
 
 
+def test_repeated_score_levels_answer_per_level() -> None:
+    question = {"type": "score", "instructions": "How?", "criteria": ["a", "b", "a"]}
+    plan = QuestionReader(CAL, broad_head=True).read(TEXT, {"s": question})
+    values = np.array([0.4, -1.0, 1.6])
+    response: dict = {"answers": {}}
+    Answerer(CAL).answer(
+        plan.questions[0], RawRow(logits={"s": values}), plan.state, response
+    )
+    levels = softmax(values / 1.1)
+    answer = response["answers"]["s"]
+    assert answer["probabilities"] == {str(i): float(p) for i, p in enumerate(levels)}
+    assert answer["score"] == math.fsum(i * p for i, p in enumerate(levels))
+    assert answer["legend"] == {"0": "a", "1": "b", "2": "a"}
+
+
 def test_set_answers_select_above_the_threshold_with_label_views() -> None:
     response = answer(RAW)
     scores = sigmoid(RAW.logits["topics"] / 1.05)
