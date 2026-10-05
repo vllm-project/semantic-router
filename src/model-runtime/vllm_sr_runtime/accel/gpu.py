@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import threading
+from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any
 
@@ -17,6 +19,9 @@ import torch
 from ..plugins.base import Accelerator, DeviceInfo
 from .kernels import Kernel, KernelSet, reference_kernels
 
+_DEVICE_LOCKS: dict[int, Any] = {}
+_LOCKS = threading.Lock()
+
 # Errors after which the process's device context stays unusable.
 DEVICE_FAULT_MARKERS = (
     "CUDA error",
@@ -24,6 +29,15 @@ DEVICE_FAULT_MARKERS = (
     "device-side assert",
     "illegal memory access",
 )
+
+
+def device_lock(index: int) -> Any:
+    """The lock that serializes this process's device work on one GPU."""
+    with _LOCKS:
+        lock = _DEVICE_LOCKS.get(index)
+        if lock is None:
+            lock = _DEVICE_LOCKS[index] = threading.RLock()
+        return lock
 
 
 def _optional(module: str, attribute: str) -> Any:
@@ -106,6 +120,16 @@ class GPUAccelerator(Accelerator):
 
     def synchronize(self, device: DeviceInfo) -> None:
         torch.cuda.synchronize(device.index or 0)
+
+    def execute(self, device: DeviceInfo, work: Callable[[], Any]) -> Any:
+        """Run device work holding the device's lock, so the process's models never launch on it at once.
+
+        A model captures a HIP / CUDA graph the second time it sees a shape,
+        and the capture fails when another thread launches work on the device,
+        whatever the capture mode; every capture also synchronizes the device.
+        """
+        with device_lock(device.index or 0):
+            return work()
 
     def device_fault(self, error: BaseException) -> bool:
         """Device errors poison the context; running out of memory fails only the batch."""

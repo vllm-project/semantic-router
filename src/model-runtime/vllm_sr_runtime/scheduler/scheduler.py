@@ -247,12 +247,16 @@ class Scheduler:
         for entry in pending:
             self._pending_jobs += 1
             self._pending_tokens += entry.tokens
-            entry.future.add_done_callback(partial(self._settle, entry.tokens))
+            entry.future.add_done_callback(partial(self._settle, entry))
 
-    def _settle(self, tokens: int, _future: Future[Results[Any]]) -> None:
+    def _settle(self, entry: _Pending, future: Future[Results[Any]]) -> None:
+        """Release an answered job's admission; a cancelled one also leaves the queue."""
         with self._lock:
             self._pending_jobs -= 1
-            self._pending_tokens -= tokens
+            self._pending_tokens -= entry.tokens
+            if future.cancelled():
+                with contextlib.suppress(ValueError):
+                    self._queue.remove(entry)
 
     def _release(self) -> None:
         with self._lock:
@@ -322,6 +326,8 @@ class Scheduler:
         now = time.monotonic()
         by_profile: dict[str, list[_Pending]] = {}
         for pending in taken:
+            if pending.future.done():
+                continue
             if pending.job.deadline is not None and now > pending.job.deadline:
                 self._expire(pending)
                 continue

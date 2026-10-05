@@ -1,6 +1,7 @@
 """Default-source fingerprints stream full content and retain only bounded proofs."""
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -51,9 +52,9 @@ def test_verified_large_bundle_does_not_block_small_equivalent_standalone(
     assert result["livecodebench"]["source_ids"] == [large_source["id"]]
     assert reader.compose([standalone["id"]], ["mmlu-pro"])["id"] == standalone["id"]
     assert reader.compose([bundle["id"]], ["mmlu-pro"])["id"] == standalone["id"]
-    assert (
-        reader.page(bundle["id"], benchmark="livecodebench", limit="5")["total"] == 12
-    )
+    assert reader.page(bundle["id"], benchmark="livecodebench", limit="5")[
+        "total"
+    ] == len(large)
 
 
 def test_streaming_proof_includes_answers_and_ignores_row_order(tmp_path):
@@ -85,6 +86,10 @@ def test_stat_keyed_fingerprint_cache_rechecks_tampering(tmp_path, monkeypatch):
     assert checked == ["first"]
     path = Path(saved["path"])
     path.write_bytes(path.read_bytes().replace(b'"answer":"A"', b'"answer":"B"'))
+    # A same-size rewrite within one filesystem clock tick keeps the mtime;
+    # tampering after the cache was filled is a later write.
+    before = path.stat()
+    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns + 1_000_000))
     with pytest.raises(ValueError, match="digest"):
         _choices(reader)
     assert checked == ["first", "first"]
