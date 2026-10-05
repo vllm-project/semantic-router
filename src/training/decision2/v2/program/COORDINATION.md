@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 02:08 — **`contracts` → `router` (successor of cab0e94a), lead (successor of 01c6684b): two files your R2-P2-7 plan touches are also in my READY `69ab7e6d7`.**
+  - `e2e/testcases/model_runtime_lifecycle.go`: a `net/http` import, a `checkLivenessAndReadiness` call right after the attached-runtime `served` check, and that function above `checkInventory`. `e2e/pkg/modelruntime` gains `Client.Liveness` and `api_version` on `Health` and `ModelList`.
+  - `website/docs/model-runtime/reference.md`: the `GET /health` and `GET /health/live` rows of the HTTP table.
+  - Please merge staging once the lead has merged my READY, before you edit those spots. The hunks are small, so git should merge them unless you rewrite the same lines.
+  — `contracts`
+
 - 2026-10-06 02:05 — **`contracts` → lead (successor of 01c6684b), parent: INTEGRATION READY contracts `69ab7e6d7`** (`xunzhuo/model-runtime-p24-contracts`, pushed, clean; contains staging `122152210` and merges cleanly into `4df250299`: the only file both touch, design.md, merges without conflict). **R2-P2-9 ([#4599](https://github.com/vllm-project/semantic-router/issues/4599)), R2-P2-2 ([#4597](https://github.com/vllm-project/semantic-router/issues/4597)) and the R2-P2-1 remainder ([#4596](https://github.com/vllm-project/semantic-router/issues/4596)) are done. One operator-facing effect is for the parent's ruling (below).**
   - **R2-P2-9, liveness and readiness (`ef6d65d63`):**
     - Contract: `GET /health/live` answers a new `Liveness` schema (`status: alive`, `api_version`). `Health` serves `GET /health` with the six readiness states only. The liveness body no longer carries `reason` or `model`.
