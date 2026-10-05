@@ -78,7 +78,6 @@ type ClassifyResponse struct {
 	Labels      []string
 	Results     []ClassifyResult
 	InputTokens int
-	Revision    string
 }
 
 // EmbedInput is one embeddings input: Text, an image data URL, or base64 WAV audio.
@@ -98,24 +97,13 @@ type EmbedRequest struct {
 	MaxTokens  int
 }
 
-// Representation identifies an embedding space; vectors of different
-// representations never mix.
-type Representation struct {
-	ModelSHA256 string
-	Layer       int
-	Dimension   int
-	Normalized  bool
-	Modality    string
-}
-
 // EmbedResponse holds one vector per input; Errors[i] is set when input i failed.
 type EmbedResponse struct {
-	Model          string
-	Embeddings     [][]float32
-	Inputs         []*InputUsage
-	Errors         []string
-	Representation *Representation
-	PromptTokens   int
+	Model        string
+	Embeddings   [][]float32
+	Inputs       []*InputUsage
+	Errors       []string
+	PromptTokens int
 }
 
 // RerankRequest scores documents against a query at an optional pair-scorer exit.
@@ -299,8 +287,7 @@ func encodeClassify(ctx context.Context, model string, request ClassifyRequest) 
 	if err := inputs.FromClassifyItemList(items); err != nil {
 		return api.ClassifyRequest{}, fmt.Errorf("%w: %w", ErrRejected, err)
 	}
-	returnMeta := true
-	options := api.ClassifyOptions{DeadlineMs: deadline, ReturnMeta: &returnMeta, MaxTokens: optionalInt(request.MaxTokens), Threshold: request.Threshold}
+	options := api.ClassifyOptions{DeadlineMs: deadline, MaxTokens: optionalInt(request.MaxTokens), Threshold: request.Threshold}
 	if request.Overflow != "" {
 		overflow := api.ClassifyOptionsOverflow(request.Overflow)
 		options.Overflow = &overflow
@@ -337,8 +324,7 @@ func encodeEmbed(ctx context.Context, model string, request EmbedRequest) (api.E
 	if err := inputs.FromContentPartList(parts); err != nil {
 		return api.EmbeddingsRequest{}, fmt.Errorf("%w: %w", ErrRejected, err)
 	}
-	returnMeta := true
-	options := api.EmbeddingsOptions{DeadlineMs: deadline, ReturnMeta: &returnMeta, MaxTokens: optionalInt(request.MaxTokens)}
+	options := api.EmbeddingsOptions{DeadlineMs: deadline, MaxTokens: optionalInt(request.MaxTokens)}
 	if request.Overflow != "" {
 		overflow := api.EmbeddingsOptionsOverflow(request.Overflow)
 		options.Overflow = &overflow
@@ -363,8 +349,7 @@ func encodeRerank(ctx context.Context, model string, request RerankRequest) (api
 	if err != nil {
 		return api.RerankRequest{}, err
 	}
-	returnMeta := true
-	options := api.RerankOptions{DeadlineMs: deadline, ReturnMeta: &returnMeta, MaxTokens: optionalInt(request.MaxTokens)}
+	options := api.RerankOptions{DeadlineMs: deadline, MaxTokens: optionalInt(request.MaxTokens)}
 	if request.Overflow != "" {
 		overflow := api.RerankOptionsOverflow(request.Overflow)
 		options.Overflow = &overflow
@@ -406,9 +391,6 @@ func finite(values ...[]float64) bool {
 
 func decodeClassify(body api.ClassifyResponse) ClassifyResponse {
 	decoded := ClassifyResponse{Model: body.Model, Head: body.Head, Kind: string(body.Kind), Labels: body.Labels, InputTokens: body.Usage.InputTokens}
-	if body.Meta != nil && body.Meta.Revision != nil {
-		decoded.Revision = *body.Meta.Revision
-	}
 	for _, result := range body.Results {
 		item := ClassifyResult{Index: result.Index, Probabilities: floats(result.Probabilities), Scores: floats(result.Scores), Input: decodeUsage(result.Input)}
 		if result.Error != nil {
@@ -452,16 +434,6 @@ func decodeEmbed(body api.EmbeddingsResponse) (EmbedResponse, error) {
 		Inputs:       make([]*InputUsage, len(body.Data)),
 		Errors:       make([]string, len(body.Data)),
 		PromptTokens: body.Usage.PromptTokens,
-	}
-	if body.Meta != nil && body.Meta.Representation != nil {
-		representation := body.Meta.Representation
-		decoded.Representation = &Representation{ModelSHA256: representation.ModelSha256, Layer: representation.Layer, Dimension: representation.Dimension}
-		if representation.Normalized != nil {
-			decoded.Representation.Normalized = *representation.Normalized
-		}
-		if representation.Modality != nil {
-			decoded.Representation.Modality = *representation.Modality
-		}
 	}
 	for _, item := range body.Data {
 		if item.Index < 0 || item.Index >= len(body.Data) {
