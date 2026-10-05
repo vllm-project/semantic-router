@@ -46,15 +46,24 @@ type modelIdentity struct {
 // Managed deployments share one process per process key, else per device,
 // except CPU models without a key, which spread over up to
 // maxCPUProcesses(cores) processes. Every CPU process runs cpuThreads threads.
+// A managed deployment on auto is planned on the device auto resolves to on
+// this host (empty when unknown: one process "auto"): as a cpu deployment on
+// the CPU, else in that device's process, where the runtime still places it.
 // Deployments of the same model, revision, device and profile in one process
 // share one loaded model.
-func planProcesses(deployments map[string]config.ModelDeployment, command []string, cacheDir string, cores int) []*processPlan {
+func planProcesses(deployments map[string]config.ModelDeployment, command []string, cacheDir string, cores int, auto string) []*processPlan {
 	attached := make(map[string]*processPlan)
 	managed := make(map[string]*processPlan)
 	served := make(map[string]map[modelIdentity]string)
 	names := make([]string, 0, len(deployments))
-	for name := range deployments {
+	resolved := make(map[string]config.ModelDeployment, len(deployments))
+	for name, deployment := range deployments {
 		names = append(names, name)
+		deployment = deployment.WithDefaults()
+		if deployment.Managed() && deployment.Device == autoDevice && auto == "cpu" {
+			deployment.Device = "cpu"
+		}
+		resolved[name] = deployment
 	}
 	sort.Strings(names)
 	add := func(process, name string, deployment config.ModelDeployment) {
@@ -75,7 +84,7 @@ func planProcesses(deployments map[string]config.ModelDeployment, command []stri
 	}
 	var spread []string
 	for _, name := range names {
-		deployment := deployments[name].WithDefaults()
+		deployment := resolved[name]
 		if endpoint := strings.TrimSpace(deployment.Endpoint); endpoint != "" {
 			plan := attached[endpoint]
 			if plan == nil {
@@ -94,11 +103,13 @@ func planProcesses(deployments map[string]config.ModelDeployment, command []stri
 			add(deployment.Process, name, deployment)
 		case deployment.Device == "cpu":
 			spread = append(spread, name)
+		case deployment.Device == autoDevice && auto != "":
+			add(auto, name, deployment)
 		default:
 			add(deployment.Device, name, deployment)
 		}
 	}
-	spreadCPUModels(spread, deployments, cores, add)
+	spreadCPUModels(spread, resolved, cores, add)
 	shareCPUThreads(managed, cores)
 	plans := make([]*processPlan, 0, len(attached)+len(managed))
 	for _, plan := range managed {
