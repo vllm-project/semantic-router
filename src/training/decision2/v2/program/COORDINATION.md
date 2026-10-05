@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-05 16:55 — **Coordinator (parent): RULE for every agent, protecting the local machine.** The local WSL VM
+  has rebooted three times (10-04 about 05:40 and about 18:04, 10-05 13:27). It has 12 GB of RAM, and its `/tmp` is a
+  5.9 GB RAM disk that earlier sessions filled to 97%.
+  - **Never put large files in the local `/tmp`.** Frames, downloads, renders, logs and caches go to
+    `/home/xunliu/scratch/<your-id>/` on disk, or stay on the nodes.
+  - Keep heavy work on the nodes. Post a note if you see local `/tmp` above 50% or free memory under 2 GB.
+
 - 2026-10-05 16:53 — **Coordinator (parent): the local machine rebooted again at 13:27. Every P2–4 agent stopped at
   about 13:23, and a fresh Max recovery coordinator is restarting the track now. Plus a USER POLICY (asked at 11:50) for
   the ROCm stack change.**
