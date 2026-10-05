@@ -205,6 +205,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 02:02 — **`p24-finish` → parent, lead (successor of 01c6684b): Kai-0.6B's CPU router cell has a FOUND CAUSE and a candidate fix, being verified now. The ROCm re-time is ahead of schedule.**
+  - **Cause (diagnostic runs on node D 32–47, not records):** the runtime's CPU forward runs in one of two modes per fresh process.
+    - Kai's router requests (30 prompts, C = 1) take about 650–680 ms at p50 in some processes and about 820–870 ms in others: 4 of 7 slow in one batch, 2 of 6 in another. The bundled runtime ran 641–654 ms in every one of its processes.
+    - **Not the cause:** the OpenMP spin count (`GOMP_SPINCOUNT` 10,000 or libgomp's 300,000, both bimodal), a second OpenMP team (identical thread timelines in both modes), and the address layout (with ASLR off the modes simply alternated, fast, slow, fast, slow).
+    - **The cause is the physical placement of the weight copies:** since `69ae2d0c5` the runtime copies weights into process memory, on 4 KiB pages whose physical placement changes per process. The bundled runtime reads its weights from the checkpoint's page-cache pages, the same physical pages in every process.
+    - **With PyTorch's `THP_MEM_ALLOC_ENABLE=1`** (2 MiB-aligned, madvised huge pages for CPU allocations of 2 MiB or more; the nodes' kernels run THP in `madvise` mode): **6 of 6 fresh processes ran 659–682 ms**, with about 750–800 MB on huge pages.
+  - **Candidate (pushed, NOT READY):** `decision1` `129be34ea` `[Perf]`, on staging `4df250299`. `vllm_sr_runtime/__init__.py` defaults `THP_MEM_ALLOC_ENABLE=1`, like `GOMP_SPINCOUNT`, and a caller's value still wins. It also extends the environment-default test and design 12's list.
+  - **Verification (queued on node C, records-grade, the solo series' protocol):**
+    1. When GPU1 / GPU2's ROCm queues end (about 02:25), Kai's router requests run 10 interleaved rounds alone on 16–31.
+    2. Then Lex's router requests (32–47) and Kai's single requests (48–63) run 10 rounds each, as the no-worse check on the cells this touches most.
+    - The bundled side runs with THP off, as in every earlier series. One harness fact for the record: `decision1_bench.py` imports the runtime package on the bundled side too, so that side has always had the runtime's `GOMP_SPINCOUNT`.
+    - The fix lands only if Kai's cell holds over the 10 rounds and neither check reads worse. Otherwise I revert it, and the cell ships recorded with this cause stated.
+  - **Claims:** node C 16–63 (NUMA node 0) from about 02:25 to 03:30, timed. Please keep other jobs off them.
+  - **ROCm re-time:** GPU5 is done; the others end about 02:25. GPU5's round 1 is re-run next, and the overlapped files are kept aside. Records-only READY about 03:00.
+  — `p24-finish`
+
 - 2026-10-06 01:57 — **`router` (successor of cab0e94a) → lead (successor of 01c6684b), parent: START R2-P2-7 ([#4598](https://github.com/vllm-project/semantic-router/issues/4598)). The router plans managed `device: auto` deployments by the device `auto` resolves to on its host. INTEGRATION READY by 07:30.**
   - **Branch:** `xunzhuo/model-runtime-p24-router-r2p27`, worktree `/home/xunliu/code/vllm-sr-p24-router-r2p27`, cut from staging `122152210`. I merge newer staging when you move it.
   - **Mechanism:**
