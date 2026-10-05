@@ -28,7 +28,7 @@ from typing import Any
 
 from .accel.autotune import KernelChoices, freeze_autotune
 from .config import ModelConfig, ServeConfig
-from .errors import RuntimeServiceError
+from .errors import PackageError, RuntimeServiceError, VerificationError
 from .placement import Placement, device_kind, place
 from .plugins import registry
 from .plugins.base import (
@@ -362,7 +362,7 @@ class ServedModel:
             run_surface=self.golden_surface,
         )
         if self.health.golden.status == "failed":
-            raise RuntimeError(self.health.golden.detail or "golden check failed")
+            raise VerificationError(self.health.golden.detail or "golden check failed")
         if self.unpinned and self.health.golden.status == "matched":
             self.health.golden = replace(
                 self.health.golden, status="unverified", detail=self.unpinned
@@ -655,6 +655,7 @@ class Runtime:
             raise ValueError("served model names must be unique")
         self.health = ProcessHealth(self)
         self._thread: threading.Thread | None = None
+        self._stopping = threading.Event()
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -673,6 +674,7 @@ class Runtime:
         return self.health.ready
 
     def stop(self) -> None:
+        self._stopping.set()
         for served in self.served:
             served.stop()
 
@@ -685,15 +687,49 @@ class Runtime:
             self._ready_gauge()
 
     def _load_all(self) -> None:
+        """Load every model in order, then reload the ones that failed with back-off.
+
+        A model whose package or golden answers are wrong stays failed at
+        once. Any other failure (no device with enough free memory, a
+        download, a busy device) is retried ``load_attempts`` times in all,
+        waiting ``load_retry_seconds`` and doubling up to 300 s, while the
+        model reports ``loading``; the other models serve meanwhile.
+        """
         if self.config.autotune_cache:
             freeze_autotune(self.config.autotune_cache)
-        for served in self.served:
-            try:
-                served.load()
-            except Exception as exc:
-                log.error("loading %s failed: %s", served.label, exc)
-                served.health.set("failed", f"{type(exc).__name__}: {exc}")
-            self._ready_gauge()
+        pending = list(self.served)
+        attempts = max(1, self.config.load_attempts)
+        for attempt in range(1, attempts + 1):
+            retry = []
+            for served in pending:
+                if self._stopping.is_set():
+                    return
+                try:
+                    served.load()
+                except (PackageError, VerificationError) as exc:
+                    log.error("loading %s failed: %s", served.label, exc)
+                    served.health.set("failed", f"{type(exc).__name__}: {exc}")
+                except Exception as exc:
+                    failure = f"{type(exc).__name__}: {exc}"
+                    if attempt == attempts:
+                        log.error("loading %s failed: %s", served.label, failure)
+                        served.health.set("failed", failure)
+                    else:
+                        log.warning(
+                            "loading %s failed, retrying: %s", served.label, failure
+                        )
+                        served.health.set(
+                            "loading",
+                            f"retrying after {failure} (attempt {attempt} of {attempts})",
+                        )
+                        retry.append(served)
+                self._ready_gauge()
+            if not retry:
+                return
+            delay = min(self.config.load_retry_seconds * 2 ** (attempt - 1), 300.0)
+            if self._stopping.wait(delay):
+                return
+            pending = retry
 
     def _ready_gauge(self) -> None:
         self.metrics.ready.set(1 if self.health.ready else 0)
