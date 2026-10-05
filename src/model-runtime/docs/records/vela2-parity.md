@@ -183,9 +183,25 @@ Questions whose decision equals the release image's, per answer type:
   image's own MATH-attention run shows, which is why the shipped image moved
   to the release's PyTorch.
 - **Span quality on that stack (B) against the release image (R)** showed no
-  measurable change on Hallucination, RAGTruth, PII and toxic-span sets
-  (paired 95% intervals): every B − R interval contains 0 except one in B's
-  favour, and no move is larger than 0.3 points.
+  measurable change: every B − R interval contains 0 except the 4B's PII
+  short texts (in B's favour), and no move is larger than 0.3 points. Both
+  images ran the runtime's `exact` profile on the same rows; the sets are
+  rebuilt from public data (Hallucination: LettuceDetect prose and code
+  test; PII: ai4privacy 300k validation, English, mapped to the 17 types;
+  toxic: SemEval-2021 test). Hallucination and RAGTruth reproduce the card
+  within 0.1 points; PII and toxic don't (other label conventions), so read
+  those rows as paired B − R only. B − R is in points, with paired bootstrap
+  95% intervals (2,000 replicates):
+
+| Set (metric) | 4B R | 4B B − R | 9B R | 9B B − R |
+| --- | --- | --- | --- | --- |
+| Hallucination, 10,698 (example F1) | 0.875 | +0.00 [−0.05, +0.06] | 0.886 | −0.02 [−0.06, +0.02] |
+| RAGTruth, 2,700 (example F1) | 0.770 | +0.04 [−0.26, +0.35] | 0.775 | −0.07 [−0.19, +0.00] |
+| PII short, 2,000 (entity F1) | 0.564 | +0.10 [+0.01, +0.18] | 0.530 | +0.00 [−0.11, +0.11] |
+| PII 4K, 200 (entity F1) | 0.387 | +0.04 [−0.03, +0.10] | 0.412 | +0.01 [−0.05, +0.06] |
+| PII 8K, 200 (entity F1) | 0.377 | −0.03 [−0.07, +0.02] | 0.405 | −0.01 [−0.05, +0.03] |
+| Toxic spans, 1,000 (char F1) | 0.216 | −0.21 [−0.52, +0.04] | 0.196 | +0.01 [−0.02, +0.05] |
+
 - **Two models in one process (P1-4):** the 4B and the 9B in one `Runtime`,
   in both load orders, answer 60 / 60 requests identically to each one's
   engine and to its single-package run.
