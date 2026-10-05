@@ -2,7 +2,6 @@ package modelservice
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -22,12 +21,10 @@ type ClassifyInput struct {
 	Answer   string
 }
 
-// Window asks for overlapping windows: Tokens includes special tokens,
-// Overlap counts content tokens shared by neighbouring windows.
-type Window struct {
-	Tokens  int
-	Overlap int
-}
+// Window is a head's declared windows, or the overlapping windows a classify
+// request asks for: Tokens includes special tokens, Overlap counts content
+// tokens shared by neighbouring windows.
+type Window = api.HeadWindow
 
 // ClassifyRequest runs one head of a model over its inputs.
 type ClassifyRequest struct {
@@ -41,21 +38,11 @@ type ClassifyRequest struct {
 
 // Span is a labelled span. Start and End are Unicode code points into the
 // text the head read (End exclusive); callers convert them once.
-type Span struct {
-	Label       string
-	Start       int
-	End         int
-	Text        string
-	Probability float64
-}
+type Span = api.Span
 
-// InputUsage holds one input's tokenizer facts, including special tokens.
-type InputUsage struct {
-	Tokens          int
-	ProcessedTokens int
-	Truncated       bool
-	Windows         int
-}
+// InputUsage holds one input's tokenizer facts, including special tokens;
+// Windows is set only for an input read in windows.
+type InputUsage = api.InputUsage
 
 // ClassifyWindow is one window of a windowed input, in content-token offsets.
 type ClassifyWindow struct {
@@ -106,24 +93,13 @@ type EmbedRequest struct {
 	MaxTokens  int
 }
 
-// Representation identifies an embedding space; vectors of different
-// representations never mix.
-type Representation struct {
-	ModelSHA256 string
-	Layer       int
-	Dimension   int
-	Normalized  bool
-	Modality    string
-}
-
 // EmbedResponse holds one vector per input; Errors[i] is set when input i failed.
 type EmbedResponse struct {
-	Model          string
-	Embeddings     [][]float32
-	Inputs         []*InputUsage
-	Errors         []string
-	Representation *Representation
-	PromptTokens   int
+	Model        string
+	Embeddings   [][]float32
+	Inputs       []*InputUsage
+	Errors       []string
+	PromptTokens int
 }
 
 // RerankRequest scores documents against a query at an optional pair-scorer exit.
@@ -288,15 +264,6 @@ func optionalInt(value int) *int {
 	return &value
 }
 
-// classifyItem is the object form of a classify input (ClassifyItem in openapi.yaml).
-type classifyItem struct {
-	Text     *string `json:"text,omitempty"`
-	TextPair *string `json:"text_pair,omitempty"`
-	Context  *string `json:"context,omitempty"`
-	Question *string `json:"question,omitempty"`
-	Answer   *string `json:"answer,omitempty"`
-}
-
 func encodeClassify(ctx context.Context, model string, request ClassifyRequest) (api.ClassifyRequest, error) {
 	if len(request.Inputs) == 0 {
 		return api.ClassifyRequest{}, fmt.Errorf("%w: classify needs at least one input", ErrRejected)
@@ -305,12 +272,16 @@ func encodeClassify(ctx context.Context, model string, request ClassifyRequest) 
 	if err != nil {
 		return api.ClassifyRequest{}, err
 	}
-	inputs := make([]classifyItem, len(request.Inputs))
+	items := make(api.ClassifyItemList, len(request.Inputs))
 	for index, input := range request.Inputs {
-		inputs[index] = classifyItem{
+		items[index] = api.ClassifyItem{
 			Text: optionalString(input.Text), TextPair: optionalString(input.TextPair),
 			Context: optionalString(input.Context), Question: optionalString(input.Question), Answer: optionalString(input.Answer),
 		}
+	}
+	var inputs api.ClassifyInput
+	if err := inputs.FromClassifyItemList(items); err != nil {
+		return api.ClassifyRequest{}, fmt.Errorf("%w: %w", ErrRejected, err)
 	}
 	options := api.ClassifyOptions{DeadlineMs: deadline, MaxTokens: optionalInt(request.MaxTokens), Threshold: request.Threshold}
 	if request.Overflow != "" {
@@ -332,16 +303,22 @@ func encodeEmbed(ctx context.Context, model string, request EmbedRequest) (api.E
 	if err != nil {
 		return api.EmbeddingsRequest{}, err
 	}
-	inputs := make([]map[string]interface{}, len(request.Inputs))
+	parts := make(api.ContentPartList, len(request.Inputs))
 	for index, input := range request.Inputs {
 		switch {
 		case input.ImageURL != "":
-			inputs[index] = map[string]interface{}{"type": "image_url", "image_url": map[string]string{"url": input.ImageURL}}
+			parts[index] = api.ContentPart{Type: api.ImageUrl, ImageUrl: &api.ImagePart{Url: input.ImageURL}}
 		case input.AudioWAV != "":
-			inputs[index] = map[string]interface{}{"type": "input_audio", "input_audio": map[string]string{"data": input.AudioWAV, "format": "wav"}}
+			format := "wav"
+			parts[index] = api.ContentPart{Type: api.InputAudio, InputAudio: &api.AudioPart{Data: input.AudioWAV, Format: &format}}
 		default:
-			inputs[index] = map[string]interface{}{"type": "text", "text": input.Text}
+			text := input.Text
+			parts[index] = api.ContentPart{Type: api.Text, Text: &text}
 		}
+	}
+	var inputs api.EmbeddingsInput
+	if err := inputs.FromContentPartList(parts); err != nil {
+		return api.EmbeddingsRequest{}, fmt.Errorf("%w: %w", ErrRejected, err)
 	}
 	options := api.EmbeddingsOptions{DeadlineMs: deadline, MaxTokens: optionalInt(request.MaxTokens)}
 	if request.Overflow != "" {
@@ -368,26 +345,15 @@ func encodeRerank(ctx context.Context, model string, request RerankRequest) (api
 	if err != nil {
 		return api.RerankRequest{}, err
 	}
-	options := api.EmbeddingsOptions{DeadlineMs: deadline, MaxTokens: optionalInt(request.MaxTokens)}
+	options := api.RerankOptions{DeadlineMs: deadline, MaxTokens: optionalInt(request.MaxTokens)}
 	if request.Overflow != "" {
-		overflow := api.EmbeddingsOptionsOverflow(request.Overflow)
+		overflow := api.RerankOptionsOverflow(request.Overflow)
 		options.Overflow = &overflow
 	}
 	return api.RerankRequest{
 		Model: optionalString(model), Query: request.Query, Documents: request.Documents,
 		Layer: optionalInt(request.Layer), Dimensions: optionalInt(request.Dimensions), Options: &options,
 	}, nil
-}
-
-func decodeUsage(usage *api.InputUsage) *InputUsage {
-	if usage == nil {
-		return nil
-	}
-	decoded := &InputUsage{Tokens: usage.Tokens, ProcessedTokens: usage.ProcessedTokens, Truncated: usage.Truncated}
-	if usage.Windows != nil {
-		decoded.Windows = *usage.Windows
-	}
-	return decoded
 }
 
 func floats(values *[]float64) []float64 {
@@ -411,7 +377,7 @@ func finite(values ...[]float64) bool {
 func decodeClassify(body api.ClassifyResponse) ClassifyResponse {
 	decoded := ClassifyResponse{Model: body.Model, Head: body.Head, Kind: string(body.Kind), Labels: body.Labels, InputTokens: body.Usage.InputTokens}
 	for _, result := range body.Results {
-		item := ClassifyResult{Index: result.Index, Probabilities: floats(result.Probabilities), Scores: floats(result.Scores), Input: decodeUsage(result.Input)}
+		item := ClassifyResult{Index: result.Index, Probabilities: floats(result.Probabilities), Scores: floats(result.Scores), Input: result.Input}
 		if result.Error != nil {
 			item.Error = string(*result.Error)
 			decoded.Results = append(decoded.Results, item)
@@ -424,9 +390,7 @@ func decodeClassify(body api.ClassifyResponse) ClassifyResponse {
 			item.Selected = append([]string(nil), (*result.Selected)...)
 		}
 		if result.Spans != nil {
-			for _, span := range *result.Spans {
-				item.Spans = append(item.Spans, Span{Label: span.Label, Start: span.Start, End: span.End, Text: span.Text, Probability: span.Probability})
-			}
+			item.Spans = append([]Span(nil), (*result.Spans)...)
 		}
 		if result.Windows != nil {
 			for _, window := range *result.Windows {
@@ -456,21 +420,11 @@ func decodeEmbed(body api.EmbeddingsResponse) (EmbedResponse, error) {
 		Errors:       make([]string, len(body.Data)),
 		PromptTokens: body.Usage.PromptTokens,
 	}
-	if body.Meta != nil && body.Meta.Representation != nil {
-		representation := body.Meta.Representation
-		decoded.Representation = &Representation{ModelSHA256: representation.ModelSha256, Layer: representation.Layer, Dimension: representation.Dimension}
-		if representation.Normalized != nil {
-			decoded.Representation.Normalized = *representation.Normalized
-		}
-		if representation.Modality != nil {
-			decoded.Representation.Modality = *representation.Modality
-		}
-	}
 	for _, item := range body.Data {
 		if item.Index < 0 || item.Index >= len(body.Data) {
 			return EmbedResponse{}, fmt.Errorf("%w: embedding index %d is out of range", ErrFailed, item.Index)
 		}
-		decoded.Inputs[item.Index] = decodeUsage(item.Input)
+		decoded.Inputs[item.Index] = item.Input
 		if item.Error != nil {
 			decoded.Errors[item.Index] = string(*item.Error)
 			continue
@@ -488,31 +442,27 @@ func decodeEmbed(body api.EmbeddingsResponse) (EmbedResponse, error) {
 }
 
 // decodeVector reads a float list or a base64 string of little-endian float32 values.
-func decodeVector(value interface{}) ([]float32, error) {
-	switch typed := value.(type) {
-	case string:
-		raw, err := base64.StdEncoding.DecodeString(typed)
-		if err != nil || len(raw)%4 != 0 {
-			return nil, fmt.Errorf("%w: embedding is not base64 float32", ErrFailed)
-		}
-		vector := make([]float32, len(raw)/4)
-		for index := range vector {
-			vector[index] = math.Float32frombits(binary.LittleEndian.Uint32(raw[index*4:]))
-		}
-		return checkVector(vector)
-	case []interface{}:
-		vector := make([]float32, len(typed))
-		for index, element := range typed {
-			number, ok := element.(float64)
-			if !ok {
-				return nil, fmt.Errorf("%w: embedding holds a non-number", ErrFailed)
-			}
-			vector[index] = float32(number)
-		}
-		return checkVector(vector)
-	default:
+func decodeVector(value api.EmbeddingVector) ([]float32, error) {
+	raw, err := value.MarshalJSON()
+	if err != nil || len(raw) == 0 {
 		return nil, fmt.Errorf("%w: embedding has an unknown encoding", ErrFailed)
 	}
+	if raw[0] != '"' {
+		vector, err := value.AsFloatVector()
+		if err != nil {
+			return nil, fmt.Errorf("%w: embedding holds a non-number", ErrFailed)
+		}
+		return checkVector(vector)
+	}
+	packed, err := value.AsBase64Vector()
+	if err != nil || len(packed)%4 != 0 {
+		return nil, fmt.Errorf("%w: embedding is not base64 float32", ErrFailed)
+	}
+	vector := make([]float32, len(packed)/4)
+	for index := range vector {
+		vector[index] = math.Float32frombits(binary.LittleEndian.Uint32(packed[index*4:]))
+	}
+	return checkVector(vector)
 }
 
 func checkVector(vector []float32) ([]float32, error) {
@@ -535,7 +485,7 @@ func decodeRerank(body api.RerankResponse, documents int) (RerankResponse, error
 			return RerankResponse{}, fmt.Errorf("%w: rerank result index %d is invalid", ErrFailed, result.Index)
 		}
 		seen[result.Index] = true
-		item := RerankResult{Index: result.Index, Input: decodeUsage(result.Input)}
+		item := RerankResult{Index: result.Index, Input: result.Input}
 		switch {
 		case result.Error != nil:
 			item.Error = string(*result.Error)

@@ -39,12 +39,6 @@ type deploymentPlanner interface {
 	Ensure(name string, deployment config.ModelDeployment) error
 }
 
-// remoteModel stands for a model served by a runtime process. The process
-// owns the weights; the reference shares only the deployment's admission gate.
-type remoteModel struct{}
-
-func (remoteModel) Close() error { return nil }
-
 // prepareHead resolves a classify binding: the deployment's card must serve
 // classify with a head of the wanted kind that accepts the input form.
 func (r *Runtime) prepareHead(ctx context.Context, spec config.ResolvedModelBinding, kind, input string) (*target, binding.Capability, error) {
@@ -70,7 +64,7 @@ func (r *Runtime) prepareHead(ctx context.Context, spec config.ResolvedModelBind
 		return nil, binding.Capability{}, err
 	}
 	capability := binding.Capability{
-		Contract: spec.Binding.Contract, Provider: Provider, Device: card.Device, Precision: precision(card),
+		Contract: spec.Binding.Contract, Provider: Provider, Device: card.Device, Precision: card.Dtype,
 		Labels: slices.Clone(head.Labels),
 		Limits: binding.Limits{ModelTokens: card.MaxInputTokens, DeploymentTokens: spec.Deployment.Input.MaxTokens, Overflow: spec.Deployment.Input.Overflow},
 	}
@@ -123,25 +117,26 @@ func (r *Runtime) card(ctx context.Context, spec config.ResolvedModelBinding) (m
 	return card, nil
 }
 
-// acquire takes a pool reference for the deployment. Bindings of one
-// deployment share one admission gate, keyed by the served model's identity
-// so a changed model never inherits the gate of the model it replaced.
+// acquire takes the deployment's admission gate; the runtime process owns
+// the model. Bindings of one deployment share one gate, keyed by the served
+// model's identity so a changed model never inherits the gate of the model it
+// replaced.
 func (r *Runtime) acquire(ctx context.Context, spec config.ResolvedModelBinding, card modelservice.ModelCard) (*binding.Resource, error) {
+	if card.Device == "" || card.Dtype == "" {
+		return nil, fmt.Errorf("%w: the card of deployment %q reports no device or dtype", binding.ErrCapability, spec.Binding.Deployment)
+	}
 	execution, _ := json.Marshal(struct {
 		Deployment, Model, Profile string
 	}{spec.Binding.Deployment, card.ID, card.Profile})
 	identity := binding.ResourceIdentity{
 		Artifact: card.ModelSHA256, Revision: card.Revision, Provider: Provider,
-		Device: card.Device, Precision: precision(card), Execution: string(execution),
+		Device: card.Device, Precision: card.Dtype, Execution: string(execution),
 	}
 	if identity.Artifact == "" {
 		identity.Artifact = card.ID
 	}
-	if identity.Device == "" {
-		identity.Device = "unknown"
-	}
 	budget, gate := resourceAdmission(spec)
-	return r.Pool.Acquire(ctx, identity, budget, gate, func(context.Context) (io.Closer, error) { return remoteModel{}, nil })
+	return r.Pool.Admit(ctx, identity, budget, gate)
 }
 
 func resourceAdmission(spec config.ResolvedModelBinding) (string, admission.Admissioner) {
@@ -150,13 +145,6 @@ func resourceAdmission(spec config.ResolvedModelBinding) (string, admission.Admi
 		return string(data), admission.Noop{}
 	}
 	return string(data), admission.NewSemaphore(spec.Admission.MaxConcurrency, spec.Admission.MaxQueue, time.Duration(spec.Admission.QueueTimeoutMs)*time.Millisecond, admission.Overflow(spec.Admission.OnOverflow))
-}
-
-func precision(card modelservice.ModelCard) string {
-	if card.Dtype != "" {
-		return card.Dtype
-	}
-	return "native"
 }
 
 // publish resolves a prepared task, runs one warmup call through the whole

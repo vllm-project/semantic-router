@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from cli.config_migration import migrate_config_data  # noqa: E402
 from cli.config_migration_model_runtime import runtime_device  # noqa: E402
 from cli.config_migration_notes import MigrationNotes  # noqa: E402
+from cli.model_runtime_retired import retired_model_fields  # noqa: E402
 from cli.main import main  # noqa: E402
 
 REMOVED_FIELDS = {"precision", "custom_ops_profile", "compilation_cache_dir"}
@@ -430,34 +431,83 @@ def test_local_hallucination_detector_loses_nli_and_the_explainer_retires():
         assert f"global.model_catalog.modules.hallucination_mitigation.{field}" in paths
 
 
-def test_endpoint_hallucination_detector_is_left_to_its_service():
-    detector = {
-        "backend": "endpoint",
-        "endpoint": "http://127.0.0.1:8077/v1",
-        "include_explanation": True,
-        "model_id": "KRLabsOrg/lettucedect-v2-qwen-2b",
-    }
-    migrated, notes = _migrate(
-        _config(
-            {
-                "model_catalog": {
-                    "modules": {
-                        "hallucination_mitigation": {
-                            "detector": {**detector, "enable_nli_filtering": True}
-                        }
-                    }
+def _endpoint_config(endpoint, bindings=None):
+    catalog = {
+        "modules": {
+            "hallucination_mitigation": {
+                "detector": {
+                    "backend": "endpoint",
+                    "endpoint": endpoint,
+                    "include_explanation": True,
+                    "model_id": "KRLabsOrg/lettucedect-v2-qwen-2b",
+                    "enable_nli_filtering": True,
                 }
             }
+        }
+    }
+    if bindings is not None:
+        catalog["bindings"] = bindings
+    return _config({"model_catalog": catalog})
+
+
+def test_endpoint_hallucination_detector_becomes_an_http_chat_binding():
+    migrated, notes = _migrate(_endpoint_config("http://detector.example:8077/v1/"))
+
+    catalog = _catalog(migrated)
+    assert catalog["modules"]["hallucination_mitigation"]["detector"] == {
+        "include_explanation": True
+    }
+    assert catalog["external"] == [
+        {
+            "name": "hallucination-detector",
+            "model_role": "classification",
+            "llm_endpoint": {
+                "address": "detector.example",
+                "port": 8077,
+                "protocol": "http",
+            },
+            "llm_model_name": "KRLabsOrg/lettucedect-v2-qwen-2b",
+            "llm_timeout_seconds": 10,
+        }
+    ]
+    assert catalog["deployments"]["hallucination-detector"] == {
+        "provider": "http",
+        "external_model": "hallucination-detector",
+    }
+    assert catalog["bindings"]["hallucination_detector"] == {
+        "deployment": "hallucination-detector",
+        "contract": "token_spans.v1",
+        "adapter": "http_chat",
+    }
+    detector = "global.model_catalog.modules.hallucination_mitigation.detector"
+    assert {detector + ".backend", detector + ".enable_nli_filtering"} <= _note_paths(
+        notes
+    )
+    assert retired_model_fields(migrated) == []
+
+
+def test_endpoint_on_another_path_needs_a_hand_written_binding():
+    with pytest.raises(ValueError, match="/v1/chat/completions"):
+        _migrate(_endpoint_config("http://detector.example:8077/detect"))
+
+
+def test_an_existing_detector_binding_wins_over_the_endpoint_shorthand():
+    binding = {
+        "deployment": "grounding",
+        "contract": "token_spans.v1",
+        "adapter": "http_classify",
+    }
+    migrated, _ = _migrate(
+        _endpoint_config(
+            "http://detector.example:8077/v1", {"hallucination_detector": binding}
         )
     )
 
-    assert (
-        _catalog(migrated)["modules"]["hallucination_mitigation"]["detector"]
-        == detector
-    )
-    assert _note_paths(notes) == {
-        "global.model_catalog.modules.hallucination_mitigation.detector"
-        ".enable_nli_filtering"
+    catalog = _catalog(migrated)
+    assert catalog["bindings"] == {"hallucination_detector": binding}
+    assert "external" not in catalog
+    assert catalog["modules"]["hallucination_mitigation"]["detector"] == {
+        "include_explanation": True
     }
 
 

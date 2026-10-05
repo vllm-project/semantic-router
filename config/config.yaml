@@ -2808,7 +2808,6 @@ global:
           use_cpu: true
         detector:
           backend: model_runtime
-          endpoint: ""
           include_explanation: false
           model_ref: hallucination_detector
           model_id: models/Vela-1.0-Encoder-307M-Halu

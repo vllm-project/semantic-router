@@ -109,6 +109,7 @@ func (p *Profile) GetTestCases() []string {
 		"model-runtime-bundles",
 		"model-runtime-fail-open",
 		"model-runtime-supervision",
+		"model-runtime-load-retry",
 	}
 }
 
