@@ -205,6 +205,36 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 00:42 — **USER (00:38): SCOPE CHANGE FOR #4512. Seven follow-ups fold into this PR, and the final push
+  moves from 03:00 to about 10:00 (CI green about 14:30). Parent → lead (successor of 01c6684b), `router`,
+  `p24-finish`, `vela2-08b`, all P2–4 workstreams.** The user chose this after the parent's analysis: these items were
+  split off only to make 03:00, and this PR introduces the 2.0.0 runtime contract and removes the runtimes that the
+  stale contracts still name.
+  - **Folded in, with owners:**
+    - R2-P2-9 (`Health.status` mixes liveness with readiness), R2-P2-2 (the training contract advertises Candle and
+      ONNX Runtime) and the R2-P2-1 remainder (the retired `gemma_model_path` / `bert_model_path` keys): new agent
+      **`contracts`**, launched now. It works from the drafts in the lead's follow-up list and in `router`'s R2-P2-1
+      draft.
+    - R2-P2-10 (built-ins registered through the same entry points as third parties) and R2-P2-11 (decision hooks out
+      of the generic base): new agent **`runtime-arch`**, launched when `vela2-08b` finishes (about 02:15). It is cut
+      from staging after `embed`'s READY merges, because both touch `plugins/base.py`, `registry/builtin.py` and
+      `runtime.py`. **Lead:** please merge `embed`'s READY promptly when it lands.
+    - R2-P2-7 (managed `device: auto` deployments share one process on a CPU-only host): **`router`**, which owns
+      process planning, after its current rows. `router`, please confirm.
+    - Decoder ROCm rows re-timed in `a580be6b9`, replacing the `af71d5e82` rows: **`p24-finish`** after `embed`'s
+      READY. **Lead:** please name the rows and the GPUs.
+  - **Still follow-up issues (opened at the final push):** R2-P2-12 (mypy scope), slimming the image (35.3 GB), and the
+    upstream Triton ROCm report. The Rust runtime and the reasoning model are separate tracks.
+  - **Proposed schedule (lead decides):**
+    - The new items post INTEGRATION READY by 07:30.
+    - The existing items keep their deadlines, but may run until 05:00 if that buys quality (for example, closing
+      `embed`'s open cell properly instead of recording it).
+    - The lead integrates and runs node checks 07:30–09:30, then the final push at about 10:00.
+    - The PR body drops the folded items from its follow-ups.
+  - **Unchanged:** any golden or parity change stops the item and goes to the lead and the parent.
+  - **Quota:** lead, `router`, `vela2-08b`, `p24-finish` and `contracts` make five. `runtime-arch` takes
+    `vela2-08b`'s slot.
+
 - 2026-10-06 00:36 — **`p24-finish` (successor of `decision1` 4fe5617f and `embed` fc6fcbfa) → lead (successor of 01c6684b), parent: INTEGRATION READY decision1 `4acef6ae7`** (`xunzhuo/model-runtime-p24-decision1`, pushed, clean; contains staging `58cbe432e`). **On the adopted image the PR's runtime is byte-identical to the Decision 1.0 release on every check. One CPU cell is worse and open: Kai's router requests.**
   - **What it adds over `2e0a87467`:** the merge with staging adds no runtime-package code, because staging already carries `decision1`'s device lock (`873bf178f` = `c3606cf8c`) and decoder thread-local capture (`607850d59` = `f25dae5dd`). The branch adds:
     - `[Docs]` design 11: the kernel-choice routing "takes no lock of its own (a GPU's device calls are serialized, §9)". Staging still says "there is no lock", which contradicts its own `accel/gpu.py`.
