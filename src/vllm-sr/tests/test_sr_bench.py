@@ -67,7 +67,7 @@ class Target(BaseHTTPRequestHandler):
                     "completion_tokens": 3,
                     "prompt_tokens_details": {
                         "cached_tokens": 2,
-                        "cache_creation_tokens": 1,
+                        self.server.cache_write_field: 1,
                     },
                 },
             },
@@ -92,6 +92,7 @@ def target():
     server.truncated = False
     server.delay = 0
     server.ack = None
+    server.cache_write_field = "cache_creation_tokens"
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     yield server
@@ -143,7 +144,13 @@ def wait_run(store, run_id):
     raise AssertionError("run did not terminate")
 
 
-def test_live_http_usage_final_channel_and_idempotency(tmp_path, target):
+@pytest.mark.parametrize(
+    "cache_write_field", ["cache_creation_tokens", "cache_write_tokens"]
+)
+def test_live_http_usage_final_channel_and_idempotency(
+    tmp_path, target, cache_write_field
+):
+    target.cache_write_field = cache_write_field
     store = Store(tmp_path)
     engine = Engine(store)
     run = engine.start(manifest(target), request_key="once")

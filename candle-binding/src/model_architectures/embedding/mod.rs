@@ -20,7 +20,7 @@
 //! ## References
 //! - Qwen3-Embedding: https://github.com/qwenlm/qwen3-embedding
 //! - GemmaEmbedding: https://huggingface.co/google/embeddinggemma-300m
-//! - mmBERT-Embedding: https://huggingface.co/llm-semantic-router/mmbert-embed-32k-2d-matryoshka
+//! - mmBERT-Embedding: https://huggingface.co/vllm-sr/mmbert-embed-32k-2d-matryoshka
 //! - TEI Qwen3: backends/candle/src/models/qwen3.rs
 //! - TEI Gemma3: backends/candle/src/models/gemma3.rs
 

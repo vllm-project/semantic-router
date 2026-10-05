@@ -325,7 +325,7 @@ const config: Config = {
             },
             {
               label: 'Hugging Face',
-              href: 'https://huggingface.co/LLM-Semantic-Router',
+              href: 'https://huggingface.co/vllm-sr',
             },
             {
               label: 'Discussions',
@@ -374,7 +374,7 @@ const config: Config = {
             },
             {
               label: 'Hugging Face',
-              href: 'https://huggingface.co/LLM-Semantic-Router',
+              href: 'https://huggingface.co/vllm-sr',
             },
             {
               label: 'GitHub Discussions',

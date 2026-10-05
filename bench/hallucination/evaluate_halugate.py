@@ -19,8 +19,8 @@ from transformers import (
     AutoTokenizer,
 )
 
-SENTINEL = "llm-semantic-router/halugate-sentinel"
-DETECTOR = "llm-semantic-router/modernbert-base-32k-haldetect-combined"
+SENTINEL = "vllm-sr/halugate-sentinel"
+DETECTOR = "vllm-sr/modernbert-base-32k-haldetect-combined"
 
 
 def answer_token_probs(tok, model, device, context, question, answer):

@@ -77,6 +77,19 @@ Do not interpret a store or binding comparison as an end-to-end routing result.
 Network placement, warmup, dataset shape, model files, and host contention can
 change the outcome.
 
+## Run status and exit codes
+
+`vllm-sr benchmark run` and `vllm-sr benchmark preview` poll the run until it reaches a terminal state — completed, failed, cancelled, or interrupted — print the report, and then exit:
+
+- `0` — the run completed.
+- `2` — the run reached a terminal state other than completed.
+
+`preview` inspects routing decisions without producing quality scores; `run` produces the full quality report. Both use the same status and exit-code contract.
+
+Exit code `2` conventionally signals a usage error, so automation that only checks for a non-zero exit misreads a failed run as CLI misuse. Check for `2` explicitly when a script needs to tell the two apart.
+
+`--detach` opts out of this contract: the command returns immediately with the durable run ID before the run reaches a terminal state, so there is no exit code to interpret. Use `vllm-sr benchmark runs` to inspect detached runs and `vllm-sr benchmark cancel` to stop one.
+
 ## Reporting results
 
 For any number intended to guide a deployment or public claim, record:
