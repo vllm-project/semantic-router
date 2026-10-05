@@ -14,7 +14,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("model-runtime-long-history", pkgtestcases.TestCase{
-		Description: "A conversation whose history gives one process more tasks than a runtime takes in one bundle by default is answered with no task refused; the Router's managed runtimes take every history piece in one bundle, and the PII signal over the whole history follows the runtime's spans",
+		Description: "A conversation whose history gives one process more tasks than a runtime takes in one bundle by default is answered with no task refused; the Router's managed runtimes advertise a bundle cap that holds every history piece and take them in one bundle, and the PII signal over the whole history follows the runtime's spans",
 		Tags:        []string{"model-runtime", "bundles", "pii", "history"},
 		Fn:          testModelRuntimeLongHistory,
 	})
@@ -81,6 +81,13 @@ func testModelRuntimeLongHistory(ctx context.Context, client *kubernetes.Clients
 
 	// How the Router's flushes group a stage depends on timing, so one bundle
 	// of every piece checks the cap the Router starts its runtimes with.
+	served, err := pii.Models(ctx)
+	if err != nil {
+		return err
+	}
+	if served.Limits == nil || served.Limits.MaxBundleTasks < len(pieces) {
+		return fmt.Errorf("%s advertises limits %+v; a managed process must take the %d pieces in one bundle", socket, served.Limits, len(pieces))
+	}
 	threshold := mrSignalThreshold
 	options := &modelruntime.ClassifyOptions{
 		Overflow: "window", MaxTokens: mrWindowBudget, Threshold: &threshold,
@@ -116,7 +123,7 @@ func testModelRuntimeLongHistory(ctx context.Context, client *kubernetes.Clients
 		opts.SetDetails(map[string]interface{}{
 			"pii_pieces": len(pieces), "pieces_with_spans": withSpans, "router_bundles": bundles,
 			"router_bundled_tasks": routed, "direct_bundle_tasks": len(tasks),
-			"decision": response.Headers.Get("x-vsr-selected-decision"),
+			"advertised_max_bundle_tasks": served.Limits.MaxBundleTasks, "decision": response.Headers.Get("x-vsr-selected-decision"),
 		})
 	}
 	return nil
