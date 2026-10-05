@@ -1,8 +1,8 @@
 """The Vela 2.0 model family (Phase 3).
 
 ``vela2-unified`` (0.3B: the Vela 307M ModernBERT encoder with eight marker
-tokens) and ``vela2-decoder`` (4B, 9B: a Qwen3.5 backbone read as a tree,
-one block per question) answer Choice, Noul, Score, Set and Span questions
+tokens) and ``vela2-decoder`` (0.8B, 4B, 9B: a Qwen3.5 backbone read as a
+tree, one block per question) answer Choice, Noul, Score, Set and Span questions
 over typed parts on ``/v1/decisions``, in the shape of the packages' own
 System One server. The family reimplements the packages' engine
 (``vela2_inference.py``); it never imports it.
@@ -326,7 +326,7 @@ class Vela2Model(LoadedModel):
         )
 
     def shared_context(self, items: list[Any], token_budget: int | None) -> int:
-        """The 4B / 9B trees always pack on the shared-context path; the 0.3B has one exact path."""
+        """The decoder trees always pack on the shared-context path; the 0.3B has one exact path."""
         return 1 if isinstance(self.member, DecoderMember) and items else 0
 
     def run(self, items: list[Any]) -> list[Any]:
@@ -334,11 +334,11 @@ class Vela2Model(LoadedModel):
         return self.member.run(items, packed=False)
 
     def run_shared(self, items: list[Any], shared_prefix: int) -> list[Any]:
-        """The shared-context path packs the 4B / 9B trees."""
+        """The shared-context path packs the decoder trees."""
         return self.member.run(items, packed=True)
 
     def run_approximate(self, items: list[Any]) -> list[Any]:
-        """Approximate batches run packed: 4B / 9B trees, and 0.3B sequences on the engine's
+        """Approximate batches run packed: decoder trees, and 0.3B sequences on the engine's
         reduced copy where it loaded one (``max_speed`` and the package's consent)."""
         if isinstance(self.member, EncoderMember):
             return self.member.run(items, packed=True, reduced=True)

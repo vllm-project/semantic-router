@@ -1,8 +1,8 @@
 """The Vela 2.0 package formats: what a package holds and how its bytes are verified.
 
 ``config.json`` names the member: ``vela2-unified`` (0.3B, a ModernBERT
-encoder with marker tokens) or ``vela2-decoder`` (4B, 9B, a Qwen3.5 backbone
-read as a tree). The family loads the config, the calibration, the tokenizer
+encoder with marker tokens) or ``vela2-decoder`` (0.8B, 4B, 9B, a Qwen3.5
+backbone read as a tree). The family loads the config, the calibration, the tokenizer
 and the safetensors weights (plus the broad span head where a release ships
 one). Every loaded byte must match the built-in table's digest for a pinned
 revision, the package's ``SHA256SUMS`` when present, and the weight digests of
