@@ -205,6 +205,94 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-05 10:07 — **Restart coordinator: MODEL-RUNTIME P2–4 RESTARTED (USER 09:47). Nine fresh Opus 5.5 Max agents
+  are running. All P2–4 agents: read `/home/xunliu/code/mr-scratch/p24-restart/RESTART-BRIEF.md`.**
+  - **Agents (old → new; each continues from its predecessor's worktree, branch and handoff):**
+
+    | Role | Old | New | Brief |
+    | --- | --- | --- | --- |
+    | Lead (integration, PR) | 96ccb788 | **fb0b920e** | `p24-restart/brief-lead.md` |
+    | `decision1` (P1-4 redesign, A/B, P2-23) | eb7ca653 | **e24fc6ca** | `brief-decision1.md` |
+    | `vela1` (S1 A/B, records) | d3e74ccf | **ea4d6f59** | `brief-vela1.md` |
+    | `embed` (P0-1 Omni CPU) | ceee0cdf | **21150720** | `brief-embed.md` |
+    | `vela2` (P1-5 adopt, P1-4 GPU check, re-timing) | ee4ab71f | **ff408fac** | `brief-vela2.md` |
+    | `stores` (P0-2 A/B, node-to-node) | f772afde | **fe5fa3c7** | `brief-stores.md` |
+    | `router` (IP3 READY, P1-12, P2-20) | 19becd41 | **ce54d321** | `brief-router.md` |
+    | `e2e-docs` (IP3 E2E, docs) | b16b8706 | **47cf54cd** | `brief-e2e-docs.md` |
+    | Second read-only reviewer | — | **8c4b0eb2** | `brief-reviewer2.md` |
+
+    Finished, not restarted: `removal` (5497de44; IP3 `INTEGRATION READY d3fd97e82`, merged by the lead at IP3a),
+    the first reviewer, `studio-serving`, `studio-ui`. **Still deferred:** the reasoning track and the
+    external-reference evals.
+  - **Inventory at 09:50:** every paused branch is pushed and clean at its handoff head and merges cleanly into
+    staging `32e155bdc`. Every P2–4 GPU lease on nodes A, B, C, D and F reads `status=released`, all GPUs are at 0%,
+    and no P2–4 job, container or CPU claim is active. No machine rebooted.
+  - **PR #4512 at `32e155bdc` is CONFLICTING with `main`** (`6b30250ec`): `17245d631` (#4531, decisions `meta`
+    default off) conflicts in four files. The lead merges it at IP3a.
+  - **CI run 3** ([37214657752](https://github.com/vllm-project/semantic-router/actions/runs/37214657752)): 67 of
+    75 jobs pass, 5 skipped.
+    - **Router Contracts** (owner: lead, IP3a): the `local-up-smoke` step execs `.venv-agent/bin/vllm-sr-runtime`,
+      which that job never installs, so managed startup fails.
+    - `CI / Gate` and `PR Gate` only aggregate it.
+    - Every Kubernetes and Local Stack E2E job passed, `multimodal-routing` included: **P0-3 is closed.**
+    - **DCO:** the 250-commit limit again (789 commits). The user overrides it at the final head.
+  - **Schedule (lead confirmed it at 10:05):**
+
+    | When | What |
+    | --- | --- |
+    | ≤ 11:30 | **S1 staging**: `stores` P0-2, `vela1` `de6854a9e`, `decision1` `3e764abf2`; no timed A/B row before it |
+    | ≤ 12:30 | **IP3a PR push**: S1, `main`, the Router Contracts fix, `removal`, and `router-ip3` if READY by 11:45; CI run 4 |
+    | ≤ 12:30 / 13:00 | Second reviewer's P0 / P1 to the lead; owners and deadlines by 13:00 |
+    | ≤ 16:30 | **IP3 `INTEGRATION READY`** from every workstream |
+    | ≤ 18:00 | IP3 push (feature complete) |
+    | ≤ 22:00 | Final full CI green; IP3b in reserve until 24:00 |
+
+  - **Open P0 / P1 (no regression; ≥ 5 interleaved rounds with 95% CIs, the 16:53 standard):**
+    - **P0-1 `embed`:** Omni CPU throughput at 4 callers (text and image trail by 11–24% under the stop policy) and
+      Nano image p50 (+0.5 to +1.65 ms).
+    - **P0-2 `stores`:** `exact` at 4 callers, 159 vs 187 lookups/s. Fix `10564d6c0` / `c679ad7b2` lands in S1, then
+      the A/B. It moves node D → node B directly (no relay through the local machine, no build on node B).
+    - **P1-4 `decision1` with the lead:** FLA kernel-choice conflicts (47 of 55 pairs). Design by 12:00; `vela2`
+      runs the GPU check.
+    - **Other P1s:** P1-5 adoption (`vela2`); P1-12 (`vela1` Python side in S1, `router` contract side).
+    - **Re-timing on S1:** `vela1`, `decision1`, `vela2` (including 0.3B `batching` at 512 tokens, 4 callers).
+    - **Also open:** P2-23 (`decision1`), P2-20 (`router`, node C GPU6), and the Router Contracts fix.
+  - **Resources:**
+    - CPU ranges follow the 04:22 table, as restated in the brief.
+    - The film's 4K render holds node F vCPUs 32–127 (untimed, 09:55); keep off them. The reviewer uses node F
+      128–159.
+    - GPUs are leased per job only.
+    - Never use node E, node C GPU0 or node F GPU0–1.
+  - **Notes:** post with `python3 /home/xunliu/code/mr-scratch/p24-restart/post_note.py <file>` (locked insert).
+    Coordinator ticks run every 20 minutes; silence over 40 minutes draws a note.
+
+- 2026-10-05 10:05 — **Model-runtime P2–4 lead (successor of 96ccb788) → coordinator, all P2–4 workstreams: RESUMED. The
+  restart schedule is confirmed unchanged.**
+  - **State verified at 10:04:** PR #4512 and staging `p24-ip2` are at `32e155bdc`; `main` is at `6b30250ec`; every
+    workstream head matches the restart brief (`stores` `c679ad7b2`, `vela1` `de6854a9e`, `decision1` `3e764abf2`,
+    `removal-ip2b` `d3fd97e82`, `router-ip3` `34fd7fc19`, `embed` `160674c5d`, `vela2` `c0e5a8281`, `e2e-docs`
+    `b99317ced`).
+  - **Schedule (UTC+8, 10-05):** S1 staging ≤ 11:30; IP3a PR push ≤ 12:30 (CI run 4); second reviewer P0 / P1 ≤ 12:30,
+    owners and deadlines by 13:00; IP3 `INTEGRATION READY` ≤ 16:30; IP3 push ≤ 18:00; final CI green ≤ 22:00; IP3b
+    in reserve until 24:00.
+  - **S1:** `stores` `c679ad7b2` (P0-2), `vela1` `de6854a9e` (P1-12 Python side, P2-9, P2-10), then `decision1`
+    `3e764abf2` (P1-13, P1-5) if its review passes; then my follow-ups (`ExactProfile.banded` into `bind()`, design
+    §9 for P0-2), the runtime suite and mypy. **Workstreams: start no timed A/B row until `STAGING S1` is posted, and
+    merge S1 into your branch first.** Review questions go to your branch owner in a note; please answer fast.
+  - **IP3a:** while S1 is reviewed, I prepare the `origin/main` merge (#4531: decisions `meta` default off) and the
+    Router Contracts `local-up-smoke` fix on a scratch branch, so IP3a = S1 + those + `removal` `d3fd97e82`.
+    `router-ip3` joins IP3a only if `INTEGRATION READY router-ip3` is posted by 11:45; otherwise IP3.
+  - **P1-4:** `decision1`, please post the GPU measurement (does a conflicting pair change numerics, for example Sol
+    under Eos's choices on the parity panel?) by about 11:30. I post the agreed design by 12:00.
+  - **Resources:** node A vCPUs 32–159 for my integration checks (only while a check runs); node B GPU6–7 only if I
+    need a GPU, leased per job.
+  — lead (successor of 96ccb788; 64bc6234)
+
+- 2026-10-05 09:55 — **vela2-film v3.1 4K: node F vCPUs 32–127 claimed (untimed).** The approved v3.1 rendered at
+  3840 × 2160 from its SHA-256-verified source (Remotion, six pinned parts), then its QA and the final deliverables
+  (ffmpeg). Measured idle at claim time (about 2%). Pinned with `docker --cpuset-cpus`; no GPUs, nothing on node B.
+  **P2–4 has priority:** post here if you need these cores and I move at once. Released with a note when done.
+
 - 2026-10-05 09:48 — **USER (09:47): FILM APPROVED; RESTART THE MODEL-RUNTIME P2–4 REFACTOR NOW.** The user said:
   "我确认片子已经 OK，请重启model runtime重构".
   - **Lifted:** the pause, for **model-runtime P2–4 only**. A fresh Opus 5.5 Max restart coordinator brings the
