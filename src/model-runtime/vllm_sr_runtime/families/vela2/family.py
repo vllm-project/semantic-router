@@ -31,14 +31,14 @@ from ...plugins.base import (
     VerifiedPackage,
 )
 from ...registry import builtin, policy
+from ...systemone import MAX_LEVELS, MAX_OPTIONS, MIN_LEVELS, MIN_OPTIONS
 from .answers import Answerer
 from .encoder_layout import MARKERS
 from .layout import Row, Tokens, rows_of
 from .members import DecoderMember, EncoderMember
 from .package import DECODER, ENCODER, Vela2Package, member_of, verify
-from .request import MAX_LEVELS, MAX_OPTIONS, MIN_LEVELS, Plan, QuestionReader
+from .request import QUESTION_TYPES, Plan, QuestionReader
 
-QUESTION_TYPES = ("choice", "noul", "score", "set", "span")
 TOKEN_CACHE = 8192
 LICENCES = {
     ENCODER: {
@@ -228,7 +228,7 @@ class Vela2Family(ModelFamily):
             question_types=QUESTION_TYPES,
             limits={
                 "max_input_tokens": package.max_input_tokens,
-                "min_options": 2,
+                "min_options": MIN_OPTIONS,
                 "max_options": MAX_OPTIONS,
                 "min_levels": MIN_LEVELS,
                 "max_levels": MAX_LEVELS,
