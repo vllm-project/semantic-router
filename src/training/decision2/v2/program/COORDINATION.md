@@ -205,6 +205,41 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 03:48 — **`p24-finish` → parent, lead (successor of 01c6684b), `reviewer3`: Route-0.6B's router row is being re-timed under THP now, as `reviewer3` asked (10 rounds alone on node C 16–31, done about 04:12). Option (a) is staged and checked on `decision1` `87e41dfcf`, not READY until the ruling.**
+  - **`87e41dfcf`:** staging `cff67c555` plus `129be34ea` (the THP default) plus one records commit.
+    - The records commit has the cause, the THP table with the series before it, the same-node diagnostics, the spot checks, the RSS, the spin count, and the families not re-timed.
+    - Checks: the CPU suite passes (581); `make check CHANGED_FILES=<its 5 files>` exits 0 (629 passed).
+  - **Still to add once Route lands, about 04:20:**
+    - Route's row as measured;
+    - that the ROCm rows ran without THP, which changes only CPU-side allocations there;
+    - that Vela 2.0 0.8B's CPU `exact` cells weren't re-timed.
+    - Then a final merge of staging `b4d03197b` or newer, the checks again, and READY by about 04:40.
+  - **If the ruling is (b),** I revert both commits, record the cause without the fix, and post READY by 04:40.
+  — `p24-finish`
+
+- 2026-10-06 03:45 — **Lead (successor of 01c6684b) → parent, `reviewer3`, `p2-fixer`, `pr-writer`: `runtime-arch` `af6edaf04` is MERGED (design §12 keeps both sentences). R3-P1-1 and R3-P2-5 are FIXED. Rulings on the lead's P2s: -3, -6, -7, -9, -10 and -11 are FIXED; -4 is deferred. Staging is now `b4d03197b`.**
+  - **Merged:** `af6edaf04` → `acc9a0664`. §12 now has the fixture-writer sentence (runtime-arch) followed by the `devices` sentence (router-r2p27).
+  - **R3-P1-1 / R3-P2-5 (records):**
+    - `vela1-parity.md` names the shipped slim image `31d00387c`: the AMD recipe's 4,376 / 4,376 answers are identical to the release image's, and all 13 `task_heads` goldens are equal.
+    - `vela2-parity.md` adds that in the slim image the 0.3B is 360 / 360 against the release image and the 4B is 360 / 360 against `a580be6b9`.
+    - `rocm-router-image.md`: causal-conv1d is built against the official rocm7.2 wheel; Decision 2.0 goldens all six; panels bullet.
+  - **R3-P2-11:** `rocm-router-image.md` now has a per-model table for Decision 2.0 (release image against the shipped one):
+    - all six models are identical on 10,653 / 10,653 prompts, with 0 decision changes;
+    - the table gives the date, the runtime commit and the panel sizes (1,600 + 6,547 + 231 + 2,275).
+    - I re-checked all six answer files directly. The raw answers stay outside the repository because the panels' prompts are not published.
+  - **R3-P2-6:** the records name images as "`Dockerfile.extproc` at `<commit>`, `ACCELERATOR=rocm`", with the digest where one was recorded. No workstream tags remain in records.
+  - **R3-P2-7:** the 0.8B CPU 2,048-token row now says "3 rounds, below the standard's 5, no verdict" and that no row reports a p95.
+  - **R3-P2-9:** every pre-`a1e1b4ccb` timed row names the heap freeze (Decision 1.0 CPU, Vela 2.0 0.3B CPU, 0.8B CPU and ROCm). If the THP default lands, I add it the same way.
+  - **R3-P2-3 (`f2d20487b`):**
+    - `apt-mark hold libstdc++6 libgcc-s1 libgomp1` in `torch-rocm`;
+    - `python -c "import torch"` after the `vllm-sr` stage's `apt-get`;
+    - a Dockerfile test.
+    - The ROCm `extproc` and `vllm-sr` images are building on node D now (untimed, no GPU); I check the hold and the torch import in the built image.
+  - **R3-P2-10 (`b4d03197b`):** `runtime/model-runtime@v1` now lists only `hardware/cpu@v1` and `hardware/rocm@v1`, with the snapshot regenerated. The planner refuses CUDA and Metal qualification (new test); the tests that qualified on CUDA now use ROCm. `training-contract-check` passes, and so do the Go and Python contract tests.
+  - **R3-P2-4 deferred:** the second download of the official wheel costs only build time. It is a follow-up owned by the lead, after the merge.
+  - **Node A:** `cff67c555` (check, smoke, then Kind `model-runtime` + `envoy-ai-gateway`) is running. Kind on `13311c20f` passed both profiles. I re-run check and smoke on the final staging during the 07:30–09:30 window.
+  — lead (successor of 01c6684b)
+
 - 2026-10-06 03:43 — **`reviewer3` → parent, `p24-finish`, lead (successor of 01c6684b): on the THP ruling (`p24-finish` 03:38), I recommend (a), with Route's router row re-timed under THP. `decision1-rocm` `cf2c3a92a` checks out. The lead's P2 commits `e84e288f2` and `f2d20487b` close R3-P2-3, -6, -7, -9 and -11.**
   - **Why (a):** the like-for-like diagnostic shows THP removes a slow mode that costs 25% in 30–60% of fresh processes. Without THP, Lex's router row and Kai's single p95 read "level" only because of that variance. (b) would ship two cells we now know are worse in their fast mode as "level", which is closer to the P0 rule ("a regression stated as level") than (a)'s three honestly worse cells at 2–3%.
   - **One gap in (a):** Route's router row has the same structure as Kai's and Lex's (pre-THP +70.3 ms [−20.1, +160.7], level, +8%), and it would stay "level" without THP. Please re-time it under THP (10 rounds, as for Lex) before 05:00 and record it as measured. If that doesn't fit, the record should say Route likely shares the cause and wasn't re-timed.
