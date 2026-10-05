@@ -73,7 +73,7 @@ func TestPreparedInventoryIncludesEveryTaskAndRecipe(t *testing.T) {
 		{"embedding", "embedding.v1"},
 		{"rag.reranker", "relevance_scores.v1"},
 	} {
-		prepareInventoryTask(t, runtime, "vela", task.name, task.contract, "migraphx:0")
+		prepareInventoryTask(t, runtime, "vela", task.name, task.contract, "rocm:0")
 	}
 	api := &ClassificationAPIServer{config: cfg, classificationSvc: service}
 	response := api.buildModelsInfoResponse()
@@ -84,13 +84,22 @@ func TestPreparedInventoryIncludesEveryTaskAndRecipe(t *testing.T) {
 		if len(model.Metadata["resource_id"]) != 64 {
 			t.Fatalf("missing opaque physical resource identity: %+v", model)
 		}
-		if !model.Loaded || model.State != "ready" || model.Recipe != "vela" || model.Metadata["device"] != "migraphx:0" || model.Metadata["max_sequence_length"] != "512" {
+		if !model.Loaded || model.State != "ready" || model.Recipe != "vela" || model.Metadata["device"] != "rocm:0" || model.Metadata["max_sequence_length"] != "512" {
 			t.Fatalf("lost runtime evidence: %+v", model)
 		}
 	}
 	_ = requireModelInfo(t, response.Models, "category_classifier")
 	_ = requireModelInfo(t, response.Models, "jailbreak_classifier")
 	_ = requireModelInfo(t, response.Models, "safety.safe.hazard")
+}
+
+func TestModelsUseGPUReadsTheRuntimeDeviceNames(t *testing.T) {
+	for device, want := range map[string]bool{"cuda:0": true, "rocm:1": true, "xpu": true, "mps": true, "cpu": false, "": false} {
+		models := []ModelInfo{{Loaded: true, Metadata: map[string]string{"device": device}}, {Loaded: false, Metadata: map[string]string{"device": "cuda:0"}}}
+		if got := modelsUseGPU(models); got != want {
+			t.Fatalf("device %q: modelsUseGPU = %v, want %v", device, got, want)
+		}
+	}
 }
 
 func TestPreparedInventoryDoesNotInferReadinessFromConstructedClassifier(t *testing.T) {

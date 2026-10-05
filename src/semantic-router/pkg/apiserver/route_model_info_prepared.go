@@ -133,7 +133,7 @@ func modelsUseGPU(models []ModelInfo) bool {
 		}
 		device, _, _ := strings.Cut(model.Metadata["device"], ":")
 		switch device {
-		case "cuda", "rocm", "migraphx", "metal":
+		case "cuda", "rocm", "xpu", "mps":
 			return true
 		}
 	}
