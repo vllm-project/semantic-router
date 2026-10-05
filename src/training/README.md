@@ -108,7 +108,7 @@ statements or hard-coded UI enums. Capability IDs follow `<domain>/<name>@<versi
 
 Training hardware requirements remain distinct from inference qualification hardware requirements:
 a neural model trained on CUDA/ROCm GPUs may be planned and qualified across multiple runtime targets
-(such as CPU with Candle or GPU with ONNX Runtime), automatically scheduling format conversions
+(such as the model runtime on a CPU or a GPU), automatically scheduling format conversions
 (e.g. Safetensors to ONNX) when direct runtime loading is unavailable.
 
 Clients query `GET /capabilities` to discover supported descriptors and `POST /capabilities/plan`

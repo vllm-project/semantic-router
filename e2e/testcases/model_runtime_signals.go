@@ -13,8 +13,8 @@ import (
 
 func init() {
 	pkgtestcases.Register("model-runtime-task-signals", pkgtestcases.TestCase{
-		Description: "Domain, PII and jailbreak signals on managed runtimes and a classifier signal on an attached runtime report exactly the runtimes' own answers",
-		Tags:        []string{"model-runtime", "classification", "pii", "jailbreak", "signals"},
+		Description: "Domain, PII, jailbreak and modality signals on managed runtimes and a classifier signal on an attached runtime report exactly the runtimes' own answers",
+		Tags:        []string{"model-runtime", "classification", "pii", "jailbreak", "modality", "signals"},
 		Fn:          testModelRuntimeTaskSignals,
 	})
 }
@@ -148,6 +148,18 @@ func checkTaskSignals(
 		return nil, fmt.Errorf("personal_data matched=%v, the PII model found %d spans %v", matched, len(pii.result.Spans), pii.result.Spans)
 	}
 
+	// Method classifier reports the modality model's choice, however confident.
+	modality, err := classifyOne(ctx, runtimes[mrModalityDeployment], modelruntime.ClassifyRequest{
+		Model: mrModalityDeployment, Input: []string{text},
+		Options: &modelruntime.ClassifyOptions{Overflow: "truncate", MaxTokens: 512},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if matched := headerItems(response.Headers, "x-vsr-matched-modality"); len(matched) != 1 || !matched[modality.result.Label] {
+		return nil, fmt.Errorf("x-vsr-matched-modality %v, the modality model chose %q", matched, modality.result.Label)
+	}
+
 	feedback, err := classifyOne(ctx, session.attachedRuntime(), modelruntime.ClassifyRequest{
 		Model: "feedback-a", Input: []string{text},
 		Options: &modelruntime.ClassifyOptions{Overflow: "truncate", MaxTokens: 512},
@@ -162,7 +174,8 @@ func checkTaskSignals(
 	}
 	return map[string]interface{}{
 		"domain": domain.result.Label, "jailbreak_risk": risk, "pii_spans": len(pii.result.Spans),
-		"user_reaction": feedback.result.Label, "decision": response.Headers.Get("x-vsr-selected-decision"),
+		"modality": modality.result.Label, "user_reaction": feedback.result.Label,
+		"decision": response.Headers.Get("x-vsr-selected-decision"),
 	}, nil
 }
 

@@ -84,9 +84,9 @@ option. The answer for `reasoning` is the probability that the answer is yes:
 }
 ```
 
-The response also carries `meta`: the revision, profile and device that
-answered and how long it took. On 16 CPU cores this request takes about 0.2
-seconds. `GET /v1/models` shows what is loaded, where it runs and whether it
+Add `"options": {"return_meta": true}` to the request to also get `meta`: the
+revision, profile and device that answered and how long it took. On 16 CPU
+cores this request takes about 0.2 seconds. `GET /v1/models` shows what is loaded, where it runs and whether it
 passed its self-check.
 
 The same command serves classifiers. Stop the server with Ctrl-C and serve the
