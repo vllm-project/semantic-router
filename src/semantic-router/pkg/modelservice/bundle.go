@@ -16,7 +16,8 @@ const DefaultBundleWindow = 2 * time.Millisecond
 type bundleKey struct{}
 
 // Bundle coalesces the runtime calls of one request stage into one
-// /v1/bundle call per runtime process.
+// /v1/bundle call per runtime process, or several when the stage has more
+// calls than the process takes in one bundle.
 //
 // The goroutines of the stage Join the bundle. A runtime call made with the
 // bundle's context parks in it. The bundle flushes when no participant can
@@ -181,7 +182,11 @@ func (b *Bundle) flushLocked() {
 	b.pending = make(map[*Client][]*bundleCall)
 	b.flushes++
 	for client, calls := range pending {
-		go b.send(client, calls)
+		for len(calls) > 0 {
+			part := calls[:min(len(calls), client.bundleTasks)]
+			calls = calls[len(part):]
+			go b.send(client, part)
+		}
 	}
 }
 
