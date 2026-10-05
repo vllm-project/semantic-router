@@ -5194,6 +5194,35 @@
   ],
   "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764"
  },
+ "rocm_router_image": {
+  "golden_answers_byte_identical": [true, true, true],
+  "golden_readiness": ["matched"],
+  "image": "Dockerfile.extproc at be7366c499551ce5566a5ec3168f1a27050a86e3 (target extproc, ACCELERATOR=rocm)",
+  "method": "the image's own Python and libraries with this commit's package installed over its own (--no-deps); node B GPU0, host vCPUs 64-71",
+  "panels_byte_identical_to_the_stack": {
+   "amd": {
+    "answers": 4376,
+    "identical": 4376
+   },
+   "amd-shield": {
+    "answers": 547,
+    "identical": 547
+   },
+   "cpu-recipe": {
+    "answers": 5534,
+    "identical": 5534
+   }
+  },
+  "passed_against_legacy": {
+   "rocm_vs_legacy_amd": true,
+   "rocm_vs_legacy_cpu": true
+  },
+  "pip_freeze_differences_from_the_stack": {
+   "image_only": ["Python 3.12.15", "causal_conv1d @ file:///tmp/wheels/causal_conv1d-1.7.0-cp312-cp312-linux_x86_64.whl#sha256=58d292e607483d44fa4b29d94b70c0ac4a337b14b3dafcb332b1158851b67687", "httptools==0.8.0", "pillow==12.3.0", "uvloop==0.23.0"],
+   "stack_only": ["Python 3.12.14"]
+  },
+  "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764"
+ },
  "rocm_stack_vs_release_image": {
   "context": {
    "baseline": "the packages' release image: PyTorch 2.12.0+git6bbd260 (built from source), HIP 7.2.53211, Triton 3.7.1, fla-core 0.5.2",

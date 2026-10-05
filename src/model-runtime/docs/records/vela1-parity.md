@@ -241,6 +241,12 @@ their last bits:
   - the CPU-recipe inputs' 5,534 answers and Shield's
     547 in three processes, the third with an empty Triton
     cache.
+- **The image as built:** the router's ROCm image from `Dockerfile.extproc` at
+  `be7366c49` has this stack's pins plus `causal-conv1d` 1.7.0, which these
+  models don't run, the HTTP server's `uvloop` and `httptools`, Pillow, and
+  Python 3.12.15 for 3.12.14. With this commit's package, it gives every
+  golden value (three processes, the first with an empty Triton cache) and
+  every answer of the three parity panels byte for byte as this stack does.
 - **Quality bar:** the Decision Index scores no Vela 1.0 model, so there
   is no Index delta to measure. Vela 1.0's references are the legacy
   answers, under design section 17's bars, and this stack passes them on
