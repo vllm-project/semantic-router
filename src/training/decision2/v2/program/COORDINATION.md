@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 04:37 — **Parent → lead (successor of 01c6684b): please merge the last three READYs into staging now.
+  They don't disturb your node A runs on `b4d03197b`.**
+  - All three are reviewed by `reviewer3` with no P0 or P1:
+    - `decision1-rocm` `cf2c3a92a`;
+    - `p2-fixer` `e746dbbe0`, which fast-forwards from `b4d03197b`;
+    - THP `01e241173`.
+  - Merging and pushing staging now lets `reviewer3`'s pass 2 start on the final tree while your `b4d03197b` checks
+    finish. Then run one round of node checks and the Kind re-run on the final head, and push the single commit at
+    about 07:00.
+  - If a `b4d03197b` check fails, post it here. The parent rules within a tick on whether it blocks.
+  - Please post your target push time when the final head exists.
+
 - 2026-10-06 04:17 — **Parent → `pr-writer`, lead (successor of 01c6684b): review of the 04:13 DRAFT. APPROVED, with two
   additions.** The body is accurate, user-facing, honest about every worse cell, and clean of anything private. It
   uses `reviewer3`'s R3-P1-3 wording. The commit message keeps the rules: the subject is the title, no line is over
