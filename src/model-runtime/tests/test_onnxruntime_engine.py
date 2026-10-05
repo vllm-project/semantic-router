@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -103,16 +104,10 @@ def test_descriptor_lists_providers_per_device():
     assert "CPUExecutionProvider" in descriptor["installed"]
 
 
-def test_cpu_sessions_share_one_pool_sized_to_the_process():
-    choice = providers.choose(CPU, ["CPUExecutionProvider"])
+def test_cpu_pools_are_sized_to_the_process_and_capped():
     assert providers.cpu_threads(3) == 3 and providers.cpu_threads(None) >= 1
-    options = providers.session_options(choice, 2)
-    size = providers.shared_pool(2)
-    if size:
-        assert options.use_per_session_threads is False
-    else:
-        assert options.intra_op_num_threads == 2
-    assert providers.shared_pool(5) == size
+    assert providers.cpu_threads(16, 8) == 8 and providers.cpu_threads(4, 8) == 4
+    assert providers.cpu_threads(None, 1) == 1
 
 
 def test_gpu_sessions_never_fall_back_to_the_cpu():
@@ -120,31 +115,28 @@ def test_gpu_sessions_never_fall_back_to_the_cpu():
         providers.ProviderChoice("CUDAExecutionProvider"), 2
     )
     assert gpu.get_session_config_entry("session.disable_cpu_ep_fallback") == "1"
-
-
-def test_cpu_sessions_beside_another_engine_get_own_pools_that_spin_briefly(
-    monkeypatch,
-):
-    choice = providers.ProviderChoice("CPUExecutionProvider")
-    monkeypatch.setattr(providers, "_SHARED_POOL", {})
-    own = providers.session_options(choice, 2, shared_cpu=True)
-    assert providers._SHARED_POOL == {} and providers.shared_pool_size() is None
-    assert own.intra_op_num_threads == 2 and own.inter_op_num_threads == 1
-    spin = own.get_session_config_entry("session.intra_op.spin_duration_us")
-    assert spin == str(providers.SHARED_PROCESS_SPIN_US)
     with pytest.raises(RuntimeError):
-        own.get_session_config_entry("session.force_spinning_stop")
-    monkeypatch.setattr(providers, "_SHARED_POOL", {"size": 4})
-    pooled = providers.session_options(choice, 2, shared_cpu=True)
-    assert pooled.use_per_session_threads is False
-    with pytest.raises(RuntimeError):
-        pooled.get_session_config_entry("session.intra_op.spin_duration_us")
-    alone = providers.session_options(choice, 2)
-    assert alone.use_per_session_threads is False
+        gpu.get_session_config_entry("session.intra_op.spin_duration_us")
 
 
 @pytest.mark.parametrize(
-    ("neighbors", "shared_cpu"),
+    ("neighbors", "spin"),
+    [
+        (False, providers.SPIN_US),
+        (True, providers.NEIGHBOR_SPIN_US),
+    ],
+)
+def test_cpu_sessions_get_own_pools_whose_idle_threads_spin_briefly(neighbors, spin):
+    choice = providers.ProviderChoice("CPUExecutionProvider")
+    options = providers.session_options(choice, 2, neighbors)
+    assert options.use_per_session_threads is True
+    assert options.intra_op_num_threads == 2 and options.inter_op_num_threads == 1
+    entry = options.get_session_config_entry("session.intra_op.spin_duration_us")
+    assert entry == str(spin)
+
+
+@pytest.mark.parametrize(
+    ("neighbors", "beside_another_engine"),
     [
         (frozenset(), False),
         (frozenset({"onnxruntime"}), False),
@@ -152,27 +144,30 @@ def test_cpu_sessions_beside_another_engine_get_own_pools_that_spin_briefly(
         (frozenset({"auto"}), True),
     ],
 )
-def test_sessions_share_the_pool_unless_another_engine_serves_the_cpu(
-    tmp_path, monkeypatch, neighbors, shared_cpu
+def test_each_graph_gets_its_own_capped_pool(
+    tmp_path, monkeypatch, neighbors, beside_another_engine
 ):
-    seen = []
+    seen = {}
     options = providers.session_options
 
-    def recording(choice, threads, shared_cpu=False):
-        seen.append(shared_cpu)
-        return options(choice, threads, shared_cpu)
+    def recording(choice, threads, cpu_neighbors=False):
+        seen[threads] = cpu_neighbors
+        return options(choice, threads, cpu_neighbors)
 
     monkeypatch.setattr(providers, "session_options", recording)
-    path = onnx_graphs.token_graph(tmp_path / "model.onnx")
+    paths = {
+        "text": onnx_graphs.token_graph(tmp_path / "text.onnx"),
+        "image": onnx_graphs.token_graph(tmp_path / "image.onnx"),
+    }
+    model_spec = dataclasses.replace(spec(paths), graph_threads={"text": 1})
     model = OnnxRuntimeEngine().load(
-        spec({"default": path}),
+        model_spec,
         CPUAccelerator(),
         CPU,
         EngineOptions(threads=2, cpu_neighbors=neighbors),
     )
-    assert seen == [shared_cpu]
-    # ONNX Runtime refuses a session its own pool once the shared one exists.
-    assert model.receipt()["shared_cpu_pool"] == providers.shared_pool_size()
+    assert seen == {1: beside_another_engine, 2: beside_another_engine}
+    assert model.receipt()["threads"] == {"text": 1, "image": 2}
 
 
 def test_unsupported_specs_say_why(tmp_path):

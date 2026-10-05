@@ -147,15 +147,13 @@ class OnnxRuntimeModel(EngineModel):
         graphs: dict[str, GraphSession],
         choice: providers.ProviderChoice,
         device_info: DeviceInfo,
-        threads: int | None,
-        shared_pool: int | None = None,
+        threads: dict[str, int],
     ):
         self.graphs = graphs
         self.choice = choice
         self.device_info = device_info
         self.device = torch.device("cpu")
         self.threads = threads
-        self.shared_pool = shared_pool
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
         raise NotImplementedError("the onnxruntime engine runs encoder graphs only")
@@ -181,7 +179,6 @@ class OnnxRuntimeModel(EngineModel):
             "provider_options": dict(self.choice.options),
             "validated": self.choice.validated,
             "threads": self.threads,
-            "shared_cpu_pool": self.shared_pool,
             "graphs": {name: graph.path.name for name, graph in self.graphs.items()},
         }
 
@@ -237,23 +234,22 @@ class OnnxRuntimeEngine(Engine):
         )
         if isinstance(choice, str):
             raise RuntimeError(choice)
-        shared_cpu = bool(options.cpu_neighbors - {self.name})
-        sessions = {
-            name: providers.session_options(choice, options.threads, shared_cpu)
+        neighbors = bool(options.cpu_neighbors - {self.name})
+        threads = {
+            name: providers.cpu_threads(
+                options.threads, None if choice.gpu else spec.graph_threads.get(name)
+            )
             for name in spec.graphs
         }
         weights = graph_files.WeightFiles()
         graphs = {
-            name: GraphSession(name, Path(path), sessions[name], choice, weights)
+            name: GraphSession(
+                name,
+                Path(path),
+                providers.session_options(choice, threads[name], neighbors),
+                choice,
+                weights,
+            )
             for name, path in spec.graphs.items()
         }
-        pooled = any(
-            not session.use_per_session_threads for session in sessions.values()
-        )
-        return OnnxRuntimeModel(
-            graphs,
-            choice,
-            device,
-            options.threads,
-            providers.shared_pool_size() if pooled else None,
-        )
+        return OnnxRuntimeModel(graphs, choice, device, threads)
