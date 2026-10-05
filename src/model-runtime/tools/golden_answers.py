@@ -23,7 +23,19 @@ from typing import Any
 
 from vllm_sr_runtime.config import ModelConfig, ServeConfig
 from vllm_sr_runtime.registry import builtin
-from vllm_sr_runtime.runtime import Runtime
+from vllm_sr_runtime.runtime import Runtime, ServedModel
+
+
+def golden_values(served: ServedModel) -> dict[str, Any]:
+    """A loaded model's answers to its family's golden requests, as the readiness check computes them."""
+    assert served.family is not None and served.package is not None
+    values: dict[str, Any] = {}
+    for golden in served.family.golden(served.package):
+        if "surface" in golden:
+            values.update(served.golden_surface(golden["surface"], golden["body"]))
+        else:
+            values.update(served.golden_decisions(golden["state"], golden["questions"]))
+    return values
 
 
 def answers(
@@ -42,15 +54,7 @@ def answers(
         runtime.load()
         served = runtime.lookup(None)
         assert served.model is not None and served.placement is not None
-        assert served.family is not None and served.package is not None
-        values: dict[str, Any] = {}
-        for golden in served.family.golden(served.package):
-            if "surface" in golden:
-                values.update(served.golden_surface(golden["surface"], golden["body"]))
-            else:
-                values.update(
-                    served.golden_decisions(golden["state"], golden["questions"])
-                )
+        values = golden_values(served)
         info = served.model.info
         return {
             "model": info.id,

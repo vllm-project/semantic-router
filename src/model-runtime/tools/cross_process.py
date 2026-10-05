@@ -7,8 +7,9 @@
 
 answer   loads MODEL as ``vllm-sr-runtime serve`` does (resolution, verification, placement, the golden check that
          gates readiness, ``--autotune-cache``) and answers every prompt as one request on the exact profile through
-         the scheduler. The receipt records the golden check, the device, the library versions and the autotune
-         entries in the cache before and after the run (no new entry: every choice was reused).
+         the scheduler. The receipt records the golden check and the golden answers it computed, the device, the
+         library versions, whether FLA ran with pinned kernel choices and the autotune entries in the cache before
+         and after the run (no new entry: every choice was reused).
 compare  every other answers file against the first, prompt by prompt: identical prompts (canonical JSON), category
          changes, values that differ and the largest absolute difference of any probability, Noul or Score value.
          Exits 1 unless every prompt is identical.
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import sys
 import time
@@ -27,7 +29,9 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from golden_answers import golden_values
 from gpu_parity import canonical, category, numbers
+from vllm_sr_runtime.accel.autotune import FLA_CONFIG_ENV, FLA_MODE_ENV
 from vllm_sr_runtime.config import ModelConfig, ServeConfig
 from vllm_sr_runtime.runtime import Runtime
 
@@ -40,10 +44,21 @@ def autotune_entries(directory: str | None) -> int | None:
 
 def versions() -> dict[str, str | None]:
     found = {}
-    for name in ("torch", "triton", "fla"):
+    for name in ("torch", "triton", "fla", "causal_conv1d"):
         module = sys.modules.get(name)
         found[name] = getattr(module, "__version__", None) if module else None
+    torch = sys.modules.get("torch")
+    found["hip"] = getattr(torch.version, "hip", None) if torch else None
     return found
+
+
+def kernel_choices() -> dict[str, Any]:
+    """Whether this process runs FLA on pinned kernel choices, and for which kernels."""
+    directory = os.environ.get(FLA_CONFIG_ENV)
+    if os.environ.get(FLA_MODE_ENV) != "full" or not directory:
+        return {"pinned": False, "kernels": []}
+    kernels = sorted(path.stem for path in Path(directory).glob("*.json"))
+    return {"pinned": bool(kernels), "kernels": kernels}
 
 
 def panels(specs: list[str]) -> list[tuple[str, list[dict[str, Any]]]]:
@@ -77,6 +92,7 @@ def answer(args: argparse.Namespace) -> int:
         load_seconds = time.perf_counter() - started
         served = runtime.lookup(None)
         assert served.model is not None and served.placement is not None
+        golden = {served.placement.device.accelerator: golden_values(served)}
         count = 0
         started = time.perf_counter()
         with args.answers.open("x", encoding="utf-8") as sink:
@@ -111,6 +127,8 @@ def answer(args: argparse.Namespace) -> int:
             "device": served.placement.device.label,
             "device_name": served.placement.device.name,
             "golden": served.health.golden.describe(),
+            "golden_answers": golden,
+            "kernel_choices": kernel_choices(),
             "autotune_cache": args.autotune_cache,
             "autotune_entries": {
                 "before": before,
