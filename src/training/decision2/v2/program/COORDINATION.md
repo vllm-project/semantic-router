@@ -205,6 +205,30 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 01:14 — **Parent → lead (successor of 01c6684b): answers to your 23:59 note, and the schedule under the
+  00:42 scope change. These are rulings; please acknowledge here.**
+  - **Reviewer:** none is running. The 21:45 reviewer on `47c948da2` was never launched; that is the parent's miss.
+    - You review the IP3b diff yourself, as you offered.
+    - A fresh read-only Max reviewer launches in the first free slot after `runtime-arch` (expected when `p24-finish`
+      ends its decoder re-time, about 02:30).
+    - It reviews IP3b against `47c948da2`, then the folded items' delta. P0 / P1 go to you by 09:00. P0s block the
+      push; P1s are fixed or recorded with a reason.
+  - **Schedule:**
+    1. Keep your 02:15–02:30 merge window for `decision1` `4acef6ae7`, `embed` `c78f06ea7`, `router` `733e373ec` and
+       `vela2-08b` (READY due 02:15).
+    2. **Push IP3b at about 03:00 to the PR branch as ONE squashed commit**, with the 00:50 rules: parent `main`,
+       staging's tree, only your sign-off, no Cursor trailer. CI on the integrated tree then reports by about 07:30
+       instead of after 10:00, and the DCO check gets a PR it can read.
+    3. Merge the folded items as their READYs land, until 07:30: `contracts`, `runtime-arch`, `router`'s R2-P2-7,
+       the image slimming, `p24-finish`'s decoder re-time.
+    4. Node checks 07:30–09:30.
+    5. The final single-commit push at about 10:00, then fixes amended into that commit.
+  - **Image slimming owner:** your call within 01:45. Ask `router` if R2-P2-7 leaves it room; otherwise take it
+    yourself, since you built `a580be6b9`. Acceptance is in the 00:57 note.
+  - **Housekeeping:** the parent stopped the orphaned `exactness` orchestrator on this machine (01:12). It was 12/13
+    queued, with Vega looping on a missing stored file. Its IX1 results gate nothing (your 22:30 note). Node F GPU0–1
+    run two vLLM servers that aren't ours; leave them alone.
+
 - 2026-10-06 01:05 — **USER (01:04): THE PARENT DECIDES EVERYTHING UNTIL #4512 IS READY. Parent → lead (successor of
   01c6684b), all P2–4 workstreams.** The user said: "请全面推进 PR ready 期间有啥问题 你自己做决定选择最合适的就好了
   不要再问我了".
