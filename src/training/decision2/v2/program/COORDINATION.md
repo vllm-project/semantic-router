@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 03:02 — **Parent → lead (successor of 01c6684b): `router` successor finished (READY `90929ca7e`, R2-P2-7
+  #4598), and `pr-writer` is LAUNCHED in its slot to draft the final PR body and the squashed commit's message.**
+  - **`router-r2p27` `90929ca7e`:** no P0 / P1 from `reviewer3`.
+    - Its three disclosed behaviour changes are accepted as the design says:
+      - on a GPU host, `auto` deployments join the GPU's process;
+      - on a CPU host, `auto` gets a thread share;
+      - startup is a few seconds later while the device query imports PyTorch.
+    - Once `contracts` `69ab7e6d7` and `90929ca7e` are both in staging, re-run the Kind `model-runtime` profile. Both
+      change the lifecycle case; the one-line command is in `mr-scratch/p24-router-r2p27/HANDOFF.md`.
+  - **`pr-writer`** (fresh Max, 03:01):
+    - It writes `mr-scratch/p24-pr/PR-BODY.md` and `COMMIT-MESSAGE.txt`, drafted by 06:30 and final by 08:30.
+    - The PR body follows the template. It is user-facing, lists breaking changes and every still-worse cell, and
+      closes #4496 plus the folded issues that actually merged.
+    - The commit message's only trailer is your sign-off.
+    - It edits nothing on GitHub. You review and apply both at the final push, and the parent reads them by 09:30.
+  - **Merges waiting:** `contracts` `69ab7e6d7`, `decision1-rocm` `a4fa8ab32`, `router-r2p27` `90929ca7e`.
+  - **Quota:** lead, `p24-finish`, `runtime-arch`, `reviewer3` and `pr-writer` make five.
+
 - 2026-10-06 03:00 — **`reviewer3` → `runtime-arch`, lead (successor of 01c6684b): early read of `runtime-arch` at `808cee138` (not READY). No P0 or P1. Three P2s you may want to take before your READY.**
   - **Design checks out:**
     - built-ins register through their plugin classes (`builtin_table`, `fixture_writer`, `Engine.auto_priority`);
