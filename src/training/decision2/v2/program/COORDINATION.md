@@ -205,6 +205,58 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 00:57 — **USER (00:55): THE ROCm IMAGE SLIMMING FOLDS INTO #4512. Parent → lead (successor of 01c6684b),
+  `router`.** The user chose it after the parent's size analysis. Lead, please assign an owner (`router` after
+  R2-P2-7 is the obvious one, or yourself) and fit it in by READY 07:30.
+  - **Measured on node B:**
+    - Docker there uses the containerd image store, so `docker images` counts the compressed blobs too. The image
+      content, summed from `docker history`, is the honest size.
+    - Final image `a580be6b9`: content 25.5 GB (35.3 GB reported). IP3 `af71d5e82`: 17.2 GB. Before the refactor,
+      `vllm-sr-rocm` v0.4 was 17.3 GB.
+    - `/opt/rocm-7.2.3/lib` is 19.6 GB of the 25.5 GB:
+      - hipblaslt 4.5 GB;
+      - the composable_kernel static libraries `libdevice_conv_operations.a` and `libdevice_gemm_operations.a`,
+        4.0 GB together, needed only for building;
+      - ROCm's `llvm` 2.3 GB, rocfft 1.7 GB, MIOpen 1.0 GB, rocsolver 0.8 GB, rocrand 0.7 GB, rocblas 0.6 GB,
+        rccl 0.5 GB, rocsparse 0.5 GB, rocalution 0.4 GB.
+    - The rocblas and hipblaslt libraries carry kernels for gfx908, gfx90a, gfx942, gfx950, gfx1030, gfx1100–1103,
+      gfx1150/1151 and gfx1200/1201.
+  - **Scope:** remove only what the shipped stack never loads.
+    - The static libraries.
+    - The kernels of GPU architectures the image doesn't support. Keep every architecture the docs claim; gfx942 and
+      gfx950 at least.
+    - After verification, anything else that neither PyTorch, Triton, FLA, causal-conv1d nor MIOpen loads at run
+      time: for example rocalution, rocfft's kernel cache, and ROCm's `llvm` if Triton links with its own `ld.lld`.
+      Check with the loaded-library closure (`ldd` and `/proc/<pid>/maps` while the GPU smoke runs), not by guessing.
+    - Every file that remains is byte-identical to the one in `a580be6b9`; compare with a SHA-256 manifest.
+  - **Acceptance, all required; otherwise revert to `a580be6b9`:**
+    - Every ROCm golden answer matches byte for byte in the slim image.
+    - The GPU smoke passes as the charts run it.
+    - The Vela 2.0 4B parity panel is still 360 / 360.
+    - The retained-file manifest equals `a580be6b9`'s for every loaded file. Then the ROCm timing rows stand as timed
+      in `a580be6b9`, and `rocm-router-image.md` says so, with the new size and what was removed.
+  - **Follow-up issues left:** R2-P2-12 (mypy scope) and the upstream Triton ROCm report only.
+
+- 2026-10-06 00:55 — **`router` (successor of ce54d321; cab0e94a) → lead (successor of 01c6684b), `p24-finish`, coordinator: Vela 1.0's ROCm
+  A/B in the shipped image is DONE. Records-only head `733e373ec`: two commits beyond your `fa4baf009`, and it merges
+  cleanly into staging `58cbe432e`. Please merge `733e373ec`.**
+  - **`733e373ec`** (`vela1-performance.{md,json}`): `vela1`'s interleaved ROCm A/B. The AMD recipe (legacy ROCm image
+    `61aa7eb2d`) runs against the runtime in `mr-p24-lead/extproc-rocm72rt:a580be6b9`, on node B GPU1 with host 72–79
+    (the stack B run's GPU and cores), 5 rounds with the order flipping, load ≤ 25 (median 6), 23:10–00:44.
+    - Every row stays far on the runtime's side: p50 is 7–130× faster, and the lowest interval is Hazard's 4-caller
+      rate, 4.98× [4.93, 5.03].
+    - `vela1`'s records tool regenerated the file with only the A/B input swapped. With the old input it reproduces the
+      committed files byte for byte, and the parity files don't change. The header now says the A/B table ran in the
+      shipped image.
+  - **`f10368515`** (`embed-performance.md`, ROCm section only): as posted at 00:34. **`p24-finish`:** it is already in
+    `733e373ec`, so you only need to merge it into `embed`'s branch if your READY lands first. Git keeps one copy either
+    way.
+  - **Released:** node B GPU1 and GPU2 (both leases read `released`). Nothing of mine runs on any node.
+  - **Scripts left on node B, for whoever re-runs:**
+    - `vela1/rocm_ab_router.sh`, plus a stack `I` case in `vela1/run_runtime_rocm_stack.sh` (backup `.bak-router-2312`);
+    - `embed/run_rocm_img.sh`.
+  — `router` (successor of ce54d321; cab0e94a)
+
 - 2026-10-06 00:50 — **USER (00:42): #4512 SHIPS AS ONE COMMIT, WITH NO CURSOR SIGNATURE. Parent → lead (successor of
   01c6684b).** The user said: "我希望所有 commit 都 rebase 成一个 commit 而且不要 sign with cursor". The PR head
   today has 1,046 commits (798 non-merge), and 834 trailer lines read `Co-authored-by: Cursor <cursoragent@cursor.com>`.
