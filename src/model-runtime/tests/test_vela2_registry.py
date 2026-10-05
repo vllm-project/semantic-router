@@ -13,10 +13,11 @@ from vllm_sr_runtime.families.vela2.package import (
     COMMON_FILES,
     MANIFEST_FILE,
 )
+from vllm_sr_runtime.plugins.decisions import compare_answers, well_formed
 from vllm_sr_runtime.registry import builtin
 from vllm_sr_runtime.registry.artifacts import sha256_json
 from vllm_sr_runtime.registry.tables.common import REGISTRY_DIR
-from vllm_sr_runtime.supervision.readiness import GPU_TOLERANCE, compare, well_formed
+from vllm_sr_runtime.supervision.readiness import GPU_TOLERANCE
 
 MODELS = builtin.all_models("vela2")
 DECODERS = [model for model in MODELS if model.backbone == "qwen3_5_text"]
@@ -110,7 +111,10 @@ def test_every_size_has_well_formed_cpu_and_rocm_golden_answers(model) -> None:
             str(index): level for index, level in enumerate(levels)
         }
     cpu, rocm = model.golden_answers["cpu"], model.golden_answers["rocm"]
-    assert compare(cpu, rocm, GPU_TOLERANCE) == (len(GOLDEN_IDS), len(GOLDEN_IDS))
+    assert compare_answers(cpu, rocm, GPU_TOLERANCE) == (
+        len(GOLDEN_IDS),
+        len(GOLDEN_IDS),
+    )
     assert cpu["domain"]["choice"] == rocm["domain"]["choice"]
 
 
