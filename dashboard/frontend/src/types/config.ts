@@ -403,6 +403,7 @@ export interface PluginConfig {
     | 'request_params'
     | 'response_jailbreak'
     | 'context_compression'
+    | 'context_dedup'
     | 'prompt_cache'
     | 'shadow_dispatch'
   configuration: Record<string, unknown>
