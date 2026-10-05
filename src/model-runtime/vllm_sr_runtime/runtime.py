@@ -28,7 +28,7 @@ from typing import Any
 from .accel.autotune import freeze_autotune, pin_kernel_choices
 from .config import ModelConfig, ServeConfig
 from .errors import RuntimeServiceError
-from .placement import Placement, place
+from .placement import Placement, device_kind, place
 from .plugins import registry
 from .plugins.base import (
     DEADLINE,
@@ -259,7 +259,9 @@ class ServedModel:
         )
         profiles = self._profiles()
         default = profiles[config.profile]
-        cpu_models = sum(served.device == "cpu" for served in process.served_models())
+        cpu_models = sum(
+            device_kind(served.device) == "cpu" for served in process.served_models()
+        )
         engine_options = default.engine_options(
             EngineOptions(threads=process.threads, exclusive_cpu=cpu_models <= 1)
         )

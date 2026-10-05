@@ -47,7 +47,7 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--device",
         default=MODEL_DEFAULTS["device"],
-        help="auto, cpu, cuda[:N], rocm[:N], xpu[:N] or mps (default: %(default)s)",
+        help="auto, or an installed accelerator with an optional :N: cpu, cuda, rocm, xpu and mps are built in (default: %(default)s)",
     )
     parser.add_argument(
         "--host",

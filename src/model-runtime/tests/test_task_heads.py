@@ -296,7 +296,21 @@ def test_one_forward_reads_every_repeat_and_bundled_task(monkeypatch, client, ru
     assert len(calls) == 1 and len(calls[0]) == 2
 
 
-def test_engines_learn_whether_their_process_shares_the_cpu(packages, monkeypatch):
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "auto",
+            marks=pytest.mark.skipif(
+                torch.cuda.is_available(), reason="auto must land on the CPU"
+            ),
+        ),
+    ],
+)
+def test_engines_learn_whether_their_process_shares_the_cpu(
+    packages, monkeypatch, device
+):
     import vllm_sr_runtime.runtime as runtime_module
 
     seen = {}
@@ -317,7 +331,7 @@ def test_engines_learn_whether_their_process_shares_the_cpu(packages, monkeypatc
     alone, other = list(packages.items())[:2]
     for served in ((alone,), (alone, other)):
         models = tuple(
-            ModelConfig(model=str(path), name=name, device="cpu")
+            ModelConfig(model=str(path), name=name, device=device)
             for name, path in served
         )
         runtime = Runtime(ServeConfig(models=models, result_cache_entries=0))

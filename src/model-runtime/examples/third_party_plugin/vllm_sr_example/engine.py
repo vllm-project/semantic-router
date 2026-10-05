@@ -55,8 +55,8 @@ class CountsEngine(Engine):
     def supports(self, spec: ModelSpec, device: DeviceInfo) -> str | None:
         if spec.backbone.model_type != "example_counts":
             return f"no {spec.backbone.model_type!r} backbone"
-        if device.accelerator != "cpu":
-            return "example_counts runs on the CPU only"
+        if device.accelerator not in ("cpu", "example_host"):
+            return "example_counts runs on the host CPU only"
         return None
 
     def load(
