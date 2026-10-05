@@ -691,6 +691,73 @@ def test_store_default_follows_a_served_semantic_model():
     assert len(notes) == 0
 
 
+def test_vela_embedding_stores_get_a_vector_size_it_serves():
+    migrated, notes = _migrate(
+        _config(
+            {
+                "stores": {
+                    "response_cache": {
+                        "enabled": True,
+                        "backend_type": "redis",
+                        "embedding_model": "bert",
+                        "redis": {"index": {"vector_field": {"dimension": 384}}},
+                    },
+                    "memory": {
+                        "enabled": True,
+                        "backend": "milvus",
+                        "embedding_model": "mmbert",
+                        "milvus": {"dimension": 384},
+                        "valkey": {"dimension": 512},
+                    },
+                    "vector_store": {
+                        "enabled": True,
+                        "backend_type": "milvus",
+                        "embedding_dimension": 384,
+                    },
+                }
+            }
+        )
+    )
+
+    stores = migrated["global"]["stores"]
+    assert stores["response_cache"]["redis"]["index"]["vector_field"] == {
+        "dimension": 768
+    }
+    assert stores["memory"]["milvus"] == {"dimension": 256}
+    assert stores["memory"]["valkey"] == {"dimension": 512}
+    assert stores["vector_store"]["embedding_model"] == "mmbert"
+    assert stores["vector_store"]["embedding_dimension"] == 768
+    by_path = {note.path: note for note in notes}
+    for path in (
+        "global.stores.response_cache.redis.index.vector_field.dimension",
+        "global.stores.memory.milvus.dimension",
+        "global.stores.vector_store.embedding_dimension",
+    ):
+        assert by_path[path].action_required, path
+        assert by_path[path].message.startswith("384 -> "), path
+    assert "global.stores.memory.valkey.dimension" not in by_path
+
+
+def test_other_embedding_models_keep_their_vector_size():
+    source = _config(
+        {
+            "stores": {
+                "memory": {
+                    "enabled": True,
+                    "backend": "qdrant",
+                    "embedding_model": "multimodal",
+                    "qdrant": {"dimension": 384},
+                }
+            }
+        }
+    )
+
+    migrated, notes = _migrate(source)
+
+    assert migrated["global"]["stores"]["memory"]["qdrant"] == {"dimension": 384}
+    assert len(notes) == 0
+
+
 def test_signal_and_plugin_nli_options_and_mlp_devices_are_removed():
     decision = {
         "name": "grounded",
