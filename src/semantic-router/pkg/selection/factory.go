@@ -73,7 +73,7 @@ type Factory struct {
 	cfg                    *ModelSelectionConfig
 	modelConfig            map[string]config.ModelParams
 	categories             []config.Category
-	embeddingFunc          func(string, EmbeddingConfig) ([]float32, error)
+	embeddingFunc          func(context.Context, string, EmbeddingConfig) ([]float32, error)
 	defaultEmbeddingConfig EmbeddingConfig
 	lookupTable            lookuptable.LookupTable
 }
@@ -112,22 +112,45 @@ func (f *Factory) WithEmbeddingFunc(
 	fn func(string, EmbeddingConfig) ([]float32, error),
 	defaultConfig EmbeddingConfig,
 ) *Factory {
+	if fn == nil {
+		return f.WithContextEmbeddingFunc(nil, defaultConfig)
+	}
+	return f.WithContextEmbeddingFunc(func(_ context.Context, text string, cfg EmbeddingConfig) ([]float32, error) {
+		return fn(text, cfg)
+	}, defaultConfig)
+}
+
+// WithContextEmbeddingFunc sets a request-aware embedding function and the
+// default embedding space used by selectors without their own configuration.
+func (f *Factory) WithContextEmbeddingFunc(
+	fn func(context.Context, string, EmbeddingConfig) ([]float32, error),
+	defaultConfig EmbeddingConfig,
+) *Factory {
 	f.embeddingFunc = fn
 	f.defaultEmbeddingConfig = defaultConfig
 	return f
 }
 
-func (f *Factory) embeddingFuncFor(cfg EmbeddingConfig) func(string) ([]float32, error) {
+func (f *Factory) embeddingFuncFor(cfg EmbeddingConfig) func(context.Context, string) ([]float32, error) {
 	if f.embeddingFunc == nil {
 		return nil
 	}
-	return func(text string) ([]float32, error) {
-		return f.embeddingFunc(text, cfg)
+	return func(ctx context.Context, text string) ([]float32, error) {
+		return f.embeddingFunc(ctx, text, cfg)
 	}
 }
 
-func (f *Factory) defaultEmbeddingFunc() func(string) ([]float32, error) {
+func (f *Factory) defaultEmbeddingFunc() func(context.Context, string) ([]float32, error) {
 	return f.embeddingFuncFor(f.defaultEmbeddingConfig)
+}
+
+func backgroundEmbeddingFunc(embed func(context.Context, string) ([]float32, error)) func(string) ([]float32, error) {
+	if embed == nil {
+		return nil
+	}
+	return func(text string) ([]float32, error) {
+		return embed(context.Background(), text)
+	}
 }
 
 // WithLookupTable sets the lookup table used by selectors that support data-driven
@@ -154,7 +177,7 @@ func (f *Factory) Create() Selector {
 	case MethodRouterDC:
 		routerDCSelector := NewRouterDCSelector(f.cfg.RouterDC)
 		if embed := f.defaultEmbeddingFunc(); embed != nil {
-			routerDCSelector.SetEmbeddingFunc(embed)
+			routerDCSelector.setContextEmbeddingFunc(embed)
 		}
 		// Initialize model embeddings from descriptions in model config
 		if f.modelConfig != nil {
@@ -177,7 +200,7 @@ func (f *Factory) Create() Selector {
 			hybridSelector.InitializeFromConfig(f.modelConfig, f.categories)
 		}
 		if embed := f.defaultEmbeddingFunc(); embed != nil && hybridSelector.routerDCSelector != nil {
-			hybridSelector.routerDCSelector.SetEmbeddingFunc(embed)
+			hybridSelector.routerDCSelector.setContextEmbeddingFunc(embed)
 		}
 		if f.lookupTable != nil {
 			hybridSelector.SetLookupTable(f.lookupTable)
@@ -190,7 +213,7 @@ func (f *Factory) Create() Selector {
 			gmtRouterSelector.InitializeFromConfig(f.modelConfig)
 		}
 		if embed := f.defaultEmbeddingFunc(); embed != nil {
-			gmtRouterSelector.SetEmbeddingFunc(embed)
+			gmtRouterSelector.SetEmbeddingFunc(backgroundEmbeddingFunc(embed))
 		}
 		selector = gmtRouterSelector
 
@@ -256,7 +279,7 @@ func (f *Factory) CreateAll() *Registry {
 	}
 	routerDCSelector := NewRouterDCSelector(routerDCCfg)
 	if embed := f.defaultEmbeddingFunc(); embed != nil {
-		routerDCSelector.SetEmbeddingFunc(embed)
+		routerDCSelector.setContextEmbeddingFunc(embed)
 	}
 	// Initialize model embeddings from descriptions in model config
 	if f.modelConfig != nil {
@@ -306,34 +329,38 @@ func (f *Factory) CreateAll() *Registry {
 	mlSelectorEmbedding := f.embeddingFuncFor(mlEmbeddingConfig)
 
 	// Create KNN selector
-	knnAdapter, err := CreateKNNSelector(mlCfg, mlSelectorEmbedding)
+	knnAdapter, err := CreateKNNSelector(mlCfg, nil)
 	if err != nil {
 		logging.Warnf("[SelectionFactory] Failed to create KNN selector: %v", err)
 	} else {
+		knnAdapter.setContextEmbeddingFunc(mlSelectorEmbedding)
 		registry.Register(MethodKNN, knnAdapter)
 	}
 
 	// Create KMeans selector
-	kmeansAdapter, err := CreateKMeansSelector(mlCfg, mlSelectorEmbedding)
+	kmeansAdapter, err := CreateKMeansSelector(mlCfg, nil)
 	if err != nil {
 		logging.Warnf("[SelectionFactory] Failed to create KMeans selector: %v", err)
 	} else {
+		kmeansAdapter.setContextEmbeddingFunc(mlSelectorEmbedding)
 		registry.Register(MethodKMeans, kmeansAdapter)
 	}
 
 	// Create SVM selector
-	svmAdapter, err := CreateSVMSelector(mlCfg, mlSelectorEmbedding)
+	svmAdapter, err := CreateSVMSelector(mlCfg, nil)
 	if err != nil {
 		logging.Warnf("[SelectionFactory] Failed to create SVM selector: %v", err)
 	} else {
+		svmAdapter.setContextEmbeddingFunc(mlSelectorEmbedding)
 		registry.Register(MethodSVM, svmAdapter)
 	}
 
 	// Create MLP selector (GPU-accelerated via Candle)
-	mlpAdapter, err := CreateMLPSelector(mlCfg, mlSelectorEmbedding)
+	mlpAdapter, err := CreateMLPSelector(mlCfg, nil)
 	if err != nil {
 		logging.Warnf("[SelectionFactory] Failed to create MLP selector: %v", err)
 	} else {
+		mlpAdapter.setContextEmbeddingFunc(mlSelectorEmbedding)
 		registry.Register(MethodMLP, mlpAdapter)
 	}
 
@@ -358,7 +385,7 @@ func (f *Factory) CreateAll() *Registry {
 		gmtRouterSelector.InitializeFromConfig(f.modelConfig)
 	}
 	if embed := f.defaultEmbeddingFunc(); embed != nil {
-		gmtRouterSelector.SetEmbeddingFunc(embed)
+		gmtRouterSelector.SetEmbeddingFunc(backgroundEmbeddingFunc(embed))
 	}
 	registry.Register(MethodGMTRouter, gmtRouterSelector)
 

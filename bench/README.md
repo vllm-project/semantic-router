@@ -161,6 +161,33 @@ For a live comparison, provide both endpoints and set explicit acceptance
 thresholds. `--require-router-diagnostics` checks the maintained `x-vsr-*`
 response-header contract.
 
+The maintained task runner has explicit protocol and continuation modes. Chat
+Completions always uses full message history:
+
+```bash
+python bench/agent_task_live_benchmark.py \
+  --protocol chat \
+  --continuation-mode full-history \
+  --dry-run \
+  --output-dir results/agent-tasks-chat
+```
+
+Native Responses lineage sends only the current turn and chains the returned
+response identifier. The runner resends stable instructions on each request:
+
+```bash
+python bench/agent_task_live_benchmark.py \
+  --protocol responses \
+  --continuation-mode previous-response-id \
+  --dry-run \
+  --output-dir results/agent-tasks-responses
+```
+
+`--continuation-mode previous-response-id` is rejected for Chat Completions,
+so Responses-only fields cannot accidentally enter a Chat request. Each output
+row records the protocol, continuation mode, effective turn identity, response
+lineage, selected model, and normalized token usage.
+
 The related tools are intentionally separate:
 
 | Tool | Purpose |

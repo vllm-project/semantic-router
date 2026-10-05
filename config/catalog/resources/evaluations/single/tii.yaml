@@ -1,0 +1,270 @@
+- id: tii/falcon-h1r-7b-aime-2025@1.0.0
+  model: tii/falcon-h1r-7b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1R 7B
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.831
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1R-7B
+    redistributable: true
+- id: tii/falcon-h1r-7b-gpqa-diamond@1.0.0
+  model: tii/falcon-h1r-7b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1R 7B
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.613
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1R-7B
+    redistributable: true
+- id: tii/falcon-h1r-7b-math-500@1.0.0
+  model: tii/falcon-h1r-7b
+  benchmark: huggingfaceh4/math-500@1.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1R 7B
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.974
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1R-7B
+    redistributable: true
+- id: tii/falcon-h1r-7b-ifbench@1.0.0
+  model: tii/falcon-h1r-7b
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1R 7B
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.534
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1R-7B
+    redistributable: true
+- id: tii/falcon-h1r-7b-humanitys-last-exam@1.0.0
+  model: tii/falcon-h1r-7b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1R 7B
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.111
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1R-7B
+    redistributable: true
+- id: tii/falcon-h1-0.5b-instruct-aime-2025@1.0.0
+  model: tii/falcon-h1-0.5b-instruct
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1 0.5B Instruct
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.0438
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct
+    redistributable: true
+- id: tii/falcon-h1-0.5b-instruct-gpqa-diamond@1.0.0
+  model: tii/falcon-h1-0.5b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1 0.5B Instruct
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.2795
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct
+    redistributable: true
+- id: tii/falcon-h1-0.5b-instruct-math-500@1.0.0
+  model: tii/falcon-h1-0.5b-instruct
+  benchmark: huggingfaceh4/math-500@1.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1 0.5B Instruct
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.584
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct
+    redistributable: true
+- id: tii/falcon-h1-0.5b-instruct-ifeval@1.0.0
+  model: tii/falcon-h1-0.5b-instruct
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1 0.5B Instruct
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.7202
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct
+    redistributable: true
+- id: tii/falcon-h1-0.5b-instruct-mmlu-pro@1.0.0
+  model: tii/falcon-h1-0.5b-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1 0.5B Instruct
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.3103
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1-0.5B-Instruct
+    redistributable: true
+- id: tii/falcon-h1-34b-instruct-aime-2025@1.0.0
+  model: tii/falcon-h1-34b-instruct
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1 34B Instruct
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.1667
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct
+    redistributable: true
+- id: tii/falcon-h1-34b-instruct-gpqa-diamond@1.0.0
+  model: tii/falcon-h1-34b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1 34B Instruct
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.4966
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct
+    redistributable: true
+- id: tii/falcon-h1-34b-instruct-math-500@1.0.0
+  model: tii/falcon-h1-34b-instruct
+  benchmark: huggingfaceh4/math-500@1.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1 34B Instruct
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.838
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct
+    redistributable: true
+- id: tii/falcon-h1-34b-instruct-ifeval@1.0.0
+  model: tii/falcon-h1-34b-instruct
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1 34B Instruct
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.8937
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct
+    redistributable: true
+- id: tii/falcon-h1-34b-instruct-mmlu-pro@1.0.0
+  model: tii/falcon-h1-34b-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Falcon H1 34B Instruct
+    model_revision: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.5873
+  status: available
+  observed_at: 2026-09-27
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct
+    redistributable: true

@@ -54,6 +54,7 @@ const AcknowledgementsSection: React.FC = () => {
                     src={project.logo}
                     alt={project.name}
                     className={styles.projectLogo}
+                    loading="lazy"
                   />
                 </div>
                 <span className={styles.projectMeta}>
