@@ -205,6 +205,81 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:00 — **`fu-srun` → fu-lead, parent: INTEGRATION READY fu-srun 23fd746fc (#4618: the runtime is
+  `vllm-srun`, published with `vllm-sr`, installed by `vllm-sr[runtime]`; release notes; zh-Hans
+  `source_commit`).**
+  - **Branch** `xunzhuo/model-runtime-fu-srun` = 5 signed commits on `6a387d587`:
+    `4d51146ae` [Refactor] rename, `4aeff1e15` [CI/Build] publisher and extra, `31965bcfd` [Docs] install and
+    release note, `cfb0ef6b0` [Docs] zh-Hans re-point, `23fd746fc` [Docs] release-note links (see the website
+    check). Staging is still `6a387d587`, so it merges as a fast-forward.
+  - **Renamed (no shims):**
+    - distribution and command `vllm-srun` (serve, models, plugins, devices, fixture); module `vllm_srun`
+      (`git mv`); entry-point groups `vllm_srun.families`, `.engines`, `.accelerators`, `.profiles`;
+    - `VLLM_SRUN_COMMAND`, `_DIR`, `_CACHE_DIR`, `_PREPARED_DIR`, `_RESULT_CACHE`, `_CPU_PROCESSES`,
+      `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` (`main` has no other such variable); metrics `vllm_srun_*`;
+    - the router (command, env, temp dir), the CLI's engine mode and install hint, both Dockerfiles, E2E profiles,
+      CI cache keys, `domains.yaml`, ruff config, the plugin example and its test, design doc, en and zh-Hans docs.
+    - Helm, the operator and the dashboard named none of them, so they are unchanged.
+    - Old-name occurrences: 777 on `main`, 52 left, all listed under "kept".
+  - **Kept, with reasons:**
+    - `VLLM_SR_RUNTIME_CONFIG_PATH`, `_STATUS_DIR`, `_CONTAINERS`: v0.4.0, CLI and dashboard (as ruled).
+    - `VLLM_SR_RUNTIME` in `install.sh` and its test harness: v0.4.0, the installer's container-runtime choice.
+    - `vllm-sr-runtime-container`: a v0.4.0 dashboard test value that names the stack container.
+    - `docs/records/stores-consumers.md:30`: what ran at that record's pinned mirror. Records keep numbers;
+      their reproduction commands use the new names.
+    - The release note's before/after table, for users of `main` builds.
+    - Generic names of the concept stay: `provider: model_runtime`, `src/model-runtime`, the `model-runtime`
+      make targets, domain, image key and E2E profile.
+  - **Publisher:**
+    - `src/model-runtime/pyproject.toml` is 0.4.0 = `vllm-sr`. `vllm-sr[runtime]` = `["vllm-srun==0.4.0"]`.
+      `check_version_contract.py`, `release.sh` (release and next-cycle bumps) and the dev rewrite keep all
+      three equal. The release body shows `pip install "vllm-sr[runtime]==<version>"` (a contract marker).
+    - `package_contract.py` builds, twine-checks and verifies sdist and wheel of both packages (one manifest).
+      The new `package.runtime` check installs `vllm-sr[runtime]` from the wheels with CPU PyTorch in a fresh
+      venv, runs `vllm-srun models` and `plugins` and serves a fixture through `vllm-sr serve`.
+    - `pypi-publish.yml` uploads `vllm-srun` first (trusted publishing), then `vllm-sr` (token), on the stable and
+      dev channels; callers grant `id-token: write`. Runtime-only `main` changes now qualify and publish the pair.
+    - uv locks the CLI's extra against the checkout (`[tool.uv.sources]`; `uv.lock` +834 lines).
+  - **Docs:** the Quickstart (en, zh-Hans): PyTorch from the hardware's index, `pip install "vllm-sr[runtime]"`,
+    `vllm-sr serve`; ROCm byte-identity only in the router images; checkout only for development. Also the
+    READMEs (the PyPI pages), the design doc and the maintainer runbook.
+  - **Release notes:** `website/docs/release-notes/built-in-model-runtime.md`, the repo's convention (one page
+    per breaking change set; the migration guide links it). Paste-ready section for the GitHub release and the
+    PR body: `mr-scratch/fu-srun/release-notes.md`. It covers all seven #4512 items and this PR.
+  - **`source_commit`:** 14 zh-Hans pages named pre-squash #4512 commits; all now name `6a387d587` (each English
+    page is identical at both). zh-Hans metadata errors: 51 → 37. The 37 are older: 35 name commits of other
+    squash-merged PRs, and 2 pages have no metadata.
+    - **Post-merge re-point needed** (their English changes here): `model-runtime/{quickstart,choose-a-model,
+      troubleshooting,migrate}.md` → the squash commit. They read "needs verification" until then (31 → 35).
+  - **Checks, on `cfb0ef6b0` (`23fd746fc` changes only 3 links in the release note) unless noted:**
+    - node A `make check` (all 16 minimum checks: router, CLI 3,162, runtime 642, E2E units 155, docs, catalog,
+      client, training) exit 0; `make harness-check` exit 0; `make impact` lists 5 optional profiles.
+    - Kind `model-runtime` 10 / 10 (333 s); CLI integration suite 22 / 22 (217 s).
+    - CPU images (extproc, vllm-sr, model-runtime) as uid 65532, read-only root: `vllm-srun models` (32) and
+      `plugins` pass; no old command or module; `VLLM_SRUN_CACHE_DIR` set.
+    - #4618 acceptance in a fresh python:3.12 container: `pip install torch` (CPU, 2.14.1) and
+      `"vllm-sr[runtime]"` from the built wheels, `vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B`: ready, golden
+      3 / 3 matched, and it answers the Quickstart's documented values (code 0.504, noul 0.519).
+    - Publisher dry runs (local): main channel 10 / 10 checks with `--verify-dist`; a simulated 0.5.0 release
+      (snapshot, `release.sh`, contract, build-only, `--verify-dist`): the tag and both wheels say 0.5.0.
+    - Website build, both locales, on `23fd746fc`: pass, 0 broken links. Its first run, on `cfb0ef6b0`, failed
+      on three links of the new release note in the zh-Hans build; `23fd746fc` fixes them.
+    - Node A claim released; nothing of mine runs (Kind cluster deleted).
+  - **Maintainer, before the first publish:** add a pending PyPI trusted publisher for `vllm-srun` (owner
+    `vllm-project`, repository `semantic-router`, workflow `pypi-publish.yml`, no environment), and one on
+    TestPyPI for the manual dispatch. In the release notes and the maintainer runbook.
+  - **For the parent to decide:**
+    1. The existing `vllm-sr` upload uses the `PYPI_API_TOKEN` secret, not trusted publishing. I kept it and
+       gave only `vllm-srun` trusted publishing, as #4618 says. Switching `vllm-sr` too is a one-step change.
+    2. Configure the publisher before this PR merges: the first `main` dev publish otherwise fails at the
+       `vllm-srun` upload, before `vllm-sr` (the job goes red; nothing half-published).
+    3. `main` stays 0.4.0, so dev builds are `0.4.0.devN`, which sort below the released 0.4.0. Until the next
+       stable release ships `vllm-srun`, the docs' `pip install "vllm-sr[runtime]"` resolves to 0.4.0, which
+       has no `runtime` extra. Accept that (the docs describe the next release), or let me add a
+       "from a checkout until then" note to the Quickstart.
+    4. Keep or drop the `uv.lock` growth (torch and CUDA packages via the checkout source).
+  — `fu-srun`
+
 - 2026-10-06 12:37 — **`fu-lead` → `fu-srun`, parent: early review of `cfb0ef6b0`: the rename is clean; one P1 in the
   publisher and one evidence request. Fold them into your READY.**
   - **Clean:** besides the release note's rename table, only two old names are left, both meant: a record that
