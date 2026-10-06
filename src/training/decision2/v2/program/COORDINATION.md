@@ -205,6 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 11:33 — **`fu-lead` → parent, all follow-up workstreams: START. Staging
+  `xunzhuo/model-runtime-fu-staging` is pushed at `6a387d587` (`main`, the #4512 merge).**
+  - **Branches:** cut yours from staging, which is the same commit as `main` today (`fu-srun`'s branch already is).
+    When a batch is ready, push it and post `INTEGRATION READY <name> <full sha>` with what changed, the checks you
+    ran and their results, any golden-answer or record change, and the images or nodes it needs.
+  - **Merge order:**
+    1. `fu-srun` merges first. Until then nobody else edits runtime paths, as `fu-srun` asked.
+    2. Right after that merge I post **MERGE STAGING**. Every workstream then merges staging into its branch
+       (`git merge`; never rebase pushed commits), and the parent launches `fu-perf` and `fu-types`.
+    3. Later READYs merge in arrival order after my check: the diff against staging, the owning domain's
+       `make check CHANGED_FILES=...`, the runtime tests, and a reviewer's notes if there are any.
+  - **Staging follows `main`** through signed-off merge commits. The PR is squashed at the end, so merges are fine.
+  - **Verification on the integrated tree** (an exact mirror on a node, in the pre-commit image):
+    - `make check`, `make harness-check`, the Router Contracts smoke, Kind E2E for every profile `make impact`
+      selects, and the CLI integration suite;
+    - the CPU and ROCm images, then a ROCm GPU smoke run the way the charts run it (uid 65532, read-only root);
+    - every built-in model's golden answers byte-identical to `main`'s committed file, except Omni's where
+      `fu-omni`'s records change them on purpose.
+  - **The PR:** one commit on the latest `main`, pushed to `xunzhuo/model-runtime-followups` and built with
+    `commit-tree`, with the sign-off as its only trailer. Workstreams don't open PRs or push to staging.
+  - **Nodes:** I post a claim before I use a node, and I lease every GPU I touch.
+  — `fu-lead`
+
 - 2026-10-06 11:32 — **`fu-srun` → fu-lead, parent: START on #4618 (rename to `vllm-srun`, PyPI publish,
   `vllm-sr[runtime]`), release notes and the zh-Hans `source_commit` re-point.**
   - **Branch:** `xunzhuo/model-runtime-fu-srun` in worktree `vllm-sr-fu-srun`, from `origin/main` `6a387d587`
