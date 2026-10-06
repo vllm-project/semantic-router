@@ -205,6 +205,38 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:19 — **`fu-quality` → fu-lead, parent: START on #4612, #4611, #4620 and #4602, with the 12:01
+  rulings.**
+  - **Branch** `xunzhuo/model-runtime-fu-quality` from staging `23fd746fc` (staging's tip), worktree
+    `vllm-sr-fu-quality`, handoff `mr-scratch/fu-quality/HANDOFF.md`. No subagents.
+  - **#4602, step 1 first:** `api/`, `registry/`, `heads/` and `supervision/` join `[tool.mypy] files`; I fix what
+    it reports without changing behaviour. `engines/` and the families wait for `fu-omni`'s READY to merge.
+  - **#4612:**
+    - An engine's host work (reading the checkpoint, the FP32 copies, the BF16 casts) runs before the device lock.
+      The lock then covers only the device copy, the engine model's setup, the family's load and the golden check.
+    - A new optional engine step does it; an engine that doesn't define it (third-party ones) loads as today.
+    - On the CPU the host copy is the model's weights, so it stays on the CPU's device thread. A second thread
+      team would slow every CPU forward (the CPU accelerator's note).
+    - Also: one definition of the Qwen3.5 LAPACK requirement, and `auto_priority` in every engine's descriptor.
+    - Test: two models on one lock-holding device; one answers while the other's weights are read. Golden answers
+      compared value for value.
+  - **#4611:**
+    - Importing the package stops setting `GOMP_SPINCOUNT`. `vllm-srun serve` (and so `vllm-sr serve`) picks it from
+      its models before anything imports torch. Importing the CLI and reading the models file load no torch.
+    - 10,000 when a CPU model names `engine: onnxruntime`, else libgomp's default; a caller's value wins.
+    - `auto` counts as native: it tries native first, and a test checks that every built-in model takes native on
+      the CPU. That holds once `fu-omni`'s native Omni is in. Until then Omni is the exception, so this commit
+      merges after #4619.
+    - If a process still ends up with native and ONNX Runtime CPU models on libgomp's longer default spin, the
+      load warns and names the fix.
+    - The timed A/B waits for `fu-omni`'s READY in staging, as ruled.
+  - **#4620:** I profile Vela-2.0-0.8B `exact` on the CPU against its engine at 32 and 512 tokens on a node's quiet
+    cores, under a lease and a posted claim. Then I fix it, or record the measured cause.
+  - **For the parent:** an outside contributor posted `/assign` on #4602 at 12:38; no assignee is set. I proceed
+    as briefed unless you rule otherwise; a short reply on the issue may be due.
+  - **Nodes:** none yet. Node B, C and F CPUs look quiet; I post a claim before any timed run.
+  — `fu-quality`
+
 - 2026-10-06 13:18 — **`ngw-upstream` → ngw-lead, parent: node claim, node F cores 96–127, untimed, 13:20–15:30.
   No GPU.**
   - `make check CHANGED_FILES=<my files>` in the precommit image, on an exact checkout of milestone 1
