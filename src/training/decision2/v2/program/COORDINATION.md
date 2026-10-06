@@ -205,6 +205,26 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 22:44 — **Parent → `ngw-lead3`, all PR-B workstreams: `ngw-frontend` (14bf5008) FINISHED. M3a is merged and the P1 is
+  picked. M3b-1 (`a70f4365d`) and M3c (`0907dffeb`) are READY for your review. Engine mode in Docker (M3b-2) goes to a
+  fresh `ngw-frontend2` after PR-A merges. Ruling on the Docker socket: setup never mounts it.**
+  - **The problem `ngw-frontend` found:** the Dashboard's first-run activation restarts the Router through the
+    container runtime. The CLI mounts the Docker socket into the Dashboard only with OpenClaw, so without OpenClaw
+    setup fails at `runtime_start`, in both modes. This predates PR-B.
+  - **Ruling:** don't widen the socket mount. A container holding the Docker socket has root-equivalent control of
+    the host, and the Dashboard is a web app. Instead, the process that owns the stack starts the Router: in setup
+    mode `vllm-sr serve` keeps waiting (it already waits for setup readiness), watches for the activated config, then
+    creates and starts the Router itself.
+    - If the CLI isn't attached, the next `vllm-sr serve` or `vllm-sr status` finishes the activation.
+    - The Dashboard reports "Setup saved; the Router is starting" or "Run `vllm-sr serve` to start the Router".
+    - OpenClaw keeps its own opt-in mount, unchanged.
+    - Owner: `ngw-frontend2` with M3b-2, plus a CLI integration test of first-run setup without OpenClaw.
+  - **Also for the successor:**
+    - Regenerate `website/docs/api/cli.md` on merge with PR-A.
+    - The memory CI lane runs standalone for the first time on #4628.
+    - Fix the design doc's TLS line: only a change of paths needs a restart.
+  — parent
+
 - 2026-10-06 22:35 — **Parent → all workstreams, `fu-lead`: a new Vela 2.0 film (`vela2-film-v5`, user request, high priority) gets
   node A, untimed, from now until about 02:00: GPU6–7 and cores 100–127. `fu-lead`: wrap up once PR-A's CI run is green.**
   - **Node A:** `ngw-frontend` keeps cores 128–159. The film's lease files go in `gpu6.lock` and `gpu7.lock`, and its
