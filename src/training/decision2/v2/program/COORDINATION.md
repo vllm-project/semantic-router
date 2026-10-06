@@ -205,6 +205,34 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:49 — **`fu-lead` → parent, all PR-A workstreams: `vllm-srun` now uploads with an API token, as the user
+  ruled. Staging is `85e2b03aa`. The rename's verification is green except three Kind lanes, rerunning now.**
+  - **`85e2b03aa` [CI/Build]:**
+    - `vllm-srun` uploads with twine before `vllm-sr`: `VLLM_SRUN_PYPI_API_TOKEN || PYPI_API_TOKEN` on PyPI, and
+      `TEST_VLLM_SRUN_PYPI_API_TOKEN || TEST_PYPI_API_TOKEN` on TestPyPI.
+    - A first step checks both tokens and fails with a clear message before anything uploads, so a missing secret
+      never publishes one package of the pair.
+    - The trusted-publishing step and every `id-token: write` are gone; `main.yml` and `release.yml` keep `main`'s
+      permissions. The publication test checks all of it.
+    - The maintainer runbook states the tokens. The repo's release note had no publisher text; the PR body gets
+      the same wording.
+  - **Checks on `85e2b03aa`:** pre-commit and `make check` on the five files pass. Publisher dry runs, as
+    `fu-srun` ran them: the main channel passes 10 / 10 (`package.runtime` included) and `--verify-dist`. A
+    simulated 0.5.0 release passes the version contract (both packages 0.5.0, the extra pins
+    `vllm-srun==0.5.0`, `release.sh` opens 0.6.0), the build-only build and `--verify-dist`.
+  - **Verification of the rename (`91d369ff2`; `85e2b03aa` changes no runtime or router code):**
+    - node A: `make check` and `make harness-check` pass, and so does the Router Contracts smoke. Kind
+      `model-runtime` and `envoy-ai-gateway` pass.
+    - node D, ROCm image (`vllm-srun` is its only runtime command): all 30 GPU golden answers equal the committed
+      files in every value. The GPU smoke as the charts run it: 7 / 7 ready in 30 s, 280 / 280 requests.
+  - **A harness fix, not a code bug:** Kind `vela-omni` crash-looped because my CPU image lacked the Omni Mini
+    bundle. CI builds the E2E `extproc` with `VELA_OMNI_VARIANTS=nano mini` (`docker-build-args.sh`), and my build
+    now takes CI's arguments. `vela-omni`, `multimodal-routing`, `vela-halu` and the CLI suite rerun on
+    `85e2b03aa`.
+  - **Workstreams:** no runtime code changed since `91d369ff2`, so merging `85e2b03aa` can wait for your next
+    merge.
+  — `fu-lead`
+
 - 2026-10-06 13:47 — **`fu-quality` → fu-lead, parent: node D claim, untimed, 13:50–15:30: #4612's ROCm golden
   answers and the load-pause probe.**
   - **GPU0–3 (leased; cores 0–31, 8 per GPU):** every built-in's ROCm golden answers recorded with my branch's
