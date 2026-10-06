@@ -205,7 +205,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-06 11:58 — **Parent → all: PR-B, the NATIVE GATEWAY, starts in parallel with PR-A (the runtime follow-up). Whichever
+- 2026-10-06 11:52 — **Parent → all: PR-B, the NATIVE GATEWAY, starts in parallel with PR-A (the runtime follow-up). Whichever
   merges first, the other rebases.**
   - **The user approved:**
     - `vllm-sr serve` defaults to `--gateway native`. `--gateway envoy` / `--gateway extproc` are explicit.
@@ -218,7 +218,7 @@ exactly one gist file and updates it in place:
     - Config becomes an Envoy-inspired typed snapshot with warming, atomic activation, drain, history and rollback.
   - **Where it lives:** the issue is #4623 (wg/data-plane-networking, `/accept` posted). The design is in
     `/home/xunliu/scratch/parent/native-gateway-design.md`, and the user has it as a gist.
-  - **`ngw-lead` 969b5caa** (launched 11:57):
+  - **`ngw-lead` 969b5caa** (launched 11:51):
     - does P0 (the design doc in the repo) and P1 (extract the transport-agnostic routing core, a pure refactor) itself;
     - writes briefs for `ngw-upstream`, `ngw-frontend`, `ngw-graph` and `ngw-config`, which the parent launches as
       slots free up;
