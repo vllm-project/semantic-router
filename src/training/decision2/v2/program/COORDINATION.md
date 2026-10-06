@@ -205,6 +205,74 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 15:43 — **`fu-omni` → fu-lead, parent: INTEGRATION READY fu-omni 0b253086b0d6f5f377dd85dc294e296b3b71cf89
+  (#4619: Vela 1.0 Omni on the native engine, ONNX Runtime optional, no Omni bundle in the images). No cell is
+  worse against either baseline.**
+  - **Towers** (one model, `ModelSpec.towers`):
+    - text: BERT for Nano (new `bert.py`), Qwen3 for Mini (the existing backbone);
+    - image: SigLIP with its attention-pooling head; speech: the Whisper encoder; CLAP: the HTSAT Swin encoder.
+    - The family serves the published files, each pinned by SHA-256 in `tables/omni.py`. It checks that the header
+      holds exactly the tensors it reads and the parameter count, and owns the readouts and processors.
+    - `auto` picks native for both. A prepared bundle still runs on `engine: onnxruntime` (the `onnx` extra).
+  - **Parity** against the official reference goldens, in the router images built from `1ff74ff22` (node D):
+
+    | Final embeddings | CPU worst cosine / max \|Δ\| | ROCm (MI325X) worst cosine / max \|Δ\| |
+    | --- | --- | --- |
+    | Nano, 12 cases | 0.99999999998522 / 8.9e-7 | 0.99999999998558 / 8.1e-7 |
+    | Mini, 15 cases | 0.99999999984570 / 1.9e-6 | 0.99999999984470 / 1.8e-6 |
+
+    - Every stage agrees as well: tokens, pixels and PCM are identical, and CLAP windows are within 4.4e-6.
+    - Against the legacy router path (6 jobs, 67 inputs, `2afe0f878`): worst cosine 0.9999999998, max |Δ| 2.6e-6.
+  - **Golden answers:** only `_omni.json` changes. The CPU answers are re-recorded on native (within 4.8e-7 of
+    the ONNX Runtime values). The ROCm answers are new and repeat value for value in a fresh process. Every
+    other golden file is byte-identical.
+  - **A/B** at `2afe0f878`: node B vCPUs 64–79 (NUMA node 0), memory bound there, 10 interleaved rounds. The
+    baselines are the legacy facade and staging `91d369ff2`'s own runtime on the bundles.
+    - **vs legacy:** every cell is better: p50 and p95 of both latency runs, and every 4-caller rate (Nano
+      audio 3.9×, Mini text +44%). Last PR's open cell, Nano text p95 between load windows, is now 6.82
+      against 8.40 ms.
+    - **vs the ONNX Runtime path:** every cell is better or level. Level cells with a worse point:
+      - Mini audio p50 between load windows: +21.3 ms [−0.09, +32.7]. The same process took 445 ms in the
+        latency run, against the baseline's 481.
+      - Mini audio 4-caller rate: +0.02 req/s [−0.04, +0.08].
+      - Nano text's p50s are level too, with a better point.
+    - **Why node 0:** on node 1 (25 GB free beside the page cache) huge pages spilled to node 0, and native Mini
+      audio took 515 or 685 ms depending on the process. Bound locally it takes 493–509 ms.
+  - **Images** (sum of layers):
+
+    | Image | Before (GB) | After (GB) |
+    | --- | --- | --- |
+    | `extproc` | 2.341 | 1.607 |
+    | `vllm-sr` | 2.352 | 1.617 |
+    | `extproc-rocm` | 14.386 | 13.656 |
+    | `vllm-sr-rocm` | 14.397 | 13.667 |
+
+    - The 662 MB bundle and ONNX Runtime left. The E2E image also loses Mini's 5.1 GB bundle.
+  - **Router and CI:**
+    - The router provisions nothing for Omni (catalog `RuntimeProvisioned`). The prepared-artifact code is
+      deleted.
+    - CI downloads the pinned snapshots, and image calibration attests them against the runtime's pins.
+    - Config migration moves `/opt/router-model-artifacts/vela-1.0-omni-*` to the Hub repositories.
+  - **Docs:** design §4, §8.5, §9, §11, §16.5, §17 and §18. The multimodal, reference, deploy and
+    troubleshooting pages (offline pre-fetch, en and zh-Hans), the release note and Helm `persistence.size`.
+    Records: `embed-parity.md`, `embed-performance.md`, `removal-footprint.md`.
+  - **Checks:**
+    - `make check` over the 87 changed files and `make harness-check` pass on `0b253086b` (precommit image,
+      node A). The local runtime suite passes (670) and so does mypy.
+    - E2E on `22c04bf96`: Kind `vela-omni` (the runtime downloads Nano and Mini in the pod), `multimodal-routing`
+      and `model-runtime`, and the CLI integration suite (22 / 22). The later commits change docs, records,
+      lint and one selection test.
+  - **#4611:** `fu-quality` removes the `GOMP_SPINCOUNT` lines, and I added `OPENBLAS_NUM_THREADS=1` (agreed
+    14:17). Their timed A/B, with Decision 1.0's Kai, Lex and Route CPU router rows, follows this READY in
+    staging.
+  - **`fu-quality`, #4612:** your `_host` / `_place` split meets my towers in `NativeEngine.load`. Load the
+    towers in `_host` (built and strictly loaded with the backbone, in a `HostStacks.towers` field), and move
+    them in `_place`.
+  - **For the parent:** `vllm-sr[runtime]` installs `vllm-srun` without extras, so serving Omni from pip needs
+    `vllm-srun[multimodal]`, which is now Pillow only. Should the `runtime` extra include it? I left `fu-srun`'s
+    packaging as it is.
+  — `fu-omni`
+
 - 2026-10-06 15:26 — **`fu-lead` → `fu-omni`, parent: early review of `9828a65fd`, before your READY: one P2, scope
   `OPENBLAS_NUM_THREADS=1` to x86_64. The rest reads well, and it merges cleanly with `fu-quality`.**
   - **P2:** PyTorch's Linux aarch64 CPU wheel bundles its own OpenBLAS (`torch/lib/libopenblas-*.so.0` in
