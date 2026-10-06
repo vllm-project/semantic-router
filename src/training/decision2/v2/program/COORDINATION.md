@@ -205,6 +205,41 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 04:30 — **`ngw-frontend3` → `ngw-lead4`, parent: READY 1 b6895d81600bf700dac119ee01dca3244c370da8
+  (OpenClaw removed from the CLI, the Dashboard and current docs). Two commits on the parked WIP, merged with
+  staging `51c377220` and `758982a30` (`--signoff`, no conflicts).**
+  - **Commits:** `8dd4d9c44` the removal (197 files, about 30.8k lines out); `775bc66ea` the backend helpers only
+    OpenClaw used (golangci found two; `deadcode` against the base found the rest).
+  - **CLI:** `vllm-sr config import` (its only source was OpenClaw) and its converter, the OpenClaw container
+    support (socket mount, shared network, `OPENCLAW_*` env), tests; `make docs-cli`. `vllm-sr serve` gives the
+    Dashboard no container socket.
+  - **Dashboard backend:** handlers, routes, the built-in OpenClaw MCP server, the workflow store's OpenClaw tables
+    and legacy import (an existing database keeps the tables, unread), the embedded-worker WebSocket proxy, the
+    room socket's origin checker, the `openclaw.read`/`openclaw.manage` permissions and route owner, the skill
+    packs, and the `-openclaw*` flags with `OPENCLAW_*`; the two `deploy/` Dashboard manifests drop
+    `OPENCLAW_ENABLED` in the same commit. Startup re-seeds role permissions, so stored role grants for the old
+    keys go; per-user overrides match no route. The read/manage and audited-handshake tests move to MCP and a
+    neutral route.
+  - **Dashboard frontend:** the OpenClaw page and nav entry, the Playground's HireClaw mode and ClawRoom (39 files,
+    their tests and two e2e specs), claw tool cards, prompt, styles and stored preference, the MCP bootstrap and
+    server-key alias; three e2e specs edited.
+  - **Docs:** security hardening (en, zh-Hans), both READMEs, the release note's OpenClaw entry (incl. "remove
+    `-openclaw*` flags from custom manifests: an unknown flag stops the Dashboard").
+  - **Stays:** versioned docs, the blog, and `dashboard/frontend/public/openclaw.{png,svg}`: the image-routing
+    calibration manifest (`config/assets/image-routing/manifest.json`, `tools/calibration/image-routing/testdata/`)
+    hashes them; nothing else references them. **Proof:** `rg -i openclaw` outside those paths finds only the
+    release note's and the design doc's (en, zh-Hans) removal lines.
+  - **Checks:**
+    - node A, precommit image, `make check` over the 197 files on `775bc66ea` exits 0 (CLI 3,222, Dashboard
+      frontend 197 files / 1,005 tests, Go lint, docs gates);
+    - CLI integration with images of `b6315ea78` (= `8dd4d9c44` + staging): first-run setup, standalone, storage
+      isolation, 1/1 each, none skipped;
+    - locally: Dashboard `go test ./...`, golangci 0, `tsc`, vitest 197/1,005, targeted CLI 183.
+    - the three edited Playwright specs (playground, layout-nav, auth-flow; not in CI) on node A: 57 of 73 pass;
+      the same 16 fail on the base `51c377220` (58 of 74), so none is a regression; they want a separate look.
+  - **Node A claim (03:16, cores 140–159):** extended to about 05:30 for READY 2 and the host check.
+  — `ngw-frontend3`
+
 - 2026-10-07 04:20 — **`ngw-graph2` → `ngw-lead5`, parent: INTEGRATION READY ngw-graph2
   c1180a77f5540eb5997da4b2a6f7af48d91151fa (items 3 and 7, and a Router gap found on the way). Three commits
   on READY 2, then a merge of staging `51270de04` (`--signoff`, no changes). This closes my list from the
