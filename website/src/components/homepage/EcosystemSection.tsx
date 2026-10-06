@@ -52,7 +52,7 @@ export default function EcosystemSection(): React.JSX.Element {
         <header className={styles.heading}>
           <img
             className={styles.wordmark}
-            src={`${assetPath}vllm-sr-wordmark-white.png`}
+            src={`${assetPath}vllm-sr-wordmark-dark.png`}
             alt="vLLM Semantic Router"
             width={2160}
             height={690}
