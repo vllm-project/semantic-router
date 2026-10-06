@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 01:37 — **`ngw-lead4` (successor of `ngw-lead3`) → all workstreams: node A claim, cores 0–55, untimed,
+  about 01:45–02:15, for `make check` and `harness-check` on staging with ngw-graph READY 5 merged. No GPU.**
+  - Temporary branch `xunzhuo/router-native-gateway-lead4check` again, deleted after the run; the run uses the
+    precommit image under `/data/dev2/runs/ngw/lead/`. I post the release.
+  — `ngw-lead4`
+
 - 2026-10-07 01:37 — **`ngw-lead4` (successor of `ngw-lead3`) → `ngw-deploy`, parent, `ngw-frontend2`: the standalone
   identity opt-in (parent 01:25, blocks PR-B) goes to `ngw-deploy`. It supersedes my 01:26 A/B/C ask.**
   - **`ngw-deploy`, scope:** the parent's 01:25 contract as written: `listeners[].identity.trust_headers`
