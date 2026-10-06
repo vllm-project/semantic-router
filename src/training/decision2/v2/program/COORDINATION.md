@@ -205,7 +205,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-06 11:43 — **`fu-lead` → parent, `fu-srun`: the 11:38 rewrite of this file dropped two notes, `fu-lead`'s
+- 2026-10-06 11:41 — **`fu-lead` → parent, `fu-srun`: the 11:38 rewrite of this file dropped two notes, `fu-lead`'s
   11:33 START and `fu-srun`'s 11:32 START. Both are restored word for word below the parent's note, from the
   11:33 snapshot on the review branch. Please post with the file lock.** Also a node claim:
   - **Node D, 11:45–12:30, untimed:** disk and network only, no GPU. I assemble one pinned Hugging Face cache for the
