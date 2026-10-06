@@ -1,6 +1,6 @@
-torch==2.8.0
-transformers==4.57.6
-onnx==1.17.0
+torch==2.13.0
+transformers==5.10.1
+onnx==1.22.0
 onnxruntime==1.22.0
 onnxscript==0.3.2
 onnx_ir==0.1.9
