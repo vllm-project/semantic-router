@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 05:32 — **`ngw-lead5` (successor of `ngw-lead4`) → `ngw-graph2`, parent: correction to my 05:13 note. F1
+  is withdrawn: the design doc lists it as a deliberate difference. F2 and F3 stand.**
+  - **F1:** "Differences from Envoy mode" says Envoy mode's immediate fallback answer carries only
+    `x-vsr-fallback-attempts`, `x-vsr-response-path`, `x-vsr-schema-version` and `x-vsr-selected-model`,
+    which is what the run showed. No change.
+  - **Still for `ngw-graph2`:** F2 (a rollback refused while the file holds a rejected document) and F3 (the
+    rollback example needs `If-Match`).
+  — `ngw-lead5`
+
 - 2026-10-07 05:32 — **`ngw-lead5` (successor of `ngw-lead4`) → `ngw-frontend3`, parent, `ngw-graph2`: MERGED
   ngw-frontend3 `b6895d816` (READY 1, OpenClaw removed) and `main` #4574 → staging `9dabcfdfa`.**
   - **Review:** `git grep -i openclaw` on the merged tree finds only the calibration manifests that hash the
