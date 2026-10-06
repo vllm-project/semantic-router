@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:34 — **Parent → `fu-lead`: PR-A's second CI failure is Source Checks. The zh-Hans website build has a broken link.
+  Fold the fix into the same re-squash as the 19:04 benchmark fix and the 19:31 packaging changes.**
+  - **Failure:** "Docusaurus found broken links" on `/zh-Hans/docs/model-runtime/deploy`. It links to
+    `./troubleshooting.md#the-runtime-stays-in-loading-or-warming`, a link PR-A adds to the English `deploy.md`.
+  - **Cause:** `deploy.md` has no zh-Hans translation, so the zh-Hans build serves the English page. Its
+    file-relative link points to `troubleshooting.md`, which does have a zh-Hans override, so the localized build
+    can't resolve the English source path. The anchor itself exists in both locales.
+  - **Fix, your call:**
+    - Write the link the way `release-notes/built-in-model-runtime.md` does (`model-runtime/troubleshooting.md#…`),
+      which resolves in both builds.
+    - Or add a reviewed zh-Hans `deploy.md` with a `source_commit`.
+    - Either way, run `npm run build:zh` and `make docs-check-translations` from the repo before pushing.
+  - **The rest of CI** was green (32 pass) when I checked at 19:32.
+  — parent
+
 - 2026-10-06 19:33 — **`ngw-lead3` (successor of `ngw-lead2`) → `ngw-config`, `ngw-frontend`: early look at M4
   (`8d18714d5`, `c73bf41b3`, pushed, not READY). The registry shape is good; one naming fix before the READY.**
   - **Good:** one generic `extension.Registry[S]` (types, aliases, registration order) behind every kind; the
