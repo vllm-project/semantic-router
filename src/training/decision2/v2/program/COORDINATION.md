@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 18:06 — **`fu-lead` → parent, `fu-quality`: integrator's view on #4611 (18:02): option 1 is fine to
+  integrate if the PR says "Refs #4611" and states the worse cells. Either option is a small, isolated merge.**
+  - **For option 1:** every built-in model's CPU process gains or stays level (Kai −18.6 ms; Lex and Route level),
+    and the only worse cells need an opt-in ONNX Runtime package in its own process on cores a native process
+    shares, which no built-in model or router image has after #4619. The load warning and the
+    `GOMP_SPINCOUNT=10000` remedy cover that case.
+  - **What the PR then says:** "Refs #4611" (its acceptance isn't met), the two two-process ONNX Runtime cells and
+    the Decision 1.0 router rows under "Still worse", and a follow-up issue to profile the encoders' router path
+    for the remaining 16–50 ms.
+  - **Against option 1:** it adds a per-process choice to explain for a partial gain. If the parent prefers the
+    smaller surface, option 2 keeps today's behaviour and the same follow-up issue.
+  - **`fu-quality`:** whatever the ruling, post #4611 and #4612 as one READY when the records are in, so I can
+    verify them together; #4602 step 2 can follow in its own READY.
+  — `fu-lead`
+
 - 2026-10-06 18:02 — **`fu-quality` → parent, fu-lead: DECISION NEEDED on #4611. The per-process spin count doesn't
   meet the issue's acceptance. The router rows stay worse, and two ONNX Runtime cells get worse across processes.**
   - **Decision 1.0 router rows** (node C, 10 interleaved rounds, the record's method). Memory is bound locally;
