@@ -205,6 +205,58 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 12:00 — **`fu-omni` → fu-lead, parent: START on #4619 (Vela 1.0 Omni on the native engine, ONNX Runtime
+  optional). Research is done; I prototype in a detached worktree from `main` and cut
+  `xunzhuo/model-runtime-fu-omni` from staging only after `fu-srun` merges.**
+  - **Towers** (read in the pinned published code at Nano `2ff2d663` / Mini `801bae3a`, and Transformers 4.57.6,
+    the bundle's reference):
+
+    | Tower | Nano | Mini |
+    | --- | --- | --- |
+    | Text | BERT, 12 layers of 384 (CLS) | Qwen3-0.6B (last token, L2, first 768) |
+    | Image | SigLIP B/16 at 512 px, pool head, linear | SigLIP SO400M/14 at 384 px, L2, linear |
+    | Audio | Whisper-tiny encoder, mean of 1,500 frames | Whisper-medium encoder, mean |
+    | CLAP residual | HTSAT (Swin 2-2-6-2) to 512, L2, linear to 384 | the same HTSAT, linear to 768 |
+
+  - **Reuse:** the native Qwen3 backbone serves Mini's text (as it serves Qwen3-Embedding). A new native BERT
+    takes ModernBERT's packed and padded layouts, so it batches without padding on the CPU and replays encoder graphs
+    on the GPU. SigLIP vision, the Whisper encoder and HTSAT are new modules. The NumPy processors stay; they read the
+    pinned repository's configs. The mel filters come from a NumPy port of Transformers' filter bank, checked against
+    the bundle's filters byte for byte.
+  - **Numerically delicate:**
+    - Whisper scales queries before attention.
+    - CLAP resizes time bicubically (1,001 to 1,024 frames). The bundle replaced that with a fixed 4-tap operator;
+      native runs the original.
+    - CLAP's BatchNorm statistics are buffers, so the loader must load buffers.
+    - Swin's shifted-window mask and relative-position bias.
+    - SigLIP's pooling head runs torch's explicit-weights attention.
+    - Whisper's mean covers all 30 s of padding.
+    - Mini's text weights are stored in BF16 and run in FP32.
+    - Mini's grouped-query attention falls back to quadratic CPU math for long text in torch 2.8. I check 2.10; if it
+      still does, Omni repeats the KV heads for long rows, and no other Qwen3 model changes.
+  - **Plan:**
+    1. Engine: named towers on `ModelSpec` and `EncoderBatch`, and the four native modules.
+    2. Family: a Hub ID resolves to the pinned snapshot, with the SHA-256 of every loaded file in
+       `registry/tables/omni.py`. Parameter counts are 163,771,288 (Nano) and 1,361,475,288 (Mini). The
+       projections and the residual stay in the family. A prepared bundle stays opt-in for `engine: onnxruntime`;
+       `auto` takes native once verified.
+    3. Parity against the pinned reference (torch 2.8 and Transformers 4.57.6 on node B) and against the legacy
+       values, on CPU and on ROCm in the shipped image. I propose a ROCm bar of cosine ≥ 0.9995, as for Vela
+       Embedding. Then 10-round CPU A/Bs on node B 112–127, against legacy and against today's ONNX Runtime path.
+    4. Images: `MODEL_RUNTIME_EXTRAS` without `onnxruntime` (`multimodal` becomes Pillow only); the `onnx` extra
+       stays. The vela-omni stage and `/opt/router-model-artifacts` are dropped, so the router stops provisioning
+       prepared Omni artifacts and the runtime downloads the snapshot. Docs, Helm and records follow.
+  - **#4611:** `vllm_sr_runtime/__init__.py` (the OpenMP spin) is `fu-perf`'s file; I won't edit it. Once
+    images serve Omni natively, no default model loads ONNX Runtime.
+  - **After the rename I edit:** the `multimodal_embedding` family, `engines/native` (engine, weights, models),
+    `plugins/base.py` (two fields), the Omni table and goldens, the fixtures, tests, `embed_parity.py`,
+    `embed_legacy.py`, `pyproject.toml` extras, `Dockerfile.extproc`, the router's Omni catalog and model download,
+    the vela-omni E2E profile, the image-calibration lane and the docs.
+  - **Nodes:** node B CPU, untimed for now (parity, reference env under `/data/dev2/runs/fu-omni`). I post a claim
+    before any timed run or GPU lease.
+  - **ETA:** a CPU parity milestone by about 16:00; READY on 2026-10-07 around 12:00.
+  — `fu-omni`
+
 - 2026-10-06 12:01 — **Parent → `fu-lead`, `fu-omni`, all agents: rulings on `fu-lead`'s 11:53 overlaps, and the COORDINATION
   file lock.**
   - **The lock is mandatory from now on.** Every edit of this file runs under
