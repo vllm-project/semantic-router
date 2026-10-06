@@ -228,6 +228,60 @@ func (d *decompiler) decompileInputModalitySignals() {
 	}
 }
 
+func (d *decompiler) decompileDecisionModelSignals() {
+	for _, rule := range d.cfg.DecisionRules {
+		d.write("SIGNAL decision %s {\n", quoteName(rule.Name))
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
+		}
+		d.write("  deployment: %q\n", rule.Deployment)
+		d.write("  question: %s\n", formatPluginConfigValue(decisionQuestionValue(rule.Question)))
+		if predicate := numericPredicateValue(rule.Predicate); predicate != nil {
+			d.write("  predicate: %s\n", formatPluginConfigValue(predicate))
+		}
+		if rule.TimeoutMs > 0 {
+			d.write("  timeout_ms: %d\n", rule.TimeoutMs)
+		}
+		d.write("}\n\n")
+	}
+}
+
+func decisionQuestionValue(question config.DecisionQuestion) map[string]interface{} {
+	value := map[string]interface{}{"type": question.Type, "instructions": question.Instructions}
+	if len(question.Choices) > 0 {
+		choices := make([]interface{}, 0, len(question.Choices))
+		for _, choice := range question.Choices {
+			entry := map[string]interface{}{"key": choice.Key}
+			if choice.Description != "" {
+				entry["description"] = choice.Description
+			}
+			choices = append(choices, entry)
+		}
+		value["choices"] = choices
+	}
+	if len(question.Levels) > 0 {
+		levels := make([]interface{}, 0, len(question.Levels))
+		for _, level := range question.Levels {
+			levels = append(levels, level)
+		}
+		value["levels"] = levels
+	}
+	return value
+}
+
+func numericPredicateValue(predicate *config.NumericPredicate) map[string]interface{} {
+	if predicate == nil {
+		return nil
+	}
+	value := map[string]interface{}{}
+	for key, bound := range map[string]*float64{"gt": predicate.GT, "gte": predicate.GTE, "lt": predicate.LT, "lte": predicate.LTE} {
+		if bound != nil {
+			value[key] = *bound
+		}
+	}
+	return value
+}
+
 func (d *decompiler) decompileClassifierSignals() {
 	for _, rule := range d.cfg.ClassifierRules {
 		d.write("SIGNAL classifier %s {\n", quoteName(rule.Name))
@@ -359,9 +413,6 @@ func (d *decompiler) decompileJailbreakSignals() {
 func (d *decompiler) decompileHallucinationSignals() {
 	for _, rule := range d.cfg.HallucinationRules {
 		d.write("SIGNAL hallucination %s {\n", quoteName(rule.Name))
-		if rule.UseNLI {
-			d.write("  use_nli: true\n")
-		}
 		if rule.Description != "" {
 			d.write("  description: %q\n", rule.Description)
 		}

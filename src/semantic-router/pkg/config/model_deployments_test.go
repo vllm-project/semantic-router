@@ -10,8 +10,8 @@ import (
 func testDeploymentConfig() *RouterConfig {
 	cfg := &RouterConfig{}
 	cfg.ModelDeployments = map[string]ModelDeployment{
-		"shared-encoder": {Artifact: "models/maintained-encoder", Revision: "frozen-revision", Provider: "candle", Device: "cpu", Precision: "native", Input: ModelInputBudget{MaxTokens: 512, Overflow: "reject"}},
-		"other-encoder":  {Artifact: "models/other-maintained-encoder", Provider: "ort", Device: "migraphx:1", Precision: "native"},
+		"shared-encoder": {Artifact: "models/maintained-encoder", Revision: strings.Repeat("f", 40), Provider: ModelRuntimeProvider, Device: "cpu", Input: ModelInputBudget{MaxTokens: 512, Overflow: "reject"}},
+		"other-encoder":  {Artifact: "models/other-maintained-encoder", Provider: ModelRuntimeProvider, Device: "rocm:1"},
 	}
 	cfg.ModelAdmission = map[string]AdmissionConfig{"shared-encoder": {MaxConcurrency: 2, MaxQueue: 3, OnOverflow: "shed"}}
 	cfg.Recipes = []RoutingRecipe{
@@ -44,7 +44,7 @@ func TestCompileModelBindingsPreservesResourceAndTaskIdentity(t *testing.T) {
 		t.Fatal("foreign recipe lookup succeeded")
 	}
 	coding, _ := plan.Lookup("coding", "domain_classifier")
-	if coding.Deployment.Device != "migraphx:1" {
+	if coding.Deployment.Device != "rocm:1" {
 		t.Fatal("wrong recipe deployment")
 	}
 	cfg.ModelDeployments["shared-encoder"] = ModelDeployment{}
@@ -66,11 +66,16 @@ func TestCompileModelBindingsRejectsInvalidPreparation(t *testing.T) {
 			d.Provider = "unknown"
 			cfg.ModelDeployments["shared-encoder"] = d
 		}, "unsupported provider"},
-		{"wrong device", func(cfg *RouterConfig) {
+		{"malformed device", func(cfg *RouterConfig) {
 			d := cfg.ModelDeployments["shared-encoder"]
-			d.Device = "migraphx:0"
+			d.Device = "CUDA 0"
 			cfg.ModelDeployments["shared-encoder"] = d
-		}, "incompatible"},
+		}, "device must be"},
+		{"malformed profile", func(cfg *RouterConfig) {
+			d := cfg.ModelDeployments["shared-encoder"]
+			d.Profile = "max-speed!"
+			cfg.ModelDeployments["shared-encoder"] = d
+		}, "profile must be"},
 		{"negative budget", func(cfg *RouterConfig) {
 			d := cfg.ModelDeployments["shared-encoder"]
 			d.Input.MaxTokens = -1
@@ -81,11 +86,6 @@ func TestCompileModelBindingsRejectsInvalidPreparation(t *testing.T) {
 			b.Contract = RemoteClassifierContractScore
 			cfg.Recipes[0].Profile.ModelBindings["domain_classifier"] = b
 		}, "contract must"},
-		{"missing adapter", func(cfg *RouterConfig) {
-			b := cfg.Recipes[0].Profile.ModelBindings["domain_classifier"]
-			b.Adapter = ""
-			cfg.Recipes[0].Profile.ModelBindings["domain_classifier"] = b
-		}, "adapter is required"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cfg := testDeploymentConfig()
@@ -98,10 +98,19 @@ func TestCompileModelBindingsRejectsInvalidPreparation(t *testing.T) {
 	}
 }
 
+func TestPluginAcceleratorAndProfileNamesAreTheRuntimes(t *testing.T) {
+	cfg := testDeploymentConfig()
+	d := cfg.ModelDeployments["shared-encoder"]
+	d.Device, d.Profile = "npu:1", "vendor_low_latency"
+	cfg.ModelDeployments["shared-encoder"] = d
+	if _, err := CompileModelBindings(cfg); err != nil {
+		t.Fatalf("a well-formed plugin accelerator and profile compile; the runtime decides whether it has them: %v", err)
+	}
+}
+
 func TestNamedDeploymentAdmissionAndCanonicalRoundTrip(t *testing.T) {
 	cfg := testDeploymentConfig()
 	deployment := cfg.ModelDeployments["other-encoder"]
-	deployment.CompilationCacheDir = "/var/cache/semantic-router/migraphx"
 	deployment.Input.MaxTokens = 8192
 	cfg.ModelDeployments["other-encoder"] = deployment
 	if err := validateModelAdmissionContracts(cfg); err != nil {
@@ -138,9 +147,9 @@ global:
   model_catalog:
     deployments:
       classifier:
-        artifact: models/classifier
-        provider: ort
-        device: migraphx:0
+        artifact: /models/classifier
+        provider: model_runtime
+        device: rocm:0
         input:
           max_tokens: 8192
           overflow: reject
@@ -151,47 +160,11 @@ global:
 	}
 }
 
-func TestCompilationCacheRequiresExplicitMIGraphXPlacement(t *testing.T) {
-	for _, test := range []struct {
-		name, provider, device, directory string
-		valid                             bool
-	}{
-		{"default off", "ort", "cpu", "", true},
-		{"MIGraphX", "ort", "migraphx:2", "/var/cache/semantic-router/migraphx", true},
-		{"CPU", "ort", "cpu", "/cache", false},
-		{"ROCm", "ort", "rocm:0", "/cache", false},
-		{"Candle", "candle", "cpu", "/cache", false},
-		{"HTTP", "http", "", "/cache", false},
-		{"relative", "ort", "migraphx:0", "cache", false},
-		{"spaces", "ort", "migraphx:0", " /cache", false},
-		{"null", "ort", "migraphx:0", "/cache\x00", false},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			cfg := testDeploymentConfig()
-			d := cfg.ModelDeployments["other-encoder"]
-			d.Provider, d.Device, d.CompilationCacheDir = test.provider, test.device, test.directory
-			if err := d.ValidateCompilationCache(); (err == nil) != test.valid {
-				t.Fatalf("cache validation: %v", err)
-			}
-			if test.provider != "http" {
-				cfg.ModelDeployments["other-encoder"] = d
-				if _, err := CompileModelBindings(cfg); (err == nil) != test.valid {
-					t.Fatalf("compiled deployment: %v", err)
-				}
-			}
-		})
-	}
-}
-
 func TestDormantComplexityRejectsUnsupportedLocalProvider(t *testing.T) {
-	for _, provider := range []string{"candle", "ort"} {
-		t.Run(provider, func(t *testing.T) {
-			cfg := &RouterConfig{}
-			cfg.ModelDeployments = map[string]ModelDeployment{"local": {Provider: provider, Artifact: "/mounted/local"}}
-			cfg.Recipes = []RoutingRecipe{{Name: "dormant", Profile: RoutingProfile{ModelBindings: map[string]ModelBinding{"complexity": {Deployment: "local", Contract: "score.v1", Adapter: "mmbert"}}}}}
-			if _, err := CompileModelBindings(cfg); err == nil {
-				t.Fatal("dormant recipe accepted unsupported local complexity")
-			}
-		})
+	cfg := &RouterConfig{}
+	cfg.ModelDeployments = map[string]ModelDeployment{"local": {Provider: ModelRuntimeProvider, Artifact: "/mounted/local"}}
+	cfg.Recipes = []RoutingRecipe{{Name: "dormant", Profile: RoutingProfile{ModelBindings: map[string]ModelBinding{"complexity": {Deployment: "local", Contract: "score.v1", Adapter: "mmbert"}}}}}
+	if _, err := CompileModelBindings(cfg); err == nil {
+		t.Fatal("dormant recipe accepted unsupported local complexity")
 	}
 }
