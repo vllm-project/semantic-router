@@ -158,6 +158,7 @@ class Context:
         }
         if role == "subject":
             call_data["phase"] = request_phase(messages)
+            call_data["phase_source"] = "request"
         call_id = self.store.start_call(
             self.run_id,
             self.case["id"],
@@ -167,6 +168,16 @@ class Context:
         )
         call_record = {"id": call_id, "role": role}
         self.calls.append(call_record)
+        session_id = None
+        if (
+            role == "subject"
+            and selected["kind"] == "mom"
+            and self.manifest.get("router_session_scope") == "case"
+        ):
+            session_id = (
+                "sr-bench-"
+                + digest([self.run_id, self.case["id"], selected["id"]])[:32]
+            )
         try:
             result = chat(
                 selected,
@@ -177,6 +188,7 @@ class Context:
                 extra_body,
                 self.artifact_dir / (call_id + ".sse"),
                 activity=activity,
+                session_id=session_id,
                 **(
                     {"output_policy": "native"}
                     if self.manifest["output_policy"] == "native"

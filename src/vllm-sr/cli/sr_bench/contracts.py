@@ -346,6 +346,14 @@ def plan(manifest, *, policy=None):
     if m.get("mode", "live") not in {"live", "preview"}:
         raise ValueError("mode must be live or preview; replay is not live evidence")
     m.setdefault("mode", "live")
+    router_session_scope = m.get("router_session_scope", "none")
+    if not isinstance(router_session_scope, str) or router_session_scope not in {
+        "none",
+        "case",
+    }:
+        raise ValueError("router_session_scope must be none or case")
+    if router_session_scope == "case" and m["mode"] != "live":
+        raise ValueError("router_session_scope case is only available for live runs")
     m.setdefault("profile", "quick")
     m.setdefault("seed", 20260918)
     if isinstance(m["seed"], bool) or not isinstance(m["seed"], int):
@@ -419,6 +427,11 @@ def plan(manifest, *, policy=None):
     targets = m.get("targets")
     if not isinstance(targets, list) or not targets:
         raise ValueError("at least one target is required")
+    if router_session_scope == "case" and any(
+        not isinstance(target, dict) or target.get("kind") != "mom"
+        for target in targets
+    ):
+        raise ValueError("router_session_scope case requires MoM subject targets")
     auxiliary = m.get("auxiliary_targets", {})
     if not isinstance(auxiliary, dict) or any(
         not isinstance(t, dict) or t.get("id") != key for key, t in auxiliary.items()

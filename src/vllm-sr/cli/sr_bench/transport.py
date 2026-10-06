@@ -71,13 +71,13 @@ def request_phase(messages: list[dict]) -> str:
 
 def session_phase(
     messages: list[dict], response_headers: Mapping[str, str] | None = None
-) -> str:
+) -> tuple[str, str]:
     """Prefer the Router phase while retaining a bounded request fallback."""
     value = (response_headers or {}).get(SESSION_PHASE_HEADER)
     if isinstance(value, str) and value.strip():
         phase = value.strip()
-        return phase if phase in SESSION_PHASES else UNKNOWN_PHASE
-    return request_phase(messages)
+        return (phase if phase in SESSION_PHASES else UNKNOWN_PHASE), "router"
+    return request_phase(messages), "request"
 
 
 def usage_presence(raw: object) -> tuple[bool, bool]:
@@ -290,6 +290,7 @@ def chat(
     stream_path=None,
     output_policy="bounded",
     activity=None,
+    session_id=None,
 ):
     started = time.monotonic()
     endpoint = target["base_url"].rstrip("/") + "/chat/completions"
@@ -301,6 +302,10 @@ def chat(
     if body.get("max_tokens", 0) > limits["max_output_tokens"]:
         raise CallFailure("Requested tokens exceed frozen cap")
     headers = {"Content-Type": "application/json"}
+    if target["kind"] == "mom":
+        headers["X-VSR-Debug"] = "true"
+    if session_id is not None:
+        headers["X-Session-Id"] = session_id
     if target.get("api_key_env"):
         key = os.environ.get(target["api_key_env"])
         if not key:
@@ -322,6 +327,7 @@ def chat(
     cache_read_reported: bool | None = None
     cache_write_reported: bool | None = None
     observed_session_phase = request_phase(messages)
+    observed_phase_source = "request"
     done = False
     response = None
     stop = threading.Event()
@@ -347,6 +353,7 @@ def chat(
             "raw_usage": raw_usage,
             "tool_calls": list(tool_calls.values()),
             "phase": observed_session_phase,
+            "phase_source": observed_phase_source,
             "cache_read_reported": cache_read_reported,
             "cache_write_reported": cache_write_reported,
             "cost_usd": (
@@ -389,7 +396,9 @@ def chat(
             raise CallFailure(f"Target HTTP {response.status_code}")
         if "text/event-stream" not in response.headers.get("content-type", ""):
             raise CallFailure("Target did not return a streaming response")
-        observed_session_phase = session_phase(messages, response.headers)
+        observed_session_phase, observed_phase_source = session_phase(
+            messages, response.headers
+        )
         if output_policy == "native" and target["kind"] == "mom":
             native_evidence = native_output.from_headers(target, response.headers)
 

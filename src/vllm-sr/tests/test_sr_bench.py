@@ -37,10 +37,21 @@ class Target(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
         self.server.requests.append(body)
+        self.server.request_headers.append(
+            {key.lower(): value for key, value in self.headers.items()}
+        )
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
-        if self.server.session_phase:
-            self.send_header("X-VSR-Session-Phase", self.server.session_phase)
+        phase = self.server.session_phase
+        if phase is None and self.headers.get("X-Session-Id"):
+            latest = body.get("messages", [])[-1:]
+            phase = (
+                "tool_loop"
+                if latest and latest[0].get("role") in {"tool", "function"}
+                else "user_turn"
+            )
+        if phase:
+            self.send_header("X-VSR-Session-Phase", phase)
         if self.server.ack:
             self.send_header("X-SR-Bench-Config-Hash", self.server.ack)
         self.end_headers()
@@ -97,6 +108,7 @@ class Target(BaseHTTPRequestHandler):
 def target():
     server = ThreadingHTTPServer(("127.0.0.1", 0), Target)
     server.requests = []
+    server.request_headers = []
     server.answer = "A"
     server.truncated = False
     server.delay = 0
@@ -185,6 +197,7 @@ def test_live_http_usage_final_channel_and_idempotency(
     assert score["cache_read_prompt_tokens"] == 10
     assert score["cache_read_ratio"] == 0.2
     assert store.calls(run["id"], summary=True)[0]["phase"] == "tool_loop"
+    assert store.calls(run["id"], summary=True)[0]["phase_source"] == "router"
     assert score["cost_usd"] == pytest.approx(18.2 / 1_000_000)
     assert score["accuracy"] == 1 and score["total"] == 1
     assert list((tmp_path / "runs" / run["id"]).glob("*/*.sse"))
@@ -224,6 +237,114 @@ def test_derived_tool_loop_phase_is_saved_in_call_summary(tmp_path, target):
     assert wait_run(store, run["id"])["status"] == "completed"
     call = store.calls(run["id"], summary=True)[0]
     assert call["phase"] == "tool_loop"
+    assert call["phase_source"] == "request"
+
+
+def test_router_session_scope_sends_case_stable_session_ids(
+    tmp_path, target, monkeypatch
+):
+    target.ack = "fixed"
+    document = manifest(target, router_session_scope="case")
+    document["cost_policy"] = "capability_only"
+    document["targets"][0].update(
+        kind="mom", config_hash="fixed", max_inference_calls=1
+    )
+    document["cases"].append({**document["cases"][0], "id": "q2"})
+
+    class AgentAdapter:
+        def execute(self, case, context):
+            context.call([{"role": "user", "content": case["id"]}])
+            context.call(
+                [
+                    {"role": "assistant", "tool_calls": [{"id": "call-1"}]},
+                    {"role": "tool", "tool_call_id": "call-1", "content": "done"},
+                ]
+            )
+            return {"answer": "A", "correct": True, "score": 1}
+
+    monkeypatch.setattr("cli.sr_bench.engine.get_adapter", lambda _: AgentAdapter())
+    store = Store(tmp_path)
+    run = Engine(store).start(document)
+
+    assert wait_run(store, run["id"])["status"] == "completed"
+    session_ids = [headers.get("x-session-id") for headers in target.request_headers]
+    assert len(session_ids) == 4
+    assert all(session_ids)
+    assert all(
+        headers.get("x-vsr-debug") == "true" for headers in target.request_headers
+    )
+    assert session_ids[0] == session_ids[1]
+    assert session_ids[2] == session_ids[3]
+    assert session_ids[0] != session_ids[2]
+    calls = store.calls(run["id"], summary=True)
+    assert [call["phase_source"] for call in calls] == ["router"] * 4
+    assert [call["phase"] for call in calls] == [
+        "user_turn",
+        "tool_loop",
+        "user_turn",
+        "tool_loop",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("updates", "target_kind", "error"),
+    [
+        (
+            {"router_session_scope": 7},
+            "mom",
+            "router_session_scope must be none or case",
+        ),
+        (
+            {"router_session_scope": "task"},
+            "mom",
+            "router_session_scope must be none or case",
+        ),
+        (
+            {"router_session_scope": "case", "mode": "preview"},
+            "mom",
+            "router_session_scope case is only available for live runs",
+        ),
+        (
+            {"router_session_scope": "case"},
+            "single",
+            "router_session_scope case requires MoM subject targets",
+        ),
+    ],
+)
+def test_router_session_scope_rejects_unsupported_inputs(
+    target, updates, target_kind, error
+):
+    document = manifest(target, **updates)
+    document["targets"][0]["kind"] = target_kind
+
+    with pytest.raises(ValueError, match=error):
+        plan(document)
+
+
+def test_router_session_scope_defaults_to_stateless_requests(
+    tmp_path, target, monkeypatch
+):
+    target.ack = "fixed"
+    document = manifest(target)
+    document["cost_policy"] = "capability_only"
+    document["targets"][0].update(
+        kind="mom", config_hash="fixed", max_inference_calls=1
+    )
+
+    class AgentAdapter:
+        def execute(self, case, context):
+            context.call([{"role": "user", "content": case["id"]}])
+            return {"answer": "A", "correct": True, "score": 1}
+
+    monkeypatch.setattr("cli.sr_bench.engine.get_adapter", lambda _: AgentAdapter())
+    store = Store(tmp_path)
+    run = Engine(store).start(document)
+
+    assert wait_run(store, run["id"])["status"] == "completed"
+    assert "x-session-id" not in target.request_headers[0]
+    assert target.request_headers[0]["x-vsr-debug"] == "true"
+    call = store.calls(run["id"], summary=True)[0]
+    assert call["phase_source"] == "request"
 
 
 @pytest.mark.parametrize("field", ["sampling", "benchmark_options", "plan_sha256"])
@@ -657,11 +778,22 @@ def test_session_phase_prefers_router_header_and_derives_router_phase_names():
     assert request_phase(structured_tool_result) == "tool_loop"
     assert request_phase(user_after_structured_tool_result) == "tool_loop"
     assert session_phase(turn, {"x-vsr-session-phase": "provider_state"}) == (
-        "provider_state"
+        "provider_state",
+        "router",
     )
-    assert session_phase(turn, {"x-vsr-session-phase": "tool_loop"}) == "tool_loop"
-    assert session_phase(turn, {"x-vsr-session-phase": " future_phase "}) == "unknown"
-    assert session_phase(turn, {"x-vsr-session-phase": "  "}) == "user_turn"
+    assert session_phase(turn, {"x-vsr-session-phase": "tool_loop"}) == (
+        "tool_loop",
+        "router",
+    )
+    assert session_phase(turn, {"x-vsr-session-phase": " future_phase "}) == (
+        "unknown",
+        "router",
+    )
+    assert session_phase(turn, {"x-vsr-session-phase": "  "}) == (
+        "user_turn",
+        "request",
+    )
+    assert session_phase(turn) == ("user_turn", "request")
 
 
 def test_cancellation_retains_evidence_and_does_not_dispatch_rest(tmp_path, target):
