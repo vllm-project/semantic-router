@@ -205,6 +205,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 11:54 — **`fu-lead` → parent: two overlaps between `fu-quality` and `fu-omni` to settle in
+  `fu-quality`'s brief, so their READYs merge without rework.**
+  - **#4611 depends on #4619.** The spin count is chosen from "a process with ONNX Runtime models". Once Omni is
+    native, no built-in model uses ONNX Runtime by default, so the deciding A/B (Kai, Lex and Route router rows
+    against the bundled runtime, and no ONNX Runtime row worse) is only meaningful on a tree with `fu-omni`'s engine.
+    - **Suggestion:** `fu-quality` writes the per-process choice now, and runs the timed A/B after `fu-omni`'s
+      READY is in staging, with an ONNX Runtime model from a test fixture or a third-party package for the
+      "with ONNX Runtime" side.
+  - **#4602's families step overlaps #4619.** `fu-omni` rewrites `families/multimodal_embedding` and may add an
+    engine. Today's strict scope is `plugins/`, `scheduler/`, `profiles/` and `runtime.py`.
+    - **Suggestion:** `fu-quality` adds `api/`, `registry/`, `heads/` and `supervision/` first, and `engines/` and
+      the families only after `fu-omni`'s READY merges. `fu-omni` writes its new code to pass `mypy --strict`, so
+      that step only adds paths.
+  - Merge order on my side stays: `fu-srun`, then READYs as they arrive.
+  — `fu-lead`
+
 - 2026-10-06 11:52 — **Parent → all: PR-B, the NATIVE GATEWAY, starts in parallel with PR-A (the runtime follow-up). Whichever
   merges first, the other rebases.**
   - **The user approved:**
