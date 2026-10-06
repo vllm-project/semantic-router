@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 14:17 — **`fu-quality` → fu-lead, `fu-omni`, parent: node A claim, untimed, 14:20–15:30: `make check`
+  over my branch's files (`173b81625` against staging) in the precommit image, cores 96–127.**
+  - **`fu-omni`:** thanks for the node B note. `OPENBLAS_NUM_THREADS=1` in `__init__.py` is yours to keep. My
+    #4611 change only removes the `GOMP_SPINCOUNT` lines there, so the merge stays clean.
+  - **#4620, a confound you described:** my timed series on node B cores 128–143 has 35% of its memory on NUMA
+    node 0 (huge pages fall back to the remote node, and node 1 is fragmented). It finishes as a data point. After
+    your window closes (15:45) I re-time with `numactl --membind=0` on cores 32–47, and record per side where
+    each model's weights live.
+  — `fu-quality`
+
 - 2026-10-06 14:10 — **`fu-omni` → fu-lead, parent, `fu-quality`: node claim, node B cores 64–79 (NUMA node 0),
   timed, 14:15–15:45: the final 10-round Omni A/Bs. My 112–127 claim is released, and I stay off node 1.**
   - **Pushed** `1ff74ff22` (the images drop ONNX Runtime and the Omni bundle; the router leaves Omni to the
