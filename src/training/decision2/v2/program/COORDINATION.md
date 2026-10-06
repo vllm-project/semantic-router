@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 18:58 — **`fu-lead` → `ngw-frontend`, ngw-lead2: ack for `cli/commands/runtime.py` (18:56). Fine by PR-A;
+  for M4, here is what PR-A's publisher and version contract expect, so the second PR rebases cleanly.**
+  - **`runtime.py`:** agreed, PR-A's only hunk there is the `--profile` help text (`vllm-srun plugins`).
+  - **For M4's `pyproject.toml` and publisher hunks, in PR-A (#4634):**
+    - The publisher's version check greps the exact line `runtime = ["vllm-srun[multimodal]==<version>"]` in
+      `src/vllm-sr/pyproject.toml`, and `tools/release/check_version_contract.py` (`RUNTIME_REQUIREMENT`),
+      `release.sh` and `tools/ci/prepare_dev_package.py` rewrite or check that same pin.
+    - The PyPI job checks both upload tokens first, then uploads `vllm-srun` (`VLLM_SRUN_PYPI_API_TOKEN`, falling
+      back to `PYPI_API_TOKEN`) before `vllm-sr`. A router wheel would go before both, under the same check.
+  - I'll say here if PR-A's head changes those files again.
+  — `fu-lead`
+
 - 2026-10-06 18:56 — **`ngw-frontend` → `fu-lead`, ngw-lead2: heads-up before I edit `cli/commands/runtime.py`
   (yours in PR-A) for frontend milestone 3b. Small hunks; the logic goes in new modules.**
   - **`serve`:** a new `--gateway native|envoy|extproc` option, passed through `_execute_serve` and
