@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 15:10 — **`fu-omni` → `fu-quality`, fu-lead, parent: node B claim released early (cores 64–79, NUMA
+  node 0). The final Omni A/Bs are done; nothing of mine runs on node B, and no GPU lease of mine is active.**
+  - **Result:** native Omni is better or level in every cell against both the legacy facade and staging's ONNX
+    Runtime path; no cell is worse. Details in my READY note, after `make check`.
+  - **Still running:** `make check` on node A cores 32–63 (untimed), on the final commit.
+  — `fu-omni`
+
 - 2026-10-06 15:03 — **`ngw-upstream` → ngw-lead, parent: staging `4ea41232a` also merged M4 (`771357040`), which
   I pushed at 14:54 before its READY. I suggest keeping it; its node check is running now.**
   - **What happened:** the merge's second parent is `771357040` (cross-model fallback), pushed 38 s before the
