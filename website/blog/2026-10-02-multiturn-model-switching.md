@@ -1,8 +1,8 @@
 ---
 slug: multiturn-model-switching
 title: "Beyond Prompt Routing: Model Selection, Conversation State, and KV Cache"
-description: "How to compose semantic routing with an inference router, preserve agent continuity, and measure the quality and cache costs of switching models."
-authors: [anupsharma]
+description: "960 live calls reveal what model switching saves—and what it can break. An architecture for combining semantic routing, conversation protection, and cache-aware inference."
+authors: [anupsharma, 1fanwang]
 tags: [evaluation, agentic, mixture-of-models, routing, vllm, architecture]
 image: /img/vllm-sr-logo.social.png
 ---
@@ -13,115 +13,71 @@ reasoning, so the router sends it to model B.
 
 The request succeeds. But did the conversation improve?
 
-Model B may receive the entire transcript and still inherit an incorrect answer
-from an earlier turn. Its serving replica may have to compute the growing prompt
-again. If a tool call is in flight, changing the model can also change how the
-result is interpreted. Meanwhile, an inference router might prefer a different
-replica because it has a shorter queue or a useful cached prefix.
+Model B may receive the entire transcript and still inherit an incorrect answer.
+Its replica may have to compute the growing prompt again. If a tool call is in
+flight, changing models can also change how the result is interpreted.
 
-These questions motivated a series of live benchmarks through vLLM Semantic
-Router, Envoy, and GPU-backed vLLM servers. In the
-[final holdout](https://github.com/vllm-project/semantic-router/issues/4080#issuecomment-5938865660),
-five policies each ran 32 six-turn sessions: **160 sessions and 960 calls in total**.
-One reactive switching policy reduced strong-model use by **31.8 percentage
-points** and mean session latency by **550 ms**. It also failed three final checks
-that the control passed. A separate native-tool experiment showed why moving
-to a capable model *before* a known difficult boundary can help.
+We benchmarked these tradeoffs through vLLM Semantic Router, Envoy, and GPU-backed
+vLLM servers. In the [960-call holdout](https://github.com/vllm-project/semantic-router/issues/4080#issuecomment-5938865660), one reactive switching policy reduced
+strong-model use by **31.8 percentage points** and mean session latency by
+**550 ms**—but failed three final checks that the control passed. A separate
+native-tool experiment showed the benefit of choosing a capable model *before*
+a difficult boundary.
 
-The numbers expose a design problem worth solving: how do we choose the right
-model, preserve the conversation, and still benefit from efficient inference?
+This is the problem beyond prompt classification: choosing the right model for
+the next turn without compromising the rest of the task. It also determines
+where semantic routing belongs in an existing inference stack.
 
 <!-- truncate -->
 
 ## A conversation carries more than a prompt
 
-A single-turn router can optimize a request in isolation. An agent accumulates
-dependencies: the next step may rely on an earlier answer, a tool call, or state
-held by a provider. “Keep the session together” therefore needs a more precise
-meaning.
+Four kinds of state matter when a conversation changes models:
 
-| State | What it contains | What a switch must account for |
-|---|---|---|
-| Conversation history | Messages, instructions, answers, and tool results | The destination needs the complete, correctly ordered context—and earlier mistakes remain in it. |
-| Tool ownership | The model that issued a call and the pending result | A compatible continuation must consume the result without breaking the call/result sequence. |
-| Provider-managed state | Response lineage or other server-held context | Resolve or reconstruct that state before moving to a backend that cannot access it. |
-| KV cache | Computed attention keys and values for a token prefix | Reuse requires compatible computation and available cache blocks; a session ID alone supplies neither. |
+| State | What a switch must preserve or rebuild |
+|---|---|
+| History | Complete, correctly ordered messages and tool results. Earlier mistakes travel too. |
+| Tool ownership | A compatible continuation of the model's pending call/result sequence. |
+| Provider-managed state | Access to stored context, or reconstruction before moving to another backend. |
+| KV cache | Compatible prefix computations available at the destination—not just a session ID. |
 
-This distinction matters even when the API looks stateful. If a router stores
-history and expands a continuation into a complete stateless request, the
-transcript can become portable. A provider-held identifier that cannot be
-resolved elsewhere has different constraints. In Semantic Router, router-owned
-Responses history can become portable after expansion, while active tool loops
-and nonportable context retain hard ownership constraints. See the
+Router-owned Responses history can become portable after expansion into a full
+request. That does not make all state portable: active tool loops and nonportable
+context retain ownership constraints under the
 [continuity protection contract](/docs/tutorials/learning/protection).
-
-Portability also does not establish correctness. A stronger model can read the
-same history perfectly and still carry an earlier error forward.
+Nor does portable history guarantee correct history.
 
 ## Two routing decisions, two kinds of evidence
 
-There are two useful questions in a fleet of models:
+**Semantic Router chooses the logical model.** Request signals, capabilities,
+policy, and configured continuity protection determine which model may do the work.
 
-1. **Which logical model is eligible and suitable for this work?** Semantic
-   Router evaluates request signals, policy, model capabilities, and configured
-   conversation protection.
-2. **Which serving endpoint should execute it?** An inference router selects a
-   replica within the admitted pool, using the scheduling signals its deployment
-   supports, such as health, queue pressure, and cache availability.
+**An inference router chooses the serving endpoint.** It schedules within that
+model's admitted pool, using supported signals such as health, queue pressure,
+and cache availability.
 
-The selected pool is the contract between these layers. Suppose semantic policy
-requires model B. A warm replica of model A is outside the eligible pool; its
-cache advantage does not make it a valid destination. Within model B's pool,
-the inference router can balance a warm prefix against queueing delay.
+These choices need not conflict. If semantic policy requires model B, a warm
+replica of model A is not eligible. The endpoint picker can prefer a warm replica
+*within B's pool*, but must not override the model decision merely for a cache hit.
 
 One inference router used in this project is **llm-d**. Its integration uses
-Gateway API routes and InferencePools to express this boundary. The
-[Gateway API Inference Extension](https://gateway-api-inference-extension.sigs.k8s.io/)
-describes the gateway passing a request to the selected pool's endpoint picker.
-Other inference routers can fit the same design if they preserve the eligible
-model set and expose their serving decisions.
-
-<figure style={{width: '100%', maxWidth: '42rem', marginInline: 'auto'}}>
-  <a href="/img/blog/multiturn-routing/routing-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="Open the routing architecture diagram at full size">
-    <img
-      src="/img/blog/multiturn-routing/routing-architecture.svg"
-      alt="An agent enters an AI gateway. Semantic Router admits model B using request and conversation context. The inference router selects replica B1 inside that pool; each replica holds its own KV cache. Model A remains outside the selected pool."
-      width={1000}
-      height={800}
-      loading="lazy"
-      decoding="async"
-      style={{maxHeight: 'none'}}
-    />
-  </a>
-  <figcaption style={{fontSize: '0.875rem', lineHeight: 1.65}}>
-    Model selection establishes the eligible pool. Endpoint selection schedules
-    within it. Click to open the full diagram.
-  </figcaption>
-</figure>
-
-This is where Semantic Router adds value to an existing serving stack: it can
-make capability, policy, and conversation context part of the decision before
-the request reaches the replica scheduler. The inference router retains the
-serving knowledge needed to execute that decision efficiently.
+Gateway API routes and InferencePools to express this boundary. Other inference
+routers can follow the same contract: preserve the eligible model set, then
+schedule within it.
 
 ## KV cache makes switching a systems decision
 
-In ordinary transformer serving, KV cache contains intermediate computations
-for a particular model and token sequence. Sending the same transcript to a
-different model does not transfer those computations. The destination needs
-its own compatible cached prefix or must prefill the prompt.
+The transcript can travel; model A's KV cache does not become model B's cache.
+Those attention computations belong to a particular model and token sequence.
+The destination needs its own compatible cached prefix or must prefill the prompt.
 
-Even staying on the same model does not guarantee a hit: another replica may
-not have the prefix, cache blocks may have been evicted, or the rendered prompt
-may have changed. Cache sharing or transfer between compatible engines must be
-an explicit serving capability; cross-model reuse cannot be assumed.
-
+Even staying on one model does not guarantee reuse: another replica may lack the
+prefix, blocks may have been evicted, or the rendered prompt may have changed.
+Cache sharing requires explicit serving support.
 [vLLM automatic prefix caching](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
-reuses computation for matching prefixes. Its benefit is in prefill, rather
-than generating new output tokens. That makes long shared prefixes attractive
-for reuse, but cache-hit ratio alone cannot explain total latency.
+reduces matching-prefix prefill work, not the work of generating new output tokens.
 
-A practical switching decision weighs several terms:
+Among choices that satisfy eligibility and ownership constraints, switching weighs:
 
 ```text
 expected task-quality gain
@@ -129,265 +85,205 @@ expected task-quality gain
 extra prefill + queueing + handoff/repair + model execution cost
 ```
 
-Hard eligibility and ownership constraints come first. Among legal choices,
-the tradeoff depends on how much work remains. Paying to rebuild a long prefix
-may be worthwhile before ten difficult steps; it may be wasteful for a final
-acknowledgement. These are quantities to calibrate on the application's tasks.
-
-Semantic Router's protection machinery has switch margins, continuity costs,
-and recent-outcome gates for this purpose. A gate checks a proposed switch; it
-does not independently discover the best model. Its quality evidence also needs
-an owner: producing tokens is not proof that a turn was correct.
+Rebuilding a long prefix may be worthwhile before ten difficult steps, but not
+for a final acknowledgement. Semantic Router's protection machinery exposes
+switch margins, continuity costs, and recent-outcome gates to check proposed
+switches. These gates still need meaningful quality feedback: HTTP 200 is not
+evidence that the task step was correct.
 
 ## An architecture for an existing gateway and model fleet
 
-Start by assigning responsibilities, even if several run in the same gateway
-process. Semantic Router is an Envoy external processor; the diagram's boxes
-represent decision boundaries rather than a requirement for separate proxies.
+For a fleet with many models and thousands of replicas, keep **model choice**
+separate from **replica scheduling**. The request flow below illustrates one
+request selecting model B, then replica B1—not searching every pod indiscriminately.
 
-| Layer | Responsibility | Integration contract |
-|---|---|---|
-| Client or agent | Own the task, history, and tool execution | Send usable conversation identity and valid message/tool sequences. |
-| AI gateway | Authenticate requests and apply tenant limits and request policy | Preserve context needed by routing and carry the selected destination to the serving layer. |
-| Semantic Router | Choose an eligible logical model and apply continuity protection | Record the proposal, final selection, and reason for retaining or switching models. |
-| Inference router | Select a healthy endpoint within the admitted model pool | Respect pool membership and expose endpoint choice and available scheduling evidence. |
-| Model server | Execute inference and manage its cache | Report actual token usage, latency, and available cache measurements. |
-
-There are four integration details to make explicit.
-
-**Preserve identity across turns.** Establish how the gateway supplies session
-and conversation identity, how it is scoped to a tenant, and where history is
-stored. Test missing identity: Semantic Router's protection records diagnostics
-and fails open when configured identity headers are absent, so silently dropping
-them can remove expected continuity behavior.
-
-**Carry model selection through to the pool.** If an existing gateway already
-has model routing, define which decision takes precedence. Map the admitted
-logical model to its backend pool and assert that the endpoint picker selects
-inside that pool. Multiple models or adapters in one serving pool require an
-additional capability filter; pool membership alone is then insufficient.
-
-**Define failure behavior at protected boundaries.** If the owner of an active
-tool loop becomes unavailable or excluded by policy, specify what the agent
-does next. Hard ownership and eligibility can conflict; Semantic Router's apply
-path can return a selection error instead of transferring that state. Recovery
-may require an explicit restart or repair. Retrying a side-effecting tool also
-requires the application's idempotency contract.
-
-**Join decisions with outcomes.** Keep a request trace connecting the selected
-model, serving endpoint, routing reason, usage, and task verdict. Semantic
-Router's Replay records provide routing evidence; backend metrics provide
-serving evidence. Feed quality outcomes from an evaluator or task owner, rather
-than inferring success from HTTP 200 or output length.
-
-This lets an application inspect a slow or failed turn and distinguish a
-capability mismatch, an ownership decision, a cold prefix, and a busy replica.
-
-## When should the conversation change models?
-
-Consider a tool boundary. If the next step requires a capability the current
-model lacks, selecting a capable owner *before* it issues the tool call gives
-that model both sides of the interaction. Once the call is active, preserving
-ownership avoids changing its continuation semantics halfway through.
-
-In a separate controlled native-tool experiment, we compared this prospective choice
-with escalation after observed failure. Across eight paired seeds, selecting
-the stronger model at the known boundary improved tool-call success from
-62.5% to 100%, tool-continuation success from 0% to 75%, and final success from
-37.5% to 100%. The cost was 52.5 percentage points more strong-model turns,
-11.35 points lower measured prefix-cache hit ratio, and 1,275 ms more per session.
-
-The boundary signal was supplied explicitly by the test fixture. This establishes
-why timing and ownership matter; learning to predict such boundaries remains
-application-specific work. Exercising the live path also revealed an ownership
-preservation defect. The [tool-loop ownership fix](https://github.com/vllm-project/semantic-router/pull/4297)
-records that earlier bug and its correction before the later evaluation.
-
-A recent-outcome gate faces another problem. It may wait for a failure before
-allowing escalation. By then, the agent has already appended the incorrect
-answer to its history.
-
-<figure style={{width: '100%', maxWidth: '42rem', marginInline: 'auto'}}>
-  <a href="/img/blog/multiturn-routing/conversation-handoff.svg" target="_blank" rel="noopener noreferrer" aria-label="Open the conversation handoff diagram at full size">
+<figure style={{width: '92%', maxWidth: '100%', marginInline: 'auto', textAlign: 'center'}}>
+  <a href="/img/blog/multiturn-routing/routing-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="Open the routing architecture diagram at full size">
     <img
-      src="/img/blog/multiturn-routing/conversation-handoff.svg"
-      alt="Six turns illustrate the observed late escalation: the small model fails turn three; the strong model takes turns four through six with the full history, including the earlier error. A proposed recovery path verifies or repairs the failed step before continuing."
+      src="/img/blog/multiturn-routing/routing-architecture.svg"
+      alt="An agent sends history and tools through an AI gateway. Semantic Router uses request and conversation context to admit model B. The inference router selects B1 within that pool; model A is excluded. Each replica has its own KV cache."
       width={1000}
-      height={640}
+      height={800}
       loading="lazy"
       decoding="async"
-      style={{maxHeight: 'none'}}
+      style={{width: '100%', height: 'auto', maxHeight: 'none'}}
     />
   </a>
-  <figcaption style={{fontSize: '0.875rem', lineHeight: 1.65}}>
-    Escalation changes the executor, but leaves earlier answers in the transcript.
-    Repairing the failed step is a proposed recovery strategy, not a measured result
-    of this evaluation.
+  <figcaption style={{fontSize: '0.875rem', lineHeight: 1.65, marginTop: '0.75rem'}}>
+    Figure 1: Choose an eligible model, then schedule inside its pool.
+    These are logical boundaries; they may share a gateway process.
   </figcaption>
 </figure>
 
-Recovery needs an explicit design: verify the suspicious answer, reconstruct
-task state from authoritative inputs, or replay the failed step when safe. That
-is different from sending the next ordinary turn to a stronger model.
+The agent supplies history and tool state. The gateway authenticates the request
+and preserves tenant-scoped conversation identity. Semantic Router, an Envoy
+external processor, selects an eligible model and applies continuity protection.
+The inference router picks a replica; the model server executes the request.
+The response returns to the agent, which owns tool execution and the next turn.
 
-## What the live measurements showed
+Three integration choices make this composition reliable:
 
-The [frozen holdout report](https://github.com/vllm-project/semantic-router/issues/4080#issuecomment-5938865660)
-evaluates the candidate agentic-context/multiturn-switch@2026-10-dev1.
-It ran **160 sessions and 960 calls** through Semantic Router,
-Envoy, and two vLLM servers hosting Qwen3-0.6B and Qwen3-8B on one NVIDIA L40S.
-Each policy received the same 16 held-out seeds across two six-turn workloads:
-ordered state retention and a one-off retrieval challenge followed by easy
-acknowledgements. The candidate thresholds were frozen before inspecting outcomes.
+1. **Choose who owns context.** Preserve conversation identity across turns and
+   decide where stored history is resolved. Test missing identity headers:
+   protection can fail open when its configured headers are absent.
+2. **Make the model-to-pool contract explicit.** Carry the final model selection
+   through the gateway. Assert endpoint membership and, for shared pools,
+   model/adapter compatibility. A protected owner becoming unavailable needs
+   explicit recovery—not an arbitrary fallback halfway through a tool loop.
+3. **Trace the whole request.** Join routing reason, final model, endpoint,
+   token usage, cache evidence, latency, and task verdict. This separates a
+   capability mismatch from a cold prefix or a busy replica.
 
-Each policy has **32 sessions and 192 calls**. The final-turn pass rate measures
-the task-defined last check, not correctness at every step or complete-agent-task
-success. In the state-retention workload it checks the ordered final synthesis;
-in the one-off challenge workload it checks the closing acknowledgement. That
-acknowledgement can pass despite a missed retrieval challenge, so read the
-final-turn rate alongside turn accuracy.
+## What the live benchmarks showed
+
+The frozen candidate, `agentic-context/multiturn-switch@2026-10-dev1`, ran
+**160 sessions and 960 calls** using Qwen3-0.6B and Qwen3-8B
+on two vLLM servers sharing one NVIDIA L40S, behind Envoy and Semantic Router.
+Each of five policies received the same 16 held-out seeds across two six-turn
+workloads: ordered state retention, and a one-off retrieval challenge followed
+by easy acknowledgements. Thresholds were frozen before inspecting the holdout.
+
+A recent-outcome gate can delay a proposed switch until observed outcomes justify
+it. **Observe** records its verdict without applying it; **enforce** applies it.
 
 | Policy | Final-turn pass rate | Turn accuracy | Strong-model turns | Prefix-cache hit ratio | Mean latency/session |
 |---|---:|---:|---:|---:|---:|
 | Strong model throughout | 100% | 66.7% | 100% | 80.8% | 1,793 ms |
 | Small model throughout | 50.0% | 53.6% | 0% | 80.8% | 456 ms |
-| Continuity protection, gate disabled | 100% | 66.1% | 83.3% | 66.1% | 1,771 ms |
+| Protection, gate disabled | 100% | 66.1% | 83.3% | 66.1% | 1,771 ms |
 | Candidate gate, observe | 100% | 66.7% | 83.3% | 65.9% | 1,694 ms |
 | Candidate gate, enforce | 90.6% | 69.3% | 51.6% | 64.8% | 1,221 ms |
 
-Compared with the gate-disabled control, enforcement reduced strong-model use
-by 31.8 percentage points and mean latency by 550 ms. Final-turn passes fell
-from **32/32 to 29/32**. The paired bootstrap 95% interval for that difference
-was [-21.9, 0.0] percentage points; the turn-accuracy difference was also
-inconclusive. The candidate failed its quality requirement and remains rejected
-for enforcement.
+Each arm contains **32 sessions and 192 calls**. **Final-turn pass rate is not whole-task accuracy:**
+it checks ordered final synthesis in state retention, but only the closing
+acknowledgement in the retrieval workload. An acknowledgement can pass after a
+failed retrieval, which is why intermediate turn accuracy matters too.
 
-All three final failures were in state-retention sessions with the schedule
-`small → small → small → strong → strong → strong`. After the small model failed
-turn three, the strong model continued with that answer in its context. Those
-sessions produced incorrectly ordered values at final synthesis. The traces
-are consistent with late escalation carrying damaged state forward; a repair
-experiment is needed to isolate that mechanism causally.
+Compared with the gate-disabled control, enforcement used fewer strong-model
+turns and finished faster, but final checks fell from **32/32 to 29/32**. Its
+paired bootstrap 95% interval was [-21.9, 0.0] percentage points; the apparent
+turn-accuracy improvement was also inconclusive. The candidate did not meet
+our quality requirement and was rejected for enforcement.
 
-The holdout used controlled keyword signals and static proposals to isolate
-continuity and gate behavior. It did **not** measure semantic-classifier accuracy.
-Calls were sequential, with short outputs and deterministic task checks; the
-latency figures are not production throughput or concurrency estimates.
-Prefix-cache ratios came from backend counter deltas, averaged per session.
-Strong-model share is a usage proxy, rather than a measured dollar saving.
+These are controlled switching measurements, **not semantic-classifier accuracy
+or production-scale throughput**. Signals and proposals were controlled, calls
+were sequential, and outputs were short. Cache ratios were backend counter
+deltas averaged per session; strong-model share is a usage proxy, not measured
+dollar savings. A separate [llm-d simulator test](https://github.com/vllm-project/semantic-router/pull/4443)
+checks model/pool/endpoint composition, not real-GPU scheduling performance.
 
-For endpoint composition, we added a separate
-[simulator-backed integration contract](https://github.com/vllm-project/semantic-router/pull/4443)
-using llm-d as the inference router. It checks selected model, pool,
-and endpoint membership with at least two ready replicas per pool. That test is
-under review; it supplies no real-GPU prefix-affinity or scheduling-performance
-measurement.
+## When should the conversation change models?
 
-## Benchmarks to run on your own system
+All three failed final checks came from state-retention sessions with the same
+schedule: three small-model turns, then three strong-model turns. The small
+model failed turn three; the stronger model received that answer in its history
+and continued. The final synthesis contained incorrectly ordered values.
 
-### Inspect a fixed session first
+<figure style={{width: '92%', maxWidth: '100%', marginInline: 'auto', textAlign: 'center'}}>
+  <a href="/img/blog/multiturn-routing/conversation-handoff.svg" target="_blank" rel="noopener noreferrer" aria-label="Open the conversation handoff diagram at full size">
+    <img
+      src="/img/blog/multiturn-routing/conversation-handoff.svg"
+      alt="The small model fails turn three. The strong model continues turns four through six with the earlier error in its history. A proposed recovery path verifies or repairs that step before continuing."
+      width={1000}
+      height={640}
+      loading="lazy"
+      decoding="async"
+      style={{width: '100%', height: 'auto', maxHeight: 'none'}}
+    />
+  </a>
+  <figcaption style={{fontSize: '0.875rem', lineHeight: 1.65, marginTop: '0.75rem'}}>
+    Figure 2: A switch changes the executor, not earlier answers.
+    Repair is a proposed strategy, not a measured result.
+  </figcaption>
+</figure>
 
-The repository's [coding-agent replay](https://github.com/vllm-project/semantic-router/blob/96fa8d4f680882b65997f0a501c2653d5c7abedb/bench/agent_session_replay.py)
-sends a growing conversation with a tool catalog, a tool result, and a short
-follow-up. With Python 3.10 or newer and jq installed, run this from the repository
-root to inspect its request sequence without a model server or network calls:
+The traces are consistent with late escalation carrying damaged state forward;
+they do not isolate that mechanism causally. Testing verification, state repair,
+or safe replay is the next step. Side-effecting tools need idempotency safeguards.
+
+Timing also mattered in a separate native-tool benchmark. Across eight paired
+seeds, choosing the stronger model **before a known tool boundary** improved
+final success from **37.5% to 100%**. The tradeoff was 52.5 percentage points more
+strong-model turns, 11.35 points lower prefix-cache hit ratio, and 1,275 ms more
+per session. The fixture supplied the boundary explicitly; predicting it in
+real applications remains work to do.
+
+Together, these experiments suggest two distinct policies: select an appropriate
+owner before difficult work begins, and recover failed state rather than merely
+changing the model on the following turn.
+
+## What to measure in your own stack
+
+Compare fixed strong and small models, per-turn routing, and continuity-protected
+routing on paired tasks with an untouched holdout. Then test endpoint scheduling
+separately, under realistic load. At minimum, check:
+
+- **Task correctness:** final outcomes and intermediate errors, not just successful requests.
+- **Continuity:** tool call/result sequences and stored-history portability.
+- **Serving behavior:** eligible endpoint selection, warm/cold prefixes, time to
+  first token, queue time, and latency percentiles.
+- **Failure recovery:** owner loss, retries, and protection against duplicate tool side effects.
+
+Run new gates in observe mode first. Set quality requirements before tuning for
+speed or model usage. The architectural payoff is a division of responsibility:
+Semantic Router decides **what should do the work**, the inference router decides
+**where it should run**, and task-level evaluation checks whether the combination
+actually finishes the job.
+
+### Start with a reproducible replay
+
+From the repository root, with Python 3.10+ and jq, inspect the bundled
+[coding-agent session](https://github.com/vllm-project/semantic-router/blob/96fa8d4f680882b65997f0a501c2653d5c7abedb/bench/agent_session_replay.py)
+without sending a request:
 
 ```bash
-python3 bench/agent_session_replay.py --dry-run > session-dry-run.json
-jq '{fixture, dry_run, tools, summary, turns: [.turns[] | {turn, phase, messages}]}' session-dry-run.json
+python3 bench/agent_session_replay.py --dry-run | \
+  jq '{fixture, dry_run, tools, summary}'
 ```
 
-The bundled fixture has ten tools and three requests. The dry run reports zero
-sent requests; its zero switch counts are not evidence that routing preserved
-continuity.
+It plans three requests with ten tools. To replay them through your own gateway:
 
-For a live replay, remove --dry-run and set --base-url to your gateway's
-OpenAI-compatible endpoint, including its /v1 prefix. Use --api-key-env when
-authentication is required, and match --session-header and any --extra-header
-values to the [configured protection identity](/docs/tutorials/learning/protection).
-Extra headers use name=value syntax. Use a distinct session identity for each
-comparison run.
+```bash
+python3 bench/agent_session_replay.py \
+  --base-url http://127.0.0.1:8899/v1 \
+  --session-id blog-replay-001 \
+  --extra-header x-conversation-id=blog-replay-001
+```
 
-The live report records selected models, switches, tool-loop switch violations,
-HTTP results, latency, and token usage. The replay does not execute tools or feed
-generated answers into later requests: the fixture supplies that history.
+Match the identity headers to your protection configuration, use a fresh ID for
+each comparison, and add `--api-key-env` when authentication is required.
 
-The [current report](https://github.com/vllm-project/semantic-router/blob/96fa8d4f680882b65997f0a501c2653d5c7abedb/bench/agent_session_replay.py#L141-L179)
-counts HTTP 2xx responses as succeeded, even when a response body is malformed.
-It can exit zero while reporting a tool-loop switch violation. Require model
-identity on each turn before interpreting zero switches as continuity.
-[Missing cache usage is recorded as zero](https://github.com/vllm-project/semantic-router/blob/96fa8d4f680882b65997f0a501c2653d5c7abedb/bench/agentic_routing_live_benchmark.py#L415-L420),
-so retain backend usage receipts to distinguish unavailable telemetry from
-an actual zero-cache-hit result.
+<details>
+<summary>What this replay measures—and what it does not</summary>
 
-### Measure complete tasks separately
+The fixture supplies the history: generated answers are not fed into later
+requests, and tools are not executed. It measures request shape and routing
+diagnostics, **not completed-agent-task quality**.
 
-For workflows whose model outputs drive subsequent actions, use the
-[sr-bench task and target setup](/docs/benchmarking/sr-bench/tasks-and-targets)
-and [frozen-plan workflow](/docs/benchmarking/sr-bench/plan-and-run).
-The [results report](/docs/benchmarking/sr-bench/results) includes per-task switch
-counts and accuracy for tasks with and without switches. Those groups describe
-what happened; a paired policy comparison is needed to evaluate the effect of
-switching.
+The current CLI counts HTTP 2xx as success, even for a malformed response body,
+and can exit zero while reporting a tool-loop switch violation. Check the
+report, including model identity on every turn. Dry-run zero switch counts
+are not continuity evidence. Missing cached-token detail is recorded as zero;
+use backend telemetry to distinguish missing data from no cache reuse.
 
-Default sr-bench agent runs currently send no session identity, so they measure
-routing without session state. [Per-task identity](https://github.com/vllm-project/semantic-router/issues/4256)
-is tracked separately; do not treat the default run as a test of identity-based
-continuity protection.
+</details>
 
-Compare a capable model held for the session, a small model held for the session,
-per-turn routing, and routing with continuity protection. Add cache-aware
-endpoint selection as a separate serving comparison. Run proposed gates in
-observe mode before enforcement so you can distinguish recorded decisions from
-applied changes.
+For tasks where generated answers drive subsequent actions, use
+[sr-bench's frozen-plan workflow](/docs/benchmarking/sr-bench/plan-and-run) and
+[task reports](/docs/benchmarking/sr-bench/results). Default agent runs do not
+supply session identity; [per-task identity is tracked separately](https://github.com/vllm-project/semantic-router/issues/4256).
+Do not treat those defaults as tests of session-scoped protection.
 
-| Test | Question it should answer | Evidence to collect |
-|---|---|---|
-| Complete-task evaluation | Does routing finish the work correctly? | Task success, intermediate errors, and paired uncertainty. |
-| Tool-loop continuation | Does the call/result sequence survive routing? | Tool schema validity, owner changes, continuation and final success. |
-| History portability | Can the selected backend actually resume? | Full-history and stored-history paths, unknown IDs, and backend ownership. |
-| Pool-to-endpoint composition | Is the request served by an eligible replica? | Logical model, pool, endpoint identity, and capability checks. |
-| Warm/cold prefix runs | Is cache-aware scheduling helping? | Backend cached tokens or blocks, TTFT, queue time, and end-to-end latency. |
-| Load and failure runs | What happens under contention or owner loss? | Latency percentiles, errors, retries, failover decisions, and tool side effects. |
+### References and reproducibility
 
-Use paired tasks and seeds, freeze development-fitted thresholds, and retain an
-untouched holdout. Vary policy order to limit warm-up effects and control shared
-prefixes across runs. Under concurrent load, process-wide cache counters cannot
-attribute hits to a single request; use request-level accounting where available
-or report the measurement as aggregate.
-
-Set acceptance requirements before looking at results. A lower latency average
-cannot compensate for broken tool ownership or lost task correctness. Likewise,
-100% completion on a small controlled fixture does not establish production
-reliability. Promote only the policies whose tradeoffs meet the application's
-requirements, with a rollback path and continuing outcome measurement.
-
-## Build for the next turn and the rest of the task
-
-Semantic Router can bring request meaning, model capability, and conversation
-protection into an inference architecture. The inference router can then make
-the admitted choice efficient on the serving fleet. Together, they let a system
-reason about both *what should do the work* and *where it should run*.
-
-Our measurements show why both layers need task-level evaluation. A prospective
-tool-boundary choice improved continuity at a cost. A reactive gate saved
-strong-model turns and time, but failed to preserve final outcomes. The next
-design needs better boundary signals and explicit recovery of failed state.
-
-For an existing model fleet, begin with eligible pools, reliable conversation
-identity, and observable continuity decisions. Then measure model switching and
-endpoint scheduling independently, and evaluate their combined effect on the
-agent's completed work.
-
-### Implementation and measurement references
-
-- [Semantic Router continuity protection](/docs/tutorials/learning/protection)
-  and [memory and Replay](/docs/tutorials/learning/memory-and-replay), with the
-  [recent-outcome gate implementation](https://github.com/vllm-project/semantic-router/pull/3436).
-- [Protocol-correct Chat and Responses benchmark runner](https://github.com/vllm-project/semantic-router/pull/4082),
-  [coding-agent replay](https://github.com/vllm-project/semantic-router/pull/4154),
-  and [per-task continuity reporting](https://github.com/vllm-project/semantic-router/pull/4239).
-- [vLLM automatic prefix caching](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
+- [Continuity protection](/docs/tutorials/learning/protection),
+  [memory and Replay](/docs/tutorials/learning/memory-and-replay), and
+  [recent-outcome gates](https://github.com/vllm-project/semantic-router/pull/3436).
+- [Tool-loop ownership fix](https://github.com/vllm-project/semantic-router/pull/4297),
+  [Chat/Responses benchmark runner](https://github.com/vllm-project/semantic-router/pull/4082),
+  [coding-agent replay](https://github.com/vllm-project/semantic-router/pull/4154), and
+  [per-task continuity reporting](https://github.com/vllm-project/semantic-router/pull/4239).
+- [vLLM prefix caching](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
   and [Gateway API Inference Extension](https://gateway-api-inference-extension.sigs.k8s.io/).
 - [Evaluation record and holdout results](https://github.com/vllm-project/semantic-router/issues/4080#issuecomment-5938865660).
   Router revision: `0ee9955fc6ae0d79104e33bc933ae0f75ed52acf`;
