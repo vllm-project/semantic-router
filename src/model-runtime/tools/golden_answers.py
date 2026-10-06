@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -47,7 +48,7 @@ def answers(
         for golden in served.family.golden(served.package):
             values.update(served.golden_surface(golden["surface"], golden["body"]))
         info = served.model.info
-        return {
+        result = {
             "model": info.id,
             "repo": info.repo,
             "revision": info.revision,
@@ -56,6 +57,12 @@ def answers(
             "readiness": served.health.golden.describe(),
             "golden_answers": {served.placement.device.accelerator: values},
         }
+        if (
+            served.placement.device.accelerator == "mps"
+            and getattr(args, "tolerance", None) is not None
+        ):
+            result["tolerances"] = {"mps": args.tolerance}
+        return result
     finally:
         runtime.stop()
 
@@ -67,6 +74,8 @@ def record(path: Path, entries: list[dict[str, Any]]) -> None:
         if current is None or current.get("revision") != entry["revision"]:
             current = {"revision": entry["revision"], "answers": {}}
         current["answers"].update(entry["golden_answers"])
+        if entry.get("tolerances"):
+            current.setdefault("tolerances", {}).update(entry["tolerances"])
         table[entry["repo"]] = current
     path.write_text(
         json.dumps(table, indent=1, sort_keys=True) + "\n", encoding="utf-8"
@@ -84,9 +93,20 @@ def main() -> None:
     parser.add_argument("--offline", action="store_true")
     parser.add_argument("--autotune-cache")
     parser.add_argument(
+        "--tolerance",
+        type=float,
+        help="measured absolute error bound for this model's MPS answers; required with --device mps --record",
+    )
+    parser.add_argument(
         "--record", type=Path, help="merge into this golden answers file"
     )
     args = parser.parse_args()
+    if args.tolerance is not None and (
+        not math.isfinite(args.tolerance) or args.tolerance < 0
+    ):
+        parser.error("--tolerance must be a finite non-negative number")
+    if args.record and args.device == "mps" and args.tolerance is None:
+        parser.error("MPS recording needs an explicitly measured --tolerance")
     if bool(args.model) == bool(args.family):
         parser.error("give a model or --family")
     targets = (

@@ -108,8 +108,9 @@ def golden_check(
     the response's comparable values (``LoadedModel.golden_values``) and
     ``compare(surface, values, reference, tolerance)`` checks them against the
     reference recorded for this device class (``LoadedModel.golden_compare``).
-    References are keyed by device class (``cpu``, ``rocm``, ``cuda``); answers
+    References are keyed by device class (``cpu``, ``rocm``, ``cuda``, ``mps``); answers
     must match within ``CPU_TOLERANCE`` on CPUs and ``GPU_TOLERANCE`` on GPUs.
+    MPS requires a per-model ``tolerances.mps`` alongside its recorded reference.
     """
     result = GoldenResult(status="unverified")
     tolerance = CPU_TOLERANCE if device_class == "cpu" else GPU_TOLERANCE
@@ -122,7 +123,22 @@ def golden_check(
                 status="failed", detail="golden answers are not deterministic"
             )
         reference = (golden.get("expected") or {}).get(device_class)
-        counts = compare(surface, first, reference or {}, tolerance)
+        model_tolerance = tolerance
+        if device_class == "mps" and reference:
+            recorded = (golden.get("tolerances") or {}).get("mps")
+            if (
+                isinstance(recorded, bool)
+                or not isinstance(recorded, (int, float))
+                or not math.isfinite(recorded)
+                or recorded < 0
+            ):
+                return GoldenResult(
+                    status="failed",
+                    reference="mps",
+                    detail="MPS reference requires a recorded per-model tolerance",
+                )
+            model_tolerance = float(recorded)
+        counts = compare(surface, first, reference or {}, model_tolerance)
         if counts is None:
             return GoldenResult(status="failed", detail="golden answers are malformed")
         if not reference:
