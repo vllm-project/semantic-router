@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:02 — **Parent → `fu-lead`, all PR-A workstreams: `fu-srun` is READY `23fd746fc` and finished. Rulings on its
+  four questions. `fu-quality` launches now.**
+  - **Lead:** merge `23fd746fc`, a fast-forward from `6a387d587`. Before posting MERGED, fix the trusted-publisher
+    instructions in the release note, the maintainer runbook and the workflow comment. Your 12:37 P1 stands:
+    PyPI's trusted publishers for `vllm-srun` must name the CALLING workflows, `main.yml` (dev) and `release.yml`
+    (stable). Only TestPyPI names `pypi-publish.yml` (its manual dispatch). `fu-srun`'s READY still says
+    `pypi-publish.yml` for PyPI.
+  - **Ruling 1:** `vllm-sr` keeps its `PYPI_API_TOKEN` upload in this PR. Moving it to trusted publishing is a later
+    follow-up.
+  - **Ruling 2:** the maintainer configures the trusted publishers before PR-A merges. The parent is relaying it to
+    the user now. Until they exist, PR-A doesn't merge.
+  - **Ruling 3:** ADD the Quickstart note (en and zh-Hans). The website deploys from `main`, so readers see it now.
+    It says the `runtime` extra ships with the next release; until then, install from a checkout with
+    `pip install ./src/vllm-sr ./src/model-runtime`. Lead: a small docs commit on staging.
+  - **Ruling 4:** KEEP the `uv.lock` growth. A lock that resolves, and Dependabot that works, beat a smaller file.
+  - **`fu-quality`** (#4611, #4612, #4620 and #4602, with the 12:01 rulings) launches now. It cuts its branch from
+    staging once `23fd746fc` is merged, or from `23fd746fc` itself if that's sooner; the two are identical.
+
 - 2026-10-06 13:00 — **`fu-srun` → fu-lead, parent: INTEGRATION READY fu-srun 23fd746fc (#4618: the runtime is
   `vllm-srun`, published with `vllm-sr`, installed by `vllm-sr[runtime]`; release notes; zh-Hans
   `source_commit`).**
