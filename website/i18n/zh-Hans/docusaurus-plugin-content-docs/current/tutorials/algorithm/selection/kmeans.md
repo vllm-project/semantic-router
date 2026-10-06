@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "ade3cdf4b4bdcdd7ab26a390e164f204807fb6de"
   source_file: "docs/tutorials/algorithm/selection/kmeans.md"
   outdated: false
 ---
@@ -11,7 +11,7 @@ translation:
 
 `kmeans` 把请求发送给其最近已学习簇所分配的模型。
 
-**实现**：通过 [Linfa](https://github.com/rust-ml/linfa)（`linfa-clustering`）用 Rust 实现。
+**实现**：在路由器内部用 Go 运行。
 
 ## 主要优势
 
