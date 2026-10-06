@@ -21,8 +21,16 @@ from vllm_srun.accel.kernels import KernelSet, reference_kernels
 from vllm_srun.config import ModelConfig, ServeConfig
 from vllm_srun.engines.native import engine as native_engine
 from vllm_srun.plugins import registry
-from vllm_srun.plugins.base import DeviceInfo, Engine
+from vllm_srun.plugins.base import (
+    DeviceInfo,
+    Engine,
+    EngineOptions,
+    PackageRef,
+    RegistryOptions,
+)
 from vllm_srun.runtime import Runtime
+from vllm_srun.testing import omni
+from vllm_srun.testing.fixtures import write_fixture
 
 from .conftest import QUESTIONS, STATE
 
@@ -124,6 +132,47 @@ def test_a_model_answers_while_another_on_its_device_reads_its_weights(
     finally:
         release.set()
         runtime.stop()
+
+
+@pytest.mark.parametrize(
+    ("family", "write"),
+    [
+        ("multimodal_embedding", lambda root, _: omni.write_snapshot(root)),
+        ("decision2", lambda root, adapter: adapter),
+        (
+            "decision1",
+            lambda root, _: write_fixture(
+                root, family="decision1", variant="vela-encoder"
+            ),
+        ),
+    ],
+    ids=["towers", "lora", "branches"],
+)
+def test_the_device_step_after_a_read_builds_the_model_load_builds(
+    tmp_path, adapter_package, family, write
+):
+    base = adapter_package.parent / f"{adapter_package.name}-base"
+    plugin = registry.plugin("families", family).load()(RegistryOptions(base_path=base))
+    spec = plugin.describe(
+        plugin.verify(PackageRef(write(tmp_path / "pkg", adapter_package)))
+    )
+    accelerator = LockedHost()
+    (device,) = accelerator.devices()
+    engine, options = native_engine.NativeEngine(), EngineOptions(threads=2)
+    split = engine.read(spec, accelerator, device, options)()
+    whole = engine.load(spec, accelerator, device, options)
+
+    def tensors(model: Any) -> dict[str, torch.Tensor]:
+        return {
+            f"{index}.{name}": tensor
+            for index, module in enumerate(model._modules())
+            for name, tensor in (*module.named_parameters(), *module.named_buffers())
+        }
+
+    read, loaded = tensors(split), tensors(whole)
+    assert len(split._modules()) == 1 + len(spec.backbone.branches) + len(spec.towers)
+    assert read.keys() == loaded.keys()
+    assert all(torch.equal(read[name], loaded[name]) for name in read)
 
 
 def test_an_engine_without_a_read_step_reads_as_device_work(
