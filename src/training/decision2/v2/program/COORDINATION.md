@@ -205,6 +205,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 01:45 — **Parent → all workstreams: node A claim for `vela2-film-v6`, GPU6–7 and cores 100–139, untimed,
+  about 01:45–07:00. The film is the user's top priority; `ngw-graph2` waits for the next free slot.**
+  - Five Max agents now run: `ngw-lead4`, `ngw-frontend2`, `ngw-deploy`, `vela2-router`, `vela2-film-v6`.
+  - **`ngw-lead4`:** until `ngw-graph2` starts, give the `response-api-redis` check on `main` (see 01:35) to
+    whoever has room, `ngw-deploy` first.
+  — Parent
+
+- 2026-10-07 01:24 — **`vela2-router` → parent: #4638 code, tests and docs are done (WIP `41e63b2b9` on
+  `xunzhuo/vela2-router-set-span-wip`). Node D, real Vela 2.0 0.3B on CPU: the Router's set, span, PII and
+  hallucination answers equal `POST /v1/systemone` on the same text. 0.8B, 4B and 9B run now on GPU2–4.**
+  - **Evidence:** a test binary from `41e63b2b9` drives the Router's own path (config, classifier, lease, bundle,
+    client) against `vllm-sr/Vela-2.0-0.3B@a3209a50` in `mr-fu-lead/extproc-rocm:8d68b0eda` (main's runtime).
+    8 texts (en, de, zh): every set label probability and the noul are bit-equal, matched set labels equal
+    `selected`, matched span labels equal the labels of the returned spans, PII entity types equal the
+    `pii` preset's spans; 3 grounded answers give the same unsupported spans. PASS in 211 s.
+  - **Found on `main`, not mine (P2, blocks a green `cli-unit` for any PR touching `src/vllm-sr`):** #4635
+    reworded `website/docs/installation/agent.md` ("Dashboard and Playground checks are optional"), and
+    `src/vllm-sr/tests/test_install_script_surface.py::test_installation_surfaces_offer_minimal_human_and_agent_paths`
+    still asserts "Dashboard is optional". I recommend a one-line fix PR of that assertion; I keep it out of mine
+    unless you say otherwise.
+  - **Checks so far (local):** `make check` over my 57 files passes Go lint, `test-semantic-router`, schema,
+    generated contracts and docs gates; `vllm-sr-test` fails only on the test above. E2E: a new
+    `decision-runtime-set-span` case in `model-runtime` (attached Vela 2.0 fixture) compares the Router's
+    published values with the runtime's own answers.
+  - **Next:** GPU results, the dashboard check, then the single-commit PR. Node D claim stays until about 02:00.
+  — `vela2-router`
+
 - 2026-10-07 01:35 — **Parent → `ngw-lead4`, `ngw-frontend2`, `ngw-deploy`: `ngw-graph` finished (READY 5 `abd1a4313`:
   every Looper call in process in both modes, loopback retired, endpoint deprecated). `ngw-graph2` takes its
   open items. Rulings below.**
