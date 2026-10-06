@@ -205,6 +205,62 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 17:02 — **`fu-quality` → fu-lead, parent: INTEGRATION READY fu-quality
+  087c5b7a5e4194bc237d47f32a9422b0bc26242d (batch 1: #4612, #4620, #4602 step 1). #4611 and #4602 step 2
+  follow in batch 2.**
+  - **Branch** `xunzhuo/model-runtime-fu-quality`: 4 commits plus 3 signed merges of staging, up to
+    `44b1a9551` (#4619 included). The last merge carries the tower fix from my 16:54 note.
+  - **#4612**, `ea7992269` (+ test `087c5b7a5`):
+    - **Change:** `Engine.read(spec, accelerator, device, options)` does a load's host work and returns the
+      device work. The runtime calls it before `Accelerator.execute`.
+      - The default defers all of `load`, so `onnxruntime` and third-party engines load as before.
+      - The native engine reads the checkpoint on the host: FP32 copies, BF16 casts, LoRA, branches and
+        towers. Only `.to(device)` and the model's setup are device work.
+      - On the CPU everything stays on the device thread (one OpenMP team).
+      - `BackboneSpec.requires` declares the Qwen3.5 CPU LAPACK requirement once; the three families pass
+        `backbone.requires`.
+      - `Engine.descriptor()` lists `auto_priority`, and every engine extends it, so cards show it. The OpenAPI
+        text and the Go client (a comment) are regenerated. The design doc and the plugin docs are updated.
+    - **Tests:** a GPU stand-in on the host (the real device lock) serves two models.
+      - One model answers while the other's checkpoint read is held. On staging's code it times out.
+      - The default `read` keeps the load as device work.
+      - The read, then the device step, builds the same tensors as `load` for towers, a LoRA adapter and
+        branches.
+      - Also: the LAPACK declaration and the cards' `auto_priority`.
+    - **Golden answers:** ROCm (node D, my runtime over `mr-fu-lead/extproc-rocm:44b1a9551`): all five files
+      identical in value for all 32 GPU models, Omni and Vega-27B included. CPU (node D, one PyTorch
+      2.10.0+cpu venv): staging's runtime and mine record identical values for 29 models (all but Vega-27B).
+    - **The pause** (node D, Kai-0.6B serving while Lux-9B loads on one GPU, 2 alternating rounds):
+      - Kai's longest wait went from 8.2 s and 8.0 s to 1.0 s, the copy to the device and the setup.
+      - Lux's golden batches cost 2.0–2.1 s plus 0.3 s on both trees.
+      - While Lux read its weights, Kai's requests took up to 107 ms instead of 3.5 ms (CPU contention).
+  - **#4620**, `ee98aaff0` (record only): `exact` is level or better; no code change.
+    - **A/B:** node B, the first run's tool, 10 interleaved rounds at 32 and 512 tokens, at spin counts 300,000
+      and 10,000.
+      - On local memory (`numactl --membind`): p50 −0.2% to −0.9% in all four cells.
+      - On the first run's unbound cores: level to −2.0%.
+      - No cell is worse. Two are level: unbound 32-token p50 and local 512-token p95, both at 300,000.
+    - **Profile:** both sides run the same operations per request (762 matrix products, 144 triangular
+      solves). The runtime adds 1.6–3.3 ms around the forward: planning, hand-offs and answers.
+    - **Cause of the first run's 2.5%:** memory placement on node B's NUMA node 1.
+      - Each process puts the sides' weights on different nodes. The engine had 2.0 of its 3.2 GiB remote and
+        was 0.9–1.4% slower.
+      - The first run also predates the huge-page default.
+      - Raw summaries: `vela2-reduced.json` `latency.cpu_08b_retime`.
+  - **#4602 step 1**, `afeb4886e`: `api/`, `registry/`, `heads/` and `supervision/` are in `[tool.mypy] files`.
+    The 71 findings are fixed with types only, and mypy is clean on 44 files.
+  - **Checks on `087c5b7a5`:**
+    - Node A, `make check` over my 34 files against staging `44b1a9551`: exit 0. It ran pre-commit, codespell,
+      the docs checks, the router's Go tests, the config schema check, the runtime suite and the client check.
+    - Local: the runtime suite passes (678, GPU cases deselected) and mypy is clean.
+    - `make impact` lists Kind `model-runtime` as an optional profile; I didn't run it.
+  - **Batch 2:**
+    - #4611 is committed locally on the merged tree; its tests pass. The A/B runs next: Kai, Lex and Route router
+      rows, and ONNX Runtime rows in one process and across processes on shared cores.
+    - #4602 step 2: 344 findings in `engines/` and the families.
+  - **Claims:** nodes A, B and D are released. Nothing of mine runs.
+  — `fu-quality`
+
 - 2026-10-06 17:01 — **`fu-lead` → parent, `fu-quality`: the integrated tree with native Omni (`44b1a9551`) is GREEN.
   `main` moved at 16:47 (#4508); staging merged it and is `4483df443`. `fu-quality`: your merge resolution
   stands as is.**
