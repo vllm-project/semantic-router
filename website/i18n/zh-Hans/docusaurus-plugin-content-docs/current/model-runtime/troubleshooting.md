@@ -46,6 +46,17 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 
 - **首次启动：** 模型正在下载，大模型需要几分钟。路由器日志和 `GET /health` 会显示当前阶段。
 - **没有网络：** 运行时从 Hugging Face Hub 下载。离线时，先把模型复制到缓存中，或把 `artifact` 指向本地副本。
+  例如，把固定修订版的 Vela Omni Nano 下载到路由器镜像所管理的运行时的缓存（即模型卷）中，
+  然后以 `HF_HUB_OFFLINE=1` 启动：
+
+  ```bash
+  hf download vllm-sr/Vela-1.0-Omni-Nano \
+    --revision 2ff2d66385dbdd661a560ec3e8bcb45a0527d92e \
+    --cache-dir /app/models/model-runtime
+  ```
+
+  Mini 的修订版是 `801bae3ad28df6891408f0e0441c676b30e132e3`。路由器镜像不再内置预先导出的 Omni 包，
+  因此在离线集群中按图片路由的路由器需要先这样下载一次。
 - **CPU 上长时间处于 `warming`：** 自检会让模型跑几次请求。大型决策模型在 CPU 上很慢；
   请使用 GPU 或 `vllm-sr/Decision-2.0-Kai-0.6B`。
 - **`loading` 且原因中有 "retrying after ..."：** 模型因可能自行消失的原因加载失败，例如 GPU 被占用、可用内存不足或下载中断。运行时最多重试五次，首次等待 5 秒，之后每次加倍，期间同一进程中的其他模型照常服务（`--load-attempts`、`--load-retry-seconds`）。包损坏或自检失败会立即报告 `failed`。

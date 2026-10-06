@@ -144,8 +144,7 @@ func init() {
 	)
 	register("multi-endpoint", func() framework.Profile { return multiendpoint.NewProfile() }, framework.ProfileCapabilities{})
 	register("vela-omni", func() framework.Profile { return velaomni.NewProfile() }, framework.ProfileCapabilities{
-		LocalImages:     providerMockerLocalImages,
-		RouterBuildArgs: map[string]string{"VELA_OMNI_VARIANTS": "nano mini"},
+		LocalImages: providerMockerLocalImages,
 	})
 	register("multimodal-routing", func() framework.Profile { return multimodalrouting.NewProfile() }, framework.ProfileCapabilities{})
 	register("production-stack", func() framework.Profile { return productionstack.NewProfile() }, framework.ProfileCapabilities{})

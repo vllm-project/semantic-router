@@ -46,7 +46,6 @@ onnx = [
   "onnxruntime>=1.26",
 ]
 multimodal = [
-  "onnxruntime>=1.26",
   "pillow>=10.4",
 ]
 

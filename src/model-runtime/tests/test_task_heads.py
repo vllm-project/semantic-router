@@ -351,9 +351,7 @@ def test_planned_engines_need_nothing_loaded():
         planned_engine(ModelConfig(model="/x", engine="onnxruntime")) == "onnxruntime"
     )
     assert planned_engine(ModelConfig(model="/no/such/package")) == "auto"
-    assert (
-        planned_engine(ModelConfig(model="vllm-sr/Vela-1.0-Omni-Nano")) == "onnxruntime"
-    )
+    assert planned_engine(ModelConfig(model="vllm-sr/Vela-1.0-Omni-Nano")) == "native"
     assert (
         planned_engine(ModelConfig(model="vllm-sr/Vela-1.0-Encoder-307M-Domain"))
         == "auto"

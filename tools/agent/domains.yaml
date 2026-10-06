@@ -177,7 +177,7 @@ domains:
     checks:
       - python3 -m unittest discover -s tools/models/vela_omni -p test_contract.py
       - python3 -m unittest discover -s tools/models/vela_omni -p test_bundle.py
-    verifications: [core, e2e.vela-omni]
+    verifications: [core]
 
   vela-halu-artifacts:
     owner: model-runtime
@@ -194,7 +194,6 @@ domains:
       - config/fragments/signal/embedding/image-routing.yaml
       - config/assets/image-routing/**
       - tools/calibration/image-routing/**
-      - tools/models/vela_omni/**
       - src/model-runtime/vllm_srun/families/multimodal_embedding/**
       - src/model-runtime/vllm_srun/registry/tables/omni.py
       - src/semantic-router/pkg/embedding/**
@@ -292,7 +291,7 @@ domains:
       - src/semantic-router/pkg/classification/embedding_classifier_integration_test.go
       - src/semantic-router/pkg/cache/negation_regression_test.go
       - src/semantic-router/pkg/cache/omni_storage_integration_test.go
-      - src/semantic-router/pkg/modeldownload/prepared_artifact*.go
+      - tools/ci/prepare_model_test_assets.py
       - src/semantic-router/pkg/modelruntime/serving/servingtest/managed.go
       - src/model-runtime/vllm_srun/registry/tables/vela1.py
       - tools/ci/run_model_tests.py
@@ -620,7 +619,6 @@ images:
       - src/semantic-router/**
       - src/model-runtime/**
       - config/**
-      - tools/models/vela_omni/**
       - tools/docker/Dockerfile.extproc
       - .dockerignore
   extproc-rocm:
@@ -629,7 +627,6 @@ images:
       - src/semantic-router/**
       - src/model-runtime/**
       - config/**
-      - tools/models/vela_omni/**
       - tools/docker/Dockerfile.extproc
       - .dockerignore
   operator:
@@ -646,7 +643,6 @@ images:
       - src/semantic-router/**
       - src/model-runtime/**
       - config/**
-      - tools/models/vela_omni/**
       - tools/docker/Dockerfile.extproc
       - .dockerignore
       - src/vllm-sr/**
@@ -656,7 +652,6 @@ images:
       - src/semantic-router/**
       - src/model-runtime/**
       - config/**
-      - tools/models/vela_omni/**
       - tools/docker/Dockerfile.extproc
       - .dockerignore
       - src/vllm-sr/**
@@ -666,7 +661,6 @@ images:
       - src/semantic-router/**
       - src/model-runtime/**
       - config/**
-      - tools/models/vela_omni/**
       - tools/docker/Dockerfile.extproc
       - .dockerignore
       - src/vllm-sr/**
@@ -880,7 +874,6 @@ profiles:
     paths:
       - e2e/profiles/vela-omni/**
       - e2e/testcases/vela_omni.go
-      - tools/models/vela_omni/**
       - src/model-runtime/vllm_srun/families/multimodal_embedding/**
       - src/semantic-router/pkg/embedding/audio*.go
 
@@ -899,7 +892,6 @@ profiles:
       - config/fragments/signal/embedding/image-routing.yaml
       - config/assets/image-routing/**
       - tools/calibration/image-routing/**
-      - tools/models/vela_omni/**
       - src/model-runtime/vllm_srun/families/multimodal_embedding/**
       - src/semantic-router/pkg/embedding/**
       - src/semantic-router/pkg/modelruntime/embedding*.go

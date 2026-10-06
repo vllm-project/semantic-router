@@ -24,7 +24,7 @@ Without a `MODEL` argument, `vllm-sr serve` starts the router instead.
 | `--port` | `8100` | Port to listen on. |
 | `--uds PATH` | | Listen on a Unix socket instead of TCP. |
 | `--profile` | `exact` | `exact`, `shared_context`, `batching`, `max_speed`, or one a plugin adds. |
-| `--engine` | `native` | Engine plugin: `native` (PyTorch) or `onnxruntime`. |
+| `--engine` | `auto` | Engine plugin: `auto` (the first that runs the model, native first), `native` (PyTorch) or `onnxruntime` (the `onnx` extra). |
 | `--family` | detected | Force a model family plugin. |
 | `--served-model-name` | the model name | The model ID the API reports, for one `MODEL`. |
 | `--threads` | all cores | CPU threads for the process. Each graph of an ONNX Runtime model runs its own pool of up to this many threads, so set it on a large host. |
@@ -171,7 +171,6 @@ The binding names (`domain_classifier`, `pii_classifier`, `prompt_guard`,
 | `VLLM_SRUN_DIR` | a private temporary directory | Where the router puts the processes' Unix sockets and models files. |
 | `VLLM_SRUN_CACHE_DIR` | `/app/models/model-runtime` in router images | Hugging Face cache of managed runtimes. |
 | `VLLM_SRUN_CPU_PROCESSES` | one per CPU model, at most one per two cores | The most processes CPU models without a `process` are spread over, `device: auto` ones included on a host without a GPU. |
-| `VLLM_SRUN_PREPARED_DIR` | `/opt/router-model-artifacts` | Where the runtime finds prepared bundles (Vela Omni) before it looks on the Hub. |
 | `VLLM_SRUN_READY_TIMEOUT` | `10m` | How long the router waits for a deployment to become ready when it starts or reloads, as a duration such as `30m`. A first start may download and verify large models. |
 | `VLLM_SRUN_RESULT_CACHE` | `4096` | Recent classify and decision results the router keeps per model, so a repeated request skips the runtime; `0` turns it off. |
 | `VLLM_SRUN_AUTOTUNE_CACHE` | | The `--autotune-cache` directory of a runtime. |

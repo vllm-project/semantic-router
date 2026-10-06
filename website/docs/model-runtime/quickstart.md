@@ -17,8 +17,9 @@ for the model download. No GPU is needed.
 The runtime is the `vllm-srun` Python package, released together with the
 `vllm-sr` CLI and with the same version. Install PyTorch first, from the
 [index that matches your hardware](https://pytorch.org/get-started/locally/)
-(CPU, CUDA or ROCm), then the CLI with its `runtime` extra. This guide uses
-the CPU build, in a virtual environment:
+(CPU, CUDA or ROCm), then the CLI with its `runtime` extra, which installs the
+runtime with what every built-in model needs (Pillow, for Vela Omni's images).
+This guide uses the CPU build, in a virtual environment:
 
 ```bash
 python3 -m venv .venv

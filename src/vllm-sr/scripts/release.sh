@@ -55,7 +55,7 @@ write_pyproject_version() {
     sed -i.bak 's/^version = .*/version = "'"$value"'"/' "$path"
     rm -f "$path.bak"
   done
-  sed -i.bak 's/"vllm-srun==[^"]*"/"vllm-srun=='"$value"'"/' "$PYPROJECT_PATH"
+  sed -i.bak 's/"vllm-srun\[multimodal\]==[^"]*"/"vllm-srun[multimodal]=='"$value"'"/' "$PYPROJECT_PATH"
   rm -f "$PYPROJECT_PATH.bak"
 }
 

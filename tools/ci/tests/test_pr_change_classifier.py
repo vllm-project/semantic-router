@@ -64,7 +64,6 @@ class SelectionTests(unittest.TestCase):
             "config/assets/image-routing/manifest.json",
             "tools/calibration/image-routing/prepare_assets.py",
             "tools/calibration/image-routing/testdata/prototype-protocol.json",
-            "tools/models/vela_omni/export.py",
             "src/model-runtime/vllm_srun/families/multimodal_embedding/family.py",
             "src/semantic-router/pkg/embedding/embedding.go",
             "src/semantic-router/pkg/modelruntime/embedding_owned.go",

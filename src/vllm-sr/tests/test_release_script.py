@@ -29,7 +29,7 @@ def test_release_tags_the_release_version_and_starts_the_next_cycle(
     pyproject.write_text(
         f'[project]\nversion = "{current_version}"\n'
         "[project.optional-dependencies]\n"
-        f'runtime = ["vllm-srun=={current_version}"]\n',
+        f'runtime = ["vllm-srun[multimodal]=={current_version}"]\n',
         encoding="utf-8",
     )
     runtime = tmp_path / "src" / "model-runtime" / "pyproject.toml"
@@ -58,7 +58,7 @@ def test_release_tags_the_release_version_and_starts_the_next_cycle(
     for ref, version in (("v0.4.0", "0.4.0"), ("HEAD", "0.5.0")):
         cli = run(tmp_path, "git", "show", f"{ref}:src/vllm-sr/pyproject.toml")
         assert f'version = "{version}"' in cli
-        assert f'runtime = ["vllm-srun=={version}"]' in cli
+        assert f'runtime = ["vllm-srun[multimodal]=={version}"]' in cli
         assert (
             run(tmp_path, "git", "show", f"{ref}:src/model-runtime/pyproject.toml")
             == f'[project]\nversion = "{version}"\n[tool.mypy]\npython_version = "3.10"'

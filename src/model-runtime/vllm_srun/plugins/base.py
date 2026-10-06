@@ -225,7 +225,10 @@ class ModelSpec:
     run; the engine may shorten it beside other engines' CPU models. ``requires``
     names, per accelerator, the capabilities its devices must report
     (``Accelerator.capabilities``) to serve the model; placement refuses a
-    device that lacks one.
+    device that lacks one. ``towers`` are a multimodal model's other
+    backbones by name (an image or audio encoder next to the text backbone),
+    each its own architecture and weights; an encoder batch runs one with
+    ``EncoderBatch.tower``.
     """
 
     name: str
@@ -238,6 +241,7 @@ class ModelSpec:
     graph_threads: Mapping[str, int] = field(default_factory=dict)
     graph_spin_us: Mapping[str, int] = field(default_factory=dict)
     requires: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    towers: Mapping[str, BackboneSpec] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -329,7 +333,9 @@ class EncoderBatch:
     entry an engine that runs graphs executes, ``graph_inputs`` are extra named
     inputs for it, and ``outputs`` the graph outputs the readout reads.
     ``branch`` runs one of the backbone's branches (``BackboneSpec.branches``)
-    instead of its own layer stack. ``reduced`` runs the reduced-precision copy
+    instead of its own layer stack. ``tower`` runs one of the model's towers
+    (``ModelSpec.towers``) on ``graph_inputs`` instead of the backbone, and
+    returns its named outputs. ``reduced`` runs the reduced-precision copy
     when the engine loaded one (approximate batches only), else the exact weights.
     """
 
@@ -343,6 +349,7 @@ class EncoderBatch:
     lengths: list[int] | None = None
     branch: str | None = None
     reduced: bool = False
+    tower: str | None = None
 
 
 @dataclass

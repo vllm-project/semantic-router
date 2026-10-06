@@ -3,13 +3,14 @@
 import re
 from pathlib import Path
 
+import tomllib
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROUTER_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc"
 START_ROUTER = REPO_ROOT / "src" / "vllm-sr" / "start-router.sh"
 STAGE = re.compile(r"^FROM\s+(?:--platform=\S+\s+)?(\S+)\s+AS\s+(\S+)\s*$", re.M)
 STAGES = (
     "router-build",
-    "vela-omni",
     "image-routing-assets",
     "python-base",
     "torch-cpu",
@@ -146,13 +147,19 @@ def test_runtime_dependencies_come_from_the_runtime_package() -> None:
     assert "==" not in runtime
 
 
+def test_router_images_carry_no_onnx_runtime_or_prepared_bundles() -> None:
+    pyproject = REPO_ROOT / "src" / "model-runtime" / "pyproject.toml"
+    extras = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"][
+        "optional-dependencies"
+    ]
+    assert not any(dep.startswith("onnxruntime") for dep in extras["multimodal"])
+    assert any(dep.startswith("onnxruntime") for dep in extras["onnx"])
+    assert "router-model-artifacts" not in router_dockerfile()
+
+
 def test_router_images_share_the_model_assets() -> None:
     router = stages()["router"][1]
 
-    assert (
-        "COPY --link --from=vela-omni /opt/router-model-artifacts/ /opt/router-model-artifacts/"
-        in router
-    )
     assert (
         "COPY --link --from=image-routing-assets /out/ /app/share/image-routing/"
         in (router)

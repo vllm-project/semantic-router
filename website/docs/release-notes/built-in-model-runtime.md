@@ -16,7 +16,8 @@ The runtime is the `vllm-srun` package and command, released together with
 `vllm-sr` and with the same version. Engine mode (`vllm-sr serve MODEL`) no
 longer needs a repository checkout: install PyTorch from the
 [index that matches your hardware](https://pytorch.org/get-started/locally/),
-then the CLI's `runtime` extra.
+then the CLI's `runtime` extra, which installs the runtime with what every
+built-in model needs (Pillow, for Vela Omni's images).
 
 ```bash
 pip install torch --index-url https://download.pytorch.org/whl/cpu
@@ -39,7 +40,8 @@ named the runtime `vllm-sr-runtime`. If you used one, rename what you set:
 | `vllm-sr-runtime` (package and command) | `vllm-srun` |
 | `vllm_sr_runtime` (module) | `vllm_srun` |
 | `vllm_sr_runtime.families`, `.engines`, `.accelerators`, `.profiles` (plugin entry-point groups) | `vllm_srun.families`, `.engines`, `.accelerators`, `.profiles` |
-| `VLLM_SR_RUNTIME_COMMAND`, `_DIR`, `_CACHE_DIR`, `_PREPARED_DIR`, `_RESULT_CACHE`, `_CPU_PROCESSES`, `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` | `VLLM_SRUN_COMMAND`, `_DIR`, `_CACHE_DIR`, `_PREPARED_DIR`, `_RESULT_CACHE`, `_CPU_PROCESSES`, `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` |
+| `VLLM_SR_RUNTIME_COMMAND`, `_DIR`, `_CACHE_DIR`, `_RESULT_CACHE`, `_CPU_PROCESSES`, `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` | `VLLM_SRUN_COMMAND`, `_DIR`, `_CACHE_DIR`, `_RESULT_CACHE`, `_CPU_PROCESSES`, `_AUTOTUNE_CACHE`, `_READY_TIMEOUT` |
+| `VLLM_SR_RUNTIME_PREPARED_DIR` | removed: Vela Omni downloads like every model (below) |
 | `vllm_sr_runtime_*` metrics | `vllm_srun_*` |
 
 `VLLM_SR_RUNTIME_CONFIG_PATH`, `VLLM_SR_RUNTIME_STATUS_DIR` and
@@ -70,6 +72,16 @@ v0.4.0, and keep their names.
 - **Retired features.** The NLI model (the hallucination explainer and the
   response cache's `polarity_guard`), OpenVINO, the ONNX Runtime MIGraphX and
   CK flash-attention paths, and RISC-V builds.
+- **Router images carry no ONNX Runtime and no Omni bundle**
+  ([#4619](https://github.com/vllm-project/semantic-router/issues/4619)). Vela
+  1.0 Omni runs on the native engine from its published repository, which the
+  runtime downloads (Nano 0.67 GB, Mini 4.3 GB) and verifies like every model.
+  An air-gapped cluster that routes images fetches it into the model volume
+  first ([Troubleshooting](model-runtime/troubleshooting.md#the-runtime-stays-in-loading-or-warming)).
+  `vllm-sr config migrate` moves deployments off the retired
+  `/opt/router-model-artifacts/vela-1.0-omni-*` paths. ONNX Runtime is the
+  optional `onnx` extra of `vllm-srun`, for ONNX packages and prepared Omni
+  bundles (`engine: onnxruntime`).
 - **Runtime contract 2.0.0.** The router treats an attached runtime that
   doesn't serve contract 2.x, such as the 1.0.0 runtime of #4481, as
   incompatible. Upgrade attached runtimes together with the router.

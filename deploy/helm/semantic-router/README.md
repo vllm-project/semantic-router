@@ -259,7 +259,7 @@ the locked chart dependencies.
 | persistence.annotations | object | `{}` | Annotations for PVC |
 | persistence.enabled | bool | `true` | Enable persistent volume |
 | persistence.existingClaim | string | `""` | Existing claim name (if provided, will use existing PVC instead of creating new one) |
-| persistence.size | string | `"10Gi"` | Storage size |
+| persistence.size | string | `"10Gi"` | Storage size of the model volume. The runtime downloads the router's models here on first start; Vela Omni Mini alone takes 4.3 GB. |
 | persistence.storageClassName | string | `"standard"` | Storage class name. Leave empty for the cluster default; use "-" to render storageClassName: "". |
 | podAnnotations | object | `{}` |  |
 | podSecurityContext | object | `{}` |  |

@@ -24,7 +24,9 @@ from snapshot_model_catalog import release_snapshot_errors
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PYPROJECT_PATH = REPO_ROOT / "src/vllm-sr/pyproject.toml"
 RUNTIME_PYPROJECT_PATH = REPO_ROOT / "src/model-runtime/pyproject.toml"
-RUNTIME_DISTRIBUTION = "vllm-srun"
+# The runtime extra serves every built-in family: multimodal brings Pillow for
+# Omni's images.
+RUNTIME_REQUIREMENT = "vllm-srun[multimodal]"
 RUNTIME_EXTRA = "runtime"
 SIM_PYPROJECT_PATH = REPO_ROOT / "src/fleet-sim/pyproject.toml"
 HELM_CHART_PATH = REPO_ROOT / "deploy/helm/semantic-router/Chart.yaml"
@@ -397,7 +399,7 @@ def validate_runtime_package(
         PYPROJECT_PATH,
         f"vllm-sr '{RUNTIME_EXTRA}' extra",
         ", ".join(contract.runtime_requirements),
-        f"{RUNTIME_DISTRIBUTION}=={version}",
+        f"{RUNTIME_REQUIREMENT}=={version}",
     )
     require_markers(errors, RELEASE_WORKFLOW_PATH, runtime_release_notes_markers())
 

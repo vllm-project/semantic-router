@@ -45,7 +45,8 @@ class DevelopmentVersionTests(unittest.TestCase):
             cli.mkdir()
             runtime.mkdir()
             (cli / "pyproject.toml").write_text(
-                'version = "0.5.0"\nruntime = ["vllm-srun==0.5.0"]\n', encoding="utf-8"
+                'version = "0.5.0"\nruntime = ["vllm-srun[multimodal]==0.5.0"]\n',
+                encoding="utf-8",
             )
             (runtime / "pyproject.toml").write_text(
                 'version = "0.5.0"\npython_version = "3.10"\n', encoding="utf-8"
@@ -54,7 +55,7 @@ class DevelopmentVersionTests(unittest.TestCase):
             self.assertEqual(version, "0.5.0.dev19700101000000")
             self.assertEqual(
                 (cli / "pyproject.toml").read_text(encoding="utf-8"),
-                f'version = "{version}"\nruntime = ["vllm-srun=={version}"]\n',
+                f'version = "{version}"\nruntime = ["vllm-srun[multimodal]=={version}"]\n',
             )
             self.assertEqual(
                 (runtime / "pyproject.toml").read_text(encoding="utf-8"),
@@ -64,11 +65,11 @@ class DevelopmentVersionTests(unittest.TestCase):
     def test_runtime_version_drift_fails_without_editing(self) -> None:
         for cli_source, runtime_source in (
             (
-                'version = "0.5.0"\nruntime = ["vllm-srun==0.5.0"]\n',
+                'version = "0.5.0"\nruntime = ["vllm-srun[multimodal]==0.5.0"]\n',
                 'version = "0.4.0"\n',
             ),
             (
-                'version = "0.5.0"\nruntime = ["vllm-srun==0.4.0"]\n',
+                'version = "0.5.0"\nruntime = ["vllm-srun[multimodal]==0.4.0"]\n',
                 'version = "0.5.0"\n',
             ),
         ):
@@ -422,7 +423,7 @@ class PythonPublisherContractTests(unittest.TestCase):
             project = root / "src" / "vllm-sr"
             project.mkdir(parents=True)
             (project / "pyproject.toml").write_text(
-                f'version = "{version}"\nruntime = ["vllm-srun=={runtime or version}"]\n',
+                f'version = "{version}"\nruntime = ["vllm-srun[multimodal]=={runtime or version}"]\n',
                 encoding="utf-8",
             )
             (root / "src" / "model-runtime").mkdir()

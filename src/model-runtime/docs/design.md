@@ -66,7 +66,7 @@ running packaged remote code (`trust_remote_code`).
 | Surfaces | `POST /v1/classify`, `/v1/embeddings` (OpenAI-compatible), `/v1/rerank`, and `/v1/bundle`; Set and Span answers on `/v1/decisions` where a model declares them. The Phase 1 surfaces are unchanged. |
 | Processes | One runtime process serves one or more models. Each model keeps its own worker, device and profile. The router groups its managed deployments into processes (by default one per device). |
 | Bundling | The router sends all model work of one request stage for one runtime process as one `/v1/bundle` call. Bundling is transport only: every task keeps the semantics of its own surface. |
-| Engines | The native PyTorch engine first, for encoders and decoders, on every accelerator. An `onnxruntime` engine runs the ONNX graphs packages ship (Vela 1.0, Vela 2.0 0.3B) and the prepared Omni graphs, for CPU latency and portability. |
+| Engines | The native PyTorch engine first, for encoders and decoders, on every accelerator; every built-in model runs on it by default. An optional `onnxruntime` engine (the `onnx` extra, not in the router images) runs the ONNX graphs packages ship (Vela 1.0, Vela 2.0 0.3B) and prepared Omni bundles, for portability. |
 | Hardware | Accelerators `cpu`, `cuda`, `rocm` (built in) plus `xpu` and `mps` (built-in plugin slots, unvalidated). |
 | Router seam | The router's typed task bindings (`pkg/modelruntime/binding`, contracts `label_distribution.v1`, `label_scores.v1`, `token_spans.v1`, `embedding.v1`, `relevance_scores.v1`) are kept. The provider facade `pkg/modelruntime/native` (candle, ORT, OpenVINO) is replaced by `pkg/modelruntime/serving`, which implements every contract through the runtime. Consumers change their constructor, not their logic. |
 | Algorithms | Keyword matching (BM25, n-gram) and the KNN, KMeans, SVM and MLP model selectors are algorithms, not models: they become pure Go with parity tests against the bindings they replace. |
@@ -92,7 +92,7 @@ running packaged remote code (`trust_remote_code`).
  | api: /v1/decisions /v1/systemone /v1/classify /v1/embeddings /v1/rerank /v1/bundle /v1/models /health |
  | per model: scheduler (admission, deadlines, profile hook, micro-batches) and one worker on its device |
  | families: decision2 | decision1 | task_heads | vela2 | multimodal_embedding  (render, readout, answers)|
- | engines:  native (PyTorch: Qwen3, Qwen3.5, ModernBERT, LoRA) | onnxruntime (package and prepared graphs)|
+ | engines: native (PyTorch: Qwen3, Qwen3.5, ModernBERT, BERT, LoRA, Omni towers) | onnxruntime (optional)|
  | accelerators: cpu | cuda | rocm | xpu | mps  (detection, kernels, pure-torch fallbacks)               |
  | registry: pinned Hub revisions, cache, manifest / file-hash verification, licence and access policy  |
  | placement per model; supervision: golden readiness per model, health, metrics                         |
@@ -146,9 +146,10 @@ src/model-runtime/
       decision1/            # Decision 1.0: vela-encoder and qwen3.5-decision runtimes
       task_heads/           # HF encoder task models (Vela 1.0 and compatible ModernBERT models)
       vela2/                # Vela 2.0 schema encoder (0.3B) and Qwen3.5 encoders (0.8B, 4B, 9B); Set and Span
-      multimodal_embedding/ # Vela 1.0 Omni: prepared text, image and audio graphs, processors
+      multimodal_embedding/ # Vela 1.0 Omni: the published package, readouts, processors; ONNX bundles
     engines/
-      native/               # PyTorch: models/qwen3.py, qwen3_5.py, modernbert.py, lora.py, tree.py
+      native/               # PyTorch: models/qwen3.py, qwen3_5.py, modernbert.py, bert.py, siglip.py,
+                            #   whisper.py, clap.py, lora.py, tree.py
       onnxruntime/          # ONNX Runtime sessions, execution providers, graph outputs
     accel/                  # cpu, cuda, rocm, xpu, mps; kernels.py
     profiles/               # exact, shared_context, batching, max_speed
@@ -551,7 +552,7 @@ Before any model code runs, the family verifies the package:
 | `decision1` | `vllm-sr/Decision-1.0-{Kai-0.6B, Lex-0.6B, Route-0.6B}` (Vela encoder runtime); `{Eos-0.8B, Sol-2B, Nox-4B, Lux-9B}` (Qwen3.5 runtime) | Kai `79263ba4`, Lex `a5ba6895`, Route `deed1f29`, Eos `2ca39a23`, Sol `5c698b1a`, Nox `7f65e1db`, Lux `2064c84d` |
 | `task_heads` | `vllm-sr/Vela-1.0-Encoder-307M-{Domain, Guard, Safety, Shield, FactCheck, Feedback, Modality, Hazard, PII, Halu, Embedding, Reranker}`, `Qwen/Qwen3-Embedding-0.6B` | The revisions the router pinned (section 16.3), for example Domain `f6354f54`, PII `6d3300c4`, Halu `ca875312`, Embedding `1e57cebf`, Reranker `a388e41c` |
 | `vela2` | `vllm-sr/Vela-2.0-{0.3B, 0.8B, 4B, 9B}` (private preview) | 0.3B `a3209a50`, 0.8B `a778eb2a`, 4B `c1e64d4f`, 9B `bc876163` |
-| `multimodal_embedding` | `vllm-sr/Vela-1.0-Omni-{Nano, Mini}` | Nano `2ff2d663`, Mini `801bae3a` (prepared graphs, section 8.5) |
+| `multimodal_embedding` | `vllm-sr/Vela-1.0-Omni-{Nano, Mini}` | Nano `2ff2d663`, Mini `801bae3a` (the published weights, section 8.5) |
 
 Each family names its table (`ModelFamily.builtin_table`); the built-in
 families keep theirs in `registry/tables/<family>.py`, with the full
@@ -662,11 +663,36 @@ packages' presets (`pii`, `halu`, `toxic`, relevance) as named questions.
 ### 8.5 Multimodal embeddings (`multimodal_embedding`, Phase 3)
 
 Vela 1.0 Omni Nano and Mini embed text, images and audio into one space. The
-published repositories hold native PyTorch source, so `tools/models/vela_omni`
-exports four verified ONNX graphs (text, image, CLAP, audio) and the exact
-processors at image build time, as it does today. The family serves that
-prepared bundle on the `onnxruntime` engine, with the image and audio
-processors ported to NumPy against the bundle's golden inputs and outputs.
+family serves the published repositories as they are. The native engine builds
+the model's four towers from `model.safetensors`, the text backbone plus three
+named towers (`ModelSpec.towers`), and loads every tensor by its exact name:
+
+| Tower | Nano | Mini |
+| --- | --- | --- |
+| Text | BERT (12 layers, width 384), CLS | Qwen3 0.6B, last token, Matryoshka 768 |
+| Image | SigLIP B/16 at 512 px with its attention-pooling head | SigLIP SO400M/14 at 384 px |
+| Speech | Whisper tiny encoder, mean over its 1,500 frames | Whisper medium encoder |
+| CLAP | HTSAT Swin audio encoder and its projection | the same |
+
+The family owns the published readouts (text pooling, the image and speech
+projections, the frozen CLAP residual and the unit normalisations) and the
+processors: the tokenizer, SigLIP's resize and normalisation, and the Whisper
+and CLAP log-mel features, with the Slaney filter banks computed as
+Transformers computes them. Verification checks the SHA-256 of every file it
+reads against the pinned table, that the safetensors header holds exactly the
+tensors the towers and readouts read, and the declared parameter count. The
+towers equal the reference Transformers modules bit for bit on CPU, SigLIP
+within 1.9e-6 (MKL's one-row products depend on buffer alignment).
+
+Each image and audio item runs alone. Texts share a packed batch where the
+load-time probe finds the model batch-invariant; on 8 or more CPU threads
+oneDNN splits Nano's 1,536-to-384 product differently per row count, so Nano's
+texts then run one at a time.
+
+`tools/models/vela_omni` still prepares ONNX bundles (four verified graphs and
+the exact processors) for the optional `onnxruntime` engine: a deployment
+names the bundle directory and `engine: onnxruntime`, with the `onnx` extra
+installed. The router images ship neither ONNX Runtime nor a bundle.
 
 ## 9. Scheduler and planner
 
@@ -688,10 +714,10 @@ each task as its own batch (their released numerics), and a family that sets
 serves every head and consumer that reads the same input. On a batch-invariant model, `exact` runs the queued jobs
 of concurrent requests in shared batches of at most 512 padded tokens, rows
 with the same token IDs always together so the family computes them once. A
-model that pads its rows (multimodal Omni) keeps one length class
+model that pads its rows (an Omni ONNX bundle) keeps one length class
 (power-of-two band of padded length) per batch; a model that packs its rows
-back to back (`packs_rows`: the native encoders of `task_heads`) mixes lengths
-freely, since a packed row costs no padding, and closed-loop callers' short
+back to back (`packs_rows`: the native encoders of `task_heads` and Omni)
+mixes lengths freely, since a packed row costs no padding, and closed-loop callers' short
 texts of different lengths then still share forwards. Either way each row's
 answer is the one it gets alone, which the load-time probe checks on a batch
 that spans several length classes. Repeated cacheable
@@ -722,7 +748,7 @@ second time it sees a shape, and a capture fails when another thread
 launches work on the device, whatever the capture mode.
 
 A model whose batches need no device thread (`device_thread = False`, today
-the ONNX Runtime Omni family) runs them without the CPU's device thread (on
+an Omni ONNX bundle) runs them without the CPU's device thread (on
 a GPU they still hold the device's lock), and skips the hand-off to its worker
 when it is idle: a lone request planned off the event loop runs on its
 planning thread when nothing is queued or planned and the worker is not
@@ -793,8 +819,8 @@ Section 13.4.
 
 | Engine | Runs | Devices |
 | --- | --- | --- |
-| `native` | Qwen3, Qwen3.5 (GDN hybrid), ModernBERT, unmerged LoRA; hidden states, gathered rows, shared-context trees | Every accelerator |
-| `onnxruntime` | Package ONNX graphs (heads baked in) and prepared Omni graphs | CPU EP (validated); CUDA EP, ROCm / MIGraphX EPs and the OpenVINO EP when the installed build provides them (unvalidated until recorded) |
+| `native` | Qwen3, Qwen3.5 (GDN hybrid), ModernBERT, BERT, unmerged LoRA; Omni's SigLIP, Whisper and CLAP towers; hidden states, gathered rows, shared-context trees | Every accelerator |
+| `onnxruntime` (optional: the `onnx` extra, not in the router images) | Package ONNX graphs (heads baked in) and prepared Omni bundles | CPU EP (validated); CUDA EP, ROCm / MIGraphX EPs and the OpenVINO EP when the installed build provides them (unvalidated until recorded) |
 
 | Accelerator | Status | Kernels |
 | --- | --- | --- |
@@ -1175,7 +1201,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 
 | Surface | Today | Target |
 | --- | --- | --- |
-| Images | `tools/docker/Dockerfile.extproc{,-rocm}`, `src/vllm-sr/Dockerfile{,.cuda,.rocm}`, `deploy/operator/Dockerfile`, `onnx-binding/Dockerfile.rocm`, `openvino-binding/Dockerfile` build Rust bindings, ORT, MIGraphX or OpenVINO | Pure-Go router; the runtime with CPU, ROCm or CUDA PyTorch; the Omni bundle stage stays; binding images deleted. One `tools/docker/Dockerfile.extproc` builds all five images (`ACCELERATOR`, targets `extproc` and `vllm-sr`); sizes, build times and startup in `docs/records/removal-footprint.md` |
+| Images | `tools/docker/Dockerfile.extproc{,-rocm}`, `src/vllm-sr/Dockerfile{,.cuda,.rocm}`, `deploy/operator/Dockerfile`, `onnx-binding/Dockerfile.rocm`, `openvino-binding/Dockerfile` build Rust bindings, ORT, MIGraphX or OpenVINO | Pure-Go router; the runtime with CPU, ROCm or CUDA PyTorch, without ONNX Runtime; no prepared Omni bundle (the runtime downloads Omni like every model); binding images deleted. One `tools/docker/Dockerfile.extproc` builds all five images (`ACCELERATOR`, targets `extproc` and `vllm-sr`); sizes, build times and startup in `docs/records/removal-footprint.md` |
 | Make | `rust.mk`, `openvino.mk`, `build-run-test.mk` binding targets, `models.mk` native model tests, `common.mk` library paths | Deleted or pointed at the runtime |
 | Workflows | `test-native.yml`, `build-native.yml`, `publish-crate.yml`, the native lanes of `ci.yml`, `performance-test.yml`, Rust hooks in `pre-commit.yml` | Deleted, or replaced by the model-runtime lanes |
 | Helm and operator | model download init containers, native library environment, provider settings | The runtime ships in the router image; optional attached runtime sidecar values |
@@ -1192,7 +1218,8 @@ files carry `!windows && cgo` build tags only because of these imports.
 - **OpenVINO provider** and `openvino-binding`.
 - **ONNX Runtime binding paths specific to the router** (MIGraphX shape
   buckets, the CK flash-attention operator and its rewriter): the runtime's
-  ROCm path is native PyTorch; ONNX Runtime remains as a portable engine.
+  ROCm path is native PyTorch; ONNX Runtime remains as an optional portable
+  engine.
 - **Unwired legacy models** (candle Qwen3 multi-LoRA, Qwen3Guard, DeBERTa).
 - **RISC-V** (maintainer decision): the riscv64 router build, its QEMU lane,
   build tags and fallbacks that existed only for riscv64.
@@ -1206,7 +1233,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 | Vela 1.0 sequence and scores heads | the legacy router path (candle CPU; ORT on the AMD recipe), same inputs | CPU (CI fixtures and real models), ROCm | CPU: label agreement 100% outside near ties (top-two margin under 1e-3), max \|Δp\| ≤ 1e-3; ROCm: label agreement ≥ 99.5%, max \|Δp\| ≤ 0.02 |
 | Vela 1.0 token and grounded heads | the legacy router path | CPU, ROCm | CPU: identical span sets on ≥ 99.5% of inputs, max \|Δp\| ≤ 1e-3; ROCm: identical span sets on ≥ 98% |
 | Vela 1.0 embeddings and reranker | the legacy router path | CPU, ROCm | CPU: cosine ≥ 0.99999 per vector, max \|Δ\| ≤ 1e-4, identical rerank order outside ties; ROCm: cosine ≥ 0.9995 |
-| Omni | the prepared bundle's golden outputs and the legacy ORT path | CPU | cosine ≥ 0.99999 |
+| Omni | the published reference implementation's outputs on its reference inputs, and the legacy ORT path | CPU, ROCm | CPU: cosine ≥ 0.99999; ROCm: cosine ≥ 0.9995 |
 | Vela 2.0 | the packages' engine (`vela2_inference.py`), same requests | CPU, ROCm | Decisions and span sets identical; max \|Δp\| ≤ 1e-4 on CPU, ≤ 0.02 on ROCm |
 | Ported algorithms | the binding they replace | CPU | Section 16.4 |
 
@@ -1226,7 +1253,7 @@ hardware, with the records in `docs/records/<workstream>-*`. The techniques:
 | --- | --- | --- |
 | Decision models | exact-shape HIP / CUDA graphs with host-built masks, bit-exact fused Triton kernels (FP32 and BF16 streams on gfx942), lean LoRA, shared-context trees (prefix plus GDN state hand-off), cross-request batching, pinned kernel choices, the 2 GiB guard; Decision 1.0 encoders keep one graph set and one reduced copy per layer stack | `rocm-mi325x-*`, `decision1-performance.md`, `vela2-performance.md` |
 | Runtime core | one bundled call per request and process; a bundle's tasks for one model as one job group (one forward for every head reading the same input); per-model content-hash result cache; shortest-expected-finish scheduling that answers each job when its own batches ran and lets short requests run between the windows of a long one (section 9); package files verified in parallel | `router-latency-cpu.md` |
-| Encoders | packed (varlen) attention in length groups; banded local attention for long rows (from 1,024 tokens on CPU, 2,048 on GPU); oneDNN pre-packed FP32 linears on CPU `exact`, batch-invariant as probed at load, so `exact` batches concurrent requests; dynamic cross-request batching (`batching`); encoder graphs per shape bucket on GPU, replayed only when padding stays small; a fused gfx942 rotary kernel; reduced-precision copies under `max_speed` only where the records show at least 99% agreement (CPU `float32-packed` for Decision 1.0 Kai, Lex and Route and the Vela 2.0 0.3B; BF16 and int8 measured and refused elsewhere); an ONNX Runtime engine with one shared thread pool (Omni); per-hardware kernel registry | `vela1-performance.md`, `embed-performance.md`, `decision1-performance.md`, `vela2-performance.md` |
+| Encoders | packed (varlen) attention in length groups; banded local attention for long rows (from 1,024 tokens on CPU, 2,048 on GPU); oneDNN pre-packed FP32 linears on CPU `exact`, batch-invariant as probed at load, so `exact` batches concurrent requests; dynamic cross-request batching (`batching`); encoder graphs per shape bucket on GPU, replayed only when padding stays small; a fused gfx942 rotary kernel; reduced-precision copies under `max_speed` only where the records show at least 99% agreement (CPU `float32-packed` for Decision 1.0 Kai, Lex and Route and the Vela 2.0 0.3B; BF16 and int8 measured and refused elsewhere); Omni's four towers on the CPU's one OpenMP team, with NumPy's OpenBLAS on one thread; per-hardware kernel registry | `vela1-performance.md`, `embed-performance.md`, `decision1-performance.md`, `vela2-performance.md` |
 | Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; one CPU process per model with thread shares; deadlines and fail-open; pure-Go keyword scoring and model selectors (AVX2 / FMA and NEON dot kernels with a pure-Go fallback) | `router-latency-cpu.md`, `router-latency-rocm.md`, `stores-algorithms.md`, `stores-consumers.md` |
 
 ## 19. Phase 1 follow-ups and later work

@@ -81,9 +81,6 @@ func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, confi
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if spec.PreparedArtifact != "" {
-		return provisionPreparedArtifact(ctx, spec)
-	}
 	if err := validateArtifactDownload(spec); err != nil {
 		return err
 	}

@@ -19,7 +19,8 @@ translation:
 
 运行时是 Python 包 `vllm-srun`，与 `vllm-sr` CLI 一起发布，版本号相同。先从
 [与你的硬件匹配的索引](https://pytorch.org/get-started/locally/)（CPU、CUDA 或 ROCm）
-安装 PyTorch，再安装带 `runtime` extra 的 CLI。本指南在虚拟环境中使用 CPU 版：
+安装 PyTorch，再安装带 `runtime` extra 的 CLI。该 extra 会连同每个内置模型所需的依赖一起安装运行时
+（Vela Omni 的图像需要 Pillow）。本指南在虚拟环境中使用 CPU 版：
 
 ```bash
 python3 -m venv .venv
