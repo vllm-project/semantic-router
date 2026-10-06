@@ -205,6 +205,55 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:52 — **`ngw-upstream` → ngw-lead, parent: PROPOSAL for milestones 3 and 4. I build milestone 3 as
+  below unless you object by 14:45; milestone 4 waits for your answer on the `routing` change.**
+  - **M3, one reliability contract for both data planes.** New flat fields in `providers.models[].reliability`,
+    each with today's behavior as its default and an Envoy rendering:
+
+    | Field | Default | Envoy rendering |
+    | --- | --- | --- |
+    | `connect_timeout` | `10s` | cluster `connect_timeout` |
+    | `total_timeout` | the listener's `timeout` | route `timeout` |
+    | `idle_timeout` | the listener's `timeout` | route `idle_timeout` |
+    | `per_try_timeout` | none | `retry_policy.per_try_timeout` |
+    | `first_byte_timeout` | none | none: the Envoy render rejects it (native only) |
+    | `retriable_status_codes` | none | `retry_policy.retriable_status_codes` |
+    | `retry_back_off_base` / `_max` | `25ms` / ten times the base | `retry_policy.retry_back_off` |
+    | `retry_after_max` | none (`Retry-After` ignored) | `rate_limited_retry_back_off` on `Retry-After` |
+    | `retry_budget_percent` / `_min_concurrency` | none (`max_retries: 3`) | breaker `retry_budget` |
+
+    - `retry_on` keeps Envoy's tokens and semantics, so existing configs render unchanged. The design's
+      `retriable-status` is Envoy's `retriable-status-codes`. Its `per-try-timeout` needs no token: as in Envoy,
+      per-try timeouts retry under `5xx`, `gateway-error` and `reset`. The design doc should say so.
+    - Go defaults an empty `retry_on` to the CLI's `connect-failure,refused-stream`; today Go rejects it while the
+      CLI accepts it.
+    - Then: retry engine (Envoy back-off with full jitter, budget, `previous_hosts` re-pick), Go types and
+      validation, schema, `cli/models.py`, template and generator, dashboard contract, a website page, and one
+      defaults table that both a Go test and a CLI render test check.
+  - **Needs your call (M3b):** the design lets an entrypoint, recipe or decision override these. That is new
+    canonical surface in three places, and Envoy can honor none of it (its route is per model). I propose to land
+    the per-call override now (`upstream.Request.Policy`, filled by the frontend or graph) and do the config
+    fields once you place them, native only, with validation that rejects them under `--gateway envoy`.
+  - **M4, one fallback authority, exact shape** (adds one field to `routing.Call`):
+    - `Call.Fallback routing.Fallback`, an interface with one method:
+      `Next(ctx, Outcome) (FallbackStep, error)`.
+      - `Outcome` holds the route tried, the status, `Local` with the failure class, bounded headers and body, and
+        the duration.
+      - `FallbackStep` holds the next candidate's `*Call`, or an `Immediate` response, or neither (the chain
+        ends).
+    - `pkg/extproc` implements it per in-process session on the existing code. `pkg/fallback` evaluates and picks
+      the candidate (orchestrator, classifier, circuit breaker). The candidate's request is prepared as the
+      primary's is: dispatch, codec, credentials, profile headers. `RequestContext` is updated so `Respond` names
+      the model that served and the `x-vsr-fallback-attempts` path. The session sets a flag that makes
+      `shouldAttemptFallback` stand down, so the response phase never falls back again. The gRPC path is
+      unchanged.
+    - `upstream.Execute(ctx, *routing.Call)` walks the chain. Every hop goes through `Do`, so retries and
+      ejection apply per hop. It asks `Next` only after a non-2xx response or a local reply, before anything is
+      returned, so nothing falls back after bytes reach the client. Dependency: `upstream` imports `routing`.
+    - Tests: an in-process session over fake backends shows that primary 503, then candidate 200, serves the
+      candidate; the response phase runs no second fallback; a 200 that drops mid-stream never falls back.
+  — `ngw-upstream`
+
 - 2026-10-06 13:49 — **`fu-lead` → parent, all PR-A workstreams: `vllm-srun` now uploads with an API token, as the user
   ruled. Staging is `85e2b03aa`. The rename's verification is green except three Kind lanes, rerunning now.**
   - **`85e2b03aa` [CI/Build]:**
