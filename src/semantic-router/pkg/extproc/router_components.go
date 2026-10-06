@@ -28,10 +28,6 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 		Milvus:              semanticCacheCfg.Milvus,
 		Qdrant:              semanticCacheCfg.Qdrant,
 		EmbeddingModel:      detectSemanticCacheEmbeddingModel(cfg),
-		PolarityGuard: cache.PolarityGuardOptions{
-			UseNLI:                 semanticCacheCfg.PolarityGuard.UsesNLI(),
-			ContradictionThreshold: semanticCacheCfg.PolarityGuard.EffectiveContradictionThreshold(),
-		},
 	}
 
 	if cacheConfig.BackendType == "" {
@@ -49,7 +45,7 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 	if semanticNeeded {
 		var err error
 		cacheConfig, identity, err = cache.PrepareEmbeddingNamespace(cacheConfig, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-			return embedding.ResolveNamespaceIdentity(cacheConfig.EmbeddingProvider, settings)
+			return embedding.ResolveProviderIdentity(cacheConfig.EmbeddingProvider, settings)
 		})
 		if err != nil {
 			return nil, "", fmt.Errorf("bind semantic cache embedding: %w", err)
@@ -72,7 +68,6 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 			"similarity_threshold": cacheConfig.SimilarityThreshold,
 			"ttl_seconds":          cacheConfig.TTLSeconds,
 			"max_entries":          cacheConfig.MaxEntries,
-			"polarity_guard_mode":  semanticCacheCfg.PolarityGuard.NormalizedMode(),
 		})
 	} else {
 		logging.ComponentEvent("extproc", "semantic_cache_disabled", map[string]interface{}{
@@ -125,7 +120,7 @@ func toolsEmbeddingProvider(cfg *config.RouterConfig, sets ...*embedding.Set) (e
 	if cfg == nil || !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
 		return nil, nil
 	}
-	provider, err := embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
+	provider, err := embedding.NewProvider(cfg.EmbeddingModels)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tools embedding provider: %w", err)
 	}

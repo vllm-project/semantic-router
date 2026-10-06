@@ -9,7 +9,7 @@ func decisionSignalConfig() *RouterConfig {
 	cfg := &RouterConfig{}
 	cfg.ModelDeployments = map[string]ModelDeployment{
 		"decider": {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Revision: strings.Repeat("a", 40)},
-		"bert":    {Provider: "candle", Artifact: "models/bert"},
+		"bert":    {Provider: "http", ExternalModel: "bert"},
 	}
 	threshold := 1.0
 	cfg.DecisionRules = []DecisionSignalRule{
@@ -26,6 +26,9 @@ func TestModelRuntimeDeploymentValidation(t *testing.T) {
 		{Provider: ModelRuntimeProvider, Artifact: "/models/kai", Device: "rocm:1", Profile: "shared_context"},
 		{Provider: ModelRuntimeProvider, Endpoint: "unix:///run/vllm-sr/kai.sock"},
 		{Provider: ModelRuntimeProvider, Endpoint: "http://decision-runtime:8100", Device: "cuda"},
+		{Provider: ModelRuntimeProvider, Endpoint: "http://shared-runtime:8100", ServedName: "vela-domain"},
+		{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-PII", Device: "xpu:0", Process: "encoders", Input: ModelInputBudget{MaxTokens: 32768, Overflow: "window"}},
+		{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Domain", Device: "mps", Input: ModelInputBudget{MaxTokens: 512, Overflow: "truncate"}},
 	}
 	for _, deployment := range valid {
 		if err := deployment.WithDefaults().validate(&RouterConfig{}); err != nil {
@@ -33,17 +36,22 @@ func TestModelRuntimeDeploymentValidation(t *testing.T) {
 		}
 	}
 	invalid := map[string]ModelDeployment{
-		"missing artifact":  {Provider: ModelRuntimeProvider},
-		"relative artifact": {Provider: ModelRuntimeProvider, Artifact: "./models/kai"},
-		"short revision":    {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Revision: "881bee41"},
-		"local revision":    {Provider: ModelRuntimeProvider, Artifact: "/models/kai", Revision: strings.Repeat("a", 40)},
-		"bad device":        {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Device: "gpu"},
-		"bad profile":       {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Profile: "turbo"},
-		"bad endpoint":      {Provider: ModelRuntimeProvider, Endpoint: "tcp://host:1"},
-		"relative socket":   {Provider: ModelRuntimeProvider, Endpoint: "unix://run/x.sock"},
-		"precision":         {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Precision: "fp16"},
-		"truncation":        {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Input: ModelInputBudget{Overflow: "truncate"}},
-		"profile elsewhere": {Provider: "candle", Artifact: "models/x", Profile: "exact"},
+		"missing artifact":      {Provider: ModelRuntimeProvider},
+		"relative artifact":     {Provider: ModelRuntimeProvider, Artifact: "./models/kai"},
+		"short revision":        {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Revision: "881bee41"},
+		"local revision":        {Provider: ModelRuntimeProvider, Artifact: "/models/kai", Revision: strings.Repeat("a", 40)},
+		"malformed device":      {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Device: "cuda:x"},
+		"malformed profile":     {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Profile: "Turbo"},
+		"bad endpoint":          {Provider: ModelRuntimeProvider, Endpoint: "tcp://host:1"},
+		"relative socket":       {Provider: ModelRuntimeProvider, Endpoint: "unix://run/x.sock"},
+		"negative budget":       {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Input: ModelInputBudget{MaxTokens: -1}},
+		"bad overflow":          {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Input: ModelInputBudget{Overflow: "drop"}},
+		"attached process":      {Provider: ModelRuntimeProvider, Endpoint: "http://runtime:8100", Process: "encoders"},
+		"managed served name":   {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", ServedName: "x"},
+		"bad process":           {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x", Process: "../escape"},
+		"profile elsewhere":     {Provider: "http", ExternalModel: "x", Profile: "exact"},
+		"process elsewhere":     {Provider: "http", ExternalModel: "x", Process: "encoders"},
+		"served name elsewhere": {Provider: "http", ExternalModel: "x", ServedName: "x"},
 	}
 	for name, deployment := range invalid {
 		if err := deployment.WithDefaults().validate(&RouterConfig{}); err == nil {
@@ -54,7 +62,7 @@ func TestModelRuntimeDeploymentValidation(t *testing.T) {
 
 func TestModelRuntimeDeploymentDefaults(t *testing.T) {
 	deployment := ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x"}.WithDefaults()
-	if deployment.Device != "auto" || deployment.Profile != "exact" || deployment.Precision != "native" || !deployment.Managed() {
+	if deployment.Device != "auto" || deployment.Profile != "exact" || !deployment.Managed() {
 		t.Fatalf("defaults = %+v", deployment)
 	}
 	if (ModelDeployment{Provider: ModelRuntimeProvider, Endpoint: "http://x:1"}).Managed() {
@@ -81,6 +89,11 @@ func TestDecisionSignalContracts(t *testing.T) {
 		"instructions":     func(cfg *RouterConfig) { cfg.DecisionRules[0].Question.Instructions = " " },
 		"timeout":          func(cfg *RouterConfig) { cfg.DecisionRules[0].TimeoutMs = MaxDecisionTimeoutMs + 1 },
 		"colon in name":    func(cfg *RouterConfig) { cfg.DecisionRules[0].Name = "a:b" },
+		"input budget": func(cfg *RouterConfig) {
+			decider := cfg.ModelDeployments["decider"]
+			decider.Input = ModelInputBudget{MaxTokens: 512, Overflow: "truncate"}
+			cfg.ModelDeployments["decider"] = decider
+		},
 	}
 	for name, mutate := range cases {
 		cfg := decisionSignalConfig()

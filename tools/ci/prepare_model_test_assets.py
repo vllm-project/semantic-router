@@ -1,86 +1,71 @@
 #!/usr/bin/env python3
-"""Prepare supported Omni variants once and revalidate every reused bundle."""
+"""Download the pinned Vela Omni releases the model runtime serves, and verify every file it reads."""
 
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
-import os
-import shlex
-import shutil
-import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PREPARATION = ROOT / "tools/models/vela_omni"
+RUNTIME = ROOT / "src/model-runtime"
+DOWNLOAD_ATTEMPTS = 4
+
+# The runtime's pins and file hashing, from this checkout (standard library only).
+sys.path.insert(0, str(RUNTIME))
+from vllm_srun.errors import PackageError  # noqa: E402
+from vllm_srun.registry.artifacts import named_files  # noqa: E402
+from vllm_srun.registry.tables import omni  # noqa: E402
 
 
-def fingerprint() -> str:
-    digest = hashlib.sha256()
-    inputs = [*PREPARATION.rglob("*"), ROOT / ".dockerignore"]
-    for path in sorted(inputs):
-        if not path.is_file() or "__pycache__" in path.parts or path.suffix == ".pyc":
-            continue
-        digest.update(str(path.relative_to(ROOT)).encode() + b"\0")
-        digest.update(path.read_bytes() + b"\0")
-    return digest.hexdigest()
+def pins():
+    """The runtime's Omni table."""
+    return omni
 
 
-def verify(artifact: Path) -> bool:
-    result = subprocess.run(
-        [sys.executable, str(PREPARATION / "bundle.py"), "verify", str(artifact)],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
+def verify(directory: Path, pinned) -> bool:
+    """Whether every file the family reads has its pinned SHA-256."""
+    try:
+        return named_files(directory, pinned.files) == dict(pinned.files)
+    except PackageError:
+        return False
+
+
+def download(directory: Path, pinned) -> None:
+    from huggingface_hub import (  # noqa: PLC0415 - only a download needs the Hub client
+        snapshot_download,
     )
-    return result.returncode == 0
+
+    for attempt in range(DOWNLOAD_ATTEMPTS):
+        try:
+            snapshot_download(
+                pinned.repo_id,
+                revision=pinned.revision,
+                allow_patterns=sorted(pinned.files),
+                local_dir=directory,
+            )
+            return
+        except Exception as error:
+            if attempt == DOWNLOAD_ATTEMPTS - 1:
+                raise
+            print(f"Retrying {pinned.repo_id}: {type(error).__name__}", flush=True)
 
 
 def prepare(output: Path, variants: list[str]) -> None:
+    table = pins()
     output.mkdir(parents=True, exist_ok=True)
-    identity = fingerprint()
-    runtime = shlex.split(os.environ.get("CONTAINER_RUNTIME") or "docker")
     for variant in variants:
-        name = "vela-1.0-omni-" + variant
-        artifact = output / name
-        receipt = output / (name + ".preparation.json")
-        expected = {"variant": variant, "inputs_sha256": identity}
-        try:
-            cached = json.loads(receipt.read_text())
-        except (OSError, ValueError):
-            cached = None
-        if cached == expected and verify(artifact):
-            print(f"Reusing verified {name}", flush=True)
+        pinned = table.lookup(f"vllm-sr/Vela-1.0-Omni-{variant.capitalize()}")
+        directory = output / pinned.repo_id.split("/", 1)[1].lower()
+        if verify(directory, pinned):
+            print(f"Reusing verified {directory.name}", flush=True)
             continue
-        # Export each variant independently: adding Mini does not re-export Nano,
-        # and a later calibration invocation reuses the same verified Nano bytes.
-        with tempfile.TemporaryDirectory(prefix=".prepare-", dir=output) as temporary:
-            subprocess.run(
-                [
-                    *runtime,
-                    "build",
-                    "-f",
-                    str(PREPARATION / "Dockerfile"),
-                    "--build-arg",
-                    "VELA_OMNI_VARIANTS=" + variant,
-                    "--output",
-                    "type=local,dest=" + temporary,
-                    ".",
-                ],
-                cwd=ROOT,
-                check=True,
+        download(directory, pinned)
+        if not verify(directory, pinned):
+            raise ValueError(
+                f"{directory.name} differs from the runtime's pinned files"
             )
-            prepared = Path(temporary) / name
-            if not verify(prepared):
-                raise ValueError(f"prepared {name} failed pinned bundle verification")
-            if artifact.exists():
-                shutil.rmtree(artifact)
-            prepared.rename(artifact)
-            receipt.write_text(json.dumps(expected, sort_keys=True) + "\n")
+        print(f"Downloaded and verified {directory.name}", flush=True)
 
 
 def main() -> None:
