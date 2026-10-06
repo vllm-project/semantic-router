@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -25,6 +27,12 @@ func stubKnowledgeBaseMapEmbeddings(t *testing.T, server *ClassificationAPIServe
 		t.Fatal(err)
 	}
 	cfg := server.currentConfig()
+	// No model runtime serves Domain's labels here.
+	cfg.CategoryMappingPath = filepath.Join(t.TempDir(), "category_mapping.json")
+	mapping := `{"category_to_idx": {"math": 0, "other": 1}, "idx_to_category": {"0": "math", "1": "other"}}`
+	if err = os.WriteFile(cfg.CategoryMappingPath, []byte(mapping), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	model := knowledgeBaseMapModelType(cfg)
 	prepared := embedding.NewSet(map[string]embedding.Provider{model: provider}, model)
 	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{Embeddings: prepared})

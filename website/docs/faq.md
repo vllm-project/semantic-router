@@ -6,15 +6,24 @@ description: What vLLM Semantic Router is, how it differs from llm-d and AI gate
 
 # FAQ
 
-Short answers to the questions that come up most often when evaluating vLLM Semantic Router. Each answer links to the page that carries the detail, so this page stays short as those pages grow.
-
 ## Is it an AI gateway, or something else?
 
-It is a **content- and policy-aware control plane** for Mixture-of-Models serving. It reads the request — signals, projections and declared evidence — decides *what* should run, and applies the decision through Envoy as an ExtProc filter.
+It is a decision layer for model calls. It selects models or bounded multi-model
+workflows from request signals and policy; the gateway handles transport. Envoy
+applies the decisions through ExtProc. TLS termination, provider load balancing,
+and Pod scheduling stay outside the Router.
 
-That makes it a decision layer above a gateway rather than a gateway itself: it does not terminate TLS, does not load-balance providers, and does not schedule pods. An AI gateway answers "how do I reach N backends"; Semantic Router answers "which model, recipe and policy should serve this request" — and then runs through whatever gateway or listener you already have.
+See [System Overview](overview/semantic-router-overview) for the architecture and
+[Mixture of Models](overview/mom-model-family) for multi-model execution.
 
-See the [System Overview](overview/semantic-router-overview) for the component layout and [Mixture of Models](overview/mom-model-family) for the serving model behind it.
+## How does it work with an agent harness?
+
+The harness owns the agent loop, tools, and task state. It calls a stable model
+entrypoint; the Router applies its recipe, and inference backends execute the
+selected model path.
+
+[Connect a harness](installation/agent-harness), or
+[use an agent to install the Router](installation/agent).
 
 ## How do we measure routing accuracy and business value?
 

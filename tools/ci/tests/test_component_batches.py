@@ -41,11 +41,11 @@ class ComponentBatchTests(unittest.TestCase):
             [batch["worker"] for batch in batches], [row["worker"] for row in rows]
         )
         self.assertEqual(json.loads(github_outputs(full)["component_batches"]), batches)
-        partial = make_plan([], source_sha=SHA, requested=("ck-rewrite",))
+        partial = make_plan([], source_sha=SHA, requested=("model-runtime",))
         self.assertEqual(len(partial["component_batches"]), 1)
         self.assertEqual(
             [row["id"] for row in partial["component_batches"][0]["verifications"]],
-            ["ck-rewrite"],
+            ["model-runtime"],
         )
         self.assertNotIn("generated_contracts", full["quality_context"])
         self.assertNotIn("soak", full["quality_context"])

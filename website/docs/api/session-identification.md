@@ -4,6 +4,9 @@ Router Learning protection requires stable, explicit client identities for
 related turns. Replay and telemetry can use derived fallback identities, but
 those fallbacks do not enable protection.
 
+For the inference connection and a tool-loop check, start with
+[Connect an agent harness](../installation/agent-harness).
+
 ## Choose the identity you need
 
 For the default `scope: conversation` protection, send both headers:
@@ -36,7 +39,7 @@ protection.
 When the request is not a Responses API request, the first available source in
 this order becomes the router session id:
 
-1. `x-session-id` supplied by the application or gateway.
+1. `x-session-id` supplied by the agent harness, another client, or a trusted gateway.
 2. `x-claude-code-session-id` on Anthropic Messages requests.
 3. Anthropic `metadata.user_id`, stored with an `ant-md-` prefix.
 4. A fingerprint of the message history and authenticated user identity.

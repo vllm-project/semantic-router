@@ -1,0 +1,5466 @@
+{
+ "format": "vela1-parity-summary/2",
+ "records": {
+  "batching_vs_exact_rocm_amd_inputs": {
+   "baseline": "runtime",
+   "context": {
+    "baseline": "the runtime's exact profile on the same GPU and inputs",
+    "candidate": "the batching profile, one request at a time",
+    "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
+    "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764",
+    "runtime_env": "the router ROCm image stage on python 3.12-slim-bookworm, as uid 65532: stack B uid 65532 python 3.12.14 torch 2.12.0+rocm7.2 hip 7.2.53211 triton 3.7.0 fla-core 0.5.2 numpy 2.5.3 tokenizers 0.23.2"
+   },
+   "device_class": "rocm",
+   "inputs_sha256": "8d5a8a550efa8ce709922b3e55189504c6ef55c32f0bf91e53eee5971e09b9ce",
+   "jobs": [
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "domain",
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.883352,
+       "p95": 3.50689
+      },
+      "runtime": {
+       "p50": 3.975166,
+       "p95": 5.563101
+      }
+     },
+     "max_abs_delta": 0.0,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "f6354f54adcf38770f635ad903be2b00577f6c11"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "guard",
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.875562,
+       "p95": 3.533429
+      },
+      "runtime": {
+       "p50": 3.944496,
+       "p95": 5.527502
+      }
+     },
+     "max_abs_delta": 0.0,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "087f9e401012df839c83717b746967ac7aebfa3e"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "safety",
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.820844,
+       "p95": 3.50541
+      },
+      "runtime": {
+       "p50": 3.883077,
+       "p95": 5.552091
+      }
+     },
+     "max_abs_delta": 0.0,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Safety",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "6e70e725a5f4d86da10f5be5e4dfd1da0358bb85"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "factcheck",
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.817064,
+       "p95": 3.478301
+      },
+      "runtime": {
+       "p50": 3.843488,
+       "p95": 5.466144
+      }
+     },
+     "max_abs_delta": 0.0,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "99ede1aba1563e59e416f744d25b3f6b7e9d8274"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "feedback",
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.888222,
+       "p95": 3.547699
+      },
+      "runtime": {
+       "p50": 3.941227,
+       "p95": 5.531823
+      }
+     },
+     "max_abs_delta": 0.0,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "47434a7fd7c245c0c7c17564a000b3c56ccfec41"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "modality",
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.825884,
+       "p95": 3.498309
+      },
+      "runtime": {
+       "p50": 3.842598,
+       "p95": 5.495515
+      }
+     },
+     "max_abs_delta": 0.0,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Modality",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "5384b8997e3cbb79ca3a670e869577f4e4f4997e"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "hazard",
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.840163,
+       "p95": 3.531949
+      },
+      "runtime": {
+       "p50": 3.911868,
+       "p95": 5.486333
+      }
+     },
+     "max_abs_delta": 0.0,
+     "mode": "operating_point",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Hazard",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 32768,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "pii",
+     "latency_ms": {
+      "legacy": {
+       "p50": 1.933942,
+       "p95": 3.699465
+      },
+      "runtime": {
+       "p50": 4.024514,
+       "p95": 5.737418
+      }
+     },
+     "max_abs_delta": 0.0,
+     "mode": "tokens",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48"
+    }
+   ],
+   "passed": true,
+   "thresholds": {
+    "label": 0.99,
+    "near_tie": 0.0,
+    "probability": Infinity,
+    "spans": 0.99
+   }
+  },
+  "bf16_copy_vs_exact_cpu": {
+   "baseline": "runtime",
+   "context": {
+    "baseline": "the runtime's exact profile on the same cores and inputs",
+    "candidate": "max_speed with a BF16 copy of the linears under CPU autocast (heads FP32), recorded before any consent",
+    "device": "AMD EPYC 9575F (AVX-512 BF16), 16 pinned cores (node B 64-79)",
+    "runtime_commit": "0a2ced48322e5b90ed78ae7cbb9425ee51139bc8",
+    "runtime_env": "Python 3.12.3, torch 2.10.0+cpu, 16 threads"
+   },
+   "device_class": "cpu",
+   "inputs_sha256": "7f23ef849f53270436f8b094aa963eb6f5a8ecae0a3120d3ef0239598caff4cd",
+   "jobs": [
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "domain",
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.67557,
+       "p95": 22.892999
+      },
+      "runtime": {
+       "p50": 12.100739,
+       "p95": 33.537034
+      }
+     },
+     "max_abs_delta": 0.07625094056129456,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "f6354f54adcf38770f635ad903be2b00577f6c11"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "guard",
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.347336,
+       "p95": 22.244604
+      },
+      "runtime": {
+       "p50": 11.666858,
+       "p95": 31.210214
+      }
+     },
+     "max_abs_delta": 0.12770268321037292,
+     "mode": "sequence_windows",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "window",
+      "window": [512, 255]
+     },
+     "passed": true,
+     "revision": "087f9e401012df839c83717b746967ac7aebfa3e"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "safety",
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.654411,
+       "p95": 23.840351
+      },
+      "runtime": {
+       "p50": 12.008303,
+       "p95": 31.945458
+      }
+     },
+     "max_abs_delta": 0.012484639883041382,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Safety",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "6e70e725a5f4d86da10f5be5e4dfd1da0358bb85"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "shield",
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.692729,
+       "p95": 23.41155
+      },
+      "runtime": {
+       "p50": 11.439624,
+       "p95": 30.88795
+      }
+     },
+     "max_abs_delta": 0.02063050866127014,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Shield",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "a981a99eeb05a2859b88b5cee9af4352897ec4ec"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "factcheck",
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.698078,
+       "p95": 23.565127
+      },
+      "runtime": {
+       "p50": 11.722097,
+       "p95": 31.599556
+      }
+     },
+     "max_abs_delta": 0.2092462182044983,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "99ede1aba1563e59e416f744d25b3f6b7e9d8274"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "feedback",
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.635931,
+       "p95": 23.536829
+      },
+      "runtime": {
+       "p50": 11.978013,
+       "p95": 32.581375
+      }
+     },
+     "max_abs_delta": 0.29527934826910496,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "47434a7fd7c245c0c7c17564a000b3c56ccfec41"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "modality",
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.617711,
+       "p95": 23.513869
+      },
+      "runtime": {
+       "p50": 11.717937,
+       "p95": 31.028968
+      }
+     },
+     "max_abs_delta": 0.03724128007888794,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Modality",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "5384b8997e3cbb79ca3a670e869577f4e4f4997e"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "hazard",
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.747579,
+       "p95": 23.51236
+      },
+      "runtime": {
+       "p50": 11.927044,
+       "p95": 31.183305
+      }
+     },
+     "max_abs_delta": 0.013732820749282837,
+     "mode": "operating_point",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Hazard",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 32768,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d"
+    },
+    {
+     "agreement": 0.9451553930530164,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 30,
+     "disagreements": [
+      {
+       "id": "p0032",
+       "legacy_only": [["AGE", 14, 15]],
+       "reason": "spans",
+       "runtime_only": [["ZIP_CODE", 14, 15]]
+      },
+      {
+       "id": "p0082",
+       "legacy_only": [["IP_ADDRESS", 288, 290]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 289, 290], ["IP_ADDRESS", 288, 289]]
+      },
+      {
+       "id": "p0084",
+       "legacy_only": [["IBAN_CODE", 102, 103], ["IBAN_CODE", 104, 105]],
+       "reason": "spans",
+       "runtime_only": [["IBAN_CODE", 102, 105]]
+      },
+      {
+       "id": "p0115",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["TITLE", 12, 14]]
+      },
+      {
+       "id": "p0128",
+       "legacy_only": [["GPE", 121, 122]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0153",
+       "legacy_only": [["CREDIT_CARD", 140, 141]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0159",
+       "legacy_only": [["US_DRIVER_LICENSE", 243, 244]],
+       "reason": "spans",
+       "runtime_only": [["IBAN_CODE", 243, 244]]
+      },
+      {
+       "id": "p0192",
+       "legacy_only": [["IBAN_CODE", 716, 717], ["IBAN_CODE", 1016, 1018], ["IBAN_CODE", 1113, 1114], ["ORGANIZATION", 416, 417], ["STREET_ADDRESS", 1018, 1019]],
+       "reason": "spans",
+       "runtime_only": [["IBAN_CODE", 1016, 1017], ["IP_ADDRESS", 1017, 1018], ["IP_ADDRESS", 1113, 1114], ["TITLE", 571, 572], ["US_DRIVER_LICENSE", 1018, 1019]]
+      },
+      {
+       "id": "p0199",
+       "legacy_only": [["AGE", 293, 294], ["IP_ADDRESS", 292, 293]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 292, 294], ["TITLE", 40, 43]]
+      },
+      {
+       "id": "p0234",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["PERSON", 9, 13]]
+      },
+      {
+       "id": "p0235",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["ORGANIZATION", 100, 101]]
+      },
+      {
+       "id": "p0252",
+       "legacy_only": [["STREET_ADDRESS", 179, 180]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0255",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["IBAN_CODE", 477, 478], ["ORGANIZATION", 69, 70]]
+      },
+      {
+       "id": "p0294",
+       "legacy_only": [["AGE", 1301, 1302], ["CREDIT_CARD", 1132, 1133], ["IBAN_CODE", 759, 761], ["IBAN_CODE", 762, 764], ["IBAN_CODE", 829, 830], ["IBAN_CODE", 860, 861], ["IBAN_CODE", 864, 865], ["IBAN_CODE", 866, 867], ["IBAN_CODE", 886, 887], ["IBAN_CODE", 1127, 1128], ["IBAN_CODE", 1147, 1152], ["IBAN_CODE", 1175, 1180], ["IBAN_CODE", 1189, 1190], ["IBAN_CODE", 1203, 1208], ["IBAN_CODE", 1221, 1223], ["IBAN_CODE", 1225, 1229], ["IBAN_CODE", 1283, 1284], ["IP_ADDRESS", 761, 762], ["IP_ADDRESS", 828, 829], ["IP_ADDRESS", 861, 862], ["IP_ADDRESS", 1128, 1129], ["IP_ADDRESS", 1130, 1131], ["IP_ADDRESS", 1133, 1134], ["IP_ADDRESS", 1188, 1189], ["IP_ADDRESS", 1223, 1224], ["STREET_ADDRESS", 839, 840], ["TITLE", 865, 866], ["TITLE", 887, 888], ["TITLE", 1154, 1155], ["US_SSN", 1250, 1251], ["US_SSN", 1284, 1285], ["US_SSN", 1311, 1312]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 1132, 1133], ["IBAN_CODE", 759, 764], ["IBAN_CODE", 828, 830], ["IBAN_CODE", 864, 867], ["IBAN_CODE", 886, 888], ["IBAN_CODE", 1133, 1134], ["IBAN_CODE", 1147, 1148], ["IBAN_CODE", 1149, 1152], ["IBAN_CODE", 1175, 1176], ["IBAN_CODE", 1177, 1180], ["IBAN_CODE", 1203, 1204], ["IBAN_CODE", 1205, 1208], ["IBAN_CODE", 1221, 1222], ["IBAN_CODE", 1225, 1228], ["IBAN_CODE", 1283, 1285], ["IBAN_CODE", 1301, 1302], ["IBAN_CODE", 1311, 1312], ["IP_ADDRESS", 860, 862], ["IP_ADDRESS", 1127, 1129], ["IP_ADDRESS", 1189, 1190], ["IP_ADDRESS", 1222, 1224], ["IP_ADDRESS", 1250, 1251], ["STREET_ADDRESS", 126, 127], ["TITLE", 1148, 1149], ["TITLE", 1176, 1177], ["TITLE", 1204, 1205], ["US_SSN", 839, 840], ["US_SSN", 1188, 1189], ["ZIP_CODE", 1228, 1229]]
+      },
+      {
+       "id": "p0301",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["GPE", 30, 34]]
+      },
+      {
+       "id": "p0304",
+       "legacy_only": [["AGE", 64, 65]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0374",
+       "legacy_only": [["ZIP_CODE", 23, 24]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0386",
+       "legacy_only": [["TITLE", 21, 22]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0402",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["PERSON", 38, 40]]
+      },
+      {
+       "id": "p0455",
+       "legacy_only": [["EMAIL_ADDRESS", 112, 116], ["PERSON", 116, 119]],
+       "reason": "spans",
+       "runtime_only": [["EMAIL_ADDRESS", 112, 113], ["PERSON", 113, 119]]
+      },
+      {
+       "id": "p0457",
+       "legacy_only": [["IP_ADDRESS", 162, 166]],
+       "reason": "spans",
+       "runtime_only": [["IP_ADDRESS", 162, 165], ["US_DRIVER_LICENSE", 165, 166]]
+      },
+      {
+       "id": "l01",
+       "legacy_only": [["IP_ADDRESS", 2953, 2955], ["STREET_ADDRESS", 1672, 1673]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 1090, 1091], ["CREDIT_CARD", 2954, 2955], ["IP_ADDRESS", 2953, 2954], ["STREET_ADDRESS", 1458, 1459]]
+      },
+      {
+       "id": "l02",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["US_SSN", 608, 609]]
+      },
+      {
+       "id": "l03",
+       "legacy_only": [["AGE", 1912, 1913], ["CREDIT_CARD", 945, 946], ["CREDIT_CARD", 1270, 1271], ["CREDIT_CARD", 3402, 3403], ["DATE_TIME", 1800, 1801], ["IBAN_CODE", 751, 753], ["IBAN_CODE", 819, 821], ["IBAN_CODE", 936, 937], ["IBAN_CODE", 954, 956], ["IBAN_CODE", 1009, 1014], ["IBAN_CODE", 1254, 1255], ["IBAN_CODE", 1256, 1257], ["IBAN_CODE", 1268, 1270], ["IBAN_CODE", 1277, 1278], ["IBAN_CODE", 1284, 1285], ["IBAN_CODE", 1296, 1299], ["IBAN_CODE", 1307, 1309], ["IBAN_CODE", 1316, 1321], ["IBAN_CODE", 1370, 1371], ["IP_ADDRESS", 753, 755], ["IP_ADDRESS", 809, 810], ["IP_ADDRESS", 863, 864], ["IP_ADDRESS", 1285, 1287], ["IP_ADDRESS", 1341, 1343], ["IP_ADDRESS", 1348, 1349], ["IP_ADDRESS", 7127, 7129], ["ORGANIZATION", 1848, 1849], ["ORGANIZATION", 3403, 3404], ["STREET_ADDRESS", 1915, 1916], ["STREET_ADDRESS", 2343, 2344], ["STREET_ADDRESS", 3401, 3402], ["US_DRIVER_LICENSE", 935, 936], ["US_SSN", 903, 904], ["ZIP_CODE", 1089, 1090], ["ZIP_CODE", 1801, 1802]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 7128, 7129], ["CREDIT_CARD", 1348, 1349], ["DATE_TIME", 1800, 1802], ["DATE_TIME", 1912, 1913], ["EMAIL_ADDRESS", 2343, 2344], ["IBAN_CODE", 751, 755], ["IBAN_CODE", 820, 821], ["IBAN_CODE", 872, 873], ["IBAN_CODE", 954, 955], ["IBAN_CODE", 1009, 1013], ["IBAN_CODE", 1254, 1257], ["IBAN_CODE", 1268, 1271], ["IBAN_CODE", 1284, 1286], ["IBAN_CODE", 1296, 1297], ["IBAN_CODE", 1298, 1299], ["IBAN_CODE", 1308, 1309], ["IBAN_CODE", 1316, 1318], ["IBAN_CODE", 1320, 1321], ["IP_ADDRESS", 903, 904], ["IP_ADDRESS", 936, 937], ["IP_ADDRESS", 1286, 1287], ["IP_ADDRESS", 1319, 1320], ["IP_ADDRESS", 1342, 1343], ["IP_ADDRESS", 1370, 1371], ["IP_ADDRESS", 3401, 3402], ["IP_ADDRESS", 7127, 7128], ["ORGANIZATION", 3402, 3404], ["STREET_ADDRESS", 819, 820], ["STREET_ADDRESS", 863, 864], ["STREET_ADDRESS", 945, 946], ["STREET_ADDRESS", 1307, 1308], ["STREET_ADDRESS", 1846, 1847], ["TITLE", 922, 923], ["TITLE", 955, 956], ["TITLE", 972, 973], ["US_DRIVER_LICENSE", 1915, 1916], ["US_SSN", 935, 936], ["US_SSN", 1297, 1298], ["US_SSN", 1318, 1319], ["US_SSN", 1341, 1342], ["ZIP_CODE", 809, 810]]
+      },
+      {
+       "id": "l04",
+       "legacy_only": [["CREDIT_CARD", 3370, 3371], ["DATE_TIME", 14874, 14875], ["IBAN_CODE", 15480, 15481], ["IBAN_CODE", 15491, 15492], ["IBAN_CODE", 15504, 15505], ["IBAN_CODE", 15831, 15832], ["IBAN_CODE", 15833, 15834], ["IBAN_CODE", 15881, 15883], ["IBAN_CODE", 15887, 15889], ["IBAN_CODE", 15959, 15960], ["IP_ADDRESS", 15450, 15452], ["IP_ADDRESS", 15505, 15506], ["IP_ADDRESS", 15819, 15820], ["IP_ADDRESS", 15825, 15826], ["IP_ADDRESS", 15875, 15876], ["IP_ADDRESS", 15904, 15906], ["STREET_ADDRESS", 1605, 1606], ["STREET_ADDRESS", 15848, 15849], ["STREET_ADDRESS", 15896, 15897], ["STREET_ADDRESS", 15903, 15904], ["STREET_ADDRESS", 15924, 15925], ["STREET_ADDRESS", 15931, 15932], ["TITLE", 15481, 15482], ["US_DRIVER_LICENSE", 15826, 15827], ["US_SSN", 15488, 15490], ["US_SSN", 15820, 15821], ["US_SSN", 15832, 15833], ["US_SSN", 15932, 15933], ["ZIP_CODE", 3369, 3370]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 15451, 15452], ["DATE_TIME", 1605, 1606], ["DATE_TIME", 15453, 15454], ["DATE_TIME", 15848, 15849], ["IBAN_CODE", 15480, 15482], ["IBAN_CODE", 15504, 15506], ["IBAN_CODE", 15819, 15820], ["IBAN_CODE", 15825, 15827], ["IBAN_CODE", 15831, 15834], ["IBAN_CODE", 15882, 15883], ["IBAN_CODE", 15888, 15889], ["IBAN_CODE", 16150, 16151], ["IP_ADDRESS", 15450, 15451], ["IP_ADDRESS", 15905, 15906], ["STREET_ADDRESS", 15875, 15876], ["STREET_ADDRESS", 15881, 15882], ["STREET_ADDRESS", 15887, 15888], ["STREET_ADDRESS", 15903, 15905], ["STREET_ADDRESS", 15931, 15933], ["STREET_ADDRESS", 15959, 15960], ["TITLE", 15864, 15865], ["US_DRIVER_LICENSE", 14874, 14875], ["US_DRIVER_LICENSE", 15488, 15489], ["US_DRIVER_LICENSE", 15820, 15821], ["US_SSN", 15489, 15490], ["ZIP_CODE", 3369, 3371]]
+      },
+      {
+       "id": "l05",
+       "legacy_only": [["CREDIT_CARD", 5678, 5679], ["CREDIT_CARD", 5680, 5681], ["CREDIT_CARD", 9798, 9799], ["CREDIT_CARD", 10010, 10014], ["GPE", 2075, 2082], ["ORGANIZATION", 9797, 9798], ["TITLE", 1519, 1520], ["US_DRIVER_LICENSE", 5394, 5395], ["ZIP_CODE", 5679, 5680]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 5678, 5681], ["CREDIT_CARD", 9797, 9799], ["CREDIT_CARD", 10011, 10014], ["DOMAIN_NAME", 5356, 5357], ["STREET_ADDRESS", 1519, 1520], ["STREET_ADDRESS", 5394, 5395], ["US_SSN", 10010, 10011]]
+      },
+      {
+       "id": "l06",
+       "legacy_only": [["CREDIT_CARD", 7449, 7450], ["CREDIT_CARD", 10095, 10096], ["CREDIT_CARD", 10834, 10836], ["CREDIT_CARD", 11205, 11207], ["CREDIT_CARD", 11680, 11681], ["IBAN_CODE", 10762, 10766], ["IBAN_CODE", 10790, 10792], ["IBAN_CODE", 10813, 10817], ["IBAN_CODE", 10836, 10837], ["IBAN_CODE", 10856, 10858], ["IBAN_CODE", 10874, 10880], ["IBAN_CODE", 11122, 11129], ["STREET_ADDRESS", 7531, 7532], ["STREET_ADDRESS", 10725, 10726], ["US_SSN", 10610, 10611], ["US_SSN", 10969, 10970], ["ZIP_CODE", 10094, 10095], ["ZIP_CODE", 11678, 11680]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 10610, 10611], ["AGE", 10725, 10726], ["CREDIT_CARD", 10094, 10096], ["CREDIT_CARD", 10834, 10837], ["CREDIT_CARD", 10969, 10970], ["CREDIT_CARD", 11206, 11207], ["IBAN_CODE", 10762, 10765], ["IBAN_CODE", 10791, 10792], ["IBAN_CODE", 10813, 10814], ["IBAN_CODE", 10815, 10817], ["IBAN_CODE", 10856, 10857], ["IBAN_CODE", 10874, 10875], ["IBAN_CODE", 10876, 10880], ["IBAN_CODE", 11122, 11123], ["IBAN_CODE", 11124, 11129], ["IP_ADDRESS", 10765, 10766], ["IP_ADDRESS", 10919, 10920], ["PHONE_NUMBER", 10901, 10902], ["TITLE", 10857, 10858], ["ZIP_CODE", 7449, 7450], ["ZIP_CODE", 10790, 10791], ["ZIP_CODE", 11678, 11681]]
+      },
+      {
+       "id": "l07",
+       "legacy_only": [["CREDIT_CARD", 153, 155], ["CREDIT_CARD", 16955, 16957], ["DATE_TIME", 19273, 19274], ["IBAN_CODE", 11928, 11929], ["IP_ADDRESS", 2565, 2580], ["IP_ADDRESS", 6374, 6375], ["IP_ADDRESS", 19272, 19273], ["ORGANIZATION", 12665, 12666], ["PHONE_NUMBER", 155, 159], ["PHONE_NUMBER", 10556, 10557], ["TITLE", 18109, 18113], ["US_DRIVER_LICENSE", 10441, 10442]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 2705, 2706], ["CREDIT_CARD", 153, 156], ["CREDIT_CARD", 2579, 2580], ["CREDIT_CARD", 16955, 16956], ["IP_ADDRESS", 2565, 2579], ["IP_ADDRESS", 19272, 19274], ["IP_ADDRESS", 22313, 22314], ["ORGANIZATION", 10441, 10442], ["PHONE_NUMBER", 156, 159], ["STREET_ADDRESS", 6374, 6375], ["TITLE", 12665, 12666], ["TITLE", 16956, 16957]]
+      },
+      {
+       "id": "l08",
+       "legacy_only": [["CREDIT_CARD", 20945, 20946], ["GPE", 18067, 18068], ["IBAN_CODE", 3633, 3634], ["IBAN_CODE", 16761, 16762], ["IBAN_CODE", 18314, 18315], ["IBAN_CODE", 18675, 18676], ["IBAN_CODE", 18737, 18738], ["IP_ADDRESS", 18775, 18776], ["IP_ADDRESS", 20944, 20945], ["ORGANIZATION", 20731, 20735], ["ORGANIZATION", 27208, 27209], ["ORGANIZATION", 30781, 30782], ["PHONE_NUMBER", 3781, 3783], ["STREET_ADDRESS", 18502, 18504], ["TITLE", 27064, 27075], ["US_SSN", 18425, 18426]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 27208, 27209], ["IBAN_CODE", 3632, 3634], ["IP_ADDRESS", 18425, 18426], ["ORGANIZATION", 18067, 18068], ["ORGANIZATION", 20731, 20734], ["STREET_ADDRESS", 18503, 18504], ["STREET_ADDRESS", 18675, 18676], ["STREET_ADDRESS", 20944, 20945], ["TITLE", 30781, 30782], ["US_SSN", 16761, 16762], ["ZIP_CODE", 3781, 3783], ["ZIP_CODE", 18314, 18315], ["ZIP_CODE", 18502, 18503], ["ZIP_CODE", 19174, 19175]]
+      },
+      {
+       "id": "l09",
+       "legacy_only": [["AGE", 28384, 28385], ["CREDIT_CARD", 13637, 13641], ["CREDIT_CARD", 48243, 48244], ["EMAIL_ADDRESS", 1816, 1819], ["EMAIL_ADDRESS", 28465, 28466], ["GPE", 12729, 12730], ["GPE", 29381, 29385], ["IBAN_CODE", 21273, 21274], ["IBAN_CODE", 28796, 28798], ["IBAN_CODE", 47687, 47688], ["IBAN_CODE", 47707, 47709], ["IBAN_CODE", 47912, 47917], ["IBAN_CODE", 48119, 48120], ["IBAN_CODE", 48213, 48214], ["IBAN_CODE", 48220, 48221], ["IP_ADDRESS", 23975, 23976], ["IP_ADDRESS", 28383, 28384], ["IP_ADDRESS", 48008, 48011], ["IP_ADDRESS", 48013, 48017], ["IP_ADDRESS", 48214, 48216], ["NRP", 14311, 14318], ["PHONE_NUMBER", 32330, 32331], ["ZIP_CODE", 28542, 28544], ["ZIP_CODE", 39340, 39341], ["ZIP_CODE", 41515, 41516], ["ZIP_CODE", 47773, 47774], ["ZIP_CODE", 48212, 48213]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 15138, 15139], ["CREDIT_CARD", 13638, 13641], ["CREDIT_CARD", 28465, 28466], ["CREDIT_CARD", 48215, 48216], ["GPE", 1816, 1819], ["IBAN_CODE", 13637, 13638], ["IBAN_CODE", 28797, 28798], ["IBAN_CODE", 47707, 47708], ["IBAN_CODE", 47912, 47913], ["IBAN_CODE", 47914, 47917], ["IBAN_CODE", 48212, 48214], ["IP_ADDRESS", 23284, 23285], ["IP_ADDRESS", 28383, 28385], ["IP_ADDRESS", 33637, 33638], ["IP_ADDRESS", 47687, 47688], ["IP_ADDRESS", 47708, 47709], ["IP_ADDRESS", 48008, 48009], ["IP_ADDRESS", 48010, 48011], ["IP_ADDRESS", 48013, 48015], ["IP_ADDRESS", 48016, 48017], ["IP_ADDRESS", 48214, 48215], ["ORGANIZATION", 32330, 32331], ["STREET_ADDRESS", 12729, 12730], ["TITLE", 47773, 47774], ["US_DRIVER_LICENSE", 28796, 28797], ["ZIP_CODE", 28543, 28544], ["ZIP_CODE", 48220, 48221]]
+      }
+     ],
+     "inputs": 547,
+     "job": "pii",
+     "latency_ms": {
+      "legacy": {
+       "p50": 7.905446,
+       "p95": 23.51685
+      },
+      "runtime": {
+       "p50": 12.098159,
+       "p95": 32.516728
+      }
+     },
+     "max_abs_delta": 0.034865960478782654,
+     "mode": "token_windows",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 32768,
+      "overflow": "window",
+      "window": [512, 255]
+     },
+     "passed": false,
+     "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48"
+    },
+    {
+     "agreement": 0.9488117001828154,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 28,
+     "disagreements": [
+      {
+       "id": "p0032",
+       "legacy_only": [["AGE", 14, 15]],
+       "reason": "spans",
+       "runtime_only": [["ZIP_CODE", 14, 15]]
+      },
+      {
+       "id": "p0082",
+       "legacy_only": [["IP_ADDRESS", 288, 290]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 289, 290], ["IP_ADDRESS", 288, 289]]
+      },
+      {
+       "id": "p0084",
+       "legacy_only": [["IBAN_CODE", 102, 103], ["IBAN_CODE", 104, 105]],
+       "reason": "spans",
+       "runtime_only": [["IBAN_CODE", 102, 105]]
+      },
+      {
+       "id": "p0115",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["TITLE", 12, 14]]
+      },
+      {
+       "id": "p0128",
+       "legacy_only": [["GPE", 121, 122]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0153",
+       "legacy_only": [["CREDIT_CARD", 140, 141]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0159",
+       "legacy_only": [["US_DRIVER_LICENSE", 243, 244]],
+       "reason": "spans",
+       "runtime_only": [["IBAN_CODE", 243, 244]]
+      },
+      {
+       "id": "p0192",
+       "legacy_only": [["AGE", 843, 844], ["CREDIT_CARD", 840, 841], ["CREDIT_CARD", 846, 847], ["CREDIT_CARD", 854, 855], ["IBAN_CODE", 716, 717], ["IBAN_CODE", 764, 766], ["IBAN_CODE", 836, 837], ["IBAN_CODE", 838, 840], ["IBAN_CODE", 848, 853], ["IP_ADDRESS", 814, 815], ["IP_ADDRESS", 832, 835], ["IP_ADDRESS", 841, 842], ["IP_ADDRESS", 845, 846], ["IP_ADDRESS", 853, 854], ["ORGANIZATION", 416, 417], ["PHONE_NUMBER", 824, 825], ["STREET_ADDRESS", 763, 764]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 763, 764], ["IBAN_CODE", 765, 766], ["IBAN_CODE", 833, 834], ["IBAN_CODE", 836, 842], ["IBAN_CODE", 843, 844], ["IBAN_CODE", 848, 855], ["IP_ADDRESS", 832, 833], ["IP_ADDRESS", 834, 835], ["IP_ADDRESS", 845, 847], ["STREET_ADDRESS", 824, 825], ["TITLE", 571, 572], ["TITLE", 764, 765]]
+      },
+      {
+       "id": "p0199",
+       "legacy_only": [["AGE", 293, 294], ["IP_ADDRESS", 292, 293]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 292, 294], ["TITLE", 40, 43]]
+      },
+      {
+       "id": "p0234",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["PERSON", 9, 13]]
+      },
+      {
+       "id": "p0235",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["ORGANIZATION", 100, 101]]
+      },
+      {
+       "id": "p0252",
+       "legacy_only": [["STREET_ADDRESS", 179, 180]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0255",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["IBAN_CODE", 477, 478], ["ORGANIZATION", 69, 70]]
+      },
+      {
+       "id": "p0294",
+       "legacy_only": [["IBAN_CODE", 759, 761], ["IBAN_CODE", 762, 764], ["IBAN_CODE", 829, 830], ["IP_ADDRESS", 761, 762], ["IP_ADDRESS", 828, 829], ["STREET_ADDRESS", 839, 840]],
+       "reason": "spans",
+       "runtime_only": [["IBAN_CODE", 759, 764], ["IBAN_CODE", 828, 830], ["STREET_ADDRESS", 126, 127], ["US_SSN", 839, 840]]
+      },
+      {
+       "id": "p0301",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["GPE", 30, 34]]
+      },
+      {
+       "id": "p0304",
+       "legacy_only": [["AGE", 64, 65]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0374",
+       "legacy_only": [["ZIP_CODE", 23, 24]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0386",
+       "legacy_only": [["TITLE", 21, 22]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0402",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["PERSON", 38, 40]]
+      },
+      {
+       "id": "p0455",
+       "legacy_only": [["EMAIL_ADDRESS", 112, 116], ["PERSON", 116, 119]],
+       "reason": "spans",
+       "runtime_only": [["EMAIL_ADDRESS", 112, 113], ["PERSON", 113, 119]]
+      },
+      {
+       "id": "p0457",
+       "legacy_only": [["IP_ADDRESS", 162, 166]],
+       "reason": "spans",
+       "runtime_only": [["IP_ADDRESS", 162, 165], ["US_DRIVER_LICENSE", 165, 166]]
+      },
+      {
+       "id": "l01",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 1090, 1091], ["STREET_ADDRESS", 1458, 1459]]
+      },
+      {
+       "id": "l02",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["US_SSN", 608, 609]]
+      },
+      {
+       "id": "l03",
+       "legacy_only": [["IBAN_CODE", 751, 753], ["IBAN_CODE", 819, 821], ["IBAN_CODE", 913, 914], ["IBAN_CODE", 929, 930], ["IBAN_CODE", 976, 977], ["IP_ADDRESS", 753, 755], ["IP_ADDRESS", 809, 810], ["IP_ADDRESS", 863, 864], ["IP_ADDRESS", 914, 915], ["TITLE", 977, 978]],
+       "reason": "spans",
+       "runtime_only": [["IBAN_CODE", 751, 755], ["IBAN_CODE", 820, 821], ["IBAN_CODE", 872, 873], ["IBAN_CODE", 976, 978], ["IP_ADDRESS", 913, 915], ["STREET_ADDRESS", 819, 820], ["STREET_ADDRESS", 863, 864], ["US_DRIVER_LICENSE", 929, 930], ["ZIP_CODE", 809, 810]]
+      },
+      {
+       "id": "l04",
+       "legacy_only": [["AGE", 1688, 1689], ["IP_ADDRESS", 1687, 1688], ["STREET_ADDRESS", 1605, 1606]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 1687, 1689], ["DATE_TIME", 1605, 1606]]
+      },
+      {
+       "id": "l05",
+       "legacy_only": [["ORGANIZATION", 2084, 2085], ["TITLE", 1519, 1520]],
+       "reason": "spans",
+       "runtime_only": [["STREET_ADDRESS", 1519, 1520], ["STREET_ADDRESS", 2004, 2005]]
+      },
+      {
+       "id": "l07",
+       "legacy_only": [["CREDIT_CARD", 153, 155], ["CREDIT_CARD", 1757, 1759], ["PHONE_NUMBER", 155, 159]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 153, 156], ["CREDIT_CARD", 1756, 1759], ["PHONE_NUMBER", 156, 159]]
+      },
+      {
+       "id": "l09",
+       "legacy_only": [["TITLE", 1727, 1729]],
+       "reason": "spans",
+       "runtime_only": [["EMAIL_ADDRESS", 1727, 1729]]
+      }
+     ],
+     "inputs": 547,
+     "job": "pii_truncate",
+     "latency_ms": {
+      "legacy": {
+       "p50": 8.967834,
+       "p95": 25.805463
+      },
+      "runtime": {
+       "p50": 11.691529,
+       "p95": 31.356013
+      }
+     },
+     "max_abs_delta": 0.034865960478782654,
+     "mode": "tokens",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": false,
+     "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48"
+    },
+    {
+     "agreement": 0.703125,
+     "both_rejected": 0,
+     "compared": 64,
+     "disagreement_count": 19,
+     "disagreements": [
+      {
+       "id": "g00",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 373, 382]]
+      },
+      {
+       "id": "g02",
+       "legacy_only": [["HALLUCINATED", 108, 115], ["HALLUCINATED", 201, 205], ["HALLUCINATED", 215, 221]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 217, 221]]
+      },
+      {
+       "id": "g08",
+       "legacy_only": [["HALLUCINATED", 63, 133]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 65, 133]]
+      },
+      {
+       "id": "g09",
+       "legacy_only": [["HALLUCINATED", 8, 56], ["HALLUCINATED", 76, 366]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 8, 55], ["HALLUCINATED", 76, 106], ["HALLUCINATED", 108, 366]]
+      },
+      {
+       "id": "g15",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 4, 12]]
+      },
+      {
+       "id": "g16",
+       "legacy_only": [["HALLUCINATED", 30, 31]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "g17",
+       "legacy_only": [["HALLUCINATED", 97, 119]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 97, 108]]
+      },
+      {
+       "id": "g20",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 145, 146]]
+      },
+      {
+       "id": "g28",
+       "legacy_only": [["HALLUCINATED", 207, 215], ["HALLUCINATED", 382, 417]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 390, 417]]
+      },
+      {
+       "id": "g31",
+       "legacy_only": [["HALLUCINATED", 17, 26]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "g32",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 325, 337]]
+      },
+      {
+       "id": "g33",
+       "legacy_only": [["HALLUCINATED", 345, 354], ["HALLUCINATED", 357, 360], ["HALLUCINATED", 361, 387]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 338, 354], ["HALLUCINATED", 357, 387]]
+      },
+      {
+       "id": "g36",
+       "legacy_only": [["HALLUCINATED", 197, 203]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 198, 203]]
+      },
+      {
+       "id": "g40",
+       "legacy_only": [["HALLUCINATED", 48, 63], ["HALLUCINATED", 64, 112]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 48, 113]]
+      },
+      {
+       "id": "g44",
+       "legacy_only": [["HALLUCINATED", 17, 23]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "g51",
+       "legacy_only": [["HALLUCINATED", 978, 1007]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 973, 1007]]
+      },
+      {
+       "id": "g53",
+       "legacy_only": [["HALLUCINATED", 63, 205]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 27, 38], ["HALLUCINATED", 69, 205]]
+      },
+      {
+       "id": "g55",
+       "legacy_only": [["HALLUCINATED", 298, 317]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 298, 314]]
+      },
+      {
+       "id": "g59",
+       "legacy_only": [["HALLUCINATED", 36, 40]],
+       "reason": "spans",
+       "runtime_only": []
+      }
+     ],
+     "inputs": 64,
+     "job": "halu",
+     "latency_ms": {
+      "legacy": {
+       "p50": 118.970761,
+       "p95": 2456.872441
+      },
+      "runtime": {
+       "p50": 109.152908,
+       "p95": 2154.139424
+      }
+     },
+     "max_abs_delta": 0.06020712852478027,
+     "mode": "grounded",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Halu",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": false,
+     "revision": "ca87531211e414ac21c641b2faa8b8e21619de8f"
+    }
+   ],
+   "passed": false,
+   "thresholds": {
+    "label": 0.99,
+    "near_tie": 0.0,
+    "probability": Infinity,
+    "spans": 0.99
+   }
+  },
+  "bf16_copy_vs_exact_rocm_amd_inputs": {
+   "baseline": "runtime",
+   "context": {
+    "baseline": "the runtime's exact profile on the same GPU and inputs",
+    "candidate": "max_speed with a BF16 copy of the linears (heads FP32), recorded before any consent",
+    "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
+    "runtime_commit": "973842d9edf7172097a9b7f1b1bff076d1e78056",
+    "runtime_env": "the Decision 2.0 track's runtime image: PyTorch 2.12.0 ROCm 7.2"
+   },
+   "device_class": "rocm",
+   "inputs_sha256": "4f5ab88eb4d6d9c38de1f9ea8415ef5f2b2d72e847bd59ad65a486c0e286e395",
+   "jobs": [
+    {
+     "agreement": 0.998165137614679,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 1,
+     "disagreements": [
+      {
+       "delta": 0.006114155054092407,
+       "id": "l01",
+       "near_tie": false,
+       "reason": "label"
+      }
+     ],
+     "inputs": 547,
+     "job": "domain",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.653872,
+       "p95": 3.982044
+      },
+      "runtime": {
+       "p50": 6.686577,
+       "p95": 10.997336
+      }
+     },
+     "max_abs_delta": 0.10971057415008545,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "f6354f54adcf38770f635ad903be2b00577f6c11"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "guard",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.678213,
+       "p95": 5.183
+      },
+      "runtime": {
+       "p50": 6.752426,
+       "p95": 11.964775
+      }
+     },
+     "max_abs_delta": 0.06327009201049805,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "087f9e401012df839c83717b746967ac7aebfa3e"
+    },
+    {
+     "agreement": 0.998165137614679,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 1,
+     "disagreements": [
+      {
+       "delta": 0.012014061212539673,
+       "id": "p0330",
+       "near_tie": false,
+       "reason": "label"
+      }
+     ],
+     "inputs": 547,
+     "job": "safety",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.627315,
+       "p95": 4.398616
+      },
+      "runtime": {
+       "p50": 6.748616,
+       "p95": 11.175152
+      }
+     },
+     "max_abs_delta": 0.02032637596130371,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Safety",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "6e70e725a5f4d86da10f5be5e4dfd1da0358bb85"
+    },
+    {
+     "agreement": 0.998165137614679,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 1,
+     "disagreements": [
+      {
+       "delta": 0.024003982543945312,
+       "id": "p0385",
+       "near_tie": false,
+       "reason": "label"
+      }
+     ],
+     "inputs": 547,
+     "job": "factcheck",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.652553,
+       "p95": 4.560863
+      },
+      "runtime": {
+       "p50": 6.55938,
+       "p95": 9.976127
+      }
+     },
+     "max_abs_delta": 0.22955633699893951,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "99ede1aba1563e59e416f744d25b3f6b7e9d8274"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "feedback",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.720133,
+       "p95": 5.366105
+      },
+      "runtime": {
+       "p50": 6.778566,
+       "p95": 11.535354
+      }
+     },
+     "max_abs_delta": 0.29709232598543167,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "47434a7fd7c245c0c7c17564a000b3c56ccfec41"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "modality",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.641894,
+       "p95": 5.60522
+      },
+      "runtime": {
+       "p50": 6.720226,
+       "p95": 12.108901
+      }
+     },
+     "max_abs_delta": 0.09512805938720703,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Modality",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "5384b8997e3cbb79ca3a670e869577f4e4f4997e"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "hazard",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.651414,
+       "p95": 4.535493
+      },
+      "runtime": {
+       "p50": 6.634979,
+       "p95": 10.137464
+      }
+     },
+     "max_abs_delta": 0.013664841651916504,
+     "mode": "operating_point",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Hazard",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 32768,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d"
+    },
+    {
+     "agreement": 0.9522935779816514,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 26,
+     "disagreements": [
+      {
+       "id": "p0032",
+       "legacy_only": [["AGE", 14, 15]],
+       "reason": "spans",
+       "runtime_only": [["ZIP_CODE", 14, 15]]
+      },
+      {
+       "id": "p0082",
+       "legacy_only": [["IP_ADDRESS", 288, 290]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 289, 290], ["IP_ADDRESS", 288, 289]]
+      },
+      {
+       "id": "p0090",
+       "legacy_only": [["AGE", 149, 150]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0103",
+       "legacy_only": [["DATE_TIME", 352, 353]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 352, 353]]
+      },
+      {
+       "id": "p0140",
+       "legacy_only": [["GPE", 256, 257]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0159",
+       "legacy_only": [["CREDIT_CARD", 198, 199], ["ORGANIZATION", 191, 192]],
+       "reason": "spans",
+       "runtime_only": [["STREET_ADDRESS", 198, 199], ["US_DRIVER_LICENSE", 191, 192]]
+      },
+      {
+       "id": "p0192",
+       "legacy_only": [["CREDIT_CARD", 704, 705], ["CREDIT_CARD", 740, 741], ["CREDIT_CARD", 1038, 1039], ["IBAN_CODE", 616, 621], ["IBAN_CODE", 736, 740], ["IBAN_CODE", 744, 745], ["IBAN_CODE", 1034, 1038], ["IBAN_CODE", 1039, 1040], ["STREET_ADDRESS", 1208, 1209], ["US_DRIVER_LICENSE", 931, 932], ["US_DRIVER_LICENSE", 1168, 1169]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 620, 621], ["CREDIT_CARD", 931, 932], ["IBAN_CODE", 616, 620], ["IBAN_CODE", 736, 739], ["IBAN_CODE", 1034, 1040], ["IP_ADDRESS", 739, 740], ["IP_ADDRESS", 1168, 1169], ["US_SSN", 740, 741], ["ZIP_CODE", 704, 705], ["ZIP_CODE", 744, 745]]
+      },
+      {
+       "id": "p0199",
+       "legacy_only": [["DATE_TIME", 207, 208]],
+       "reason": "spans",
+       "runtime_only": [["STREET_ADDRESS", 207, 208]]
+      },
+      {
+       "id": "p0234",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["PERSON", 9, 13]]
+      },
+      {
+       "id": "p0235",
+       "legacy_only": [["ORGANIZATION", 357, 358]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0247",
+       "legacy_only": [["DATE_TIME", 106, 107], ["IP_ADDRESS", 357, 358]],
+       "reason": "spans",
+       "runtime_only": [["US_DRIVER_LICENSE", 357, 358]]
+      },
+      {
+       "id": "p0252",
+       "legacy_only": [["STREET_ADDRESS", 179, 180]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0255",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["ORGANIZATION", 69, 70]]
+      },
+      {
+       "id": "p0294",
+       "legacy_only": [["IBAN_CODE", 538, 539], ["IBAN_CODE", 765, 767], ["IBAN_CODE", 1137, 1138], ["IBAN_CODE", 1139, 1140], ["STREET_ADDRESS", 783, 784], ["US_DRIVER_LICENSE", 1138, 1139]],
+       "reason": "spans",
+       "runtime_only": [["IBAN_CODE", 765, 766], ["IBAN_CODE", 783, 784], ["IBAN_CODE", 1137, 1140], ["IBAN_CODE", 1158, 1159], ["TITLE", 766, 767], ["US_DRIVER_LICENSE", 538, 539]]
+      },
+      {
+       "id": "p0304",
+       "legacy_only": [["AGE", 64, 65], ["AGE", 178, 180], ["TITLE", 152, 153]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 179, 180], ["PHONE_NUMBER", 178, 179], ["STREET_ADDRESS", 183, 184]]
+      },
+      {
+       "id": "p0374",
+       "legacy_only": [["ZIP_CODE", 23, 24]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0386",
+       "legacy_only": [["TITLE", 21, 22]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0455",
+       "legacy_only": [["EMAIL_ADDRESS", 112, 116], ["PERSON", 116, 119]],
+       "reason": "spans",
+       "runtime_only": [["EMAIL_ADDRESS", 112, 113], ["PERSON", 113, 119]]
+      },
+      {
+       "id": "p0457",
+       "legacy_only": [["IP_ADDRESS", 162, 166]],
+       "reason": "spans",
+       "runtime_only": [["IP_ADDRESS", 162, 165], ["US_DRIVER_LICENSE", 165, 166]]
+      },
+      {
+       "id": "e00",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["PERSON", 1, 2]]
+      },
+      {
+       "id": "l01",
+       "legacy_only": [["DATE_TIME", 568, 569], ["IBAN_CODE", 1169, 1170], ["IBAN_CODE", 3001, 3003], ["PHONE_NUMBER", 2996, 2997]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 3002, 3003], ["GPE", 1169, 1170], ["IBAN_CODE", 3001, 3002]]
+      },
+      {
+       "id": "l03",
+       "legacy_only": [["CREDIT_CARD", 1195, 1196], ["IBAN_CODE", 778, 783], ["IBAN_CODE", 1173, 1175], ["IBAN_CODE", 1226, 1229], ["IBAN_CODE", 1378, 1381], ["IBAN_CODE", 2431, 2432], ["IP_ADDRESS", 1172, 1173], ["ORGANIZATION", 3408, 3409], ["STREET_ADDRESS", 224, 225], ["STREET_ADDRESS", 945, 946], ["ZIP_CODE", 7251, 7252]],
+       "reason": "spans",
+       "runtime_only": [["EMAIL_ADDRESS", 2244, 2250], ["IBAN_CODE", 778, 781], ["IBAN_CODE", 782, 783], ["IBAN_CODE", 1174, 1175], ["IBAN_CODE", 1226, 1228], ["IBAN_CODE", 1378, 1380], ["IP_ADDRESS", 224, 225], ["IP_ADDRESS", 781, 782], ["IP_ADDRESS", 1172, 1174], ["IP_ADDRESS", 1195, 1196], ["IP_ADDRESS", 1228, 1229], ["IP_ADDRESS", 1380, 1381], ["ORGANIZATION", 226, 230], ["US_DRIVER_LICENSE", 2431, 2432], ["US_DRIVER_LICENSE", 3408, 3409], ["US_SSN", 945, 946]]
+      },
+      {
+       "id": "l04",
+       "legacy_only": [["AGE", 15898, 15899], ["CREDIT_CARD", 3247, 3250], ["IBAN_CODE", 15408, 15411], ["IBAN_CODE", 15439, 15440], ["IBAN_CODE", 15444, 15445], ["IBAN_CODE", 15447, 15448], ["IBAN_CODE", 15449, 15450], ["IBAN_CODE", 15795, 15797], ["IP_ADDRESS", 3252, 3254], ["IP_ADDRESS", 15438, 15439], ["IP_ADDRESS", 15443, 15444], ["STREET_ADDRESS", 15903, 15905], ["STREET_ADDRESS", 15959, 15961], ["TITLE", 15448, 15449]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 3248, 3250], ["DATE_TIME", 3247, 3248], ["IBAN_CODE", 3253, 3254], ["IBAN_CODE", 15408, 15409], ["IBAN_CODE", 15410, 15411], ["IBAN_CODE", 15438, 15440], ["IBAN_CODE", 15443, 15445], ["IBAN_CODE", 15447, 15450], ["IBAN_CODE", 15461, 15462], ["IBAN_CODE", 15795, 15796], ["IBAN_CODE", 15904, 15905], ["IBAN_CODE", 15959, 15960], ["IP_ADDRESS", 3252, 3253], ["ORGANIZATION", 14940, 14944], ["STREET_ADDRESS", 15903, 15904], ["STREET_ADDRESS", 15960, 15961], ["TITLE", 15409, 15410], ["TITLE", 15796, 15797], ["US_SSN", 15898, 15899]]
+      },
+      {
+       "id": "l05",
+       "legacy_only": [["CREDIT_CARD", 4145, 4146], ["CREDIT_CARD", 5413, 5414], ["IBAN_CODE", 4144, 4145], ["STREET_ADDRESS", 6991, 6992], ["TITLE", 1585, 1586], ["US_DRIVER_LICENSE", 5411, 5413]],
+       "reason": "spans",
+       "runtime_only": [["IBAN_CODE", 1585, 1586], ["IBAN_CODE", 4144, 4146], ["ORGANIZATION", 7322, 7324], ["TITLE", 9002, 9004], ["US_DRIVER_LICENSE", 5411, 5414], ["ZIP_CODE", 6991, 6992]]
+      },
+      {
+       "id": "l06",
+       "legacy_only": [["AGE", 10670, 10671], ["AGE", 10751, 10752], ["CREDIT_CARD", 10562, 10563], ["CREDIT_CARD", 10965, 10966], ["IBAN_CODE", 10563, 10564], ["IBAN_CODE", 10627, 10628], ["IBAN_CODE", 10752, 10753], ["IBAN_CODE", 10832, 10833], ["IBAN_CODE", 10897, 10898], ["IBAN_CODE", 11102, 11103], ["IBAN_CODE", 11122, 11128], ["IP_ADDRESS", 10671, 10673], ["IP_ADDRESS", 10896, 10897], ["IP_ADDRESS", 11217, 11219], ["ORGANIZATION", 10781, 10782], ["PERSON", 774, 778], ["PHONE_NUMBER", 11838, 11839], ["STREET_ADDRESS", 5276, 5279], ["TITLE", 10833, 10834], ["TITLE", 11157, 11158], ["TITLE", 11391, 11413], ["ZIP_CODE", 10850, 10851], ["ZIP_CODE", 11678, 11681]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 10850, 10851], ["CREDIT_CARD", 10627, 10628], ["CREDIT_CARD", 11126, 11127], ["CREDIT_CARD", 11267, 11268], ["CREDIT_CARD", 11680, 11681], ["CREDIT_CARD", 11838, 11839], ["IBAN_CODE", 10562, 10564], ["IBAN_CODE", 10751, 10753], ["IBAN_CODE", 10832, 10834], ["IBAN_CODE", 10896, 10898], ["IBAN_CODE", 11122, 11126], ["IBAN_CODE", 11172, 11173], ["IBAN_CODE", 11218, 11219], ["IBAN_CODE", 11234, 11235], ["IP_ADDRESS", 10670, 10673], ["IP_ADDRESS", 11102, 11103], ["IP_ADDRESS", 11127, 11128], ["IP_ADDRESS", 11217, 11218], ["NRP", 774, 778], ["ORGANIZATION", 10403, 10406], ["ORGANIZATION", 10781, 10783], ["STREET_ADDRESS", 5276, 5277], ["STREET_ADDRESS", 5278, 5279], ["TITLE", 10491, 10493], ["TITLE", 11391, 11401], ["ZIP_CODE", 11678, 11680]]
+      },
+      {
+       "id": "l07",
+       "legacy_only": [["EMAIL_ADDRESS", 22286, 22289], ["GPE", 704, 707], ["GPE", 9223, 9224], ["GPE", 13740, 13743], ["IBAN_CODE", 19271, 19272], ["IP_ADDRESS", 19272, 19274], ["STREET_ADDRESS", 702, 704], ["TITLE", 4861, 4863], ["ZIP_CODE", 12013, 12016]],
+       "reason": "spans",
+       "runtime_only": [["GPE", 13735, 13743], ["IP_ADDRESS", 19271, 19274], ["STREET_ADDRESS", 702, 707], ["TITLE", 9223, 9224], ["ZIP_CODE", 12013, 12014], ["ZIP_CODE", 13066, 13067]]
+      }
+     ],
+     "inputs": 547,
+     "job": "pii",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.739622,
+       "p95": 4.605662
+      },
+      "runtime": {
+       "p50": 6.882063,
+       "p95": 9.453167
+      }
+     },
+     "max_abs_delta": 0.04904663562774658,
+     "mode": "tokens",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": false,
+     "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48"
+    }
+   ],
+   "passed": false,
+   "thresholds": {
+    "label": 0.99,
+    "near_tie": 0.0,
+    "probability": Infinity,
+    "spans": 0.99
+   }
+  },
+  "bf16_copy_vs_exact_rocm_cpu_inputs": {
+   "baseline": "runtime",
+   "context": {
+    "baseline": "the runtime's exact profile on the same GPU and inputs",
+    "candidate": "max_speed with a BF16 copy of the linears (heads FP32), recorded before any consent",
+    "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
+    "runtime_commit": "973842d9edf7172097a9b7f1b1bff076d1e78056",
+    "runtime_env": "the Decision 2.0 track's runtime image: PyTorch 2.12.0 ROCm 7.2"
+   },
+   "device_class": "rocm",
+   "inputs_sha256": "4f5ab88eb4d6d9c38de1f9ea8415ef5f2b2d72e847bd59ad65a486c0e286e395",
+   "jobs": [
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "domain",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.669883,
+       "p95": 5.553161
+      },
+      "runtime": {
+       "p50": 6.612959,
+       "p95": 10.631273
+      }
+     },
+     "max_abs_delta": 0.10971057415008545,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "f6354f54adcf38770f635ad903be2b00577f6c11"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "guard",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.709972,
+       "p95": 5.022693
+      },
+      "runtime": {
+       "p50": 6.885523,
+       "p95": 11.379488
+      }
+     },
+     "max_abs_delta": 0.3480706512928009,
+     "mode": "sequence_windows",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "window",
+      "window": [512, 255]
+     },
+     "passed": true,
+     "revision": "087f9e401012df839c83717b746967ac7aebfa3e"
+    },
+    {
+     "agreement": 0.9981718464351006,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 1,
+     "disagreements": [
+      {
+       "delta": 0.012014061212539673,
+       "id": "p0330",
+       "near_tie": false,
+       "reason": "label"
+      }
+     ],
+     "inputs": 547,
+     "job": "safety",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.617884,
+       "p95": 4.18567
+      },
+      "runtime": {
+       "p50": 6.696897,
+       "p95": 10.069834
+      }
+     },
+     "max_abs_delta": 0.02032637596130371,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Safety",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "6e70e725a5f4d86da10f5be5e4dfd1da0358bb85"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "shield",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.597195,
+       "p95": 5.427494
+      },
+      "runtime": {
+       "p50": 6.707717,
+       "p95": 10.432048
+      }
+     },
+     "max_abs_delta": 0.021488547325134277,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Shield",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "a981a99eeb05a2859b88b5cee9af4352897ec4ec"
+    },
+    {
+     "agreement": 0.9981718464351006,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 1,
+     "disagreements": [
+      {
+       "delta": 0.024003982543945312,
+       "id": "p0385",
+       "near_tie": false,
+       "reason": "label"
+      }
+     ],
+     "inputs": 547,
+     "job": "factcheck",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.619023,
+       "p95": 4.331797
+      },
+      "runtime": {
+       "p50": 6.724697,
+       "p95": 10.265831
+      }
+     },
+     "max_abs_delta": 0.22955633699893951,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "99ede1aba1563e59e416f744d25b3f6b7e9d8274"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "feedback",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.691193,
+       "p95": 4.198911
+      },
+      "runtime": {
+       "p50": 6.843894,
+       "p95": 10.808329
+      }
+     },
+     "max_abs_delta": 0.29709232598543167,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "47434a7fd7c245c0c7c17564a000b3c56ccfec41"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "modality",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.619025,
+       "p95": 4.088543
+      },
+      "runtime": {
+       "p50": 6.693537,
+       "p95": 10.490687
+      }
+     },
+     "max_abs_delta": 0.09512805938720703,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Modality",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "5384b8997e3cbb79ca3a670e869577f4e4f4997e"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "hazard",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.641473,
+       "p95": 4.613131
+      },
+      "runtime": {
+       "p50": 6.646428,
+       "p95": 11.438917
+      }
+     },
+     "max_abs_delta": 0.013664841651916504,
+     "mode": "operating_point",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Hazard",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 32768,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d"
+    },
+    {
+     "agreement": 0.946983546617916,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 29,
+     "disagreements": [
+      {
+       "id": "p0032",
+       "legacy_only": [["AGE", 14, 15]],
+       "reason": "spans",
+       "runtime_only": [["ZIP_CODE", 14, 15]]
+      },
+      {
+       "id": "p0082",
+       "legacy_only": [["IP_ADDRESS", 288, 290]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 289, 290], ["IP_ADDRESS", 288, 289]]
+      },
+      {
+       "id": "p0090",
+       "legacy_only": [["AGE", 149, 150]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0103",
+       "legacy_only": [["DATE_TIME", 352, 353]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 352, 353]]
+      },
+      {
+       "id": "p0140",
+       "legacy_only": [["GPE", 256, 257]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0159",
+       "legacy_only": [["CREDIT_CARD", 198, 199], ["ORGANIZATION", 191, 192]],
+       "reason": "spans",
+       "runtime_only": [["STREET_ADDRESS", 198, 199], ["US_DRIVER_LICENSE", 191, 192]]
+      },
+      {
+       "id": "p0192",
+       "legacy_only": [["IBAN_CODE", 716, 717], ["IBAN_CODE", 898, 899], ["IBAN_CODE", 1016, 1018], ["IBAN_CODE", 1113, 1114], ["IP_ADDRESS", 1129, 1131], ["STREET_ADDRESS", 435, 437], ["ZIP_CODE", 1196, 1197]],
+       "reason": "spans",
+       "runtime_only": [["DATE_TIME", 1129, 1130], ["IBAN_CODE", 1016, 1017], ["IP_ADDRESS", 1017, 1018], ["IP_ADDRESS", 1113, 1114], ["IP_ADDRESS", 1130, 1131], ["PHONE_NUMBER", 634, 635], ["PHONE_NUMBER", 1196, 1197], ["STREET_ADDRESS", 435, 438], ["TITLE", 571, 572]]
+      },
+      {
+       "id": "p0199",
+       "legacy_only": [["DATE_TIME", 207, 208]],
+       "reason": "spans",
+       "runtime_only": [["STREET_ADDRESS", 207, 208]]
+      },
+      {
+       "id": "p0234",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["PERSON", 9, 13]]
+      },
+      {
+       "id": "p0235",
+       "legacy_only": [["ORGANIZATION", 357, 358]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0247",
+       "legacy_only": [["DATE_TIME", 106, 107], ["IP_ADDRESS", 357, 358]],
+       "reason": "spans",
+       "runtime_only": [["US_DRIVER_LICENSE", 357, 358]]
+      },
+      {
+       "id": "p0252",
+       "legacy_only": [["STREET_ADDRESS", 179, 180]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0255",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["ORGANIZATION", 69, 70]]
+      },
+      {
+       "id": "p0294",
+       "legacy_only": [["AGE", 1267, 1268], ["AGE", 1301, 1302], ["CREDIT_CARD", 1132, 1133], ["IBAN_CODE", 759, 761], ["IBAN_CODE", 762, 764], ["IBAN_CODE", 829, 830], ["IBAN_CODE", 860, 861], ["IBAN_CODE", 866, 867], ["IBAN_CODE", 897, 902], ["IBAN_CODE", 1127, 1128], ["IBAN_CODE", 1147, 1152], ["IBAN_CODE", 1175, 1180], ["IBAN_CODE", 1189, 1190], ["IBAN_CODE", 1203, 1208], ["IBAN_CODE", 1221, 1223], ["IBAN_CODE", 1225, 1229], ["IBAN_CODE", 1281, 1282], ["IBAN_CODE", 1283, 1284], ["IP_ADDRESS", 696, 697], ["IP_ADDRESS", 740, 742], ["IP_ADDRESS", 761, 762], ["IP_ADDRESS", 828, 829], ["IP_ADDRESS", 855, 856], ["IP_ADDRESS", 861, 862], ["IP_ADDRESS", 1128, 1129], ["IP_ADDRESS", 1130, 1131], ["IP_ADDRESS", 1133, 1134], ["IP_ADDRESS", 1188, 1189], ["IP_ADDRESS", 1223, 1224], ["STREET_ADDRESS", 449, 451], ["TITLE", 1154, 1155], ["TITLE", 1282, 1283], ["US_SSN", 1250, 1251], ["US_SSN", 1284, 1285], ["US_SSN", 1311, 1312]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 1132, 1133], ["CREDIT_CARD", 1189, 1190], ["GPE", 449, 451], ["IBAN_CODE", 759, 764], ["IBAN_CODE", 828, 830], ["IBAN_CODE", 897, 899], ["IBAN_CODE", 900, 902], ["IBAN_CODE", 1133, 1134], ["IBAN_CODE", 1147, 1148], ["IBAN_CODE", 1149, 1152], ["IBAN_CODE", 1175, 1176], ["IBAN_CODE", 1177, 1180], ["IBAN_CODE", 1203, 1204], ["IBAN_CODE", 1205, 1208], ["IBAN_CODE", 1221, 1222], ["IBAN_CODE", 1225, 1228], ["IBAN_CODE", 1281, 1285], ["IBAN_CODE", 1301, 1302], ["IBAN_CODE", 1311, 1312], ["IP_ADDRESS", 740, 741], ["IP_ADDRESS", 860, 862], ["IP_ADDRESS", 1127, 1129], ["IP_ADDRESS", 1222, 1224], ["IP_ADDRESS", 1250, 1251], ["TITLE", 1148, 1149], ["TITLE", 1176, 1177], ["TITLE", 1204, 1205], ["US_DRIVER_LICENSE", 866, 867], ["US_DRIVER_LICENSE", 899, 900], ["US_SSN", 696, 697], ["US_SSN", 741, 742], ["US_SSN", 855, 856], ["US_SSN", 1188, 1189], ["ZIP_CODE", 1228, 1229]]
+      },
+      {
+       "id": "p0304",
+       "legacy_only": [["AGE", 64, 65], ["AGE", 178, 180], ["TITLE", 152, 153]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 179, 180], ["PHONE_NUMBER", 178, 179], ["STREET_ADDRESS", 183, 184]]
+      },
+      {
+       "id": "p0374",
+       "legacy_only": [["ZIP_CODE", 23, 24]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0386",
+       "legacy_only": [["TITLE", 21, 22]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0455",
+       "legacy_only": [["EMAIL_ADDRESS", 112, 116], ["PERSON", 116, 119]],
+       "reason": "spans",
+       "runtime_only": [["EMAIL_ADDRESS", 112, 113], ["PERSON", 113, 119]]
+      },
+      {
+       "id": "p0457",
+       "legacy_only": [["IP_ADDRESS", 162, 166]],
+       "reason": "spans",
+       "runtime_only": [["IP_ADDRESS", 162, 165], ["US_DRIVER_LICENSE", 165, 166]]
+      },
+      {
+       "id": "e00",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["PERSON", 1, 2]]
+      },
+      {
+       "id": "l01",
+       "legacy_only": [["GPE", 1169, 1170], ["IBAN_CODE", 2962, 2963], ["IBAN_CODE", 3002, 3003], ["STREET_ADDRESS", 1422, 1425], ["US_DRIVER_LICENSE", 3001, 3002], ["ZIP_CODE", 2963, 2964]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 1090, 1091], ["IBAN_CODE", 1169, 1170], ["IBAN_CODE", 2962, 2964], ["IBAN_CODE", 3001, 3003], ["STREET_ADDRESS", 1423, 1425], ["STREET_ADDRESS", 1458, 1459]]
+      },
+      {
+       "id": "l02",
+       "legacy_only": [["ORGANIZATION", 3920, 3921]],
+       "reason": "spans",
+       "runtime_only": [["IBAN_CODE", 3920, 3921], ["US_SSN", 608, 609]]
+      },
+      {
+       "id": "l03",
+       "legacy_only": [["CREDIT_CARD", 3402, 3403], ["DATE_TIME", 1800, 1801], ["IBAN_CODE", 751, 753], ["IBAN_CODE", 819, 821], ["IBAN_CODE", 898, 899], ["IBAN_CODE", 960, 961], ["IBAN_CODE", 1190, 1191], ["IBAN_CODE", 1296, 1299], ["IBAN_CODE", 1307, 1309], ["IBAN_CODE", 1316, 1321], ["IBAN_CODE", 1344, 1348], ["IBAN_CODE", 1356, 1359], ["IBAN_CODE", 1370, 1371], ["IP_ADDRESS", 753, 755], ["IP_ADDRESS", 809, 810], ["IP_ADDRESS", 863, 864], ["IP_ADDRESS", 897, 898], ["IP_ADDRESS", 1191, 1192], ["IP_ADDRESS", 1341, 1343], ["IP_ADDRESS", 1348, 1349], ["IP_ADDRESS", 7127, 7129], ["ORGANIZATION", 1848, 1849], ["ORGANIZATION", 3403, 3404], ["STREET_ADDRESS", 1915, 1916], ["TITLE", 961, 962], ["US_DRIVER_LICENSE", 940, 941], ["ZIP_CODE", 1801, 1802]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 7128, 7129], ["CREDIT_CARD", 1348, 1349], ["DATE_TIME", 1800, 1802], ["IBAN_CODE", 751, 755], ["IBAN_CODE", 820, 821], ["IBAN_CODE", 960, 962], ["IBAN_CODE", 1190, 1192], ["IBAN_CODE", 1296, 1297], ["IBAN_CODE", 1298, 1299], ["IBAN_CODE", 1308, 1309], ["IBAN_CODE", 1316, 1317], ["IBAN_CODE", 1320, 1321], ["IBAN_CODE", 1344, 1346], ["IBAN_CODE", 1347, 1348], ["IBAN_CODE", 1356, 1358], ["IBAN_CODE", 1848, 1849], ["IP_ADDRESS", 897, 899], ["IP_ADDRESS", 1319, 1320], ["IP_ADDRESS", 1342, 1343], ["IP_ADDRESS", 1370, 1371], ["IP_ADDRESS", 7127, 7128], ["ORGANIZATION", 3402, 3404], ["PHONE_NUMBER", 1346, 1347], ["STREET_ADDRESS", 819, 820], ["STREET_ADDRESS", 863, 864], ["STREET_ADDRESS", 1307, 1308], ["US_DRIVER_LICENSE", 1915, 1916], ["US_SSN", 1297, 1298], ["US_SSN", 1318, 1319], ["US_SSN", 1341, 1342], ["US_SSN", 1358, 1359], ["ZIP_CODE", 809, 810]]
+      },
+      {
+       "id": "l04",
+       "legacy_only": [["AGE", 15456, 15457], ["CREDIT_CARD", 3370, 3371], ["CREDIT_CARD", 15871, 15872], ["DATE_TIME", 14874, 14875], ["IBAN_CODE", 15472, 15473], ["IBAN_CODE", 15491, 15492], ["IBAN_CODE", 15504, 15505], ["IBAN_CODE", 15831, 15832], ["IBAN_CODE", 15833, 15834], ["IBAN_CODE", 15860, 15862], ["IBAN_CODE", 15922, 15923], ["IP_ADDRESS", 15450, 15452], ["IP_ADDRESS", 15471, 15472], ["IP_ADDRESS", 15825, 15826], ["IP_ADDRESS", 15842, 15844], ["IP_ADDRESS", 15889, 15890], ["IP_ADDRESS", 15904, 15906], ["STREET_ADDRESS", 1605, 1606], ["STREET_ADDRESS", 15848, 15849], ["STREET_ADDRESS", 15859, 15860], ["STREET_ADDRESS", 15909, 15910], ["STREET_ADDRESS", 15931, 15932], ["TITLE", 15886, 15887], ["TITLE", 15892, 15893], ["TITLE", 15920, 15921], ["US_SSN", 15455, 15456], ["US_SSN", 15820, 15821], ["US_SSN", 15832, 15833], ["US_SSN", 15870, 15871], ["ZIP_CODE", 3369, 3370]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 2163, 2164], ["CREDIT_CARD", 15451, 15452], ["CREDIT_CARD", 15889, 15890], ["DATE_TIME", 1605, 1606], ["IBAN_CODE", 15471, 15473], ["IBAN_CODE", 15825, 15826], ["IBAN_CODE", 15831, 15834], ["IBAN_CODE", 15859, 15862], ["IBAN_CODE", 15909, 15910], ["IBAN_CODE", 15931, 15932], ["IBAN_CODE", 16150, 16151], ["IP_ADDRESS", 15450, 15451], ["IP_ADDRESS", 15843, 15844], ["IP_ADDRESS", 15870, 15872], ["IP_ADDRESS", 15905, 15906], ["US_DRIVER_LICENSE", 14874, 14875], ["US_DRIVER_LICENSE", 15820, 15821], ["US_SSN", 15455, 15457], ["US_SSN", 15504, 15505], ["US_SSN", 15842, 15843], ["US_SSN", 15848, 15849], ["US_SSN", 15904, 15905], ["US_SSN", 15922, 15923], ["ZIP_CODE", 3369, 3371], ["ZIP_CODE", 16096, 16097]]
+      },
+      {
+       "id": "l05",
+       "legacy_only": [["CREDIT_CARD", 5678, 5679], ["CREDIT_CARD", 5680, 5681], ["GPE", 2075, 2082], ["TITLE", 1519, 1520], ["US_DRIVER_LICENSE", 5394, 5395], ["ZIP_CODE", 5679, 5680]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 5678, 5681], ["STREET_ADDRESS", 1519, 1520], ["STREET_ADDRESS", 5394, 5395]]
+      },
+      {
+       "id": "l06",
+       "legacy_only": [["AGE", 1968, 1969], ["AGE", 10952, 10953], ["CREDIT_CARD", 1969, 1973], ["CREDIT_CARD", 10095, 10096], ["CREDIT_CARD", 10834, 10836], ["CREDIT_CARD", 10895, 10896], ["CREDIT_CARD", 11008, 11009], ["CREDIT_CARD", 11205, 11207], ["IBAN_CODE", 10411, 10412], ["IBAN_CODE", 10836, 10837], ["IBAN_CODE", 10856, 10858], ["IBAN_CODE", 10874, 10880], ["IBAN_CODE", 10920, 10921], ["IBAN_CODE", 11006, 11008], ["IBAN_CODE", 11009, 11011], ["IP_ADDRESS", 10913, 10915], ["STREET_ADDRESS", 7531, 7532], ["US_SSN", 10610, 10611], ["ZIP_CODE", 10094, 10095], ["ZIP_CODE", 10906, 10907]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 3006, 3007], ["CREDIT_CARD", 1968, 1973], ["CREDIT_CARD", 10094, 10096], ["CREDIT_CARD", 10834, 10837], ["CREDIT_CARD", 10952, 10953], ["CREDIT_CARD", 11206, 11207], ["IBAN_CODE", 10856, 10857], ["IBAN_CODE", 10874, 10875], ["IBAN_CODE", 10876, 10880], ["IBAN_CODE", 10913, 10914], ["IBAN_CODE", 11006, 11011], ["IP_ADDRESS", 10610, 10611], ["IP_ADDRESS", 10914, 10915], ["ORGANIZATION", 10413, 10414], ["TITLE", 10857, 10858], ["US_DRIVER_LICENSE", 10920, 10921]]
+      },
+      {
+       "id": "l07",
+       "legacy_only": [["AGE", 4703, 4704], ["CREDIT_CARD", 153, 155], ["CREDIT_CARD", 4858, 4859], ["CREDIT_CARD", 10558, 10559], ["DATE_TIME", 4829, 4830], ["DATE_TIME", 19273, 19274], ["IBAN_CODE", 11928, 11929], ["IP_ADDRESS", 2565, 2580], ["IP_ADDRESS", 6374, 6375], ["IP_ADDRESS", 19272, 19273], ["PHONE_NUMBER", 155, 159], ["PHONE_NUMBER", 10556, 10557], ["TITLE", 9223, 9224], ["TITLE", 11278, 11279], ["TITLE", 18109, 18113], ["ZIP_CODE", 4857, 4858]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 4702, 4704], ["CREDIT_CARD", 153, 156], ["CREDIT_CARD", 2579, 2580], ["IP_ADDRESS", 2565, 2579], ["IP_ADDRESS", 19272, 19274], ["ORGANIZATION", 11278, 11279], ["PHONE_NUMBER", 156, 159], ["STREET_ADDRESS", 6374, 6375], ["ZIP_CODE", 4857, 4859], ["ZIP_CODE", 10558, 10559]]
+      },
+      {
+       "id": "l08",
+       "legacy_only": [["GPE", 18067, 18068], ["IBAN_CODE", 18150, 18152], ["IBAN_CODE", 18264, 18267], ["IBAN_CODE", 18329, 18330], ["IBAN_CODE", 18737, 18738], ["IBAN_CODE", 27248, 27249], ["IBAN_CODE", 28563, 28564], ["ORGANIZATION", 17944, 17945], ["STREET_ADDRESS", 18502, 18504], ["US_SSN", 18425, 18426]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 18264, 18265], ["GPE", 27248, 27249], ["IBAN_CODE", 17958, 17960], ["IBAN_CODE", 18150, 18151], ["IBAN_CODE", 18265, 18267], ["IP_ADDRESS", 18425, 18426], ["ORGANIZATION", 18067, 18068], ["PHONE_NUMBER", 17018, 17019], ["STREET_ADDRESS", 18329, 18330], ["STREET_ADDRESS", 18503, 18504], ["TITLE", 18151, 18152], ["TITLE", 30809, 30817], ["ZIP_CODE", 18502, 18503], ["ZIP_CODE", 19174, 19175]]
+      },
+      {
+       "id": "l09",
+       "legacy_only": [["AGE", 12878, 12879], ["AGE", 28384, 28385], ["CREDIT_CARD", 19343, 19344], ["CREDIT_CARD", 28481, 28482], ["EMAIL_ADDRESS", 1727, 1729], ["EMAIL_ADDRESS", 1816, 1819], ["EMAIL_ADDRESS", 28465, 28466], ["GPE", 12729, 12730], ["IBAN_CODE", 13304, 13305], ["IBAN_CODE", 47687, 47688], ["IBAN_CODE", 47707, 47709], ["IBAN_CODE", 47894, 47896], ["IBAN_CODE", 48213, 48214], ["IP_ADDRESS", 23975, 23976], ["IP_ADDRESS", 28383, 28384], ["IP_ADDRESS", 48008, 48011], ["IP_ADDRESS", 48013, 48017], ["IP_ADDRESS", 48206, 48209], ["ORGANIZATION", 32043, 32044], ["STREET_ADDRESS", 32042, 32043], ["STREET_ADDRESS", 47437, 47439], ["US_DRIVER_LICENSE", 48007, 48008], ["US_DRIVER_LICENSE", 48020, 48021], ["US_SSN", 13396, 13397], ["ZIP_CODE", 28480, 28481], ["ZIP_CODE", 28542, 28544], ["ZIP_CODE", 48212, 48213]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 13304, 13305], ["AGE", 15138, 15139], ["CREDIT_CARD", 28465, 28466], ["CREDIT_CARD", 28480, 28482], ["GPE", 1816, 1819], ["IBAN_CODE", 12878, 12879], ["IBAN_CODE", 47400, 47402], ["IBAN_CODE", 47707, 47708], ["IBAN_CODE", 47894, 47895], ["IBAN_CODE", 48212, 48214], ["IP_ADDRESS", 11559, 11560], ["IP_ADDRESS", 23284, 23285], ["IP_ADDRESS", 28383, 28385], ["IP_ADDRESS", 47687, 47688], ["IP_ADDRESS", 47708, 47709], ["IP_ADDRESS", 47895, 47896], ["IP_ADDRESS", 48007, 48011], ["IP_ADDRESS", 48013, 48015], ["IP_ADDRESS", 48016, 48017], ["IP_ADDRESS", 48207, 48209], ["ORGANIZATION", 16254, 16255], ["ORGANIZATION", 19343, 19344], ["STREET_ADDRESS", 12729, 12730], ["STREET_ADDRESS", 21363, 21364], ["STREET_ADDRESS", 32042, 32044], ["STREET_ADDRESS", 47437, 47440], ["STREET_ADDRESS", 48020, 48021], ["TITLE", 1727, 1729], ["US_DRIVER_LICENSE", 48206, 48207], ["ZIP_CODE", 28543, 28544]]
+      }
+     ],
+     "inputs": 547,
+     "job": "pii",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.764251,
+       "p95": 6.291485
+      },
+      "runtime": {
+       "p50": 6.708313,
+       "p95": 6.797001
+      }
+     },
+     "max_abs_delta": 0.04904663562774658,
+     "mode": "token_windows",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 32768,
+      "overflow": "window",
+      "window": [512, 255]
+     },
+     "passed": false,
+     "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48"
+    },
+    {
+     "agreement": 0.9506398537477148,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 27,
+     "disagreements": [
+      {
+       "id": "p0032",
+       "legacy_only": [["AGE", 14, 15]],
+       "reason": "spans",
+       "runtime_only": [["ZIP_CODE", 14, 15]]
+      },
+      {
+       "id": "p0082",
+       "legacy_only": [["IP_ADDRESS", 288, 290]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 289, 290], ["IP_ADDRESS", 288, 289]]
+      },
+      {
+       "id": "p0090",
+       "legacy_only": [["AGE", 149, 150]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0103",
+       "legacy_only": [["DATE_TIME", 352, 353]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 352, 353]]
+      },
+      {
+       "id": "p0140",
+       "legacy_only": [["GPE", 256, 257]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0159",
+       "legacy_only": [["CREDIT_CARD", 198, 199], ["ORGANIZATION", 191, 192]],
+       "reason": "spans",
+       "runtime_only": [["STREET_ADDRESS", 198, 199], ["US_DRIVER_LICENSE", 191, 192]]
+      },
+      {
+       "id": "p0192",
+       "legacy_only": [["AGE", 843, 844], ["CREDIT_CARD", 840, 841], ["CREDIT_CARD", 846, 847], ["IBAN_CODE", 764, 766], ["IBAN_CODE", 836, 837], ["IBAN_CODE", 838, 840], ["IBAN_CODE", 848, 853], ["IP_ADDRESS", 814, 815], ["IP_ADDRESS", 832, 835], ["IP_ADDRESS", 841, 842], ["IP_ADDRESS", 845, 846], ["IP_ADDRESS", 853, 854], ["PHONE_NUMBER", 824, 825], ["STREET_ADDRESS", 435, 437], ["STREET_ADDRESS", 712, 713], ["STREET_ADDRESS", 763, 764], ["TITLE", 770, 771], ["ZIP_CODE", 771, 772]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 763, 764], ["IBAN_CODE", 765, 766], ["IBAN_CODE", 833, 834], ["IBAN_CODE", 836, 842], ["IBAN_CODE", 843, 844], ["IBAN_CODE", 848, 854], ["IP_ADDRESS", 832, 833], ["IP_ADDRESS", 834, 835], ["IP_ADDRESS", 845, 847], ["STREET_ADDRESS", 398, 400], ["STREET_ADDRESS", 435, 438], ["STREET_ADDRESS", 824, 825], ["TITLE", 770, 772], ["US_DRIVER_LICENSE", 712, 713], ["ZIP_CODE", 764, 765]]
+      },
+      {
+       "id": "p0199",
+       "legacy_only": [["DATE_TIME", 207, 208]],
+       "reason": "spans",
+       "runtime_only": [["STREET_ADDRESS", 207, 208]]
+      },
+      {
+       "id": "p0234",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["PERSON", 9, 13]]
+      },
+      {
+       "id": "p0235",
+       "legacy_only": [["ORGANIZATION", 357, 358]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0247",
+       "legacy_only": [["DATE_TIME", 106, 107], ["IP_ADDRESS", 357, 358]],
+       "reason": "spans",
+       "runtime_only": [["US_DRIVER_LICENSE", 357, 358]]
+      },
+      {
+       "id": "p0252",
+       "legacy_only": [["STREET_ADDRESS", 179, 180]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0255",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["ORGANIZATION", 69, 70]]
+      },
+      {
+       "id": "p0294",
+       "legacy_only": [["IBAN_CODE", 759, 761], ["IBAN_CODE", 762, 764], ["IBAN_CODE", 765, 769], ["IBAN_CODE", 829, 830], ["IP_ADDRESS", 696, 697], ["IP_ADDRESS", 740, 742], ["IP_ADDRESS", 746, 747], ["IP_ADDRESS", 761, 762], ["IP_ADDRESS", 828, 829], ["STREET_ADDRESS", 257, 258]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 257, 258], ["IBAN_CODE", 759, 764], ["IBAN_CODE", 765, 768], ["IBAN_CODE", 828, 830], ["IP_ADDRESS", 740, 741], ["IP_ADDRESS", 745, 747], ["IP_ADDRESS", 768, 769], ["STREET_ADDRESS", 126, 127], ["US_SSN", 696, 697], ["US_SSN", 741, 742]]
+      },
+      {
+       "id": "p0304",
+       "legacy_only": [["AGE", 64, 65], ["AGE", 178, 180], ["TITLE", 152, 153]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 179, 180], ["PHONE_NUMBER", 178, 179], ["STREET_ADDRESS", 183, 184]]
+      },
+      {
+       "id": "p0374",
+       "legacy_only": [["ZIP_CODE", 23, 24]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0386",
+       "legacy_only": [["TITLE", 21, 22]],
+       "reason": "spans",
+       "runtime_only": []
+      },
+      {
+       "id": "p0455",
+       "legacy_only": [["EMAIL_ADDRESS", 112, 116], ["PERSON", 116, 119]],
+       "reason": "spans",
+       "runtime_only": [["EMAIL_ADDRESS", 112, 113], ["PERSON", 113, 119]]
+      },
+      {
+       "id": "p0457",
+       "legacy_only": [["IP_ADDRESS", 162, 166]],
+       "reason": "spans",
+       "runtime_only": [["IP_ADDRESS", 162, 165], ["US_DRIVER_LICENSE", 165, 166]]
+      },
+      {
+       "id": "e00",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["PERSON", 1, 2]]
+      },
+      {
+       "id": "l01",
+       "legacy_only": [["STREET_ADDRESS", 1422, 1425]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 1090, 1091], ["STREET_ADDRESS", 1423, 1425], ["STREET_ADDRESS", 1458, 1459]]
+      },
+      {
+       "id": "l02",
+       "legacy_only": [["CREDIT_CARD", 610, 611]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 610, 611]]
+      },
+      {
+       "id": "l03",
+       "legacy_only": [["DATE_TIME", 984, 985], ["GPE", 512, 514], ["IBAN_CODE", 819, 821], ["IBAN_CODE", 913, 914], ["IBAN_CODE", 929, 930], ["IBAN_CODE", 976, 977], ["IP_ADDRESS", 753, 755], ["IP_ADDRESS", 863, 864], ["IP_ADDRESS", 914, 915], ["STREET_ADDRESS", 971, 972], ["TITLE", 977, 978]],
+       "reason": "spans",
+       "runtime_only": [["EMAIL_ADDRESS", 512, 514], ["IBAN_CODE", 754, 755], ["IBAN_CODE", 820, 821], ["IBAN_CODE", 971, 972], ["IBAN_CODE", 976, 978], ["IP_ADDRESS", 753, 754], ["IP_ADDRESS", 913, 915], ["STREET_ADDRESS", 819, 820], ["STREET_ADDRESS", 863, 864], ["STREET_ADDRESS", 984, 985], ["US_DRIVER_LICENSE", 929, 930]]
+      },
+      {
+       "id": "l04",
+       "legacy_only": [["AGE", 1688, 1689], ["IP_ADDRESS", 1687, 1688], ["STREET_ADDRESS", 1605, 1606]],
+       "reason": "spans",
+       "runtime_only": [["AGE", 1687, 1689], ["DATE_TIME", 1605, 1606]]
+      },
+      {
+       "id": "l05",
+       "legacy_only": [["IBAN_CODE", 1553, 1554], ["ORGANIZATION", 2084, 2085], ["TITLE", 1519, 1520], ["TITLE", 1622, 1623]],
+       "reason": "spans",
+       "runtime_only": [["DATE_TIME", 1553, 1554], ["STREET_ADDRESS", 1519, 1520], ["STREET_ADDRESS", 2004, 2005]]
+      },
+      {
+       "id": "l07",
+       "legacy_only": [["CREDIT_CARD", 153, 155], ["PHONE_NUMBER", 155, 159]],
+       "reason": "spans",
+       "runtime_only": [["CREDIT_CARD", 153, 156], ["PHONE_NUMBER", 156, 159]]
+      },
+      {
+       "id": "l08",
+       "legacy_only": [["GPE", 788, 791]],
+       "reason": "spans",
+       "runtime_only": []
+      }
+     ],
+     "inputs": 547,
+     "job": "pii_truncate",
+     "latency_ms": {
+      "legacy": {
+       "p50": 2.747932,
+       "p95": 4.395567
+      },
+      "runtime": {
+       "p50": 6.635274,
+       "p95": 6.716283
+      }
+     },
+     "max_abs_delta": 0.04904663562774658,
+     "mode": "tokens",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": false,
+     "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48"
+    },
+    {
+     "agreement": 0.75,
+     "both_rejected": 0,
+     "compared": 64,
+     "disagreement_count": 16,
+     "disagreements": [
+      {
+       "id": "g00",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 373, 382]]
+      },
+      {
+       "id": "g08",
+       "legacy_only": [["HALLUCINATED", 63, 133]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 65, 133]]
+      },
+      {
+       "id": "g09",
+       "legacy_only": [["HALLUCINATED", 8, 56], ["HALLUCINATED", 73, 75], ["HALLUCINATED", 76, 366]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 8, 55], ["HALLUCINATED", 76, 106], ["HALLUCINATED", 108, 366]]
+      },
+      {
+       "id": "g15",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 4, 12]]
+      },
+      {
+       "id": "g16",
+       "legacy_only": [["HALLUCINATED", 66, 96], ["HALLUCINATED", 99, 137]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 66, 137]]
+      },
+      {
+       "id": "g21",
+       "legacy_only": [["HALLUCINATED", 771, 779]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 425, 426]]
+      },
+      {
+       "id": "g22",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 320, 325]]
+      },
+      {
+       "id": "g28",
+       "legacy_only": [["HALLUCINATED", 207, 215], ["HALLUCINATED", 359, 364], ["HALLUCINATED", 382, 417]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 390, 417]]
+      },
+      {
+       "id": "g32",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 325, 337]]
+      },
+      {
+       "id": "g33",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 338, 341]]
+      },
+      {
+       "id": "g36",
+       "legacy_only": [["HALLUCINATED", 197, 203]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 198, 203]]
+      },
+      {
+       "id": "g38",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 40, 41]]
+      },
+      {
+       "id": "g40",
+       "legacy_only": [["HALLUCINATED", 48, 63], ["HALLUCINATED", 64, 112]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 48, 113]]
+      },
+      {
+       "id": "g51",
+       "legacy_only": [["HALLUCINATED", 978, 1007]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 973, 1007]]
+      },
+      {
+       "id": "g53",
+       "legacy_only": [["HALLUCINATED", 7, 10], ["HALLUCINATED", 63, 205]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 69, 205]]
+      },
+      {
+       "id": "g55",
+       "legacy_only": [["HALLUCINATED", 202, 205], ["HALLUCINATED", 283, 284], ["HALLUCINATED", 290, 296], ["HALLUCINATED", 298, 317], ["HALLUCINATED", 319, 322], ["HALLUCINATED", 324, 329], ["HALLUCINATED", 330, 335]],
+       "reason": "spans",
+       "runtime_only": [["HALLUCINATED", 164, 173], ["HALLUCINATED", 189, 190], ["HALLUCINATED", 200, 201], ["HALLUCINATED", 202, 207], ["HALLUCINATED", 283, 286], ["HALLUCINATED", 290, 335]]
+      }
+     ],
+     "inputs": 64,
+     "job": "halu",
+     "latency_ms": {
+      "legacy": {
+       "p50": 8.703474,
+       "p95": 60.07235
+      },
+      "runtime": {
+       "p50": 11.2439,
+       "p95": 32.508345
+      }
+     },
+     "max_abs_delta": 0.02566838264465332,
+     "mode": "grounded",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Halu",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": false,
+     "revision": "ca87531211e414ac21c641b2faa8b8e21619de8f"
+    }
+   ],
+   "passed": false,
+   "thresholds": {
+    "label": 0.99,
+    "near_tie": 0.0,
+    "probability": Infinity,
+    "spans": 0.99
+   }
+  },
+  "cpu_vs_legacy_cpu": {
+   "baseline": "legacy",
+   "context": {
+    "device": "AMD EPYC 9575F, 16 pinned cores per side (runtime on node B 64-79, beside the interleaved A/B on 96-111)",
+    "legacy_commit": "61aa7eb2db0cfd9f00bfa06abd4944b3864cf38d",
+    "legacy_env": "Go 1.25 test binary of pkg/modelruntime/native, bindings built in golang:1.25-bookworm",
+    "legacy_recipe": "cpu (candle; Hazard and Halu through their operating point / grounded facades)",
+    "runtime_commit": "efb5ec4d71cf349d57ef16b200f86382e9eedcc5",
+    "runtime_env": "Python 3.12.3, torch 2.10.0+cpu, profile exact (FP32, oneDNN packed linears)",
+    "threads": 16
+   },
+   "device_class": "cpu",
+   "inputs_sha256": "7f23ef849f53270436f8b094aa963eb6f5a8ecae0a3120d3ef0239598caff4cd",
+   "jobs": [
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "domain",
+     "latency_ms": {
+      "legacy": {
+       "p50": 40.384987,
+       "p95": 213.646947
+      },
+      "runtime": {
+       "p50": 8.210568,
+       "p95": 25.185195
+      }
+     },
+     "max_abs_delta": 0.0001515711791991725,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "f6354f54adcf38770f635ad903be2b00577f6c11"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "guard",
+     "latency_ms": {
+      "legacy": {
+       "p50": 37.281508,
+       "p95": 210.521999
+      },
+      "runtime": {
+       "p50": 7.984122,
+       "p95": 23.609526
+      }
+     },
+     "max_abs_delta": 2.9398009033204664e-05,
+     "mode": "sequence_windows",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "window",
+      "window": [512, 255]
+     },
+     "passed": true,
+     "revision": "087f9e401012df839c83717b746967ac7aebfa3e"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "safety",
+     "latency_ms": {
+      "legacy": {
+       "p50": 38.051448,
+       "p95": 215.500156
+      },
+      "runtime": {
+       "p50": 8.07024,
+       "p95": 24.641967
+      }
+     },
+     "max_abs_delta": 3.4832360076952895e-05,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Safety",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "6e70e725a5f4d86da10f5be5e4dfd1da0358bb85"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "shield",
+     "latency_ms": {
+      "legacy": {
+       "p50": 34.345537,
+       "p95": 218.322018
+      },
+      "runtime": {
+       "p50": 7.562162,
+       "p95": 24.603325
+      }
+     },
+     "max_abs_delta": 4.622952346799991e-05,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Shield",
+     "near_ties": 1,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "a981a99eeb05a2859b88b5cee9af4352897ec4ec"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "factcheck",
+     "latency_ms": {
+      "legacy": {
+       "p50": 35.58463,
+       "p95": 232.021212
+      },
+      "runtime": {
+       "p50": 7.693959,
+       "p95": 23.460199
+      }
+     },
+     "max_abs_delta": 2.163727741241739e-05,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "99ede1aba1563e59e416f744d25b3f6b7e9d8274"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "feedback",
+     "latency_ms": {
+      "legacy": {
+       "p50": 36.267059,
+       "p95": 209.347372
+      },
+      "runtime": {
+       "p50": 7.436703,
+       "p95": 23.048015
+      }
+     },
+     "max_abs_delta": 9.661537094118877e-05,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "47434a7fd7c245c0c7c17564a000b3c56ccfec41"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "modality",
+     "latency_ms": {
+      "legacy": {
+       "p50": 32.569875,
+       "p95": 213.461511
+      },
+      "runtime": {
+       "p50": 7.710288,
+       "p95": 23.681483
+      }
+     },
+     "max_abs_delta": 5.778193206795734e-06,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Modality",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "5384b8997e3cbb79ca3a670e869577f4e4f4997e"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "hazard",
+     "latency_ms": {
+      "legacy": {
+       "p50": 33.926899,
+       "p95": 213.884898
+      },
+      "runtime": {
+       "p50": 9.564222,
+       "p95": 28.674054
+      }
+     },
+     "max_abs_delta": 9.568565368600623e-06,
+     "mode": "operating_point",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Hazard",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 32768,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "pii",
+     "latency_ms": {
+      "legacy": {
+       "p50": 34.589487,
+       "p95": 211.875789
+      },
+      "runtime": {
+       "p50": 10.474754,
+       "p95": 30.108026
+      }
+     },
+     "max_abs_delta": 9.189390411379339e-05,
+     "mode": "token_windows",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 32768,
+      "overflow": "window",
+      "window": [512, 255]
+     },
+     "passed": true,
+     "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "pii_truncate",
+     "latency_ms": {
+      "legacy": {
+       "p50": 82.450085,
+       "p95": 244.355667
+      },
+      "runtime": {
+       "p50": 10.057221,
+       "p95": 27.162665
+      }
+     },
+     "max_abs_delta": 7.235566772462176e-05,
+     "mode": "tokens",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 64,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 64,
+     "job": "halu",
+     "latency_ms": {
+      "legacy": {
+       "p50": 1424.365538,
+       "p95": 38738.255569
+      },
+      "runtime": {
+       "p50": 110.375244,
+       "p95": 2808.694282
+      }
+     },
+     "max_abs_delta": 4.387160934449241e-05,
+     "mode": "grounded",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Halu",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "ca87531211e414ac21c641b2faa8b8e21619de8f"
+    }
+   ],
+   "passed": true,
+   "thresholds": {
+    "label": 1.0,
+    "near_tie": 0.001,
+    "probability": 0.001,
+    "spans": 0.995
+   }
+  },
+  "rocm_vs_legacy_amd": {
+   "baseline": "legacy",
+   "context": {
+    "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
+    "legacy_commit": "61aa7eb2db0cfd9f00bfa06abd4944b3864cf38d",
+    "legacy_env": "Dockerfile.extproc-rocm at 61aa7eb2d: ONNX Runtime MIGraphX / ROCm EP (config/recipes/vela-amd)",
+    "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764",
+    "runtime_env": "the router ROCm image stage on python 3.12-slim-bookworm, as uid 65532: stack B uid 65532 python 3.12.14 torch 2.12.0+rocm7.2 hip 7.2.53211 triton 3.7.0 fla-core 0.5.2 numpy 2.5.3 tokenizers 0.23.2"
+   },
+   "device_class": "rocm",
+   "inputs_sha256": "8d5a8a550efa8ce709922b3e55189504c6ef55c32f0bf91e53eee5971e09b9ce",
+   "jobs": [
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "domain",
+     "latency_ms": {
+      "legacy": {
+       "p50": 154.058433,
+       "p95": 155.905885
+      },
+      "runtime": {
+       "p50": 1.883352,
+       "p95": 3.50689
+      }
+     },
+     "max_abs_delta": 0.00018008482093812006,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "f6354f54adcf38770f635ad903be2b00577f6c11"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "guard",
+     "latency_ms": {
+      "legacy": {
+       "p50": 245.813985,
+       "p95": 258.071691
+      },
+      "runtime": {
+       "p50": 1.875562,
+       "p95": 3.533429
+      }
+     },
+     "max_abs_delta": 4.677909011840953e-05,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "087f9e401012df839c83717b746967ac7aebfa3e"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "safety",
+     "latency_ms": {
+      "legacy": {
+       "p50": 155.259382,
+       "p95": 163.997636
+      },
+      "runtime": {
+       "p50": 1.820844,
+       "p95": 3.50541
+      }
+     },
+     "max_abs_delta": 3.5212045288446348e-06,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Safety",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "6e70e725a5f4d86da10f5be5e4dfd1da0358bb85"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "factcheck",
+     "latency_ms": {
+      "legacy": {
+       "p50": 158.243533,
+       "p95": 163.860647
+      },
+      "runtime": {
+       "p50": 1.817064,
+       "p95": 3.478301
+      }
+     },
+     "max_abs_delta": 0.00011330739425663428,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "99ede1aba1563e59e416f744d25b3f6b7e9d8274"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "feedback",
+     "latency_ms": {
+      "legacy": {
+       "p50": 157.93381,
+       "p95": 164.111395
+      },
+      "runtime": {
+       "p50": 1.888222,
+       "p95": 3.547699
+      }
+     },
+     "max_abs_delta": 0.00011458729789731725,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "47434a7fd7c245c0c7c17564a000b3c56ccfec41"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "modality",
+     "latency_ms": {
+      "legacy": {
+       "p50": 158.560985,
+       "p95": 167.204505
+      },
+      "runtime": {
+       "p50": 1.825884,
+       "p95": 3.498309
+      }
+     },
+     "max_abs_delta": 5.454315624237038e-06,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Modality",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "5384b8997e3cbb79ca3a670e869577f4e4f4997e"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "hazard",
+     "latency_ms": {
+      "legacy": {
+       "p50": 13.379062,
+       "p95": 14.126868
+      },
+      "runtime": {
+       "p50": 1.840163,
+       "p95": 3.531949
+      }
+     },
+     "max_abs_delta": 2.5059732055576767e-06,
+     "mode": "operating_point",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Hazard",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 32768,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d"
+    },
+    {
+     "agreement": 0.9889908256880734,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 6,
+     "disagreements": [
+      {
+       "id": "p0103",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["PHONE_NUMBER", 273, 274]]
+      },
+      {
+       "id": "p0246",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["STREET_ADDRESS", 221, 222]]
+      },
+      {
+       "id": "l01",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["PHONE_NUMBER", 2992, 2993], ["PHONE_NUMBER", 2996, 2997]]
+      },
+      {
+       "id": "l04",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["PHONE_NUMBER", 3250, 3251]]
+      },
+      {
+       "id": "l06",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["ORGANIZATION", 8126, 8127]]
+      },
+      {
+       "id": "l07",
+       "legacy_only": [],
+       "reason": "spans",
+       "runtime_only": [["ORGANIZATION", 14813, 14814], ["PHONE_NUMBER", 4738, 4739], ["PHONE_NUMBER", 5092, 5093], ["PHONE_NUMBER", 16927, 16928]]
+      }
+     ],
+     "inputs": 547,
+     "job": "pii",
+     "latency_ms": {
+      "legacy": {
+       "p50": 134.032646,
+       "p95": 136.054453
+      },
+      "runtime": {
+       "p50": 1.933942,
+       "p95": 3.699465
+      }
+     },
+     "max_abs_delta": 2.4442363662724453e-05,
+     "mode": "tokens",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48"
+    }
+   ],
+   "passed": true,
+   "thresholds": {
+    "label": 0.995,
+    "near_tie": 0.001,
+    "probability": 0.02,
+    "spans": 0.98
+   }
+  },
+  "rocm_vs_legacy_cpu": {
+   "baseline": "legacy",
+   "context": {
+    "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
+    "legacy_commit": "61aa7eb2db0cfd9f00bfa06abd4944b3864cf38d",
+    "legacy_device": "AMD EPYC 9575F, 16 pinned cores",
+    "legacy_env": "Go 1.25 test binary of pkg/modelruntime/native, bindings built in golang:1.25-bookworm",
+    "legacy_recipe": "cpu (candle; Hazard and Halu through their operating point / grounded facades)",
+    "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764",
+    "runtime_env": "the router ROCm image stage on python 3.12-slim-bookworm, as uid 65532: stack B uid 65532 python 3.12.14 torch 2.12.0+rocm7.2 hip 7.2.53211 triton 3.7.0 fla-core 0.5.2 numpy 2.5.3 tokenizers 0.23.2"
+   },
+   "device_class": "rocm",
+   "inputs_sha256": "7f23ef849f53270436f8b094aa963eb6f5a8ecae0a3120d3ef0239598caff4cd",
+   "jobs": [
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "domain",
+     "latency_ms": {
+      "legacy": {
+       "p50": 40.384987,
+       "p95": 213.646947
+      },
+      "runtime": {
+       "p50": 1.889532,
+       "p95": 3.529929
+      }
+     },
+     "max_abs_delta": 0.00035768482093812004,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "f6354f54adcf38770f635ad903be2b00577f6c11"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "guard",
+     "latency_ms": {
+      "legacy": {
+       "p50": 37.281508,
+       "p95": 210.521999
+      },
+      "runtime": {
+       "p50": 1.902252,
+       "p95": 3.558928
+      }
+     },
+     "max_abs_delta": 4.9800184707626816e-05,
+     "mode": "sequence_windows",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "window",
+      "window": [512, 255]
+     },
+     "passed": true,
+     "revision": "087f9e401012df839c83717b746967ac7aebfa3e"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "safety",
+     "latency_ms": {
+      "legacy": {
+       "p50": 38.051448,
+       "p95": 215.500156
+      },
+      "runtime": {
+       "p50": 1.794704,
+       "p95": 3.391352
+      }
+     },
+     "max_abs_delta": 3.549291233062579e-05,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Safety",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "6e70e725a5f4d86da10f5be5e4dfd1da0358bb85"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "shield",
+     "latency_ms": {
+      "legacy": {
+       "p50": 34.345537,
+       "p95": 218.322018
+      },
+      "runtime": {
+       "p50": 1.820094,
+       "p95": 3.482471
+      }
+     },
+     "max_abs_delta": 4.6527546691876864e-05,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Shield",
+     "near_ties": 1,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "a981a99eeb05a2859b88b5cee9af4352897ec4ec"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "factcheck",
+     "latency_ms": {
+      "legacy": {
+       "p50": 35.58463,
+       "p95": 232.021212
+      },
+      "runtime": {
+       "p50": 1.815998,
+       "p95": 3.486361
+      }
+     },
+     "max_abs_delta": 7.062739425656162e-05,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "99ede1aba1563e59e416f744d25b3f6b7e9d8274"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "feedback",
+     "latency_ms": {
+      "legacy": {
+       "p50": 36.267059,
+       "p95": 209.347372
+      },
+      "runtime": {
+       "p50": 1.880947,
+       "p95": 3.638168
+      }
+     },
+     "max_abs_delta": 9.201277278900188e-05,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "47434a7fd7c245c0c7c17564a000b3c56ccfec41"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "modality",
+     "latency_ms": {
+      "legacy": {
+       "p50": 32.569875,
+       "p95": 213.461511
+      },
+      "runtime": {
+       "p50": 1.839159,
+       "p95": 3.518074
+      }
+     },
+     "max_abs_delta": 8.876766204868325e-06,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Modality",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "5384b8997e3cbb79ca3a670e869577f4e4f4997e"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "hazard",
+     "latency_ms": {
+      "legacy": {
+       "p50": 33.926899,
+       "p95": 213.884898
+      },
+      "runtime": {
+       "p50": 1.834461,
+       "p95": 3.504186
+      }
+     },
+     "max_abs_delta": 1.028382110590531e-05,
+     "mode": "operating_point",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Hazard",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 32768,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": true,
+     "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "pii",
+     "latency_ms": {
+      "legacy": {
+       "p50": 34.589487,
+       "p95": 211.875789
+      },
+      "runtime": {
+       "p50": 1.953877,
+       "p95": 3.74336
+      }
+     },
+     "max_abs_delta": 0.00015336615554806254,
+     "mode": "token_windows",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 32768,
+      "overflow": "window",
+      "window": [512, 255]
+     },
+     "passed": true,
+     "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 547,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 547,
+     "job": "pii_truncate",
+     "latency_ms": {
+      "legacy": {
+       "p50": 82.450085,
+       "p95": 244.355667
+      },
+      "runtime": {
+       "p50": 1.922719,
+       "p95": 3.660964
+      }
+     },
+     "max_abs_delta": 6.28000785827254e-05,
+     "mode": "tokens",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 512,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48"
+    },
+    {
+     "agreement": 1.0,
+     "both_rejected": 0,
+     "compared": 64,
+     "disagreement_count": 0,
+     "disagreements": [],
+     "inputs": 64,
+     "job": "halu",
+     "latency_ms": {
+      "legacy": {
+       "p50": 1424.365538,
+       "p95": 38738.255569
+      },
+      "runtime": {
+       "p50": 7.721229,
+       "p95": 56.147697
+      }
+     },
+     "max_abs_delta": 7.24170526122947e-05,
+     "mode": "grounded",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Halu",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "truncate",
+      "window": null
+     },
+     "passed": true,
+     "revision": "ca87531211e414ac21c641b2faa8b8e21619de8f"
+    }
+   ],
+   "passed": true,
+   "thresholds": {
+    "label": 0.995,
+    "near_tie": 0.001,
+    "probability": 0.02,
+    "spans": 0.98
+   }
+  },
+  "rocm_vs_legacy_ort_shield": {
+   "baseline": "legacy",
+   "context": {
+    "device": "AMD Instinct MI325X (one GPU), host threads on 8 pinned EPYC 9575F cores",
+    "legacy_commit": "61aa7eb2db0cfd9f00bfa06abd4944b3864cf38d",
+    "legacy_env": "Dockerfile.extproc-rocm at 61aa7eb2d: ONNX Runtime MIGraphX / ROCm EP (config/recipes/vela-amd)",
+    "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764",
+    "runtime_env": "the router ROCm image stage on python 3.12-slim-bookworm, as uid 65532: stack B uid 65532 python 3.12.14 torch 2.12.0+rocm7.2 hip 7.2.53211 triton 3.7.0 fla-core 0.5.2 numpy 2.5.3 tokenizers 0.23.2"
+   },
+   "device_class": "rocm",
+   "inputs_sha256": "f7475ac802d785e55a5dedec3e9822966905d55370fb24bb9ad7e6334798e22f",
+   "jobs": [
+    {
+     "agreement": 0.9779816513761468,
+     "both_rejected": 2,
+     "compared": 545,
+     "disagreement_count": 351,
+     "disagreements": [
+      {
+       "delta": 0.020766551648101816,
+       "id": "p0000",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05280907810411453,
+       "id": "p0003",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04483379269427109,
+       "id": "p0004",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05746132191680908,
+       "id": "p0005",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.07711632588000489,
+       "id": "p0006",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.08795776555485535,
+       "id": "p0007",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.07408183553955078,
+       "id": "p0008",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.08962656718749995,
+       "id": "p0009",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.06704747699391174,
+       "id": "p0010",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0675170177312851,
+       "id": "p0011",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03168958149093626,
+       "id": "p0016",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04069942617263789,
+       "id": "p0017",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.10395306340148924,
+       "id": "p0019",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.022366064231872596,
+       "id": "p0020",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.027829833829047395,
+       "id": "p0021",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03527341360168457,
+       "id": "p0023",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04037779338182831,
+       "id": "p0024",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.06241245547004699,
+       "id": "p0025",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.09048605284729005,
+       "id": "p0026",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03333284002501793,
+       "id": "p0027",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05721865748119354,
+       "id": "p0029",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.023303776818847655,
+       "id": "p0030",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05279417162856483,
+       "id": "p0031",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.028747917714691207,
+       "id": "p0032",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.07190235482354737,
+       "id": "p0033",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05814140783401489,
+       "id": "p0034",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02319198893524166,
+       "id": "p0039",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.025486534822845464,
+       "id": "p0040",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02304894410987854,
+       "id": "p0042",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.024054499857330325,
+       "id": "p0044",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02749542946777339,
+       "id": "p0049",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03151423951932182,
+       "id": "p0054",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02887285143753049,
+       "id": "p0056",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.021122321846771208,
+       "id": "p0059",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.025757781235675813,
+       "id": "p0060",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.025922360269470257,
+       "id": "p0061",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.028153592976118087,
+       "id": "p0063",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.027328377166123963,
+       "id": "p0066",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.029704755722045895,
+       "id": "p0067",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02737964074369812,
+       "id": "p0070",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02566419901679039,
+       "id": "p0073",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04030306786727911,
+       "id": "p0075",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.022356001951206208,
+       "id": "p0076",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05511941385079193,
+       "id": "p0077",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.024961926727294914,
+       "id": "p0078",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.06699991217269896,
+       "id": "p0079",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04900386709993744,
+       "id": "p0080",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.033482390930628964,
+       "id": "p0083",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.022317112042236298,
+       "id": "p0084",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.030373530636596646,
+       "id": "p0087",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.034376596961498265,
+       "id": "p0089",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03851892633362389,
+       "id": "p0090",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.028150563956485748,
+       "id": "p0091",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.12750590387344363,
+       "id": "p0093",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03193203453313446,
+       "id": "p0094",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.025067841958536147,
+       "id": "p0095",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.022769933549341204,
+       "id": "p0096",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05038283742969131,
+       "id": "p0098",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.021425849060821567,
+       "id": "p0099",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03648396134490972,
+       "id": "p0104",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.366629706921463,
+       "id": "p0105",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.06240986318664554,
+       "id": "p0106",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.020216779991912848,
+       "id": "p0110",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.043854412810516386,
+       "id": "p0111",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03468769686325068,
+       "id": "p0112",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0497794677539215,
+       "id": "p0113",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.028229048265105056,
+       "id": "p0115",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.026102036231219483,
+       "id": "p0116",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.11474310919525149,
+       "id": "p0117",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02583253227752691,
+       "id": "p0118",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05217117314865116,
+       "id": "p0120",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03351148870031395,
+       "id": "p0121",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.033126785430109024,
+       "id": "p0123",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.025146743862915044,
+       "id": "p0124",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.024139764100647,
+       "id": "p0126",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.09475249143890385,
+       "id": "p0127",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.07384455124130251,
+       "id": "p0130",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.029252713417816212,
+       "id": "p0131",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.022334682505798287,
+       "id": "p0132",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.06069140135142517,
+       "id": "p0135",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02003862402578697,
+       "id": "p0136",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03140941823514366,
+       "id": "p0137",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.022273106085967997,
+       "id": "p0141",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.12256247508644104,
+       "id": "p0143",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03556311425582881,
+       "id": "p0146",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02296947872696762,
+       "id": "p0147",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.046008112061615036,
+       "id": "p0149",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.022817428536682116,
+       "id": "p0150",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04175829072123413,
+       "id": "p0151",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.035144274147338894,
+       "id": "p0153",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.025462175442504842,
+       "id": "p0154",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0279350344439373,
+       "id": "p0155",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02376764736099246,
+       "id": "p0157",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.049912873988189665,
+       "id": "p0158",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.023636902783712388,
+       "id": "p0160",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.027054362174827574,
+       "id": "p0161",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.06791589188766478,
+       "id": "p0162",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02663434114627838,
+       "id": "p0163",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.024624828720087432,
+       "id": "p0166",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02465152897415157,
+       "id": "p0168",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03363215454345703,
+       "id": "p0172",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.18763888114303584,
+       "id": "p0174",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.029168743653106732,
+       "id": "p0175",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.18184810331466675,
+       "id": "p0177",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.07067400795579147,
+       "id": "p0178",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.055759217702484154,
+       "id": "p0180",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05580675699966431,
+       "id": "p0182",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.029062652004241962,
+       "id": "p0184",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.027217309927341463,
+       "id": "p0185",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.023657536867040634,
+       "id": "p0186",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03221416522293086,
+       "id": "p0187",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0266826109608459,
+       "id": "p0188",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03904952842559817,
+       "id": "p0189",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0471685059126091,
+       "id": "p0190",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.1296158019538879,
+       "id": "p0191",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.046782983841400144,
+       "id": "p0192",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.06112730287216184,
+       "id": "p0193",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.047808899459838905,
+       "id": "p0196",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.25759441012252804,
+       "id": "p0198",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.028526963762969926,
+       "id": "p0200",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03326603041891861,
+       "id": "p0201",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02775418965836754,
+       "id": "p0203",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.060082909156196594,
+       "id": "p0204",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02161011349135208,
+       "id": "p0205",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.032111771806123734,
+       "id": "p0207",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0239605553941473,
+       "id": "p0208",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04112827745880132,
+       "id": "p0212",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05332541528762813,
+       "id": "p0213",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.037598522288513236,
+       "id": "p0219",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.025657087891382217,
+       "id": "p0220",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.026496214823913622,
+       "id": "p0221",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02898681579093933,
+       "id": "p0223",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.035825975237274155,
+       "id": "p0225",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.027295138188573837,
+       "id": "p0226",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.10273555206863405,
+       "id": "p0227",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.09856801091512299,
+       "id": "p0228",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05317234996917719,
+       "id": "p0230",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.17245620906478887,
+       "id": "p0237",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.027262721702832032,
+       "id": "p0238",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04468821361757851,
+       "id": "p0239",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04069651099566955,
+       "id": "p0243",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02544019573745726,
+       "id": "p0244",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.08787862797253036,
+       "id": "p0245",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03575583822097783,
+       "id": "p0246",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04261842371597291,
+       "id": "p0250",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02817016615442276,
+       "id": "p0252",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.030565268311151503,
+       "id": "p0253",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.028313752070617704,
+       "id": "p0254",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0427157841178894,
+       "id": "p0255",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.15274978752772522,
+       "id": "p0256",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.026803926406860357,
+       "id": "p0257",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.026852107512664758,
+       "id": "p0258",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04666372395175934,
+       "id": "p0259",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05364978660980224,
+       "id": "p0261",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03141945051906967,
+       "id": "p0266",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04058504183273315,
+       "id": "p0267",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.034850117287445026,
+       "id": "p0270",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.023015653662109337,
+       "id": "p0271",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.042327040775371555,
+       "id": "p0272",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.022850610935785293,
+       "id": "p0273",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0724180345481873,
+       "id": "p0274",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.027181799246368432,
+       "id": "p0275",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02304146994933319,
+       "id": "p0276",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.023120846427154507,
+       "id": "p0277",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.08985716089706419,
+       "id": "p0279",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.041087684483489983,
+       "id": "p0282",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0519470178020668,
+       "id": "p0283",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02489097406286621,
+       "id": "p0284",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.06271470379667664,
+       "id": "p0285",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02514001561375427,
+       "id": "p0291",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03495898631322861,
+       "id": "p0299",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04163029495716476,
+       "id": "p0300",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.050819022879028286,
+       "id": "p0303",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.025825307884601592,
+       "id": "p0307",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0405399816833496,
+       "id": "p0308",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.028090201559553146,
+       "id": "p0312",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03906930165023803,
+       "id": "p0313",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02013766886062618,
+       "id": "p0315",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.3517037050941467,
+       "id": "p0317",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.1388863314718628,
+       "id": "p0318",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.029393070345985414,
+       "id": "p0319",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04190018369674686,
+       "id": "p0320",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.020255026674346976,
+       "id": "p0321",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.14597404303470612,
+       "id": "p0322",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.024266044781045912,
+       "id": "p0323",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.39691603211959836,
+       "id": "p0325",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.043962758424652096,
+       "id": "p0327",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04960488922485351,
+       "id": "p0328",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.26847136756343837,
+       "id": "p0329",
+       "near_tie": false,
+       "reason": "label"
+      },
+      {
+       "delta": 0.26847136756343837,
+       "id": "p0329",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.08880843232818603,
+       "id": "p0330",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.16424917501358033,
+       "id": "p0331",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.022188427631988472,
+       "id": "p0333",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.15052869915637207,
+       "id": "p0334",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03447707429580693,
+       "id": "p0335",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.06010998538969803,
+       "id": "p0336",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.022907901362314607,
+       "id": "p0337",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05953374600920792,
+       "id": "p0339",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.07063708488704681,
+       "id": "p0340",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.050433457281494176,
+       "id": "p0341",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02317612863104057,
+       "id": "p0343",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.035239534559051516,
+       "id": "p0345",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.07896154708526615,
+       "id": "p0347",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0984875778683014,
+       "id": "p0348",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.025796461866760254,
+       "id": "p0351",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.12227320803459167,
+       "id": "p0353",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.051752516997882844,
+       "id": "p0354",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.054376194523620636,
+       "id": "p0355",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.22588375728973387,
+       "id": "p0357",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.035533661098213196,
+       "id": "p0358",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.027284451330348205,
+       "id": "p0359",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0875586345868187,
+       "id": "p0361",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03971001531524658,
+       "id": "p0362",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03046968418914795,
+       "id": "p0365",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.028347332369232148,
+       "id": "p0368",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.1770721503544693,
+       "id": "p0369",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04082117472001076,
+       "id": "p0370",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.025590342168426483,
+       "id": "p0371",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.031134265768894196,
+       "id": "p0375",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.033735071226161956,
+       "id": "p0376",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02416068546981809,
+       "id": "p0377",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.020784433529663082,
+       "id": "p0378",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.059004347330341336,
+       "id": "p0380",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05667221240295406,
+       "id": "p0382",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.06153004173561096,
+       "id": "p0385",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.07751137295486454,
+       "id": "p0386",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.027137865910339398,
+       "id": "p0391",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.021971330500030528,
+       "id": "p0393",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.06168979015655518,
+       "id": "p0395",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03675538686604691,
+       "id": "p0396",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.2836353378421783,
+       "id": "p0397",
+       "near_tie": false,
+       "reason": "label"
+      },
+      {
+       "delta": 0.2836353378421783,
+       "id": "p0397",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.15372952069091794,
+       "id": "p0398",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.023311437673950164,
+       "id": "p0400",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04176879403182987,
+       "id": "p0401",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.10759658073959355,
+       "id": "p0402",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04265477650695801,
+       "id": "p0405",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.09902058259517288,
+       "id": "p0406",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.06651271165097046,
+       "id": "p0407",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03152763982999649,
+       "id": "p0408",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.09643403829853057,
+       "id": "p0409",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.09781410888650513,
+       "id": "p0410",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05408521141370392,
+       "id": "p0411",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.052424432947692834,
+       "id": "p0412",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.09195881680801388,
+       "id": "p0413",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05534387281771011,
+       "id": "p0414",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.09351201890522766,
+       "id": "p0415",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.09730469919853213,
+       "id": "p0416",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.18363222688804626,
+       "id": "p0417",
+       "near_tie": false,
+       "reason": "label"
+      },
+      {
+       "delta": 0.18363222688804626,
+       "id": "p0417",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03338966971893309,
+       "id": "p0418",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.1731336104734802,
+       "id": "p0419",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05088158138090133,
+       "id": "p0420",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03477752062499995,
+       "id": "p0421",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02163453461837772,
+       "id": "p0423",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02336013371276857,
+       "id": "p0426",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.038296419658195496,
+       "id": "p0427",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03130830635907631,
+       "id": "p0429",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02133166571289058,
+       "id": "p0430",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.024388342728935242,
+       "id": "p0434",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03454890150832481,
+       "id": "p0435",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.020400702039001465,
+       "id": "p0439",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.026611932282975006,
+       "id": "p0440",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03527378788986202,
+       "id": "p0441",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.035635251640211106,
+       "id": "p0442",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04232371193557738,
+       "id": "p0443",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.026180510088310238,
+       "id": "p0445",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05660258028453827,
+       "id": "p0446",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.073320619352211,
+       "id": "p0447",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.20346807735856628,
+       "id": "p0448",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.1035935005896759,
+       "id": "p0450",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0773221232220459,
+       "id": "p0451",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04949689191928863,
+       "id": "p0453",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.08846158183288577,
+       "id": "p0454",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05634023386938248,
+       "id": "p0456",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05333055753744507,
+       "id": "p0457",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.15798693857084656,
+       "id": "p0458",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.37274464640769955,
+       "id": "p0459",
+       "near_tie": false,
+       "reason": "label"
+      },
+      {
+       "delta": 0.37274464640769955,
+       "id": "p0459",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.16227565279354095,
+       "id": "p0460",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04410070616149897,
+       "id": "p0461",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.19229507766700743,
+       "id": "p0463",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.07032400300506592,
+       "id": "p0464",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.3663892549909973,
+       "id": "p0465",
+       "near_tie": false,
+       "reason": "label"
+      },
+      {
+       "delta": 0.3663892549909973,
+       "id": "p0465",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.2182707505809021,
+       "id": "p0466",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.5383700765290833,
+       "id": "p0467",
+       "near_tie": false,
+       "reason": "label"
+      },
+      {
+       "delta": 0.5383700765290833,
+       "id": "p0467",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.05356945716781614,
+       "id": "p0468",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.1293126971221924,
+       "id": "p0469",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.13014585259094236,
+       "id": "p0470",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0510805139177742,
+       "id": "p0471",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04587107917495725,
+       "id": "p0472",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.806571880725193,
+       "id": "p0473",
+       "near_tie": false,
+       "reason": "label"
+      },
+      {
+       "delta": 0.806571880725193,
+       "id": "p0473",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.14843144211196901,
+       "id": "p0474",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.12287853465435028,
+       "id": "p0475",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.08180846131591801,
+       "id": "p0476",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.1363545164364624,
+       "id": "p0477",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.048956918433380125,
+       "id": "p0478",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.33446725880599976,
+       "id": "p0479",
+       "near_tie": false,
+       "reason": "label"
+      },
+      {
+       "delta": 0.33446725880599976,
+       "id": "p0479",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.4574062120181275,
+       "id": "p0480",
+       "near_tie": false,
+       "reason": "label"
+      },
+      {
+       "delta": 0.4574062120181275,
+       "id": "p0480",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.23919158201225282,
+       "id": "p0481",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.5826193051480102,
+       "id": "p0482",
+       "near_tie": false,
+       "reason": "label"
+      },
+      {
+       "delta": 0.5826193051480102,
+       "id": "p0482",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.14294184518356323,
+       "id": "p0483",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.23304144417533876,
+       "id": "p0484",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.020410295510101317,
+       "id": "p0485",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.020808511601257296,
+       "id": "p0486",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04016151625759125,
+       "id": "p0487",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.044929030620727506,
+       "id": "p0488",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0200963600694275,
+       "id": "p0491",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03401726721108246,
+       "id": "p0495",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.028861550514671326,
+       "id": "p0496",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02065796798749542,
+       "id": "p0497",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.040333696937366485,
+       "id": "p0499",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0231414829614048,
+       "id": "p0500",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.021894096031646715,
+       "id": "p0501",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02110936392003441,
+       "id": "p0503",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.021422841764601706,
+       "id": "p0504",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.020385385016174262,
+       "id": "p0506",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.038042996530673216,
+       "id": "p0507",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.07654388163604742,
+       "id": "p0508",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.046615879540740965,
+       "id": "p0510",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04645314809412766,
+       "id": "p0511",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.028226720032449724,
+       "id": "p0513",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.029342650171842576,
+       "id": "p0514",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.038419588201904276,
+       "id": "p0516",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.033431085041368484,
+       "id": "p0518",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02696045028228755,
+       "id": "p0519",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.06974918877182001,
+       "id": "p0520",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.025816095127340316,
+       "id": "p0523",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.020502867018737825,
+       "id": "p0524",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04965900874023432,
+       "id": "p0525",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.02120890108871465,
+       "id": "p0528",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04744619238271141,
+       "id": "p0529",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.04988844138259885,
+       "id": "e01",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03677028889709477,
+       "id": "e02",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03740156872649574,
+       "id": "e03",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.03927610254745484,
+       "id": "l00",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.33006674334617614,
+       "id": "l01",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.215127673646698,
+       "id": "l02",
+       "near_tie": false,
+       "reason": "label"
+      },
+      {
+       "delta": 0.215127673646698,
+       "id": "l02",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.5442629284986877,
+       "id": "l03",
+       "near_tie": false,
+       "reason": "label"
+      },
+      {
+       "delta": 0.5442629284986877,
+       "id": "l03",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.32818384857406613,
+       "id": "l04",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.3091748011817932,
+       "id": "l05",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.027432978417823793,
+       "id": "l06",
+       "reason": "probability"
+      },
+      {
+       "delta": 0.0948135739486694,
+       "id": "l07",
+       "reason": "probability"
+      }
+     ],
+     "inputs": 547,
+     "job": "shield",
+     "latency_ms": {
+      "legacy": {
+       "p50": 151.21803,
+       "p95": 157.224368
+      },
+      "runtime": {
+       "p50": 1.802264,
+       "p95": 3.442511
+      }
+     },
+     "max_abs_delta": 0.806571880725193,
+     "mode": "sequence",
+     "model": "vllm-sr/Vela-1.0-Encoder-307M-Shield",
+     "near_ties": 0,
+     "options": {
+      "max_tokens": 8192,
+      "overflow": "reject",
+      "window": null
+     },
+     "passed": false,
+     "revision": "a981a99eeb05a2859b88b5cee9af4352897ec4ec"
+    }
+   ],
+   "note": "Not a parity reference: Shield is outside config/recipes/vela-amd, and its package's onnx/model.onnx answers differently from its model.safetensors checkpoint (legacy ORT against legacy candle on the same 545 inputs: 14 label flips, max |dp| 0.85). The runtime and candle serve the checkpoint and agree (cpu_vs_legacy_cpu, rocm_vs_legacy_cpu).",
+   "passed": false,
+   "thresholds": {
+    "label": 0.995,
+    "near_tie": 0.001,
+    "probability": 0.02,
+    "spans": 0.98
+   }
+  }
+ },
+ "rocm_cross_process_stack_b": {
+  "context": {
+   "method": "separate processes (fresh containers) answer the same inputs; every other process is compared with the first, answer by answer (canonical JSON)",
+   "runtime_commits": ["efb5ec4d71cf349d57ef16b200f86382e9eedcc5", "35ff3a8a5c914b38d1746b0de987b52691396764"]
+  },
+  "panels": {
+   "amd_recipe": {
+    "answers": 4376,
+    "identical": true,
+    "processes": 7,
+    "runs": "the five A/B rounds and the parity runs at efb5ec4d7 and 35ff3a8a5"
+   },
+   "cpu_recipe": {
+    "answers": 5534,
+    "identical": true,
+    "processes": 3,
+    "runs": "the parity runs at efb5ec4d7 and 35ff3a8a5, and one with an empty Triton cache"
+   },
+   "shield": {
+    "answers": 547,
+    "identical": true,
+    "processes": 3,
+    "runs": "the parity runs at efb5ec4d7 and 35ff3a8a5, and one with an empty Triton cache"
+   }
+  }
+ },
+ "rocm_golden_answers": {
+  "device_class": "rocm",
+  "file": "vllm_srun/registry/golden_answers_vela1.json",
+  "models": ["Qwen/Qwen3-Embedding-0.6B", "vllm-sr/Vela-1.0-Encoder-307M-Domain", "vllm-sr/Vela-1.0-Encoder-307M-Embedding", "vllm-sr/Vela-1.0-Encoder-307M-FactCheck", "vllm-sr/Vela-1.0-Encoder-307M-Feedback", "vllm-sr/Vela-1.0-Encoder-307M-Guard", "vllm-sr/Vela-1.0-Encoder-307M-Halu", "vllm-sr/Vela-1.0-Encoder-307M-Hazard", "vllm-sr/Vela-1.0-Encoder-307M-Modality", "vllm-sr/Vela-1.0-Encoder-307M-PII", "vllm-sr/Vela-1.0-Encoder-307M-Reranker", "vllm-sr/Vela-1.0-Encoder-307M-Safety", "vllm-sr/Vela-1.0-Encoder-307M-Shield"],
+  "note": "tools/golden_answers.py --family task_heads --device rocm:0, one fresh process per run; every recorded value is byte-identical, so the file is unchanged",
+  "re_recorded": false,
+  "runs": [
+   {
+    "byte_identical_to_the_file": true,
+    "stack": "the router's ROCm image stack, empty Triton cache"
+   },
+   {
+    "byte_identical_to_the_file": true,
+    "stack": "the router's ROCm image stack"
+   },
+   {
+    "byte_identical_to_the_file": true,
+    "stack": "the router's ROCm image stack"
+   },
+   {
+    "byte_identical_to_the_file": true,
+    "stack": "the packages' release image"
+   }
+  ],
+  "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764"
+ },
+ "rocm_router_image": {
+  "golden_answers_byte_identical": [true, true, true],
+  "golden_readiness": ["matched"],
+  "image": "Dockerfile.extproc at be7366c499551ce5566a5ec3168f1a27050a86e3 (target extproc, ACCELERATOR=rocm)",
+  "method": "the image's own Python and libraries with this commit's package installed over its own (--no-deps); node B GPU0, host vCPUs 64-71",
+  "panels_byte_identical_to_the_stack": {
+   "amd": {
+    "answers": 4376,
+    "identical": 4376
+   },
+   "amd-shield": {
+    "answers": 547,
+    "identical": 547
+   },
+   "cpu-recipe": {
+    "answers": 5534,
+    "identical": 5534
+   }
+  },
+  "passed_against_legacy": {
+   "rocm_vs_legacy_amd": true,
+   "rocm_vs_legacy_cpu": true
+  },
+  "pip_freeze_differences_from_the_stack": {
+   "image_only": ["Python 3.12.15", "causal_conv1d @ file:///tmp/wheels/causal_conv1d-1.7.0-cp312-cp312-linux_x86_64.whl#sha256=58d292e607483d44fa4b29d94b70c0ac4a337b14b3dafcb332b1158851b67687", "httptools==0.8.0", "pillow==12.3.0", "uvloop==0.23.0"],
+   "stack_only": ["Python 3.12.14"]
+  },
+  "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764"
+ },
+ "rocm_stack_vs_release_image": {
+  "context": {
+   "baseline": "the packages' release image: PyTorch 2.12.0+git6bbd260 (built from source), HIP 7.2.53211, Triton 3.7.1, fla-core 0.5.2",
+   "baseline_commit": "efb5ec4d71cf349d57ef16b200f86382e9eedcc5",
+   "candidate": "the router's ROCm image stack: PyTorch 2.12.0+rocm7.2 (the official rocm7.2 wheel), HIP 7.2.53211, Triton 3.7.0, fla-core 0.5.2",
+   "device": "AMD Instinct MI325X (node B GPU0), host threads on vCPUs 64-71",
+   "note": "byte-identical compares each answer's canonical JSON; inputs_up_to_200_chars counts the inputs of at most 200 characters and how many of them are byte-identical",
+   "runtime_commit": "35ff3a8a5c914b38d1746b0de987b52691396764"
+  },
+  "jobs": [
+   {
+    "differ": 83,
+    "differ_median_chars": 415,
+    "identical": 464,
+    "identical_median_chars": 54.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "domain",
+    "label_changes": 0,
+    "max_abs_delta": 3.4570693969726562e-06
+   },
+   {
+    "differ": 76,
+    "differ_median_chars": 413.5,
+    "identical": 471,
+    "identical_median_chars": 55,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "guard",
+    "label_changes": 0,
+    "max_abs_delta": 1.3470649719238281e-05
+   },
+   {
+    "differ": 73,
+    "differ_median_chars": 427,
+    "identical": 474,
+    "identical_median_chars": 55.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "safety",
+    "label_changes": 0,
+    "max_abs_delta": 1.3113021850585938e-06
+   },
+   {
+    "differ": 66,
+    "differ_median_chars": 394.0,
+    "identical": 481,
+    "identical_median_chars": 55,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 447,
+    "job": "factcheck",
+    "label_changes": 0,
+    "max_abs_delta": 3.129243850708008e-06
+   },
+   {
+    "differ": 82,
+    "differ_median_chars": 421.0,
+    "identical": 465,
+    "identical_median_chars": 54,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "feedback",
+    "label_changes": 0,
+    "max_abs_delta": 9.03010368347168e-06
+   },
+   {
+    "differ": 79,
+    "differ_median_chars": 415,
+    "identical": 468,
+    "identical_median_chars": 55.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "modality",
+    "label_changes": 0,
+    "max_abs_delta": 1.1920928955078125e-07
+   },
+   {
+    "differ": 85,
+    "differ_median_chars": 427,
+    "identical": 462,
+    "identical_median_chars": 54.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "hazard",
+    "label_changes": 0,
+    "max_abs_delta": 1.1026859283447266e-06
+   },
+   {
+    "differ": 69,
+    "differ_median_chars": 415,
+    "identical": 478,
+    "identical_median_chars": 55.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "pii",
+    "label_changes": 0,
+    "max_abs_delta": 4.3272972106933594e-05
+   },
+   {
+    "differ": 85,
+    "differ_median_chars": 427,
+    "identical": 462,
+    "identical_median_chars": 54.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "domain",
+    "label_changes": 0,
+    "max_abs_delta": 6.079673767089844e-06
+   },
+   {
+    "differ": 78,
+    "differ_median_chars": 421.0,
+    "identical": 469,
+    "identical_median_chars": 55,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "guard",
+    "label_changes": 0,
+    "max_abs_delta": 3.7550926208496094e-05
+   },
+   {
+    "differ": 78,
+    "differ_median_chars": 445.5,
+    "identical": 469,
+    "identical_median_chars": 55,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "safety",
+    "label_changes": 0,
+    "max_abs_delta": 1.3113021850585938e-06
+   },
+   {
+    "differ": 76,
+    "differ_median_chars": 439.5,
+    "identical": 471,
+    "identical_median_chars": 55,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "shield",
+    "label_changes": 0,
+    "max_abs_delta": 5.662441253662109e-07
+   },
+   {
+    "differ": 64,
+    "differ_median_chars": 379.0,
+    "identical": 483,
+    "identical_median_chars": 55,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 447,
+    "job": "factcheck",
+    "label_changes": 0,
+    "max_abs_delta": 3.129243850708008e-06
+   },
+   {
+    "differ": 84,
+    "differ_median_chars": 432.0,
+    "identical": 463,
+    "identical_median_chars": 54,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "feedback",
+    "label_changes": 0,
+    "max_abs_delta": 5.602836608886719e-06
+   },
+   {
+    "differ": 82,
+    "differ_median_chars": 432.0,
+    "identical": 465,
+    "identical_median_chars": 54,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "modality",
+    "label_changes": 0,
+    "max_abs_delta": 1.1920928955078125e-07
+   },
+   {
+    "differ": 85,
+    "differ_median_chars": 427,
+    "identical": 462,
+    "identical_median_chars": 54.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "hazard",
+    "label_changes": 0,
+    "max_abs_delta": 1.1026859283447266e-06
+   },
+   {
+    "differ": 71,
+    "differ_median_chars": 437,
+    "identical": 476,
+    "identical_median_chars": 55.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "pii",
+    "label_changes": 0,
+    "max_abs_delta": 0.00020766258239746094
+   },
+   {
+    "differ": 71,
+    "differ_median_chars": 437,
+    "identical": 476,
+    "identical_median_chars": 55.0,
+    "inputs": 547,
+    "inputs_up_to_200_chars": 450,
+    "inputs_up_to_200_chars_identical": 446,
+    "job": "pii_truncate",
+    "label_changes": 0,
+    "max_abs_delta": 3.403425216674805e-05
+   },
+   {
+    "differ": 44,
+    "differ_median_chars": 3492.0,
+    "identical": 20,
+    "identical_median_chars": 3340.0,
+    "inputs": 64,
+    "inputs_up_to_200_chars": 0,
+    "inputs_up_to_200_chars_identical": 0,
+    "job": "halu",
+    "label_changes": 0,
+    "max_abs_delta": 3.254413604736328e-05
+   }
+  ]
+ }
+}

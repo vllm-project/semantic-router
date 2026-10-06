@@ -17147,6 +17147,135 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "matharena/aime@2024.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/pdf/2504.21318v1",
+        "verification": "claimed"
+      },
+      "id": "microsoft/phi-4-reasoning-plus-paper-aime-2024@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.813
+      },
+      "model": "microsoft/phi-4-reasoning-plus",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 65536,
+        "samples_per_prompt": 5,
+        "sampling_temperature": 0.8,
+        "source_kind": "official_technical_report",
+        "table": "Table 1",
+        "variant": "Phi-4-reasoning-plus"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/pdf/2504.21318v1",
+        "verification": "claimed"
+      },
+      "id": "microsoft/phi-4-reasoning-plus-paper-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.78
+      },
+      "model": "microsoft/phi-4-reasoning-plus",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 65536,
+        "samples_per_prompt": 50,
+        "sampling_temperature": 0.8,
+        "source_kind": "official_technical_report",
+        "table": "Table 1",
+        "variant": "Phi-4-reasoning-plus"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/pdf/2504.21318v1",
+        "verification": "claimed"
+      },
+      "id": "microsoft/phi-4-reasoning-plus-paper-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.693
+      },
+      "model": "microsoft/phi-4-reasoning-plus",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 65536,
+        "sampling_temperature": 0.8,
+        "source_kind": "official_technical_report",
+        "table": "Table 1",
+        "variant": "Phi-4-reasoning-plus"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/pdf/2504.21318v1",
+        "verification": "claimed"
+      },
+      "id": "microsoft/phi-4-reasoning-plus-paper-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.849
+      },
+      "model": "microsoft/phi-4-reasoning-plus",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 32768,
+        "metric_variant": "strict",
+        "sampling_temperature": 0.8,
+        "source_kind": "official_technical_report",
+        "table": "Table 2",
+        "variant": "Phi-4-reasoning-plus"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/pdf/2504.21318v1",
+        "verification": "claimed"
+      },
+      "id": "microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.76
+      },
+      "model": "microsoft/phi-4-reasoning-plus",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "maximum_output_tokens": 32768,
+        "samples_per_prompt": 5,
+        "sampling_temperature": 0.8,
+        "source_kind": "official_technical_report",
+        "table": "Table 2",
+        "variant": "Phi-4-reasoning-plus"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/briefcase@1.0.0",
       "benchmark_profile": "independent-agent",
       "evidence": {
@@ -27517,6 +27646,147 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://openai.com/index/introducing-gpt-5-4-mini-and-nano/",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-5.4-mini-launch-evals-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.544
+      },
+      "model": "openai/gpt-5.4-mini",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "xhigh",
+        "source_kind": "official_launch_evaluation",
+        "subset": "public",
+        "variant": "GPT-5.4 mini"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://openai.com/index/introducing-gpt-5-4-mini-and-nano/",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-5.4-mini-launch-evals-terminal-bench-2.0@1.0.0",
+      "metrics": {
+        "resolved": 0.6
+      },
+      "model": "openai/gpt-5.4-mini",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "xhigh",
+        "source_kind": "official_launch_evaluation",
+        "variant": "GPT-5.4 mini"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://openai.com/index/introducing-gpt-5-4-mini-and-nano/",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-5.4-mini-launch-evals-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.88
+      },
+      "model": "openai/gpt-5.4-mini",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "xhigh",
+        "source_kind": "official_launch_evaluation",
+        "variant": "GPT-5.4 mini"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://openai.com/index/introducing-gpt-5-4-mini-and-nano/",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-5.4-mini-launch-evals-humanitys-last-exam-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.415
+      },
+      "model": "openai/gpt-5.4-mini",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "xhigh",
+        "source_kind": "official_launch_evaluation",
+        "tool_policy": "tools_enabled",
+        "variant": "GPT-5.4 mini"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://openai.com/index/introducing-gpt-5-4-mini-and-nano/",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-5.4-mini-launch-evals-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.282
+      },
+      "model": "openai/gpt-5.4-mini",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "hle_mode": "no_tools",
+        "reasoning_effort": "xhigh",
+        "source_kind": "official_launch_evaluation",
+        "variant": "GPT-5.4 mini"
+      }
+    },
+    {
+      "benchmark": "osworld/verified@1.0.0",
+      "benchmark_profile": "official",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://openai.com/index/introducing-gpt-5-4-mini-and-nano/",
+        "verification": "claimed"
+      },
+      "id": "openai/gpt-5.4-mini-launch-evals-osworld-verified@1.0.0",
+      "metrics": {
+        "success_rate": 0.721
+      },
+      "model": "openai/gpt-5.4-mini",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "xhigh",
+        "source_kind": "official_launch_evaluation",
+        "variant": "GPT-5.4 mini"
+      }
+    },
+    {
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "evidence": {
@@ -34058,6 +34328,138 @@ const builtInCatalogJSON = `{
       "subject": {
         "source_kind": "official_model_card",
         "variant": "Hunyuan-A13B-Instruct"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2024.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+        "verification": "claimed"
+      },
+      "id": "tencent/hunyuan-7b-instruct-model-card-aime-2024@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.811
+      },
+      "model": "tencent/hunyuan-7b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Hunyuan-7B-Instruct"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+        "verification": "claimed"
+      },
+      "id": "tencent/hunyuan-7b-instruct-model-card-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.753
+      },
+      "model": "tencent/hunyuan-7b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Hunyuan-7B-Instruct"
+      }
+    },
+    {
+      "benchmark": "hendrycks/math@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+        "verification": "claimed"
+      },
+      "id": "tencent/hunyuan-7b-instruct-model-card-math@1.0.0",
+      "metrics": {
+        "accuracy": 0.937
+      },
+      "model": "tencent/hunyuan-7b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Hunyuan-7B-Instruct"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+        "verification": "claimed"
+      },
+      "id": "tencent/hunyuan-7b-instruct-model-card-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.601
+      },
+      "model": "tencent/hunyuan-7b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Hunyuan-7B-Instruct"
+      }
+    },
+    {
+      "benchmark": "opencompass/olympiadbench@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+        "verification": "claimed"
+      },
+      "id": "tencent/hunyuan-7b-instruct-model-card-olympiadbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.765
+      },
+      "model": "tencent/hunyuan-7b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Hunyuan-7B-Instruct"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+        "verification": "claimed"
+      },
+      "id": "tencent/hunyuan-7b-instruct-model-card-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.793
+      },
+      "model": "tencent/hunyuan-7b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Hunyuan-7B-Instruct"
       }
     },
     {
@@ -62039,6 +62441,175 @@ const builtInCatalogJSON = `{
       "components": [
         {
           "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.76,
+          "status": "available",
+          "value": 0.76,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 76.0
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "microsoft/phi-4-reasoning-plus",
+      "provenance": [
+        "microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "default",
+      "score": 76.0,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "microsoft/phi-4-reasoning-plus-paper-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.693,
+          "status": "available",
+          "value": 0.693,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "microsoft/phi-4-reasoning-plus",
+      "provenance": [
+        "microsoft/phi-4-reasoning-plus-paper-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "microsoft/phi-4-reasoning-plus",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "microsoft/phi-4-reasoning-plus",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.76,
+          "status": "available",
+          "value": 0.76,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "microsoft/phi-4-reasoning-plus",
+      "provenance": [
+        "microsoft/phi-4-reasoning-plus-paper-gpqa-diamond@1.0.0",
+        "microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
           "benchmark_profiles": [
             "independent-standard",
             "published-standard"
@@ -75786,6 +76357,632 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "openai/gpt-5.4-mini-launch-evals-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.88,
+          "status": "available",
+          "value": 0.88,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [
+        "openai/gpt-5.4-mini-launch-evals-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-5.4-mini",
+      "provenance": [
+        "openai/gpt-5.4-mini-launch-evals-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "openai/gpt-oss-120b",
       "provenance": [],
       "reasoning_effort": "low",
@@ -84246,6 +85443,322 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "unspecified",
       "score": null,
       "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "tencent/hunyuan-7b-instruct-model-card-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.601,
+          "status": "available",
+          "value": 0.601,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [
+        "tencent/hunyuan-7b-instruct-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [
+        "tencent/hunyuan-7b-instruct-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
     },
     {
       "components": [
@@ -96680,6 +98193,54 @@ const builtInCatalogJSON = `{
     {
       "capabilities": [
         "chat",
+        "reasoning"
+      ],
+      "description": "Open-weight 14B Phi-4 reasoning model with additional reinforcement learning for math, science, and coding.",
+      "display_name": "Phi-4 Reasoning Plus",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/microsoft/Phi-4-reasoning-plus",
+        "type": "open_weights"
+      },
+      "family": "phi-4",
+      "id": "microsoft/phi-4-reasoning-plus",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 32768
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "14B",
+      "presentation": {
+        "logo": "package:microsoft",
+        "monochrome": false,
+        "monogram": "Φ"
+      },
+      "publisher": "Microsoft",
+      "released_at": "2025-04-30",
+      "revision": "69baf8528e1bcf05f475034d9e5dd32875ed125f",
+      "tags": [
+        "open_weights",
+        "reasoning",
+        "dense"
+      ],
+      "verification": {
+        "authority": "Microsoft",
+        "source": "https://huggingface.co/microsoft/Phi-4-reasoning-plus/blob/69baf8528e1bcf05f475034d9e5dd32875ed125f/README.md",
+        "status": "claimed",
+        "verified_at": "2026-09-24"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
         "reasoning",
         "tools",
         "structured_output",
@@ -98011,6 +99572,59 @@ const builtInCatalogJSON = `{
         "reasoning",
         "tools",
         "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "OpenAI small GPT-5.4 model for low-latency coding, computer use, and subagents.",
+      "display_name": "GPT-5.4 mini",
+      "distribution": {
+        "source": "https://developers.openai.com/api/docs/models/gpt-5.4-mini",
+        "type": "proprietary_api"
+      },
+      "family": "gpt-5",
+      "id": "openai/gpt-5.4-mini",
+      "kind": "physical",
+      "knowledge_cutoff": "2025-08-31",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 400000,
+        "max_output_tokens": 128000
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "package:openai",
+        "monochrome": true,
+        "monogram": "O"
+      },
+      "publisher": "OpenAI",
+      "reasoning_family": "gpt-5.4",
+      "released_at": "2026-03-17",
+      "tags": [
+        "efficient",
+        "proprietary",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "OpenAI",
+        "source": "https://developers.openai.com/api/docs/models/gpt-5.4-mini",
+        "status": "claimed",
+        "verified_at": "2026-09-23"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
         "long_context"
       ],
       "description": "OpenAI open-weight reasoning model sized for a single 80 GB accelerator.",
@@ -99077,6 +100691,56 @@ const builtInCatalogJSON = `{
         "source": "https://huggingface.co/tencent/Hunyuan-A13B-Instruct",
         "status": "claimed",
         "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "long_context"
+      ],
+      "description": "Open-weight hybrid-reasoning dense 7B model with 256K context.",
+      "display_name": "Hunyuan 7B Instruct",
+      "distribution": {
+        "license": "Tencent-Hunyuan-7B",
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct",
+        "type": "open_weights"
+      },
+      "family": "hunyuan",
+      "id": "tencent/hunyuan-7b-instruct",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "7B",
+      "presentation": {
+        "logo": "package:tencent",
+        "monochrome": false,
+        "monogram": "H"
+      },
+      "publisher": "Tencent / Hunyuan",
+      "released_at": "2025-07-30",
+      "revision": "6fd6ecb05e76589bc43b79f49e3619445c6b4593",
+      "tags": [
+        "open_weights",
+        "hybrid_reasoning",
+        "dense",
+        "efficient"
+      ],
+      "verification": {
+        "authority": "Tencent Hunyuan",
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+        "status": "claimed",
+        "verified_at": "2026-09-23"
       }
     },
     {
@@ -102661,6 +104325,21 @@ const builtInCatalogJSON = `{
           }
         },
         {
+          "catalog": "openai/gpt-5.4-mini",
+          "id": "gpt-5.4-mini",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://developers.openai.com/api/docs/models/gpt-5.4-mini",
+            "status": "claimed",
+            "verified_at": "2026-09-23"
+          }
+        },
+        {
           "catalog": "openai/gpt-5.5",
           "id": "gpt-5.5",
           "lifecycle": "active",
@@ -104870,6 +106549,24 @@ const builtInCatalogJSON = `{
           }
         },
         {
+          "catalog": "tencent/hunyuan-7b-instruct",
+          "id": "tencent/Hunyuan-7B-Instruct",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "restrictions": {
+            "minimum_vllm_version": "0.10.0"
+          },
+          "verification": {
+            "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+            "status": "claimed",
+            "verified_at": "2026-09-23"
+          }
+        },
+        {
           "catalog": "zai/glm-5.1",
           "id": "zai-org/GLM-5.1",
           "lifecycle": "experimental",
@@ -105076,6 +106773,21 @@ const builtInCatalogJSON = `{
             "source": "https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "microsoft/phi-4-reasoning-plus",
+          "id": "microsoft/Phi-4-reasoning-plus",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/microsoft/Phi-4-reasoning-plus/blob/69baf8528e1bcf05f475034d9e5dd32875ed125f/README.md",
+            "status": "claimed",
+            "verified_at": "2026-09-24"
           }
         },
         {
