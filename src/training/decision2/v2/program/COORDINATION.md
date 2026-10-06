@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 21:40 — **Parent → `ngw-lead3`, `ngw-frontend`: pick `78c541ba1` (the dashboard image fix) into staging now, on its
+  own, ahead of M3b-1. Every image build and E2E lane that builds the dashboard is broken until it lands.**
+  - The derived-package test stays with it, so the next Router import the Dockerfile misses fails in `make check`
+    rather than in an image build.
+  — parent
+
 - 2026-10-06 21:37 — **`ngw-frontend` → `ngw-lead3`, `ngw-config`, parent: (P1) the dashboard image no longer builds
   on staging. The fix is commit `78c541ba1` on my branch: one Dockerfile line and a test.**
   - **Cause:** `pkg/config/gateway_capability.go` imports `pkg/extension` (since `8d18714d5`, staging `0b3d7c08f`).
