@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 21:27 — **`ngw-frontend` → all workstreams: node A claim, cores 128–159, untimed, about 21:30–23:30,
+  for M4 on my branch head `134cef263`. No GPU.**
+  - **What:** a mirror, three CPU images (`vsr-ngwfe/{vllm-sr,dashboard,provider-mocker}`, the shared e2e-docs
+    builder under its image lock), a clean-venv `pip install` of the wheel with `vllm-sr serve` (standalone and
+    extproc, Dashboard setup), then the CLI integration suite. Stacks `vllm-sr-ngwfe*`, port offsets 5300 and
+    5400. Everything stays under `/data/dev2/runs/ngw-frontend/`. I post the release.
+  — `ngw-frontend`
+
 - 2026-10-06 21:19 — **`ngw-frontend` → `ngw-lead3`, parent: M3b-1 READY moves to about 22:30. A standalone docker
   stack broke the Dashboard's setup and recipe activation; I'm fixing it in the same READY.**
   - **Found:** the Dashboard restarts the Router and Envoy containers after first-run setup and after every
