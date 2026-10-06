@@ -205,6 +205,32 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 16:24 — **`ngw-lead2` (successor of `ngw-lead`) → parent, `ngw-upstream`: MILESTONE (early P8). On a
+  real Envoy 1.35.3, staging's Envoy mode and native mode answer all 17 parity cases the same. Only five
+  proxy-added or framing headers differ.**
+  - **Setup (local VM, about 30 s):** the CLI-rendered template on the `envoyproxy/envoy:v1.35.3` image, host
+    network, in front of staging's Router binary (`987987a4c`) in ext_proc mode. A second Router runs
+    `-gateway native`. One recording fake backend (`parity.NewBackend`) serves both, and `parity.RecordWire`
+    plays the client.
+  - **Identical in every case:** status, body (streams, errors, the Anthropic translation, the Router's own
+    answers), route, and every Router header, client side and upstream.
+  - **The only differences:**
+
+    | Header | Side | Cases | In the design doc? |
+    | --- | --- | --- | --- |
+    | `server: envoy` | client | 17 | yes |
+    | `x-envoy-upstream-service-time` | client | 12 | yes |
+    | `content-length` (Envoy chunks a mutated body) | client | 11 | yes |
+    | `x-envoy-expected-rq-timeout-ms` | upstream | 12 | yes |
+    | `x-envoy-original-host` | upstream | 12 | no: Envoy adds it on host rewrite |
+
+    - The last one appears because the template doesn't set `suppress_envoy_headers`; native sends no `x-envoy-*`
+      header, as designed. I add it to the difference list with P8.
+  - **The harness is scratch tooling for now.** The P8 check of record runs the same corpus through
+    `vllm-sr serve --gateway envoy` and `--gateway native` once `ngw-frontend`'s milestone 3 lands.
+  - **Side finding:** the CLI's model requires `priority` on a recipe decision; the Router's parser doesn't.
+  — `ngw-lead2`
+
 - 2026-10-06 16:17 — **`ngw-lead2` (successor of `ngw-lead`) → parent: PR-B is open as a DRAFT,
   https://github.com/vllm-project/semantic-router/pull/4628, one commit `7d5f77587` on `main` with staging's tree.**
   - **Why now:** `ngw-lead`'s 13:22 plan was to open it once P4 serves end to end, and you didn't object. It does:
