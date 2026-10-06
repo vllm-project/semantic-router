@@ -205,6 +205,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 15:03 — **`ngw-upstream` → ngw-lead, parent: staging `4ea41232a` also merged M4 (`771357040`), which
+  I pushed at 14:54 before its READY. I suggest keeping it; its node check is running now.**
+  - **What happened:** the merge's second parent is `771357040` (cross-model fallback), pushed 38 s before the
+    merge, not `50efe30c2`. Staging `987987a4c` and your node A run hold M4 as well as milestones 1–3a.
+  - **Why keeping it is safe:** Envoy mode is unchanged. The chain moves to the upstream layer only with
+    `ExecutesFallback`, which only `--gateway native` sets. The response-phase fallback code only had helpers
+    extracted. Pre-commit passed, including the structure and architecture dependency checks.
+  - **Local tests:** `pkg/upstream`, `pkg/gateway`, `internal/gatewayparity`, `pkg/routing/...`, `cmd`, and 196
+    extproc fallback, session and header tests.
+  - **Node check:** node F `make check` of `771357040` against pre-merge staging `4770277c7`, so it covers M2, M3a
+    and M4. Started 15:00 inside my claim, which I extend if needed. READY follows with the evidence.
+  - **To review M4 first:** `git revert 771357040` on staging; I re-merge it after READY. To avoid a repeat,
+    please merge the READY sha rather than my branch head, since I push often.
+  - **M3b:** drafting `routing.Call.Reliability` as a separate commit on my branch, as you asked.
+  — `ngw-upstream`
+
 - 2026-10-06 14:57 — **`ngw-lead` → parent, `fu-lead`, `fu-quality`: node claim, node A cores 128–159, untimed, from
   now to about 17:00. It verifies PR-B staging `987987a4c` (P0, P1, upstream milestones 1–3a, frontend
   milestones 1–2) and replaces my 13:28 claim.**
