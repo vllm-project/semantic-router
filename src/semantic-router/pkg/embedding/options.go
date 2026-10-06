@@ -31,13 +31,17 @@ type AudioProvider interface {
 	EmbedAudio(context.Context, AudioRequest) ([]float32, error)
 }
 
-// Window offsets are UTF-8 bytes in the original text, with End exclusive.
-type Window struct {
-	Start int
-	End   int
+// InputChecker reports whether the model reads text whole: false when it
+// would truncate it. The answer comes with the vector of the provider's view,
+// so embedding the same text next costs no second model call. A provider that
+// cannot tell reports binding.ErrCapability or does not implement it.
+type InputChecker interface {
+	FitsInput(context.Context, string) (bool, error)
 }
-type WindowProvider interface {
-	Windows(context.Context, string, int) ([]Window, error)
+
+// ConfigurableInputChecker answers FitsInput at another output view.
+type ConfigurableInputChecker interface {
+	FitsInputWithOptions(context.Context, string, Options) (bool, error)
 }
 
 // Embed applies options at the provider boundary. Remote providers retain their
@@ -131,15 +135,14 @@ func (p *providerView) EmbedAudio(ctx context.Context, request AudioRequest) ([]
 	return q.EmbedAudio(ctx, request)
 }
 
-// Windows reports a missing tokenizer as a capability mismatch, the same way a
-// prepared provider without local token windows does, so a caller can tell an
-// absent tokenizer from a tokenizer that failed.
-func (p *providerView) Windows(ctx context.Context, text string, limit int) ([]Window, error) {
-	q, ok := p.Provider.(WindowProvider)
+// FitsInput asks at the view's options, so the answer shares the call that
+// embeds the text through this view.
+func (p *providerView) FitsInput(ctx context.Context, text string) (bool, error) {
+	q, ok := p.Provider.(ConfigurableInputChecker)
 	if !ok {
-		return nil, fmt.Errorf("%w: embedding provider does not support token windows", binding.ErrCapability)
+		return false, fmt.Errorf("%w: embedding provider does not report input truncation", binding.ErrCapability)
 	}
-	return q.Windows(ctx, text, limit)
+	return q.FitsInputWithOptions(ctx, text, p.options)
 }
 
 // CacheIdentity names immutable model/adapter semantics for request-local caches.

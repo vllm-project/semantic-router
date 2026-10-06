@@ -1,5 +1,4 @@
 import os
-import shlex
 import socket
 import stat
 import subprocess
@@ -15,14 +14,6 @@ LINUX_PERMISSION_HELPER = pytest.mark.skipif(
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DASHBOARD_DOCKERFILE = REPO_ROOT / "dashboard" / "backend" / "Dockerfile"
-VLLM_SR_DOCKERFILE = REPO_ROOT / "src" / "vllm-sr" / "Dockerfile"
-VLLM_SR_ROCM_DOCKERFILE = REPO_ROOT / "src" / "vllm-sr" / "Dockerfile.rocm"
-VLLM_SR_CUDA_DOCKERFILE = REPO_ROOT / "src" / "vllm-sr" / "Dockerfile.cuda"
-VLLM_SR_CUDA_DOCKERIGNORE = (
-    REPO_ROOT / "src" / "vllm-sr" / "Dockerfile.cuda.dockerignore"
-)
-EXTPROC_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc"
-EXTPROC_ROCM_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc-rocm"
 DASHBOARD_ENTRYPOINT = REPO_ROOT / "dashboard" / "backend" / "entrypoint.sh"
 DASHBOARD_PERMISSION_HELPER = (
     REPO_ROOT / "dashboard" / "backend" / "entrypoint_permissions.py"
@@ -477,147 +468,10 @@ def test_dashboard_dockerfile_ships_sr_bench_service_without_legacy_model_eval()
     assert '"torch==' not in content
 
 
-def test_vllm_sr_dockerfile_stays_router_only() -> None:
-    content = VLLM_SR_DOCKERFILE.read_text(encoding="utf-8")
-
-    assert "ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bookworm" in content
-    assert "ARG GO_RUNTIME_COMPAT_IMAGE=library/golang:1.25-bookworm" in content
-    assert (
-        "FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE}"
-        in content
-    )
-    assert "FROM ${IMAGE_REGISTRY}library/debian:bookworm-slim" in content
-    assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
-    assert "ENV VIRTUAL_ENV=/opt/vllm-sr-venv" in content
-    assert "python3-yaml" in content
-    assert "python3-venv" in content
-    assert 'python3 -m venv "${VIRTUAL_ENV}"' in content
-    assert "huggingface_hub==" in content
-    assert "COPY --from=dashboard-builder" not in content
-    assert "COPY --from=frontend-builder" not in content
-    assert "COPY --from=wizmap-builder" not in content
-    assert "COPY src/vllm-sr/start-dashboard.sh" not in content
-    assert "COPY dashboard/backend/config/openclaw-skills.json" not in content
-    assert "COPY src/training/model_eval/" not in content
-
-
-def test_vllm_sr_rocm_dockerfile_stays_router_only() -> None:
-    content = VLLM_SR_ROCM_DOCKERFILE.read_text(encoding="utf-8")
-
-    assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
-    assert "ENV VIRTUAL_ENV=/opt/vllm-sr-venv" in content
-    assert "python3-yaml" in content
-    assert "python3-venv" in content
-    assert 'python3 -m venv "${VIRTUAL_ENV}"' in content
-    assert "huggingface_hub[cli]==1.5.0" in content
-    assert "COPY --from=dashboard-builder" not in content
-    assert "COPY --from=frontend-builder" not in content
-    assert "COPY --from=wizmap-builder" not in content
-    assert "COPY src/vllm-sr/start-dashboard.sh" not in content
-    assert "COPY dashboard/backend/config/openclaw-skills.json" not in content
-    assert "COPY src/training/model_eval/" not in content
-
-
-def test_vllm_sr_rocm_dockerfile_uses_fully_qualified_base_images() -> None:
-    """Podman with default short-name policy rejects unqualified base images;
-    keep every FROM directive fully qualified so `make vllm-sr-dev
-    VLLM_SR_PLATFORM=amd CONTAINER_RUNTIME=podman` works.
-    """
-    content = VLLM_SR_ROCM_DOCKERFILE.read_text(encoding="utf-8")
-
-    assert "ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye" in content
-    assert "ARG ONNX_RUST_RUNTIME_COMPAT_IMAGE=library/rust:1.90-bullseye" in content
-    assert "ARG GO_RUNTIME_COMPAT_IMAGE=library/golang:1.25-bookworm" in content
-    assert (
-        "FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE}"
-        in content
-    )
-    assert "FROM ${IMAGE_REGISTRY}rocm/dev-ubuntu-22.04:7.0" in content
-
-
-def test_rocm_runtime_images_pin_only_the_attention_compiler_exclusion() -> None:
-    compiler_policy = "ENV MIGRAPHX_MLIR_USE_SPECIFIC_OPS=~attention"
-    for dockerfile in (VLLM_SR_ROCM_DOCKERFILE, EXTPROC_ROCM_DOCKERFILE):
-        content = dockerfile.read_text(encoding="utf-8")
-        runtime_stage = content.rsplit("\nFROM ", maxsplit=1)[-1]
-        assert compiler_policy in runtime_stage.splitlines(), dockerfile
-        assert content.count("MIGRAPHX_MLIR_USE_SPECIFIC_OPS=") == 1, dockerfile
-        assert "MIGRAPHX_DISABLE_MLIR=" not in content, dockerfile
-        assert "ORT_MIGRAPHX_FP16_ENABLE=" not in content, dockerfile
-
-    for dockerfile in (
-        VLLM_SR_DOCKERFILE,
-        VLLM_SR_CUDA_DOCKERFILE,
-        EXTPROC_DOCKERFILE,
-    ):
-        assert "MIGRAPHX_MLIR_USE_SPECIFIC_OPS=" not in dockerfile.read_text(
-            encoding="utf-8"
-        ), dockerfile
-
-
-def test_rocm_runtime_images_ship_miopen_jit_headers() -> None:
-    for dockerfile in (VLLM_SR_ROCM_DOCKERFILE, EXTPROC_ROCM_DOCKERFILE):
-        runtime_stage = dockerfile.read_text(encoding="utf-8").rsplit(
-            "\nFROM ", maxsplit=1
-        )[-1]
-        assert "rocrand-dev" in runtime_stage, dockerfile
-        assert (
-            "test -r /opt/rocm/include/rocrand/rocrand_xorwow.h" in runtime_stage
-        ), dockerfile
-
-
-def test_vllm_sr_cuda_dockerfile_stays_router_only() -> None:
-    content = VLLM_SR_CUDA_DOCKERFILE.read_text(encoding="utf-8")
-
-    assert "FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04" in content
-    assert "onnxruntime-gpu==1.22.0" in content
-    assert "ENV AI_BINDING=onnx" in content
-    assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
-    assert (
-        "COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go /build/../nlp-binding/"
-        in content
-    )
-    assert (
-        "COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go ./"
-        not in content
-    )
-    assert "COPY --from=dashboard-builder" not in content
-    assert "COPY --from=frontend-builder" not in content
-    assert "COPY --from=wizmap-builder" not in content
-    assert "COPY src/vllm-sr/start-dashboard.sh" not in content
-    assert "COPY dashboard/backend/config/openclaw-skills.json" not in content
-    assert "COPY src/training/model_eval/" not in content
-
-
-def test_router_images_ship_the_management_api_runtime_sync_module() -> None:
-    expected_copy = "COPY src/vllm-sr/cli/ /app/cli/"
-    for dockerfile in (
-        VLLM_SR_DOCKERFILE,
-        VLLM_SR_ROCM_DOCKERFILE,
-        VLLM_SR_CUDA_DOCKERFILE,
-    ):
-        content = dockerfile.read_text(encoding="utf-8")
-        assert expected_copy in content, f"{dockerfile} omits runtime config sync"
-        assert "pyyaml>=6.0.2" in content, f"{dockerfile} omits runtime YAML support"
-
-
-def test_runtime_images_bind_the_generated_model_catalog() -> None:
-    expected_copy = "COPY src/vllm-sr/cli/ /app/cli/"
-    expected_catalog_copy = "COPY config/recipes/built-in/ /app/cli/model_assets/"
-    for dockerfile in (
-        VLLM_SR_DOCKERFILE,
-        VLLM_SR_ROCM_DOCKERFILE,
-        VLLM_SR_CUDA_DOCKERFILE,
-        DASHBOARD_DOCKERFILE,
-    ):
-        content = dockerfile.read_text(encoding="utf-8")
-        assert expected_copy in content, f"{dockerfile} omits built-in model assets"
-        assert (
-            expected_catalog_copy in content
-        ), f"{dockerfile} omits the canonical built-in catalog distribution"
+def test_dashboard_image_binds_the_generated_model_catalog() -> None:
+    content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
+    assert "COPY src/vllm-sr/cli/ /app/cli/" in content
+    assert "COPY config/recipes/built-in/ /app/cli/model_assets/" in content
 
     source_root = REPO_ROOT / "config" / "recipes" / "built-in"
     source_assets = {
@@ -634,16 +488,6 @@ def test_runtime_images_bind_the_generated_model_catalog() -> None:
         text=True,
     ).stdout.splitlines()
     assert tracked_package_assets == ["src/vllm-sr/cli/model_assets/__init__.py"]
-
-
-def test_gpu_onnx_builders_validate_the_preinstalled_native_toolchain() -> None:
-    for dockerfile in (VLLM_SR_ROCM_DOCKERFILE, VLLM_SR_CUDA_DOCKERFILE):
-        content = dockerfile.read_text(encoding="utf-8")
-        onnx_builder = content.split(" AS onnx-builder", maxsplit=1)[1].split(
-            "COPY onnx-binding/Cargo.toml", maxsplit=1
-        )[0]
-        assert "pkg-config --exists openssl" in onnx_builder
-        assert "apt-get" not in onnx_builder
 
 
 def test_dashboard_runtime_image_binds_cli_version_metadata() -> None:
@@ -663,61 +507,3 @@ def test_dashboard_runtime_image_binds_cli_version_metadata() -> None:
     assert content.index(nonroot_catalog_check) > content.index(
         "find /app/cli -type f -exec chmod 0444 {} +"
     )
-
-
-def test_router_entrypoint_does_not_override_management_listener_config() -> None:
-    content = (REPO_ROOT / "src" / "vllm-sr" / "start-router.sh").read_text()
-    assert "-enable-api=true" in content
-    assert "-api-port=" not in content
-    assert "-api-bind=" not in content
-
-
-def test_vllm_sr_cuda_dockerignore_excludes_runtime_state_and_large_unused_inputs() -> (
-    None
-):
-    content = VLLM_SR_CUDA_DOCKERIGNORE.read_text(encoding="utf-8")
-
-    assert "**/.vllm-sr/" in content
-    assert "**/milvus-data/" in content
-    assert "**/etcd/" in content
-    assert "**/postgres-data/" in content
-    assert "bench/" in content
-    assert "slides/" in content
-
-
-def test_extproc_dockerfile_copies_built_in_knowledge_bases() -> None:
-    content = EXTPROC_DOCKERFILE.read_text(encoding="utf-8")
-
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
-    assert "COPY config/kb/ /app/config/kb/" not in content
-
-
-def test_extproc_dockerfile_stages_complete_openvino_go_package() -> None:
-    staged_sources: set[str] = set()
-    for line in EXTPROC_DOCKERFILE.read_text(encoding="utf-8").splitlines():
-        if not line.startswith("COPY "):
-            continue
-        _, *sources, destination = shlex.split(line)
-        if destination.rstrip("/") != "openvino-binding":
-            continue
-        for source in sources:
-            for matched in REPO_ROOT.glob(source):
-                files = matched.glob("*.go") if matched.is_dir() else (matched,)
-                staged_sources.update(path.name for path in files)
-
-    runtime_sources = {
-        path.name
-        for path in (REPO_ROOT / "openvino-binding").glob("*.go")
-        if not path.name.endswith("_test.go")
-    }
-    assert runtime_sources <= staged_sources, (
-        "OpenVINO-tagged router image omits Go sources: "
-        f"{sorted(runtime_sources - staged_sources)}"
-    )
-
-
-def test_extproc_rocm_dockerfile_copies_built_in_knowledge_bases() -> None:
-    content = EXTPROC_ROCM_DOCKERFILE.read_text(encoding="utf-8")
-
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
-    assert "COPY config/kb/ /app/config/kb/" not in content

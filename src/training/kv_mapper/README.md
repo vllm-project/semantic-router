@@ -132,3 +132,44 @@ PYTHONPATH=. python3 src/training/kv_mapper/model_eval_run.py \
 
 This run measures teacher-forced target cache injection. Connector reuse and
 fallback require their own integration evaluation.
+
+## Distill
+
+`distill.py` adds a second stage on top of the ridge fit, following KV-Lingo
+([arXiv 2609.32610](https://arxiv.org/abs/2609.32610)). The maps keep their
+shape and the same `features @ W + b` application, so the artifact, the
+connector and the headers do not change. Ridge makes the mapped cache close to
+the target's own cache. The second stage trains the maps so the target predicts
+the same next tokens from the mapped cache as from its own: the source prefills
+the prefix, the target reads the continuation on the mapped cache, and the loss
+is the KL from the target's own distribution. Both models stay frozen and only
+the maps receive gradients.
+
+`distill_run.py` reads a stage-1 artifact, streams chat conversations from a
+pinned dataset revision, cuts each one before an assistant reply, holds out
+`--val-count` conversations, and trains with AdamW (no weight decay), a cosine
+schedule with 5% warmup and clipping at 1.0. It writes the same layout under
+the next `bundle_version` (or `--bundle-version`) and records the recipe and
+the validation KL before and after under `calibration.stage2`. It refuses to
+overwrite an existing artifact.
+
+The defaults are the recipe measured on Qwen3-14B to Qwen3-32B (#2976): each W
+stays frozen and a rank-16 correction is trained in the NoRA form
+([arXiv 2608.31036](https://arxiv.org/abs/2608.31036)), and each tensor's rate
+is `--lr` times the RMS of its map, because value maps there are about fifty
+times smaller than key maps. Training every entry of W (`--rank 0`) needs a
+rate near `1e-5` to come close; at `1e-4` it lowers the chat KL while plain
+text gets worse than the ridge fit. Check the result on held-out plain text as
+well as on chat, and compare it with `model_eval_run.py` on the same items as
+its stage-1 artifact. Needs torch, transformers and datasets.
+
+```bash
+PYTHONPATH=. python3 src/training/kv_mapper/distill_run.py \
+  --artifact /tmp/kv-artifacts/<stage1-mapper-id> --pair-slug qwen3-14b-32b \
+  --dataset HuggingFaceH4/ultrachat_200k --dataset-revision <sha> \
+  --split train_sft --output-dir /tmp/kv-artifacts
+```
+
+```bash
+PYTHONPATH=. python3 -m unittest src.training.kv_mapper.tests.test_distill
+```
