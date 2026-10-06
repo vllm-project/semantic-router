@@ -658,7 +658,8 @@ type ModelList struct {
 // PluginInfo defines model for PluginInfo.
 type PluginInfo struct {
 	// Capabilities The plugin's capability descriptor: a family's surfaces and package formats, an engine's architectures
-	// and outputs, an accelerator's validation status, a profile's numerics.
+	// and outputs, an accelerator's validation status, a profile's numerics. Engines and accelerators also list
+	// `auto_priority`, where `auto` tries them (lowest first; null: only when named).
 	Capabilities *map[string]interface{} `json:"capabilities,omitempty"`
 	Distribution *string                 `json:"distribution"`
 	Group        string                  `json:"group"`

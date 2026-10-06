@@ -6,9 +6,9 @@ import threading
 import time
 
 import pytest
-from vllm_sr_runtime.accel.cuda import CUDAAccelerator
-from vllm_sr_runtime.accel.rocm import ROCmAccelerator
-from vllm_sr_runtime.plugins.base import DeviceInfo
+from vllm_srun.accel.cuda import CUDAAccelerator
+from vllm_srun.accel.rocm import ROCmAccelerator
+from vllm_srun.plugins.base import DeviceInfo
 
 
 def test_device_work_on_one_gpu_never_overlaps_while_other_gpus_run_in_parallel():

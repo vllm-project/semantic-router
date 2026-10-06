@@ -7,8 +7,8 @@ import "strings"
 const legacyHuggingFaceOrg = "llm-semantic-router"
 
 // SameModelRepo reports whether two Hugging Face repo IDs name one repository,
-// so prepared bundles and mom_registry entries recorded before the organization
-// move still match the registry.
+// so mom_registry entries recorded before the organization move still match the
+// registry.
 func SameModelRepo(a, b string) bool {
 	return canonicalModelRepo(a) == canonicalModelRepo(b)
 }

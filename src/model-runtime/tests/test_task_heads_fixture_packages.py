@@ -1,13 +1,13 @@
-"""`vllm-sr-runtime fixture --family task_heads` writes embedders and rerankers too (E2E uses them)."""
+"""`vllm-srun fixture --family task_heads` writes embedders and rerankers too (E2E uses them)."""
 
 from __future__ import annotations
 
 import pytest
-from vllm_sr_runtime.accel.cpu import CPUAccelerator
-from vllm_sr_runtime.cli import main
-from vllm_sr_runtime.engines.native.engine import NativeEngine
-from vllm_sr_runtime.families.task_heads.family import TaskHeadsFamily
-from vllm_sr_runtime.plugins.base import (
+from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.cli import main
+from vllm_srun.engines.native.engine import NativeEngine
+from vllm_srun.families.task_heads.family import TaskHeadsFamily
+from vllm_srun.plugins.base import (
     DeviceInfo,
     EngineOptions,
     PackageRef,

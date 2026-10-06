@@ -1,6 +1,6 @@
 // Package modelruntime is the E2E client of the built-in model runtime. It
 // calls every surface of the runtime contract
-// (src/model-runtime/vllm_sr_runtime/api/openapi.yaml) over a port-forward,
+// (src/model-runtime/vllm_srun/api/openapi.yaml) over a port-forward,
 // for runtimes the Router attaches to, or through the Router pod, for the
 // runtimes the Router manages on private Unix sockets. Waits poll readiness;
 // nothing sleeps for a fixed time.

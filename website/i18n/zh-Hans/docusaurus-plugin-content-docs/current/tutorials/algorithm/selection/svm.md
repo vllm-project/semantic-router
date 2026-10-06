@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "ade3cdf4b4bdcdd7ab26a390e164f204807fb6de"
+  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/tutorials/algorithm/selection/svm.md"
   outdated: false
 ---

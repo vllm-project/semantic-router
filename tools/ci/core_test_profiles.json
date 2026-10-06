@@ -107,13 +107,6 @@
       "reason": "Requires separately provisioned panel/judge LLM endpoints; production grounding orchestration has deterministic core tests."
     },
     {
-      "package": "./pkg/modeldownload",
-      "test": "TestPublishedOmniPreparedInventory",
-      "source": "src/semantic-router/pkg/modeldownload/prepared_artifact_test.go",
-      "profile": "model-runtime",
-      "reason": "Executed with the prepared Omni Nano bundle by the Published Models contract; each listed managed test must pass without skipping."
-    },
-    {
       "package": "./pkg/modelselection",
       "test": "TestPublishedSelectionsMatchBindingFixtures",
       "source": "src/semantic-router/pkg/modelselection/parity_test.go",

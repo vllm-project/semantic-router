@@ -1,4 +1,4 @@
-# Models of the attached runtime (vllm-sr-runtime serve --models); the Router
+# Models of the attached runtime (vllm-srun serve --models); the Router
 # selects them by served_name. runtime_with_fixtures.py writes the packages.
 models:
   - model: /tmp/vsr-fixtures/decision-attached

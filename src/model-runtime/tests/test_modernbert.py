@@ -2,10 +2,10 @@
 
 import pytest
 import torch
-from vllm_sr_runtime.accel import onednn
-from vllm_sr_runtime.accel.kernels import reference_kernels
-from vllm_sr_runtime.engines.native import encoder, models
-from vllm_sr_runtime.engines.native.models.modernbert import (
+from vllm_srun.accel import onednn
+from vllm_srun.accel.kernels import reference_kernels
+from vllm_srun.engines.native import encoder, models
+from vllm_srun.engines.native.models.modernbert import (
     BAND_FROM,
     FULL,
     SLIDING,
@@ -17,8 +17,8 @@ from vllm_sr_runtime.engines.native.models.modernbert import (
     rope_frequencies,
     rope_parameters,
 )
-from vllm_sr_runtime.engines.native.weights import lay_out_linears, load_backbone
-from vllm_sr_runtime.testing.fixtures import modernbert_config, random_backbone, save
+from vllm_srun.engines.native.weights import lay_out_linears, load_backbone
+from vllm_srun.testing.fixtures import modernbert_config, random_backbone, save
 
 VOCAB = 300
 # Shorter and longer than the 4-token half-window and the 9-token band, padded and not.
@@ -246,9 +246,9 @@ def test_layer_exits_outside_the_encoder_are_refused():
 
 
 def test_native_engine_encodes_packed_and_padded_batches(tmp_path):
-    from vllm_sr_runtime.accel.cpu import CPUAccelerator
-    from vllm_sr_runtime.engines.native.engine import NativeEngine
-    from vllm_sr_runtime.plugins.base import (
+    from vllm_srun.accel.cpu import CPUAccelerator
+    from vllm_srun.engines.native.engine import NativeEngine
+    from vllm_srun.plugins.base import (
         BackboneSpec,
         DtypePolicy,
         EncoderBatch,
