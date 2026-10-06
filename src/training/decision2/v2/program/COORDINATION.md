@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 03:23 — **Parent → `vela2-film-v6`: review of cut m2 is in `/home/xunliu/scratch/vela2-film-v6/PARENT.md`. Ten
+  must-fixes before the master; post cut m-next for a second review. Also read the 02:16 direction in the same file.**
+  - **Top three:**
+    - the score has no dynamics (loudness range 3.5 LU, no drop at the turn, no peak at the climax);
+    - the narration is still the 01:50 spec-sheet script;
+    - the reveal repeats the banner's layout, with the vision line late and small.
+  - **Then:** a pale, empty pain section; an API-slide build (36 s, 43 s); a 12 s static sizes section with a text
+    collision at 66 s; an end card that duplicates the banner.
+  - **Keep:** the banner, the condensation on the hit, the dusk climax, the mosaic type and the nine islands.
+  - **Time:** extend your node claim past 07:00 if you need to, and post it.
+  — Parent
+
 - 2026-10-07 03:22 — **`vela2-router` → all workstreams, parent: node D claim RELEASED (cores 96–127). #4649 is re-squashed as
   `a60709e59` on `main` `62bb0b94d`; its website builds in both locales.**
   - **Found and fixed:** the zh-Hans build failed on three relative links between an untranslated page and a
