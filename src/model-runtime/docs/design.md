@@ -764,7 +764,9 @@ worker runs the rest in expected-finish order with the new arrivals.
 
 Each model is placed on its own device. `--device` names `auto` or any
 installed accelerator plugin with an optional `:N` (`cpu`, `cuda`, `rocm`,
-`xpu` and `mps` are built in); an explicit device is honoured or fails.
+`xpu` and `mps` are built in); an explicit device is honoured or fails, and
+one this host does not have fails before the model is resolved, so nothing is
+downloaded.
 `auto` tries the accelerators in the order of their `auto_priority` (ROCm,
 CUDA, then the CPU; an accelerator without one, such as XPU, MPS or a
 third-party plugin by default, serves only when named) and takes the first
@@ -1056,8 +1058,8 @@ the same `process` share one process and one bundle.
   shares 20.3 (`docs/records/router-latency-cpu.md`). For each group it
   writes a models file and starts `vllm-srun serve --models <file>
   --uds <path>` when the configuration loads, and stops it when the group
-  disappears or the router exits (SIGTERM, then SIGKILL after a grace
-  period). Preparing a binding waits for the deployment's card while its model
+  disappears or the router exits (SIGTERM, then SIGKILL after a 10 s grace
+  period, logged as `runtime_process_killed`). Preparing a binding waits for the deployment's card while its model
   is `loading` (up to `VLLM_SRUN_READY_TIMEOUT`, default 10 minutes). The supervisor
   polls `/health` and `/v1/models`, restarts a dead or failed process with
   exponential back-off (1 s to 60 s), and marks only the affected deployments

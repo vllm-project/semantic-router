@@ -46,6 +46,33 @@ def test_auto_falls_back_to_cpu_without_gpus():
         place(SPEC, "rocm:0", 1000)
 
 
+@pytest.mark.parametrize(
+    ("device", "reason"),
+    [
+        pytest.param(
+            "rocm:0",
+            "rocm: not available on this host",
+            marks=pytest.mark.skipif(GPU, reason="needs a host without ROCm"),
+        ),
+        ("cpu:7", "cpu: no device 7"),
+    ],
+)
+def test_an_unusable_device_fails_before_the_model_is_resolved(
+    monkeypatch, device, reason
+):
+    import vllm_srun.runtime as runtime_module
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
+
+    def resolve(*args, **kwargs):
+        raise AssertionError("the model was resolved before the device was checked")
+
+    monkeypatch.setattr(runtime_module, "resolve", resolve)
+    model = ModelConfig(model="vllm-sr/Decision-2.0-Kai-0.6B", device=device)
+    with pytest.raises(PlacementError, match=reason):
+        Runtime(ServeConfig(models=(model,))).load()
+
+
 def test_cuda_is_marked_unvalidated_and_rocm_validated():
     assert CUDAAccelerator.validated is False
     assert ROCmAccelerator.validated is True

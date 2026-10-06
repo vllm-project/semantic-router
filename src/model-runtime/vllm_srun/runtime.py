@@ -35,7 +35,7 @@ from .errors import (
     UnsupportedDeviceError,
     VerificationError,
 )
-from .placement import Placement, device_kind, place
+from .placement import Placement, check_device, device_kind, place
 from .plugins import registry
 from .plugins.base import (
     DEADLINE,
@@ -285,6 +285,7 @@ class ServedModel:
     def load(self) -> None:
         process = self.runtime.config
         config = self.config
+        check_device(config.model, config.device)
         self.health.set("loading", "resolving the model")
         options = RegistryOptions(
             cache_dir=process.cache_dir,

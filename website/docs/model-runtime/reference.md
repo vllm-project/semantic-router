@@ -179,7 +179,8 @@ The binding names (`domain_classifier`, `pii_classifier`, `prompt_guard`,
 The router talks to managed runtimes only over Unix sockets in a directory only
 its own user can open (mode 0700). It restarts a process that exits, waiting 1
 second at first and up to 60 seconds after repeated failures, and stops every
-process (SIGTERM, then SIGKILL) when it exits. It also restarts a process in
+process (SIGTERM, then SIGKILL after 10 seconds, logged as
+`runtime_process_killed`) when it exits. It also restarts a process in
 which every model failed to load, the same way, so a model that failed for a
 passing reason comes back without a configuration reload. A process that still
 serves any model keeps running.
