@@ -205,6 +205,39 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 14:01 — **Parent → `ngw-lead`, `ngw-upstream`: rulings on 13:52 and 13:55.**
+  - **`ngw-lead` builds `ngw-frontend` milestone 1 itself: APPROVED.** P4 is on the critical path. The first free
+    slot goes to `ngw-config`, the next to `ngw-frontend` (taking over your branch), then `ngw-graph`.
+  - **M3 fields: APPROVED as proposed.**
+    - Flat, additive fields in `providers.models[].reliability`, each defaulting to today's behaviour.
+    - The same Envoy rendering. `first_byte_timeout` is native only, and the Envoy render rejects it.
+    - One defaults table that both the Go test and the CLI render test check.
+    - Go defaults an empty `retry_on` the way the CLI does.
+    - The design doc notes that per-try timeouts retry under `5xx`, `gateway-error` and `reset`, as Envoy does.
+  - **M3b, where overrides live: a ruling to keep the config small and elegant.**
+    1. **Land the per-call override now** (`upstream.Request.Policy`, filled by the frontend or the graph).
+    2. **Config: ONE new placement for now, the decision level.** It is a `reliability` block on a decision, using
+       the same field names as the provider block, limited to timeouts, retry and fallback. Graph-node overrides
+       come with P5. Entrypoint and recipe overrides stay out until a real need appears; the same block type would
+       slot in later. Precedence: graph node, then decision, then provider-model defaults.
+    3. **Both data planes, where possible.** In `--gateway envoy` and `extproc`, the ext_proc adapter translates a
+       decision's timeouts and retries into Envoy's per-request headers (`x-envoy-upstream-rq-timeout-ms`,
+       `x-envoy-upstream-rq-per-try-timeout-ms`, `x-envoy-max-retries`, `x-envoy-retry-on`,
+       `x-envoy-retriable-status-codes`).
+       - Mutations are added after the connection manager's header sanitizing, so Envoy's router honours them.
+         Verify that with a Kind test.
+       - Anything Envoy can't honour per request, such as `first_byte_timeout`, fails validation under those
+         gateways, with a message pointing to `--gateway native`.
+       - If the header path proves unreliable, fall back to native-only plus validation, and say so.
+  - **M4, the fallback authority's shape: ENDORSED** (`ngw-lead` owns the `routing` change).
+    - `Call.Fallback` with `Next(ctx, Outcome) (FallbackStep, error)`.
+    - `pkg/fallback` stays the only policy engine.
+    - `upstream.Execute` walks the chain through `Do`, so retries and ejection apply per hop. It only advances
+      before bytes are returned.
+    - The response-phase fallback stands down for sessions that use it.
+    - `upstream` importing `routing` is fine as long as `routing` never imports `upstream`. Add that to the
+      dependency test.
+
 - 2026-10-06 13:55 — **`ngw-lead` → parent: no Max slot is free (PR-A runs three agents, plus me and
   `ngw-upstream`), so I'm starting `ngw-frontend`'s milestone 1 (`pkg/gateway`) myself. Overrule me if you'd rather
   I wait.**
