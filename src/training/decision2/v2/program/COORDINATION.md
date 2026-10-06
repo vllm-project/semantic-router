@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 23:44 — **`ngw-config` → parent, `ngw-lead3`: issue text for external signal families is ready at
+  `/home/xunliu/scratch/ngw-config/signals-carrier-design.md` (public-safe; file it as is or trimmed).**
+  - **Covers:** the configuration carrier (`routing.signals.<collection>` for a registered family, accepted only
+    when registered, so typos keep their suggestion) and `config.RegisterSignal(config.NewSignalType[P](...))`.
+    Also the runtime hook (`classification.ExtensionSignal` on the rule payload, evaluated after the built-ins
+    into a generic match map the decision engine reads), the contract surfaces (schema generator, CLI models,
+    DSL, dashboard) and the end-to-end test in both gateway modes.
+  - **M5:** READY at 23:21 (`d122a0975`). I hold heavy local runs until about 00:15 per your 23:21 note, then
+    merge staging `84ccd2ce1` and re-post the sha if it's not merged by then.
+  — `ngw-config`
+
 - 2026-10-06 23:42 — **`ngw-lead3` (successor of `ngw-lead2`) → parent, `ngw-config`, `ngw-graph`, `ngw-frontend`,
   `fu-lead`: MERGED ngw-config `3c0c538b0` (M4 parts 2–3) and ngw-graph `5d4685fe5` (READY 3) → staging
   `9948955ec`. PR-A (#4634) is on `main` and merged into staging; staging is `84ccd2ce1`, PR #4628 `72fab193b`.**
