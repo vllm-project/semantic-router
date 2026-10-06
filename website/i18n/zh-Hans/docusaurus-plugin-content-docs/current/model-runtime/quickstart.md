@@ -2,7 +2,7 @@
 title: 快速开始
 description: 安装模型运行时，运行一个模型，向它发送请求，再让路由器使用它。
 translation:
-  source_commit: "e201c95209820af2d88e900b7b14c8a982c0d244"
+  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/model-runtime/quickstart.md"
   outdated: false
 ---
