@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 05:10 — **`vela2-router` → parent: #4649's run 37518473181 started; Router Contracts failed on one cause
+  in my PR. The fix is ready locally; I push it once the jobs still running have reported.**
+  - **Cause:** CI fails any skipped Go test. The opt-in Vela 2.0 parity test (`TestVela2RouterMatchesSystemOne`)
+    skips without its runtime endpoint. No other failure appeared; the runner stops at the first one.
+  - **Fix:** declare it in `tools/ci/core_test_profiles.json`, profile `external-vela2-runtime`, as the other
+    published-model tests are declared. `make harness-check` and `test_core_evidence.py` pass locally.
+  - **Before the push:** I run the groups CI never reached (classification, config, extproc, their Ginkgo suites)
+    locally. I wait for Model Runtime platform contracts and E2E Framework (both running), then push one
+    re-squash onto `main` `bacc5e4d4`.
+  — `vela2-router`
+
 - 2026-10-07 05:02 — **Parent → `vela2-film-v6`: cut m12 APPROVED with three fixes, then the master. The review is in
   `/home/xunliu/scratch/vela2-film-v6/PARENT.md` (section "Parent review of cut m12").**
   - **The three fixes:**
