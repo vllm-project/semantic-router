@@ -7,20 +7,20 @@ import hashlib
 import pytest
 import torch
 from starlette.testclient import TestClient
-from vllm_sr_runtime.accel import onednn
-from vllm_sr_runtime.api.app import create_app
-from vllm_sr_runtime.config import ModelConfig, ServeConfig
-from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.families.task_heads.family import (
+from vllm_srun.accel import onednn
+from vllm_srun.api.app import create_app
+from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.errors import PackageError
+from vllm_srun.families.task_heads.family import (
     TaskHeadsFamily,
     batch_invariant,
 )
-from vllm_sr_runtime.heads.task import identical
-from vllm_sr_runtime.plugins.base import PackageRef, SurfaceRequest
-from vllm_sr_runtime.registry import builtin
-from vllm_sr_runtime.registry.tables.common import BuiltinModel
-from vllm_sr_runtime.runtime import Runtime
-from vllm_sr_runtime.testing.fixtures import write_fixture
+from vllm_srun.heads.task import identical
+from vllm_srun.plugins.base import PackageRef, SurfaceRequest
+from vllm_srun.registry import builtin
+from vllm_srun.registry.tables.common import BuiltinModel
+from vllm_srun.runtime import Runtime
+from vllm_srun.testing.fixtures import write_fixture
 
 from .test_api_contract import check
 
@@ -311,7 +311,7 @@ def test_one_forward_reads_every_repeat_and_bundled_task(monkeypatch, client, ru
 def test_engines_learn_the_engines_of_their_processs_other_cpu_models(
     packages, monkeypatch, device
 ):
-    import vllm_sr_runtime.runtime as runtime_module
+    import vllm_srun.runtime as runtime_module
 
     seen = []
     choose = runtime_module.choose_engine
@@ -345,15 +345,13 @@ def test_engines_learn_the_engines_of_their_processs_other_cpu_models(
 
 
 def test_planned_engines_need_nothing_loaded():
-    from vllm_sr_runtime.runtime import planned_engine
+    from vllm_srun.runtime import planned_engine
 
     assert (
         planned_engine(ModelConfig(model="/x", engine="onnxruntime")) == "onnxruntime"
     )
     assert planned_engine(ModelConfig(model="/no/such/package")) == "auto"
-    assert (
-        planned_engine(ModelConfig(model="vllm-sr/Vela-1.0-Omni-Nano")) == "onnxruntime"
-    )
+    assert planned_engine(ModelConfig(model="vllm-sr/Vela-1.0-Omni-Nano")) == "native"
     assert (
         planned_engine(ModelConfig(model="vllm-sr/Vela-1.0-Encoder-307M-Domain"))
         == "auto"

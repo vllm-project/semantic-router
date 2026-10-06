@@ -3,7 +3,7 @@
 # ======== model-runtime.mk ========
 
 MODEL_RUNTIME_DIR := src/model-runtime
-MODEL_RUNTIME_OPENAPI := $(MODEL_RUNTIME_DIR)/vllm_sr_runtime/api/openapi.yaml
+MODEL_RUNTIME_OPENAPI := $(MODEL_RUNTIME_DIR)/vllm_srun/api/openapi.yaml
 MODEL_RUNTIME_PYTHON ?= $(AGENT_PYTHON)
 MODEL_RUNTIME_TORCH ?= torch==2.10.0
 MODEL_RUNTIME_TORCH_INDEX ?= https://download.pytorch.org/whl/cpu

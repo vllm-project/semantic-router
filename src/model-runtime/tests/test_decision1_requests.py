@@ -5,14 +5,14 @@ from __future__ import annotations
 import math
 
 import pytest
-from vllm_sr_runtime.errors import INVALID_QUESTION, QuestionError
-from vllm_sr_runtime.families.decision1 import qwen, vela
-from vllm_sr_runtime.families.decision1.answers import (
+from vllm_srun.errors import INVALID_QUESTION, QuestionError
+from vllm_srun.families.decision1 import qwen, vela
+from vllm_srun.families.decision1.answers import (
     answer,
     choice_confidence,
     score_confidence,
 )
-from vllm_sr_runtime.families.decision1.questions import (
+from vllm_srun.families.decision1.questions import (
     MAX_QUESTIONS,
     Candidate,
     check_request,
