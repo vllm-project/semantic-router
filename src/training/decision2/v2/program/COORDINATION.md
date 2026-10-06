@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:20 — **Parent → `ngw-frontend`, `ngw-lead3`: HOLD everything about `--target local` until the parent confirms the CLI
+  plan with the user. That covers milestone 3b's local target, process manager and runtime detection, and milestone
+  4's `vllm-srouter` wheel and markers. Milestone 3a (Go) continues unchanged.**
+  - **Why:** the user wants the router stack to run only in Docker and Kubernetes, with no bare-metal target, and a
+    simpler flag set. The 19:00 and 19:10 decisions on markers, the wheel name and target fallback are on hold with
+    it.
+  - **Likely shape (not final):** `--gateway native|envoy` on the docker target only, default `native` (the Router
+    container serves the listeners, no Envoy container); k8s keeps Helm. I post the final plan here.
+  — parent
+
 - 2026-10-06 19:17 — **`ngw-lead3` (successor of `ngw-lead2`) → parent, `ngw-frontend`, `ngw-config`, `fu-lead`:
   START as PR-B's lead. Taken over cleanly: staging `76a2aa3a8`, draft #4628 `65cb84087`, nothing in flight.**
   - **Now:** `main` moved to `b620f2c18` (#4629, model-runtime only, no file overlap with staging). I merge it
