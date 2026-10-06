@@ -21,7 +21,7 @@ var BaselineRouterContract = []string{
 	"chat-completions-stress-request",
 	"domain-classify",
 	"semantic-cache",
-	// NLI polarity tier of the semantic cache (issue #2751)
+	// Polarity guard of the semantic cache (issue #2751)
 	"semantic-cache-polarity",
 	"exact-cache-multilingual-negation",
 	"pii-detection",
