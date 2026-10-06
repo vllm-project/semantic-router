@@ -534,9 +534,8 @@ def test_golden_request_exercises_every_graph(nano, model, tmp_path):
     family = MultimodalEmbeddingFamily()
     (golden,) = family.golden(family.verify(PackageRef(nano)))
     assert golden["surface"] == "embeddings"
-    assert (
-        set(golden["expected"]) == {"cpu"} and len(golden["expected"]["cpu"]) == 3 * 384
-    )
+    assert set(golden["expected"]) == {"cpu", "rocm"}
+    assert all(len(values) == 3 * 384 for values in golden["expected"].values())
     unpinned = {"repo_id": "example/omni-fixture", "revision": "0" * 40}
     other = omni.write_bundle(tmp_path / "other", source=unpinned)
     assert family.golden(family.verify(PackageRef(other)))[0]["expected"] == {}
