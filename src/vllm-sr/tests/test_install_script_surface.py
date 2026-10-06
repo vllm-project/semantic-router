@@ -111,7 +111,7 @@ def test_installation_surfaces_offer_minimal_human_and_agent_paths() -> None:
 
     assert "AGENT_INSTALL_PROMPT" in agent_docs
     assert "AGENT_SKILL_PATH" in agent_docs
-    assert "Dashboard is optional" in normalized_agent_docs
+    assert "Dashboard and Playground checks are optional" in normalized_agent_docs
     assert "vllm-sr config validate" in agent_docs
     assert "vllm-sr config plan" in agent_docs
     assert "vllm-sr route preview" in agent_docs
