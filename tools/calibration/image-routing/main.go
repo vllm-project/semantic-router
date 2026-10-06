@@ -24,7 +24,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
 // calibrationSet is the labelled input: every fixture is listed explicitly
@@ -55,8 +54,7 @@ type excludedLabel struct {
 	Reason    string `json:"reason"`
 }
 
-// fixtureExtensions mirrors the image crate features compiled into
-// the native Omni image decoder (JPEG and PNG).
+// fixtureExtensions lists the image formats the calibration set uses.
 var fixtureExtensions = map[string]string{".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 
 type excludedFixture struct {
@@ -241,15 +239,11 @@ func runCalibration() int {
 	if err != nil {
 		fatal("model directory: %v", err)
 	}
-	provider, err := native.New(nil).Embedding(context.Background(), config.ResolvedModelBinding{
-		Recipe: "image-calibration", Name: "embedding",
-		Binding:    config.ModelBinding{Deployment: "omni-calibration", Adapter: "vela_omni", Contract: "embedding.v1"},
-		Deployment: config.ModelDeployment{Provider: "ort", Device: "cpu", Artifact: modelDir, Precision: "native", Input: config.ModelInputBudget{MaxTokens: artifact.MaxTextLength, Overflow: "reject"}},
-	}, 0, 0)
+	provider, stopRuntime, err := omniEmbedding(context.Background(), modelDir, artifact.MaxTextLength)
 	if err != nil {
 		fatal("initialize Omni: %v", err)
 	}
-	defer provider.Close()
+	defer stopRuntime()
 	var prototypeRun *prototypeEvaluation
 	for _, rule := range rules {
 		if rule.HasImageCandidates() {

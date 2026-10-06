@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -53,11 +53,10 @@ func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, r 
 }
 
 type classifierModelAvailability struct {
-	core                   bool
-	factCheck              bool
-	hallucination          bool
-	hallucinationExplainer bool
-	feedback               bool
+	core          bool
+	factCheck     bool
+	hallucination bool
+	feedback      bool
 }
 
 // buildModelsInfoResponse builds the models info response

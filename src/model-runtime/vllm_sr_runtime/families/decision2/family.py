@@ -18,63 +18,51 @@ from ...plugins.base import (
     BackboneSpec,
     DtypePolicy,
     EngineModel,
-    ForwardBatch,
-    LoadedModel,
     LoRASpec,
     ModelFamily,
     ModelInfo,
     ModelSpec,
     PackageRef,
-    RenderedItem,
-    RequestPlan,
     VerifiedPackage,
 )
+from ...plugins.decisions import DecisionModel, RenderedItem, RequestPlan
 
 __all__ = ["Decision2Family", "Decision2Model"]
+from ...heads.candidate import forward_logits, load_head
 from ...registry import builtin, policy
 from ...registry.resolve import download_base
-from . import package as pkg
-from .answers import apply_score_bias, product_answer
-from .readout import load_head, logits
-from .renderer import (
+from ...systemone import (
+    GOLDEN_STATE,
     MAX_LEVELS,
+    MAX_OPTIONS,
     MIN_LEVELS,
-    Tokenizer,
-    collate,
-    encode,
+    golden_questions,
     question_options,
     valid_state,
 )
+from ...text.segments import collate, encode
+from ...text.tokenizer import Tokenizer
+from . import package as pkg
+from .answers import apply_score_bias, product_answer
 
-INT32_MAX = 2**31 - 1
-GOLDEN_STATE = (
-    "Write a Python function that merges two sorted lists and explain its running time."
-)
-GOLDEN_QUESTIONS = {
-    "domain": {
-        "type": "choice",
-        "instructions": "Which domain does this request belong to?",
-        "criteria": {
-            "code": "Programming",
-            "math": "Mathematics",
-            "other": "Anything else",
-        },
-    },
-    "reasoning": {
-        "type": "noul",
-        "instructions": "Does answering this request need multi-step reasoning?",
-    },
-    "difficulty": {
-        "type": "score",
-        "instructions": "How difficult is this request?",
-        "criteria": ["Trivial", "Moderate", "Hard"],
-    },
-}
+GOLDEN_QUESTIONS = golden_questions("Anything else")
+# Gated DeltaNet layers (Qwen3.5) solve triangular systems; on a CPU that needs LAPACK.
+GATED_DELTA_REQUIRES = {"cpu": ("lapack",)}
 
 
 class Decision2Family(ModelFamily):
     name = "decision2"
     surfaces = frozenset({"decisions"})
+    builtin_table = "vllm_sr_runtime.registry.tables.decision2"
+    fixture_writer = "vllm_sr_runtime.testing.decision2"
+
+    @classmethod
+    def descriptor(cls) -> dict[str, Any]:
+        return {
+            "surfaces": sorted(cls.surfaces),
+            "formats": ["vllm-sr-decision/2"],
+            "question_types": ["choice", "noul", "score"],
+        }
 
     def detect(self, package: PackageRef) -> bool:
         return pkg.is_package(package.root)
@@ -193,6 +181,9 @@ class Decision2Family(ModelFamily):
             backbone=backbone,
             dtype=DtypePolicy(),
             max_input_tokens=package.max_input_tokens,
+            requires=(
+                GATED_DELTA_REQUIRES if backbone.model_type == "qwen3_5_text" else {}
+            ),
         )
 
     def load(
@@ -230,7 +221,7 @@ class Decision2Family(ModelFamily):
             limits={
                 "max_input_tokens": package.max_input_tokens,
                 "min_options": 2,
-                "max_options": pkg.MAX_OPTIONS,
+                "max_options": MAX_OPTIONS,
                 "min_levels": MIN_LEVELS,
                 "max_levels": MAX_LEVELS,
             },
@@ -238,14 +229,14 @@ class Decision2Family(ModelFamily):
             parameters=parameters,
             dtype=dtype,
         )
-        return Decision2Model(info, engine_model, head, tokenizer, details, spec)
+        return Decision2Model(info, engine_model, head, tokenizer, details)
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
-        known = builtin.by_identity(package.model_sha256)
-        expected = dict(known.golden_answers) if known else {}
-        return [
-            {"state": GOLDEN_STATE, "questions": GOLDEN_QUESTIONS, "expected": expected}
-        ]
+        return builtin.golden(
+            package.model_sha256,
+            "decisions",
+            {"state": GOLDEN_STATE, "questions": GOLDEN_QUESTIONS},
+        )
 
 
 def _model_type(config: dict[str, Any], declared: str) -> str:
@@ -259,7 +250,7 @@ def _model_type(config: dict[str, Any], declared: str) -> str:
     return model_type
 
 
-class Decision2Model(LoadedModel):
+class Decision2Model(DecisionModel):
     def __init__(
         self,
         info: ModelInfo,
@@ -267,27 +258,15 @@ class Decision2Model(LoadedModel):
         head: torch.nn.Module,
         tokenizer: Tokenizer,
         details: pkg.Decision2Package,
-        spec: ModelSpec,
     ):
         self.info = info
         self.engine_model = engine_model
         self.head = head
         self.tokenizer = tokenizer
         self.details = details
-        self.spec = spec
 
     def forward_token_budget(self) -> int | None:
-        """GPU forwards keep gated-delta q/k/v tensors within 2**30 elements (32-bit offsets in FLA)."""
-        if self.engine_model.device.type == "cpu":
-            return None
-        config = self.spec.backbone.config
-        heads = config.get("linear_num_value_heads")
-        if not heads:
-            return None
-        width = heads * max(
-            config["linear_key_head_dim"], config["linear_value_head_dim"]
-        )
-        return (INT32_MAX // 2) // width
+        return self.engine_model.max_forward_tokens()
 
     def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan:
         if not valid_state(state):
@@ -338,23 +317,20 @@ class Decision2Model(LoadedModel):
             input_tokens=tokens,
         )
 
-    def run(
-        self, items: list[RenderedItem], shared_prefix: int = 0
+    def run(self, items: list[RenderedItem]) -> list[list[float] | None]:
+        return self.run_shared(items, 0)
+
+    def run_shared(
+        self, items: list[RenderedItem], shared_prefix: int
     ) -> list[list[float] | None]:
         batch = collate(items, self.tokenizer.pad_id)
-        output = self.engine_model.forward(
-            ForwardBatch(
-                input_ids=batch["input_ids"],
-                attention_mask=batch["attention_mask"],
-                gather=batch["candidate_positions"],
-                query=batch["query_positions"],
-                lengths=[len(item.ids) for item in items],
-                shared_prefix=shared_prefix,
-            )
+        scores = forward_logits(
+            self.engine_model,
+            self.head,
+            batch,
+            [len(item.ids) for item in items],
+            shared_prefix,
         )
-        mask = batch["candidate_mask"].to(output.gathered.device)
-        with torch.inference_mode():
-            scores = logits(self.head, output.gathered, output.query, mask)
         if scores.shape[0] != len(items):
             raise RuntimeError("model returned the wrong number of question answers")
         return [

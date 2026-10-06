@@ -1,5 +1,7 @@
 # Opt-in profiles: accuracy and speed on ROCm (MI325X)
 
+> **Phase 1 record** (Decision 2.0, [#4481](https://github.com/vllm-project/semantic-router/pull/4481) and its follow-ups). The Phases 2–4 records are the `decision1-*`, `vela1-*`, `vela2-*`, `embed-*`, `stores-*`, `router-latency-cpu*`, `router-latency-rocm*`, `rocm-router-image` and `removal-footprint*` files.
+
 The `exact` profile, the default, answers bit-identically to the released
 packages ([parity record](rocm-mi325x-parity.md)). The other profiles may move
 an answer by rounding and are opt-in.

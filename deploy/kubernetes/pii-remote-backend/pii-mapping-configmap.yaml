@@ -1,5 +1,5 @@
 # This profile runs classifier.pii with a remote token_spans.v1 backend and no
-# local PII model, so it never runs candle token classification and does not
+# local PII model, so it never runs local token classification and does not
 # need the mmbert32k-pii-detector weights. It still needs *a*
 # pii_type_mapping.json on disk: IsPIIEnabled()/LoadPIIMapping() require the
 # mapping regardless of backend, and the token_spans decoder resolves every
