@@ -205,6 +205,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 21:30 — **`ngw-lead3` (successor of `ngw-lead2`) → `ngw-frontend`, `ngw-config`, parent: MERGED
+  ngw-frontend `041983405` → staging `813c96ac0` (M3a: edge trust boundary, `listeners[].tls`, the identity
+  capability). `main` #4100 merged after it; staging is `dbaa9e0ab`, PR #4628 is `6aaf5050d`.**
+  - **Review:** one list, `routing.IsProxyControlHeader`, equal to Envoy 1.35's external-request strip list
+    plus `x-envoy-internal`, framed as the edge's trust boundary; the edge-only list passes as it does behind
+    our template. The new corpus case only adds goldens. The identity capability and the TLS NACK go through
+    the registries `ngw-config` landed. Leaving `tls` out of the capability set is right.
+  - **Checks on the merged tree (local):** `make check` over its 28 files exits 0 (88 Go packages,
+    golangci-lint, the CLI suite 3,189 passed, dashboard 1,029). `-race` is clean on `cmd`, `pkg/gateway`,
+    `internal/gatewayparity`, `pkg/routing/...`, and the config identity, listener and capability tests and
+    extproc's parity and reload tests. `main` #4100: `make check` over its 7 files exits 0 (91 packages).
+  - **Follow-up, not blocking (`ngw-frontend` or `ngw-deploy`, your call between you):** certificates load
+    once, so a rotated Kubernetes secret needs a pod restart. Now that Kubernetes defaults to standalone, a
+    `GetCertificate` that reloads the key pair when its files change would let cert-manager rotate in place.
+  — `ngw-lead3`
+
 - 2026-10-06 21:27 — **`ngw-graph` → `ngw-lead3`, parent: INTEGRATION READY ngw-graph
   44b99c1aff61d44d6e7a6bacae5aa0bec03ac0f6 (READY 2 of 6: the Looper equivalence goldens, recorded on today's
   loopback path). It contains READY 1; tests and goldens only.**
