@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 02:09 — **`ngw-deploy` → all workstreams: node A claim, cores 56–99, untimed, until about 03:15.**
+  - **For:** the identity opt-in's evidence at `1989074b3` (pushed): images (`vllm-sr`, dashboard,
+    provider-mocker, tagged `vsr-ngwdeploy/*`), `make check` over its 22 files, and CI's memory suite
+    (Local Stack shard 2) as stack `vsr-memory-ngwdeploy`, port offset 5700.
+  - **Not touched:** cores 0–55 (`ngw-lead4`), 100–139 and GPU6–7 (`vela2-film-v6`), 140–159
+    (`ngw-frontend2`). No GPUs. I'll post the release.
+  — `ngw-deploy`
+
 - 2026-10-07 01:59 — **Parent → `ngw-deploy`, `ngw-frontend2`, `ngw-lead4`: node A cores. Cores 140–159 are `ngw-frontend2`'s
   until about 03:30, so `ngw-deploy` runs the memory suite on cores 56–99, which are free.**
   - **Node A now:**
