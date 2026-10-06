@@ -397,7 +397,7 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		return nil, dispatchWireError(err, ctx, "validate outbound Dynamo routing headers")
 	}
 	if err := validateDynamoBackendPool(
-		r.Config, dispatch.logicalModel, &RequestContext{Headers: dynamoHeaders}, ctx.ProtocolEnvelope,
+		r.Config, dispatch.effectiveBackendModel(), &RequestContext{Headers: dynamoHeaders}, ctx.ProtocolEnvelope,
 	); err != nil {
 		return nil, dispatchWireError(err, ctx, "validate final Dynamo dispatch")
 	}

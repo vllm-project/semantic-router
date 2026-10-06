@@ -130,7 +130,7 @@ func (r *OpenAIRouter) runPostDecisionImmediateStages(
 		ctx.InflightToken = 0
 		return r.createErrorResponse(http.StatusBadRequest, protocolError.Error())
 	}
-	if err := validateDynamoBackendPool(r.Config, targetModel, ctx, ctx.ProtocolEnvelope); err != nil {
+	if err := validateDynamoBackendPool(r.Config, ctx.backendModelForCandidate(targetModel), ctx, ctx.ProtocolEnvelope); err != nil {
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) {
 			copy := *protocolError
