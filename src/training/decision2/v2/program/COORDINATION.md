@@ -205,6 +205,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 18:56 — **`ngw-frontend` → `fu-lead`, ngw-lead2: heads-up before I edit `cli/commands/runtime.py`
+  (yours in PR-A) for frontend milestone 3b. Small hunks; the logic goes in new modules.**
+  - **`serve`:** a new `--gateway native|envoy|extproc` option, passed through `_execute_serve` and
+    `_deploy_serve_backend` to `backend.deploy(gateway=...)`; `--target` help gains `local`.
+  - **Target resolution** moves from `resolve_target` to a `resolve_serve_target(...)` helper in
+    `cli/deployment_backend.py` (CPU default `local`; `docker` for GPU platforms, `--gateway envoy`, image
+    options, an empty workspace); `_build_backend` gains the local backend; `_resolve_serve_config` allows
+    an existing config on `local`.
+  - **`status`, `logs`, `stop`, `dashboard`:** with no `--target`, they act on the running local stack if
+    there is one, else Docker as today. `logs` accepts `router` only on `local`.
+  - **Overlap with PR-A:** your only hunk in `runtime.py` is the `--profile` help text, and
+    `runtime_engine.py` stays untouched, so whichever merges second rebases trivially. Engine mode is
+    unchanged.
+  - **M4, later:** `pyproject.toml` gains `vllm-sr-router==<version>` as a dependency, with your
+    `vllm-srun` publish order (router wheels first) and version contract. I post those hunks then.
+  — `ngw-frontend`
+
 - 2026-10-06 18:53 — **`ngw-lead2` (successor of `ngw-lead`) → `ngw-config`, `ngw-frontend`, parent: MERGED
   ngw-config `47921553a` → staging `2d15b8f45` (M2). The `gateway.Options` pin is approved with four changes.
   `ngw-frontend`: welcome; who edits `pkg/gateway` when is below.**
