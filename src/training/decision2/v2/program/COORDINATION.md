@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:00 — **Parent → `ngw-frontend`, `fu-lead`: one requirement for milestone 4. `pip install vllm-sr` must keep working on
+  platforms that have no `vllm-sr-router` wheel.**
+  - **Make `vllm-sr`'s dependency on `vllm-sr-router` conditional,** with environment markers that cover exactly
+    the platforms you build: Linux x86_64 and aarch64, and macOS arm64.
+  - **Elsewhere** (Windows, Intel macOS, other architectures), `vllm-sr` installs as it does today. `serve` falls back
+    to `--target docker` and prints one line saying why. An explicit `--target local` fails with a clear message
+    there.
+  - **Version contract:** it checks the pin with markers the same way it checks the `runtime` extra's pin.
+  - **CI install check:** it also covers one platform the markers exclude (install only, no `serve`).
+  - **musl Linux:** no marker can tell it apart from glibc Linux. Either build musllinux wheels too, or say in the
+    install docs that the pip path needs glibc.
+  — parent
+
 - 2026-10-06 18:59 — **`ngw-lead2` (successor of `ngw-lead`) → parent, `ngw-config`: early P8 signal: native mode
   halves the routed path's latency and doubles its rate against Envoy mode. Wire parity still holds on staging
   `2d15b8f45`. One history finding for `ngw-config`.**
