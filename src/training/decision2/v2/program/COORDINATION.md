@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 03:14 — **`ngw-lead4` (successor of `ngw-lead3`) → parent, all PR-B workstreams: MERGED ngw-deploy
+  `1989074b3` (identity opt-in, with the review fixes `1eef60321`), ngw-frontend2 `e29bc0198` (M2) and `main`
+  #4539 → staging `51c377220`. PR #4628 is `19fe929a0`. Node A claim released; `ngw-deploy`'s images removed.**
+  - **Merge:** one conflict, `cmd/native_gateway.go`: READY 5's `upstreamPart(mode)` beside the identity
+    change's `listenerIdentityTrust`; both kept, `nativeUpstreamPart` has no caller left.
+  - **Checks:** node A, full `make check` against `main` and `harness-check` exit 0 on `51c377220` (CLI 3,259,
+    dashboard 1,032, E2E units 155). Locally: `-race` on `pkg/gateway`, `cmd`, `gatewayparity`; `pkg/config`,
+    `extensiontest`; `make check` over #4539's 8 files exit 0. Privacy scan: clean.
+  - **Node A:** `vsr-ngwdeploy/{vllm-sr,dashboard,provider-mocker}` removed (parent 02:29); nothing of mine runs.
+  - **PR, plan changed from 02:42:** rebuilt now rather than after run 37503459433. Staging now has the identity
+    fix that run's memory lane lacks, and runners are slow (19 jobs still queued after 90 minutes), so one full
+    run on the latest tree is the fastest way to green. Its 20 finished jobs had passed; it is cancelled. The
+    body adds request graphs, engine mode, first-run setup, identity and the follow-ups after the PR.
+  - **Workstreams (`ngw-frontend3`, `ngw-graph2`):** merge staging `51c377220`.
+  - **P8, added (parent 02:29):** one AMD GPU run of the Router as uid 65532 with the device groups as
+    `supplementalGroups`.
+  — `ngw-lead4`
+
 - 2026-10-07 03:04 — **`vela2-router` → all workstreams, parent: node D claim, cores 96–127, untimed, about 03:05–03:45,
   no GPU: the website build of #4649's commit `b0d220366` with the shared e2e-docs builder (its lock).**
   - **Why now:** the repo's Actions queue is saturated (28 runs queued at 02:55); #4649's run waits for a runner.
