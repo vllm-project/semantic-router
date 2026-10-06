@@ -17,6 +17,10 @@ embedding models. Model servers remain separate: a healthy Router stack does
 not mean that its provider endpoints are installed, running, or able to
 generate.
 
+On Apple silicon Macs, the experimental [Apple GPU host bridge](apple-mps)
+uses `--platform apple` to run supported internal models natively with MPS.
+The Router stack stays in Docker; model qualification and memory limits still apply.
+
 ## Start the stack
 
 Complete the [Quickstart](/docs/installation) to install the CLI and create a
