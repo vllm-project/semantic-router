@@ -10,7 +10,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -37,13 +36,11 @@ func buildClassifierWithAdmission(
 	if cfg != nil && cfg.RoutingScope == "" {
 		cfg = cfg.ConfigForRecipe(cfg.DefaultRecipe())
 	}
-	var runtime *native.Runtime
 	var runtimeOption RecipeRuntimeOptions
 	if len(runtimeOptions) > 0 {
 		runtimeOption = runtimeOptions[0]
-		runtime = runtimeOption.Runtime
 	}
-	models, err := newClassifierModelRuntime(cfg, runtime)
+	models, err := newClassifierModelRuntime(cfg, runtimeOption)
 	if err != nil {
 		return nil, err
 	}

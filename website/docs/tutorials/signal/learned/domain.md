@@ -58,12 +58,11 @@ Keep domain names stable because decisions reference those names directly.
 
 ### Local and remote classifier selection
 
-With no `backend`, category/domain classification keeps its existing local
-model behavior. Use `variant: candle`, `variant: modernbert`, or
-`variant: mmbert32k` for an explicit local selector; the deprecated
-`use_modernbert` and `use_mmbert_32k` keys remain readable for compatibility
-but are normalized to `variant` in canonical output. An agreeing canonical and
-legacy selector is accepted; contradictory active selectors are rejected.
+With no `backend`, the domain classifier (Vela Domain by default) runs in the
+[model runtime](../../../model-runtime/guides/classify.md). The runtime reads
+the model's architecture from the package, so there is no local selector to
+set; `vllm-sr config migrate` removes the earlier `variant`, `use_modernbert`
+and `use_mmbert_32k` keys.
 
 A remote category classifier uses the shared backend block. Its `model` is an
 explicit name from `global.model_catalog.external[]`, and that catalog entry

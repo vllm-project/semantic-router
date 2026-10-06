@@ -475,15 +475,6 @@
         "use_cpu": {
           "type": "boolean"
         },
-        "use_modernbert": {
-          "type": "boolean"
-        },
-        "use_mmbert_32k": {
-          "type": "boolean"
-        },
-        "variant": {
-          "type": "string"
-        },
         "backend": {
           "$ref": "#/$defs/RemoteClassifierBackend"
         },
@@ -602,24 +593,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "CanonicalExplainerModule": {
-      "properties": {
-        "model_id": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "use_cpu": {
-          "type": "boolean"
-        },
-        "model_ref": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "CanonicalFactCheckModule": {
       "properties": {
         "max_sequence_length": {
@@ -632,9 +605,6 @@
           "type": "number"
         },
         "use_cpu": {
-          "type": "boolean"
-        },
-        "use_mmbert_32k": {
           "type": "boolean"
         },
         "model_ref": {
@@ -659,12 +629,6 @@
           "type": "number"
         },
         "use_cpu": {
-          "type": "boolean"
-        },
-        "use_modernbert": {
-          "type": "boolean"
-        },
-        "use_mmbert_32k": {
           "type": "boolean"
         },
         "feedback_mapping_path": {
@@ -703,9 +667,6 @@
         "backend": {
           "type": "string"
         },
-        "endpoint": {
-          "type": "string"
-        },
         "include_explanation": {
           "type": "boolean"
         },
@@ -727,12 +688,6 @@
         "context_window_size": {
           "type": "integer"
         },
-        "enable_nli_filtering": {
-          "type": "boolean"
-        },
-        "nli_entailment_threshold": {
-          "type": "number"
-        },
         "model_ref": {
           "type": "string"
         }
@@ -750,9 +705,6 @@
         },
         "detector": {
           "$ref": "#/$defs/CanonicalHallucinationDetector"
-        },
-        "explainer": {
-          "$ref": "#/$defs/CanonicalExplainerModule"
         }
       },
       "additionalProperties": false,
@@ -785,15 +737,15 @@
           "type": "object",
           "default": {
             "hazard": {
-              "artifact": "models/Vela-1.0-Encoder-307M-Hazard",
+              "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Hazard",
               "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d",
-              "provider": "candle",
+              "provider": "model_runtime",
               "device": "cpu",
-              "precision": "fp32",
               "input": {
                 "max_tokens": 32768,
                 "overflow": "reject"
-              }
+              },
+              "profile": "exact"
             }
           }
         },
@@ -878,9 +830,6 @@
         "use_cpu": {
           "type": "boolean"
         },
-        "use_mmbert_32k": {
-          "type": "boolean"
-        },
         "pii_mapping_path": {
           "type": "string"
         },
@@ -952,9 +901,6 @@
             "type": "string"
           },
           "type": "array"
-        },
-        "variant": {
-          "type": "string"
         },
         "on_error": {
           "type": "string"
@@ -1459,9 +1405,6 @@
           "type": "string"
         },
         "hallucination_detector": {
-          "type": "string"
-        },
-        "hallucination_explainer": {
           "type": "string"
         },
         "feedback_detector": {
@@ -2551,16 +2494,10 @@
         "qwen3_model_path": {
           "type": "string"
         },
-        "gemma_model_path": {
-          "type": "string"
-        },
         "mmbert_model_path": {
           "type": "string"
         },
         "multimodal_model_path": {
-          "type": "string"
-        },
-        "bert_model_path": {
           "type": "string"
         },
         "use_cpu": {
@@ -2896,7 +2833,7 @@
         "min_keep": {
           "type": "integer"
         },
-        "nli_contradiction_penalty": {
+        "contradiction_penalty": {
           "type": "number"
         },
         "on_error": {
@@ -2974,9 +2911,6 @@
         "enabled": {
           "type": "boolean"
         },
-        "use_nli": {
-          "type": "boolean"
-        },
         "hallucination_action": {
           "type": "string"
         },
@@ -2997,9 +2931,6 @@
         },
         "description": {
           "type": "string"
-        },
-        "use_nli": {
-          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -4271,15 +4202,6 @@
         "device": {
           "type": "string"
         },
-        "precision": {
-          "type": "string"
-        },
-        "custom_ops_profile": {
-          "type": "string"
-        },
-        "compilation_cache_dir": {
-          "type": "string"
-        },
         "input": {
           "$ref": "#/$defs/ModelInputBudget"
         },
@@ -4287,6 +4209,12 @@
           "type": "string"
         },
         "endpoint": {
+          "type": "string"
+        },
+        "process": {
+          "type": "string"
+        },
+        "served_name": {
           "type": "string"
         }
       },
@@ -4744,27 +4672,6 @@
         },
         "dimension": {
           "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "PolarityGuardConfig": {
-      "properties": {
-        "mode": {
-          "type": "string"
-        },
-        "nli": {
-          "$ref": "#/$defs/PolarityGuardNLIConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "PolarityGuardNLIConfig": {
-      "properties": {
-        "contradiction_threshold": {
-          "type": "number"
         }
       },
       "additionalProperties": false,
@@ -5846,9 +5753,6 @@
         },
         "embedding_model": {
           "type": "string"
-        },
-        "polarity_guard": {
-          "$ref": "#/$defs/PolarityGuardConfig"
         }
       },
       "additionalProperties": false,

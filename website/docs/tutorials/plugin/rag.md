@@ -106,10 +106,9 @@ global:
   model_catalog:
     deployments:
       document-ranker:
-        artifact: models/Vela-1.0-Encoder-307M-Reranker
-        provider: candle
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
         device: cpu
-        precision: native
         input:
           max_tokens: 4096
           overflow: reject
@@ -118,7 +117,6 @@ routing:
     rag.reranker:
       deployment: document-ranker
       contract: relevance_scores.v1
-      adapter: vela_reranker
       pair_scorer:
         layer: 22
         dimension: 768
@@ -152,11 +150,9 @@ either text. Loading validates the selected trained layer and dimension; zero
 selects the artifact's actual full depth or width. CPU cost grows with candidate
 count and pair length, so choose an explicit deployment budget.
 
-Candle artifacts must include encoder weights, `config.json`, `tokenizer.json`,
-`matryoshka_config.json` and `classification_heads.safetensors`. An ORT deployment
-selects a complete graph through the binding's `head` field. Its embedded
-`semantic_router.pair_scorer` metadata must declare the actual exit and
-`relevance_logit` contract; the graph filename is not proof of its semantics.
+The reranker runs in the [model runtime](../../model-runtime/guides/rerank.md).
+At startup the router checks that the model declares the selected exit, so a
+`pair_scorer` the model was not trained for is refused before traffic arrives.
 
 Only reachable recipes with an enabled `rerank` plugin load a scorer. Missing
 models, invalid scores and input-limit failures follow the existing RAG

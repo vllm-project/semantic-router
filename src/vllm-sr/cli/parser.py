@@ -15,6 +15,7 @@ from cli.config_contract import (
 from cli.config_schema.validation import validate_config_structure
 from cli.config_yaml import safe_load_router_config
 from cli.context_bands import references_environment
+from cli.model_runtime_retired import retired_model_fields
 from cli.models import UserConfig
 from cli.utils import get_logger
 
@@ -162,6 +163,16 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
             "session or conversation protection, and `routing.decisions[].adaptations` "
             "only when a decision needs apply/observe/bypass control or a local "
             "adaptation candidate_set override."
+        )
+
+    retired_fields = retired_model_fields(data)
+    if retired_fields:
+        raise ConfigParseError(
+            "Removed model execution fields are no longer supported: "
+            f"{', '.join(retired_fields)}. Local models are served by the built-in "
+            "model runtime (provider: model_runtime), which detects the package "
+            "format and owns numerics, and the NLI explainer is retired. Use "
+            f"`vllm-sr config migrate --config {config_path}`."
         )
 
 

@@ -8,7 +8,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// TestBM25KeywordClassifier tests BM25-based keyword classification via nlp-binding.
+// TestBM25KeywordClassifier tests BM25-based keyword classification.
 func TestBM25KeywordClassifier(t *testing.T) {
 	rules := []config.KeywordRule{
 		{
@@ -39,7 +39,6 @@ func TestBM25KeywordClassifier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create BM25 classifier: %v", err)
 	}
-	defer classifier.Free()
 
 	testCases := []struct {
 		query       string
@@ -100,7 +99,7 @@ func TestBM25KeywordClassifier(t *testing.T) {
 	fmt.Println(strings.Repeat("=", 100))
 }
 
-// TestNgramKeywordClassifier tests N-gram based keyword classification via nlp-binding.
+// TestNgramKeywordClassifier tests N-gram based keyword classification.
 func TestNgramKeywordClassifier(t *testing.T) {
 	rules := []config.KeywordRule{
 		{
@@ -120,7 +119,6 @@ func TestNgramKeywordClassifier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create N-gram classifier: %v", err)
 	}
-	defer classifier.Free()
 
 	testCases := []struct {
 		query       string
@@ -197,7 +195,6 @@ func TestNgramANDOperator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create N-gram AND classifier: %v", err)
 	}
-	defer classifier.Free()
 
 	testCases := []struct {
 		query       string
@@ -288,7 +285,6 @@ func TestMixedMethodClassifier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create mixed classifier: %v", err)
 	}
-	defer classifier.Free()
 
 	testCases := []struct {
 		query       string
@@ -372,9 +368,7 @@ func TestBM25vsRegexComparison(t *testing.T) {
 	}
 
 	bm25Classifier, _ := NewKeywordClassifier(bm25Rules)
-	defer bm25Classifier.Free()
 	regexClassifier, _ := NewKeywordClassifier(regexRules)
-	defer regexClassifier.Free()
 
 	queries := []string{
 		"This is urgent",       // exact - both match
@@ -434,9 +428,7 @@ func TestNgramvsRegexFuzzyComparison(t *testing.T) {
 	}
 
 	ngramClassifier, _ := NewKeywordClassifier(ngramRules)
-	defer ngramClassifier.Free()
 	regexFuzzyClassifier, _ := NewKeywordClassifier(regexFuzzyRules)
-	defer regexFuzzyClassifier.Free()
 
 	queries := []struct {
 		text string

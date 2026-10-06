@@ -17,7 +17,6 @@ def run_resolver(**overrides: str) -> str:
         env = os.environ | {
             "GITHUB_OUTPUT": str(output),
             "MATRIX_IMAGE": "dashboard",
-            "CARGO_BUILD_JOBS": "8",
         }
         env.update(overrides)
         subprocess.run(["bash", str(SCRIPT)], cwd=REPO_ROOT, env=env, check=True)
@@ -32,6 +31,12 @@ class DockerBuildArgumentTests(unittest.TestCase):
     def test_other_images_keep_their_model_bundle_defaults(self) -> None:
         output = run_resolver(MATRIX_IMAGE="envoy")
         self.assertNotIn("VELA_OMNI_VARIANTS", output)
+
+    def test_router_images_pass_their_runtime_accelerator(self) -> None:
+        output = run_resolver(MATRIX_IMAGE="vllm-sr-rocm", ACCELERATOR="rocm")
+        self.assertIn("ACCELERATOR=rocm\n", output)
+        self.assertNotIn("ACCELERATOR", run_resolver(MATRIX_IMAGE="operator"))
+        self.assertNotIn("CARGO", output)
 
     def test_release_dashboard_uses_stable_tag(self) -> None:
         output = run_resolver(
