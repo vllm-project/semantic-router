@@ -17,7 +17,7 @@ purpose-built virtual models:
 
 ## What Problem Does It Solve?
 
-This separation lets an application choose an objective such as low latency,
+This separation lets an agent harness choose an objective such as low latency,
 high quality, or a balanced trade-off without knowing which backend model will
 serve the request.
 
@@ -94,6 +94,9 @@ recipes:
 Clients can discover entrypoint names through `/v1/models`. Routed responses
 include `x-vsr-selected-recipe`, so operators can confirm which policy handled
 a request without exposing the backend selection contract to the client.
+
+For the connection, protocol, and session setup, see
+[Connect an agent harness](../../installation/agent-harness).
 
 ## Limits for agent clients
 

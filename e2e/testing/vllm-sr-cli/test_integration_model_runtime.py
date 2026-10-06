@@ -4,7 +4,7 @@
 The Quickstart's step 4: a decision signal on a `provider: model_runtime`
 deployment, which the Router starts and asks inside its container. The test
 takes the signal, its route and the deployment from the page and serves a tiny
-random-weight decision package that `vllm-sr-runtime fixture` writes into the
+random-weight decision package that `vllm-srun fixture` writes into the
 models directory, so nothing is downloaded. The host needs the model runtime
 installed (`make model-runtime-install`), as the engine-mode tests do.
 """
@@ -82,7 +82,7 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
         self.print_test_result(True, f"{signal} answered; {selected} selected")
 
     def _write_decision_package(self) -> None:
-        runtime = shutil.which("vllm-sr-runtime")
+        runtime = shutil.which("vllm-srun")
         self.assertIsNotNone(runtime, "the model runtime is not installed")
         models = Path(self.test_dir) / "models"
         models.mkdir(exist_ok=True)

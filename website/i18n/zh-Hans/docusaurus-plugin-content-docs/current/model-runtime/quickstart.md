@@ -2,7 +2,7 @@
 title: 快速开始
 description: 安装模型运行时，运行一个模型，向它发送请求，再让路由器使用它。
 translation:
-  source_commit: "e201c95209820af2d88e900b7b14c8a982c0d244"
+  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/model-runtime/quickstart.md"
   outdated: false
 ---
@@ -17,8 +17,8 @@ translation:
 
 ## 1. 安装 {#1-install}
 
-运行时是一个 Python 包，与 `vllm-sr` CLI 放在同一个仓库中。把两者装进一个虚拟环境，
-并使用 CPU 版 PyTorch：
+运行时是 Python 包 `vllm-srun`。每个路由器镜像都自带它，它不发布到 PyPI，所以在你自己的机器上，
+要从仓库 checkout 安装它，和 `vllm-sr` CLI 放在一起。用 CPU 版 PyTorch 把两者装进同一个虚拟环境：
 
 ```bash
 git clone https://github.com/vllm-project/semantic-router.git
@@ -29,10 +29,15 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install ./src/vllm-sr ./src/model-runtime
 ```
 
+使用 GPU 时，请改从[与你的硬件匹配的索引](https://pytorch.org/get-started/locally/)（CUDA 或 ROCm）
+安装 PyTorch。在 ROCm 上，只有路由器镜像保证答案与已发布的模型包逐字节一致，因为镜像携带发布时所用的
+PyTorch 构建。用官方 PyTorch wheel 经 `pip` 安装同样能运行这些模型，但答案可能略有差异
+（见[选择模型](./choose-a-model.md#hardware)）。
+
 确认运行时能看到它的内置模型：
 
 ```bash
-vllm-sr-runtime models
+vllm-srun models
 ```
 
 ## 2. 运行模型 {#2-serve-a-model}

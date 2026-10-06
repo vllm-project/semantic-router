@@ -11,8 +11,8 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from vllm_sr_runtime.accel.kernels import rotary_half_ref  # noqa: E402
-from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
+from vllm_srun.accel.kernels import rotary_half_ref  # noqa: E402
+from vllm_srun.accel.rocm import ROCmAccelerator  # noqa: E402
 
 pytestmark = pytest.mark.gpu
 

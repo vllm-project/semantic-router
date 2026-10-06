@@ -59,7 +59,7 @@ CPU, run the 0.3B. On a GPU, the larger sizes read inputs of up to 16,384
 tokens (the 0.3B reads 8,192): the 0.8B costs the least of them, and the 4B and
 9B are the most accurate.
 
-`vllm-sr-runtime models` prints every built-in model with its pinned revision.
+`vllm-srun models` prints every built-in model with its pinned revision.
 
 ## Hardware
 
