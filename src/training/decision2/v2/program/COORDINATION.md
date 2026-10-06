@@ -205,6 +205,40 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 20:55 — **`ngw-frontend` → `ngw-lead3`, parent, `ngw-config`: INTEGRATION READY ngw-frontend
+  0419834056396234d50c73141845660edecdb88b (M3a: the standalone frontend's TLS, edge trust boundary and
+  identity capability). It contains staging `69277679a`.**
+  - **User-visible:**
+    - **Edge trust boundary:** a standalone Router drops `x-envoy-internal` and the 14 proxy-control headers
+      Envoy 1.35.3 strips from external requests (`cleanInternalHeaders`: retry, timeout, tracing,
+      `x-envoy-original-url`…). Our template has `use_remote_address` off, so Envoy's five edge-only headers
+      pass in both modes. One list, `routing.IsProxyControlHeader`, used by the frontend and by the parity
+      corpus's `GatewayRequest`; a new corpus case `client-envoy-control-headers` and its goldens.
+    - **`listeners[].tls`** (`cert_file`, `key_file`, relative to the config's directory): TLS 1.2+, HTTP/2
+      or HTTP/1.1 by ALPN. A TLS change NACKs as `restart_required` (`validateNativeListeners`); rotating
+      a certificate needs a restart. The CLI's Envoy renderer refuses `tls` rather than serve cleartext.
+    - **Identity:** the capability `gateway_asserted_identity` (extproc only) refuses, at load and on
+      reload, a decision on an `authz` signal and a rate limit rule matching `user` or `group`, at their
+      paths, naming `--gateway extproc`. The identity header names `authz.identity` sets are dropped from
+      client requests, from the pinned snapshot (`gateway.Serving.IdentityHeaders`), so they reload.
+    - **`-listener-address`:** binds every standalone listener on one address (the container case).
+    - Body (500 MiB) and connection (50,000) limits: tests added; TLS and h2c server tests.
+  - **Contract:** `listeners[].tls` through Go types, schema, `cli/models.py`, the reference config (a
+    second listener, `https-8443`, which the coverage test needs) and the configuration docs (en, zh-Hans).
+    `gateway.Options.IdentityHeaders` moved to `Serving`. My old `ValidateGatewayIdentity` and
+    `validateGatewayCapabilities` are gone in favour of the registry.
+  - **Not a capability, on purpose:** `tls` in extproc mode. An extproc Router serves no listeners, and
+    CI runs the reference config (which shows `tls`) in extproc mode; the CLI refuses it where it matters.
+  - **Checks (local):** `make check` over the 28 files against staging `29f7c5a08` exits 0 (84 Go
+    packages, golangci-lint, 3189 CLI tests, 49 e2e CLI unit tests, dashboard 1029). After merging
+    `69277679a` (#4567, #4631; no shared files): `cmd`, `pkg/gateway`, `internal/gatewayparity`,
+    `pkg/routing/...`, and extproc's looper/parity and config capability tests pass. `-race` is clean on
+    `cmd`, `pkg/gateway`, `internal/gatewayparity`, `pkg/routing/...`.
+  - **M3b:** containers only, per 19:31/19:43: `--gateway standalone|extproc` on both targets,
+    `--target docker|kubernetes`, `--platform` on both, option groups, `--container-runtime`; my earlier
+    local-target work is dropped. READY ~21:45; engine mode in Docker follows PR-A's merge.
+  — `ngw-frontend`
+
 - 2026-10-06 20:53 — **Parent → `fu-lead`: PR-A's CI run ended with one more real failure. Kind `model-runtime` hung in its first
   case and timed out at 90 minutes. Reproduce it before you re-squash. The other new failures are the two Gate rollups.**
   - **Failure:** E2E "Kubernetes Providers (Model Runtime / CPU / amd64 / Standard 1 / model-runtime)" at `e2e8650e4`.
