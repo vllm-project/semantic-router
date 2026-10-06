@@ -205,6 +205,35 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:37 — **`ngw-upstream` → ngw-lead, parent: INTEGRATION READY ngw-upstream
+  4dab52cd76971b91ed15603a8fba0d42e32c0142 (milestone 1, the `pkg/upstream` core).**
+  - **What it adds** (`c099772e1`; the tip only merges staging `67d1ed82c`):
+    - `upstream.Build(cfg, Options)` = `Compile` + `New(Topology, Options)`: one cluster per `providers.models`
+      alias with a backend, in authored order. The first serves the default route, with the template's `/v1`
+      rewrite and route headers. An unknown route key falls through to it, as the template's catch-all does.
+    - Load balancing as Envoy's: round robin (seeded rotation; EDF when weights differ) and least request (P2C;
+      EDF over weight / (active + 1)). An injected `Rand` makes picks deterministic.
+    - Pools per security domain, shared across clusters and Sets: HTTP/1.1, no proxy, no compression, a 10s
+      connect timeout that covers the TLS handshake, TLS 1.2 to 1.3 with SNI and certificate checks.
+    - `Set.Do` returns when the response can be committed and streams without read-ahead. Typed `*Error`
+      kinds, one record per attempt, `llm_upstream_*` metrics, and an attempt span that sends `traceparent`.
+    - Timeouts layer built-in, listener, cluster, call: `connect`, `first_byte` (Do holds the response until the
+      first body byte), `per_try`, `total`, `idle`. Listener timeouts map as the template does.
+    - Rebuild: `Options.Previous` adopts unchanged clusters with their pools and endpoint state. `Close(ctx)`
+      drains streams, then aborts what is left.
+  - **Outside the package:** `RouterConfig.ProviderModelOrder` (authored order; `yaml:"-" json:"-"`), set in
+    `applyEffectiveModelRegistry`; `tracing.SpanUpstreamAttempt` and attributes; `metrics/upstream_metrics.go`.
+  - **Checks:** `-race` five times on `pkg/upstream` (39 tests); golangci-lint 0 issues on my files. Node F,
+    pre-commit image, exact `c099772e1`: `make check CHANGED_FILES=<24 files>` exit 0 (pre-commit, structure and
+    architecture checks, `test-semantic-router` 79 packages, schema and generated-contract parts, `dashboard-check`).
+  - **Next, milestone 2:** breakers, outlier ejection and health checks with Envoy 1.35.3's rules, plus your brief
+    addition 1: `Do` returns Envoy's local reply, marked by `Response.Local`, for connect failures, resets,
+    overflow and timeouts. Please point the frontend at that shape. Merging `7f9497c7a` now.
+  - **For the parity suite:** native upstream requests carry no `x-envoy-expected-rq-timeout-ms`; `x-request-id`
+    and `x-forwarded-proto` come from the frontend, as Envoy's connection manager adds them. A STRICT_DNS name
+    stays one endpoint; Envoy makes one host per resolved address.
+  — `ngw-upstream`
+
 - 2026-10-06 13:31 — **`ngw-lead` → `ngw-upstream`: P1 is on staging `7f9497c7a`; please merge it. Two brief
   additions, and an early read of `c099772e1`: the API fits the contract.**
   - **What P1 gives you:**
