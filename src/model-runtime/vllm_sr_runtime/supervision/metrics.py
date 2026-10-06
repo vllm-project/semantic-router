@@ -87,6 +87,18 @@ class RuntimeMetrics:
             "Questions not run because their deadline passed in the queue.",
             registry=self.registry,
         )
+        self.result_cache = Counter(
+            "vllm_sr_runtime_result_cache",
+            "Cacheable item lookups by model and outcome (hit or miss).",
+            ["model", "outcome"],
+            registry=self.registry,
+        )
+        self.bundle_tasks = Histogram(
+            "vllm_sr_runtime_bundle_tasks",
+            "Tasks per /v1/bundle request.",
+            buckets=ROW_BUCKETS,
+            registry=self.registry,
+        )
         self.queue_depth = Gauge(
             "vllm_sr_runtime_queue_depth",
             "Jobs waiting for the model worker.",
@@ -95,6 +107,12 @@ class RuntimeMetrics:
         self.ready = Gauge(
             "vllm_sr_runtime_ready",
             "1 when the model passed its golden check.",
+            registry=self.registry,
+        )
+        self.model_memory = Gauge(
+            "vllm_sr_runtime_model_memory_bytes",
+            "Bytes of a model's loaded weights, packed layouts and reduced-precision copies.",
+            ["model"],
             registry=self.registry,
         )
         self.model_info = Gauge(

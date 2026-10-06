@@ -7,7 +7,7 @@ error; tensors outside ``prefix`` (for example a vision tower) are ignored.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 
 import torch
@@ -29,19 +29,38 @@ def iter_tensors(files: Iterable[Path], prefix: str = ""):
 
 
 def set_parameter(root: nn.Module, name: str, tensor: torch.Tensor) -> None:
-    """Replace a (possibly meta) parameter with a loaded FP32 tensor."""
+    """Replace a (possibly meta) parameter with a loaded FP32 tensor in the process's own memory.
+
+    ``get_tensor`` returns a view of the checkpoint's file mapping, which an
+    FP32 tensor would keep: GEMMs then read file-backed pages, a short CPU
+    forward 8-11% slower than on a private copy.
+    """
     owner_name, _, leaf = name.rpartition(".")
     owner = root.get_submodule(owner_name) if owner_name else root
     owner._parameters[leaf] = nn.Parameter(
-        tensor.to(torch.float32).contiguous(), requires_grad=False
+        tensor.to(torch.float32, copy=True).contiguous(), requires_grad=False
     )
 
 
-def load_backbone(module: nn.Module, files: Iterable[Path], prefix: str = "") -> None:
+def _renamed(name: str, renames: Mapping[str, str]) -> str:
+    for old, new in renames.items():
+        if name.startswith(old):
+            return new + name[len(old) :]
+    return name
+
+
+def load_backbone(
+    module: nn.Module,
+    files: Iterable[Path],
+    prefix: str = "",
+    renames: Mapping[str, str] | None = None,
+) -> None:
+    """Load every parameter of ``module``; ``renames`` maps checkpoint name prefixes to module ones."""
     expected = {name for name, _ in module.named_parameters()}
     parameters = dict(module.named_parameters())
     seen: set[str] = set()
-    for name, tensor in iter_tensors(files, prefix):
+    for checkpoint_name, tensor in iter_tensors(files, prefix):
+        name = _renamed(checkpoint_name, renames or {})
         if name not in parameters:
             if prefix:
                 continue
@@ -87,6 +106,24 @@ def load_adapter(module: nn.Module, files: Iterable[Path]) -> int:
     if seen != expected:
         raise ValueError(f"adapter covers {len(seen)} of {len(expected)} LoRA factors")
     return loaded
+
+
+def cast_parameters(module: nn.Module, dtype: torch.dtype) -> None:
+    """Hold every parameter in ``dtype``; buffers such as rotary frequencies keep theirs, as Transformers loads."""
+    for parameter in module.parameters():
+        parameter.data = parameter.data.to(dtype)
+
+
+def lay_out_linears(
+    module: nn.Module, make: Callable[[nn.Linear], nn.Module]
+) -> nn.Module:
+    """Every ``nn.Linear`` inside ``module`` replaced in place by ``make(linear)``."""
+    for name, child in module.named_children():
+        if isinstance(child, nn.Linear):
+            setattr(module, name, make(child))
+        else:
+            lay_out_linears(child, make)
+    return module
 
 
 def keep_linear_bf16(module: nn.Module) -> dict[str, int]:
