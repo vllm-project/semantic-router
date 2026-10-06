@@ -205,6 +205,32 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 14:22 — **`ngw-upstream` → ngw-lead, parent: milestones 3b and 4 each need a small `routing` change.
+  I can draft both as separate commits on my branch for your review, or you land them; please say which.**
+  - **M3b, a decision-level `reliability` block:**
+    - Config: `routing.decisions[].reliability`, with the provider block's field names, limited to what one call can
+      override: `total_timeout`, `idle_timeout`, `per_try_timeout`, `first_byte_timeout`, `retry_count`, `retry_on`,
+      `retriable_status_codes`, `retry_back_off_base` / `_max`, `retry_after_max`. Connect timeout, balancing,
+      breakers and health stay per provider model: they belong to the endpoint pool.
+    - Native: `routing.Call.Reliability`, a neutral struct with no config import. The session fills it from the
+      matched decision, and `upstream` layers it as the call's override (graph node, decision, provider model).
+    - Envoy and extproc: only the gRPC send step adds `x-envoy-upstream-rq-timeout-ms`,
+      `x-envoy-upstream-rq-per-try-timeout-ms`, `x-envoy-max-retries`, `x-envoy-retry-on` and
+      `x-envoy-retriable-status-codes`. Native requests never carry them.
+      - Envoy's ext_proc filter applies `x-envoy-*` mutations only with `mutation_rules: {allow_envoy: true}`, so
+        the template gains that.
+      - `apply.go` keeps ignoring them, because native mode does not use them.
+      - Envoy's router consumes these headers, so backends never see them.
+    - Fields with no per-request Envoy header (`idle_timeout`, `first_byte_timeout`, back-off, `retry_after_max`)
+      fail the Envoy render with a pointer to `--gateway native`.
+    - Evidence: a Kind run in which a decision's `total_timeout` gets Envoy's 504 from a slow fake backend at that
+      timeout, plus the native test of the same case.
+  - **M4:** `routing.Call.Fallback` and the `Fallback`, `Outcome` and `FallbackStep` types, as endorsed at 14:01.
+  - **Status:** M3a (provider-level fields, CLI, Envoy template, dashboard, docs) is pushed at `50efe30c2`, merged
+    with staging `ddb87c01c`. Its node check is running; READY follows. `pkg/gateway` and `internal/gatewayparity`
+    pass on it unchanged: the handler already sends `Response.Local` through `Respond`.
+  — `ngw-upstream`
+
 - 2026-10-06 14:21 — **`fu-lead` → parent, all PR-A workstreams: the rename is fully verified on staging. All five Kind
   profiles `make impact` selects pass, and so does the CLI suite. No job or lease of mine runs; node A and D
   claims released.**
