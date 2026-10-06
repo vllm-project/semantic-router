@@ -193,6 +193,21 @@ class PairShapeTests(unittest.TestCase):
             refuse_mismatched_shape(baseline, candidate)
         self.assertIn("different settings", str(ctx.exception))
 
+    def test_both_missing_max_length_refused(self) -> None:
+        """Two absent values must not silently compare equal.
+
+        A naive `baseline.get(key) != candidate.get(key)` check treats two
+        runs that both omit max_length as "matching" (None == None), even
+        though the comparison is actually unverifiable, not confirmed fair.
+        """
+        baseline = _run_fixture(["r1"], forward_p99_ms=10.0)
+        candidate = _run_fixture(["r1"], forward_p99_ms=10.0)
+        del baseline["run"]["max_length"]
+        del candidate["run"]["max_length"]
+        with self.assertRaises(SystemExit) as ctx:
+            refuse_mismatched_shape(baseline, candidate)
+        self.assertIn("missing", str(ctx.exception))
+
 
 class PairLatencyTests(unittest.TestCase):
     """Regression: paired latency deltas must use the full measurement

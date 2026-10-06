@@ -75,6 +75,16 @@ def refuse_mismatched_shape(baseline: dict, candidate: dict) -> None:
 
     baseline_run = baseline.get("run") or {}
     candidate_run = candidate.get("run") or {}
+    missing = [
+        key
+        for key in RUN_SHAPE_KEYS
+        if baseline_run.get(key) is None or candidate_run.get(key) is None
+    ]
+    if missing:
+        # Two absent values must not silently compare equal -- that is
+        # "unverifiable", not "matching".
+        raise SystemExit(f"run settings missing {missing}; refusing to pair")
+
     mismatched = {
         key: (baseline_run.get(key), candidate_run.get(key))
         for key in RUN_SHAPE_KEYS
