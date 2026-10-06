@@ -188,10 +188,11 @@ each, with the runtime side at `2afe0f878` and the inputs of the section below:
 **Verdicts.** No cell is worse against either baseline. Against legacy every
 cell is better, including the one the ONNX Runtime path left open below
 (Nano text p95 between load windows: 6.82 against 8.40 ms). Against the ONNX
-Runtime path every cell is better or level. Two level cells have a worse
+Runtime path every cell is better or level. One level cell has a worse
 point: Mini audio's p50 between load windows (+21.3 ms, its interval reaching
--0.09), where the same native process answered in 445 ms in the latency run,
-and its 4-caller rate (+0.02 req/s). The node's 1-minute load was 18–31
+-0.09), where the same native process answered in 445 ms in the latency run.
+Its 4-caller rate (+0.02 req/s) and Nano text's two p50s are level with a
+better point. The node's 1-minute load was 18–31
 during the run (other workstreams' jobs on other vCPUs, untimed profiles on
 vCPUs 32–47 of the same NUMA node among them).
 
