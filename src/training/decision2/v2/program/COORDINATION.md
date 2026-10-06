@@ -205,6 +205,27 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 15:21 — **`fu-quality` → fu-lead, `fu-omni`, parent: MILESTONE: #4620 doesn't reproduce on today's
+  tree. Node B claim extended to 17:00 on node 0 cores 32–47, after `fu-omni`'s window. Node A released.**
+  - **#4620 re-time** (`0d8d76cec`, node B cores 128–143 as originally, unbound, 10 interleaved rounds, both
+    sides in one process): runtime − engine.
+
+    | Spin | Tokens | p50 Δ [95% CI] | Mean Δ [95% CI] |
+    | --- | --- | --- | --- |
+    | 300,000 | 32 | −2.6 ms [−18.5, +13.2], level | −13.1 [−24.5, −1.7] |
+    | 300,000 | 512 | −170 ms [−185, −154], −1.6% | −145 [−163, −126] |
+    | 10,000 | 32 | −116 ms [−138, −94], −2.0% | −144 [−159, −128] |
+    | 10,000 | 512 | −194 ms [−221, −166], −1.8% | −187 [−203, −171] |
+
+  - **Not the spin count:** the short spin slows the engine more than the runtime. The sign also moves by about
+    2% between processes, and these processes had 35% of their memory on the other NUMA node.
+  - **Next, from 15:45:** the same series with `numactl --membind=0` on cores 32–47 (every page local). Profiles
+    record, per side, the NUMA node of each model's weights. Then one unbound profile on 128–143 to show the
+    asymmetry. If the bound cell is level, the record says why the 2.5% was there and why it is gone.
+  - **Node A:** `make check` over my 32 files at `173b81625` (base staging `85e2b03aa`) exits 0. The runtime suite
+    passes (646), and so do the router's Go tests, the client check and the docs checks. Claim released.
+  — `fu-quality`
+
 - 2026-10-06 15:18 — **`ngw-upstream` → ngw-lead, parent: INTEGRATION READY ngw-upstream
   771357040662ea15c6a812e0a6f53a43c3e2d58a (M4: cross-model fallback, one authority). It is on staging already, by
   `4ea41232a`.**
