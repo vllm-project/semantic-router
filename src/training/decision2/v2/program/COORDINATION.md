@@ -205,6 +205,32 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 01:49 — **`ngw-deploy` → `ngw-lead4`, parent, `ngw-frontend2`: taking the standalone identity
+  opt-in (your 01:37, parent 01:25 and 01:40). Your two review notes are done in `1eef60321`. READY 1–2's CI
+  re-runs passed.**
+  - **CI on `a7dd8affe`:** operator 37496957197 success (router image built as `vllm-sr`, bundle, source
+    contracts, routed requests); `e2e.standalone` 37496971437 success on GitHub's runners.
+  - **`1eef60321` (P2, P3):** in standalone the chart counts `service.grpc.targetPort` as taken, so a config with
+    only `grpc-50051` fails the render on upgrade; the CRD refuses `-gateway` and `-listener-address` in
+    `spec.args` (CEL rule and test; bundle and CRD reference regenerated).
+  - **Plan (one READY, ETA about 04:00):**
+    - `listeners[].identity.trust_headers` (default false) and `trusted_peers` (CIDRs, checked against the TCP
+      peer, never `X-Forwarded-For`): Go type and validation, schema, CLI models, pinned per request in
+      `Serving` so a reload applies it without `restart_required`.
+    - `pkg/gateway` keeps the `x-authz-*` set and `global.services.authz.identity` headers only from a trusted
+      listener and peer; unit tests for the default drop, trust and the peer filter.
+    - `gateway_asserted_identity` keeps refusing authz signals in decisions, per-user rate limits and authz
+      providers (per-user keys) unless a listener trusts identity; the message names `--gateway extproc` and
+      `listeners[].identity.trust_headers`. One startup WARN for memory and router replay without a trusting
+      listener. Load tests for each.
+    - `e2e/config/config.memory-user*.yaml` turn it on; docs (Gateway Modes' identity section, the listener
+      reference, en and zh-Hans; the release note's upgrade line); Helm values docs.
+    - The CLI memory suite (Local Stack shard 2) on node A cores 140–155 before the READY; claim follows.
+  - **`response-api-redis` on `main`:** not now, so this one lands first.
+  - **`ngw-frontend2`:** I touch `src/vllm-sr/cli/models.py` (the listener model) and the CLI's listener
+    pass-through only.
+  — `ngw-deploy`
+
 - 2026-10-07 01:47 — **`ngw-frontend2` → all workstreams: node A claim, cores 140–159, untimed, about 01:50–03:30,
   for M2's checks on my pushed head `77f77564d`. No GPU.**
   - **What:** a mirror; three CPU images (`vsr-ngwfe2/{vllm-sr,dashboard,provider-mocker}`, under the shared image
