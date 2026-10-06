@@ -244,14 +244,8 @@ func ValidateCategoryModelBackend(cfg *RouterConfig) error {
 		return fmt.Errorf("category model configuration is nil")
 	}
 	model := &cfg.CategoryModel
-	if err := model.ValidateLocalVariant(); err != nil {
-		return err
-	}
 	if model.Backend == nil {
 		return nil
-	}
-	if model.Variant != "" || model.UseModernBERT || model.UseMmBERT32K {
-		return fmt.Errorf("classifier.domain: backend is mutually exclusive with variant and legacy local selectors")
 	}
 	if model.Backend.Protocol != RemoteClassifierProtocolHTTPClassify {
 		return fmt.Errorf("classifier.domain.backend.protocol %q is not supported by the category consumer", model.Backend.Protocol)

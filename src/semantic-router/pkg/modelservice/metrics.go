@@ -16,10 +16,31 @@ var (
 	requestDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "vsr_model_runtime_request_duration_seconds",
-			Help:    "Latency of model runtime calls that reached the runtime.",
-			Buckets: []float64{0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5},
+			Help:    "Latency of model runtime calls that reached the runtime, by surface.",
+			Buckets: []float64{0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5},
 		},
-		[]string{"deployment"},
+		[]string{"deployment", "surface"},
+	)
+	cacheTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vsr_model_runtime_result_cache_total",
+			Help: "Classify and decision results served from the per-model result cache (hit) or the runtime (miss).",
+		},
+		[]string{"deployment", "result"},
+	)
+	bundleTasks = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "vsr_model_runtime_bundle_tasks",
+			Help:    "Tasks per /v1/bundle call.",
+			Buckets: []float64{1, 2, 3, 4, 6, 8, 12, 16, 32, 64},
+		},
+	)
+	bundleWait = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "vsr_model_runtime_bundle_wait_seconds",
+			Help:    "Time from a bundle's first parked call to its flush.",
+			Buckets: []float64{0.00005, 0.0001, 0.0002, 0.0005, 0.001, 0.002, 0.005},
+		},
 	)
 	unknownAnswers = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -31,14 +52,14 @@ var (
 	readyGauge = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "vsr_model_runtime_ready",
-			Help: "1 while the deployment's runtime passes its readiness check.",
+			Help: "1 while the deployment's model passes its runtime's readiness check.",
 		},
 		[]string{"deployment"},
 	)
 	restartsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "vsr_model_runtime_restarts_total",
-			Help: "Restarts of Router-managed runtime processes.",
+			Help: "Restarts of the Router-managed runtime process that serves the deployment.",
 		},
 		[]string{"deployment"},
 	)

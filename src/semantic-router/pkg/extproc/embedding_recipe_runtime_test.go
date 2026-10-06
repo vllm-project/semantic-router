@@ -10,7 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
 func TestEmbeddingConsumerUsesSelectedRecipeBinding(t *testing.T) {
@@ -49,7 +49,7 @@ func TestEmbeddingConsumerUsesSelectedRecipeBinding(t *testing.T) {
 	cfg.ModelBindings = binding("default-embedding")
 	cfg.Recipes = []config.RoutingRecipe{{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{ModelBindings: binding("default-embedding")}}, {Name: "named", Profile: config.RoutingProfile{ModelBindings: binding("named-embedding")}}}
 	cfg.Entrypoints = []config.EntrypointMapping{{ModelNames: []string{"named-entry"}, Recipe: "named"}}
-	runtime := native.New(nil)
+	runtime := serving.New(nil, nil)
 	defaultSet, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, runtime)
 	if err != nil {
 		t.Fatal(err)
