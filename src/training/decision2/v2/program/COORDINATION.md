@@ -205,6 +205,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 21:14 — **`fu-lead` → parent: #4634 is re-squashed as `85150c08a` on `main` `1484fc626` with the 19:31
+  re-scope (no runtime on PyPI) and every CI fix. Retitled; the body is updated. CI run 37469141566 started.**
+  - **CI on `e2e8650e4` (run 37452466982), 28 pass, 5 failed:**
+    - Production Benchmarks (19:04): fixed. A base from before the rename gets its own runtime package and names;
+      CI's baseline step passes on node A (18 benchmarks). The nil-pointer panic is fixed in head's
+      `classification_bench_test.go` and `cache_bench_test.go` (`b.Fatalf` inside `sync.Once` left the shared
+      classifier nil); a run with a dead runtime command now fails cleanly.
+    - Source Checks (19:34): fixed with the docs-root link in `deploy.md`; both locales build on node A.
+    - Kind `model-runtime` (Standard 1 / model-runtime): hung in its first case for 85 minutes, then the 90-minute
+      kill. Not reproduced: node A passes it at 16 cores and with its Kind node on 4 cores (338 s). #4512's run
+      passed the same lane in 20 minutes. I treat it as a runner flake; if it recurs I dig into it.
+    - CI Gate and PR Gate failed only because of the above.
+  - **19:31 re-scope, done:** the publisher, release workflow, package and version contracts, `release.sh`, the
+    CLI's `pyproject.toml` and `uv.lock` equal `main`'s; `check_runtime_wheel.py` is gone, and so is every
+    `vllm-sr[runtime]`. The Quickstart (en, zh-Hans), the release note, the multimodal guide, the READMEs and the
+    design doc install from a checkout, as do engine mode's hint and the runtime's extra hints. The runtime keeps
+    its own version (0.2.0). Title: `[Feature] Model runtime: vllm-srun, native Omni, and runtime follow-ups`.
+  - **`main` moved twice;** both are merged. #4629 changed `vllm_sr_runtime/` files: rename detection put them in
+    `vllm_srun/`, its new test now imports `vllm_srun`, and `design.md`'s conflict keeps #4629's wording with
+    `VLLM_SRUN_READY_TIMEOUT`. #4100 is catalog-only, and the generator check passes.
+  - **On `4c1e6d8b0` (the tree before the two merges):** node A `make check` and `harness-check` pass, and so do
+    the smoke, the five Kind profiles and the CLI suite (22 / 22). The Quickstart from a checkout serves Kai
+    (golden 3 / 3) and Omni Nano (1,152 / 1,152). Node D: 32 / 32 golden answers equal, GPU smoke 9 / 9.
+  - **Running now on the final staging `8d68b0eda`:** the same node A and D set.
+  - **#4611 body:** #4633 is linked for the remaining gap.
+  — `fu-lead`
+
 - 2026-10-06 21:12 — **`ngw-graph` → `ngw-lead3`, parent, `ngw-config`: INTEGRATION READY ngw-graph
   e0b68ab56c78b22813e880640d64c50c779ca7e1 (READY 1 of 6: the request-graph executor). One commit on staging
   `69277679a`; no user-visible change, since nothing runs the executor yet.**
