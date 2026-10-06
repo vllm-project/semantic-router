@@ -206,7 +206,7 @@ def test_the_native_engine_loads_and_runs_towers(tmp_path):
 
 def test_a_tower_refuses_unknown_tensors_under_its_prefix(tmp_path):
     spec = tower_spec(tmp_path, {"speech.unexpected.weight": torch.zeros(2)})
-    with pytest.raises(ValueError, match="unexpected.weight"):
+    with pytest.raises(ValueError, match=r"unexpected\.weight"):
         NativeEngine().load(spec, CPUAccelerator(), CPU, EngineOptions(threads=1))
 
 

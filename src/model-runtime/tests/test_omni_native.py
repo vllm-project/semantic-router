@@ -110,7 +110,7 @@ def test_a_local_snapshot_verifies_by_its_file_digests(snapshot):
 
 
 def test_a_pinned_revision_must_match_its_digests(snapshot, monkeypatch):
-    pinned = replace(pins.MODELS[0], files={name: "0" * 64 for name in snapshots.FILES})
+    pinned = replace(pins.MODELS[0], files=dict.fromkeys(snapshots.FILES, "0" * 64))
     monkeypatch.setattr(pins, "lookup", lambda repo: pinned)
     family = MultimodalEmbeddingFamily()
     ref = PackageRef(snapshot, pinned.repo_id, pinned.revision)

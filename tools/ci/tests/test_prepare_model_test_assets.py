@@ -34,9 +34,11 @@ class PreparationTests(unittest.TestCase):
             for name, data in CONTENT.items():
                 (directory / name).write_bytes(data)
 
-        with tempfile.TemporaryDirectory() as temporary, patch.object(
-            table, "lookup", return_value=entry
-        ), patch.object(preparation, "download", side_effect=download):
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.object(table, "lookup", return_value=entry),
+            patch.object(preparation, "download", side_effect=download),
+        ):
             output = Path(temporary)
             preparation.prepare(output, ["nano"])
             preparation.prepare(output, ["nano"])
@@ -52,11 +54,13 @@ class PreparationTests(unittest.TestCase):
             directory.mkdir(parents=True, exist_ok=True)
             (directory / "config.json").write_bytes(b"{}")
 
-        with tempfile.TemporaryDirectory() as temporary, patch.object(
-            table, "lookup", return_value=entry
-        ), patch.object(preparation, "download", side_effect=download):
-            with self.assertRaisesRegex(ValueError, "pinned files"):
-                preparation.prepare(Path(temporary), ["nano"])
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.object(table, "lookup", return_value=entry),
+            patch.object(preparation, "download", side_effect=download),
+            self.assertRaisesRegex(ValueError, "pinned files"),
+        ):
+            preparation.prepare(Path(temporary), ["nano"])
 
 
 if __name__ == "__main__":

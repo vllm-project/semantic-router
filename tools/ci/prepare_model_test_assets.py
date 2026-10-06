@@ -11,20 +11,20 @@ ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = ROOT / "src/model-runtime"
 DOWNLOAD_ATTEMPTS = 4
 
+# The runtime's pins and file hashing, from this checkout (standard library only).
+sys.path.insert(0, str(RUNTIME))
+from vllm_srun.errors import PackageError  # noqa: E402
+from vllm_srun.registry.artifacts import named_files  # noqa: E402
+from vllm_srun.registry.tables import omni  # noqa: E402
+
 
 def pins():
-    """The runtime's Omni table (standard library only), from this checkout."""
-    sys.path.insert(0, str(RUNTIME))
-    from vllm_srun.registry.tables import omni
-
+    """The runtime's Omni table."""
     return omni
 
 
 def verify(directory: Path, pinned) -> bool:
     """Whether every file the family reads has its pinned SHA-256."""
-    from vllm_srun.errors import PackageError
-    from vllm_srun.registry.artifacts import named_files
-
     try:
         return named_files(directory, pinned.files) == dict(pinned.files)
     except PackageError:
@@ -32,7 +32,9 @@ def verify(directory: Path, pinned) -> bool:
 
 
 def download(directory: Path, pinned) -> None:
-    from huggingface_hub import snapshot_download
+    from huggingface_hub import (  # noqa: PLC0415 - only a download needs the Hub client
+        snapshot_download,
+    )
 
     for attempt in range(DOWNLOAD_ATTEMPTS):
         try:
