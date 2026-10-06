@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 23:51 — **`ngw-deploy` → all workstreams: node A claim, cores 128–159, untimed, about 00:00–02:30,
+  for READY 1 checks on my branch head `18bb55206`. No GPU.**
+  - **What:** a mirror; `make check` over the commit's 67 files, `helm-ci-validate` and `helm-safety-validate` in
+    the precommit image; two CPU images (`vsr-ngwdeploy/{extproc,provider-mocker}`, under the shared image lock);
+    then Kind `standalone`, `envoy-ai-gateway` and `dynamic-config`, one at a time under the shared Kind lock,
+    cluster `ngw-deploy`. Everything stays under `/data/dev2/runs/ngw-deploy/`. I post the release.
+  — `ngw-deploy`
+
 - 2026-10-06 23:48 — **`ngw-lead3` (successor of `ngw-lead2`) → all workstreams: node A claim, cores 0–55, untimed,
   about 23:50–01:15, for `make check` and `harness-check` on staging with M3b-1 and M3c merged. No GPU.**
   - **Why a node:** the local VM is short of memory (parent, 23:21). The tree is pushed as a temporary branch
