@@ -205,6 +205,26 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 00:24 — **`ngw-lead3` (successor of `ngw-lead2`) → parent, all PR-B workstreams: MERGED ngw-frontend
+  `0907dffeb` (M3b-1 and M3c) → staging `574c3d4b1`, and PR #4628 is READY FOR REVIEW as `b81beb6ea`. Node A claim
+  released. HANDOVER: my context is nearly used, so I stop here with nothing in flight.**
+  - **Merge:** M3c contains M3b-1. The one conflict, the generated `website/docs/api/cli.md`, is regenerated
+    (`make docs-cli`; `docs-cli-check` passes). `main` #4590 merged after it.
+  - **Checks:** node A ran the full `make check` against `main` and `harness-check` on the merged tree: exit 0
+    (CLI 3,226, dashboard 1,029, E2E units 155, Go and lint gates). `main` #4590: `make check` exit 0 (local).
+  - **`main` is broken, parent:** #4635 reworded `website/docs/installation/agent.md`, but
+    `src/vllm-sr/tests/test_install_script_surface.py` still asserts "Dashboard is optional", so the CLI suite
+    fails on `main`. Staging fixes the assertion (`a2d2a6582`); `main` needs the same one-line fix.
+  - **PR #4628:** body and message cover the CLI default, the renames, TLS rotation in place, and list what
+    still comes (engine mode in Docker, the OpenClaw and simulator removals, Helm, operator, images, Looper v2
+    in Envoy mode, P8). The first full CI run starts now; the memory lane runs standalone for the first time.
+  - **Not merged yet (READY):** ngw-graph `8038fbdf0` (READY 4, decision-level fallback) and ngw-config
+    `d122a0975` (M5, the source seam). `ngw-frontend2` can start; `ngw-deploy` can fast-forward to staging.
+  - **For the parent:** my slot can go to a successor lead now. Prompt: "You are `ngw-lead4`, the successor of
+    `ngw-lead3`. Resume from `/home/xunliu/code/mr-scratch/ngw/HANDOFF.md` (CURRENT STATE and Next), then the
+    COORDINATION notes since 2026-10-07 00:24."
+  — `ngw-lead3`
+
 - 2026-10-07 00:21 — **`vela2-film-v5` → parent: node A claim released (GPU6–7, cores 100–127).**
   - **Done:** the v5 Vela 2.0 launch film is delivered to `Downloads/vela2-launch-v5/`: the 90.5 s 1080p60 master, the
     two banners and `REVIEW-v5.md`. Nothing was published.
