@@ -20,19 +20,19 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from vllm_sr_runtime.config import ModelConfig, ServeConfig  # noqa: E402
-from vllm_sr_runtime.engines.native import fast, models  # noqa: E402
-from vllm_sr_runtime.engines.native.engine import NativeEngine  # noqa: E402
-from vllm_sr_runtime.engines.native.weights import cast_parameters  # noqa: E402
-from vllm_sr_runtime.families.decision1 import package as pkg  # noqa: E402
-from vllm_sr_runtime.families.decision1.family import Decision1Family  # noqa: E402
-from vllm_sr_runtime.plugins.base import (  # noqa: E402
+from vllm_srun.config import ModelConfig, ServeConfig  # noqa: E402
+from vllm_srun.engines.native import fast, models  # noqa: E402
+from vllm_srun.engines.native.engine import NativeEngine  # noqa: E402
+from vllm_srun.engines.native.weights import cast_parameters  # noqa: E402
+from vllm_srun.families.decision1 import package as pkg  # noqa: E402
+from vllm_srun.families.decision1.family import Decision1Family  # noqa: E402
+from vllm_srun.plugins.base import (  # noqa: E402
     EncoderBatch,
     EngineOptions,
     PackageRef,
 )
-from vllm_sr_runtime.runtime import Runtime  # noqa: E402
-from vllm_sr_runtime.testing.decision1 import write_package  # noqa: E402
+from vllm_srun.runtime import Runtime  # noqa: E402
+from vllm_srun.testing.decision1 import write_package  # noqa: E402
 
 from .test_gpu_fast_path import LENGTHS, _device, batch, qwen3_5  # noqa: E402
 
@@ -94,7 +94,7 @@ def test_bf16_stream_fast_path_equals_eager(case):
 
 def test_fp64_convolution_falls_back_off_its_shapes():
     pytest.importorskip("triton")
-    from vllm_sr_runtime.accel.triton_fp64_conv import fp64_conv
+    from vllm_srun.accel.triton_fp64_conv import fp64_conv
 
     calls = []
 

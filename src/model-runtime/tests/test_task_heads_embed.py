@@ -9,17 +9,17 @@ from dataclasses import replace
 import numpy as np
 import pytest
 import torch
-from vllm_sr_runtime.accel import onednn
-from vllm_sr_runtime.accel.cpu import CPUAccelerator
-from vllm_sr_runtime.engines.native.engine import NativeEngine
-from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.families.task_heads.family import (
+from vllm_srun.accel import onednn
+from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.engines.native.engine import NativeEngine
+from vllm_srun.errors import PackageError
+from vllm_srun.families.task_heads.family import (
     TaskHeadsFamily,
     batch_invariant,
     length_buckets,
 )
-from vllm_sr_runtime.heads.task import identical
-from vllm_sr_runtime.plugins.base import (
+from vllm_srun.heads.task import identical
+from vllm_srun.plugins.base import (
     DeviceInfo,
     EngineOptions,
     PackageRef,
@@ -27,8 +27,8 @@ from vllm_sr_runtime.plugins.base import (
     SurfaceRequest,
     UnsupportedSurfaceError,
 )
-from vllm_sr_runtime.profiles.exact import ExactProfile
-from vllm_sr_runtime.testing import embed_packages
+from vllm_srun.profiles.exact import ExactProfile
+from vllm_srun.testing import embed_packages
 
 CPU = DeviceInfo(accelerator="cpu", index=None, name="cpu")
 
@@ -193,7 +193,7 @@ def test_exact_merges_native_cpu_embedders_and_rerankers_where_the_probe_holds(
 def test_graph_engine_serves_the_configured_exits(embedder, reranker):
     pytest.importorskip("onnxruntime")
     pytest.importorskip("onnx")
-    from vllm_sr_runtime.engines.onnxruntime.engine import OnnxRuntimeEngine
+    from vllm_srun.engines.onnxruntime.engine import OnnxRuntimeEngine
 
     _, _, model = load(embedder, OnnxRuntimeEngine(), layers=[2, 4])
     assert model.info.embedding.layers == (2, 4)
@@ -219,7 +219,7 @@ def test_graph_engine_serves_the_configured_exits(embedder, reranker):
 def test_auto_tries_the_tables_engine_first_where_it_runs(embedder):
     pytest.importorskip("onnxruntime")
     pytest.importorskip("onnx")
-    from vllm_sr_runtime.runtime import choose_engine
+    from vllm_srun.runtime import choose_engine
 
     family = TaskHeadsFamily(RegistryOptions())
     spec = family.describe(family.verify(PackageRef(embedder)))
@@ -235,7 +235,7 @@ def test_auto_tries_the_tables_engine_first_where_it_runs(embedder):
 def test_graph_runs_keep_torch_on_one_thread(embedder):
     pytest.importorskip("onnxruntime")
     pytest.importorskip("onnx")
-    from vllm_sr_runtime.engines.onnxruntime.engine import OnnxRuntimeEngine
+    from vllm_srun.engines.onnxruntime.engine import OnnxRuntimeEngine
 
     _, _, model = load(embedder, OnnxRuntimeEngine(), layers=[2])
     seen = []

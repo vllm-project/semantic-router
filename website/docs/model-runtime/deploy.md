@@ -90,11 +90,11 @@ turns on the GPU, one device call at a time; put a model on a GPU of its own
 when it must not wait for the others. CPU models
 are spread over several processes, one per model up to one per two cores the
 router may use, so a request's models run in parallel; each process runs an
-equal share of the cores as threads. `VLLM_SR_RUNTIME_CPU_PROCESSES` caps the
+equal share of the cores as threads. `VLLM_SRUN_CPU_PROCESSES` caps the
 number of CPU processes, and `1` keeps every CPU model in one process. Keep the
-default where you can: in one process, an ONNX Runtime model such as Vela Omni
-and a PyTorch model share the CPU's threads, and one of them answers more
-slowly under load.
+default where you can: in one process, a model on the optional ONNX Runtime
+engine and a PyTorch model share the CPU's threads, and one of them answers
+more slowly under load.
 
 Deployments on `device: auto` (the default) are grouped by the device `auto`
 picks on the router's host. On a host without a GPU that is the CPU, so each
@@ -102,7 +102,7 @@ of them gets a CPU process of its own, as with `device: cpu`. On a GPU host
 they share the process of the first GPU, such as `rocm:0`, with the
 deployments you put on that GPU; the runtime may still place a model on
 another device when that GPU lacks the memory, and a model it places on the
-CPU there may use every core the router has. `vllm-sr-runtime devices` shows
+CPU there may use every core the router has. `vllm-srun devices` shows
 the device `auto` picks first. The router asks once, the first time it runs a
 deployment on `auto`; if the runtime cannot answer, the `auto` deployments
 share one process until the router restarts, and the router logs
@@ -156,10 +156,11 @@ A runtime started this way listens on `127.0.0.1` unless you pass `--host`.
 Expose it only on a private network: it has no authentication of its own.
 
 On a large host, give such a runtime `--threads`, or run it in a cpuset, when
-it serves an ONNX Runtime model such as Vela Omni: each graph of that model
-runs its own pool of up to `--threads` CPU threads, and without the option up
-to every CPU the process may run on (an Omni bundle has four graphs). The
-runtimes the router starts always get their share of the cores as `--threads`.
+it serves a model on the optional ONNX Runtime engine (an ONNX package, or an
+Omni bundle): each graph of that model runs its own pool of up to `--threads`
+CPU threads, and without the option up to every CPU the process may run on (an
+Omni bundle has four graphs). The runtimes the router starts always get their
+share of the cores as `--threads`.
 
 ### On Kubernetes
 
@@ -168,6 +169,12 @@ in any cluster. The ROCm router image,
 `ghcr.io/vllm-project/semantic-router/extproc-rocm`, contains the runtime with
 PyTorch for ROCm: give the router pod an AMD GPU and set `device: rocm:0` on a
 deployment, and the router runs that model on the GPU itself.
+
+On first start the runtime downloads the models a router uses into its model
+volume (`/app/models`, the chart's `persistence` claim, 10 GiB by default).
+Size the claim for the models you route with: Vela Omni Mini alone takes
+4.3 GB. In an air-gapped cluster, fetch them into it first
+([Troubleshooting](model-runtime/troubleshooting.md#the-runtime-stays-in-loading-or-warming)).
 
 Models you keep on the CPU in the ROCm image run on its ROCm build of PyTorch.
 For most Vela task models that build fails the runtime's load-time check that
@@ -182,7 +189,7 @@ from the CPU image.
 
 To share GPU models between several routers, run the runtime as its own
 Deployment from the same image and attach every router to its Service. The
-image's `vllm-sr-runtime` command starts it:
+image's `vllm-srun` command starts it:
 
 ```yaml
 apiVersion: apps/v1
@@ -200,7 +207,7 @@ spec:
       containers:
         - name: runtime
           image: ghcr.io/vllm-project/semantic-router/extproc-rocm:latest
-          command: ["vllm-sr-runtime"]
+          command: ["vllm-srun"]
           args: ["serve", "vllm-sr/Decision-2.0-Lux-9B", "--device", "rocm:0", "--host", "0.0.0.0", "--port", "8100"]
           resources:
             limits: {amd.com/gpu: 1}
