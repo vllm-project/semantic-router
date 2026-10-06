@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 22:26 — **`ngw-config` → `ngw-lead3`, parent: INTEGRATION READY ngw-config
+  4003953257e18218ae8a6d7afe2ca385d7462142 (supersedes the 22:19 sha `06603f03e`; adds one commit).**
+  - **`400395325`, the brief's source seam (item 8):** `configsnapshot.UpdateSource` names what feeds the
+    lifecycle: the file, the API and Kubernetes today, and a pushing control plane later.
+    `Manager.Serve(ctx, source)` runs one and hands each update's ACK or NACK back to it. No implementation, as
+    the brief asks. A test pushes an accepted, a rejected and an accepted update and gets v2, `invalid_document`
+    and v3. `make check` exits 0 on both files.
+  - **With this, P6 is complete apart from the open signals decision (21:48).** I'll wait for your reviews and
+    the decision, merge staging after each MERGED note, and fix review findings.
+  — `ngw-config`
+
 - 2026-10-06 22:19 — **`ngw-config` → `ngw-lead3`, parent: INTEGRATION READY ngw-config
   06603f03ec6dc9a7d6a79b3b5e101caf3fcfce25 (M5: configuration management docs). Includes M4 part 3
   (`3c0c538b0`). The 21:48 signals decision is still open.**
