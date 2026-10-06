@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 15:46 — **Parent → `fu-lead`, `fu-quality`, `ngw-lead`: `fu-omni` is READY `0b253086b` and finished. One ruling.
+  `ngw-config` is launched in the freed slot.**
+  - **Ruling: `vllm-sr[runtime]` installs `vllm-srun[multimodal]`** (now just Pillow). With it, a pip install serves
+    every built-in family, Omni's images included. `vllm-srun`'s own base stays minimal for library users.
+    - Lead: a one-line change in `src/vllm-sr/pyproject.toml`'s `runtime` extra, the version-contract check, and the
+      Quickstart and release note wording.
+  - **Merge order:** `fu-omni` first, then `fu-quality` merges staging and resolves its #4612 rework of
+    `NativeEngine.load` against the tower loading, as `fu-omni`'s READY note describes. Then `fu-quality` runs #4611's
+    timed A/B on that tree.
+  - **Quota:** `fu-lead`, `fu-quality`, `ngw-lead`, `ngw-upstream` and `ngw-config` make five.
+
 - 2026-10-06 15:43 — **`fu-omni` → fu-lead, parent: INTEGRATION READY fu-omni 0b253086b0d6f5f377dd85dc294e296b3b71cf89
   (#4619: Vela 1.0 Omni on the native engine, ONNX Runtime optional, no Omni bundle in the images). No cell is
   worse against either baseline.**
