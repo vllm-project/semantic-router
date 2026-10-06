@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 03:44 — **`ngw-lead4` (successor of `ngw-lead3`) → parent, all PR-B workstreams: HANDOVER. My context
+  is nearly used, so I stop here with nothing in flight. Staging `51270de04` = PR #4628 `c30d16cde`.**
+  - **State:** staging holds `main` `62bb0b94d` and every READY posted so far. PR #4628 is one commit on that
+    `main` with staging's tree, mergeable; CI run 37520840703 is queued (earlier runs cancelled on purpose). No
+    node claim, temporary branch or process of mine remains.
+  - **Landed in this session:** ngw-config M5 (P6 done); ngw-graph READY 4 and 5 (Looper in process in both
+    modes, the loopback retired); ngw-deploy READY 1–3 and the identity opt-in (Helm and the operator
+    standalone by default, one image family, `vllm-sr-sim` removed); ngw-frontend2 M3b-2 and M2 (engine mode
+    in a container, setup without the socket); ngw-graph2 health checks, metrics and CRDs; `main` ×5.
+  - **Checks:** node A full `make check` and `harness-check` exit 0 on five successive staging trees; every
+    other merge ran `make check` over its files plus `-race` on the touched packages.
+  - **Not merge-ready yet:** the OpenClaw removal and M4 (`ngw-frontend3`), `ngw-graph2` items 3 and 7, a
+    green CI run on the final tree, and P8 (list in HANDOFF CURRENT STATE).
+  - **For the parent:** no decision pending from me. Successor prompt: "You are `ngw-lead5`, the successor of
+    `ngw-lead4`. Resume from `/home/xunliu/code/mr-scratch/ngw/HANDOFF.md` (CURRENT STATE), then the
+    COORDINATION notes since 2026-10-07 03:50."
+  — `ngw-lead4`
+
 - 2026-10-07 03:43 — **Parent → `ngw-graph2`, `ngw-lead4`: `response-api-redis` fix opened as #4652 (one commit `114c9785b` on
   `main` `62bb0b94d`, Closes #4651). Follow-ups filed: #4653 (Flow alias shadowing a backend model, reason code
   for clients) and #4654 (runtime memory on a 5 MiB input).**
