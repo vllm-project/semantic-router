@@ -179,8 +179,10 @@ so the runtime has one discovery path.
 
 Every plugin class has a capability descriptor (`descriptor()`): a family's
 surfaces and package formats, an engine's architectures and outputs, an
-accelerator's validation status, a profile's numerics. `/v1/models` lists
-each active plugin with its distribution, version and descriptor.
+accelerator's validation status, a profile's numerics; engines and
+accelerators also list their `auto_priority`. `/v1/models` lists each active
+plugin with its distribution, version and descriptor, so a card shows why
+`auto` chose its engine and device.
 
 Everything else the runtime needs from a plugin is declared on its class, so
 no central list names a built-in: a family names its table of pinned models
@@ -261,6 +263,7 @@ never parses a package format.
 class Engine(ABC):
     name: ClassVar[str]                     # "native" | "onnxruntime"
     def supports(self, spec: ModelSpec, device: DeviceInfo) -> str | None: ...
+    def read(self, spec, accelerator, device, options) -> Callable[[], EngineModel]: ...  # host work; returns the device work
     def load(self, spec, accelerator, device, options) -> EngineModel: ...
 
 class EngineModel(ABC):
@@ -276,6 +279,16 @@ returns hidden states by layer or named graph outputs. Readouts stay in the
 family: an engine that returns hidden states (native) and one that returns
 graph outputs with heads baked in (ONNX graphs as published) serve the same
 family, and the family records which one it used.
+
+A load is two steps. `read` does the host work and returns the device work
+that finishes the load; the runtime runs the first before it takes the
+device and the second as device work (section 10.2). The native engine reads
+the checkpoint into host memory there, in the dtypes the device holds, and
+leaves the copy to the device and the model's setup as device work. On the
+CPU it reads as device work too: there the host copy is the model's weights,
+and the CPU's torch work runs on its device thread (section 9). An engine
+without its own `read` (`onnxruntime`, and third-party engines by default)
+loads as device work.
 
 The engine defaults to `auto`: a built-in model's preferred engine for the
 placed device class (`BuiltinModel.engines`, set where an interleaved
@@ -732,8 +745,10 @@ third-party plugin by default, serves only when named) and takes the first
 available device with enough free memory. The memory estimate is the weight
 bytes under the dtype policy plus the activation bound; `--memory-budget`
 caps it per model. A model names the device capabilities it requires per
-accelerator (`ModelSpec.requires`), and placement refuses a device whose
-accelerator does not report one, before any weights load. The Qwen3.5
+accelerator (`ModelSpec.requires`; a backbone architecture declares its own
+once, in `BackboneSpec.requires`, and the families pass it on), and placement
+refuses a device whose accelerator does not report one, before any weights
+load. The Qwen3.5
 decoders require `lapack` on the CPU, since their gated-delta kernel solves
 triangular systems there: a PyTorch built without LAPACK (the ROCm image's)
 refuses them with that cause and the fix (a PyTorch with LAPACK, such as the
@@ -763,10 +778,12 @@ to load releases its worker and device memory. A package or golden-answer
 failure is final; any other load failure (no device with enough free memory,
 a download, a busy device) is retried `--load-attempts` times in all (5),
 after `--load-retry-seconds` (5 s) doubling up to 300 s, while the model
-reports `loading` with the reason. The others serve between its attempts, not
-during one: an attempt, like the first load, runs as device work (section 9),
-so the other models of its GPU, or those on the CPU's device thread, wait for
-the whole attempt, reading the weights from disk included.
+reports `loading` with the reason. An attempt, like the first load, reads the
+weights before it takes the device (`Engine.read`, section 5.2), so the other
+models of its GPU keep answering meanwhile; they wait only for its device
+work (section 9): the copy to the device, the family's load and each golden
+batch. On the CPU's device thread the native engine's read is device work
+too, so the other CPU models of the process wait for it.
 
 ### 10.3 Router-managed lifecycle
 

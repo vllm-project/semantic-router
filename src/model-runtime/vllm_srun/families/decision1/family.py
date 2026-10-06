@@ -57,8 +57,6 @@ LICENCES = {
 }
 # The released golden answers were recorded with a null catch-all description.
 GOLDEN_QUESTIONS = golden_questions(None)
-# Gated DeltaNet layers (Qwen3.5) solve triangular systems; on a CPU that needs LAPACK.
-GATED_DELTA_REQUIRES = {"cpu": ("lapack",)}
 
 
 def expected_parameters(details: pkg.Decision1Package) -> int | None:
@@ -195,15 +193,16 @@ class Decision1Family(ModelFamily):
             if files.model_name in qwen.FP64_CONV_ON_GFX942
             else {}
         )
+        backbone = BackboneSpec(
+            model_type="qwen3_5_text", config=config, weight_files=weights
+        )
         return ModelSpec(
             name=package.model_name,
-            backbone=BackboneSpec(
-                model_type="qwen3_5_text", config=config, weight_files=weights
-            ),
+            backbone=backbone,
             dtype=DtypePolicy(bf16_resident=False, gpu_weights="bfloat16"),
             max_input_tokens=package.max_input_tokens,
             kernel_variants=variants,
-            requires=GATED_DELTA_REQUIRES,
+            requires=backbone.requires,
         )
 
     def load(

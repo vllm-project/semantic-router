@@ -208,6 +208,7 @@ class OnnxRuntimeEngine(Engine):
         except ImportError:
             installed = []
         return {
+            **super().descriptor(),
             "architectures": ["onnx-graph"],
             "outputs": ["graph_outputs"],
             "devices": sorted(providers.PROVIDERS),

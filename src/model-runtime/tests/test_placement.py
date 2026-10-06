@@ -74,13 +74,20 @@ def test_device_names_and_the_auto_order_come_from_the_accelerators():
         assert device_kind("auto") == "cpu"
 
 
+GATED_DELTA_BACKBONE = BackboneSpec("qwen3_5_text", {}, ())
 GATED_DELTA = ModelSpec(
     "Decision-2.0-Eos-0.8B",
-    BackboneSpec("qwen3_5_text", {}, ()),
+    GATED_DELTA_BACKBONE,
     DtypePolicy(),
     1024,
-    requires={"cpu": ("lapack",)},
+    requires=GATED_DELTA_BACKBONE.requires,
 )
+
+
+def test_only_the_qwen3_5_backbone_requires_lapack_on_the_cpu():
+    assert GATED_DELTA_BACKBONE.requires == {"cpu": ("lapack",)}
+    for model_type in ("qwen3", "modernbert"):
+        assert BackboneSpec(model_type, {}, ()).requires == {}
 
 
 @pytest.mark.parametrize("lapack", [True, False])

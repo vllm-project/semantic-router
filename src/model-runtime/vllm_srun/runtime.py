@@ -340,9 +340,7 @@ class ServedModel:
             return placement.accelerator.execute(placement.device, work)
 
         engine_model = execute(
-            lambda: engine.load(
-                spec, placement.accelerator, placement.device, engine_options
-            )
+            engine.read(spec, placement.accelerator, placement.device, engine_options)
         )
         try:
             model = execute(lambda: family.load(package, spec, engine_model))
@@ -755,9 +753,10 @@ class Runtime:
         at once. Any other failure (no device with enough free memory, a
         download, a busy device) is retried ``load_attempts`` times in all,
         waiting ``load_retry_seconds`` and doubling up to 300 s, while the
-        model reports ``loading``; the other models serve between attempts,
-        but each attempt is device work, so the models of its device wait for
-        it. Every pass ends with ``freeze_heap``.
+        model reports ``loading``. The other models of its device keep serving
+        while an attempt reads the weights (``Engine.read``) and wait for its
+        device work: the copy to the device, the family's load and the golden
+        check. Every pass ends with ``freeze_heap``.
         """
         if self.config.autotune_cache:
             freeze_autotune(self.config.autotune_cache)

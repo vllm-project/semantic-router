@@ -117,7 +117,12 @@ The built-in families declare both the same way.
 `forward` or `encode`) only for a new kind of network or a new execution
 library. Set `auto_priority` if `engine: auto` should try your engine before
 others (lower first; the built-in `native` engine is 0); without it, `auto`
-tries it after the engines that set one, by name.
+tries it after the engines that set one, by name. Build your `descriptor()`
+on `super().descriptor()`, which lists `auto_priority` on the model cards. If
+your `load` reads weights from disk, override `read` too: it does that host
+work before the runtime takes the device and returns the device work that
+finishes the load, so the device's other models keep answering while it
+reads. Without it, all of `load` is device work.
 
 **3. An accelerator or a profile, if you need one.** For new hardware,
 subclass `Accelerator` (`available`, `devices`, `torch_device`, `kernels`), and

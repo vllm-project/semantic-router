@@ -46,8 +46,6 @@ from . import package as pkg
 from .answers import apply_score_bias, product_answer
 
 GOLDEN_QUESTIONS = golden_questions("Anything else")
-# Gated DeltaNet layers (Qwen3.5) solve triangular systems; on a CPU that needs LAPACK.
-GATED_DELTA_REQUIRES = {"cpu": ("lapack",)}
 
 
 class Decision2Family(ModelFamily):
@@ -181,9 +179,7 @@ class Decision2Family(ModelFamily):
             backbone=backbone,
             dtype=DtypePolicy(),
             max_input_tokens=package.max_input_tokens,
-            requires=(
-                GATED_DELTA_REQUIRES if backbone.model_type == "qwen3_5_text" else {}
-            ),
+            requires=backbone.requires,
         )
 
     def load(
