@@ -39,6 +39,7 @@ type Manager struct {
 	cacheDir        string
 	cores           int
 	closed          bool
+	host            *hostRuntime
 
 	dispatchSequence uint64
 
@@ -56,7 +57,7 @@ func NewManager() *Manager {
 	if runtimeDir == "" {
 		runtimeDir = filepath.Join(os.TempDir(), fmt.Sprintf("vllm-srun-%d", os.Getpid()))
 	}
-	return &Manager{groups: make(map[string]*group), runtimeDir: runtimeDir, command: command, cacheDir: os.Getenv(RuntimeCacheEnv), cores: cpuCores()}
+	return &Manager{groups: make(map[string]*group), runtimeDir: runtimeDir, command: command, cacheDir: os.Getenv(RuntimeCacheEnv), cores: cpuCores(), host: configuredHostRuntime()}
 }
 
 // Acquire returns a lease on the model_runtime deployments the configuration
@@ -68,11 +69,12 @@ func (m *Manager) Acquire(cfg *config.RouterConfig) (*Lease, error) {
 
 // AcquireDeployments returns a lease on an explicit set of deployments.
 func (m *Manager) AcquireDeployments(deployments map[string]config.ModelDeployment) (*Lease, error) {
-	auto := m.resolveAuto(deployments)
-	if err := refuseGPUOnlyOnCPU(deployments, auto); err != nil {
-		return nil, err
+	if m.host == nil {
+		if err := refuseGPUOnlyOnCPU(deployments, m.resolveAuto(deployments)); err != nil {
+			return nil, err
+		}
 	}
-	plans := planProcesses(deployments, m.command, m.cacheDir, m.cores, auto)
+	plans := m.processPlans(deployments)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -173,6 +175,9 @@ func (m *Manager) startGroupLocked(plan *processPlan) (*group, error) {
 		g := newGroup(plan, client, false)
 		g.start()
 		return g, nil
+	}
+	if m.host != nil {
+		return m.host.start(plan)
 	}
 	if err := privateDir(m.runtimeDir); err != nil {
 		return nil, err
