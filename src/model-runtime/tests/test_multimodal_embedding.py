@@ -1,4 +1,4 @@
-"""The multimodal_embedding family: bundle verification, processors and /v1/embeddings on Omni."""
+"""The multimodal_embedding family's prepared bundles on onnxruntime: verification, processors, /v1/embeddings."""
 
 from __future__ import annotations
 
@@ -32,7 +32,6 @@ from vllm_srun.plugins.base import (
     SurfaceRequest,
 )
 from vllm_srun.registry.artifacts import inventory
-from vllm_srun.registry.resolve import PREPARED_DIR_ENV, resolve
 from vllm_srun.testing import omni
 
 pytest.importorskip("onnxruntime")
@@ -59,7 +58,8 @@ def test_a_missing_extra_names_its_install(nano, monkeypatch):
     family = MultimodalEmbeddingFamily()
     package = family.verify(PackageRef(nano))
     with pytest.raises(
-        RuntimeError, match=r"Pillow: pip install 'vllm-srun\[multimodal\]'"
+        RuntimeError,
+        match=r"Omni bundles need Pillow: pip install 'vllm-srun\[multimodal,onnx\]'",
     ):
         family.describe(package)
 
@@ -94,17 +94,17 @@ def test_the_default_engine_serves_a_bundle_on_onnxruntime(tmp_path):
 
 def test_batches_never_run_on_the_cpu_device_thread(tmp_path, monkeypatch):
     from vllm_srun.config import ModelConfig, ServeConfig
-    from vllm_srun.families.multimodal_embedding.family import OmniModel
+    from vllm_srun.families.multimodal_embedding.model import GraphOmniModel
     from vllm_srun.runtime import Runtime
 
     threads: list[str] = []
-    run = OmniModel.run
+    run = GraphOmniModel.run
 
     def recording_run(self, items):
         threads.append(threading.current_thread().name)
         return run(self, items)
 
-    monkeypatch.setattr(OmniModel, "run", recording_run)
+    monkeypatch.setattr(GraphOmniModel, "run", recording_run)
     source = {"repo_id": "example/omni-fixture", "revision": "0" * 40}
     bundle = omni.write_bundle(tmp_path / "omni", source=source)
     served = ModelConfig(model=str(bundle), name="omni", device="cpu")
@@ -215,19 +215,13 @@ def test_a_failed_parity_receipt_is_refused(tmp_path):
         bundles.load(root)
 
 
-def test_hub_ids_resolve_to_the_prepared_bundle(nano, monkeypatch, tmp_path):
+def test_a_bundle_names_the_revision_it_was_prepared_from(nano, tmp_path):
     family = MultimodalEmbeddingFamily()
     ref = PackageRef(tmp_path, omni.SOURCE["repo_id"], omni.SOURCE["revision"])
     assert family.detect(ref) and not family.detect(
         PackageRef(tmp_path, "someone/else")
     )
-    monkeypatch.setenv(PREPARED_DIR_ENV, str(nano.parent))
-    assert family.fetch(ref).root == nano
-    offline = resolve(omni.SOURCE["repo_id"], offline=True, cache_dir=tmp_path)
-    assert offline.root == nano and offline.revision == omni.SOURCE["revision"]
-    monkeypatch.setenv(PREPARED_DIR_ENV, str(tmp_path))
-    with pytest.raises(PackageError, match="tools/models/vela_omni"):
-        family.fetch(ref)
+    assert family.fetch(PackageRef(nano)).root == nano
     with pytest.raises(PackageError, match="prepared from"):
         family.verify(PackageRef(nano, "vllm-sr/Vela-1.0-Omni-Mini", "1" * 40))
 
@@ -241,9 +235,9 @@ def test_model_card_descriptor(model):
     )
     assert model.info.licence == "apache-2.0" and model.info.parameters > 0
     descriptor = MultimodalEmbeddingFamily.descriptor()
-    assert descriptor["formats"] == ["vela-omni-bundle/1"] and descriptor[
-        "surfaces"
-    ] == ["embeddings"]
+    assert descriptor["formats"] == ["vela-omni/1", "vela-omni-bundle/1"]
+    assert descriptor["surfaces"] == ["embeddings"]
+    assert descriptor["engines"] == ["native", "onnxruntime"]
 
 
 def test_text_image_and_audio_share_one_unit_space(model):
@@ -391,7 +385,7 @@ def test_a_failed_image_fails_only_its_request_and_the_model_keeps_serving(
     tmp_path, monkeypatch
 ):
     from vllm_srun.config import ModelConfig, ServeConfig
-    from vllm_srun.families.multimodal_embedding.family import OmniModel
+    from vllm_srun.families.multimodal_embedding.model import GraphOmniModel
     from vllm_srun.runtime import Runtime
 
     source = {"repo_id": "example/omni-fixture", "revision": "0" * 40}
@@ -404,7 +398,7 @@ def test_a_failed_image_fails_only_its_request_and_the_model_keeps_serving(
         "image_url": {"url": f"data:image/png;base64,{image}"},
     }
     body = {"model": "omni", "input": ["route this request", picture, "a second one"]}
-    embed = OmniModel._embed
+    embed = GraphOmniModel._embed
 
     def failing(self, item):
         if item.modality == "image":
@@ -414,7 +408,7 @@ def test_a_failed_image_fails_only_its_request_and_the_model_keeps_serving(
     runtime.start(background=False)
     try:
         before = asyncio.run(runtime.call("embeddings", body))
-        monkeypatch.setattr(OmniModel, "_embed", failing)
+        monkeypatch.setattr(GraphOmniModel, "_embed", failing)
         failed = asyncio.run(runtime.call("embeddings", body))
         monkeypatch.undo()
         after = asyncio.run(runtime.call("embeddings", body))
@@ -498,7 +492,7 @@ def test_bad_inputs_fail_in_place(model):
 def test_images_of_any_mode_and_size_become_normalized_channels_first_pixels(nano):
     from PIL import Image
 
-    processor = ImageProcessor(bundles.load(nano))
+    processor = ImageProcessor.from_bundle(bundles.load(nano))
     photo = io.BytesIO()
     noise = np.random.default_rng(7).integers(0, 256, (97, 151, 3), dtype=np.uint8)
     Image.fromarray(noise).save(photo, format="JPEG", quality=90)
@@ -553,7 +547,7 @@ def test_golden_request_exercises_every_graph(nano, model, tmp_path):
 
 
 def test_mini_formats_queries_with_its_instruction(tmp_path):
-    text = TextProcessor(
+    text = TextProcessor.from_bundle(
         bundles.load(omni.write_bundle(tmp_path / "mini", variant="mini"))
     )
     assert text.input_types == ("query", "document")
@@ -563,6 +557,8 @@ def test_mini_formats_queries_with_its_instruction(tmp_path):
     assert plain == document == [2, 10, 3]
     assert len(query) > len(plain) and query[-2:] == [10, 3]
     assert (
-        TextProcessor(bundles.load(omni.write_bundle(tmp_path / "nano"))).input_types
+        TextProcessor.from_bundle(
+            bundles.load(omni.write_bundle(tmp_path / "nano"))
+        ).input_types
         == ()
     )

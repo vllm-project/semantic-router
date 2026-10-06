@@ -3,11 +3,12 @@
 Both branches start from the original PCM: each channel is resampled to
 16 kHz (Whisper) and 48 kHz (CLAP) with torchaudio's default Hann-windowed
 sinc kernel, then the channels are averaged. Spectrograms follow the
-Transformers feature extractors the bundle was exported with: periodic Hann
-window, reflect-centred frames, a float64 FFT stored as complex64, the
-bundle's mel filters, and the Whisper or CLAP log readout. WAV decoding
-accepts exactly what the router accepts: integer PCM (8, 16, 24, 32 bit) and
-IEEE float32, up to eight channels and 30 seconds.
+Transformers feature extractors the published model uses: periodic Hann
+window, reflect-centred frames, a float64 FFT stored as complex64, Slaney mel
+filters (a bundle's exported filters, or the same filters computed from the
+published preprocessor configs) and the Whisper or CLAP log readout. WAV
+decoding accepts exactly what the router accepts: integer PCM (8, 16, 24, 32
+bit) and IEEE float32, up to eight channels and 30 seconds.
 """
 
 from __future__ import annotations
@@ -42,6 +43,71 @@ _FILTER_RANK = 2
 _FMT_MIN_BYTES = 16
 _EXTENSIBLE_MIN_BYTES = 40
 _EXTENSIBLE_MIN_EXTRA = 22
+# Slaney's mel scale: linear below 1 kHz (15 mels), logarithmic above.
+_MIN_LOG_HERTZ = 1000.0
+_MIN_LOG_MEL = 15.0
+# The published feature extractors' settings (Transformers' WhisperFeatureExtractor
+# and ClapFeatureExtractor as Vela 1.0 Omni configures them).
+WHISPER_FEATURES = {
+    "feature_extractor_type": "WhisperFeatureExtractor",
+    "feature_size": 80,
+    "sampling_rate": WHISPER_RATE,
+    "n_fft": 400,
+    "hop_length": 160,
+    "n_samples": 480_000,
+    "nb_max_frames": 3000,
+    "padding_value": 0.0,
+}
+CLAP_FEATURES = {
+    "feature_extractor_type": "ClapFeatureExtractor",
+    "feature_size": 64,
+    "sampling_rate": CLAP_RATE,
+    "fft_window_size": 1024,
+    "hop_length": 480,
+    "nb_max_samples": 480_000,
+    "frequency_min": 50,
+    "frequency_max": 14_000,
+    "padding": "repeatpad",
+    "truncation": "rand_trunc",
+    "top_db": None,
+}
+
+
+def _hertz_to_mel(frequency: float) -> float:
+    if frequency >= _MIN_LOG_HERTZ:
+        return _MIN_LOG_MEL + np.log(frequency / _MIN_LOG_HERTZ) * (27.0 / np.log(6.4))
+    return 3.0 * frequency / 200.0
+
+
+def _mel_to_hertz(mels: np.ndarray) -> np.ndarray:
+    frequencies = 200.0 * mels / 3.0
+    log = mels >= _MIN_LOG_MEL
+    frequencies[log] = _MIN_LOG_HERTZ * np.exp(
+        np.log(6.4) / 27.0 * (mels[log] - _MIN_LOG_MEL)
+    )
+    return frequencies
+
+
+def slaney_filters(
+    bins: int, mels: int, low: float, high: float, rate: int
+) -> np.ndarray:
+    """Area-normalized triangular filters on Slaney's mel scale, ``[bins, mels]`` float64.
+
+    The operations of Transformers' ``audio_utils.mel_filter_bank`` with
+    ``norm="slaney", mel_scale="slaney"``, the filters both published
+    feature extractors compute.
+    """
+    centres = _mel_to_hertz(
+        np.linspace(_hertz_to_mel(low), _hertz_to_mel(high), mels + 2)
+    )
+    spacing = np.diff(centres)
+    slopes = np.expand_dims(centres, 0) - np.expand_dims(
+        np.linspace(0, rate // 2, bins), 1
+    )
+    falling = -slopes[:, :-2] / spacing[:-1]
+    rising = slopes[:, 2:] / spacing[1:]
+    filters = np.maximum(np.zeros(1), np.minimum(falling, rising))
+    return filters * np.expand_dims(2.0 / (centres[2 : mels + 2] - centres[:mels]), 0)
 
 
 class AudioError(ValueError):
@@ -107,6 +173,49 @@ class Spectrum:
             mel_filters=filters,
             clap=clap,
         )
+
+    @classmethod
+    def whisper(cls, preprocessor: dict[str, Any]) -> Spectrum:
+        """Whisper's readout from its published ``preprocessor_config.json`` (80 mels up to 8 kHz)."""
+        _expect(preprocessor, WHISPER_FEATURES, "Whisper")
+        n_fft, mels = WHISPER_FEATURES["n_fft"], WHISPER_FEATURES["feature_size"]
+        return cls(
+            sampling_rate=WHISPER_RATE,
+            n_fft=n_fft,
+            hop_length=WHISPER_FEATURES["hop_length"],
+            n_samples=WHISPER_FEATURES["n_samples"],
+            n_frames=WHISPER_FEATURES["nb_max_frames"],
+            mel_filters=slaney_filters(n_fft // 2 + 1, mels, 0.0, 8000.0, WHISPER_RATE),
+            clap=False,
+        )
+
+    @classmethod
+    def clap_window(cls, preprocessor: dict[str, Any]) -> Spectrum:
+        """CLAP's readout of one 10-second window from its published ``preprocessor_config.json``."""
+        _expect(preprocessor, CLAP_FEATURES, "CLAP")
+        n_fft, hop = CLAP_FEATURES["fft_window_size"], CLAP_FEATURES["hop_length"]
+        samples = CLAP_FEATURES["nb_max_samples"]
+        return cls(
+            sampling_rate=CLAP_RATE,
+            n_fft=n_fft,
+            hop_length=hop,
+            n_samples=samples,
+            n_frames=samples // hop + 1,
+            mel_filters=slaney_filters(
+                n_fft // 2 + 1,
+                CLAP_FEATURES["feature_size"],
+                CLAP_FEATURES["frequency_min"],
+                CLAP_FEATURES["frequency_max"],
+                CLAP_RATE,
+            ),
+            clap=True,
+        )
+
+
+def _expect(config: dict[str, Any], expected: dict[str, Any], name: str) -> None:
+    changed = sorted(key for key, value in expected.items() if config.get(key) != value)
+    if changed:
+        raise ValueError(f"unsupported {name} feature extractor settings: {changed}")
 
 
 def decode_wav(data: bytes) -> PCM:

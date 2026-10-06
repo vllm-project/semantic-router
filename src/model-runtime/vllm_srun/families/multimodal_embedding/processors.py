@@ -1,9 +1,11 @@
-"""Vela Omni input processors: text tokens, image pixels and audio features as graph inputs.
+"""Vela Omni input processors: text tokens, image pixels and audio features as model inputs.
 
-Every processor reproduces the Transformers processor the bundle was exported
-and parity-checked with. Images decode and resize through Pillow (the
-processors' own backend: antialiased resampling with 8-bit intermediates),
-then rescale in float64 and normalize in float32. Audio follows ``audio.py``.
+Every processor reproduces the Transformers processor of the published
+model (the one a prepared bundle was exported and parity-checked with).
+Images decode and resize through Pillow (the processors' own backend:
+antialiased resampling with 8-bit intermediates), then rescale in float64 and
+normalize in float32. Audio follows ``audio.py``. Each processor is built
+from a bundle's manifest or from the published repository's configs.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from __future__ import annotations
 import io
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -22,6 +25,8 @@ from .bundle import OmniBundle
 
 MAX_IMAGE_PIXELS = 64 << 20
 _RESAMPLE = {"bicubic": "BICUBIC", "bilinear": "BILINEAR"}
+# PIL resampling codes in an image processor config.
+RESAMPLE_CODES = {3: "bicubic", 2: "bilinear"}
 # Prefixes per input_type of each instruction API a bundle may declare (Mini's retrieval task).
 INSTRUCTIONS = {
     "qwen_optional_instruction_v1": {
@@ -41,28 +46,42 @@ class AudioFeatures:
 
 
 class TextProcessor:
-    """The bundle tokenizer with its special tokens; over-long input is rejected or, under ``truncate``, cut.
+    """The model's tokenizer with its special tokens; over-long input is rejected or, under ``truncate``, cut.
 
-    A bundle with an instruction API formats the raw text for its ``input_type``
+    A model with an instruction API formats the raw text for its ``input_type``
     first (a query gets the task instruction), then strips the result. A cut
     keeps the beginning of the content inside the special tokens
     (``heads.embedding.encode_text``).
     """
 
-    def __init__(self, bundle: OmniBundle):
+    def __init__(
+        self,
+        tokenizer: Path,
+        *,
+        strip_whitespace: bool,
+        instruction_api: str | None,
+        pad_token_id: int | None = None,
+    ):
         from tokenizers import Tokenizer
 
-        settings = bundle.processors["text"]
-        self.backend = Tokenizer.from_file(
-            str(bundle.file(bundle.manifest["tokenizer"]))
-        )
+        self.backend = Tokenizer.from_file(str(tokenizer))
         self.backend.no_truncation()
         self.backend.no_padding()
-        self.strip = bool(settings["strip_whitespace"])
-        self.instructions = INSTRUCTIONS.get(settings["instruction_api"] or "", {})
-        self.pad_id = int(settings["pad_token_id"])
-        if self.pad_id >= self.backend.get_vocab_size(with_added_tokens=True):
+        self.strip = strip_whitespace
+        self.instructions = INSTRUCTIONS.get(instruction_api or "", {})
+        vocabulary = self.backend.get_vocab_size(with_added_tokens=True)
+        if pad_token_id is not None and pad_token_id >= vocabulary:
             raise ValueError("the pad token is outside the tokenizer vocabulary")
+
+    @classmethod
+    def from_bundle(cls, bundle: OmniBundle) -> TextProcessor:
+        settings = bundle.processors["text"]
+        return cls(
+            bundle.file(bundle.manifest["tokenizer"]),
+            strip_whitespace=bool(settings["strip_whitespace"]),
+            instruction_api=settings["instruction_api"],
+            pad_token_id=int(settings["pad_token_id"]),
+        )
 
     @property
     def input_types(self) -> tuple[str, ...]:
@@ -97,16 +116,46 @@ class ImageProcessor:
     whole image's resize.
     """
 
-    def __init__(self, bundle: OmniBundle):
-        settings = bundle.processors["image"]
-        self.size = int(settings["size"])
-        self.resample = _RESAMPLE[settings["resample"]]
-        self.mean = np.asarray(settings["mean"], dtype=np.float32)
-        self.std = np.asarray(settings["std"], dtype=np.float32)
+    def __init__(self, size: int, resample: str, mean: list[float], std: list[float]):
+        self.size = size
+        self.resample = _RESAMPLE[resample]
+        self.mean = np.asarray(mean, dtype=np.float32)
+        self.std = np.asarray(std, dtype=np.float32)
         scaled = (np.arange(256, dtype=np.float64) * (1 / 255)).astype(np.float32)
         self.table = np.ascontiguousarray(((scaled[:, None] - self.mean) / self.std).T)
         self.bands = ThreadPoolExecutor(
             max_workers=2, thread_name_prefix="vllm-sr-omni-pixels"
+        )
+
+    @classmethod
+    def from_bundle(cls, bundle: OmniBundle) -> ImageProcessor:
+        settings = bundle.processors["image"]
+        return cls(
+            int(settings["size"]),
+            settings["resample"],
+            settings["mean"],
+            settings["std"],
+        )
+
+    @classmethod
+    def from_preprocessor(cls, config: dict[str, Any]) -> ImageProcessor:
+        """A published ``SiglipImageProcessor`` config: a square resize, rescale by 1/255, normalize."""
+        size = config.get("size") or {}
+        if (
+            config.get("image_processor_type") != "SiglipImageProcessor"
+            or not (config.get("do_resize") and config.get("do_rescale"))
+            or not config.get("do_normalize")
+            or config.get("rescale_factor") != 1 / 255
+            or set(size) != {"height", "width"}
+            or size["height"] != size["width"]
+            or config.get("resample") not in RESAMPLE_CODES
+        ):
+            raise ValueError("unsupported image processor settings")
+        return cls(
+            int(size["height"]),
+            RESAMPLE_CODES[config["resample"]],
+            config["image_mean"],
+            config["image_std"],
         )
 
     def pixels(self, data: bytes) -> np.ndarray | str:
@@ -149,17 +198,32 @@ class ImageProcessor:
 class AudioProcessor:
     """WAV bytes to the CLAP and Whisper inputs of the audio branch."""
 
-    def __init__(self, bundle: OmniBundle, config: dict[str, Any]):
+    def __init__(
+        self,
+        sample_rates: tuple[int, ...],
+        max_sample_rate: int,
+        whisper: audio.Spectrum,
+        clap: audio.Spectrum,
+    ):
+        self.sample_rates = sample_rates
+        self.max_sample_rate = max_sample_rate
+        self.whisper = whisper
+        self.clap = clap
+
+    @classmethod
+    def from_bundle(cls, bundle: OmniBundle, config: dict[str, Any]) -> AudioProcessor:
         settings = bundle.processors["audio"]
-        self.sample_rates = tuple(int(rate) for rate in settings["sample_rates"])
-        self.max_sample_rate = int(settings["max_sample_rate"])
         if (
             config.get("format_version") != 1
             or config.get("windows") != "endpoint_cover_v1"
         ):
             raise ValueError("unsupported audio feature contract")
-        self.whisper = audio.Spectrum.from_config(config["whisper"], clap=False)
-        self.clap = audio.Spectrum.from_config(config["clap"], clap=True)
+        return cls(
+            tuple(int(rate) for rate in settings["sample_rates"]),
+            int(settings["max_sample_rate"]),
+            audio.Spectrum.from_config(config["whisper"], clap=False),
+            audio.Spectrum.from_config(config["clap"], clap=True),
+        )
 
     def features(self, data: bytes, media_type: str | None) -> AudioFeatures | str:
         if media_type not in (

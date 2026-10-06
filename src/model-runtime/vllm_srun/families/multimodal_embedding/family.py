@@ -1,12 +1,17 @@
-"""Multimodal embeddings (Phase 3): the Vela 1.0 Omni prepared bundles.
+"""Multimodal embeddings (Phase 3): Vela 1.0 Omni Nano and Mini.
 
-A bundle (``tools/models/vela_omni``) holds four verified ONNX graphs (text,
-image, CLAP, audio) and the exact processor constants, described by
-``vela_omni_manifest.json``. The family serves text, image and audio
-embeddings in one normalized space on ``/v1/embeddings`` through the
-``onnxruntime`` engine. The published Hub repositories hold native source, so
-a Hub ID resolves to the bundle prepared from its pinned revision
-(``VLLM_SRUN_PREPARED_DIR``, default ``/opt/router-model-artifacts``).
+Omni embeds text, images and audio into one normalized space on
+``/v1/embeddings``. Two package formats serve it:
+
+- **The published repository** (``package.py``): the pinned revision's
+  ``model.safetensors`` and configs, verified by the SHA-256 of every file
+  the family reads. Its text, image, Whisper and CLAP towers run on the
+  native engine (``ModelSpec.towers``) and its readouts here; this is what a
+  Hub ID resolves to.
+- **A prepared bundle** (``bundle.py``): four ONNX graphs exported by
+  ``tools/models/vela_omni`` and their processor constants, served on the
+  ``onnxruntime`` engine (install the ``onnx`` extra) when the model is a
+  bundle directory.
 """
 
 from __future__ import annotations
@@ -17,56 +22,66 @@ import io
 import json
 import math
 import wave
-from concurrent.futures import Future, ThreadPoolExecutor, wait
 from typing import Any
 
 import numpy as np
-import torch
 
+from ...accel import onednn
+from ...accel.kernels import CONTIGUOUS
 from ...errors import PackageError
-from ...heads import embedding
 from ...plugins.base import (
     BackboneSpec,
     DtypePolicy,
     EmbeddingInfo,
-    EncoderBatch,
     EngineModel,
-    LoadedModel,
     ModelFamily,
     ModelInfo,
     ModelSpec,
     PackageRef,
-    SurfacePlan,
-    SurfaceRequest,
-    UnsupportedSurfaceError,
     VerifiedPackage,
 )
-from ...registry.resolve import PREPARED_DIR_ENV, prepared_bundle
+from ...registry.artifacts import named_files, sha256_json
+from ...registry.resolve import fetch
 from ...registry.tables import omni as pins
+from . import audio
 from . import bundle as bundles
-from .processors import AudioFeatures, AudioProcessor, ImageProcessor, TextProcessor
+from . import package as snapshots
+from .model import GraphOmniModel, NativeOmniModel, OmniModel, batch_invariant
+from .processors import AudioProcessor, ImageProcessor, TextProcessor
+from .readout import OmniReadout
 
-UNIT_NORM_TOLERANCE = 0.005
-CONCURRENT_INPUTS = 4
-# A media input's scheduler cost in text tokens of the same bundle: its CPU
+# A media input's scheduler cost in text tokens of the same model: its CPU
 # forward takes about as long as a text that long (measured on 16 cores).
 MEDIA_COST = {
     "nano": {"image": 1200, "audio": 1600},
     "mini": {"image": 300, "audio": 550},
 }
-# CPU threads per graph (ModelSpec.graph_threads). Nano's text graph runs up
-# to CONCURRENT_INPUTS texts at once, and on 16 cores 12 threads leave a core
-# to each concurrent caller: 16 oversubscribe the cores (p50 +0.5 ms against
-# legacy, 3 % fewer texts per second with four callers), and 8 slow the texts
-# of 64-104 tokens that set its p95. Every other graph needs all 16 for one
-# request (Nano image 109 ms, 163 on 8; Mini text 33 ms, 41-45 on 8).
+# CPU threads per graph of a prepared bundle (ModelSpec.graph_threads). Nano's
+# text graph runs up to CONCURRENT_INPUTS texts at once, and on 16 cores 12
+# threads leave a core to each concurrent caller: 16 oversubscribe the cores
+# (p50 +0.5 ms against legacy, 3 % fewer texts per second with four callers),
+# and 8 slow the texts of 64-104 tokens that set its p95. Every other graph
+# needs all 16 for one request (Nano image 109 ms, 163 on 8; Mini text 33 ms,
+# 41-45 on 8).
 GRAPH_THREADS: dict[str, dict[str, int]] = {"nano": {"text": 12}, "mini": {}}
 # Idle-thread spin per graph (ModelSpec.graph_spin_us): with the engine's 2 ms
 # some of Nano's 12 text threads sleep inside a 2-8 ms run (p50 0.3-0.4 ms
 # slower than with 10 ms).
 GRAPH_SPIN_US: dict[str, dict[str, int]] = {"nano": {"text": 10_000}, "mini": {}}
-# Import name -> distribution of the multimodal extra.
-EXTRA = {"onnxruntime": "onnxruntime", "PIL": "Pillow"}
+# Import name -> distribution, per format.
+EXTRAS = {
+    "snapshot": {"PIL": "Pillow"},
+    "bundle": {"onnxruntime": "onnxruntime", "PIL": "Pillow"},
+}
+INSTALL = {"snapshot": "multimodal", "bundle": "multimodal,onnx"}
+# The published model computes in FP32 on every device.
+EXACT_DTYPE = DtypePolicy(
+    weights="float32", autocast=None, head="float32", bf16_resident=False
+)
+# oneDNN's packed FP32 linear (x86) and GeGLU on contiguous rows: each row's
+# result is then the same alone or in a batch (the load-time probe checks).
+KERNELS = {"linear": onednn.PACKED, "geglu": CONTIGUOUS}
+IDENTITY_FORMAT = "vela-omni/1"
 GOLDEN_TEXT = "Route this request to the model that answers it best."
 LATE_TONE_SECONDS = 0.3
 
@@ -100,6 +115,11 @@ def golden_audio(rate: int = 16000, seconds: float = 0.5) -> bytes:
     return buffer.getvalue()
 
 
+def identity(files: dict[str, str]) -> str:
+    """A published snapshot's identity: a digest of its loaded files' digests."""
+    return sha256_json({"format": IDENTITY_FORMAT, "files": files})
+
+
 class MultimodalEmbeddingFamily(ModelFamily):
     name = "multimodal_embedding"
     surfaces = frozenset({"embeddings"})
@@ -110,32 +130,71 @@ class MultimodalEmbeddingFamily(ModelFamily):
     def descriptor(cls) -> dict[str, Any]:
         return {
             "surfaces": sorted(cls.surfaces),
-            "formats": ["vela-omni-bundle/1"],
+            "formats": [IDENTITY_FORMAT, "vela-omni-bundle/1"],
             "modalities": ["text", "image", "audio"],
-            "engines": ["onnxruntime"],
+            "engines": ["native", "onnxruntime"],
         }
 
     def detect(self, package: PackageRef) -> bool:
-        if bundles.is_bundle(package.root):
+        if bundles.is_bundle(package.root) or snapshots.detect(package.root):
             return True
         return package.repo_id is not None and pins.lookup(package.repo_id) is not None
 
     def fetch(self, package: PackageRef) -> PackageRef:
-        """A Hub ID resolves to the bundle prepared from its pinned source revision."""
-        if bundles.is_bundle(package.root):
+        """A Hub package that is not a built-in pin downloads the files this family reads."""
+        if bundles.is_bundle(package.root) or pins.lookup(package.repo_id or ""):
             return package
-        pinned = pins.lookup(package.repo_id or "")
-        if pinned is None:
-            raise PackageError(f"{package.repo_id} has no prepared Omni bundle")
-        root = prepared_bundle(pinned)
-        if not bundles.is_bundle(root):
-            raise PackageError(
-                f"no prepared bundle at {root}: build it with tools/models/vela_omni "
-                f"(prepare.py --variants {pins.variant(pinned)}) or set {PREPARED_DIR_ENV}"
-            )
-        return PackageRef(root=root, repo_id=package.repo_id, revision=package.revision)
+        return fetch(
+            package,
+            list(snapshots.FILES),
+            cache_dir=self.options.cache_dir,
+            offline=self.options.offline,
+        )
 
     def verify(self, package: PackageRef) -> VerifiedPackage:
+        if bundles.is_bundle(package.root):
+            return self._verify_bundle(package)
+        files = named_files(package.root, snapshots.FILES)
+        model_sha256 = identity(files)
+        known = pins.lookup(package.repo_id or "")
+        if known is not None and known.revision != package.revision:
+            known = None
+        if known is not None:
+            if dict(known.files) != files:
+                changed = sorted(set(known.files.items()) ^ set(files.items()))
+                raise PackageError(
+                    f"{package.repo_id}@{package.revision} files differ from the pinned digests: "
+                    f"{sorted({name for name, _ in changed})}"
+                )
+            if known.model_sha256 != model_sha256:
+                raise PackageError(
+                    f"{package.repo_id} identity differs from the pinned identity"
+                )
+        omni = snapshots.read(package.root)
+        snapshots.weight_names(omni)
+        if known is not None and known.loaded_parameters != omni.parameters:
+            raise PackageError(
+                f"{package.repo_id} declares {omni.parameters:,} parameters, not {known.loaded_parameters:,}"
+            )
+        name = (package.repo_id or package.root.name).rsplit("/", 1)[-1]
+        return VerifiedPackage(
+            ref=package,
+            family=self.name,
+            model_name=name,
+            manifest={},
+            manifest_sha256="",
+            model_sha256=model_sha256,
+            max_input_tokens=omni.contract.max_tokens,
+            licence=pins.LICENCE if known else None,
+            loaded_parameters=omni.parameters,
+            details={
+                "snapshot": omni,
+                "files": files,
+                "verification": "builtin" if known else "local",
+            },
+        )
+
+    def _verify_bundle(self, package: PackageRef) -> VerifiedPackage:
         verified = bundles.load(package.root)
         repo_id, revision = verified.source
         pinned = pins.lookup(repo_id)
@@ -164,31 +223,108 @@ class MultimodalEmbeddingFamily(ModelFamily):
             details={"bundle": verified},
         )
 
-    def describe(self, package: VerifiedPackage) -> ModelSpec:
+    @staticmethod
+    def _require(kind: str) -> None:
         missing = [
             name
-            for module, name in EXTRA.items()
+            for module, name in EXTRAS[kind].items()
             if importlib.util.find_spec(module) is None
         ]
         if missing:
             raise RuntimeError(
-                f"Omni bundles need {' and '.join(missing)}: "
-                "pip install 'vllm-srun[multimodal]'"
+                f"Omni {'bundles' if kind == 'bundle' else 'models'} need {' and '.join(missing)}: "
+                f"pip install 'vllm-srun[{INSTALL[kind]}]'"
             )
-        verified: bundles.OmniBundle = package.details["bundle"]
+
+    def describe(self, package: VerifiedPackage) -> ModelSpec:
+        if "bundle" in package.details:
+            self._require("bundle")
+            verified: bundles.OmniBundle = package.details["bundle"]
+            return ModelSpec(
+                name=package.model_name,
+                backbone=BackboneSpec(
+                    model_type="vela_omni", config={}, weight_files=()
+                ),
+                dtype=DtypePolicy(autocast=None, bf16_resident=False),
+                max_input_tokens=package.max_input_tokens,
+                graphs=verified.graphs,
+                encoder=True,
+                graph_threads=GRAPH_THREADS[verified.variant],
+                graph_spin_us=GRAPH_SPIN_US[verified.variant],
+            )
+        self._require("snapshot")
+        omni: snapshots.OmniPackage = package.details["snapshot"]
+        layout, weights = omni.layout, (omni.weights,)
         return ModelSpec(
             name=package.model_name,
-            backbone=BackboneSpec(model_type="vela_omni", config={}, weight_files=()),
-            dtype=DtypePolicy(autocast=None, bf16_resident=False),
+            backbone=BackboneSpec(
+                layout.text_type, omni.text_config, weights, layout.text
+            ),
+            dtype=EXACT_DTYPE,
             max_input_tokens=package.max_input_tokens,
-            graphs=verified.graphs,
             encoder=True,
-            graph_threads=GRAPH_THREADS[verified.variant],
-            graph_spin_us=GRAPH_SPIN_US[verified.variant],
+            kernel_variants=KERNELS,
+            towers={
+                "image": BackboneSpec(
+                    "siglip_vision_model", omni.vision_config, weights, layout.image
+                ),
+                "speech": BackboneSpec(
+                    "whisper_encoder", omni.speech_config, weights, layout.speech
+                ),
+                "clap": BackboneSpec(
+                    "clap_audio_model", omni.clap_config, weights, layout.clap
+                ),
+            },
         )
 
     def load(
         self, package: VerifiedPackage, spec: ModelSpec, engine_model: EngineModel
+    ) -> OmniModel:
+        if "bundle" in package.details:
+            return self._load_bundle(package, engine_model)
+        omni: snapshots.OmniPackage = package.details["snapshot"]
+        contract = omni.contract
+        readout = OmniReadout(omni)
+        parameters = engine_model.parameter_count() + sum(
+            parameter.numel() for parameter in readout.parameters()
+        )
+        if parameters != omni.parameters:
+            raise PackageError(
+                f"loaded {parameters:,} parameters; the model declares {omni.parameters:,}"
+            )
+        readout = engine_model.place(readout).eval()
+        text = TextProcessor(
+            omni.tokenizer,
+            strip_whitespace=omni.layout.strip_whitespace,
+            instruction_api=contract.instruction_api,
+        )
+        processors = (
+            text,
+            ImageProcessor.from_preprocessor(omni.image),
+            AudioProcessor(
+                contract.sample_rates,
+                audio.MAX_RATE,
+                audio.Spectrum.whisper(omni.speech_features),
+                audio.Spectrum.clap_window(omni.clap_features),
+            ),
+        )
+        info = self._info(package, text, contract, parameters)
+        model = NativeOmniModel(
+            info,
+            engine_model,
+            *processors,
+            MEDIA_COST[omni.variant],
+            readout,
+            packed_text=False,
+        )
+        model.packed_text = engine_model.batch_invariant and batch_invariant(
+            model, int(omni.text_config["vocab_size"])
+        )
+        model.batch_invariant = True
+        return model
+
+    def _load_bundle(
+        self, package: VerifiedPackage, engine_model: EngineModel
     ) -> OmniModel:
         verified: bundles.OmniBundle = package.details["bundle"]
         config = json.loads(
@@ -196,8 +332,27 @@ class MultimodalEmbeddingFamily(ModelFamily):
                 encoding="utf-8"
             )
         )
-        text = TextProcessor(verified)
-        info = ModelInfo(
+        text = TextProcessor.from_bundle(verified)
+        info = self._info(
+            package, text, verified.contract, engine_model.parameter_count()
+        )
+        return GraphOmniModel(
+            info,
+            engine_model,
+            text,
+            ImageProcessor.from_bundle(verified),
+            AudioProcessor.from_bundle(verified, config),
+            MEDIA_COST[verified.variant],
+        )
+
+    def _info(
+        self,
+        package: VerifiedPackage,
+        text: TextProcessor,
+        contract: bundles.Variant,
+        parameters: int,
+    ) -> ModelInfo:
+        return ModelInfo(
             id=package.model_name,
             family=self.name,
             repo=package.ref.repo_id,
@@ -208,29 +363,21 @@ class MultimodalEmbeddingFamily(ModelFamily):
             question_types=(),
             limits={"max_input_tokens": package.max_input_tokens},
             licence=package.licence,
-            parameters=engine_model.parameter_count(),
+            parameters=parameters,
             dtype="fp32",
             embedding=EmbeddingInfo(
-                dimensions=(verified.contract.dimension,),
+                dimensions=(contract.dimension,),
                 layers=(),
                 modalities=("text", "image", "audio"),
-                pooling=verified.contract.text_pooling,
+                pooling=contract.text_pooling,
                 input_types=text.input_types,
             ),
         )
-        return OmniModel(
-            info,
-            engine_model,
-            text,
-            ImageProcessor(verified),
-            AudioProcessor(verified, config),
-            MEDIA_COST[verified.variant],
-        )
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
-        """One request through all four graphs; references per device class when recorded."""
-        repo_id, revision = package.details["bundle"].source
-        pinned = pins.lookup(repo_id)
+        """One request through every tower; references per device class when recorded."""
+        repo_id, revision = package.ref.repo_id, package.ref.revision
+        pinned = pins.lookup(repo_id or "")
         expected = {}
         if pinned is not None and pinned.revision == revision:
             expected = dict(pinned.golden_answers)
@@ -250,176 +397,6 @@ class MultimodalEmbeddingFamily(ModelFamily):
             ]
         }
         return [{"surface": "embeddings", "body": body, "expected": expected}]
-
-
-class OmniModel(LoadedModel):
-    """One bundle on the onnxruntime engine; each input runs its modality's graphs.
-
-    Every input runs its graphs alone, so its vector is the same in any batch:
-    the ``exact`` profile hands every queued request to one ``run``, which runs
-    up to ``CONCURRENT_INPUTS`` text and audio inputs at once on their graphs'
-    ONNX Runtime pools (one short input's run leaves most of a pool idle).
-    Images run one after another beside them: one image's run keeps every
-    core busy, and two at once only contend for the cores. An input that
-    raises fails the whole batch, as any other model's failed forward does:
-    ``run`` cancels the batch's inputs that haven't started and waits for the
-    running ones before it raises, so none of them runs beside the next batch.
-    """
-
-    device_thread = False
-    batch_invariant = True
-
-    def __init__(
-        self,
-        info: ModelInfo,
-        engine_model: EngineModel,
-        text: TextProcessor,
-        image: ImageProcessor,
-        audio: AudioProcessor,
-        media_cost: dict[str, int],
-    ):
-        self.info = info
-        self.engine_model = engine_model
-        self.text = text
-        self.image = image
-        self.audio = audio
-        self.media_cost = media_cost
-        assert info.embedding is not None
-        self.dimension = info.embedding.dimensions[0]
-        self.inputs = ThreadPoolExecutor(
-            max_workers=CONCURRENT_INPUTS, thread_name_prefix="vllm-sr-omni"
-        )
-
-    def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan:
-        if surface != "embeddings":
-            raise UnsupportedSurfaceError(surface, self.info.id)
-        assert self.info.embedding is not None
-        parsed = embedding.parse_request(
-            request, self.info.embedding, self.info.limits["max_input_tokens"]
-        )
-        items = [self._item(entry, parsed) for entry in parsed.inputs]
-        rep = embedding.representation(self.info.model_sha256, 0, self.dimension, True)
-        return embedding.plan(request, parsed, items, rep)
-
-    def _item(
-        self, entry: embedding.EmbeddingInput, parsed: embedding.EmbeddingRequest
-    ) -> tuple[embedding.EmbedItem, dict[str, Any] | None] | str:
-        if entry.error is not None:
-            return entry.error
-        if entry.modality == "text":
-            assert entry.text is not None
-            encoded = self.text.encode(
-                entry.text, parsed.max_tokens, parsed.input_type, parsed.overflow
-            )
-            if isinstance(encoded, str):
-                return encoded
-            ids, usage = encoded
-            key = embedding.content_key(self.info.model_sha256, "text", ids)
-            return embedding.EmbedItem(entry.index, "text", ids, key), usage
-        assert entry.data is not None
-        key = embedding.content_key(self.info.model_sha256, entry.modality, entry.data)
-        if entry.modality == "image":
-            pixels = self.image.pixels(entry.data)
-            if isinstance(pixels, str):
-                return pixels
-            inputs = {"pixel_values": pixels}
-            cost = self.media_cost["image"]
-            return (
-                embedding.EmbedItem(entry.index, "image", [], key, inputs, cost),
-                None,
-            )
-        features = self.audio.features(entry.data, entry.media_type)
-        if isinstance(features, str):
-            return features
-        by_graph = {"clap": features.clap, "whisper": features.whisper}
-        cost = self.media_cost["audio"]
-        return embedding.EmbedItem(entry.index, "audio", [], key, by_graph, cost), None
-
-    def run(self, items: list[Any]) -> list[Any]:
-        if len(items) == 1:
-            return [self._embed(items[0])]
-        shared: dict[int, Future[list[float] | None]] = {}
-        try:
-            for index, item in enumerate(items):
-                if item.modality != "image":
-                    shared[index] = self.inputs.submit(self._embed, item)
-            images = {
-                index: self._embed(item)
-                for index, item in enumerate(items)
-                if item.modality == "image"
-            }
-            return [
-                images[index] if index in images else shared[index].result()
-                for index in range(len(items))
-            ]
-        except BaseException:
-            for future in shared.values():
-                future.cancel()
-            wait(shared.values())
-            raise
-
-    def finish_surface(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:
-        return embedding.finish(plan, results)
-
-    def close(self) -> None:
-        self.inputs.shutdown(wait=True)
-        self.image.close()
-        super().close()
-
-    def _graph(
-        self, name: str, size: int, ids: list[int] | None = None, **inputs: np.ndarray
-    ) -> np.ndarray | None:
-        """One graph's embedding, or None unless it is a finite unit vector of ``size``."""
-        tokens = torch.tensor([ids or [0]], dtype=torch.long)
-        batch = EncoderBatch(
-            input_ids=tokens,
-            attention_mask=torch.ones_like(tokens),
-            graph=name,
-            graph_inputs={
-                key: torch.from_numpy(value) for key, value in inputs.items()
-            },
-            outputs=("embedding",),
-        )
-        vector = (
-            self.engine_model.encode(batch).outputs["embedding"].numpy().reshape(-1)
-        )
-        if vector.shape != (size,) or not np.isfinite(vector).all():
-            return None
-        if abs(float(np.linalg.norm(vector)) - 1) > UNIT_NORM_TOLERANCE:
-            return None
-        return vector
-
-    def _embed(self, item: embedding.EmbedItem) -> list[float] | None:
-        if item.modality == "text":
-            vector = self._graph("text", self.dimension, item.ids)
-        elif item.modality == "image":
-            vector = self._graph("image", self.dimension, **item.features)
-        else:
-            vector = self._audio(
-                AudioFeatures(item.features["clap"], item.features["whisper"])
-            )
-        return None if vector is None else vector.astype(np.float32).tolist()
-
-    def _audio(self, features: AudioFeatures) -> np.ndarray | None:
-        windows = []
-        for window in features.clap:
-            vector = self._graph("clap", bundles.CLAP_DIMENSION, input_features=window)
-            if vector is None:
-                return None
-            windows.append(vector)
-        clap = np.sum(windows, axis=0, dtype=np.float32)
-        if len(windows) > 1:
-            clap = clap / np.float32(len(windows))
-            norm = np.sqrt(np.sum(clap * clap, dtype=np.float32))
-            if not norm > embedding.NORM_EPSILON:
-                return None
-            clap = clap / norm
-        return self._graph(
-            "audio",
-            self.dimension,
-            input_features=features.whisper,
-            clap_embedding=clap[None].astype(np.float32),
-        )
 
 
 __all__ = ["MultimodalEmbeddingFamily", "OmniModel", "golden_audio", "golden_image"]
