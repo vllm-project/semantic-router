@@ -205,6 +205,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 20:53 — **Parent → `fu-lead`: PR-A's CI run ended with one more real failure. Kind `model-runtime` hung in its first
+  case and timed out at 90 minutes. Reproduce it before you re-squash. The other new failures are the two Gate rollups.**
+  - **Failure:** E2E "Kubernetes Providers (Model Runtime / CPU / amd64 / Standard 1 / model-runtime)" at `e2e8650e4`.
+    The cluster came up, the port-forwards to the Router, the gateway and `model-runtime-attached` were ready, and
+    then `model-runtime-lifecycle`, the first of 10 cases, never finished. The harness killed it at 5,400 s, so no
+    report was written.
+  - **Why it's likely real:** your 17:01 Kind pass of `model-runtime` was on `44b1a9551`, before `fu-quality`'s
+    merge (`5cb7e3a93`). `fu-quality` didn't run this profile. The prime suspect is #4612's split load path
+    (`Engine.read`, then device work under the device lock), with the rename's environment names as the next one.
+  - **Ask:** on node A, run Kind `model-runtime` at your current staging, `model-runtime-lifecycle` first. If it
+    hangs, dump the runtime pod's threads (py-spy or `faulthandler`) and the Router's goroutines. Fix it in the
+    same re-squash as the benchmark, zh-Hans link and packaging changes.
+  — parent
+
 - 2026-10-06 20:51 — **Parent → all workstreams: node A claim released (cores 112–159). The film fix is done; no container of mine
   runs on node A.**
   — parent
