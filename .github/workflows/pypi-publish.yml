@@ -217,35 +217,44 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && !inputs.build-only
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: vllm-sr-dist
           path: dist
 
-      - run: pip install twine
-
-      - name: Publish explicit test package
+      - name: Check the upload tokens
         env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        run: twine upload --repository testpypi dist/vllm_sr-*.whl dist/vllm_sr-*.tar.gz
+          RUNTIME_TOKEN: ${{ secrets.TEST_VLLM_SRUN_PYPI_API_TOKEN || secrets.TEST_PYPI_API_TOKEN }}
+          CLI_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        run: |
+          if [[ -z "$RUNTIME_TOKEN" ]]; then
+            echo "::error::No TestPyPI token for vllm-srun: set TEST_VLLM_SRUN_PYPI_API_TOKEN or TEST_PYPI_API_TOKEN"
+            exit 1
+          fi
+          if [[ -z "$CLI_TOKEN" ]]; then
+            echo "::error::No TestPyPI token for vllm-sr: set TEST_PYPI_API_TOKEN"
+            exit 1
+          fi
+
+      - run: pip install twine
 
       - name: Stage the runtime distribution
         run: |
           mkdir runtime-dist
           mv dist/vllm_srun-*.whl dist/vllm_srun-*.tar.gz runtime-dist/
 
-      # Runs only on this file's own workflow_dispatch, so TestPyPI's trusted
-      # publisher for vllm-srun names pypi-publish.yml.
       - name: Publish explicit test runtime package
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          packages-dir: runtime-dist/
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TEST_VLLM_SRUN_PYPI_API_TOKEN || secrets.TEST_PYPI_API_TOKEN }}
+        run: twine upload --repository testpypi runtime-dist/vllm_srun-*.whl runtime-dist/vllm_srun-*.tar.gz
+
+      - name: Publish explicit test package
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        run: twine upload --repository testpypi dist/vllm_sr-*.whl dist/vllm_sr-*.tar.gz
 
   pypi:
     name: Publish to PyPI
@@ -259,9 +268,6 @@ jobs:
         || (inputs.channel == 'stable' && startsWith(github.ref, 'refs/tags/v')))
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -282,6 +288,22 @@ jobs:
           MODE: ${{ inputs.channel == 'dev' && 'main' || 'release' }}
           TAG: ${{ inputs.tag }}
         run: python tools/ci/package_contract.py --verify-dist --output dist --mode "$MODE" --tag "$TAG"
+      # Both tokens are checked before anything uploads, so a missing secret
+      # never leaves vllm-srun published without its vllm-sr.
+      - name: Check the upload tokens
+        env:
+          RUNTIME_TOKEN: ${{ secrets.VLLM_SRUN_PYPI_API_TOKEN || secrets.PYPI_API_TOKEN }}
+          CLI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          if [[ -z "$RUNTIME_TOKEN" ]]; then
+            echo "::error::No PyPI token for vllm-srun: set VLLM_SRUN_PYPI_API_TOKEN or PYPI_API_TOKEN"
+            exit 1
+          fi
+          if [[ -z "$CLI_TOKEN" ]]; then
+            echo "::error::No PyPI token for vllm-sr: set PYPI_API_TOKEN"
+            exit 1
+          fi
+
       - run: pip install twine
 
       - name: Stage the runtime distribution
@@ -290,15 +312,12 @@ jobs:
           mv dist/vllm_srun-*.whl dist/vllm_srun-*.tar.gz runtime-dist/
 
       # vllm-srun goes first, so a published vllm-sr[runtime] never pins a
-      # runtime that is missing. It uses PyPI trusted publishing (OIDC). PyPI
-      # matches the workflow that starts the run, never a reusable one like
-      # this file, so the project's publishers name main.yml (dev channel)
-      # and release.yml (stable).
+      # runtime that is missing.
       - name: Publish verified runtime package
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: runtime-dist/
-          skip-existing: true
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.VLLM_SRUN_PYPI_API_TOKEN || secrets.PYPI_API_TOKEN }}
+        run: twine upload runtime-dist/vllm_srun-*.whl runtime-dist/vllm_srun-*.tar.gz --skip-existing
 
       - name: Publish verified package
         env:

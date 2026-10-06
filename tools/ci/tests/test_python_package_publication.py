@@ -151,37 +151,69 @@ class PythonPublisherContractTests(unittest.TestCase):
         for step in self.publisher.jobs["build"]["steps"]:
             self.assertNotIn("secrets.", str(step))
 
-    def test_runtime_is_published_first_with_trusted_publishing(self) -> None:
-        for job_name in ("pypi", "testpypi"):
+    def test_runtime_is_published_first_with_its_api_token(self) -> None:
+        tokens = {
+            "pypi": (
+                "secrets.VLLM_SRUN_PYPI_API_TOKEN || secrets.PYPI_API_TOKEN",
+                "secrets.PYPI_API_TOKEN",
+            ),
+            "testpypi": (
+                "secrets.TEST_VLLM_SRUN_PYPI_API_TOKEN || secrets.TEST_PYPI_API_TOKEN",
+                "secrets.TEST_PYPI_API_TOKEN",
+            ),
+        }
+        for job_name, (runtime_token, cli_token) in tokens.items():
             job = self.publisher.jobs[job_name]
-            self.assertEqual(
-                job["permissions"], {"contents": "read", "id-token": "write"}
-            )
+            self.assertNotIn("id-token", job.get("permissions", {}), job_name)
             steps = job["steps"]
-            runtime = next(
-                index
-                for index, step in enumerate(steps)
-                if step.get("uses", "").startswith("pypa/gh-action-pypi-publish@")
+            self.assertFalse(
+                any(
+                    step.get("uses", "").startswith("pypa/gh-action-pypi-publish@")
+                    for step in steps
+                ),
+                job_name,
             )
-            cli = next(
+            uploads = [
                 index
                 for index, step in enumerate(steps)
                 if "twine upload" in step.get("run", "")
+            ]
+            runtime, cli = uploads
+            self.assertIn(
+                "runtime-dist/vllm_srun-*.whl runtime-dist/vllm_srun-*.tar.gz",
+                steps[runtime]["run"],
             )
-            self.assertEqual(steps[runtime]["with"]["packages-dir"], "runtime-dist/")
-            self.assertNotIn("secrets.", str(steps[runtime]))
             self.assertIn("dist/vllm_sr-*.whl dist/vllm_sr-*.tar.gz", steps[cli]["run"])
+            self.assertEqual(
+                steps[runtime]["env"]["TWINE_PASSWORD"], f"${{{{ {runtime_token} }}}}"
+            )
+            self.assertEqual(
+                steps[cli]["env"]["TWINE_PASSWORD"], f"${{{{ {cli_token} }}}}"
+            )
+            # Both tokens are checked before the first upload.
+            check = next(
+                index
+                for index, step in enumerate(steps)
+                if step.get("name") == "Check the upload tokens"
+            )
+            self.assertLess(check, runtime)
+            self.assertEqual(
+                steps[check]["env"],
+                {
+                    "RUNTIME_TOKEN": f"${{{{ {runtime_token} }}}}",
+                    "CLI_TOKEN": f"${{{{ {cli_token} }}}}",
+                },
+            )
+            self.assertIn('[[ -z "$RUNTIME_TOKEN" ]]', steps[check]["run"])
+            self.assertIn('[[ -z "$CLI_TOKEN" ]]', steps[check]["run"])
+            self.assertLess(runtime, cli)
             if job_name == "pypi":
-                self.assertLess(runtime, cli)
-                self.assertTrue(steps[runtime]["with"]["skip-existing"])
+                self.assertIn("--skip-existing", steps[runtime]["run"])
             else:
-                self.assertEqual(
-                    steps[runtime]["with"]["repository-url"],
-                    "https://test.pypi.org/legacy/",
-                )
+                self.assertIn("--repository testpypi", steps[runtime]["run"])
         for workflow in ("main.yml", "release.yml"):
-            caller = self.workflows[workflow].jobs["pypi"]
-            self.assertEqual(caller["permissions"]["id-token"], "write", workflow)
+            for job in self.workflows[workflow].jobs.values():
+                self.assertNotIn("id-token", job.get("permissions", {}), workflow)
 
     def test_release_builds_distribution_without_runtime_wheel_smoke(self) -> None:
         steps = self.publisher.jobs["build"]["steps"]
