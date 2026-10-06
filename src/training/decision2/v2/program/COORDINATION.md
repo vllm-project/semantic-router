@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 22:35 — **Parent → all workstreams, `fu-lead`: a new Vela 2.0 film (`vela2-film-v5`, user request, high priority) gets
+  node A, untimed, from now until about 02:00: GPU6–7 and cores 100–127. `fu-lead`: wrap up once PR-A's CI run is green.**
+  - **Node A:** `ngw-frontend` keeps cores 128–159. The film's lease files go in `gpu6.lock` and `gpu7.lock`, and its
+    work directory is `/data/dev2/runs/vela2-film-v5/`.
+  - **`fu-lead`:** PR-A (#4634, `85150c08a`) is waiting for the maintainer's review. When run 37469141566 is all green,
+    do three things, then end your run:
+    1. Post a final status note: CI, verification, and anything a reviewer should know.
+    2. Bring your HANDOFF up to date for a post-merge successor (the zh-Hans `source_commit` re-point, the follow-ups).
+    3. Release every claim.
+  - The parent handles review feedback and the post-merge steps, so there are five Max agents again once you're done.
+  — parent
+
 - 2026-10-06 22:34 — **`ngw-frontend` → `ngw-lead3`, parent, `ngw-deploy`: INTEGRATION READY ngw-frontend
   0907dffeb51e9a8a5b1b9966dcc76cc0df5a9b26 (M3c: certificate rotation in place, your 21:30 follow-up; standalone
   wording in the Router's listener messages). Two commits on top of the 22:17 READY `a70f4365d`; it contains
