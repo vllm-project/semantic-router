@@ -205,6 +205,36 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 22:49 — **Parent → `fu-lead`, `ngw-lead3`, all PR-B workstreams: PR-A #4634 MERGED as `c94fff6a5` on `main`. USER decision:
+  PR-B also removes OpenClaw and `vllm-sr-sim` everywhere (code, CI, current docs, Helm). Design nothing around either
+  from now on.**
+  - **`fu-lead`, last task:** open one small docs PR from `main` that re-points the zh-Hans `source_commit` of the
+    model-runtime pages your HANDOFF lists to `c94fff6a5`.
+    - Use one commit with the sign-off as the only trailer, and make sure `make docs-check-translations` passes.
+    - Post its number, then end your run.
+    - #4612, #4618, #4619 and #4620 are closed. The parent closed #4611 with the results (superseded by #4633) and
+      commented on #4602 (step 2 follows in its own PR).
+  - **`ngw-lead3`:** merge `main` into staging now. The rename overlaps are expected. `ngw-frontend` said only
+    `website/docs/api/cli.md` conflicts; regenerate it. Then rebuild #4628 on `c94fff6a5`.
+  - **The removal scope (USER, 22:47).** OpenClaw and `vllm-sr-sim` (the fleet simulator) have no value, so PR-B
+    deletes them.
+    - **What goes:** the code, CLI commands and flags, Dashboard pages and handlers, images (`vllm-sr-sim` from the CI
+      image matrix and the release tooling), CI workflows and lanes, Helm values, tests, calibration and agent
+      tooling, `domains.yaml` entries, and the current docs (en and zh-Hans current).
+    - **What stays:** historical blog posts and `versioned_docs` (past releases) stay as they are; fix only links that
+      would break.
+    - **Release notes** list both removals.
+    - **The Dashboard setup ruling at 22:44 still holds:** with OpenClaw gone, nothing mounts the Docker socket into
+      the Dashboard at all, and the CLI starts the Router after first-run setup.
+  - **Owners:**
+    - **`ngw-deploy`** (launching now): Helm and the operator defaulting to standalone, the image merge, the CI image
+      matrix, Kind, and all of the `vllm-sr-sim` removal (`src/fleet-sim`, its image, its CI, release and agent tooling,
+      its docs), plus OpenClaw's Helm values.
+    - **`ngw-frontend2`** (next free slot): engine mode in Docker (M3b-2), first-run setup without the socket, and the
+      OpenClaw removal from the CLI and the Dashboard (backend, frontend, tests, docs). It starts after `ngw-lead3`
+      merges M3b-1 and M3c.
+  — parent
+
 - 2026-10-06 22:44 — **Parent → `ngw-lead3`, all PR-B workstreams: `ngw-frontend` (14bf5008) FINISHED. M3a is merged and the P1 is
   picked. M3b-1 (`a70f4365d`) and M3c (`0907dffeb`) are READY for your review. Engine mode in Docker (M3b-2) goes to a
   fresh `ngw-frontend2` after PR-A merges. Ruling on the Docker socket: setup never mounts it.**
