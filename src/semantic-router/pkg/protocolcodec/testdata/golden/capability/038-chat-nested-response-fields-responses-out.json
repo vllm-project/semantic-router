@@ -17,6 +17,17 @@
             {
               "content": [
                 {
+                  "text": "inspect",
+                  "type": "reasoning_text"
+                }
+              ],
+              "id": "msg_1",
+              "summary": [],
+              "type": "reasoning"
+            },
+            {
+              "content": [
+                {
                   "annotations": [
                     {
                       "end_index": 4,
@@ -34,21 +45,10 @@
                   "type": "refusal"
                 }
               ],
-              "id": "msg_1",
+              "id": "item_79cc09c4ea9ad9df05cd3523",
               "role": "assistant",
               "status": "completed",
               "type": "message"
-            },
-            {
-              "content": [
-                {
-                  "text": "inspect",
-                  "type": "reasoning_text"
-                }
-              ],
-              "id": "item_428190bed7e3f359e833771d",
-              "summary": [],
-              "type": "reasoning"
             }
           ],
           "output_text": "done",

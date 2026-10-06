@@ -413,10 +413,8 @@ func assembleChatMessage(
 	contents []llmprotocol.Content,
 	policy llmprotocol.Policy,
 ) (llmprotocol.Message, error) {
-	message := llmprotocol.Message{ID: wire.ID, Role: role, Content: contents}
-	if wire.Refusal != nil {
-		message.Content = append(message.Content, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: *wire.Refusal})
-	}
+	// Reasoning first, the order vLLM's own Messages and Responses output uses.
+	message := llmprotocol.Message{ID: wire.ID, Role: role}
 	reasoning := wire.Reasoning
 	if reasoning == nil {
 		reasoning = wire.AlternateReasoning
@@ -425,6 +423,10 @@ func assembleChatMessage(
 		message.Content = append(message.Content, llmprotocol.Content{
 			Kind: llmprotocol.ContentReasoning, Text: *reasoning, Reasoning: llmprotocol.ReasoningScopeText,
 		})
+	}
+	message.Content = append(message.Content, contents...)
+	if wire.Refusal != nil {
+		message.Content = append(message.Content, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: *wire.Refusal})
 	}
 	toolCalls, err := decodeChatToolCalls(wire.ToolCalls, index, policy)
 	if err != nil {

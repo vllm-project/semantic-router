@@ -13,6 +13,7 @@ type chatStreamDecoder struct {
 	framer               sseFramer
 	contentIndexes       map[chatContentKey]int
 	nextContentIndexes   map[int]int
+	lastWasReasoning     bool // choice 0's last text was reasoning; decodeChoice rejects other choices
 	toolKinds            map[int]llmprotocol.ToolKind
 	providerReported     bool
 	nativeReasonReported bool
@@ -395,18 +396,23 @@ func chatDeltaHasText(choice chatChunkChoiceWire) bool {
 type chatEventFactory func() ([]llmprotocol.Event, error)
 
 func (decoder *chatStreamDecoder) chatChoiceEventFactories(choice chatChunkChoiceWire) []chatEventFactory {
-	return []chatEventFactory{
-		func() ([]llmprotocol.Event, error) { return decoder.decodeContentDelta(choice) },
-		func() ([]llmprotocol.Event, error) { return decoder.decodeAnnotations(choice) },
-		func() ([]llmprotocol.Event, error) { return decoder.decodeReasoningDelta(choice) },
-		func() ([]llmprotocol.Event, error) { return decoder.decodeRefusalDelta(choice) },
+	reasoning := func() ([]llmprotocol.Event, error) { return decoder.decodeReasoningDelta(choice) }
+	content := func() ([]llmprotocol.Event, error) { return decoder.decodeContentDelta(choice) }
+	annotations := func() ([]llmprotocol.Event, error) { return decoder.decodeAnnotations(choice) }
+	refusal := func() ([]llmprotocol.Event, error) { return decoder.decodeRefusalDelta(choice) }
+	// vLLM can end the reasoning and start the answer in one delta. While the
+	// reasoning is in progress its tail goes first; otherwise the content does.
+	if decoder.lastWasReasoning {
+		return []chatEventFactory{reasoning, content, annotations, refusal}
 	}
+	return []chatEventFactory{content, annotations, reasoning, refusal}
 }
 
 func (decoder *chatStreamDecoder) decodeContentDelta(choice chatChunkChoiceWire) ([]llmprotocol.Event, error) {
 	if !chatDeltaHasText(choice) {
 		return nil, nil
 	}
+	decoder.lastWasReasoning = false
 	content := llmprotocol.Content{Kind: llmprotocol.ContentText, Text: *choice.Delta.Content}
 	event, err := decoder.next(llmprotocol.Event{
 		Type: llmprotocol.EventOutputTextDelta, ItemIndex: choice.Index,
@@ -424,6 +430,7 @@ func (decoder *chatStreamDecoder) decodeReasoningDelta(choice chatChunkChoiceWir
 	if reasoning == nil {
 		return nil, nil
 	}
+	decoder.lastWasReasoning = true
 	content := llmprotocol.Content{
 		Kind: llmprotocol.ContentReasoning, Text: *reasoning, Reasoning: llmprotocol.ReasoningScopeText,
 	}
