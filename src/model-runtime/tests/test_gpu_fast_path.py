@@ -16,10 +16,11 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
-from vllm_sr_runtime.engines.native import fast, models  # noqa: E402
-from vllm_sr_runtime.engines.native.models.lora import attach  # noqa: E402
-from vllm_sr_runtime.engines.native.weights import keep_linear_bf16  # noqa: E402
+from vllm_srun.accel.rocm import ROCmAccelerator  # noqa: E402
+from vllm_srun.engines.native import fast, models  # noqa: E402
+from vllm_srun.engines.native.models.forest import ForestShape  # noqa: E402
+from vllm_srun.engines.native.models.lora import attach  # noqa: E402
+from vllm_srun.engines.native.weights import keep_linear_bf16  # noqa: E402
 
 pytestmark = pytest.mark.gpu
 
@@ -218,3 +219,43 @@ def test_attention_prep_above_2gib():
         got = fused(ids, mask, masks=fast.Masks().build(mask, False))
     assert not fused.layers[0]._fused_failed
     assert torch.equal(want, got)
+
+
+FOREST_CASES = [
+    # (prefix row lengths, block lengths, block owners)
+    ([20], [7], [0]),
+    ([347], [12, 180, 33], [0, 0, 0]),
+    ([64, 401], [5, 260, 17, 90], [0, 1, 1, 0]),
+    ([1000, 990, 12], [300, 300, 1, 64, 128], [2, 1, 0, 0, 1]),
+]
+
+
+def test_fused_forest_equals_eager():
+    """The fused forest forward (prefix rows and blocks, ``models/forest.py``) equals the eager one."""
+    accelerator, device = _device()
+    reference = build(qwen3_5(4, 2560, 32, 16), 7, False, accelerator, device)
+    fused = copy.deepcopy(reference)
+    fused.kernels = reference.kernels
+    assert fast.install_fused(fused) == len(fused.layers)
+    generator = torch.Generator().manual_seed(11)
+    torch_device = accelerator.torch_device(device)
+    for prefix_lengths, block_lengths, owners in FOREST_CASES:
+        prefix_ids, prefix_mask = batch(prefix_lengths, generator, torch_device)
+        width = prefix_ids.shape[1]
+        for row, length in enumerate(prefix_lengths):
+            prefix_ids[row] = prefix_ids[row].roll(width - length)
+            prefix_mask[row] = prefix_mask[row].roll(width - length)
+        block_ids, block_mask = batch(block_lengths, generator, torch_device)
+        owner = torch.tensor(owners, device=torch_device)
+        shape = ForestShape(
+            tuple(width - length for length in prefix_lengths),
+            tuple(block_lengths),
+            tuple(owners),
+        )
+        args = (prefix_ids, prefix_mask, block_ids, block_mask, owner, shape)
+        with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+            want = reference.forward_forest(*args)
+            got = fused.forward_forest(*args)
+        assert not any(layer._fused_failed for layer in fused.layers)
+        for a, b in zip(want, got, strict=True):
+            assert torch.equal(a, b), (prefix_lengths, block_lengths)

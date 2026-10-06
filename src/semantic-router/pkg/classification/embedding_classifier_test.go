@@ -532,8 +532,8 @@ func chipFabImageRules() []config.EmbeddingRule {
 // Image and audio rules are init-rejected unless ModelType is "multimodal",
 // so this helper centralizes that pairing for the test fixtures below.
 // TargetDimension must be set explicitly: WithDefaults() falls back to 768,
-// which the 384-dim multi-modal-embed-small model rejects at encode time
-// (target_dim validation in the candle-binding FFI), so leaving it unset
+// which the 384-dim multimodal model rejects at encode time (the serving
+// facade accepts only the dimensions on the model's card), so leaving it unset
 // makes every model-backed test fail as soon as it actually runs.
 func multimodalHNSWConfig(preload bool) config.HNSWConfig {
 	return config.HNSWConfig{

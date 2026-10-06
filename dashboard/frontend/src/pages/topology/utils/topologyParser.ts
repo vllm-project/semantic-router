@@ -57,7 +57,6 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
       modelId: promptGuardModel || 'vLLM-SR-Jailbreak',
       threshold: promptGuard.threshold,
       config: {
-        use_modernbert: promptGuard.use_modernbert,
         use_vllm: promptGuard.use_vllm,
       },
     })
