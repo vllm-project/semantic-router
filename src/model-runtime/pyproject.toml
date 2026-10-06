@@ -96,6 +96,10 @@ files = [
   "vllm_srun/scheduler",
   "vllm_srun/profiles",
   "vllm_srun/runtime.py",
+  "vllm_srun/api",
+  "vllm_srun/registry",
+  "vllm_srun/heads",
+  "vllm_srun/supervision",
 ]
 strict = true
 follow_imports = "silent"

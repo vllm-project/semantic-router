@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 import os
+import socket
 import stat
 from pathlib import Path
+from typing import Any
 
 from ..config import ServeConfig
 from ..runtime import Runtime
@@ -40,11 +42,11 @@ def serve(config: ServeConfig) -> None:
 
     class Server(uvicorn.Server):
         # uvicorn re-raises the stop signal after serve() returns, so clean up inside shutdown.
-        async def shutdown(self, sockets=None) -> None:
+        async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
             await super().shutdown(sockets=sockets)
             cleanup()
 
-    options = {
+    options: dict[str, Any] = {
         "log_level": config.log_level,
         "access_log": False,
         "timeout_keep_alive": 30,

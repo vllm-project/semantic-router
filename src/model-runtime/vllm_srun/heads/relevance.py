@@ -150,7 +150,7 @@ class RelevanceLayout:
         from safetensors.torch import load_file
 
         tensors = load_file(str(self.weights))
-        out = {}
+        out: dict[tuple[int, int], nn.Module] = {}
         for layer, dim in exits:
             prefix = f"{layer}.{dim}"
             scorer = nn.Sequential(
@@ -268,7 +268,7 @@ class RerankSurface:
 
     def plan(
         self, request: SurfaceRequest, identity: str, max_input_tokens: int
-    ) -> SurfacePlan:
+    ) -> SurfacePlan[Item]:
         """Every pair tokenized with the tokenizer's pair template; the query once."""
         parsed = self.parse(request, max_input_tokens)
         head = self.heads[parsed.exit]
@@ -306,7 +306,7 @@ class RerankSurface:
         )
 
     @staticmethod
-    def finish(plan: SurfacePlan, results: Any) -> dict[str, Any]:
+    def finish(plan: SurfacePlan[Item], results: Any) -> dict[str, Any]:
         """Results by descending logit (ties by input order), ``top_n`` of them, then failed pairs."""
         state: RerankPlanState = plan.state
         scored, failed = [], []

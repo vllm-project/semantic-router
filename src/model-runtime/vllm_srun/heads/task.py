@@ -53,7 +53,10 @@ class ClassifierHead(nn.Module):
         self.classifier = nn.Linear(hidden, labels)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        return self.classifier(self.norm(self.act(self.dense(hidden_states))))
+        logits: torch.Tensor = self.classifier(
+            self.norm(self.act(self.dense(hidden_states)))
+        )
+        return logits
 
     @classmethod
     def load(
@@ -165,7 +168,7 @@ def identical(left: Any, right: Any) -> bool:
         )
     if isinstance(left, list | tuple):
         return len(left) == len(right) and all(map(identical, left, right))
-    return left == right
+    return bool(left == right)
 
 
 def cache_key(identity: str, head: str, layer: int, ids: Sequence[int]) -> str:

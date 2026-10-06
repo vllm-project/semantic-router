@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any, TypeVar
@@ -77,7 +77,7 @@ def create_app(runtime: Runtime) -> Starlette:
             time.perf_counter() - started
         )
 
-    def surface_route(surface: str):
+    def surface_route(surface: str) -> Callable[[Request], Awaitable[Response]]:
         async def handle(request: Request) -> Response:
             endpoint = request.url.path
             started = time.perf_counter()

@@ -9,7 +9,7 @@ scores the hidden state of every candidate marker. Runs in FP32.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import torch
 import torch.nn.functional as F
@@ -47,7 +47,10 @@ class TypeHeadLayer(nn.Module):
             training=False, key_padding_mask=key_padding, need_weights=False,
         )  # fmt: skip
         hidden = hidden + output.transpose(1, 0)
-        return hidden + self.linear2(F.relu(self.linear1(self.norm2(hidden))))
+        out: torch.Tensor = hidden + self.linear2(
+            F.relu(self.linear1(self.norm2(hidden)))
+        )
+        return out
 
 
 class TypeReadout(nn.Module):
@@ -92,12 +95,13 @@ class TypeReadout(nn.Module):
         key_padding = torch.zeros_like(padding, dtype=hidden.dtype).masked_fill_(
             padding, float("-inf")
         )
-        for layer in self.heads[kind]:
+        for layer in cast(nn.ModuleList, self.heads[kind]):
             hidden = layer(hidden, key_padding)
         gathered = torch.gather(
             hidden, 1, markers[:, :, None].expand(-1, -1, hidden.shape[-1])
         )
-        return self.scorers[kind](gathered).squeeze(-1).float()
+        scores: torch.Tensor = self.scorers[kind](gathered).squeeze(-1).float()
+        return scores
 
 
 def load_readout(path: Path, hidden: int, head: dict[str, Any]) -> TypeReadout:

@@ -191,7 +191,7 @@ def transient(exc: Exception) -> bool:
 
     status = getattr(getattr(exc, "response", None), "status_code", None)
     if status is not None:
-        return status == TOO_MANY_REQUESTS or status >= SERVER_ERROR
+        return bool(status == TOO_MANY_REQUESTS or status >= SERVER_ERROR)
     if isinstance(exc, (LocalEntryNotFoundError, OSError, TimeoutError)):
         return True
     return type(exc).__module__.split(".")[0] in ("httpx", "httpcore", "requests")

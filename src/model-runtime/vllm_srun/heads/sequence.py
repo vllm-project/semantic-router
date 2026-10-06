@@ -84,11 +84,12 @@ class SequenceHead(TaskHead):
         if options.overflow == "window":
             if tokens > options.max_tokens:
                 raise InputTooLongError(tokens, options.max_tokens)
+            assert options.window is not None
             size, overlap = options.window
             windows = plan_windows(len(encoded.content), self.envelope, size, overlap)
-            ids = [encoded.framed(w.start, w.end) for w in windows]
+            rows = [encoded.framed(w.start, w.end) for w in windows]
             usage["windows"] = len(windows)
-            return Prepared(self.items(ids, identity), usage, windows)
+            return Prepared(self.items(rows, identity), usage, windows)
         if tokens <= options.max_tokens:
             return Prepared(self.items([encoded.framed()], identity), usage)
         if options.overflow != "truncate":

@@ -8,7 +8,7 @@ lists the labels whose reduced score passes its threshold.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -17,7 +17,7 @@ import torch
 from ..accel.kernels import rowwise
 from .sequence import SequenceHead
 
-COMPARISONS = {
+COMPARISONS: dict[str, Callable[[float, float], bool]] = {
     "score >= threshold": lambda score, threshold: score >= threshold,
     "score > threshold": lambda score, threshold: score > threshold,
 }

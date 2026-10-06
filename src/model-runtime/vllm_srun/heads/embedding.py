@@ -15,7 +15,7 @@ import binascii
 import hashlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import torch
@@ -92,7 +92,7 @@ class EmbeddingPlanState:
 
 
 def _media(index: int, part: dict[str, Any]) -> EmbeddingInput:
-    kind = part.get("type")
+    kind = cast(str, part.get("type"))
     modality = _MEDIA_TYPES[kind]
     payload = part.get(kind)
     if not isinstance(payload, dict):
@@ -106,12 +106,12 @@ def _media(index: int, part: dict[str, Any]) -> EmbeddingInput:
             raise ValueError(f"input[{index}].image_url.url must be base64 data")
         media_type = header[len("data:") : -len(";base64")].lower()
     else:
-        encoded, media_type = payload.get("data"), payload.get("format", "wav")
-        if not isinstance(encoded, str) or not isinstance(media_type, str):
+        audio, audio_format = payload.get("data"), payload.get("format", "wav")
+        if not isinstance(audio, str) or not isinstance(audio_format, str):
             raise ValueError(
                 f"input[{index}].input_audio needs data and format strings"
             )
-        media_type = media_type.lower()
+        encoded, media_type = audio, audio_format.lower()
     if len(encoded) > (MAX_MEDIA_BYTES * 4) // 3 + 4:
         return EmbeddingInput(index, modality, error=INVALID_INPUT)
     try:
@@ -137,7 +137,7 @@ def _inputs(value: Any, modalities: Sequence[str]) -> list[EmbeddingInput]:
             raise ValueError(
                 f"input[{index}] must be a string or a text, image_url or input_audio part"
             )
-        modality = _MEDIA_TYPES.get(kind, "text")
+        modality = "text" if kind is None else _MEDIA_TYPES.get(kind, "text")
         if modality not in modalities:
             raise ValueError(f"this model does not embed {modality} input")
         if isinstance(part, str):
@@ -259,7 +259,8 @@ def matryoshka(
     view = vectors[:, :dimension]
     if not normalize:
         return view
-    return view / (view.norm(dim=-1, keepdim=True) + NORM_EPSILON)
+    normalized: torch.Tensor = view / (view.norm(dim=-1, keepdim=True) + NORM_EPSILON)
+    return normalized
 
 
 def encode_vector(vector: Sequence[float], encoding: str) -> list[float] | str:
@@ -290,9 +291,9 @@ def representation(
 def plan(
     surface_request: SurfaceRequest,
     request: EmbeddingRequest,
-    entries: list[tuple[Any, dict[str, Any] | None] | str],
+    entries: Sequence[tuple[Any, dict[str, Any] | None] | str],
     rep: dict[str, Any],
-) -> SurfacePlan:
+) -> SurfacePlan[Any]:
     """A plan from one ``(item, usage)`` or item error code per input, in input order.
 
     Items are whatever the family runs (anything with ``ids`` and ``cache_key``).
@@ -319,7 +320,7 @@ def plan(
 
 
 def finish(
-    plan: SurfacePlan,
+    plan: SurfacePlan[Any],
     results: Any,
     view: Callable[[Any], Sequence[float]] | None = None,
 ) -> dict[str, Any]:

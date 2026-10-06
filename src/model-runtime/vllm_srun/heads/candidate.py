@@ -55,7 +55,8 @@ class CandidateHead(nn.Module):
                     + self.query_mlp(global_query)[:, None, :]
                 )
             ).squeeze(-1)
-            return bilinear + nonlinear
+            scores: torch.Tensor = bilinear + nonlinear
+            return scores
 
 
 def load_head(path: Path, hidden_size: int, head_dim: int) -> CandidateHead:
@@ -77,7 +78,7 @@ def logits(
     head: CandidateHead, gathered: torch.Tensor, query: torch.Tensor, mask: torch.Tensor
 ) -> torch.Tensor:
     """Candidate logits with padded option slots set to -inf (the scored model's output)."""
-    scores = head(gathered, query)
+    scores: torch.Tensor = head(gathered, query)
     return scores.masked_fill(~mask, -float("inf"))
 
 
