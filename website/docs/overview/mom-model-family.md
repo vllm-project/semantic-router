@@ -10,8 +10,10 @@ A **Mixture of Models (MoM)** is a serving architecture in which several
 independently deployed models act as one system. A routing policy decides which
 model, cascade, panel, or workflow should handle each request.
 
-The client does not need to know which physical backend won. It asks for a
-stable virtual model that represents the desired behavior.
+MoM is one way to use the programmable decision layer: an agent harness asks for
+a stable virtual model that represents the desired behavior while a recipe
+selects or coordinates the configured backends. The harness retains its task
+loop and tools.
 
 ```mermaid
 flowchart LR
@@ -36,7 +38,7 @@ internal architecture does not change the routing abstraction.
 
 | Kind | Example | Role |
 | --- | --- | --- |
-| **Provider model** | A vLLM, Ollama, or hosted model endpoint | Generates the application response. |
+| **Provider model** | A vLLM, Ollama, or hosted model endpoint | Generates the inference response. |
 | **Virtual model** | `vllm-sr/mom-v1-flash` | Gives clients a stable objective and selects a recipe. |
 | **Router system model** | An embedding or classifier asset | Helps detect intent, risk, similarity, or another routing signal. |
 
@@ -103,7 +105,7 @@ for the full schema and isolation rules.
 ## MoM V1
 
 MoM V1 offers five built-in recipes. Connect your own backends and choose the
-policy that fits your application:
+policy that fits your harness's model calls:
 
 | Public model | Recipe | Decisions |
 | --- | --- | --- |

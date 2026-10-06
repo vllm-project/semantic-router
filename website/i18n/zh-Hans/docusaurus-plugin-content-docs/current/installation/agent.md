@@ -3,7 +3,7 @@ sidebar_position: 2
 title: 使用 Agent 安装
 description: 向 Agent 提供一条提示词，即可通过 CLI 和 Router API 完成 vLLM Semantic Router 的安装、配置与验证。
 translation:
-  source_commit: "aa8c4a7d17848ba060a509ea9917b380a1c25f7f"
+  source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
   source_file: "docs/installation/agent.md"
   outdated: false
 ---
@@ -21,6 +21,9 @@ import {
 <CodeBlock language="text">{AGENT_INSTALL_PROMPT}</CodeBlock>
 
 这就是完整的引导提示词。它会指向公开、自包含的 <a href={AGENT_SKILL_PATH}>vLLM SR Skill</a>；安装细节保留在 Skill 中，而不是复制到每条提示词里。控制面板是可选的；需要验证控制面板或 Playground 时，可以一并交给 Agent。
+
+本页介绍如何让 Agent 安装和运维 Router。若要将正在运行的 Harness 发起的模型
+调用接入 Router，请阅读[接入 Agent Harness](agent-harness)。
 
 ## Agent 会做什么
 
@@ -51,7 +54,7 @@ Agent 使用的契约与 CLI 和控制面板相同。需要控制面板验证时
 | 测试路由逻辑 | `vllm-sr route preview` |
 | 测试完整数据路径 | `vllm-sr route probe` |
 
-管理源提供健康检查、发现、配置和 OpenAPI。已路由的推理源单独提供 OpenAI 兼容请求。Agent 必须分别发现两者，而不能从其中一个推断另一个。
+管理源提供健康检查、发现、配置和 OpenAPI。推理源单独提供[受支持的推理协议](protocol-compatibility)。Agent 必须分别发现两者，而不能从其中一个推断另一个。
 
 ## 安全边界
 
@@ -64,6 +67,6 @@ Agent 使用的契约与 CLI 和控制面板相同。需要控制面板验证时
 
 ## 维护 Skill
 
-唯一编写源位于 [`tools/agent/skills/vllm-sr-agent-operations/`](https://github.com/vllm-project/semantic-router/tree/main/tools/agent/skills/vllm-sr-agent-operations)，包含可选参考文档。修改这些文件后运行 `make agent-skill-sync`，不要直接修改公开副本。生成器只调整公开 Skill 名称，并将相对参考链接转换为同站点的绝对 URL。源文件与生成文件一同提交后，网站直接发布这些静态文件；远程 Agent 无须检出仓库即可加载参考文档。
+唯一编写源位于 [`tools/agent/skills/vllm-sr-agent-operations/`](https://github.com/vllm-project/semantic-router/tree/main/tools/agent/skills/vllm-sr-agent-operations)，包含可选参考文档。修改这些文件后运行 `make agent-skill-sync`，不要直接修改公开副本。在 Skill 及每份参考文档中使用绝对 URL，让任一副本都可独立安装。生成器调整公开 Skill 名称、检查链接文档，并将相对链接转换为绝对 URL。源文件与生成文件一同提交后，网站直接发布这些静态文件；远程 Agent 无须检出仓库即可加载参考文档。
 
 `make agent-skill-check`、pre-commit 和 `make harness-check` 会检查生成文件缺失或过期。仓库与网站由此共享同一套工作流，同时保留各自的 Skill 名称和安装路径。

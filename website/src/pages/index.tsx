@@ -7,7 +7,7 @@ import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import useBaseUrl from '@docusaurus/useBaseUrl'
 import IntegrationArchitecture from '@site/src/components/homepage/IntegrationArchitecture'
-import UseCaseExplorer from '@site/src/components/homepage/UseCaseExplorer'
+import EcosystemSection from '@site/src/components/homepage/EcosystemSection'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
 import YouTubeSection from '@site/src/components/YouTubeSection'
@@ -28,16 +28,16 @@ import styles from './index.module.css'
 const paperCount = researchPapers.length
 const homepageMetaTitle = translate({
   id: 'homepage.meta.title',
-  message: 'Build Your Mixture-of-Models',
+  message: 'A Decision Layer for Models and Compute',
 })
 const homepageMetaDescription = translate({
   id: 'homepage.meta.description',
   message:
-    'Mixture-of-Models is a serving architecture for heterogeneous LLM inference. vLLM Semantic Router makes it practical to deploy.',
+    'An open, programmable decision layer for models and compute. Connect your agent harness to policy-driven model selection, bounded collaboration, and configured backends.',
 })
 const homepageSocialTitle = translate({
   id: 'homepage.meta.socialTitle',
-  message: 'Build Your Mixture-of-Models | vLLM Semantic Router',
+  message: 'A Decision Layer for Models and Compute | vLLM Semantic Router',
 })
 
 const heroStats = [
@@ -136,7 +136,7 @@ const architectureDimensions = [
     }),
     unified: translate({
       id: 'homepage.capabilities.compute.value',
-      message: 'Route across heterogeneous compute.',
+      message: 'Select configured backends across heterogeneous compute.',
     }),
   },
   {
@@ -369,12 +369,12 @@ function CapabilitySection(): JSX.Element {
             </SectionLabel>
             <h2 id="mixture-architecture-title">
               <Translate id="homepage.capabilities.heading">
-                Unify heterogeneous inference
+                Program inference across models and compute
               </Translate>
             </h2>
             <p>
               <Translate id="homepage.capabilities.description">
-                Unify a fragmented model landscape across four dimensions.
+                Turn request signals and policies into decisions for your agent harness.
               </Translate>
             </p>
           </header>
@@ -458,13 +458,14 @@ function AlternativesSection(): JSX.Element {
             </SectionLabel>
             <h2 id="alternatives-title">
               <Translate id="homepage.alternatives.heading">
-                One decision layer, two neighbours
+                Between your agent harness and inference
               </Translate>
             </h2>
             <p>
               <Translate id="homepage.alternatives.description">
-                What the Router owns next to an AI Gateway and an Inference
-                Router. The three components make no overlapping decisions.
+                Your harness owns the agent loop and tool execution. The Router
+                decides how each inference call uses models and configured
+                backends, alongside gateways and inference routers.
               </Translate>
             </p>
           </header>
@@ -580,14 +581,14 @@ function MixtureOfModelsProofSection(): JSX.Element {
                 </SectionLabel>
                 <h3>
                   <Translate id="homepage.momProof.architectureTitle">
-                    The app calls one model. The router builds the team.
+                    Your harness calls one endpoint. The router coordinates models.
                   </Translate>
                 </h3>
                 <p>
                   <Translate id="homepage.momProof.architectureCopy">
                     Route by task shape, risk, confidence, and model capability;
-                    run bounded collaboration; return one OpenAI-compatible
-                    response.
+                    run bounded model collaboration; return a response to the
+                    harness that continues the agent loop.
                   </Translate>
                 </p>
               </div>
@@ -705,12 +706,12 @@ function FinalCtaSection(): JSX.Element {
               </SectionLabel>
               <h2>
                 <Translate id="homepage.finalCta.title">
-                  Compose your Mixture-of-Models
+                  Program inference for your agent harness
                 </Translate>
               </h2>
               <p>
                 <Translate id="homepage.finalCta.description">
-                  Shape model paths with signals, preferences, and policy.
+                  Connect a stable model API. Shape its decisions with signals, preferences, and policy.
                 </Translate>
               </p>
             </div>
@@ -723,8 +724,8 @@ function FinalCtaSection(): JSX.Element {
               >
                 <Translate id="homepage.finalCta.playground">Try the Playground</Translate>
               </PillLink>
-              <PillLink to="/docs/intro" muted>
-                <Translate id="homepage.finalCta.docs">Explore the Docs</Translate>
+              <PillLink to="/docs/overview/use-cases" muted>
+                <Translate id="homepage.finalCta.docs">Explore use cases</Translate>
               </PillLink>
             </div>
           </div>
@@ -773,7 +774,7 @@ export default function Home(): JSX.Element {
         <meta property="og:type" content="website" />
         <meta
           name="keywords"
-          content="Mixture-of-Models runtime, preference-driven AI, open-source LLM router, multi-model routing, model orchestration, model selection, model cascade, Fusion API, micro-agent workflows, semantic router, policy-aware routing, vLLM"
+          content="programmable decision layer, agent harness, models and compute, Mixture-of-Models, open-source LLM router, multi-model routing, model selection, bounded model collaboration, semantic router, policy-aware routing, vLLM"
         />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={homepageSocialTitle} />
@@ -828,7 +829,7 @@ export default function Home(): JSX.Element {
         </div>
 
         <div className={styles.bandBlack}>
-          <UseCaseExplorer />
+          <EcosystemSection />
         </div>
 
         <div className={styles.bandRaised}>

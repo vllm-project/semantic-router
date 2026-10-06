@@ -1,7 +1,7 @@
 ---
 sidebar_position: 1
 sidebar_label: Introduction
-description: Build a programmable Mixture-of-Models system behind one stable model API.
+description: An open, programmable decision layer for models and compute.
 ---
 
 import ThemedImage from '@theme/ThemedImage';
@@ -17,28 +17,34 @@ import ThemedImage from '@theme/ThemedImage';
       dark: '/img/vllm-sr-logo.white.png',
     }}
   />
-  <p className="docs-intro-brand__tagline">Make your Mixture-of-Models programmable.</p>
+  <p className="docs-intro-brand__tagline">An open, programmable <strong>decision layer</strong> for models and compute.</p>
 </div>
 
-vLLM Semantic Router is an open-source routing and control layer for building
-Mixture-of-Models systems across heterogeneous AI infrastructure. Applications
-call a stable OpenAI- or Anthropic-compatible endpoint while the serving layer
-chooses—or composes—the capability path for each request.
+vLLM Semantic Router lets agent harnesses use models and compute through an
+open, programmable decision layer. A harness calls a stable OpenAI- or
+Anthropic-compatible endpoint; explicit policy selects a model, coordinates a
+bounded multi-model strategy, and applies route-specific behavior over
+configured backends.
+
+Our vision is intelligence that can evolve beyond any one model. Our mission is
+to make the decisions connecting agent harnesses to models and compute open,
+programmable, and observable.
 
 ## The problem: an AI request is more than traffic
 
-Modern AI applications rarely rely on one interchangeable model. A request may
-need a fast local model, a specialist or frontier model, retrieval, memory,
-tools, a verifier, or several models working together. Those paths may span
-the cloud, a data center, or the edge.
+An agent harness manages a task across model calls, tool execution, and evolving
+context. One inference call may suit a fast local model; another needs a
+specialist, more context capacity, or bounded verification across several
+models. Those paths may span the cloud, a data center, or the edge.
 
 Each path carries different tradeoffs in capability, latency, cost, and trust.
 The right choice can also change with the request, user, session, and available
 infrastructure.
 
-When every application hard-codes these choices, product code becomes coupled
-to the current model fleet. The same routing logic is repeated across clients,
-and it becomes difficult to change, explain, or evaluate as the system grows.
+When every harness hard-codes these choices, its integration code becomes
+coupled to the current model fleet. The same routing logic is repeated across
+clients and becomes difficult to change, explain, or evaluate as the system
+grows.
 
 ## The idea: make intelligence programmable
 
@@ -49,29 +55,35 @@ to an isolated recipe.
 
 A recipe can choose one model, escalate through a cascade, coordinate a bounded
 multi-model workflow, or attach behavior such as retrieval, memory, tool
-filtering, caching, safety checks, and verification. The application keeps one
-familiar API while the capability path can evolve behind it.
+filtering, caching, safety checks, and verification. The harness keeps a stable
+model API while the policy and configured model pool evolve behind it.
 
 The result is more than a model name:
 
 - **The right model path:** direct, specialist, local, cascade, or collaborative.
-- **The right supporting capabilities:** retrieval, memory, tools, prompts,
+- **The right supporting capabilities:** retrieval, memory, tool filtering, prompts,
   caching, or verification where the request needs them.
 - **The right execution boundary:** configured cloud, data center, or edge
   backends across heterogeneous hardware.
 - **Evidence for what happened:** routing metadata plus configured feedback,
   replay, and evaluation workflows.
 
-vLLM Semantic Router does not replace the gateway or the model servers. Envoy
-continues to carry traffic, and inference runtimes continue to generate
-responses. The Router coordinates the semantic work between them.
+The harness owns the agent loop, tool execution, and task lifecycle. Semantic
+Router owns per-call routing policy and configured model collaboration. Gateways
+and Envoy carry traffic; inference platforms execute models and manage replica
+placement, batching, and capacity. Here, decisions about **compute** concern the
+configured inference path and bounded model calls, with execution managed by
+those platforms.
 
 ## Start with what you want to do
 
 - **Run it locally:** follow the [Quickstart](/docs/installation) and send a
   request through the Router.
+- **Connect an agent harness:** follow the [agent harness
+  guide](/docs/installation/agent-harness) for the integration and ownership
+  boundaries.
 - **Find the pattern for your workload:** explore [use cases](overview/use-cases)
-  from cloud and data center to edge and enterprise deployments.
+  for agent model calls across cloud, data center, edge, and enterprise deployments.
 - **Understand the system:** read the [System
   Overview](overview/semantic-router-overview) and [Routing
   Pipeline](overview/signal-driven-decisions).

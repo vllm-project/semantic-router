@@ -22,6 +22,10 @@ self-contained <a href={AGENT_SKILL_PATH}>vLLM SR Skill</a>; installation detail
 stay in the Skill instead of being copied into every prompt. The Dashboard is
 optional; the agent can verify it when you request Dashboard or Playground work.
 
+This page covers using an agent to install and operate the Router. To send the
+model calls from a running harness through it, see
+[Connect an agent harness](agent-harness).
+
 ## What the agent does
 
 The Skill directs the agent to:
@@ -66,8 +70,9 @@ Playground output when requested.
 | Test the complete data path | `vllm-sr route probe` |
 
 The management origin serves health, discovery, configuration, and OpenAPI.
-The routed inference origin separately serves OpenAI-compatible requests. An
-agent must discover both rather than infer one from the other.
+The routed inference origin separately serves the
+[supported inference protocols](protocol-compatibility). An agent must discover
+both rather than infer one from the other.
 
 ## Safety boundaries
 

@@ -2,7 +2,7 @@
 
 <img src="website/static/img/artworks/vllm-sr-logo.dark.png" alt="vLLM Semantic Router" width="50%"/>
 
-<p><strong>Make Your Mixture-of-Models Programmable.</strong></p>
+<p>An open, programmable <strong>decision layer</strong> for models and compute.</p>
 
 <p>
   <a href="https://vllm-sr.ai">Documentation</a> |
@@ -16,8 +16,8 @@
 <a href="https://trendshift.io/repositories/15581?utm_source=repository-badge&utm_medium=badge&utm_campaign=badge-repository-15581" target="_blank" rel="noopener noreferrer">
   <img src="https://trendshift.io/api/badge/repositories/15581" alt="vllm-project%2Fsemantic-router | Trendshift" width="250" height="55"/>
 </a>
-<a href="https://trendshift.io/repositories/15581?utm_source=trendshift-badge&utm_medium=badge&utm_campaign=badge-trendshift-15581" target="_blank" rel="noopener noreferrer">
-  <img src="https://trendshift.io/api/badge/trendshift/repositories/15581/daily?language=Go" alt="vllm-project%2Fsemantic-router | Trendshift" width="250" height="55"/>
+<a href="https://huggingface.co/collections/vllm-sr/decision-20">
+  <img src="website/static/img/hf-trending.svg" alt="Decision 2.0 — #1 on Hugging Face Trending Collections, October 6, 2026" width="300" height="55"/>
 </a>
 
 [![Main](https://github.com/vllm-project/semantic-router/actions/workflows/main.yml/badge.svg)](https://github.com/vllm-project/semantic-router/actions/workflows/main.yml)
@@ -31,16 +31,18 @@
 
 ## About
 
-vLLM Semantic Router is a programmable routing layer for building Mixture-of-Models systems across heterogeneous LLM infrastructure. It evaluates request signals, user preferences, and application policies to select—or compose—the right model path for each request.
+vLLM Semantic Router is an open, programmable **decision layer** for models and compute. Connect your agent harness to a stable model API, then program how each call selects or combines models across configured local, private, and cloud backends.
 
-Use it to improve quality, cost, latency, privacy, and safety without hard-coding routing logic into applications.
+The harness owns the agent loop, tool execution, and task state. The Router evaluates signals, preferences, and policy to choose a model path or run bounded model collaboration. Inference runtimes execute those calls and manage their compute.
+
+Our vision is intelligence that can evolve beyond any one model. Our mission is to make the decisions connecting agent harnesses to models and compute open, programmable, and observable.
 
 | Dimension | Fragmented today | With vLLM SR |
 | --- | --- | --- |
-| **Models** | Models specialize in different work. | Compose personalized model paths. |
-| **Compute** | GPUs, accelerators, edge, and cloud coexist. | Route across heterogeneous compute. |
-| **Location** | Inference spans edge, private, and cloud. | Keep data within its boundaries. |
-| **Preference** | "Best" changes by user and workload. | Make every preference executable. |
+| **Models** | Models specialize in different work. | Select a model or compose a bounded Mixture-of-Models workflow. |
+| **Compute** | Inference runs across heterogeneous hardware. | Choose among configured inference backends. |
+| **Location** | Inference spans edge, private, and cloud. | Enforce routing constraints on eligible paths. |
+| **Preference** | "Best" changes by user and workload. | Express preferences as routing policy. |
 
 [Explore how it works →](https://vllm-sr.ai/docs/intro/)
 
@@ -54,6 +56,12 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable
 
 For pip, uv, or agent-driven installation, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
+### Connect your agent harness
+
+Point your harness at the Router's inference endpoint and use a published model ID such as `vllm-sr/auto`. Models and policy can evolve behind that name while the harness keeps its model API.
+
+Follow **[Connect an agent harness](https://vllm-sr.ai/docs/installation/agent-harness/)** for protocol compatibility, authentication, model budgets, tool calls, and session continuity.
+
 ### Online playground
 
 Try the online playground at <https://app.vllm-sr.ai/playground>.
@@ -65,6 +73,8 @@ Credentials:
 
 ## Latest News
 
+- [2026/10/06] [Decision 2.0](https://huggingface.co/collections/vllm-sr/decision-20) reached #1 on Hugging Face Trending Collections (snapshot: October 6, 2026).
+- [2026/09/24] v0.4 Released: [Hermes: Many Models, One Improving System](https://vllm-sr.ai/blog/v0.4-vllm-sr-hermes-release/).
 - [2026/07/21] New Blog: [Beyond a Single Model: Building Mixture-of-Models Systems with vLLM Semantic Router](https://vllm.ai/blog/2026-07-21-vllm-sr-new-chapter-mom)
 - [2026/06/29] New Blog: [Micro-Agent: Beat Frontier Models with Collaboration inside Model API](https://vllm.ai/blog/2026-06-29-micro-agent-frontier-models)
 - [2026/06/16] New Blog: [Beyond One Model: Fusion in vLLM Semantic Router](https://vllm.ai/blog/2026-06-16-vllm-sr-fusion-api)
@@ -125,18 +135,12 @@ If you find Semantic Router helpful in your research or projects, please conside
 }
 ```
 
-## Sponsors
+## Ecosystem & partnerships
 
-We are grateful to our sponsors who support us:
-
----
-
-[**AMD**](https://www.amd.com) provides us with GPU resources and [ROCm™](https://www.amd.com/en/products/software/rocm.html) software for training and researching frontier router models, enhancing E2E testing, and building the online models playground.
+An open ecosystem spanning research, infrastructure, and enterprise adoption.
 
 <div align="center">
-<a href="https://www.amd.com">
-  <img src="website/static/img/amd-logo.svg" alt="AMD" width="40%"/>
-</a>
+  <a href="https://vllm-sr.ai/#ecosystem">
+    <img src="website/static/img/ecosystem/ecosystem.webp" alt="vLLM Semantic Router's growing ecosystem: AMD, Hugging Face, Microsoft, Intel, NVIDIA, Red Hat, IBM, Liquid, DaoCloud, Delta, MBZUAI, McGill, KR Labs, University of Chicago, UC Berkeley, UMass Boston, University of Illinois Chicago, National Taiwan University, New York University, UBS, AI21, Bayer, Dell, and Nutanix." width="100%"/>
+  </a>
 </div>
-
----

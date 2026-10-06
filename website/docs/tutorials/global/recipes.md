@@ -18,6 +18,12 @@ decision graph, or duplicating an entire Router deployment for every routing
 objective. They keep policy and runtime state separate while reusing expensive
 model endpoints and shared services.
 
+For an agent harness, a recipe programs the policy applied to its model calls.
+The harness continues to own the agent loop, tool execution, and task state; a
+recipe can coordinate a bounded model workflow within that call. Start with
+[Connect an agent harness](../../installation/agent-harness) for the client
+contract.
+
 ## When to Use
 
 Add recipes when consumers need different latency, quality, cost, privacy, or

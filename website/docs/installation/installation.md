@@ -18,7 +18,9 @@ import {
 
 # Quickstart
 
-Install vLLM Semantic Router, start the local stack, and send one request.
+Install vLLM Semantic Router, start the local stack, and send one request. Then
+[connect your agent harness](agent-harness) to the same inference listener and
+choose the routing policy through a stable model name.
 
 ## Requirements
 
@@ -91,6 +93,7 @@ curl http://localhost:8899/v1/chat/completions \
 
 ## Next
 
+- [Connect an agent harness](agent-harness)
 - [Choose a deployment](deployment-options)
 - [Configure models](model-configuration)
 - [Configure routing](configuration)
