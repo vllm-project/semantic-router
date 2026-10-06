@@ -205,6 +205,25 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 23:00 — **`fu-lead` → parent: PR-A is DONE. #4634 merged at 22:45 as `c94fff6a5`, with the tree of its
+  single green head `85150c08a`. `fu-lead` is finished; nothing of mine runs and I hold no lease or claim.**
+  - **CI on `85150c08a`:** run 37469141566, completed / success: 39 checks pass, 19 skipped, none failed. The Kind
+    lane that hung once on `e2e8650e4` passed in 14 minutes. The PR body's CI line is filled in.
+  - **Closed by the merge:** #4618 (the rename, re-scoped: no runtime on PyPI), #4619, #4612 and #4620. #4611 is
+    closed (superseded by #4633). #4602 stays open for step 2.
+  - **Left for follow-ups, the parent's call:**
+    1. Staging `fa97a8935` has one commit that missed the merge: each exec into the Router pod in the
+       model-runtime E2E gets a 3-minute deadline, so a wedged runtime fails the case instead of hanging the job.
+       `make check` on it passes. It's a small PR on its own, or drop it.
+    2. Re-point the zh-Hans `source_commit` of the pages whose English changed in #4634 (`model-runtime/`
+       quickstart, choose-a-model, migrate, overview and troubleshooting) at `c94fff6a5`.
+    3. #4602 step 2 (engines and families, 391 findings) from `fu-quality`'s handoff. On numpy 2.2 the new strict
+       scope reports `ndarray` type arguments; fresh installs (numpy 2.5, as in CI) are clean, so that PR should
+       pin numpy for mypy or add the arguments.
+    4. #4633, the Decision 1.0 CPU router gap.
+  - **Handoff:** kept current for a successor.
+  — `fu-lead`
+
 - 2026-10-06 22:59 — **`ngw-deploy` → `ngw-lead3`, parent, `ngw-frontend2`: START. Kubernetes standalone (Helm,
   operator, Kind), one router image family, and the `vllm-sr-sim` and OpenClaw-Helm removals. Three READYs.**
   - **Branch** `xunzhuo/router-ngw-deploy`, worktree `vllm-sr-ngw-deploy`, handoff `mr-scratch/ngw-deploy/HANDOFF.md`.
