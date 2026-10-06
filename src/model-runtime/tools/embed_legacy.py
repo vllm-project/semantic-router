@@ -619,9 +619,10 @@ def serve_runtime(
     """A started in-process runtime serving every job's model, and the served names.
 
     Omni runs its published snapshot on the native engine, or with
-    ``--omni-engine onnxruntime`` its prepared bundle (``--prepared``).
+    ``--omni-engine onnxruntime`` its prepared bundle (``--prepared``). The
+    runtime is this checkout's, or with ``--runtime-src`` another tree's.
     """
-    sys.path.insert(0, str(REPO / "src" / "model-runtime"))
+    sys.path.insert(0, args.runtime_src or str(REPO / "src" / "model-runtime"))
     from vllm_srun.config import ModelConfig, ServeConfig
     from vllm_srun.runtime import Runtime
 
@@ -787,6 +788,8 @@ def baseline_command(args: argparse.Namespace) -> list[str]:
     command += ["--device", args.device, "--profile", args.profile]
     if args.threads:
         command += ["--threads", str(args.threads)]
+    if args.baseline_runtime:
+        command += ["--runtime-src", args.baseline_runtime]
     return command
 
 
@@ -1115,6 +1118,12 @@ def main(argv: Iterable[str] | None = None) -> int:
         metavar="NAME=VALUE",
         help="an environment variable for the baseline runtime process only",
     )
+    ab.add_argument(
+        "--baseline-runtime",
+        default=None,
+        metavar="DIR",
+        help="the baseline runtime's source (another tree's src/model-runtime)",
+    )
     ab.add_argument("--rounds", type=int, default=4)
     ab.add_argument("--legacy-cpus", type=int, default=None)
     ab.add_argument(
@@ -1132,6 +1141,12 @@ def main(argv: Iterable[str] | None = None) -> int:
             choices=("native", "onnxruntime"),
             default="native",
             help="Omni's published snapshot on native, or its prepared bundle on onnxruntime",
+        )
+        sub.add_argument(
+            "--runtime-src",
+            default=None,
+            metavar="DIR",
+            help="import vllm_srun from this src/model-runtime instead of this checkout's",
         )
     for sub in (legacy, build, runtime, serve, ab):
         sub.add_argument("--cache", required=True)
