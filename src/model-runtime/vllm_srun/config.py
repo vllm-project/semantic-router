@@ -6,12 +6,17 @@ models, each described by a ``ModelConfig``.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 DEFAULT_PORT = 8100
+# libgomp's spin count for a process with an ONNX Runtime model on the CPU:
+# PyTorch's idle OpenMP threads spin that long after a native forward, and
+# libgomp's default (300,000) spins long enough to slow an ONNX Runtime run
+# that follows on the same cores.
+ONNX_RUNTIME_SPIN_COUNT = "10000"
 
 MODEL_FIELDS = {
     "model",
@@ -73,6 +78,22 @@ class ServeConfig:
         if not self.models:
             raise ValueError("a runtime needs at least one model")
         return self.models
+
+
+def spin_count(models: Sequence[ModelConfig]) -> str | None:
+    """``GOMP_SPINCOUNT`` for a process that serves ``models``; None keeps libgomp's default.
+
+    libgomp reads it when PyTorch loads, so the process chooses it from its
+    configuration alone. 10,000 when a model may run ONNX Runtime on the CPU
+    (``engine: onnxruntime`` on a ``cpu`` or ``auto`` device); native CPU
+    forwards run fastest on the default. ``engine: auto`` counts as native:
+    it tries ``native`` first, which runs every built-in model.
+    """
+    for model in models:
+        kind = model.device.split(":", 1)[0].strip().lower()
+        if model.engine == "onnxruntime" and kind in ("cpu", "auto"):
+            return ONNX_RUNTIME_SPIN_COUNT
+    return None
 
 
 def split_revision(value: str) -> tuple[str, str | None]:

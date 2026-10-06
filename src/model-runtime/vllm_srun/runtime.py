@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from .accel.autotune import KernelChoices, freeze_autotune
-from .config import ModelConfig, ServeConfig
+from .config import ONNX_RUNTIME_SPIN_COUNT, ModelConfig, ServeConfig
 from .errors import (
     PackageError,
     RuntimeServiceError,
@@ -328,6 +328,19 @@ class ServedModel:
             for served in process.served_models()
             if served is not config and device_kind(served.device) == "cpu"
         )
+        if (
+            self.engine == "onnxruntime"
+            and placement.device.accelerator == "cpu"
+            and neighbors - {self.engine}
+            and "GOMP_SPINCOUNT" not in os.environ
+        ):
+            log.warning(
+                "%s runs ONNX Runtime beside other CPU models on libgomp's default spin "
+                "count, which slows its runs after their forwards; name engine: onnxruntime "
+                "in its configuration or set GOMP_SPINCOUNT=%s",
+                self.label,
+                ONNX_RUNTIME_SPIN_COUNT,
+            )
         engine_options = default.engine_options(
             EngineOptions(threads=process.threads, cpu_neighbors=neighbors)
         )

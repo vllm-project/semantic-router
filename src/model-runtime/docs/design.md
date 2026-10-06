@@ -909,9 +909,11 @@ the devices of the available accelerators (`devices`) and the one
 accelerator in `auto_priority` order); the router reads `auto` before it
 groups its processes (section 13.4).
 
-Importing `vllm_srun` sets five environment defaults:
-`GOMP_SPINCOUNT`, `THP_MEM_ALLOC_ENABLE=1`, `ONEDNN_PRIMITIVE_CACHE_CAPACITY`,
-and MIOpen's `MIOPEN_FIND_MODE=FAST` with `MIOPEN_LOG_LEVEL=3`. MIOpen's
+Importing `vllm_srun` sets these environment defaults:
+`THP_MEM_ALLOC_ENABLE=1`, `ONEDNN_PRIMITIVE_CACHE_CAPACITY`, on x86_64
+`OPENBLAS_NUM_THREADS=1` (OpenBLAS's idle threads took the cores of the CPU
+device's OpenMP team after the runtime's small NumPy products), and MIOpen's
+`MIOPEN_FIND_MODE=FAST` with `MIOPEN_LOG_LEVEL=3`. MIOpen's
 default find mode times each new convolution shape's solvers, so cold
 processes picked different ones and answered differently; FAST never times.
 `THP_MEM_ALLOC_ENABLE` puts PyTorch's CPU allocations of 2 MiB or more on
@@ -921,6 +923,19 @@ and some processes ran the same CPU forward about a quarter slower
 (`decision1-performance.md`). They take effect only when
 PyTorch loads, and the plugin base layer imports PyTorch, so they cannot wait
 for `main`. A value the caller set is kept.
+
+libgomp's spin count depends on what a process serves, so `serve` chooses
+it from its models before anything imports PyTorch (`vllm-sr serve` runs the
+same `main`), and keeps a value the caller set. PyTorch's idle OpenMP threads
+spin that long after a native forward. Native CPU forwards run fastest on
+libgomp's default (300,000), while an ONNX Runtime run that follows on the
+same cores needs them asleep sooner, so a process with a model that names
+`engine: onnxruntime` on a `cpu` or `auto` device gets `GOMP_SPINCOUNT=10000`
+(`decision1-performance.md`, `embed-performance.md`). `engine: auto` counts
+as native: it tries `native` first, which runs every built-in model. A
+process that still serves ONNX Runtime beside other CPU models on the
+default (a third-party package only ONNX Runtime runs, or a runtime embedded
+in another program) logs a warning that names the fix.
 
 ## 13. Router integration
 
