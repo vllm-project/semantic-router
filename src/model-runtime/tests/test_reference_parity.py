@@ -4,8 +4,8 @@ import json
 
 import pytest
 import torch
-from vllm_sr_runtime.families.decision2.readout import load_head, logits
-from vllm_sr_runtime.families.decision2.renderer import collate
+from vllm_srun.heads.candidate import load_head, logits
+from vllm_srun.text.segments import collate
 
 transformers = pytest.importorskip("transformers")
 pytestmark = pytest.mark.reference
@@ -59,7 +59,7 @@ def questions_with_unpadded_row(runtime):
     """Questions whose rendered length is a multiple of 8, so one batch runs SDPA without a mask."""
     for extra in range(64):
         question = {"type": "noul", "instructions": "Is this hard?" + "!" * extra}
-        plan = runtime.model.plan("state", {"q": question})
+        plan = runtime.lookup(None).model.plan("state", {"q": question})
         if len(plan.items[0].ids) % 8 == 0:
             return {"q": question}
     raise AssertionError("no unpadded length found")
@@ -93,11 +93,12 @@ def test_native_backbones_match_transformers_bit_for_bit(
         "instructions": "Hard?",
         "criteria": ["a", "b", "c", "d", "e"],
     }
-    plan = runtime.model.plan("Merge two sorted lists in Python. " * 3, questions)
-    unpadded = runtime.model.plan("state", questions_with_unpadded_row(runtime)).items
-    pad_id = runtime.model.tokenizer.pad_id
+    model = runtime.lookup(None).model
+    plan = model.plan("Merge two sorted lists in Python. " * 3, questions)
+    unpadded = model.plan("state", questions_with_unpadded_row(runtime)).items
+    pad_id = model.tokenizer.pad_id
     for items in (plan.items, plan.items[:1], plan.items[2:4], unpadded):
-        assert runtime.model.run(items) == reference_scores(package, items, pad_id)
+        assert model.run(items) == reference_scores(package, items, pad_id)
 
 
 def test_tokenizer_matches_transformers(qwen3_runtime, qwen3_package):
@@ -107,6 +108,6 @@ def test_tokenizer_matches_transformers(qwen3_runtime, qwen3_package):
         tokenizer_file=str(qwen3_package / "tokenizer.json")
     )
     for text in TEXTS:
-        assert qwen3_runtime.model.tokenizer.encode(text) == reference.encode(
-            text, add_special_tokens=False
-        )
+        assert qwen3_runtime.lookup(None).model.tokenizer.encode(
+            text
+        ) == reference.encode(text, add_special_tokens=False)

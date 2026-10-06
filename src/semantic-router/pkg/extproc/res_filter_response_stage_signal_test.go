@@ -31,7 +31,7 @@ var _ = Describe("Response stage jailbreak signal", func() {
 	It("publishes without any plugin configured", func() {
 		router, ctx := newRouter(responseRule)
 
-		router.evaluateResponseJailbreakSignal(ctx, "some answer")
+		router.scoreResponseStageSignals(ctx, "some answer")
 
 		// No detector backs the rule, so it resolves as unavailable rather
 		// than silently absent, under the plain jailbreak key.
@@ -42,7 +42,7 @@ var _ = Describe("Response stage jailbreak signal", func() {
 	It("does nothing when only request-direction rules are declared", func() {
 		router, ctx := newRouter(config.JailbreakRule{Name: "prompt_injection", Threshold: 0.7})
 
-		router.evaluateResponseJailbreakSignal(ctx, "some answer")
+		router.scoreResponseStageSignals(ctx, "some answer")
 
 		Expect(ctx.VSRSignalErrors).To(BeEmpty())
 		Expect(ctx.VSRSignalConfidences).To(BeEmpty())
@@ -52,7 +52,7 @@ var _ = Describe("Response stage jailbreak signal", func() {
 		router, _ := newRouter(responseRule)
 		ctx := &RequestContext{}
 
-		router.evaluateResponseJailbreakSignal(ctx, "some answer")
+		router.scoreResponseStageSignals(ctx, "some answer")
 
 		Expect(ctx.VSRSignalErrors).To(BeEmpty())
 		Expect(ctx.VSRSignalConfidences).To(BeEmpty())
@@ -61,7 +61,7 @@ var _ = Describe("Response stage jailbreak signal", func() {
 	It("reports a response with no assistant text as unresolved, not clean", func() {
 		router, ctx := newRouter(responseRule)
 
-		router.evaluateResponseJailbreakSignal(ctx, "")
+		router.scoreResponseStageSignals(ctx, "")
 
 		Expect(ctx.VSRSignalErrors).To(HaveKey("jailbreak:unsafe_completion"))
 	})

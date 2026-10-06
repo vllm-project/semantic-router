@@ -185,7 +185,7 @@ var _ = Describe("Domain signal: complete classification failure", func() {
 	It("should not crash and return empty results", func() {
 		mock := &MockCategoryInference{
 			classifyWithProbsError: errors.New("ModernBERT not initialized"),
-			classifyError:          errors.New("CandleBERT also failed"),
+			classifyError:          errors.New("BERT classifier also failed"),
 		}
 
 		classifier := buildDomainClassifier(mock)

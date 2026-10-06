@@ -3,9 +3,6 @@ name: Performance Tests
 on:
   workflow_call:
     inputs:
-      native-artifact:
-        type: string
-        default: ""
       verification:
         type: string
         default: ""
@@ -22,6 +19,9 @@ jobs:
     name: Production Benchmarks
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      HF_HUB_DISABLE_XET: "1"
+      VLLM_SRUN_CACHE_DIR: ${{ github.workspace }}/.cache/model-runtime
 
     steps:
       - name: Check out the repo
@@ -34,25 +34,6 @@ jobs:
         with:
           go-version: "1.25"
 
-      # The paired baseline may rebuild its libraries even when HEAD uses the shared artifact.
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.90
-
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            candle-binding/target/
-          key: ${{ runner.os }}-perf-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-perf-cargo-
-
       - name: Cache Go dependencies
         uses: actions/cache@v4
         with:
@@ -62,36 +43,28 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-perf-go-
 
-      - name: Cache Models
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pinned runtime models
         uses: actions/cache@v4
         with:
-          path: |
-            models/
-          key: ${{ runner.os }}-models-v1-${{ hashFiles('src/semantic-router/pkg/config/registry.go', 'src/semantic-router/pkg/config/canonical_defaults.go') }}
+          path: .cache/model-runtime
+          key: ${{ runner.os }}-perf-runtime-models-${{ hashFiles('src/semantic-router/pkg/config/registry.go', 'src/semantic-router/pkg/config/canonical_defaults.go', 'src/model-runtime/vllm_srun/registry/**') }}
           restore-keys: |
-            ${{ runner.os }}-models-v1-
+            ${{ runner.os }}-perf-runtime-models-
         continue-on-error: true
 
-      - name: Load shared native libraries
-        if: inputs.native-artifact != ''
-        uses: ./.github/actions/load-native-artifact
-        with:
-          artifact: ${{ inputs.native-artifact }}
-
-      - name: Build Rust library (CPU-only)
-        if: inputs.native-artifact == ''
-        run: make rust-ci
-
-      - name: Install HuggingFace CLI
-        run: |
-          pip install -U "huggingface_hub[cli]" hf_transfer
+      - name: Install the model runtime
+        run: make harness-venv-install model-runtime-install
 
       - name: Test benchmark measurement and ownership contracts
         run: make perf-test-unit perf-test-benchmark-contracts
 
-      - name: Measure baseline with identical Vela artifacts
+      - name: Measure the base revision with the same pinned models
         env:
-          HF_HUB_DISABLE_XET: "1"
           PERF_BASE_REF: ${{ inputs.base-ref || 'HEAD^' }}
         run: make perf-model-baseline PERF_BASE_REF="$PERF_BASE_REF"
 
@@ -100,7 +73,6 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p reports
-          export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release
           make perf-bench-quick 2>&1 | tee reports/bench-output.txt
 
       - name: Run Looper benchmarks
@@ -110,7 +82,6 @@ jobs:
         if: ${{ always() && !cancelled() }}
         run: |
           set -o pipefail
-          export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release
           make perf-bench-looper 2>&1 | tee -a reports/bench-output.txt
 
       - name: Generate current results
@@ -121,8 +92,8 @@ jobs:
             --parse-bench=../reports/bench-output.txt \
             --output=../reports/current.json
 
-      # Model benchmarks use the measured base implementation with identical
-      # artifacts; other components retain their committed baselines. Numeric
+      # Model benchmarks use the measured base implementation with the same
+      # pinned models; other components retain their committed baselines. Numeric
       # regressions are advisory; invalid or incomplete comparisons still fail.
       - name: Compare against baseline and report regressions
         id: comparison

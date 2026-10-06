@@ -247,13 +247,6 @@ main() {
     print_info "To override: export USE_GPU=true USE_HNSW=true"
     echo ""
     
-    # Set library path for candle binding
-    if [ -z "$LD_LIBRARY_PATH" ]; then
-        export LD_LIBRARY_PATH="$PROJECT_ROOT/candle-binding/target/release"
-    else
-        export LD_LIBRARY_PATH="$PROJECT_ROOT/candle-binding/target/release:$LD_LIBRARY_PATH"
-    fi
-    
     # Parse command
     COMMAND="${1:-quick}"
     shift || true

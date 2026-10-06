@@ -47,11 +47,10 @@ def binding_document():
             "model_catalog": {
                 "deployments": {
                     "shared": {
-                        "artifact": "models/maintained-checkpoint",
-                        "revision": "pinned-revision",
-                        "provider": "candle",
+                        "provider": "model_runtime",
+                        "artifact": "vllm-sr/maintained-checkpoint",
+                        "revision": "0123456789abcdef0123456789abcdef01234567",
                         "device": "cpu",
-                        "precision": "fp32",
                         "input": {"max_tokens": 512, "overflow": "reject"},
                     }
                 },
@@ -142,14 +141,6 @@ def test_recipe_binding_cannot_resolve_a_missing_deployment():
             "http_classify",
             "no HTTP",
         ),
-        ("hallucination_detector", "ort", "token_spans.v1", "mmbert", "no ORT"),
-        (
-            "hallucination_explainer",
-            "ort",
-            "text_pair_distribution.v1",
-            "mmbert",
-            "no ORT",
-        ),
         (
             "prompt_guard",
             "http",
@@ -157,9 +148,22 @@ def test_recipe_binding_cannot_resolve_a_missing_deployment():
             "http_chat",
             "label_decision.v1",
         ),
-        ("unknown", "candle", "score.v1", "mmbert", "Unknown task"),
-        ("complexity", "candle", "score.v1", "mmbert", "requires an HTTP"),
-        ("complexity", "ort", "label_distribution.v1", "mmbert", "requires an HTTP"),
+        ("unknown", "model_runtime", "score.v1", "mmbert", "Unknown task"),
+        ("complexity", "model_runtime", "score.v1", "mmbert", "requires an HTTP"),
+        (
+            "complexity",
+            "model_runtime",
+            "label_distribution.v1",
+            "mmbert",
+            "requires an HTTP",
+        ),
+        (
+            "hallucination_explainer",
+            "model_runtime",
+            "text_pair_distribution.v1",
+            "mmbert",
+            "explainer is retired",
+        ),
     ],
 )
 def test_unsupported_task_provider_binding_fails_before_startup(
@@ -174,8 +178,8 @@ def test_unsupported_task_provider_binding_fails_before_startup(
     deployment["provider"] = provider
     if provider == "http":
         deployment.pop("artifact")
+        deployment.pop("revision")
         deployment.pop("device")
-        deployment.pop("precision")
         deployment["external_model"] = "remote"
         document["global"]["model_catalog"]["external"] = [{"name": "remote"}]
     deployment["input"] = {"overflow": "reject"}
@@ -202,8 +206,8 @@ def test_classification_budget_is_checked_against_actual_loaded_checkpoint(limit
     "changes,fragment",
     [
         ({"provider": "unknown"}, "Unsupported provider"),
-        ({"provider": "ort", "device": "cuda:0"}, "incompatible"),
-        ({"device": "migraphx:0"}, "incompatible"),
+        ({"device": "rocm:x"}, "device must be"),
+        ({"profile": "Fastest"}, "profile must be"),
         ({"input": {"max_tokens": -1}}, "negative"),
         ({"external_model": "remote"}, "cannot set external_model"),
     ],
@@ -217,31 +221,7 @@ def test_deployment_validation_matches_router_before_model_loading(changes, frag
 
 def test_unregistered_custom_local_artifact_remains_valid():
     document = binding_document()
-    document["global"]["model_catalog"]["deployments"]["shared"][
-        "artifact"
-    ] = "/mounted/custom/checkpoint"
+    shared = document["global"]["model_catalog"]["deployments"]["shared"]
+    shared["artifact"] = "/mounted/custom/checkpoint"
+    del shared["revision"]
     assert validate_model_runtime_references(UserConfig.model_validate(document)) == []
-
-
-@pytest.mark.parametrize(
-    "consumer,contract",
-    [("embedding", "embedding.v1"), ("domain_classifier", "label_distribution.v1")],
-)
-def test_openvino_binding_uses_canonical_deployment(consumer, contract):
-    document = binding_document()
-    document["recipes"] = []
-    document["routing"]["model_bindings"] = {
-        consumer: {
-            "deployment": "shared",
-            "contract": contract,
-            "adapter": "bert",
-            "head": "openvino_model.xml",
-        }
-    }
-    deployment = document["global"]["model_catalog"]["deployments"]["shared"]
-    deployment.update(provider="openvino", device="CPU", precision="native")
-    assert validate_config_structure(document) == []
-    assert validate_model_runtime_references(UserConfig.model_validate(document)) == []
-    deployment["input"]["overflow"] = "window"
-    errors = validate_model_runtime_references(UserConfig.model_validate(document))
-    assert any("reject or truncate" in e.message for e in errors)
