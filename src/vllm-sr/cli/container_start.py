@@ -792,7 +792,12 @@ def _sensitive_runtime_env_names(
 
     names = set(sensitive_env_names(runtime_paths.get("source_config_path")))
     names.update(_recipe_env_binding_names(common_env))
-    return (names & set(common_env)) | set(STORAGE_SECRET_ENV_NAMES)
+    host_secrets = (
+        {"VLLM_SR_HOST_RUNTIME_TOKEN"}
+        if "VLLM_SR_HOST_RUNTIME_TOKEN" in os.environ
+        else set()
+    )
+    return (names & set(common_env)) | set(STORAGE_SECRET_ENV_NAMES) | host_secrets
 
 
 def _build_dashboard_runtime_env(

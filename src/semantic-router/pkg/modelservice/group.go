@@ -35,6 +35,7 @@ type group struct {
 	client     *Client
 	managed    bool
 	supervisor *supervisor
+	host       *hostRuntime
 	modelsFile string
 	cancel     context.CancelFunc
 	done       chan struct{}
@@ -84,6 +85,13 @@ func (g *group) start() {
 	ctx, cancel := context.WithCancel(context.Background())
 	g.cancel = cancel
 	var wg sync.WaitGroup
+	if g.host != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			g.host.keepAlive(ctx, g.plan)
+		}()
+	}
 	if g.supervisor != nil {
 		wg.Add(1)
 		go func() {
