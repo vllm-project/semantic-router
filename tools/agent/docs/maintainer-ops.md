@@ -131,11 +131,18 @@ artifacts are never promoted automatically.
 The Python publisher releases `vllm-srun` (the model runtime) with `vllm-sr`,
 at the same version, and uploads it first. `vllm-sr` uploads with the
 `PYPI_API_TOKEN` secret; `vllm-srun` uses PyPI trusted publishing. Before the
-first publish, a maintainer adds its (pending) trusted publisher on PyPI, and
-on TestPyPI for the manual TestPyPI dispatch: owner `vllm-project`, repository
-`semantic-router`, workflow `pypi-publish.yml`, no environment. The dev channel
-publishes the pair from validated `main` commits too, so the publisher must
-exist before the first such merge.
+first publish, a maintainer adds its (pending) trusted publishers, each with
+owner `vllm-project`, repository `semantic-router` and no environment:
+
+- on PyPI, one with workflow `release.yml` (stable releases) and one with
+  workflow `main.yml` (the dev channel);
+- on TestPyPI, one with workflow `pypi-publish.yml` (its manual dispatch).
+
+PyPI matches the workflow that starts a run, and `pypi-publish.yml` is a
+reusable workflow that `main.yml` and `release.yml` call, so a PyPI publisher
+that names `pypi-publish.yml` refuses the upload. The dev channel publishes
+the pair from validated `main` commits too, so both PyPI publishers must exist
+before the first such merge.
 
 Fleet Simulator uses its own package version and tag stream. Keep that release
 independent from the main Router version unless a documented compatibility

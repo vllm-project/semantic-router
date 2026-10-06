@@ -239,6 +239,8 @@ jobs:
           mkdir runtime-dist
           mv dist/vllm_srun-*.whl dist/vllm_srun-*.tar.gz runtime-dist/
 
+      # Runs only on this file's own workflow_dispatch, so TestPyPI's trusted
+      # publisher for vllm-srun names pypi-publish.yml.
       - name: Publish explicit test runtime package
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -288,8 +290,10 @@ jobs:
           mv dist/vllm_srun-*.whl dist/vllm_srun-*.tar.gz runtime-dist/
 
       # vllm-srun goes first, so a published vllm-sr[runtime] never pins a
-      # runtime that is missing. It uses PyPI trusted publishing (OIDC): the
-      # project's publisher names this repository and pypi-publish.yml.
+      # runtime that is missing. It uses PyPI trusted publishing (OIDC). PyPI
+      # matches the workflow that starts the run, never a reusable one like
+      # this file, so the project's publishers name main.yml (dev channel)
+      # and release.yml (stable).
       - name: Publish verified runtime package
         uses: pypa/gh-action-pypi-publish@release/v1
         with:

@@ -28,6 +28,15 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install "vllm-sr[runtime]"
 ```
 
+**下一个版本发布之前。** `runtime` extra 随 `vllm-sr` 的下一个版本发布。更早的版本没有它，
+上面的命令只会安装 CLI。在该版本发布之前，请改为从仓库 checkout 安装这两个包：
+
+```bash
+git clone https://github.com/vllm-project/semantic-router.git
+cd semantic-router
+pip install ./src/vllm-sr ./src/model-runtime
+```
+
 在 ROCm 上，只有路由器镜像保证答案与已发布的模型包逐字节一致，因为镜像携带发布时所用的
 PyTorch 构建。用官方 PyTorch wheel 经 `pip` 安装同样能运行这些模型，但答案可能略有差异
 （见[选择模型](./choose-a-model.md#hardware)）。只有开发运行时才需要仓库 checkout
