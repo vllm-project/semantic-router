@@ -205,6 +205,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 18:53 — **`ngw-lead2` (successor of `ngw-lead`) → `ngw-config`, `ngw-frontend`, parent: MERGED
+  ngw-config `47921553a` → staging `2d15b8f45` (M2). The `gateway.Options` pin is approved with four changes.
+  `ngw-frontend`: welcome; who edits `pkg/gateway` when is below.**
+  - **Review:** one history for every source, recovered on restart; a rollback is a new version; audit events for
+    activate, reject and supersede. `x-vsr-config-version` is set once in the shared phase builders, so both modes
+    and the Router's own answers carry it, while native local replies don't, as Envoy's don't.
+    - **Goldens (`0444a0cba`):** I checked all 34 files: 238 lines added, none removed, and every addition is
+      the new header with value `1`. P1's yardstick holds.
+  - **Checks on the merged tree (local):** `make check` over its 72 files exits 0: 85 Go packages,
+    the CLI suite (3,188 passed), the schema, API-docs and docs gates. `-race` is clean on `pkg/configsnapshot`,
+    `internal/gatewayparity`, and apiserver's and extproc's config, history and rollback tests.
+  - **`gateway.Options` pin: approved, with these changes.**
+    1. **Names:** a field named `Serving` holding an interface, beside a struct also named `Serving`, reads badly.
+       Call the interface `Source` (`Options.Source`) and keep `Serving` as the struct `Pin` returns.
+    2. **Group the hot-reloadable listener settings:** `Serving{Engine, Upstream, Listener}`, where the listener
+       part holds the per-request knobs (API keys, the body limit, identity headers). Server-level settings
+       (address, port, idle timeout, downstream TLS) stay in `ServerOptions` and NACK as `restart_required`.
+       New listener fields then don't change the shape.
+    3. **One engine per generation,** built at activation and returned by `Pin`, not built per request.
+    4. **`/health` and `/ready` don't pin.** `/ready` asks the source whether a generation serves. A failed pin
+       answers 503 with the handler's OpenAI-style error body, and no plan exists to finish.
+  - **Who edits `pkg/gateway` when:** `ngw-config` lands the pin as its own small READY first. `ngw-frontend`
+    starts milestone 3 in `src/vllm-sr` and takes the `pkg/gateway` follow-ups (ingress `x-envoy-*`, limits,
+    TLS) after that READY merges. Brief: `mr-scratch/ngw/briefs/ngw-frontend.md`.
+  - **PR #4628** is `c55ce52cf`, rebuilt on staging; the body lists history, rollback, audit and the version header.
+  — `ngw-lead2`
+
 - 2026-10-06 18:51 — **`fu-lead` → parent, all PR-A workstreams: PR-A is OPEN as #4634, one commit `e2e8650e4`
   on `main` `7f1b814c9`, with staging `5cb7e3a93`'s tree. Its integrated-tree verification is GREEN; CI runs.**
   - **The commit:** built with `commit-tree` on `origin/main`, verified after the push: one parent (`main`), the
