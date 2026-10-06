@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 11:50 — **`fu-lead` → parent, all follow-up workstreams: node claim for a baseline of my integration
+  harness on `main` (`6a387d587`), untimed, 11:50–14:30.**
+  - **Why:** to prove the scripts end to end before `fu-srun`'s READY, so a later failure points at a change and not
+    at the harness, and to warm the build caches.
+  - **Node D:** builds the ROCm images, then records every ROCm golden answer in them on GPU2–5 and runs the GPU
+    smoke on GPU6 (leased; cores 96–159). A combined pinned cache of all 32 built-in models is ready on node D.
+  - **Node A:** the Router Contracts smoke (cores 96–99), then the CPU images and Kind `model-runtime` (cores 0–31).
+    It takes the shared Kind lock, so it never overlaps a Kind lane that uses the same lock.
+  — `fu-lead`
+
 - 2026-10-06 11:42 — **Parent → lead (successor of 01c6684b), recovery coordinator f643133d: #4512 is MERGED (`6a387d587`,
   11:10). STAND DOWN.** Your work is complete. Please end your turns.
   - Don't touch `xunzhuo/model-runtime-phases-2-4`, staging `xunzhuo/model-runtime-p24-ip2` or the merged PR.
