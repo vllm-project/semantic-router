@@ -349,12 +349,6 @@ func canonicalAutoModelNames(names []string) *[]string {
 
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
 	categoryModel := cfg.CategoryModel
-	if err := normalizeCanonicalCategoryVariant(&categoryModel); err != nil {
-		// Export is intentionally non-validating. Preserve an invalid runtime
-		// value so the normal configuration validator reports the actionable
-		// error instead of silently changing it during serialization.
-		categoryModel = cfg.CategoryModel
-	}
 
 	return CanonicalModelCatalog{
 		Deployments: cloneModelMap(cfg.ModelDeployments),
@@ -363,15 +357,14 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 			Semantic: cfg.EmbeddingModels,
 		},
 		System: CanonicalSystemModels{
-			Safety:                 cfg.SafetyModels.Safety.ModelID,
-			Hazard:                 cfg.SafetyModels.Hazard.ModelID,
-			PromptGuard:            cfg.PromptGuard.ModelID,
-			DomainClassifier:       cfg.CategoryModel.ModelID,
-			PIIClassifier:          cfg.PIIModel.ModelID,
-			FactCheckClassifier:    cfg.HallucinationMitigation.FactCheckModel.ModelID,
-			HallucinationDetector:  cfg.HallucinationMitigation.HallucinationModel.ModelID,
-			HallucinationExplainer: cfg.HallucinationMitigation.NLIModel.ModelID,
-			FeedbackDetector:       cfg.FeedbackDetector.ModelID,
+			Safety:                cfg.SafetyModels.Safety.ModelID,
+			Hazard:                cfg.SafetyModels.Hazard.ModelID,
+			PromptGuard:           cfg.PromptGuard.ModelID,
+			DomainClassifier:      cfg.CategoryModel.ModelID,
+			PIIClassifier:         cfg.PIIModel.ModelID,
+			FactCheckClassifier:   cfg.HallucinationMitigation.FactCheckModel.ModelID,
+			HallucinationDetector: cfg.HallucinationMitigation.HallucinationModel.ModelID,
+			FeedbackDetector:      cfg.FeedbackDetector.ModelID,
 		},
 		External:  append([]ExternalModelConfig(nil), cfg.ExternalModels...),
 		KBs:       append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
@@ -405,10 +398,6 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 				Detector: CanonicalHallucinationDetector{
 					HallucinationModelConfig: cfg.HallucinationMitigation.HallucinationModel,
 					ModelRef:                 "hallucination_detector",
-				},
-				Explainer: CanonicalExplainerModule{
-					NLIModelConfig: cfg.HallucinationMitigation.NLIModel,
-					ModelRef:       "hallucination_explainer",
 				},
 			},
 			FeedbackDetector: CanonicalFeedbackDetectorModule{

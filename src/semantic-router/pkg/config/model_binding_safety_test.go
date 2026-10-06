@@ -5,7 +5,7 @@ import "testing"
 func TestSafetyBindingsKeepIndependentHeadContractAndRecipeScope(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.SafetyRules = []SafetyRule{{Name: "risk", Threshold: .5, Hazard: &SafetyHazardRule{Labels: []string{"a", "b"}, Categories: []string{"b"}, Threshold: .8}}}
-	cfg.ModelDeployments = map[string]ModelDeployment{"encoder": {Artifact: "model", Provider: "candle", Device: "cpu", Precision: "native", Input: ModelInputBudget{MaxTokens: 32768}}}
+	cfg.ModelDeployments = map[string]ModelDeployment{"encoder": {Artifact: "/models/encoder", Provider: ModelRuntimeProvider, Device: "cpu", Input: ModelInputBudget{MaxTokens: 32768}}}
 	cfg.ModelBindings = map[string]ModelBinding{
 		"safety.risk":        {Deployment: "encoder", Adapter: "modernbert", Contract: RemoteClassifierContractLabelDistribution},
 		"safety.risk.hazard": {Deployment: "encoder", Adapter: "modernbert", Contract: RemoteClassifierContractLabelScores, Head: "hazard-head"},
@@ -45,7 +45,7 @@ func TestSafetyBindingValidationUsesEffectiveDeploymentWithoutMutatingDefaults(t
 	cfg.SafetyModels.Safety.ModelID = ""
 	cfg.SafetyModels.Safety.MaxSequenceLength = 512
 	cfg.SafetyModels.Safety.Window = &SequenceHeadWindowConfig{Size: 1024, Overlap: 128}
-	cfg.ModelDeployments = map[string]ModelDeployment{"head": {Provider: "candle", Artifact: "mounted", Input: ModelInputBudget{MaxTokens: 2048}}}
+	cfg.ModelDeployments = map[string]ModelDeployment{"head": {Provider: ModelRuntimeProvider, Artifact: "/models/head", Input: ModelInputBudget{MaxTokens: 2048}}}
 	cfg.ModelBindings = map[string]ModelBinding{"safety.unsafe": {Deployment: "head", Adapter: "modernbert", Contract: RemoteClassifierContractLabelDistribution}}
 	if err := validateSafetySignalContracts(cfg); err != nil {
 		t.Fatal(err)
@@ -84,30 +84,22 @@ func TestSafetyHTTPBindingUsesBoundEndpointAndCannotScanLocalWindows(t *testing.
 func TestSafetyBindingRejectsAmbiguousConsumerAndUnusedMapping(t *testing.T) {
 	rules := []SafetyRule{{Name: "risk", Hazard: &SafetyHazardRule{}}, {Name: "risk.hazard"}}
 	decl := ModelBinding{Adapter: "modernbert", Contract: RemoteClassifierContractLabelScores}
-	if err := validateSafetyModelBinding(rules, "safety.risk.hazard", decl, ModelDeployment{Provider: "candle"}); err == nil {
+	if err := validateSafetyModelBinding(rules, "safety.risk.hazard", decl, ModelDeployment{Provider: ModelRuntimeProvider}); err == nil {
 		t.Fatal("ambiguous consumer accepted")
 	}
 	decl.Contract = RemoteClassifierContractLabelDistribution
 	decl.MappingPath = "ignored.json"
-	if err := validateSafetyModelBinding(rules, "safety.risk", decl, ModelDeployment{Provider: "candle"}); err == nil {
+	if err := validateSafetyModelBinding(rules, "safety.risk", decl, ModelDeployment{Provider: ModelRuntimeProvider}); err == nil {
 		t.Fatal("ignored label mapping accepted")
 	}
 }
 
-func TestModelDeploymentROCmCustomOpsIsExplicitAndScoped(t *testing.T) {
-	d := ModelDeployment{Provider: "ort", Artifact: "model", Device: "rocm:0", Precision: "native", CustomOpsProfile: "ck_flash_attention"}
-	if err := d.WithDefaults().validate(&RouterConfig{}); err != nil {
-		t.Fatal(err)
-	}
-	for _, device := range []string{"cpu", "migraphx:0", "rocm:-1"} {
-		bad := d
-		bad.Device = device
-		if err := bad.WithDefaults().validate(&RouterConfig{}); err == nil {
-			t.Fatalf("accepted CK on %q", device)
-		}
-	}
-	d.CustomOpsProfile = "none"
-	if d.WithDefaults().CustomOpsProfile != "" {
-		t.Fatal("none did not normalize to no custom ops")
+func TestSafetyBindingOnAnAttachedRuntimeNeedsNoArtifact(t *testing.T) {
+	cfg := safetyTestConfig()
+	cfg.SafetyModels.Safety.ModelID = ""
+	cfg.ModelDeployments = map[string]ModelDeployment{"head": {Provider: ModelRuntimeProvider, Endpoint: "http://runtime:8100", Input: ModelInputBudget{MaxTokens: 2048}}}
+	cfg.ModelBindings = map[string]ModelBinding{"safety.unsafe": {Deployment: "head", Adapter: "modernbert", Contract: RemoteClassifierContractLabelDistribution}}
+	if err := validateSafetySignalContracts(cfg); err != nil {
+		t.Fatalf("an attached safety head selects its model by deployment name: %v", err)
 	}
 }

@@ -131,10 +131,8 @@ global:
     embeddings:
       semantic:
         qwen3_model_path: ""
-        gemma_model_path: ""
         mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         multimodal_model_path: ""
-        bert_model_path: ""
         use_cpu: true
         embedding_config:
           model_type: mmbert

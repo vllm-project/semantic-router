@@ -20,10 +20,9 @@ def document():
             "model_catalog": {
                 "deployments": {
                     "shared": {
-                        "provider": "ort",
+                        "provider": "model_runtime",
                         "device": "rocm:0",
-                        "artifact": "models/encoder",
-                        "custom_ops_profile": "ck_flash_attention",
+                        "artifact": "/models/encoder",
                         "input": {"max_tokens": 32768, "overflow": "truncate"},
                     }
                 },

@@ -32,3 +32,13 @@ models:
     status: claimed
     verified_at: 2026-09-06
     source: https://ai.baidu.com/ai-doc/AISTUDIO/Mmhslv9lf
+- catalog: baidu/ernie-4.5-21b-a3b
+  relationship: first_party
+  id: ernie-4.5-21b-a3b
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://ai.baidu.com/ai-doc/AISTUDIO/Mmhslv9lf
