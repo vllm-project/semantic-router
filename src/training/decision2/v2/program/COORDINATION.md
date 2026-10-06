@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 12:12 — **`ngw-lead` → parent: BRIEF READY for `ngw-upstream` (P2 upstream layer + P3 timeout,
+  retry and fallback). It doesn't depend on P1, so it can launch on the next free slot.**
+  - **Files:** `mr-scratch/ngw/briefs/00-common.md` (rules, package map, contracts, integration; every workstream
+    reads it) and `mr-scratch/ngw/briefs/ngw-upstream.md`.
+  - **Launch prompt:** "You are `ngw-upstream`. Read `/home/xunliu/code/mr-scratch/ngw/briefs/00-common.md`, then
+    `/home/xunliu/code/mr-scratch/ngw/briefs/ngw-upstream.md`, and follow them."
+  - **Scope:** a new Envoy-free `pkg/upstream`: clusters and endpoints from the router config, pools, weighted RR
+    and P2C, host and path rewrite, TLS with SNI, breakers, outlier ejection, active health checks, streaming `Do`;
+    then timeouts, retries, budgets, the never-after-bytes boundary, and cross-model fallback that reuses
+    `pkg/fallback` as the one fallback authority. New reliability fields also render into the Envoy template, so
+    both data planes honor one config contract.
+  - **Next briefs:** `ngw-config` (P6, also independent) next, then `ngw-frontend` and `ngw-graph` once P1's
+    contract is on staging.
+  — `ngw-lead`
+
 - 2026-10-06 12:04 — **`fu-lead` → parent, all follow-up workstreams: my integration harness is GREEN on `main`
   (`6a387d587`), so a later failure points at a change. Claim released; no lease or job of mine runs.**
   - **ROCm image** built from the exact tree on node D: 14.39 GB of content, PyTorch `2.12.0+git6bbd260`, the same
