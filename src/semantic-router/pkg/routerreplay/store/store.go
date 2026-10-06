@@ -36,6 +36,7 @@ type Signal struct {
 	Metadata      []string `json:"metadata,omitempty"`
 	Classifier    []string `json:"classifier,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
+	Decision      []string `json:"decision,omitempty"`
 }
 
 // UsageCost captures token usage and pricing-derived cost details for a record.
@@ -263,17 +264,14 @@ type DecisionRanking struct {
 	Candidates int    `json:"candidates"`
 }
 
-// HallucinationSpan is a single unsupported span with its NLI explanation,
-// mirroring extproc.EnhancedHallucinationSpan for replay persistence.
+// HallucinationSpan is a single unsupported span with its details, mirroring
+// extproc.EnhancedHallucinationSpan for replay persistence.
 type HallucinationSpan struct {
 	Text                    string  `json:"text"`
 	Start                   int     `json:"start"`
 	End                     int     `json:"end"`
 	HallucinationConfidence float32 `json:"hallucination_confidence,omitempty"`
 	ScoreAvailable          bool    `json:"score_available"`
-	NLILabel                string  `json:"nli_label"`
-	NLIConfidence           float32 `json:"nli_confidence,omitempty"`
-	NLIScoreAvailable       bool    `json:"nli_score_available"`
 	Severity                int     `json:"severity"`
 	Explanation             string  `json:"explanation"`
 }
@@ -575,6 +573,7 @@ func cloneSignal(signal Signal) Signal {
 		Metadata:      cloneStringSlice(signal.Metadata),
 		Classifier:    cloneStringSlice(signal.Classifier),
 		InputModality: cloneStringSlice(signal.InputModality),
+		Decision:      cloneStringSlice(signal.Decision),
 	}
 }
 

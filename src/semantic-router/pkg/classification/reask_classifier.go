@@ -22,10 +22,6 @@ type ReaskClassifier struct {
 	provider  embedding.Provider
 }
 
-func NewReaskClassifier(rules []config.ReaskRule, modelType string) (*ReaskClassifier, error) {
-	return NewReaskClassifierWithProvider(rules, modelType, nil)
-}
-
 func NewReaskClassifierWithProvider(rules []config.ReaskRule, modelType string, provider embedding.Provider) (*ReaskClassifier, error) {
 	if len(rules) == 0 {
 		return nil, fmt.Errorf("reask rules cannot be empty")

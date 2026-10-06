@@ -1005,7 +1005,7 @@ Analyze replay and outcomes to produce recipe-learning artifacts.
 | Parameter | Description |
 | --- | --- |
 | `--replay-file FILE` | Router replay JSON file. Accepts a router_replay.list payload or a record array. |
-| `--endpoint TEXT` | Router management base URL (origin or /api/v1). Defaults to http://localhost:8080 when --replay-file is omitted. Uses VSR_MGMT_TOKEN for bearer auth when set. |
+| `--endpoint TEXT` | Router management base URL (origin or /api/v1). Defaults to http://localhost:8080, with VLLM_SR_PORT_OFFSET added to the port, when --replay-file is omitted. Uses VSR_MGMT_TOKEN for bearer auth when set. |
 | `--cases-file FILE` | Optional eval cases JSON with replay_id/request_id plus expected_decision or expected_model. |
 | `--recipe-file FILE` | Optional current recipe YAML used to materialize complete candidate recipe variants. |
 | `--limit INTEGER` | Replay records to fetch from the endpoint.  [default: 100] |
@@ -1318,7 +1318,7 @@ Probe a real route and assert complete assistant delivery for expected 2xx.
 ## `vllm-sr serve` {#vllm-sr-serve}
 
 ```text
-Usage: vllm-sr serve [OPTIONS]
+Usage: vllm-sr serve [OPTIONS] [MODEL]...
 ```
 
 Start vLLM Semantic Router.
@@ -1389,8 +1389,31 @@ vllm-sr serve --platform amd --startup-timeout 7200
 VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform amd
 ```
 
+```text
+ENGINE MODE:
+```
+
+```text
+vllm-sr serve MODEL [MODEL ...] [--revision SHA] [--device DEVICE]
+              [--host HOST] [--port N | --uds PATH] [--profile PROFILE]
+vllm-sr serve --models models.yaml [--host HOST] [--port N | --uds PATH]
+```
+
+Serves router models with the built-in model runtime instead of starting the
+Router: decision models (POST /v1/decisions), classifiers (/v1/classify),
+embedders (/v1/embeddings) and rerankers (/v1/rerank), with /v1/bundle,
+/v1/models, /health and /metrics. MODEL is a Hub repository, a built-in model
+name or a local package directory; MODEL@REVISION pins a revision, and several
+MODELs share one process. --models lists models with their own name,
+revision, device and profile. In engine mode --profile selects the numerics
+profile: exact (default, identical to the released package), shared_context,
+batching, max_speed, or one a plugin installs (vllm-srun plugins lists
+them). Router mode starts managed runtimes itself for model_runtime
+deployments in the config.
+
 | Parameter | Description |
 | --- | --- |
+| `[MODEL]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--config TEXT` | Path to the Router configuration.  [default: config.yaml] |
 | `--replace-active-config` | Replace this local Docker stack's active runtime config from --config, discarding Dashboard edits. Default: false. |
 | `--image TEXT` | Docker image to use (default: ghcr.io/vllm-project/semantic-router/vllm-sr:v0.4.0) |
@@ -1402,15 +1425,21 @@ VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES=7 vllm-sr serve --platform amd
 | `--readonly` | Run dashboard in read-only mode (disable config editing, allow playground only) Default: false. |
 | `--minimal` | Start in minimal mode: only router + envoy, no dashboard or observability (Jaeger, Prometheus, Grafana) Default: false. |
 | `--log-level CHOICE` | Router log level override (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
-| `--platform TEXT` | Platform for local Docker GPU deployments: 'amd' enables ROCm passthrough, 'nvidia' enables NVIDIA GPU passthrough (--gpus all). Serve defaults to the matching GPU image (ROCm / CUDA) unless --image or VLLM_SR_IMAGE is provided. Internal models default to GPU, except AMD semantic embeddings retain their configured use_cpu value (default true). MIGraphX mmBERT embeddings require an explicit model binding and deployment with an input token budget. Set VLLM_SR_&lt;PLATFORM&gt;_PRESERVE_CPU=1 to keep CPU settings. For Kubernetes, configure GPU images and resources through a Helm profile or the operator. |
+| `--platform TEXT` | Platform for local Docker GPU deployments: 'amd' enables ROCm passthrough, 'nvidia' enables NVIDIA GPU passthrough (--gpus all). Serve defaults to the matching GPU image (ROCm / CUDA) unless --image or VLLM_SR_IMAGE is provided. Internal models default to GPU, except AMD semantic embeddings retain their configured use_cpu value (default true). Set VLLM_SR_&lt;PLATFORM&gt;_PRESERVE_CPU=1 to keep CPU settings. For Kubernetes, configure GPU images and resources through a Helm profile or the operator. |
 | `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. |
 | `--target TEXT` | Deployment target: docker, k8s (default: docker) |
 | `--namespace TEXT` | Kubernetes namespace (k8s target only) |
 | `--context TEXT` | kubectl / Helm context (k8s target only) |
-| `--profile TEXT` | Deployment profile: dev, prod (k8s target only). Selects values-&lt;profile&gt;.yaml defaults. |
+| `--profile TEXT` | Deployment profile: dev, prod (k8s target only). Selects values-&lt;profile&gt;.yaml defaults. With MODEL: the runtime numerics profile (default exact; vllm-srun plugins lists the installed ones). |
 | `--chart-dir TEXT` | Path to Helm chart directory (k8s target only) |
 | `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
 | `--recipe-env NAME` | Explicitly bind one host environment variable for the active Recipe. Repeat for multiple names; NAME=value is rejected. May be repeated. |
+| `--models TEXT` | Engine mode: YAML file listing the models to serve, each with its own name, revision, device and profile. |
+| `--revision TEXT` | Engine mode: 40-hex revision of a single MODEL. |
+| `--device TEXT` | Engine mode: auto (default), cpu, cuda[:N], rocm[:N], xpu[:N] or mps. |
+| `--host TEXT` | Engine mode: TCP bind address (default 127.0.0.1). |
+| `--port INTEGER` | Engine mode: TCP port (default 8100). |
+| `--uds TEXT` | Engine mode: serve on this Unix socket instead. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr status` {#vllm-sr-status}
