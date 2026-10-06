@@ -12,28 +12,28 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-from vllm_sr_runtime.accel.cpu import CPUAccelerator
-from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.families.multimodal_embedding import bundle as bundles
-from vllm_sr_runtime.families.multimodal_embedding.family import (
+from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.errors import PackageError
+from vllm_srun.families.multimodal_embedding import bundle as bundles
+from vllm_srun.families.multimodal_embedding.family import (
     MultimodalEmbeddingFamily,
     golden_audio,
     golden_image,
 )
-from vllm_sr_runtime.families.multimodal_embedding.processors import (
+from vllm_srun.families.multimodal_embedding.processors import (
     ImageProcessor,
     TextProcessor,
 )
-from vllm_sr_runtime.plugins.base import (
+from vllm_srun.plugins.base import (
     DEADLINE,
     DeviceInfo,
     EngineOptions,
     PackageRef,
     SurfaceRequest,
 )
-from vllm_sr_runtime.registry.artifacts import inventory
-from vllm_sr_runtime.registry.resolve import PREPARED_DIR_ENV, resolve
-from vllm_sr_runtime.testing import omni
+from vllm_srun.registry.artifacts import inventory
+from vllm_srun.registry.resolve import PREPARED_DIR_ENV, resolve
+from vllm_srun.testing import omni
 
 pytest.importorskip("onnxruntime")
 pytest.importorskip("onnx")
@@ -59,7 +59,7 @@ def test_a_missing_extra_names_its_install(nano, monkeypatch):
     family = MultimodalEmbeddingFamily()
     package = family.verify(PackageRef(nano))
     with pytest.raises(
-        RuntimeError, match=r"Pillow: pip install 'vllm-sr-runtime\[multimodal\]'"
+        RuntimeError, match=r"Pillow: pip install 'vllm-srun\[multimodal\]'"
     ):
         family.describe(package)
 
@@ -75,8 +75,8 @@ def test_nano_sizes_its_text_graph_pool(nano, tmp_path):
 
 
 def test_the_default_engine_serves_a_bundle_on_onnxruntime(tmp_path):
-    from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.runtime import Runtime
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
 
     source = {"repo_id": "example/omni-fixture", "revision": "0" * 40}
     bundle = omni.write_bundle(tmp_path / "omni", source=source)
@@ -93,9 +93,9 @@ def test_the_default_engine_serves_a_bundle_on_onnxruntime(tmp_path):
 
 
 def test_batches_never_run_on_the_cpu_device_thread(tmp_path, monkeypatch):
-    from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.families.multimodal_embedding.family import OmniModel
-    from vllm_sr_runtime.runtime import Runtime
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.families.multimodal_embedding.family import OmniModel
+    from vllm_srun.runtime import Runtime
 
     threads: list[str] = []
     run = OmniModel.run
@@ -124,14 +124,14 @@ def test_batches_never_run_on_the_cpu_device_thread(tmp_path, monkeypatch):
     finally:
         runtime.stop()
     assert inline[0] == planned_off_loop[0] == 200
-    assert threads[0] == "vllm-sr-runtime-worker"
-    assert threads[1] not in ("vllm-sr-runtime-worker", "vllm-sr-cpu")
+    assert threads[0] == "vllm-srun-worker"
+    assert threads[1] not in ("vllm-srun-worker", "vllm-sr-cpu")
     assert threads[1] != threading.main_thread().name
 
 
 @pytest.fixture(scope="module")
 def model(nano):
-    from vllm_sr_runtime.engines.onnxruntime.engine import OnnxRuntimeEngine
+    from vllm_srun.engines.onnxruntime.engine import OnnxRuntimeEngine
 
     family = MultimodalEmbeddingFamily()
     package = family.verify(PackageRef(nano))
@@ -390,9 +390,9 @@ def test_a_failed_input_fails_its_batch_and_leaves_none_of_it_running(
 def test_a_failed_image_fails_only_its_request_and_the_model_keeps_serving(
     tmp_path, monkeypatch
 ):
-    from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.families.multimodal_embedding.family import OmniModel
-    from vllm_sr_runtime.runtime import Runtime
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.families.multimodal_embedding.family import OmniModel
+    from vllm_srun.runtime import Runtime
 
     source = {"repo_id": "example/omni-fixture", "revision": "0" * 40}
     bundle = omni.write_bundle(tmp_path / "omni", source=source)
@@ -429,8 +429,8 @@ def test_a_failed_image_fails_only_its_request_and_the_model_keeps_serving(
 
 
 def test_media_inputs_carry_a_scheduler_cost_and_text_counts_its_tokens(model):
-    from vllm_sr_runtime.families.multimodal_embedding.family import MEDIA_COST
-    from vllm_sr_runtime.scheduler.planner import cost
+    from vllm_srun.families.multimodal_embedding.family import MEDIA_COST
+    from vllm_srun.scheduler.planner import cost
 
     image = base64.b64encode(golden_image()).decode()
     sound = base64.b64encode(golden_audio()).decode()
@@ -522,7 +522,7 @@ def test_deadlines_and_non_unit_outputs(tmp_path, model):
     plan = model.plan_surface("embeddings", request({"input": ["hello", "route"]}))
     expired = model.finish_surface(plan, DEADLINE)
     assert [entry["error"] for entry in expired["data"]] == ["deadline_exceeded"] * 2
-    from vllm_sr_runtime.engines.onnxruntime.engine import OnnxRuntimeEngine
+    from vllm_srun.engines.onnxruntime.engine import OnnxRuntimeEngine
 
     root = omni.write_bundle(tmp_path / "raw", normalize=False)
     family = MultimodalEmbeddingFamily()

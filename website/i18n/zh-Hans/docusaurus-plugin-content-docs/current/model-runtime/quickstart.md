@@ -32,7 +32,7 @@ pip install ./src/vllm-sr ./src/model-runtime
 确认运行时能看到它的内置模型：
 
 ```bash
-vllm-sr-runtime models
+vllm-srun models
 ```
 
 ## 2. 运行模型 {#2-serve-a-model}

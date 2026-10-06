@@ -1,17 +1,17 @@
 import os
 
-from vllm_sr_runtime.accel.autotune import freeze_autotune
-from vllm_sr_runtime.cli import build_parser, config_from_args
-from vllm_sr_runtime.families.decision2.family import Decision2Family
-from vllm_sr_runtime.plugins.base import (
+from vllm_srun.accel.autotune import freeze_autotune
+from vllm_srun.cli import build_parser, config_from_args
+from vllm_srun.families.decision2.family import Decision2Family
+from vllm_srun.plugins.base import (
     DeviceInfo,
     PackageRef,
     RegistryOptions,
     VerifiedPackage,
 )
-from vllm_sr_runtime.plugins.decisions import compare_answers
-from vllm_sr_runtime.registry import builtin
-from vllm_sr_runtime.supervision.readiness import (
+from vllm_srun.plugins.decisions import compare_answers
+from vllm_srun.registry import builtin
+from vllm_srun.supervision.readiness import (
     CPU_TOLERANCE,
     GPU_TOLERANCE,
     compare_numbers,
@@ -124,7 +124,7 @@ def test_built_in_models_pin_their_released_kernel_choices_on_gfx942(tmp_path):
 
 
 def test_autotune_cache_comes_from_the_flag_or_the_environment(monkeypatch):
-    monkeypatch.setenv("VLLM_SR_RUNTIME_AUTOTUNE_CACHE", "/cache/from-env")
+    monkeypatch.setenv("VLLM_SRUN_AUTOTUNE_CACHE", "/cache/from-env")
     parsed = build_parser().parse_args(["serve", "/models/kai"])
     assert config_from_args(parsed).autotune_cache == "/cache/from-env"
     parsed = build_parser().parse_args(
@@ -134,7 +134,7 @@ def test_autotune_cache_comes_from_the_flag_or_the_environment(monkeypatch):
 
 
 def test_surface_goldens_compare_flattened_values():
-    from vllm_sr_runtime.supervision.readiness import flatten
+    from vllm_srun.supervision.readiness import flatten
 
     response = {
         "results": [

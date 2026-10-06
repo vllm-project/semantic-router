@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import torch
-from vllm_sr_runtime.plugins.base import (
+from vllm_srun.plugins.base import (
     Accelerator,
     DeviceInfo,
     EncoderBatch,

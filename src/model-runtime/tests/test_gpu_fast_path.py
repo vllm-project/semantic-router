@@ -16,11 +16,11 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
-from vllm_sr_runtime.engines.native import fast, models  # noqa: E402
-from vllm_sr_runtime.engines.native.models.forest import ForestShape  # noqa: E402
-from vllm_sr_runtime.engines.native.models.lora import attach  # noqa: E402
-from vllm_sr_runtime.engines.native.weights import keep_linear_bf16  # noqa: E402
+from vllm_srun.accel.rocm import ROCmAccelerator  # noqa: E402
+from vllm_srun.engines.native import fast, models  # noqa: E402
+from vllm_srun.engines.native.models.forest import ForestShape  # noqa: E402
+from vllm_srun.engines.native.models.lora import attach  # noqa: E402
+from vllm_srun.engines.native.weights import keep_linear_bf16  # noqa: E402
 
 pytestmark = pytest.mark.gpu
 

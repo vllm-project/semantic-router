@@ -70,7 +70,7 @@ def required_inventory() -> set[tuple[str, str]]:
 
 def provision(models_dir: Path) -> dict[str, dict]:
     """Copy each pinned package into ``models_dir`` as plain files (the runtime refuses links)."""
-    from vllm_sr_runtime.registry.resolve import (  # noqa: PLC0415 - only the model lane installs the runtime
+    from vllm_srun.registry.resolve import (  # noqa: PLC0415 - only the model lane installs the runtime
         fetch,
         resolve,
     )

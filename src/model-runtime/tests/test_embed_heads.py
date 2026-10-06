@@ -10,20 +10,20 @@ import pytest
 import torch
 from safetensors.torch import load_file
 from tokenizers import Tokenizer
-from vllm_sr_runtime.accel.cpu import CPUAccelerator
-from vllm_sr_runtime.engines.native import models
-from vllm_sr_runtime.engines.native.models.modernbert import padded_layout
-from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.heads.pooled import EmbeddingSurface, PooledHead, PooledLayout
-from vllm_sr_runtime.heads.relevance import (
+from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.engines.native import models
+from vllm_srun.engines.native.models.modernbert import padded_layout
+from vllm_srun.errors import PackageError
+from vllm_srun.heads.pooled import EmbeddingSurface, PooledHead, PooledLayout
+from vllm_srun.heads.relevance import (
     LOGITS,
     RelevanceHead,
     RelevanceLayout,
     RerankSurface,
 )
-from vllm_sr_runtime.heads.task import Rows
-from vllm_sr_runtime.plugins.base import DEADLINE, DeviceInfo, SurfaceRequest
-from vllm_sr_runtime.testing import embed_packages
+from vllm_srun.heads.task import Rows
+from vllm_srun.plugins.base import DEADLINE, DeviceInfo, SurfaceRequest
+from vllm_srun.testing import embed_packages
 
 CPU = DeviceInfo(accelerator="cpu", index=None, name="cpu")
 

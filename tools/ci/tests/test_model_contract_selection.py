@@ -20,7 +20,7 @@ class ModelContractSelectionTests(unittest.TestCase):
     def test_halu_artifact_selects_its_deployed_contract(self):
         for path in (
             "tools/models/vela_halu/export.py",
-            "src/model-runtime/vllm_sr_runtime/heads/grounded.py",
+            "src/model-runtime/vllm_srun/heads/grounded.py",
         ):
             with self.subTest(path=path):
                 selected = set(classify([path]).selected_jobs)
@@ -31,7 +31,7 @@ class ModelContractSelectionTests(unittest.TestCase):
     def test_omni_artifact_keeps_conformance_and_routing_coverage(self):
         for path in (
             "tools/models/vela_omni/export.py",
-            "src/model-runtime/vllm_sr_runtime/families/multimodal_embedding/family.py",
+            "src/model-runtime/vllm_srun/families/multimodal_embedding/family.py",
         ):
             with self.subTest(path=path):
                 selected = set(classify([path]).selected_jobs)

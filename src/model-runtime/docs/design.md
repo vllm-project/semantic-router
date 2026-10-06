@@ -10,7 +10,7 @@ legacy native bindings.
 | | |
 | --- | --- |
 | Status | Phase 1 merged ([#4481](https://github.com/vllm-project/semantic-router/pull/4481)); Phases 2–4 in implementation ([#4496](https://github.com/vllm-project/semantic-router/issues/4496)) |
-| Domain | `src/model-runtime/` (Python package `vllm_sr_runtime`) |
+| Domain | `src/model-runtime/` (Python package `vllm_srun`) |
 | Router side | `src/semantic-router/pkg/modelservice/` (client, bundles, lifecycle) and `pkg/modelruntime/serving/` (typed task bindings) |
 | CLI | `vllm-sr serve <hf-model> [<hf-model> ...]` (engine mode); `vllm-sr serve --config ...` (router mode) |
 
@@ -52,7 +52,7 @@ running packaged remote code (`trust_remote_code`).
 | --- | --- |
 | Architecture | A contract-first, standalone-process Python runtime, supervised by the router. Three plugin layers: model family, engine, accelerator. No Go/cgo/Rust core. |
 | Protocol | HTTP/JSON with a checked-in OpenAPI schema; a Unix domain socket (UDS) between router and runtime, TCP in engine mode; a generated Go client. |
-| Naming | Domain `src/model-runtime/`, package `vllm_sr_runtime`, engine mode `vllm-sr serve <hf-model>`. Router mode keeps working and the router manages the runtime's lifecycle. |
+| Naming | Domain `src/model-runtime/`, package `vllm_srun`, engine mode `vllm-sr serve <hf-model>`. Router mode keeps working and the router manages the runtime's lifecycle. |
 | Numerics | The default path is byte-identical to the released packages' runtime. Shared context, cross-request batching and max speed are opt-in profiles, each with a measured accuracy impact. |
 | Router | A `decision` signal and a `decision` selector, plus the router-managed lifecycle. Fail-open: a late or failed answer leaves the signal unknown and the selector falls back. |
 | Hardware | ROCm (MI300 / MI325X) and CPU validated; CUDA implemented and unit-tested, unvalidated. |
@@ -88,7 +88,7 @@ running packaged remote code (`trust_remote_code`).
                  +---------------------------------|---------------------------------------------------+
                                                    | HTTP/JSON over UDS (managed) or TCP (attached)
                                                    v
- +------------------------------ vllm_sr_runtime (one Python process, one or more models) ---------------+
+ +------------------------------ vllm_srun (one Python process, one or more models) ---------------+
  | api: /v1/decisions /v1/systemone /v1/classify /v1/embeddings /v1/rerank /v1/bundle /v1/models /health |
  | per model: scheduler (admission, deadlines, profile hook, micro-batches) and one worker on its device |
  | families: decision2 | decision1 | task_heads | vela2 | multimodal_embedding  (render, readout, answers)|
@@ -108,14 +108,14 @@ share a fault domain go to separate processes (section 13.4).
 
 ```text
 src/model-runtime/
-  pyproject.toml            # distribution vllm-sr-runtime; entry points for built-in plugins
+  pyproject.toml            # distribution vllm-srun; entry points for built-in plugins
   AGENTS.md, README.md
   Dockerfile                # CPU image (CI, E2E, Kubernetes)
   docs/
     design.md               # this document
     records/                # parity and performance records
-  vllm_sr_runtime/
-    __main__.py, cli.py     # `vllm-sr-runtime serve ...`; `vllm-sr serve <hf-model>` delegates here
+  vllm_srun/
+    __main__.py, cli.py     # `vllm-srun serve ...`; `vllm-sr serve <hf-model>` delegates here
     config.py               # ServeConfig (process options) and ModelConfig (one served model)
     runtime.py              # the process: models by served name, surface dispatch, bundles
     api/
@@ -139,7 +139,7 @@ src/model-runtime/
       policy.py             # licence and access policy, token handling
     scheduler/              # planner, scheduler (one per model)
     placement.py            # device choice and memory budget
-    devices.py              # `vllm-sr-runtime devices`: the host's devices and the one auto takes
+    devices.py              # `vllm-srun devices`: the host's devices and the one auto takes
     supervision/            # readiness (golden answers), metrics
     families/               # package formats, rendering and answer assembly only
       decision2/            # Decision 2.0 (Phase 1)
@@ -166,16 +166,16 @@ never imports another family.
 
 ## 5. Plugin layers
 
-All plugin types are abstract base classes in `vllm_sr_runtime.plugins.base`.
+All plugin types are abstract base classes in `vllm_srun.plugins.base`.
 Built-in plugins register through the same entry points as third-party ones,
 so the runtime has one discovery path.
 
 | Entry-point group | Base class | Built-in |
 | --- | --- | --- |
-| `vllm_sr_runtime.families` | `ModelFamily` | `decision2`, `decision1`, `task_heads`, `vela2`, `multimodal_embedding` |
-| `vllm_sr_runtime.engines` | `Engine` | `native`, `onnxruntime` |
-| `vllm_sr_runtime.accelerators` | `Accelerator` | `cpu`, `cuda`, `rocm`, `xpu`, `mps` |
-| `vllm_sr_runtime.profiles` | `Profile` | `exact`, `shared_context`, `batching`, `max_speed` |
+| `vllm_srun.families` | `ModelFamily` | `decision2`, `decision1`, `task_heads`, `vela2`, `multimodal_embedding` |
+| `vllm_srun.engines` | `Engine` | `native`, `onnxruntime` |
+| `vllm_srun.accelerators` | `Accelerator` | `cpu`, `cuda`, `rocm`, `xpu`, `mps` |
+| `vllm_srun.profiles` | `Profile` | `exact`, `shared_context`, `batching`, `max_speed` |
 
 Every plugin class has a capability descriptor (`descriptor()`): a family's
 surfaces and package formats, an engine's architectures and outputs, an
@@ -341,7 +341,7 @@ Decision 2.0 model, and serves it on the example accelerator and profile.
 
 ## 6. API
 
-The contract is `vllm_sr_runtime/api/openapi.yaml` (OpenAPI 3.0.3), served at
+The contract is `vllm_srun/api/openapi.yaml` (OpenAPI 3.0.3), served at
 `GET /openapi.yaml`, checked by contract tests on both sides, and the source of
 the Go client in `pkg/modelservice/api`. Every surface takes an optional
 `model` (the served model ID, required when a process serves several models)
@@ -847,7 +847,7 @@ pip install ./src/model-runtime          # or the vllm-sr image, or src/model-ru
 vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
 vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-Domain vllm-sr/Vela-1.0-Encoder-307M-PII --device cpu
 vllm-sr serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --profile shared_context
-vllm-sr-runtime serve --models models.yaml --uds /run/vllm-sr/runtime.sock
+vllm-srun serve --models models.yaml --uds /run/vllm-sr/runtime.sock
 ```
 
 Several `MODEL` arguments share the process options; `MODEL@REVISION` pins a
@@ -856,16 +856,16 @@ revision, device, profile, engine and family options (the router writes this
 file in managed mode). The other options are as in Phase 1. `vllm-sr serve`
 without `MODEL` keeps its router-mode behaviour. Every serve option's default
 is the `ServeConfig` / `ModelConfig` field default, so the CLI and an
-embedding host start alike. `vllm-sr-runtime fixture OUTPUT --family F
+embedding host start alike. `vllm-srun fixture OUTPUT --family F
 --variant V` writes a tiny random-weight package of any installed family
 that names a writer (`ModelFamily.fixture_writer`; the built-in families'
-writers are `testing/<family>.py`). `vllm-sr-runtime devices` prints, as JSON,
+writers are `testing/<family>.py`). `vllm-srun devices` prints, as JSON,
 the devices of the available accelerators (`devices`) and the one
 `--device auto` tries first (`auto`: the first device of the first available
 accelerator in `auto_priority` order); the router reads `auto` before it
 groups its processes (section 13.4).
 
-Importing `vllm_sr_runtime` sets five environment defaults:
+Importing `vllm_srun` sets five environment defaults:
 `GOMP_SPINCOUNT`, `THP_MEM_ALLOC_ENABLE=1`, `ONEDNN_PRIMITIVE_CACHE_CAPACITY`,
 and MIOpen's `MIOPEN_FIND_MODE=FAST` with `MIOPEN_LOG_LEVEL=3`. MIOpen's
 default find mode times each new convolution shape's solvers, so cold
@@ -979,9 +979,9 @@ the same `process` share one process and one bundle.
   without an `endpoint` into processes: by `process` when set; else each GPU
   device gets one process, and each CPU model its own process (`cpu-0`,
   `cpu-1`, ...; at most half the cores, capped by
-  `VLLM_SR_RUNTIME_CPU_PROCESSES`; `1` folds them into one). A deployment on
+  `VLLM_SRUN_CPU_PROCESSES`; `1` folds them into one). A deployment on
   `device: auto` is grouped by the device `auto` takes on the host, which the
-  router asks the runtime once (`vllm-sr-runtime devices`, section 12) and
+  router asks the runtime once (`vllm-srun devices`, section 12) and
   keeps: on the CPU it is planned as a `cpu` deployment, so on a host without
   a GPU each `auto` model gets a CPU process and thread share of its own; on a
   GPU it joins that device's process (`rocm:0`, ...), and the runtime still
@@ -995,11 +995,11 @@ the same `process` share one process and one bundle.
   the cores an idle one leaves: on 16 cores and five task models, one shared
   process served 11.1 requests/s, pinned disjoint shares 15.6, unpinned
   shares 20.3 (`docs/records/router-latency-cpu.md`). For each group it
-  writes a models file and starts `vllm-sr-runtime serve --models <file>
+  writes a models file and starts `vllm-srun serve --models <file>
   --uds <path>` when the configuration loads, and stops it when the group
   disappears or the router exits (SIGTERM, then SIGKILL after a grace
   period). Preparing a binding waits for the deployment's card while its model
-  is `loading` (up to `VLLM_SR_RUNTIME_READY_TIMEOUT`, default 10 minutes). The supervisor
+  is `loading` (up to `VLLM_SRUN_READY_TIMEOUT`, default 10 minutes). The supervisor
   polls `/health` and `/v1/models`, restarts a dead or failed process with
   exponential back-off (1 s to 60 s), and marks only the affected deployments
   unavailable. Sockets live in a private 0700 directory.
@@ -1007,8 +1007,8 @@ the same `process` share one process and one bundle.
   the router uses a runtime it does not manage, such as a Kubernetes sidecar or
   a shared GPU runtime started with `vllm-sr serve <hf-model> ...`; the
   deployment name or `served_name` selects the model on it.
-- `VLLM_SR_RUNTIME_COMMAND`, `VLLM_SR_RUNTIME_DIR` and
-  `VLLM_SR_RUNTIME_CACHE_DIR` keep their Phase 1 meaning. Every router image
+- `VLLM_SRUN_COMMAND`, `VLLM_SRUN_DIR` and
+  `VLLM_SRUN_CACHE_DIR` keep their Phase 1 meaning. Every router image
   ships the runtime, so managed deployments work out of the box on CPU, and on
   GPUs with the GPU images.
 - **Fail-open** is unchanged: while a deployment is not ready its calls fail
@@ -1023,7 +1023,7 @@ keep-alive pools, request bundles, process groups, per-deployment state
 (`vsr_model_runtime_*`: requests and latency per deployment and surface,
 result-cache outcomes, bundle sizes and waits, unknown answers by reason,
 readiness and restarts). A per-deployment LRU of classify and decision
-results (`VLLM_SR_RUNTIME_RESULT_CACHE` entries, default 4,096, cleared when
+results (`VLLM_SRUN_RESULT_CACHE` entries, default 4,096, cleared when
 readiness changes) answers repeated requests without a round trip; the
 runtime's own item cache serves every router and deduplicates items inside a
 bundle.
@@ -1071,7 +1071,7 @@ layout and refuse every path below with a pointer to `config migrate`.
 | Unit (CPU, tiny fixtures) | `src/model-runtime/tests` | every family's renderer, readout and answers; ModernBERT, Qwen3 and Qwen3.5 backbones against the Transformers reference; heads, windows, spans; engines and fallbacks; scheduler, profiles, placement, plugins |
 | Registry | same | manifests and file digests, tampered, extra, missing and linked files, identity, offline cache |
 | API contract | same | every response validated against `openapi.yaml`; System One cases; bundles; error codes; UDS and TCP; multi-model processes |
-| Integration | same | `vllm-sr-runtime serve` on generated fixture packages of every family, readiness gating, deadlines, overload |
+| Integration | same | `vllm-srun serve` on generated fixture packages of every family, readiness gating, deadlines, overload |
 | Router | `pkg/modelservice`, `pkg/modelruntime/serving`, consumers | generated client against an httptest runtime, bundles, process groups with a fake runtime binary, every contract, fail-open, config validation and migration |
 | Ports | `pkg/classification`, `pkg/modelselection` | BM25, n-gram, KNN, KMeans, SVM and MLP against fixtures recorded from the bindings they replace |
 | E2E (CPU, Kind) | `e2e/profiles/*` | managed and attached runtimes, every migrated signal and feature, decision signals and the selector, fail-open; tiny fixtures |

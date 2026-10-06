@@ -150,8 +150,8 @@ scans should use so nothing is missed.
 
 ## Requests are slower than expected
 
-- Look at `vllm_sr_runtime_request_duration_seconds` and
-  `vllm_sr_runtime_queue_duration_seconds` on the runtime's `/metrics`. Time
+- Look at `vllm_srun_request_duration_seconds` and
+  `vllm_srun_queue_duration_seconds` on the runtime's `/metrics`. Time
   spent queueing means the model is saturated: add a GPU, use a smaller model
   or another process.
 - On CPU, models of one process share the CPU threads. Start the runtime with

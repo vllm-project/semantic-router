@@ -14,8 +14,8 @@ REVISION = "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764"
 @pytest.fixture
 def runtime_calls(monkeypatch):
     calls = []
-    package = types.ModuleType("vllm_sr_runtime")
-    module = types.ModuleType("vllm_sr_runtime.cli")
+    package = types.ModuleType("vllm_srun")
+    module = types.ModuleType("vllm_srun.cli")
 
     def fake_main(argv):
         calls.append(list(argv))
@@ -23,8 +23,8 @@ def runtime_calls(monkeypatch):
 
     module.main = fake_main
     package.cli = module
-    monkeypatch.setitem(sys.modules, "vllm_sr_runtime", package)
-    monkeypatch.setitem(sys.modules, "vllm_sr_runtime.cli", module)
+    monkeypatch.setitem(sys.modules, "vllm_srun", package)
+    monkeypatch.setitem(sys.modules, "vllm_srun.cli", module)
     return calls
 
 
@@ -209,8 +209,8 @@ def test_router_mode_keeps_the_deployment_profile(router_serve):
 
 
 def test_engine_mode_without_the_runtime_explains_the_install(monkeypatch):
-    monkeypatch.setitem(sys.modules, "vllm_sr_runtime", None)
-    monkeypatch.setitem(sys.modules, "vllm_sr_runtime.cli", None)
+    monkeypatch.setitem(sys.modules, "vllm_srun", None)
+    monkeypatch.setitem(sys.modules, "vllm_srun.cli", None)
 
     result = CliRunner().invoke(main, ["serve", "vllm-sr/Decision-2.0-Kai-0.6B"])
 

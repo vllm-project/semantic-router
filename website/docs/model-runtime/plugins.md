@@ -39,17 +39,17 @@ mkdir -p /tmp/keywords && cat > /tmp/keywords/example_model.json <<'JSON'
 {"format": "vllm-sr-example/1", "labels": ["billing", "shipping", "other"],
  "keywords": {"billing": ["refund", "invoice", "charge"], "shipping": ["parcel", "delivery"]}}
 JSON
-vllm-sr-runtime serve /tmp/keywords --engine example_counts --device cpu --port 8100
+vllm-srun serve /tmp/keywords --engine example_counts --device cpu --port 8100
 ```
 
 ```bash
 curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
   -d '{"input": ["Please refund the invoice", "Where is my parcel?"]}'
-vllm-sr-runtime plugins
+vllm-srun plugins
 ```
 
 The first request returns `billing` for the first text and `shipping` for the
-second. `vllm-sr-runtime plugins` lists `example_keywords` among the families,
+second. `vllm-srun plugins` lists `example_keywords` among the families,
 `example_counts` among the engines, `example_host` among the accelerators and
 `example_one_by_one` among the profiles; `GET /v1/models` also shows the
 distribution and version each came from.
@@ -59,7 +59,7 @@ profile runs every request alone, in arrival order. Name them like the
 built-in ones:
 
 ```bash
-vllm-sr-runtime serve /tmp/keywords --engine example_counts --device example_host --profile example_one_by_one --port 8100
+vllm-srun serve /tmp/keywords --engine example_counts --device example_host --profile example_one_by_one --port 8100
 ```
 
 `vllm-sr serve` passes the same names to the runtime, and the runtime picks
@@ -77,7 +77,7 @@ device or profile it has no plugin for and lists the names it has.
 A plugin is an ordinary Python distribution.
 
 **1. The family.** Subclass `ModelFamily` and `LoadedModel` from
-`vllm_sr_runtime.plugins.base`:
+`vllm_srun.plugins.base`:
 
 | Method | What it does |
 | --- | --- |
@@ -93,7 +93,7 @@ Declare the endpoints you serve in `surfaces` and describe the plugin in
 `descriptor()`; `/v1/models` shows it to clients.
 
 A family that answers questions on `/v1/decisions` subclasses `DecisionModel`
-from `vllm_sr_runtime.plugins.decisions` instead of `LoadedModel`. It writes
+from `vllm_srun.plugins.decisions` instead of `LoadedModel`. It writes
 `plan` (turn a request's questions into work items) and `answer` (one
 question's answer from its result); `DecisionModel` serves the endpoint, its
 startup self-check and its per-question metrics.
@@ -108,7 +108,7 @@ why. A table that pins a repository another family's table pins, or lists
 another family's model, stops every model of the process from loading,
 built-in ones included, until you remove the conflict. Name the module that
 writes tiny test packages in
-`fixture_writer`, and `vllm-sr-runtime fixture --family <name>` writes one.
+`fixture_writer`, and `vllm-srun fixture --family <name>` writes one.
 The built-in families declare both the same way.
 
 **2. The engine, if you need one.** Most families reuse the built-in `native`
@@ -128,21 +128,21 @@ subclass `Profile` (`plan`, and `bind` for what it reads from the model).
 **4. Register it** in your `pyproject.toml`:
 
 ```toml
-[project.entry-points."vllm_sr_runtime.families"]
+[project.entry-points."vllm_srun.families"]
 example_keywords = "vllm_sr_example.family:KeywordFamily"
 
-[project.entry-points."vllm_sr_runtime.engines"]
+[project.entry-points."vllm_srun.engines"]
 example_counts = "vllm_sr_example.engine:CountsEngine"
 
-[project.entry-points."vllm_sr_runtime.accelerators"]
+[project.entry-points."vllm_srun.accelerators"]
 example_host = "vllm_sr_example.accelerator:HostAccelerator"
 
-[project.entry-points."vllm_sr_runtime.profiles"]
+[project.entry-points."vllm_srun.profiles"]
 example_one_by_one = "vllm_sr_example.profile:OneByOneProfile"
 ```
 
-The groups are `vllm_sr_runtime.families`, `vllm_sr_runtime.engines`,
-`vllm_sr_runtime.accelerators` and `vllm_sr_runtime.profiles`. A name that is
+The groups are `vllm_srun.families`, `vllm_srun.engines`,
+`vllm_srun.accelerators` and `vllm_srun.profiles`. A name that is
 already taken is refused at startup.
 
 **5. Make it fast.** Two flags turn on the runtime's shared optimizations:

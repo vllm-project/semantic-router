@@ -4,12 +4,12 @@ import numpy as np
 import pytest
 import torch
 from tokenizers import Tokenizer
-from vllm_sr_runtime.heads.grounded import GroundingPolicy, PairEnvelope, answer_spans
-from vllm_sr_runtime.heads.scores import OperatingPoint
-from vllm_sr_runtime.heads.task import ClassifierHead, Rows, cache_key
-from vllm_sr_runtime.heads.token import bio_spans, trim
-from vllm_sr_runtime.testing.fixtures import save
-from vllm_sr_runtime.testing.task_heads import (
+from vllm_srun.heads.grounded import GroundingPolicy, PairEnvelope, answer_spans
+from vllm_srun.heads.scores import OperatingPoint
+from vllm_srun.heads.task import ClassifierHead, Rows, cache_key
+from vllm_srun.heads.token import bio_spans, trim
+from vllm_srun.testing.fixtures import save
+from vllm_srun.testing.task_heads import (
     BOS,
     EOS,
     encoder_tokenizer,

@@ -30,7 +30,7 @@ pip install ./src/vllm-sr ./src/model-runtime
 Check that the runtime sees its built-in models:
 
 ```bash
-vllm-sr-runtime models
+vllm-srun models
 ```
 
 ## 2. Serve a model

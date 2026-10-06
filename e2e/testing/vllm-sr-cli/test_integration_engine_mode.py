@@ -3,7 +3,7 @@
 
 These tests start the real CLI in the current Python environment, which must
 have the model runtime installed (`make model-runtime-install`). They serve
-tiny random-weight packages written by `vllm-sr-runtime fixture`, so no model
+tiny random-weight packages written by `vllm-srun fixture`, so no model
 is downloaded, and send the requests the Quickstart page tells readers to send,
 read from the page itself.
 """
@@ -39,7 +39,7 @@ class TestEngineMode(unittest.TestCase):
         output = cls.root / name
         subprocess.run(
             [
-                "vllm-sr-runtime",
+                "vllm-srun",
                 "fixture",
                 str(output),
                 "--family",
@@ -93,9 +93,7 @@ class TestEngineMode(unittest.TestCase):
 
         status, metrics = call(engine.base, "/metrics")
         self.assertEqual(status, HTTP_OK)
-        self.assertIn(
-            'vllm_sr_runtime_requests_total{endpoint="/v1/decisions"', metrics
-        )
+        self.assertIn('vllm_srun_requests_total{endpoint="/v1/decisions"', metrics)
         self.assertEqual(engine.stop(), 0)
 
     def test_quickstart_classifier(self):

@@ -1,9 +1,9 @@
 from importlib import metadata
 
 import pytest
-from vllm_sr_runtime.accel.kernels import Kernel, KernelSet, reference_kernels
-from vllm_sr_runtime.plugins import registry
-from vllm_sr_runtime.plugins.base import (
+from vllm_srun.accel.kernels import Kernel, KernelSet, reference_kernels
+from vllm_srun.plugins import registry
+from vllm_srun.plugins.base import (
     Accelerator,
     DtypePolicy,
     Engine,
@@ -42,19 +42,19 @@ def test_every_plugin_loads_under_its_own_name():
 
 def test_an_entry_point_must_name_a_plugin_of_its_group():
     profile = registry.PluginEntry(
-        "families", "exact", "vllm_sr_runtime.profiles.exact:ExactProfile", "acme", "1"
+        "families", "exact", "vllm_srun.profiles.exact:ExactProfile", "acme", "1"
     )
     with pytest.raises(registry.PluginError, match="not a ModelFamily"):
         profile.load()
     renamed = registry.PluginEntry(
-        "profiles", "turbo", "vllm_sr_runtime.profiles.exact:ExactProfile", "acme", "1"
+        "profiles", "turbo", "vllm_srun.profiles.exact:ExactProfile", "acme", "1"
     )
     with pytest.raises(registry.PluginError, match="whose name is 'exact'"):
         renamed.load()
 
 
 def test_profiles_take_the_process_options():
-    from vllm_sr_runtime.config import ServeConfig
+    from vllm_srun.config import ServeConfig
 
     config = ServeConfig(max_batch_tokens=1024)
     for name in ("batching", "max_speed"):
@@ -105,18 +105,16 @@ def test_third_party_entry_points_are_loaded(monkeypatch):
     real = metadata.entry_points
 
     def entry_points(group):
-        extra = [
-            FakeEntry("acme_label_token", "vllm_sr_runtime.profiles.exact:ExactProfile")
-        ]
+        extra = [FakeEntry("acme_label_token", "vllm_srun.profiles.exact:ExactProfile")]
         return list(real(group=group)) + (
-            extra if group == "vllm_sr_runtime.families" else []
+            extra if group == "vllm_srun.families" else []
         )
 
     monkeypatch.setattr(metadata, "entry_points", entry_points)
     entry = registry.discover()["families"]["acme_label_token"]
     assert (
         entry.distribution == "acme"
-        and entry.describe()["group"] == "vllm_sr_runtime.families"
+        and entry.describe()["group"] == "vllm_srun.families"
     )
 
 
@@ -130,7 +128,7 @@ def test_conflicting_names_are_refused(monkeypatch):
             )
 
     def entry_points(group):
-        if group == "vllm_sr_runtime.families":
+        if group == "vllm_srun.families":
             return [FakeEntry("a:B", "one"), FakeEntry("c:D", "two")]
         return []
 

@@ -66,7 +66,7 @@ def runtime(socket_path):
                 argv = stream.read().split(b"\0")
         except OSError:
             continue
-        if socket_path.encode() in argv and any(b"vllm-sr-runtime" in arg or b"vllm_sr_runtime" in arg for arg in argv):
+        if socket_path.encode() in argv and any(b"vllm-srun" in arg or b"vllm_srun" in arg for arg in argv):
             return pid, [arg.decode() for arg in argv if arg]
     raise SystemExit("no runtime process serves " + socket_path)
 `

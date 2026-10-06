@@ -16,7 +16,7 @@ DEFAULTS = {
 
 def environment_after_import(env: dict[str, str]) -> dict[str, str | None]:
     probe = (
-        "import json, os, sys; import vllm_sr_runtime; "
+        "import json, os, sys; import vllm_srun; "
         f"print(json.dumps({{k: os.environ.get(k) for k in {sorted(DEFAULTS)!r}}})); "
         "print('torch' in sys.modules)"
     )

@@ -9,8 +9,8 @@ import wave
 
 import numpy as np
 import pytest
-from vllm_sr_runtime.families.multimodal_embedding import audio
-from vllm_sr_runtime.testing.omni import audio_config
+from vllm_srun.families.multimodal_embedding import audio
+from vllm_srun.testing.omni import audio_config
 
 
 def wav_bytes(frames: bytes, channels: int, rate: int, width: int) -> bytes:

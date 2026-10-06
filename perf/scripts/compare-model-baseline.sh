@@ -65,7 +65,7 @@ cp -R "$ROOT_DIR/perf" "$BASE_TREE/perf"
 
 # The base side runs its own runtime source on the installed dependencies.
 export PYTHONPATH="$BASE_TREE/src/model-runtime${PYTHONPATH:+:$PYTHONPATH}"
-export VLLM_SR_RUNTIME_COMMAND="${PERF_RUNTIME_PYTHON:-python3} -m vllm_sr_runtime"
+export VLLM_SRUN_COMMAND="${PERF_RUNTIME_PYTHON:-python3} -m vllm_srun"
 (
   cd "$BASE_TREE/perf"
   export GIT_WORK_TREE="$BASE_TREE"

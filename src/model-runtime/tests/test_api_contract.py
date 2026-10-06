@@ -8,9 +8,9 @@ import jsonschema
 import pytest
 import yaml
 from starlette.testclient import TestClient
-from vllm_sr_runtime.api.app import API_VERSION, OPENAPI_PATH, create_app
-from vllm_sr_runtime.config import ModelConfig, ServeConfig
-from vllm_sr_runtime.runtime import Runtime
+from vllm_srun.api.app import API_VERSION, OPENAPI_PATH, create_app
+from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.runtime import Runtime
 
 from .conftest import QUESTIONS, STATE
 
@@ -161,8 +161,8 @@ SYSTEM_ONE_CASES = {
 
 @pytest.fixture(scope="module")
 def decision_runtimes(tmp_path_factory, qwen3_runtime):
-    from vllm_sr_runtime.testing import decision1
-    from vllm_sr_runtime.testing.vela2 import write_encoder_package
+    from vllm_srun.testing import decision1
+    from vllm_srun.testing.vela2 import write_encoder_package
 
     root = tmp_path_factory.mktemp("systemone")
     packages = {
@@ -359,8 +359,8 @@ def test_models_health_metrics_and_openapi(client):
     )
     assert card["limits"]["max_options"] == 255 and card["limits"]["max_levels"] == 10
     assert {p["group"] for p in card["plugins"]} >= {
-        "vllm_sr_runtime.families",
-        "vllm_sr_runtime.engines",
+        "vllm_srun.families",
+        "vllm_srun.engines",
     }
     health = client.get("/health")
     assert health.status_code == 200
@@ -376,14 +376,11 @@ def test_models_health_metrics_and_openapi(client):
         == live["api_version"]
     )
     metrics = client.get("/metrics").text
-    assert (
-        "vllm_sr_runtime_requests_total" in metrics
-        and "vllm_sr_runtime_ready 1.0" in metrics
-    )
+    assert "vllm_srun_requests_total" in metrics and "vllm_srun_ready 1.0" in metrics
     memory = [
         line
         for line in metrics.splitlines()
-        if line.startswith("vllm_sr_runtime_model_memory_bytes{")
+        if line.startswith("vllm_srun_model_memory_bytes{")
     ]
     assert len(memory) == 1 and float(memory[0].rsplit(" ", 1)[1]) > 0
     assert client.get("/openapi.yaml").text == Path(OPENAPI_PATH).read_text()

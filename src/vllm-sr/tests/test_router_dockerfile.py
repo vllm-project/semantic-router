@@ -158,7 +158,7 @@ def test_router_images_share_the_model_assets() -> None:
         in (router)
     )
     assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in router
-    assert "ENV VLLM_SR_RUNTIME_CACHE_DIR=/app/models/model-runtime" in router
+    assert "ENV VLLM_SRUN_CACHE_DIR=/app/models/model-runtime" in router
     # The charts' root filesystem is read-only: GPU caches live in the model volume.
     for cache in (
         "TRITON_CACHE_DIR=/app/models/triton",

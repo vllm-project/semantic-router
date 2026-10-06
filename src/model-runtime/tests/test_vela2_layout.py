@@ -6,24 +6,24 @@ from dataclasses import dataclass
 
 import numpy as np
 import pytest
-from vllm_sr_runtime.families.vela2.calibration import Calibration
-from vllm_sr_runtime.families.vela2.decoder_layout import DecoderLayout
-from vllm_sr_runtime.families.vela2.dispatch import Dispatcher
-from vllm_sr_runtime.families.vela2.encoder_layout import (
+from vllm_srun.families.vela2.calibration import Calibration
+from vllm_srun.families.vela2.decoder_layout import DecoderLayout
+from vllm_srun.families.vela2.dispatch import Dispatcher
+from vllm_srun.families.vela2.encoder_layout import (
     MARKERS,
     EncoderLayout,
     batch_indices,
     split_outputs,
 )
-from vllm_sr_runtime.families.vela2.layout import (
+from vllm_srun.families.vela2.layout import (
     SchemaTooLongError,
     Tokens,
     fit,
     rows_of,
     word_windows,
 )
-from vllm_sr_runtime.families.vela2.request import QuestionReader
-from vllm_sr_runtime.testing.vela2 import calibration
+from vllm_srun.families.vela2.request import QuestionReader
+from vllm_srun.testing.vela2 import calibration
 
 
 @dataclass

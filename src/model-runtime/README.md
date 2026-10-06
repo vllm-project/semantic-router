@@ -1,13 +1,13 @@
 # vLLM Semantic Router model runtime
 
-`vllm_sr_runtime` serves the router's models (decision models, classifiers,
+`vllm_srun` serves the router's models (decision models, classifiers,
 embedders and rerankers) behind one HTTP contract. One process can serve
 several models. The router manages it for `model_runtime` deployments, and
 `vllm-sr serve <hf-model> [<hf-model> ...]` runs it on its own.
 
 ```bash
 pip install -e "src/model-runtime[test]"
-vllm-sr-runtime serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
+vllm-srun serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
 curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
   "state": "Write a Python function that merges two sorted lists.",
   "questions": {
@@ -29,12 +29,12 @@ curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
 | `GET /health`, `GET /health/live` | Readiness (gated on golden answers) and liveness |
 | `GET /metrics` | Prometheus metrics |
 
-The contract is [`vllm_sr_runtime/api/openapi.yaml`](vllm_sr_runtime/api/openapi.yaml)
+The contract is [`vllm_srun/api/openapi.yaml`](vllm_srun/api/openapi.yaml)
 and the design is [`docs/design.md`](docs/design.md).
 
 ## Built-in models
 
-`vllm-sr-runtime models` lists the built-in models with their pinned
+`vllm-srun models` lists the built-in models with their pinned
 revisions. Every package is verified against its manifest or the pinned file
 digests before load, and code shipped inside packages is never executed.
 

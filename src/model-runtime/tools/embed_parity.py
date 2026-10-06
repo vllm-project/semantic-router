@@ -45,17 +45,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from embed_corpus import RERANK, texts  # noqa: E402
-from vllm_sr_runtime.accel.cpu import CPUAccelerator  # noqa: E402
-from vllm_sr_runtime.engines.native.engine import NativeEngine  # noqa: E402
-from vllm_sr_runtime.engines.onnxruntime.engine import OnnxRuntimeEngine  # noqa: E402
-from vllm_sr_runtime.families.multimodal_embedding import audio  # noqa: E402
-from vllm_sr_runtime.families.multimodal_embedding.family import (  # noqa: E402
+from vllm_srun.accel.cpu import CPUAccelerator  # noqa: E402
+from vllm_srun.engines.native.engine import NativeEngine  # noqa: E402
+from vllm_srun.engines.onnxruntime.engine import OnnxRuntimeEngine  # noqa: E402
+from vllm_srun.families.multimodal_embedding import audio  # noqa: E402
+from vllm_srun.families.multimodal_embedding.family import (  # noqa: E402
     MultimodalEmbeddingFamily,
 )
-from vllm_sr_runtime.families.task_heads.family import TaskHeadsFamily  # noqa: E402
-from vllm_sr_runtime.heads.embedding import matryoshka, pool  # noqa: E402
-from vllm_sr_runtime.heads.relevance import RelevanceLayout  # noqa: E402
-from vllm_sr_runtime.plugins.base import (  # noqa: E402
+from vllm_srun.families.task_heads.family import TaskHeadsFamily  # noqa: E402
+from vllm_srun.heads.embedding import matryoshka, pool  # noqa: E402
+from vllm_srun.heads.relevance import RelevanceLayout  # noqa: E402
+from vllm_srun.plugins.base import (  # noqa: E402
     DeviceInfo,
     EncoderBatch,
     EngineOptions,
@@ -288,7 +288,7 @@ def device_info(name: str) -> DeviceInfo:
     """The device as placement reports it (architecture included, which selects fused kernels)."""
     if name == "cpu":
         return CPU
-    from vllm_sr_runtime.accel.rocm import ROCmAccelerator
+    from vllm_srun.accel.rocm import ROCmAccelerator
 
     return ROCmAccelerator().devices()[int(name.partition(":")[2] or 0)]
 
@@ -302,7 +302,7 @@ def load_task_model(
     reduced: str | None = None,
 ) -> Any:
     """A ``task_heads`` model on one engine; ``reduced`` consents to that copy kind."""
-    from vllm_sr_runtime.accel.rocm import ROCmAccelerator
+    from vllm_srun.accel.rocm import ROCmAccelerator
 
     family = TaskHeadsFamily(RegistryOptions(model_options=options or {}))
     verified = family.verify(PackageRef(package))

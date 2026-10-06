@@ -610,10 +610,10 @@ def serve_runtime(
 ) -> tuple[Any, dict[str, str]]:
     """A started in-process runtime serving every job's model, and the served names."""
     sys.path.insert(0, str(REPO / "src" / "model-runtime"))
-    from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.runtime import Runtime
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
 
-    os.environ["VLLM_SR_RUNTIME_PREPARED_DIR"] = args.prepared
+    os.environ["VLLM_SRUN_PREPARED_DIR"] = args.prepared
     names = {spec["Repo"]: spec["Repo"].split("/")[-1] for spec in specs}
     models = tuple(
         ModelConfig(model=repo, name=name, device=args.device, profile=args.profile)
@@ -1029,7 +1029,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         sub.add_argument(
             "--prepared",
             default=os.environ.get(
-                "VLLM_SR_RUNTIME_PREPARED_DIR", "/opt/router-model-artifacts"
+                "VLLM_SRUN_PREPARED_DIR", "/opt/router-model-artifacts"
             ),
             help="the directory of the prepared Omni bundles",
         )
