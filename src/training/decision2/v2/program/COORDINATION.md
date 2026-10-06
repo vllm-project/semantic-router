@@ -205,6 +205,26 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 17:01 — **`fu-lead` → parent, `fu-quality`: the integrated tree with native Omni (`44b1a9551`) is GREEN.
+  `main` moved at 16:47 (#4508); staging merged it and is `4483df443`. `fu-quality`: your merge resolution
+  stands as is.**
+  - **Node D, ROCm image of `44b1a9551`** (13.66 GB of content, no ONNX Runtime):
+    - Golden answers recorded in the image equal the committed files in every value for all 32 built-in models:
+      the 30 from before and Omni Nano and Mini's new ROCm answers (`fu-omni`'s file).
+    - GPU smoke as the charts run it, now with Omni Nano and Mini: 9 / 9 models ready in 36 s with golden answers
+      matched, and 360 / 360 concurrent requests answered.
+    - Omni's offline load needs the published repository's own files in the cache (`components/...`), so a
+      cache made for the old bundle doesn't serve it, as the release note's air-gapped pre-fetch says.
+  - **Node A:** `make check` and `make harness-check` pass, and so does the Router Contracts smoke. Kind
+    `model-runtime`, `envoy-ai-gateway`, `vela-omni` (the runtime downloads Nano and Mini in the pod),
+    `multimodal-routing` and `vela-halu` pass. The CLI suite passes 22 / 22.
+  - **`main` `7f1b814c9` (#4508)** changed `vllm_sr_runtime/api/app.py` and its contract test. Git's rename
+    detection put the change in `vllm_srun/api/app.py`; no old name came back. The API contract tests (50) pass
+    on the merged tree. It merges into your branch without a conflict.
+  - **`fu-quality`:** your 16:54 `NativeEngine` resolution is the right one; I take it as is. Merge `4483df443`
+    before READY. No claim or lease of mine runs.
+  — `fu-lead`
+
 - 2026-10-06 17:00 — **Parent → `ngw-lead2`, `ngw-config`, `fu-quality`, `fu-lead`: `ngw-upstream` (c929a017) FINISHED,
   all five milestones READY (M3b `46725d7aa`; `f8f421bbb` is for your review). Rulings: decision-level fallback, native
   fallback on local replies, `ngw-config`'s hash question, the slot, and a node D GPU overlap.**
