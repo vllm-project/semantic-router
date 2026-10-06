@@ -1,8 +1,11 @@
 """Load safetensors checkpoints into native modules by exact parameter name.
 
 Every tensor is upcast to FP32, as the released runtime loads with
-``dtype=torch.float32``. A missing or unexpected backbone tensor is an
-error; tensors outside ``prefix`` (for example a vision tower) are ignored.
+``dtype=torch.float32``. Persistent buffers (BatchNorm statistics) load like
+parameters. A missing or unexpected backbone tensor is an error; tensors
+outside ``prefix`` (for example a vision tower) are ignored, and so are
+unknown tensors under it unless ``strict`` asks otherwise. A module's
+``ignored_tensors`` names checkpoint tensors it recomputes or never reads.
 """
 
 from __future__ import annotations
@@ -42,6 +45,24 @@ def set_parameter(root: nn.Module, name: str, tensor: torch.Tensor) -> None:
     )
 
 
+def set_buffer(root: nn.Module, name: str, tensor: torch.Tensor) -> None:
+    """Replace a (possibly meta) persistent buffer with a loaded tensor, FP32 when floating."""
+    owner_name, _, leaf = name.rpartition(".")
+    owner = root.get_submodule(owner_name) if owner_name else root
+    dtype = torch.float32 if tensor.is_floating_point() else tensor.dtype
+    owner._buffers[leaf] = tensor.to(dtype, copy=True).contiguous()
+
+
+def persistent_buffers(module: nn.Module) -> dict[str, torch.Tensor]:
+    """The buffers ``module`` saves in its state dict, by full name."""
+    return {
+        f"{prefix}.{leaf}" if prefix else leaf: buffer
+        for prefix, owner in module.named_modules()
+        for leaf, buffer in owner._buffers.items()
+        if buffer is not None and leaf not in owner._non_persistent_buffers_set
+    }
+
+
 def _renamed(name: str, renames: Mapping[str, str]) -> str:
     for old, new in renames.items():
         if name.startswith(old):
@@ -54,23 +75,30 @@ def load_backbone(
     files: Iterable[Path],
     prefix: str = "",
     renames: Mapping[str, str] | None = None,
+    *,
+    strict: bool = False,
 ) -> None:
-    """Load every parameter of ``module``; ``renames`` maps checkpoint name prefixes to module ones."""
-    expected = {name for name, _ in module.named_parameters()}
+    """Load every parameter and persistent buffer of ``module``; ``renames`` maps checkpoint name prefixes to module ones."""
     parameters = dict(module.named_parameters())
+    buffers = persistent_buffers(module)
+    expected = set(parameters) | set(buffers)
+    ignored = tuple(getattr(module, "ignored_tensors", ()))
     seen: set[str] = set()
     for checkpoint_name, tensor in iter_tensors(files, prefix):
         name = _renamed(checkpoint_name, renames or {})
-        if name not in parameters:
-            if prefix:
+        target = parameters.get(name, buffers.get(name))
+        if target is None:
+            if name.rpartition(".")[2] in ignored or (prefix and not strict):
                 continue
             raise ValueError(f"checkpoint tensor {name!r} has no backbone parameter")
-        target = parameters[name]
         if tuple(tensor.shape) != tuple(target.shape):
             raise ValueError(
                 f"{name}: checkpoint shape {tuple(tensor.shape)} != {tuple(target.shape)}"
             )
-        set_parameter(module, name, tensor)
+        if name in parameters:
+            set_parameter(module, name, tensor)
+        else:
+            set_buffer(module, name, tensor)
         seen.add(name)
     missing = sorted(expected - seen)
     if missing:
