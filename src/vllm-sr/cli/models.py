@@ -2320,7 +2320,8 @@ class ModelBinding(BaseModel):
 
     deployment: str
     contract: str
-    adapter: str
+    # Required except on model_runtime deployments, whose card names the head.
+    adapter: str = ""
     head: Optional[str] = None
     mapping_path: Optional[str] = None
     pair_scorer: Optional[PairScorerSelection] = None
@@ -2442,19 +2443,12 @@ class EmbeddingModelsConfig(BaseModel):
     qwen3_model_path: Optional[str] = Field(
         None, description="Path to Qwen3-Embedding model"
     )
-    gemma_model_path: Optional[str] = Field(
-        None, description="Path to EmbeddingGemma model"
-    )
     mmbert_model_path: Optional[str] = Field(
         None, description="Path to mmBERT 2D Matryoshka model"
     )
     multimodal_model_path: Optional[str] = Field(
         None,
         description="Path to multi-modal embedding model (text/image/audio)",
-    )
-    bert_model_path: Optional[str] = Field(
-        None,
-        description="Path to BERT/MiniLM model (recommended for memory retrieval)",
     )
     embedding_config: Optional[EmbeddingClassifierConfig] = Field(
         default=None,

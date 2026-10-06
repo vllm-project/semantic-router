@@ -85,11 +85,10 @@ clean-llama-stack: stop-llama-stack ## Clean up Llama Stack data
 	@echo "Llama Stack data directory cleaned"
 
 # Test vector store with Llama Stack backend
-test-llama-stack-vectorstore: start-llama-stack rust ## Run Llama Stack vector store integration tests
+test-llama-stack-vectorstore: start-llama-stack ## Run Llama Stack vector store integration tests
 	@$(LOG_TARGET)
 	@echo "Testing vector store with Llama Stack backend..."
-	@export $(NATIVE_ENV) && \
-	export SKIP_LLAMA_STACK_TESTS=false && \
+	@export SKIP_LLAMA_STACK_TESTS=false && \
 	export LLAMA_STACK_ENDPOINT=http://localhost:$(LLAMA_STACK_PORT) && \
 	export LLAMA_STACK_EMBEDDING_MODEL=$${LLAMA_STACK_EMBEDDING_MODEL:-sentence-transformers/$(LLAMA_STACK_EMBEDDING_MODEL_ID)} && \
 	export LLAMA_STACK_SEARCH_TYPE=$(LLAMA_STACK_SEARCH_TYPE) && \

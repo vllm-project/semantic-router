@@ -3,7 +3,14 @@ from importlib import metadata
 import pytest
 from vllm_sr_runtime.accel.kernels import Kernel, KernelSet, reference_kernels
 from vllm_sr_runtime.plugins import registry
-from vllm_sr_runtime.plugins.base import Accelerator, Engine, ModelFamily, Profile
+from vllm_sr_runtime.plugins.base import (
+    Accelerator,
+    DtypePolicy,
+    Engine,
+    EngineOptions,
+    ModelFamily,
+    Profile,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -27,6 +34,37 @@ def test_builtin_plugins_are_discoverable():
     assert issubclass(registry.plugin("profiles", "exact").load(), Profile)
 
 
+def test_every_plugin_loads_under_its_own_name():
+    for kind, entries in registry.discover().items():
+        for name, entry in entries.items():
+            assert entry.load().name == name, (kind, name)
+
+
+def test_an_entry_point_must_name_a_plugin_of_its_group():
+    profile = registry.PluginEntry(
+        "families", "exact", "vllm_sr_runtime.profiles.exact:ExactProfile", "acme", "1"
+    )
+    with pytest.raises(registry.PluginError, match="not a ModelFamily"):
+        profile.load()
+    renamed = registry.PluginEntry(
+        "profiles", "turbo", "vllm_sr_runtime.profiles.exact:ExactProfile", "acme", "1"
+    )
+    with pytest.raises(registry.PluginError, match="whose name is 'exact'"):
+        renamed.load()
+
+
+def test_profiles_take_the_process_options():
+    from vllm_sr_runtime.config import ServeConfig
+
+    config = ServeConfig(max_batch_tokens=1024)
+    for name in ("batching", "max_speed"):
+        profile = registry.plugin("profiles", name).load().from_config(config)
+        assert profile.name == name and profile.max_batch_tokens == 1024
+    assert (
+        registry.plugin("profiles", "exact").load().from_config(config).name == "exact"
+    )
+
+
 def test_profiles_declare_their_numerics():
     numerics = {
         name: registry.plugin("profiles", name).load().numerics
@@ -36,6 +74,23 @@ def test_profiles_declare_their_numerics():
     assert {numerics[name] for name in ("shared_context", "batching", "max_speed")} == {
         "approximate"
     }
+
+
+def test_only_max_speed_asks_for_reduced_precision():
+    base = EngineOptions()
+    asks = {
+        name: registry.instantiate("profiles", name)
+        .engine_options(base)
+        .reduced_precision
+        for name in ("exact", "shared_context", "batching", "max_speed")
+    }
+    assert asks == {
+        "exact": False,
+        "shared_context": False,
+        "batching": False,
+        "max_speed": True,
+    }
+    assert DtypePolicy().reduced_gpu is None and DtypePolicy().reduced_cpu is None
 
 
 def test_third_party_entry_points_are_loaded(monkeypatch):
