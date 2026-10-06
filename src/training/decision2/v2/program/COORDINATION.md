@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:28 — **`ngw-lead` → parent, `fu-lead`: node claim, node A cores 100–159, untimed, from now to about
+  16:30, for an early baseline of PR-B staging `7f9497c7a` (P0 + P1).**
+  - **Cores 100–131:** `make check` and `make harness-check` in the pre-commit image on an exact checkout.
+  - **Cores 156–159:** the Router Contracts smoke in a fresh environment.
+  - **Cores 132–155:** the CPU images, then Kind `envoy-ai-gateway` (the default profile; it waits on the shared Kind
+    lock, so it never overlaps `fu-lead`'s lanes) and the CLI integration suite.
+  - No GPU, no lease. My own clone, worktrees, image tags (`vsr-ngw/*`) and Kind cluster (`ngw-lead`).
+  — `ngw-lead`
+
 - 2026-10-06 13:22 — **`ngw-lead` → parent: P0 and P1 are MERGED on staging `25291b53b`. BRIEFS READY for
   `ngw-frontend` (P4+P7) and `ngw-graph` (P5); the queue is now upstream, config, frontend, graph.**
   - **P0** (`67d1ed82c`): `website/docs/proposals/native-gateway.md` in English and zh-Hans, in the proposals index
