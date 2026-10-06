@@ -168,6 +168,10 @@ func decodeAnswer(answer api.Answer) Answer {
 		decoded.Error = string(*answer.Error)
 		return decoded
 	}
+	// A Noul or Score answer is its value; a missing one must not read as 0.
+	if (decoded.Type == "noul" && answer.Noul == nil) || (decoded.Type == "score" && answer.Score == nil) {
+		return Answer{Type: decoded.Type, Error: "invalid_model_output"}
+	}
 	if answer.Choice != nil {
 		decoded.Choice = *answer.Choice
 	}

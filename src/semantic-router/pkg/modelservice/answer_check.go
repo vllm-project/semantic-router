@@ -25,12 +25,13 @@ func checkAnswers(request Request, response Response) Response {
 }
 
 // answerFits reports whether an answer is of the type asked and answers the
-// question. A Choice gives every declared option a probability and no other
-// option, and chooses a most probable one. A Noul is a probability. A Score
-// lies within its levels and comes with a distribution over them. Answer types
-// the router does not ask for pass unchecked.
+// question, with a confidence in [0, 1]. A Choice gives every declared option
+// a probability and no other option, and chooses a most probable one. A Noul
+// is a probability. A Score comes with a distribution over its levels and is
+// that distribution's expected level. Answer types the router does not ask for
+// pass unchecked.
 func answerFits(question Question, answer Answer) bool {
-	if answer.Type != question.Type {
+	if answer.Type != question.Type || answer.Confidence < 0 || answer.Confidence > 1 {
 		return false
 	}
 	switch question.Type {
@@ -39,17 +40,23 @@ func answerFits(question Question, answer Answer) bool {
 		for index, choice := range question.Choices {
 			keys[index] = choice.Key
 		}
-		return distributionOver(keys, answer.Probabilities) &&
-			(answer.Choice == "" || mostProbable(answer.Choice, answer.Probabilities))
+		return distributionOver(keys, answer.Probabilities) && mostProbable(answer.Choice, answer.Probabilities)
 	case "noul":
 		return answer.Noul >= 0 && answer.Noul <= 1
 	case "score":
 		keys := make([]string, len(question.Levels))
+		expected := 0.0
 		for index := range question.Levels {
 			keys[index] = strconv.Itoa(index)
+			expected += float64(index) * answer.Probabilities[keys[index]]
 		}
+		// A distribution within the sum tolerance of one moves its expected
+		// level by at most that tolerance times the top level, so the score
+		// may be taken over the probabilities as given or normalized.
+		top := float64(len(keys) - 1)
 		return distributionOver(keys, answer.Probabilities) &&
-			answer.Score >= 0 && answer.Score <= float64(len(keys)-1)
+			answer.Score >= 0 && answer.Score <= top &&
+			math.Abs(answer.Score-expected) <= probabilitySumTolerance*top
 	}
 	return true
 }

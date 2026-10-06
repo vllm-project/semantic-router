@@ -58,9 +58,32 @@ func TestDecideRejectsAnswersThatDoNotFitTheirQuestion(t *testing.T) {
 			map[string]interface{}{"type": "choice", "choice": "code", "probabilities": map[string]float64{"code": 0.5, "math": 0.5}},
 			true,
 		},
-		"no choice on a tie": {
+		"no choice": {
 			Question{Type: "choice", Choices: kinds},
 			map[string]interface{}{"type": "choice", "probabilities": map[string]float64{"code": 0.5, "math": 0.5}},
+			false,
+		},
+		"confidence above one": {
+			Question{Type: "choice", Choices: kinds},
+			map[string]interface{}{"type": "choice", "choice": "math", "confidence": 7.5, "probabilities": map[string]float64{"code": 0.2, "math": 0.8}},
+			false,
+		},
+		"noul without a value": {Question{Type: "noul"}, map[string]interface{}{"type": "noul"}, false},
+		"noul of null":         {Question{Type: "noul"}, map[string]interface{}{"type": "noul", "noul": nil}, false},
+		"noul of zero":         {Question{Type: "noul"}, map[string]interface{}{"type": "noul", "noul": 0}, true},
+		"score without a value": {
+			Question{Type: "score", Levels: levels},
+			map[string]interface{}{"type": "score", "probabilities": map[string]float64{"0": 1, "1": 0, "2": 0}},
+			false,
+		},
+		"score against its distribution": {
+			Question{Type: "score", Levels: levels},
+			map[string]interface{}{"type": "score", "score": 2, "probabilities": map[string]float64{"0": 1, "1": 0, "2": 0}},
+			false,
+		},
+		"score of zero": {
+			Question{Type: "score", Levels: levels},
+			map[string]interface{}{"type": "score", "score": 0, "probabilities": map[string]float64{"0": 1, "1": 0, "2": 0}},
 			true,
 		},
 		"noul": {Question{Type: "noul"}, map[string]interface{}{"type": "noul", "noul": 0.4}, true},
