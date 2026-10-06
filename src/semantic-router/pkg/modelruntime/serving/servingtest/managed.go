@@ -19,7 +19,7 @@ type TB interface {
 }
 
 // Installed reports whether the managed runtime command
-// (VLLM_SR_RUNTIME_COMMAND, else vllm-sr-runtime) is installed.
+// (VLLM_SRUN_COMMAND, else vllm-srun) is installed.
 func Installed() bool {
 	_, err := exec.LookPath(runtimeCommand())
 	return err == nil
@@ -47,5 +47,5 @@ func runtimeCommand() string {
 	if command := strings.Fields(os.Getenv(modelservice.RuntimeCommandEnv)); len(command) > 0 {
 		return command[0]
 	}
-	return "vllm-sr-runtime"
+	return "vllm-srun"
 }

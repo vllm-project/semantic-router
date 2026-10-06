@@ -7,17 +7,17 @@ import json
 import re
 
 import pytest
-from vllm_sr_runtime.families.vela2.family import GOLDEN_QUESTIONS
-from vllm_sr_runtime.families.vela2.package import (
+from vllm_srun.families.vela2.family import GOLDEN_QUESTIONS
+from vllm_srun.families.vela2.package import (
     BROAD_HEAD_FILE,
     COMMON_FILES,
     MANIFEST_FILE,
 )
-from vllm_sr_runtime.plugins.decisions import compare_answers, well_formed
-from vllm_sr_runtime.registry import builtin
-from vllm_sr_runtime.registry.artifacts import sha256_json
-from vllm_sr_runtime.registry.tables.common import REGISTRY_DIR
-from vllm_sr_runtime.supervision.readiness import GPU_TOLERANCE
+from vllm_srun.plugins.decisions import compare_answers, well_formed
+from vllm_srun.registry import builtin
+from vllm_srun.registry.artifacts import sha256_json
+from vllm_srun.registry.tables.common import REGISTRY_DIR
+from vllm_srun.supervision.readiness import GPU_TOLERANCE
 
 MODELS = builtin.all_models("vela2")
 DECODERS = [model for model in MODELS if model.backbone == "qwen3_5_text"]

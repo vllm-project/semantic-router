@@ -3,8 +3,8 @@
 import pytest
 import torch
 from torch import nn
-from vllm_sr_runtime.accel.onednn import PackedLinear
-from vllm_sr_runtime.engines.native.reduced import (
+from vllm_srun.accel.onednn import PackedLinear
+from vllm_srun.engines.native.reduced import (
     linear_bytes,
     reduced_view,
     unavailable,
@@ -90,16 +90,16 @@ def test_copies_that_cannot_run_on_a_device_say_why():
 @pytest.mark.parametrize("profile_asks", [True, False])
 def test_the_engine_runs_reduced_batches_on_the_copy_only(tmp_path, profile_asks):
     runnable("int8")
-    from vllm_sr_runtime.accel.cpu import CPUAccelerator
-    from vllm_sr_runtime.engines.native.engine import NativeEngine
-    from vllm_sr_runtime.plugins.base import (
+    from vllm_srun.accel.cpu import CPUAccelerator
+    from vllm_srun.engines.native.engine import NativeEngine
+    from vllm_srun.plugins.base import (
         BackboneSpec,
         DtypePolicy,
         EncoderBatch,
         EngineOptions,
         ModelSpec,
     )
-    from vllm_sr_runtime.testing.fixtures import random_backbone, save
+    from vllm_srun.testing.fixtures import random_backbone, save
 
     config = CONFIGS["yarn"]
     state = random_backbone("modernbert", config, seed=7)

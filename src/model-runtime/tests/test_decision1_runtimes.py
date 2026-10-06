@@ -15,19 +15,19 @@ import time
 import pytest
 import torch
 from torch import nn
-from vllm_sr_runtime.config import ModelConfig, ServeConfig
-from vllm_sr_runtime.families.decision1 import package as pkg
-from vllm_sr_runtime.families.decision1 import qwen, vela
-from vllm_sr_runtime.families.decision1.questions import KINDS
-from vllm_sr_runtime.heads.candidate import load_head, logits
-from vllm_sr_runtime.plugins.base import Job
-from vllm_sr_runtime.plugins.decisions import RenderedItem
-from vllm_sr_runtime.profiles.batching import BatchingProfile
-from vllm_sr_runtime.profiles.exact import ExactProfile
-from vllm_sr_runtime.runtime import Runtime
-from vllm_sr_runtime.scheduler.planner import padded
-from vllm_sr_runtime.testing.decision1 import write_package
-from vllm_sr_runtime.text import segments
+from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.families.decision1 import package as pkg
+from vllm_srun.families.decision1 import qwen, vela
+from vllm_srun.families.decision1.questions import KINDS
+from vllm_srun.heads.candidate import load_head, logits
+from vllm_srun.plugins.base import Job
+from vllm_srun.plugins.decisions import RenderedItem
+from vllm_srun.profiles.batching import BatchingProfile
+from vllm_srun.profiles.exact import ExactProfile
+from vllm_srun.runtime import Runtime
+from vllm_srun.scheduler.planner import padded
+from vllm_srun.testing.decision1 import write_package
+from vllm_srun.text import segments
 
 STATE = (
     "Write a Python function that merges two sorted lists and explain its running time."

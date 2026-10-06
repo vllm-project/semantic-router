@@ -320,7 +320,6 @@ IMAGE_REGISTRY ?= $(shell \
   else \
     printf "docker.io/"; \
   fi)
-VELA_OMNI_VARIANTS ?= nano
 VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM) --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY)
 VLLM_SR_PROJECT_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' src/vllm-sr/pyproject.toml | head -n1)
 VLLM_SR_GIT_REVISION := $(shell git rev-parse --short=7 HEAD 2>/dev/null || echo local)
@@ -333,7 +332,6 @@ VLLM_SR_DASHBOARD_VERSION := $(VLLM_SR_DASHBOARD_VERSION).dirty
 endif
 endif
 # Hash the source only when a build consumes these arguments.
-VLLM_SR_BUILD_ARGS += --build-arg VELA_OMNI_VARIANTS="$(VELA_OMNI_VARIANTS)"
 VLLM_SR_ROUTER_BUILD_ARGS = $(VLLM_SR_BUILD_ARGS) --target vllm-sr --build-arg ACCELERATOR=$(VLLM_SR_ACCELERATOR)
 
 VLLM_SR_DASHBOARD_BUILD_ARGS = $(VLLM_SR_BUILD_ARGS) --build-arg DASHBOARD_VERSION=$(VLLM_SR_DASHBOARD_VERSION) --build-arg VLLM_SR_SOURCE_REVISION=$(VLLM_SR_SOURCE_REVISION)

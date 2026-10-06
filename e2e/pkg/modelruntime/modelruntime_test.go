@@ -165,7 +165,7 @@ func TestRuntimeScriptsFindTheProcessServingASocket(t *testing.T) {
 		t.Skip("no /proc")
 	}
 	socket := filepath.Join(t.TempDir(), "cpu-0-0123456789ab.sock")
-	standIn := exec.Command(python, "-c", "import time; time.sleep(60)", "vllm-sr-runtime", "serve", "--uds", socket, "--threads", "3")
+	standIn := exec.Command(python, "-c", "import time; time.sleep(60)", "vllm-srun", "serve", "--uds", socket, "--threads", "3")
 	if err := standIn.Start(); err != nil {
 		t.Fatal(err)
 	}

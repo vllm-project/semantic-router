@@ -37,7 +37,7 @@ The table therefore keeps its pins. Moving the default revision to the current
 
 ## Cross-process repeatability
 
-Each run is a separate process. It loads the model as `vllm-sr-runtime serve`
+Each run is a separate process. It loads the model as `vllm-srun serve`
 does (verification, the golden check, `--autotune-cache`) and answers the four
 scored panels (10,653 prompts, one request each, `exact`). It is then compared
 with a reference run prompt by prompt (`tools/cross_process.py`). Identical
