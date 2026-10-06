@@ -1,9 +1,13 @@
-"""Fused Triton kernels for the element-wise ops of Qwen3.5 and Qwen3 decoder layers (ROCm gfx942).
+"""Fused Triton kernels for the element-wise ops of Qwen3.5 / Qwen3 decoder layers and ModernBERT (ROCm gfx942).
 
 Each kernel computes exactly what the eager decoder layer computes under BF16
 autocast, bit for bit: FP32 residual stream and norms, BF16 wherever the eager
 ops round (Linear inputs, SiLU / sigmoid outputs, the gated norm's intermediate
-cast, the conv output). Transcendentals call the same OCML functions as the ATen
+cast, the conv output). A backbone whose parameters are BF16 (the Decision 1.0
+decoders) streams BF16, and the kernels follow PyTorch's type rules for the
+dtypes they receive: the residual sum rounds to BF16 before the norm, a BF16
+gated-norm weight rounds its product, and BF16 rotary tables round each RoPE
+product and the sum. Transcendentals call the same OCML functions as the ATen
 and causal-conv1d kernels, floating-point contraction is off (those builds do
 not fuse multiply-adds), the RMSNorm means are summed in the order of ATen's
 ROCm row reduction (one 64-lane wavefront per row, four accumulators per lane,
@@ -21,6 +25,7 @@ Kernels:
     gated_rmsnorm   Gated DeltaNet output norm with the SiLU(z) gate
     attn_prep       (Qwen3.5: q / gate split,) q / k RMSNorm, RoPE, [B, H, T, D] layout
     sigmoid_gate    attention output * sigmoid(gate)
+    rotary_half     ModernBERT's FP32 rotate-half rotary of q and k, [B, H, T, D] out
 """
 
 from __future__ import annotations
@@ -112,6 +117,7 @@ def _add_rmsnorm_kernel(
     inv_h,
     eps,
     HAS_DELTA: tl.constexpr,
+    BF16_STREAM: tl.constexpr,
     R: tl.constexpr,
 ):
     rows = tl.program_id(0) * R + tl.arange(0, R)
@@ -122,8 +128,12 @@ def _add_rmsnorm_kernel(
     for c in range(0, H // 256):
         offs = base + c * 256 + cols
         x = tl.load(res_ptr + offs, mask=rmask, other=0.0)
+        if BF16_STREAM:
+            x = x.to(tl.float32)
         if HAS_DELTA:
             x = x + tl.load(delta_ptr + offs, mask=rmask, other=0.0).to(tl.float32)
+            if BF16_STREAM:
+                x = x.to(tl.bfloat16).to(tl.float32)
             tl.store(hidden_ptr + offs, x, mask=rmask)
         acc = acc + sumsq_vec4_chunk(x, R)
     var = lane_tree64(combine_vec4(acc, R), R) * inv_h
@@ -131,8 +141,12 @@ def _add_rmsnorm_kernel(
     for c in range(0, H // 256):
         offs = base + c * 256 + cols
         x = tl.load(res_ptr + offs, mask=rmask, other=0.0)
+        if BF16_STREAM:
+            x = x.to(tl.float32)
         if HAS_DELTA:
             x = x + tl.load(delta_ptr + offs, mask=rmask, other=0.0).to(tl.float32)
+            if BF16_STREAM:
+                x = x.to(tl.bfloat16).to(tl.float32)
         y = (x * rstd) * tl.load(w1_ptr + c * 256 + cols)
         tl.store(out_ptr + offs, y.to(tl.bfloat16), mask=rmask)
 
@@ -140,13 +154,14 @@ def _add_rmsnorm_kernel(
 def add_rmsnorm(
     residual: Any, delta: Any | None, weight_plus_one: Any, eps: float
 ) -> tuple[Any, Any]:
-    """(hidden FP32, normed BF16): ``hidden = residual + delta`` (or ``residual``), RMSNorm by the FP32 weight.
+    """(hidden, normed BF16): ``hidden = residual + delta`` (or ``residual``), RMSNorm by the FP32 weight.
 
     The weight is ``1 + w`` for Qwen3.5's zero-centred norm and ``w`` for Qwen3's (whose cast to the
     FP32 input dtype is a no-op).
 
-    ``residual`` is the contiguous FP32 stream, ``delta`` a contiguous BF16 or FP32 block output,
-    the hidden size a multiple of 256.
+    ``residual`` is the contiguous FP32 or BF16 stream (``hidden`` keeps its dtype; a BF16 sum is
+    rounded before the norm reads it), ``delta`` a contiguous BF16 or FP32 block output, the hidden
+    size a multiple of 256.
     """
     H = residual.shape[-1]
     rows = residual.numel() // H
@@ -163,6 +178,7 @@ def add_rmsnorm(
         float(np.float32(1.0) / np.float32(H)),
         eps,
         HAS_DELTA=delta is not None,
+        BF16_STREAM=residual.dtype == torch.bfloat16,
         R=2,
         num_warps=4,
         **EXACT,
@@ -171,24 +187,36 @@ def add_rmsnorm(
 
 
 @triton.jit
-def _residual_add_kernel(res_ptr, delta_ptr, out_ptr, N, BLOCK: tl.constexpr):
+def _residual_add_kernel(
+    res_ptr, delta_ptr, out_ptr, N, BF16_STREAM: tl.constexpr, BLOCK: tl.constexpr
+):
     offs = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
     mask = offs < N
     x = tl.load(res_ptr + offs, mask=mask, other=0.0)
     d = tl.load(delta_ptr + offs, mask=mask, other=0.0).to(tl.float32)
-    tl.store(out_ptr + offs, x + d, mask=mask)
+    if BF16_STREAM:
+        tl.store(out_ptr + offs, (x.to(tl.float32) + d).to(tl.bfloat16), mask=mask)
+    else:
+        tl.store(out_ptr + offs, x + d, mask=mask)
 
 
 def residual_add(residual: Any, delta: Any) -> Any:
-    """``residual + delta``: the contiguous FP32 stream plus a contiguous BF16 or FP32 block output.
+    """``residual + delta``: the contiguous FP32 or BF16 stream plus a contiguous BF16 or FP32 block output.
 
     One FP32 addition per element, as ATen's type-promoting add computes it (ATen's mixed-dtype
-    kernel runs several times slower at some hidden sizes).
+    kernel runs several times slower at some hidden sizes); a BF16 stream rounds the sum to BF16.
     """
     out = torch.empty_like(residual)
     n = residual.numel()
     _residual_add_kernel[(triton.cdiv(n, 4096),)](
-        residual, delta, out, n, BLOCK=4096, num_warps=8, **EXACT
+        residual,
+        delta,
+        out,
+        n,
+        BF16_STREAM=residual.dtype == torch.bfloat16,
+        BLOCK=4096,
+        num_warps=8,
+        **EXACT,
     )
     return out
 
@@ -342,7 +370,16 @@ def gdn_prep(
 
 @triton.jit
 def _gated_rmsnorm_kernel(
-    x_ptr, z_ptr, w_ptr, out_ptr, N, eps, inv_d, D: tl.constexpr, BR: tl.constexpr
+    x_ptr,
+    z_ptr,
+    w_ptr,
+    out_ptr,
+    N,
+    eps,
+    inv_d,
+    D: tl.constexpr,
+    BF16_WEIGHT: tl.constexpr,
+    BR: tl.constexpr,
 ):
     r = (tl.program_id(0) * BR + tl.arange(0, BR)).to(tl.int64)
     d = tl.arange(0, D)
@@ -351,14 +388,22 @@ def _gated_rmsnorm_kernel(
     x = tl.load(x_ptr + offs, mask=m, other=0.0).to(tl.float32)
     rstd = rsqrt_rn(sumsq_128(x, BR) * inv_d + eps)
     xn = (x * rstd[:, None]).to(tl.bfloat16).to(tl.float32)
-    y = tl.load(w_ptr + d)[None, :] * xn
+    if BF16_WEIGHT:
+        # a BF16 weight times the BF16 normalized value is a BF16 product
+        y = (
+            (tl.load(w_ptr + d)[None, :].to(tl.float32) * xn)
+            .to(tl.bfloat16)
+            .to(tl.float32)
+        )
+    else:
+        y = tl.load(w_ptr + d)[None, :] * xn
     z = tl.load(z_ptr + offs, mask=m, other=0.0).to(tl.float32)
     y = y * (z / (1.0 + libdevice.exp(-z)))
     tl.store(out_ptr + offs, y.to(tl.bfloat16), mask=m)
 
 
 def gated_rmsnorm(core: Any, z: Any, weight: Any, eps: float) -> Any:
-    """``Qwen3_5RMSNormGated`` on contiguous [N, 128] BF16 rows ``core`` and gates ``z``."""
+    """``Qwen3_5RMSNormGated`` on contiguous [N, 128] BF16 rows ``core`` and gates ``z`` (FP32 or BF16 weight)."""
     D = core.shape[-1]
     n = core.numel() // D
     out = torch.empty(core.shape, dtype=torch.bfloat16, device=core.device)
@@ -371,6 +416,7 @@ def gated_rmsnorm(core: Any, z: Any, weight: Any, eps: float) -> Any:
         eps,
         float(np.float32(1.0) / np.float32(D)),
         D=D,
+        BF16_WEIGHT=weight.dtype == torch.bfloat16,
         BR=16,
         num_warps=4,
         **EXACT,
@@ -395,6 +441,7 @@ def _head_prep_kernel(
     ROT: tl.constexpr,
     SRC_HEAD: tl.constexpr,
     ROUND_BEFORE_WEIGHT: tl.constexpr,
+    BF16_ROPE: tl.constexpr,
     R: tl.constexpr,
 ):
     # R tokens of one head per program; every row's arithmetic is the one-row order. One tensor per launch:
@@ -433,7 +480,13 @@ def _head_prep_kernel(
     cs = (b * cs_bstride + t * ROT)[:, None] + d[None, :]
     c = tl.load(cos_ptr + cs, mask=rot & rmask, other=1.0)
     s = tl.load(sin_ptr + cs, mask=rot & rmask, other=0.0)
-    out = tl.where(rot, (y * c) + (yp * s), y)
+    if BF16_ROPE:
+        # BF16 q / k times BF16 tables: each product and the sum round to BF16
+        yc = (y * c.to(tl.float32)).to(tl.bfloat16).to(tl.float32)
+        ys = (yp * s.to(tl.float32)).to(tl.bfloat16).to(tl.float32)
+        out = tl.where(rot, yc + ys, y)
+    else:
+        out = tl.where(rot, (y * c) + (yp * s), y)
     tl.store(dst + d[None, :], out.to(tl.bfloat16), mask=rmask)
 
 
@@ -459,7 +512,8 @@ def attn_prep(
     BF16 before the partial RoPE. Qwen3 (neither): ``q_proj_out`` is [B, T, H * D], the norms
     round ``x * rstd`` to BF16 and multiply by ``w`` in FP32, and the full RoPE runs in FP32.
     ``k_proj_out`` [B, T, Hkv * D] is contiguous BF16 like ``q_proj_out``; ``cos`` / ``sin`` the
-    contiguous [B or 1, T, rotary dim] FP32 rotary tables; the head dim is 128 or 256.
+    contiguous [B or 1, T, rotary dim] rotary tables in the stream's dtype (BF16 tables round the
+    RoPE products and sum to BF16); the head dim is 128 or 256.
     """
     if head_dim not in (128, 256):
         raise ValueError("attn_prep reduces rows of 128 or 256")
@@ -489,6 +543,7 @@ def attn_prep(
             ROT=rot,
             SRC_HEAD=width,
             ROUND_BEFORE_WEIGHT=not zero_centred,
+            BF16_ROPE=cos.dtype == torch.bfloat16,
             R=rows,
             num_warps=4,
             **EXACT,
@@ -558,3 +613,78 @@ def sigmoid_gate(attn_out: Any, gate: Any) -> Any:
         **EXACT,
     )
     return out
+
+
+@triton.jit
+def _rotary_half_kernel(
+    q_ptr,
+    k_ptr,
+    cos_ptr,
+    sin_ptr,
+    qo_ptr,
+    ko_ptr,
+    sb,
+    sh,
+    st,
+    H,
+    T,
+    HALF: tl.constexpr,
+    HP: tl.constexpr,
+    BT: tl.constexpr,
+):
+    bh = tl.program_id(0)
+    t = tl.program_id(1) * BT + tl.arange(0, BT)[:, None]
+    d = tl.arange(0, HP)[None, :]
+    m = (t < T) & (d < HALF)
+    src = (bh // H) * sb + (bh % H) * sh + t * st
+    dst = (bh * T + t) * (2 * HALF)
+    table = t * (2 * HALF)
+    c1 = tl.load(cos_ptr + table + d, mask=m)
+    c2 = tl.load(cos_ptr + table + HALF + d, mask=m)
+    s1 = tl.load(sin_ptr + table + d, mask=m)
+    s2 = tl.load(sin_ptr + table + HALF + d, mask=m)
+    q1 = tl.load(q_ptr + src + d, mask=m).to(tl.float32)
+    q2 = tl.load(q_ptr + src + HALF + d, mask=m).to(tl.float32)
+    k1 = tl.load(k_ptr + src + d, mask=m).to(tl.float32)
+    k2 = tl.load(k_ptr + src + HALF + d, mask=m).to(tl.float32)
+    out = qo_ptr.dtype.element_ty
+    tl.store(qo_ptr + dst + d, (q1 * c1 - q2 * s1).to(out), mask=m)
+    tl.store(qo_ptr + dst + HALF + d, (q2 * c2 + q1 * s2).to(out), mask=m)
+    tl.store(ko_ptr + dst + d, (k1 * c1 - k2 * s1).to(out), mask=m)
+    tl.store(ko_ptr + dst + HALF + d, (k2 * c2 + k1 * s2).to(out), mask=m)
+
+
+def rotary_half(query: Any, key: Any, cos: Any, sin: Any) -> tuple[Any, Any]:
+    """``kernels.rotary_half_ref`` in one launch: contiguous ``[B, H, T, D]`` query and key.
+
+    ``query`` and ``key`` are views with one stride set and a unit last stride
+    (the halves of a fused QKV projection); other layouts run the reference.
+    The FP32 products round before the sum, as the eager ``x * cos + rotate(x) * sin``.
+    """
+    from .kernels import rotary_half_ref
+
+    B, H, T, D = query.shape
+    if query.stride() != key.stride() or query.stride(-1) != 1 or D % 2:
+        return rotary_half_ref(query, key, cos, sin)
+    cos = cos.reshape(-1, D)[:T].float().contiguous()
+    sin = sin.reshape(-1, D)[:T].float().contiguous()
+    query_out = torch.empty((B, H, T, D), dtype=query.dtype, device=query.device)
+    key_out = torch.empty_like(query_out)
+    _rotary_half_kernel[(B * H, triton.cdiv(T, 64))](
+        query,
+        key,
+        cos,
+        sin,
+        query_out,
+        key_out,
+        query.stride(0),
+        query.stride(1),
+        query.stride(2),
+        H,
+        T,
+        HALF=D // 2,
+        HP=triton.next_power_of_2(D // 2),
+        BT=64,
+        **EXACT,
+    )
+    return query_out, key_out

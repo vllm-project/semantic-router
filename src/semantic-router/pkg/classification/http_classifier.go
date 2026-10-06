@@ -82,8 +82,8 @@ func newHTTPClassifierInference(cfg *config.ExternalModelConfig, mapping sequenc
 	if isNilMapping(mapping) {
 		return nil, fmt.Errorf("label mapping is required for http_classify")
 	}
-	// http_classify was the only backend without an arity check (candle
-	// requires numClasses >= 2, http_chat exactly 2). Without one, a mapping
+	// http_classify was the only backend without an arity check (the local
+	// prompt guard requires numClasses >= 2, http_chat exactly 2). Without one, a mapping
 	// with fewer than 2 labels - an empty file, or one built in-process rather
 	// than through LoadJailbreakMapping's normalization - makes
 	// alignScoresToMapping allocate an undersized distribution, so

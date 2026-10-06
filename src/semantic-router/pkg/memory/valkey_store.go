@@ -1,5 +1,3 @@
-//go:build !riscv64
-
 package memory
 
 import (
@@ -74,7 +72,7 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 	if options.EmbeddingConfig != nil {
 		embeddingCfg = *options.EmbeddingConfig
 	} else {
-		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelBERT}
+		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelMMBERT}
 	}
 
 	vc := options.ValkeyConfig

@@ -47,7 +47,7 @@ func NewQdrantStore(opts QdrantStoreOptions) (*QdrantStore, error) {
 		collectionName = "agentic_memory"
 	}
 
-	embCfg := EmbeddingConfig{Model: EmbeddingModelBERT}
+	embCfg := EmbeddingConfig{Model: EmbeddingModelMMBERT}
 	if opts.EmbeddingConfig != nil {
 		embCfg = *opts.EmbeddingConfig
 	}

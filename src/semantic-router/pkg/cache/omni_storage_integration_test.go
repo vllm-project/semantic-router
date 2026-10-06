@@ -1,5 +1,3 @@
-//go:build !windows && cgo
-
 package cache
 
 import (
@@ -10,7 +8,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
 )
 
 // Select either prepared Nano or Mini with VELA_OMNI_ARTIFACT. This checks the
@@ -21,12 +19,12 @@ func TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity(t *testing.T) {
 		if os.Getenv("REQUIRE_OMNI_TESTS") == "1" {
 			t.Fatal("VELA_OMNI_ARTIFACT must select a prepared artifact")
 		}
-		t.Skip("set VELA_OMNI_ARTIFACT to select native storage integration")
+		t.Skip("set VELA_OMNI_ARTIFACT to select the Omni storage integration")
 	}
-	provider, err := native.New(nil).Embedding(context.Background(), config.ResolvedModelBinding{
+	provider, err := servingtest.Managed(t).Embedding(context.Background(), config.ResolvedModelBinding{
 		Recipe: "storage-test", Name: "embedding",
-		Binding:    config.ModelBinding{Deployment: "omni", Contract: "embedding.v1", Adapter: "vela_omni"},
-		Deployment: config.ModelDeployment{Artifact: artifact, Provider: "ort", Device: "cpu", Precision: "native", Input: config.ModelInputBudget{Overflow: "reject"}},
+		Binding:    config.ModelBinding{Deployment: "omni", Contract: "embedding.v1"},
+		Deployment: config.ModelDeployment{Artifact: artifact, Provider: config.ModelRuntimeProvider, Device: "cpu", Profile: "exact", Input: config.ModelInputBudget{Overflow: "reject"}},
 	}, 0, 0)
 	if err != nil {
 		t.Fatal(err)
