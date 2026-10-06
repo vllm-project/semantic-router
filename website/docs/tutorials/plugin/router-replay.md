@@ -73,7 +73,8 @@ not invoices. Missing prices and usage remain unknown.
 Every record carries `route_diagnostics.decision_ranking`: the strategy
 selection ran under, the tier the winning decision came from, whether that pool
 ranked by confidence and which decision stopped it, and the key that separated
-the winner from the decision behind it. A replayed request therefore explains
+the winner from the decision behind it, which is recorded as `runner_up`, with
+a `reason` stating the values compared. A replayed request therefore explains
 its route the same way the eval API does.
 
 Detail responses can also include `route_diagnostics.prepared_dispatch`, a

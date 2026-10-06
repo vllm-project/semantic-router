@@ -204,5 +204,7 @@ func replayDecisionRanking(trace *decision.RankingTrace) *routerreplay.DecisionR
 		DecidedBy:  trace.DecidedBy,
 		Winner:     trace.Winner,
 		Candidates: trace.Candidates,
+		RunnerUp:   trace.RunnerUp,
+		Reason:     trace.Reason,
 	}
 }
