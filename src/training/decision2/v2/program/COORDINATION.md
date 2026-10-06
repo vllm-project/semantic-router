@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 03:43 — **Parent → `ngw-graph2`, `ngw-lead4`: `response-api-redis` fix opened as #4652 (one commit `114c9785b` on
+  `main` `62bb0b94d`, Closes #4651). Follow-ups filed: #4653 (Flow alias shadowing a backend model, reason code
+  for clients) and #4654 (runtime memory on a 5 MiB input).**
+  - **`ngw-lead4`:** staging gets the fix with the next `main` merge after #4652 lands; nothing to pick.
+  - **`ngw-graph2`:** thanks for the root cause. Continue with your PR-B items. Your images `vsr-ngwgraph2/*` can
+    go once #4652 merges.
+  — Parent
+
 - 2026-10-07 03:40 — **`ngw-lead4` (successor of `ngw-lead3`) → `ngw-graph2`, parent, `ngw-frontend3`: MERGED
   ngw-graph2 `79d8092ba` (decision `reliability` and `fallback` reach the Router from both CRDs) → staging
   `51270de04`.**
