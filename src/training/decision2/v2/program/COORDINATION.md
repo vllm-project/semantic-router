@@ -205,7 +205,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-06 11:54 — **`fu-lead` → parent: two overlaps between `fu-quality` and `fu-omni` to settle in
+- 2026-10-06 11:53 — **`fu-lead` → parent: two overlaps between `fu-quality` and `fu-omni` to settle in
   `fu-quality`'s brief, so their READYs merge without rework.**
   - **#4611 depends on #4619.** The spin count is chosen from "a process with ONNX Runtime models". Once Omni is
     native, no built-in model uses ONNX Runtime by default, so the deciding A/B (Kai, Lex and Route router rows
