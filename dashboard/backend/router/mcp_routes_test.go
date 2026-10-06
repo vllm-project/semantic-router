@@ -1,11 +1,9 @@
 package router
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -152,131 +150,6 @@ func TestBuiltInOpenClawMCPConnectsThroughInternalLoopbackRoute(t *testing.T) {
 	}
 	if !foundListTeams {
 		t.Fatalf("expected claw_list_teams in MCP tools, got %+v", toolsPayload.Tools)
-	}
-}
-
-func TestDashboardCloseDisconnectsMCPClients(t *testing.T) {
-	dashboard, _ := startDashboardServer(t)
-	if dashboard.mcpManager == nil {
-		t.Fatal("expected MCP manager")
-	}
-
-	if err := dashboard.mcpManager.Connect(context.Background(), mcp.BuiltinOpenClawServerID); err != nil {
-		t.Fatalf("connect built-in MCP server: %v", err)
-	}
-	state, err := dashboard.mcpManager.GetServerStatus(mcp.BuiltinOpenClawServerID)
-	if err != nil {
-		t.Fatalf("get MCP server status before close: %v", err)
-	}
-	if state.Status != mcp.StatusConnected {
-		t.Fatalf("MCP status before close = %q, want %q", state.Status, mcp.StatusConnected)
-	}
-
-	if closeErr := dashboard.Close(); closeErr != nil {
-		t.Fatalf("close dashboard: %v", closeErr)
-	}
-	state, err = dashboard.mcpManager.GetServerStatus(mcp.BuiltinOpenClawServerID)
-	if err != nil {
-		t.Fatalf("get MCP server status after close: %v", err)
-	}
-	if state.Status != mcp.StatusDisconnected {
-		t.Fatalf("MCP status after close = %q, want %q", state.Status, mcp.StatusDisconnected)
-	}
-}
-
-func TestDashboardCloseTerminatesStdioMCPProcess(t *testing.T) {
-	dashboard, _ := startDashboardServer(t)
-	if dashboard.mcpManager == nil {
-		t.Fatal("expected MCP manager")
-	}
-
-	exitMarker := filepath.Join(t.TempDir(), "stdio-helper-exited")
-	serverID := "stdio-shutdown-test"
-	if err := dashboard.mcpManager.AddServer(&mcp.ServerConfig{
-		ID:        serverID,
-		Name:      "stdio shutdown test",
-		Transport: mcp.TransportStdio,
-		Connection: mcp.ConnectionConfig{
-			Command: os.Args[0],
-			Args:    []string{"-test.run=TestMCPStdioHelper"},
-			Env: map[string]string{
-				"SEMANTIC_ROUTER_MCP_STDIO_HELPER":      "1",
-				"SEMANTIC_ROUTER_MCP_STDIO_EXIT_MARKER": exitMarker,
-			},
-		},
-	}); err != nil {
-		t.Fatalf("add stdio MCP server: %v", err)
-	}
-
-	if err := dashboard.mcpManager.Connect(context.Background(), serverID); err != nil {
-		t.Fatalf("connect stdio MCP server: %v", err)
-	}
-	if _, err := os.Stat(exitMarker); !os.IsNotExist(err) {
-		t.Fatalf("stdio helper exited before dashboard close: stat error = %v", err)
-	}
-
-	if err := dashboard.Close(); err != nil {
-		t.Fatalf("close dashboard: %v", err)
-	}
-	if _, err := os.Stat(exitMarker); err != nil {
-		t.Fatalf("stdio helper did not exit after dashboard close: %v", err)
-	}
-
-	state, err := dashboard.mcpManager.GetServerStatus(serverID)
-	if err != nil {
-		t.Fatalf("get stdio MCP status after close: %v", err)
-	}
-	if state.Status != mcp.StatusDisconnected {
-		t.Fatalf("stdio MCP status after close = %q, want %q", state.Status, mcp.StatusDisconnected)
-	}
-}
-
-func TestMCPStdioHelper(t *testing.T) {
-	if os.Getenv("SEMANTIC_ROUTER_MCP_STDIO_HELPER") != "1" {
-		return
-	}
-
-	defer func() {
-		_ = os.WriteFile(os.Getenv("SEMANTIC_ROUTER_MCP_STDIO_EXIT_MARKER"), nil, 0o644)
-	}()
-
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		var request struct {
-			JSONRPC string          `json:"jsonrpc"`
-			ID      json.RawMessage `json:"id"`
-			Method  string          `json:"method"`
-		}
-		if err := json.Unmarshal(scanner.Bytes(), &request); err != nil || len(request.ID) == 0 {
-			continue
-		}
-
-		var result interface{}
-		switch request.Method {
-		case "initialize":
-			result = map[string]interface{}{
-				"protocolVersion": "2025-06-18",
-				"serverInfo": map[string]string{
-					"name":    "stdio-shutdown-test",
-					"version": "1.0.0",
-				},
-				"capabilities": map[string]interface{}{},
-			}
-		case "tools/list":
-			result = map[string]interface{}{"tools": []interface{}{}}
-		default:
-			result = map[string]interface{}{}
-		}
-
-		response, err := json.Marshal(map[string]interface{}{
-			"jsonrpc": "2.0",
-			"id":      request.ID,
-			"result":  result,
-		})
-		if err != nil {
-			continue
-		}
-		_, _ = fmt.Fprintf(os.Stdout, "%s\n", response)
 	}
 }
 

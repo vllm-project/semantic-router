@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -127,44 +125,6 @@ func (c *Client) Connect(ctx context.Context) error {
 
 	log.Printf("[MCP-Client] Connect() completed, status: connected, tools: %d", len(tools))
 	return nil
-}
-
-// createStdioClient creates a Stdio client
-func (c *Client) createStdioClient(ctx context.Context) (client.MCPClient, error) {
-	log.Printf("[MCP-Client] Creating Stdio client: argument_count=%d", len(c.config.Connection.Args))
-
-	// Build environment variables
-	env := os.Environ()
-	for k, v := range c.config.Connection.Env {
-		env = append(env, fmt.Sprintf("%s=%s", k, v))
-	}
-
-	// Prepare options
-	opts := []transport.StdioOption{}
-
-	// If working directory needs to be set, use custom command function
-	if c.config.Connection.Cwd != "" {
-		opts = append(opts, transport.WithCommandFunc(func(ctx context.Context, command string, env []string, args []string) (*exec.Cmd, error) {
-			cmd := exec.CommandContext(ctx, command, args...)
-			cmd.Env = env
-			cmd.Dir = c.config.Connection.Cwd
-			return cmd, nil
-		}))
-	}
-
-	// Use SDK to create Stdio client
-	// NewStdioMCPClient automatically starts subprocess
-	mcpClient, err := client.NewStdioMCPClientWithOptions(
-		c.config.Connection.Command,
-		env,
-		c.config.Connection.Args,
-		opts...,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stdio client: %w", err)
-	}
-
-	return mcpClient, nil
 }
 
 // createStreamableHTTPClient creates a Streamable HTTP client
