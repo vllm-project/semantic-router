@@ -68,7 +68,8 @@ const (
 	VSRSelectedRecipe = "x-vsr-selected-recipe"
 
 	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
-	// This is the final routing decision made by the DecisionEngine.
+	// This is the final routing decision made by the DecisionEngine. It is
+	// omitted when no decision matched and the request went to the default model.
 	// Example values: "math_decision", "business_decision", "thinking_decision"
 	VSRSelectedDecision = "x-vsr-selected-decision"
 
@@ -315,6 +316,12 @@ const (
 	// structural input-modality signal names.
 	// Example: "image_input,audio_input"
 	VSRMatchedInputModality = "x-vsr-matched-input-modality"
+
+	// VSRMatchedDecisionModel contains comma-separated list of matched decision
+	// signals answered by a decision model: noul and score rule names, and
+	// "rule:choice" for choice questions.
+	// Example: "needs_reasoning,request_kind:code"
+	VSRMatchedDecisionModel = "x-vsr-matched-decision-model"
 
 	// VSRMatchedProjection contains comma-separated list of matched projection outputs.
 	// Example: "balance_medium,verification_required"

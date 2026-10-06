@@ -48,10 +48,19 @@ threshold inherits the global setting; calibrate that value for the selected
 embedding model and search mode before adding an override. See a complete example:
 [`config/fragments/plugin/memory/session-memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/memory/session-memory.yaml).
 
+## Observability
+
+Router Memory exposes bounded Prometheus metrics on the Router scrape endpoint.
+Retrieval volume is tracked by `llm_memory_retrieval_total` with `backend` and
+`status` labels (`hit`, `miss`, `error`). Latency and result counts use separate
+histograms without per-user labels. If you upgrade from a release that labeled
+memory metrics with `user_id`, follow the [Router Memory Prometheus label release
+note](../../release-notes/router-memory-prometheus-labels).
+
 ## Upgrading the embedding model
 
-Restart the model runtime after changing embedding weights. For local `mmbert`
-models, including Vela Embedding, the router binds memory to
+Restart the model runtime after changing embedding weights. For embeddings from
+the model runtime, including Vela Embedding, the router binds memory to
 the loaded model, tokenizer, inference settings, and vector dimension. Changing
 these creates a separate physical collection or index and a separate Redis hot
 cache. Restarting with the same representation reuses its existing storage.
@@ -62,17 +71,8 @@ equal vector dimensions do not prove that two models produce compatible
 embeddings. The management API has no import or bulk export endpoint for
 memories, so the collection for the new model starts empty and repopulates
 from new traffic. No old collection is deleted during
-startup or model migration. This automatic identity binding currently covers
-local `mmbert`; other embedding providers keep their existing behavior, except
-Candle `bert` as described below.
-
-Candle `bert` models have no content descriptor, so the router keys their memory
-by an encoder version that changes whenever Candle BERT vectors change, as they
-did when padding tokens stopped counting toward the average. After upgrading
-across such a change, BERT memory opens a new collection or index and a new
-Redis hot cache. Entries stored before the upgrade stay in the old collection
-and are no longer recalled, so memory fills again from new conversations. BERT
-served by another runtime keeps its existing storage.
+startup or model migration. This automatic identity binding covers every
+embedding the model runtime serves.
 
 A remote embedding endpoint cannot prove which model produced its vectors, so
 memory keeps the configured collection or index, and the router logs a startup

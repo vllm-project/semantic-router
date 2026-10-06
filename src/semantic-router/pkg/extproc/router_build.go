@@ -15,8 +15,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -34,7 +34,8 @@ type routerComponents struct {
 	embeddings                  *embedding.Set
 	serviceEmbeddings           *embedding.Set
 	cacheEmbeddings             *embedding.Set
-	modelRuntime                *native.Runtime
+	modelLease                  *modelservice.Lease
+	serving                     *serving.Runtime
 	rerankers                   map[config.RecipeName]modelruntime.PairScorer
 	cfg                         *config.RouterConfig
 	categoryDescriptions        []string
@@ -151,7 +152,13 @@ func parseRouterConfigFile(configPath string) (*config.RouterConfig, error) {
 }
 
 func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Pool) (*OpenAIRouter, error) {
+	if err := validateStickyToolSelectionPhaseSupport(cfg); err != nil {
+		return nil, err
+	}
 	if err := validateResponseCacheScopeSecret(cfg); err != nil {
+		return nil, err
+	}
+	if err := validateStickyToolSelectionSecret(cfg); err != nil {
 		return nil, err
 	}
 	components, err := buildRouterComponents(cfg, pools...)
@@ -159,6 +166,63 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Poo
 		return nil, err
 	}
 	return components.buildRouter(), nil
+}
+
+// validateStickyToolSelectionPhaseSupport rejects any decision that enables
+// tool_selection.sticky.enabled (issue #3347 phase 1 / sub-issue #3392): no
+// production request path consumes ResolveStickyToolIdentity or the
+// sessiontools store yet, so accepting sticky.enabled: true here would
+// construct successfully and then silently never activate sticky selection
+// for any request. config.ToolSelectionPluginConfig.Validate() already
+// rejects this at config-admission time (config.ErrToolSelectionStickyUnsupported);
+// this is a second, router-construction-time gate over the same condition
+// via the same sentinel error, checked here too since config admission and
+// router construction are two different entry points into this codebase
+// (config.Parse vs. an already-parsed *config.RouterConfig handed directly
+// to buildOpenAIRouterFromConfig, e.g. from the Kubernetes reconciler path)
+// and this must fail closed regardless of which one produced cfg.
+func validateStickyToolSelectionPhaseSupport(cfg *config.RouterConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	for _, decision := range cfg.AllRoutingDecisions() {
+		plugin := decision.GetToolSelectionConfig()
+		if plugin == nil || plugin.Sticky == nil || !plugin.Sticky.Enabled {
+			continue
+		}
+		return config.ErrToolSelectionStickyUnsupported
+	}
+	return nil
+}
+
+// validateStickyToolSelectionSecret requires USER_SCOPE_NAMESPACE_SECRET
+// whenever any decision enables tool_selection.sticky.enabled (issue #3347,
+// PL-0042 section 2.4). Retained as a construction-time guard for once
+// Phase 2 lifts validateStickyToolSelectionPhaseSupport's rejection above —
+// sticky.enabled: true cannot reach this check today, since the
+// phase-support gate now rejects it first. Unlike
+// validateResponseCacheScopeSecret just below, this is unconditional — not
+// gated on cfg.ManagementAPI.RemoteExposure. Response-cache scoping without
+// the secret degrades to a documented, bounded fallback (a plain hash) that
+// is merely weaker, not silently wrong; sticky tool-set identity has no
+// such acceptable degraded mode — ResolveStickyToolIdentity
+// (sticky_tool_identity.go) fails closed with no fallback path at all when
+// the secret is absent, so an unkeyed deployment with sticky enabled would
+// otherwise construct successfully and then simply never activate sticky
+// selection for any request, silently. Fail at construction time instead,
+// with an actionable error.
+func validateStickyToolSelectionSecret(cfg *config.RouterConfig) error {
+	if cfg == nil || cache.UserScopeSecretConfigured() {
+		return nil
+	}
+	for _, decision := range cfg.AllRoutingDecisions() {
+		plugin := decision.GetToolSelectionConfig()
+		if plugin == nil || plugin.Sticky == nil || !plugin.Sticky.Enabled {
+			continue
+		}
+		return fmt.Errorf("USER_SCOPE_NAMESPACE_SECRET is required when tool_selection sticky selection is enabled")
+	}
+	return nil
 }
 
 func validateResponseCacheScopeSecret(cfg *config.RouterConfig) error {
@@ -200,14 +264,16 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 		pool = pools[0]
 	}
 	components := &routerComponents{
-		modelRuntime:       native.New(pool),
 		cfg:                cfg,
 		resources:          newResourceScope(),
 		routerSessionStore: buildRouterLearningStateStore(cfg),
 		protocolCodecs:     protocolcodec.NewBuiltinRegistry(),
 	}
+	if err := components.acquireModelServices(pool); err != nil {
+		return nil, rollbackResources(components.resources, err)
+	}
 	registerRouterSessionStore(components.resources, components.routerSessionStore)
-	embeddings, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, components.modelRuntime)
+	embeddings, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, components.serving)
 	if err != nil {
 		return nil, rollbackResources(components.resources, err)
 	}
@@ -216,20 +282,20 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 	servicesConfig := *cfg
 	// Ingestion owns an independent handle for its longer worker lifetime.
 	servicesConfig.VectorStore = nil
-	components.serviceEmbeddings, err = modelruntime.PrepareOwnedGlobalServiceEmbeddings(context.Background(), &servicesConfig, components.modelRuntime)
+	components.serviceEmbeddings, err = modelruntime.PrepareOwnedGlobalServiceEmbeddings(context.Background(), &servicesConfig, components.serving)
 	if err != nil {
 		return nil, rollbackResources(components.resources, err)
 	}
 	components.resources.add(components.serviceEmbeddings.Close)
 	components.cacheEmbeddings = embeddings
 	if cfg.NeedsSemanticResponseCache() {
-		components.cacheEmbeddings, err = modelruntime.PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, components.modelRuntime)
+		components.cacheEmbeddings, err = modelruntime.PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, components.serving)
 		if err != nil {
 			return nil, rollbackResources(components.resources, err)
 		}
 		components.resources.add(components.cacheEmbeddings.Close)
 	}
-	components.rerankers, err = modelruntime.PrepareRerankers(context.Background(), cfg, components.modelRuntime)
+	components.rerankers, err = modelruntime.PrepareRerankers(context.Background(), cfg, components.serving)
 	if err != nil {
 		return nil, rollbackResources(components.resources, err)
 	}
@@ -300,7 +366,10 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})
 	}
 
-	components.memoryStore, components.memoryExtractor = createMemoryRuntime(cfg, components.serviceEmbeddings)
+	components.memoryStore, components.memoryExtractor, err = createMemoryRuntime(cfg, components.serviceEmbeddings)
+	if err != nil {
+		return nil, rollbackResources(components.resources, err)
+	}
 	if components.memoryStore != nil {
 		components.resources.add(components.memoryStore.Close)
 	}
@@ -338,14 +407,7 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 }
 
 func (components *routerComponents) buildEarlyResources() error {
-	verifier, err := modelruntime.PrepareOwnedResponseCacheNLI(context.Background(), components.cfg, components.modelRuntime)
-	if err != nil {
-		return rollbackResources(components.resources, err)
-	}
-	if verifier != nil {
-		// The cache drains and closes before its borrowed verifier is released.
-		components.resources.add(verifier.Close)
-	}
+	var err error
 	components.semanticCache, components.semanticCacheIdentity, err = createSemanticCache(components.cfg, components.cacheEmbeddings)
 	if err != nil {
 		return rollbackResources(components.resources, err)
@@ -359,31 +421,36 @@ func (components *routerComponents) buildEarlyResources() error {
 		return rollbackResources(components.resources, err)
 	}
 
-	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, classification.RecipeRuntimeOptions{Runtime: components.modelRuntime, Embeddings: components.embeddings})
+	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, classification.RecipeRuntimeOptions{Runtime: components.serving, Embeddings: components.embeddings})
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
 	components.classificationSvc.SetGlobalEmbeddings(components.serviceEmbeddings)
 	components.resources.add(components.recipeClassifiers.Close)
 	components.resources.add(components.classificationSvc.Close)
-	if target, ok := components.semanticCache.(interface {
-		SetPolarityVerifier(cache.PolarityVerifyFunc)
-	}); ok {
-		if verifier != nil {
-			target.SetPolarityVerifier(func(ctx context.Context, cached, incoming string) (float32, error) {
-				result, callErr := verifier.Call(ctx, string(config.GlobalModelScope), tasks.TextPairRequest{Premise: cached, Hypothesis: incoming})
-				if callErr != nil {
-					return 0, callErr
-				}
-				return result.Probabilities[2], nil
-			})
-		}
-	}
 	components.responseCache, err = newResponseCacheService(components.cfg, components.semanticCache, components.semanticCacheIdentity, components.cacheEmbeddings)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
 
+	return nil
+}
+
+// acquireModelServices leases the generation's model_runtime deployments from
+// the process manager. The lease closes after every binding that uses it,
+// since resources close in reverse order. Without a manager (embedded
+// routers, tests) model_runtime bindings fail preparation.
+func (components *routerComponents) acquireModelServices(pool *binding.Pool) error {
+	var services serving.Services
+	if manager := modelservice.DefaultManager(); manager != nil {
+		lease, err := manager.Acquire(components.cfg)
+		if err != nil {
+			return err
+		}
+		components.modelLease, services = lease, lease
+		components.resources.add(lease.Close)
+	}
+	components.serving = serving.New(services, pool)
 	return nil
 }
 
@@ -495,6 +562,9 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		FallbackOrchestrator:        components.fallbackOrchestrator,
 		RecipeFallbackOrchestrators: components.recipeFallbackOrchestrators,
 		resources:                   components.resources,
+	}
+	if components.modelLease != nil {
+		router.decisionDecider = components.modelLease
 	}
 	if components.classificationSvc != nil {
 		components.classificationSvc.SetEvalModelSelector(router)

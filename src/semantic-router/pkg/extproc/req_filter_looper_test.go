@@ -1,10 +1,13 @@
 package extproc
 
 import (
+	"strings"
 	"testing"
 
+	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -129,5 +132,66 @@ func TestLooperProviderDispatchReevaluatesOntoSelectedRoute(t *testing.T) {
 	}
 	if got := setHeaders[":path"]; got != "/v1/chat/completions" {
 		t.Fatalf("provider path = %q, want /v1/chat/completions", got)
+	}
+}
+
+// A credential failure on a Looper hop must reach the client with the status and
+// message the dispatch builder produced, not a generic 500 (issue #4581).
+func TestLooperProviderDispatchKeepsCredentialFailure(t *testing.T) {
+	tests := []struct {
+		name    string
+		prepare func(router *OpenAIRouter)
+		status  typev3.StatusCode
+		message string
+	}{
+		{
+			name:    "credential resolver unavailable",
+			prepare: func(router *OpenAIRouter) { router.CredentialResolver = nil },
+			status:  typev3.StatusCode_InternalServerError,
+			message: "Provider credentials are unavailable.",
+		},
+		{
+			name: "credential resolution fails",
+			prepare: func(router *OpenAIRouter) {
+				router.CredentialResolver = authz.NewCredentialResolver(authz.NewStaticConfigProvider(router.Config))
+			},
+			status:  typev3.StatusCode_Unauthorized,
+			message: "Authentication failed. Check your API key configuration.",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+			tt.prepare(router)
+			ctx := routingTestContext(llmprotocol.OpenAIChatV1, testNeutralRequest(model, "compare these answers"))
+			ctx.LooperRequest = true
+
+			looper, err := router.buildLooperBackendDispatchResponse(model, "", false, ctx)
+			if err != nil {
+				t.Fatalf("buildLooperBackendDispatchResponse: %v", err)
+			}
+			immediate := looper.GetImmediateResponse()
+			if immediate == nil {
+				t.Fatalf("Looper hop did not return the credential failure: %+v", looper)
+			}
+			if immediate.GetStatus().GetCode() != tt.status {
+				t.Fatalf("status = %v, want %v", immediate.GetStatus().GetCode(), tt.status)
+			}
+			if !strings.Contains(string(immediate.GetBody()), tt.message) {
+				t.Fatalf("body = %s, want message %q", immediate.GetBody(), tt.message)
+			}
+
+			// The ordinary dispatch path reports the same failure.
+			dispatch, err := router.prepareProviderDispatch(ctx.SemanticRequest, model, "", false, ctx)
+			if err != nil {
+				t.Fatalf("prepareProviderDispatch: %v", err)
+			}
+			ordinary := router.buildProviderDispatchResponse(dispatch, ctx).GetImmediateResponse()
+			if ordinary.GetStatus().GetCode() != immediate.GetStatus().GetCode() ||
+				string(ordinary.GetBody()) != string(immediate.GetBody()) {
+				t.Fatalf("Looper failure %v %s differs from ordinary %v %s",
+					immediate.GetStatus().GetCode(), immediate.GetBody(), ordinary.GetStatus().GetCode(), ordinary.GetBody())
+			}
+		})
 	}
 }
