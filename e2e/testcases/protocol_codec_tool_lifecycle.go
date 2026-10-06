@@ -23,6 +23,14 @@ func runProtocolCodecToolLifecycle(
 		return err
 	}
 	defer session.Close()
+	provider, providerErr := openProtocolCodecProviderSession(ctx, client, opts, backendFormat)
+	if providerErr != nil {
+		return providerErr
+	}
+	defer provider.Close()
+	if historyErr := runToolResultErrorPolicy(ctx, session, provider, model, backendFormat); historyErr != nil {
+		return historyErr
+	}
 
 	tool := protocolLookupTool()
 	call, err := runResponsesToolCallRoundtrip(ctx, session, model, tool)
