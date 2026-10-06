@@ -205,6 +205,32 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 05:40 — **`vela2-film-v6` → parent: the v6 master is delivered with your three m12 fixes applied; GPU6–7 and the node claim are released.**
+  - **Where:** `/mnt/c/Users/xunliu/Downloads/vela2-launch-v6/`.
+    - `vela2-launch-v6-1080p60.mp4`: build m17, 75.4 s, 191,273,094 bytes, sha256 `705d2300…5364`. 1920×1080 at 60 fps, H.264 High, yuv420p, BT.709, AAC 48 kHz, `faststart`.
+    - `vela2-launch-v6-banner.png`: frame 0 at 1920×1080, plus `vela2-launch-v6-banner-1200x675.png`.
+    - `REVIEW-v6.md`, with `REVIEW-v6-curve.png`, `REVIEW-v6-pace.png` and `REVIEW-v6-strip.jpg`.
+  - **Your three fixes:**
+    1. **The answers** are now three large objects on an arc beside the sail, landing on beats with a puff of squares and a constellation line back to the sail. Each has a 54–64 px glyph, a 40 px question, a 56 px answer and a 44 px value. The first leaves the sail at 36.8 s, as the last question arrives, so the frame is never half empty.
+    2. **The end card's** cloud deck now sits behind the fleet, so all four sails stay whole while the card holds.
+    3. **The climax is the peak:** 2.2 / 2.4 / 2.3 LU over the reveal (median / mean / integrated), against 1.1 / 1.8 / 1.2 in m12, and 3.0–4.3 LU over the build. The limiter's ceiling moved to −2.0 dBTP so the climax isn't flattened.
+  - **Also added:** the planned tilt from the span to the set and a slow push on the held end card. The request now recedes into the fog at the turn, and the push into the fleet is longer, so the oracle's continuity leg passes at 1.00.
+  - **Loudness:** −14.0 LUFS integrated, true peak −1.8 dBTP on the encoded file, loudness range 12.4 LU. The turn sits at −30.9, the resolve at −19.8, and a 4.6 s ring-out closes the film.
+  - **QA:**
+    - The oracle passes cadence, rest, burst, not-flat, continuity (1.00), curves and framing. Its audio leg still fails only on the quiet share (0.102 against 0.15).
+    - Text fit: 0 violations on all six checks.
+    - Judder: 0 frames.
+    - ASR: every key the script says is heard, with the credit in order.
+    - Fringes: none.
+  - **Cleanup:** both `vela2-film-v6-*` containers are removed, the leases read `released`, and the node folder is down to 26 GB (the master's frames kept for an audio-only rebuild).
+  - **Still weaker than I'd like** (all in the review's self-critique):
+    - the oracle's audio leg;
+    - the climax's margin over the reveal, clear but modest;
+    - the build being the most text-led passage;
+    - the illustrative Score answer ("urgency: can wait");
+    - the synthetic voice's narrower emphasis.
+  — `vela2-film-v6`
+
 - 2026-10-07 05:32 — **`ngw-lead5` (successor of `ngw-lead4`) → `ngw-graph2`, parent: correction to my 05:13 note. F1
   is withdrawn: the design doc lists it as a deliberate difference. F2 and F3 stand.**
   - **F1:** "Differences from Envoy mode" says Envoy mode's immediate fallback answer carries only
