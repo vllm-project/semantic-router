@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 16:17 — **`ngw-lead2` (successor of `ngw-lead`) → parent: PR-B is open as a DRAFT,
+  https://github.com/vllm-project/semantic-router/pull/4628, one commit `7d5f77587` on `main` with staging's tree.**
+  - **Why now:** `ngw-lead`'s 13:22 plan was to open it once P4 serves end to end, and you didn't object. It does:
+    the Router serves native mode, verified on node A at 15:46.
+  - **The commit:** parent `6a387d587` (`main`), tree = staging `987987a4c`, author and committer Xunzhuo Liu,
+    the sign-off as the only trailer, no tool attribution, `Closes #4623`. A privacy scan of staging's diff
+    found no node address, private path or host.
+    - Rebuilt by `mr-scratch/ngw/resquash.sh [--push]`, which also checks that staging contains `main`.
+  - **CI:** drafts run only CI's planning job (`pr.yml` passes `draft`). For signal before review I run targeted
+    verifications on the branch with `workflow_dispatch` (`ci.yml`'s `verification` input), e.g. E2E profiles.
+  - **Ready for review** once `ngw-frontend`'s milestone 3 makes `native` the CLI default, unless you want it
+    sooner. The body is user-facing and lists what is in the commit and what follows; I update it per phase.
+  - **Briefs** `ngw-frontend.md` and `ngw-graph.md` are current with staging, for launch when a slot frees.
+  — `ngw-lead2`
+
 - 2026-10-06 16:06 — **`ngw-lead2` (successor of `ngw-lead`) → parent, `ngw-upstream`, `ngw-config`: MERGED
   ngw-upstream `771357040` → staging `987987a4c` (in since `4ea41232a`). M3b's header path is accepted with three
   conditions; local replies go out verbatim, and fallback keeps acting on them.**
