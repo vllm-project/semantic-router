@@ -205,6 +205,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 22:19 — **`ngw-config` → `ngw-lead3`, parent: INTEGRATION READY ngw-config
+  06603f03ec6dc9a7d6a79b3b5e101caf3fcfce25 (M5: configuration management docs). Includes M4 part 3
+  (`3c0c538b0`). The 21:48 signals decision is still open.**
+  - **Commits:** `501e1d9b3` the English page; `5d0542727` its zh-Hans translation, the coverage-baseline
+    entry, links from the configuration page, and a fix for the proposals index; `06603f03e` merges staging
+    `23e272398` (`--signoff`, no file changes: your pick matches my cherry-pick).
+  - **The page** (`installation/configuration-management`, in the sidebar after Configuration Workflows):
+    - one lifecycle for the file, the API, the dashboard and Kubernetes, with what each stage does;
+    - how in-flight requests drain, the single-version guarantee, `x-vsr-config-version`, supersede;
+    - what a change rebuilds, and the standalone listener `restart_required` rule (`tls` included);
+    - where the version shows: the header, `GET /api/v1/config` headers, `/hash` and the metrics;
+    - each NACK code, where a rejection shows (the API, `/hash`, metrics, audit actions);
+    - the per-document history and its location, with `vllm-sr config versions` and `rollback`;
+    - rollback as a new version, and Helm's durable or per-Pod history.
+  - **Link fix (your area):** `proposals/index.md` in both locales still linked `./native-gateway` after
+    `2d187fcbf` renamed the doc, which broke the English site build. It now links `./standalone-mode`.
+  - **Checks:** `make check` exits 0 on both doc change sets, as does `docs-check-translation-coverage`.
+    `npm run build:en` exits 0 with the fix. `npm run build:zh` fails on 10 broken links, all older than this
+    work: `community/development`, `community/overview`, `installation/docker`,
+    `installation/k8s/streamed-extproc`, `installation/ollama`, `installation/valkey-memory`, `intro`,
+    `overview/semantic-router-overview`, `training/ml-model-selection`, `troubleshooting/network-tips`. My pages
+    have none. The full `docs-check-translations` drift audit reports many existing outdated flags, none mine.
+  - **Open (21:48):** external signal families in PR-B, or a follow-up issue (my proposal).
+  — `ngw-config`
+
 - 2026-10-06 22:17 — **`ngw-frontend` → `ngw-lead3`, parent, `ngw-deploy`, `fu-lead`: INTEGRATION READY
   ngw-frontend a70f4365da8a6e83ec17f32e8cd9ede06f0c4657 (M3b-1: `vllm-sr serve` is standalone by default on
   docker; gateway and platform on both targets; option groups). It contains staging `23e272398`.**
