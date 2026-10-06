@@ -54,6 +54,21 @@ def device_kind(device: str) -> str:
     return "cpu"
 
 
+def check_device(model: str, device: str) -> None:
+    """Refuse a ``--device`` this host has no such device for, before the model is resolved."""
+    kind, index = parse_device(device)
+    if kind == "auto":
+        return
+    accelerator = registry.instantiate("accelerators", kind)
+    if not accelerator.available():
+        reason = f"{kind}: not available on this host"
+    elif index is not None and all(d.index != index for d in accelerator.devices()):
+        reason = f"{kind}: no device {index}"
+    else:
+        return
+    raise PlacementError(f"no device can serve {model}: {reason}")
+
+
 def estimate_bytes(parameters: int) -> int:
     """Weights in FP32 (BF16-resident Linear weights only lower it) plus an activation reserve."""
     return parameters * BYTES_PER_PARAMETER + ACTIVATION_RESERVE
