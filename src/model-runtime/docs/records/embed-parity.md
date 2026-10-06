@@ -7,12 +7,16 @@ thresholds.
 
 - **Date:** 2026-10-05 (the legacy comparison and the stack B goldens); the
   golden answers at the head on 2026-10-06; the Transformers, Omni-golden and
-  reduced-copy rows are from 2026-10-04.
+  reduced-copy rows are from 2026-10-04. The Omni rows on the native engine
+  ([#4619](https://github.com/vllm-project/semantic-router/issues/4619)) are
+  from 2026-10-06.
 - **Packages:** `vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf`,
   `vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41c`,
-  `Qwen/Qwen3-Embedding-0.6B@97b0c614`; Omni bundles prepared from
-  `vllm-sr/Vela-1.0-Omni-Nano@2ff2d663` (bundle `c7cc9a5b26c0…`) and
-  `vllm-sr/Vela-1.0-Omni-Mini@801bae3a` (bundle `97d6b2b1045e…`).
+  `Qwen/Qwen3-Embedding-0.6B@97b0c614`; `vllm-sr/Vela-1.0-Omni-Nano@2ff2d663`
+  and `vllm-sr/Vela-1.0-Omni-Mini@801bae3a`, whose published weights the
+  native engine serves. The Omni bundles prepared from them (bundle
+  `c7cc9a5b26c0…` and `97d6b2b1045e…`) hold the official reference goldens and
+  serve the ONNX Runtime rows.
 - **CPU:** 16 vCPUs of an AMD EPYC 9575F (Zen 5) host in one cgroup cpuset,
   PyTorch 2.10 (oneDNN, MKL), ONNX Runtime 1.30, Transformers 5.18.
 - **ROCm:** one AMD Instinct MI325X (gfx942), PyTorch 2.12 on ROCm 7.2, the
@@ -60,6 +64,23 @@ the per-graph pools change no value: every Omni input runs its graphs alone,
 and the family's test checks that a batch answers each input as it answers
 alone.
 
+**Omni on the native engine (#4619),** the same legacy values against the
+runtime at `2afe0f878` serving the published weights (node B vCPUs 64–79,
+memory on their NUMA node, PyTorch 2.10.0):
+
+| Job | Inputs | Worst cosine | Max \|Δ\| | Passes |
+| --- | --- | --- | --- | --- |
+| Omni Nano text | 26 | 0.9999999999996 | 2.4e-07 | yes |
+| Omni Nano image | 3 | 0.9999999999987 | 3.6e-07 | yes |
+| Omni Nano audio | 4 | 0.9999999999660 | 1.3e-06 | yes |
+| Omni Mini text | 26 | 0.9999999999878 | 6.6e-07 | yes |
+| Omni Mini image | 3 | 0.9999999999986 | 2.0e-07 | yes |
+| Omni Mini audio | 5 | 0.9999999998042 | 2.6e-06 | yes |
+
+The native engine runs each image and audio input alone, and texts in one
+packed batch only where the load-time probe finds the model batch-invariant
+(design section 8.5).
+
 ## Golden answers at the head
 
 At `c05aa8b77` (this branch with staging `58cbe432e` merged),
@@ -73,6 +94,16 @@ golden file (`registry/golden_answers_vela1.json`, `_omni.json`):
 | Qwen3-Embedding | 2,048 / 2,048 values equal | matched, max \|Δ\| 2.6e-7 |
 | Omni Nano | CPU only | matched, max \|Δ\| 1.1e-7 |
 | Omni Mini | CPU only | matched, max \|Δ\| 7.2e-8 |
+
+**Omni on the native engine (#4619).** The `cpu` answers above were recorded on
+the ONNX Runtime bundle. The native engine moves them by at most 4.8e-7 (Nano)
+and 2.9e-7 (Mini), inside the CPU tolerance (readiness `matched`, 1,152 and
+2,304 values), so `_omni.json` is re-recorded from the native engine, in the
+CPU router image `1ff74ff22` on node D (PyTorch 2.10.0, 16 threads). The
+`rocm` answers are new: the ROCm router image `1ff74ff22` on node D GPU6, one
+process to record and a fresh one that repeats every value exactly (1,152 /
+1,152 and 2,304 / 2,304). They lie within 4.8e-7 of the CPU answers. No other
+golden file changes.
 
 - **ROCm:** the router's ROCm image, `Dockerfile.extproc` at `a580be6b9` (`ACCELERATOR=rocm`), on node D GPU1;
   readiness `matched` in both processes, and every recorded value equals the
@@ -125,14 +156,40 @@ rerank sets of one query with eight documents.
 
 ROCm, whose bar is cosine ≥ 0.9995, stays inside the CPU bar too.
 
-## Omni against the bundle goldens (CPU)
+## Omni against the official reference goldens
 
 The goldens are the official reference's outputs recorded when the bundle
 was prepared (`reference_parity.json`, `golden/`). Every stage is compared,
-not only the final vector (runtime at `1c0c95497`; the later Omni changes,
-audio preprocessing that builds each resampler once and skips Whisper frames
-that hold only padding, are bit-identical by test, and the legacy comparison
-above checks the head end to end).
+not only the final vector.
+
+**On the native engine (#4619),** `tools/embed_parity.py omni --snapshot`
+serves the published files in the router images built from `1ff74ff22` on
+node D: the CPU image on 16 vCPUs (PyTorch 2.10.0), and the ROCm image on
+GPU6 (one MI325X, PyTorch 2.12.0+git6bbd260). The bundles that hold the
+goldens were exported again there with `tools/models/vela_omni/Dockerfile`;
+their graphs and goldens are byte-identical to the earlier export.
+
+| Stage | Nano CPU | Nano ROCm | Mini CPU | Mini ROCm |
+| --- | --- | --- | --- | --- |
+| Cases | 12 | 12 | 15 | 15 |
+| Token IDs, pixels, decoded PCM | identical | identical | identical | identical |
+| Resampled audio, max \|Δ\| | 1.2e-7 | 1.2e-7 | 1.2e-7 | 1.2e-7 |
+| Whisper log-mel, max \|Δ\| | 7.5e-5 | 7.5e-5 | 7.5e-5 | 7.5e-5 |
+| CLAP log-mel (dB), max \|Δ\| | 1.1e-2 | 1.1e-2 | 1.7e-2 | 1.7e-2 |
+| CLAP window embeddings, max \|Δ\| | 1.5e-6 | 1.5e-6 | 4.4e-6 | 4.4e-6 |
+| Final embeddings, worst cosine | 0.99999999998522 | 0.99999999998558 | 0.99999999984570 | 0.99999999984470 |
+| Final embeddings, max \|Δ\| | 8.9e-7 | 8.1e-7 | 1.9e-6 | 1.8e-6 |
+
+Both devices pass the CPU bar (cosine ≥ 0.99999, max |Δ| ≤ 1e-4), the GPU's
+bar being cosine ≥ 0.9995. Tower by tower, on the real weights against
+Transformers 4.57.6 and PyTorch 2.8 on the CPU, BERT, Qwen3, both Whisper
+encoders and HTSAT are bit-identical and SigLIP is within 1.9e-6, a spread
+MKL's one-row products already show on identical inputs at different buffer
+alignments; `tests/test_omni_towers.py` checks each tower on random weights.
+
+**On the ONNX Runtime bundle,** the runtime at `1c0c95497` (the later Omni
+changes, audio preprocessing that builds each resampler once and skips Whisper
+frames that hold only padding, are bit-identical by test):
 
 | Stage | Nano (12 cases) | Mini (15 cases) |
 | --- | --- | --- |
@@ -180,4 +237,4 @@ oneDNN's pre-packed FP32 linears are the exact path's numbers within 1.5e-5
 and twice as fast, so the `exact` path itself now runs them on x86 CPUs (the
 `task_heads` kernel variants, as for the classify heads), which leaves a
 `float32-packed` copy nothing to gain. Qwen3-Embedding runs the decoder path,
-which loads no copy; Omni has no copy (its graphs are the bundle's).
+which loads no copy; Omni runs no reduced copy.
