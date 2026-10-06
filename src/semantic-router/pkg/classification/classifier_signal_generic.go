@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
 const (
@@ -28,29 +29,15 @@ func (c *Classifier) evaluateGenericClassifierSignals(
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	var waitGroup sync.WaitGroup
+	var rules []config.ClassifierSignalRule
 	for _, rule := range c.Config.ClassifierRules {
-		if !signalRuleUsed(usedSignals, config.SignalTypeClassifier, rule.Name) {
-			continue
+		if signalRuleUsed(usedSignals, config.SignalTypeClassifier, rule.Name) && c.genericClassifiers[rule.Name] != nil {
+			rules = append(rules, rule)
 		}
-		classifier := c.genericClassifiers[rule.Name]
-		if classifier == nil {
-			continue
-		}
-		waitGroup.Add(1)
-		go func(rule config.ClassifierSignalRule, classifier labelClassifier) {
-			defer waitGroup.Done()
-			c.evaluateGenericClassifierRule(
-				ctx,
-				results,
-				mu,
-				text,
-				rule,
-				classifier,
-			)
-		}(rule, classifier)
 	}
-	waitGroup.Wait()
+	modelservice.Fan(ctx, len(rules), func(i int) {
+		c.evaluateGenericClassifierRule(ctx, results, mu, text, rules[i], c.genericClassifiers[rules[i].Name])
+	})
 	elapsed := time.Since(start)
 	mu.Lock()
 	results.Metrics.Classifier.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0

@@ -53,10 +53,11 @@ including special tokens. Each forward uses at most 512 tokens, with 255 content
 tokens of overlap. The model tokenizer defines the windows; character estimates
 and text re-tokenization at window boundaries do not determine coverage.
 
-Native Candle and ORT preserve original UTF-8 offsets, choose one observation per
-token by its surrounding context, then decode BIO entities once. Overlap does not
-double-count input usage or entity confidence. This guarantees coverage of admitted
-tokens, not detection accuracy or the quality of a single 32K forward.
+The [model runtime](../../../model-runtime/guides/pii.md) reports spans as
+character offsets into the original text, chooses one observation per token by
+its surrounding context, then decodes BIO entities once. Overlap does not
+double-count input usage or entity confidence. This guarantees coverage of
+admitted tokens, not detection accuracy or the quality of a single 32K forward.
 
 An explicit module budget, backend, window, or recipe binding keeps its own
 policy. For example, a deployment with `input: {max_tokens: 8192, overflow: reject}`
@@ -69,7 +70,6 @@ global:
     modules:
       classifier:
         pii:
-          use_mmbert_32k: true
           max_sequence_length: 65536  # Complete text budget, including special tokens.
           window: {size: 32768, overlap: 256}
 ```

@@ -114,26 +114,24 @@ and one/two/three CLAP windows. It checks full embedding shape, finite values,
 absolute/relative error and cosine similarity. The receipt includes source
 identity, dependency versions, producer file hashes, and executed cases. GPU
 qualification requires the requested execution provider with CPU fallback
-disabled; the native model tests additionally audit the execution profile.
+disabled.
 
-Run native source-reference parity explicitly with an artifact retaining goldens
-and `ORT_DYLIB_PATH` pointing to the installed ONNX Runtime library:
+The model runtime's `multimodal_embedding` family serves the bundle on its
+`onnxruntime` engine. Check a bundle exported with its goldens kept
+(`VELA_OMNI_KEEP_GOLDEN=1`) against the official source reference, stage by
+stage and end to end, through the runtime's request path:
 
 ```sh
-VELA_OMNI_ARTIFACT=/models/exported-nano \
-go -C onnx-binding test ./instance -run '^TestPublishedOmniParity$' -count=1 -v
-VELA_OMNI_ARTIFACT=/models/exported-mini \
-go -C onnx-binding test ./instance -run '^TestPublishedOmniFullContext$' -count=1 -v
+python3 src/model-runtime/tools/embed_parity.py omni \
+  --bundle /models/exported-nano --output nano-parity.json
 ```
 
-The second command requires a Mini artifact exported with `--full-context`, or
+Mini 32K qualification needs a Mini bundle exported with `--full-context`, or
 `VELA_OMNI_FULL_CONTEXT_REFERENCE` naming a separately generated matching source
-reference. These explicit reference tests are excluded from model-free Core;
-routine CI does not claim Mini 32K qualification. The image-calibration CI lane
-prepares Nano once, checks export parity, and uses that same immutable artifact
-for owned image classification, prepared inventory, cache/memory integration,
-and the complete frozen routing calibration. Candle's legacy multimodal lane
-retains its separate original binding compatibility tests.
+reference; routine CI does not claim it. The image-calibration CI lane prepares
+Nano once, checks export parity, and uses that same immutable bundle for image
+classification, cache and memory integration, and the complete frozen routing
+calibration.
 
 `bundle.py` uses only Python's standard library to verify the complete inventory
 and receipt and to stage a new directory atomically. It rejects missing graphs,

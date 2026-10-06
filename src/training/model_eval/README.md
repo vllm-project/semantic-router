@@ -87,10 +87,11 @@ Useful options:
 Use underscores in option names, as shown by
 `python mom_collection_eval.py --help`.
 
-Download evaluation native snapshots with `make download-eval-models`. Production
-`make download-models` continues to use the Router's downloader, including its
-runtime artifact validation. Existing `download-mmbert-*` targets remain legacy
-utilities; they do not download Vela. Legacy adapters must declare an available
+Download evaluation native snapshots with `make download-eval-models`. In
+production, the model runtime downloads each model it serves on first start, and
+the Router provisions only label maps, custom-registry models and the Omni
+bundles. Existing `download-mmbert-*` targets remain legacy utilities; they do not
+download Vela. Legacy adapters must declare an available
 base and save every newly initialized task-head parameter; otherwise evaluation
 rejects them instead of scoring a random head.
 

@@ -2,38 +2,35 @@
 
 ## Overview
 
-`decision` asks a decision model a typed question about the request and turns
-the answer into a routing fact. The question is a System One question: a
-Choice among named options, a Noul (a yes/no probability) or a Score on an
-ordered scale. The model runs in the built-in model runtime through a
-`model_runtime` deployment, which the Router starts and supervises, or
-attaches to.
-
-All decision questions of one request that target the same deployment travel
-in one call, so the runtime answers them together.
+`decision` asks a decision model a typed question about the request and turns the answer into a routing fact.
+You write the question in plain language: pick one of a few options
+(`choice`), yes or no (`noul`), or a level on a scale (`score`). The model
+runs in the [built-in model runtime](model-runtime/overview.md),
+which the router starts for you.
 
 ## Key Advantages
 
-- asks open, per-route questions in plain language, without training a classifier per label set
-- returns calibrated probabilities and expected levels that decisions can threshold
-- fails open: a late or failed answer leaves the signal unknown, never the request
+- A new question works as soon as you write it; there is no classifier to train.
+- Answers come with probabilities, so routes can require a confident answer.
+- All decision questions of one request travel in one call to the model.
+- A late or failed answer makes the signal unknown; the request still goes through.
 
 ## What Problem Does It Solve?
 
 Fixed-label classifiers answer only the questions they were trained for. A
-decision model answers a new question as soon as it is written in the
-configuration, and the Router can route on the answer the same way it routes
-on any other signal.
+decision model answers "does this need step-by-step reasoning?" or "is this
+about our product?" from the question text alone.
 
 ## When to Use
 
-Use a decision signal for routing questions that need judgment about the whole
-request ("does this need multi-step reasoning?", "which kind of work is
-this?", "how difficult is it?"). Prefer heuristic signals for structural facts
-(token counts, keywords, modalities) and specialized learned signals (PII,
-jailbreak, domain) where they exist.
+Use it for questions that need judgment about the whole request. Prefer
+heuristic signals for structural facts (length, keywords, modality) and the
+specialized learned signals (domain, PII, jailbreak) where they already answer
+your question.
 
 ## Configuration
+
+Name the model as a `model_runtime` deployment, then ask it questions:
 
 ```yaml
 global:
@@ -42,9 +39,7 @@ global:
       decision-kai:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
-        revision: 881bee413681d80ebeac86afcda8b4138dae516e
-        device: auto          # auto, cpu, cuda:N or rocm:N
-        profile: exact        # exact (default) or an opt-in faster profile
+        device: auto
 
 routing:
   signals:
@@ -55,7 +50,7 @@ routing:
           type: noul
           instructions: Does answering this request need multi-step reasoning?
         predicate:
-          gte: 0.7            # on P(true); 0.5 when omitted
+          gte: 0.7
         timeout_ms: 1000
       - name: request_kind
         deployment: decision-kai
@@ -76,7 +71,7 @@ routing:
           instructions: How difficult is this request?
           levels: [Trivial, Moderate, Hard]
         predicate:
-          gte: 1.5            # on the expected level (0..2 here); required for score
+          gte: 1.5
 
   decisions:
     - name: hard-code
@@ -94,16 +89,19 @@ routing:
         - model: large-coder
 ```
 
-| Question type | Matches when | Published values |
+| Question type | Matches when | Value a route can read |
 | --- | --- | --- |
-| `noul` | P(true) satisfies `predicate` (default `gte: 0.5`) | `decision:<name>` = P(true) |
-| `score` | the expected level satisfies `predicate` | `decision:<name>` = expected level |
-| `choice` | a condition's `label` is the arg-max option, and its probability satisfies `predicate` when one is set | `decision:<name>:<key>` = P(key), `decision:<name>` = P(chosen) |
+| `noul` | the probability of yes meets `predicate` (default `gte: 0.5`) | `decision:<name>` = P(yes) |
+| `score` | the expected level meets `predicate` (required; levels count from 0) | `decision:<name>` = expected level |
+| `choice` | a condition's `label` is the chosen option, and its probability meets `predicate` when one is set | `decision:<name>:<key>` = P(key), `decision:<name>` = P(chosen) |
 
-A condition may add its own `predicate`, which reads the published value; for
-a Choice condition with a `label`, it reads that option's probability.
+A condition may add its own `predicate`; for a `choice` condition with a
+`label`, it reads that option's probability.
 
-When the runtime is starting, overloaded or too slow, the signal is unknown.
-Set `rules.on_unknown` on the decision, or `on_error: match | no_match` on the
-condition, to choose what an unknown answer means. Matched decision signals
-are reported in the `x-vsr-matched-decision-model` response header.
+While the model is loading, overloaded or slower than `timeout_ms`, the signal
+is unknown. `rules.on_unknown` on the decision, or `on_error: match | no_match`
+on a condition, decides what an unknown answer means. Matched decision signals
+are listed in the `x-vsr-matched-decision-model` response header.
+
+To choose a model, size and hardware, or to run the model on your own GPU
+server, see [Decision models](../../../model-runtime/guides/decisions.md).

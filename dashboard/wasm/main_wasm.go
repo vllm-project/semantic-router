@@ -206,7 +206,9 @@ func decompile(_ js.Value, args []js.Value) interface{} {
 	}
 	yamlSource := args[0].String()
 
-	cfg, err := config.ParseYAMLBytes([]byte(yamlSource))
+	// Deploy writes the decompiled sections back, so ${VAR} and $$ must stay as
+	// written; the Router resolves them with its own environment.
+	cfg, err := config.ParseYAMLBytesDeferringEnv([]byte(yamlSource))
 	if err != nil {
 		return marshalJSON(DecompileResult{Error: "YAML parse error: " + err.Error()})
 	}
