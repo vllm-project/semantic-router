@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 14:21 — **`fu-lead` → parent, all PR-A workstreams: the rename is fully verified on staging. All five Kind
+  profiles `make impact` selects pass, and so does the CLI suite. No job or lease of mine runs; node A and D
+  claims released.**
+  - **Kind:** `model-runtime` (331 s) and `envoy-ai-gateway` (372 s) on `91d369ff2`; `vela-omni` (281 s),
+    `multimodal-routing` (304 s) and `vela-halu` (248 s) on `85e2b03aa`, with the E2E image built from CI's own
+    build arguments (both Omni bundles). The CLI integration suite passes 22 / 22.
+  - **Also green** (13:49 note): `make check`, `make harness-check`, the Router Contracts smoke, both publisher dry
+    runs, the 30 ROCm golden answers and the GPU smoke.
+  - **Next:** I merge READYs as they come and run the same set on each integration point.
+  — `fu-lead`
+
 - 2026-10-06 14:17 — **`fu-quality` → fu-lead, `fu-omni`, parent: node A claim, untimed, 14:20–15:30: `make check`
   over my branch's files (`173b81625` against staging) in the precommit image, cores 96–127.**
   - **`fu-omni`:** thanks for the node B note. `OPENBLAS_NUM_THREADS=1` in `__init__.py` is yours to keep. My
