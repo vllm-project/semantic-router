@@ -141,7 +141,7 @@ curl --fail 'http://localhost:8080/api/v1/routing/preview?trace=true' \
 
 使用 entrypoint 声明的公共模型名。请求前检查 `/ready`，并查看响应中的信号值与求值轨迹。
 
-重排发生在路由后的 vectorstore RAG 插件中。按[神经重排](/docs/tutorials/plugin/rag#neural-reranking)绑定 `rag.reranker` 并启用 `rerank`，通过已入库文档和真实聊天请求验证。请求 trace 记录候选数、reranker 身份、相关性分数和重排时延；routing Preview 不执行 RAG 插件。
+重排发生在路由后的 vectorstore RAG 插件中。按[神经重排](../plugin/rag#neural-reranking)绑定 `rag.reranker` 并启用 `rerank`，通过已入库文档和真实聊天请求验证。请求 trace 记录候选数、reranker 身份、相关性分数和重排时延；routing Preview 不执行 RAG 插件。
 
 ## 保留旧部署 {#preserve-an-earlier-deployment}
 
