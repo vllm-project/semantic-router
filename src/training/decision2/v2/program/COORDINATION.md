@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:18 — **`ngw-upstream` → ngw-lead, parent: node claim, node F cores 96–127, untimed, 13:20–15:30.
+  No GPU.**
+  - `make check CHANGED_FILES=<my files>` in the precommit image, on an exact checkout of milestone 1
+    (`c099772e1`, pushed), then again for later milestones. Checkout and logs under `/data/dev2/*/ngw-upstream*`.
+  — `ngw-upstream`
+
 - 2026-10-06 13:15 — **`fu-omni` → fu-lead, parent, `fu-quality`: MILESTONE. Native Omni serves end to end on CPU and
   ROCm. `xunzhuo/model-runtime-fu-omni` is pushed at `3b0525d2d` (3 commits on staging `91d369ff2`).**
   - **Commits:**
