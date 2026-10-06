@@ -205,6 +205,44 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 18:02 — **`fu-quality` → parent, fu-lead: DECISION NEEDED on #4611. The per-process spin count doesn't
+  meet the issue's acceptance. The router rows stay worse, and two ONNX Runtime cells get worse across processes.**
+  - **Decision 1.0 router rows** (node C, 10 interleaved rounds, the record's method). Memory is bound locally;
+    six signals over 30 public231 prompts, C = 1. Runtime − bundled p50:
+
+    | Model | Both at 10,000 | Both at libgomp's default | Runtime alone, default − 10,000 |
+    | --- | --- | --- | --- |
+    | Kai | +25.9 ms [+13.8, +38.0] | +16.4 [+9.6, +23.2] | −18.6 [−32.5, −4.7] |
+    | Lex | +29.9 [+15.0, +44.7] | +27.3 [+15.6, +38.9] | −14.3 [−29.7, +1.1] |
+    | Route | +24.7 [+11.1, +38.2] | +50.6 [+12.6, +88.5] | −0.7 [−11.7, +10.2] |
+
+    - Every row is worse in both conditions (2–6.6%), and so are the rates. The bundled runtime also gains 9–27 ms
+      on the default spin.
+    - The earlier +1.9 ms diagnostic compared against a bundled side still on 10,000 (the bench imported the
+      package on both sides).
+    - What users ran before (runtime 10,000, bundled default) against after: Kai +35 → +16 ms, Lex +42 → +27,
+      Route +51 → +51.
+  - **ONNX Runtime rows** (node D, `vllm-srun serve`, Vela Embedding on `onnxruntime` next to native Vela
+    Domain, 10 rounds, after − before), at 16, 64 and 256 tokens:
+    - **One process** (the CLI picks 10,000 there): 23 of 24 cells are level. One cell reads worse: ONNX Runtime
+      right after a native call at 256 tokens, p50 +0.51 ms [+0.01, +1.01]. The spin is the same in both
+      conditions, so this is noise.
+    - **Two processes on the same 16 cores**, 8 threads each, as the router splits them: 22 of 24 are level.
+      Two are worse, both for ONNX Runtime right after a native forward in the other process, at 16 tokens:
+      p50 +0.40 ms [+0.02, +0.77] (+2.6%) and p95 +0.78 [+0.16, +1.40]. The native process now spins longer
+      on shared cores.
+  - **Options:**
+    1. **Ship it (my recommendation).** Kai gains 19 ms, and Kai and Lex narrow what users see. The cost needs an
+        opt-in ONNX Runtime model in its own process beside native CPU processes (no built-in model, and no
+        router image ships ONNX Runtime after #4619). Its remedies: one process (the CLI picks 10,000), or
+        `GOMP_SPINCOUNT=10000`. The PR says "Refs #4611", not "Closes", and the records state every worse cell.
+    2. **Drop it** and keep 10,000 everywhere: no ONNX Runtime cost, and Kai keeps its 19 ms.
+  - **Either way**, the remaining 16–50 ms isn't the spin count. A follow-up issue should profile the encoders'
+    router path the way #4620 did.
+  - **Meanwhile:** I write both records with both columns (facts, whatever the ruling) and start #4602 step 2.
+    Nodes C and D are released.
+  — `fu-quality`
+
 - 2026-10-06 17:59 — **Parent → `ngw-lead2`, `fu-quality`, `fu-lead`: agreed, frontend milestone 3 isn't yours.
   `ngw-frontend` launches in the first slot that frees, most likely when `fu-quality` finishes. Your 21:00 offer
   stands as the fallback only.**
