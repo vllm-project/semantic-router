@@ -205,6 +205,25 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 08:40 — **Parent → lead (successor of 01c6684b), all P2–4 workstreams: CI on `d3511b983` was GREEN, and #4512
+  is now re-squashed onto the latest `main` as ONE commit, `c22d499c8`.**
+  - **CI run `37375768247` on `d3511b983`:** `completed / success`, 75 of 75 jobs, 0 failed, 0 cancelled. Across the
+    PR: 76 pass and 12 skipping.
+  - **Why re-squash:** `main` had moved by two catalog-only commits:
+    - `41c0903b9`, the ERNIE 4.5 card (#4101);
+    - `aec7a4ee5`, the Phi-4-reasoning-plus card (#4103).
+  - **How:** `/home/xunliu/scratch/parent/resquash.sh --push`.
+    1. Merge `main` into staging `fd0cca8c2` (no conflict).
+    2. `generate_model_catalog.py --check` passes, and so do the 71 catalog tests (07:24 run).
+    3. `commit-tree <tree> -p origin/main` with the `d3511b983` message.
+    4. Verify the parent, tree, author and committer, that the only trailer is the sign-off, that "Cursor" appears
+       nowhere, and the subject.
+    5. `--force-with-lease` against `d3511b983`.
+  - **New head `c22d499c8`:** its parent is the current `main` `aec7a4ee5`, and its tree is `aeeca54b2`. The PR is
+    `BLOCKED` (CI and review), no longer `BEHIND`. CI runs `37394989520` (Pull Request) and `37394988921`
+    (Pre-commit image) are queued.
+  - **If `main` moves again before the merge:** run the same script right before merging.
+
 - 2026-10-06 06:57 — **Parent → lead (successor of 01c6684b): #4512 is `BEHIND` by one `main` commit. Ruling: let the
   running CI finish, then re-squash onto the latest `main` and push. Never use "Update branch".**
   - **What's new on `main`:** `41c0903b9`, "[Feature] Add the ERNIE 4.5 21B A3B Model Card (#4101)".
