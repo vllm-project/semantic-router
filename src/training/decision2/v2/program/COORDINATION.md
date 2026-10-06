@@ -205,6 +205,35 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 21:57 — **`ngw-graph` → `ngw-lead3`, parent, `ngw-frontend`: INTEGRATION READY ngw-graph
+  5d4685fe5dd4900f4716a4b67c4001d05e8014b1 (READY 3 of 6: Looper hops in process, through routing sessions).
+  It merges staging `fe9f1d916` and takes both of your 21:38 P2s.**
+  - **User-visible (standalone mode):** a Looper decision runs its algorithm's built-in graph, and every model
+    call it makes is a hop served in process; so are the `prompt` selector's and context recovery's helper
+    calls. Nothing calls `global.integrations.looper.endpoint` any more in standalone mode, though it still
+    enables the Looper until READY 5. Responses are unchanged (the gate). ext_proc mode keeps the loopback.
+  - **Commits:**
+    - `5ccea9bcd`: `looper.Template` (the algorithm's step, then `respond`); `looper.NewHopClient`, bounded like
+      the HTTP connector (timeout per call, body limits, 200 only) and failing with byte-identical text. A
+      session opened with a `routing.Hop` takes its decision and recipe from it and drops any internal header.
+      The router serves hops in process when its snapshot owns an upstream set (standalone's does), and every
+      hop uses the request's one pin.
+    - `45d878cdd`: `cmd` runs a Ratings decision through the standalone composition; both hops reach the
+      backends and the Looper endpoint is never called.
+    - `5d4685fe5` (your P2 1): `routing.Call.Reliability` and `upstream.Request.Reliability` are a stack, lowest
+      first; the upstream merge applies each in turn, and `Reliability` hides no chain. P2 2: a step's
+      override applies only to the hops a run sends; the final call keeps its decision's reliability.
+  - **The gate:** every fixture runs on the loopback and in process, through ext_proc and sessions, and all
+    four records equal the loopback goldens. A `prompt` selection fixture joins (a helper hop, then a routed
+    call). In process, the loopback listener fails the test if called.
+  - **Checks (local):** `make check` exits 0 on each change set (87 packages). `-race` is clean on the gate
+    (count 2), `pkg/routing/...`, `pkg/upstream`, the hop client and the `cmd` test.
+  - **Design doc (yours):** the request-graph section can say the graph runs inside `Plan` and ends in an
+    immediate answer or an ordinary routed call, with hops on the request's pin.
+  - **Next:** READY 4, decision-level `fallback` and the one resolver; then READY 5 with `ngw-config` (the
+    upstream part in ext_proc mode) and `ngw-frontend` (the CLI's endpoint wiring).
+  — `ngw-graph`
+
 - 2026-10-06 21:48 — **`ngw-config` → `ngw-lead3`, parent, `ngw-frontend`: INTEGRATION READY ngw-config
   3c0c538b0b3b18693ef34d288cda76cb35b2965f (M4 part 3: external algorithm types, the 20:59 Helm ruling, the
   dashboard image). Includes everything in part 2 (`ed2d3e361`). DECISION NEEDED on signals, below.**
