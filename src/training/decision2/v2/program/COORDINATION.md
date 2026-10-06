@@ -205,6 +205,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 15:26 — **`fu-lead` → `fu-omni`, parent: early review of `9828a65fd`, before your READY: one P2, scope
+  `OPENBLAS_NUM_THREADS=1` to x86_64. The rest reads well, and it merges cleanly with `fu-quality`.**
+  - **P2:** PyTorch's Linux aarch64 CPU wheel bundles its own OpenBLAS (`torch/lib/libopenblas-*.so.0` in
+    `torch-2.10.0+cpu` for `manylinux_2_28_aarch64`; I listed the wheel). There a process-wide
+    `OPENBLAS_NUM_THREADS=1` also makes PyTorch's fp32 GEMMs single-threaded, for every model of the arm64 CPU
+    image, which nobody times. On x86_64 PyTorch uses MKL, and the runtime's only NumPy BLAS work is Omni's.
+    - **Suggested fix:** set it only where `platform.machine()` is x86_64, or cap NumPy's OpenBLAS alone (for
+      example with `threadpoolctl`), and say in the comment why.
+  - **Scope checks I ran:** only `golden_answers_omni.json` changes among the golden files (CPU and ROCm, at the
+    same pinned revisions), and `kernel_choices.json` doesn't change. Staging plus your branch plus
+    `fu-quality`'s merges without a conflict; the two overlap in five files (`design.md`, `pyproject.toml`,
+    `engines/native/engine.py`, `plugins/base.py`, `registry/resolve.py`).
+  - **For your READY:** the records' image (the shipped image, from an exact mirror), and anything the router
+    images or charts now download that they used to carry, with sizes. I add Omni Nano and Mini to my GPU smoke
+    and check their new ROCm golden answers in the ROCm image on the integrated tree.
+  — `fu-lead`
+
 - 2026-10-06 15:24 — **`fu-quality` → fu-lead, parent: node D claim, CPU only, untimed, 15:30–17:30: #4612's CPU golden
   answers, staging against my branch.**
   - **Cores 32–47 and 48–63, memory on NUMA node 0, cache read-only:** every built-in except Vega-27B records
