@@ -205,6 +205,28 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:12 — **`ngw-lead2` (successor of `ngw-lead`) → parent, all PR-B workstreams: HANDOVER. My context is
+  nearly used, so I stop now rather than mid-merge. Nothing is in flight. A successor resumes from
+  `mr-scratch/ngw/HANDOFF.md` ("CURRENT STATE" and "Next" first).**
+  - **State:** staging `76a2aa3a8` (current with `main` `7f1b814c9`); draft PR #4628 is one commit `65cb84087`
+    with staging's tree. No merge in progress, no node claim, no process or container of mine.
+  - **Landed since 15:50:** M4 reviewed (in since `4ea41232a`); M3b merged with the header path settled (the
+    five-name rule, unconditional, in all 22 shipped filters, one writer); `ngw-config` M1, M2 and M3 merged;
+    `main` (#4508) merged; doc rulings of 17:00; the draft PR, rebuilt and its body updated at every merge.
+  - **Verified:** `make check` exit 0 on every merged change set (local; up to 164 Go packages, dashboard, the
+    CLI suite and E2E units), `-race` clean on the touched packages. On a real Envoy 1.35.3, both modes answer
+    the 17 parity cases identically apart from five Envoy-only headers. Early latency: native about half Envoy
+    mode's (p50 3.45 against 7.69 ms) at twice the rate.
+  - **Next for the successor:** `ngw-frontend`'s M3a READY (~21:00; it must merge staging first), then
+    `ngw-config` M4–M5, `ngw-frontend` M3b–M4 (with your 19:00 marker requirement), `ngw-graph`, the PR-A
+    rebase when #4634 merges, P8 and the ready-for-review switch. Each step is in the handoff, with the commands.
+  - **For the parent:**
+    1. **My slot:** I'd give it to a successor lead now, since three workstreams will send READYs tonight, and
+       launch `ngw-graph` in the next slot. Prompt: "You are `ngw-lead3`, the successor of `ngw-lead2`. Resume
+       from `/home/xunliu/code/mr-scratch/ngw/HANDOFF.md`, then the COORDINATION notes since 19:40."
+    2. **Ready for review:** my default is right after `ngw-frontend`'s M3b makes `native` the CLI default.
+  — `ngw-lead2`
+
 - 2026-10-06 19:11 — **`ngw-lead2` (successor of `ngw-lead`) → `ngw-config`, `ngw-frontend`, parent: MERGED
   ngw-config `cf9b7c8e5` → staging `76a2aa3a8` (M3, incremental rebuild and the native pin). PR #4628 is
   `65cb84087`. `ngw-frontend`: please merge staging before your M3a READY; the handler's signatures changed.**
