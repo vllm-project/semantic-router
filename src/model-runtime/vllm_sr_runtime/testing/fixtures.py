@@ -10,6 +10,7 @@ must never execute package code.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 from pathlib import Path
 from typing import Any
@@ -17,8 +18,10 @@ from typing import Any
 import torch
 
 from ..families.decision2 import package as pkg
-from ..families.decision2.readout import CandidateHead
+from ..heads.candidate import CandidateHead
+from ..plugins import registry
 from ..registry.artifacts import safetensors_elements, sha256_file
+from ..systemone import MAX_OPTIONS
 
 PAD = "<|endoftext|>"
 CORPUS = [
@@ -83,8 +86,8 @@ def qwen3_config(vocab: int) -> dict[str, Any]:
     }
 
 
-def qwen3_5_config(vocab: int) -> dict[str, Any]:
-    return {
+def qwen3_5_config(vocab: int, **overrides: Any) -> dict[str, Any]:
+    config = {
         "architectures": ["Qwen3_5TextModel"],
         "model_type": "qwen3_5_text",
         "attention_bias": False,
@@ -121,6 +124,46 @@ def qwen3_5_config(vocab: int) -> dict[str, Any]:
         "tie_word_embeddings": True,
         "vocab_size": vocab,
     }
+    config.update(overrides)
+    return config
+
+
+def modernbert_config(vocab: int, **overrides: Any) -> dict[str, Any]:
+    """A tiny Vela-shaped ModernBERT: global and local layers, YaRN rotary, a 4-token local half-window."""
+    config = {
+        "architectures": ["ModernBertModel"],
+        "model_type": "modernbert",
+        "attention_bias": False,
+        "bos_token_id": 2,
+        "cls_token_id": 1,
+        "eos_token_id": 1,
+        "global_attn_every_n_layers": 3,
+        "global_rope_theta": 160000,
+        "hidden_activation": "gelu",
+        "hidden_size": 64,
+        "intermediate_size": 96,
+        "local_attention": 8,
+        "local_rope_theta": 160000,
+        "max_position_embeddings": 32768,
+        "mlp_bias": False,
+        "norm_bias": False,
+        "norm_eps": 1e-5,
+        "num_attention_heads": 4,
+        "num_hidden_layers": 4,
+        "pad_token_id": 0,
+        "rope_scaling": {
+            "beta_fast": 32.0,
+            "beta_slow": 1.0,
+            "factor": 4.0,
+            "original_max_position_embeddings": 8192,
+            "rope_type": "yarn",
+            "truncate": True,
+        },
+        "sep_token_id": 1,
+        "vocab_size": vocab,
+    }
+    config.update(overrides)
+    return config
 
 
 def random_backbone(
@@ -144,7 +187,7 @@ def random_backbone(
         elif (
             name.endswith("dt_bias")
             or name.endswith("linear_attn.norm.weight")
-            or (backbone == "qwen3" and name.endswith("norm.weight"))
+            or (backbone in ("qwen3", "modernbert") and name.endswith("norm.weight"))
         ):
             value = torch.ones(parameter.shape) + value
         state[name] = value.to(torch.bfloat16) if name in linear else value
@@ -157,6 +200,31 @@ def save(tensors: dict[str, torch.Tensor], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     save_file(
         {name: tensor.contiguous() for name, tensor in tensors.items()}, str(path)
+    )
+
+
+def write_fixture(
+    output: str | Path, *, family: str, variant: str | None = None, seed: int = 0
+) -> Path:
+    """Write a tiny package of an installed ``family`` with the writer it names (``ModelFamily.fixture_writer``).
+
+    A writer module exposes ``write_fixture(output, variant, seed) -> Path``
+    and lists its variants in ``VARIANTS`` (the first is the default).
+    """
+    try:
+        target = registry.plugin("families", family).load().fixture_writer
+    except KeyError:
+        target = None
+    if not target:
+        raise ValueError(f"no fixture writer for the {family!r} family")
+    module = importlib.import_module(target)
+    variants = tuple(getattr(module, "VARIANTS", ()))
+    if variant is not None and variants and variant not in variants:
+        raise ValueError(
+            f"{family} fixtures are {', '.join(variants)}, not {variant!r}"
+        )
+    return module.write_fixture(
+        output, variant or (variants[0] if variants else None), seed
     )
 
 
@@ -186,7 +254,7 @@ def write_package(
         "backbone_model_type": "qwen3" if backbone == "qwen3" else "qwen3_5",
         "prompt_version": pkg.PROMPT_VERSION,
         "head_dim": head_dim,
-        "max_options": pkg.MAX_OPTIONS,
+        "max_options": MAX_OPTIONS,
         "parameter_dtype": "float32",
         "autocast_dtype": "bfloat16",
         "head_compute_dtype": "float32",

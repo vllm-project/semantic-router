@@ -4,7 +4,7 @@
 
 `kmeans` sends a request to the model assigned to its nearest learned cluster.
 
-**Implementation**: Rust via [Linfa](https://github.com/rust-ml/linfa) (`linfa-clustering`).
+**Implementation**: runs in the router itself, in Go.
 
 ## Key Advantages
 

@@ -23,7 +23,7 @@ func newHTTPClassifyHallucinationDetector(t *testing.T, handler http.HandlerFunc
 	cfg.ExternalModels = []config.ExternalModelConfig{{Name: "grounding", ModelName: "grounding-spans", ModelRole: config.ModelRoleClassification, ModelEndpoint: endpointForTestServer(t, server)}}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"grounding": {Provider: "http", ExternalModel: "grounding"}}
 	cfg.ModelBindings = map[string]config.ModelBinding{"hallucination_detector": {Deployment: "grounding", Adapter: config.RemoteClassifierProtocolHTTPClassify, Contract: config.RemoteClassifierContractTokenSpans}}
-	models, err := newClassifierModelRuntime(cfg, nil)
+	models, err := newClassifierModelRuntime(cfg, RecipeRuntimeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestHTTPClassifyHallucination_AnswerIsInputsAndOffsetsIndexAnswer(t *testin
 			"spans": []map[string]any{{"label": "HALLUCINATED", "start": 15, "end": 19, "text": "1999", "score": 0.91}},
 		})
 	})
-	result, err := detector.DetectWithNLI(context.Background(), contextText, question, answer)
+	result, err := detector.DetectWithExplanations(context.Background(), contextText, question, answer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestHTTPClassifyHallucination_OutsideLabelIsAnError(t *testing.T) {
 	detector := newHTTPClassifyHallucinationDetector(t, func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode([]map[string]any{{"label": "SUPPORTED", "start": 0, "end": 4, "text": "Café", "score": 0.5}})
 	})
-	_, err := detector.DetectWithNLI(context.Background(), "context", "q", "Café opened.")
+	_, err := detector.DetectWithExplanations(context.Background(), "context", "q", "Café opened.")
 	if err == nil || !strings.Contains(err.Error(), "outside label") {
 		t.Fatalf("err = %v", err)
 	}
@@ -87,7 +87,7 @@ func TestHTTPClassifyHallucination_TruncatedScanIsNotClean(t *testing.T) {
 	detector := newHTTPClassifyHallucinationDetector(t, func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"spans": []any{}, "truncated_at": 4})
 	})
-	_, err := detector.DetectWithNLI(context.Background(), "context", "q", "Café opened.")
+	_, err := detector.DetectWithExplanations(context.Background(), "context", "q", "Café opened.")
 	if err == nil {
 		t.Fatal("expected a partial-scan error, got a clean verdict")
 	}

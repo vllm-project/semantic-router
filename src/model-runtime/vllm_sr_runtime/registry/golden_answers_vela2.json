@@ -1,0 +1,406 @@
+{
+  "vllm-sr/Vela-2.0-0.3B": {
+    "answers": {
+      "cpu": {
+        "domain": {
+          "abstain_probability": 0.030883394851261563,
+          "choice": "health",
+          "confidence": 0.3321741609092661,
+          "probabilities": {
+            "health": 0.61908029626811,
+            "math": 0.2869061353588439,
+            "other": 0.09401356837304593
+          },
+          "type": "choice"
+        },
+        "halu": {
+          "noul": 0.9938214802378829,
+          "type": "noul"
+        },
+        "jailbreak": {
+          "noul": 0.486132825757937,
+          "type": "noul"
+        },
+        "pii": {
+          "noul": 0.9997741772243828,
+          "type": "noul"
+        },
+        "topics.billing": {
+          "noul": 0.004833187628064087,
+          "type": "noul"
+        },
+        "topics.medication": {
+          "noul": 0.3769105503501694,
+          "type": "noul"
+        },
+        "urgency": {
+          "confidence": 0.0,
+          "legend": {
+            "0": "Routine",
+            "1": "Needs prompt attention",
+            "2": "Critical"
+          },
+          "probabilities": {
+            "0": 0.4845903872208001,
+            "1": 0.24082953672645718,
+            "2": 0.2745800760527427
+          },
+          "score": 0.7899896888319426,
+          "type": "score"
+        }
+      },
+      "rocm": {
+        "domain": {
+          "abstain_probability": 0.030883468563277065,
+          "choice": "health",
+          "confidence": 0.3321733981996777,
+          "probabilities": {
+            "health": 0.6190798804364641,
+            "math": 0.2869064822367864,
+            "other": 0.09401363732674947
+          },
+          "type": "choice"
+        },
+        "halu": {
+          "noul": 0.9938214902417332,
+          "type": "noul"
+        },
+        "jailbreak": {
+          "noul": 0.4861321993330232,
+          "type": "noul"
+        },
+        "pii": {
+          "noul": 0.9997741755691524,
+          "type": "noul"
+        },
+        "topics.billing": {
+          "noul": 0.004833192146175605,
+          "type": "noul"
+        },
+        "topics.medication": {
+          "noul": 0.3769102332301367,
+          "type": "noul"
+        },
+        "urgency": {
+          "confidence": 0.0,
+          "legend": {
+            "0": "Routine",
+            "1": "Needs prompt attention",
+            "2": "Critical"
+          },
+          "probabilities": {
+            "0": 0.4845905209511528,
+            "1": 0.24082950136282466,
+            "2": 0.2745799776860226
+          },
+          "score": 0.7899894567348699,
+          "type": "score"
+        }
+      }
+    },
+    "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4"
+  },
+  "vllm-sr/Vela-2.0-0.8B": {
+    "answers": {
+      "cpu": {
+        "domain": {
+          "abstain_probability": 0.03004443609010088,
+          "choice": "health",
+          "confidence": 0.9439367544975296,
+          "probabilities": {
+            "health": 0.9703745967263607,
+            "math": 0.003187561044808107,
+            "other": 0.026437842228831155
+          },
+          "type": "choice"
+        },
+        "halu": {
+          "noul": 0.9967421274504847,
+          "type": "noul"
+        },
+        "jailbreak": {
+          "noul": 0.5631176720368465,
+          "type": "noul"
+        },
+        "pii": {
+          "noul": 0.9962581957167301,
+          "type": "noul"
+        },
+        "topics.billing": {
+          "noul": 7.507960362633285e-05,
+          "type": "noul"
+        },
+        "topics.medication": {
+          "noul": 0.9326076153192941,
+          "type": "noul"
+        },
+        "urgency": {
+          "confidence": 0.18070467358817055,
+          "legend": {
+            "0": "Routine",
+            "1": "Needs prompt attention",
+            "2": "Critical"
+          },
+          "probabilities": {
+            "0": 0.7717967793982892,
+            "1": 0.07327558059354092,
+            "2": 0.15492764000817
+          },
+          "score": 0.3831308606098809,
+          "type": "score"
+        }
+      },
+      "rocm": {
+        "domain": {
+          "abstain_probability": 0.029708713033486038,
+          "choice": "health",
+          "confidence": 0.9438144319238722,
+          "probabilities": {
+            "health": 0.9702899965428174,
+            "math": 0.003234438838237201,
+            "other": 0.02647556461894533
+          },
+          "type": "choice"
+        },
+        "halu": {
+          "noul": 0.9967315319220758,
+          "type": "noul"
+        },
+        "jailbreak": {
+          "noul": 0.5598270492172556,
+          "type": "noul"
+        },
+        "pii": {
+          "noul": 0.9963511273050084,
+          "type": "noul"
+        },
+        "topics.billing": {
+          "noul": 7.55031970903507e-05,
+          "type": "noul"
+        },
+        "topics.medication": {
+          "noul": 0.9329364490981737,
+          "type": "noul"
+        },
+        "urgency": {
+          "confidence": 0.17927138087686856,
+          "legend": {
+            "0": "Routine",
+            "1": "Needs prompt attention",
+            "2": "Critical"
+          },
+          "probabilities": {
+            "0": 0.7708436479519969,
+            "1": 0.07389994100544632,
+            "2": 0.1552564110425567
+          },
+          "score": 0.3844127630905597,
+          "type": "score"
+        }
+      }
+    },
+    "revision": "a778eb2ae2304cfa72fca7e53a19136dea5be012"
+  },
+  "vllm-sr/Vela-2.0-4B": {
+    "answers": {
+      "cpu": {
+        "domain": {
+          "abstain_probability": 0.005675705477015666,
+          "choice": "health",
+          "confidence": 0.9713894787108026,
+          "probabilities": {
+            "health": 0.9847289846455516,
+            "math": 0.0019315094196994975,
+            "other": 0.01333950593474899
+          },
+          "type": "choice"
+        },
+        "halu": {
+          "noul": 0.9905335041056328,
+          "type": "noul"
+        },
+        "jailbreak": {
+          "noul": 0.13633259281892893,
+          "type": "noul"
+        },
+        "pii": {
+          "noul": 0.9999484750942274,
+          "type": "noul"
+        },
+        "topics.billing": {
+          "noul": 0.0001025361894643162,
+          "type": "noul"
+        },
+        "topics.medication": {
+          "noul": 0.951655673122835,
+          "type": "noul"
+        },
+        "urgency": {
+          "confidence": 0.7029018312045716,
+          "legend": {
+            "0": "Routine",
+            "1": "Needs prompt attention",
+            "2": "Critical"
+          },
+          "probabilities": {
+            "0": 0.9021874246937502,
+            "1": 0.05808961015773173,
+            "2": 0.03972296514851807
+          },
+          "score": 0.13753554045476787,
+          "type": "score"
+        }
+      },
+      "rocm": {
+        "domain": {
+          "abstain_probability": 0.005687941349962913,
+          "choice": "health",
+          "confidence": 0.971239754543806,
+          "probabilities": {
+            "health": 0.9846491826655257,
+            "math": 0.0019413892127544664,
+            "other": 0.013409428121719727
+          },
+          "type": "choice"
+        },
+        "halu": {
+          "noul": 0.9906052250689735,
+          "type": "noul"
+        },
+        "jailbreak": {
+          "noul": 0.13631965295292459,
+          "type": "noul"
+        },
+        "pii": {
+          "noul": 0.9999487470733169,
+          "type": "noul"
+        },
+        "topics.billing": {
+          "noul": 0.00010318415402913311,
+          "type": "noul"
+        },
+        "topics.medication": {
+          "noul": 0.951852027377549,
+          "type": "noul"
+        },
+        "urgency": {
+          "confidence": 0.7032210620163002,
+          "legend": {
+            "0": "Routine",
+            "1": "Needs prompt attention",
+            "2": "Critical"
+          },
+          "probabilities": {
+            "0": 0.9025400072338162,
+            "1": 0.057721287683626187,
+            "2": 0.03973870508255765
+          },
+          "score": 0.13719869784874147,
+          "type": "score"
+        }
+      }
+    },
+    "revision": "c1e64d4f872cb38bc58502e6888340100bab9d55"
+  },
+  "vllm-sr/Vela-2.0-9B": {
+    "answers": {
+      "cpu": {
+        "domain": {
+          "abstain_probability": 0.006792695493617424,
+          "choice": "health",
+          "confidence": 0.9776926022526841,
+          "probabilities": {
+            "health": 0.9885184699343844,
+            "math": 0.0006556623839151661,
+            "other": 0.010825867681700317
+          },
+          "type": "choice"
+        },
+        "halu": {
+          "noul": 0.9889163112169755,
+          "type": "noul"
+        },
+        "jailbreak": {
+          "noul": 0.13946104251843003,
+          "type": "noul"
+        },
+        "pii": {
+          "noul": 0.9999945671013583,
+          "type": "noul"
+        },
+        "topics.billing": {
+          "noul": 0.00045496931006340117,
+          "type": "noul"
+        },
+        "topics.medication": {
+          "noul": 0.8880935558048915,
+          "type": "noul"
+        },
+        "urgency": {
+          "confidence": 0.0,
+          "legend": {
+            "0": "Routine",
+            "1": "Needs prompt attention",
+            "2": "Critical"
+          },
+          "probabilities": {
+            "0": 0.5668147249315815,
+            "1": 0.20847229158611963,
+            "2": 0.22471298348229876
+          },
+          "score": 0.6578982585507172,
+          "type": "score"
+        }
+      },
+      "rocm": {
+        "domain": {
+          "abstain_probability": 0.006790196934370111,
+          "choice": "health",
+          "confidence": 0.9778244581667818,
+          "probabilities": {
+            "health": 0.9885894936454556,
+            "math": 0.0006454708758708023,
+            "other": 0.010765035478673786
+          },
+          "type": "choice"
+        },
+        "halu": {
+          "noul": 0.9888871736050961,
+          "type": "noul"
+        },
+        "jailbreak": {
+          "noul": 0.13894825098745106,
+          "type": "noul"
+        },
+        "pii": {
+          "noul": 0.9999942841398841,
+          "type": "noul"
+        },
+        "topics.billing": {
+          "noul": 0.00045360733812846194,
+          "type": "noul"
+        },
+        "topics.medication": {
+          "noul": 0.8879964799990651,
+          "type": "noul"
+        },
+        "urgency": {
+          "confidence": 0.0,
+          "legend": {
+            "0": "Routine",
+            "1": "Needs prompt attention",
+            "2": "Critical"
+          },
+          "probabilities": {
+            "0": 0.5696143437940261,
+            "1": 0.20701316735564484,
+            "2": 0.223372488850329
+          },
+          "score": 0.6537581450563028,
+          "type": "score"
+        }
+      }
+    },
+    "revision": "bc8761637d8788619dfbaf6d8890128efe85fd40"
+  }
+}

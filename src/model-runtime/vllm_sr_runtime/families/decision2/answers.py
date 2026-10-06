@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from .package import MAX_OPTIONS, MIN_OPTIONS
+from ...systemone import MAX_OPTIONS, MIN_OPTIONS
 
 # Probabilities this close to the maximum count as tied (the scored adapter's rule).
 TIE_TOLERANCE = 1e-8
@@ -82,7 +82,7 @@ def product_answer(
     entropy = -sum(p * math.log(p) for p in probabilities if p > 0)
     answer["confidence"] = max(0.0, min(1.0, 1.0 - entropy / math.log(len(keys))))
     if kind == "score":
-        from .renderer import canonical
+        from ...systemone import canonical
 
         answer["legend"] = {
             key: description if isinstance(description, str) else canonical(description)

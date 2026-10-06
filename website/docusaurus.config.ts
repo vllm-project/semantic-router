@@ -161,20 +161,40 @@ const config: Config = {
             to: '/blog/vela-models',
           },
           {
-            from: '/docs/installation/runtime/engines-and-hardware',
-            to: '/docs/installation/runtime/in-process',
+            from: [
+              '/docs/installation/native-backends',
+              '/docs/installation/runtime/engines-and-hardware',
+            ],
+            to: '/docs/model-runtime/overview',
           },
           {
-            from: '/docs/installation/runtime/models-and-bindings',
-            to: '/docs/installation/runtime/in-process',
+            from: [
+              '/docs/installation/runtime/in-process',
+              '/docs/installation/runtime/models-and-bindings',
+            ],
+            to: '/docs/model-runtime/deploy',
           },
           {
-            from: '/docs/tutorials/global/safety-models-and-policy',
-            to: '/docs/installation/runtime/safety',
+            from: '/docs/installation/runtime/openvino',
+            to: '/docs/model-runtime/migrate',
           },
           {
-            from: '/docs/tutorials/global/remote-embeddings',
-            to: '/docs/installation/runtime/embeddings',
+            from: [
+              '/docs/installation/runtime/safety',
+              '/docs/tutorials/global/safety-models-and-policy',
+            ],
+            to: '/docs/model-runtime/guides/safety',
+          },
+          {
+            from: [
+              '/docs/installation/runtime/embeddings',
+              '/docs/tutorials/global/remote-embeddings',
+            ],
+            to: '/docs/model-runtime/guides/embeddings',
+          },
+          {
+            from: '/docs/installation/runtime/lifecycle-diagnostics',
+            to: '/docs/model-runtime/troubleshooting',
           },
           {
             from: '/docs/installation/kubernetes',

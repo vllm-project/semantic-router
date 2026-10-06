@@ -69,9 +69,7 @@ class PerfMakeFailurePropagationTests(unittest.TestCase):
             for name in ("bin", "perf/scripts", "src/semantic-router"):
                 (root / name).mkdir(parents=True)
             fixture = root / "fixture.mk"
-            fixture.write_text(
-                "LOG_TARGET = :\nNATIVE_ENV = PERF_TEST_NATIVE=1\nrust rust-ci:\n\t@:\ndownload-models-perf:\n\t@:\nperf-model-baseline:\n\t@:\n"
-            )
+            fixture.write_text("LOG_TARGET = :\nperf-model-baseline:\n\t@:\n")
             go = root / "bin/go"
             go.write_text(
                 '#!/bin/sh\nprintf "%s\\n" "$*" >> "$PERF_TEST_CALLS"\n'
