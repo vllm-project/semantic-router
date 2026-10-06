@@ -994,7 +994,7 @@ Print desired/observed mode and durable operation state.
 ## `vllm-sr logs` {#vllm-sr-logs}
 
 ```text
-Usage: vllm-sr logs [OPTIONS] {envoy|router|dashboard}
+Usage: vllm-sr logs [OPTIONS] {envoy|router|dashboard|model-runtime}
 ```
 
 Show logs from vLLM Semantic Router service.
@@ -1013,7 +1013,7 @@ vllm-sr logs router --target kubernetes -f  # Follow K8s logs
 
 | Parameter | Description |
 | --- | --- |
-| `SERVICE` | Required argument. Type: choice. Choices: envoy, router, dashboard. |
+| `SERVICE` | Required argument. Type: choice. Choices: envoy, router, dashboard, model-runtime. |
 | `-f, --follow` | Follow log output Default: false. |
 | `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
 | `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
@@ -1476,7 +1476,7 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `--readonly` | Run dashboard in read-only mode (disable config editing, allow playground only) Default: false. |
 | `--minimal` | Start in minimal mode: no Dashboard or observability stack (Jaeger, Prometheus, Grafana) Default: false. |
 | `--log-level CHOICE` | Log level of the Router, or of the runtime in engine mode (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
-| `--platform CHOICE` | Execution backend: auto (default) discovers the deployment target; cpu, cuda or rocm select it explicitly. Choices: auto, cpu, cuda, rocm. |
+| `--platform CHOICE` | Execution backend: auto (default), cpu, cuda, rocm; apple uses the experimental native MPS host bridge on Apple silicon. Choices: auto, cpu, cuda, rocm, apple. |
 | `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor. |
 | `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
 | `--gateway CHOICE` | Where client traffic enters: standalone (default; the Router serves the OpenAI-compatible API on the config's listeners, with no Envoy) or extproc (an Envoy-based gateway in front of the Router: the Envoy container on the docker target, your gateway on kubernetes). Choices: standalone, extproc. |
@@ -1490,12 +1490,17 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `-dp, --data-parallel-size INTEGER RANGE` | Number of model replicas. Preserve configured placement; new GPU deployments use distinct available GPUs.  [1&lt;=x&lt;=64] |
 | `--device-ids IDS` | Docker host GPU indices, e.g. 0 or 0,1. One index shares a GPU across replicas; otherwise use one per replica. Existing visibility masks are respected, not changed. |
 | `--runtime-profile PROFILE` | Model runtime numerics profile (default exact; vllm-srun plugins lists the installed ones). |
+| `--models TEXT` | Apple engine model-list file. |
+| `--device TEXT` | Apple engine device (mps only). |
+| `--host TEXT` | Apple engine loopback bind address. |
+| `--port INTEGER` | Apple engine TCP port. |
+| `--uds TEXT` | Unsupported for Apple engine mode. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr status` {#vllm-sr-status}
 
 ```text
-Usage: vllm-sr status [OPTIONS] [envoy|router|dashboard|all]
+Usage: vllm-sr status [OPTIONS] [envoy|router|dashboard|model-runtime|all]
 ```
 
 Show status of vLLM Semantic Router services.
@@ -1512,7 +1517,7 @@ vllm-sr status --target kubernetes  # Show Kubernetes status
 
 | Parameter | Description |
 | --- | --- |
-| `[SERVICE]` | Optional argument. Type: choice. Choices: envoy, router, dashboard, all. Default: all. |
+| `[SERVICE]` | Optional argument. Type: choice. Choices: envoy, router, dashboard, model-runtime, all. Default: all. |
 | `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
 | `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
 | `--context TEXT` | kubectl / Helm context (kubernetes target only) |
