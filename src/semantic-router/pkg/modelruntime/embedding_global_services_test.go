@@ -10,7 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
 func TestGlobalServicesSharePeerResourceWithoutBorrowingDefault(t *testing.T) {
@@ -48,7 +48,7 @@ func TestGlobalServicesSharePeerResourceWithoutBorrowingDefault(t *testing.T) {
 	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "global", Adapter: "openai_compatible", Contract: "embedding.v1"}}
 	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "local", Adapter: "openai_compatible", Contract: "embedding.v1"}}
 	cfg.EmbeddingRules = []config.EmbeddingRule{{Name: "route", Candidates: []string{"hello"}}}
-	runtime := native.New(binding.NewPool())
+	runtime := serving.New(nil, binding.NewPool())
 	services, err := PrepareOwnedGlobalServiceEmbeddings(context.Background(), cfg, runtime)
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +60,7 @@ func TestGlobalServicesSharePeerResourceWithoutBorrowingDefault(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = local.Close() })
 	peerConfig := cfg.ConfigForRecipe(&config.RoutingRecipe{Name: "peer", Profile: config.RoutingProfile{Signals: config.Signals{EmbeddingRules: cfg.EmbeddingRules}}})
-	peer, err := PrepareOwnedRecipeEmbeddings(context.Background(), peerConfig, runtime)
+	peer, err := PrepareOwnedEmbeddings(context.Background(), peerConfig, runtime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,9 +114,9 @@ func TestGlobalModuleDefaultDoesNotBorrowRecipeEmbedding(t *testing.T) {
 	cfg.EmbeddingConfig = config.HNSWConfig{ModelType: "bert", Backend: config.EmbeddingBackendOpenAICompatible, TargetDimension: 2}
 	cfg.EmbeddingModels.Endpoint = config.EmbeddingEndpointConfig{BaseURL: server.URL, Model: "global-default", Dimensions: 2}
 	cfg.Tools.Enabled = true
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"recipe-only": {Provider: "ort", Device: "rocm:7", Artifact: "/not-installed/recipe-only"}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"recipe-only": {Provider: config.ModelRuntimeProvider, Device: "rocm:7", Artifact: "/not-installed/recipe-only"}}
 	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "recipe-only", Adapter: "mmbert", Contract: "embedding.v1"}}
-	runtime := native.New(binding.NewPool())
+	runtime := serving.New(nil, binding.NewPool())
 	services, err := PrepareOwnedGlobalServiceEmbeddings(context.Background(), cfg, runtime)
 	if err != nil {
 		t.Fatal(err)

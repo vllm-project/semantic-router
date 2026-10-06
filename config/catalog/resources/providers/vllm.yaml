@@ -39,6 +39,20 @@ models:
     status: claimed
     verified_at: 2026-09-06
     source: https://huggingface.co/baidu/ERNIE-4.5-300B-A47B-PT
+- catalog: baidu/ernie-4.5-21b-a3b
+  relationship: self_hosted
+  id: baidu/ERNIE-4.5-21B-A3B-PT
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  restrictions:
+    minimum_vllm_version: 0.10.2
+    excluded_vllm_versions:
+    - 0.11.0
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT/blob/87db95487941cb39592ee0abca3b9155a6d19c5c/README.md
 - catalog: nvidia/nemotron-cascade-2-30b-a3b
   relationship: self_hosted
   id: nvidia/Nemotron-Cascade-2-30B-A3B
@@ -460,6 +474,19 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct
+- catalog: tencent/hunyuan-7b-instruct
+  relationship: self_hosted
+  id: tencent/Hunyuan-7B-Instruct
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  restrictions:
+    minimum_vllm_version: 0.10.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-23
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
 - catalog: zai/glm-5.1
   relationship: self_hosted
   id: zai-org/GLM-5.1
@@ -613,6 +640,17 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B
+- catalog: microsoft/phi-4-reasoning-plus
+  relationship: self_hosted
+  id: microsoft/Phi-4-reasoning-plus
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-plus/blob/69baf8528e1bcf05f475034d9e5dd32875ed125f/README.md
 - catalog: cohere/tiny-aya-global
   relationship: self_hosted
   id: CohereLabs/tiny-aya-global

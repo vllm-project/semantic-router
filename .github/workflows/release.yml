@@ -28,7 +28,6 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       images: ${{ steps.contract.outputs.release_images_json }}
       sim_version: ${{ steps.contract.outputs.sim_version }}
-      candle_version: ${{ steps.contract.outputs.candle_version }}
       catalog_snapshot: ${{ steps.contract.outputs.catalog_snapshot }}
     steps:
       - uses: actions/checkout@v4
@@ -161,24 +160,9 @@ jobs:
       prebuilt-dist: true
     secrets: inherit
 
-  crate:
-    name: Publish Rust Crate
-    needs: [validate, images, helm-build, python-build]
-    if: >-
-      github.event_name == 'push'
-      && needs.images.result == 'success'
-      && needs.helm-build.result == 'success'
-      && needs.python-build.result == 'success'
-    uses: ./.github/workflows/publish-crate.yml
-    with:
-      version: ${{ needs.validate.outputs.version }}
-      crate_version: ${{ needs.validate.outputs.candle_version }}
-      tag: ${{ needs.validate.outputs.tag }}
-    secrets: inherit
-
   release-notes:
     name: Publish GitHub Release
-    needs: [validate, docker, helm, pypi, crate]
+    needs: [validate, docker, helm, pypi]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
@@ -188,27 +172,6 @@ jobs:
         with:
           name: vllm-sr-dist
           path: release-assets/python
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: candle-release-libraries
-          path: release-assets/rust
-
-      - name: Verify Rust release assets
-        env:
-          CANDLE_CRATE_VERSION: ${{ needs.validate.outputs.candle_version }}
-        run: |
-          set -euo pipefail
-          for asset in \
-            release-assets/rust/release/libcandle_semantic_router.a \
-            release-assets/rust/release/libcandle_semantic_router.so \
-            "release-assets/rust/package/candle-semantic-router-${CANDLE_CRATE_VERSION}.crate" \
-            release-assets/rust/package/qualified.sha256; do
-            if [[ ! -s "$asset" ]]; then
-              echo "::error::Missing or empty Rust release asset: $asset"
-              exit 1
-            fi
-          done
 
       - name: Resolve lowercase registry owner
         id: owner
@@ -230,13 +193,11 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             release-assets/python/*
-            release-assets/rust/release/*
-            release-assets/rust/package/*
           body: |
             ## Release ${{ needs.validate.outputs.tag }}
 
             Release versions and artifact identities were checked before Docker,
-            Helm, PyPI, crates.io, and operator image publication.
+            Helm, PyPI, and operator image publication.
 
             ### Container images
 
@@ -267,15 +228,6 @@ jobs:
             ```bash
             pip install vllm-sr==${{ needs.validate.outputs.version }}
             ```
-
-            ### Rust Crate (crates.io)
-
-            ```toml
-            candle-semantic-router = "${{ needs.validate.outputs.candle_version }}"
-            ```
-
-            The crate version may differ from the Router tag because crates.io
-            versions are immutable. Use the version shown above for Rust dependencies.
 
             ### Built-in virtual models
 

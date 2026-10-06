@@ -95,18 +95,22 @@ fi
 # Step 3: Start Semantic Router (gRPC ExtProc on port 50051)
 echo -e "${YELLOW}[3/5]${NC} Starting Semantic Router (ExtProc port 50051)..."
 cd "$ROOT_DIR"
-export LD_LIBRARY_PATH=${ROOT_DIR}/candle-binding/target/release
 nohup ./bin/router -config=e2e/config/config.hallucination.yaml > /tmp/router_demo.log 2>&1 &
 echo $! > /tmp/router_demo.pid
 
-echo "   Waiting for router to initialize models (15s)..."
-sleep 15
-
-# Check if router initialized
-if grep -q "Fact-check classifier initialized" /tmp/router_demo.log 2>/dev/null; then
-    echo -e "   ${GREEN}✓ Router models initialized${NC}"
+echo "   Waiting for the router's models (up to 300s)..."
+ready=false
+for _ in $(seq 1 300); do
+    if curl -fsS -o /dev/null --max-time 1 http://127.0.0.1:8080/ready 2>/dev/null; then
+        ready=true
+        break
+    fi
+    sleep 1
+done
+if $ready; then
+    echo -e "   ${GREEN}✓ Router models ready${NC}"
 else
-    echo -e "   ${YELLOW}⚠ Router may still be initializing...${NC}"
+    echo -e "   ${YELLOW}⚠ Router is not ready yet${NC}"
     echo "   Check /tmp/router_demo.log for details"
 fi
 

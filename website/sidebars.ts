@@ -34,6 +34,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'installation/installation',
+        'installation/agent-harness',
         'installation/agent',
         'installation/shell-completion',
         {
@@ -245,6 +246,37 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Model Runtime',
+      collapsed: false,
+      link: { type: 'doc', id: 'model-runtime/overview' },
+      items: [
+        'model-runtime/quickstart',
+        'model-runtime/choose-a-model',
+        {
+          type: 'category',
+          label: 'Model Runtime Guides',
+          items: [
+            'model-runtime/guides/classify',
+            'model-runtime/guides/pii',
+            'model-runtime/guides/safety',
+            'model-runtime/guides/hallucination',
+            'model-runtime/guides/embeddings',
+            'model-runtime/guides/rerank',
+            'model-runtime/guides/multimodal',
+            'model-runtime/guides/decisions',
+          ],
+        },
+        'model-runtime/deploy',
+        'model-runtime/profiles',
+        'installation/runtime/external',
+        'model-runtime/migrate',
+        'model-runtime/troubleshooting',
+        'model-runtime/plugins',
+        'model-runtime/reference',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Deploy & Operate',
       collapsed: false,
       items: [
@@ -367,31 +399,6 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/k8s/operator-operations',
             'installation/upgrade-rollback',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Router Runtime',
-          link: { type: 'doc', id: 'installation/native-backends' },
-          items: [
-            {
-              type: 'category',
-              label: 'Run models',
-              items: [
-                'installation/runtime/in-process',
-                'installation/runtime/openvino',
-                'installation/runtime/external',
-              ],
-            },
-            {
-              type: 'category',
-              label: 'Model guides',
-              items: [
-                'installation/runtime/embeddings',
-                'installation/runtime/safety',
-              ],
-            },
-            'installation/runtime/lifecycle-diagnostics',
           ],
         },
       ],

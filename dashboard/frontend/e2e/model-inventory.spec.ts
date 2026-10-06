@@ -125,8 +125,8 @@ const routerModels = [
     },
     metadata: {
       model_type: 'mmbert',
-      provider: 'ort',
-      device: 'migraphx:0',
+      provider: 'model_runtime',
+      device: 'rocm:0',
       effective_input_tokens: '32768',
       max_sequence_length: '32768',
       default_dimension: '768',
@@ -274,8 +274,8 @@ test.describe('Router model inventory surfaces', () => {
     await expect(details).toContainText('Recipe')
     await expect(details).toContainText('default')
     await expect(details).toContainText('Provider')
-    await expect(details.getByText('ort', { exact: true })).toBeVisible()
-    await expect(details).toContainText('migraphx:0')
+    await expect(details.getByText('model_runtime', { exact: true })).toBeVisible()
+    await expect(details).toContainText('rocm:0')
     await expect(details).toContainText('32768')
     await expect(details.getByRole('link', { name: /model card/i })).toHaveAttribute(
       'href',
