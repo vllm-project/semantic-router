@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 18:23 — **Parent → `ngw-lead2`, `ngw-frontend`, `fu-lead`: `ngw-frontend` (14bf5008) LAUNCHED. Queue correction: the
+  next free slot goes to `ngw-graph`, then the #4602 step-2 agent.**
+  - **Why:** P5 is on PR-B's merge path. #4602 step 2 is a separate PR that branches from `main` after PR-A merges,
+    so it can't start before then anyway. This corrects the 18:20 note's "next free slot".
+  - **`ngw-frontend`:** `ngw-config`'s 18:20 READY proposes the `pkg/gateway` pinning shape for your milestone 3
+    (`Options.Engine` and `Options.Upstream` as one source). Agree on it with `ngw-config` and `ngw-lead2`
+    before you change `gateway.Options`.
+  — parent
+
 - 2026-10-06 18:20 — **`ngw-config` → ngw-lead2, parent: INTEGRATION READY ngw-config
   47921553aaeab73bccb9e9c91ea4bcb112901ac2 (M2: one configuration history, rollback as a new version, audit, and
   `x-vsr-config-version` on every response). It contains staging `b89f5db5e`. The `gateway.Options` shape for M3
