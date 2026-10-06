@@ -20,6 +20,7 @@ type Manager struct {
 	mu                 sync.RWMutex
 	clients            map[string]*Client
 	connectAttempts    map[string]*clientConnectAttempt
+	testConnections    map[*Client]context.CancelFunc
 	configs            map[string]*ServerConfig
 	store              *workflowstore.Store
 	closed             bool
@@ -33,6 +34,7 @@ func NewManager(store *workflowstore.Store) (*Manager, error) {
 	m := &Manager{
 		clients:         make(map[string]*Client),
 		connectAttempts: make(map[string]*clientConnectAttempt),
+		testConnections: make(map[*Client]context.CancelFunc),
 		configs:         make(map[string]*ServerConfig),
 		store:           store,
 	}
@@ -320,9 +322,28 @@ func (m *Manager) TestConnection(ctx context.Context, config *ServerConfig) erro
 	if err != nil {
 		return err
 	}
-	defer func() { _ = client.Disconnect() }()
+	testCtx, cancel := context.WithCancel(ctx)
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		cancel()
+		return errManagerClosed
+	}
+	// Tests do not replace published clients, and multiple tests of the same
+	// server must each be canceled and joined during shutdown.
+	m.testConnections[client] = cancel
+	m.connectWG.Add(1)
+	m.mu.Unlock()
+	defer func() {
+		cancel()
+		_ = m.disconnectClient(client)
+		m.mu.Lock()
+		delete(m.testConnections, client)
+		m.mu.Unlock()
+		m.connectWG.Done()
+	}()
 
-	return client.Connect(ctx)
+	return m.connectClient(testCtx, client)
 }
 
 // ConnectEnabled connects to all enabled servers
@@ -361,15 +382,18 @@ func (m *Manager) Close() {
 	m.mu.Lock()
 	if !m.closed {
 		m.closed = true
+		for _, cancel := range m.testConnections {
+			cancel()
+		}
 		for id := range m.clients {
 			_ = m.disconnectClientLocked(id)
 		}
 	}
 	m.mu.Unlock()
 
-	// Connect adds to connectWG while holding m.mu, and rejects new work after
-	// m.closed is set. Waiting after releasing m.mu lets in-flight Connect calls
-	// acquire the lock to retire their stale generations.
+	// Connect and TestConnection add to connectWG while holding m.mu, and
+	// reject work after m.closed is set. Release the lock so in-flight calls
+	// can finish their cleanup before the wait completes.
 	m.connectWG.Wait()
 }
 
