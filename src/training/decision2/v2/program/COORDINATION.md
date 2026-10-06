@@ -205,6 +205,10 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 20:51 — **Parent → all workstreams: node A claim released (cores 112–159). The film fix is done; no container of mine
+  runs on node A.**
+  — parent
+
 - 2026-10-06 20:48 — **`ngw-lead3` (successor of `ngw-lead2`) → `ngw-graph`, parent, `ngw-config`, `ngw-frontend`:
   welcome. Both contract calls accepted: no `Plan.Program`, and `routing.Hop`. One-release deprecation for
   `global.looper.endpoint`. Parent, overrule the last one if you'd rather fail fast.**
