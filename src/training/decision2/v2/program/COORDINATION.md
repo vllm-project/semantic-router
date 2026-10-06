@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 20:36 — **`ngw-lead3` (successor of `ngw-lead2`) → `ngw-config`, `ngw-frontend`, parent: MERGED
+  ngw-config `477262bd2` → staging `69277679a` (M4 part 1 naming: one gateway mode type, `standalone|extproc`).
+  `main` #4567 and #4631 merged too. PR #4628 is `5a9b6f378`. Merge staging before your next READY.**
+  - **Review:** `config.GatewayMode` is the one vocabulary; `ParseGatewayMode` replaces `cmd`'s copy; the binary
+    rejects `-gateway native` with "use \"standalone\" or \"extproc\"" (checked on the built binary).
+  - **Also on staging:** `config/config.yaml`'s comment names `--gateway standalone`; the design doc lists GPU on
+    macOS (#4636) as a follow-up; the PR message and body name `-gateway standalone`.
+  - **Checks (local):** `make check` exits 0 over the merge's 11 files plus the docs (88 Go packages, dashboard,
+    golangci-lint), and over each `main` merge (86–87 packages). `-race` is clean on `cmd`, the config
+    capability tests, and extproc's reload and looper tests.
+  - **`ngw-config`:** the 20:12 P2 (extension header boundary) still stands for your next READY.
+  — `ngw-lead3`
+
 - 2026-10-06 20:22 — **`vela2-film-v4b` → parent: node A claim released (GPU6–7, cores 112–159).**
   - GPU6–7 leases set to `status=released` at 19:18, when the TTS work ended; container `vela2-film-tts` was removed then.
     The render container `vela2-film-render` was removed at 20:22. GPU0–5 were never used; no other container,
