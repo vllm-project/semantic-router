@@ -1,10 +1,10 @@
 from dataclasses import replace
 
 import pytest
-from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.registry import builtin, policy
-from vllm_sr_runtime.registry.artifacts import read_json
-from vllm_sr_runtime.registry.resolve import pinned_revision, resolve
+from vllm_srun.errors import PackageError
+from vllm_srun.registry import builtin, policy
+from vllm_srun.registry.artifacts import read_json
+from vllm_srun.registry.resolve import pinned_revision, resolve
 
 
 def test_builtin_table_pins_every_phase1_model():
@@ -92,7 +92,7 @@ def test_licence_policy():
 
 
 def test_every_builtin_model_has_cpu_and_rocm_golden_answers():
-    from vllm_sr_runtime.plugins.decisions import well_formed
+    from vllm_srun.plugins.decisions import well_formed
 
     for model in builtin.all_models("decision2"):
         for device_class in ("cpu", "rocm"):
@@ -105,8 +105,8 @@ def test_every_builtin_model_has_cpu_and_rocm_golden_answers():
 
 
 def test_a_later_revision_with_the_same_identity_gets_the_table_references(tmp_path):
-    from vllm_sr_runtime.families.decision2.family import Decision2Family
-    from vllm_sr_runtime.plugins.base import (
+    from vllm_srun.families.decision2.family import Decision2Family
+    from vllm_srun.plugins.base import (
         PackageRef,
         RegistryOptions,
         VerifiedPackage,
@@ -144,7 +144,7 @@ def test_every_family_has_a_table_and_lookups_cover_them():
 
 
 def test_pinned_files_are_the_whole_download(monkeypatch, tmp_path):
-    from vllm_sr_runtime.registry import resolve as resolver
+    from vllm_srun.registry import resolve as resolver
 
     pinned = replace(
         builtin.lookup("vllm-sr/Decision-2.0-Kai-0.6B"),
@@ -172,8 +172,8 @@ def test_pinned_files_are_the_whole_download(monkeypatch, tmp_path):
 def test_a_hub_package_without_a_manifest_keeps_its_pointer_files(
     monkeypatch, tmp_path
 ):
-    from vllm_sr_runtime.plugins.base import PackageRef
-    from vllm_sr_runtime.registry import resolve as resolver
+    from vllm_srun.plugins.base import PackageRef
+    from vllm_srun.registry import resolve as resolver
 
     calls = []
 
@@ -197,7 +197,7 @@ def test_a_hub_package_without_a_manifest_keeps_its_pointer_files(
 
 
 def test_parallel_hashing_matches_one_file_at_a_time(tmp_path):
-    from vllm_sr_runtime.registry.artifacts import inventory, sha256_file, sha256_files
+    from vllm_srun.registry.artifacts import inventory, sha256_file, sha256_files
 
     for index in range(12):
         (tmp_path / f"part-{index}.bin").write_bytes(
@@ -211,7 +211,7 @@ def test_parallel_hashing_matches_one_file_at_a_time(tmp_path):
 
 
 def test_named_files_hash_only_what_a_family_loads(tmp_path):
-    from vllm_sr_runtime.registry.artifacts import named_files, sha256_file
+    from vllm_srun.registry.artifacts import named_files, sha256_file
 
     (tmp_path / "config.json").write_text("{}", encoding="utf-8")
     (tmp_path / "large.onnx").write_bytes(b"\0" * 64)
@@ -232,7 +232,7 @@ def test_named_files_hash_only_what_a_family_loads(tmp_path):
 def test_downloads_retry_transient_hub_failures_only(monkeypatch, tmp_path):
     import huggingface_hub
     from huggingface_hub.errors import LocalEntryNotFoundError
-    from vllm_sr_runtime.registry import resolve as resolver
+    from vllm_srun.registry import resolve as resolver
 
     revision = "f" * 40
     failures = [LocalEntryNotFoundError("Temporary failure in name resolution")] * 2

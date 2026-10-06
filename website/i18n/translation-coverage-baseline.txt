@@ -23,6 +23,7 @@ zh-Hans	community/documentation.md
 zh-Hans	community/model-provider-day-0-support.md
 zh-Hans	community/overview.md
 zh-Hans	community/translation-guide.md
+zh-Hans	faq.md
 zh-Hans	fleet-sim/getting-started.md
 zh-Hans	fleet-sim/guide.md
 zh-Hans	fleet-sim/overview.md
@@ -30,6 +31,7 @@ zh-Hans	fleet-sim/power-model.md
 zh-Hans	fleet-sim/related-work.md
 zh-Hans	fleet-sim/sim-algorithms.md
 zh-Hans	fleet-sim/use-cases.md
+zh-Hans	installation/agent-harness.md
 zh-Hans	installation/agent.md
 zh-Hans	installation/amd-rocm.md
 zh-Hans	installation/backend-target-compatibility.md

@@ -143,7 +143,7 @@ config:
 
 extraEnv:
   # Where the managed runtimes' sockets live, so the cases can ask Kai directly.
-  - name: VLLM_SR_RUNTIME_DIR
+  - name: VLLM_SRUN_DIR
     value: /tmp/vsr-runtime
 
 resources:

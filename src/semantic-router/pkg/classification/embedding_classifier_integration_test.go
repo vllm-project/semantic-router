@@ -45,7 +45,7 @@ func requireOmniProvider(t *testing.T) embedding.Provider {
 	artifact := os.Getenv("VELA_OMNI_ARTIFACT")
 	if artifact == "" {
 		if os.Getenv("REQUIRE_OMNI_TESTS") == "1" {
-			t.Fatal("VELA_OMNI_ARTIFACT must select a prepared artifact")
+			t.Fatal("VELA_OMNI_ARTIFACT must select a Vela Omni snapshot")
 		}
 		t.Skip("set VELA_OMNI_ARTIFACT to select owned Omni integration")
 	}

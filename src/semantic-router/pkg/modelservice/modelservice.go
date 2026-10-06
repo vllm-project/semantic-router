@@ -14,7 +14,7 @@ import (
 
 // ReadyTimeoutEnv bounds, as a Go duration, how long preparing a binding waits
 // for its deployment to become ready when the caller sets no deadline.
-const ReadyTimeoutEnv = "VLLM_SR_RUNTIME_READY_TIMEOUT"
+const ReadyTimeoutEnv = "VLLM_SRUN_READY_TIMEOUT"
 
 const defaultReadyTimeout = 10 * time.Minute
 
