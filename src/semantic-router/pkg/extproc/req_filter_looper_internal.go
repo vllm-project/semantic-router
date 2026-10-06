@@ -108,6 +108,12 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	dispatch.decisionName = decisionName
 	dispatch.useReasoning = useReasoning
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
+	// The builder answers a failure (an unresolved credential, for example) with
+	// an immediate response. Return it unchanged so the Looper hop reports the
+	// same status and message as the ordinary dispatch path.
+	if response.GetImmediateResponse() != nil {
+		return response, nil
+	}
 	common := response.GetRequestBody().GetResponse()
 	if common == nil {
 		return r.createErrorResponse(500, "Failed to build provider dispatch"), nil
