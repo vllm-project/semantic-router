@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"sort"
 	"strings"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
@@ -163,11 +164,22 @@ func (c *RouterConfig) GetModelForDecisionIndex(index int) string {
 // lookup through ExternalModelIDs (provider_model_id) when the name is not
 // a direct key in ModelConfig. This handles the case where the Envoy AI
 // Gateway rewrites the model field to the provider model ID.
+//
+// The fallback scans entries in sorted model-name order so a provider model
+// ID claimed by several entries (e.g. the same served model split across
+// endpoint groups) resolves to the same owner on every load instead of
+// following Go's randomized map iteration order.
 func (c *RouterConfig) resolveModelConfig(modelName string) (ModelParams, bool) {
 	if params, ok := c.ModelConfig[modelName]; ok {
 		return params, true
 	}
-	for _, params := range c.ModelConfig {
+	owners := make([]string, 0, len(c.ModelConfig))
+	for name := range c.ModelConfig {
+		owners = append(owners, name)
+	}
+	sort.Strings(owners)
+	for _, name := range owners {
+		params := c.ModelConfig[name]
 		for _, extID := range params.ExternalModelIDs {
 			if extID == modelName {
 				return params, true

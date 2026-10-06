@@ -44,6 +44,18 @@ class Target(BaseHTTPRequestHandler):
         if self.server.ack:
             self.send_header("X-SR-Bench-Config-Hash", self.server.ack)
         self.end_headers()
+        usage_events = self.server.usage_events
+        if usage_events is None:
+            usage_events = [
+                {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 3,
+                    "prompt_tokens_details": {
+                        "cached_tokens": 2,
+                        self.server.cache_write_field: 1,
+                    },
+                }
+            ]
         events = [
             {
                 "model": "model",
@@ -66,7 +78,7 @@ class Target(BaseHTTPRequestHandler):
             },
             *[
                 {"model": "model", "choices": [], "usage": usage}
-                for usage in self.server.usage_events
+                for usage in usage_events
             ],
         ]
         try:
@@ -90,16 +102,8 @@ def target():
     server.delay = 0
     server.ack = None
     server.session_phase = None
-    server.usage_events = [
-        {
-            "prompt_tokens": 10,
-            "completion_tokens": 3,
-            "prompt_tokens_details": {
-                "cached_tokens": 2,
-                "cache_creation_tokens": 1,
-            },
-        }
-    ]
+    server.usage_events = None
+    server.cache_write_field = "cache_creation_tokens"
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     yield server
@@ -151,8 +155,14 @@ def wait_run(store, run_id):
     raise AssertionError("run did not terminate")
 
 
-def test_live_http_usage_final_channel_and_idempotency(tmp_path, target):
+@pytest.mark.parametrize(
+    "cache_write_field", ["cache_creation_tokens", "cache_write_tokens"]
+)
+def test_live_http_usage_final_channel_and_idempotency(
+    tmp_path, target, cache_write_field
+):
     target.session_phase = "tool_loop"
+    target.cache_write_field = cache_write_field
     store = Store(tmp_path)
     engine = Engine(store)
     run = engine.start(manifest(target), request_key="once")
@@ -596,9 +606,9 @@ def test_cache_usage_presence_distinguishes_missing_and_explicit_zero():
     }
     assert usage_presence(provider_alias) == (True, True)
     assert normalize_usage(provider_alias) == {
-        "input_tokens": 8,
+        "input_tokens": 5,
         "cached_input_tokens": 2,
-        "cache_write_tokens": 0,
+        "cache_write_tokens": 3,
         "output_tokens": 1,
     }
     conflicting_writes = {
@@ -682,6 +692,7 @@ def test_cost_reservation_rejects_before_generation(tmp_path, target):
 
 
 def test_multimodel_four_bucket_cost_receipt():
+
     prices = {
         "a": {"input": 1, "cached_input": 0.1, "cache_write": 2, "output": 3},
         "b": {"input": 2, "cached_input": 0.2, "cache_write": 4, "output": 6},
@@ -721,6 +732,7 @@ def test_multimodel_four_bucket_cost_receipt():
 
 
 def test_arc_multiple_test_grids_are_atomic():
+
     case = {
         "benchmark": "arc-agi-2",
         "answer": [[[1, 2]], [[3]]],
@@ -731,6 +743,7 @@ def test_arc_multiple_test_grids_are_atomic():
 
 
 def test_offline_replay_regrade_and_export_never_infer(tmp_path, target):
+
     store = Store(tmp_path)
     engine = Engine(store)
     m = manifest(target)
@@ -796,6 +809,7 @@ def test_offline_replay_regrade_and_export_never_infer(tmp_path, target):
 
 
 def test_training_export_refuses_unknown_split(tmp_path, target):
+
     store = Store(tmp_path)
     run = Engine(store).start(manifest(target))
     wait_run(store, run["id"])
@@ -868,6 +882,7 @@ def test_native_target_params_are_frozen_sent_and_journaled(tmp_path, target):
 def test_registered_adapter_preflights_all_cases_and_executes_shared_client(
     tmp_path, target, monkeypatch
 ):
+
     adapters.list_adapters()
     monkeypatch.setattr(adapters, "_adapters", dict(adapters._adapters))
     seen = []

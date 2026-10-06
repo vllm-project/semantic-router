@@ -15,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/profiling"
@@ -399,7 +400,28 @@ func initializeRuntimeDependencies(
 	if err := initializeVectorStoreIfEnabled(cfg, shutdownHooks, runtimeRegistry); err != nil {
 		return embeddingState, err
 	}
+	startModelRuntimeManager(cfg, shutdownHooks, runtimeRegistry)
 	return embeddingState, nil
+}
+
+// startModelRuntimeManager starts the model_runtime deployments the config
+// uses and reconciles them on every config publication. A runtime that cannot
+// start leaves its decision signals unknown; it never blocks Router startup.
+func startModelRuntimeManager(
+	cfg *config.RouterConfig,
+	shutdownHooks *[]func(context.Context) error,
+	runtimeRegistry *routerruntime.Registry,
+) {
+	manager := modelservice.NewManager()
+	reconcile := func(next *config.RouterConfig) {
+		if err := manager.Reconcile(next); err != nil {
+			logging.ComponentWarnEvent("model_runtime", "reconcile_failed", map[string]interface{}{"error": err.Error()})
+		}
+	}
+	reconcile(cfg)
+	modelservice.SetDefault(manager)
+	runtimeRegistry.OnConfigPublished(reconcile)
+	*shutdownHooks = append(*shutdownHooks, manager.Shutdown)
 }
 
 func startupEmbeddingProviderStatus(state modelruntime.EmbeddingRuntimeState) *startupstatus.EmbeddingProviderStatus {

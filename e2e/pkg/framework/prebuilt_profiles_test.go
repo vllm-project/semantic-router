@@ -15,6 +15,7 @@ import (
 var fixtureEnvironments = map[string]string{
 	"provider-mocker": "E2E_PREBUILT_PROVIDER_MOCKER_IMAGE",
 	"dashboard":       "VLLM_SR_DASHBOARD_IMAGE",
+	"model-runtime":   "E2E_PREBUILT_MODEL_RUNTIME_IMAGE",
 }
 
 func sameLocalImageFixture(a, b framework.LocalImageBuild) bool {

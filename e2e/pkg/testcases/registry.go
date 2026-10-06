@@ -20,6 +20,11 @@ type TestCase struct {
 	// Tags are optional tags for filtering tests
 	Tags []string
 
+	// MutatesClusterState marks a case that deletes, restarts, or rescales a
+	// workload. Such a case always runs once, because a retry would start from
+	// the state its own failure left behind instead of a fresh cluster.
+	MutatesClusterState bool
+
 	// Fn is the test function to execute
 	Fn func(ctx context.Context, client *kubernetes.Clientset, opts TestCaseOptions) error
 }

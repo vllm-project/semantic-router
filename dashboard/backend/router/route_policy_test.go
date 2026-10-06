@@ -58,6 +58,7 @@ func TestDashboardRouteInventoryHasCompletePolicies(t *testing.T) {
 		}
 	}
 	for _, route := range []struct{ method, path string }{
+		{http.MethodGet, "/api/ml-pipeline/availability"},
 		{http.MethodGet, "/api/ml-pipeline/jobs"},
 		{http.MethodGet, "/api/ml-pipeline/jobs/job-1"},
 		{http.MethodPost, "/api/ml-pipeline/benchmark"},
@@ -70,6 +71,29 @@ func TestDashboardRouteInventoryHasCompletePolicies(t *testing.T) {
 		if lookup != auth.RouteFound || policy.Permission != auth.PermMlPipeline {
 			t.Errorf("ML inventory %s %s: lookup=%v policy=%+v", route.method, route.path, lookup, policy)
 		}
+	}
+}
+
+func TestMLPipelineAvailabilityFollowsRouteRegistration(t *testing.T) {
+	disabled, disabledCfg := setupRouteInventoryServerWithConfig(t, func(cfg *config.Config) {
+		cfg.MLPipelineEnabled = false
+	})
+	if disabledCfg.MLPipelineAvailable {
+		t.Fatal("MLPipelineAvailable = true, want false while the feature is disabled")
+	}
+	if disabledCfg.MLPipelineUnavailableReason == "" {
+		t.Fatal("MLPipelineUnavailableReason is empty while the feature is disabled")
+	}
+	if _, lookup := disabled.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/ml-pipeline/jobs"); lookup != auth.RouteNotFound {
+		t.Errorf("disabled ML route lookup = %v, want RouteNotFound", lookup)
+	}
+	if policy, lookup := disabled.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/ml-pipeline/availability"); lookup != auth.RouteFound || policy.Permission != auth.PermMlPipeline {
+		t.Errorf("disabled availability route = %v with policy %+v, want RouteFound under PermMlPipeline", lookup, policy)
+	}
+
+	_, enabledCfg := setupRouteInventoryServerWithConfig(t)
+	if !enabledCfg.MLPipelineAvailable || enabledCfg.MLPipelineUnavailableReason != "" {
+		t.Errorf("enabled config = %+v, want available with an empty reason", enabledCfg)
 	}
 }
 
@@ -137,6 +161,7 @@ func TestOutboundDashboardRoutesRevalidateBeforeUse(t *testing.T) {
 		{"/api/tools/fetch-raw", "tools.fetch_raw"},
 		{"/api/topology/test-query", "topology.test_query"},
 		{"/api/mcp/servers/server-1/test", "mcp.server.test"},
+		{"/api/mcp/servers/test", "mcp.server.test"},
 		{"/api/openclaw/mcp", "openclaw.mcp.call"},
 	} {
 		policy, lookup := server.routePolicies.LookupRoutePolicy(http.MethodPost, test.path)
@@ -232,7 +257,7 @@ func setupRouteInventoryServer(t *testing.T) *Server {
 	return server
 }
 
-func setupRouteInventoryServerWithConfig(t *testing.T) (*Server, *config.Config) {
+func setupRouteInventoryServerWithConfig(t *testing.T, options ...func(*config.Config)) (*Server, *config.Config) {
 	t.Helper()
 	dir := t.TempDir()
 	staticDir := filepath.Join(dir, "static")
@@ -254,6 +279,9 @@ func setupRouteInventoryServerWithConfig(t *testing.T) (*Server, *config.Config)
 		MLPipelineEnabled: true, MLPipelineDataDir: filepath.Join(dir, "ml-pipeline"),
 		WorkflowDBPath:         filepath.Join(dir, "workflow.sqlite"),
 		ConfigProjectionDBPath: filepath.Join(dir, "projection.sqlite"),
+	}
+	for _, option := range options {
+		option(cfg)
 	}
 	server := Setup(cfg, setupmode.New(configPath, false))
 	t.Cleanup(func() { _ = server.Close() })

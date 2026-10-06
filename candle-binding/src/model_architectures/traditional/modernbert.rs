@@ -42,11 +42,11 @@ pub enum ModernBertVariant {
     /// Reference: https://huggingface.co/jhu-clsp/mmBERT-base
     Multilingual,
     /// ModernBERT-base-32k - Extended context ModernBERT (32,768 max length with RoPE)
-    /// Reference: https://huggingface.co/llm-semantic-router/modernbert-base-32k
+    /// Reference: https://huggingface.co/vllm-sr/modernbert-base-32k
     Extended32K,
     /// Historical mmBERT-32K variant name (32768 max length).
     /// Actual rotary scaling is declared only by config.json.
-    /// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+    /// Reference: https://huggingface.co/vllm-sr/mmbert-32k-yarn
     Multilingual32K,
 }
 
@@ -1138,7 +1138,7 @@ impl TraditionalModernBertClassifier {
     /// Use load_from_directory_with_max_sequence_length to request a larger
     /// budget. Capacity and RoPE parameters come from the checkpoint config;
     /// the variant name does not enable a scaling algorithm.
-    /// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+    /// Reference: https://huggingface.co/vllm-sr/mmbert-32k-yarn
     pub fn load_mmbert_32k_from_directory(
         model_path: &str,
         use_cpu: bool,
@@ -1596,7 +1596,7 @@ impl TraditionalModernBertTokenClassifier {
 
     /// Create the historical multilingual 32K token-classifier variant.
     /// Capacity and default/YaRN math still come from config.json.
-    /// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+    /// Reference: https://huggingface.co/vllm-sr/mmbert-32k-yarn
     pub fn new_mmbert_32k(model_id: &str, use_cpu: bool) -> Result<Self> {
         Self::new_with_variant(model_id, use_cpu, ModernBertVariant::Multilingual32K)
     }

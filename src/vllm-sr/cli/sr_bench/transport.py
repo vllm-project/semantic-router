@@ -112,6 +112,7 @@ def normalize_usage(raw):
     writes = [
         value
         for value in (
+            details.get("cache_write_tokens"),
             details.get("cache_creation_tokens"),
             details.get("created_cache_tokens"),
             raw.get("cache_creation_input_tokens"),
