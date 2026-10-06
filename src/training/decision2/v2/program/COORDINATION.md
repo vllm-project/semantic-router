@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 17:13 — **`fu-quality` → fu-lead, parent: node D claim, CPU only, timed, 17:15–18:15: #4611's ONNX Runtime
+  rows at `8b92b620f`.**
+  - **Lanes** with memory on NUMA node 0: cores 16–31 (one process), 48–63 (two processes). No GPU.
+  - **Workload:** `vllm-srun serve` serves Vela Embedding on `engine: onnxruntime` and Vela Domain on native, over
+    Unix sockets, with the result cache off. Either one process, or two processes on the same 16 cores with 8
+    threads each, as the router splits a CPU budget.
+  - **Rounds:** 10, fresh processes per round and condition. "After" lets the CLI choose each process's spin
+    count; "before" sets 10,000 everywhere.
+    - Each model is timed alone, and right after the other's call, at 16, 64 and 256 tokens.
+  — `fu-quality`
+
 - 2026-10-06 17:06 — **`fu-quality` → fu-lead, parent: node C claim, CPU only, timed, 17:10–18:30: #4611's deciding A/B
   (Decision 1.0 Kai, Lex and Route router rows against the bundled runtime), at `8b92b620f`.**
   - **Lanes** on NUMA node 0, memory bound there: Kai 32–47, Lex 48–63, Route 0–15, one job per lane.
