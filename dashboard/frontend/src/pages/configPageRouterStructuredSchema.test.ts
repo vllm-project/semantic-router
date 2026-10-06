@@ -242,7 +242,7 @@ describe('router defaults structured schemas', () => {
         embedding_models: {
           semantic: {
             mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
-            embedding_config: { backend: 'candle', model_type: 'mmbert' },
+            embedding_config: { backend: 'model_runtime', model_type: 'mmbert' },
           },
         },
       },

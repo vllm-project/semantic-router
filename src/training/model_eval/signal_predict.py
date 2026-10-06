@@ -17,10 +17,10 @@ Complements signal_eval.py:
     Use when you are in the pre-config phase (config not generated yet,
     router not running) and just need per-question labels.
 
-The candle binding (Rust) used by SR internally is not directly callable
-from Python; it requires the router process. This script uses transformers
-+ torch instead, which is portable and sufficient for small classifiers
-like mmbert32k (760 questions in minutes on CPU).
+The router serves these classifiers from its model runtime, which needs a
+running router or runtime. This script uses transformers + torch directly
+instead, which needs no service and is sufficient for small classifiers like
+the Vela encoders (760 questions in minutes on CPU).
 
 Decoupled from any specific model: the model class (sequence vs token
 classification) and the label list are read from the model's config

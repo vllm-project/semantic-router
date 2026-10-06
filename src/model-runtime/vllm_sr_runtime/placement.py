@@ -5,12 +5,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .errors import PlacementError
+from .errors import PlacementError, UnsupportedDeviceError
 from .plugins import registry
 from .plugins.base import Accelerator, DeviceInfo, ModelSpec
 
-DEVICE = re.compile(r"(?P<kind>auto|cpu|cuda|rocm|xpu|mps)(?::(?P<index>\d+))?\Z")
-AUTO_ORDER = ("rocm", "cuda")
+DEVICE = re.compile(r"(?P<kind>[a-z][a-z0-9_]*)(?::(?P<index>\d+))?\Z")
 BYTES_PER_PARAMETER = 4
 ACTIVATION_RESERVE = 2 << 30
 
@@ -23,13 +22,36 @@ class Placement:
 
 
 def parse_device(value: str) -> tuple[str, int | None]:
+    """``auto``, or a registered accelerator's name with an optional ``:N`` device index."""
     match = DEVICE.fullmatch(value.strip().lower())
-    if not match:
+    names = registry.names("accelerators")
+    if not match or (match["kind"] != "auto" and match["kind"] not in names):
         raise PlacementError(
-            f"--device must be auto, cpu, cuda[:N] or rocm[:N]; got {value!r}"
+            f"--device must be auto or one of {', '.join(names)}, optionally with :N; got {value!r}"
         )
     index = match["index"]
     return match["kind"], int(index) if index is not None else None
+
+
+def auto_order() -> list[str]:
+    """The accelerators ``--device auto`` tries, by their ``auto_priority``."""
+    ranked = []
+    for name in registry.names("accelerators"):
+        priority = registry.plugin("accelerators", name).load().auto_priority
+        if priority is not None:
+            ranked.append((priority, name))
+    return [name for _, name in sorted(ranked)]
+
+
+def device_kind(device: str) -> str:
+    """The accelerator a ``--device`` value lands on; ``auto`` takes the first available in ``auto_order``."""
+    kind, _ = parse_device(device)
+    if kind != "auto":
+        return kind
+    for name in auto_order():
+        if registry.instantiate("accelerators", name).available():
+            return name
+    return "cpu"
 
 
 def estimate_bytes(parameters: int) -> int:
@@ -50,8 +72,9 @@ def place(
         raise PlacementError(
             f"{spec.name} needs about {needed / (1 << 30):.1f} GiB, above --memory-budget {memory_budget_gib} GiB"
         )
-    candidates = (*AUTO_ORDER, "cpu") if kind == "auto" else (kind,)
+    candidates = auto_order() if kind == "auto" else [kind]
     reasons = []
+    unsupported = []
     for name in candidates:
         try:
             accelerator = registry.instantiate("accelerators", name)
@@ -64,8 +87,15 @@ def place(
         devices = accelerator.devices()
         if index is not None:
             devices = [d for d in devices if d.index == index]
+        required = spec.requires.get(name, ())
         for info in devices:
-            if name != "cpu" and not info.bf16:
+            if required:
+                offered = accelerator.capabilities(info)
+                lacking = [need for need in required if not offered.get(need)]
+                if lacking:
+                    unsupported += [accelerator.lacks(info, need) for need in lacking]
+                    continue
+            if name != "cpu" and spec.dtype.autocast == "bfloat16" and not info.bf16:
                 reasons.append(f"{info.label}: no BF16 support")
                 continue
             if (
@@ -86,4 +116,7 @@ def place(
                 if index is not None
                 else f"{name}: no devices"
             )
-    raise PlacementError(f"no device can serve {spec.name}: " + "; ".join(reasons))
+    message = f"no device can serve {spec.name}: " + "; ".join(reasons + unsupported)
+    if unsupported and not reasons:
+        raise UnsupportedDeviceError(message)
+    raise PlacementError(message)

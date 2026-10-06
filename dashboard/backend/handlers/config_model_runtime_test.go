@@ -9,18 +9,19 @@ import (
 )
 
 func TestUpdateConfigHandlerPreservesModelRuntimeDeclarations(t *testing.T) {
+	const pinned = "0123456789abcdef0123456789abcdef01234567"
 	configPath := createValidTestConfig(t, t.TempDir())
 	body := canonicalConfigBody("127.0.0.1:8000")
 	body["global"] = map[string]interface{}{"model_catalog": map[string]interface{}{
 		"deployments": map[string]interface{}{"local-pii": map[string]interface{}{
-			"artifact": "models/checkpoint", "revision": "pinned", "provider": "candle", "device": "cpu", "precision": "fp32",
+			"artifact": "vllm-sr/checkpoint", "revision": pinned, "provider": "model_runtime", "device": "cpu",
 			"input": map[string]interface{}{"max_tokens": 512, "overflow": "reject"},
 		}},
 		"admission": map[string]interface{}{"local-pii": map[string]interface{}{"max_concurrency": 2, "max_queue": 3, "queue_timeout_ms": 500, "on_overflow": "shed"}},
 	}}
 	body["recipes"] = []map[string]interface{}{{"name": "private", "routing": map[string]interface{}{
 		"model_bindings": map[string]interface{}{"pii_classifier": map[string]interface{}{
-			"deployment": "local-pii", "contract": "token_spans.v1", "adapter": "mmbert32k", "head": "pii", "mapping_path": "mappings/pii.json",
+			"deployment": "local-pii", "contract": "token_spans.v1", "head": "pii", "mapping_path": "mappings/pii.json",
 		}},
 	}}}
 	payload, err := json.Marshal(body)
@@ -39,7 +40,7 @@ func TestUpdateConfigHandlerPreservesModelRuntimeDeclarations(t *testing.T) {
 		t.Fatal(err)
 	}
 	deployment := saved.Global.ModelCatalog.Deployments["local-pii"]
-	if deployment.Revision != "pinned" || deployment.Precision != "fp32" || deployment.Input.MaxTokens != 512 {
+	if deployment.Revision != pinned || !deployment.IsModelRuntime() || deployment.Input.MaxTokens != 512 {
 		t.Fatalf("deployment changed: %#v", deployment)
 	}
 	budget := saved.Global.ModelCatalog.Admission["local-pii"]

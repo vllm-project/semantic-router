@@ -24,7 +24,7 @@ For an interpretation of maintained benchmark coverage, see the
 | Do Router Flow arms improve answer quality? | [`router_flow/`](router_flow/README.md) |
 | Does grounding-aware fusion help on DRACO? | [`grounded_fusion/`](grounded_fusion/README.md) |
 | How do hallucination detectors compare? | [`hallucination/`](hallucination/README.md) |
-| What is the signal latency across CPU, GPU, attention, and body modes? | [`cpu-vs-gpu/`](cpu-vs-gpu/README.md) |
+| How fast does the built-in model runtime serve each model on CPU and GPU? | [model runtime records](../src/model-runtime/docs/records/) |
 
 Start with the smallest dataset or `--dry-run` mode supported by the selected
 runner. Run `python <script> --help` or the installed command's `--help` before

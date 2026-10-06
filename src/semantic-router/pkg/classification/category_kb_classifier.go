@@ -48,10 +48,6 @@ type KnowledgeBaseClassifier struct {
 	provider    embedding.Provider
 }
 
-func NewKnowledgeBaseClassifier(rule config.KnowledgeBaseConfig, modelType string, baseDir string) (*KnowledgeBaseClassifier, error) {
-	return NewKnowledgeBaseClassifierWithProvider(rule, modelType, baseDir, nil)
-}
-
 func NewKnowledgeBaseClassifierWithProvider(rule config.KnowledgeBaseConfig, modelType string, baseDir string, provider embedding.Provider) (*KnowledgeBaseClassifier, error) {
 	rule = rule.WithDefaults()
 	c := &KnowledgeBaseClassifier{
@@ -65,28 +61,19 @@ func NewKnowledgeBaseClassifierWithProvider(rule config.KnowledgeBaseConfig, mod
 	if err := c.loadDefinition(); err != nil {
 		return nil, fmt.Errorf("failed to load KB manifest from %s: %w", rule.Source.Path, err)
 	}
-	if c.shouldDeferPreload() {
-		logging.ComponentEvent("classifier", "knowledge_base_preload_deferred", map[string]interface{}{
-			"knowledge_base": c.rule.Name,
-			"labels":         len(c.labels),
-			"backend":        c.currentBackend(),
-		})
-	} else if err := c.ensureEmbeddingsPreloaded(); err != nil {
-		return nil, fmt.Errorf("failed to preload KB embeddings: %w", err)
-	}
+	logging.ComponentEvent("classifier", "knowledge_base_preload_deferred", map[string]interface{}{
+		"knowledge_base": c.rule.Name,
+		"labels":         len(c.labels),
+		"backend":        c.currentBackend(),
+	})
 	return c, nil
 }
 
 func (c *KnowledgeBaseClassifier) currentBackend() string {
-	if c.provider != nil {
-		return c.provider.Backend()
+	if c.provider == nil {
+		return ""
 	}
-	return embeddingBackendOverride()
-}
-
-func (c *KnowledgeBaseClassifier) shouldDeferPreload() bool {
-	backend := c.currentBackend()
-	return backend == "" || backend == "candle" || c.provider != nil
+	return c.provider.Backend()
 }
 
 func (c *KnowledgeBaseClassifier) ensureEmbeddingsPreloaded() error {

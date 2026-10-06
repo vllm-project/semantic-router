@@ -2,7 +2,7 @@
 translation:
   source_commit: "e86e1ac69ece8f9921cddbbfa12a4c2d8f50b66b"
   source_file: "docs/api/apiserver.md"
-  outdated: false
+  outdated: true
 ---
 
 # 路由器管理接口 {#router-management-api}

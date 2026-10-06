@@ -18,13 +18,14 @@ from typing import Any
 
 from ...errors import PackageError
 from ...registry.artifacts import (
-    canonical_json,
     inventory,
+    read_json,
     safetensors_elements,
     safetensors_header,
     sha256_file,
     sha256_json,
 )
+from ...systemone import MAX_OPTIONS, MIN_OPTIONS
 
 POINTER = {
     "decision_format": "vllm-sr-decision",
@@ -62,8 +63,6 @@ SOURCE_SUFFIXES = {".json", ".safetensors", ".bin", ".model", ".txt"}
 SCORE_BIAS_FORMAT = "dev2-score-bias-v1"
 CALIBRATION_VERSION = "decision2-per-type-temperature/1"
 TASK_TYPES = ("choice", "noul", "score")
-MIN_OPTIONS = 2
-MAX_OPTIONS = 255
 MIN_INPUT_TOKENS = 16
 MIN_TEMPERATURE, MAX_TEMPERATURE = 0.05, 20.0
 
@@ -82,13 +81,6 @@ class Decision2Package:
     model_sha256: str
     temperatures: dict[str, float]
     score_bias: dict[int, list[float]] | None
-
-
-def read_json(path: Path) -> Any:
-    try:
-        return json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise PackageError(f"cannot read {Path(path).name}: {exc}") from exc
 
 
 def is_package(root: Path) -> bool:
@@ -404,7 +396,3 @@ def verify_adapter(root: Path, decision_config: dict[str, Any]) -> dict[str, Any
     ):
         raise PackageError("adapter tensors differ from the pinned projections")
     return config
-
-
-def describe_canonical(value: Any) -> str:
-    return canonical_json(value)
