@@ -31,8 +31,7 @@ EXECUTOR_JOBS = (
     "operator",
     "local",
     "recipes",
-    "native-shared",
-    "native-independent",
+    "platform",
     "performance",
     "package",
     "tools",
@@ -40,7 +39,7 @@ EXECUTOR_JOBS = (
     "e2e-fixtures",
     "e2e-dashboard",
 )
-ALL_DISPATCH_JOBS = ("plan", *IMAGE_PRODUCERS, "native-build", *EXECUTOR_JOBS)
+ALL_DISPATCH_JOBS = ("plan", *IMAGE_PRODUCERS, *EXECUTOR_JOBS)
 LANE_IMAGES = frozenset({"extproc", "provider-mocker", "dashboard"})
 
 
@@ -52,8 +51,6 @@ def content_digest(value: object) -> str:
 
 def dispatch_job(record: dict) -> str:
     executor = record["executor"]
-    if executor == "native":
-        return "native-shared" if record["native"] else "native-independent"
     if executor == "e2e":
         images = set(record["images"])
         if images == {"extproc"}:
@@ -84,7 +81,6 @@ def expected_dispatch_jobs(plan: dict) -> list[str]:
             "plan",
             *(dispatch_job(record) for record in plan["verifications"]),
             *(job for job, images in image_producers(plan["images"]).items() if images),
-            *(["native-build"] if plan["native"] else []),
         }
     )
 
@@ -92,13 +88,11 @@ def expected_dispatch_jobs(plan: dict) -> list[str]:
 def _compatibility(record: dict) -> dict:
     common = {
         key: record[key]
-        for key in ("executor", "runner", "runtime", "device", "platform", "native")
+        for key in ("executor", "runner", "runtime", "device", "platform")
     }
     common.update(images=sorted(record["images"]), dispatch_job=dispatch_job(record))
-    if record["executor"] == "native":
-        common.update(
-            platform_id=record["platform_id"], execution=record.get("execution", {})
-        )
+    if record["executor"] == "platform":
+        common["platform_id"] = record["platform_id"]
     else:
         common["resource_class"] = record.get("resource_class", "standard")
     return common
@@ -109,7 +103,7 @@ def _batch(records: list[dict], shard: int) -> dict:
     executor = common["executor"]
     identity = content_digest([record["id"] for record in records])[:12]
     architecture = common["platform"].split("/")[-1]
-    runtime = {"ort": "ORT", "candle": "Candle", "openvino": "OpenVINO"}.get(
+    runtime = {"model-runtime": "Model Runtime"}.get(
         common["runtime"], common["runtime"]
     )
     label = f"{runtime} / {common['device'].upper()} / {architecture}"
@@ -121,11 +115,9 @@ def _batch(records: list[dict], shard: int) -> dict:
         extra = [image for image in common["images"] if image not in LANE_IMAGES]
         if extra:
             label += " / " + " + ".join(extra)
-    elif common.get("execution"):
-        label += " / QEMU"
-    if executor == "native":
-        # Compatible native contracts may now run in separate workers. Their
-        # runtime label alone would collide in the Actions matrix.
+    if executor == "platform":
+        # Platform contracts run in separate workers; their runtime label alone
+        # would collide in the Actions matrix.
         label += f" / {identity[:6]}"
     minutes = sum(
         record.get("timeout_minutes", 90 if executor == "e2e" else 120)
@@ -163,8 +155,8 @@ def e2e_batches(records: list[dict]) -> list[dict]:
     return execution_batches(records, "e2e")
 
 
-def native_batches(records: list[dict]) -> list[dict]:
-    return execution_batches(records, "native")
+def platform_batches(records: list[dict]) -> list[dict]:
+    return execution_batches(records, "platform")
 
 
 def validate_execution_batch(batch: dict, executor: str) -> None:

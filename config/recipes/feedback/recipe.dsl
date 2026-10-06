@@ -101,7 +101,7 @@ PROJECTION mapping feedback_recovery_band {
 PROJECTION mapping verification_band {
   source: "verification_pressure"
   method: "threshold_bands"
-  outputs: [{ name: "feedback_needs_evidence", gte: 0.42 }]
+  outputs: [{ name: "feedback_needs_evidence", gte: 0.45 }]
 }
 
 # =============================================================================

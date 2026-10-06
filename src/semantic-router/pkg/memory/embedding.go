@@ -12,11 +12,9 @@ import (
 type EmbeddingModelType string
 
 const (
-	EmbeddingModelBERT   EmbeddingModelType = "bert"
 	EmbeddingModelMMBERT EmbeddingModelType = "mmbert"
 	EmbeddingModelMulti  EmbeddingModelType = "multimodal"
 	EmbeddingModelQwen3  EmbeddingModelType = "qwen3"
-	EmbeddingModelGemma  EmbeddingModelType = "gemma"
 )
 
 // EmbeddingConfig holds the embedding model configuration
@@ -50,7 +48,7 @@ func GenerateEmbeddingWithContext(ctx context.Context, text string, cfg Embeddin
 	modelName := strings.ToLower(strings.TrimSpace(string(cfg.Model)))
 	options := embedding.Options{}
 	switch modelName {
-	case "qwen3", "gemma", "bert", "":
+	case "qwen3", "":
 		// These paths have always requested the provider's full output.
 	case "mmbert":
 		options = embedding.Options{Dimension: cfg.Dimension, Layer: cfg.Layer}
@@ -64,7 +62,7 @@ func GenerateEmbeddingWithContext(ctx context.Context, text string, cfg Embeddin
 		}
 		options.Dimension = dimension
 	default:
-		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelName)
+		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'mmbert', 'qwen3' or 'multimodal')", modelName)
 	}
 	vector, err := embedding.Embed(ctx, cfg.Provider, text, options)
 	if err != nil {

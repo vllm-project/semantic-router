@@ -131,9 +131,9 @@ domains' smallest unit or static checks. Common direct targets include:
 | --- | --- |
 | Harness or workflows | `make harness-check` |
 | Go router | `make test-semantic-router` |
-| Native bindings | `make test-binding` |
+| Model runtime | `make model-runtime-test` |
 | Python CLI | `make vllm-sr-test` |
-| Category, PII, or jailbreak classifier | `make test-category-classifier`, `make test-pii-classifier`, or `make test-jailbreak-classifier` |
+| Published models (domain, PII, jailbreak and the other classifiers) | `make test-models` |
 | Explicit integration or E2E | `make verify DOMAIN=<domain>` or `make verify PROFILE=<profile>` |
 
 Integration and E2E are explicit because a path classifier cannot infer all
@@ -175,8 +175,6 @@ rerun `make check`.
 Follow the language's standard formatter and keep modules focused:
 
 - Go: `gofmt`, meaningful exported API comments, and `make check-go-mod-tidy`.
-- Rust: `cargo fmt`, `cargo clippy`, explicit error handling, and public API
-  documentation.
 - Python: Black formatting, type hints where they improve the
   interface, and tests for behavior changes.
 
@@ -214,8 +212,8 @@ behavior was verified.
 | --- | --- |
 | `src/semantic-router/` | Go router, config, routing, APIs, and Envoy ExtProc service |
 | `src/vllm-sr/` | Python CLI and local stack orchestration |
+| `src/model-runtime/` | Model runtime that serves every classifier, embedding, and decision model |
 | `config/` | Canonical reference, fragments, runtime examples, and Recipes |
-| `candle-binding/`, `ml-binding/`, `nlp-binding/`, `onnx-binding/` | Native inference bindings |
 | `dashboard/` | Web console frontend and management backend |
 | `deploy/` | Helm, operator, Kubernetes, OpenShift, and local deployment assets |
 | `e2e/` | End-to-end framework and profiles |
