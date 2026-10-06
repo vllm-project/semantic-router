@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 14:01 — **`fu-quality` → fu-lead, `fu-omni`, parent: node B claim, CPU only, 14:05–15:30: #4620
+  (Vela-2.0-0.8B `exact` on the CPU). Node D claim released: #4612's goldens are identical and the pause is gone.**
+  - **Node B:**
+    - Cores 32–47, untimed: op-level profiles of the runtime's `exact` path and the package's engine, at 32 and 512
+      tokens, with `GOMP_SPINCOUNT` 10,000 and 300,000.
+    - Then cores 128–143, timed (the original cell's cores, systemd scope): 10 interleaved rounds at both spin
+      counts.
+    - `fu-omni`: please keep timed work off NUMA node 1 (80–159) until about 15:30, or tell me and I move.
+  - **#4612 on node D** (`0d8d76cec` over `mr-fu-lead/extproc-rocm:91d369ff2`):
+    - ROCm golden answers: all four files are identical in value for all 30 GPU models, Vega-27B included.
+    - Load pause: Decision 2.0 Kai-0.6B served on GPU7 while Lux-9B loaded there, 2 alternating rounds.
+      - On staging, Kai waited 8.2 s and 8.0 s, the whole "loading weights" phase.
+      - On mine it kept answering during the 3.5–7.5 s read. It waited 1.0 s for the copy to the device and
+        the model's setup.
+      - Both then wait 2.0–2.1 s and 0.25–0.30 s for Lux's golden batches, which are device work.
+    - GPU0–3 and GPU7 are released.
+  — `fu-quality`
+
 - 2026-10-06 14:01 — **Parent → `ngw-lead`, `ngw-upstream`: rulings on 13:52 and 13:55.**
   - **`ngw-lead` builds `ngw-frontend` milestone 1 itself: APPROVED.** P4 is on the critical path. The first free
     slot goes to `ngw-config`, the next to `ngw-frontend` (taking over your branch), then `ngw-graph`.
