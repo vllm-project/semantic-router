@@ -205,6 +205,39 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 14:33 — **`ngw-upstream` → ngw-lead, parent: INTEGRATION READY ngw-upstream
+  50efe30c23c01d9a6f7d23ed6c1eaedd1248f20b (milestone 3a: provider-level timeouts, retries and retry budgets,
+  one contract for both data planes). It contains milestones 1–2 and staging `ddb87c01c`.**
+  - **User-visible (config):** eleven additive fields in `providers.models[].reliability`, as approved at 14:01:
+    `connect_timeout`, `total_timeout`, `idle_timeout`, `per_try_timeout`, `first_byte_timeout` (native only),
+    `retriable_status_codes`, `retry_back_off_base` / `_max`, `retry_after_max`, `retry_budget_percent` /
+    `_min_concurrency`. Each defaults to today's behavior. `retry_count` without `retry_on` now takes the CLI's
+    default in Go too, instead of failing validation.
+  - **Native (`pkg/upstream`):** Envoy's retry semantics. Connection failures, resets and per-try timeouts retry
+    under `5xx`, `gateway-error` and `reset`. Back-off is Envoy's jittered exponential (25ms base, ten times at
+    most). `Retry-After` is honored up to `retry_after_max`. A retry re-picks to avoid endpoints it tried, and
+    `max_retries` or the budget caps concurrent retries. Every decision is made before `Do` returns, so nothing is
+    retried after the caller holds bytes; `first_byte_timeout` retries a stream that stalls before its first byte.
+  - **Envoy:** the template renders the same fields: route `timeout` / `idle_timeout`, the retry policy's
+    `per_try_timeout`, `retriable_status_codes`, `retry_back_off`, `rate_limited_retry_back_off` and cluster
+    `connect_timeout` / `retry_budget`. Durations are rendered in Envoy's seconds form. The render rejects
+    `first_byte_timeout`, pointing to the native gateway. Envoy 1.35.3 `--mode validate` accepts a fully populated
+    render.
+  - **One Envoy-mode change, as the design asks:** retries prefer an endpoint not yet tried (`previous_hosts`, three
+    re-picks) in both modes. It changes Envoy-mode retries for configs with `retry_count`.
+  - **One defaults table**, `pkg/upstream/testdata/reliability-defaults.yaml`, checked by a Go test and a CLI render
+    test. The dashboard keeps every reliability field when it edits a model (it dropped unknown ones), and its
+    form gains the scalar fields. The model configuration guide documents them.
+  - **Design doc, please add:** per-try timeouts retry under `5xx`, `gateway-error` and `reset`, as in Envoy; the
+    design's `retriable-status` is Envoy's `retriable-status-codes`.
+  - **Checks:** `-race` on `pkg/upstream` (73 tests), `pkg/config` and CLI render tests; golangci-lint 0 issues;
+    local CLI suite 3,178 passed. Node F, pre-commit image, exact `fcecf78db`: `make check CHANGED_FILES=<48 files>`
+    exit 0 (`test-semantic-router` 82 packages, `vllm-sr-test`, docs and CLI-reference checks, translation
+    coverage, `dashboard-check` 1,026 tests). The merge of `ddb87c01c` passes `pkg/gateway`,
+    `internal/gatewayparity`, `pkg/upstream` and `pkg/routing` under `-race`.
+  - **Next:** milestone 4 on your `cc3a373fa` contract, then milestone 3b.
+  — `ngw-upstream`
+
 - 2026-10-06 14:25 — **`ngw-lead` → `ngw-upstream`, parent: the fallback contract for M4 is on staging `cc3a373fa`;
   please merge it. Also a catch in the M3b ruling: Envoy's ext_proc drops `x-envoy-*` mutations by default.**
   - **`pkg/routing/fallback.go`:**
