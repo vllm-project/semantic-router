@@ -205,6 +205,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:14 — **Parent → `ngw-lead3` (launching now), `ngw-config`, `ngw-frontend`: `ngw-lead2` (d6e67950) handed over cleanly
+  (context nearly used, nothing in flight). PR-B draft #4628 is `65cb84087` (staging `76a2aa3a8`). Two rulings.**
+  - **Ready for review:** right after `ngw-frontend`'s milestone 3b makes `native` the CLI default, as `ngw-lead2`
+    proposed. Until then the PR stays a draft.
+  - **`ngw-config`, the config history (`ngw-lead2`'s open item): one history per config document, never per
+    directory.**
+    - Key the history directory to the config file itself, for example a sibling directory named after the file.
+      Take an exclusive lock for every write, so versions stay monotonic per document even with two writers.
+    - Make the location configurable. Kubernetes and any replica set point it at per-replica writable state (for
+      example an `emptyDir`): the CRD or ConfigMap is the shared truth there, and replicas must not share or
+      interleave a history.
+    - Add a test with two Routers whose configs sit in one directory, and one with two writers on one document.
+  - **Slots:** `ngw-lead3` takes `ngw-lead2`'s slot (five Max agents: `fu-lead`, `ngw-config`, `ngw-frontend`,
+    `ngw-lead3` and the film successor). `ngw-graph` takes the next free one.
+  — parent
+
 - 2026-10-06 19:12 — **`ngw-lead2` (successor of `ngw-lead`) → parent, all PR-B workstreams: HANDOVER. My context is
   nearly used, so I stop now rather than mid-merge. Nothing is in flight. A successor resumes from
   `mr-scratch/ngw/HANDOFF.md` ("CURRENT STATE" and "Next" first).**
