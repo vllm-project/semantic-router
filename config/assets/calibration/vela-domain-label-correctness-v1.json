@@ -1,5 +1,5 @@
 {
-  "artifact_id": "sha256:ee3584fcad6a6b925467c839881126b5393532af77b24dfaf3f63ed54cf702fc",
+  "artifact_id": "sha256:9bc6cfca7875dfd6319cb39fdd6dec4d1d82d762b96c74f53b2ec96a1939f7c4",
   "artifact_schema_version": "signal-calibration-artifact/v1",
   "dataset": {
     "digest": "sha256:0e24a191921c2f453518a537a8b2117bd137e7714d4ef1565e9ba06c1ecb9ad8",
@@ -559,11 +559,6 @@
     }
   },
   "model": {
-    "files": {
-      "config.json": "2741d5ac33b7c56fd3c716e6b434e4616d6f0d943b9f0634fbf3bb1e7dd8cafd",
-      "model.safetensors": "be89c0202dc630796e0487b2cb661103782fc2d8aa181a8f92bd67b697d089a4",
-      "tokenizer.json": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f"
-    },
     "id": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
     "labels": [
       "biology",
@@ -581,6 +576,7 @@
       "physics",
       "psychology"
     ],
+    "model_sha256": "ce836f431e224e2c8134b5b8be60236bccaf5eb900c848701bf99c65a950f826",
     "revision": "736c049c8710e16011c0216ff1bd79c5a1c399db"
   },
   "name": "vela-domain-label-correctness-v1",
@@ -604,7 +600,7 @@
   "rollback_identity": "uncalibrated-domain-probability",
   "scale": "label_correctness/v1",
   "source": {
-    "manifest_sha256": "sha256:f226d3665d11c435dab7fa88791c67678fd040c87c256807ce56e3b2f3052593",
+    "manifest_sha256": "sha256:b90925605508cb6fa1a25b5bce66f22ae9ceeb6aa3abc3633441d2b81fedc3ea",
     "splits": {
       "calibration": {
         "path": "calibration.json",

@@ -15,24 +15,19 @@ import (
 
 var calibrationLabels = []string{"health", "law"}
 
+// servedModel is the model_sha256 the runtime reports for the fitted model.
+var servedModel = strings.Repeat("ab", 32)
+
 func sha256Hex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }
 
-// writeCalibration writes a model directory and an artifact fitted on it, then
-// lets edit change the artifact before it is pinned.
-func writeCalibration(t *testing.T, edit func(map[string]any)) (config.ScoreCalibrationReference, string) {
+// writeCalibration writes an artifact fitted on servedModel, then lets edit
+// change the artifact before it is pinned.
+func writeCalibration(t *testing.T, edit func(map[string]any)) config.ScoreCalibrationReference {
 	t.Helper()
 	dir := t.TempDir()
-	modelDir := filepath.Join(dir, "model")
-	if err := os.MkdirAll(modelDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	weights := []byte("weights")
-	if err := os.WriteFile(filepath.Join(modelDir, "model.safetensors"), weights, 0o644); err != nil {
-		t.Fatal(err)
-	}
 	artifact := map[string]any{
 		"artifact_schema_version": "signal-calibration-artifact/v1",
 		"artifact_id":             "sha256:test",
@@ -40,8 +35,8 @@ func writeCalibration(t *testing.T, edit func(map[string]any)) (config.ScoreCali
 		"family":                  "domain",
 		"scale":                   "label_correctness/v1",
 		"model": map[string]any{
-			"labels": calibrationLabels,
-			"files":  map[string]string{"model.safetensors": sha256Hex(weights)},
+			"labels":       calibrationLabels,
+			"model_sha256": servedModel,
 		},
 		"mapping": map[string]any{"knots": [][2]float64{{0.5, 0.2}, {1.0, 0.9}}},
 	}
@@ -56,12 +51,12 @@ func writeCalibration(t *testing.T, edit func(map[string]any)) (config.ScoreCali
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return config.ScoreCalibrationReference{Path: path, SHA256: sha256Hex(data)}, modelDir
+	return config.ScoreCalibrationReference{Path: path, SHA256: sha256Hex(data)}
 }
 
 func TestLoadScoreCalibrationAppliesKnots(t *testing.T) {
-	ref, modelDir := writeCalibration(t, nil)
-	calibration, err := LoadScoreCalibration(ref, config.SignalTypeDomain, modelDir, calibrationLabels)
+	ref := writeCalibration(t, nil)
+	calibration, err := LoadScoreCalibration(ref, config.SignalTypeDomain, servedModel, calibrationLabels)
 	if err != nil {
 		t.Fatalf("LoadScoreCalibration() error = %v", err)
 	}
@@ -78,36 +73,25 @@ func TestLoadScoreCalibrationAppliesKnots(t *testing.T) {
 // Every way an artifact can stop describing the running model refuses it, so a
 // stale or missing calibration never ranks.
 func TestLoadScoreCalibrationRefusesStaleArtifacts(t *testing.T) {
+	otherModel, noModel := strings.Repeat("cd", 32), ""
 	cases := map[string]struct {
 		edit   func(map[string]any)
-		mutate func(config.ScoreCalibrationReference, string) (config.ScoreCalibrationReference, string)
+		mutate func(*config.ScoreCalibrationReference)
+		served *string
 		labels []string
 		want   string
 	}{
 		"missing artifact": {
-			mutate: func(ref config.ScoreCalibrationReference, dir string) (config.ScoreCalibrationReference, string) {
-				ref.Path += ".missing"
-				return ref, dir
-			},
-			want: "no such file",
+			mutate: func(ref *config.ScoreCalibrationReference) { ref.Path += ".missing" },
+			want:   "no such file",
 		},
 		"pinned digest differs": {
-			mutate: func(ref config.ScoreCalibrationReference, dir string) (config.ScoreCalibrationReference, string) {
-				ref.SHA256 = strings.Repeat("0", 64)
-				return ref, dir
-			},
-			want: "pinned sha256",
+			mutate: func(ref *config.ScoreCalibrationReference) { ref.SHA256 = strings.Repeat("0", 64) },
+			want:   "pinned sha256",
 		},
-		"model weights changed": {
-			mutate: func(ref config.ScoreCalibrationReference, dir string) (config.ScoreCalibrationReference, string) {
-				if err := os.WriteFile(filepath.Join(dir, "model.safetensors"), []byte("retrained"), 0o644); err != nil {
-					panic(err)
-				}
-				return ref, dir
-			},
-			want: "different model",
-		},
-		"label order differs": {labels: []string{"law", "health"}, want: "labels"},
+		"runtime serves another model": {served: &otherModel, want: "different model"},
+		"runtime reports no identity":  {served: &noModel, want: "different model"},
+		"label order differs":          {labels: []string{"law", "health"}, want: "labels"},
 		"held-out brier did not improve": {
 			edit: func(a map[string]any) { a["status"] = "no_improvement" },
 			want: "not calibrated",
@@ -120,24 +104,25 @@ func TestLoadScoreCalibrationRefusesStaleArtifacts(t *testing.T) {
 			edit: func(a map[string]any) { a["mapping"] = map[string]any{"knots": [][2]float64{{0.5, 0.9}, {1.0, 0.2}}} },
 			want: "does not rise",
 		},
-		"weights unbound": {
-			edit: func(a map[string]any) {
-				a["model"] = map[string]any{"labels": calibrationLabels, "files": map[string]string{}}
-			},
-			want: "model.safetensors",
+		"model unbound": {
+			edit: func(a map[string]any) { a["model"] = map[string]any{"labels": calibrationLabels} },
+			want: "model_sha256",
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			ref, modelDir := writeCalibration(t, tc.edit)
+			ref := writeCalibration(t, tc.edit)
 			if tc.mutate != nil {
-				ref, modelDir = tc.mutate(ref, modelDir)
+				tc.mutate(&ref)
 			}
-			labels := calibrationLabels
+			served, labels := servedModel, calibrationLabels
+			if tc.served != nil {
+				served = *tc.served
+			}
 			if tc.labels != nil {
 				labels = tc.labels
 			}
-			_, err := LoadScoreCalibration(ref, config.SignalTypeDomain, modelDir, labels)
+			_, err := LoadScoreCalibration(ref, config.SignalTypeDomain, served, labels)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("LoadScoreCalibration() error = %v, want it to mention %q", err, tc.want)
 			}
@@ -156,8 +141,8 @@ func calibratedRanking(t *testing.T, families []string, calibration *ScoreCalibr
 }
 
 func TestCalibratedDomainScoresRankAndNameTheirArtifact(t *testing.T) {
-	ref, modelDir := writeCalibration(t, nil)
-	calibration, err := LoadScoreCalibration(ref, config.SignalTypeDomain, modelDir, calibrationLabels)
+	ref := writeCalibration(t, nil)
+	calibration, err := LoadScoreCalibration(ref, config.SignalTypeDomain, servedModel, calibrationLabels)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 
@@ -36,8 +35,8 @@ type scoreCalibrationArtifact struct {
 	Family        string `json:"family"`
 	Scale         string `json:"scale"`
 	Model         struct {
-		Labels []string          `json:"labels"`
-		Files  map[string]string `json:"files"`
+		Labels      []string `json:"labels"`
+		ModelSHA256 string   `json:"model_sha256"`
 	} `json:"model"`
 	Mapping struct {
 		Knots [][2]float64 `json:"knots"`
@@ -55,9 +54,10 @@ func (e *DecisionEngine) WithScoreCalibration(families []string, calibration *Sc
 }
 
 // LoadScoreCalibration verifies the artifact against its pinned digest, the
-// family's ordered labels and the model files it was fitted on. Any mismatch is
-// an error, so a missing or stale artifact stops startup instead of ranking.
-func LoadScoreCalibration(ref config.ScoreCalibrationReference, family, modelDir string, labels []string) (*ScoreCalibration, error) {
+// family's ordered labels and modelSHA256, the identity the model runtime
+// reports for the model it serves. Any mismatch is an error, so a missing or
+// stale artifact stops startup instead of ranking.
+func LoadScoreCalibration(ref config.ScoreCalibrationReference, family, modelSHA256 string, labels []string) (*ScoreCalibration, error) {
 	data, err := readLimited(ref.Path)
 	if err != nil {
 		return nil, fmt.Errorf("calibration artifact: %w", err)
@@ -79,21 +79,13 @@ func LoadScoreCalibration(ref config.ScoreCalibrationReference, family, modelDir
 		return nil, fmt.Errorf("calibration artifact maps %s onto %q, want %s onto %q", artifact.Family, artifact.Scale, family, labelCorrectnessScale)
 	case !slices.Equal(artifact.Model.Labels, labels):
 		return nil, fmt.Errorf("calibration artifact labels %v differ from the classifier's %v", artifact.Model.Labels, labels)
-	case artifact.Model.Files["model.safetensors"] == "":
-		return nil, fmt.Errorf("calibration artifact does not bind model.safetensors")
+	case artifact.Model.ModelSHA256 == "":
+		return nil, fmt.Errorf("calibration artifact does not bind a model_sha256")
+	case artifact.Model.ModelSHA256 != modelSHA256:
+		return nil, fmt.Errorf("calibration artifact was fitted on a different model: model_sha256 %s, served %q", artifact.Model.ModelSHA256, modelSHA256)
 	}
 	if err := validKnots(artifact.Mapping.Knots); err != nil {
 		return nil, err
-	}
-	names := make([]string, 0, len(artifact.Model.Files))
-	for name := range artifact.Model.Files {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		if err := verifyFile(filepath.Join(config.ResolveModelPath(modelDir), name), artifact.Model.Files[name]); err != nil {
-			return nil, fmt.Errorf("calibration artifact was fitted on a different model: %w", err)
-		}
 	}
 	return &ScoreCalibration{Family: family, ArtifactID: artifact.ArtifactID, knots: artifact.Mapping.Knots}, nil
 }
@@ -143,20 +135,4 @@ func readLimited(path string) ([]byte, error) {
 		return nil, fmt.Errorf("%s exceeds %d bytes", path, scoreCalibrationLimit)
 	}
 	return data, nil
-}
-
-func verifyFile(path, want string) error {
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return err
-	}
-	if hex.EncodeToString(hash.Sum(nil)) != want {
-		return fmt.Errorf("%s sha256 differs", filepath.Base(path))
-	}
-	return nil
 }

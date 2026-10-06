@@ -141,7 +141,7 @@ artifact maps the classifier's probability onto that scale, and only scores on
 it rank against each other, so calibrating `domain` alone leaves a pool that
 mixes it with another family on priority until a second family shares the
 scale. A configuration that declares a calibration whose artifact is missing,
-altered, or fitted on different model files does not start, and a calibrated
+altered, or fitted on a model other than the one served does not start, and a calibrated
 leaf without a loaded artifact reports no comparable score rather than its raw
 probability. See the [domain signal](../signal/learned/domain#calibrated-scores)
 for the configuration.

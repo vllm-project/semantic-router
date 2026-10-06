@@ -43,7 +43,7 @@ def _manifest(
             "id": "fixture/model",
             "revision": "r1",
             "labels": LABELS,
-            "files": {"model.safetensors": "a" * 64},
+            "model_sha256": "a" * 64,
         },
         "operating_threshold": 0.5,
         "splits": {"calibration": "calibration.json", "held_out": "held_out.json"},
@@ -121,6 +121,11 @@ def test_held_out_label_without_rows_is_an_unsupported_region(tmp_path):
         ([{"id": "x", "category": "law", "label": "law", "score": 1.5}], {}, "[0, 1]"),
         (_rows("h", OVERCONFIDENT), {"family": "embedding"}, "domain family"),
         (_rows("h", OVERCONFIDENT), {"operating_threshold": 0.3}, "[0.5, 1]"),
+        (
+            _rows("h", OVERCONFIDENT),
+            {"model": {"id": "fixture/model", "revision": "r1", "labels": LABELS}},
+            "model_sha256",
+        ),
     ],
 )
 def test_unsafe_inputs_are_refused(tmp_path, held_out, overrides, message):

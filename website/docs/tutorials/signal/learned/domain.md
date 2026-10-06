@@ -112,11 +112,12 @@ global:
 
 The artifact comes from `tools/calibration/tuning/signal_calibration.py`, which
 fits an isotonic map on recorded predictions and reports it on a disjoint
-held-out split. It binds the model's files and label order by content, and the
-router verifies both when the category classifier starts, so a retrained or
-swapped model refuses the artifact instead of ranking with it. Calibration
-needs a local category model and a threshold of at least 0.5, where only the top
-label can match. Matching and its threshold are unchanged. The map changes only
+held-out split. It binds the label order and the model by `model_sha256`, the
+identity the model runtime reports for the files it serves, and the router
+checks both when the category classifier starts, so a retrained or swapped
+model refuses the artifact instead of ranking with it. Calibration needs the
+category classifier served by the model runtime, not a remote `backend`, and a
+threshold of at least 0.5, where only the top label can match. Matching and its threshold are unchanged. The map changes only
 the score a matched domain contributes to ranking.
 
 ## Dependencies and Limitations

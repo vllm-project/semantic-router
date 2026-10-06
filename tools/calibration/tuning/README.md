@@ -182,8 +182,10 @@ its schema names: the manifest is `signal-calibration/v1` and the artifact is
   mapping is a list of knots, rising strictly in raw score and never falling in
   calibrated value. The router interpolates linearly between knots and clamps
   outside them, so the order of raw scores is kept.
-- Identity: `model.labels` and `model.files` bind the classifier's label order
-  and file digests, `source` records the manifest and split digests, and
+- Identity: `model.labels` binds the classifier's label order and
+  `model.model_sha256` the model, as the identity the model runtime computes
+  over the files it loads and reports on `/v1/models`. `source` records the
+  manifest and split digests, and
   `artifact_id` hashes the artifact. A configuration pins the artifact file by
   `sha256`, which is the reviewed promotion. Nothing changes at request time.
 - Report: raw and calibrated accuracy, Brier score, ten-bin expected
@@ -212,7 +214,9 @@ python -m tuning.signal_calibration \
   --output vela-domain-label-correctness-v1.json
 ```
 
-The collector needs `torch`, `transformers`, `huggingface_hub` and `pyarrow`.
+The collector needs `torch`, `transformers`, `huggingface_hub`, `pyarrow` and
+the model runtime (`pip install -e src/model-runtime`), whose identity function
+it uses.
 The builder needs only the standard library.
 
 ## Add a Scenario

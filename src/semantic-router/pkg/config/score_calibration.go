@@ -26,9 +26,9 @@ func (r ScoreCalibrationReference) validate() error {
 }
 
 // validateCategoryCalibration admits a calibration only where its scale holds.
-// The artifact binds local model files, and it maps the top label's
-// probability, which is the only label that can match at a threshold of 0.5
-// or more.
+// The artifact binds the model the runtime serves, which a remote backend does
+// not report, and it maps the top label's probability, which is the only label
+// that can match at a threshold of 0.5 or more.
 func validateCategoryCalibration(model *CategoryModel) error {
 	if model.Calibration == nil {
 		return nil
@@ -37,7 +37,7 @@ func validateCategoryCalibration(model *CategoryModel) error {
 		return fmt.Errorf("classifier.domain.%w", err)
 	}
 	if model.Backend != nil {
-		return fmt.Errorf("classifier.domain.calibration binds local model files and cannot be used with a backend")
+		return fmt.Errorf("classifier.domain.calibration binds the model the runtime serves and cannot be used with a backend")
 	}
 	if model.Threshold < 0.5 {
 		return fmt.Errorf("classifier.domain.calibration maps the top label's probability and requires a threshold of at least 0.5")

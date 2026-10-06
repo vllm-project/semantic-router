@@ -65,7 +65,7 @@ type Classifier struct {
 	keywordEmbeddingClassifier *EmbeddingClassifier
 
 	// domainCalibration maps domain scores onto the declared calibrated scale
-	// once the local category model it was fitted on is initialized.
+	// once the runtime serves the category model it was fitted on.
 	domainCalibration *decision.ScoreCalibration
 
 	// Dependencies - MCP-based classifiers

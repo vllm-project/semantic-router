@@ -307,7 +307,7 @@ func (c *Classifier) initializeConfiguredCategoryRuntime() error {
 		return c.loadDomainCalibration()
 	}
 	if c.Config.CategoryModel.Calibration != nil {
-		return fmt.Errorf("classifier.domain.calibration requires the local category classifier")
+		return fmt.Errorf("classifier.domain.calibration requires the category classifier")
 	}
 	if c.IsMCPCategoryEnabled() {
 		return c.initializeMCPCategoryClassifier()
@@ -315,18 +315,32 @@ func (c *Classifier) initializeConfiguredCategoryRuntime() error {
 	return nil
 }
 
-// loadDomainCalibration binds the declared calibration to the category model
-// and label order this classifier actually loaded.
+// servedModel is a category backend that reports the identity of the model
+// the runtime serves it from.
+type servedModel interface {
+	ModelSHA256() (string, error)
+}
+
+// loadDomainCalibration binds the declared calibration to the label order and
+// the served model of the category classifier this router prepared.
 func (c *Classifier) loadDomainCalibration() error {
 	ref := c.Config.CategoryModel.Calibration
 	if ref == nil {
 		return nil
 	}
+	served, ok := c.categoryInitializer.(servedModel)
+	if !ok {
+		return fmt.Errorf("classifier.domain.calibration requires a category classifier served by the model runtime")
+	}
+	identity, err := served.ModelSHA256()
+	if err != nil {
+		return fmt.Errorf("classifier.domain.calibration: %w", err)
+	}
 	labels := make([]string, c.CategoryMapping.GetCategoryCount())
 	for i := range labels {
 		labels[i], _ = c.CategoryMapping.GetCategoryFromIndex(i)
 	}
-	calibration, err := decision.LoadScoreCalibration(*ref, config.SignalTypeDomain, c.Config.CategoryModel.ModelID, labels)
+	calibration, err := decision.LoadScoreCalibration(*ref, config.SignalTypeDomain, identity, labels)
 	if err != nil {
 		return fmt.Errorf("classifier.domain.calibration: %w", err)
 	}

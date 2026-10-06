@@ -157,6 +157,22 @@ func (b *ownedSequenceBackend) Init(_ string, _ bool, classes ...int) error {
 	return nil
 }
 
+// ModelSHA256 is the identity the runtime reports for the model behind this
+// binding, which is what a calibration artifact is fitted on.
+func (b *ownedSequenceBackend) ModelSHA256() (string, error) {
+	services := b.runtime.Services()
+	if services == nil {
+		return "", serving.ErrNotConfigured
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), modelservice.ReadyTimeout())
+	defer cancel()
+	card, err := services.Card(ctx, b.spec.Binding.Deployment)
+	if err != nil {
+		return "", fmt.Errorf("model_runtime deployment %q: %w", b.spec.Binding.Deployment, err)
+	}
+	return card.ModelSHA256, nil
+}
+
 func (b *ownedSequenceBackend) Classify(ctx context.Context, text string) (tasks.LabelDistribution, error) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()

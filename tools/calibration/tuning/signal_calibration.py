@@ -300,17 +300,14 @@ def _validate_manifest(manifest: Mapping[str, Any], path: Path) -> None:
         raise ConfidenceCalibrationError(
             "model.labels must list at least two distinct labels"
         )
-    files = model.get("files")
+    identity = model.get("model_sha256")
     if (
-        not isinstance(files, Mapping)
-        or not all(
-            isinstance(digest, str) and len(digest) == SHA256_HEX_LENGTH
-            for digest in files.values()
-        )
-        or "model.safetensors" not in files
+        not isinstance(identity, str)
+        or len(identity) != SHA256_HEX_LENGTH
+        or identity.strip("0123456789abcdef")
     ):
         raise ConfidenceCalibrationError(
-            "model.files must bind model.safetensors by sha256"
+            "model.model_sha256 must be the runtime's model identity, 64 lowercase hex"
         )
     threshold = manifest["operating_threshold"]
     if (

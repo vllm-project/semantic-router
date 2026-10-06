@@ -5,7 +5,9 @@ The rows are the quality baseline's domain split (``baseline_tasks.py``):
 MMLU-Pro test questions whose source is not MMLU, since Vela Domain trains on
 MMLU (#4300). Each row records the top label and its probability. Rows split
 into calibration and held_out by a hash of the question id, and the script
-writes both files plus a ``signal-calibration/v1`` manifest. It never changes
+writes both files plus a ``signal-calibration/v1`` manifest. The manifest binds
+the model by the identity the model runtime computes for the same directory,
+which its ``/v1/models`` card reports as ``model_sha256``. It never changes
 router configuration.
 """
 
@@ -21,10 +23,11 @@ import pyarrow.parquet as pq
 import torch
 from huggingface_hub import hf_hub_download
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from vllm_sr_runtime.families.task_heads import package as task_heads
+from vllm_sr_runtime.registry.artifacts import named_files
 
 DATASET = "TIGER-Lab/MMLU-Pro"
 DATASET_FILE = "data/test-00000-of-00001.parquet"
-MODEL_FILES = ("model.safetensors", "config.json", "tokenizer.json")
 
 
 def _sha256(path: Path) -> str:
@@ -122,7 +125,9 @@ def main() -> int:
             "id": args.model_id,
             "revision": args.model_revision,
             "labels": labels,
-            "files": {name: _sha256(args.model_dir / name) for name in MODEL_FILES},
+            "model_sha256": task_heads.identity(
+                named_files(args.model_dir, task_heads.read(args.model_dir).files)
+            ),
         },
         "operating_threshold": 0.5,
         "splits": {split: f"{split}.json" for split in results},
