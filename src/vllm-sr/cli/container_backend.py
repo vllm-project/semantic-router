@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
+import os
+
+from cli import apple_runtime
+
 from cli.consts import HEALTH_CHECK_TIMEOUT
 from cli.container_cli import container_status
 from cli.container_runtime import get_container_runtime
 from cli.core import show_logs, show_status, start_vllm_sr, stop_vllm_sr
-from cli.gateway_mode import GATEWAY_EXTPROC
+from cli.gateway_mode import GATEWAY_EXTPROC, runs_envoy
 from cli.instance_setup import (
     attach_controller,
     stop_managed_controller,
@@ -49,24 +53,63 @@ class ContainerBackend:
         if runtime_config_file is None:
             runtime_config_file = kwargs.get("runtime_config_file")
         with self._lifecycle_lock():
-            start_vllm_sr(
-                config_file,
-                env_vars=env_vars,
-                source_config_file=source_config_file,
-                runtime_config_file=runtime_config_file,
-                image=image,
-                router_image=router_image,
-                envoy_image=envoy_image,
-                dashboard_image=dashboard_image,
-                topology=topology,
-                pull_policy=pull_policy,
-                enable_observability=enable_observability,
-                runtime_config_lock=runtime_config_lock,
-                startup_timeout=startup_timeout,
-                gateway=gateway,
-            )
-        # This control plane changes capabilities in the persistent frontend. It has only
-        # a group-restricted Unix socket, never a public Docker control port.
+            apple = (
+                (env_vars or {}).get("VLLM_SR_PLATFORM")
+                or os.getenv("VLLM_SR_PLATFORM")
+                or os.getenv("DASHBOARD_PLATFORM")
+                or ""
+            ).strip().lower() == "apple"
+            if apple:
+                from cli.container_images import get_runtime_images
+
+                images = get_runtime_images(
+                    image=image,
+                    router_image=router_image,
+                    envoy_image=envoy_image,
+                    dashboard_image=dashboard_image,
+                    pull_policy=pull_policy,
+                    platform="apple",
+                    include_envoy=runs_envoy(gateway),
+                    include_dashboard=(env_vars or {}).get("DISABLE_DASHBOARD")
+                    != "true",
+                )
+                state = apple_runtime.start_bridge(images["router"])
+                router_image = state["image"]
+                envoy_image = images.get("envoy")
+                dashboard_image = images.get("dashboard")
+                pull_policy = "never"
+                os.environ[apple_runtime.ENDPOINT_ENV] = (
+                    f"http://host.docker.internal:{state['port']}"
+                )
+                os.environ[apple_runtime.TOKEN_ENV] = state["token"]
+            else:
+                apple_runtime.stop_bridge()
+            try:
+                start_vllm_sr(
+                    config_file,
+                    env_vars=env_vars,
+                    source_config_file=source_config_file,
+                    runtime_config_file=runtime_config_file,
+                    image=image,
+                    router_image=router_image,
+                    envoy_image=envoy_image,
+                    dashboard_image=dashboard_image,
+                    topology=topology,
+                    pull_policy=pull_policy,
+                    enable_observability=enable_observability,
+                    runtime_config_lock=runtime_config_lock,
+                    startup_timeout=startup_timeout,
+                    gateway=gateway,
+                )
+            except BaseException:
+                if apple:
+                    apple_runtime.stop_bridge()
+                raise
+            finally:
+                if apple:
+                    os.environ.pop(apple_runtime.ENDPOINT_ENV, None)
+                    os.environ.pop(apple_runtime.TOKEN_ENV, None)
+
         attach_controller(
             source_config_file or config_file,
             runtime_config_file or config_file,
@@ -77,8 +120,11 @@ class ContainerBackend:
 
     def teardown(self) -> None:
         with self._lifecycle_lock():
-            stop_managed_controller()
-            stop_vllm_sr()
+            try:
+                stop_managed_controller()
+                stop_vllm_sr()
+            finally:
+                apple_runtime.stop_bridge()
 
     @staticmethod
     def _lifecycle_lock():
@@ -89,9 +135,17 @@ class ContainerBackend:
         )
 
     def logs(self, service: str, follow: bool = False) -> None:
+        if service == "model-runtime":
+            apple_runtime.bridge_logs(follow)
+            return
         show_logs(service, follow=follow)
 
     def status(self, service: str = "all") -> None:
+        if service == "model-runtime":
+            apple_runtime.bridge_status()
+            return
+        if service == "all" and apple_runtime.read_state() is not None:
+            apple_runtime.bridge_status()
         show_status(service)
 
     def get_dashboard_url(self) -> str | None:

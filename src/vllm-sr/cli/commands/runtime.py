@@ -272,9 +272,20 @@ def _execute_serve(
                 "--startup-timeout is supported only for local Docker deployments"
             )
     apply_container_runtime_override(runtime)
-    platform = resolve_execution_platform(
-        platform, target=resolved_target, context=context
-    )
+    if _platform_hint(platform) == "apple":
+        from cli.apple_runtime_environment import (
+            validate_apple_host,
+            validate_local_docker,
+        )
+        from cli.container_runtime import get_container_runtime
+
+        validate_apple_host(resolved_target, get_container_runtime())
+        validate_local_docker()
+        platform = "apple"
+    else:
+        platform = resolve_execution_platform(
+            platform, target=resolved_target, context=context
+        )
     if engine and quiet_logs():
         artifact = (model_options or {}).get("artifact") or "the configured model"
         progress(f"Engine mode: serving {artifact} on the {platform} platform")
@@ -505,9 +516,9 @@ def _execute_serve(
 )
 @click.option(
     "--platform",
-    type=click.Choice(PLATFORMS),
+    type=click.Choice((*PLATFORMS, "apple")),
     default=None,
-    help="Execution backend: auto (default) discovers the deployment target; cpu, cuda or rocm select it explicitly.",
+    help="Execution backend: auto (default), cpu, cuda, rocm; apple uses the experimental native MPS host bridge on Apple silicon.",
 )
 @click.option(
     "--algorithm",
@@ -629,6 +640,13 @@ def _execute_serve(
     is_eager=True,
 )
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
+@click.option(
+    "--models", "models_file", default=None, help="Apple engine model-list file."
+)
+@click.option("--device", default=None, help="Apple engine device (mps only).")
+@click.option("--host", default=None, help="Apple engine loopback bind address.")
+@click.option("--port", type=int, default=None, help="Apple engine TCP port.")
+@click.option("--uds", default=None, help="Unsupported for Apple engine mode.")
 def serve(
     model: str | None,
     engine: bool,
@@ -666,8 +684,38 @@ def serve(
     batch_window_ms: float | None,
     dtype: str | None,
     enable_shared_context: bool | None,
+    models_file: str | None,
+    device: str | None,
+    host: str | None,
+    port: int | None,
+    uds: str | None,
 ) -> None:
     ctx = click.get_current_context()
+    runtime = resolve_container_runtime(ctx, container_runtime, runtime)
+    if _platform_hint(platform) == "apple" and (model or models_file):
+        from cli.apple_runtime_engine import run_apple_engine
+
+        run_apple_engine(
+            ctx,
+            (model,) if model else (),
+            models_file=models_file,
+            revision=revision,
+            device=device,
+            host=host,
+            port=port,
+            uds=uds,
+            profile=None,
+            log_level=log_level,
+            target=target,
+            runtime=runtime,
+            image=router_image or image,
+            pull_policy=image_pull_policy,
+        )
+        return
+    if any(value is not None for value in (models_file, device, host, port, uds)):
+        raise click.UsageError(
+            "--models/--device/--host/--port/--uds require Apple engine mode"
+        )
     model_options = validate_model_options(
         model=model,
         revision=revision,
@@ -735,7 +783,7 @@ def serve(
 @click.command()
 @click.argument(
     "service",
-    type=click.Choice(["envoy", "router", "dashboard", "all"]),
+    type=click.Choice(["envoy", "router", "dashboard", "model-runtime", "all"]),
     default="all",
 )
 @click.option("--target", default=None, help=TARGET_HELP)
@@ -771,11 +819,17 @@ def status(
         )
     )
     backend = _build_backend(target, namespace=namespace, context=context)
+    if service == "model-runtime" and resolve_target(target) != TARGET_DOCKER:
+        raise ValueError(
+            "model-runtime status is available only for the local Apple host service"
+        )
     backend.status(service)
 
 
 @click.command()
-@click.argument("service", type=click.Choice(["envoy", "router", "dashboard"]))
+@click.argument(
+    "service", type=click.Choice(["envoy", "router", "dashboard", "model-runtime"])
+)
 @click.option("--follow", "-f", is_flag=True, help="Follow log output")
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
@@ -813,6 +867,10 @@ def logs(
         )
     )
     backend = _build_backend(target, namespace=namespace, context=context)
+    if service == "model-runtime" and resolve_target(target) != TARGET_DOCKER:
+        raise ValueError(
+            "model-runtime logs are available only for the local Apple host service"
+        )
     backend.logs(service, follow=follow)
 
 
