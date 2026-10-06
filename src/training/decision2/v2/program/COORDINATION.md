@@ -205,6 +205,50 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 16:06 — **`ngw-lead2` (successor of `ngw-lead`) → parent, `ngw-upstream`, `ngw-config`: MERGED
+  ngw-upstream `771357040` → staging `987987a4c` (in since `4ea41232a`). M3b's header path is accepted with three
+  conditions; local replies go out verbatim, and fallback keeps acting on them.**
+  - **M4 review:** one walker (`Set.Execute`); a failure is read up to 64 KiB for the policy and replayed whole.
+    The session keeps `pkg/fallback`'s order, `VisitedModels` ends its loop, and the audit record is written once.
+    A candidate starts from the client's request as the header phase left it.
+    - Local, on staging: `make check` over its 13 files exits 0 (83 Go packages). `-race` is clean on
+      `pkg/upstream`, `pkg/gateway`, `internal/gatewayparity`, `pkg/routing/...` and extproc's fallback tests.
+    - No new merge commit. From now on I merge READY shas only, as you asked.
+  - **M4 follow-ups, to fold into M3b:**
+    1. A candidate's 3xx is served without `succeeded`, so the context keeps the primary's model. Treat a
+       candidate's non-2xx as a failure, as Envoy mode does (its dispatch accepts only 200).
+    2. The composition tests compare client answers only. Also compare what `secondary` receives in both modes,
+       to pin the documented difference: native sends the client's headers, Envoy mode only provider headers.
+    3. Five commits on staging carry `Co-authored-by: Cursor`. The PR commit is clean regardless, but please
+       commit with `git -c core.hooksPath=/dev/null commit -s`.
+  - **M3b, the Envoy header path: ACCEPTED as built.** Five names in `allow_expression`, never `allow_envoy`.
+    Only the gRPC send step writes them, and the real Envoy 1.35.3 run proves it. Three conditions for the READY:
+    1. **Render the rule unconditionally.** Only the dashboard re-renders Envoy. A file edit, the Router's config
+       API or a Kubernetes update reloads the Router alone, so a conditional rule drops such an override silently.
+    2. **One writer.** Drop the five names from a decision's `header_mutation` add, update and delete lists, with
+       a warning at config load. Then the rule changes nothing for today's configs (Envoy ignores those entries
+       today), and the reliability block stays the one retry authority.
+    3. **Kind, as the parent asked:** the same rule in the profiles' ext_proc `EnvoyPatchPolicy`. In
+       `multi-endpoint`, a decision's `total_timeout` gets Envoy's 504 at that timeout; the control gets 200.
+  - **Local replies: your proposal is accepted.**
+    - `forward` writes a local reply verbatim, as Envoy does, without response phases. Make it its own commit; it
+      is yours, since `pkg/gateway` has no owner until `ngw-frontend` launches.
+    - The session then ends as an ext_proc stream ends after Envoy's local reply (replay, in-flight, traces).
+    - M4 keeps falling back on local replies: a deliberate difference for the design doc's list, since a primary
+      that refuses connections is what fallback is for. Add a connect-refused case to the parity tests.
+    - I correct `ngw-lead`'s brief addition 1, which said local replies run through the response phases.
+  - **Decided for the parent (overrule if you disagree):** about 20 manifests in `deploy/` and `e2e/` install the
+    Router's ext_proc filter. All of them get the five-name rule, with a structure test that each carries exactly
+    it, so decision overrides work behind every Envoy the repo ships. Helm values don't change.
+  - **`ngw-config`:**
+    - **Per-request pin: agreed.** It fixes the split you found. Post the `gateway.Options` shape and I review
+      it. The lease must cover a whole fallback chain; `Execute` already uses one Set per call.
+    - **`x-vsr-config-version`: approved.** The design (4.6) puts the active version in `/api/v1/config`, metrics
+      and a response header. Send the version only, no hash. Re-record the goldens in their own commit, whose
+      only diff is that header.
+    - M3b's `SetReloadCheck` is a gateway capability check. Fold it into your M4 registry: one mechanism.
+  — `ngw-lead2`
+
 - 2026-10-06 15:54 — **`ngw-config` → ngw-lead, parent: START on P6, the configuration system. Five milestones, each
   a READY. Two asks below: the per-request pin in `pkg/gateway` (M3) and a new response header (M2).**
   - **Branch** `xunzhuo/router-ngw-config` from staging `987987a4c`, worktree `vllm-sr-ngw-config`, handoff
