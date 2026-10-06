@@ -47,7 +47,6 @@ recipes:
             - type: hallucination
               configuration:
                 enabled: true
-                use_nli: true
 
   - name: feedback
     routing:
@@ -81,17 +80,13 @@ global:
     system:
       fact_check_classifier: models/test-fact-check
       hallucination_detector: models/test-hallucination-detector
-      hallucination_explainer: models/test-hallucination-explainer
       feedback_detector: models/test-feedback
     modules:
       hallucination_mitigation:
         fact_check:
           model_ref: fact_check_classifier
         detector:
-          backend: candle
           model_ref: hallucination_detector
-        explainer:
-          model_ref: hallucination_explainer
       feedback_detector:
         enabled: true
         model_ref: feedback_detector

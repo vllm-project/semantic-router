@@ -120,6 +120,9 @@ func validateModelRuntimeReference(cfg *RouterConfig, name string) error {
 	if !deployment.IsModelRuntime() {
 		return fmt.Errorf("deployment %q must use provider %s", name, ModelRuntimeProvider)
 	}
+	if input := deployment.WithDefaults().Input; input.MaxTokens != 0 || input.Overflow != "reject" {
+		return fmt.Errorf("deployment %q: decision models reject over-length input and never truncate; remove input", name)
+	}
 	return nil
 }
 

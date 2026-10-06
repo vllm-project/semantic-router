@@ -153,11 +153,11 @@ global:
         timeout: 10
         collection_prefix: "mem:"
         index_name: mem_idx
-        dimension: 384               # Must match your embedding model
+        dimension: 256               # mmbert: 64, 128, 256, 512 or 768
         metric_type: COSINE           # COSINE, L2, or IP
         index_m: 16
         index_ef_construction: 256
-      embedding_model: bert
+      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.40
       hybrid_search: true
@@ -165,9 +165,13 @@ global:
       adaptive_threshold: true
 ```
 
-The threshold in this example is calibrated for `bert` (`mom-embedding-light`)
-with weighted hybrid scoring. Other embedding models and search modes need
-their own recall and unrelated-query checks before choosing a threshold.
+`dimension` must be a size the embedding model serves. With any other size the
+router logs `Failed to create memory store: … Memory will be disabled` and
+runs without memory.
+
+The 0.40 threshold is a starting point for weighted hybrid scoring, not a
+calibrated value. Each embedding model, vector size and search mode needs its
+own recall and unrelated-query checks before you choose a threshold.
 Lower thresholds can also retrieve superseded facts alongside corrections;
 check updated facts before relying on the example in production.
 
@@ -182,7 +186,7 @@ check updated facts before relying on the example in production.
 | `timeout` | `10` | Connection timeout in seconds |
 | `collection_prefix` | `mem:` | Key prefix for HASH documents |
 | `index_name` | `mem_idx` | FT.CREATE index name |
-| `dimension` | derived | Embedding vector dimension; when omitted, `mmbert` uses 256 and current other memory embedding models use 384 |
+| `dimension` | derived | Embedding vector dimension; when omitted, `mmbert` uses 256 and the other embedding models their full width |
 | `metric_type` | `COSINE` | Distance metric: `COSINE`, `L2`, or `IP` |
 | `index_m` | `16` | HNSW M parameter (links per node) |
 | `index_ef_construction` | `256` | HNSW build-time search width |

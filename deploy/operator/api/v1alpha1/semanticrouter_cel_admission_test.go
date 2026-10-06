@@ -22,7 +22,19 @@ import (
 // PerCallLimit and RuntimeCELCostBudget) without importing that package.
 func loadCRDValidator(t *testing.T) (*schema.Structural, *schemacel.Validator) {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "..", "config", "crd", "bases", "vllm.ai_semanticrouters.yaml"))
+	structural := loadCRDStructural(t, filepath.Join("..", "..", "config", "crd", "bases", "vllm.ai_semanticrouters.yaml"))
+	validator := schemacel.NewValidator(structural, true, 1_000_000)
+	if validator == nil {
+		t.Fatal("CRD schema has no x-kubernetes-validations; the CEL rules are gone")
+	}
+	return structural, validator
+}
+
+// loadCRDStructural reads a generated CRD copy into the structural schema the
+// API server validates and prunes custom resources with.
+func loadCRDStructural(t *testing.T, path string) *schema.Structural {
+	t.Helper()
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read CRD: %v", err)
 	}
@@ -41,11 +53,7 @@ func loadCRDValidator(t *testing.T) (*schema.Structural, *schemacel.Validator) {
 	if err != nil {
 		t.Fatalf("structural schema: %v", err)
 	}
-	validator := schemacel.NewValidator(structural, true, 1_000_000)
-	if validator == nil {
-		t.Fatal("CRD schema has no x-kubernetes-validations; the CEL rules are gone")
-	}
-	return structural, validator
+	return structural
 }
 
 func celErrors(t *testing.T, structural *schema.Structural, validator *schemacel.Validator, cr string) []string {

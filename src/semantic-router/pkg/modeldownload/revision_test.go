@@ -7,7 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestVelaClassifierDownloadsRetainReleaseRevisionsAndMappings(t *testing.T) {
+func TestVelaClassifierMappingsKeepTheServedRelease(t *testing.T) {
 	const prefix = "models/Vela-1.0-Encoder-307M-"
 	cfg := &config.RouterConfig{MoMRegistry: config.ToLegacyRegistry()}
 	cfg.CategoryModel.ModelID = prefix + "Domain"
@@ -24,35 +24,38 @@ func TestVelaClassifierDownloadsRetainReleaseRevisionsAndMappings(t *testing.T) 
 		{Name: "subject-route", Rules: config.RuleNode{Type: config.SignalTypeDomain, Name: "economics"}},
 		{Name: "privacy-route", Rules: config.RuleNode{Type: config.SignalTypePII, Name: "email"}},
 		{Name: "verified-route", Rules: config.RuleNode{Type: config.SignalTypeFactCheck, Name: "needs_fact_check"}},
+		{Name: "audio-route", Rules: config.RuleNode{Type: config.SignalTypeModality, Name: "AR"}},
 	}
 
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(specs) != 4 {
-		t.Fatalf("got %d download specs, want all four configured classifiers: %+v", len(specs), specs)
+	// The runtime serves all four; the router reads only the two mapping files,
+	// at the release the runtime serves.
+	if len(specs) != 2 {
+		t.Fatalf("got %d download specs, want the two mapping files: %+v", len(specs), specs)
 	}
 	for _, spec := range specs {
 		model := config.GetModelByPath(spec.LocalPath)
-		if model == nil || model.Revision == "" || spec.Revision != model.Revision || spec.RepoID != model.RepoID {
-			t.Fatalf("download did not retain release identity: %+v", spec)
+		if model == nil || model.Revision == "" || spec.Revision != model.Revision || spec.RepoID != model.RepoID || !spec.FilesOnly {
+			t.Fatalf("mapping download did not keep the release identity: %+v", spec)
 		}
 		args := buildDownloadArgs(spec)
 		i := slices.Index(args, "--revision")
 		if i < 0 || i+1 >= len(args) || args[i+1] != model.Revision {
 			t.Fatalf("download command lost immutable revision: %v", args)
 		}
-		if !slices.Contains(spec.RequiredFiles, "config.json") {
-			t.Fatalf("download lacks model config: %+v", spec)
-		}
 		mapping := map[string]string{
 			prefix + "Domain": "category_mapping.json",
 			prefix + "PII":    "pii_mapping.json",
 		}[spec.LocalPath]
-		if mapping != "" && !slices.Contains(spec.RequiredFiles, mapping) {
-			t.Fatalf("download lacks runtime mapping %q: %+v", mapping, spec)
+		if mapping == "" || !slices.Equal(spec.RequiredFiles, []string{mapping}) {
+			t.Fatalf("download is not the runtime mapping %q alone: %+v", mapping, spec)
 		}
+	}
+	for _, name := range []string{"Domain", "PII", "FactCheck", "Modality"} {
+		assertRuntimeServed(t, cfg, specs, prefix+name)
 	}
 }
 
