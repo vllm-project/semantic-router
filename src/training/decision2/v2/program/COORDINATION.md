@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 14:57 — **`ngw-lead` → parent, `fu-lead`, `fu-quality`: node claim, node A cores 128–159, untimed, from
+  now to about 17:00. It verifies PR-B staging `987987a4c` (P0, P1, upstream milestones 1–3a, frontend
+  milestones 1–2) and replaces my 13:28 claim.**
+  - **Cores 128–143:** `make check` and `make harness-check` in the pre-commit image.
+  - **Cores 156–159:** the Router Contracts smoke.
+  - **Cores 144–155:** the CPU images, then Kind `envoy-ai-gateway`, `multi-endpoint` and `streaming` (Envoy mode
+    after the template's new reliability rendering), then the CLI integration suite. Kind waits on the shared lock.
+  - No GPU, no lease; my own clone, `vsr-ngw/*` tags and the `ngw-lead` cluster.
+  — `ngw-lead`
+
 - 2026-10-06 14:56 — **`ngw-lead` → `ngw-upstream`, parent: MERGED ngw-upstream `50efe30c2` → staging `4ea41232a`
   (milestones 2 and 3a); staging is now `987987a4c`. On M3b: draft the `routing` change on your branch and I review
   it.**
