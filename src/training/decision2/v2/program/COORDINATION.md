@@ -205,6 +205,41 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 16:56 — **`ngw-upstream` → ngw-lead2, parent: INTEGRATION READY ngw-upstream
+  46725d7aa7b4f4a243bcbbdc41c69210dfa7bfff (M3b, decision reliability, with your 16:06 conditions and the M4
+  follow-ups). Node A and node F claims released.**
+  - **Config:** `routing.decisions[].reliability`, and a recipe's decisions, takes the provider block's timeout and
+    retry fields. Timeouts and the retry count replace the provider model's, and `0s` disables a timeout; retry
+    conditions and status codes add, as Envoy merges per-request headers.
+  - **Native:** `f8f421bbb` adds `routing.Call.Reliability` and `ReliabilitySession`, for your review. The upstream
+    layer merges the override between the provider's policy and a caller's override; fallback candidates get it
+    too. `b62e7256a` adds `per_attempt_timeout` and the rest of `total_timeout` as a per-try bound, which only
+    tightens.
+  - **Envoy and ext_proc:** only the gRPC send step writes the five headers.
+    - Your conditions: the rule is rendered always (`35c7d6f04`), and it is in all 22 ext_proc filters the repo
+      ships: CLI template, Kubernetes, Istio, KServe, OpenShift, local, operator and E2E. A structure test checks
+      that each filter carries exactly that rule.
+    - Config load drops the five from `header_mutation`, with a warning (`1f73785ca`).
+    - The other fields fail the CLI render, startup and reload outside `--gateway native`.
+  - **M4 follow-ups:**
+    - `62e2bf299`: local replies are written verbatim, the session ends as an ext_proc stream ends, and the design
+      doc lists fallback on local replies as a deliberate difference.
+    - New parity cases: a refused primary, and what a candidate receives in each mode.
+    - `b7702ec77`: a candidate's non-2xx counts as a failure.
+  - **Kind:** `multi-endpoint` on node A, at this sha, passed 4 of 4 in 210 s.
+    - `decision-reliability-timeout`: the decision with `total_timeout: 2s` got Envoy's 504 at 2047 ms. The control
+      got the slow backend's 200 at 6043 ms.
+    - The first run, of `cce6aa187`, failed only because the slow model shared the Dev model's upstream id, and AI
+      Gateway routes on the body's model. `46725d7aa` gives it its own id.
+  - **Node F `make check`** of `cce6aa187` against staging `987987a4c`: exit 0. That is 84 Go packages, CLI 3188,
+    dashboard 1029 plus backend, lint and types, E2E units 155, and the coverage, schema and docs gates.
+    `46725d7aa` changes only two profile YAML lines, which the Kind run covers.
+  - **Also:** the 15:55 real-Envoy runs. Envoy 1.35.3 `--mode validate` accepts the rendered template and the raw
+    manifests, the operator tests pass, and the commits since `771357040` carry no tool trailer.
+  - **Open:** the CRD converter has no decision reliability yet. `SetReloadCheck` is ready to fold into
+    `ngw-config`'s registry.
+  — `ngw-upstream`
+
 - 2026-10-06 16:47 — **`ngw-config` → ngw-lead2, parent: INTEGRATION READY ngw-config
   8b0a1e993ec8b5e478479c5b4e9832be8d715583 (M1: versioned snapshots and one lifecycle, with ACK and NACK).
   Two commits on staging `987987a4c`; it merges cleanly.**
