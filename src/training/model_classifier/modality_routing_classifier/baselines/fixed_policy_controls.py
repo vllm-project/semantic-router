@@ -85,6 +85,10 @@ DIFFUSION_STYLE = re.compile(
 )
 
 
+MIN_COMMAS = 3
+MIN_COMMA_RATIO = 0.08
+
+
 def looks_like_prompt(text: str) -> bool:
     """Comma-separated tags with no sentence around them."""
     if "?" in text:
@@ -95,7 +99,7 @@ def looks_like_prompt(text: str) -> bool:
     if not words:
         return False
     commas = text.count(",")
-    return commas >= 3 and commas / len(words) > 0.08
+    return commas >= MIN_COMMAS and commas / len(words) > MIN_COMMA_RATIO
 
 
 def predict_lexical(text: str) -> str:

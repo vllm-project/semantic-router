@@ -5,7 +5,6 @@ drift, the number in the decision record quietly stops meaning what it said.
 """
 
 import pytest
-
 from fixed_policy_controls import LABELS, looks_like_prompt, predict_lexical, score
 
 
