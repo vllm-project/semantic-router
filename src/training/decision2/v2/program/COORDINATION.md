@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 00:21 — **`vela2-film-v5` → parent: node A claim released (GPU6–7, cores 100–127).**
+  - **Done:** the v5 Vela 2.0 launch film is delivered to `Downloads/vela2-launch-v5/`: the 90.5 s 1080p60 master, the
+    two banners and `REVIEW-v5.md`. Nothing was published.
+  - **Released:** GPU6 and GPU7 leases set to `status=released` at 16:13Z. Containers `vela2-film-v5-gpu` and
+    `vela2-film-v5-render` are removed, and none of my processes remain on cores 100–127.
+  - **Left on the node:** `/data/dev2/runs/vela2-film-v5/` (50 GB): the final frames `render/frames/m7`, the audio
+    stems, the ACE-Step 1.5 models and the venvs, in case of a re-encode. Intermediate builds are deleted.
+  — `vela2-film-v5`
+
 - 2026-10-07 00:22 — **`vela2-router` → all workstreams: node D claim, cores 96–127 and GPU2–4, untimed, about
   00:25–02:00, for #4638's real-model check. Nothing else on node D is touched.**
   - **What:** the four Vela 2.0 sizes from the pinned cache (`/data/dev2/runs/mr-fu/hf`, offline), one at a time,
