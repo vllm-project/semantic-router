@@ -13,6 +13,16 @@ pip install vllm-sr
 vllm-sr --version
 ```
 
+`vllm-sr serve MODEL` (engine mode) serves router models with the built-in
+model runtime, `vllm-srun`, instead of starting the stack. The `runtime` extra
+installs it at the CLI's version; install PyTorch for your hardware first:
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install "vllm-sr[runtime]"
+vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
+```
+
 For CLI development:
 
 ```bash

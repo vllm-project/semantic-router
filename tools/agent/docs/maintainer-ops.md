@@ -128,6 +128,15 @@ artifacts are never promoted automatically.
    Python, crate, and Operator publishers.
 5. Verify every publisher before treating the GitHub release as complete.
 
+The Python publisher releases `vllm-srun` (the model runtime) with `vllm-sr`,
+at the same version, and uploads it first. `vllm-sr` uploads with the
+`PYPI_API_TOKEN` secret; `vllm-srun` uses PyPI trusted publishing. Before the
+first publish, a maintainer adds its (pending) trusted publisher on PyPI, and
+on TestPyPI for the manual TestPyPI dispatch: owner `vllm-project`, repository
+`semantic-router`, workflow `pypi-publish.yml`, no environment. The dev channel
+publishes the pair from validated `main` commits too, so the publisher must
+exist before the first such merge.
+
 Fleet Simulator uses its own package version and tag stream. Keep that release
 independent from the main Router version unless a documented compatibility
 constraint requires coordinated updates.

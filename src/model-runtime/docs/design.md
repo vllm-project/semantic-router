@@ -52,7 +52,7 @@ running packaged remote code (`trust_remote_code`).
 | --- | --- |
 | Architecture | A contract-first, standalone-process Python runtime, supervised by the router. Three plugin layers: model family, engine, accelerator. No Go/cgo/Rust core. |
 | Protocol | HTTP/JSON with a checked-in OpenAPI schema; a Unix domain socket (UDS) between router and runtime, TCP in engine mode; a generated Go client. |
-| Naming | Domain `src/model-runtime/`, package `vllm_srun`, engine mode `vllm-sr serve <hf-model>`. Router mode keeps working and the router manages the runtime's lifecycle. |
+| Naming | Domain `src/model-runtime/`, distribution and command `vllm-srun`, package `vllm_srun`, engine mode `vllm-sr serve <hf-model>`. The distribution is released with `vllm-sr`, at its version; `vllm-sr[runtime]` pins it. Router mode keeps working and the router manages the runtime's lifecycle. |
 | Numerics | The default path is byte-identical to the released packages' runtime. Shared context, cross-request batching and max speed are opt-in profiles, each with a measured accuracy impact. |
 | Router | A `decision` signal and a `decision` selector, plus the router-managed lifecycle. Fail-open: a late or failed answer leaves the signal unknown and the selector falls back. |
 | Hardware | ROCm (MI300 / MI325X) and CPU validated; CUDA implemented and unit-tested, unvalidated. |
@@ -843,7 +843,7 @@ together, which lifts throughput under load without changing an answer.
 Engine mode runs a runtime process in the current Python environment:
 
 ```bash
-pip install ./src/model-runtime          # or the vllm-sr image, or src/model-runtime/Dockerfile
+pip install "vllm-sr[runtime]"           # after PyTorch; or the vllm-sr image, or src/model-runtime/Dockerfile
 vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
 vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-Domain vllm-sr/Vela-1.0-Encoder-307M-PII --device cpu
 vllm-sr serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --profile shared_context

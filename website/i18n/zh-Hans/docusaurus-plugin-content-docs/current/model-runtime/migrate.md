@@ -12,7 +12,7 @@ translation:
 
 早期版本在路由器内部用三种后端运行模型：candle、ONNX Runtime（`ort`）和 OpenVINO。
 这些后端已经移除。现在每个模型都运行在[模型运行时](model-runtime/overview.md)中，默认在 CPU 上，
-你要求时在 GPU 上。
+你要求时在 GPU 上。该版本的全部破坏性变更见[发布说明](release-notes/built-in-model-runtime.md)。
 
 **大多数配置无需修改。** 如果你只是开启功能（`domain` 信号、语义缓存、PII 检测），
 从未指定后端，路由器会选择与以前相同的 Vela 模型，并在运行时中运行它们。

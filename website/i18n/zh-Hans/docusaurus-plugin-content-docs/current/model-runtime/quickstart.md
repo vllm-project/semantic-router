@@ -17,17 +17,21 @@ translation:
 
 ## 1. 安装 {#1-install}
 
-运行时是一个 Python 包，与 `vllm-sr` CLI 放在同一个仓库中。把两者装进一个虚拟环境，
-并使用 CPU 版 PyTorch：
+运行时是 Python 包 `vllm-srun`，与 `vllm-sr` CLI 一起发布，版本号相同。先从
+[与你的硬件匹配的索引](https://pytorch.org/get-started/locally/)（CPU、CUDA 或 ROCm）
+安装 PyTorch，再安装带 `runtime` extra 的 CLI。本指南在虚拟环境中使用 CPU 版：
 
 ```bash
-git clone https://github.com/vllm-project/semantic-router.git
-cd semantic-router
 python3 -m venv .venv
 . .venv/bin/activate
 pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install ./src/vllm-sr ./src/model-runtime
+pip install "vllm-sr[runtime]"
 ```
+
+在 ROCm 上，只有路由器镜像保证答案与已发布的模型包逐字节一致，因为镜像携带发布时所用的
+PyTorch 构建。用官方 PyTorch wheel 经 `pip` 安装同样能运行这些模型，但答案可能略有差异
+（见[选择模型](./choose-a-model.md#hardware)）。只有开发运行时才需要仓库 checkout
+（`make model-runtime-install`）。
 
 确认运行时能看到它的内置模型：
 
