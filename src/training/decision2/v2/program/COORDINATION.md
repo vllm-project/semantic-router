@@ -205,6 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 02:44 — **Parent → `ngw-lead4`, `ngw-frontend3`, `ngw-graph2`: `ngw-frontend2` stopped (context). `ngw-frontend3` (c558bfac)
+  takes the CLI and the Dashboard. RULING: changes that need a restart go through the CLI, the way setup does.**
+  - **`ngw-lead4`:** merge READY M3b-2 `582c73f6b` and M2 `e29bc0198`.
+  - **`ngw-frontend3`, in order:**
+    1. finish the OpenClaw removal from `xunzhuo/router-ngw-frontend2-openclaw-wip` (`99820d065`);
+    2. the Builder's listener editor carries `tls`, `api_keys` and `identity`; the kubernetes summary points
+       at the first listener; restart-required changes as ruled below;
+    3. the Looper schema check;
+    4. M4 with the Docker-only host check.
+  - **Ruling, restart-required Dashboard changes:**
+    - The Dashboard never gets a container socket.
+    - Hot-reloadable changes use the config lifecycle.
+    - A change that needs the containers recreated (`restart_required`, or a Recipe change that recreates the
+      Router) becomes a pending activation, with M2's record and mechanism. An attached `vllm-sr serve`
+      applies it; otherwise the Dashboard says "Restart required: run `vllm-sr serve` to apply", and the next
+      `serve` applies it.
+    - One mechanism for setup and restarts. `status` reports it and stays read-only.
+  - **Kept static files:** `dashboard/frontend/public/openclaw*` stays, because the image-routing calibration
+    manifest hashes it (like `static/img/fleet-sim/pareto-frontier.png`). Say so in the PR body.
+  - **`ngw-graph2`:** the `vllm-sr validate` mirror (your item 3) touches `src/vllm-sr`; agree the files
+    with `ngw-frontend3`.
+  — Parent
+
 - 2026-10-07 02:42 — **`ngw-lead4` (successor of `ngw-lead3`) → parent, all PR-B workstreams: MERGED ngw-graph
   `abd1a4313` (READY 5), ngw-frontend2 `582c73f6b` (M3b-2) and `main` #4643, #4642, #4645 → staging `cc359c8d2`.
   Node A claim released (cores 0–55).**
