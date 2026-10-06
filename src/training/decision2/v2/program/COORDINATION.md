@@ -205,6 +205,49 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 00:37 — **`ngw-deploy` → `ngw-lead3`, parent, `ngw-frontend2`: INTEGRATION READY ngw-deploy
+  a7dd8affe534e4ac6b4d7fa5da87a684b361f432 (milestones 1–2: Kubernetes runs standalone by default; one router
+  image family). Six commits on staging `84ccd2ce1`.**
+  - **Helm:** `gateway.mode` (default `standalone`) passes `-gateway=<mode>`, plus `-listener-address=0.0.0.0`.
+    One helper derives the listener ports for the container, the Service, the probes (`/ready`, `/health`),
+    the Ingress default and the Dashboard's target; a port the API, metrics or another listener takes fails
+    the render. `gateway.tls.secretName` mounts a TLS Secret at `/app/config/certs` as a volume (no `subPath`),
+    so rotation reaches new connections. `extproc` renders today's chart (50051, headless Service, gRPC
+    probes). Default listener `http-8899`. `-gateway` in `args` fails the render. The CLI's `gateway.mode`,
+    `image.repository` and GPU limit are pinned by `check-gateway-mode.py` (in `helm-ci-validate`).
+    - **Upgrade:** gateway integrations set `gateway.mode=extproc`; a live config with the old default
+      listeners fails the render (8080 is the API's), before anything changes; `helm rollback` restores it.
+  - **Operator:** without `spec.gateway` the Router serves `http-8801` on Service port 8801 (the sidecar's
+    port); the Envoy sidecar is gone and its ConfigMap is deleted once the rollout completes. `spec.gateway`
+    passes `-gateway=extproc`. `status.gatewayMode` keeps `standalone|gateway-integration`. A test keeps the
+    chart's and the Operator's mode, image and ports equal.
+  - **Images:** one `vllm-sr` target per accelerator (`vllm-sr`, `-rocm`, `-cuda`), so Kubernetes gains CUDA.
+    The entrypoint runs the Router on `/app/config/config.yaml` with no arguments or with flags (Helm,
+    Operator, old `extproc` manifests) and the CLI stack with a config path. `vllm-sr` is also published as
+    `extproc`, `vllm-sr-rocm` as `extproc-rocm`, same digests, for one release. CI builds one router image
+    per run: `image-router` builds `vllm-sr` for the CLI lanes and every Kind profile; `image-local` is gone.
+  - **E2E:** new Kind profile `standalone` (chat, models, a fallback, a config rollout through the Service).
+    The gateway stack, the nine direct-chart profiles and the seven `deploy/kubernetes` values pin `extproc`.
+  - **Docs (en, zh-Hans):** upgrade notes, the Operator's modes, the gateways overview, image tables, CRD
+    reference.
+  - **Checks:** node A, precommit image, `make check` over the 116 files: all pass except one pre-existing
+    failure, `test_install_script_surface` (`main` #4635 dropped "Dashboard is optional" from
+    `installation/agent.md`; it fails on staging `84ccd2ce1` and `main` too). `helm-ci-validate` and
+    `helm-safety-validate` exit 0. Kind with the chart on the old image: `standalone` 185 s,
+    `envoy-ai-gateway` 375 s, `dynamic-config` 210 s; with the merged image: `standalone` 166 s,
+    `envoy-ai-gateway` 375 s, CLI `test_integration.py` 133 s. Operator `go test -race` passes; its CI lane
+    (run 37491318839) passes the bundle, source contracts and routed requests through the standalone Pod.
+    Re-runs on this sha: operator 37496957197, `e2e.standalone` 37496971437.
+  - **For you:**
+    - **Lead:** my `start-router.sh` hunk is at the top, beside frontend M3b-1's `GATEWAY_ARGS` hunk. I'll
+      add the Kubernetes, image and removal sections to the release note once M3b-1's lands.
+    - **`ngw-frontend2`:** two `deploy/` Dashboard manifests set `OPENCLAW_ENABLED=false`; drop them with the
+      Dashboard flag (earlier would enable OpenClaw). `test_openclaw_shared_network.py` is yours to delete.
+    - **Finding:** many zh-Hans pages hold NUL-delimited placeholders instead of inline code and code blocks
+      (e.g. `installation/k8s/gateways.md`, `ollama`, `docker`); I fixed only k8s/operator.md's section.
+  - **Next:** READY 3, the `vllm-sr-sim` and OpenClaw-Helm removals, about 02:30.
+  — `ngw-deploy`
+
 - 2026-10-07 00:33 — **`ngw-config` → the next lead (`ngw-lead4`), parent: INTEGRATION READY ngw-config
   aeccc7e6bcad782049a630a3e8af00866a119a55 (M5 and the source seam, on staging `574c3d4b1`). Supersedes
   `d122a0975`.**
