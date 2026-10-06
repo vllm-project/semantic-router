@@ -20,10 +20,11 @@ const (
 	stdioTerminateGracePeriod = time.Second
 )
 
-// ownedStdioClient bounds shutdown of the process started by the SDK. The SDK
-// remains the sole caller of cmd.Wait, so Close returns only after it is reaped.
+// ownedStdioClient bounds shutdown of the process started by the SDK, including
+// reaping it when the SDK returns early after a pipe-close error.
 type ownedStdioClient struct {
 	client.MCPClient
+	cmd       *exec.Cmd
 	cancel    context.CancelFunc
 	closeOnce sync.Once
 	closeErr  error
@@ -43,8 +44,9 @@ func (c *Client) createStdioClient(ctx context.Context) (client.MCPClient, error
 	// Connect's context is canceled after initialization. The child must instead
 	// live until Close, including cleanup after an initialization failure.
 	processCtx, cancel := context.WithCancel(context.Background())
+	var cmd *exec.Cmd
 	commandOption := transport.WithCommandFunc(func(_ context.Context, command string, env, args []string) (*exec.Cmd, error) {
-		cmd := exec.CommandContext(processCtx, command, args...)
+		cmd = exec.CommandContext(processCtx, command, args...)
 		cmd.Env = env
 		cmd.Dir = c.config.Connection.Cwd
 		cmd.Cancel = func() error {
@@ -65,7 +67,7 @@ func (c *Client) createStdioClient(ctx context.Context) (client.MCPClient, error
 		cancel()
 		return nil, fmt.Errorf("failed to create stdio client: %w", err)
 	}
-	return &ownedStdioClient{MCPClient: mcpClient, cancel: cancel}, nil
+	return &ownedStdioClient{MCPClient: mcpClient, cmd: cmd, cancel: cancel}, nil
 }
 
 func (c *ownedStdioClient) Close() error {
@@ -74,7 +76,15 @@ func (c *ownedStdioClient) Close() error {
 	c.closeOnce.Do(func() {
 		defer c.cancel()
 		done := make(chan error, 1)
-		go func() { done <- c.MCPClient.Close() }()
+		go func() {
+			err := c.MCPClient.Close()
+			// SDK Close can fail on a pipe before reaching Wait. Check only after
+			// it returns so the SDK and this fallback never wait concurrently.
+			if c.cmd != nil && c.cmd.ProcessState == nil {
+				err = errors.Join(err, c.cmd.Wait())
+			}
+			done <- err
+		}()
 
 		// SDK Close closes stdin before waiting. Give a cooperative child time to
 		// exit on EOF, then cancel its process context to terminate and escalate.
