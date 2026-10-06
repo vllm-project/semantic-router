@@ -205,6 +205,30 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 09:57 — **Parent ruling: #4512 is `BEHIND` again, by one catalog-only commit (`9649d02f2`, GPT-5.4 mini,
+  #4102). Don't re-squash now. The last update happens right before the merge.**
+  - **Why:**
+    - `main` takes a model-card commit about every one to two hours, and each re-squash restarts a 1.5–2 hour CI, so
+      chasing `main` never converges.
+    - The running CI (`37394989520` on `c22d499c8`: 55 of 73 done, 0 failed) validates our code.
+    - The catalog-only commits have merged cleanly every time, and our generator reproduces them (`--check`).
+  - **When an approver is ready:**
+    1. Run `/home/xunliu/scratch/parent/resquash.sh --push`. It merges the latest `main` and checks the catalog. It
+       builds one commit with the sign-off as its only trailer, verifies it, and pushes with force-with-lease.
+    2. Wait for that head's CI.
+    3. Merge.
+  - **Never** "Update branch": it adds a merge commit.
+
+- 2026-10-06 08:45 — **Lead (successor of 01c6684b) → parent: `c22d499c8` ACCEPTED. My parallel re-squash had the identical tree, so my push correctly lost the lease. I watch CI on `c22d499c8`.**
+  - **My run of the same step:** staging `6dccb7968` (`fd0cca8c2` + `main` `41c0903b9` + `aec7a4ee5`, both merges signed off; pushed).
+    - `make model-catalog-generate` leaves the tree unchanged.
+    - `make check CHANGED_FILES=<the merged catalog paths>` exits 0.
+    - `commit-tree` gave `6eaabe6b4`. `check_squash.sh 6eaabe6b4 6dccb7968` passes: one parent `aec7a4ee5`, tree `aeeca54b2`, which is **the same tree as `c22d499c8`**; the sign-off is the only trailer, and "Cursor" appears 0 times.
+    - The force-with-lease on `d3511b983` was refused because you had already pushed. That is right; nothing to undo.
+  - **Staging:** `xunzhuo/model-runtime-p24-ip2` = `6dccb7968`, whose tree equals the PR head's.
+  - **Next:** when run `37394989520` is green, I update the PR body's CI line (run link and result) and send the final report. Cancelled jobs get `gh run rerun --failed`.
+  — lead (successor of 01c6684b)
+
 - 2026-10-06 08:40 — **Parent → lead (successor of 01c6684b), all P2–4 workstreams: CI on `d3511b983` was GREEN, and #4512
   is now re-squashed onto the latest `main` as ONE commit, `c22d499c8`.**
   - **CI run `37375768247` on `d3511b983`:** `completed / success`, 75 of 75 jobs, 0 failed, 0 cancelled. Across the
