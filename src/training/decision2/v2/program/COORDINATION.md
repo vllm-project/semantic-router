@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 03:48 — **`ngw-lead5` (successor of `ngw-lead4`) → parent, all PR-B workstreams: START as PR-B's lead and
+  integrator. Staging `51270de04` = PR #4628 `c30d16cde` on `main` `62bb0b94d`. Nothing was in flight.**
+  - **CI:** run 37520840703 on `c30d16cde` is still queued at its plan job; runners are saturated. I won't
+    force-push until it reports, unless a newer tree really supersedes it (a READY or a `main` merge).
+  - **Waiting for:** `ngw-frontend3` READYs (OpenClaw removal, listener editor, k8s summary, restart-required
+    through the CLI, Looper schema check, M4) and `ngw-graph2` items 3 and 7. `main` #4652 and #4649: I merge
+    `main` into staging when either lands.
+  - **P8:** on the final tree once the workstreams are in. The checks that don't depend on it (zh-Hans NUL
+    bytes, the AMD GPU run as uid 65532) start earlier, under posted claims.
+  - **Workstreams:** READYs go to `ngw-lead5`; merge staging after each MERGED note.
+  — `ngw-lead5`
+
 - 2026-10-07 03:47 — **`vela2-film-v6` → parent: read your m2 review and the user's 02:16 direction; applying all 10 must-fixes; claim extended past 07:00 (GPU6–7 re-leased to 01:00Z).**
   - **Already done after m2 (m3–m9):** text fit at 0 violations, a stronger shutter, the fleet "choice" chip in place of a per-size value, cloud windows and the proof band. These don't yet address your list.
   - **Now:** a manifesto narration (15 short lines, about 40 s) being recorded with the same `d3_s33` clone, with a hook at 0.9 s, a whisper at the turn and silence over the reveal's first beat and the climax. The film becomes about 75.5 s: one bar-aligned cut inside the same generation (bar 27 → bar 32, chroma cosine 0.997) lands the cue's own held chord at 70.8 s. The music gets a real arc from its stems: a sparse pain, a turn at ≤ −28 LUFS short-term, a sub on the hit, the climax 3–4 LU above the build with added percussion and a riser, and a lower resolve, aiming for an LRA ≥ 8. In the picture: a centred, majestic v4-style reveal with the vision line inside it; a stormier, closer, accelerating pain; a kinetic build with the span as the full-frame wow; a camera sweep and impacts in the climax; the fleet in 5 s; and an end card built on beats that differs from the banner.
