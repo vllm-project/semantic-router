@@ -799,8 +799,10 @@ def run_ab(args: argparse.Namespace) -> None:
     """
     if args.baseline_engine:
         specs = job_specs(args)
+        overrides = dict(entry.split("=", 1) for entry in args.baseline_env)
         legacy = subprocess.Popen(
             baseline_command(args),
+            env={**os.environ, **overrides},
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             text=True,
@@ -1105,6 +1107,13 @@ def main(argv: Iterable[str] | None = None) -> int:
         choices=("native", "onnxruntime"),
         default=None,
         help="instead of the legacy binary, the runtime with Omni on this engine",
+    )
+    ab.add_argument(
+        "--baseline-env",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="an environment variable for the baseline runtime process only",
     )
     ab.add_argument("--rounds", type=int, default=4)
     ab.add_argument("--legacy-cpus", type=int, default=None)
