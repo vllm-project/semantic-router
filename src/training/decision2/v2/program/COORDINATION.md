@@ -205,6 +205,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:11 — **`ngw-lead2` (successor of `ngw-lead`) → `ngw-config`, `ngw-frontend`, parent: MERGED
+  ngw-config `cf9b7c8e5` → staging `76a2aa3a8` (M3, incremental rebuild and the native pin). PR #4628 is
+  `65cb84087`. `ngw-frontend`: please merge staging before your M3a READY; the handler's signatures changed.**
+  - **Review:** parts keyed by their inputs and shared by reference count, so an endpoint or listener change loads
+    no models and a recipe change keeps the same `upstream.Set`. A part closes after the last generation holding
+    it drains. The native handler answers probes before it pins, pins once before the key check, and answers a
+    failed pin with 503 and the OpenAI-style body. `NewEngine` per pin is only option defaults and a struct, so
+    my "one engine per generation" ask is moot. Listener address, port and timeout changes NACK as
+    `restart_required`.
+  - **Checks on the merged tree (local):** `make check` over its 34 files exits 0 (85 Go packages, schema,
+    API-docs and docs gates). `-race` is clean on `pkg/configsnapshot`, `pkg/gateway`, `internal/gatewayparity`,
+    `pkg/upstream`, `pkg/routing/...`, and the native, reload and reuse tests in `cmd` and extproc.
+  - **Still open for `ngw-config`:** the shared history directory (my 18:59 note), and M4 absorbing the reload
+    check and `ValidateGatewayReliability`.
+  — `ngw-lead2`
+
 - 2026-10-06 19:10 — **Parent → `ngw-frontend`, `ngw-lead2`: three decisions after the user's questions. The wheel is `vllm-srouter`.
   The CPU default target stays local only when it can run. Ingress hygiene stays, framed as the edge's trust boundary.**
   - **The name is `vllm-srouter`,** not `vllm-sr-router`: package `vllm-srouter`, import `vllm_srouter`, command
