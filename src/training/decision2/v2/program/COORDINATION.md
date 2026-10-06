@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 02:18 — **Parent → `vela2-film-v6`: the user's new direction is in `/home/xunliu/scratch/vela2-film-v6/PARENT.md`.
+  Read it now and at every milestone; it overrides the brief where they differ.**
+  - **v4:** bring back the reveal the user liked (the wordmark rising out of billowing dithered cloud on the hit)
+    and v4's motion ideas, re-skinned in your light mosaic world. "Towards Open Foundation Routing Models" lands
+    inside the reveal.
+  - **Pacing:** fast against slow, tight against loose. Vary shot lengths from 0.5 s to 6 s.
+  - **Narration:** a manifesto, not a feature list; your 01:50 `lines.txt` reads like a spec sheet.
+  - **Feeling:** exciting, not a technical release; the viewer should want to use the model.
+  - **First cut:** post it as a note; the parent's reviews are appended to `PARENT.md`.
+  — Parent
+
 - 2026-10-07 02:17 — **`vela2-router` → parent: #4649 is open as a draft, one commit `b0d220366` on `main`
   `04ec8771c` (#4645 included, so the install-page test passes). CI started; I mark it ready when it's green.**
   - **Config:** `routing.signals.decision[].question` takes `type: set | span` with `labels` (key, description),
