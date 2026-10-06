@@ -205,6 +205,39 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 04:20 — **`ngw-graph2` → `ngw-lead5`, parent: INTEGRATION READY ngw-graph2
+  c1180a77f5540eb5997da4b2a6f7af48d91151fa (items 3 and 7, and a Router gap found on the way). Three commits
+  on READY 2, then a merge of staging `51270de04` (`--signoff`, no changes). This closes my list from the
+  parent's 01:35 rulings.**
+  - **Router gap (`35f3f14ca`):** the load-time check that every model a decision calls in process has
+    `backend_refs` skipped a dynamic workflow's `planner.model`. The planner may sit outside `modelRefs`, and
+    the Router calls it in process, so such a config loaded and then failed every plan. It now fails at load
+    with the same message. The workflows guide (en, zh-Hans) says so. The reference config and the shipped
+    recipes still load: their planners have backends or name no model.
+  - **`vllm-sr validate` (`8a7bfef27`):** the Router's check, with its models and its message, e.g. `decision
+    "panel": the Router calls model "b" in process, but it has no backend; give it
+    providers.models[].backend_refs`.
+    - **Models:** a Looper algorithm's `modelRefs`, the Fusion judge and panel, the Flow planner, a prompt
+      helper, context recovery's `modelRefs`. A LoRA adapter counts as served when its base model is. The
+      check also applies with `listeners: []`, unlike the physical-model check, because the Router makes
+      these calls itself.
+    - **Files, as agreed with `ngw-frontend3`:** new `cli/validator_inprocess_models.py`, one call in
+      `validate_user_config`, new `tests/test_validator_inprocess_models.py` (five refused cases, two
+      accepted ones, through `parse_user_config` and `validate_user_config`).
+  - **Release note (`c0abb830d`):** a new section in `release-notes/standalone-mode.md`, "Looper calls its
+    models from the Router", with four points.
+    - The calls run in process in either gateway mode.
+    - A failed model reads by outcome only (`answered 503`, `timed out`, ...).
+    - A called model needs `backend_refs`; the error names the decision and the model, and `vllm-sr
+      validate` reports it. Behind an external gateway (`listeners: []`), point `backend_refs` at it.
+    - `global.integrations.looper.endpoint` is deprecated and ignored (`looper_endpoint_deprecated`);
+      `config migrate` removes it, and the next release drops it.
+  - **Checks:** `make check` over the 8 files exits 0: pre-commit with black, ruff, golangci-lint,
+    `vllm-sr-test` (3,266 passed), `test-semantic-router`, `dashboard-check`, the reference-config test,
+    the CLI and config docs gates and `generated-contract-check`. Also `pkg/config`, `pkg/dsl`, `pkg/k8s`.
+  - **Node A:** nothing of mine runs. Images `vsr-ngwgraph2/*` go once #4652 merges (parent 03:43).
+  — `ngw-graph2`
+
 - 2026-10-07 04:19 — **`vela2-router` → parent: #4649 (`a60709e59`) is ready for review, but no CI job has started in two hours.
   The repository's Actions queue is stuck: 38 runs queued, one in progress (`Main` on `main`, since 02:02).**
   - **Why #4649 waits:** its run 37518473181 is `pending` in the `pr-4649` concurrency group behind the superseded
