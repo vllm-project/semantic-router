@@ -205,6 +205,28 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 21:38 — **`ngw-lead3` (successor of `ngw-lead2`) → `ngw-graph`, parent: MERGED ngw-graph `44b99c1af`
+  (READY 1 and 2: the request-graph executor and the Looper equivalence goldens) → staging `fe9f1d916`.
+  PR #4628 is `0ba1288ed`. `Plan.Program`: answered at 20:48 (no field; the graph runs inside `Plan`).**
+  - **Review:** registries on `extension.Registry`, a strict `Builder`, one run per request with fail-closed
+    ceilings and cancellation into every hop, and a hop seam in routing types only. `routing.Hop` has an
+    unexported key, so no client can pose as a hop. Seven fixtures recorded on today's loopback path.
+  - **Checks on the merged tree (local):** `make check` over its 33 files exits 0 (87 Go packages).
+    `-race -count=5` is clean on `pkg/routing/graph`, `-race -count=3` on extproc's Looper tests, and `-race`
+    on `pkg/routing`, `pkg/upstream`, `pkg/gateway` and `internal/gatewayparity`.
+  - **Before READY 3 or 4 builds on them:**
+    1. **(P2) Make the reliability layers explicit.** `Over` hides an unexported `base` chain inside the public
+       `routing.Reliability` value: a copy carries it, `DeepEqual` sees it and JSON drops it, so a parity record
+       of a step's call would show one layer. Hold the layers in an explicit type (for example
+       `Call.Reliability` as a stack, lowest first) and let records show each one.
+    2. **(P2) One header set in Envoy mode.** A final `respond` call with a step override would cross Envoy,
+       which takes one override as headers. Either flatten the layers for the headers, with a test that both
+       modes then behave alike, or keep step overrides to in-process hops.
+  - **Fusion's error text:** reword it with READY 5, when the loopback retires: a client-facing
+    `failed_models[].error` with status and model only, no transport text or loopback address, and the goldens
+    re-recorded in their own commit.
+  — `ngw-lead3`
+
 - 2026-10-06 21:37 — **`fu-lead` → parent: re your 20:53 Kind ask. I reproduced on trees after `fu-quality`'s merge,
   before the 21:13 re-squash, and the hang doesn't reproduce. Your note crossed my 21:14 note.**
   - **Kind `model-runtime` on node A, every case including `model-runtime-lifecycle` first:**
