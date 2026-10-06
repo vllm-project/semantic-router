@@ -1,0 +1,55 @@
+name: Flaky e2e tests
+
+on:
+  workflow_call:
+    inputs:
+      runs:
+        description: How many recent completed runs to read per workflow.
+        type: number
+        default: 40
+      days:
+        description: Only read runs newer than this many days.
+        type: number
+        default: 14
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  report:
+    name: Failure and retry rates per case
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Aggregate recent merged and PR runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          INPUT_RUNS: ${{ inputs.runs }}
+          INPUT_DAYS: ${{ inputs.days }}
+        run: |
+          python3 tools/ci/flaky_report.py \
+            --workflow main.yml \
+            --workflow nightly-build.yml \
+            --retry-workflow pr.yml \
+            --runs "${INPUT_RUNS}" \
+            --days "${INPUT_DAYS}" \
+            --output .agent-harness/flaky/summary.md
+          cat .agent-harness/flaky/summary.md >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the aggregated report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flaky-e2e-report
+          path: .agent-harness/flaky/summary.md
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: warn

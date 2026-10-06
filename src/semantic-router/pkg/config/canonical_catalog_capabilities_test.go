@@ -53,3 +53,30 @@ routing:
 		t.Fatalf("operator capabilities must be carried verbatim, got %v", got)
 	}
 }
+
+func TestGemini31ProCatalogCardMaterializesItsLimits(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: gemini-pro
+      catalog: google/gemini-3.1-pro
+      backend_refs:
+        - provider: gemini
+routing: {}
+`))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+	params := cfg.ModelConfig["gemini-pro"]
+	if params.Catalog != "google/gemini-3.1-pro" ||
+		params.ContextWindowSize != 1048576 ||
+		params.MaxOutputTokens != 65536 {
+		t.Fatalf(
+			"catalog=%q context_window=%d max_output=%d",
+			params.Catalog,
+			params.ContextWindowSize,
+			params.MaxOutputTokens,
+		)
+	}
+}
