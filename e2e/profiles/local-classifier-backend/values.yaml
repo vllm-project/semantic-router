@@ -25,14 +25,14 @@ config:
     signals:
       classifiers:
         - name: local_jailbreak_score
-          description: Deterministic in-process local classifier E2E signal (real candle inference, no mock)
+          description: Deterministic local classifier E2E signal (real model runtime inference, no mock)
           type: local
           model_path: models/Vela-1.0-Encoder-307M-Guard
           labels: [benign, jailbreak]
           use_cpu: true
     decisions:
       - name: local_classifier_jailbreak
-        description: Route on a score from the in-process local classifier backend (real candle inference, no mock)
+        description: Route on a score from the local classifier backend (real model runtime inference, no mock)
         priority: 2000
         rules:
           operator: AND

@@ -4,14 +4,14 @@ sidebar_label: Safety 和 Hazard
 translation:
   source_commit: "915ddf56e0335e2046c38aa17c4aec6233908039"
   source_file: "docs/training/mmbert-safety-classifier.md"
-  outdated: false
+  outdated: true
 ---
 
 # 训练 Vela Safety 和 Hazard {#train-vela-safety-and-hazard}
 
 根据应用的内容策略适配 Vela Safety 和 Hazard。**Safety** 预测 `safe` 或 `unsafe`；**Hazard** 识别风险类别，帮助选择合适的响应。提示词注入和越狱检测使用独立的 Guard 模型。
 
-直接使用已发布模型，请参阅[安全模型](../installation/runtime/safety.md)。本页介绍训练兼容 checkpoint 的流程。
+直接使用已发布模型，请参阅[安全模型](model-runtime/guides/safety.md)。本页介绍训练兼容 checkpoint 的流程。
 
 ## 定义输出 {#define-the-outputs}
 
@@ -95,9 +95,9 @@ Safety 需要测量不安全请求召回率和安全请求误报率。Hazard 需
 
 使用[序列导出工具](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier/sequence_repair#freeze-then-evaluate-the-independent-test)，指定 `--method full`、选中的 checkpoint，以及 `--runtime-task safety` 或 `--runtime-task hazard`。它保留标签顺序，输出权重、tokenizer 和 runtime 映射。ONNX 部署需要从同一组权重导出的图。
 
-通过[本地绑定](../installation/runtime/in-process.md)或支持的[外部服务](../installation/runtime/external.md)配置模型。[Safety 信号指南](/docs/tutorials/signal/learned/safety)说明二元风险规则和类别条件。在带类别条件的 Safety 规则中，Safety 达到阈值后才运行 Hazard。
+通过[本地绑定](model-runtime/deploy.md)或支持的[外部服务](../installation/runtime/external.md)配置模型。[Safety 信号指南](/docs/tutorials/signal/learned/safety)说明二元风险规则和类别条件。在带类别条件的 Safety 规则中，Safety 达到阈值后才运行 Hazard。
 
-使用[路由预览](../installation/runtime/lifecycle-diagnostics.md)，在实际服务配置下验证分数、决策、错误和延迟。
+使用[路由预览](model-runtime/troubleshooting.md)，在实际服务配置下验证分数、决策、错误和延迟。
 
 ## 早期 Safety 模型 {#earlier-safety-models}
 

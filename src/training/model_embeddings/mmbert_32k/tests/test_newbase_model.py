@@ -137,6 +137,11 @@ class NewBaseModelTest(unittest.TestCase):
 
     def test_every_encoder_layer_and_twenty_heads_receive_gradients(self):
         model = self.model("reranker").train()
+        # A 2-wide exit's head has one hidden unit; dropout zeroes it for the
+        # whole batch about once in a hundred draws, leaving no gradient.
+        for module in model.modules():
+            if isinstance(module, torch.nn.Dropout):
+                module.p = 0.0
         outputs = model(*self.inputs())
         self.assertEqual(len(outputs), 20)
         loss = sum(

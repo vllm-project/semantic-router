@@ -2,7 +2,7 @@
 translation:
   source_commit: "485dba984a011cee07ec21e7d6a6d54f69509dae"
   source_file: "docs/tutorials/signal/learned/hallucination.md"
-  outdated: false
+  outdated: true
 ---
 
 # 幻觉检测信号 {#hallucination-signal}
@@ -42,11 +42,10 @@ routing:
   signals:
     hallucination:
       - name: ungrounded_claims
-        use_nli: true
         description: Detect claims the grounding context does not support.
 ```
 
-规则自身没有阈值：检测器在 `hallucination_model` 上的 `threshold`、`min_span_length` 与 `min_span_confidence` 决定什么算不受支持的片段，检测器找到一个时规则匹配。`use_nli` 要求检测器给出片段级 NLI 解释；它是检测设置，因此写在规则上，一旦声明了规则，插件自己的 `use_nli` 会报告为已忽略。
+规则自身没有阈值：检测器在 `hallucination_model` 上的 `threshold`、`min_span_length` 与 `min_span_confidence` 决定什么算不受支持的片段，检测器找到一个时规则匹配。早期版本可以用 `use_nli` 请求片段级 NLI 解释；该解释器已退役，`vllm-sr config migrate` 会移除这一设置。
 
 ### 阶段 {#stage}
 
@@ -63,7 +62,7 @@ routing:
 
 流式回答在流结束后检查，并以 `enforcement: not_enforced_streaming` 代替动作记录。此时字节已到达客户端，因此 `hallucination` 插件不运行，`hallucination_action` 与 `unverified_factual_action` 都不适用。从未到达终端回答的流不检查，也不记录任何内容。
 
-声明规则就足以为本配方供给检测器，`use_nli: true` 则供给解释器，即使没有决策启用插件。决策的 `hallucination` 插件在未声明规则时运行会在加载时报告：插件随后自己对回答分类，这是兼容路径。
+声明规则就足以为本配方供给检测器，即使没有决策启用插件。决策的 `hallucination` 插件在未声明规则时运行会在加载时报告：插件随后自己对回答分类，这是兼容路径。
 
 ## 依赖与限制 {#dependencies-and-limitations}
 

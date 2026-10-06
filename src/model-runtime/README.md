@@ -1,8 +1,9 @@
 # vLLM Semantic Router model runtime
 
-`vllm_sr_runtime` serves typed decision models behind one HTTP contract. The
-router manages it for `model_runtime` deployments, and `vllm-sr serve
-<hf-model>` runs it on its own.
+`vllm_sr_runtime` serves the router's models (decision models, classifiers,
+embedders and rerankers) behind one HTTP contract. One process can serve
+several models. The router manages it for `model_runtime` deployments, and
+`vllm-sr serve <hf-model> [<hf-model> ...]` runs it on its own.
 
 ```bash
 pip install -e "src/model-runtime[test]"
@@ -19,8 +20,12 @@ curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
 
 | Endpoint | Purpose |
 | --- | --- |
-| `POST /v1/decisions`, `POST /v1/systemone` | Choice, Noul and Score answers (a superset of System One) |
-| `GET /v1/models` | Identity, limits, placement, profiles, plugins and golden-check status |
+| `POST /v1/decisions`, `POST /v1/systemone` | Choice, Noul and Score answers (a superset of System One), plus Set and Span where a model declares them |
+| `POST /v1/classify` | Fixed heads: label distributions, label scores and token spans over texts, pairs or grounded answers |
+| `POST /v1/embeddings` | OpenAI-compatible embeddings with dimensions and layer exits |
+| `POST /v1/rerank` | Pair scores of documents against a query |
+| `POST /v1/bundle` | Several surface requests, for one or more models, in one call |
+| `GET /v1/models` | Identity, surfaces, heads, limits, placement, profiles, plugins and golden-check status per model |
 | `GET /health`, `GET /health/live` | Readiness (gated on golden answers) and liveness |
 | `GET /metrics` | Prometheus metrics |
 
@@ -29,9 +34,15 @@ and the design is [`docs/design.md`](docs/design.md).
 
 ## Built-in models
 
-`vllm-sr-runtime models` lists the six Decision 2.0 models with their pinned
-revisions. Every package is verified against its manifest before load, and
-code shipped inside packages is never executed.
+`vllm-sr-runtime models` lists the built-in models with their pinned
+revisions. Every package is verified against its manifest or the pinned file
+digests before load, and code shipped inside packages is never executed.
+
+## Plugins
+
+Families, engines, accelerators and profiles are entry-point plugins.
+[`examples/third_party_plugin`](examples/third_party_plugin) is a complete
+out-of-tree family and engine to start from.
 
 ## Tests
 

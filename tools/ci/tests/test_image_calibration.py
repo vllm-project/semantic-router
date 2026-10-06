@@ -49,7 +49,7 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
         }
         (self.model / image_calibration.OMNI_MANIFEST).write_text(json.dumps(artifact))
         manifest = {
-            "provider": "ort",
+            "provider": "model_runtime",
             "models": [
                 {
                     "name": "Multimodal",
