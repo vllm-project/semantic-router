@@ -15,6 +15,7 @@ import controls from './BenchControls.module.css'
 export interface ResolvedDatasetScope {
   profile: string
   sourceIDs: string[]
+  missingBenchmarks: string[]
   seed: number | null
   ready: boolean
   error: string
@@ -87,6 +88,7 @@ export default function RunDatasetScope({
         id: benchmark.id,
         eligible,
         reason: eligible ? null : 'Not included in this dataset',
+        reason_code: eligible ? null : 'not_in_dataset',
         case_count: 0,
         source_ids: eligible ? [dataset!.id] : [],
       }
@@ -95,7 +97,9 @@ export default function RunDatasetScope({
       ? selection.benchmarks.find((entry) => entry.id === benchmark.id)
       : undefined
   })
-  const available = entries.filter((entry) => entry?.eligible).map((entry) => entry!.id)
+  const available = entries
+    .filter((entry) => entry?.eligible || (!custom && entry?.reason_code === 'not_prepared'))
+    .map((entry) => entry!.id)
   const resolved = useMemo((): ResolvedDatasetScope => {
     if (custom) {
       const ready =
@@ -106,6 +110,7 @@ export default function RunDatasetScope({
       return {
         profile,
         sourceIDs: ready ? [dataset.id] : [],
+        missingBenchmarks: [],
         seed: dataset?.seed ?? null,
         ready,
         error: ready
@@ -117,6 +122,7 @@ export default function RunDatasetScope({
       return {
         profile,
         sourceIDs: [],
+        missingBenchmarks: [],
         seed: null,
         ready: false,
         error: error || 'Wait for the service to check this profile.',
@@ -124,18 +130,24 @@ export default function RunDatasetScope({
     const chosen = benchmarks.map((id) => selection.benchmarks.find((entry) => entry.id === id))
     const ready =
       chosen.length > 0 &&
-      chosen.every((entry) => entry?.eligible && entry.source_ids.length > 0) &&
-      selection.seed !== null
+      chosen.every(
+        (entry) =>
+          (entry?.eligible && entry.source_ids.length > 0 && selection.seed !== null) ||
+          entry?.reason_code === 'not_prepared',
+      )
     return {
       profile,
       sourceIDs: ready ? [...new Set(chosen.flatMap((entry) => entry!.source_ids))] : [],
-      seed: selection.seed,
+      missingBenchmarks: ready
+        ? chosen.filter((entry) => entry?.reason_code === 'not_prepared').map((entry) => entry!.id)
+        : [],
+      seed: selection.seed ?? 20260918,
       ready,
       error: ready
         ? ''
         : benchmarks.length
           ? 'Some selected benchmarks are unavailable for this profile. Deselect them or choose a specific dataset.'
-          : 'Select at least one prepared benchmark.',
+          : 'Select at least one benchmark.',
     }
   }, [custom, dataset, profile, benchmarks, loading, selection, error])
   useEffect(() => onResolved(resolved), [resolved, onResolved])
@@ -193,7 +205,7 @@ export default function RunDatasetScope({
               <input
                 type="checkbox"
                 checked={selected}
-                disabled={!selected && (!entry?.eligible || loading)}
+                disabled={!selected && (!available.includes(benchmark.id) || loading)}
                 onChange={(event) =>
                   onBenchmarks(
                     event.target.checked
@@ -209,13 +221,20 @@ export default function RunDatasetScope({
                     ? custom
                       ? 'Included in selected dataset'
                       : `${entry.case_count} questions`
-                    : (entry?.reason ?? 'Not available')}
+                    : entry?.reason_code === 'not_prepared'
+                      ? 'Prepared automatically'
+                      : (entry?.reason ?? 'Not available')}
                 </small>
               </span>
             </label>
           )
         })}
       </div>
+      {!custom && (
+        <p className={styles.muted}>
+          Missing datasets and required dependencies are prepared automatically when you review.
+        </p>
+      )}
       {benchmarks.length > 0 && !resolved.ready && !loading && !error && (
         <p className={styles.notice}>{resolved.error}</p>
       )}
@@ -240,7 +259,7 @@ export default function RunDatasetScope({
             selections are preserved; no questions are resampled.
           </p>
           <button className={styles.linkButton} onClick={() => setCustom(false)}>
-            Use standard prepared benchmarks
+            Choose benchmarks automatically
           </button>
         </section>
       ) : (

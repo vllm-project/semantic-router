@@ -2,7 +2,7 @@
 translation:
   source_commit: "cd975c6129460d700dd9c116ddd3356cdd90e915"
   source_file: "docs/tutorials/global/api-and-observability.md"
-  outdated: false
+  outdated: true
 ---
 
 # API 与可观测性
@@ -67,7 +67,7 @@ global:
 
 `routing_preview` 作用于 `POST /api/v1/routing/preview`。推理时限从请求体解析完成后开始计算，默认 120 秒。`request_timeout_seconds` 可设为 1 至 3600 秒，应根据实际输入长度和部署硬件的测量结果选择。该设置支持配置热更新；其他 HTTP 路由保留现有超时设置。
 
-达到时限后，API 返回 `504 REQUEST_TIMEOUT`，并取消排队中或可取消的推理。已经执行的原生推理可能稍后才结束；在其结束前，模型资源和并发名额都会保留，关闭服务时也不例外。`max_concurrency` 是正整数，默认允许 16 个推理任务并发执行，不提供等待队列；名额用完后，新请求返回 `429 OVERLOADED`。修改此并发上限需要重新部署并重启服务，热更新会拒绝该变更。
+达到时限后，API 返回 `504 REQUEST_TIMEOUT`，并取消该 Preview 的模型调用：模型运行时跳过尚未开始的工作，已在运行的一次计算会完成。这些调用返回后，该 Preview 的并发名额即被释放。`max_concurrency` 是正整数，默认允许 16 个推理任务并发执行，不提供等待队列；名额用完后，新请求返回 `429 OVERLOADED`。修改此并发上限需要重新部署并重启服务，热更新会拒绝该变更。
 
 响应写入另有 5 秒余量，用于发送结果或超时响应。Dashboard Topology 使用配置的 Preview 时限加上该余量，并传递客户端取消信号。Recipe 探测仍使用 `probes.yaml` 中独立的 `evaluation.request_timeout_seconds` 客户端时限；应按实际测试配置。如果外部 HTTP 客户端或代理需要收到 Router 的超时响应，其时限应至少多留 5 秒。
 
@@ -140,6 +140,8 @@ global:
 
 `semantic_router.request` span 覆盖整个 ExtProc 请求，包括流式响应和取消。它使用有界的 `traffic.kind` 和路由模板区分推理、目录与健康轮询，不存储 URL 查询参数或资源 ID。信号、决策、算法、插件与实际上游请求是子阶段；`routing.entrypoint`、`routing.recipe`、`decision.name` 和 `routing.algorithm` 记录已解析的路由身份。`routing.backend.resolved` 事件记录选择证据，上游 span 测量提供方响应时间。如果本地响应检查拦截上游 HTTP 200，上游 span 仍记录 200，根 span 记录最终返回给客户端的状态。
 
+上游 span 还带有 OpenTelemetry GenAI 属性，便于支持 GenAI 语义的 trace 后端展示每次提供方调用：`gen_ai.operation.name`（`chat`）、`gen_ai.provider.name`、`gen_ai.request.model`（发往上游的提供方模型 ID），以及提供方上报的 `gen_ai.usage.input_tokens` 和 `gen_ai.usage.output_tokens`。非流式响应还会记录 `gen_ai.response.model`，流式响应暂不记录。提供方未上报的用量保持为空，不做估算；`model.name` 仍为 Router 的逻辑模型名。GenAI 约定在上游仍处于 Development 状态，属性名可能变化。
+
 信号证据事件分别记录有限的实测值和置信度，保留真实零值，缺失数据不填零。投影事件记录实际分数和配置名称，聚合信号阶段不虚构置信度。Trace 不包含原始提示词、信号错误文本或检索异常原文；无法事后补全旧 trace。
 
 本地 `vllm-sr serve` 在 Grafana 中预置 **vLLM Semantic Router**。主面板覆盖公开推理结果、Recipe 流程、后端使用量、插件与响应缓存、遥测健康；折叠的成本和 MoM 面板区分模型上报用量与已支持的 Looper attempt 证据。Recipe 阶段耗时展示实测均值；投影计数展示评估次数，单次分数可在 Insights 查看。模型耗时使用观测均值，避免有限直方图桶把长请求的分位数截断。Prometheus 抓取 Router 和 Jaeger 的内部管理指标。缺少序列表示没有观测，不能当作零流量或健康结果；导出成功只表示 SDK 批次导出完成，不证明所有请求都被采样或持久保存。
@@ -195,7 +197,7 @@ helm install vsr ./deploy/helm/semantic-router \
   --set router.skipProcessing.enabled=true
 ```
 
-仅当由已认证的上游过滤器（Envoy AI Gateway、ext_authz、路由级过滤器等）负责按信任依据设置或剥离该请求头时，才应启用此开关。促成该开关的 AI Gateway 互操作模式背景见 [issue #1808](https://github.com/vllm-project/semantic-router/issues/1808)。
+仅当由已认证的上游过滤器（Agent Router（原 Envoy AI Gateway）、ext_authz、路由级过滤器等）负责按信任依据设置或剥离该请求头时，才应启用此开关。促成该开关的 AI Gateway 互操作模式背景见 [issue #1808](https://github.com/vllm-project/semantic-router/issues/1808)。
 
 ### 路由回放
 

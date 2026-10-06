@@ -22,7 +22,7 @@
     },
     {
       "name": "diagnostics",
-      "description": "Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, NLI, and rerankers."
+      "description": "Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, and rerankers."
     },
     {
       "name": "inventory",
@@ -7550,6 +7550,13 @@
                                 "type": "string"
                               }
                             },
+                            "decision": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "domains": {
                               "nullable": true,
                               "type": "array",
@@ -8857,6 +8864,13 @@
                           }
                         },
                         "conversation": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "decision": {
                           "nullable": true,
                           "type": "array",
                           "items": {
@@ -10854,8 +10868,8 @@
     },
     "/api/v1/diagnostics/embeddings": {
       "post": {
-        "summary": "Generate text and image embeddings",
-        "description": "Generate text and image embeddings",
+        "summary": "Generate text, image, and audio embeddings",
+        "description": "Generate text, image, and audio embeddings",
         "operationId": "post_api_v1_diagnostics_embeddings",
         "tags": [
           "diagnostics"
@@ -11260,6 +11274,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "audios": {
+                    "nullable": true,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "dimension": {
                     "type": "integer"
                   },
@@ -11369,8 +11390,46 @@
                             "nullable": true,
                             "type": "object",
                             "properties": {
+                              "audio": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "layout": {
+                                    "type": "string"
+                                  },
+                                  "max_channels": {
+                                    "type": "integer"
+                                  },
+                                  "max_sample_rate": {
+                                    "type": "integer"
+                                  },
+                                  "max_seconds": {
+                                    "type": "integer"
+                                  },
+                                  "sample_rates": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "integer"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "max_sample_rate",
+                                  "max_seconds",
+                                  "max_channels",
+                                  "layout"
+                                ]
+                              },
                               "dimension": {
                                 "type": "integer"
+                              },
+                              "dimensions": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "integer"
+                                }
                               },
                               "layer": {
                                 "type": "integer"
@@ -11799,8 +11858,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -12420,8 +12517,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -13085,8 +13220,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -13733,8 +13906,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -14380,8 +14591,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -15001,416 +15250,6 @@
         "x-vllm-sr-audiences": [
           "agent",
           "operator"
-        ],
-        "x-vllm-sr-stability": "stable",
-        "x-vllm-sr-visibility": "advanced"
-      }
-    },
-    "/api/v1/diagnostics/nli": {
-      "post": {
-        "summary": "Natural language inference classification for premise and hypothesis pairs",
-        "description": "Natural language inference classification for premise and hypothesis pairs",
-        "operationId": "post_api_v1_diagnostics_nli",
-        "tags": [
-          "diagnostics"
-        ],
-        "security": [
-          {},
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "confidence": {
-                      "type": "number"
-                    },
-                    "contradiction_prob": {
-                      "type": "number"
-                    },
-                    "entailment_prob": {
-                      "type": "number"
-                    },
-                    "label": {
-                      "type": "string"
-                    },
-                    "neutral_prob": {
-                      "type": "number"
-                    },
-                    "processing_time_ms": {
-                      "type": "integer"
-                    },
-                    "recipe": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "label",
-                    "confidence",
-                    "entailment_prob",
-                    "neutral_prob",
-                    "contradiction_prob",
-                    "processing_time_ms"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The authenticated role lacks the operation permission",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request body too large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "description": "Correlation identifier for this management request.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "description": "application/json request payload. Limit: 10485760 bytes.",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "hypothesis": {
-                    "type": "string"
-                  },
-                  "premise": {
-                    "type": "string"
-                  },
-                  "recipe": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "premise",
-                  "hypothesis"
-                ]
-              }
-            }
-          }
-        },
-        "x-vllm-sr-permission": "classify.invoke",
-        "x-vllm-sr-sensitivity": "operational",
-        "x-vllm-sr-plane": "diagnostic",
-        "x-vllm-sr-audiences": [
-          "operator",
-          "internal"
         ],
         "x-vllm-sr-stability": "stable",
         "x-vllm-sr-visibility": "advanced"
@@ -16773,6 +16612,334 @@
         "x-vllm-sr-visibility": "primary"
       }
     },
+    "/api/v1/inventory/model-runtime": {
+      "get": {
+        "summary": "Get the model_runtime deployments: process, readiness, restarts and served model cards",
+        "description": "Get the model_runtime deployments: process, readiness, restarts and served model cards",
+        "operationId": "get_api_v1_inventory_model_runtime",
+        "tags": [
+          "inventory"
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "deployments": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "device": {
+                            "type": "string"
+                          },
+                          "embedding": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "dimensions": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "integer"
+                                }
+                              },
+                              "layers": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "integer"
+                                }
+                              },
+                              "modalities": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "endpoint": {
+                            "type": "string"
+                          },
+                          "engine": {
+                            "type": "string"
+                          },
+                          "family": {
+                            "type": "string"
+                          },
+                          "heads": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "labels": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "kind"
+                              ]
+                            }
+                          },
+                          "managed": {
+                            "type": "boolean"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "process": {
+                            "type": "string"
+                          },
+                          "profile": {
+                            "type": "string"
+                          },
+                          "ready": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "repo": {
+                            "type": "string"
+                          },
+                          "rerank": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "default_layer": {
+                                "type": "integer"
+                              },
+                              "layers": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "integer"
+                                }
+                              }
+                            },
+                            "required": [
+                              "default_layer"
+                            ]
+                          },
+                          "restarts": {
+                            "type": "integer"
+                          },
+                          "revision": {
+                            "type": "string"
+                          },
+                          "served_name": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "surfaces": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "managed",
+                          "process",
+                          "served_name",
+                          "ready",
+                          "state",
+                          "restarts"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "deployments",
+                    "count"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Management authentication configuration is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config",
+        "x-vllm-sr-plane": "management",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-visibility": "primary"
+      }
+    },
     "/api/v1/inventory/models": {
       "get": {
         "summary": "Get information about loaded models",
@@ -17508,9 +17675,6 @@
                     "hallucination_detector": {
                       "type": "boolean"
                     },
-                    "hallucination_explainer": {
-                      "type": "boolean"
-                    },
                     "projection_mapping_count": {
                       "type": "integer"
                     },
@@ -17538,7 +17702,6 @@
                     "unified_classifier",
                     "fact_check_classifier",
                     "hallucination_detector",
-                    "hallucination_explainer",
                     "feedback_detector",
                     "decision_count",
                     "projection_partition_count",
@@ -18184,6 +18347,9 @@
                   "reason": {
                     "type": "string"
                   },
+                  "record_only": {
+                    "type": "boolean"
+                  },
                   "replay_id": {
                     "type": "string"
                   },
@@ -18726,15 +18892,6 @@
                                 "hallucination_confidence": {
                                   "type": "number"
                                 },
-                                "nli_confidence": {
-                                  "type": "number"
-                                },
-                                "nli_label": {
-                                  "type": "string"
-                                },
-                                "nli_score_available": {
-                                  "type": "boolean"
-                                },
                                 "score_available": {
                                   "type": "boolean"
                                 },
@@ -18753,8 +18910,6 @@
                                 "start",
                                 "end",
                                 "score_available",
-                                "nli_label",
-                                "nli_score_available",
                                 "severity",
                                 "explanation"
                               ]
@@ -19545,6 +19700,9 @@
                             "items": {
                               "type": "object",
                               "properties": {
+                                "idempotency_key": {
+                                  "type": "string"
+                                },
                                 "metadata": {
                                   "nullable": true,
                                   "type": "object",
@@ -20268,6 +20426,30 @@
                               "original_model": {
                                 "type": "string"
                               },
+                              "prepared_dispatch": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "byte_length": {
+                                    "type": "integer"
+                                  },
+                                  "sha256": {
+                                    "type": "string"
+                                  },
+                                  "version": {
+                                    "type": "integer"
+                                  },
+                                  "wire_format": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "version",
+                                  "wire_format",
+                                  "sha256",
+                                  "byte_length"
+                                ]
+                              },
                               "previous_model": {
                                 "type": "string"
                               },
@@ -20586,6 +20768,13 @@
                                 }
                               },
                               "conversation": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "decision": {
                                 "nullable": true,
                                 "type": "array",
                                 "items": {
@@ -21713,6 +21902,551 @@
         "x-vllm-sr-visibility": "primary"
       }
     },
+    "/api/v1/observability/replays/dataset": {
+      "get": {
+        "summary": "Export a shadow comparison dataset manifest built from the selected Router Replay records",
+        "description": "Export a shadow comparison dataset manifest built from the selected Router Replay records",
+        "operationId": "get_api_v1_observability_replays_dataset",
+        "tags": [
+          "observability"
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive text search across replay records.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recipe",
+            "in": "query",
+            "description": "Filter by recipe name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "description": "Filter by decision name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Filter by selected model.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "description": "Filter by logical session identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cache_status",
+            "in": "query",
+            "description": "Filter by response-cache outcome.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "cached",
+                "streamed"
+              ]
+            }
+          },
+          {
+            "name": "seed",
+            "in": "query",
+            "description": "Seed that fixes split assignment; the same records under the same seed reproduce the same manifest.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "split",
+            "in": "query",
+            "description": "Repeatable split written as name:weight, for example train:8.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "balance_by",
+            "in": "query",
+            "description": "Group a balance cap applies to. Requires balance_max.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "recipe",
+                "decision",
+                "primary_model"
+              ]
+            }
+          },
+          {
+            "name": "balance_max",
+            "in": "query",
+            "description": "Most examples one group may contribute. Requires balance_by.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shadow comparison dataset manifest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "examples": {
+                          "type": "integer"
+                        },
+                        "excluded": {
+                          "nullable": true,
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "integer"
+                          }
+                        },
+                        "records": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "records",
+                        "examples"
+                      ]
+                    },
+                    "digest": {
+                      "type": "string"
+                    },
+                    "examples": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "input_digest": {
+                            "type": "string"
+                          },
+                          "lineage": {
+                            "type": "object",
+                            "properties": {
+                              "decision": {
+                                "type": "string"
+                              },
+                              "recipe": {
+                                "type": "string"
+                              },
+                              "replay_id": {
+                                "type": "string"
+                              },
+                              "request_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "replay_id"
+                            ]
+                          },
+                          "primary": {
+                            "type": "object",
+                            "properties": {
+                              "backend": {
+                                "type": "string"
+                              },
+                              "model": {
+                                "type": "string"
+                              },
+                              "output_digest": {
+                                "type": "string"
+                              },
+                              "sample_rate": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "model",
+                              "output_digest"
+                            ]
+                          },
+                          "shadows": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "backend": {
+                                  "type": "string"
+                                },
+                                "model": {
+                                  "type": "string"
+                                },
+                                "output_digest": {
+                                  "type": "string"
+                                },
+                                "sample_rate": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "model",
+                                "output_digest"
+                              ]
+                            }
+                          },
+                          "split": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "input_digest",
+                          "split",
+                          "primary",
+                          "shadows",
+                          "lineage"
+                        ]
+                      }
+                    },
+                    "policy": {
+                      "type": "object",
+                      "properties": {
+                        "balance": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "by": {
+                              "type": "string"
+                            },
+                            "max": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "by",
+                            "max"
+                          ]
+                        },
+                        "seed": {
+                          "type": "string"
+                        },
+                        "splits": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "weight": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "weight"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "seed",
+                        "splits"
+                      ]
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "digest",
+                    "policy",
+                    "counts",
+                    "examples"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "replay.read",
+        "x-vllm-sr-sensitivity": "replay",
+        "x-vllm-sr-plane": "management",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-plugin-operations": [
+          {
+            "plugin": "router_replay",
+            "mode": "read"
+          },
+          {
+            "plugin": "shadow_dispatch",
+            "mode": "read"
+          }
+        ],
+        "x-vllm-sr-visibility": "primary"
+      }
+    },
     "/api/v1/observability/replays/trajectory": {
       "get": {
         "summary": "Build a recipe-scoped session trajectory with each recorded routing result",
@@ -22311,15 +23045,6 @@
                           "hallucination_confidence": {
                             "type": "number"
                           },
-                          "nli_confidence": {
-                            "type": "number"
-                          },
-                          "nli_label": {
-                            "type": "string"
-                          },
-                          "nli_score_available": {
-                            "type": "boolean"
-                          },
                           "score_available": {
                             "type": "boolean"
                           },
@@ -22338,8 +23063,6 @@
                           "start",
                           "end",
                           "score_available",
-                          "nli_label",
-                          "nli_score_available",
                           "severity",
                           "explanation"
                         ]
@@ -23130,6 +23853,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "idempotency_key": {
+                            "type": "string"
+                          },
                           "metadata": {
                             "nullable": true,
                             "type": "object",
@@ -23853,6 +24579,30 @@
                         "original_model": {
                           "type": "string"
                         },
+                        "prepared_dispatch": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "byte_length": {
+                              "type": "integer"
+                            },
+                            "sha256": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "integer"
+                            },
+                            "wire_format": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "version",
+                            "wire_format",
+                            "sha256",
+                            "byte_length"
+                          ]
+                        },
                         "previous_model": {
                           "type": "string"
                         },
@@ -24171,6 +24921,13 @@
                           }
                         },
                         "conversation": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "decision": {
                           "nullable": true,
                           "type": "array",
                           "items": {
@@ -31184,6 +31941,13 @@
                                 "type": "string"
                               }
                             },
+                            "decision": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "domains": {
                               "nullable": true,
                               "type": "array",
@@ -31358,6 +32122,13 @@
                                 "type": "string"
                               }
                             },
+                            "decision": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "domains": {
                               "nullable": true,
                               "type": "array",
@@ -31519,6 +32290,13 @@
                               }
                             },
                             "conversation": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "decision": {
                               "nullable": true,
                               "type": "array",
                               "items": {
@@ -32117,6 +32895,99 @@
                           ]
                         },
                         "conversation": {
+                          "type": "object",
+                          "properties": {
+                            "confidence": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "confidence_available": {
+                              "nullable": true,
+                              "type": "boolean"
+                            },
+                            "execution_time_ms": {
+                              "type": "number"
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "policy_default": {
+                              "type": "string"
+                            },
+                            "rules": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "content_token_windows": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "integer"
+                                      }
+                                    }
+                                  },
+                                  "device": {
+                                    "type": "string"
+                                  },
+                                  "execution_time_ms": {
+                                    "type": "number"
+                                  },
+                                  "input_tokens": {
+                                    "type": "integer"
+                                  },
+                                  "policy_sha256": {
+                                    "type": "string"
+                                  },
+                                  "precision": {
+                                    "type": "string"
+                                  },
+                                  "processed_tokens": {
+                                    "type": "integer"
+                                  },
+                                  "provider": {
+                                    "type": "string"
+                                  },
+                                  "thresholds": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "truncated": {
+                                    "type": "boolean"
+                                  },
+                                  "window_batch_size": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "policy_sha256",
+                                  "provider",
+                                  "device",
+                                  "precision",
+                                  "input_tokens",
+                                  "processed_tokens",
+                                  "truncated",
+                                  "content_token_windows",
+                                  "thresholds",
+                                  "window_batch_size",
+                                  "execution_time_ms"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "execution_time_ms",
+                            "confidence"
+                          ]
+                        },
+                        "decision": {
                           "type": "object",
                           "properties": {
                             "confidence": {
@@ -33813,7 +34684,8 @@
                         "event",
                         "metadata",
                         "classifier",
-                        "input_modality"
+                        "input_modality",
+                        "decision"
                       ]
                     },
                     "original_text": {
@@ -34506,6 +35378,13 @@
                                     "type": "string"
                                   }
                                 },
+                                "decision": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "domains": {
                                   "nullable": true,
                                   "type": "array",
@@ -34680,6 +35559,13 @@
                                     "type": "string"
                                   }
                                 },
+                                "decision": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "domains": {
                                   "nullable": true,
                                   "type": "array",
@@ -34841,6 +35727,13 @@
                                   }
                                 },
                                 "conversation": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "decision": {
                                   "nullable": true,
                                   "type": "array",
                                   "items": {
@@ -35439,6 +36332,99 @@
                               ]
                             },
                             "conversation": {
+                              "type": "object",
+                              "properties": {
+                                "confidence": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "confidence_available": {
+                                  "nullable": true,
+                                  "type": "boolean"
+                                },
+                                "execution_time_ms": {
+                                  "type": "number"
+                                },
+                                "method": {
+                                  "type": "string"
+                                },
+                                "policy_default": {
+                                  "type": "string"
+                                },
+                                "rules": {
+                                  "nullable": true,
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "content_token_windows": {
+                                        "nullable": true,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "integer"
+                                          }
+                                        }
+                                      },
+                                      "device": {
+                                        "type": "string"
+                                      },
+                                      "execution_time_ms": {
+                                        "type": "number"
+                                      },
+                                      "input_tokens": {
+                                        "type": "integer"
+                                      },
+                                      "policy_sha256": {
+                                        "type": "string"
+                                      },
+                                      "precision": {
+                                        "type": "string"
+                                      },
+                                      "processed_tokens": {
+                                        "type": "integer"
+                                      },
+                                      "provider": {
+                                        "type": "string"
+                                      },
+                                      "thresholds": {
+                                        "nullable": true,
+                                        "type": "object",
+                                        "additionalProperties": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "truncated": {
+                                        "type": "boolean"
+                                      },
+                                      "window_batch_size": {
+                                        "type": "integer"
+                                      }
+                                    },
+                                    "required": [
+                                      "policy_sha256",
+                                      "provider",
+                                      "device",
+                                      "precision",
+                                      "input_tokens",
+                                      "processed_tokens",
+                                      "truncated",
+                                      "content_token_windows",
+                                      "thresholds",
+                                      "window_batch_size",
+                                      "execution_time_ms"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "execution_time_ms",
+                                "confidence"
+                              ]
+                            },
+                            "decision": {
                               "type": "object",
                               "properties": {
                                 "confidence": {
@@ -37135,7 +38121,8 @@
                             "event",
                             "metadata",
                             "classifier",
-                            "input_modality"
+                            "input_modality",
+                            "decision"
                           ]
                         },
                         "original_text": {
@@ -40645,7 +41632,7 @@
             }
           },
           "202": {
-            "description": "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash",
+            "description": "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart",
             "content": {
               "application/json": {
                 "schema": {
@@ -42251,7 +43238,7 @@
             }
           },
           "202": {
-            "description": "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash",
+            "description": "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart",
             "content": {
               "application/json": {
                 "schema": {
@@ -43266,7 +44253,7 @@
             }
           },
           "202": {
-            "description": "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash",
+            "description": "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart",
             "content": {
               "application/json": {
                 "schema": {
@@ -44249,6 +45236,14 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Rows to skip after created_at descending, id descending. Best-effort under concurrent writes. Defaults to 0.",
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "security": [
@@ -44313,6 +45308,9 @@
                         ]
                       }
                     },
+                    "offset": {
+                      "type": "integer"
+                    },
                     "total": {
                       "type": "integer"
                     }
@@ -44320,7 +45318,8 @@
                   "required": [
                     "memories",
                     "total",
-                    "limit"
+                    "limit",
+                    "offset"
                   ]
                 }
               }

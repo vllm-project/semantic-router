@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Validate framework evidence and write source-bound CI execution receipts."""
+
 from __future__ import annotations
 
 import argparse
@@ -10,13 +11,20 @@ import subprocess
 from pathlib import Path
 
 from ci_plan import digest
+from release_guard_waiver import waiver_evidence_errors
 
 STATUSES = frozenset({"passed", "failed", "skipped"})
 SHA256_LENGTH = 64
 
 
-def collection_errors(evidence: dict, activity: str) -> list[str]:
+def collection_errors(
+    evidence: dict, activity: str, *, waiver: dict | None = None
+) -> list[str]:
     errors = []
+    if waiver:
+        errors.extend(waiver_evidence_errors(evidence, waiver))
+    elif evidence.get("known_issue_waiver") or evidence.get("waived_failure"):
+        errors.append("unplanned known-issue waiver in evidence")
     field = "cases" if "cases" in evidence else "checks"
     if field == "checks" and activity in {"test", "performance"}:
         return [
@@ -46,7 +54,9 @@ def collection_errors(evidence: dict, activity: str) -> list[str]:
         ids.append(item["id"])
         if item.get("status") not in STATUSES:
             errors.append(f"{item['id']}: missing or invalid status")
-        elif item["status"] != "passed":
+        elif item["status"] != "passed" and not (
+            waiver and item["id"] == waiver["case"] and item["status"] == "failed"
+        ):
             errors.append(f"required {item['id']}: {item['status']}")
     if len(ids) != len(set(ids)):
         errors.append(f"{field} contains duplicate execution IDs")
@@ -60,7 +70,7 @@ def collection_errors(evidence: dict, activity: str) -> list[str]:
 
 def artifact_records(evidence: dict, *, environ: dict | None = None) -> list[dict]:
     records = list(evidence.get("artifacts", []))
-    for name in ("CI_IMAGE_RECEIPTS", "CI_NATIVE_RECEIPTS"):
+    for name in ("CI_IMAGE_RECEIPTS",):
         value = (os.environ if environ is None else environ).get(name)
         if value:
             records.extend(json.loads(Path(value).read_text()))
@@ -87,27 +97,9 @@ def actual_platform() -> str:
     return f"{platform.system().lower()}/{machine}"
 
 
-def execution_errors(
-    verification: dict, evidence: dict, producer_platform: str
-) -> list[str]:
-    execution = verification.get("execution")
-    if not execution:
-        errors = (
-            []
-            if producer_platform == verification["platform"]
-            else ["receipt producer ran on a different platform"]
-        )
-        if evidence.get("execution"):
-            errors.append("undeclared emulated execution")
-        return errors
-    if (
-        execution.get("mode") != "qemu-user"
-        or execution.get("host_platform") != producer_platform
-        or evidence.get("execution") != execution
-        or verification["platform"] != "linux/riscv64"
-        or verification["native"]
-    ):
-        return ["emulated target, producer platform or artifact contract differs"]
+def execution_errors(verification: dict, producer_platform: str) -> list[str]:
+    if producer_platform != verification["platform"]:
+        return ["receipt producer ran on a different platform"]
     return []
 
 
@@ -119,7 +111,12 @@ def make_receipt(
     execution_platform: str,
     environ: dict | None = None,
 ) -> dict:
-    errors = collection_errors(evidence, verification["activity"])
+    waiver = (
+        verification.get("known_issue_waiver")
+        if evidence.get("known_issue_waiver")
+        else None
+    )
+    errors = collection_errors(evidence, verification["activity"], waiver=waiver)
     if source_sha != verification["source_sha"]:
         errors.append("executed source SHA differs from planned source")
     for key in ("runtime", "device", "platform"):
@@ -127,11 +124,9 @@ def make_receipt(
             errors.append(
                 f"actual {key} {evidence.get(key)!r} differs from planned {verification[key]!r}"
             )
-    errors.extend(execution_errors(verification, evidence, execution_platform))
+    errors.extend(execution_errors(verification, execution_platform))
     artifacts = artifact_records(evidence, environ=environ)
     required = {f"image:{image}" for image in verification["images"]}
-    if verification["native"]:
-        required.add("native:cpu")
     missing = required - {record["id"] for record in artifacts}
     if missing:
         errors.append(f"missing consumed artifact identities: {sorted(missing)}")
@@ -146,15 +141,10 @@ def make_receipt(
         "runtime": evidence["runtime"],
         "device": evidence["device"],
         "platform": evidence["platform"],
-        **(
-            {"execution": {**verification["execution"]}}
-            if verification.get("execution")
-            else {}
-        ),
         "artifacts": artifacts,
         "evidence": evidence,
         "evidence_sha256": digest(evidence),
-        "result": "success",
+        "result": "qualified-with-waiver" if waiver else "success",
     }
 
 

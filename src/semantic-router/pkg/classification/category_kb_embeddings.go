@@ -3,10 +3,10 @@ package classification
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -33,51 +33,17 @@ func (c *KnowledgeBaseClassifier) collectExemplarRefs() []exemplarRef {
 	return refs
 }
 
-func (c *KnowledgeBaseClassifier) embedOneExemplar(backend, modelType string, targetDim int, ref exemplarRef) embeddingResult {
-	if c.provider != nil {
-		embedding, err := c.embedText(ref.text)
-		if err != nil {
-			return embeddingResult{ref: ref, err: err}
-		}
-		return embeddingResult{ref: ref, embedding: embedding}
-	}
-	if backend == "openvino" {
-		return embeddingResult{ref: ref, err: fmt.Errorf("OpenVINO requires an owned model binding")}
-	}
-
-	output, err := getEmbeddingWithModelType(ref.text, modelType, targetDim)
-	if err != nil {
-		return embeddingResult{ref: ref, err: err}
-	}
-	return embeddingResult{ref: ref, embedding: output.Embedding}
+func (c *KnowledgeBaseClassifier) embedOneExemplar(ref exemplarRef) embeddingResult {
+	vector, err := c.embedText(ref.text)
+	return embeddingResult{ref: ref, embedding: vector, err: err}
 }
 
 func (c *KnowledgeBaseClassifier) embedText(text string) ([]float32, error) {
-	if c.provider != nil {
-		return c.provider.Embed(context.Background(), text)
-	}
-	output, err := getEmbeddingWithModelType(text, c.modelType, 0)
-	if err != nil {
-		return nil, err
-	}
-	return output.Embedding, nil
+	return embedding.Embed(context.Background(), c.provider, text, embedding.Options{})
 }
 
 func (c *KnowledgeBaseClassifier) embedExemplarsParallel(refs []exemplarRef) <-chan embeddingResult {
-	numWorkers := runtime.NumCPU()
-	backend := embeddingBackendOverride()
-	if backend == "candle" {
-		numWorkers = 1
-	} else if numWorkers > 8 {
-		numWorkers = 8
-	}
-	if numWorkers > len(refs) {
-		numWorkers = len(refs)
-	}
-	if numWorkers == 0 {
-		numWorkers = 1
-	}
-
+	numWorkers := embeddingWorkers(len(refs))
 	resultChan := make(chan embeddingResult, len(refs))
 	refChan := make(chan exemplarRef, len(refs))
 	for _, ref := range refs {
@@ -85,16 +51,13 @@ func (c *KnowledgeBaseClassifier) embedExemplarsParallel(refs []exemplarRef) <-c
 	}
 	close(refChan)
 
-	modelType := c.modelType
-	targetDim := 0
-
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for ref := range refChan {
-				resultChan <- c.embedOneExemplar(backend, modelType, targetDim, ref)
+				resultChan <- c.embedOneExemplar(ref)
 			}
 		}()
 	}

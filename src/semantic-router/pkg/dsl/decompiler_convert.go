@@ -67,6 +67,16 @@ func (d *decompiler) embeddingToSignal(emb *config.EmbeddingRule) *SignalDecl {
 	if emb.AggregationMethodConfiged != "" {
 		fields["aggregation_method"] = StringValue{V: string(emb.AggregationMethodConfiged)}
 	}
+	for _, list := range []struct {
+		name   string
+		values []string
+	}{
+		{"image_candidates", emb.ImageCandidates}, {"negative_candidates", emb.NegativeCandidates}, {"negative_image_candidates", emb.NegativeImageCandidates},
+	} {
+		if len(list.values) > 0 {
+			fields[list.name] = stringsToArray(list.values)
+		}
+	}
 	if emb.QueryModality != "" && emb.QueryModality != config.QueryModalityText {
 		fields["query_modality"] = StringValue{V: string(emb.QueryModality)}
 	}
@@ -220,9 +230,6 @@ func (d *decompiler) roleBindingToSignal(rb *config.RoleBinding) *SignalDecl {
 
 func (d *decompiler) hallucinationToSignal(rule *config.HallucinationRule) *SignalDecl {
 	fields := make(map[string]Value)
-	if rule.UseNLI {
-		fields["use_nli"] = BoolValue{V: true}
-	}
 	if rule.Description != "" {
 		fields["description"] = StringValue{V: rule.Description}
 	}

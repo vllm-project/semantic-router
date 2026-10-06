@@ -39,10 +39,6 @@ global:
       enabled: true
       backend_type: memory
       similarity_threshold: 0.8
-      polarity_guard:
-        mode: lexical          # lexical | nli | lexical+nli
-        nli:
-          contradiction_threshold: 0.5
 ```
 
 #### Negation guard
@@ -50,33 +46,22 @@ global:
 Bi-encoder similarity cannot tell *"turn on dark mode"* from *"turn off dark
 mode"*: opposite-meaning queries often score above `similarity_threshold`
 while genuine paraphrases score below it, so raising the threshold does not
-reliably prevent false hits. All cache backends apply the lexical tier before
-serving a semantic candidate. The `polarity_guard` configuration additionally
-selects an optional verifier for the in-memory backend:
+reliably prevent false hits. Every cache backend applies a lexical guard
+before it serves a semantic candidate: it catches negation cues and known
+antonym swaps in near-identical English token sets. It needs no model, has no
+setting, and runs for the in-memory, Redis,
+Valkey, Milvus, Qdrant and hybrid caches. It does not cover cue-less,
+word-order-only or non-English changes.
 
-- `lexical` (default): the model-free tier that catches negation cues and
-  known antonym swaps in near-identical English token sets. It is always on
-  for in-memory, Redis, Valkey, Milvus, Qdrant, and hybrid caches and needs no
-  model. It does not cover cue-less, word-order-only, or non-English changes.
-- `nli` / `lexical+nli`: additionally runs the router's NLI model once per
-  lookup on the single best candidate and rejects the hit when the
-  contradiction probability exceeds `nli.contradiction_threshold`. The tier
-  reuses the hallucination explainer
-  (`global.model_catalog.modules.hallucination_mitigation.explainer`, by default
-  `tasksource/ModernBERT-base-nli`); the cache owns its verifier independently
-  of recipe classifiers. Config loading fails when an NLI mode
-  is selected without that model. Expect roughly 70 ms per verified hit on CPU;
-  a cache hit still saves a full generation. If the model is unavailable or
-  errors at lookup time, the unverified candidate becomes a cache miss so the
-  request continues to the model backend; a `cache_polarity_nli_skipped`
-  warning records the degraded lookup. This intentionally prioritizes response
-  correctness over cache-hit latency while the verifier is unavailable.
+Rejections are logged as `cache_negation_reject`, count as misses, and still
+surface the rejected score on `x-vsr-cache-similarity`. Remote and hybrid
+backends reject candidates without an original query and continue checking the
+bounded fetched candidate set. The same check also applies to hybrid's Milvus
+fallback.
 
-Rejections are logged as `cache_negation_reject` with `tier: nli`, count as
-misses, and still surface the rejected score on `x-vsr-cache-similarity`. Remote
-and hybrid backends run the lexical tier only. They reject candidates without
-an original query and continue checking the bounded fetched candidate set.
-The same lexical check also applies to hybrid's Milvus fallback.
+Earlier releases configured it with `polarity_guard`, including an NLI tier
+(`nli`, `lexical+nli`) on the in-memory backend. The NLI model is retired and
+the router refuses `polarity_guard`; `vllm-sr config migrate` removes it.
 
 ### Memory
 
@@ -92,7 +77,7 @@ global:
       milvus:
         address: milvus:19530
         collection: agentic_memory
-        dimension: 384
+        dimension: 256
 ```
 
 **Valkey backend** (requires Valkey with Search module):
@@ -106,7 +91,7 @@ global:
       valkey:
         host: valkey
         port: 6379
-        dimension: 384
+        dimension: 256
         collection_prefix: "mem:"
         index_name: mem_idx
         metric_type: COSINE
@@ -124,11 +109,18 @@ global:
         host: qdrant
         port: 6334
         collection: agentic_memory
-        dimension: 384
-      embedding_model: bert
+        dimension: 256
+      embedding_model: mmbert
       default_retrieval_limit: 5
-      default_similarity_threshold: 0.70
+      default_similarity_threshold: 0.30
 ```
+
+All three examples embed with `mmbert` (Vela Embedding), the default, so
+`dimension` is one of its sizes: 64, 128, 256, 512 or 768. With any other size
+the router logs `Failed to create memory store: … Memory will be disabled` and
+runs without memory. The Qdrant example's 0.30 threshold, on plain cosine
+scores, is a starting point, not a calibrated value. Check unrelated queries
+and corrected facts before using it with your data.
 
 For full deployment instructions, see:
 
@@ -139,6 +131,23 @@ For full deployment instructions, see:
 When an external model with `model_role: memory_rewrite` is configured, its
 `max_response_bytes` limits each query-rewrite response. An omitted or
 non-positive value uses the 1 MiB default.
+
+#### Hybrid search and reflection
+
+`hybrid_mode` and `reflection.algorithm` can be set globally under
+`global.stores.memory` and overridden in a decision's `memory` plugin. The
+router refuses to start with any other value, including one set in a recipe's
+decisions:
+
+| Field | Accepted values | Default |
+|-------|-----------------|---------|
+| `hybrid_mode` | `weighted`, `rrf` (exact, lowercase) | `weighted` |
+| `reflection.algorithm` | `heuristic`, `noop` | `heuristic` |
+
+`hybrid_mode` takes effect only with `hybrid_search: true`. Older configs that
+use `hybrid_mode: rerank` or `algorithm: recency_semantic` fail at startup.
+Replace them with `weighted` and `heuristic`, which is how those values
+already ran.
 
 #### Write path bounds
 
@@ -215,17 +224,18 @@ CLI local runtime will provision Postgres and fill `metadata_postgres` connectio
 defaults when `metadata_store: postgres` is set. Use `memory` only for ephemeral
 local experiments because store and file metadata is lost on router restart.
 
-With local `mmbert` embeddings, including Vela Embedding, each new vector store
-records the identity of the representation that created its vectors. After a
-model or dimension change, existing stores remain visible and their uploaded
-files are retained. Searching or attaching files to an incompatible or untagged
-store returns `409 EMBEDDING_REINDEX_REQUIRED`. Create a new vector store and
-reattach the original uploaded file IDs to generate compatible vectors. Client
-metadata cannot replace the router-owned `_router_embedding_identity` field.
+With embeddings from the [model runtime](../../model-runtime/guides/embeddings.md),
+including Vela Embedding, each new vector store records the identity of the
+representation that created its vectors. Existing stores remain visible and their
+uploaded files are retained. Searching or attaching files to an incompatible or
+untagged store returns `409 EMBEDDING_REINDEX_REQUIRED`. Create a new vector
+store and reattach the original uploaded file IDs to generate compatible
+vectors. Client metadata cannot replace the router-owned
+`_router_embedding_identity` field.
 
 The same check applies to request-time RAG and cached retrieval results. The
 `llama_stack` backend embeds search queries remotely, so it cannot currently be
-combined with identity-bound local `mmbert` document embeddings. Use `memory`,
+combined with identity-bound runtime document embeddings. Use `memory`,
 `milvus`, `valkey`, or `qdrant` for that configuration. Remote provider identity
 verification is a separate capability.
 

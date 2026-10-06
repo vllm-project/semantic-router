@@ -22,15 +22,15 @@ const (
 )
 
 var resourceManifests = []string{
-	"deploy/kubernetes/hallucination/mock-vllm.yaml",
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 	"deploy/kubernetes/response-jailbreak/gwapi-resources.yaml",
 }
 
-// waitDeployments are the mock backends the profile must wait on. mock-vllm
+// waitDeployments are the mock backends the profile must wait on. provider-mocker
 // is both the chat backend and, on /classify, the http_classify guardrail
 // this profile thresholds against.
 var waitDeployments = []helpers.DeploymentRef{
-	{Namespace: "default", Name: "mock-vllm"},
+	{Namespace: "default", Name: "provider-mocker"},
 }
 
 // Profile implements the response_jailbreak test profile.

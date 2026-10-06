@@ -1,8 +1,12 @@
 package extproc
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"sync/atomic"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -12,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -26,10 +31,11 @@ func TestProviderDispatchReplayPersistsFinalDemand(t *testing.T) {
 		specified bool
 		explicit  bool
 		stream    bool
+		adapted   bool
 	}{
 		{name: "entrypoint_auto"},
 		{name: "entrypoint_auto_stream", stream: true},
-		{name: "entrypoint_explicit", explicit: true},
+		{name: "entrypoint_explicit_provider_adapter", explicit: true, adapted: true},
 		{name: "specified_explicit", specified: true, explicit: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -37,18 +43,38 @@ func TestProviderDispatchReplayPersistsFinalDemand(t *testing.T) {
 			r, ctx, model := dispatchReplayFixture(t, tc.explicit, renderMock(t, &calls, 0, 0))
 			ctx.SemanticRequest.Stream = tc.stream
 			ctx.ExpectStreamingResponse = tc.stream
+			reasoning := entropy.ReasoningDecision{}
+			if tc.adapted {
+				enabled := true
+				params := r.Config.ModelConfig[model]
+				params.ReasoningFamily = "prepared-dispatch-test"
+				r.Config.ModelConfig[model] = params
+				r.Config.ReasoningFamilies = map[string]config.ReasoningFamilyConfig{
+					"prepared-dispatch-test": {
+						Type: config.ReasoningFamilyTypeChatTemplateKwargs, Parameter: "enable_thinking",
+					},
+				}
+				ctx.VSRSelectedDecision.ModelRefs[0].UseReasoning = &enabled
+				reasoning.UseReasoning = true
+			}
 			var response *ext_proc.ProcessingResponse
 			var err error
 			if tc.specified {
 				response, err = r.handleSpecifiedModelRouting(ctx.SemanticRequest, model, "", ctx)
 			} else {
-				response, err = r.handleEntrypointModelRouting(ctx.SemanticRequest, "auto", ctx.VSRSelectedDecision.Name, entropy.ReasoningDecision{}, model, ctx)
+				response, err = r.handleEntrypointModelRouting(ctx.SemanticRequest, "auto", ctx.VSRSelectedDecision.Name, reasoning, model, ctx)
 			}
 			require.NoError(t, err)
+			body := response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
 			var wire map[string]any
-			require.NoError(t, json.Unmarshal(response.GetRequestBody().GetResponse().GetBodyMutation().GetBody(), &wire))
+			require.NoError(t, json.Unmarshal(body, &wire))
 			if tc.stream {
 				require.Equal(t, true, wire["stream"])
+			}
+			if tc.adapted {
+				kwargs, ok := wire["chat_template_kwargs"].(map[string]any)
+				require.True(t, ok, "provider adapter mutation is absent")
+				require.Equal(t, true, kwargs["enable_thinking"])
 			}
 			budget := int64(8192)
 			if tc.explicit {
@@ -66,6 +92,7 @@ func TestProviderDispatchReplayPersistsFinalDemand(t *testing.T) {
 			record, ok := r.ReplayRecorder.GetRecord(ctx.RouterReplayID)
 			require.True(t, ok)
 			require.NotNil(t, record.RouteDiagnostics)
+			assertPreparedDispatchReceipt(t, record.RouteDiagnostics.PreparedDispatch, body, llmprotocol.OpenAIChatV1)
 			snapshots := record.RouteDiagnostics.RequestDemandSnapshots
 			require.Len(t, snapshots, 4, "persisted Replay must include provider_bound")
 			require.Equal(t, requestDemandStageProviderBound, snapshots[3].Stage)
@@ -131,7 +158,82 @@ func TestProviderDispatchReplaySurvivesFinalizerFailure(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, routerreplay.LifecycleFailed, record.LifecycleState)
 	require.Equal(t, "request_processing_failed", record.TerminalReason)
+	require.Nil(t, record.RouteDiagnostics.PreparedDispatch, "failed rendering must not fabricate final provider bytes")
 	require.Len(t, record.RouteDiagnostics.RequestDemandSnapshots, 3, "failed rendering must not fabricate provider_bound")
+}
+
+func TestProviderDispatchReplayOmitsPreparedDispatchAfterLateCancellation(t *testing.T) {
+	calls := 0
+	r, ctx, model := dispatchReplayFixture(t, true, renderMock(t, &calls, 0, 0))
+	var encoded atomic.Bool
+	requestContext, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	registry, err := protocolcodec.NewRegistry(encodingObserverCodec{
+		OpenAIChatCodec: protocolcodec.OpenAIChatCodec{},
+		encoded:         &encoded,
+		cancel:          cancel,
+	})
+	require.NoError(t, err)
+	r.ProtocolCodecs = registry
+	ctx.TraceContext = requestContext
+
+	response, err := r.handleSpecifiedModelRouting(ctx.SemanticRequest, model, "", ctx)
+	require.Nil(t, response)
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, encoded.Load(), "cancellation must occur only after provider encoding")
+	require.NotEmpty(t, ctx.RouterReplayID)
+
+	state, reason := replayLifecycleForProcessError(err)
+	r.finalizeRouterReplay(ctx, state, reason)
+	record, ok := r.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+	require.True(t, ok)
+	require.Equal(t, routerreplay.LifecycleAborted, record.LifecycleState)
+	require.Equal(t, "request_canceled", record.TerminalReason)
+	require.NotNil(t, record.RouteDiagnostics)
+	require.Nil(t, record.RouteDiagnostics.PreparedDispatch, "discarded provider bytes must not acquire a receipt")
+	require.Len(t, record.RouteDiagnostics.RequestDemandSnapshots, 4, "late cancellation must follow provider-bound demand capture")
+	require.Equal(t, requestDemandStageProviderBound, record.RouteDiagnostics.RequestDemandSnapshots[3].Stage)
+}
+
+func TestProviderDispatchReplayDoesNotAttachReceiptToPrestartedRecord(t *testing.T) {
+	calls := 0
+	r, ctx, model := dispatchReplayFixture(t, true, renderMock(t, &calls, 0, 0))
+
+	// Looper starts its per-attempt Replay record before final wire encoding. The
+	// minimal single-dispatch contract deliberately does not add an updater for
+	// an existing record, so that lifecycle must not gain a misleading receipt.
+	r.startRouterReplay(ctx, ctx.RequestModel, model, ctx.VSRSelectedDecision.Name)
+	recordID := ctx.RouterReplayID
+	require.NotEmpty(t, recordID)
+
+	response, err := r.handleSpecifiedModelRouting(ctx.SemanticRequest, model, "", ctx)
+	require.NoError(t, err)
+	require.NotNil(t, response.GetRequestBody().GetResponse().GetBodyMutation())
+	require.Nil(t, ctx.preparedDispatchReceipt)
+
+	record, ok := r.ReplayRecorder.GetRecord(recordID)
+	require.True(t, ok)
+	require.NotNil(t, record.RouteDiagnostics)
+	require.Nil(t, record.RouteDiagnostics.PreparedDispatch)
+}
+
+type encodingObserverCodec struct {
+	protocolcodec.OpenAIChatCodec
+	encoded *atomic.Bool
+	cancel  context.CancelFunc
+}
+
+func (codec encodingObserverCodec) EncodeRequest(
+	request llmprotocol.Request,
+	envelope llmprotocol.Envelope,
+	policy llmprotocol.Policy,
+) ([]byte, llmprotocol.Diagnostics, error) {
+	body, diagnostics, err := codec.OpenAIChatCodec.EncodeRequest(request, envelope, policy)
+	if err == nil {
+		codec.encoded.Store(true)
+		codec.cancel()
+	}
+	return body, diagnostics, err
 }
 
 func dispatchReplayFixture(t *testing.T, explicit bool, handler http.HandlerFunc) (*OpenAIRouter, *RequestContext, string) {
@@ -151,4 +253,19 @@ func dispatchReplayFixture(t *testing.T, explicit bool, handler http.HandlerFunc
 	captureRequestDemand(ctx, requestDemandStagePostContext, ctx.SemanticRequest, "auto")
 	captureRequestDemand(ctx, requestDemandStagePostToolPolicy, ctx.SemanticRequest, "auto")
 	return r, ctx, model
+}
+
+func assertPreparedDispatchReceipt(
+	t *testing.T,
+	receipt *routerreplay.PreparedDispatchReceipt,
+	body []byte,
+	format llmprotocol.WireFormat,
+) {
+	t.Helper()
+	require.NotNil(t, receipt)
+	digest := sha256.Sum256(body)
+	require.Equal(t, preparedDispatchReceiptVersion, receipt.Version)
+	require.Equal(t, string(format), receipt.WireFormat)
+	require.Equal(t, hex.EncodeToString(digest[:]), receipt.SHA256)
+	require.Equal(t, len(body), receipt.ByteLength)
 }

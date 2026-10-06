@@ -14,7 +14,6 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
@@ -33,9 +32,6 @@ func TestKubernetesActivationWaitsForListenerAndKeepsServingOnFailure(t *testing
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	candidate := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes, DocumentHash: "candidate"}
-	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
-		return modelruntime.EmbeddingRuntimeState{}, nil
-	}
 	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		return &OpenAIRouter{Config: cfg}, nil
 	}
@@ -44,7 +40,7 @@ func TestKubernetesActivationWaitsForListenerAndKeepsServingOnFailure(t *testing
 	var releaseOnce sync.Once
 	releaseWarmup := func() { releaseOnce.Do(func() { close(allowWarmup) }) }
 	defer releaseWarmup()
-	warmupReloadRouter = func(*OpenAIRouter, modelruntime.EmbeddingRuntimeState) error {
+	warmupReloadRouter = func(*OpenAIRouter) error {
 		close(warmupEntered)
 		<-allowWarmup
 		return nil
@@ -89,8 +85,8 @@ func TestKubernetesActivationWaitsForListenerAndKeepsServingOnFailure(t *testing
 	if server.CurrentConfig() != candidate {
 		t.Fatal("candidate was not published before acknowledgement")
 	}
-	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
-		return modelruntime.EmbeddingRuntimeState{}, errors.New("candidate dependency unavailable")
+	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
+		return nil, errors.New("candidate dependency unavailable")
 	}
 	if err := server.ActivateKubernetesConfig(ctx, &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes, DocumentHash: "failed"}); err == nil {
 		t.Fatal("failed candidate acknowledged")
@@ -122,13 +118,10 @@ func TestKubernetesActivationCancellationDuringWarmupDoesNotPublish(t *testing.T
 	server := &Server{servingReady: ready, service: NewRouterService(&OpenAIRouter{Config: initial}), runtime: routerruntime.NewRegistry(initial)}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
-		return modelruntime.EmbeddingRuntimeState{}, nil
-	}
 	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		return &OpenAIRouter{Config: cfg}, nil
 	}
-	warmupReloadRouter = func(*OpenAIRouter, modelruntime.EmbeddingRuntimeState) error { cancel(); return nil }
+	warmupReloadRouter = func(*OpenAIRouter) error { cancel(); return nil }
 	if err := server.ActivateKubernetesConfig(ctx, &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("activation = %v", err)
 	}

@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   security:
-    name: Security
+    name: Code and Infrastructure Scans
     runs-on: ubuntu-24.04
     permissions:
       contents: read

@@ -9,6 +9,8 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
+from .models_decision import DecisionSignalRule
+from .models_predicates import NumericPredicate
 from .models_safety import SafetyRule
 
 from pydantic import (
@@ -36,6 +38,7 @@ SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT = 2
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
+LABELED_CONDITION_TYPES = frozenset({"classifier", "decision"})
 
 
 class Listener(BaseModel):
@@ -47,9 +50,10 @@ class Listener(BaseModel):
     timeout: Optional[str] = "300s"
     api_keys: Optional[List[str]] = Field(
         default=None,
-        description="Bearer tokens required to call this listener. "
-        "If set, requests without 'Authorization: Bearer <key>' matching one of these "
-        "values are rejected with HTTP 401.",
+        description="Client keys required to call this listener. "
+        "If set, requests must send one of these values as "
+        "'Authorization: Bearer <key>' or, for Azure OpenAI clients, "
+        "'api-key: <key>'; other requests are rejected with HTTP 401.",
     )
 
 
@@ -69,16 +73,40 @@ class EmbeddingSignal(BaseModel):
     payload the embedding rule's query is computed from. It defaults to
     ``"text"`` when omitted, preserving existing behavior. ``"image"`` and
     ``"audio"`` require ``global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal``
-    in the router config so the query and candidate embeddings land in the same
-    shared space.
+    or an explicit embedding binding with those capabilities. Positive and negative
+    text/image candidates are encoded in that same prepared model space.
     """
 
     name: str
     threshold: float
-    candidates: List[str]
-    aggregation_method: str = "max"
+    candidates: List[StrictStr] = Field(default_factory=list)
+    image_candidates: List[StrictStr] = Field(default_factory=list)
+    negative_candidates: List[StrictStr] = Field(default_factory=list)
+    negative_image_candidates: List[StrictStr] = Field(default_factory=list)
+    aggregation_method: Literal["max", "mean", "any"] = "max"
     query_modality: Optional[Literal["text", "image", "audio"]] = None
     prototype_scoring: Optional["PrototypeScoringConfig"] = None
+
+    @model_validator(mode="after")
+    def validate_candidate_banks(self):
+        if not self.candidates and not self.image_candidates:
+            raise ValueError(
+                "embedding requires positive candidates or image_candidates"
+            )
+        for values in (
+            self.candidates,
+            self.image_candidates,
+            self.negative_candidates,
+            self.negative_image_candidates,
+        ):
+            if any(not value.strip() for value in values):
+                raise ValueError("embedding candidates must be non-empty strings")
+        bound = 2 if self.negative_candidates or self.negative_image_candidates else 1
+        if not math.isfinite(self.threshold) or not -bound <= self.threshold <= bound:
+            raise ValueError(
+                f"embedding threshold must be finite and within [-{bound}, {bound}]"
+            )
+        return self
 
 
 class ProjectionPartition(BaseModel):
@@ -237,36 +265,6 @@ class StructureFeature(BaseModel):
 
     type: str
     source: StructureSource
-
-
-class NumericPredicate(BaseModel):
-    """Numeric threshold predicate for structure signals."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    gt: Optional[float] = None
-    gte: Optional[float] = None
-    lt: Optional[float] = None
-    lte: Optional[float] = None
-
-    @model_validator(mode="after")
-    def validate_contract(self):
-        for value in (self.gt, self.gte, self.lt, self.lte):
-            if value is not None and not math.isfinite(value):
-                raise ValueError("numeric predicate values must be finite")
-        if all(value is None for value in (self.gt, self.gte, self.lt, self.lte)):
-            raise ValueError("numeric predicate requires at least one comparator")
-        if self.gt is not None and self.gte is not None:
-            raise ValueError("numeric predicate cannot set both gt and gte")
-        if self.lt is not None and self.lte is not None:
-            raise ValueError("numeric predicate cannot set both lt and lte")
-        lower = self.gt if self.gt is not None else self.gte
-        upper = self.lt if self.lt is not None else self.lte
-        if lower is not None and upper is not None:
-            strict = self.gt is not None or self.lt is not None
-            if lower > upper or (lower == upper and strict):
-                raise ValueError("numeric predicate defines an empty range")
-        return self
 
 
 class StructureRule(BaseModel):
@@ -641,6 +639,7 @@ class Signals(BaseModel):
     metadata: Optional[List[MetadataRule]] = []
     classifiers: Optional[List[ClassifierSignal]] = []
     input_modality: Optional[List[InputModalityRule]] = []
+    decision: Optional[List[DecisionSignalRule]] = []
 
     @model_validator(mode="after")
     def validate_rule_names(self):
@@ -711,12 +710,16 @@ class Condition(BaseModel):
             raise ValueError("leaf condition node requires both type and name")
         if self.conditions:
             raise ValueError("leaf condition node cannot define child conditions")
-        if self.label is not None and self.type != "classifier":
-            raise ValueError("label is only valid for classifier conditions")
+        if self.label is not None and self.type not in LABELED_CONDITION_TYPES:
+            raise ValueError(
+                "label is only valid for classifier and decision conditions"
+            )
         if self.type == "classifier" and self.label is None:
             raise ValueError("classifier conditions require a label")
-        if self.on_error is not None and self.type != "classifier":
-            raise ValueError("on_error is only valid for classifier conditions")
+        if self.on_error is not None and self.type not in LABELED_CONDITION_TYPES:
+            raise ValueError(
+                "on_error is only valid for classifier and decision conditions"
+            )
         if self.on_unknown is not None:
             raise ValueError("on_unknown is only valid on the root rules node")
         return self
@@ -945,6 +948,27 @@ class ContextCompressionPluginConfig(BaseModel):
     failure_mode: Literal["fail_open", "fail_closed"] = "fail_open"
 
 
+class PromptCachePluginConfig(BaseModel):
+    """Route-local prompt-cache marker injection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    ttl: Literal["5m", "1h"] = "5m"
+    targets: List[Literal["instructions", "tools"]] = Field(
+        default_factory=lambda: ["instructions", "tools"]
+    )
+    on_unsupported: Literal["skip", "reject"] = "skip"
+
+    @model_validator(mode="after")
+    def validate_targets(self) -> "PromptCachePluginConfig":
+        if not self.targets:
+            raise ValueError("targets must not be empty")
+        if len(set(self.targets)) != len(self.targets):
+            raise ValueError("targets must not contain duplicates")
+        return self
+
+
 class FastResponsePluginConfig(BaseModel):
     """Configuration for fast_response plugin."""
 
@@ -1100,6 +1124,22 @@ class AdvancedToolFilteringConfig(BaseModel):
     hybrid_history: Optional[HybridHistoryConfig] = None
 
 
+class StickyToolSelectionConfig(BaseModel):
+    """Session-scoped sticky tool-set selection (issue #3347).
+
+    Mirrors the Go-side `config.StickyToolSelectionConfig`. Opt-in and
+    disabled by default. This layer only mirrors the schema surface so
+    Pydantic stops dropping the subtree; the Go side is authoritative for
+    bounds (max_tools 1..128, max_new_tools_per_turn 0..max_tools) and for
+    rejecting sticky.enabled under a disabled tool_selection plugin.
+    """
+
+    enabled: bool = False
+    max_tools: Optional[int] = Field(default=None, ge=1, le=128)
+    max_new_tools_per_turn: Optional[int] = Field(default=None, ge=0)
+    pin_called_tools: Optional[bool] = None
+
+
 class ToolSelectionPluginConfig(BaseModel):
     """Configuration for tool_selection plugin (semantic add/filter on request tools)."""
 
@@ -1113,6 +1153,7 @@ class ToolSelectionPluginConfig(BaseModel):
     relevance_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     preserve_count: Optional[int] = Field(default=None, ge=0)
     advanced_filtering: Optional[AdvancedToolFilteringConfig] = None
+    sticky: Optional[StickyToolSelectionConfig] = None
 
 
 class SystemPromptPluginConfig(BaseModel):
@@ -2279,7 +2320,8 @@ class ModelBinding(BaseModel):
 
     deployment: str
     contract: str
-    adapter: str
+    # Required except on model_runtime deployments, whose card names the head.
+    adapter: str = ""
     head: Optional[str] = None
     mapping_path: Optional[str] = None
     pair_scorer: Optional[PairScorerSelection] = None
@@ -2401,19 +2443,12 @@ class EmbeddingModelsConfig(BaseModel):
     qwen3_model_path: Optional[str] = Field(
         None, description="Path to Qwen3-Embedding model"
     )
-    gemma_model_path: Optional[str] = Field(
-        None, description="Path to EmbeddingGemma model"
-    )
     mmbert_model_path: Optional[str] = Field(
         None, description="Path to mmBERT 2D Matryoshka model"
     )
     multimodal_model_path: Optional[str] = Field(
         None,
         description="Path to multi-modal embedding model (text/image/audio)",
-    )
-    bert_model_path: Optional[str] = Field(
-        None,
-        description="Path to BERT/MiniLM model (recommended for memory retrieval)",
     )
     embedding_config: Optional[EmbeddingClassifierConfig] = Field(
         default=None,

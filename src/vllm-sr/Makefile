@@ -3,7 +3,7 @@
 # Configuration
 IMAGE_NAME ?= ghcr.io/vllm-project/semantic-router/vllm-sr
 ROUTER_IMAGE_NAME ?= $(IMAGE_NAME)
-ENVOY_IMAGE ?= envoyproxy/envoy:v1.34-latest
+ENVOY_IMAGE ?= envoyproxy/envoy:v1.35.3
 DASHBOARD_IMAGE_NAME ?= ghcr.io/vllm-project/semantic-router/dashboard
 IMAGE_TAG ?= latest
 FULL_IMAGE = $(IMAGE_NAME):$(IMAGE_TAG)
@@ -129,7 +129,7 @@ docker-build:
 	@echo "Image: $(FULL_IMAGE)"
 	@echo "This may take a few minutes..."
 	@echo ""
-	cd ../.. && docker build -t $(FULL_IMAGE) -f src/vllm-sr/Dockerfile .
+	cd ../.. && docker build -t $(FULL_IMAGE) -f tools/docker/Dockerfile.extproc --target vllm-sr .
 	@echo ""
 	@echo "Docker image built: $(FULL_IMAGE)"
 	@echo ""
@@ -139,7 +139,7 @@ docker-build-router:
 	@echo "Image: $(FULL_ROUTER_IMAGE)"
 	@echo "This may take a few minutes..."
 	@echo ""
-	cd ../.. && docker build -t $(FULL_ROUTER_IMAGE) -f src/vllm-sr/Dockerfile .
+	cd ../.. && docker build -t $(FULL_ROUTER_IMAGE) -f tools/docker/Dockerfile.extproc --target vllm-sr .
 	@echo ""
 	@echo "Docker image built: $(FULL_ROUTER_IMAGE)"
 	@echo ""
@@ -149,6 +149,7 @@ docker-build-envoy:
 	@echo "Image: $(FULL_ENVOY_IMAGE)"
 	@echo ""
 	@docker image inspect $(FULL_ENVOY_IMAGE) >/dev/null 2>&1 || docker pull $(FULL_ENVOY_IMAGE)
+	@docker run --rm $(FULL_ENVOY_IMAGE) --version >/dev/null
 	@echo ""
 	@echo "Docker image available: $(FULL_ENVOY_IMAGE)"
 	@echo ""
@@ -186,7 +187,8 @@ docker-buildx: docker-buildx-setup
 	cd ../.. && docker buildx build \
 		--platform $(PLATFORMS) \
 		--tag $(FULL_IMAGE) \
-		--file src/vllm-sr/Dockerfile \
+		--file tools/docker/Dockerfile.extproc \
+		--target vllm-sr \
 		--load \
 		.
 	@echo ""
@@ -203,7 +205,8 @@ docker-buildx-push: docker-buildx-setup
 	cd ../.. && docker buildx build \
 		--platform $(PLATFORMS) \
 		--tag $(FULL_IMAGE) \
-		--file src/vllm-sr/Dockerfile \
+		--file tools/docker/Dockerfile.extproc \
+		--target vllm-sr \
 		--push \
 		.
 	@echo ""

@@ -14,8 +14,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
+from cli.container_services import _is_port_in_use
 from cli.runtime_env_names import runtime_env_name_is_allowed
-from cli.runtime_stack import RuntimeStackLayout
+from cli.runtime_stack import BENCH_PORT_ENV, PORT_OFFSET_ENV, RuntimeStackLayout
 
 BENCH_CONFIG_ENV = ("SR_BENCH_URL", "SR_BENCH_TOKEN_ENV", "SR_BENCH_STORE")
 BENCH_TOKEN_ENV = "SR_BENCH_TOKEN"
@@ -131,6 +132,10 @@ def prepare_bench_runtime(
     os.chmod(store, 0o700)
     token = environment.get(token_ref) or _private_token(root / "service-token")
     values = {token_ref: token}
+    # The service owns gated source downloads; never send this credential to the
+    # browser or include its value in preparation requests or job receipts.
+    if environment.get("HF_TOKEN"):
+        values["HF_TOKEN"] = environment["HF_TOKEN"]
     for ref in _target_secret_refs(store):
         value = environment.get(ref)
         if not value:
@@ -168,6 +173,8 @@ def reconcile_bench_container(
 
     Identity covers every launch argument and credential. The previous image is
     the only permitted difference; even legacy workers carry the full identity.
+    A worker that never started is removed whatever its identity: it holds no
+    ledger state, and left in place its name would fail every later serve.
     """
     expected = next(
         (
@@ -200,6 +207,23 @@ def reconcile_bench_container(
         status = existing["status"]
         labels = existing["labels"]
     except (ValueError, KeyError, TypeError):
+        return None
+    if status == "created" and existing.get("id"):
+        subprocess.run(
+            [command[0], "rm", existing["id"]],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        host_port = int(command[command.index("-p") + 1].rsplit(":", 2)[-2])
+        if _is_port_in_use(host_port):
+            raise ValueError(
+                f"sr-bench port {host_port} is already in use, so {container_name} "
+                f"could not start. Stop the process using port {host_port}, set "
+                f"{BENCH_PORT_ENV} for both serve and benchmark, or set a different "
+                f"{PORT_OFFSET_ENV}."
+            )
         return None
     if status != "running":
         raise ValueError(
@@ -294,6 +318,41 @@ def _remove_idle_bench_container(runtime: str, container_id: str, store: Path) -
         if busy:
             raise ValueError(
                 "The sr-bench service has active runs; finish or cancel them before an image upgrade"
+            )
+        # Preparation workers share this service lifecycle but have their own
+        # durable journal. Inspect it while admission and its children are frozen.
+        from cli.sr_bench.preparations import ACTIVE, JOB_ID  # noqa: PLC0415
+
+        try:
+            preparations = store / "dataset-preparations"
+            if preparations.is_symlink() or (
+                preparations.exists() and not preparations.is_dir()
+            ):
+                raise ValueError("Invalid preparation journal directory")
+            preparing = False
+            if preparations.exists():
+                for path in preparations.iterdir():
+                    if not path.name.startswith("prep-") or path.suffix != ".json":
+                        continue
+                    if path.is_symlink() or not JOB_ID.fullmatch(path.stem):
+                        raise ValueError("Invalid preparation journal file")
+                    job = json.loads(path.read_text())
+                    if (
+                        not isinstance(job, dict)
+                        or job.get("id") != path.stem
+                        or job.get("status") not in ACTIVE | {"completed", "failed"}
+                    ):
+                        raise ValueError("Invalid preparation journal record")
+                    if job["status"] in ACTIVE:
+                        preparing = True
+                        break
+        except (OSError, ValueError, TypeError) as exc:
+            raise ValueError(
+                "Cannot verify dataset preparations; leaving the sr-bench worker unchanged"
+            ) from exc
+        if preparing:
+            raise ValueError(
+                "The sr-bench service has active dataset preparations; wait for them to finish before an image upgrade"
             )
         # No benchmark can be dispatched after the idle check while frozen.
         # SQLite's durable journal survives removal; only the owned ID is removed.

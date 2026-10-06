@@ -92,7 +92,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `model_id` _string_ |  |  | Optional: \{\} <br /> |
-| `use_modernbert` _boolean_ |  |  | Optional: \{\} <br /> |
 | `threshold` _string_ | Classification threshold (0.0-1.0). Stored as string to avoid float precision issues. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  |  | Optional: \{\} <br /> |
 | `category_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
@@ -212,6 +211,7 @@ _Appears in:_
 | `reasoning_effort` _string_ | ReasoningEffort is the default reasoning effort for model bindings that do<br />not select a different effort. The selected model family validates the<br />value because built-in and custom families may expose different ladders. |  | Optional: \{\} <br /> |
 | `api` _[APIConfig](#apiconfig)_ | API configuration |  | Optional: \{\} <br /> |
 | `observability` _[ObservabilityConfig](#observabilityconfig)_ | Observability configuration |  | Optional: \{\} <br /> |
+| `streamed_body` _[StreamedBodyConfig](#streamedbodyconfig)_ | StreamedBody enables streamed request body handling. Mirrors<br />global.router.streamed_body; the gateway must send bodies to ExtProc in<br />STREAMED or FullDuplexStreamed mode for it to take effect. |  | Optional: \{\} <br /> |
 
 #### DecisionConfig
 
@@ -261,7 +261,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `qwen3_model_path` _string_ | Path to Qwen3-Embedding-0.6B model directory<br />Qwen3 provides 32K context and high quality embeddings (1024 dimensions) |  | Optional: \{\} <br /> |
-| `gemma_model_path` _string_ | Path to EmbeddingGemma-300M model directory<br />Gemma provides 8K context and fast embeddings (768 dimensions) |  | Optional: \{\} <br /> |
 | `mmbert_model_path` _string_ | Path to mmBERT 2D Matryoshka embedding model directory<br />Supports layer early exit (3/6/11/22) and dimension reduction (64-768) |  | Optional: \{\} <br /> |
 | `use_cpu` _boolean_ | Use CPU for inference (default: true) | true | Optional: \{\} <br /> |
 | `embedding_config` _[HNSWEmbeddingConfig](#hnswembeddingconfig)_ | Embedding configuration for embedding-based classification |  | Optional: \{\} <br /> |
@@ -364,7 +363,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `backend` _string_ | Backend selects the embedding provider backend. |  | Enum: [candle openvino openai_compatible] <br />Optional: \{\} <br /> |
+| `backend` _string_ | Backend selects the embedding provider backend: the built-in model<br />runtime (the default) or an external OpenAI-compatible endpoint. |  | Enum: [model_runtime openai_compatible] <br />Optional: \{\} <br /> |
 | `model_type` _string_ | ModelType specifies which embedding model to use<br />Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual), "remote" (external provider) |  | Enum: [qwen3 gemma mmbert remote] <br />Optional: \{\} <br /> |
 | `preload_embeddings` _boolean_ | PreloadEmbeddings enables precomputing candidate embeddings at startup | true | Optional: \{\} <br /> |
 | `target_dimension` _integer_ | TargetDimension is the embedding dimension to use (default: 768)<br />For mmBERT, supported local dimensions are 64, 128, 256, 512, 768.<br />External providers may use other positive dimensions such as 1024, 1536, or 3072. |  | Minimum: 1 <br />Optional: \{\} <br /> |
@@ -720,14 +719,12 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `max_sequence_length` _integer_ | MaxSequenceLength is the total tokenized input budget, including special<br />tokens. Omission or zero preserves the 512-token legacy limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `use_mmbert_32k` _boolean_ | UseMmBERT32K selects the local model that supports token windows. |  | Optional: \{\} <br /> |
 | `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window scans original content tokens with explicit overlap. Omission or<br />null leaves window selection unchanged; no CRD defaults are injected. |  | Optional: \{\} <br /> |
 | `model_id` _string_ |  |  | Optional: \{\} <br /> |
-| `use_modernbert` _boolean_ |  |  | Optional: \{\} <br /> |
 | `threshold` _string_ | Detection threshold (0.0-1.0). Stored as string to avoid float precision issues. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  |  | Optional: \{\} <br /> |
 | `pii_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
-| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend names a remote token classifier speaking token_spans.v1. Its<br />absence keeps local PII inference. The local selectors this replaces are<br />model_id, use_modernbert, use_mmbert_32k and use_cpu above. Explicit<br />token windows are only supported by the local mmbert32k model. |  | Optional: \{\} <br /> |
+| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend names a remote token classifier speaking token_spans.v1. Its<br />absence keeps local PII inference. The local selectors this replaces are<br />model_id and use_cpu above. Explicit token windows are only supported by<br />the local model. |  | Optional: \{\} <br /> |
 | `on_error` _string_ | OnError selects what a PII backend failure, or a provider-declared<br />truncation, does to the rule that consumed it: allow (default) treats the<br />content as not matching, block matches it as classification_error. |  | Enum: [allow block] <br />Optional: \{\} <br /> |
 
 #### PersistenceSpec
@@ -790,9 +787,8 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend selects a named external classifier and its typed result contract. |  | Optional: \{\} <br /> |
 | `max_sequence_length` _integer_ | MaxSequenceLength limits the total tokenized input, including special<br />tokens. Omission or zero retains the 512-token budget. The model loader<br />validates the requested budget against the loaded model's capacity. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window enables explicit scanning of all input tokens. Omission or null<br />keeps whole-input inference. Only the local mmbert32k variant supports it. |  | Optional: \{\} <br /> |
+| `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window enables explicit scanning of all input tokens. Omission or null<br />keeps whole-input inference. Only the local model supports it. |  | Optional: \{\} <br /> |
 | `enabled` _boolean_ |  | true | Optional: \{\} <br /> |
-| `variant` _string_ | Variant selects a local Candle-backed model variant. It is mutually<br />exclusive with Backend. When both are omitted, the operator uses mmbert32k. |  | Enum: [candle mmbert32k] <br />Optional: \{\} <br /> |
 | `model_id` _string_ |  | models/Vela-1.0-Encoder-307M-Guard | Optional: \{\} <br /> |
 | `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues. | 0.5 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  | true | Optional: \{\} <br /> |
@@ -1230,6 +1226,20 @@ _Appears in:_
 | `grpc` _[PortSpec](#portspec)_ | GRPC port configuration |  | Optional: \{\} <br /> |
 | `api` _[PortSpec](#portspec)_ | API port configuration |  | Optional: \{\} <br /> |
 | `metrics` _[MetricsPortSpec](#metricsportspec)_ | Metrics port configuration |  | Optional: \{\} <br /> |
+
+#### StreamedBodyConfig
+
+StreamedBodyConfig defines streamed request body handling.
+
+_Appears in:_
+
+- [ConfigSpec](#configspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled accumulates request body chunks before routing at end-of-stream. |  | Optional: \{\} <br /> |
+| `max_bytes` _integer_ | MaxBytes caps the accumulated body size. A larger body is rejected and the<br />ExtProc stream ends; the downstream response follows the gateway's ExtProc<br />failure policy. Zero disables the limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `timeout_sec` _integer_ | TimeoutSec caps how long body accumulation may take. A slower body is<br />rejected and the ExtProc stream ends; the downstream response follows the<br />gateway's ExtProc failure policy. Zero disables the limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 
 #### Tool
 

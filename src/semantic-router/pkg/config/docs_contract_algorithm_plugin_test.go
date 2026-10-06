@@ -25,6 +25,7 @@ var algorithmTutorialBuckets = map[string]string{
 	"svm":           "selection",
 	"workflows":     "looper",
 	"prompt":        "selection",
+	"decision":      "selection",
 }
 
 var retiredAlgorithmTutorialDocs = []string{
@@ -39,6 +40,7 @@ var pluginTutorialBuckets = map[string]string{
 	"hallucination":       "safety-and-generation",
 	"header-mutation":     "response-and-mutation",
 	"memory":              "retrieval-and-memory",
+	"prompt-cache":        "retrieval-and-memory",
 	"rag":                 "retrieval-and-memory",
 	"request-params":      "response-and-mutation",
 	"response-jailbreak":  "safety-and-generation",

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -286,14 +286,7 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 
 	if search.bestSimilarity >= threshold {
 		// Candidate selection already excluded above-threshold lexical polarity
-		// mismatches. The optional NLI tier verifies the remaining winner once,
-		// outside the cache lock, before it is served or its access info is touched.
-		if result, handled, err := c.applyPolarityNLI(
-			ctx, start, model, query, search.bestEntry, search.bestSimilarity, threshold,
-		); handled {
-			return result, err
-		}
-
+		// mismatches.
 		atomic.AddInt64(&c.hitCount, 1)
 
 		c.mu.Lock()
@@ -309,12 +302,15 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 			"model":      model,
 		})
 		metrics.RecordCacheOperation("memory", "find_similar", "hit", time.Since(start).Seconds())
-		return lookupResultFromTimestamps(
+		result := lookupResultFromTimestamps(
 			search.bestEntry.ResponseBody,
 			search.bestSimilarity,
 			search.bestEntry.Timestamp,
 			search.bestEntry.ExpiresAt,
-		), nil
+		)
+		var queryBuffer [32]string
+		result.NegationGuard = negationGuardOutcomeFor(tokenizeForPolarity(query, queryBuffer[:0]), search.bestEntry.Query)
+		return result, nil
 	}
 
 	atomic.AddInt64(&c.missCount, 1)

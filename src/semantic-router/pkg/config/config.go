@@ -1,6 +1,9 @@
 package config
 
-import modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+import (
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+)
 
 // ConfigSource defines where to load dynamic configuration from.
 type ConfigSource string
@@ -20,25 +23,6 @@ const (
 	ModelRolePreference       = "preference"
 	ModelRoleMemoryRewrite    = "memory_rewrite"
 	ModelRoleMemoryExtraction = "memory_extraction"
-)
-
-// PromptGuardConfig.Variant values, selecting which local Candle-backed
-// jailbreak classifier variant to use. Mutually exclusive with Protocol - see
-// PromptGuardConfig's doc comment. An empty/unset value passed directly to
-// createJailbreakInference falls back to PromptGuardVariantCandle. This is
-// NOT the same as the canonical-config default: canonical resolution starts
-// from defaultPromptGuardModule()'s baseline (PromptGuardVariantMmBERT32K,
-// matching the bundled mmbert32k model it also defaults ModelID to) and
-// overlays user YAML, so a canonical-resolved config with no explicit
-// variant gets mmbert32k, not candle. A user who wants the plain candle
-// variant under canonical resolution must set variant: candle explicitly.
-const (
-	// PromptGuardVariantCandle runs the bundled Candle model locally
-	// (LoRA/BERT auto-detect, falling back to ModernBERT).
-	PromptGuardVariantCandle = "candle"
-	// PromptGuardVariantMmBERT32K runs the bundled mmBERT-32K model locally
-	// (32K context, YaRN RoPE, multilingual).
-	PromptGuardVariantMmBERT32K = "mmbert32k"
 )
 
 // PromptGuardConfig.OnError values live in classifier_on_error.go as
@@ -106,12 +90,13 @@ type RouterConfig struct {
 	InlineModels     `yaml:",inline"`
 	ExternalModels   []ExternalModelConfig `yaml:"external_models,omitempty"`
 	SemanticCache    `yaml:"semantic_cache"`
-	Memory           MemoryConfig        `yaml:"memory"`
-	VectorStore      *VectorStoreConfig  `yaml:"vector_store,omitempty"`
-	ResponseAPI      ResponseAPIConfig   `yaml:"response_api"`
-	RouterReplay     RouterReplayConfig  `yaml:"router_replay"`
-	StartupStatus    StartupStatusConfig `yaml:"startup_status"`
-	Looper           LooperConfig        `yaml:"looper,omitempty"`
+	Memory           MemoryConfig            `yaml:"memory"`
+	VectorStore      *VectorStoreConfig      `yaml:"vector_store,omitempty"`
+	ToolSessions     *ToolSessionStoreConfig `yaml:"tool_sessions,omitempty"`
+	ResponseAPI      ResponseAPIConfig       `yaml:"response_api"`
+	RouterReplay     RouterReplayConfig      `yaml:"router_replay"`
+	StartupStatus    StartupStatusConfig     `yaml:"startup_status"`
+	Looper           LooperConfig            `yaml:"looper,omitempty"`
 	LLMObservability `yaml:",inline"`
 	APIServer        `yaml:",inline"`
 	RouterOptions    `yaml:",inline"`
@@ -271,10 +256,11 @@ type IntelligentRouting struct {
 	DataPolicy            *RoutingDataPolicy      `yaml:"data_policy,omitempty"`
 	ModelBindings         map[string]ModelBinding `yaml:"model_bindings,omitempty"`
 	Signals               `yaml:",inline"`
-	Projections           Projections          `yaml:"projections,omitempty"`
-	Decisions             []Decision           `yaml:"decisions,omitempty"`
-	Strategy              RoutingStrategy      `yaml:"strategy,omitempty"`
-	ModelSelection        ModelSelectionConfig `yaml:"model_selection,omitempty"`
+	Projections           Projections              `yaml:"projections,omitempty"`
+	Decisions             []Decision               `yaml:"decisions,omitempty"`
+	Strategy              RoutingStrategy          `yaml:"strategy,omitempty"`
+	Fallback              *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	ModelSelection        ModelSelectionConfig     `yaml:"model_selection,omitempty"`
 	ReasoningConfig       `yaml:",inline"`
 }
 

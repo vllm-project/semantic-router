@@ -24,7 +24,7 @@ def test_virtual_assignment_roles_match_decisions_that_invoke_backends() -> None
     assert len(virtual) == 5
     for model in virtual:
         assert model["generation"] == 1
-        assert model["policy_version"] == "2.0.0"
+        assert model["policy_version"] == "3.0.0"
         assert {
             key: value
             for key, value in model["verification"].items()

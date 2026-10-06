@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -14,21 +15,13 @@ type complexityQueryEmbeddings struct {
 	image  []float32
 }
 
-func (c *ComplexityClassifier) loadQueryEmbeddingsCached(ctx context.Context, query string, imageURL string, cache *requestImageEmbeddingCache) (complexityQueryEmbeddings, error) {
+func (c *ComplexityClassifier) loadQueryEmbeddingsCached(ctx context.Context, query string, imageURL string, cache *requestMediaEmbeddingCache) (complexityQueryEmbeddings, error) {
 	if err := ctx.Err(); err != nil {
 		return complexityQueryEmbeddings{}, err
 	}
 	var embeddings complexityQueryEmbeddings
 	var err error
-	if c.provider != nil {
-		embeddings.text, err = c.provider.Embed(ctx, query)
-	} else {
-		queryOutput, queryErr := getEmbeddingWithModelType(query, c.modelType, 0)
-		err = queryErr
-		if err == nil {
-			embeddings.text = queryOutput.Embedding
-		}
-	}
+	embeddings.text, err = embedding.Embed(ctx, c.provider, query, embedding.Options{})
 	if err != nil {
 		return complexityQueryEmbeddings{}, fmt.Errorf("failed to compute query embedding: %w", err)
 	}
@@ -52,13 +45,7 @@ func (c *ComplexityClassifier) loadOptionalMultiModalTextEmbedding(ctx context.C
 	if ctx.Err() != nil {
 		return nil
 	}
-	var vector []float32
-	var err error
-	if c.multiModalProvider != nil {
-		vector, err = c.multiModalProvider.Embed(ctx, query)
-	} else {
-		vector, err = getMultiModalTextEmbedding(query, 0)
-	}
+	vector, err := embedding.Embed(ctx, c.multiModalProvider, query, embedding.Options{})
 	if err != nil {
 		logging.Warnf("[Complexity Signal] Failed to compute multimodal text embedding: %v", err)
 		return nil
@@ -66,7 +53,7 @@ func (c *ComplexityClassifier) loadOptionalMultiModalTextEmbedding(ctx context.C
 	return vector
 }
 
-func (c *ComplexityClassifier) loadOptionalMultiModalImageEmbeddingCached(ctx context.Context, imageURL string, cache *requestImageEmbeddingCache) []float32 {
+func (c *ComplexityClassifier) loadOptionalMultiModalImageEmbeddingCached(ctx context.Context, imageURL string, cache *requestMediaEmbeddingCache) []float32 {
 	if cache == nil {
 		embedding, err := c.embedMultiModalImage(ctx, imageURL)
 		if err != nil {
@@ -76,7 +63,7 @@ func (c *ComplexityClassifier) loadOptionalMultiModalImageEmbeddingCached(ctx co
 		return embedding
 	}
 
-	embedding, err := cache.resolveFor(c.multiModalProvider, imageURL, 0, func() ([]float32, error) {
+	embedding, err := cache.resolveFor(c.multiModalProvider, config.QueryModalityImage, imageURL, 0, func() ([]float32, error) {
 		return c.embedMultiModalImage(ctx, imageURL)
 	})
 	if err != nil {
@@ -90,8 +77,5 @@ func (c *ComplexityClassifier) embedMultiModalImage(ctx context.Context, ref str
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if c.multiModalProvider != nil {
-		return embedding.Image(ctx, c.multiModalProvider, ref, 0)
-	}
-	return getMultiModalImageEmbedding(ref, 0)
+	return embedding.Image(ctx, c.multiModalProvider, ref, 0)
 }

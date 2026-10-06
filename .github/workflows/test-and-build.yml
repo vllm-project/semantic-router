@@ -3,9 +3,6 @@ name: Core Tests
 on:
   workflow_call:
     inputs:
-      native-artifact:
-        type: string
-        default: ""
       verification:
         type: string
         default: ""
@@ -19,17 +16,11 @@ env:
 
 jobs:
   test-and-build:
-    name: Core Tests
+    name: Router Contracts
     runs-on: ubuntu-24.04
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
-
-      - name: Set up Rust
-        if: inputs.native-artifact == ''
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.90
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -52,20 +43,6 @@ jobs:
       - name: Validate Helm chart
         run: make helm-ci-validate HELM_NAMESPACE=test-namespace
 
-      - name: Cache Rust dependencies
-        if: inputs.native-artifact == ''
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            candle-binding/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
       - name: Cache Go dependencies
         uses: actions/cache@v4
         with:
@@ -75,16 +52,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Load shared native libraries
-        if: inputs.native-artifact != ''
-        uses: ./.github/actions/load-native-artifact
-        with:
-          artifact: ${{ inputs.native-artifact }}
-
-      - name: Build and test native libraries without a shared producer
-        if: inputs.native-artifact == ''
-        run: make rust-ci test-rust-ci
-
       - name: Check Go modules and vet source
         run: make check-go-mod-tidy vet
 
@@ -93,24 +60,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install the CPU ORT runtime for tiny-tensor contracts
-        run: |
-          python3 -m pip install onnxruntime==1.22.0 PyYAML==6.0.3
-          python3 - <<'PYCODE'
-          import importlib.util
-          import os
-          from pathlib import Path
-          root = Path(importlib.util.find_spec("onnxruntime").origin).parent / "capi"
-          paths = list(root.glob("libonnxruntime.so.*"))
-          assert len(paths) == 1, paths
-          with open(os.environ["GITHUB_ENV"], "a") as output:
-              output.write(f"ORT_DYLIB_PATH={paths[0]}\n")
-          PYCODE
+      - name: Install the core harness dependencies
+        run: python3 -m pip install PyYAML==6.0.3
 
-      - name: Run owned binding and alternate provider-default contracts
-        run: make test-core-owned
-
-      - name: Verify trained selector parity with the native runtime
+      - name: Verify trained selector parity with the router's selectors
         run: |
           python3 -m pip install -r src/training/model_selection/ml_model_selection/requirements-parity.txt
           mkdir -p .agent-harness/core
@@ -119,9 +72,11 @@ jobs:
       - name: Run discovered core contracts once
         run: make test-core-unit
         env:
-          CORE_NATIVE_FIXTURES: "1"
           SR_TEST_MODE: "true"
           ROUTER_PROTECTION_REPORT: ${{ github.workspace }}/.agent-harness/agent-routing-protection/report.json
+
+      - name: Install the model runtime for the local smoke test
+        run: make harness-venv-install model-runtime-install
 
       - name: Local dev smoke test (no Authorino)
         run: |
@@ -141,7 +96,6 @@ jobs:
         run: |
           python3 tools/ci/workflow_evidence.py --verification "$VERIFICATION" \
             --evidence .agent-harness/core/unit/evidence.json \
-            --evidence .agent-harness/core/owned/evidence.json \
             --junit .agent-harness/core/parity.xml \
             --case tools/test/smoke/test-local-up-router.sh \
             --output .agent-harness/core/result.json

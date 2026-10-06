@@ -31,7 +31,7 @@ class OperatorRequestTests(unittest.TestCase):
                     "message": {
                         "content": json.dumps(
                             {
-                                "mock": "mock-vllm",
+                                "mock": "provider-mocker",
                                 "protocol": "chat_completions",
                                 "model": "backend",
                                 "user": ["nonce"],
@@ -176,7 +176,7 @@ class OperatorRequestTests(unittest.TestCase):
                 output = Path(directory) / "resource.yaml"
                 command = script.replace(
                     "${{ matrix.cache-backend }}", backend
-                ).replace("${{ matrix.router-name }}", "test-router-" + backend)
+                ).replace("${{ matrix.cache-backend }}", backend)
                 subprocess.run(
                     ["bash", "-eu", "-c", 'kubectl() { cat > "$OUTPUT"; }\n' + command],
                     env={**os.environ, "OUTPUT": str(output)},

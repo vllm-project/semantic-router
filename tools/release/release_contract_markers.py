@@ -6,7 +6,7 @@ MarkerSet = tuple[tuple[str, str], ...]
 
 
 def upgrade_runbook_fixture_markers(
-    *, release_version: str, sim_version: str, helm_chart_ref: str
+    *, release_version: str, helm_chart_ref: str
 ) -> MarkerSet:
     release_tag = f"v{release_version}"
     return (
@@ -28,7 +28,7 @@ def upgrade_runbook_fixture_markers(
         ),
         (
             "Docker digest lookup",
-            "DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}'",
+            "DIGEST=$(docker buildx imagetools inspect",
         ),
         (
             "Make Docker release pull",
@@ -40,10 +40,6 @@ def upgrade_runbook_fixture_markers(
         ),
         ("Helm values image pin", f'tag: "{release_tag}"'),
         ("Python CLI upgrade pin", f"pip install --upgrade vllm-sr=={release_version}"),
-        (
-            "Fleet simulator upgrade pin",
-            f"pip install --upgrade vllm-sr-sim=={sim_version}",
-        ),
     )
 
 
@@ -81,62 +77,18 @@ def sim_release_notes_markers() -> MarkerSet:
     )
 
 
-def sim_upgrade_docs_markers(sim_version: str) -> MarkerSet:
+def sim_upgrade_docs_markers() -> MarkerSet:
     return (
         (
-            "vllm-sr-sim upgrade command",
-            f"pip install --upgrade vllm-sr-sim=={sim_version}",
-        ),
-        ("vllm-sr-sim independent release tag", "`vllm-sr-sim-v<version>`"),
-        ("vllm-sr-sim publish workflow", "pypi-publish-vllm-sr-sim.yml"),
-    )
-
-
-def candle_crate_workflow_markers() -> MarkerSet:
-    return (
-        ("Candle crate reusable publisher", "name: Candle Crate Publisher"),
-        (
-            "Candle crate version guard",
-            'CRATE_VERSION="$(',
+            "vllm-sr-sim published version discovery",
+            "python -m pip index versions --pre vllm-sr-sim",
         ),
         (
-            "Candle crate release input",
-            "RELEASE_VERSION: ${{ inputs.version }}",
+            "vllm-sr-sim published version pin",
+            "pip install --upgrade --pre vllm-sr-sim==<published-version>",
         ),
         (
-            "Candle crate tag input",
-            "RELEASE_TAG: ${{ inputs.tag }}",
-        ),
-        ("Candle crate CPU API smoke tests", "cargo test --no-default-features"),
-        ("Candle crate CPU check", "cargo check --no-default-features --verbose"),
-        (
-            "Candle crate release build",
-            "cargo build --release --no-default-features --verbose",
-        ),
-        (
-            "Candle crate publish dry run",
-            "cargo publish --dry-run --no-default-features --verbose",
-        ),
-        (
-            "Candle crate publish command",
-            "cargo publish --no-default-features --verbose",
-        ),
-        (
-            "Candle static release artifact",
-            "candle-binding/target/release/libcandle_semantic_router.a",
-        ),
-        (
-            "Candle shared release artifact",
-            "candle-binding/target/release/libcandle_semantic_router.so",
-        ),
-    )
-
-
-def candle_release_notes_markers() -> MarkerSet:
-    return (
-        ("Candle crate release notes section", "### Rust Crate (crates.io)"),
-        (
-            "Candle crate release notes version",
-            'candle-semantic-router = "${{ needs.validate.outputs.version }}"',
+            "vllm-sr-sim independent cadence",
+            "Fleet Simulator has an independent version stream",
         ),
     )

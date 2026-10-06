@@ -71,9 +71,9 @@ for the intended input lengths and deployment hardware. This setting can be
 updated through config hot reload;
 other HTTP routes keep their existing timeouts.
 
-A deadline returns `504 REQUEST_TIMEOUT` and cancels queued or cancellable
-inference. Native inference already running may finish later. Its model resources
-and admission slot remain held until it finishes, including during shutdown.
+A deadline returns `504 REQUEST_TIMEOUT` and cancels the preview's model calls:
+the model runtime skips work it has not started and finishes a pass already
+running. The preview's admission slot is free again once those calls return.
 `max_concurrency` is a positive worker limit, defaults to 16, and has no wait
 queue: when all slots are occupied, new previews return `429 OVERLOADED`.
 Changing this limit requires a deployment restart; hot reload rejects the change.
@@ -141,14 +141,18 @@ Common Prometheus metric families:
 | Looper | `llm_looper_attempts_total`, `llm_looper_attempt_duration_seconds`, `llm_looper_attempt_first_byte_seconds`, `llm_looper_attempt_tokens_total`, `llm_looper_attempt_cost_total`, `llm_looper_execution_duration_seconds` |
 | Cache | `llm_cache_plugin_hits_total`, `llm_cache_plugin_misses_total`, `llm_cache_warmth_estimate` |
 | RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
+| Router Memory | `llm_memory_retrieval_total` (`backend`, `status`), `llm_memory_retrieval_latency_seconds`, `llm_memory_retrieval_results`, `llm_memory_store_operations_total`, `llm_memory_cache_hits_total`, `llm_memory_cache_misses_total`, `llm_memory_extraction_total` |
 | Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
 | Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total` |
 | Signals | `llm_signal_extraction_total`, `llm_signal_match_total`, `llm_signal_extraction_latency_seconds` |
 | Complexity verdicts | `llm_complexity_verdict_total` (by `rule`, `verdict`, `source`), `llm_complexity_evaluation_failures_total` |
 | Remote classifier backends | `llm_remote_connector_requests_total` (by `operation`, `outcome`), `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
-| Recipe routing | `llm_entrypoint_requests_total`, `llm_recipe_selections_total`, `llm_routing_stage_duration_seconds` |
+| Recipe routing | `llm_entrypoint_requests_total`, `llm_recipe_selections_total`, `llm_routing_stage_duration_seconds` (stages `signals`, `decision`, `algorithm`, `prompt_compression`), `llm_prompt_compression_total` (by `recipe` and `outcome`: `compressed`, `skipped_disabled`, `skipped_min_length`, `skipped_max_tokens`) |
+| Streamed request body | `llm_streamed_body_arrival_seconds`, `llm_streamed_body_bytes`, `llm_streamed_body_chunks` (by `recipe`; STREAMED and FULL_DUPLEX_STREAMED modes only) |
 | Projections | `llm_projection_score` (by configured recipe and projection name) |
 | Trace export | `llm_trace_export_spans_total` (by exporter batch result) |
+
+Router Memory counters use bounded labels only. See the [Router Memory Prometheus label release note](../../release-notes/router-memory-prometheus-labels).
 
 `llm_request_outcomes_total{traffic_kind="inference"}` counts public inference
 requests once at their terminal boundary. Authenticated internal looper requests
@@ -176,6 +180,16 @@ identify the routing boundary where available. A `routing.backend.resolved`
 event records selection evidence; the upstream span measures provider duration.
 If a local response guard blocks an upstream HTTP 200, the upstream span retains
 200 while the root records the final client response status.
+
+The upstream span also carries OpenTelemetry GenAI attributes, so GenAI-aware
+trace backends can show each provider call: `gen_ai.operation.name` (`chat`),
+`gen_ai.provider.name`, `gen_ai.request.model` (the provider model ID sent
+upstream), and the provider-reported `gen_ai.usage.input_tokens` and
+`gen_ai.usage.output_tokens`. Buffered responses also set
+`gen_ai.response.model`; streamed responses do not yet. Usage the provider did
+not report is left unset rather than estimated, and `model.name` keeps the
+Router's logical model name. The GenAI conventions are still in Development
+status upstream, so their attribute names can change.
 
 Signal evidence events contain finite reported values and confidence separately,
 including real zero values; missing evidence remains absent. Projection events

@@ -68,6 +68,15 @@ func (c *Compiler) compileEmbeddingSignal(s *SignalDecl) {
 	if v, ok := getStringField(s.Fields, "aggregation_method"); ok {
 		rule.AggregationMethodConfiged = config.AggregationMethod(v)
 	}
+	if v, ok := getStringArrayField(s.Fields, "image_candidates"); ok {
+		rule.ImageCandidates = v
+	}
+	if v, ok := getStringArrayField(s.Fields, "negative_candidates"); ok {
+		rule.NegativeCandidates = v
+	}
+	if v, ok := getStringArrayField(s.Fields, "negative_image_candidates"); ok {
+		rule.NegativeImageCandidates = v
+	}
 	if v, ok := getStringField(s.Fields, "query_modality"); ok {
 		rule.QueryModality = config.QueryModality(v)
 	}
@@ -231,6 +240,26 @@ func (c *Compiler) compileInputModalitySignal(s *SignalDecl) {
 	c.config.InputModalityRules = append(c.config.InputModalityRules, rule)
 }
 
+func (c *Compiler) compileDecisionModelSignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode decision signal %q: %v", s.Name, err)
+		return
+	}
+	var rule config.DecisionSignalRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode decision signal %q: %v", s.Name, err)
+		return
+	}
+	if err := config.ValidateDecisionSignalRuleContract(rule); err != nil {
+		c.addError(s.Pos, "%v", err)
+		return
+	}
+	c.config.DecisionRules = append(c.config.DecisionRules, rule)
+}
+
 func (c *Compiler) compileClassifierSignal(s *SignalDecl) {
 	payload := fieldsToMap(s.Fields)
 	payload["name"] = s.Name
@@ -335,8 +364,8 @@ func (c *Compiler) compileJailbreakSignal(s *SignalDecl) {
 
 func (c *Compiler) compileHallucinationSignal(s *SignalDecl) {
 	rule := config.HallucinationRule{Name: s.Name}
-	if v, ok := getBoolField(s.Fields, "use_nli"); ok {
-		rule.UseNLI = v
+	if _, ok := s.Fields["use_nli"]; ok {
+		c.addError(s.Pos, "hallucination signal %q: use_nli is retired with the NLI explainer; remove it", s.Name)
 	}
 	if v, ok := getStringField(s.Fields, "description"); ok {
 		rule.Description = v

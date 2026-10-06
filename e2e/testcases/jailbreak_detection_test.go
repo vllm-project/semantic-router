@@ -2,8 +2,25 @@ package testcases
 
 import (
 	"net/http"
+	"reflect"
 	"testing"
 )
+
+func TestJailbreakFailedCasesPreserveExactMissesWithoutPrompts(t *testing.T) {
+	results := []JailbreakResult{
+		{Description: "blocked attack", Question: "attack text", ExpectedBlocked: true, ActuallyBlocked: true, Correct: true},
+		{Description: "known miss", Question: "sensitive prompt", ExpectedBlocked: true},
+		{Description: "request error", Question: "private prompt", Error: "backend failed"},
+		{Description: "allowed benign", Question: "benign text", Correct: true},
+	}
+	want := []jailbreakCaseFailure{
+		{Description: "known miss", ExpectedBlocked: true},
+		{Description: "request error", Error: "request error"},
+	}
+	if got := jailbreakFailedCases(results); !reflect.DeepEqual(got, want) {
+		t.Fatalf("failed cases = %#v, want %#v", got, want)
+	}
+}
 
 func TestJailbreakAcceptanceRequiresBothClasses(t *testing.T) {
 	balanced := func(positive, negative int) []JailbreakResult {
@@ -58,6 +75,10 @@ func TestJailbreakResponseAttributesTheConfiguredGuardDecision(t *testing.T) {
 		{name: "Safety fast response is not Guard", decision: "block_safety", path: "fast_response", fast: "true"},
 		{name: "matching prefix is not the configured decision", decision: "block_jailbreak_other", path: "fast_response", fast: "true"},
 		{name: "upstream allowed", decision: "other", path: "upstream"},
+		{name: "upstream no-match is allowed", path: "upstream"},
+		{name: "upstream no-match cannot claim fast enforcement", path: "upstream", fast: "true", wantErr: true},
+		{name: "upstream no-match cannot hide a Guard match", path: "upstream", matched: "jailbreak_standard", wantErr: true},
+		{name: "fast path needs a selected decision", path: "fast_response", fast: "true", wantErr: true},
 		{name: "validated cache allowed", decision: "other", path: "cache"},
 		{name: "missing route is not a negative", path: "cache", wantErr: true},
 		{name: "missing path is not a negative", decision: "other", wantErr: true},

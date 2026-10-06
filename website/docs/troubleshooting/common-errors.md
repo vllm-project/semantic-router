@@ -51,6 +51,84 @@ The process cannot open the path it received. Check:
 Use `vllm-sr status` to identify the active workspace before inspecting
 container mounts.
 
+## Entrypoint / Recipe Validation
+
+`vllm-sr config validate` (or `vllm-sr validate`) includes a repair hint for common multi-recipe wiring errors.
+
+### Unknown recipe
+
+```text
+Entrypoint references unknown recipe 'missing-recipe'
+Hint: Change this to the name of a recipe defined under recipes.
+```
+
+Broken:
+
+```yaml
+entrypoints:
+  - model_names: [my-model]
+    recipe: missing-recipe
+recipes:
+  - name: production
+```
+
+Corrected:
+
+```yaml
+entrypoints:
+  - model_names: [my-model]
+    recipe: production
+recipes:
+  - name: production
+```
+
+### Duplicate recipe name
+
+```text
+Duplicate recipe name 'production'
+Hint: Rename one recipe so every recipe has a unique name.
+```
+
+Give each recipe a distinct `name`, then update entrypoints that refer to the
+renamed recipe:
+
+```yaml
+recipes:
+  - name: production
+  - name: staging
+entrypoints:
+  - model_names: [my-model]
+    recipe: production
+```
+
+### Model or reserved alias collision
+
+```text
+Entrypoint model 'vllm-sr/auto' conflicts with a configured model or reserved alias
+Hint: Use a distinct entrypoint model name; do not reuse a configured model or
+reserved alias such as vllm-sr/auto.
+```
+
+Broken:
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: production
+```
+
+Corrected:
+
+```yaml
+entrypoints:
+  - model_names: [customer-production]
+    recipe: production
+```
+
+See the
+[entrypoints and recipes tutorial](../tutorials/global/entrypoints-and-recipes.md)
+and [recipes tutorial](../tutorials/global/recipes.md) for complete examples.
+
 ## Response cache cannot start
 
 ### Backend configuration is required
@@ -320,29 +398,20 @@ See [Container connectivity](./container-connectivity) for end-to-end checks.
 
 ## A classifier or embedding model cannot load
 
-Model-load errors vary by implementation but normally include the failed path:
+Every model runs in the [model runtime](model-runtime/overview.md). When a
+model cannot load, its feature reports unknown results and the runtime records
+why. Check the router's `vsr_model_runtime_ready{deployment="..."}` metric and
+the router log, or ask a runtime you run yourself:
 
-```text
-models directory does not exist: <path>
-<name> model directory does not exist: <path>
-failed to initialize <name> model from <path>: <error>
-failed to load pre-trained model <path>: <error>
+```bash
+curl -s localhost:8100/v1/models
 ```
 
-Check the path inside the runtime, not only on the host. A normal local
-workspace mounts `models/` at `/app/models`; managed Recipes keep mutable model
-state under their workspace and mount it at the same container path.
-
-```yaml
-global:
-  model_catalog:
-    embeddings:
-      semantic:
-        bert_model_path: /app/models/all-MiniLM-L12-v2
-```
-
-Also verify that the artifact format, label mapping, and configured embedding
-dimension match the selected implementation.
+Each model's `status` and `reason` say what failed: a damaged download, a
+missing `revision`, a private repository without a token, a device that does
+not exist, or a model too large for its device.
+[Troubleshooting and FAQ](model-runtime/troubleshooting.md) lists each
+reason and the fix.
 
 ## Container image has no matching platform
 

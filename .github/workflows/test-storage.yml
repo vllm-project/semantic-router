@@ -3,9 +3,6 @@ name: Storage Integration
 on:
   workflow_call:
     inputs:
-      native-artifact:
-        type: string
-        default: ""
       verification:
         type: string
         required: true
@@ -15,7 +12,7 @@ permissions:
 
 jobs:
   storage:
-    name: Storage Integration
+    name: Service Contracts
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -43,11 +40,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Load shared native libraries
-        if: inputs.native-artifact != ''
-        uses: ./.github/actions/load-native-artifact
-        with:
-          artifact: ${{ inputs.native-artifact }}
       - name: Start Milvus service
         run: |
           echo "Starting Milvus vector database..."

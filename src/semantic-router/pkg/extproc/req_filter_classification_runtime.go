@@ -28,6 +28,7 @@ var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
 	"multi_factor":  selection.MethodMultiFactor,
 	"mlp":           selection.MethodMLP,
 	"prompt":        selection.MethodPrompt,
+	"decision":      selection.MethodDecision,
 }
 
 func (r *OpenAIRouter) evaluateSignalsForDecision(
@@ -57,6 +58,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		HasPriorAssistantReply: signalInput.hasAssistantReply,
 		Headers:                ctx.Headers,
 		ImageURL:               ctx.RequestImageURL,
+		Audio:                  ctx.RequestAudio,
 		UncompressedText:       signalInput.evaluationText,
 		SkipCompressionSignals: signalInput.skipCompressionSignals,
 		ConversationFacts:      signalInput.conversationFacts,
@@ -155,6 +157,7 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"metadata":       signals.MatchedMetadataRules,
 		"classifier":     signals.MatchedClassifierRules,
 		"input_modality": signals.MatchedInputModalityRules,
+		"decision":       signals.MatchedDecisionRules,
 		"projection":     signals.MatchedProjectionRules,
 		"context_tokens": signals.TokenCount,
 	})
@@ -200,6 +203,7 @@ func logSignalPhaseTiming(ctx *RequestContext, signalLatencyMs int64, signals *c
 			{"metadata", signals.Metrics.Metadata.ExecutionTimeMs},
 			{"classifier", signals.Metrics.Classifier.ExecutionTimeMs},
 			{"input_modality", signals.Metrics.InputModality.ExecutionTimeMs},
+			{"decision", signals.Metrics.Decision.ExecutionTimeMs},
 		}
 		for _, timing := range timings {
 			if timing.ms > 0 {
@@ -463,24 +467,15 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 	logging.ComponentDebugEvent("extproc", "decision_model_selected", selectionFields)
 	ctx.VSRSelectedModel = selectedModel
 	ctx.VSRSelectionMethod = usedMethod
+	if orch := r.fallbackOrchestratorForContext(ctx); orch != nil && orch.Policy().Enabled {
+		ctx.FallbackRecord = orch.NewExecutionRecord(ctx.RequestID, decisionName, selectedModel)
+	}
 	return selectedModel, applyReasoningModeFromSelectedModel(
 		selectedModelRef,
 		decisionName,
 		evaluationConfidence,
 		ctx,
 	), nil
-}
-
-func firstDecisionModelName(modelRefs []config.ModelRef) string {
-	for _, modelRef := range modelRefs {
-		if model := strings.TrimSpace(modelRef.LoRAName); model != "" {
-			return model
-		}
-		if model := strings.TrimSpace(modelRef.Model); model != "" {
-			return model
-		}
-	}
-	return ""
 }
 
 func applyReasoningModeFromSelectedModel(

@@ -31,7 +31,6 @@ func main() {
 	logo.PrintVLLMLogo()
 	opts := parseRuntimeOptions()
 	initializeRuntimeLogger()
-	applyBackendRuntimeTuningDefaults()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	runErr := runRouterProcess(ctx, opts)
 	stop()
@@ -110,7 +109,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	}
 
 	embeddingRuntime := routerServer.EmbeddingRuntimeState()
-	if err = warmupRouterRuntime(ctx, routerServer, embeddingRuntime); err != nil {
+	if err = warmupRouterRuntime(ctx, routerServer); err != nil {
 		return recordStartupError(startupWriter, "warm up router runtime", err)
 	}
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
@@ -251,50 +250,11 @@ func shutdownConcurrently(ctx context.Context, shutdowns ...func(context.Context
 	return errors.Join(shutdownErrors...)
 }
 
-var (
-	ensureKubernetesConfigModels = func(ctx context.Context, cfg *config.RouterConfig, writer startupstatus.StatusWriter) error {
-		if writer != nil {
-			return ensureModelsDownloaded(ctx, cfg, writer)
-		}
-		return modeldownload.EnsureModelsForConfigWithProgressContext(ctx, cfg, nil)
+var ensureKubernetesConfigModels = func(ctx context.Context, cfg *config.RouterConfig, writer startupstatus.StatusWriter) error {
+	if writer != nil {
+		return ensureModelsDownloaded(ctx, cfg, writer)
 	}
-)
-
-func applyBackendRuntimeTuningDefaults() {
-	backend := strings.TrimSpace(strings.ToLower(os.Getenv("EMBEDDING_BACKEND_OVERRIDE")))
-	if backend != "candle" {
-		return
-	}
-
-	defaults := map[string]string{
-		"OMP_NUM_THREADS":        "1",
-		"MKL_NUM_THREADS":        "1",
-		"OPENBLAS_NUM_THREADS":   "1",
-		"RAYON_NUM_THREADS":      "1",
-		"TOKENIZERS_PARALLELISM": "false",
-	}
-	applied := make(map[string]string)
-	for key, value := range defaults {
-		if _, exists := os.LookupEnv(key); exists {
-			continue
-		}
-		if err := os.Setenv(key, value); err != nil {
-			logging.ComponentWarnEvent("router", "backend_runtime_tuning_setenv_failed", map[string]interface{}{
-				"backend": backend,
-				"env":     key,
-				"error":   err.Error(),
-			})
-			continue
-		}
-		applied[key] = value
-	}
-	if len(applied) == 0 {
-		return
-	}
-	logging.ComponentEvent("router", "backend_runtime_tuning_applied", map[string]interface{}{
-		"backend": backend,
-		"env":     applied,
-	})
+	return modeldownload.EnsureModelsForConfigWithProgressContext(ctx, cfg, nil)
 }
 
 func ensureModelsDownloaded(ctx context.Context, cfg *config.RouterConfig, startupWriter startupstatus.StatusWriter) error {

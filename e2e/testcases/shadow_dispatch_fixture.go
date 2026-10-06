@@ -79,7 +79,7 @@ func openShadowDispatchRun(
 	if err != nil {
 		return nil, err
 	}
-	run.provider, err = fixtures.OpenServiceEndpointSession(ctx, client, opts, "default", "mock-vllm", "8000")
+	run.provider, err = fixtures.OpenServiceEndpointSession(ctx, client, opts, "default", "provider-mocker", "8000")
 	if err != nil {
 		return nil, err
 	}

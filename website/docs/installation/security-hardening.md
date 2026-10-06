@@ -58,7 +58,7 @@ Relevant Dashboard permissions include:
 
 | Permission | Purpose | Default roles |
 | --- | --- | --- |
-| `feedback.submit` | Submit routing feedback. | admin, write |
+| `feedback.submit` | Submit routing feedback. Read-role feedback is recorded on the replay without updating model experience. | admin, write, read |
 | `replay.read` | List replay records. | admin, write, read |
 | `logs.read` | Read bounded local-stack service logs. | admin, write |
 

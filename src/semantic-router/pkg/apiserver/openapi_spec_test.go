@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -25,6 +25,11 @@ func TestKnowledgeBaseOpenAPIDocumentsPendingPublication(t *testing.T) {
 		pending, ok := operation.Responses["202"]
 		if !ok || pending.Content["application/json"].Schema.Properties["generated_runtime_hash"].Type != "string" {
 			t.Fatalf("pending response missing exact candidate hash: %+v", operation.Responses)
+		}
+		// A Kubernetes ConfigMap target reports "persisted" on this same 202,
+		// since activation there needs a restart rather than a poll (#3814).
+		if !strings.Contains(pending.Description, "Kubernetes ConfigMap") {
+			t.Fatalf("202 response does not document the persisted (restart-required) case: %q", pending.Description)
 		}
 		if !strings.Contains(operation.Responses["409"].Description, "CONFIG_ACTIVATION_PENDING") {
 			t.Fatal("pending mutation conflict was not documented")
@@ -467,7 +472,6 @@ func documentedOpenAPIPaths() []string {
 		"/api/v1",
 		"/api/v1/diagnostics/classify/batch",
 		"/api/v1/routing/preview",
-		"/api/v1/diagnostics/nli",
 		"/api/v1/diagnostics/embeddings",
 		"/api/v1/diagnostics/similarity/batch",
 		"/openapi.json",

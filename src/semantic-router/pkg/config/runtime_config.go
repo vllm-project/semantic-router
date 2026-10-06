@@ -1,5 +1,7 @@
 package config
 
+import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+
 // LooperConfig defines configuration for multi-model execution.
 type LooperConfig struct {
 	Endpoint           string              `yaml:"endpoint"`
@@ -23,9 +25,17 @@ func (l *LooperConfig) GetTimeout() int {
 	return l.TimeoutSeconds
 }
 
+// grpcEnvelopeHeadroomBytes leaves room for the ExtProc message fields that
+// travel with a request body.
+const grpcEnvelopeHeadroomBytes = 1 << 20
+
+// defaultGRPCMaxMsgSize admits every body the protocol codec accepts, because
+// Envoy sends a buffered request body to ExtProc as a single message.
+var defaultGRPCMaxMsgSize = llmprotocol.DefaultPolicy().Limits.BodyBytes + grpcEnvelopeHeadroomBytes
+
 func (l *LooperConfig) GetGRPCMaxMsgSize() int {
 	if l.GRPCMaxMsgSizeMB <= 0 {
-		return 4 * 1024 * 1024
+		return defaultGRPCMaxMsgSize
 	}
 	return l.GRPCMaxMsgSizeMB * 1024 * 1024
 }
@@ -190,9 +200,6 @@ type ResponseCacheStoreConfig struct {
 	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
 	Qdrant              *QdrantConfig `yaml:"qdrant,omitempty"`
 	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
-	// PolarityGuard configures the negation/antonym guard; nil means the
-	// lexical default with the NLI tier off.
-	PolarityGuard *PolarityGuardConfig `yaml:"polarity_guard,omitempty"`
 }
 
 // SemanticCache is retained for source compatibility.
@@ -207,6 +214,9 @@ type QdrantConfig struct {
 	ConnectTimeout int    `yaml:"connect_timeout,omitempty"`
 	CollectionName string `yaml:"collection_name,omitempty"`
 }
+
+// DefaultMemorySimilarityThreshold applies when no memory similarity threshold is configured.
+const DefaultMemorySimilarityThreshold float32 = 0.70
 
 type MemoryConfig struct {
 	Enabled                    bool                    `yaml:"enabled,omitempty"`
@@ -247,12 +257,12 @@ type MemoryRedisCacheConfig struct {
 }
 
 type MemoryReflectionConfig struct {
-	Enabled          *bool    `yaml:"enabled,omitempty"`
-	Algorithm        string   `yaml:"algorithm,omitempty"`
-	MaxInjectTokens  int      `yaml:"max_inject_tokens,omitempty"`
-	RecencyDecayDays int      `yaml:"recency_decay_days,omitempty"`
-	DedupThreshold   float32  `yaml:"dedup_threshold,omitempty"`
-	BlockPatterns    []string `yaml:"block_patterns,omitempty"`
+	Enabled          *bool    `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	Algorithm        string   `yaml:"algorithm,omitempty" json:"algorithm,omitempty"`
+	MaxInjectTokens  int      `yaml:"max_inject_tokens,omitempty" json:"max_inject_tokens,omitempty"`
+	RecencyDecayDays int      `yaml:"recency_decay_days,omitempty" json:"recency_decay_days,omitempty"`
+	DedupThreshold   float32  `yaml:"dedup_threshold,omitempty" json:"dedup_threshold,omitempty"`
+	BlockPatterns    []string `yaml:"block_patterns,omitempty" json:"block_patterns,omitempty"`
 }
 
 func (c MemoryReflectionConfig) ReflectionEnabled() bool {

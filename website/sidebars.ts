@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
   // By default, Docusaurus generates a sidebar from the docs folder structure
   tutorialSidebar: [
     'intro',
+    'faq',
     {
       type: 'category',
       label: 'Overview',
@@ -34,6 +35,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'installation/installation',
         'installation/agent',
+        'installation/shell-completion',
         {
           type: 'category',
           label: 'Plan a Deployment',
@@ -95,6 +97,7 @@ const sidebars: SidebarsConfig = {
               label: 'Learned',
               items: [
                 'tutorials/signal/learned/classifier',
+                'tutorials/signal/learned/decision',
                 'tutorials/signal/learned/complexity',
                 'tutorials/signal/learned/domain',
                 'tutorials/signal/learned/embedding',
@@ -152,6 +155,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/selection/mlp',
                 'tutorials/algorithm/selection/multi-factor',
                 'tutorials/algorithm/selection/prompt',
+                'tutorials/algorithm/selection/decision',
                 'tutorials/algorithm/selection/router-dc',
                 'tutorials/algorithm/selection/static',
                 'tutorials/algorithm/selection/svm',
@@ -209,6 +213,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/router-replay',
                 'tutorials/plugin/shadow-dispatch',
                 'tutorials/plugin/response-cache',
+                'tutorials/plugin/prompt-cache',
               ],
             },
             {
@@ -233,8 +238,40 @@ const sidebars: SidebarsConfig = {
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
             'tutorials/global/vela-models',
+            'tutorials/global/model-runtime',
           ],
         },
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Model Runtime',
+      collapsed: false,
+      link: { type: 'doc', id: 'model-runtime/overview' },
+      items: [
+        'model-runtime/quickstart',
+        'model-runtime/choose-a-model',
+        {
+          type: 'category',
+          label: 'Model Runtime Guides',
+          items: [
+            'model-runtime/guides/classify',
+            'model-runtime/guides/pii',
+            'model-runtime/guides/safety',
+            'model-runtime/guides/hallucination',
+            'model-runtime/guides/embeddings',
+            'model-runtime/guides/rerank',
+            'model-runtime/guides/multimodal',
+            'model-runtime/guides/decisions',
+          ],
+        },
+        'model-runtime/deploy',
+        'model-runtime/profiles',
+        'installation/runtime/external',
+        'model-runtime/migrate',
+        'model-runtime/troubleshooting',
+        'model-runtime/plugins',
+        'model-runtime/reference',
       ],
     },
     {
@@ -252,6 +289,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/configuration-contract',
             'installation/configuration-workflows',
+            'installation/recipe-lifecycle',
             {
               type: 'category',
               label: 'Models',
@@ -360,31 +398,6 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/k8s/operator-operations',
             'installation/upgrade-rollback',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Router Runtime',
-          link: { type: 'doc', id: 'installation/native-backends' },
-          items: [
-            {
-              type: 'category',
-              label: 'Run models',
-              items: [
-                'installation/runtime/in-process',
-                'installation/runtime/openvino',
-                'installation/runtime/external',
-              ],
-            },
-            {
-              type: 'category',
-              label: 'Model guides',
-              items: [
-                'installation/runtime/embeddings',
-                'installation/runtime/safety',
-              ],
-            },
-            'installation/runtime/lifecycle-diagnostics',
           ],
         },
       ],
@@ -498,7 +511,21 @@ const sidebars: SidebarsConfig = {
         'benchmarking/open-intelligence-index',
         'benchmarking/agent-evaluation-loop',
         'benchmarking/custom-evaluations',
-        'benchmarking/sr-bench',
+        {
+          type: 'category',
+          label: 'sr-bench 1.0',
+          link: {
+            type: 'doc',
+            id: 'benchmarking/sr-bench/index',
+          },
+          items: [
+            'benchmarking/sr-bench/shared-worker',
+            'benchmarking/sr-bench/tasks-and-targets',
+            'benchmarking/sr-bench/plan-and-run',
+            'benchmarking/sr-bench/iterate',
+            'benchmarking/sr-bench/results',
+          ],
+        },
       ],
     },
     {

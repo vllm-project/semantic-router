@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -31,12 +32,6 @@ type cachedJailbreakResult struct {
 const JailbreakClassificationErrorType = "classification_error"
 
 const jailbreakEvaluationFailedCode = "jailbreak_evaluation_failed"
-
-// collectJailbreakClassifierContents returns the deduplicated set of text pieces
-// that need BERT classifier inference (contrastive rules are excluded).
-func (c *Classifier) collectJailbreakClassifierContents(jailbreakText string, nonUserMessages []string) []string {
-	return c.collectJailbreakClassifierContentPieces([]string{jailbreakText}, nonUserMessages)
-}
 
 func (c *Classifier) collectJailbreakClassifierContentPieces(current, history []string) []string {
 	seen := make(map[string]struct{})
@@ -80,35 +75,40 @@ func (c *Classifier) evaluateJailbreakSignalPieces(ctx context.Context, results 
 	// Step 1: Collect unique content pieces needed by classifier (non-contrastive) rules.
 	classifierContents := c.collectJailbreakClassifierContentPieces(current, history)
 
-	// Step 2: Run classifier inference exactly once per unique content piece.
+	// Step 2: Run classifier inference exactly once per unique content piece,
+	// every piece concurrently so the pieces share one bundle.
 	jailbreakCache := make(map[string][]cachedJailbreakResult, len(classifierContents))
+	type piece struct{ content, chunk string }
+	var pieces []piece
 	for _, content := range classifierContents {
 		chunks := c.jailbreakModelInputs(content)
-		cached := make([]cachedJailbreakResult, 0, len(chunks))
+		jailbreakCache[content] = make([]cachedJailbreakResult, len(chunks))
 		for _, chunk := range chunks {
-			entry := cachedJailbreakResult{}
-			if backend := jailbreakDecisionBackend(c.jailbreakInference); backend != nil {
-				decision, err := backend.Decide(ctx, chunk)
-				entry.decision = &decision
-				entry.err = err
-			} else {
-				entry.result, entry.err = c.jailbreakInference.Classify(ctx, chunk)
-			}
-			cached = append(cached, entry)
+			pieces = append(pieces, piece{content, chunk})
 		}
-		jailbreakCache[content] = cached
+	}
+	classified := make([]cachedJailbreakResult, len(pieces))
+	modelservice.Fan(ctx, len(pieces), func(i int) {
+		entry := &classified[i]
+		if backend := jailbreakDecisionBackend(c.jailbreakInference); backend != nil {
+			decision, err := backend.Decide(ctx, pieces[i].chunk)
+			entry.decision = &decision
+			entry.err = err
+			return
+		}
+		entry.result, entry.err = c.jailbreakInference.Classify(ctx, pieces[i].chunk)
+	})
+	next := make(map[string]int, len(classifierContents))
+	for i, p := range pieces {
+		jailbreakCache[p.content][next[p.content]] = classified[i]
+		next[p.content]++
 	}
 
 	// Step 3: Evaluate all rules concurrently.
-	var ruleWg sync.WaitGroup
-	for _, rule := range c.Config.RequestJailbreakRules() {
-		ruleWg.Add(1)
-		go func() {
-			defer ruleWg.Done()
-			c.evaluateJailbreakRulePieces(rule, current, history, jailbreakCache, start, results, mu)
-		}()
-	}
-	ruleWg.Wait()
+	rules := c.Config.RequestJailbreakRules()
+	modelservice.Fan(ctx, len(rules), func(i int) {
+		c.evaluateJailbreakRulePieces(rules[i], current, history, jailbreakCache, start, results, mu)
+	})
 	c.recordJailbreakObservedRisk(results, mu)
 
 	elapsed := time.Since(start)
@@ -142,10 +142,6 @@ func (c *Classifier) recordJailbreakObservedRisk(results *SignalResults, mu *syn
 	}
 }
 
-func (c *Classifier) evaluateJailbreakRule(rule config.JailbreakRule, jailbreakText string, nonUserMessages []string, jailbreakCache map[string][]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
-	c.evaluateJailbreakRulePieces(rule, []string{jailbreakText}, nonUserMessages, jailbreakCache, start, results, mu)
-}
-
 func (c *Classifier) evaluateJailbreakRulePieces(rule config.JailbreakRule, current, history []string, jailbreakCache map[string][]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
 	var contentToAnalyze []string
 	for _, text := range current {
@@ -170,18 +166,6 @@ func (c *Classifier) evaluateJailbreakRulePieces(rule config.JailbreakRule, curr
 	default:
 		c.evaluateBERTJailbreakRule(rule, contentToAnalyze, jailbreakCache, start, results, mu)
 	}
-}
-
-// buildContentList assembles the text pieces to analyze for a single rule.
-func buildContentList(text string, nonUserMessages []string, includeHistory bool) []string {
-	var content []string
-	if text != "" {
-		content = append(content, text)
-	}
-	if includeHistory && len(nonUserMessages) > 0 {
-		content = append(content, nonUserMessages...)
-	}
-	return content
 }
 
 func (c *Classifier) evaluateContrastiveJailbreakRule(rule config.JailbreakRule, contentToAnalyze []string, start time.Time, results *SignalResults, mu *sync.Mutex) {
@@ -266,7 +250,17 @@ func (c *Classifier) evaluateBERTJailbreakRule(rule config.JailbreakRule, conten
 		if results.SignalValues == nil {
 			results.SignalValues = make(map[string]float64)
 		}
-		results.SignalValues[signalConfidenceKey(config.SignalTypeJailbreak, rule.Name)] = float64(observed.riskScore)
+		key := signalConfidenceKey(config.SignalTypeJailbreak, rule.Name)
+		results.SignalValues[key] = float64(observed.riskScore)
+		// A scan reads a long prompt in several windows and reports the riskiest
+		// one, so the value above belongs to a span rather than to the whole
+		// prompt. Without these a tail window blocking a benign document reads
+		// the same as the document itself scoring high.
+		if observed.window != nil {
+			results.SignalValues[key+":window_start"] = float64(observed.window.Start)
+			results.SignalValues[key+":window_end"] = float64(observed.window.End)
+			results.SignalValues[key+":windows"] = float64(observed.window.Count)
+		}
 		mu.Unlock()
 	}
 	if observed.unresolved {
@@ -293,6 +287,7 @@ type jailbreakCandidate struct {
 	jailbreakType string
 	riskScore     float32
 	riskAvailable bool
+	window        *tasks.ScanWindow
 }
 
 // evaluateCachedJailbreakResult classifies a single cached result into a
@@ -321,7 +316,7 @@ func (c *Classifier) evaluateCachedJailbreakResult(rule config.JailbreakRule, ca
 		return jailbreakCandidate{outcome: jailbreakCandidateUnknown, errorCode: jailbreakEvaluationFailedCode}
 	}
 	aboveThreshold, riskScore := isJailbreakRiskAboveThreshold(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, cached.result, rule.Threshold)
-	candidate := jailbreakCandidate{jailbreakType: jailbreakType, riskScore: riskScore, riskAvailable: true}
+	candidate := jailbreakCandidate{jailbreakType: jailbreakType, riskScore: riskScore, riskAvailable: true, window: cached.result.Window}
 	if aboveThreshold {
 		candidate.outcome = jailbreakCandidateMatched
 	}
@@ -350,6 +345,7 @@ type jailbreakRuleObservation struct {
 	riskAvailable bool
 	unresolved    bool
 	errorCode     string
+	window        *tasks.ScanWindow
 }
 
 func (c *Classifier) findJailbreakRuleObservation(rule config.JailbreakRule, contents []string, cache map[string][]cachedJailbreakResult) jailbreakRuleObservation {
@@ -363,6 +359,7 @@ func (c *Classifier) findJailbreakRuleObservation(rule config.JailbreakRule, con
 			if candidate.riskAvailable && (!observed.riskAvailable || candidate.riskScore > observed.riskScore) {
 				observed.riskScore = candidate.riskScore
 				observed.riskAvailable = true
+				observed.window = candidate.window
 			}
 			switch candidate.outcome {
 			case jailbreakCandidateUnknown:

@@ -4,7 +4,7 @@ sidebar_label: 概览
 translation:
   source_commit: "915ddf56e0335e2046c38aa17c4aec6233908039"
   source_file: "docs/training/training-overview.md"
-  outdated: false
+  outdated: true
 ---
 
 # 训练 Vela Router 模型 {#train-vela-router-models}
@@ -27,7 +27,7 @@ translation:
 
 ## 选择起始模型 {#record-the-base-and-task-lineage}
 
-训练新任务时，使用 [Vela Encoder](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M)。它是分类器、Embedding 和 Reranker 的共同基座。下载明确的 Hub revision，并保持权重、tokenizer 和配置一致。
+训练新任务时，使用 [Vela Encoder](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M)。它是分类器、Embedding 和 Reranker 的共同基座。下载明确的 Hub revision，并保持权重、tokenizer 和配置一致。
 
 改进已有任务时，从完整的 Vela 任务 checkpoint 继续训练，保留已训练的 head。除非要训练新的输出契约，否则保持标签和预处理一致。各任务指南分别说明新任务初始化和继续训练。
 
@@ -53,10 +53,10 @@ translation:
 
 ## 接入 Router {#use-the-trained-model-in-the-router}
 
-导出包含 tokenizer 和标签的完整 checkpoint。在[本地运行模型](../installation/runtime/in-process.md)中选择支持的引擎和输入预算，然后验证配置：
+导出包含 tokenizer 和标签的完整 checkpoint。在[本地运行模型](model-runtime/deploy.md)中选择支持的引擎和输入预算，然后验证配置：
 
 ```bash
 vllm-sr config validate --config config.yaml
 ```
 
-使用[路由预览](../installation/runtime/lifecycle-diagnostics.md)，在部署到真实流量前检查代表性请求的信号、决策和延迟。
+使用[路由预览](model-runtime/troubleshooting.md)，在部署到真实流量前检查代表性请求的信号、决策和延迟。

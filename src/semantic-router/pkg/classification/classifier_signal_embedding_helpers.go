@@ -2,6 +2,7 @@ package classification
 
 import (
 	"context"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -10,91 +11,60 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-func (c *Classifier) evaluateEmbeddingSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache) {
+type embeddingSignalInput struct{ Text, Image, Audio string }
+
+type modalityEvaluation struct {
+	modality config.QueryModality
+	result   *EmbeddingClassificationResult
+	err      error
+	elapsed  time.Duration
+}
+
+func (c *Classifier) evaluateEmbeddingSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, input embeddingSignalInput, mediaCache *requestMediaEmbeddingCache) {
 	start := time.Now()
-
-	// Text-modality evaluation: scores rules whose query_modality is unset
-	// or "text". Skipped when the request has no text (image-only content
-	// arrays) because ClassifyDetailed rejects an empty query and the error
-	// would be misleading - "no text rules to evaluate" is the correct
-	// behavior, not a failure.
-	var (
-		textResult  *EmbeddingClassificationResult
-		textErr     error
-		textElapsed time.Duration
-	)
-	if strings.TrimSpace(text) != "" {
-		textStart := time.Now()
-		textResult, textErr = c.keywordEmbeddingClassifier.ClassifyDetailedWithContext(ctx, text)
-		textElapsed = time.Since(textStart)
+	evaluations := make([]modalityEvaluation, 0, 3)
+	for _, query := range []struct {
+		modality config.QueryModality
+		payload  string
+	}{
+		{config.QueryModalityText, input.Text}, {config.QueryModalityImage, input.Image}, {config.QueryModalityAudio, input.Audio},
+	} {
+		if strings.TrimSpace(query.payload) == "" {
+			continue
+		}
+		evaluation := modalityEvaluation{modality: query.modality}
+		modalityStart := time.Now()
+		if query.modality == config.QueryModalityText {
+			evaluation.result, evaluation.err = c.keywordEmbeddingClassifier.ClassifyDetailedWithContext(ctx, query.payload)
+		} else {
+			evaluation.result, evaluation.err = c.keywordEmbeddingClassifier.classifyDetailedMultimodalWithCache(ctx, query.modality, query.payload, mediaCache)
+		}
+		evaluation.elapsed = time.Since(modalityStart)
+		if evaluation.err != nil {
+			logging.Errorf("%s embedding rule evaluation failed: %v", query.modality, evaluation.err)
+			c.recordEmbeddingSignalError(results, mu, query.modality)
+		}
+		evaluations = append(evaluations, evaluation)
 	}
-
-	// Image-modality evaluation: only fires when the request carries an
-	// image attachment. The classifier's internal rulesByModality cache
-	// makes the no-image-rules case a free no-op (returns an empty result
-	// without computing the FFI embedding), so this call is safe even when
-	// no image rules are configured. The shared imgCache deduplicates the
-	// FFI encode against any sibling signal (e.g. complexity image rules)
-	// resolving the same image during this request.
-	var (
-		imageResult  *EmbeddingClassificationResult
-		imageErr     error
-		imageElapsed time.Duration
-	)
-	if strings.TrimSpace(imageURL) != "" {
-		imageStart := time.Now()
-		imageResult, imageErr = c.keywordEmbeddingClassifier.classifyDetailedMultimodalWithCache(ctx, config.QueryModalityImage, imageURL, imgCache)
-		imageElapsed = time.Since(imageStart)
-	}
-
-	elapsed := time.Since(start)
-
-	results.Metrics.Embedding.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	logging.Debugf("[Signal Computation] Embedding signal evaluation completed in %v (text=%v image=%v)",
-		elapsed, textElapsed, imageElapsed)
-
-	// Text and image classifications are independent: a failure in one does
-	// not skip the other. Pre-PR-2 this function returned early on text
-	// error because there was no second classification to attempt. Now there
-	// is, and an early return would silently drop a valid image-rule match
-	// whenever text classification hit a transient failure.
-	if textErr != nil {
-		logging.Errorf("text-modality embedding rule evaluation failed: %v", textErr)
-		c.recordEmbeddingSignalError(results, mu, config.QueryModalityText)
-	}
-	if imageErr != nil {
-		logging.Errorf("image-modality embedding rule evaluation failed: %v", imageErr)
-		c.recordEmbeddingSignalError(results, mu, config.QueryModalityImage)
-	}
-
 	mu.Lock()
-	// Cancellation invalidates the whole embedding evaluation, including a
-	// modality that finished before another one observed the canceled context.
-	// Check at publication time; ordinary modality errors still permit fallback.
+	results.Metrics.Embedding.ExecutionTimeMs = float64(time.Since(start).Microseconds()) / 1000
+	// A request cancellation invalidates every result. Ordinary modality errors
+	// remain independent, so a valid attachment can still select its route.
 	if ctx.Err() != nil {
 		mu.Unlock()
-		if strings.TrimSpace(text) != "" {
-			c.recordEmbeddingSignalError(results, mu, config.QueryModalityText)
-		}
-		if strings.TrimSpace(imageURL) != "" {
-			c.recordEmbeddingSignalError(results, mu, config.QueryModalityImage)
+		for _, evaluation := range evaluations {
+			c.recordEmbeddingSignalError(results, mu, evaluation.modality)
 		}
 		return
 	}
 	defer mu.Unlock()
-
-	// Track the best confidence across both modalities for the metric.
-	// Per-rule extraction-latency observations use modality-specific elapsed
-	// times so an image-bearing request that also matched a text rule does
-	// not double-count the image FFI cost into the text-rule sample.
-	var bestConfidence float64
-	if textResult != nil {
-		bestConfidence = c.recordEmbeddingResult(results, textResult, textElapsed, bestConfidence)
+	var confidence float64
+	for _, evaluation := range evaluations {
+		if evaluation.err == nil && evaluation.result != nil {
+			confidence = c.recordEmbeddingResult(results, evaluation.result, evaluation.elapsed, confidence)
+		}
 	}
-	if imageResult != nil {
-		bestConfidence = c.recordEmbeddingResult(results, imageResult, imageElapsed, bestConfidence)
-	}
-	results.Metrics.Embedding.Confidence = bestConfidence
+	results.Metrics.Embedding.Confidence = confidence
 }
 
 func (c *Classifier) recordEmbeddingSignalError(results *SignalResults, mu *sync.Mutex, modality config.QueryModality) {
@@ -120,10 +90,15 @@ func (c *Classifier) recordEmbeddingSignalError(results *SignalResults, mu *sync
 //
 // Caller must hold the mu used to guard results.
 func (c *Classifier) recordEmbeddingResult(results *SignalResults, detailedResult *EmbeddingClassificationResult, elapsed time.Duration, bestConfidence float64) float64 {
+	confidences := make(map[string]float64, len(detailedResult.Scores))
 	for _, score := range detailedResult.Scores {
-		if score.Score > bestConfidence {
-			bestConfidence = score.Score
+		confidence := embeddingSignalConfidence(score.Score, score.Contrastive)
+		confidences[score.Name] = confidence
+		if confidence > bestConfidence {
+			bestConfidence = confidence
 		}
+		results.SignalValues["embedding:"+score.Name+":positive"] = score.PositiveScore
+		results.SignalValues["embedding:"+score.Name+":negative"] = score.NegativeScore
 		results.SignalValues["embedding:"+score.Name] = score.Score
 		results.SignalValues["embedding:"+score.Name+":best"] = score.Best
 		results.SignalValues["embedding:"+score.Name+":support"] = score.Support
@@ -133,10 +108,23 @@ func (c *Classifier) recordEmbeddingResult(results *SignalResults, detailedResul
 		c.recordSignalExtraction(config.SignalTypeEmbedding, mr.RuleName, elapsed.Seconds())
 		c.recordSignalMatch(config.SignalTypeEmbedding, mr.RuleName)
 		results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, mr.RuleName)
-		results.SignalConfidences["embedding:"+mr.RuleName] = mr.Score
+		confidence, ok := confidences[mr.RuleName]
+		if !ok {
+			confidence = embeddingSignalConfidence(mr.Score, false)
+		}
+		results.SignalConfidences["embedding:"+mr.RuleName] = confidence
 
 		logging.Debugf("[Signal Computation] Embedding match: rule=%q, score=%.4f, method=%s",
 			mr.RuleName, mr.Score, mr.Method)
 	}
 	return bestConfidence
+}
+
+// Confidence is bounded evidence strength, never a calibrated probability.
+// Raw cosine margins remain in SignalValues and drive threshold matching.
+func embeddingSignalConfidence(score float64, contrastive bool) float64 {
+	if contrastive {
+		score = (score + 2) / 4
+	}
+	return math.Max(0, math.Min(1, score))
 }

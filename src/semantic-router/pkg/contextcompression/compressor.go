@@ -34,7 +34,11 @@ type scoredChunk struct {
 // a target token budget. JSON objects and arrays are compressed through string
 // leaves so the resulting payload remains valid JSON with the same structure.
 func CompressToolOutput(content string, query string, minTokens int, targetTokens int) Result {
-	originalTokens := estimateTokens(content)
+	return compressToolOutput(content, query, estimateTokens(content), minTokens, targetTokens)
+}
+
+// compressToolOutput takes a precomputed engine estimate so callers count each text once.
+func compressToolOutput(content string, query string, originalTokens int, minTokens int, targetTokens int) Result {
 	minTokens, targetTokens = normalizeTokenBudget(minTokens, targetTokens)
 	if originalTokens < minTokens || targetTokens <= 0 || targetTokens >= originalTokens {
 		return unchangedResult(content, originalTokens)

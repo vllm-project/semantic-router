@@ -6,23 +6,29 @@ interface EvaluationAvailabilityRouteProps {
   available: boolean
   isLoading: boolean
   reason: string
+  settingsError: string | null
+  onRefreshAccess: () => void
   children: ReactNode
+  featureName?: string
 }
 
-/** Keep a disabled or failed Evaluation service out of the normal workspace. */
+/** Keep a disabled or failed feature out of the normal workspace. */
 export default function EvaluationAvailabilityRoute({
   available,
   isLoading,
   reason,
+  settingsError,
+  onRefreshAccess,
   children,
+  featureName = 'Evaluation',
 }: EvaluationAvailabilityRouteProps) {
   const navigate = useNavigate()
 
   if (isLoading) {
     return (
       <SetupStatusPage
-        title="Checking Evaluation"
-        description="Confirming that the Evaluation service initialized successfully."
+        title={`Checking ${featureName}`}
+        description={`Confirming that the ${featureName} service initialized successfully.`}
         actionLabel=""
         onAction={() => undefined}
         variant="loading"
@@ -30,11 +36,22 @@ export default function EvaluationAvailabilityRoute({
     )
   }
 
+  if (settingsError) {
+    return (
+      <SetupStatusPage
+        title={`Unable to check ${featureName} access`}
+        description={settingsError}
+        actionLabel="Refresh access"
+        onAction={onRefreshAccess}
+      />
+    )
+  }
+
   if (!available) {
     return (
       <SetupStatusPage
-        title="Evaluation is not available"
-        description={reason || 'Evaluation is not available for this deployment.'}
+        title={`${featureName} is not available`}
+        description={reason || `${featureName} is not available for this deployment.`}
         actionLabel="Return to Dashboard"
         onAction={() => navigate('/dashboard', { replace: true })}
       />

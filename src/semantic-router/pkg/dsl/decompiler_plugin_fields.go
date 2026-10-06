@@ -12,6 +12,7 @@ var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
 	"system_prompt":       pluginFieldsSystemPrompt,
 	"response_cache":      pluginFieldsResponseCache,
 	"context_compression": pluginFieldsStructuredConfiguration,
+	"prompt_cache":        pluginFieldsStructuredConfiguration,
 	"router_replay":       pluginFieldsRouterReplay,
 	"shadow_dispatch":     pluginFieldsStructuredConfiguration,
 	"memory":              pluginFieldsMemory,
@@ -122,9 +123,6 @@ func pluginFieldsHallucination(p *config.DecisionPlugin) map[string]Value {
 	if cfg.Enabled {
 		fields["enabled"] = BoolValue{V: true}
 	}
-	if cfg.UseNLI {
-		fields["use_nli"] = BoolValue{V: true}
-	}
 	if cfg.HallucinationAction != "" {
 		fields["hallucination_action"] = StringValue{V: cfg.HallucinationAction}
 	}
@@ -204,6 +202,9 @@ func pluginFieldsToolSelection(p *config.DecisionPlugin) map[string]Value {
 	}
 	if cfg.Strategy != "" {
 		fields["strategy"] = StringValue{V: cfg.Strategy}
+	}
+	if cfg.FallbackToEmpty != nil {
+		fields["fallback_to_empty"] = BoolValue{V: *cfg.FallbackToEmpty}
 	}
 	if cfg.RelevanceThreshold != nil {
 		fields["relevance_threshold"] = FloatValue{V: float64(*cfg.RelevanceThreshold)}

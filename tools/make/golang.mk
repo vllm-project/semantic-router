@@ -34,9 +34,8 @@ go-lint-fix: ## Auto-fix lint issues in src/semantic-router (may need manual fix
 		golangci-lint run ./... --fix --config ../../tools/linter/go/.golangci.yml
 	@echo "src/semantic-router go module lint fix applied"
 
-vet: $(if $(CI),rust-ci,rust) ## Run go vet for all Go modules (build Rust library first)
+vet: ## Run go vet for the router module
 	@$(LOG_TARGET)
-	@cd candle-binding && go vet ./...
 	@cd src/semantic-router && go vet ./...
 
 check-perf-go-mod-tidy: ## Check that the performance Go module is tidy
@@ -53,11 +52,6 @@ check-perf-go-mod-tidy: ## Check that the performance Go module is tidy
 check-go-mod-tidy: ## Check go mod tidy for all Go modules
 	@$(LOG_TARGET)
 	@echo "Checking go mod tidy for all Go modules..."
-	@echo "Checking candle-binding..."
-	@cd candle-binding && go mod tidy && \
-		(git diff --exit-code go.mod 2>/dev/null || (echo "ERROR: go.mod file is not tidy in candle-binding. Please run 'go mod tidy' in candle-binding directory and commit the changes." && git diff go.mod && exit 1)) && \
-		(test ! -f go.sum || git diff --exit-code go.sum 2>/dev/null || (echo "ERROR: go.sum file is not tidy in candle-binding. Please run 'go mod tidy' in candle-binding directory and commit the changes." && git diff go.sum && exit 1))
-	@echo "candle-binding go mod tidy check passed"
 	@echo "Checking src/semantic-router..."
 	@cd src/semantic-router && go mod tidy && \
 		if ! git diff --exit-code go.mod go.sum; then \
@@ -67,9 +61,6 @@ check-go-mod-tidy: ## Check go mod tidy for all Go modules
 		fi
 	@echo "src/semantic-router go mod tidy check passed"
 	@$(MAKE) check-perf-go-mod-tidy
-	@echo "Checking shared ONNX module compatibility links..."
-	@test "$$(readlink src/semantic-router/go.onnx.mod)" = go.mod
-	@test "$$(readlink src/semantic-router/go.onnx.sum)" = go.sum
 	@echo "All go mod tidy checks passed"
 
 install-controller-gen: ## Install controller-gen for code generation
@@ -120,3 +111,12 @@ generate-api-check: install-controller-gen ## Check generated Kubernetes API cod
 	fi
 
 .PHONY: config-schema-generate config-schema-check check-perf-go-mod-tidy check-go-mod-tidy
+
+.PHONY: training-contract-generate training-contract-check
+training-contract-generate: ## Generate the shared training schema and Console types
+	@cd src/semantic-router && go generate ./pkg/trainingcontract
+
+training-contract-check: harness-venv-install ## Check training contracts without trainers or native libraries
+	@cd src/semantic-router && go run ../../tools/codegen/trainingcontract/main.go --root ../.. --check
+	@cd src/semantic-router && go test ./pkg/trainingcontract
+	@"$(AGENT_PYTHON)" -m unittest src.training.control_plane.test_contracts

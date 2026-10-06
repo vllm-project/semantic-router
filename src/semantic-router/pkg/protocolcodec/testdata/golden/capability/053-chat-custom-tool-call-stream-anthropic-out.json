@@ -1,0 +1,14 @@
+{
+  "cases": [
+    {
+      "name": "custom_tool_call_deltas",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    }
+  ]
+}

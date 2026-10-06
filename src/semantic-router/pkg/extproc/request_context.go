@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
@@ -22,23 +23,21 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
-// EnhancedHallucinationSpan represents a hallucinated span with NLI explanation.
+// EnhancedHallucinationSpan is one unsupported span with its offsets, score,
+// severity and explanation.
 type EnhancedHallucinationSpan struct {
 	Text                    string  `json:"text"`
 	Start                   int     `json:"start"`
 	End                     int     `json:"end"`
 	HallucinationConfidence float32 `json:"hallucination_confidence,omitempty"`
 	ScoreAvailable          bool    `json:"score_available"`
-	NLILabel                string  `json:"nli_label"` // ENTAILMENT, NEUTRAL, or CONTRADICTION
-	NLIConfidence           float32 `json:"nli_confidence,omitempty"`
-	NLIScoreAvailable       bool    `json:"nli_score_available"`
 	Severity                int     `json:"severity"`    // 0-4: 0=low, 4=critical
 	Explanation             string  `json:"explanation"` // Human-readable explanation
 }
 
 // ResponseHallucinationEvidence is the detector output behind the
 // hallucination signal: the verdict, its confidence, and the spans it rests
-// on, with NLI explanations when the rule asked for them.
+// on, with span details when the detector explains them.
 type ResponseHallucinationEvidence struct {
 	Detected       bool
 	Confidence     float32
@@ -55,6 +54,39 @@ type EnhancedHallucinationInfo struct {
 	ScoreKind      string                      `json:"score_kind,omitempty"`
 	Spans          []EnhancedHallucinationSpan `json:"spans"`
 }
+
+// SessionProvenance identifies how RequestContext.SessionID was derived. A
+// closed enum: only the values declared below are valid, and callers must
+// not construct or compare against any other string. See
+// sticky_tool_identity.go for the trust boundary this exists to support.
+type SessionProvenance string
+
+const (
+	// SessionProvenanceNone means no session ID has been derived yet (the
+	// zero value).
+	SessionProvenanceNone SessionProvenance = ""
+	// SessionProvenanceResponseAPI: SessionID came from server-retained
+	// Response API state (ResponseObjectState.SessionTrackingID) — trusted.
+	SessionProvenanceResponseAPI SessionProvenance = "response_api"
+	// SessionProvenanceHeader: SessionID came from the client-supplied
+	// x-session-id header — trusted only because it is scoped inside
+	// AuthenticatedPrincipal's hard namespace by callers that need
+	// trust (a header alone is never authentication).
+	SessionProvenanceHeader SessionProvenance = "header"
+	// SessionProvenanceAnthropicPromptCache: SessionID came from Anthropic
+	// transport/body signals (x-claude-code-session-id or
+	// metadata.user_id) — client-influenced, not trusted for sticky state.
+	SessionProvenanceAnthropicPromptCache SessionProvenance = "anthropic_prompt_cache"
+	// SessionProvenanceMessageHash: SessionID is a derived fingerprint of
+	// message content/structure — a heuristic grouping signal, not an
+	// explicit session declaration; not trusted for sticky state.
+	SessionProvenanceMessageHash SessionProvenance = "message_hash"
+	// SessionProvenanceRequestID: SessionID is a per-request pseudo-session
+	// derived from the request ID — by construction never repeats across
+	// requests, so it cannot carry cross-turn state; not trusted for
+	// sticky state.
+	SessionProvenanceRequestID SessionProvenance = "request_id"
+)
 
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
@@ -105,6 +137,12 @@ type RequestContext struct {
 	StreamedBody          *StreamedBodyHandler
 	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
 	SkipProcessing        bool // true only when the configured opt-out header is valid
+	BufferedRequestBody   bool // true when the data plane negotiated BUFFERED or BUFFERED_PARTIAL
+	// Arrival diagnostics, set at end of stream in STREAMED modes only.
+	StreamedBodyStats StreamedBodyStats
+
+	// Request header reply held until a full-duplex body is routed.
+	fullDuplexHold *fullDuplexHeaderHold
 
 	StreamingComplete      bool // True after neutral stream finalization runs once.
 	StreamingAborted       bool // True if the neutral stream ended abnormally.
@@ -118,6 +156,11 @@ type RequestContext struct {
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
 	UpstreamStatusCode int
 
+	// ResponseHeadersContinued indicates whether response headers were forwarded
+	// downstream to the client. Once true, response headers are committed and no
+	// subsequent replacement or fallback response may be attempted.
+	ResponseHeadersContinued bool
+
 	// TTFT tracking
 	TTFTRecorded bool
 	TTFTSeconds  float64
@@ -128,13 +171,33 @@ type RequestContext struct {
 	// and inflight.End on it is a no-op.
 	InflightToken uint64
 
+	// InflightModel is the model key whose bucket InflightToken was taken
+	// from. It travels with the token so every End site releases the exact
+	// bucket Begin admitted, even if the routing model is later rewritten
+	// (fallback candidates) or the request errors out before dispatch.
+	InflightModel string
+
 	// Session-aware transition metadata
-	SessionID           string  // Derived from ConversationID (Response API) or message hash (Chat Completions)
-	TurnIndex           int     // Number of prior turns in this session (0 = first turn)
-	PreviousModel       string  // Model used in the immediately preceding turn; empty on first turn
-	CacheWarmthEstimate float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
-	SessionIdleSeconds  float64 // Seconds since the last locally observed turn for this session
-	SessionIdleKnown    bool    // True when SessionIdleSeconds came from local session observation
+	SessionID string // Derived from ConversationID (Response API) or message hash (Chat Completions)
+	// SessionProvenance records how SessionID was derived. Only
+	// SessionProvenanceResponseAPI and SessionProvenanceHeader are trusted
+	// enough for session-scoped sticky tool-set selection (issue #3347) to
+	// bind state to — the others are heuristic/derived signals a caller
+	// could influence or collide, not an explicit session declaration. See
+	// ResolveStickyToolIdentity in sticky_tool_identity.go.
+	SessionProvenance SessionProvenance
+	// AuthenticatedPrincipal is the trusted gateway-authenticated user ID
+	// (from the configured authz header, via authHeaderUserID) — never a
+	// client-supplied or derived value. Empty when the request carries no
+	// trusted authentication. A header's mere presence is not
+	// authentication; this field must only ever be populated from the
+	// configured auth gateway header, never from request-body content.
+	AuthenticatedPrincipal string
+	TurnIndex              int     // Number of prior turns in this session (0 = first turn)
+	PreviousModel          string  // Model used in the immediately preceding turn; empty on first turn
+	CacheWarmthEstimate    float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
+	SessionIdleSeconds     float64 // Seconds since the last locally observed turn for this session
+	SessionIdleKnown       bool    // True when SessionIdleSeconds came from local session observation
 
 	// HistoryTokenCount is the estimated token count of conversation history,
 	// excluding the current turn. Source priority: provider usage accumulation
@@ -181,7 +244,11 @@ type RequestContext struct {
 	VSRCacheSource                      string
 	VSRCacheEntryAgeSeconds             float64
 	VSRCacheTTLSeconds                  int
-	VSRInjectedSystemPrompt             bool             // Whether a system prompt was injected into the request
+	VSRInjectedSystemPrompt             bool // Whether a system prompt was injected into the request
+	PromptCacheAction                   string
+	PromptCacheReason                   string
+	PromptCacheInserted                 int
+	PromptCachePreserved                int
 	VSRSelectedDecision                 *config.Decision // The decision object selected by DecisionEngine (for plugins)
 	// VSREligibleModelRefs is the selected decision's model set after applying
 	// request contracts. Loopers consume this exact set; broader Router Learning
@@ -194,6 +261,14 @@ type RequestContext struct {
 	// VSRSelectedCandidate is the exact post-policy choice used at dispatch.
 	// Never recover its reasoning settings by searching model names again.
 	VSRSelectedCandidate *config.ModelRef
+	// primaryBackendName is the exact provider backend selected for the primary
+	// dispatch. It is separate from VSRSelectedModel, which preserves the
+	// client-facing logical model or LoRA identity for telemetry and headers.
+	primaryBackendName string
+
+	// FallbackRecord tracks bounded cross-candidate execution attempts and token accounting.
+	FallbackRecord        *fallback.ExecutionRecord
+	FallbackAuditRecorded bool
 
 	// Selection stages ownership; only a validated provider continuation commits it.
 	pendingSessionDecision *sessiontelemetry.SessionDecisionParams
@@ -239,6 +314,7 @@ type RequestContext struct {
 	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
 	VSRMatchedClassifier      []string // Matched generic classifier signal names
 	VSRMatchedInputModality   []string // Matched structural input-modality signal names
+	VSRMatchedDecisionModel   []string // Matched decision-model signals (rule or rule:choice)
 	VSRConversationFacts      classification.ConversationFacts
 	VSRMatchedProjection      []string // Matched projection mapping outputs
 	VSRProjectionScores       map[string]float64
@@ -272,6 +348,7 @@ type RequestContext struct {
 	HasToolsForFactCheck        bool     // Request has tools that provide context for fact-checking
 	ToolResultsContext          string   // Aggregated tool results for hallucination check
 	UserContent                 string   // Stored user content for hallucination detection
+	RequestAudio                string   // First inline user audio, never a remote URL or local path
 	RequestImageURL             string   // First image URL from user messages (for Tier 1 complexity classification)
 	HallucinationDetected       bool     // Result of hallucination detection
 	HallucinationSpans          []string // Unsupported spans found in answer (basic mode)
@@ -312,6 +389,10 @@ type RequestContext struct {
 	// persistence participates in this request. Generation never depends on it.
 	ResponseObjectState *ResponseObjectState
 
+	// preparedDispatchReceipt identifies the final primary payload returned to
+	// Envoy without retaining its bytes beyond the existing body mutation.
+	preparedDispatchReceipt *routerreplay.PreparedDispatchReceipt
+
 	// Router replay context
 	RouterReplayID           string                           // ID of the router replay session, if applicable
 	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
@@ -328,9 +409,13 @@ type RequestContext struct {
 
 	// SourceFormat and SemanticRequest are the authoritative public protocol
 	// contract and neutral request.
-	SourceFormat             llmprotocol.WireFormat
-	TargetFormat             llmprotocol.WireFormat
-	SemanticRequest          *llmprotocol.Request
+	SourceFormat    llmprotocol.WireFormat
+	TargetFormat    llmprotocol.WireFormat
+	SemanticRequest *llmprotocol.Request
+	// FallbackRequest is an immutable, protocol-neutral snapshot taken after all
+	// request plugins and final capability checks. Every provider retry clones
+	// this snapshot instead of replaying mutations made for the primary backend.
+	FallbackRequest          *llmprotocol.Request
 	OriginalContextHistory   *contextcompression.HistorySnapshot
 	ContextRequestIR         *contextcompression.RequestIR
 	ContextHistorySteps      []contextcompression.TransformationStep
@@ -345,6 +430,7 @@ type RequestContext struct {
 	PrimaryOutputChars       int
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
+	ResponseBodyNeedsRewrite bool // The decoded client wire differs from the provider body.
 	ProtocolDiagnostics      llmprotocol.Diagnostics
 	ResponseVendor           llmprotocol.ResponseVendor
 	ResponseVendorExtensions bool // Upstream response carried vendor decorations that were dropped on decode
