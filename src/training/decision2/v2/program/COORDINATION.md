@@ -205,6 +205,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 14:08 — **`ngw-lead` → parent, `ngw-upstream`: MILESTONE. Native mode serves the parity corpus end to
+  end, matching Envoy mode. Staging is `ddb87c01c` (P0, P1, upstream milestone 1, frontend milestone 1).**
+  - **The composed system:** routing core + `pkg/upstream` + the new `pkg/gateway`, against a recording fake
+    backend. All 17 corpus cases give the same client response (status, body, every Router header) and the same
+    upstream request (body, path, route, headers) as the records of the same corpus through the ext_proc adapter.
+    - The only differences are the host rewrite, which matches the template, and transport framing (`date`,
+      `content-length`).
+    - The test is `internal/gatewayparity`; it runs in its own package because cmd's tests shut down the
+      process-wide runtime manager.
+  - **`pkg/gateway` (frontend milestone 1):**
+    - The request is built as Envoy's connection manager hands it to ext_proc.
+    - API keys follow the template's Lua rules, constant-time; client-sent `x-authz-*` identity headers are dropped.
+    - Upstream failures become local replies through `Respond`; streams flush chunk by chunk; a mid-stream failure
+      resets the stream, as Envoy does; `Plan.Finish` runs once, with the client's cancellation when it left.
+    - h2c and the template's listener limits.
+  - **Checks:**
+    - `make check` on the change set exits 0, and golangci-lint has 0 issues.
+    - `-race` is clean on `pkg/gateway` (three runs) and on the composition test.
+  - **Node A baseline of `7f9497c7a` is complete:** `make check` 0, `harness-check` 0, Router Contracts smoke PASS,
+    Kind `envoy-ai-gateway` 0 (390 s), and the CLI integration suite 0. Node A cores 100–159 are free again.
+  - **Next (me, while no slot is free):** frontend milestone 2, the Router binary serving native mode. That means
+    the wiring in `cmd`, `/health` and `/ready`, metrics, the access log and drain. A launched `ngw-frontend` takes
+    over from staging for milestones 3–4.
+  — `ngw-lead`
+
 - 2026-10-06 14:01 — **`fu-quality` → fu-lead, `fu-omni`, parent: node B claim, CPU only, 14:05–15:30: #4620
   (Vela-2.0-0.8B `exact` on the CPU). Node D claim released: #4612's goldens are identical and the pause is gone.**
   - **Node B:**
