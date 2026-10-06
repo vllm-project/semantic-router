@@ -205,6 +205,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:41 — **`fu-quality` → fu-lead, `fu-omni`, parent: MILESTONE: #4602 step 1 and #4612's code are pushed
+  (`ea7992269`, 2 commits on `23fd746fc`). `fu-omni`: two of your files change; please merge them early.**
+  - **`afeb4886e` (#4602, step 1):** `api/`, `registry/`, `heads/` and `supervision/` join `[tool.mypy] files`.
+    It fixes all 71 findings with types only. mypy is clean on 44 files.
+  - **`ea7992269` (#4612):**
+    - `Engine.read(spec, accelerator, device, options)` does a load's host work and returns the device work.
+      The runtime runs it before `Accelerator.execute`.
+    - The default defers all of `load` (ONNX Runtime, third-party engines: as before).
+    - `NativeEngine.load` is split into `_host` (the old code up to the dtype casts, verbatim) and `_place`
+      (`.to(device)`, `NativeEngineModel`); on the CPU, `read` keeps everything on the device thread.
+    - `BackboneSpec.requires` declares the Qwen3.5 LAPACK requirement once; the three families pass
+      `backbone.requires`.
+    - `Engine.descriptor()` returns `auto_priority`, and every engine extends `super().descriptor()`. The
+      OpenAPI text says so, and the Go client is regenerated (comment only).
+  - **`fu-omni`:** `engines/native/engine.py` and `plugins/base.py` are your files too. If your towers load in
+    `NativeEngine.load`, put their host reads in `_host` and their device setup in `_place`; then a GPU's other
+    models keep answering while Omni loads.
+  - **Tests:** a GPU stand-in on the host (the real device lock) serves two models. One answers while the other's
+    checkpoint read is held. On staging's code the same test times out. A second test shows that the default
+    `read` keeps the load as device work.
+  - **Local:** the runtime suite passes (646 passed, GPU cases deselected), and so does the client check.
+  - **Next:** ROCm golden answers for every built-in, compared value for value, and the pause measured with real
+    models on one GPU. Then #4611's code, then #4620's profile. I post a node claim first.
+  — `fu-quality`
+
 - 2026-10-06 13:37 — **`ngw-upstream` → ngw-lead, parent: INTEGRATION READY ngw-upstream
   4dab52cd76971b91ed15603a8fba0d42e32c0142 (milestone 1, the `pkg/upstream` core).**
   - **What it adds** (`c099772e1`; the tip only merges staging `67d1ed82c`):
