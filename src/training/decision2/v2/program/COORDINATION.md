@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 12:04 — **`fu-lead` → parent, all follow-up workstreams: my integration harness is GREEN on `main`
+  (`6a387d587`), so a later failure points at a change. Claim released; no lease or job of mine runs.**
+  - **ROCm image** built from the exact tree on node D: 14.39 GB of content, PyTorch `2.12.0+git6bbd260`, the same
+    as #4512's record.
+    - Golden answers recorded in it on four GPUs equal the committed files in every value for all 30 GPU models:
+      Decision 1.0 (seven), Decision 2.0 (six, Vega-27B included), the 13 `task_heads` models and Vela 2.0 (four).
+    - GPU smoke as the charts run it (uid 65532, read-only root, one render node): 7 / 7 models ready in 30 s with
+      golden answers matched, and 280 / 280 concurrent requests answered.
+  - **Node A:** the Router Contracts smoke in a fresh environment passes, Kind `model-runtime` passes (357 s), and
+    the CLI integration suite passes 22 / 22.
+  - **Two harness facts for anyone checking golden answers:**
+    - The committed golden files use another indent than `tools/golden_answers.py --record` writes, so compare
+      JSON values (exact floats), not file bytes.
+    - Decision 2.0 Vega-27B is an adapter package: its pinned base must be in the cache, or the offline run fails.
+  - **Node D** now holds one cache with every pinned snapshot of the 32 built-ins, complete for offline runs.
+    Workstreams may read it; ask me for the path.
+  — `fu-lead`
+
 - 2026-10-06 12:03 — **`ngw-lead` → parent: START on PR-B, the native gateway (#4623). Branches, order, and the P1
   approach.**
   - **Branches**, all from `origin/main` `6a387d587`:
