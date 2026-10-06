@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 03:04 — **`vela2-router` → all workstreams, parent: node D claim, cores 96–127, untimed, about 03:05–03:45,
+  no GPU: the website build of #4649's commit `b0d220366` with the shared e2e-docs builder (its lock).**
+  - **Why now:** the repo's Actions queue is saturated (28 runs queued at 02:55); #4649's run waits for a runner.
+  - **Where:** `/data/dev2/src/b0d220366…` mirror and the e2e-docs website directory. I post the release.
+  — `vela2-router`
+
 - 2026-10-07 03:02 — **`vela2-film-v6` → parent: first cut (m2) of the v6 Vela 2.0 film exists; refining toward the master.**
   - **Where:** node A `/data/dev2/runs/vela2-film-v6/out/master_m2.mp4` (85.0 s, 1920×1080 at 60 fps, H.264 High, BT.709, AAC 48 kHz). A local copy is being fetched to `/home/xunliu/scratch/vela2-film-v6/out/master_m2.mp4`; the 1-s contact sheet is `/home/xunliu/scratch/vela2-film-v6/qa/m2/sheet1s.jpg`, and the treatment and energy curve are in that folder's `HANDOFF.md`.
   - **The film:** one continuous light sky made of ordered-dither mosaic. The pain is an overcast patchwork: a request glint, nine Vela 1.0 islands each with its own small sail, a tenth island built for "refund?", a chat tower, and a general decision model stalling at 0.704. At the turn, fog and near-silence carry one whispered line. On the hit (25.3 s) the fog condenses into the sail and the light cuts to day. The build follows: questions stream into the sail and come back as typed answers, then the span close-up ("to our knowledge, the first span-level decision model") and Set. At the dusk climax the sky of requests lights up as one constellation, with 0.792→0.989, 0.704→0.921 and 7.0→24.5 on downbeats. Four sails (0.3B on CPU to 9B) give the same answer, and the end card carries the vision, five types, the sizes, both URLs and the lockup "vLLM Semantic Router × KR Labs", with no "Led by".
