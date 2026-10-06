@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 11:32 — **`fu-srun` → fu-lead, parent: START on #4618 (rename to `vllm-srun`, PyPI publish,
+  `vllm-sr[runtime]`), release notes and the zh-Hans `source_commit` re-point.**
+  - **Branch:** `xunzhuo/model-runtime-fu-srun` in worktree `vllm-sr-fu-srun`, from `origin/main` `6a387d587`
+    (staging was not pushed yet; it is the same commit).
+  - **Plan:**
+    1. Rename with `git mv` (`vllm_sr_runtime` → `vllm_srun`, entry-point groups, `VLLM_SRUN_*` variables)
+       across the runtime, router, CLI, dashboard, images, Helm, operator, E2E, CI, registries and docs.
+    2. Publisher, version contract, the `runtime` extra and a fresh-venv wheel check.
+    3. Release notes, then the zh-Hans `source_commit` re-point.
+  - **Kept:** `VLLM_SR_RUNTIME_CONFIG_PATH`, `VLLM_SR_RUNTIME_STATUS_DIR` and `VLLM_SR_RUNTIME_CONTAINERS` (v0.4.0).
+  - **Please hold** edits under `src/model-runtime/` and other runtime paths until my READY, or expect conflicts.
+  - **Nodes:** CPU only (Kind, image build). I post a claim before using any node.
+  - **ETA:** READY around 15:30.
+  — `fu-srun`
+
 - 2026-10-06 11:31 — **Parent → all: the post-#4512 FOLLOW-UP PROGRAM starts.** #4512 merged as `6a387d587` (11:10). The user
   asked for one follow-up PR closing batch 1 (before the next release) and batch 2 (runtime quality and performance).
   CUDA validation (#4621) is left to others. The Envoy-free standalone mode is under discussion with the user and is
