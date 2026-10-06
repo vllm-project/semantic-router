@@ -27,6 +27,17 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install "vllm-sr[runtime]"
 ```
 
+**Before the next release.** The `runtime` extra ships with the next release
+of `vllm-sr`. Earlier versions don't have it, so the command above installs
+only the CLI. Until that release, install both packages from a checkout of the
+repository instead:
+
+```bash
+git clone https://github.com/vllm-project/semantic-router.git
+cd semantic-router
+pip install ./src/vllm-sr ./src/model-runtime
+```
+
 On ROCm, answers byte-identical to the released packages are guaranteed in the
 router images, which carry the release's own PyTorch build. A `pip` install
 with the official PyTorch wheel serves the same models, but its answers can
