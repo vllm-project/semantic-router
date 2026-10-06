@@ -202,7 +202,7 @@ func TestReferenceMemoryCalibratedRequestPath(t *testing.T) {
 	configPath := filepath.Join(filepath.Dir(sourceFile), "../../../../config/config.yaml")
 	cfg, err := config.Load(configPath)
 	require.NoError(t, err)
-	require.Equal(t, "bert", cfg.Memory.EmbeddingModel)
+	require.Equal(t, "mmbert", cfg.Memory.EmbeddingModel)
 	require.Equal(t, float32(0.40), cfg.Memory.DefaultSimilarityThreshold)
 	require.Equal(t, "weighted", cfg.Memory.HybridMode)
 	require.Equal(t, "heuristic", cfg.Memory.Reflection.Algorithm)

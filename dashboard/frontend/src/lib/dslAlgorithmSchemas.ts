@@ -695,8 +695,8 @@ function getFusionFieldSchema(): FieldSchema[] {
         { key: 'min_score', label: 'Minimum Score', type: 'number', min: 0, max: 1 },
         { key: 'min_keep', label: 'Minimum Responses', type: 'number', min: 0 },
         {
-          key: 'nli_contradiction_penalty',
-          label: 'NLI Contradiction Penalty',
+          key: 'contradiction_penalty',
+          label: 'Contradiction Penalty',
           type: 'number',
           min: 0,
           max: 1,

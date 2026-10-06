@@ -79,9 +79,7 @@ export function formatRouterModelLabel(value?: string): string {
     mmbert: 'mmBERT',
     nli: 'NLI',
     pii: 'PII',
-    ort: 'ONNX Runtime',
     rocm: 'ROCm',
-    migraphx: 'MIGraphX',
   }
   return (value || 'Unknown')
     .replace(/[_-]+/g, ' ')
@@ -97,11 +95,11 @@ export function getRouterModelDevice(model: RouterModelInfo): {
 } {
   const device = model.metadata?.device?.trim()
   if (!device) return { label: 'Device not reported', isAmd: false }
-  const gpu = device.match(/^(rocm|migraphx|cuda)(?::(\d+))?$/i)
+  const gpu = device.match(/^(rocm|cuda|xpu|mps)(?::(\d+))?$/i)
   if (gpu) {
     const kind = gpu[1].toLowerCase()
-    const label = { rocm: 'ROCm', migraphx: 'MIGraphX', cuda: 'CUDA' }[kind]
-    return { label: `${label}${gpu[2] ? ` ${gpu[2]}` : ''}`, isAmd: kind !== 'cuda' }
+    const label = { rocm: 'ROCm', cuda: 'CUDA', xpu: 'XPU', mps: 'MPS' }[kind]
+    return { label: `${label}${gpu[2] ? ` ${gpu[2]}` : ''}`, isAmd: kind === 'rocm' }
   }
   return { label: device.toLowerCase() === 'cpu' ? 'CPU' : device, isAmd: false }
 }

@@ -512,8 +512,6 @@ args:
   - "--secure=false"
 # Environment variables
 env:
-  - name: LD_LIBRARY_PATH
-    value: "/app/lib"
   # The runtime root filesystem is read-only. Keep user and Hugging Face cache
   # state on explicitly writable mounts.
   - name: HOME

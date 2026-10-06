@@ -1,7 +1,6 @@
 """Negative coverage for collected Go/Ginkgo inventories and report adapters."""
 
 import json
-import re
 import sys
 import tempfile
 import unittest
@@ -11,7 +10,6 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from run_core_tests import (
     collected_go_inventory,
-    execute_owned,
     execute_tool_units,
     profile_exclusions,
     race_inventory,
@@ -21,7 +19,6 @@ from run_core_tests import (
     terminal_cases,
     unit_groups,
 )
-from run_model_tests import OWNED_OMNI_TESTS
 from workflow_evidence import go_cases, junit_cases
 
 
@@ -65,15 +62,17 @@ class RequiredInventoryTests(unittest.TestCase):
         ):
             execute_tool_units(Path(directory), {})
 
-    def test_modelcompat_registry_separates_optional_checkpoint_and_keeps_race(
+    def test_registry_builds_model_selection_tools_with_the_router_module(
         self,
     ) -> None:
-        sources, flags = repository_go_tools()["modelcompat"]
-        self.assertEqual(flags, ["-race"])
-        self.assertEqual(
-            {Path(source).name for source in sources},
-            {"main.go", "main_test.go", "make_test.go"},
-        )
+        tools = repository_go_tools()
+        for name, source in (
+            ("ml-selection-validate", "ml_model_selection/validate.go"),
+            ("selector-parity", "ml_model_selection/selectorparity/main.go"),
+        ):
+            sources, flags = tools[name]
+            self.assertEqual(flags, [])
+            self.assertTrue(any(path.endswith(source) for path in sources))
 
     def test_tool_flags_apply_to_discovery_and_execution(self) -> None:
         listed = [{"Package": "command-line-arguments", "Output": "TestOwned\n"}]
@@ -84,7 +83,7 @@ class RequiredInventoryTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as directory,
             mock.patch(
                 "run_core_tests.repository_go_tools",
-                return_value={"modelcompat": (["main.go"], ["-race"])},
+                return_value={"sr-dsl": (["main.go"], ["-race"])},
             ),
             mock.patch("run_core_tests.run_go", side_effect=[listed, passed]) as run,
         ):
@@ -98,16 +97,16 @@ class RequiredInventoryTests(unittest.TestCase):
 
     def test_tool_inventory_rejects_filter_flags_and_invalid_sources(self) -> None:
         for flags, sources in (
-            ("-run=^Nothing$", "../../tools/modelcompat/main.go"),
+            ("-run=^Nothing$", "../../tools/dev/dsl/main.go"),
             ("", ""),
             ("", "/outside-repository.go"),
-            ("", "../../tools/modelcompat/main.go ../../tools/modelcompat/main.go"),
+            ("", "../../tools/dev/dsl/main.go ../../tools/dev/dsl/main.go"),
         ):
             with (
                 self.subTest(flags=flags, sources=sources),
                 mock.patch(
                     "run_core_tests.subprocess.check_output",
-                    return_value=f"modelcompat\t{flags}\t{sources}\n",
+                    return_value=f"sr-dsl\t{flags}\t{sources}\n",
                 ),
                 self.assertRaises(ValueError),
             ):
@@ -195,7 +194,7 @@ class RequiredInventoryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 require_complete(actual, [case["id"] for case in selected])
 
-    def test_profile_exclusions_validate_binding_and_core_sources(self) -> None:
+    def test_profile_exclusions_validate_module_and_core_sources(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             profile_path = root / "tools/ci/core_test_profiles.json"
@@ -203,7 +202,7 @@ class RequiredInventoryTests(unittest.TestCase):
             records = []
             for package, source in (
                 ("./pkg/example", "src/semantic-router/pkg/example/external_test.go"),
-                ("candle-binding", "candle-binding/external_test.go"),
+                ("e2e/pkg/example", "e2e/pkg/example/external_test.go"),
             ):
                 path = root / source
                 path.parent.mkdir(parents=True)
@@ -220,74 +219,13 @@ class RequiredInventoryTests(unittest.TestCase):
             profile_path.write_text(json.dumps({"excluded": records}))
             with mock.patch("run_core_tests.ROOT", root):
                 excluded, _ = profile_exclusions()
-                self.assertEqual(set(excluded), {"./pkg/example", "candle-binding"})
-                self.assertEqual(excluded["candle-binding"], {"TestExternalCheckpoint"})
+                self.assertEqual(set(excluded), {"./pkg/example", "e2e/pkg/example"})
+                self.assertEqual(
+                    excluded["e2e/pkg/example"], {"TestExternalCheckpoint"}
+                )
                 (root / records[1]["source"]).write_text("// test removed\n")
                 with self.assertRaisesRegex(ValueError, "stale or unowned"):
                     profile_exclusions()
-
-    def test_owned_inventory_separates_explicit_references_and_rejects_other_skips(
-        self,
-    ):
-        references = {
-            "TestPublishedGroundedParity",
-            "TestPublishedOmniParity",
-            "TestPublishedOmniFullContext",
-        }
-        excluded, profiles = profile_exclusions()
-        self.assertTrue(references <= excluded["onnx-binding/instance"])
-        for record in profiles["excluded"]:
-            if record["test"] in references:
-                self.assertTrue(record["profile"].startswith("explicit-vela-"))
-
-        def invoke(action):
-            def run_go(args, _output, _env, *, module):
-                names = {"TestOwned"}
-                if module.name == "onnx-binding":
-                    names |= references
-                package = "test/" + module.name
-                if "-list" in args:
-                    return [
-                        {"Package": package, "Output": name + "\n"}
-                        for name in sorted(names)
-                    ]
-                if "-skip" in args:
-                    skip = args[args.index("-skip") + 1]
-                    names = {name for name in names if not re.fullmatch(skip, name)}
-                self.assertEqual(names, {"TestOwned"})
-                return [
-                    {"Package": package, "Test": name, "Action": action}
-                    for name in names
-                ]
-
-            with (
-                tempfile.TemporaryDirectory() as directory,
-                mock.patch("run_core_tests.run_go", side_effect=run_go),
-            ):
-                return execute_owned(Path(directory), {})
-
-        evidence = invoke("pass")
-        require_complete(evidence["cases"], evidence["expected_cases"])
-        self.assertEqual(len(evidence["cases"]), 3)
-        with self.assertRaisesRegex(ValueError, "did not pass"):
-            invoke("skip")
-
-    def test_owned_omni_integration_exclusions_have_the_actual_artifact_lane(self):
-        excluded, profiles = profile_exclusions()
-        indexed = {(row["package"], row["test"]): row for row in profiles["excluded"]}
-        for package, tests in OWNED_OMNI_TESTS.items():
-            for name in tests:
-                key = "./pkg/" + package
-                self.assertIn(name, excluded[key])
-                self.assertEqual(indexed[key, name]["profile"], "native.ort-cpu")
-        self.assertEqual(
-            indexed["./pkg/modelruntime/native", "TestPublishedVelaHalu"]["profile"],
-            "native.candle-cpu",
-        )
-        self.assertEqual(
-            indexed["./pkg/modelruntime/native", "TestPublishedOmniModels"]["profile"],
-            "native.ort-cpu",
-        )
 
     def test_race_and_ordinary_partitions_execute_each_selected_case_once(self) -> None:
         package = "./pkg/example"

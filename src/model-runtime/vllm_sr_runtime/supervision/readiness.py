@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -11,7 +12,6 @@ STATES = ("starting", "loading", "warming", "ready", "degraded", "failed")
 GPU_TOLERANCE = 0.02
 # CPU kernels round differently across instruction sets (AVX2, AVX-512, NEON).
 CPU_TOLERANCE = 1e-3
-SUM_TOLERANCE = 1e-6
 
 
 @dataclass
@@ -50,84 +50,95 @@ class Health:
         return self.state == "ready"
 
 
-def well_formed(answer: dict[str, Any]) -> bool:
-    """A finite, normalized answer of the declared type."""
-    if "error" in answer:
-        return False
-    kind = answer.get("type")
-    if kind == "noul":
-        value = answer.get("noul")
-        return isinstance(value, float) and 0.0 <= value <= 1.0
-    probabilities = answer.get("probabilities")
-    if not isinstance(probabilities, dict) or not probabilities:
-        return False
-    values = list(probabilities.values())
-    if any(not isinstance(v, float) or not math.isfinite(v) or v < 0 for v in values):
-        return False
-    return abs(sum(values) - 1.0) < SUM_TOLERANCE
+def flatten(surface: str, response: dict[str, Any]) -> dict[str, float]:
+    """Comparable numbers of a classify, embeddings or rerank response, by stable key."""
+    values: dict[str, float] = {}
+    if surface == "classify":
+        for result in response.get("results", []):
+            index = result.get("index")
+            for name in ("probabilities", "scores"):
+                for position, value in enumerate(result.get(name) or []):
+                    values[f"{index}.{name}.{position}"] = float(value)
+            for position, span in enumerate(result.get("spans") or []):
+                key = f"{index}.span.{position}.{span['label']}.{span['start']}.{span['end']}"
+                values[key] = float(span["probability"])
+    elif surface == "embeddings":
+        for item in response.get("data", []):
+            for position, value in enumerate(item.get("embedding") or []):
+                values[f"{item['index']}.{position}"] = float(value)
+    elif surface == "rerank":
+        for result in response.get("results", []):
+            values[f"{result['index']}.logit"] = float(result["logit"])
+    return values
 
 
-def compare(
-    answers: dict[str, Any], expected: dict[str, Any], tolerance: float
-) -> tuple[int, int]:
-    """(checked, matched) of answers against reference answers for the same questions."""
-    checked = matched = 0
-    for question_id, reference in expected.items():
-        answer = answers.get(question_id)
-        if answer is None:
-            continue
-        checked += 1
-        if answer.get("type") != reference.get("type"):
-            continue
-        if answer.get("type") == "noul":
-            matched += abs(answer["noul"] - reference["noul"]) <= tolerance
-            continue
-        left, right = answer.get("probabilities", {}), reference.get(
-            "probabilities", {}
-        )
-        if set(left) == set(right) and all(
-            abs(left[k] - right[k]) <= tolerance for k in left
-        ):
-            matched += 1
+def compare_numbers(
+    values: dict[str, Any], reference: dict[str, Any], tolerance: float
+) -> tuple[int, int] | None:
+    """(checked, matched) of golden numbers against a reference; None when there are none or one is not finite.
+
+    Every reference value is checked; a key set that differs from the
+    reference's fails at least one.
+    """
+    if not values or not all(math.isfinite(value) for value in values.values()):
+        return None
+    if not reference:
+        return 0, 0
+    checked = len(reference)
+    matched = sum(
+        key in values and abs(values[key] - float(value)) <= tolerance
+        for key, value in reference.items()
+    )
+    if set(values) != set(reference):
+        matched = min(matched, checked - 1)
     return checked, matched
 
 
 def golden_check(
-    run: Any,
+    run: Callable[[str, dict[str, Any]], dict[str, Any]],
+    compare: Callable[
+        [str, dict[str, Any], dict[str, Any], float], tuple[int, int] | None
+    ],
     goldens: list[dict[str, Any]],
     device_class: str,
 ) -> GoldenResult:
     """Run each golden request twice; require determinism, well-formed answers and the reference when known.
 
-    ``run(state, questions)`` returns the answers dict. References are keyed
-    by device class (``cpu``, ``rocm``, ``cuda``); answers must match within
-    ``CPU_TOLERANCE`` on CPUs and ``GPU_TOLERANCE`` on GPUs.
+    A golden is ``{surface, body, expected}``. ``run(surface, body)`` returns
+    the response's comparable values (``LoadedModel.golden_values``) and
+    ``compare(surface, values, reference, tolerance)`` checks them against the
+    reference recorded for this device class (``LoadedModel.golden_compare``).
+    References are keyed by device class (``cpu``, ``rocm``, ``cuda``); answers
+    must match within ``CPU_TOLERANCE`` on CPUs and ``GPU_TOLERANCE`` on GPUs.
     """
     result = GoldenResult(status="unverified")
+    tolerance = CPU_TOLERANCE if device_class == "cpu" else GPU_TOLERANCE
     for golden in goldens:
-        first = run(golden["state"], golden["questions"])
-        second = run(golden["state"], golden["questions"])
+        surface, body = golden["surface"], golden["body"]
+        first = run(surface, body)
+        second = run(surface, body)
         if first != second:
             return GoldenResult(
                 status="failed", detail="golden answers are not deterministic"
             )
-        if not all(well_formed(answer) for answer in first.values()):
-            return GoldenResult(status="failed", detail="golden answers are malformed")
         reference = (golden.get("expected") or {}).get(device_class)
-        if reference:
-            tolerance = CPU_TOLERANCE if device_class == "cpu" else GPU_TOLERANCE
-            checked, matched = compare(first, reference, tolerance)
-            result.checked += checked
-            result.matched += matched
-            result.reference = device_class
-            if matched != checked:
-                return GoldenResult(
-                    status="failed",
-                    checked=result.checked,
-                    matched=result.matched,
-                    reference=device_class,
-                    detail="golden answers differ from the reference",
-                )
+        counts = compare(surface, first, reference or {}, tolerance)
+        if counts is None:
+            return GoldenResult(status="failed", detail="golden answers are malformed")
+        if not reference:
+            continue
+        checked, matched = counts
+        result.checked += checked
+        result.matched += matched
+        result.reference = device_class
+        if matched != checked:
+            return GoldenResult(
+                status="failed",
+                checked=result.checked,
+                matched=result.matched,
+                reference=device_class,
+                detail="golden answers differ from the reference",
+            )
     if result.reference is not None:
         result.status = "matched"
     return result
