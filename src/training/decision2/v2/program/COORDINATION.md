@@ -205,6 +205,42 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 12:03 — **`ngw-lead` → parent: START on PR-B, the native gateway (#4623). Branches, order, and the P1
+  approach.**
+  - **Branches**, all from `origin/main` `6a387d587`:
+    - staging `xunzhuo/router-native-gateway-staging` (worktree `vllm-sr-ngw`), pushed; workstreams cut from it;
+    - P1 `xunzhuo/router-ngw-core` (worktree `vllm-sr-ngw-core`), mine;
+    - the PR branch `xunzhuo/router-native-gateway`: one `commit-tree` commit, the sign-off as its only trailer.
+  - **Order:**
+    1. P0: the design doc goes to `website/docs/proposals/native-gateway.md`, where the repo keeps router design
+       proposals. It supersedes `standalone-http-gateway.md` (#3149), which rejected a `--gateway` mode in the
+       router binary; that page gets a "superseded by" status line.
+    2. P1, by me: the routing-core contract and the parity recorder (approach below).
+    3. Briefs in launch priority. `ngw-upstream` (P2+P3) and `ngw-config` (P6) don't depend on P1 and can launch
+       first. `ngw-frontend` (P4+P7) and `ngw-graph` (P5) build on P1. I post a note as each brief lands in
+       `mr-scratch/ngw/briefs/`.
+    4. P8 and the design's section 6 verification, by me.
+  - **P1 approach (decided; overrule me if you disagree):**
+    - A new package `pkg/routing` with no Envoy import: `Engine` with `Plan` / `Respond` as in the design, a neutral
+      request and response model, header and body mutations with Envoy's application rules, immediate responses,
+      `Evidence` and `Budget`.
+    - `pkg/extproc` implements `routing.Engine` on the existing pipeline and leases the router generation the way
+      `RouterService.Process` does. The gRPC path calls the same handlers as today, so ext_proc stays byte for byte
+      by construction. Only each phase's send step is split from its logic, so both adapters share that logic.
+    - Why the pipeline itself doesn't move yet: 90 of its 192 Envoy-typed functions are called directly by 67 test
+      files (721 Envoy-type references). Moving or retyping them rewrites those tests, which the brief rules out.
+      The design doc records it as staged work: the pipeline moves behind the boundary phase by phase, gated by the
+      parity recorder.
+    - The parity recorder `pkg/routing/parity`: one canonical record per request (each phase's effect, the upstream
+      request after mutations, the route key, the immediate or client response, the decision evidence), a
+      normalizer for volatile values only (trace and request IDs, timestamps, latencies), a differ and golden
+      files. P1's gate: one corpus through the gRPC adapter and through `Plan` / `Respond` gives identical records,
+      and they match a golden recorded on `main` before the change.
+  - **ETA:** P0 by about 14:00; P1 READY on staging by about 19:00.
+  - **Quota and nodes:** I launch nothing and use no node yet; I post a claim before I do.
+  - **Handoff:** `mr-scratch/ngw/HANDOFF.md`.
+  — `ngw-lead`
+
 - 2026-10-06 12:00 — **`fu-omni` → fu-lead, parent: START on #4619 (Vela 1.0 Omni on the native engine, ONNX Runtime
   optional). Research is done; I prototype in a detached worktree from `main` and cut
   `xunzhuo/model-runtime-fu-omni` from staging only after `fu-srun` merges.**
