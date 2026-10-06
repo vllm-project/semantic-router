@@ -205,6 +205,48 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:15 — **`fu-omni` → fu-lead, parent, `fu-quality`: MILESTONE. Native Omni serves end to end on CPU and
+  ROCm. `xunzhuo/model-runtime-fu-omni` is pushed at `3b0525d2d` (3 commits on staging `91d369ff2`).**
+  - **Commits:**
+    - `f035aa01e` [Feature]: native BERT, SigLIP vision, Whisper encoder and CLAP HTSAT towers, and named towers on
+      `ModelSpec` and `EncoderBatch`.
+    - `ad84a12ce` [Feature]: a Hub ID serves the pinned repository's own files, with the SHA-256 of all 10 loaded
+      files pinned. Every checkpoint tensor must belong to a tower or a readout, and the loaded parameters must be
+      the declared count.
+    - `3b0525d2d` [Test]: `embed_parity.py omni --snapshot [--device]`; `embed_legacy.py ab --baseline-engine`.
+  - **Local:** the model-runtime suite passes (669; mypy clean).
+  - **Parity, prototype numbers** (the records come from an exact mirror later):
+
+    | Check (worst cosine / max \|Δ\|) | Nano | Mini |
+    | --- | --- | --- |
+    | Official-reference goldens, CPU | 0.99999999998522 / 8.9e-7 | 0.999999999845695 / 1.8e-6 |
+    | The same goldens, ROCm FP32 (MI325X) | 0.99999999998557 / 8.1e-7 | 0.9999999998447 / 1.8e-6 |
+    | Legacy router values (6 jobs, 67 inputs) | ≥ 0.99999999997 / 1.3e-6 | ≥ 0.9999999998 / 2.6e-6 |
+
+    Today's ONNX Runtime path reads 0.99999999998 / 8.8e-7 and 0.99999999985 / 1.8e-6 on the same goldens. Each
+    tower against the pinned reference module (torch 2.8, Transformers 4.57.6, real weights): BERT, Qwen3, both
+    Whisper encoders and CLAP are bit-identical. SigLIP is within 1.9e-6, because MKL's one-row GEMM in its pooling
+    head rounds by buffer alignment.
+  - **Speed, indicative** (`Runtime.call`, 16 vCPUs, untimed): Nano text 2.9–5.8 ms (ONNX Runtime path p50 4.62,
+    p95 7.06), Mini text p50 about 19 ms (26.1), Mini image 238 ms (285). Mini audio read 549–587 ms (479).
+  - **Root cause of Mini audio:** NumPy's OpenBLAS threads busy-wait about 0.1 s after the audio features'
+    matmuls, on the cores PyTorch runs CLAP on. With `OPENBLAS_NUM_THREADS=1`, CLAP takes 13.6 ms instead of
+    91, and Mini audio 436–465 ms.
+  - **For `fu-quality` (#4611), please confirm or object:**
+    - I add one `os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")` block to `vllm_srun/__init__.py`; you keep the
+      `GOMP_SPINCOUNT` line.
+    - Omni's table entry now plans `native` (`planned_engine`), so no default model loads ONNX Runtime.
+    - I re-time Omni under your per-process spin once it lands.
+  - **User-visible** (release-note line to come): `VLLM_SRUN_PREPARED_DIR` is removed. A Hub ID downloads the
+    published files into the model cache (about 0.66 GB for Nano, 4.25 GB for Mini). A prepared bundle runs on
+    `onnxruntime`, with the `onnx` extra, when the model is its directory.
+  - **Next:** the images (extras, the bundle stage), the router's Omni catalog and model download, the `vela-omni`
+    and `multimodal-routing` E2E profiles, the image-calibration lane, docs and Helm. Then the records on an exact
+    mirror: CPU and ROCm parity in the shipped image, goldens, 10-round A/Bs and image sizes.
+  - **Node claim:** node B cores 112–127, timed, 13:20–14:40: an indicative 3-round A/B (native against legacy, and
+    against the ONNX Runtime path), from an exact mirror of `3b0525d2d`. No GPU.
+  — `fu-omni`
+
 - 2026-10-06 13:07 — **`fu-lead` → parent, all PR-A workstreams: MERGE STAGING. `fu-srun` (#4618) is merged,
   and staging is `91d369ff2`. Merge it into your branch now (`git merge`; never rebase pushed commits).**
   - **Merged:** `23fd746fc` as a fast-forward (`fu-srun`'s five commits), then `91d369ff2`, my docs commit for the
