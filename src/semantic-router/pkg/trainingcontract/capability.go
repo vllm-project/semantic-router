@@ -143,7 +143,7 @@ type RuntimeAdapterDescriptor struct {
 	AcceptedFormats     []CapabilityID `json:"accepted_formats"`
 	SupportedHardware   []CapabilityID `json:"supported_hardware"`
 	SupportedPrecisions []CapabilityID `json:"supported_precisions"`
-	Connector           string         `json:"connector"` // e.g. sr.candle.embedded.v1 from #3196
+	Connector           string         `json:"connector"` // e.g. sr.model-runtime.openapi.v2
 }
 
 // PrecisionDescriptor registers numeric precision modes.
@@ -172,7 +172,7 @@ type ConversionRule struct {
 
 // CapabilityCatalog is the complete snapshot of server capabilities returned by the API.
 type CapabilityCatalog struct {
-	SchemaVersion string                         `json:"schema_version" jsonschema:"enum=semantic-router.training/v1"`
+	SchemaVersion string                         `json:"schema_version" jsonschema:"enum=semantic-router.training/v2"`
 	Targets       []TargetDescriptor             `json:"targets"`
 	Trainers      []TrainerDescriptor            `json:"trainers"`
 	Architectures []ArchitectureDriverDescriptor `json:"architectures"`
@@ -492,14 +492,7 @@ func DefaultRegistry() *CapabilityRegistry {
 		Component:      Component{Name: "safetensors", Version: "1"},
 		DisplayName:    "Hugging Face Safetensors",
 		FileExtensions: []string{".safetensors", ".json"},
-		DirectRuntimes: []CapabilityID{"runtime/candle@v1"},
-	})
-	_ = r.RegisterFormat(ArtifactFormatDescriptor{
-		ID:             "format/onnx@v1",
-		Component:      Component{Name: "onnx", Version: "1"},
-		DisplayName:    "Open Neural Network Exchange (ONNX)",
-		FileExtensions: []string{".onnx"},
-		DirectRuntimes: []CapabilityID{"runtime/onnxruntime@v1"},
+		DirectRuntimes: []CapabilityID{"runtime/model-runtime@v1"},
 	})
 
 	// Runtimes
@@ -513,25 +506,20 @@ func DefaultRegistry() *CapabilityRegistry {
 		SupportedPrecisions: []CapabilityID{"precision/fp32@v1"},
 		Connector:           "sr.native.embedded.v1",
 	})
+	// The built-in model runtime (src/model-runtime) serves Router classifiers
+	// over its OpenAPI 2.x contract: ModernBERT sequence and token checkpoints
+	// loaded from safetensors, with FP32 weights and heads on every device.
+	// Only the devices with readiness references qualify a classifier; the
+	// runtime's CUDA and Metal paths are unvalidated (design section 11).
 	_ = r.RegisterRuntime(RuntimeAdapterDescriptor{
-		ID:                  "runtime/candle@v1",
-		Component:           Component{Name: "candle", Version: "1"},
-		DisplayName:         "Embedded Candle CPU/GPU Runtime",
-		SupportedTargets:    []Target{LabelScores},
-		AcceptedFormats:     []CapabilityID{"format/safetensors@v1"},
-		SupportedHardware:   []CapabilityID{"hardware/cpu@v1", "hardware/cuda@v1", "hardware/metal@v1"},
-		SupportedPrecisions: []CapabilityID{"precision/fp32@v1", "precision/fp16@v1"},
-		Connector:           "sr.candle.embedded.v1",
-	})
-	_ = r.RegisterRuntime(RuntimeAdapterDescriptor{
-		ID:                  "runtime/onnxruntime@v1",
-		Component:           Component{Name: "onnxruntime", Version: "1"},
-		DisplayName:         "ONNX Runtime Engine",
+		ID:                  "runtime/model-runtime@v1",
+		Component:           Component{Name: "model-runtime", Version: "1"},
+		DisplayName:         "vLLM Semantic Router Model Runtime",
 		SupportedTargets:    []Target{LabelScores, Spans},
-		AcceptedFormats:     []CapabilityID{"format/onnx@v1"},
-		SupportedHardware:   []CapabilityID{"hardware/cpu@v1", "hardware/cuda@v1", "hardware/rocm@v1"},
-		SupportedPrecisions: []CapabilityID{"precision/fp32@v1", "precision/fp16@v1"},
-		Connector:           "sr.onnxruntime.embedded.v1",
+		AcceptedFormats:     []CapabilityID{"format/safetensors@v1"},
+		SupportedHardware:   []CapabilityID{"hardware/cpu@v1", "hardware/rocm@v1"},
+		SupportedPrecisions: []CapabilityID{"precision/fp32@v1"},
+		Connector:           "sr.model-runtime.openapi.v2",
 	})
 
 	// Executors
@@ -556,21 +544,6 @@ func DefaultRegistry() *CapabilityRegistry {
 		SupportedHardware: []CapabilityID{"hardware/cpu@v1", "hardware/cuda@v1", "hardware/rocm@v1"},
 		IsolationLevel:    "container",
 	})
-	_ = r.RegisterExecutor(ExecutorDescriptor{
-		ID:                "executor/onnx-exporter@v1",
-		Component:         Component{Name: "onnx-exporter", Version: "1"},
-		DisplayName:       "Safetensors to ONNX Exporter",
-		SupportedHardware: []CapabilityID{"hardware/cpu@v1", "hardware/cuda@v1"},
-		IsolationLevel:    "container",
-	})
-
-	// Conversions
-	_ = r.RegisterConversion(ConversionRule{
-		SourceFormat: "format/safetensors@v1",
-		TargetFormat: "format/onnx@v1",
-		Executor:     "executor/onnx-exporter@v1",
-		Hardware:     []CapabilityID{"hardware/cpu@v1", "hardware/cuda@v1"},
-	})
 
 	// Architectures
 	_ = r.RegisterArchitecture(ArchitectureDriverDescriptor{
@@ -578,18 +551,9 @@ func DefaultRegistry() *CapabilityRegistry {
 		Family:             "modernbert",
 		DisplayName:        "Hugging Face ModernBERT",
 		SupportedTargets:   []Target{LabelScores, Spans},
-		SupportedFormats:   []CapabilityID{"format/safetensors@v1", "format/onnx@v1"},
-		SupportedRuntimes:  []CapabilityID{"runtime/candle@v1", "runtime/onnxruntime@v1"},
-		RequiredModelFiles: []string{"config.json", "model.safetensors"},
-	})
-	_ = r.RegisterArchitecture(ArchitectureDriverDescriptor{
-		ID:                 "architecture/hf-bert@v1",
-		Family:             "bert",
-		DisplayName:        "Hugging Face BERT / RoBERTa",
-		SupportedTargets:   []Target{LabelScores, Spans},
-		SupportedFormats:   []CapabilityID{"format/safetensors@v1", "format/onnx@v1"},
-		SupportedRuntimes:  []CapabilityID{"runtime/candle@v1", "runtime/onnxruntime@v1"},
-		RequiredModelFiles: []string{"config.json", "model.safetensors"},
+		SupportedFormats:   []CapabilityID{"format/safetensors@v1"},
+		SupportedRuntimes:  []CapabilityID{"runtime/model-runtime@v1"},
+		RequiredModelFiles: []string{"config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json", "special_tokens_map.json"},
 	})
 	_ = r.RegisterArchitecture(ArchitectureDriverDescriptor{
 		ID:                "architecture/selector-tabular@v1",
@@ -652,7 +616,7 @@ func DefaultRegistry() *CapabilityRegistry {
 		Component:              Component{Name: "neural", Version: "1"},
 		DisplayName:            "Neural Classifier Trainer",
 		SupportedTargets:       []Target{LabelScores, Spans},
-		SupportedArchitectures: []CapabilityID{"architecture/hf-modernbert@v1", "architecture/hf-bert@v1"},
+		SupportedArchitectures: []CapabilityID{"architecture/hf-modernbert@v1"},
 		SupportedExecutors:     []CapabilityID{"executor/train@v1"},
 		SupportedHardware:      []CapabilityID{"hardware/cuda@v1", "hardware/rocm@v1", "hardware/metal@v1", "hardware/cpu@v1"},
 		SupportedPrecisions:    []CapabilityID{"precision/fp32@v1", "precision/fp16@v1", "precision/bf16@v1"},
@@ -667,7 +631,7 @@ func DefaultRegistry() *CapabilityRegistry {
 		Component:              Component{Name: "hf-peft", Version: "1"},
 		DisplayName:            "Hugging Face Parameter-Efficient Fine-Tuning (LoRA)",
 		SupportedTargets:       []Target{LabelScores, Spans},
-		SupportedArchitectures: []CapabilityID{"architecture/hf-modernbert@v1", "architecture/hf-bert@v1"},
+		SupportedArchitectures: []CapabilityID{"architecture/hf-modernbert@v1"},
 		SupportedExecutors:     []CapabilityID{"executor/train@v1"},
 		SupportedHardware:      []CapabilityID{"hardware/cuda@v1", "hardware/rocm@v1"},
 		SupportedPrecisions:    []CapabilityID{"precision/fp16@v1", "precision/bf16@v1"},

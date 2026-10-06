@@ -25,8 +25,7 @@ export default function ResearchPaperCarousel(): JSX.Element {
           </h2>
           <p className={styles.subtitle}>
             <Translate id="homepage.researchCarousel.subtitle">
-              Research threads that trace the router&apos;s evolving ideas across safety,
-              multimodality, orchestration, and system design.
+              The ideas that move inference forward.
             </Translate>
           </p>
         </div>
@@ -82,11 +81,11 @@ export default function ResearchPaperCarousel(): JSX.Element {
         <div className={styles.footer}>
           <p>
             <Translate id="homepage.researchCarousel.footer">
-              Papers that frame how the router sees, decides, and scales.
+              Explore the research.
             </Translate>
           </p>
           <PillLink to="/publications" muted>
-            <Translate id="homepage.researchCarousel.cta">See all papers and talks</Translate>
+            <Translate id="homepage.researchCarousel.cta">All papers and talks</Translate>
           </PillLink>
         </div>
       </div>

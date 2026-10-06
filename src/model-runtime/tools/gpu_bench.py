@@ -28,10 +28,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import many_questions
 from gpu_parity import load, system_one
-from vllm_sr_runtime.profiles.batching import BatchingProfile
-from vllm_sr_runtime.profiles.exact import ExactProfile
-from vllm_sr_runtime.profiles.shared_context import SharedContextProfile
-from vllm_sr_runtime.scheduler.scheduler import Scheduler, SchedulerLimits
+from vllm_srun.profiles.batching import BatchingProfile
+from vllm_srun.profiles.exact import ExactProfile
+from vllm_srun.profiles.shared_context import SharedContextProfile
+from vllm_srun.scheduler.scheduler import Scheduler, SchedulerLimits
 
 
 def percentile(values: list[float], q: float) -> float:
@@ -104,6 +104,8 @@ def main() -> int:
     shared = SharedContextProfile()
     if shared.available(model):
         shared = None
+    else:
+        shared.bind(model)
     result["many"] = {}
     for n in (16, 64, 128):
         questions = dict(list(request["questions"].items())[:n])

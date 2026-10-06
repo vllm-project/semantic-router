@@ -1,6 +1,6 @@
 # Model runtime
 
-- `vllm_sr_runtime/api/openapi.yaml` is the contract. Change it first, then the
+- `vllm_srun/api/openapi.yaml` is the contract. Change it first, then the
   server, the contract tests and the generated Go client
   (`make model-runtime-client-generate`) in the same change.
 - Plugin layers stay separate: families own package formats, rendering,
@@ -12,5 +12,5 @@
   an accuracy record under `docs/records/`.
 - Never import or execute code shipped inside a model package, and never use
   `trust_remote_code`.
-- Unit tests use the tiny fixtures in `vllm_sr_runtime/testing/fixtures.py`.
+- Unit tests use the tiny fixtures in `vllm_srun/testing/fixtures.py`.
   GPU tests carry the `gpu` marker and skip on CPU hosts.

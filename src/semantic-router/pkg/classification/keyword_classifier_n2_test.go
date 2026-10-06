@@ -11,7 +11,7 @@ import (
 )
 
 // makeBM25Rules builds n distinct BM25 rules whose keywords do NOT appear in
-// the test prompt, so first-match short-circuit inside Rust is never taken.
+// the test prompt, so first-match short-circuit is never taken.
 // This is the realistic shape of the production hot path: many signals, few
 // (or zero) matches per request.
 func makeBM25Rules(n int) []config.KeywordRule {
@@ -54,7 +54,6 @@ func TestBM25_CorrectnessAcrossManyRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewKeywordClassifier: %v", err)
 	}
-	defer kc.Free()
 
 	got, _, err := kc.ClassifyWithKeywords("we need better observability for this service")
 	if err != nil {
@@ -83,7 +82,6 @@ func TestBM25_FirstMatchPriorityPreserved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewKeywordClassifier: %v", err)
 	}
-	defer kc.Free()
 
 	got, _, err := kc.ClassifyWithKeywords("observability matters")
 	if err != nil {
@@ -103,7 +101,6 @@ func TestKeywordMatchAllPreservesRuleOrderAndLegacyTopOne(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewKeywordClassifier: %v", err)
 	}
-	defer kc.Free()
 
 	matches, err := kc.MatchAll("compare the options briefly")
 	if err != nil {
@@ -134,7 +131,6 @@ func TestEvaluateKeywordSignalEmitsEveryMatchedRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewKeywordClassifier: %v", err)
 	}
-	defer kc.Free()
 
 	classifier := &Classifier{keywordClassifier: kc}
 	results := &SignalResults{Metrics: &SignalMetricsCollection{}}
@@ -166,7 +162,6 @@ func TestMixedMethodOrderPreserved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewKeywordClassifier: %v", err)
 	}
-	defer kc.Free()
 
 	// Prompt matches regex_b only — should return regex_b, not bm25_a or bm25_c.
 	got, _, err := kc.ClassifyWithKeywords("observability is key")
@@ -191,7 +186,7 @@ func longChinesePrompt() string {
 
 // BenchmarkBM25_LongChinese_30Rules measures the realistic worst case from the
 // signal-latency report: N=30 BM25 rules, long Chinese prompt, no rule matches
-// (so Rust never short-circuits). On unfixed upstream this took ~54ms per
+// (so nothing short-circuits). On unfixed upstream this took ~54ms per
 // classify in production metrics. With the per-call cache it should drop into
 // the low-millisecond range.
 func BenchmarkBM25_LongChinese_30Rules(b *testing.B) {
@@ -200,7 +195,6 @@ func BenchmarkBM25_LongChinese_30Rules(b *testing.B) {
 	if err != nil {
 		b.Fatalf("NewKeywordClassifier: %v", err)
 	}
-	defer kc.Free()
 	prompt := longChinesePrompt()
 
 	b.ReportAllocs()
@@ -217,7 +211,6 @@ func BenchmarkBM25_LongChinese_5Rules(b *testing.B) {
 	if err != nil {
 		b.Fatalf("NewKeywordClassifier: %v", err)
 	}
-	defer kc.Free()
 	prompt := longChinesePrompt()
 
 	b.ReportAllocs()
@@ -235,7 +228,6 @@ func BenchmarkBM25_ShortEnglish_30Rules(b *testing.B) {
 	if err != nil {
 		b.Fatalf("NewKeywordClassifier: %v", err)
 	}
-	defer kc.Free()
 	prompt := "What is the time complexity of binary search?"
 
 	b.ReportAllocs()

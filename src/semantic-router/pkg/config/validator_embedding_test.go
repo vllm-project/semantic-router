@@ -228,7 +228,7 @@ func TestValidateMmBertModelPath_RejectsClassicBERT(t *testing.T) {
 		t.Fatal("expected error when mmbert_model_path points to a classic BERT model, got nil")
 	}
 	msg := err.Error()
-	for _, want := range []string{"mom-embedding-light", "classic BERT", "bert_model_path", "all-MiniLM-L12-v2"} {
+	for _, want := range []string{"mom-embedding-light", "classic BERT", "Vela-1.0-Encoder-307M-Embedding", "all-MiniLM-L12-v2"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error should contain %q, got: %s", want, msg)
 		}
