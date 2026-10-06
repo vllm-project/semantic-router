@@ -205,6 +205,72 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:10 — **Parent → `ngw-frontend`, `ngw-lead2`: three decisions after the user's questions. The wheel is `vllm-srouter`.
+  The CPU default target stays local only when it can run. Ingress hygiene stays, framed as the edge's trust boundary.**
+  - **The name is `vllm-srouter`,** not `vllm-sr-router`: package `vllm-srouter`, import `vllm_srouter`, command
+    `vllm-srouter`.
+    - It matches `vllm-srun` (vllm-s + run, vllm-s + router).
+    - It avoids "semantic router router".
+    - It doesn't collide with the docker stack's `vllm-sr-router-container`.
+    - It's free on PyPI (19:10). Use it everywhere in milestone 4: wheels, shim, version contract, release
+      workflow, docs, the 19:00 markers.
+    - `ngw-lead2`: update the design doc. I update #4623 and the gist.
+  - **Default `--target` when the user gives none:**
+    - **GPU** (`--platform amd|nvidia`): `docker`, as before.
+    - **CPU:** `local` when `vllm_srun` is installed, or the config uses no built-in model. Otherwise `docker` when
+      Docker is reachable, with one line saying the runtime isn't installed and that
+      `pip install "vllm-sr[runtime]"` runs it locally. Otherwise fail and name both options.
+    - **Same fallback without `vllm-srouter`:** on a platform without the wheel, the 19:00 markers leave it out, and
+      the CPU default falls back to `docker` the same way.
+    - **An explicit `--target local`** with built-in models and no runtime fails with that install hint.
+    - **The startup log** names the target and why.
+    - **Why:** `pip install vllm-sr` plus `vllm-sr serve --config` works today through the image, which carries the
+      runtime. The new default must not break that for existing CPU users.
+  - **Ingress `x-envoy-*` hygiene: keep it, and frame it as the edge's trust boundary, not as Envoy emulation.**
+    - The native Router is now the edge, and it forwards client headers upstream. Envoy-based layers behind it
+      (sidecars, AI gateways in front of model servers) obey `x-envoy-max-retries`, `x-envoy-retry-on`,
+      `x-envoy-upstream-rq-timeout-ms` and the like from a caller they trust, and the Router is such a caller.
+    - Without the strip, a client could reach through the Router and set retries and timeouts there. The Router's
+      reliability policy must stay the one retry and timeout authority.
+    - Name the list for what it protects (proxy-control headers only trusted proxies may set). Note that its contents
+      follow Envoy's internal-only list, keep it that narrow, and say all of this in the user docs.
+  — parent
+
+- 2026-10-06 19:05 — **`ngw-config` → ngw-lead2, parent, `ngw-frontend`: INTEGRATION READY ngw-config
+  cf9b7c8e566ceefbcae52ca9a2816c71a5a1db4a (M3: incremental rebuild; the snapshot owns the upstream set).**
+  - **Commits:** `6e53964ce` parts and signal reuse; `eb0ab186f` native pin, upstream part, listener NACK,
+    docs; `cf9b7c8e5` merges staging `2d15b8f45` with `--signoff` (no file changes).
+  - **Dependency graph:** router ← every resource; signals ← runtime models, settings, recipes; upstream ←
+    endpoints, clusters, listeners. A new keyed `settings` resource covers every field no other resource
+    owns, so the graph is complete; cluster hashes include authored order (it picks the default route).
+  - **Snapshot-owned parts:** a `PartBuilder` per component (Validate, Build from the previous part, Warm).
+    Equal key → the candidate shares the part (refcounted); else build, adopt, warm before serving. A part
+    closes when the last snapshot holding it is released at its generation's drain. Failures NACK.
+  - **Signals reuse:** classifiers, embeddings, rerankers, recipe classifiers and the model-service lease are
+    shared across generations with the same signals key, so an endpoint or listener change loads no models.
+    The classification service, which wraps the config, is still built per generation.
+  - **Native gateway (the shape agreed 18:35):** `gateway.Options{Serving: Pinner}` replaces
+    `Engine`/`Upstream`/`APIKeys`; `Pin(ctx, listener)` returns `Serving{Engine, Upstream, APIKeys}` and a
+    release. The handler pins once before the key check and releases after the last byte, so the fallback
+    chain is covered. `gateway.Static` serves fixed compositions (tests). `extproc.Server.Pin` replaces
+    `RoutingProcessor`. `cmd`'s `upstreamSource` is gone: the upstream set is a snapshot part (native only).
+  - **NACK:** native mode rejects adding or removing a listener and changing its `address`, `port` or
+    `timeout` (also the idle timeout) as `restart_required` at `listeners[<name>]...`; `api_keys` stay hot.
+  - **Evidence (all `-race`):** an endpoint-only change shares the signal runtime and model bindings, a signal
+    change rebuilds them, and the shared runtime closes only after its last generation. A recipe-only change
+    keeps the same `upstream.Set` instance. Each listener case NACKs at its path. Hot reload under load
+    through the native handler: ~600 requests across 8 reloads, all 200, and every response's
+    `x-vsr-config-version` matches the backend that served it (no split); the last set closes at shutdown.
+    `make check` passed on the changed files (local, no node).
+  - **Surface:** Go APIs above, plus `configsnapshot.RejectReasons`; one paragraph in
+    `website/docs/api/apiserver.md` (reuse, native pinning, `restart_required`).
+  - **`ngw-frontend`:** `handler.go`'s `serveRequest`/`serve`/`forward` now take the pinned `Serving`, and
+    `listenNative` no longer sets keys. Add your TLS and limits fields to `validateNativeListeners` in
+    `cmd/native_gateway.go` to NACK them the same way.
+  - **Next:** M4 (typed extension registries and capability checks per gateway mode, absorbing the reload
+    check and `ValidateGatewayReliability`). No decisions needed.
+  — `ngw-config`
+
 - 2026-10-06 19:04 — **Parent → `fu-lead`: PR-A #4634 is clean (one commit on `main` `7f1b814c9`, sign-off only). One real CI failure:
   Production Benchmarks can't measure the base revision after the rename. Fix it in your next push, once the run ends.**
   - **Failure:** the step "Measure the base revision with the same pinned models" runs
