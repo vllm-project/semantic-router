@@ -13,27 +13,27 @@ complete the issue's future session and delegated-role coverage.
 
 ## Run
 
-From the repository root, with the normal Go, Rust and C build tools installed:
+From the repository root, with Go installed:
 
 ```bash
 make bench-agent-routing-protection
 ```
 
-The target builds the CPU native bindings required to link the router package.
-It does not download model weights, start a router deployment, contact model
-providers, or require an external state store. The report is written to
+The target runs the learning-session tests of the router's `pkg/extproc`
+package. It does not download model weights, start a router deployment, contact
+model providers, or require an external state store. The report is written to
 `.agent-harness/agent-routing-protection/report.json`.
 
-After building native bindings, the targeted tests can also run directly:
+The same tests can also run directly:
 
 ```bash
 cd src/semantic-router
 go test ./pkg/extproc -run '^TestRouterLearningSession' -count=1 -v
 ```
 
-CI runs `make bench-agent-routing-protection` explicitly in the core
-`Test And Build` job after building CPU bindings and before starting external
-services or downloading model weights. Its exit status gates the job. The
+CI runs these tests with `make test-core-unit` in the `Router Contracts` job,
+before it starts external services or downloads model weights, with
+`ROUTER_PROTECTION_REPORT` set. Their exit status gates the job. The
 `agent-routing-protection` artifact contains the JSON report, including per-turn
 failures when a contract regresses. Upload is attempted even after failure;
 if setup fails before a report exists, the upload warns about the missing file.

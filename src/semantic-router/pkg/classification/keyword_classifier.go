@@ -4,130 +4,104 @@ import (
 	"fmt"
 	"strings"
 
-	nlp_binding "github.com/vllm-project/semantic-router/nlp-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification/lexical"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
+const (
+	defaultBM25Threshold  = 0.1
+	defaultNgramThreshold = 0.4
+	defaultNgramArity     = 3
+)
+
 // KeywordClassifier implements keyword-based classification logic.
-// It supports regex, bm25, and ngram matching methods per rule.
+// Each rule uses regex (the default), bm25 or ngram matching, and rules are
+// evaluated in configuration order.
 type KeywordClassifier struct {
-	regexRules []preppedKeywordRule
-
-	bm25Classifier  *nlp_binding.BM25Classifier
-	ngramClassifier *nlp_binding.NgramClassifier
-
-	ruleOrder []ruleRef
+	rules []keywordRule
 }
 
-// ruleRef tracks the method and name for ordered rule evaluation.
-type ruleRef struct {
-	method string
+// keywordRule is one configured rule with the engine that evaluates it:
+// exactly one of regex and scored is set.
+type keywordRule struct {
 	name   string
+	method string
+	regex  *preppedKeywordRule
+	scored scoredKeywordMatcher
+}
+
+// scoredKeywordMatcher is a BM25 or n-gram rule.
+type scoredKeywordMatcher interface {
+	Match(*lexical.Text) (lexical.Match, bool)
 }
 
 // NewKeywordClassifier creates a new KeywordClassifier.
-// Rules with method "bm25" or "ngram" are dispatched to Rust-backed
-// classifiers; all others use the regex engine.
 func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, error) {
-	kc := &KeywordClassifier{}
-
-	var hasBM25, hasNgram bool
-
+	kc := &KeywordClassifier{rules: make([]keywordRule, 0, len(cfgRules))}
 	for _, rule := range cfgRules {
 		switch rule.Operator {
 		case "AND", "OR", "NOR":
 		default:
 			return nil, fmt.Errorf("unsupported keyword rule operator: %q for rule %q", rule.Operator, rule.Name)
 		}
-
-		method := strings.ToLower(rule.Method)
-		if method == "" {
-			method = "regex"
+		compiled, err := newKeywordRule(rule)
+		if err != nil {
+			return nil, err
 		}
-
-		switch method {
-		case "bm25":
-			hasBM25 = true
-		case "ngram":
-			hasNgram = true
-		case "regex":
-		default:
-			return nil, fmt.Errorf("unsupported keyword rule method: %q for rule %q (valid: regex, bm25, ngram)", rule.Method, rule.Name)
-		}
+		kc.rules = append(kc.rules, compiled)
 	}
-
-	if hasBM25 {
-		kc.bm25Classifier = nlp_binding.NewBM25Classifier()
-	}
-	if hasNgram {
-		kc.ngramClassifier = nlp_binding.NewNgramClassifier()
-	}
-
-	for _, rule := range cfgRules {
-		method := strings.ToLower(rule.Method)
-		if method == "" {
-			method = "regex"
-		}
-
-		switch method {
-		case "bm25":
-			threshold := rule.BM25Threshold
-			if threshold == 0 {
-				threshold = 0.1
-			}
-			err := kc.bm25Classifier.AddRule(
-				rule.Name, rule.Operator, rule.Keywords, threshold, rule.CaseSensitive,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("failed to add BM25 rule %q: %w", rule.Name, err)
-			}
-			kc.ruleOrder = append(kc.ruleOrder, ruleRef{method: "bm25", name: rule.Name})
-			logging.Debugf("Keyword rule %q using BM25 method (threshold=%.2f, keywords=%d)",
-				rule.Name, threshold, len(rule.Keywords))
-
-		case "ngram":
-			threshold := rule.NgramThreshold
-			if threshold == 0 {
-				threshold = 0.4
-			}
-			arity := rule.NgramArity
-			if arity == 0 {
-				arity = 3
-			}
-			err := kc.ngramClassifier.AddRule(
-				rule.Name, rule.Operator, rule.Keywords, threshold, rule.CaseSensitive, arity,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("failed to add N-gram rule %q: %w", rule.Name, err)
-			}
-			kc.ruleOrder = append(kc.ruleOrder, ruleRef{method: "ngram", name: rule.Name})
-			logging.Debugf("Keyword rule %q using N-gram method (threshold=%.2f, arity=%d, keywords=%d)",
-				rule.Name, threshold, arity, len(rule.Keywords))
-
-		case "regex":
-			preppedRule, err := prepRegexRule(rule)
-			if err != nil {
-				return nil, err
-			}
-			kc.regexRules = append(kc.regexRules, preppedRule)
-			kc.ruleOrder = append(kc.ruleOrder, ruleRef{method: "regex", name: rule.Name})
-			logging.Debugf("Keyword rule %q using regex method (keywords=%d, fuzzy=%v)",
-				rule.Name, len(rule.Keywords), rule.FuzzyMatch)
-		}
-	}
-
 	return kc, nil
 }
 
-// Free releases Rust-side resources. Call when the classifier is no longer needed.
-func (c *KeywordClassifier) Free() {
-	if c.bm25Classifier != nil {
-		c.bm25Classifier.Free()
+func newKeywordRule(rule config.KeywordRule) (keywordRule, error) {
+	method := strings.ToLower(rule.Method)
+	if method == "" {
+		method = "regex"
 	}
-	if c.ngramClassifier != nil {
-		c.ngramClassifier.Free()
+	compiled := keywordRule{name: rule.Name, method: method}
+	scoredRule := lexical.Rule{Name: rule.Name, Operator: rule.Operator, Keywords: rule.Keywords, CaseSensitive: rule.CaseSensitive}
+	switch method {
+	case "bm25":
+		scoredRule.Threshold = rule.BM25Threshold
+		if scoredRule.Threshold == 0 {
+			scoredRule.Threshold = defaultBM25Threshold
+		}
+		matcher, err := lexical.NewBM25(scoredRule)
+		if err != nil {
+			return keywordRule{}, fmt.Errorf("failed to add BM25 rule %q: %w", rule.Name, err)
+		}
+		compiled.scored = matcher
+		logging.Debugf("Keyword rule %q using BM25 method (threshold=%.2f, keywords=%d)",
+			rule.Name, scoredRule.Threshold, len(rule.Keywords))
+	case "ngram":
+		scoredRule.Threshold = rule.NgramThreshold
+		if scoredRule.Threshold == 0 {
+			scoredRule.Threshold = defaultNgramThreshold
+		}
+		arity := rule.NgramArity
+		if arity == 0 {
+			arity = defaultNgramArity
+		}
+		matcher, err := lexical.NewNgram(scoredRule, arity)
+		if err != nil {
+			return keywordRule{}, fmt.Errorf("failed to add N-gram rule %q: %w", rule.Name, err)
+		}
+		compiled.scored = matcher
+		logging.Debugf("Keyword rule %q using N-gram method (threshold=%.2f, arity=%d, keywords=%d)",
+			rule.Name, scoredRule.Threshold, arity, len(rule.Keywords))
+	case "regex":
+		prepped, err := prepRegexRule(rule)
+		if err != nil {
+			return keywordRule{}, err
+		}
+		compiled.regex = &prepped
+		logging.Debugf("Keyword rule %q using regex method (keywords=%d, fuzzy=%v)",
+			rule.Name, len(rule.Keywords), rule.FuzzyMatch)
+	default:
+		return keywordRule{}, fmt.Errorf("unsupported keyword rule method: %q for rule %q (valid: regex, bm25, ngram)", rule.Method, rule.Name)
 	}
+	return compiled, nil
 }
 
 // Classify performs keyword-based classification on the given text.
