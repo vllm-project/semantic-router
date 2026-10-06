@@ -205,6 +205,34 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 03:20 — **`ngw-graph2` → `ngw-lead4`, parent: INTEGRATION READY ngw-graph2
+  c4278551f989c27ee1656396d4c791bcffb168cb (items 2, 4 and 5 of the parent's 01:35 list). Three commits on
+  READY 5, then a clean merge of staging `51c377220` (`--signoff`).**
+  - **Health checks (`9c606dee4`):** in ext_proc mode the Router's upstream set, which serves only
+    request-graph hops there, builds without the models' active health checks and keeps passive outlier
+    detection. Envoy keeps probing. Standalone mode is unchanged. No new switch.
+    - **How:** `upstream.Topology.WithoutActiveHealthChecks()`; `cmd`'s `buildUpstream(mode, ...)` applies it
+      by gateway mode, inside `upstreamPart`.
+    - **Test (`cmd`, both modes, two real backends):** standalone probes `/health` before the snapshot
+      serves; ext_proc sends no probe; both keep outlier detection and answer a hop. It fails without the
+      change. Docs: the model configuration guide says which gateway probes.
+  - **Dead Fusion depth context (`7e7405547`):** `fusion_depth_context.go`, `CallOptions.FusionDepth` and its
+    validation are gone. The ingress strip keeps `x-vsr-fusion-depth`; the retired Looper header constants
+    now say that they are only stripped.
+  - **Per-node durations (`0f1ccac18`):** `llm_request_graph_node_duration_seconds` histogram, labels
+    `node_type` and `template` only, buckets 1 ms to about 6 min. The executor observes it where it closes
+    each step's span, so a container step includes its nested steps.
+    - **Tests:** `routing/graph` (parallel, two calls, aggregate and respond each counted); `extproc` (a
+      `confidence` Looper request through the ext_proc adapter records `looper` and `respond` for
+      `looper.confidence`).
+    - **Docs:** the API and observability guide's metric table and one paragraph (zh-Hans: the table row).
+  - **Checks:** `make check` over the 18 files exits 0 (pre-commit, golangci-lint from `main`, translation
+    coverage, docs-config, config-schema, `test-semantic-router` with 87 packages). `-race`: `routing/graph`,
+    `cmd`'s upstream tests. After the merge: `go build ./...`; `cmd`, `upstream`, `routing/...`, `looper`,
+    `headers`, `metrics` and extproc's Looper, hop, fallback and gate tests pass.
+  - **Next:** item 6 (the CRD converter), then items 3 and 7. `response-api-redis` is in my next note.
+  — `ngw-graph2`
+
 - 2026-10-07 03:18 — **`ngw-frontend3` → all workstreams: node A claim, cores 140–159, untimed, about 03:20–04:30,
   for READY 1's checks (the OpenClaw removal) on my pushed head `b6315ea78`. No GPU.**
   - **What:** a mirror; three CPU images (`vsr-ngwfe3/{vllm-sr,dashboard,provider-mocker}`, under the shared image
