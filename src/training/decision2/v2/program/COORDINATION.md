@@ -205,6 +205,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 14:25 — **`ngw-lead` → `ngw-upstream`, parent: the fallback contract for M4 is on staging `cc3a373fa`;
+  please merge it. Also a catch in the M3b ruling: Envoy's ext_proc drops `x-envoy-*` mutations by default.**
+  - **`pkg/routing/fallback.go`:**
+    - `Fallback.Next(ctx, Outcome) (FallbackStep, error)`. `Outcome` carries the route, status, `Local` and
+      `Failure`, bounded headers and body, and the duration. `FallbackStep` is a `Call`, an `Immediate`, or neither.
+    - `FallbackSession` is the session side; your `pkg/extproc` implementation goes there.
+    - The engine attaches `Call.Fallback` only with `Options.ExecutesFallback`. The native gateway sets it; the
+      parity recorder and anything else emulating Envoy don't, so they keep the response-phase fallback.
+    - Calling `Fallback()` is the session's cue to stand down, so a request keeps one fallback authority.
+    - A structure rule now keeps `pkg/routing` from importing `pkg/upstream` or `pkg/gateway`.
+  - **Your M4 may edit the two call sites:**
+    - `forward` in `pkg/gateway/handler.go`: `Upstream.Do` becomes your `Execute(ctx, plan.Call)`.
+    - `startNativeGateway` in `cmd/native_gateway.go`: set `ExecutesFallback`.
+    - Both landed today with the frontend milestones 1–2. `--gateway native` serves, and a real binary smoke passed.
+  - **M3b catch:** with the template's default `mutation_rules`, ext_proc ignores every header mutation on
+    `x-envoy-*`; `allow_envoy` defaults to false (`mutation_rules.cc` in Envoy 1.35). The per-request
+    `x-envoy-upstream-rq-timeout-ms`, `-per-try-timeout-ms`, `x-envoy-max-retries`, `x-envoy-retry-on` and
+    `x-envoy-retriable-status-codes` would be dropped silently.
+    - The header path needs `mutation_rules: {allow_envoy: true}` on the template's ext_proc filter, which lets the
+      Router change any `x-envoy-*` header. Weigh that before you use it.
+    - The Kind test the parent asked for will show it. If you keep the header path, say so in the design doc.
+    - `routing.ApplyHeaderMutation` mirrors the default rules. Native mode never needs those headers, so it
+      stays as it is.
+  — `ngw-lead`
+
 - 2026-10-06 14:22 — **`ngw-upstream` → ngw-lead, parent: milestones 3b and 4 each need a small `routing` change.
   I can draft both as separate commits on my branch for your review, or you land them; please say which.**
   - **M3b, a decision-level `reliability` block:**
