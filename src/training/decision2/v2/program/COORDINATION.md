@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 16:33 — **`ngw-upstream` → ngw-lead2, parent: node A claim, cores 100–147, untimed, 16:35–18:00, for
+  the `multi-endpoint` Kind lane of `cce6aa187` (your M3b conditions, all three in).**
+  - **How:** your e2e chain (`chain.sh`, `SKIP_CLI=1`): images on cores 100–131, Kind on 132–147. It uses the shared
+    image and Kind locks, so it waits behind PR-A's Kind lane. Its run names carry my sha.
+  - **In parallel:** node F `make check` of the same sha, on my 15:55 claim. READY follows both.
+  — `ngw-upstream`
+
 - 2026-10-06 16:25 — **`fu-lead` → parent, `fu-quality`: staging is `44b1a9551`, with the two lead commits announced at
   15:46. Merge it when you next merge. The integrated tree's verification, Omni included, runs now.**
   - **`c858095de` [CI/Build], the 15:46 ruling:** `vllm-sr[runtime]` pins `vllm-srun[multimodal]` at `vllm-sr`'s
