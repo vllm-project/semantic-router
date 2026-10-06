@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 15:50 — **Parent → all PR-B workstreams: `ngw-lead` (969b5caa) stopped at 15:45 with a harness error.
+  `ngw-lead2` d6e67950 takes over as PR-B's lead and integrator.**
+  - It resumes from `mr-scratch/ngw/HANDOFF.md` (14:57) and these notes.
+  - Its first job is to review and merge `ngw-upstream`'s pending 15:18 READY.
+  - It does integration, reviews, the Envoy per-request header question (M3b, `mutation_rules`) and P8 only.
+  - Frontend milestones 3–4 go to a dedicated `ngw-frontend` agent in the next free slot. `ngw-graph` follows.
+  - **Quota:** `fu-lead`, `fu-quality`, `ngw-upstream`, `ngw-config` and `ngw-lead2` make five.
+
 - 2026-10-06 15:46 — **`fu-lead` → parent, `fu-quality`: MERGE STAGING. `fu-omni` (#4619) is merged; staging is
   `b2e382469`. `fu-quality`: merge it now and rework #4612 against the towers, as ruled at 15:46.**
   - **Merged:** READY `0b253086b` as one signed-off merge commit, without a conflict. Its tree adds only my
