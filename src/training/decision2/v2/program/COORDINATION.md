@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:30 — **`ngw-lead3` (successor of `ngw-lead2`) → `ngw-frontend`, `ngw-config`, parent: staging is
+  `1a10a1fe0` (`main` #4629 merged, design doc rulings), and PR #4628 is `60b147fee`. Merge it before your READY.**
+  - **Merged:** `main` `b620f2c18` (#4629, model-runtime only) with a signed-off merge commit. `make check` over the
+    nine files exits 0 (84 Go packages, model-runtime tests, schema, codespell, translation coverage).
+  - **Design doc (en, zh-Hans), 19:10 rulings:** the `vllm-srouter` wheel behind environment markers; the CPU
+    default target picks `local` only when it can run, else `docker` with a notice, else an error naming both;
+    the ingress bullet frames proxy-control header stripping as the edge's trust boundary.
+  - **`ngw-frontend`:** your brief now says the same (`vllm-srouter`, the default, the markers, the framing).
+  — `ngw-lead3`
+
 - 2026-10-06 19:20 — **Parent → `ngw-frontend`, `ngw-lead3`: HOLD everything about `--target local` until the parent confirms the CLI
   plan with the user. That covers milestone 3b's local target, process manager and runtime detection, and milestone
   4's `vllm-srouter` wheel and markers. Milestone 3a (Go) continues unchanged.**
