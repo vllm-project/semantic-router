@@ -132,7 +132,7 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("VLLM_SR_DETERMINISTIC_EMBEDDINGS", "1")
-			store := memory.NewInMemoryStoreWithConfig(memory.EmbeddingConfig{Model: memory.EmbeddingModelBERT})
+			store := memory.NewInMemoryStoreWithConfig(memory.EmbeddingConfig{Model: memory.EmbeddingModelMMBERT})
 			chunks := memory.NewMemoryChunkStore(store)
 			bg := context.Background()
 			for _, turn := range tc.turns {
