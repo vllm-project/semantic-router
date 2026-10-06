@@ -164,3 +164,45 @@
   - dense
   - efficient
   released_at: '2025-06-19'
+- id: mistral/ministral-3-14b-instruct
+  display_name: Ministral 3 14B Instruct
+  description: Largest Ministral 3 instruction checkpoint, with vision, for edge and local deployment.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512
+    license: Apache-2.0
+  family: ministral-3
+  parameter_size: 14B
+  revision: 29439f81c2be264d8d393273f99e7db9c0961120
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512/blob/29439f81c2be264d8d393273f99e7db9c0961120/README.md
+  tags:
+  - open_weights
+  - multimodal
+  - dense
+  - efficient
+  released_at: '2025-12-02'

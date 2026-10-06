@@ -47,13 +47,13 @@ type fusionExecutionConfig struct {
 	SynthesisTemplate            string
 	JudgePromptVersion           string
 
-	GroundingEnabled                 bool
-	GroundingReference               string
-	GroundingPolicy                  string
-	GroundingMinScore                float64
-	GroundingMinKeep                 int
-	GroundingNLIContradictionPenalty float64
-	GroundingOnError                 string
+	GroundingEnabled              bool
+	GroundingReference            string
+	GroundingPolicy               string
+	GroundingMinScore             float64
+	GroundingMinKeep              int
+	GroundingContradictionPenalty float64
+	GroundingOnError              string
 }
 
 type FusionAnalysis struct {

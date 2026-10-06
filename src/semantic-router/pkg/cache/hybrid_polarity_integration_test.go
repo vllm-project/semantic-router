@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -35,7 +35,7 @@ func TestHybridSemanticPolarityStorageIntegration(t *testing.T) {
 	const opposite = "disable logging for this service"
 	const paraphrase = "turn on service logging"
 	cache, err := NewHybridCache(HybridCacheOptions{
-		Enabled: true, TTLSeconds: 60, EmbeddingModel: "bert", Milvus: cfg,
+		Enabled: true, TTLSeconds: 60, EmbeddingModel: "qwen3", Milvus: cfg,
 		SimilarityThreshold: 0.8, MaxMemoryEntries: 16, DisableRebuildOnStartup: true,
 		EmbeddingProvider: storagetest.Vectors{Size: 384, Aliases: map[string]string{opposite: query, paraphrase: query}},
 	})
