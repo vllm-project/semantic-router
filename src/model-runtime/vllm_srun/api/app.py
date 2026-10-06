@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from collections.abc import Awaitable, Callable
 from http import HTTPStatus
@@ -20,6 +21,7 @@ from ..errors import RuntimeServiceError
 from ..runtime import Runtime
 
 OPENAPI_PATH = Path(__file__).with_name("openapi.yaml")
+_SURROGATE_ESCAPE = re.compile(rb"\\u[dD][89a-fA-F]")
 # The contract version (``info.version`` in openapi.yaml), reported to clients.
 API_VERSION = "2.0.0"
 # Recorded for a request whose client disconnected before its answer (nginx's code).
@@ -228,12 +230,23 @@ async def _read_json(request: Request, limit: int) -> tuple[Any, int]:
                 "request_too_large", f"the request body exceeds {limit} bytes"
             )
         chunks.append(chunk)
+    raw = b"".join(chunks)
     try:
-        return json.loads(b"".join(chunks)), size
+        body = json.loads(raw.decode("utf-8"))
+        # Strict UTF-8 cannot carry a surrogate, so only a \uD800-\uDFFF escape
+        # can leave an unpaired one that no tokenizer accepts. Only a body with
+        # such an escape is re-encoded to find out.
+        if _SURROGATE_ESCAPE.search(raw):
+            json.dumps(body, ensure_ascii=False).encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise RuntimeServiceError(
+            "invalid_request", "the request contains an unpaired surrogate"
+        ) from exc
     except (UnicodeDecodeError, ValueError) as exc:
         raise RuntimeServiceError(
             "invalid_request", f"the request body is not JSON: {exc}"
         ) from exc
+    return body, size
 
 
 async def _not_found(request: Request, exc: Exception) -> Response:
