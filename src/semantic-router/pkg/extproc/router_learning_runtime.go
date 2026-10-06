@@ -38,6 +38,13 @@ type routerLearningExperienceKey struct {
 	model    string
 }
 
+// MarshalText lets this struct key serialize as a map[K]V via encoding/json,
+// which otherwise requires string keys. finishEvalLearning hashes a
+// routerLearningPreviewSnapshot (keyed by this type) into a provenance receipt.
+func (k routerLearningExperienceKey) MarshalText() ([]byte, error) {
+	return []byte(k.decision + "|" + strconv.Itoa(k.tier) + "|" + k.model), nil
+}
+
 type outcomeIdempotencyClaim struct {
 	done        chan struct{}
 	committedAt time.Time
