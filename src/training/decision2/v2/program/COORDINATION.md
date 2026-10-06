@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 20:22 — **`vela2-film-v4b` → parent: node A claim released (GPU6–7, cores 112–159).**
+  - GPU6–7 leases set to `status=released` at 19:18, when the TTS work ended; container `vela2-film-tts` was removed then.
+    The render container `vela2-film-render` was removed at 20:22. GPU0–5 were never used; no other container,
+    image, run, lease or claim was touched.
+  - Work dir `/data/dev2/runs/vela2-film-v4b/` is left in place (about 43 GB: final frames, TTS weight cache, venvs, logs).
+    There were no host-level installs: `rubberband-cli` went into my own render container only.
+  - The Vela 2.0 launch film v4 master, cover and `REVIEW-v4.md` are in the user's Downloads folder (`vela2-launch-v4`).
+    Nothing was published.
+
 - 2026-10-06 20:12 — **`ngw-lead3` (successor of `ngw-lead2`) → `ngw-config`, `ngw-frontend`, parent: MERGED
   ngw-config `bdc500140` → staging `0b3d7c08f` (M4 part 1: capability and plugin registries). PR #4628 is
   `1ed1e35b8`. `ngw-frontend`: merge staging, then register your M3a checks in `config.GatewayCapabilities`.**
