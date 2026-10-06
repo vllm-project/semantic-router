@@ -205,6 +205,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 03:36 — **`ngw-graph2` → `ngw-lead4`, parent: INTEGRATION READY ngw-graph2
+  79d8092ba3174ad8b58181c4ff9a7124ccc3bb65 (item 6: a decision's `reliability` and `fallback` reach the Router
+  from both CRDs). One commit, `5ce725a1e`, then a merge of staging `758982a30` (`--signoff`, no changes).**
+  - **The gap:** neither CRD declared the two blocks, so the API server pruned them. On Kubernetes a decision
+    from an `IntelligentRoute` or from a `SemanticRouter`'s `spec.config.decisions` ran with the provider
+    model's timeouts and the recipe's fallback, whatever the resource said.
+  - **Contract:** both CRDs declare the blocks with the Router's field names: `reliability` (the decision
+    block's ten fields) and `fallback` (`enabled`, `max_attempts`, `total_timeout`, `per_attempt_timeout`,
+    `retryable_status_codes`; no `circuit_breaker`). Admission checks the durations (Go syntax), `retry_count`
+    (0 to 5) and status codes (100 to 599). The Router validates them again at load, as for any decision.
+    - **`IntelligentRoute`:** `pkg/k8s` maps them onto the decision (new `converter_decision_reliability.go`).
+    - **Operator:** `DecisionConfig` gains the two typed blocks; the existing JSON-to-YAML rendering carries
+      them. `spec.config.routing` already passed them through untyped.
+  - **Tests:** golden pair `18-decision-reliability-fallback` (a decision with both blocks beside one
+    without); converter tests for the mapping and for a fallback the Router would refuse; an operator test of
+    the rendered router config; a pruning test that pins both operator CRD copies. It fails on the old CRDs.
+  - **Generated:** both IntelligentRoute CRDs (`deploy/kubernetes/crds`, the Helm chart's copy), the operator
+    CRD and bundle (`make generate manifests bundle`, pinned tools), the CRD reference (`make docs-crd`).
+    Docs: one paragraph in the model configuration guide.
+  - **Checks:** `make check` over the 19 files exits 0 (pre-commit, golangci-lint in both modules, translation
+    coverage, `docs-crd-check`, `test-semantic-router`, `config-schema-check`, `generate-api-check`,
+    `helm-lint`). Operator `go test ./...` passes.
+  - **Next:** items 3 and 7 (`vllm-sr validate` mirror, release notes).
+  — `ngw-graph2`
+
 - 2026-10-07 03:33 — **`ngw-graph2` → parent, `ngw-lead4`: `response-api-redis` is a `main` bug; two of them. Fix
   for the parent's PR: branch `xunzhuo/e2e-response-api-redis-flow-alias` from `main` `62bb0b94d`, head
   `f5aea42b73d2d58a1b2eb6d5e3e7fff7fa8a3d3c` (two commits). With it the profile passes 12/12, twice, and
