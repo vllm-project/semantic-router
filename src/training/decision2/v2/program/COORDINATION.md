@@ -205,6 +205,41 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 20:56 — **`ngw-config` → `ngw-lead3`, parent: INTEGRATION READY ngw-config
+  ed2d3e361d7b6e7652ce1139c211ad51fbca12a8 (M4 part 2: the 19:14 history ruling, your 20:12 P2 and P3). One
+  thing to confirm for Helm, below.**
+  - **Commits:** `34506de5e` one history per document with a lock; `0db6d839b` merges staging `69277679a`
+    (`--signoff`); `ed2d3e361` the extension header boundary and a typed plugin-spec constructor.
+  - **One history per document:** a workspace's `config.yaml` keeps `.vllm-sr/config-backups` (so existing
+    histories and the Dashboard's backups are unchanged); any other file gets
+    `.vllm-sr/config-backups/<file name>/`. `VLLM_SR_CONFIG_BACKUP_DIR` still overrides it.
+  - **Lock:** every write holds `flock` on `<dir>/.lock` (`configsnapshot/historylock`, a leaf package; 10 s
+    bounded wait) and first reads what other writers recorded. An activation takes its version while it holds
+    the lock, so two writers of one document never activate the same version. The Dashboard takes the same
+    lock for its backups and cleanup; its cleanup now removes a Router record's sidecars too.
+  - **Tests:** two Routers (extproc servers) on `router-a.yaml` and `router-b.yaml` in one directory each serve
+    v1 to v4 from their own history. Two writers of one document, alternating and then concurrent (16
+    activations at once), record versions 1 to 21 exactly once each, in write order. Plus a lock test and a
+    directory test. `-race` is clean.
+  - **Kubernetes:** the Helm, OpenShift, KServe and Istio manifests set `VLLM_SR_CONFIG_BACKUP_DIR` to
+    `/tmp/vllm-sr/config-history`. In Helm that is the existing `emptyDir`; elsewhere it is the container's own
+    filesystem. The Helm README and `validate-chart.sh` follow.
+    - **Confirm (parent):** the README promised that the models PVC keeps rollback versions across the rollout a
+      ConfigMap edit requires. Per-replica state loses them at that rollout. The README now says to restore an
+      earlier document through the ConfigMap. If you'd rather keep durable Helm history, the lock makes the
+      PVC safe for a single replica, and I'd revert that one line.
+  - **P2:** plugins may not write the route key, the `x-vsr-` and `x-envoy-` namespaces, hop-by-hop headers,
+    `host` or `content-length`. `internal/extensiontest` drives a plugin that tries all six through the
+    routing core as Envoy would forward it (`Call.Route` stays `m`) and through the standalone gateway; both keep
+    the Router's values, and `x-vsr-response-path` stays `upstream`.
+  - **P3:** `config.NewDecisionPluginType[P](catalog, PluginOptions[P]{Strict, Defaults, Validate, Aliases})`.
+    The 15 built-ins and the test extensions use it.
+  - **Checks:** `make check` exits 0 on both change sets (18 and 5 files, Router, Dashboard, deploy, docs). One
+    run hit a timing flake in `pkg/looper` (`TestStateStore_RenewKeepsClaimPastLease/file`, untouched). It
+    passed 5/5 alone and on the rerun.
+  - **Next:** the (b) carriers for external algorithms and signals (no objection by 20:30), then M5.
+  — `ngw-config`
+
 - 2026-10-06 20:55 — **`ngw-frontend` → `ngw-lead3`, parent, `ngw-config`: INTEGRATION READY ngw-frontend
   0419834056396234d50c73141845660edecdb88b (M3a: the standalone frontend's TLS, edge trust boundary and
   identity capability). It contains staging `69277679a`.**
