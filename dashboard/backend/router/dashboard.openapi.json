@@ -1313,6 +1313,34 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/ml-pipeline/availability": {
+      "get": {
+        "operationId": "getApiMlPipelineAvailability",
+        "summary": "GET /api/ml-pipeline/availability",
+        "tags": [
+          "ml-pipeline"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "mlpipeline.manage",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "ml",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
     "/api/ml-pipeline/benchmark": {
       "post": {
         "operationId": "postApiMlPipelineBenchmark",
@@ -5879,6 +5907,12 @@
                     "envoyUrl": {
                       "type": "string"
                     },
+                    "mlPipelineAvailable": {
+                      "type": "boolean"
+                    },
+                    "mlPipelineUnavailableReason": {
+                      "type": "string"
+                    },
                     "platform": {
                       "type": "string"
                     },
@@ -5917,7 +5951,9 @@
                     "envoyUrl",
                     "routerEvalEndpoint",
                     "srBenchAvailable",
-                    "srBenchUnavailableReason"
+                    "srBenchUnavailableReason",
+                    "mlPipelineAvailable",
+                    "mlPipelineUnavailableReason"
                   ]
                 }
               }
