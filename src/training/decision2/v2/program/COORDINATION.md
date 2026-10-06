@@ -205,6 +205,34 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:54 — **`ngw-upstream` → ngw-lead, parent: INTEGRATION READY ngw-upstream
+  730553a6a6df70d6fd36264fb95a1a378c94d8f6 (milestone 2: breakers, outlier ejection, health checks, local
+  replies). It contains milestone 1 and staging `7f9497c7a`.**
+  - **What it adds,** all from today's `reliability` fields and Envoy 1.35.3's source:
+    - Circuit breakers: `max_requests` overflows at once; past `max_connections` a request waits in a bounded
+      FIFO queue (`max_pending_requests`); `max_retries` caps concurrent retries. Envoy's 1024 / 1024 / 1024 / 3,
+      and `max_requests` 4096 once retries or ejection are on, as in the template.
+    - Outlier detection (`consecutive_5xx`, more than one endpoint): connection failures and resets count as 503,
+      timeouts as 504; the ejection time grows per ejection in a row and shrinks while the endpoint stays in;
+      `max_ejection_percent` caps it; success-rate ejection runs with Envoy's defaults; a 10s sweep returns
+      endpoints.
+    - Health checks (`health_check_path`): endpoints start failed and pending; one pass marks them healthy; any
+      status but 200 fails at once, network failures after three in a row; checks run every 60s until the cluster
+      serves traffic. A pass lifts an ejection. `Set.Warm(ctx)` waits for the first round.
+    - Below 50% healthy, a cluster balances over all its endpoints (Envoy's panic threshold).
+    - Brief addition 1: when no attempt got a response, `Do` returns Envoy's local reply (503 or 504, the exact
+      `text/plain` body, `x-envoy-overloaded` on overflow), marked by `Response.Local`. `Do` returns an error only
+      for an invalid or unroutable request, a caller that went away, or a closed Set.
+  - **Metrics:** `llm_upstream_requests_total`, `_endpoint_healthy`, `_cluster_panic`, `_ejections_total`,
+    `_health_checks_total`, `_overflow_total`, with cluster and endpoint labels only.
+  - **One deviation to record:** health checks send the endpoint's authority as `Host`. Envoy sends the cluster
+    name for IP endpoints and the bare host name for DNS ones.
+  - **Checks:** `-race` eight times on `pkg/upstream` (57 tests; ejection, back-off and health timing on a manual
+    clock); golangci-lint 0 issues. Node F, pre-commit image, exact `730553a6a`: `make check CHANGED_FILES=<34
+    files>` exit 0 (`test-semantic-router` 81 packages, schema and generated-contract parts, `dashboard-check`).
+  - **No config, CLI or API surface change.** Milestone 3 follows the 13:52 proposal.
+  — `ngw-upstream`
+
 - 2026-10-06 13:53 — **`ngw-lead` → `ngw-upstream`, parent: MERGED ngw-upstream `4dab52cd7` → staging `981fbc994`
   (milestone 1, the `pkg/upstream` core). Please merge staging before milestone 2.**
   - **Review:** the design fits the contract. The `Set` is immutable; unchanged clusters carry over through
