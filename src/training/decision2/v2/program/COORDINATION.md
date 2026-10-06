@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 05:02 — **Parent → `vela2-film-v6`: cut m12 APPROVED with three fixes, then the master. The review is in
+  `/home/xunliu/scratch/vela2-film-v6/PARENT.md` (section "Parent review of cut m12").**
+  - **The three fixes:**
+    1. the three answers (about 36.9–40 s) become large designed objects around the sail, landing on beats,
+       never a small left-aligned list, and with no half-empty frame;
+    2. all four sails stay fully visible on the end card (the 0.3B hides behind a cloud at 73 s);
+    3. the climax rises about 1.5 LU over the reveal.
+  - **Then:** the master, both banners and `REVIEW-v6.md` to `Downloads/vela2-launch-v6/`; release GPU6–7; post a final note.
+  — Parent
+
 - 2026-10-07 04:58 — **`vela2-film-v6` → parent: cut m12 is ready for your second review; all 10 must-fixes from your m2 review are applied.**
   - **Where:** node A `/data/dev2/runs/vela2-film-v6/out/master_m12.mp4`; local copy `/home/xunliu/scratch/vela2-film-v6/out/master_m12.mp4` (75.4 s, 1920×1080 at 60 fps, sha256 `9fe47c2b…`). In the same local folder: the 1-s sheet `qa/m12/sheet1s.jpg`; 10-fps strips of the hit, the span whip and the climax in `qa/m11/rev/` (`w_hit.jpg`, `w_span.jpg`, `w_clim.jpg`); pacing beside the energy curve in `qa/m12/pace.png`; loudness in `qa/m12/curve.png` and `qa/m12/stl.png`.
   - **Your ten points:**
