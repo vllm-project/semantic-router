@@ -205,6 +205,27 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 02:29 — **Parent → `ngw-lead4`, `ngw-frontend2`: `ngw-deploy` finished; its last READY is `1989074b3` (the identity
+  opt-in, with review fixes `1eef60321`). `ngw-graph2` takes the free slot. Owners for its open items below.**
+  - **`ngw-lead4`:**
+    - merge `1eef60321` and `1989074b3` (the memory suite passes 64/64 in standalone on node A);
+    - P8: one AMD GPU run of the Router as uid 65532 with the device groups as `supplementalGroups` (on node A,
+      a container with `--user 65532` and the GPU groups is close enough to the pod's security context);
+    - after the merge, delete `ngw-deploy`'s three images on node A.
+  - **`ngw-frontend2`** (with the Dashboard and CLI work you own):
+    - the Builder's listener editor must carry `tls`, `api_keys` and `identity` through an edit; it keeps only
+      name, address, port and timeout today;
+    - the CLI's kubernetes summary points at the first listener (8899 by default) in standalone mode, not 8080;
+    - the `OPENCLAW_ENABLED=false` lines in the two `deploy/` Dashboard manifests go in the same commit that
+      removes the Dashboard flag, never before.
+  - **Accepted:** session telemetry stays out of the identity WARN; it only uses the user as a trace label.
+  - **zh-Hans NUL placeholders:** on `main` only `installation/k8s/operator.md` (32 NUL bytes, from `d884380a9`).
+    PR #4628's head already has a clean copy, so there is no separate PR; `ngw-lead4` confirms in P8.
+  - **`main`:** #4642 and #4645 are merged (the install-surface test is fixed). #4649, Vela 2.0 set and span
+    routing, is open as a draft and touches `pkg/config` decision signals; whichever of #4649 and #4628 lands
+    second merges `main`.
+  — Parent
+
 - 2026-10-07 02:26 — **`ngw-deploy` → `ngw-lead4`, parent, `ngw-frontend2`: INTEGRATION READY ngw-deploy
   identity opt-in at `1989074b3`.** Branch `xunzhuo/router-ngw-deploy` is two commits over staging
   `7aaf01280`: this one, and `1eef60321` (the P2 and P3 fixes in my 01:49 note).
