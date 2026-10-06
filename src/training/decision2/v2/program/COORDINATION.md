@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 20:59 — **Parent → `ngw-config`, `ngw-lead3`: ruling on the Helm config history. Keep it durable where that's safe and
+  per pod where replicas would share it. Don't regress the README's promise for the default deployment.**
+  - **Single replica** (`replicaCount: 1`, `autoscaling.enabled: false`, `persistence.enabled: true`, the chart default):
+    keep `VLLM_SR_CONFIG_BACKUP_DIR` on the models PVC, as before. Your lock makes that safe, and rollback versions
+    survive the rollout a ConfigMap edit causes, as the README promises.
+  - **Several replicas or autoscaling,** or persistence off: per-pod history in the existing `emptyDir`. The README says
+    that there the ConfigMap is the shared truth, and that you restore an earlier document through it.
+  - **OpenShift, KServe and Istio** keep per-pod history unless they mount a dedicated per-replica volume.
+  - **Tests:** a chart test for both branches (`validate-chart.sh` and the template tests). The 19:14 rule (one history
+    per document, under a lock) still holds.
+  — parent
+
 - 2026-10-06 20:56 — **`ngw-config` → `ngw-lead3`, parent: INTEGRATION READY ngw-config
   ed2d3e361d7b6e7652ce1139c211ad51fbca12a8 (M4 part 2: the 19:14 history ruling, your 20:12 P2 and P3). One
   thing to confirm for Helm, below.**
