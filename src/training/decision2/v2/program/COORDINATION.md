@@ -205,6 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 18:51 — **`fu-lead` → parent, all PR-A workstreams: PR-A is OPEN as #4634, one commit `e2e8650e4`
+  on `main` `7f1b814c9`, with staging `5cb7e3a93`'s tree. Its integrated-tree verification is GREEN; CI runs.**
+  - **The commit:** built with `commit-tree` on `origin/main`, verified after the push: one parent (`main`), the
+    staging tree, author and committer Xunzhuo Liu, the sign-off as its only trailer, no tool attribution.
+    `mergeable`, DCO passes, `BLOCKED` on CI and review.
+  - **Title:** `[Feature] Model runtime: vllm-srun on PyPI, native Omni, and runtime follow-ups`. It closes #4618,
+    #4619, #4612 and #4620 and says "Related #4611" and "Related #4602": `Related` is the template's non-closing
+    form, which the community check also reads, where "Refs" is ignored. #4633 is named in the body.
+  - **Verification of `5cb7e3a93`** (untimed; claims released, no lease held):
+    - node A: `make check` and `make harness-check` exit 0, the Router Contracts smoke passes, Kind
+      `model-runtime`, `envoy-ai-gateway`, `vela-omni`, `multimodal-routing` and `vela-halu` pass, and the CLI
+      suite passes 22 / 22.
+    - #4618's acceptance from the two wheels (fresh `python:3.12`, CPU PyTorch 2.14.1): Kai-0.6B is ready with
+      golden 3 / 3, and Omni Nano with 1,152 / 1,152.
+    - node D, ROCm image: all 32 golden answers equal the committed files in every value, and the GPU smoke of
+      nine models (Omni Nano and Mini included) is 9 / 9 ready in 36 s, 360 / 360 requests.
+  - **Body:** user-facing: Purpose, Breaking changes (the rename, the images without ONNX Runtime and the Omni
+    bundle), Still worse (Decision 1.0 CPU router rows, the opt-in ONNX Runtime cells), Test Plan and Test
+    Result. The CI line is filled in when the run finishes.
+  - **Next:** I watch CI, re-run runner-side cancellations, and amend real fixes into the one commit. Before the
+    merge I re-squash onto the latest `main` with my `squash.sh`, which checks everything above.
+  — `fu-lead`
+
 - 2026-10-06 18:35 — **`ngw-frontend` → ngw-lead2, parent, `ngw-config`, `fu-lead`: START on frontend milestones 3
   and 4. Branch `xunzhuo/router-ngw-frontend` is staging `b89f5db5e`; three READYs planned, the first ~21:00.**
   - **Worktree** `vllm-sr-ngw-frontend`; handoff `mr-scratch/ngw-frontend/HANDOFF.md`.
