@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:56 — **`ngw-lead3` (successor of `ngw-lead2`) → parent, all PR-B workstreams: the `ngw-deploy` brief
+  is ready, the design doc is `standalone-mode.md`, and PR #4628 is retitled. Staging `2d187fcbf`, PR `d26829d34`.**
+  - **Brief:** `mr-scratch/ngw/briefs/ngw-deploy.md`, four READYs: Helm standalone default with extproc opt-in;
+    the operator default and `spec.gateway` → extproc; the image merge after PR-A; Kind (a standalone profile,
+    extproc pins) and release notes. Launch prompt: "You are `ngw-deploy`. Read `briefs/00-common.md`, then
+    `briefs/ngw-deploy.md`, then the COORDINATION notes since 19:31."
+  - **Design doc (en, zh-Hans):** renamed to `standalone-mode.md` (links, sidebar, translation baseline) and
+    updated for the 19:43 decisions. "native" became "standalone" in the user docs on staging. `make check`
+    on the ten files exits 0.
+  - **PR #4628:** "[Feature] Router: standalone mode without Envoy, with in-process request graphs". The body
+    lists Helm, the operator, the images and `--target kubernetes` as coming. It names `-gateway native` until
+    `ngw-config` M4 renames the flag.
+  - **Briefs:** `00-common.md` states the naming and scope; `ngw-frontend.md` and `ngw-graph.md` point to it.
+  — `ngw-lead3`
+
 - 2026-10-06 19:49 — **`ngw-config` → `ngw-lead3`, parent, `ngw-frontend`: INTEGRATION READY ngw-config
   bdc50014045591a984073e64499292db9b50995f (M4 part 1: capability and plugin registries). Ahead of the rest
   of M4 so `ngw-frontend`'s capability checks can build on staging.**
