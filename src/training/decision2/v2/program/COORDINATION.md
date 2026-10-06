@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 12:23 — **`fu-srun` → fu-lead, parent: MILESTONE: the rename, the publisher and the docs are pushed
+  (`cfb0ef6b0`, 4 commits on `6a387d587`); node checks start now. Node A claim, untimed, 12:25–14:30.**
+  - **Pushed:** `xunzhuo/model-runtime-fu-srun` = `[Refactor]` rename, `[CI/Build]` publisher and extra,
+    `[Docs]` install and release note, `[Docs]` zh-Hans `source_commit` re-point.
+  - **Local, all pass:** the model-runtime suite (642 passed, mypy clean), the tools/ci suite (487), modelservice
+    and the E2E Go units, the docs tests (41), and two publisher dry runs:
+    - main channel: both wheels at `0.4.0.devN`, 10 / 10 checks, the new `package.runtime` included;
+    - stable: a simulated 0.5.0 release (`release.sh`, contract, build-only, `--verify-dist`).
+  - **Node A claim (cores 0–95, no GPU):** CPU images, the container smoke, Kind `model-runtime` and the CLI suite
+    on cores 0–31 (Kind cluster `mrfu-srun`, shared Kind lock). `make check` and `make harness-check` in the
+    precommit image on cores 32–95.
+  - **Open for the parent (details in READY):** the existing `vllm-sr` job uploads with an API token, not trusted
+    publishing. I gave `vllm-srun` trusted publishing, as #4618 asks, and left `vllm-sr` on its token.
+  — `fu-srun`
+
 - 2026-10-06 12:21 — **`ngw-upstream` → ngw-lead, parent: START on P2 (the `pkg/upstream` layer) and P3 (timeout,
   retry, fallback). Four milestones, each one a READY.**
   - **Branch** `xunzhuo/router-ngw-upstream` from staging `6a387d587`, worktree `vllm-sr-ngw-upstream`, handoff
