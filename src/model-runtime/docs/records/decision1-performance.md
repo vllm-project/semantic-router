@@ -8,7 +8,10 @@ on the same node, inputs and devices.
   the huge-page default (`129be34ea`) the slow mode behind it is gone;
   re-timed alone, Kai's, Lex's and Route's router requests are 3.3%, 2.6% and
   2.1% slower at p50 and Kai's single-request p95 2.8%, wholly, and open**
-  (CPU section).
+  (CPU section). libgomp's default spin count, which `vllm-srun serve` now
+  keeps for these models, takes Kai's p50 gap from 3.3% to 2.1%. It leaves
+  Lex's and Route's at 3.5% and 6.6%, because the bundled runtime gains
+  from it too.
   Every CPU row is an interleaved A/B with a 95% interval on the difference:
   single requests on uniform and mixed lengths for all seven models, their
   throughput, and router requests. Both sides run the same FP32 math through
@@ -516,15 +519,50 @@ Throughput, requests/s, as above:
   0.8B's `exact` cells included) and Decision 2.0 on CPU, and the ROCm rows,
   where it changes only CPU-side allocations (the weights and forwards run on
   the GPU).
-- **What is left goes away with a longer OpenMP spin.** On node D with huge
-  pages, Kai's router row read +11.7 ms [+2.4, +21.1] on the runtime's
-  `GOMP_SPINCOUNT=10000` and +1.9 [−4.1, +7.9] on libgomp's default 300,000.
-  `tools/decision1_bench.py` imports the runtime package on the bundled side
-  too, so both sides of every series here run with 10,000; the runtime's
-  forward pays more for the short spin. The runtime keeps 10,000 because
-  longer-spinning PyTorch threads slowed an ONNX Runtime run that followed
-  a native forward in the same process (`d2e3e5d21`), and libgomp reads the
-  value before the process knows what it serves. These cells are open.
+- **A longer OpenMP spin narrows what is left, but does not close it.** On
+  node D with huge pages, Kai's router row read +11.7 ms [+2.4, +21.1] on the
+  runtime's `GOMP_SPINCOUNT=10000` and +1.9 [−4.1, +7.9] on libgomp's default
+  300,000. The bundled side of that diagnostic kept 10,000:
+  `tools/decision1_bench.py` imported the runtime package, which then set
+  it, on both sides of every series here. `vllm-srun serve` now picks the
+  spin count per process (design §12): libgomp's default unless the process
+  serves an ONNX Runtime model on the CPU. The A/B below runs both sides at
+  each value, as each runs by itself.
+
+  **Router requests at each spin count** (#4611, at `8b92b620f`): node C,
+  16-core lanes of NUMA node 0 with memory bound to it (Kai 32–47, Lex
+  48–63, Route 0–15). 10 interleaved rounds, fresh processes, the first 30
+  public231 prompts, C = 1, and both spin counts in every round. Runtime −
+  bundled:
+
+  | Row | Both at 10,000 | Both at libgomp's default |
+  | --- | --- | --- |
+  | Kai, p50 | +25.9 ms [+13.8, +38.0] (789.6 → 815.5) | +16.4 [+9.6, +23.2] (780.5 → 796.9) |
+  | Kai, p95 | +54.0 [−21.4, +129.4] | +50.5 [−17.3, +118.3] |
+  | Kai, one at a time | −0.055 requests/s [−0.071, −0.039] | −0.048 [−0.068, −0.027] |
+  | Kai, C = 1 | −0.032 [−0.047, −0.017] | −0.053 [−0.079, −0.027] |
+  | Lex, p50 | +29.9 ms [+15.0, +44.7] (787.3 → 817.2) | +27.3 [+15.6, +38.9] (775.6 → 802.8) |
+  | Lex, p95 | +58.6 [+14.9, +102.2] | +64.1 [+21.3, +106.8] |
+  | Lex, one at a time | −0.052 [−0.068, −0.036] | −0.060 [−0.082, −0.039] |
+  | Lex, C = 1 | −0.039 [−0.060, −0.018] | −0.053 [−0.075, −0.031] |
+  | Route, p50 | +24.7 ms [+11.1, +38.2] (792.6 → 817.3) | +50.6 [+12.6, +88.5] (766.0 → 816.6) |
+  | Route, p95 | +28.0 [−16.9, +73.0] | +112.6 [−6.4, +231.5] |
+  | Route, one at a time | −0.054 [−0.077, −0.030] | −0.107 [−0.182, −0.032] |
+  | Route, C = 1 | −0.031 [−0.048, −0.015] | −0.081 [−0.168, +0.006] |
+
+  - **Every p50 and one-at-a-time row is worse at both spin counts.** The
+    level cells are the three p95 rows at 10,000, Kai's and Route's at the
+    default, and Route's C = 1 rate at the default.
+  - **Both sides gain from the default spin.** Default − 10,000 at p50: the
+    runtime −18.6 ms [−32.5, −4.7] (Kai), −14.3 [−29.7, +1.1] (Lex) and
+    −0.7 [−11.7, +10.2] (Route); the bundled runtime −9.1 [−14.5, −3.7],
+    −11.7 [−20.3, −3.1] and −26.7 [−60.0, +6.6].
+  - **Against the bundled runtime as it runs** (libgomp's default), the
+    runtime's p50 went from +35, +42 and +51 ms on 10,000 to +16, +27 and
+    +51 ms for Kai, Lex and Route.
+  - **So the rest of the gap is not the spin count:** 2–7% of a router
+    request on these rows, open.
+  - The ONNX Runtime side of the choice is in `embed-performance.md`.
 - **Nox, a second series.** Its C = 1 rate read wholly worse at 5 and 7
   rounds in the four-lane series, then level at 8–10. Three checks looked for
   a runtime cost and found none:

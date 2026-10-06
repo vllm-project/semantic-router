@@ -1,7 +1,7 @@
 """A model runtime started by a test, and the JSON calls the tests send it.
 
 `ServeProcess` runs a serving command (`vllm-sr serve MODEL ...` in engine
-mode, or `vllm-sr-runtime serve ...`) on a free local port and stops it with
+mode, or `vllm-srun serve ...`) on a free local port and stops it with
 SIGINT, as a reader would with Ctrl-C. `page_requests` reads the requests a
 docs page tells readers to send, so the tests send exactly those.
 """

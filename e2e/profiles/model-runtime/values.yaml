@@ -4,7 +4,7 @@
 # - managed: the Router starts runtime processes itself, the cpu device
 #   group (domain, PII, guard and modality classifiers, an embedder on device
 #   auto and a reranker) and the "decisions" process group (a Decision 2.0
-#   model), through VLLM_SR_RUNTIME_COMMAND;
+#   model), through VLLM_SRUN_COMMAND;
 # - attached: model-runtime-attached serves a decision model and a feedback
 #   classifier in one process, selected by served_name;
 # - fail-open: decision-offline points at a Service with no pods.
@@ -370,9 +370,9 @@ config:
         embeddings: {enabled: true}
 
 extraEnv:
-  - name: VLLM_SR_RUNTIME_COMMAND
+  - name: VLLM_SRUN_COMMAND
     value: python3 /opt/vsr-e2e/runtime_with_fixtures.py
-  - name: VLLM_SR_RUNTIME_DIR
+  - name: VLLM_SRUN_DIR
     value: /tmp/vsr-runtime
   - name: HF_HUB_OFFLINE
     value: "1"

@@ -1407,7 +1407,7 @@ name or a local package directory; MODEL@REVISION pins a revision, and several
 MODELs share one process. --models lists models with their own name,
 revision, device and profile. In engine mode --profile selects the numerics
 profile: exact (default, identical to the released package), shared_context,
-batching, max_speed, or one a plugin installs (vllm-sr-runtime plugins lists
+batching, max_speed, or one a plugin installs (vllm-srun plugins lists
 them). Router mode starts managed runtimes itself for model_runtime
 deployments in the config.
 
@@ -1430,7 +1430,7 @@ deployments in the config.
 | `--target TEXT` | Deployment target: docker, k8s (default: docker) |
 | `--namespace TEXT` | Kubernetes namespace (k8s target only) |
 | `--context TEXT` | kubectl / Helm context (k8s target only) |
-| `--profile TEXT` | Deployment profile: dev, prod (k8s target only). Selects values-&lt;profile&gt;.yaml defaults. With MODEL: the runtime numerics profile (default exact; vllm-sr-runtime plugins lists the installed ones). |
+| `--profile TEXT` | Deployment profile: dev, prod (k8s target only). Selects values-&lt;profile&gt;.yaml defaults. With MODEL: the runtime numerics profile (default exact; vllm-srun plugins lists the installed ones). |
 | `--chart-dir TEXT` | Path to Helm chart directory (k8s target only) |
 | `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
 | `--recipe-env NAME` | Explicitly bind one host environment variable for the active Recipe. Repeat for multiple names; NAME=value is rejected. May be repeated. |
