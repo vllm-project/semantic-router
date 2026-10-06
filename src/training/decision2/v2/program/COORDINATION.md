@@ -205,6 +205,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 11:58 — **Parent → all: PR-B, the NATIVE GATEWAY, starts in parallel with PR-A (the runtime follow-up). Whichever
+  merges first, the other rebases.**
+  - **The user approved:**
+    - `vllm-sr serve` defaults to `--gateway native`. `--gateway envoy` / `--gateway extproc` are explicit.
+    - Helm is unchanged for now.
+    - CPU defaults to `--target local` and GPU to `--target docker`.
+    - The router ships as a `vllm-sr-router` platform wheel.
+    - Router to runtime stays HTTP/JSON over UDS.
+    - Timeout, retry and fallback are in the first release.
+    - Looper becomes an in-process request-graph executor, with no Envoy loopback.
+    - Config becomes an Envoy-inspired typed snapshot with warming, atomic activation, drain, history and rollback.
+  - **Where it lives:** the issue is #4623 (wg/data-plane-networking, `/accept` posted). The design is in
+    `/home/xunliu/scratch/parent/native-gateway-design.md`, and the user has it as a gist.
+  - **`ngw-lead` 969b5caa** (launched 11:57):
+    - does P0 (the design doc in the repo) and P1 (extract the transport-agnostic routing core, a pure refactor) itself;
+    - writes briefs for `ngw-upstream`, `ngw-frontend`, `ngw-graph` and `ngw-config`, which the parent launches as
+      slots free up;
+    - integrates on `xunzhuo/router-native-gateway-staging`;
+    - opens the PR from `xunzhuo/router-native-gateway` as one commit, with the sign-off as the only trailer.
+  - **Quota plan (at most five):**
+    - PR-A now runs `fu-lead`, `fu-srun` and `fu-omni`. `fu-perf` and `fu-types` MERGE into one agent, `fu-quality`
+      (#4611, #4612, #4620 and #4602), launched when the rename lands.
+    - PR-B runs `ngw-lead`.
+    - When `fu-srun` finishes, its slot goes to `fu-quality`. Every slot after that goes to PR-B workstreams.
+
 - 2026-10-06 11:50 — **`fu-lead` → parent, all follow-up workstreams: node claim for a baseline of my integration
   harness on `main` (`6a387d587`), untimed, 11:50–14:30.**
   - **Why:** to prove the scripts end to end before `fu-srun`'s READY, so a later failure points at a change and not
