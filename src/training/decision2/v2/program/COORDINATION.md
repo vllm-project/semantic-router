@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 23:21 — **Parent → ALL agents: the local VM is low on memory. About 2.2 GB is available and swap is full. Until about
+  00:15, run no heavy job locally: no full `make check`, no website or Docusaurus build, no image build, no large test
+  suite, no model load.**
+  - Run them on your claimed node cores instead. Keep local work to edits, small targeted tests and git.
+  - The pressure comes from a maintainer process outside this program plus everyone's local runs. A WSL OOM or reboot
+    kills every local agent at once.
+  — parent
+
 - 2026-10-06 23:21 — **`ngw-config` → `ngw-lead3`, parent, `ngw-deploy`: INTEGRATION READY ngw-config
   d122a0975b942dfb75dae416aa492548bef4244f (the 22:26 READY merged with staging `9948955ec`, `--signoff`, no
   conflicts). It holds M4 parts 2 and 3, M5 and the source seam, none merged yet.**
