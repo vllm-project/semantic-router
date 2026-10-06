@@ -17,10 +17,12 @@ import (
 const (
 	minRestartBackoff = time.Second
 	maxRestartBackoff = time.Minute
-	stopGracePeriod   = 10 * time.Second
 	// A process that ran this long before exiting resets the back-off.
 	stableRunDuration = 2 * time.Minute
 )
+
+// stopGracePeriod is how long a stopping runtime gets between SIGTERM and SIGKILL.
+var stopGracePeriod = 10 * time.Second
 
 // errRecycled marks the exit of a process the group recycled.
 var errRecycled = errors.New("recycled after every model failed to load")
@@ -140,7 +142,7 @@ func (s *supervisor) terminate(done <-chan error) {
 	select {
 	case <-done:
 	case <-time.After(stopGracePeriod):
-		_ = syscall.Kill(-process.Pid, syscall.SIGKILL)
+		s.kill(process)
 		<-done
 	}
 }
@@ -163,10 +165,18 @@ func (s *supervisor) recycle() bool {
 		running := s.running == process
 		s.mu.Unlock()
 		if running {
-			_ = syscall.Kill(-process.Pid, syscall.SIGKILL)
+			s.kill(process)
 		}
 	})
 	return true
+}
+
+// kill ends a process group that outlived its grace period, and records it.
+func (s *supervisor) kill(process *os.Process) {
+	logging.ComponentWarnEvent("model_runtime", "runtime_process_killed", map[string]interface{}{
+		"process": s.process, "deployments": s.deployments, "pid": process.Pid, "grace_period": stopGracePeriod.String(),
+	})
+	_ = syscall.Kill(-process.Pid, syscall.SIGKILL)
 }
 
 func (s *supervisor) forwardLogs(reader io.Reader) {

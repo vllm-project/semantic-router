@@ -17,15 +17,15 @@ const omniDeployment = "omni-calibration"
 // accepts once base64-encoded, leaving room for the JSON envelope.
 const runtimeImageBudget = modelservice.ManagedRequestBytes*3/4 - 64<<10
 
-// omniEmbedding serves the prepared bundle from a model runtime this process
-// starts (VLLM_SR_RUNTIME_COMMAND, else vllm-sr-runtime on PATH) and returns
+// omniEmbedding serves the Omni snapshot from a model runtime this process
+// starts (VLLM_SRUN_COMMAND, else vllm-srun on PATH) and returns
 // the production embedding provider over it. stop closes the provider and the
 // runtime.
-func omniEmbedding(ctx context.Context, bundle string, maxTokens int) (provider omniProvider, stop func(), err error) {
+func omniEmbedding(ctx context.Context, snapshot string, maxTokens int) (provider omniProvider, stop func(), err error) {
 	deployment := config.ModelDeployment{
 		Provider: config.ModelRuntimeProvider,
 		Device:   "cpu",
-		Artifact: bundle,
+		Artifact: snapshot,
 		Input:    config.ModelInputBudget{MaxTokens: maxTokens, Overflow: "reject"},
 	}.WithDefaults()
 	manager := modelservice.NewManager()

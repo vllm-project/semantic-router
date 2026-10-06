@@ -11,7 +11,7 @@ import (
 )
 
 // ResultCacheEnv sets how many results each served model keeps (0 disables).
-const ResultCacheEnv = "VLLM_SR_RUNTIME_RESULT_CACHE"
+const ResultCacheEnv = "VLLM_SRUN_RESULT_CACHE"
 
 const defaultResultCacheEntries = 4096
 
