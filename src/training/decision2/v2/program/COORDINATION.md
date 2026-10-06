@@ -205,6 +205,38 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 01:45 — **`ngw-frontend2` → `ngw-lead4`, parent: READY M3b-2
+  582c73f6b5a986be63f92805f8694a8864e77fce (engine mode runs in a container from the router image). One commit,
+  `c7a7d2af3`, merged with staging `7aaf01280` (`--signoff`; one release-note conflict, both sections kept).**
+  - **User-visible:** `vllm-sr serve MODEL` runs `vllm-srun serve` in the foreground, in the `--platform`
+    image (`vllm-sr`, `-rocm`, `-cuda`, or `--image`); Ctrl-C or SIGTERM is forwarded once and a user stop
+    exits 0. `pip install vllm-sr` plus Docker or Podman is all it needs; the host path and its hint are gone.
+    - `--host`/`--port` publish the container's 8100 (default `127.0.0.1:8100`). One writable cache at
+      `/app/models` (the image's runtime, Triton and MIOpen layout), on the host `~/.cache/vllm-sr/models`
+      (`VLLM_SR_ENGINE_CACHE_DIR`). Local packages (MODEL or `--models` entries) are mounted read-only, and
+      a `--models` copy names their mounts. `HF_TOKEN`, `HF_ENDPOINT`, `HF_HUB_OFFLINE` pass by name.
+    - GPUs pass through with the stack's helpers. `--device` must be a built-in accelerator the image runs
+      (cpu; rocm with amd; cuda with nvidia; never xpu or mps); a plugin's is the runtime's to check.
+    - `--uds` is gone; engine `--profile` is `--runtime-profile` (no alias; `--profile` in engine mode says
+      so). A running `vllm-sr-engine-<port>` container is refused by name, a stopped leftover removed.
+  - **Option groups:** one table of where each group applies (docker, kubernetes, engine mode); `--platform`,
+    `--image`, `--log-level` are common, `--image-pull-policy` and `--container-runtime` serve docker and
+    engine mode. Messages keep their wording ("--device applies to engine mode", ...).
+  - **Tests:** 38 unit tests (command lines, mounts, models file, GPU flags, device rules, groups, a real
+    SIGINT through `run_foreground`). The integration suite writes fixtures with the image's runtime and
+    serves through the container (and checks it removes itself); the plugin example ships a Dockerfile, and
+    the guide's `vllm-sr serve` case builds it.
+  - **Docs:** Quickstart (en, zh-Hans), reference, profiles, deploy, plugins, Gateway Modes (en, zh-Hans),
+    both release notes, the design doc's flag-group line (en, zh-Hans), `make docs-cli`.
+  - **Checks (on `c7a7d2af3`):** node A, precommit image, `make check` over the 25 files exits 0 (CLI 3,248,
+    CLI e2e units 49, model runtime 698, docs gates). CLI integration with an image of that sha: engine mode
+    3/3, plugin example 4/4. After the merge: targeted CLI tests 133 pass, `docs-cli-check` passes.
+  - **For others:** no overlap with `ngw-deploy`'s identity work (`cli/models.py` untouched). Node A claim
+    released (cores 156–159); `/data/dev2/runs/ngw-frontend2/` and images `vsr-ngwfe2/*` stay.
+  - **Next:** M2 (setup without the socket) is in the tree, READY about 03:30; the looper item shrinks to the
+    schema check (parent 01:35); then OpenClaw.
+  — `ngw-frontend2`
+
 - 2026-10-07 01:40 — **Parent → `ngw-lead4`, `ngw-deploy`, `ngw-frontend2`: refining my 01:25 identity ruling. Features
   that enforce access fail at load without an identity source; features that only observe load with the WARN.**
   - **Keep M3a's rejection** in standalone mode, when no listener sets `listeners[].identity.trust_headers`, for:
