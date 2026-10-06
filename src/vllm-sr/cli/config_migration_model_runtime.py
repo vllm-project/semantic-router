@@ -15,9 +15,9 @@ from urllib.parse import urlparse
 
 from cli.config_migration_embeddings import migrate_embedding_models
 from cli.config_migration_legacy_models import (
-    PREPARED_BUNDLE_ROOT,
     Replacement,
     is_legacy_mapping,
+    is_retired_bundle,
     is_retired_nli,
     replacement_for,
     runtime_artifact,
@@ -164,6 +164,10 @@ def _migrate_deployments(catalog: dict[str, Any], notes: MigrationNotes) -> set[
                 notes.changed(path + ".device", problem)
             _migrate_artifact(path, deployment, notes)
             migrated.add(name)
+        elif provider == MODEL_RUNTIME and is_retired_bundle(
+            deployment.get("artifact")
+        ):
+            _migrate_artifact(path, deployment, notes)
         _drop_execution_fields(path, deployment, notes)
     return migrated
 
@@ -202,12 +206,12 @@ def _migrate_artifact(
             notes.changed(
                 path + ".artifact", f"{artifact} -> {target}: {replacement.note}"
             )
-        elif target.startswith(PREPARED_BUNDLE_ROOT):
+        elif is_retired_bundle(artifact):
             deployment.pop("revision", None)
             notes.changed(
                 path + ".artifact",
-                f"{artifact} -> {target} (the prepared bundle router images ship; "
-                "elsewhere prepare it with tools/models/vela_omni/prepare.py)",
+                f"{artifact} -> {target} (router images no longer ship prepared "
+                "Omni bundles; the runtime serves the published repository)",
             )
         elif target != artifact:
             notes.changed(

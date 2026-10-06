@@ -44,14 +44,13 @@ CLASSIFIER_TESTS = (
     "TestUnifiedClassifierPublishedModels",
 )
 CACHE_TESTS = ("TestNegationFalseHitRegressionInMemory",)
-# The prepared Omni Nano bundle (VELA_OMNI_ARTIFACT) serves these.
+# The pinned Omni Nano snapshot (VELA_OMNI_ARTIFACT) serves these.
 OMNI_TESTS = {
     "classification": (
         "TestEmbeddingClassifier_IntegrationImageQueryEndToEnd",
         "TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath",
     ),
     "cache": ("TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity",),
-    "modeldownload": ("TestPublishedOmniPreparedInventory",),
 }
 SELECTIONS = (
     ("./pkg/classification", CLASSIFIER_TESTS, "classification.jsonl"),
@@ -171,7 +170,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--models-dir", type=Path, required=True)
     parser.add_argument(
-        "--omni", type=Path, required=True, help="the prepared Vela Omni Nano bundle"
+        "--omni", type=Path, required=True, help="the pinned Vela Omni Nano snapshot"
     )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
