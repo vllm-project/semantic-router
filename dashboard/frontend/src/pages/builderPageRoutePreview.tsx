@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 
-import { getAlgorithmFieldSchema, serializeFields } from '@/lib/dslMutations'
+import { getAlgorithmFieldSchema, quoteDSLString, serializeFields } from '@/lib/dslMutations'
 import type { ASTAlgoSpec, ASTModelRef, ASTPluginRef, DSLFieldObject } from '@/types/dsl'
 import type { RouteAlgoInput, RouteModelInput, RoutePluginInput } from '@/lib/dslMutations'
 
@@ -19,7 +19,9 @@ function generateRouteDslPreview(
   algorithm: RouteAlgoInput | undefined,
   plugins: RoutePluginInput[],
 ): string {
-  const descPart = description.trim() ? ` (description = "${description.trim()}")` : ''
+  const descPart = description.trim()
+    ? ` (description = ${quoteDSLString(description.trim())})`
+    : ''
   const lines: string[] = [`ROUTE ${routeName}${descPart} {`]
   lines.push(`  PRIORITY ${priority}`)
   if (whenExpr.trim()) {
@@ -33,11 +35,11 @@ function generateRouteDslPreview(
       .map((m) => {
         const attrs: string[] = []
         if (m.reasoning) attrs.push(`reasoning = true`)
-        if (m.effort) attrs.push(`effort = "${m.effort}"`)
-        if (m.paramSize) attrs.push(`param_size = "${m.paramSize}"`)
+        if (m.effort) attrs.push(`effort = ${quoteDSLString(m.effort)}`)
+        if (m.paramSize) attrs.push(`param_size = ${quoteDSLString(m.paramSize)}`)
         if (m.weight !== undefined) attrs.push(`weight = ${m.weight}`)
         const attrStr = attrs.length > 0 ? ` (${attrs.join(', ')})` : ''
-        return `"${m.model}"${attrStr}`
+        return `${quoteDSLString(m.model)}${attrStr}`
       })
     if (modelStrs.length === 1) {
       lines.push(`  MODEL ${modelStrs[0]}`)
@@ -421,6 +423,7 @@ function astModelToInput(m: ASTModelRef): RouteModelInput {
     model: m.model,
     reasoning: m.reasoning,
     effort: m.effort,
+    mode: m.mode,
     lora: m.lora,
     paramSize: m.paramSize,
     weight: m.weight,

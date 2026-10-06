@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -12,7 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -34,21 +34,21 @@ func apiModelDiagnosticRoutes() []apiRoute {
 	}
 }
 
-func (s *ClassificationAPIServer) acquireModelDiagnostics(recipe string) (*config.RouterConfig, *native.Runtime, func(), error) {
+func (s *ClassificationAPIServer) acquireModelDiagnostics(recipe string) (*config.RouterConfig, services.ModelDiagnostics, func(), error) {
 	cfg, service, releaseGeneration := s.acquireClassificationRuntime()
 	source, ok := service.(interface {
-		AcquireModelDiagnostics(string) (*native.Runtime, func(), error)
+		AcquireModelDiagnostics(string) (services.ModelDiagnostics, func(), error)
 	})
 	if !ok {
 		releaseGeneration()
-		return nil, nil, func() {}, binding.ErrNotPrepared
+		return nil, services.ModelDiagnostics{}, func() {}, binding.ErrNotPrepared
 	}
-	runtime, releaseService, err := source.AcquireModelDiagnostics(recipe)
+	diagnostics, releaseService, err := source.AcquireModelDiagnostics(recipe)
 	if err != nil {
 		releaseGeneration()
-		return nil, nil, func() {}, err
+		return nil, services.ModelDiagnostics{}, func() {}, err
 	}
-	return cfg, runtime, func() { releaseService(); releaseGeneration() }, nil
+	return cfg, diagnostics, func() { releaseService(); releaseGeneration() }, nil
 }
 
 func (s *ClassificationAPIServer) handleModelDiagnosticInventory(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +68,7 @@ func (s *ClassificationAPIServer) handleModelDiagnosticInventory(w http.Response
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-func runModelTextDiagnostic[T any](s *ClassificationAPIServer, w http.ResponseWriter, r *http.Request, call func(context.Context, *native.Runtime, ModelTextDiagnosticRequest) (ModelDiagnosticResponse[T], error)) {
+func runModelTextDiagnostic[T any](s *ClassificationAPIServer, w http.ResponseWriter, r *http.Request, call func(context.Context, services.ModelDiagnostics, ModelTextDiagnosticRequest) (ModelDiagnosticResponse[T], error)) {
 	var request ModelTextDiagnosticRequest
 	if err := s.parseStrictJSONRequest(r, &request); err != nil {
 		s.writeJSONRequestError(w, err)
@@ -92,8 +92,8 @@ func runModelTextDiagnostic[T any](s *ClassificationAPIServer, w http.ResponseWr
 }
 
 func (s *ClassificationAPIServer) handleModelDiagnosticLabels(w http.ResponseWriter, r *http.Request) {
-	runModelTextDiagnostic(s, w, r, func(ctx context.Context, runtime *native.Runtime, req ModelTextDiagnosticRequest) (ModelDiagnosticResponse[ModelDiagnosticLabelsResult], error) {
-		result, err := runtime.DiagnoseLabels(ctx, req.Recipe, req.Binding, req.Text)
+	runModelTextDiagnostic(s, w, r, func(ctx context.Context, runtime services.ModelDiagnostics, req ModelTextDiagnosticRequest) (ModelDiagnosticResponse[ModelDiagnosticLabelsResult], error) {
+		result, err := runtime.Tasks.DiagnoseLabels(ctx, req.Recipe, req.Binding, req.Text)
 		out := ModelDiagnosticLabelsResult{}
 		if d := result.Result.Distribution; d != nil {
 			out.Probabilities = d.Probabilities
@@ -111,8 +111,8 @@ func (s *ClassificationAPIServer) handleModelDiagnosticLabels(w http.ResponseWri
 }
 
 func (s *ClassificationAPIServer) handleModelDiagnosticScores(w http.ResponseWriter, r *http.Request) {
-	runModelTextDiagnostic(s, w, r, func(ctx context.Context, runtime *native.Runtime, req ModelTextDiagnosticRequest) (ModelDiagnosticResponse[ModelDiagnosticScoresResult], error) {
-		result, err := runtime.DiagnoseScores(ctx, req.Recipe, req.Binding, req.Text)
+	runModelTextDiagnostic(s, w, r, func(ctx context.Context, runtime services.ModelDiagnostics, req ModelTextDiagnosticRequest) (ModelDiagnosticResponse[ModelDiagnosticScoresResult], error) {
+		result, err := runtime.Tasks.DiagnoseScores(ctx, req.Recipe, req.Binding, req.Text)
 		d := result.Result
 		out := ModelDiagnosticScoresResult{Scores: d.Scores, Input: diagnosticInput(d.Input), PolicySHA256: d.PolicySHA256, Thresholds: d.Thresholds, WindowRanges: d.WindowRanges}
 		if d.Windows != nil {
@@ -126,8 +126,8 @@ func (s *ClassificationAPIServer) handleModelDiagnosticScores(w http.ResponseWri
 }
 
 func (s *ClassificationAPIServer) handleModelDiagnosticTokens(w http.ResponseWriter, r *http.Request) {
-	runModelTextDiagnostic(s, w, r, func(ctx context.Context, runtime *native.Runtime, req ModelTextDiagnosticRequest) (ModelDiagnosticResponse[ModelDiagnosticTokensResult], error) {
-		result, err := runtime.DiagnoseTokens(ctx, req.Recipe, req.Binding, req.Text)
+	runModelTextDiagnostic(s, w, r, func(ctx context.Context, runtime services.ModelDiagnostics, req ModelTextDiagnosticRequest) (ModelDiagnosticResponse[ModelDiagnosticTokensResult], error) {
+		result, err := runtime.Tasks.DiagnoseTokens(ctx, req.Recipe, req.Binding, req.Text)
 		d := result.Result
 		out := ModelDiagnosticTokensResult{ScanIncomplete: errors.Is(err, tasks.ErrTokenSpansTruncated), Entities: []ModelDiagnosticEntity{}, Input: diagnosticInput(d.Spans.Input), ScoresAvailable: d.Spans.HasScores(), TruncatedAt: d.Spans.TruncatedAt, Windows: d.Windows, ContentTokens: d.ContentTokens}
 		for _, v := range d.Spans.Entities {
@@ -143,8 +143,8 @@ func (s *ClassificationAPIServer) handleModelDiagnosticTokens(w http.ResponseWri
 }
 
 func (s *ClassificationAPIServer) handleModelDiagnosticEmbedding(w http.ResponseWriter, r *http.Request) {
-	runModelTextDiagnostic(s, w, r, func(ctx context.Context, runtime *native.Runtime, req ModelTextDiagnosticRequest) (ModelDiagnosticResponse[ModelDiagnosticEmbeddingResult], error) {
-		result, err := runtime.DiagnoseEmbedding(ctx, req.Recipe, req.Binding, req.Text)
+	runModelTextDiagnostic(s, w, r, func(ctx context.Context, runtime services.ModelDiagnostics, req ModelTextDiagnosticRequest) (ModelDiagnosticResponse[ModelDiagnosticEmbeddingResult], error) {
+		result, err := runtime.Tasks.DiagnoseEmbedding(ctx, req.Recipe, req.Binding, req.Text)
 		return ModelDiagnosticResponse[ModelDiagnosticEmbeddingResult]{Binding: diagnosticBinding(result.Binding), Result: ModelDiagnosticEmbeddingResult{Embedding: result.Result.Embedding, Input: diagnosticInput(result.Result.Input)}}, err
 	})
 }
@@ -177,8 +177,8 @@ func (s *ClassificationAPIServer) handleModelDiagnosticRerank(w http.ResponseWri
 	for i, p := range req.Pairs {
 		pairs[i] = tasks.QueryDocument{Query: p.Query, Document: p.Document}
 	}
-	result, err := executeModelDiagnostic(w, r, release, func(ctx context.Context) (native.DiagnosticResult[tasks.RelevanceScores], error) {
-		return runtime.DiagnoseRerank(ctx, req.Recipe, req.Binding, pairs)
+	result, err := executeModelDiagnostic(w, r, release, func(ctx context.Context) (serving.DiagnosticResult[tasks.RelevanceScores], error) {
+		return runtime.Tasks.DiagnoseRerank(ctx, req.Recipe, req.Binding, pairs)
 	})
 	if err != nil {
 		s.writeModelDiagnosticError(w, err)
@@ -209,9 +209,9 @@ func (s *ClassificationAPIServer) writeModelDiagnosticError(w http.ResponseWrite
 }
 
 // executeModelDiagnostic bounds the response while transferring the lease to
-// the actual inference. A canceled native forward cannot be unloaded early.
-// Its prepared resource retains the one shared admission ticket; the API does
-// not add a competing admission policy or discover another model instance.
+// the actual inference, which keeps the binding's one shared admission ticket
+// until the model call returns; the API does not add a competing admission
+// policy or discover another model instance.
 func executeModelDiagnostic[T any](w http.ResponseWriter, r *http.Request, release func(), invoke func(context.Context) (T, error)) (T, error) {
 	var zero T
 	ctx, cancel := context.WithTimeout(r.Context(), apiWriteTimeout)

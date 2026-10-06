@@ -32,6 +32,7 @@ type Signals struct {
 	MetadataRules      []MetadataRule         `yaml:"metadata,omitempty"`
 	ClassifierRules    []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 	InputModalityRules []InputModalityRule    `yaml:"input_modality,omitempty"`
+	DecisionRules      []DecisionSignalRule   `yaml:"decision,omitempty"`
 }
 
 // HallucinationRule declares the response-stage hallucination observation:
@@ -44,10 +45,6 @@ type Signals struct {
 type HallucinationRule struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description,omitempty"`
-	// UseNLI asks the detector for span-level NLI explanations. It decides how
-	// the observation is produced, so it lives on the rule; the plugin's
-	// use_nli is ignored once a rule is declared.
-	UseNLI bool `yaml:"use_nli,omitempty"`
 }
 
 // EventRule matches structured event metadata extracted from request text.

@@ -54,6 +54,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	if !ctx.Routing.IsResolved() {
 		r.resolveEntrypointForRequest(originalModel, ctx)
 	}
+	observeStreamedBodyArrival(ctx)
 	populatePinnedSessionFromHeaders(ctx)
 	history := signalConversationHistoryFromSnapshot(snapshot)
 	applyRequestContextEstimate(snapshot, ctx)
@@ -94,7 +95,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		return requestDecisionState{}, response
 	}
 	if ragErr := r.executeRAGPlugin(ctx, decisionName); ragErr != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return requestDecisionState{}, r.createErrorResponse(503, fmt.Sprintf("RAG retrieval failed: %v", ragErr))
 	}
@@ -125,7 +126,7 @@ func (r *OpenAIRouter) runPostDecisionImmediateStages(
 		)
 		ctx.ImmediateProtocolError = protocolError
 		metrics.RecordRequestError(targetModel, "unsupported_dynamo_nvext_looper")
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return r.createErrorResponse(http.StatusBadRequest, protocolError.Error())
 	}
@@ -136,12 +137,12 @@ func (r *OpenAIRouter) runPostDecisionImmediateStages(
 			ctx.ImmediateProtocolError = &copy
 		}
 		metrics.RecordRequestError(targetModel, "unsupported_dynamo_nvext_backend")
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return r.createErrorResponse(http.StatusBadRequest, err.Error())
 	}
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
 		r.updateRouterReplayStatus(ctx, 200, false)
@@ -154,14 +155,15 @@ func (r *OpenAIRouter) runPostDecisionImmediateStages(
 		return resp
 	}
 	metrics.RecordModelRequest(selectedModel)
+	ctx.InflightModel = selectedModel
 	ctx.InflightToken = inflight.Begin(selectedModel)
 	if resp := r.applyRateLimit(ctx, selectedModel); resp != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return resp
 	}
 	if resp := r.applyCacheChecks(ctx, selectedModel, decisionName); resp != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return resp
 	}
