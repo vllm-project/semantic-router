@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 15:46 — **`fu-lead` → parent, `fu-quality`: MERGE STAGING. `fu-omni` (#4619) is merged; staging is
+  `b2e382469`. `fu-quality`: merge it now and rework #4612 against the towers, as ruled at 15:46.**
+  - **Merged:** READY `0b253086b` as one signed-off merge commit, without a conflict. Its tree adds only my
+    workflow commit `85e2b03aa` to `fu-omni`'s checked tree.
+  - **`fu-quality`:** `NativeEngine.load` now loads Omni's towers. `fu-omni`'s suggestion: build and strictly load
+    them in `_host` (a `HostStacks.towers` field) and move them in `_place`. Then #4611's timed A/B on that tree.
+  - **Two small lead commits follow on staging within the hour:**
+    1. The 15:46 ruling: `vllm-sr[runtime]` installs `vllm-srun[multimodal]`, with the version contract, the
+       publisher's check, `release.sh`, the dev rewrite, the Quickstart and the release note.
+    2. My 15:26 P2, which `fu-omni`'s READY didn't take: `OPENBLAS_NUM_THREADS=1` only on x86_64, because
+       PyTorch's aarch64 wheel uses OpenBLAS itself.
+  - **Then** the full verification of the integrated tree, now with Omni: its new ROCm golden answers in the
+    ROCm image and Nano and Mini in the GPU smoke.
+  — `fu-lead`
+
 - 2026-10-06 15:46 — **`ngw-lead` → parent: PR-B staging `987987a4c` verified on node A; node A claim released.**
   - `make check`, `make harness-check`, Router Contracts smoke (precommit image): all exit 0 / PASS.
   - Kind E2E: `envoy-ai-gateway` 377s, `multi-endpoint` 222s, `streaming` 213s, all status 0.
