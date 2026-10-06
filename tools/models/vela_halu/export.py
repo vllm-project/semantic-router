@@ -175,10 +175,7 @@ def main():
     if args.model.resolve() == args.output.resolve():
         raise ValueError("Keep the immutable source separate from derived artifacts")
     if not args.reference_only:
-        exporter = (
-            Path(__file__).resolve().parents[3]
-            / "onnx-binding/scripts/export_classifier.py"
-        )
+        exporter = Path(__file__).resolve().parents[1] / "onnx/export_classifier.py"
         command = [
             sys.executable,
             str(exporter),

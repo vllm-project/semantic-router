@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -14,7 +14,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -89,7 +89,7 @@ func TestEmbeddingInventoryUsesActualGlobalAPIAndRefresh(t *testing.T) {
 	}
 }
 
-func prepareEmbeddingInventoryOwner(t *testing.T, runtime *native.Runtime, recipe, name string) {
+func prepareEmbeddingInventoryOwner(t *testing.T, runtime *serving.Runtime, recipe, name string) {
 	t.Helper()
 	task, err := binding.Register(binding.NewRegistry(runtime.ObserveBinding), "embedding.v1", func(string) error { return nil }, func(string, string) error { return nil })
 	if err != nil {
@@ -110,7 +110,7 @@ func prepareEmbeddingInventoryOwner(t *testing.T, runtime *native.Runtime, recip
 
 func TestEmbeddingInventoryPreservesOwnersAndReleasesEveryGeneration(t *testing.T) {
 	pool := binding.NewPool()
-	runtime := native.New(pool)
+	runtime := serving.New(nil, pool)
 	_, service := preparedInventoryService(t, runtime)
 	prepareEmbeddingInventoryOwner(t, runtime, "@global", "api+tools.embedding")
 	prepareEmbeddingInventoryOwner(t, runtime, "@global", "response_cache.embedding")
@@ -139,7 +139,7 @@ func TestEmbeddingInventoryPreservesOwnersAndReleasesEveryGeneration(t *testing.
 			t.Fatalf("shared physical instance erased owner %q", owner)
 		}
 	}
-	_, next := preparedInventoryService(t, native.New(pool))
+	_, next := preparedInventoryService(t, serving.New(nil, pool))
 	for name, replacement := range map[string]classificationService{"empty prepared generation": next, "unavailable placeholder": services.NewPlaceholderClassificationService()} {
 		t.Run(name, func(t *testing.T) {
 			current = replacement

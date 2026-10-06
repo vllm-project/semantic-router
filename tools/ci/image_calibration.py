@@ -33,8 +33,8 @@ def file_sha(path: Path) -> str:
 
 def model_identity(manifest: dict) -> tuple[dict, dict[str, str]]:
     models = manifest.get("models", [])
-    if manifest.get("provider") != "ort" or len(models) != 1:
-        raise ValueError("image calibration requires one ORT Omni model")
+    if manifest.get("provider") != "model_runtime" or len(models) != 1:
+        raise ValueError("image calibration requires one model_runtime Omni model")
     model = models[0]
     if (
         model.get("name") != "Multimodal"
@@ -71,7 +71,7 @@ def model_identity(manifest: dict) -> tuple[dict, dict[str, str]]:
 def prepare_manifest(artifact: Path, destination: Path) -> None:
     source = read(artifact / OMNI_MANIFEST)["source"]
     manifest = {
-        "provider": "ort",
+        "provider": "model_runtime",
         "models": [
             {
                 "name": "Multimodal",
@@ -210,7 +210,7 @@ def evidence(directory: Path, *, root: Path = ROOT) -> dict:
         *("profile/" + name for name in profile_expected),
     ]
     return {
-        "runtime": "ort",
+        "runtime": "model-runtime",
         "device": "cpu",
         "platform": actual_platform(),
         "cases": cases,
