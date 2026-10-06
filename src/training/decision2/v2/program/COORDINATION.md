@@ -205,6 +205,37 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 21:48 — **`ngw-config` → `ngw-lead3`, parent, `ngw-frontend`: INTEGRATION READY ngw-config
+  3c0c538b0b3b18693ef34d288cda76cb35b2965f (M4 part 3: external algorithm types, the 20:59 Helm ruling, the
+  dashboard image). Includes everything in part 2 (`ed2d3e361`). DECISION NEEDED on signals, below.**
+  - **Commits since part 2:** `41f549ad2` algorithm types; `aa31a0e61` merges staging `fe9f1d916`
+    (`--signoff`, clean); `76b31304d` cherry-picks `ngw-frontend`'s `78c541ba1` (pkg/extension COPY and its
+    test); `9d3cc1557` adds the `pkg/configsnapshot/historylock` COPY that test then asks for (the Dashboard
+    takes the history lock); `3c0c538b0` the Helm ruling.
+  - **Algorithms (the (b) carrier):** `config.RegisterDecisionAlgorithm(config.NewDecisionAlgorithmType[P](...))`.
+    A decision writes the block under the type's name (`algorithm: {type: x, x: {...}}`), held in
+    `AlgorithmConfig.Extensions`. The loader accepts it only for a registered type, so a typo still fails with
+    a suggestion; export keeps it; the schema generator adds each registered type's block. The CLI keeps such
+    a block for the Router and still refuses unknown and retired types. Retired names can't be registered.
+    At request time the payload implements `selection.ExtensionAlgorithm`, behind `selectorForDecisionMethod`.
+    `internal/extensiontest`: a test-only algorithm loads, refuses a bad value, an unknown field and a
+    misspelled block, survives export and reload, is in the generated schema, and picks `b` end to end
+    through the standalone gateway. The generated schema and contract with no extension stay byte-identical.
+  - **Helm (20:59):** one replica with a persistent models volume (the default) or a custom `/app/models`
+    mount keeps `/app/models/.vllm-sr/config-backups`. Several replicas, autoscaling or
+    `persistence.enabled=false` use `/tmp/vllm-sr/config-history` (the `/tmp` `emptyDir`). `validate-chart.sh`
+    checks both branches; it now also accepts Helm 4's wording of the empty-`configOverride` error. The full
+    validator exits 0 on Helm v4.2.3. README restored for the default; OpenShift, KServe, Istio stay per pod.
+  - **Checks:** `make check` exits 0 on the algorithm change set (13 files: 88 Go packages, the CLI suite,
+    dashboard, schema, generated contracts) and on the Helm set. `-race` clean on `internal/extensiontest`.
+  - **DECISION NEEDED (lead): external signal families.** A carrier for them (`routing.signals.<collection>`)
+    reaches the canonical schema, rule-reference validation, the classification pipeline, the decision
+    engine's match results, the DSL and the CLI models. It's several hours with real regression risk.
+    I propose it as a follow-up issue after PR-B, with this design, and M5 now. Signal families already sit on
+    a registry for the built-ins; plugins, algorithms, capabilities and graph nodes are open today. Say
+    if you want it in PR-B instead; I'd do it after M5.
+  — `ngw-config`
+
 - 2026-10-06 21:40 — **Parent → `ngw-lead3`, `ngw-frontend`: pick `78c541ba1` (the dashboard image fix) into staging now, on its
   own, ahead of M3b-1. Every image build and E2E lane that builds the dashboard is broken until it lands.**
   - The derived-package test stays with it, so the next Router import the Dockerfile misses fails in `make check`
