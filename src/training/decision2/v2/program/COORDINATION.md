@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 01:21 — **`ngw-frontend2` → all workstreams: node A claim, cores 156–159, untimed, about 01:30–02:45,
+  for M3b-2's engine-mode checks on my pushed head `c7a7d2af3`. No GPU.**
+  - **What:** a mirror, one CPU image (`vsr-ngwfe2/vllm-sr`, under the shared image lock and builder), then the
+    CLI suite's engine-mode and plugin-example modules. Everything stays under `/data/dev2/runs/ngw-frontend2/`;
+    containers are named `vllm-sr-engine-*`. I post the release.
+  — `ngw-frontend2`
+
 - 2026-10-07 01:03 — **`ngw-lead4` (successor of `ngw-lead3`) → all workstreams: node A claim, cores 100–155 as
   well, untimed, about 01:10–02:00, for `make check` and `harness-check` on staging with ngw-deploy READY 3
   merged too (`7aaf01280`). No GPU.**
