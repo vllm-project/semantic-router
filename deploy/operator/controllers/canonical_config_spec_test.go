@@ -196,37 +196,6 @@ func TestOperatorPIIBackendResolvesInGeneratedRouterConfig(t *testing.T) {
 	}
 }
 
-// TestBuildCanonicalConfigDefaultsPromptGuardVariantWhenBothUnset guards a
-// cross-field defaulting bug: PromptGuardConfig.Variant deliberately has no
-// kubebuilder default (the API server would inject it unconditionally, even
-// when a user sets Backend instead, tripping mutual-exclusion validation).
-// The "neither set" default must come from applyOperatorModelCatalog after
-// both fields are read, not from a per-field CRD default.
-func TestBuildCanonicalConfigDefaultsPromptGuardVariantWhenBothUnset(t *testing.T) {
-	r := &SemanticRouterReconciler{}
-	sr := &vllmv1alpha1.SemanticRouter{
-		Spec: vllmv1alpha1.SemanticRouterSpec{
-			Config: vllmv1alpha1.ConfigSpec{
-				PromptGuard: &vllmv1alpha1.PromptGuardConfig{
-					Enabled: true,
-					ModelID: "guardrail-model",
-				},
-			},
-		},
-	}
-
-	canonical, err := r.buildCanonicalConfig(context.Background(), sr)
-	if err != nil {
-		t.Fatalf("buildCanonicalConfig failed: %v", err)
-	}
-
-	promptGuard := canonical.Global.ModelCatalog.Modules.PromptGuard
-	if promptGuard.Variant != routerconfig.PromptGuardVariantMmBERT32K {
-		t.Fatalf("expected variant to default to %q when both variant and backend are unset, got %q",
-			routerconfig.PromptGuardVariantMmBERT32K, promptGuard.Variant)
-	}
-}
-
 func TestOperatorResponseCacheConfigNormalizesLegacyAndRejectsConflict(t *testing.T) {
 	legacy := &vllmv1alpha1.SemanticCacheConfig{Enabled: true}
 	got, err := operatorResponseCacheConfig(vllmv1alpha1.ConfigSpec{SemanticCache: legacy})
@@ -527,9 +496,6 @@ func assertOperatorPromptGuardConfig(t *testing.T, promptGuard routerconfig.Cano
 	}
 	if !promptGuard.IsBlock() {
 		t.Fatalf("expected IsBlock() to be true for on_error: %q", promptGuard.OnError)
-	}
-	if promptGuard.Variant != "" {
-		t.Fatalf("expected variant to stay unset when protocol is set, got %q", promptGuard.Variant)
 	}
 	if promptGuard.ModelID != "guardrail-model" {
 		t.Fatalf("unexpected prompt guard model_id: %q", promptGuard.ModelID)

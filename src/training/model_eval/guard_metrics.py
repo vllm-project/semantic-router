@@ -51,7 +51,7 @@ def token_windows(
     window rather than to the whole text. `size` counts the special tokens the
     model adds, the content width is what is left after them, and a window
     starts every `width - overlap` tokens until the document is covered. This
-    is the geometry `candle-binding/src/core/sequence_windows.rs` scans with.
+    is the geometry the model runtime's `text/windows.py` scans with.
     """
     width = size - specials
     if width <= 0 or overlap >= width:

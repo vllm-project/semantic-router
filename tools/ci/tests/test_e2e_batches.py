@@ -160,10 +160,10 @@ class E2EBatchTests(unittest.TestCase):
         self.assertEqual(result["after_retry_clusters"], [])
         self.assertEqual(result["after_retry_states"], [])
 
-    def test_ort_profile_keeps_its_declared_runtime_and_full_baseline(self):
+    def test_model_profile_keeps_its_declared_runtime_and_full_baseline(self):
         result = self.execute(profiles=("vela-omni",), full=True)
         self.assertTrue(result["passed"])
-        self.assertEqual(result["receipts"][0]["runtime"], "ort")
+        self.assertEqual(result["receipts"][0]["runtime"], "model-runtime")
         calls = [row for row in result["calls"] if row["kind"] == "profile"]
         self.assertEqual(calls[0]["baseline"], "full")
 
@@ -178,7 +178,7 @@ class E2EBatchTests(unittest.TestCase):
             elif condition == "images":
                 changed["images"] = ["extproc"]
             else:
-                changed["verifications"][0]["executor"] = "native"
+                changed["verifications"][0]["executor"] = "platform"
             with self.subTest(condition=condition), self.assertRaises(ValueError):
                 validate_execution_batch(changed, "e2e")
 

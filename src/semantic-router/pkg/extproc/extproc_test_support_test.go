@@ -10,7 +10,6 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	. "github.com/onsi/ginkgo/v2"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
@@ -85,11 +84,6 @@ func createTestRouterWithToolsProvider(cfg *config.RouterConfig, provider embedd
 		return nil, err
 	}
 
-	err = initTestBERTModel(classifierCfg)
-	if err != nil {
-		return nil, err
-	}
-
 	semanticCache, err := newTestSemanticCache(classifierCfg)
 	if err != nil {
 		return nil, err
@@ -149,13 +143,6 @@ func loadTestPIIMapping(cfg *config.RouterConfig) (*classification.PIIMapping, e
 		return nil, nil
 	}
 	return classification.LoadPIIMapping(cfg.PIIMappingPath)
-}
-
-func initTestBERTModel(cfg *config.RouterConfig) error {
-	if err := candle_binding.InitModel(cfg.BertModelPath, cfg.UseCPU); err != nil {
-		return fmt.Errorf("failed to initialize BERT model: %w", err)
-	}
-	return nil
 }
 
 func newTestSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {

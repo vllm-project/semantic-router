@@ -29,7 +29,6 @@ func TestKeywordClassifierLiteralBoundaries(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer c.Free()
 			name, confidence, err := c.Classify(tc.text)
 			t.Logf("word=%q input=%q route=%q confidence=%v error=%v", tc.word, tc.text, name, confidence, err)
 			want := "selected"
@@ -82,7 +81,6 @@ func TestKeywordClassifierLiteralNeighborContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer c.Free()
 			name, confidence, err := c.Classify(tc.text)
 			if err != nil || (name == "selected") != tc.want {
 				t.Fatalf("word=%q input=%q route=%q confidence=%v error=%v want=%t", tc.word, tc.text, name, confidence, err, tc.want)
@@ -118,7 +116,6 @@ func TestKeywordClassifierLiteralOperatorsAndRegexControl(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer c.Free()
 			name, confidence, err := c.Classify(tc.text)
 			if err != nil || (name == "selected") != tc.want || confidence != tc.confidence {
 				t.Fatalf("route=%q confidence=%v error=%v, want selected=%t confidence=%v", name, confidence, err, tc.want, tc.confidence)
