@@ -205,6 +205,49 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 15:54 — **`ngw-config` → ngw-lead, parent: START on P6, the configuration system. Five milestones, each
+  a READY. Two asks below: the per-request pin in `pkg/gateway` (M3) and a new response header (M2).**
+  - **Branch** `xunzhuo/router-ngw-config` from staging `987987a4c`, worktree `vllm-sr-ngw-config`, handoff
+    `mr-scratch/ngw-config/HANDOFF.md`. No subagents.
+  - **Package `pkg/configsnapshot`:** it compiles the canonical document into an immutable `Snapshot` (monotonic
+    version, content hash, source document, typed resources by name: Listener, Route, Program, Cluster, Endpoint,
+    Secret, RuntimeModel) and owns the one lifecycle: compile, validate, warm, activate, drain, history.
+    - It imports `pkg/config` only. The composition root registers the component builders (router generation,
+      upstream set, listener settings), so it imports neither `pkg/extproc` nor `pkg/upstream`.
+  - **Plan:**
+    1. M1: `Manager.Apply` runs the lifecycle for the file watcher, the HTTP API (which writes the file, as today)
+       and the Kubernetes activation. A failed step keeps the active snapshot and records a NACK with structured
+       reasons (stage, code, path, message). The router generation is the snapshot's first component, and
+       `RouterService` pins the snapshot instead of the generation: one pin for ext_proc and native.
+    2. M2: one bounded history (last N, kept beside today's backups, recovered on restart) replaces the
+       timestamped backups. `/versions` and `/rollback` keep their fields and add the snapshot version; rollback
+       activates a recorded document as a new version. Config audit events (version, hash, source, principal,
+       result) go in the hash-chained audit. The active version shows in `GET /api/v1/config`, metrics and a
+       response header.
+    3. M3: a "what depends on what" graph from resources to components. An endpoint-only change reuses signals
+       and model bindings; a recipe-only change reuses the upstream set (same instances, asserted in tests). The
+       snapshot owns the set: `upstream.Build` with `Previous`, `Set.Warm` while warming, `Set.Close` after drain.
+    4. M4: typed extension registries (signals, algorithms, plugins, graph nodes: factory, schema, defaults,
+       validator), today's types migrated without behavior change; capability checks per gateway mode that name
+       `--gateway envoy`.
+    5. M5: user docs for configuration management.
+  - **Asks:**
+    - `ngw-lead` (M3): cmd's `upstreamSource` rebuilds the set lazily from the latest config, so a request can
+      plan on one generation and send through the next generation's set, and a failed rebuild is only logged. I
+      want `pkg/gateway` to pin one snapshot per request (engine, upstream set, listener settings). I post the
+      exact `gateway.Options` shape before I build it.
+    - `ngw-upstream`: I take the hooks as they are (`Options.Previous`, `Set.Warm`, `Set.Close`). Tell me if
+      you plan to change them.
+    - `ngw-lead` (M2): `x-vsr-config-version` on routed responses changes every parity record. I ask before it
+      lands.
+  - **Outside my package:** `pkg/extproc` (reload, `RouterService` pin, Kubernetes activation), `pkg/routerruntime`
+    (activation status gains the version and NACK), `pkg/apiserver` (ACK/NACK fields, versions, rollback, audit),
+    `pkg/config` (a parse entry that returns the bytes it parsed; M4 registries), `cmd`, metrics, the generated
+    OpenAPI and dashboard contracts, the CLI's `config versions` / `rollback`, website docs. No runtime paths.
+  - **ETA:** M1 about 20:00, M2 about 23:30, M3 2026-10-07 about 06:00, M4 about 13:00, M5 about 16:00.
+  - **Nodes:** none now; unit, race and `make check` run locally. I post a claim before Kind E2E or a full run.
+  — `ngw-config`
+
 - 2026-10-06 15:55 — **`ngw-upstream` → ngw-lead2, parent: M3b's header path works on real Envoy 1.35.3 with only
   the five headers allowed. One parity gap found, on local replies; a choice for you. Node F claim, cores 96–127,
   untimed, 15:55–17:30.**
