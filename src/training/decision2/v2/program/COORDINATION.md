@@ -205,6 +205,35 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 22:58 — **`ngw-graph` → `ngw-lead3`, parent: INTEGRATION READY ngw-graph
+  8038fbdf0c24238272f611deeb8990c284fae32d (READY 4 of 6: decision-level `fallback` and one fallback resolver,
+  the parent's 17:00 ruling). It contains READY 3 and merges staging `23e272398`.**
+  - **User-visible, a config contract change:** `routing.decisions[].fallback` (a recipe's decisions too) takes
+    the recipe block's fields except `circuit_breaker`: tri-state `enabled`, `max_attempts`, `total_timeout`,
+    `per_attempt_timeout`, `retryable_status_codes`. `circuit_breaker` there fails at load, with its path.
+    Candidates stay the decision's ranked eligible models; a provider model has no fallback of its own.
+  - **One resolver (`pkg/fallback`):** field by field, most specific first: a request-graph step's override, the
+    decision's, the recipe's `routing.fallback`, then `global.router.fallback`. `FallbackPolicy.Resolve` lays
+    the overrides over the recipe's policy and `Orchestrator.For` gives a call that view, sharing the circuit
+    breakers. Both modes take their orchestrator through the router, so Envoy mode's response-phase fallback
+    and the standalone chain run the same policy. Load-time validation checks the policy it resolves to.
+  - **The step layer** rides on `routing.Hop.Fallback`. Looper hops carry a disabled override, so Looper calls
+    still never fall back across models (the gate is unchanged); a looped-back hop still never does.
+  - **Surfaces:** Go type and validation, generated schema (`FallbackOverride`), `cli/models.py` (which also
+    gains the recipe-level `routing.fallback` it rejected until now), the dashboard's decision editor, DSL
+    preservation, the reference config, and a "Fall back to another model" section in the model configuration
+    guide (layers, precedence, fields, the standalone local-reply difference).
+  - **Evidence:** `internal/gatewayparity` serves four decision overrides in both modes (on over a disabled
+    recipe, off over an enabled one, statuses replacing the recipe's, a status outside them); config round
+    trip and five fail-fast cases; resolver table tests; CLI 8 tests; dashboard tests.
+  - **Checks (local):** `make check` over the 25 files exits 0 (89 Go packages, dashboard 1,031, generated
+    contracts, docs and translation gates). One run hit `TestSupervisorLogsAProcessKilledAfterTheGracePeriod`
+    in `pkg/modelservice` (untouched); it passed 5/5 alone and on the rerun. After the staging merge: build,
+    the fallback, config, gatewayparity, routing and gate tests pass.
+  - **Next:** READY 5, the ext_proc switch (with `ngw-config` for the upstream part) and the loopback's
+    retirement; the CLI's endpoint wiring is now `ngw-frontend2`'s, so I'll coordinate with whoever has it.
+  — `ngw-graph`
+
 - 2026-10-06 22:49 — **Parent → `fu-lead`, `ngw-lead3`, all PR-B workstreams: PR-A #4634 MERGED as `c94fff6a5` on `main`. USER decision:
   PR-B also removes OpenClaw and `vllm-sr-sim` everywhere (code, CI, current docs, Helm). Design nothing around either
   from now on.**
