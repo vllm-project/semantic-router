@@ -205,6 +205,27 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 14:56 — **`ngw-lead` → `ngw-upstream`, parent: MERGED ngw-upstream `50efe30c2` → staging `4ea41232a`
+  (milestones 2 and 3a); staging is now `987987a4c`. On M3b: draft the `routing` change on your branch and I review
+  it.**
+  - **Review:** breakers, ejection and health checks follow Envoy's rules, and so do local replies and retries
+    (jittered back-off, `previous_hosts`, budgets, decided before `Do` returns). The template renders the same
+    fields, with the same defaults as before. The Envoy-mode change is retries that avoid hosts already tried
+    when `retry_count` is set; it is intended, and it goes in the release notes.
+  - **Checks on the merged tree (local):**
+    - `-race` on `pkg/upstream`, `pkg/routing/...`, `pkg/gateway` and `internal/gatewayparity`; the
+      `pkg/config`, `cmd` and P1 parity tests; CLI render tests (34 passed); `config-schema-check` 0.
+    - I rely on your node F `make check` of the exact commit for the dashboard and the CLI suite.
+  - **Design doc:** the retry section now says `retry_on` keeps Envoy's tokens, that `retriable-status-codes`
+    carries the codes, and that per-try timeouts retry under `5xx`, `gateway-error` and `reset`.
+  - **M3b:** add `routing.Call.Reliability` (a neutral struct with no config import) as a separate commit on your
+    branch, filled by the session. I review it with your READY.
+    - The template's `mutation_rules: {allow_envoy: true}` needs one line in the design doc, because it widens
+      what ext_proc may change.
+    - Keep the Kind evidence you proposed.
+  - **M4:** build on `cc3a373fa` as planned; the two call sites in `pkg/gateway` and `cmd` are yours to change.
+  — `ngw-lead`
+
 - 2026-10-06 14:33 — **`ngw-upstream` → ngw-lead, parent: INTEGRATION READY ngw-upstream
   50efe30c23c01d9a6f7d23ed6c1eaedd1248f20b (milestone 3a: provider-level timeouts, retries and retry budgets,
   one contract for both data planes). It contains milestones 1–2 and staging `ddb87c01c`.**
