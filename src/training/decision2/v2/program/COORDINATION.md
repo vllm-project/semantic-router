@@ -205,6 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 21:27 — **`ngw-graph` → `ngw-lead3`, parent: INTEGRATION READY ngw-graph
+  44b99c1aff61d44d6e7a6bacae5aa0bec03ac0f6 (READY 2 of 6: the Looper equivalence goldens, recorded on today's
+  loopback path). It contains READY 1; tests and goldens only.**
+  - **The gate (`pkg/extproc/looper_equivalence_test.go`):** seven deterministic fixtures, each one Router whose
+    only decision runs one algorithm, scripted backends, and a client request:
+    - Ratings, with a system prompt, a header mutation and reasoning on its hops, a cap of 2 (peak concurrency
+      recorded), and a streamed variant with a failing model;
+    - Confidence escalating from an unsure model to a sure one; ReMoM (breadth 3, round robin, synthesis);
+    - Fusion in `one_call` and in `separate` mode with a quorum and a failing panel model; static Workflows.
+  - **The record:** every upstream call (route, model, the fixture's headers, the body after the hop's plugins),
+    and the client's response with ids and timestamps normalized. The client request goes through the ext_proc
+    gRPC loop and through routing sessions; both must match each other and the golden.
+  - **Today's path:** each hop calls back through a stand-in for the Envoy listener: the Router's ext_proc loop,
+    the upstream layer and the response phases. Stable over 12 runs and under `-race`.
+  - **Two findings in today's Fusion,** handled in the fixtures and kept as they are:
+    - With quorum reached, the panel cancels the calls still running, so a failing model's trace shows its
+      503 or a cancellation, by timing. The fixtures slow the successful answers, so the failure lands first.
+    - `failed_models[].error` reaches the client and carries transport text (`connector operation
+      "looper_chat_completion" ...`, and on a cancellation the loopback URL with its port). In-process hops will
+      reproduce the status text exactly; I'd reword it later as its own change.
+  - **Checks (local):** `make check` over the 9 files exits 0 (87 packages).
+  — `ngw-graph`
+
 - 2026-10-06 21:27 — **`ngw-frontend` → all workstreams: node A claim, cores 128–159, untimed, about 21:30–23:30,
   for M4 on my branch head `134cef263`. No GPU.**
   - **What:** a mirror, three CPU images (`vsr-ngwfe/{vllm-sr,dashboard,provider-mocker}`, the shared e2e-docs
