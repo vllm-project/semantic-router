@@ -205,6 +205,39 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:22 — **`ngw-lead` → parent: P0 and P1 are MERGED on staging `25291b53b`. BRIEFS READY for
+  `ngw-frontend` (P4+P7) and `ngw-graph` (P5); the queue is now upstream, config, frontend, graph.**
+  - **P0** (`67d1ed82c`): `website/docs/proposals/native-gateway.md` in English and zh-Hans, in the proposals index
+    and sidebar. `standalone-http-gateway.md` is marked "Superseded" (a new index status).
+  - **P1, the routing core** (5 commits; `pkg/extproc`'s Go code changes only by the split described below):
+    - `pkg/routing`, with no Envoy import: a `Processor` opens one `Session` per request, and each phase answers
+      with an `Effect`. `NewEngine` gives `Plan` / `Respond` / `Finish`. It drives a session with the local Envoy
+      template's processing mode and applies effects with Envoy 1.35's own rules, read from its source: removals
+      before sets, routing and `x-envoy-*` headers ignored, content-length checks, local replies, and the route
+      cache.
+    - `pkg/extproc` implements `routing.Processor`. Each phase's reply is built once and shared by the gRPC stream
+      and the session. The session leases the router generation, so hot reload drains it, and it ends through the
+      same lifecycle as an ext_proc stream. One strict codec turns replies into effects and fails closed.
+    - `pkg/routing/parity`: a 17-case corpus, records, a normalizer for volatile values only, and a differ.
+  - **Evidence:**
+    - The exact ext_proc messages for the corpus were pinned as goldens on `main`'s pipeline, and they still match.
+    - The corpus gives identical records through in-process sessions and through the gRPC adapter.
+    - `make check` on the change set exits 0: golangci-lint 0 issues, `harness-check`, the full Go suite (80
+      packages), `config-schema-check` and translation coverage. `-race` is clean.
+    - `make impact` selects no E2E profile; Kind runs come with the final verification.
+  - **Findings for later phases:**
+    - Envoy applies only a set header's `raw_value`. The Router's `accept-encoding: identity` uses `value`, so
+      Envoy (and now native mode, faithfully) sends it empty.
+    - Immediate responses whose status is missing from the Router's status map go out as 200.
+    - Both are recorded in the parity goldens; fixing either changes both modes on purpose.
+  - **Briefs:** `mr-scratch/ngw/briefs/ngw-frontend.md` and `ngw-graph.md`. Their prompts follow the same pattern:
+    "You are `ngw-<name>`. Read `00-common.md`, then your brief, and follow them."
+  - **Launch order:** `ngw-upstream`, `ngw-config`, `ngw-frontend`, `ngw-graph`. `ngw-frontend` and `ngw-graph` can
+    start against fakes before the upstream READY lands.
+  - **Your call:** I'd open the draft PR (one `commit-tree` commit) once P4 serves end to end, not now. Say if you
+    want an early draft PR for CI signal and visibility instead.
+  — `ngw-lead`
+
 - 2026-10-06 13:22 — **Parent → `fu-lead`: USER (13:19): publish `vllm-srun` with an API token, like `vllm-sr`. NO trusted
   publishing. Please change PR-A's publisher and docs on staging.**
   - **Secret:** the parent created the repository secret `VLLM_SRUN_PYPI_API_TOKEN` (05:21 UTC). It holds a token the
