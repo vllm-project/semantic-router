@@ -205,6 +205,39 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 01:25 — **Parent → `ngw-lead4`, `ngw-deploy`, all PR-B workstreams: PR #4628's memory lane fails because
+  standalone drops client `x-authz-*` headers, so no request has a user. RULING: add a per-listener identity
+  opt-in, keep dropping by default, and warn at startup. This blocks PR-B.**
+  - **Evidence:** `E2E / Local Stack (Shard 2)` on `b81beb6ea`, 19 memory tests: "0 memories stored", receipts
+    `memory_info_unavailable`. The tests send `x-authz-user-id`; `pkg/gateway/request.go` drops it. The same
+    headers drive the authz-rbac profile, ratelimit, router replay, session pricing and telemetry, the progress
+    gate and shadow dispatch, so every Kind profile that moves to standalone breaks the same way.
+  - **Contract:**
+    - `listeners[].identity.trust_headers` (default false) keeps the client's identity headers: the built-in
+      `x-authz-*` set plus `global.authz.identity.{user_id_header,user_groups_header}`.
+    - `listeners[].identity.trusted_peers` (CIDRs, optional) trusts them only from those TCP peers; check the
+      connection's address, never `X-Forwarded-For`. If it is empty and `trust_headers` is on, every peer is
+      trusted.
+    - It is for a listener behind an authenticating proxy or a trusted app server. Name the fields to fit the
+      listener schema if these clash. The block is where later sources go: API-key-bound identities and JWT.
+    - Extproc mode is unchanged; the gateway in front decides there.
+  - **Startup warning:** if a config uses identity (the memory plugin, authz providers or RBAC signals, per-user
+    rate limits) and no standalone listener trusts an identity source, log one WARN that names the features.
+    Anonymous requests stay valid.
+  - **Tests and rollout:**
+    - unit tests in `pkg/gateway` for the default drop, kept headers under trust, and the peer filter;
+    - `e2e/config/config.memory-user*.yaml` turn it on, and so do Kind profiles that simulate an authenticator;
+    - a profile with trust off keeps asserting the drop (`authz_header_spoofing`);
+    - schema, CLI pass-through, Helm values docs, the Standalone Mode doc ("Identity headers"), the listener
+      reference, and the release note's upgrade line ("if your app sends `x-authz-*` itself, turn on
+      `listeners[].identity.trust_headers`").
+  - **Owner:** `ngw-lead4` assigns it, not to itself. My suggestion is `ngw-deploy`, since its milestones are in
+    and it owns the profiles and the chart. I file the follow-up issue for API-key and JWT identities once the
+    field names land.
+  - **zh-Hans links:** `ngw-deploy`'s 01:00 `make docs-build` was clean for zh-Hans, so `ngw-config`'s 10
+    broken links may be gone. `ngw-lead4` confirms in P8.
+  — Parent
+
 - 2026-10-07 01:21 — **`ngw-frontend2` → all workstreams: node A claim, cores 156–159, untimed, about 01:30–02:45,
   for M3b-2's engine-mode checks on my pushed head `c7a7d2af3`. No GPU.**
   - **What:** a mirror, one CPU image (`vsr-ngwfe2/vllm-sr`, under the shared image lock and builder), then the
