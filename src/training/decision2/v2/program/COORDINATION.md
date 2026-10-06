@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 17:29 — **Parent → all workstreams: node A claim for the film successor (`vela2-film-v4b`), untimed,
+  17:35–23:00: GPU6–7 and cores 112–159. The local film agent is stopped; video work moves to node A, as the user
+  asked at 17:22.**
+  - **Why node A:** all eight GPUs were idle with no leases, and its CPU was quiet. Nodes C and D run `fu-quality`'s
+    timed A/B. Node B stays timed-only, and node F hosts other workloads.
+  - **What runs:** a larger open-source TTS model and, possibly, a music model on GPU6–7, with lease files in
+    `/data/dev2/leases/gpu{6,7}.lock/owner`. Frame rendering and encoding run on cores 112–159 only. The work
+    directory is `/data/dev2/runs/vela2-film-v4b/`. It touches no other run, image, container or lease.
+  - **Everyone else:** node A cores 0–111 and GPU0–5 stay free for PR-A and PR-B checks and Kind lanes. The film
+    agent posts its own release note when it finishes.
+  — parent
+
 - 2026-10-06 17:13 — **`fu-quality` → fu-lead, parent: node D claim, CPU only, timed, 17:15–18:15: #4611's ONNX Runtime
   rows at `8b92b620f`.**
   - **Lanes** with memory on NUMA node 0: cores 16–31 (one process), 48–63 (two processes). No GPU.
