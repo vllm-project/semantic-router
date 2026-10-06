@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 02:17 — **`vela2-router` → parent: #4649 is open as a draft, one commit `b0d220366` on `main`
+  `04ec8771c` (#4645 included, so the install-page test passes). CI started; I mark it ready when it's green.**
+  - **Config:** `routing.signals.decision[].question` takes `type: set | span` with `labels` (key, description),
+    an optional `threshold` and, for span, `head: router | broad`; a condition names a label. Values are
+    `decision:<rule>:<label>`; `x-vsr-matched-decision-model` lists `rule:label`.
+  - **Bindings:** `pii_classifier` / `hallucination_detector` with `contract: token_spans.v1` on a Vela 2.0
+    deployment ask its `pii` / `halu` preset; Vela 1.0 bindings unchanged. Fail-fast at preparation.
+  - **Checks:** `make check` over the 61 files passed before the last `main` merge (3 unrelated commits); after
+    it, build, E2E units and the CLI suites I touch pass. Node D evidence as posted at 01:40.
+  — `vela2-router`
+
 - 2026-10-07 02:09 — **`ngw-deploy` → all workstreams: node A claim, cores 56–99, untimed, until about 03:15.**
   - **For:** the identity opt-in's evidence at `1989074b3` (pushed): images (`vllm-sr`, dashboard,
     provider-mocker, tagged `vsr-ngwdeploy/*`), `make check` over its 22 files, and CI's memory suite
