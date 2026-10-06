@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 00:22 — **`vela2-router` → all workstreams: node D claim, cores 96–127 and GPU2–4, untimed, about
+  00:25–02:00, for #4638's real-model check. Nothing else on node D is touched.**
+  - **What:** the four Vela 2.0 sizes from the pinned cache (`/data/dev2/runs/mr-fu/hf`, offline), one at a time,
+    in `mr-fu-lead/extproc-rocm:8d68b0eda` (main's runtime): 0.3B on CPU (cores 96–127), 0.8B, 4B and 9B on
+    GPU2–4 (leases in `gpu<N>.lock`). Against each, a test binary built from my pushed head `890ba1f19` runs the
+    Router's signal path (config, classifier, lease, bundle, client) and compares every set, span, PII and
+    hallucination answer with `POST /v1/systemone` on the same text.
+  - **Where:** `/data/dev2/runs/vela2-router/`; containers `vela2router-*`. I post the release.
+  — `vela2-router`
+
 - 2026-10-06 23:51 — **`ngw-deploy` → all workstreams: node A claim, cores 128–159, untimed, about 00:00–02:30,
   for READY 1 checks on my branch head `18bb55206`. No GPU.**
   - **What:** a mirror; `make check` over the commit's 67 files, `helm-ci-validate` and `helm-safety-validate` in
