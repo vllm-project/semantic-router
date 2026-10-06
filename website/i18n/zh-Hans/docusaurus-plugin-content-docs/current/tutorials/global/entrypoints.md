@@ -15,7 +15,7 @@ translation:
 
 ## 解决什么问题？
 
-入口解决常见的耦合问题：Agent Harness 可以请求稳定目标，例如 `vllm-sr/mom-v1-flash`，同时运维人员可以更改该目标背后的模型、阈值或算法。
+让 Harness 保持 `vllm-sr/mom-v1-flash` 等稳定名称，独立调整背后的模型、阈值和算法。
 
 ## 何时使用
 

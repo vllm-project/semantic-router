@@ -5,24 +5,17 @@ description: Connect an agent harness to a stable model API with explicit routin
 
 # Connect an agent harness
 
-An open, programmable **decision layer** for models and compute.
+Point your harness at a Router entrypoint such as `vllm-sr/auto`. The harness
+owns the agent loop, tools, and task state; the Router selects models or runs a
+bounded multi-model workflow under your policy. Inference backends execute the
+model calls.
 
-Connect the model calls from your agent harness to a public entrypoint, then
-evolve the models and routing policy behind that name.
-
-An agent harness manages the agent loop, tool execution, and task state. The
-Router evaluates policy for each model call and can select one model or run a
-configured, bounded multi-model workflow. Inference runtimes and serving
-platforms execute those calls and manage their compute.
-
-Start with the [Quickstart](/docs/installation) if you do not have a running
-Router. [Install with an agent](agent) explains how an agent can install and
-operate it; this guide connects the harness that will use its inference API.
+[Install the Router](/docs/installation) first, or
+[ask an agent to install it](agent).
 
 ## Choose the inference connection
 
-Configure your harness's model provider using the settings below. Use the
-setting names supported by your installed harness version.
+Configure the harness's model provider. Setting names vary by harness version.
 
 | Setting | What to use |
 | --- | --- |
@@ -32,8 +25,7 @@ setting names supported by your installed harness version.
 | Authentication | The credentials required by your inference listener or gateway. Backend provider credentials are configured separately by the operator. |
 | Model limits and capabilities | Context, output, tools, vision, and reasoning settings that the selected recipe can support. |
 
-Some clients expect a base URL ending in `/v1`; others append `/v1` themselves.
-Check the final request path rather than copying a URL between harnesses:
+Clients may append `/v1` themselves. Check that the final path matches:
 
 | Client API | Final request path | Requirement |
 | --- | --- | --- |
@@ -41,25 +33,21 @@ Check the final request path rather than copying a URL between harnesses:
 | Responses | `POST /v1/responses` | The Router's `global.services.response_api` and its store must be available. |
 | Messages | `POST /v1/messages` | Send the Messages request shape and an appropriate `anthropic-version` header. |
 
-The client and backend may use different protocols. Compatibility still depends
-on the features in the request: for example, free-form custom tools cannot be
-translated to a Messages backend. Review the [Protocol Compatibility
-Matrix](protocol-compatibility), including its Codex CLI limitations, before
-enabling harness features. Keep credentials in the harness's supported secret
-store or environment bindings.
+Client and backend protocols can differ, within the [compatibility
+matrix](protocol-compatibility). Free-form custom tools cannot reach a Messages
+backend; Codex CLI has additional limits listed there. Keep credentials in the
+harness's supported secret store or environment bindings.
 
 ## Verify the public model
 
-After configuring at least one backend in the local stack, list its public
-models:
+Configure at least one backend, then list the local stack's public models:
 
 ```bash
 curl -sS http://localhost:8899/v1/models
 ```
 
-Use a virtual entrypoint when the Router should apply routing policy. A concrete
-provider model name selects that model directly and bypasses recipe routing.
-See [Entrypoints](../tutorials/global/entrypoints) for the resolution rules.
+Use a [virtual entrypoint](../tutorials/global/entrypoints) to apply routing
+policy. Concrete provider model names bypass recipe routing.
 
 Send a minimal request and include response headers:
 
@@ -72,13 +60,10 @@ curl -sS -i http://localhost:8899/v1/chat/completions \
   }'
 ```
 
-These commands use the local Quickstart listener. For another deployment, use
-its inference address and required authentication. Check the final assistant
-output and the `x-vsr-selected-recipe` and `x-vsr-selected-model` routing
-receipts; a successful HTTP status alone does not establish a useful answer or
-the intended route. [VSR routing headers](../troubleshooting/vsr-headers)
-explains the receipts and [the CLI reference](../api/cli) covers route previews
-and end-to-end probes.
+For other deployments, use their inference address and authentication. Check
+the answer plus `x-vsr-selected-recipe` and `x-vsr-selected-model`; HTTP success
+alone does not verify the output or route. See [routing
+receipts](../troubleshooting/vsr-headers) and [CLI previews and probes](../api/cli).
 
 ## Set budgets before running a task
 
@@ -96,12 +81,10 @@ for the example and exact eligibility behavior.
 
 ## Preserve tool and conversation continuity
 
-Verify a real tool loop in the harness: a model requests a tool, the harness
-executes it, and the next model call carries the matching tool result. With
-streaming enabled, also verify that the harness receives the complete tool
-arguments, terminal event, and final answer. Protocol translation preserves the
-supported wire contract; model capability and harness behavior still need
-end-to-end verification.
+Run a real tool loop: model requests a tool → harness executes it → next call
+carries the matching result. For streaming, check complete tool arguments, the
+terminal event, and final answer. Protocol compatibility alone does not verify
+the model and harness together.
 
 When Router Learning protection is configured, it needs explicit identities.
 The default `scope: conversation` requires both headers on related calls:
@@ -119,18 +102,15 @@ protection. Responses history, including `previous_response_id`, does not
 replace these headers. See [Session identification](../api/session-identification)
 for identity priority and privacy boundaries.
 
-Inspect the selected model on tool continuations and user follow-ups when
-verifying protection. Keep tool execution permissions and task state in the
-harness; a routing recipe does not configure delegated agents or own the outer
-agent loop.
+Check the selected model on tool continuations and user follow-ups. The harness
+retains tool permissions, task state, and the outer loop; recipes do not configure
+delegated agents.
 
 ## Program the policy behind the entrypoint
 
-Use [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
-to connect models and publish a recipe. Signals describe the request,
-decisions enforce routing policy, and algorithms select or coordinate eligible
-models. A stable entrypoint lets the harness keep its model ID while that policy
-evolves.
+[Connect models and publish a recipe](../tutorials/global/models-entrypoints-serving)
+behind the same entrypoint. Signals, decisions, and algorithms define which
+models are eligible and how they run.
 
 The [Agent Routing recipe](https://github.com/vllm-project/semantic-router/tree/main/config/recipes/agent)
 is a starting point for local, specialist, and frontier model lanes. Review its

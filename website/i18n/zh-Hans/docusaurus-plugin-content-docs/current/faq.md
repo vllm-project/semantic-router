@@ -10,21 +10,21 @@ translation:
 
 # 常见问题
 
-这里简要回答评估 vLLM Semantic Router 时的常见问题。每个回答都链接到详细文档，便于继续阅读。
-
 ## 它是 AI 网关，还是其他系统？ {#is-it-an-ai-gateway-or-something-else}
 
-它是面向模型与算力的开放、可编程**决策层**。它读取请求信号和声明的证据，评估路由策略，并通过 Envoy ExtProc 过滤器实施决策。一条路由可以选择一个模型，也可以协调有明确边界的多模型工作流。
+它是模型调用的决策层，根据请求信号和策略选择模型或有界多模型工作流，网关负责
+传输。Envoy 通过 ExtProc 执行决策。TLS 终止、提供方负载均衡和 Pod 调度由其他
+组件负责。
 
-它在网关之上做决策，不承担 TLS 终止、提供方负载均衡或 Pod 调度。AI 网关解决“如何访问多个后端”，Semantic Router 解决“由哪个模型、配方和策略处理这次请求”，再通过已有的网关或监听器执行。
-
-组件结构见[系统概览](overview/semantic-router-overview)，背后的服务模型见 [Mixture of Models](overview/mom-model-family)。
+架构见[系统概览](overview/semantic-router-overview)，多模型执行见
+[Mixture of Models](overview/mom-model-family)。
 
 ## 如何与 Agent Harness 配合？ {#how-does-it-work-with-an-agent-harness}
 
-Harness 负责 Agent 循环、工具执行和任务状态。它将模型调用发送到稳定入口，Router 对这些调用应用所选配方的策略。推理运行时和服务平台执行所选模型路径，并管理相应算力。
+Harness 管理 Agent 循环、工具和任务状态。它调用稳定模型入口，Router 应用对应
+配方，推理后端执行所选模型路径。
 
-[接入 Agent Harness](installation/agent-harness)介绍推理地址、协议、模型限制、工具循环和会话连续性。[使用 Agent 安装](installation/agent)则是另一条工作流，介绍如何让 Agent 安装和运维 Router。
+[接入 Harness](installation/agent-harness)，或[让 Agent 安装 Router](installation/agent)。
 
 ## 如何衡量路由准确性和业务价值？ {#how-do-we-measure-routing-accuracy-and-business-value}
 

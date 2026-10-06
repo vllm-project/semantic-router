@@ -6,11 +6,9 @@ description: Programmable model decisions for agent harnesses across cloud, data
 
 # Use Cases
 
-Agent harnesses can use a stable model entrypoint while routing policy determines
-the model path for each inference call. The same request contract can sit over
-hosted APIs, a shared data-center fleet, a small edge pool, or a hybrid enterprise
-deployment. The harness owns the task loop and tools; Semantic Router owns the
-configured decisions connecting its calls to models and compute.
+Route each model call by task, capability, and policy. A stable entrypoint lets
+your harness use hosted APIs, data-center fleets, edge models, or a hybrid pool
+while retaining its task loop and tools.
 
 ## Decisions inside an agent task
 
@@ -30,10 +28,9 @@ The environments below are not mutually exclusive. Many deployments use a
 data-center pool for general traffic, an edge model for private or offline work,
 and selected cloud providers for specialized capabilities.
 
-This is the practical Mixture-of-Models pattern: clients use a stable virtual
-model identity, a recipe describes the routing behavior, and deployment-specific
-provider bindings connect the recipe's logical model roles to the endpoints
-available in each environment.
+In a Mixture-of-Models setup, the virtual model name stays stable. A recipe
+defines its behavior; provider bindings connect logical model roles to each
+environment's endpoints.
 
 ### At a glance
 

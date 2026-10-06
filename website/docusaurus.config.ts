@@ -10,9 +10,9 @@ const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
 const siteUrl = 'https://vllm-sr.ai'
 const siteDefaultDescription
-  = 'An open, programmable decision layer for models and compute. Connect your agent harness to policy-driven model selection, bounded collaboration, and configured backends.'
+  = 'An open, programmable decision layer for models and compute.'
 const siteSocialTitle
-  = 'A Decision Layer for Models and Compute | vLLM Semantic Router'
+  = 'Intelligence Beyond Any One Model | vLLM Semantic Router'
 const siteSocialPreviewImageUrl = `${siteUrl}/${SITE_SOCIAL_PREVIEW_IMAGE}`
 
 const config: Config = {

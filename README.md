@@ -31,18 +31,18 @@
 
 ## About
 
-vLLM Semantic Router is an open, programmable **decision layer** for models and compute. Connect your agent harness to a stable model API, then program how each call selects or combines models across configured local, private, and cloud backends.
+**Intelligence beyond any one model.**
 
-The harness owns the agent loop, tool execution, and task state. The Router evaluates signals, preferences, and policy to choose a model path or run bounded model collaboration. Inference runtimes execute those calls and manage their compute.
+Give your agent harness one API for many models. vLLM Semantic Router selects or combines models for each call, guided by your policy.
 
-Our vision is intelligence that can evolve beyond any one model. Our mission is to make the decisions connecting agent harnesses to models and compute open, programmable, and observable.
+Your harness keeps the agent loop, tools, and task state. The Router chooses among configured backends across local, private, and cloud compute.
 
 | Dimension | Fragmented today | With vLLM SR |
 | --- | --- | --- |
-| **Models** | Models specialize in different work. | Select a model or compose a bounded Mixture-of-Models workflow. |
-| **Compute** | Inference runs across heterogeneous hardware. | Choose among configured inference backends. |
-| **Location** | Inference spans edge, private, and cloud. | Enforce routing constraints on eligible paths. |
-| **Preference** | "Best" changes by user and workload. | Express preferences as routing policy. |
+| **Models** | Different models excel at different tasks. | Select or combine models. |
+| **Compute** | Hardware varies in speed and capacity. | Choose among configured backends. |
+| **Location** | Edge, private, and cloud. | Keep calls within approved locations. |
+| **Preference** | Priorities change by task. | Set quality, latency, and cost priorities. |
 
 [Explore how it works →](https://vllm-sr.ai/docs/intro/)
 
@@ -58,9 +58,9 @@ For pip, uv, or agent-driven installation, see the **[Installation Guide](https:
 
 ### Connect your agent harness
 
-Point your harness at the Router's inference endpoint and use a published model ID such as `vllm-sr/auto`. Models and policy can evolve behind that name while the harness keeps its model API.
+Point your harness at the Router's inference endpoint. Use a public model ID such as `vllm-sr/auto`.
 
-Follow **[Connect an agent harness](https://vllm-sr.ai/docs/installation/agent-harness/)** for protocol compatibility, authentication, model budgets, tool calls, and session continuity.
+Follow **[Connect an agent harness](https://vllm-sr.ai/docs/installation/agent-harness/)** for setup and compatibility.
 
 ### Online playground
 

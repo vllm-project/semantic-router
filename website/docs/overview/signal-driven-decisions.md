@@ -6,13 +6,9 @@ description: How signals, projections, decisions, plugins, algorithms, and model
 
 # Routing Pipeline
 
-Semantic Router separates request understanding, policy, and model execution.
-Each layer answers a different question, which keeps routing rules readable and
-prevents one classifier or optimization score from becoming the whole policy.
-
-For an agent harness, this pipeline handles an inference call inside the task
-loop. The harness decides when to call a model and executes tools; the Router
-applies the selected recipe to that call.
+Routed model calls pass through separate stages for request understanding,
+policy, and model execution. The selected recipe defines those stages; the
+harness owns the surrounding task loop and tool execution.
 
 ```mermaid
 flowchart LR

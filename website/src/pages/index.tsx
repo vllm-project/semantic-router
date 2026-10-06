@@ -28,16 +28,16 @@ import styles from './index.module.css'
 const paperCount = researchPapers.length
 const homepageMetaTitle = translate({
   id: 'homepage.meta.title',
-  message: 'A Decision Layer for Models and Compute',
+  message: 'Intelligence Beyond Any One Model',
 })
 const homepageMetaDescription = translate({
   id: 'homepage.meta.description',
   message:
-    'An open, programmable decision layer for models and compute. Connect your agent harness to policy-driven model selection, bounded collaboration, and configured backends.',
+    'An open, programmable decision layer for models and compute.',
 })
 const homepageSocialTitle = translate({
   id: 'homepage.meta.socialTitle',
-  message: 'A Decision Layer for Models and Compute | vLLM Semantic Router',
+  message: 'Intelligence Beyond Any One Model | vLLM Semantic Router',
 })
 
 const heroStats = [
@@ -50,7 +50,7 @@ const heroStats = [
     description: translate({
       id: 'homepage.stats.signals.description',
       message:
-        '20 signal families spanning request context, safety, intent, preference, and system state.',
+        'Context, intent, safety, preferences, and system state.',
     }),
   },
   {
@@ -62,7 +62,7 @@ const heroStats = [
     description: translate({
       id: 'homepage.stats.algorithms.description',
       message:
-        '11 selection algorithms and 5 loopers for choosing, composing, and retrying model calls.',
+        '11 selection algorithms and 5 loopers.',
     }),
   },
   {
@@ -72,7 +72,7 @@ const heroStats = [
       {
         id: 'homepage.stats.papers.description',
         message:
-          '{count} research papers spanning routing, systems, safety, and multimodality.',
+          '{count} papers on routing, safety, and inference.',
       },
       { count: paperCount },
     ),
@@ -121,7 +121,7 @@ const architectureDimensions = [
     }),
     unified: translate({
       id: 'homepage.capabilities.models.value',
-      message: 'Compose policy-specific model paths.',
+      message: 'Combine their strengths.',
     }),
   },
   {
@@ -132,11 +132,11 @@ const architectureDimensions = [
     }),
     fragmented: translate({
       id: 'homepage.capabilities.compute.reality',
-      message: 'GPU generations and accelerators differ in capacity and latency.',
+      message: 'GPUs differ in speed and capacity.',
     }),
     unified: translate({
       id: 'homepage.capabilities.compute.value',
-      message: 'Select configured backends across heterogeneous compute.',
+      message: 'Choose among your configured backends.',
     }),
   },
   {
@@ -147,11 +147,11 @@ const architectureDimensions = [
     }),
     fragmented: translate({
       id: 'homepage.capabilities.location.reality',
-      message: 'Inference spans edge, private, and cloud.',
+      message: 'Edge, private, and cloud.',
     }),
     unified: translate({
       id: 'homepage.capabilities.location.value',
-      message: 'Route to configured local, private, or cloud backends.',
+      message: 'Stay within approved locations.',
     }),
   },
   {
@@ -162,11 +162,11 @@ const architectureDimensions = [
     }),
     fragmented: translate({
       id: 'homepage.capabilities.preference.reality',
-      message: '“Best” changes by user and workload.',
+      message: 'Priorities change by task.',
     }),
     unified: translate({
       id: 'homepage.capabilities.preference.value',
-      message: 'Express preferences as routing policy.',
+      message: 'Set quality, latency, and cost priorities.',
     }),
   },
 ]
@@ -270,7 +270,7 @@ const alternativeComparison = [
     }),
     semanticRouter: translate({
       id: 'homepage.alternatives.decides.semanticRouter',
-      message: 'Which model, recipe and policy serve a request',
+      message: 'Models and policy for each request',
     }),
     aiGateway: translate({
       id: 'homepage.alternatives.decides.aiGateway',
@@ -278,7 +278,7 @@ const alternativeComparison = [
     }),
     llmd: translate({
       id: 'homepage.alternatives.decides.llmd',
-      message: 'Which healthy replica inside the chosen pool',
+      message: 'A healthy replica in the chosen pool',
     }),
   },
   {
@@ -288,7 +288,7 @@ const alternativeComparison = [
     }),
     semanticRouter: translate({
       id: 'homepage.alternatives.reads.semanticRouter',
-      message: 'Request content, policy, semantic evidence',
+      message: 'Request meaning and policy',
     }),
     aiGateway: translate({
       id: 'homepage.alternatives.reads.aiGateway',
@@ -306,11 +306,11 @@ const alternativeComparison = [
     }),
     semanticRouter: translate({
       id: 'homepage.alternatives.owns.semanticRouter',
-      message: 'The model, recipe and policy decision',
+      message: 'Model selection and collaboration',
     }),
     aiGateway: translate({
       id: 'homepage.alternatives.owns.aiGateway',
-      message: 'Provider translation, credentials, rate limits, traffic policy',
+      message: 'Provider access and traffic control',
     }),
     llmd: translate({
       id: 'homepage.alternatives.owns.llmd',
@@ -332,7 +332,7 @@ const alternativeComparison = [
     }),
     llmd: translate({
       id: 'homepage.alternatives.runs.llmd',
-      message: 'A pool scheduler, such as the llm-d Endpoint Picker',
+      message: 'A pool scheduler, such as llm-d',
     }),
   },
   {
@@ -369,12 +369,12 @@ function CapabilitySection(): JSX.Element {
             </SectionLabel>
             <h2 id="mixture-architecture-title">
               <Translate id="homepage.capabilities.heading">
-                Program inference across models and compute
+                Your models. Your rules.
               </Translate>
             </h2>
             <p>
               <Translate id="homepage.capabilities.description">
-                Turn request signals and policies into decisions for your agent harness.
+                Choose models and compute for each request.
               </Translate>
             </p>
           </header>
@@ -458,14 +458,13 @@ function AlternativesSection(): JSX.Element {
             </SectionLabel>
             <h2 id="alternatives-title">
               <Translate id="homepage.alternatives.heading">
-                Between your agent harness and inference
+                Fits your stack.
               </Translate>
             </h2>
             <p>
               <Translate id="homepage.alternatives.description">
-                Your harness owns the agent loop and tool execution. The Router
-                decides how each inference call uses models and configured
-                backends, alongside gateways and inference routers.
+                Your harness runs the agent loop and tools. The Router chooses
+                models and backends.
               </Translate>
             </p>
           </header>
@@ -550,20 +549,18 @@ function MixtureOfModelsProofSection(): JSX.Element {
           <div className={styles.momProofHeading}>
             <SectionLabel>
               <Translate id="homepage.momProof.label">
-                Mixture-of-Models proof
+                Mixture-of-Models
               </Translate>
             </SectionLabel>
             <div>
               <h2 id="mom-proof-title">
                 <Translate id="homepage.momProof.title">
-                  One Model API can beat frontier models
+                  Stronger models, together.
                 </Translate>
               </h2>
               <p>
                 <Translate id="homepage.momProof.description">
-                  vLLM Semantic Router keeps the public surface as vllm-sr/auto,
-                  then coordinates closed, open, and hybrid model pools inside the
-                  serving layer.
+                  One API brings open and closed models together.
                 </Translate>
               </p>
             </div>
@@ -581,14 +578,12 @@ function MixtureOfModelsProofSection(): JSX.Element {
                 </SectionLabel>
                 <h3>
                   <Translate id="homepage.momProof.architectureTitle">
-                    Your harness calls one endpoint. The router coordinates models.
+                    One call. More than one model.
                   </Translate>
                 </h3>
                 <p>
                   <Translate id="homepage.momProof.architectureCopy">
-                    Route by task shape, risk, confidence, and model capability;
-                    run bounded model collaboration; return a response to the
-                    harness that continues the agent loop.
+                    Bounded model collaboration. Your harness keeps the agent loop.
                   </Translate>
                 </p>
               </div>
@@ -648,13 +643,12 @@ function DataSovereigntySection(): JSX.Element {
               </SectionLabel>
               <h2>
                 <Translate id="homepage.sovereignty.title">
-                  Keep regulated traffic on approved paths
+                  Your data. Your boundaries.
                 </Translate>
               </h2>
               <p>
                 <Translate id="homepage.sovereignty.description">
-                  Residency, locality, and authorization are hard constraints, not preferences.
-                  Ineligible paths are removed before ranking ever runs.
+                  Enforce residency, locality, and authorization before choosing a model.
                 </Translate>
               </p>
             </div>
@@ -680,11 +674,11 @@ function DataSovereigntySection(): JSX.Element {
             <div className={styles.constraintFooter}>
               <p className={styles.constraintNote}>
                 <Translate id="homepage.sovereignty.note">
-                  A request fails closed instead of reaching a provider your policy does not allow.
+                  Requests fail closed when no approved route remains.
                 </Translate>
               </p>
               <PillLink className={styles.sovereigntyCta} to="/docs/overview/signal-driven-decisions" muted>
-                <Translate id="homepage.sovereignty.cta">How routing policy works</Translate>
+                <Translate id="homepage.sovereignty.cta">Explore routing policies</Translate>
               </PillLink>
             </div>
           </div>
@@ -706,12 +700,12 @@ function FinalCtaSection(): JSX.Element {
               </SectionLabel>
               <h2>
                 <Translate id="homepage.finalCta.title">
-                  Program inference for your agent harness
+                  Build beyond one model.
                 </Translate>
               </h2>
               <p>
                 <Translate id="homepage.finalCta.description">
-                  Connect a stable model API. Shape its decisions with signals, preferences, and policy.
+                  Connect your harness. Choose your models. Set your rules.
                 </Translate>
               </p>
             </div>

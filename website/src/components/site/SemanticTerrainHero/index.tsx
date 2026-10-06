@@ -109,21 +109,28 @@ export default function SemanticTerrainHero(): JSX.Element {
                   <Translate
                     id="homepage.hero.title"
                     values={{
+                      beyond: (
+                        <span className={styles.accent}>
+                          <Translate id="homepage.hero.beyond">beyond any one model.</Translate>
+                        </span>
+                      ),
+                    }}
+                  >
+                    {'Intelligence {beyond}'}
+                  </Translate>
+                </h1>
+                <p className={styles.dek}>
+                  <Translate
+                    id="homepage.hero.dek"
+                    values={{
                       decisionLayer: (
-                        <strong className={styles.accent}>
+                        <strong>
                           <Translate id="homepage.hero.decisionLayer">decision layer</Translate>
                         </strong>
                       ),
                     }}
                   >
                     {'An open, programmable {decisionLayer} for models and compute.'}
-                  </Translate>
-                </h1>
-                <p className={styles.dek}>
-                  <Translate id="homepage.hero.dek">
-                    Connect your agent harness to a stable model API. Program how
-                    each inference request selects and combines models across
-                    configured backends.
                   </Translate>
                 </p>
               </div>

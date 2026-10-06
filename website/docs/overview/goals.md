@@ -6,17 +6,12 @@ description: Why agent harnesses need a programmable decision layer over heterog
 
 # Why Semantic Routing
 
-There is no single best model for every request. Models differ in reasoning,
-latency, price, language, context length, modality, tool use, deployment
-location, and safety profile. The pool also changes as models are upgraded,
-scaled, or temporarily unavailable.
-
-An agent harness encounters these differences across model calls within the
-same task. Without a shared decision layer, model choice becomes client-side
-conditionals, policy is copied across harnesses, and a backend change can require
-an integration release.
-
-Semantic routing moves that decision into the serving path.
+Choose models through policy instead of hard-coding each harness integration.
+Models differ in reasoning, latency, price, language, context length, modality,
+tools, location, and safety. Their availability changes with upgrades, scaling,
+and outages.
+A shared routing policy lets harnesses adapt to these differences within a task
+without duplicating model-selection logic.
 
 ## The problems it addresses
 

@@ -7,16 +7,13 @@ description: Connect inference backends and expose programmable model entrypoint
 
 ## Overview
 
-Semantic Router gives agent harnesses stable model names while operators can
-change the physical models and routing policy behind them. The Dashboard is the
-fastest path to a working topology; YAML remains available for reviewed,
-version-controlled deployments.
+Connect models, choose a recipe, and publish an entrypoint. Use the Dashboard
+for interactive setup or YAML for version-controlled deployments.
 
 ## What Problem Does It Solve?
 
-Agent harnesses should call a durable model name without coupling themselves to a
-provider, endpoint, or checkpoint. Entrypoints keep that public contract stable
-while Recipes and connected Models can evolve independently.
+Keep the harness's model name stable while changing providers, endpoints, or
+routing policy behind it.
 
 The topology has four user-facing objects:
 

@@ -22,8 +22,7 @@ import {
 
 # 快速开始
 
-安装 vLLM Semantic Router，启动本地栈，并发送一条请求。然后将你的
-[Agent Harness 接入](agent-harness)同一推理监听器，通过稳定的模型名选择路由策略。
+安装 vLLM Semantic Router，发送第一条路由请求。
 
 ## 系统要求
 

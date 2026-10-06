@@ -392,7 +392,7 @@
     "message": "面向异构 LLM 推理的系统级智能"
   },
   "homepage.hero.dek": {
-    "message": "将你的 agent harness 接入稳定的模型 API，通过编程控制每次推理请求如何在已配置的后端上选择与组合模型。"
+    "message": "面向模型与算力的开放、可编程{decisionLayer}。"
   },
   "homepage.hero.primaryCta": {
     "message": "接入你的 harness"
@@ -416,28 +416,28 @@
     "message": "信号"
   },
   "homepage.stats.signals.description": {
-    "message": "20 类信号，覆盖请求上下文、安全、意图、偏好与系统状态。"
+    "message": "上下文、意图、安全、偏好与系统状态。"
   },
   "homepage.stats.algorithms.label": {
     "message": "算法"
   },
   "homepage.stats.algorithms.description": {
-    "message": "11 种选择算法和 5 种 looper，用于选择、组合与重试模型调用。"
+    "message": "11 种选择算法，5 种协作循环。"
   },
   "homepage.stats.papers.label": {
     "message": "论文"
   },
   "homepage.stats.papers.description": {
-    "message": "{count} 篇研究论文，覆盖路由、系统、安全与多模态。"
+    "message": "{count} 篇关于路由、安全与推理的论文。"
   },
   "homepage.capabilities.label": {
     "message": "架构"
   },
   "homepage.capabilities.heading": {
-    "message": "为模型与算力上的推理编程"
+    "message": "你的模型，你的规则。"
   },
   "homepage.capabilities.description": {
-    "message": "将请求信号与策略转化为 agent harness 的推理决策。"
+    "message": "为每次请求选择模型与算力。"
   },
   "homepage.capabilities.axis.models": {
     "message": "模型"
@@ -467,25 +467,25 @@
     "message": "不同模型擅长不同任务。"
   },
   "homepage.capabilities.models.value": {
-    "message": "组合面向策略的模型路径。"
+    "message": "让模型优势互补。"
   },
   "homepage.capabilities.compute.reality": {
-    "message": "不同代际 GPU 与加速器在容量和时延上各不相同。"
+    "message": "GPU 的速度和容量各不相同。"
   },
   "homepage.capabilities.compute.value": {
-    "message": "在异构算力上的已配置后端之间选择。"
+    "message": "从已配置的后端中选择。"
   },
   "homepage.capabilities.location.reality": {
-    "message": "推理横跨边缘、私有环境与云端。"
+    "message": "边缘、私有环境与云端。"
   },
   "homepage.capabilities.location.value": {
-    "message": "路由到已配置的本地、私有或云端后端。"
+    "message": "在允许的区域内路由。"
   },
   "homepage.capabilities.preference.reality": {
-    "message": "“最佳”因用户与负载而变化。"
+    "message": "任务不同，优先级也不同。"
   },
   "homepage.capabilities.preference.value": {
-    "message": "将偏好表达为路由策略。"
+    "message": "设定质量、延迟与成本的优先级。"
   },
   "homepage.capabilities.signal.title": {
     "message": "信号提取"
@@ -596,10 +596,10 @@
     "message": "安装"
   },
   "homepage.install.title.human": {
-    "message": "一条命令，本地跑起来"
+    "message": "一行命令，即刻开始"
   },
   "homepage.install.title.agent": {
-    "message": "把安装和配置交给 Agent"
+    "message": "让 Agent 帮你安装"
   },
   "homepage.install.audience.aria": {
     "message": "选择安装方式"
@@ -638,7 +638,7 @@
     "message": "这些论文，构成了路由器的底层思路"
   },
   "homepage.researchCarousel.subtitle": {
-    "message": "从安全、多模态到编排与系统设计，这些研究线索持续塑造 vLLM Semantic Router 的演进方向。"
+    "message": "推动推理进步的想法。"
   },
   "homepage.researchCarousel.cardType": {
     "message": "论文"
@@ -647,10 +647,10 @@
     "message": "查看论文"
   },
   "homepage.researchCarousel.footer": {
-    "message": "它们决定路由器如何感知、如何判断，以及如何扩展。"
+    "message": "探索背后的研究。"
   },
   "homepage.researchCarousel.cta": {
-    "message": "查看全部论文与分享"
+    "message": "所有论文与演讲"
   },
   "homepage.band.docs.label": {
     "message": "文档"
@@ -1049,10 +1049,10 @@
     "message": "实际案例"
   },
   "homepage.videos.title": {
-    "message": "语义路由的真实应用"
+    "message": "看看它如何工作。"
   },
   "homepage.videos.description": {
-    "message": "了解团队如何在企业推理、开放模型服务、混合系统和 Mixture-of-Models 中使用语义路由。"
+    "message": "来自社区的演示、部署与想法。"
   },
   "homepage.videos.featured": {
     "message": "精选"
@@ -2227,13 +2227,13 @@
     "message": "Decision 1.0：迈向开放的决策基础模型。这份技术报告介绍 Decision 系列的模型、数据与训练方法。"
   },
   "homepage.meta.description": {
-    "message": "面向模型与算力的开放、可编程决策层。将 agent harness 接入由策略驱动的模型选择、有界协作与已配置的后端。"
+    "message": "面向模型与算力的开放、可编程决策层。"
   },
   "homepage.meta.title": {
-    "message": "面向模型与算力的决策层"
+    "message": "智能，超越单一模型"
   },
   "homepage.meta.socialTitle": {
-    "message": "面向模型与算力的决策层 | vLLM Semantic Router"
+    "message": "智能，超越单一模型 | vLLM Semantic Router"
   },
   "homepage.whereItLives.title": {
     "message": "它的位置"
@@ -2275,16 +2275,16 @@
     "message": "在开放协作中构建"
   },
   "teamCarousel.subtitle": {
-    "message": "来自研究、基础设施与模型系统的维护者，共同塑造这个项目。"
+    "message": "研究者与开发者，一起构建。"
   },
   "teamCarousel.label": {
     "message": "社区"
   },
   "teamCarousel.footer": {
-    "message": "认识把 Mixture-of-Models 变成共享基础设施的构建者。"
+    "message": "一起塑造下一步。"
   },
   "teamCarousel.viewAll": {
-    "message": "查看团队名单"
+    "message": "认识团队"
   },
   "acknowledgements.label": {
     "message": "开源基础"
@@ -2314,10 +2314,10 @@
     "message": "开始构建"
   },
   "homepage.finalCta.title": {
-    "message": "为你的 agent harness 配置可编程推理"
+    "message": "构建超越单一模型的智能。"
   },
   "homepage.finalCta.description": {
-    "message": "接入稳定的模型 API，用信号、偏好与策略定义决策。"
+    "message": "接入 Harness，选择模型，设定规则。"
   },
   "homepage.finalCta.playground": {
     "message": "体验 Playground"
@@ -2595,10 +2595,10 @@
     "message": "闭源模型"
   },
   "homepage.integration.extproc.compat": {
-    "message": "兼容 OpenAI 的请求与响应面"
+    "message": "兼容 OpenAI 的 API"
   },
   "homepage.integration.extproc.summary": {
-    "message": "agent harness 调用稳定的模型入口，由其 recipe 选择模型与已配置的后端，再将响应返回 harness。"
+    "message": "接入一次 Harness，用策略选择模型与后端。"
   },
   "homepage.integration.eyebrow": {
     "message": "如何接入"
@@ -2643,7 +2643,7 @@
     "message": "入口"
   },
   "homepage.integration.pipeline.eyebrow": {
-    "message": "可编程决策层"
+    "message": "决策层"
   },
   "homepage.integration.pipeline.plugins.detail": {
     "message": "执行"
@@ -2679,25 +2679,25 @@
     "message": "路由"
   },
   "homepage.integration.title": {
-    "message": "将 agent harness 接入模型与算力"
+    "message": "一个 API，更多模型。"
   },
   "homepage.integration.viewDocs": {
-    "message": "为入口配置决策"
+    "message": "设定路由策略"
   },
   "homepage.momProof.architectureAlt": {
     "message": "vLLM Semantic Router 在异构的闭源与开源模型池之间路由"
   },
   "homepage.momProof.architectureCopy": {
-    "message": "根据任务形态、风险、置信度与模型能力路由，执行有界的模型协作，并将响应返回给继续运行智能体循环的 harness。"
+    "message": "模型在限定范围内协作，Harness 继续掌控 Agent 循环。"
   },
   "homepage.momProof.architectureLabel": {
     "message": "路由器侧协作"
   },
   "homepage.momProof.architectureTitle": {
-    "message": "agent harness 调用一个入口，Router 协调多个模型。"
+    "message": "一次调用，多模型协作。"
   },
   "homepage.momProof.description": {
-    "message": "vLLM Semantic Router 对外保持 vllm-sr/auto 这一公开入口，并在服务层协调闭源、开源与混合模型池。"
+    "message": "一个 API，汇聚开放与闭源模型。"
   },
   "homepage.momProof.gpqa.alt": {
     "message": "GPQA-Diamond 深色记分卡，VSR Closed 为 96.0"
@@ -2718,7 +2718,7 @@
     "message": "Humanity's Last Exam"
   },
   "homepage.momProof.label": {
-    "message": "多模型混合实证"
+    "message": "Mixture-of-Models"
   },
   "homepage.momProof.livecodebench.alt": {
     "message": "LiveCodeBench 深色记分卡，VSR Closed 为 92.6"
@@ -2730,19 +2730,19 @@
     "message": "LiveCodeBench"
   },
   "homepage.momProof.title": {
-    "message": "一个模型 API 可以胜过前沿模型"
+    "message": "让模型携手，变得更强。"
   },
   "homepage.sovereignty.cta": {
-    "message": "路由策略如何工作"
+    "message": "探索路由策略"
   },
   "homepage.sovereignty.description": {
-    "message": "驻留、本地性和授权是硬约束，不是偏好。不合格路径会在排序开始前被剔除。"
+    "message": "先落实驻留、位置与授权限制，再选择模型。"
   },
   "homepage.sovereignty.label": {
     "message": "数据主权"
   },
   "homepage.sovereignty.note": {
-    "message": "请求会在不允许的提供商前失败关闭，而不是落到策略禁止的路径。"
+    "message": "没有合规的路由时，请求将被拒绝。"
   },
   "homepage.sovereignty.stage.constraints": {
     "message": "硬约束"
@@ -2769,7 +2769,7 @@
     "message": "身份 + 上下文"
   },
   "homepage.sovereignty.title": {
-    "message": "让受监管流量只走已批准路径"
+    "message": "你的数据，你的边界。"
   },
   "homepage.useCases.integration.extproc": {
     "message": "Envoy ExtProc"
@@ -3024,16 +3024,16 @@
     "message": "云原生开源贡献者，参与 Karmada、Volcano 和 Kthena 的 Kubernetes 编排与大模型服务工作，并担任 Kthena 的 LFX 导师。"
   },
   "homepage.hero.title": {
-    "message": "面向模型与算力的开放、可编程{decisionLayer}。"
+    "message": "智能，{beyond}"
   },
   "homepage.hero.decisionLayer": {
     "message": "决策层"
   },
   "homepage.alternatives.heading": {
-    "message": "连接 agent harness 与推理系统"
+    "message": "融入你的技术栈。"
   },
   "homepage.alternatives.description": {
-    "message": "agent harness 负责智能体循环与工具执行。Router 决定每次推理调用如何使用模型与已配置的后端，与网关和推理路由器协同工作。"
+    "message": "Harness 负责 Agent 循环与工具执行，Router 负责选择模型与后端。"
   },
   "homepage.ecosystem.title": {
     "message": "生态与合作"
@@ -3049,5 +3049,26 @@
   },
   "homepage.ecosystem.decisionLayer": {
     "message": "决策层"
+  },
+  "homepage.hero.beyond": {
+    "message": "超越单一模型。"
+  },
+  "homepage.alternatives.decides.semanticRouter": {
+    "message": "每次请求的模型与策略"
+  },
+  "homepage.alternatives.decides.llmd": {
+    "message": "已选池内的健康副本"
+  },
+  "homepage.alternatives.reads.semanticRouter": {
+    "message": "请求语义与策略"
+  },
+  "homepage.alternatives.owns.semanticRouter": {
+    "message": "模型选择与协作"
+  },
+  "homepage.alternatives.owns.aiGateway": {
+    "message": "提供商接入与流量控制"
+  },
+  "homepage.alternatives.runs.llmd": {
+    "message": "池内调度器，例如 llm-d"
   }
 }

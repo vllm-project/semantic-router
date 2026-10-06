@@ -6,14 +6,9 @@ description: How virtual models turn a shared pool of independent models into st
 
 # Mixture of Models
 
-A **Mixture of Models (MoM)** is a serving architecture in which several
-independently deployed models act as one system. A routing policy decides which
-model, cascade, panel, or workflow should handle each request.
-
-MoM is one way to use the programmable decision layer: an agent harness asks for
-a stable virtual model that represents the desired behavior while a recipe
-selects or coordinates the configured backends. The harness retains its task
-loop and tools.
+A **Mixture of Models (MoM)** presents independently deployed models as one
+virtual model. A recipe selects a model, cascade, panel, or bounded workflow for
+each request. Your harness uses a stable name and retains its task loop and tools.
 
 ```mermaid
 flowchart LR

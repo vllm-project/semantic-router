@@ -15,9 +15,8 @@ for the client connection and session setup.
 
 ## What Problem Does It Solve?
 
-Entrypoints solve a common coupling problem: an agent harness can ask for a
-stable objective such as `vllm-sr/mom-v1-flash` while operators change the models,
-thresholds, or algorithms behind that objective.
+Keep a stable name such as `vllm-sr/mom-v1-flash` in the harness while changing
+the models, thresholds, or algorithms behind it.
 
 ## When to Use
 

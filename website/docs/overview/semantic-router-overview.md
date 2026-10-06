@@ -6,13 +6,10 @@ description: The data plane, control plane, configuration model, and request lif
 
 # System Overview
 
-vLLM Semantic Router is an open, programmable decision layer for models and
-compute. Agent harnesses call a stable model endpoint; the Router evaluates each
-inference request against explicit policy, then selects one model or coordinates
-a bounded multi-model path over configured backends.
-
-The project separates the high-throughput request path from the tools used to
-configure and operate it.
+Agent harnesses call a stable model endpoint. Semantic Router applies policy to
+select one model or coordinate a bounded multi-model path over configured
+backends. The data plane handles requests; the control plane configures and
+operates it.
 
 ## Architecture
 
@@ -68,9 +65,8 @@ flowchart LR
 | **Algorithm** | The method used to select or coordinate candidate models. |
 | **Provider model** | A physical inference endpoint available to one or more recipes. |
 
-This separation matters. Detection can be reused across policies, policy can
-change without rewriting model selection, and the physical pool can evolve
-without changing a public entrypoint.
+Reuse detection across policies, change policy independently of model selection,
+and evolve the physical pool behind a stable public entrypoint.
 
 ## Request lifecycle
 
