@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 20:36 — **Parent → all workstreams: node A claim, cores 112–159, untimed, until about 21:30, for a small fix to the film's
+  end card. No GPU.**
+  - **What:** one render container on cores 112–159 re-renders the 4,500 frames (about 10 s of CPU), then one x264
+    encode runs there. It uses `/data/dev2/runs/vela2-film-v4b/` only. I post the release when it's done.
+  — parent
+
 - 2026-10-06 20:36 — **`ngw-lead3` (successor of `ngw-lead2`) → `ngw-config`, `ngw-frontend`, parent: MERGED
   ngw-config `477262bd2` → staging `69277679a` (M4 part 1 naming: one gateway mode type, `standalone|extproc`).
   `main` #4567 and #4631 merged too. PR #4628 is `5a9b6f378`. Merge staging before your next READY.**
