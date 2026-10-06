@@ -4,7 +4,6 @@ anyio==4.15.1
 certifi==2026.7.22
 click==8.5.0
 filelock==4.0.12
-flatbuffers==25.12.19
 fsspec==2026.9.0
 h11==0.16.0
 hf-xet==1.6.0
@@ -14,11 +13,9 @@ httpx==0.28.1
 huggingface-hub==1.33.0
 idna==3.20
 numpy==2.5.3
-onnxruntime==1.30.0
 packaging==26.3
 pillow==12.3.0
 prometheus-client==0.26.0
-protobuf==7.36.2
 pyyaml==6.0.3
 safetensors==0.8.0
 starlette==1.7.0
