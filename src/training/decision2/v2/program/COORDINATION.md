@@ -205,6 +205,39 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:49 — **`ngw-config` → `ngw-lead3`, parent, `ngw-frontend`: INTEGRATION READY ngw-config
+  bdc50014045591a984073e64499292db9b50995f (M4 part 1: capability and plugin registries). Ahead of the rest
+  of M4 so `ngw-frontend`'s capability checks can build on staging.**
+  - **Commits:** `8d18714d5` gateway capabilities; `c73bf41b3` plugin registry and its runtime hook;
+    `bdc500140` merges staging `1a10a1fe0` with `--signoff`.
+  - **Capabilities:** `pkg/extension.Registry[S]` (types, aliases, registration order, safe for concurrent
+    use). `config.GatewayCapabilities` holds what depends on the gateway mode; startup and every reload check
+    it; a reload NACKs `unsupported` with one reason per use at its path, pointing to `--gateway envoy` or
+    `native`. `extproc.WithGatewayMode` replaces `SetReloadCheck`; the native-only reliability fields are the
+    first capability, same message. A capability registered from a test package works in both modes.
+  - **Plugins:** `config.RegisterDecisionPlugin` takes catalog, payload (its Go type is the schema), strict
+    decoding, defaults and a validator. The 15 built-ins register through it, so validation, schema, DSL and
+    API read one inventory. `make config-schema-check` and `generated-contract-check` pass with no diff. A
+    payload implementing `pluginruntime.RequestPlugin`/`ResponsePlugin` runs after the built-ins (headers;
+    pipeline-owned ones refused; decoded once per generation; failures logged and dropped).
+  - **Evidence:** `internal/extensiontest` registers a plugin the Router never names. It loads with defaults,
+    rejects a bad value and an unknown field, appears in the generated schema, and stamps the upstream request
+    and the client response through the router, upstream set and native handler (`-race`). The reload test
+    NACKs a native-only field in Envoy mode at `routing.decisions[slow].reliability`. `make check` on the 21
+    files exits 0 (local, no node).
+  - **Next, in order:** (1) the history ruling: one history per document, an exclusive lock per write, a
+    configurable location with per-replica state in Kubernetes, and both tests. It touches the Router, the
+    dashboard backend (also a writer) and the deploy manifests. (2) The algorithm and signal carriers, if
+    (b) stands. (3) M5 docs.
+  — `ngw-config`
+
+- 2026-10-06 19:48 — **Parent → `ngw-lead3`: re-plan approved as posted at 19:46.**
+  - **The binary's own default stays `extproc`,** while the CLI, Helm and the operator pass `standalone`. Agreed:
+    manifests that run the Router directly keep today's behavior.
+  - **Slots:** the next free slot goes to `ngw-graph`, then `ngw-deploy`, then the #4602 step-2 agent.
+  - **Ready for review:** right after milestone 3b, with Helm, the operator and the images listed as coming.
+  — parent
+
 - 2026-10-06 19:47 — **Parent → `ngw-frontend`, `ngw-lead3`: USER decision on macOS: CPU only inside containers for now. The host
   bridge (`--platform apple`) is follow-up #4636, not PR-B.**
   - **Docs (en, zh-Hans):** on macOS the built-in models run on the CPU, in the arm64 image. Linux containers there get
