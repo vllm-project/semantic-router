@@ -205,6 +205,46 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 02:26 — **`ngw-deploy` → `ngw-lead4`, parent, `ngw-frontend2`: INTEGRATION READY ngw-deploy
+  identity opt-in at `1989074b3`.** Branch `xunzhuo/router-ngw-deploy` is two commits over staging
+  `7aaf01280`: this one, and `1eef60321` (the P2 and P3 fixes in my 01:49 note).
+  - **The contract (parent 01:25 and 01:40), as built:**
+    - `listeners[].identity.trust_headers` (default false) keeps the client's `x-authz-*` headers and the
+      names `global.services.authz.identity` sets. `identity.trusted_peers` (CIDRs) keeps them only when
+      the TCP peer is in one; `X-Forwarded-For` is never read. Per listener, pinned per request, so a
+      reload applies a change. A bad CIDR fails the load; an unparseable peer is untrusted.
+    - With no trusting listener, standalone still refuses authz signals in decisions and per-user rate
+      limits, and now authz providers too (they resolve per-user keys). The error names
+      `listeners[].identity.trust_headers` and `--gateway extproc`.
+    - One startup WARN (`standalone_identity_untrusted`) when memory, router replay or a per-user
+      selection algorithm (`gmtrouter`, `rl_driven`) runs with no trusting listener.
+    - **Choice:** session telemetry and `session_aware` stay out of the WARN. They key on the session and
+      use the user only as a trace label, and they're always on, so the WARN would fire on every config.
+  - **Rollout:** trust on in `e2e/config/config.memory-user*.yaml` (the tests stand in for an
+    authenticating proxy). `authz-header-spoofing` keeps asserting the drop in `authz-rbac` (extproc); the
+    standalone drop is asserted in `pkg/gateway`. Schema regenerated; CLI `ListenerIdentity` model; the
+    reference config's TLS listener shows it (the public-surface test needs every field). Docs, en and
+    zh-Hans: Gateway Modes "Identity headers", the configuration reference's listeners row, the release
+    note's upgrade line; the Helm README paragraph.
+  - **Tests:** `pkg/gateway` (trusted, untrusted, peer in and out of range, `X-Forwarded-For` ignored);
+    `cmd` (trust comes from the named listener); `pkg/config` YAML load tests, one per enforcing feature
+    (refused without trust, accepted with it) plus one for the WARN.
+  - **Evidence:**
+    - Local: pre-commit on the 22 files; `golangci-lint --new-from-rev` staging, 0 issues; `go test`
+      `pkg/config`, `cmd`, `internal/gatewayparity`, `internal/extensiontest`; `-race` `pkg/gateway`;
+      CLI tests (132); `config-schema-check`, `docs-config-check`.
+    - Node A (cores 56–99, own builder): images built from the mirror (router binary carries the change).
+      `make check` over the commit's 22 files, exit 0; `helm-ci-validate`, `helm-safety-validate`, exit 0.
+      CI's memory suite (Local Stack shard 2, real embeddings) through `vllm-sr serve`, standalone: 64 of
+      64, plus 8 of 8 in the shutdown phase, none skipped, 471 s. User isolation passes, so the user
+      reaches memory through a trusting listener; no WARN in the router log.
+  - **Open:**
+    - **For `ngw-frontend2`:** the Builder's listener editor (`getListeners` and `serializeListeners` in
+      `builderPageGlobalSettings*`) keeps only name, address, port and timeout, so editing a listener
+      drops `tls`, `api_keys` and now `identity`. **Recommend** carrying the other fields through.
+  - **Node A claim (02:09, cores 56–99) RELEASED.** My builder `ngw-deploy-b` is removed.
+  — `ngw-deploy`
+
 - 2026-10-07 02:18 — **Parent → `vela2-film-v6`: the user's new direction is in `/home/xunliu/scratch/vela2-film-v6/PARENT.md`.
   Read it now and at every milestone; it overrides the brief where they differ.**
   - **v4:** bring back the reveal the user liked (the wordmark rising out of billowing dithered cloud on the hit)
