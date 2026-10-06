@@ -1,7 +1,5 @@
 """Model-runtime checks that do not load local or remote model resources."""
 
-from pathlib import PurePosixPath
-
 from cli.model_runtime_defaults import (
     effective_model_deployments,
     global_model_bindings,
@@ -14,8 +12,6 @@ from cli.validator_decision_model import (
     validate_decision_model_references,
 )
 from cli.validator_pii_window import validate_pii_windows
-
-DEVICE_SELECTOR_PARTS = 2
 
 
 def validate_model_runtime_references(config: UserConfig) -> list[ValidationError]:
@@ -100,11 +96,11 @@ def validate_model_runtime_references(config: UserConfig) -> list[ValidationErro
 def _binding_error(
     consumer, binding, deployment, profile=None, *, global_default=False
 ):
-    provider = deployment.get("provider") or "candle"
-    if provider == "model_runtime":
+    provider = deployment.get("provider")
+    runtime = provider == "model_runtime"
+    if runtime and consumer == "hallucination_explainer":
         return (
-            "model_runtime deployments serve decision signals and the decision "
-            "algorithm, not task bindings"
+            "the NLI hallucination explainer is retired and has no model_runtime task"
         )
     if binding.operating_point is not None and not consumer.startswith("classifier."):
         return "operating_point is only supported by generic classifier bindings"
@@ -124,12 +120,12 @@ def _binding_error(
     if binding.pair_scorer is not None and consumer != "rag.reranker":
         return "pair_scorer selection is only supported by rag.reranker"
     if consumer == "rag.reranker":
-        if provider == "http" or binding.adapter != "vela_reranker":
+        if provider == "http" or (
+            binding.adapter != "vela_reranker" and not (runtime and not binding.adapter)
+        ):
             return "Reranker requires a local vela_reranker adapter"
-        if binding.mapping_path or (provider == "candle" and binding.head):
-            return (
-                "Reranker has no label mapping or separate Candle classification head"
-            )
+        if binding.mapping_path:
+            return "Reranker has no label mapping"
         if ((deployment.get("input") or {}).get("overflow") or "reject") != "reject":
             return "Reranker requires reject overflow for complete tokenizer pairs"
     if global_default and consumer.startswith("safety."):
@@ -179,22 +175,14 @@ def _binding_error(
             return "Generic classifier labels define the mapping; mapping_path is not supported"
         if binding.contract == "label_scores.v1":
             contracts[consumer] = binding.contract
-            if (
-                binding.operating_point is None
-                or provider not in {"candle", "ort"}
-                or (provider == "candle" and binding.head)
-                or rule.type == "llm"
-            ):
-                return "Independent scores require operating_point and a complete Candle or qualified ORT artifact"
+            if binding.operating_point is None or not runtime or rule.type == "llm":
+                return "Independent scores require an operating_point and a complete local artifact"
             budget = deployment.get("input") or {}
             if (
                 budget.get("max_tokens", 0) <= 0
                 or (budget.get("overflow") or "reject") != "reject"
             ):
                 return "operating_point requires an explicit document budget and reject overflow"
-            precision = deployment.get("precision") or "native"
-            if precision != "native" and (provider != "candle" or precision != "fp32"):
-                return "operating_point requires Candle float32 or qualified ORT native execution"
         elif binding.operating_point is not None:
             return "operating_point requires label_scores.v1"
         if rule.type == "llm":
@@ -217,7 +205,7 @@ def _binding_error(
         expected = binding.contract
     if binding.contract != expected:
         return f"Contract must be '{expected}' for {consumer}"
-    if not binding.adapter.strip():
+    if not binding.adapter.strip() and not runtime:
         return "Adapter is required"
     if consumer == "complexity" and provider != "http":
         return "Complexity requires an HTTP score or distribution adapter"
@@ -241,27 +229,6 @@ def _binding_error(
             )
         if consumer == "hallucination_detector" and binding.adapter != "http_chat":
             return "Hallucination detector requires http_chat adapter"
-    if provider == "openvino":
-        if binding.contract not in {"embedding.v1", "label_distribution.v1"}:
-            return (
-                "OpenVINO supports text embedding and sequence label distributions only"
-            )
-        if binding.adapter not in {
-            "auto",
-            "bert",
-            "modernbert",
-            "mmbert",
-            "mmbert32k",
-            "mmbert-32k",
-        }:
-            return f"Unsupported OpenVINO adapter '{binding.adapter}'"
-        if binding.head and not binding.head.endswith(".xml"):
-            return "OpenVINO head must identify a complete IR XML graph"
-    if provider == "ort" and consumer in {
-        "hallucination_detector",
-        "hallucination_explainer",
-    }:
-        return f"{consumer} has no ORT task adapter"
     return None
 
 
@@ -288,71 +255,25 @@ def _deployment_error(name, deployment, external_names):
     provider = deployment.get("provider")
     if provider == "model_runtime":
         return model_runtime_deployment_error(deployment)
-    if deployment.get("profile") or deployment.get("endpoint"):
-        return "profile and endpoint apply only to model_runtime deployments"
-    if provider in {"candle", "ort"}:
-        if not (deployment.get("artifact") or "").strip() or deployment.get(
-            "external_model"
-        ):
-            return "Local deployment requires artifact and cannot set external_model"
-        device = deployment.get("device") or "cpu"
-        if device != "cpu":
-            parts = device.split(":")
-            allowed = {"migraphx", "rocm"} if provider == "ort" else {"cuda", "metal"}
-            if (
-                len(parts) != DEVICE_SELECTOR_PARTS
-                or parts[0] not in allowed
-                or not parts[1].isdigit()
-            ):
-                return f"Device '{device}' is incompatible with provider '{provider}'"
-        if (deployment.get("precision") or "native") not in {"native", "fp32", "fp16"}:
-            return "Precision must be native, fp32 or fp16"
-    elif provider == "openvino":
-        if not (deployment.get("artifact") or "").strip() or deployment.get(
-            "external_model"
-        ):
-            return "Local deployment requires artifact and cannot set external_model"
-        device = deployment.get("device") or "CPU"
-        if device.strip() != device or "\x00" in device:
-            return "OpenVINO device must be non-empty and trimmed"
-        if (deployment.get("precision") or "native") != "native":
-            return "OpenVINO executes the exported IR with native precision"
-        if (deployment.get("input") or {}).get("overflow") == "window":
-            return "OpenVINO supports reject or truncate input policy"
-    elif provider == "http":
-        if (
-            deployment.get("artifact")
-            or not (deployment.get("external_model") or "").strip()
-        ):
-            return "HTTP deployment requires external_model and cannot set artifact"
-        if deployment.get("device") or deployment.get("precision"):
-            return (
-                "External service device and precision are not controlled by the router"
-            )
-        if deployment["external_model"] not in external_names:
-            return f"Unknown external model '{deployment['external_model']}'"
-    else:
-        return f"Unsupported provider '{provider}'"
-    profile = deployment.get("custom_ops_profile") or "none"
-    if profile != "none" and (
-        profile != "ck_flash_attention"
-        or provider != "ort"
-        or not (deployment.get("device") or "cpu").startswith("rocm:")
+    if any(
+        deployment.get(field)
+        for field in ("profile", "endpoint", "process", "served_name")
     ):
-        return "custom_ops_profile requires ck_flash_attention on an ORT rocm:index deployment"
-    cache_dir = deployment.get("compilation_cache_dir")
-    if cache_dir is not None and cache_dir != "":
-        if provider != "ort" or not (deployment.get("device") or "cpu").startswith(
-            "migraphx:"
-        ):
-            return "compilation_cache_dir requires an ORT migraphx:index deployment"
-        if (
-            not isinstance(cache_dir, str)
-            or cache_dir.strip() != cache_dir
-            or "\x00" in cache_dir
-            or not PurePosixPath(cache_dir).is_absolute()
-        ):
-            return "compilation_cache_dir must be an absolute, trimmed path without null bytes"
+        return (
+            "profile, endpoint, process and served_name apply only to "
+            "model_runtime deployments"
+        )
+    if provider != "http":
+        return f"Unsupported provider '{provider}'"
+    if (
+        deployment.get("artifact")
+        or not (deployment.get("external_model") or "").strip()
+    ):
+        return "HTTP deployment requires external_model and cannot set artifact"
+    if deployment.get("device"):
+        return "External service device and precision are not controlled by the router"
+    if deployment["external_model"] not in external_names:
+        return f"Unknown external model '{deployment['external_model']}'"
     budget = deployment.get("input") or {}
     if budget.get("max_tokens", 0) < 0:
         return "input.max_tokens must not be negative"

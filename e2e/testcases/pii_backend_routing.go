@@ -22,8 +22,8 @@ func init() {
 // testPIIBackendRouting drives the PII signal through a remote token_spans.v1
 // service.
 //
-// The profile configures no local PII model, so candle token classification
-// cannot run and cannot produce a span. Every assertion below therefore
+// The profile configures no local PII model, so no local token classification
+// can run and produce a span. Every assertion below therefore
 // attributes the decision to the remote call rather than merely agreeing with
 // it.
 //

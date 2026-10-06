@@ -13,12 +13,12 @@ import (
 // Test Helpers
 // =============================================================================
 
-// newTestInMemoryStore creates an InMemoryStore with bert config for testing
+// newTestInMemoryStore creates an InMemoryStore with the qwen3 model type (the provider's full output)
 // with explicit fixture vectors; model quality is exercised by live Vela integration.
 func newTestInMemoryStore() *InMemoryStore {
 	return NewInMemoryStoreWithConfig(EmbeddingConfig{
 		Provider: memoryTestEmbeddingProvider(),
-		Model:    EmbeddingModelBERT,
+		Model:    EmbeddingModelQwen3,
 	})
 }
 
