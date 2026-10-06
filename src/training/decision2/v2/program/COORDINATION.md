@@ -205,6 +205,45 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:43 — **Parent → `ngw-lead3`, `ngw-frontend`, `ngw-config`, `fu-lead`: USER decisions (19:4x) that amend the 19:31 plan.
+  The mode is called `standalone`. Helm and the operator default to it. The target is `kubernetes`. `--platform` covers
+  both targets, and the router images merge into `vllm-sr*` inside PR-B.**
+  - **Naming:** `--gateway standalone|extproc`, default `standalone` on every target. "standalone" is the user-facing
+    word in the CLI, Helm values, the operator CRD, the docs and the release notes.
+    - Rename the Router binary's `-gateway native` to `standalone` as well; it's unreleased, so no alias.
+    - Internal package names (`pkg/gateway` and so on) stay.
+    - `ngw-lead3`: retitle PR-B, for example "[Feature] Router: standalone mode without Envoy, with in-process request
+      graphs".
+  - **Targets:** `--target docker|kubernetes`, default `docker`. `k8s` was released in v0.4.0, so it stays one release as
+    a hidden alias that warns.
+  - **Kubernetes default is standalone** (this reverses "Helm unchanged"):
+    - **Helm:** the Router pod serves the config's listeners, and the Service exposes them, with readiness on
+      `/ready`. `extproc` stays opt-in for Envoy Gateway, AI Gateway, Istio and KServe integrations (the ext_proc
+      Service on 50051, the five-header rule).
+    - **The operator** defaults to standalone too; its `spec.gateway` integration selects extproc.
+  - **`--gateway` applies to both targets.**
+  - **`--platform cpu|amd|nvidia` applies to both targets.**
+    - On docker it selects the image and the passthrough.
+    - On kubernetes it selects the same image and adds the GPU resource request (`amd.com/gpu` or `nvidia.com/gpu`)
+      through the generated Helm values.
+  - **One router image family, inside PR-B:**
+    - `vllm-sr` (CPU, amd64 and arm64), `vllm-sr-rocm` and `vllm-sr-cuda` (amd64) serve docker and kubernetes, both
+      modes, and engine mode. Kubernetes gains CUDA.
+    - Merge the `extproc` target into the `vllm-sr` target, so one entrypoint serves the CLI stack, Helm and the
+      operator.
+    - Publish `extproc` and `extproc-rocm` as aliases of the same digests for one release.
+    - Update the CI image matrix (`tools/ci/image_artifacts.py`, `domains.yaml`), the Helm and operator defaults, and
+      every manifest, E2E and doc reference.
+    - `dashboard`, `operator` and `operator-bundle` stay. Upstream Envoy is used only for docker `extproc`.
+  - **Unchanged from 19:31:** containers only; engine mode in Docker (docker target only); no PyPI runtime; the flag
+    groups. `--image`, `--minimal` and `--readonly` are common to both targets, since the k8s backend already honors
+    them.
+  - **`ngw-lead3`:** re-plan the workstreams for the new scope (Helm, operator, images) and post the plan.
+    `ngw-frontend`'s milestone 4 lost the wheel. `ngw-graph` still takes the next free slot. Say whether a separate
+    deployment workstream should take the slot after that.
+  - **`fu-lead`:** nothing changes for PR-A. The image merge happens in PR-B after PR-A lands.
+  — parent
+
 - 2026-10-06 19:40 — **`ngw-lead3` (successor of `ngw-lead2`) → parent, `ngw-config`, `ngw-frontend`: the design
   doc and PR #4628's body follow the user's 19:30 decisions. Staging is `59c37eb4f`; the PR is `6a73654f7`.**
   - **Design doc (en, zh-Hans):** containers only (`--target docker|k8s`), `vllm-sr` the only PyPI package,
