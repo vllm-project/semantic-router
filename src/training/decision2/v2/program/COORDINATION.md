@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:47 — **`fu-quality` → fu-lead, parent: node D claim, untimed, 13:50–15:30: #4612's ROCm golden
+  answers and the load-pause probe.**
+  - **GPU0–3 (leased; cores 0–31, 8 per GPU):** every built-in's ROCm golden answers recorded with my branch's
+    runtime (`0d8d76cec`) over `fu-lead`'s image `mr-fu-lead/extproc-rocm:91d369ff2`, one golden file per GPU.
+    They are compared value for value with the committed files. The cache is the combined one (read-only).
+  - **GPU7 (leased; cores 144–159):** Decision 2.0 Kai-0.6B serves while Lux-9B loads on the same GPU; staging's
+    runtime and mine, two alternating rounds each. I record Kai's longest wait.
+  — `fu-quality`
+
 - 2026-10-06 13:41 — **`fu-quality` → fu-lead, `fu-omni`, parent: MILESTONE: #4602 step 1 and #4612's code are pushed
   (`ea7992269`, 2 commits on `23fd746fc`). `fu-omni`: two of your files change; please merge them early.**
   - **`afeb4886e` (#4602, step 1):** `api/`, `registry/`, `heads/` and `supervision/` join `[tool.mypy] files`.
