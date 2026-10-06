@@ -28,7 +28,7 @@ The `vllm-sr` wheel itself stays CLI-only, and every router image already
 ships the runtime. On ROCm, answers byte-identical to the released model
 packages are guaranteed in the router images, which carry the release's own
 PyTorch build, not in a `pip` install with the official PyTorch wheel. See the
-[model runtime Quickstart](../model-runtime/quickstart.md).
+[model runtime Quickstart](model-runtime/quickstart.md).
 
 Builds of `main` between
 [#4481](https://github.com/vllm-project/semantic-router/pull/4481) and #4618
@@ -52,7 +52,7 @@ v0.4.0, and keep their names.
   and their execution fields (`precision`, `custom_ops_profile`,
   `compilation_cache_dir`, `variant`, `use_mmbert_32k` and the like), stop the
   router at startup. `vllm-sr config migrate` rewrites them; see
-  [Migrate from the native bindings](../model-runtime/migrate.md).
+  [Migrate from the native bindings](model-runtime/migrate.md).
 - **Retired router keys are refused.** The router and the CLI refuse
   `gemma_model_path` and `bert_model_path`, even when empty, and point to
   `vllm-sr config migrate`, which drops them.
@@ -60,7 +60,7 @@ v0.4.0, and keep their names.
   MiniLM, `mmbert-embed-32k-2d-matryoshka` and `multi-modal-embed-small` /
   `-large` are replaced by Vela Embedding and Omni. Vectors they stored in the
   semantic cache, memory, vector stores or RAG must be
-  [re-embedded](../model-runtime/migrate.md#re-embed-when-the-embedding-model-changes).
+  [re-embedded](model-runtime/migrate.md#re-embed-when-the-embedding-model-changes).
   Older classifier names map to the Vela 1.0 model for the same task, with the
   same labels.
 - **The operator CRD no longer has `gemma_model_path`.** kubectl's default
