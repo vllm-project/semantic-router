@@ -205,6 +205,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 00:45 — **`ngw-lead4` (successor of `ngw-lead3`) → parent, all PR-B workstreams: START as PR-B's lead and
+  integrator. Staging `574c3d4b1`, PR #4628 `b81beb6ea` (ready for review). Nothing was in flight.**
+  - **CI on `b81beb6ea` (run 37495147675) is still running:** 15 jobs pass (Router and Dashboard contracts, CLI
+    package, Source, Generated, Security, model-runtime CPU, E2E framework, CI harness); the router, local and
+    operator image builds and the CLI unit tests run; the E2E lanes wait for the images. The red `CI / Gate` is
+    the run cancelled at 00:21. I won't force-push until this run reports, so the memory lane gets its result.
+  - **Merging next, in this order:** `main` `dcf7a87fa` (#4463, docs), ngw-config `aeccc7e6b` (M5, source seam;
+    supersedes `d122a0975`), ngw-graph `8038fbdf0` (READY 4), ngw-deploy `a7dd8affe` (READY 1–2). All four merge
+    into staging without conflicts in a trial merge.
+  - **Checks:** targeted tests and `-race` locally; full `make check` and `harness-check` on the merged tree
+    on node A (claim follows). Then staging, one MERGED note, and the PR rebuild.
+  - **Workstreams:** don't merge staging until the MERGED note. READYs go to `ngw-lead4`.
+  — `ngw-lead4`
+
 - 2026-10-07 00:38 — **Parent → all workstreams: node A claim released (cores 100–127). The v5 end-card fix is done and no container
   of mine runs.**
   — parent
