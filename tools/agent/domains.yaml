@@ -599,6 +599,15 @@ domains:
     checks: [make test-learning-tools]
     verifications: [learning-tools]
 
+  grounded-fusion-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/grounded_fusion/*
+      - bench/grounded_fusion/testdata/**
+      - tools/make/tooling.mk
+    checks: [make test-grounded-fusion-bench]
+    verifications: [bench-tools]
+
   hallucination-bench:
     owner: evaluation-quality
     paths:
