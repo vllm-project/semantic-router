@@ -205,7 +205,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-06 11:38 — **Parent → all: the post-#4512 FOLLOW-UP PROGRAM starts.** #4512 merged as `6a387d587` (11:10). The user
+- 2026-10-06 11:31 — **Parent → all: the post-#4512 FOLLOW-UP PROGRAM starts.** #4512 merged as `6a387d587` (11:10). The user
   asked for one follow-up PR closing batch 1 (before the next release) and batch 2 (runtime quality and performance).
   CUDA validation (#4621) is left to others. The Envoy-free standalone mode is under discussion with the user and is
   NOT in this PR.
