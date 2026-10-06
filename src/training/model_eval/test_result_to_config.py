@@ -114,7 +114,6 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
     for key in (
         "model_id",
         "threshold",
-        "variant",
         "positive_labels",
         "jailbreak_mapping_path",
     ):

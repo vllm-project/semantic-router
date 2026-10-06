@@ -91,7 +91,6 @@ DEFAULT_PROMPT_GUARD = {
     "model_id": served_model_path("jailbreak"),
     "threshold": 0.5,
     "use_cpu": True,
-    "variant": "mmbert32k",
     "jailbreak_mapping_path": served_model_path("jailbreak")
     + "/jailbreak_type_mapping.json",
     "positive_labels": ["jailbreak"],
@@ -101,7 +100,6 @@ DEFAULT_DOMAIN_CLASSIFIER = {
     "model_id": served_model_path("intent"),
     "threshold": 0.5,
     "use_cpu": True,
-    "variant": "mmbert32k",
     "category_mapping_path": served_model_path("intent") + "/category_mapping.json",
     "fallback_category": "other",
 }
@@ -110,7 +108,6 @@ DEFAULT_PII_CLASSIFIER = {
     "model_id": served_model_path("pii"),
     "threshold": 0.9,
     "use_cpu": True,
-    "use_mmbert_32k": True,
     "pii_mapping_path": served_model_path("pii") + "/pii_mapping.json",
 }
 
