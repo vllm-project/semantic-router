@@ -16,7 +16,8 @@ The runtime is the `vllm-srun` package and command, released together with
 `vllm-sr` and with the same version. Engine mode (`vllm-sr serve MODEL`) no
 longer needs a repository checkout: install PyTorch from the
 [index that matches your hardware](https://pytorch.org/get-started/locally/),
-then the CLI's `runtime` extra.
+then the CLI's `runtime` extra, which installs the runtime with what every
+built-in model needs (Pillow, for Vela Omni's images).
 
 ```bash
 pip install torch --index-url https://download.pytorch.org/whl/cpu

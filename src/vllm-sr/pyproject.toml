@@ -34,7 +34,7 @@ dependencies = [
 
 [project.optional-dependencies]
 bench = ["pyarrow>=18.0.0", "tomli>=2.0.1; python_version < '3.11'"]
-runtime = ["vllm-srun==0.4.0"]
+runtime = ["vllm-srun[multimodal]==0.4.0"]
 dev = [
     "pytest>=8.4.1",
     "black>=22.0.0",

@@ -28,7 +28,7 @@ class PackageBuildOnlyTests(unittest.TestCase):
         project.mkdir(parents=True)
         (project / "pyproject.toml").write_text(
             '[project]\nname = "vllm-sr"\nversion = "9.8.7"\n'
-            '[project.optional-dependencies]\nruntime = ["vllm-srun==9.8.7"]\n',
+            '[project.optional-dependencies]\nruntime = ["vllm-srun[multimodal]==9.8.7"]\n',
             encoding="utf-8",
         )
         runtime = self.root / "src/model-runtime"

@@ -97,7 +97,7 @@ jobs:
             sed -n 's/^version = "\(.*\)"/\1/p' ../model-runtime/pyproject.toml | head -n1
           )"
           if [[ "$RUNTIME_VERSION" != "$RELEASE_VERSION" ]] ||
-             ! grep -Fqx "runtime = [\"vllm-srun==${RELEASE_VERSION}\"]" pyproject.toml; then
+             ! grep -Fqx "runtime = [\"vllm-srun[multimodal]==${RELEASE_VERSION}\"]" pyproject.toml; then
             echo "::error::vllm-srun '$RUNTIME_VERSION' and vllm-sr[runtime] must carry '$RELEASE_VERSION'"
             exit 1
           fi

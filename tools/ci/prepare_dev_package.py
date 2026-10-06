@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 VERSION_LINE = re.compile(r'^version = "(\d+\.\d+\.\d+)"$', re.MULTILINE)
-RUNTIME_PIN = re.compile(r'"vllm-srun==([^"]+)"')
+RUNTIME_PIN = re.compile(r'"vllm-srun\[multimodal\]==([^"]+)"')
 
 
 def _set_runtime_version(pyproject: Path, base: str, version: str) -> None:
@@ -43,9 +43,11 @@ def prepare_version(
     if runtime is not None:
         pins = RUNTIME_PIN.findall(content)
         if pins != [base]:
-            raise ValueError(f"expected the runtime extra to pin vllm-srun=={base}")
+            raise ValueError(
+                f"expected the runtime extra to pin vllm-srun[multimodal]=={base}"
+            )
         _set_runtime_version(runtime / "pyproject.toml", base, version)
-        content = RUNTIME_PIN.sub(f'"vllm-srun=={version}"', content)
+        content = RUNTIME_PIN.sub(f'"vllm-srun[multimodal]=={version}"', content)
     pyproject.write_text(
         VERSION_LINE.sub(f'version = "{version}"', content), encoding="utf-8"
     )

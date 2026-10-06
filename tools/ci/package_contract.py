@@ -258,7 +258,7 @@ def main() -> None:
             "project"
         ]["version"]
         if runtime_version != value or cli["optional-dependencies"]["runtime"] != [
-            f"vllm-srun=={value}"
+            f"vllm-srun[multimodal]=={value}"
         ]:
             raise ValueError(
                 "vllm-srun and vllm-sr[runtime] must carry vllm-sr's version"

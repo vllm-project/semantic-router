@@ -123,7 +123,7 @@ class ReleaseVersionContractTests(unittest.TestCase):
         self.assertEqual(contract.runtime_version, contract.pyproject_version)
         self.assertEqual(
             contract.runtime_requirements,
-            (f"vllm-srun=={contract.pyproject_version}",),
+            (f"vllm-srun[multimodal]=={contract.pyproject_version}",),
         )
         errors: list[str] = []
         release_contract.validate_runtime_package(
@@ -132,7 +132,12 @@ class ReleaseVersionContractTests(unittest.TestCase):
         self.assertEqual(errors, [])
 
         for runtime_version, requirements, expected in (
-            ("0.2.0", ("vllm-srun==9.8.7",), "vllm-srun version has '0.2.0'"),
+            (
+                "0.2.0",
+                ("vllm-srun[multimodal]==9.8.7",),
+                "vllm-srun version has '0.2.0'",
+            ),
+            ("9.8.7", ("vllm-srun==9.8.7",), "'runtime' extra has 'vllm-srun==9.8.7'"),
             ("9.8.7", ("vllm-srun>=9.8",), "'runtime' extra has 'vllm-srun>=9.8'"),
             ("9.8.7", (), "'runtime' extra has ''"),
         ):
