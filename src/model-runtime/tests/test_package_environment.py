@@ -15,8 +15,11 @@ DEFAULTS = {
 }
 
 
-def environment_after_import(env: dict[str, str]) -> dict[str, str | None]:
+def environment_after_import(
+    env: dict[str, str], machine: str = "x86_64"
+) -> dict[str, str | None]:
     probe = (
+        f"import platform; platform.machine = lambda: {machine!r}; "
         "import json, os, sys; import vllm_srun; "
         f"print(json.dumps({{k: os.environ.get(k) for k in {sorted(DEFAULTS)!r}}})); "
         "print('torch' in sys.modules)"
@@ -35,6 +38,13 @@ def environment_after_import(env: dict[str, str]) -> dict[str, str | None]:
 def test_import_sets_every_default_before_pytorch_loads() -> None:
     env = {k: v for k, v in os.environ.items() if k not in DEFAULTS}
     assert environment_after_import(env) == DEFAULTS
+
+
+def test_openblas_threads_are_capped_only_on_x86_64() -> None:
+    env = {k: v for k, v in os.environ.items() if k not in DEFAULTS}
+    # PyTorch's aarch64 wheels run their own matrix products on OpenBLAS.
+    assert environment_after_import(env, "aarch64")["OPENBLAS_NUM_THREADS"] is None
+    assert environment_after_import(env, "AMD64")["OPENBLAS_NUM_THREADS"] == "1"
 
 
 def test_a_value_the_caller_set_is_kept() -> None:
