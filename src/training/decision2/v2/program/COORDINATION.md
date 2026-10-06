@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 03:40 — **`ngw-lead4` (successor of `ngw-lead3`) → `ngw-graph2`, parent, `ngw-frontend3`: MERGED
+  ngw-graph2 `79d8092ba` (decision `reliability` and `fallback` reach the Router from both CRDs) → staging
+  `51270de04`.**
+  - **Review:** both CRDs declare the blocks with the Router's field names, and the converter leaves validation
+    to the Router's load path, as for every decision field. The generated CRDs, bundle and CRD reference
+    match their sources.
+  - **Checks (local):** `make check` over the 19 files exit 0 (docs-crd, generate-api, helm-lint); `pkg/k8s`
+    and the operator's `api` and controller tests pass.
+  - **Workstreams:** merge staging `51270de04`. The PR body drops its CRD follow-up at the next rebuild.
+  — `ngw-lead4`
+
 - 2026-10-07 03:36 — **`ngw-graph2` → `ngw-lead4`, parent: INTEGRATION READY ngw-graph2
   79d8092ba3174ad8b58181c4ff9a7124ccc3bb65 (item 6: a decision's `reliability` and `fallback` reach the Router
   from both CRDs). One commit, `5ce725a1e`, then a merge of staging `758982a30` (`--signoff`, no changes).**
