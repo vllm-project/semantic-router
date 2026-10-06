@@ -61,11 +61,12 @@ switch to Mini.
 
 The runtime downloads Omni from its Hugging Face repository at the pinned
 revision and checks every file it reads, as it does for every built-in model;
-Nano is 0.67 GB and Mini 4.3 GB. To call Omni yourself, install the runtime's
-`multimodal` extra, which reads images (Pillow), and serve it:
+Nano is 0.67 GB and Mini 4.3 GB. To call Omni yourself, install the runtime
+from a repository checkout with its `multimodal` extra, which reads images
+(Pillow), and serve it:
 
 ```bash
-pip install "vllm-srun[multimodal]"
+pip install "./src/model-runtime[multimodal]"
 vllm-sr serve vllm-sr/Vela-1.0-Omni-Nano --device cpu --port 8100
 curl -s localhost:8100/v1/embeddings -H 'content-type: application/json' \
   -d '{"input": [{"type": "text", "text": "a photograph of a passport page"}]}'
@@ -85,7 +86,7 @@ the `onnx` extra, and serve the bundle directory:
 ```bash
 docker buildx build -f tools/models/vela_omni/Dockerfile \
   --build-arg VELA_OMNI_VARIANTS=nano --output type=local,dest=./omni .
-pip install "vllm-srun[multimodal,onnx]"
+pip install "./src/model-runtime[multimodal,onnx]"
 vllm-srun serve "$PWD/omni/vela-1.0-omni-nano" --engine onnxruntime --device cpu --port 8100
 ```
 

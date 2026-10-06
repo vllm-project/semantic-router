@@ -17,31 +17,22 @@ translation:
 
 ## 1. 安装 {#1-install}
 
-运行时是 Python 包 `vllm-srun`，与 `vllm-sr` CLI 一起发布，版本号相同。先从
-[与你的硬件匹配的索引](https://pytorch.org/get-started/locally/)（CPU、CUDA 或 ROCm）
-安装 PyTorch，再安装带 `runtime` extra 的 CLI。该 extra 会连同每个内置模型所需的依赖一起安装运行时
-（Vela Omni 的图像需要 Pillow）。本指南在虚拟环境中使用 CPU 版：
-
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install "vllm-sr[runtime]"
-```
-
-**下一个版本发布之前。** `runtime` extra 随 `vllm-sr` 的下一个版本发布。更早的版本没有它，
-上面的命令只会安装 CLI。在该版本发布之前，请改为从仓库 checkout 安装这两个包：
+运行时是 Python 包 `vllm-srun`。每个路由器镜像都自带它，它不发布到 PyPI，所以在你自己的机器上，
+要从仓库 checkout 安装它，和 `vllm-sr` CLI 放在一起。用 CPU 版 PyTorch 把两者装进同一个虚拟环境：
 
 ```bash
 git clone https://github.com/vllm-project/semantic-router.git
 cd semantic-router
+python3 -m venv .venv
+. .venv/bin/activate
+pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install ./src/vllm-sr ./src/model-runtime
 ```
 
-在 ROCm 上，只有路由器镜像保证答案与已发布的模型包逐字节一致，因为镜像携带发布时所用的
+使用 GPU 时，请改从[与你的硬件匹配的索引](https://pytorch.org/get-started/locally/)（CUDA 或 ROCm）
+安装 PyTorch。在 ROCm 上，只有路由器镜像保证答案与已发布的模型包逐字节一致，因为镜像携带发布时所用的
 PyTorch 构建。用官方 PyTorch wheel 经 `pip` 安装同样能运行这些模型，但答案可能略有差异
-（见[选择模型](./choose-a-model.md#hardware)）。只有开发运行时才需要仓库 checkout
-（`make model-runtime-install`）。
+（见[选择模型](./choose-a-model.md#hardware)）。
 
 确认运行时能看到它的内置模型：
 

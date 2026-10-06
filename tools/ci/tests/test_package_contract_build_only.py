@@ -27,14 +27,7 @@ class PackageBuildOnlyTests(unittest.TestCase):
         project = self.root / "src/vllm-sr"
         project.mkdir(parents=True)
         (project / "pyproject.toml").write_text(
-            '[project]\nname = "vllm-sr"\nversion = "9.8.7"\n'
-            '[project.optional-dependencies]\nruntime = ["vllm-srun[multimodal]==9.8.7"]\n',
-            encoding="utf-8",
-        )
-        runtime = self.root / "src/model-runtime"
-        runtime.mkdir(parents=True)
-        (runtime / "pyproject.toml").write_text(
-            '[project]\nname = "vllm-srun"\nversion = "9.8.7"\n', encoding="utf-8"
+            '[project]\nname = "vllm-sr"\nversion = "9.8.7"\n', encoding="utf-8"
         )
         self.output = self.root / "output"
         self.commands: list[tuple[str, ...]] = []
@@ -42,15 +35,11 @@ class PackageBuildOnlyTests(unittest.TestCase):
 
     def fake_run(self, *command: str) -> None:
         self.commands.append(command)
-        names = {"src/vllm-sr": "vllm_sr", "src/model-runtime": "vllm_srun"}
-        if command[1:3] == ("-m", "build") and command[3] in names:
+        if command[1:4] == ("-m", "build", "src/vllm-sr"):
             dist = Path(command[-1])
-            dist.mkdir(parents=True, exist_ok=True)
-            name = names[command[3]]
-            (dist / f"{name}-9.8.7-py3-none-any.whl").write_bytes(
-                b"wheel " + name.encode()
-            )
-            (dist / f"{name}-9.8.7.tar.gz").write_bytes(b"sdist " + name.encode())
+            dist.mkdir(parents=True)
+            (dist / "vllm_sr-9.8.7-py3-none-any.whl").write_bytes(b"wheel")
+            (dist / "vllm_sr-9.8.7.tar.gz").write_bytes(b"sdist")
 
     def fake_check_output(self, command: list[str], **_kwargs: object) -> str:
         self.git_commands.append(tuple(command))
@@ -60,7 +49,7 @@ class PackageBuildOnlyTests(unittest.TestCase):
             return self.BASE_SHA + "\n"
         raise AssertionError(f"Unexpected Git command: {command}")
 
-    def invoke(self, *flags: str) -> tuple[mock.MagicMock, ...]:
+    def invoke(self, *flags: str) -> tuple[mock.MagicMock, mock.MagicMock]:
         argv = [
             "package_contract.py",
             "--mode",
@@ -82,23 +71,19 @@ class PackageBuildOnlyTests(unittest.TestCase):
                 side_effect=self.fake_check_output,
             ),
             mock.patch.object(package_contract, "verify_resources") as resources,
-            mock.patch.object(
-                package_contract, "verify_runtime_resources"
-            ) as runtime_resources,
             mock.patch.object(package_contract, "check_wheel") as installed,
-            mock.patch.object(package_contract, "check_runtime_wheel") as runtime,
             mock.patch.object(
                 package_contract, "host_platform", return_value="linux/amd64"
             ),
             mock.patch.object(sys, "argv", argv),
         ):
             package_contract.main()
-        return resources, installed, runtime_resources, runtime
+        return resources, installed
 
     def test_build_only_keeps_distribution_integrity_without_test_qualification(
         self,
     ) -> None:
-        resources, installed, runtime_resources, runtime = self.invoke("--build-only")
+        resources, installed = self.invoke("--build-only")
 
         self.assertEqual(self.git_commands, [("git", "rev-parse", "HEAD")])
         self.assertEqual(
@@ -137,12 +122,6 @@ class PackageBuildOnlyTests(unittest.TestCase):
         )
         resources.assert_called_once()
         installed.assert_not_called()
-        runtime_resources.assert_called_once()
-        runtime.assert_not_called()
-        built = [
-            command[3] for command in self.commands if command[1:3] == ("-m", "build")
-        ]
-        self.assertEqual(built, ["src/vllm-sr", "src/model-runtime"])
 
         dist = self.output / "dist"
         manifest = json.loads((dist / "manifest.json").read_text())
@@ -190,7 +169,7 @@ class PackageBuildOnlyTests(unittest.TestCase):
             package_contract.main()
 
     def test_normal_qualification_still_runs_all_checks_and_resolves_base(self) -> None:
-        resources, installed, runtime_resources, runtime = self.invoke()
+        resources, installed = self.invoke()
         self.assertEqual(
             self.git_commands,
             [
@@ -217,10 +196,6 @@ class PackageBuildOnlyTests(unittest.TestCase):
         )
         resources.assert_called_once()
         installed.assert_called_once()
-        runtime_resources.assert_called_once()
-        (runtime_wheel, cli_wheel), _ = runtime.call_args
-        self.assertEqual(runtime_wheel.name, "vllm_srun-9.8.7-py3-none-any.whl")
-        self.assertEqual(cli_wheel.name, "vllm_sr-9.8.7-py3-none-any.whl")
 
     def test_build_only_requires_release_mode(self) -> None:
         with (

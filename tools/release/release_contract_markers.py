@@ -67,15 +67,6 @@ def sim_release_workflow_markers() -> MarkerSet:
     )
 
 
-def runtime_release_notes_markers() -> MarkerSet:
-    return (
-        (
-            "unified release notes runtime extra",
-            'pip install "vllm-sr[runtime]==${{ needs.validate.outputs.version }}"',
-        ),
-    )
-
-
 def sim_release_notes_markers() -> MarkerSet:
     return (
         ("unified release notes simulator tag stream", "vllm-sr-sim-v*"),

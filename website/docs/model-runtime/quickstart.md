@@ -14,36 +14,27 @@ for the model download. No GPU is needed.
 
 ## 1. Install
 
-The runtime is the `vllm-srun` Python package, released together with the
-`vllm-sr` CLI and with the same version. Install PyTorch first, from the
-[index that matches your hardware](https://pytorch.org/get-started/locally/)
-(CPU, CUDA or ROCm), then the CLI with its `runtime` extra, which installs the
-runtime with what every built-in model needs (Pillow, for Vela Omni's images).
-This guide uses the CPU build, in a virtual environment:
-
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install "vllm-sr[runtime]"
-```
-
-**Before the next release.** The `runtime` extra ships with the next release
-of `vllm-sr`. Earlier versions don't have it, so the command above installs
-only the CLI. Until that release, install both packages from a checkout of the
-repository instead:
+The runtime is the `vllm-srun` Python package. Every router image ships it, and
+it is not published to PyPI, so on your own machine you install it from a
+checkout of the repository, next to the `vllm-sr` CLI. Install both into a
+virtual environment, with the CPU build of PyTorch:
 
 ```bash
 git clone https://github.com/vllm-project/semantic-router.git
 cd semantic-router
+python3 -m venv .venv
+. .venv/bin/activate
+pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install ./src/vllm-sr ./src/model-runtime
 ```
 
-On ROCm, answers byte-identical to the released packages are guaranteed in the
-router images, which carry the release's own PyTorch build. A `pip` install
-with the official PyTorch wheel serves the same models, but its answers can
-differ slightly ([Choose a model](./choose-a-model.md#hardware)). A repository
-checkout is needed only to develop the runtime (`make model-runtime-install`).
+For a GPU, install PyTorch from the
+[index that matches your hardware](https://pytorch.org/get-started/locally/)
+(CUDA or ROCm) instead. On ROCm, answers byte-identical to the released
+packages are guaranteed in the router images, which carry the release's own
+PyTorch build. A `pip` install with the official PyTorch wheel serves the same
+models, but its answers can differ slightly
+([Choose a model](./choose-a-model.md#hardware)).
 
 Check that the runtime sees its built-in models:
 

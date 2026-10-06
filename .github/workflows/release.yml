@@ -229,14 +229,6 @@ jobs:
             pip install vllm-sr==${{ needs.validate.outputs.version }}
             ```
 
-            Engine mode (`vllm-sr serve MODEL`) also needs the model runtime,
-            `vllm-srun`, released with the same version. Install PyTorch from
-            the index that matches the hardware first, then:
-
-            ```bash
-            pip install "vllm-sr[runtime]==${{ needs.validate.outputs.version }}"
-            ```
-
             ### Built-in virtual models
 
             Curated virtual models and their versioned Recipe YAML are bundled

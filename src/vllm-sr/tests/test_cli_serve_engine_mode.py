@@ -215,7 +215,7 @@ def test_engine_mode_without_the_runtime_explains_the_install(monkeypatch):
     result = CliRunner().invoke(main, ["serve", "vllm-sr/Decision-2.0-Kai-0.6B"])
 
     assert result.exit_code == 1
-    assert 'pip install "vllm-sr[runtime]"' in result.output
+    assert "pip install ./src/model-runtime" in result.output
 
 
 def test_serve_help_documents_engine_mode():

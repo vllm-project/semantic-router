@@ -10,25 +10,24 @@ same Vela model as before, now served by the runtime. Read the breaking changes
 before you upgrade an operator deployment, a training pipeline, stored vectors
 or a runtime you run yourself.
 
-## Install the runtime with the CLI
+## The runtime ships in the router images
 
-The runtime is the `vllm-srun` package and command, released together with
-`vllm-sr` and with the same version. Engine mode (`vllm-sr serve MODEL`) no
-longer needs a repository checkout: install PyTorch from the
-[index that matches your hardware](https://pytorch.org/get-started/locally/),
-then the CLI's `runtime` extra, which installs the runtime with what every
-built-in model needs (Pillow, for Vela Omni's images).
+The runtime is the `vllm-srun` package and command. Every router image ships
+it, and it is not published to PyPI: `vllm-sr` stays the only PyPI package.
+Engine mode (`vllm-sr serve MODEL`) on your own machine needs the runtime
+installed next to the CLI from a checkout of the repository. Install PyTorch
+from the [index that matches your hardware](https://pytorch.org/get-started/locally/),
+then both packages:
 
 ```bash
 pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install "vllm-sr[runtime]"
+pip install ./src/vllm-sr ./src/model-runtime
 vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
 ```
 
-The `vllm-sr` wheel itself stays CLI-only, and every router image already
-ships the runtime. On ROCm, answers byte-identical to the released model
-packages are guaranteed in the router images, which carry the release's own
-PyTorch build, not in a `pip` install with the official PyTorch wheel. See the
+On ROCm, answers byte-identical to the released model packages are guaranteed
+in the router images, which carry the release's own PyTorch build, not in a
+`pip` install with the official PyTorch wheel. See the
 [model runtime Quickstart](model-runtime/quickstart.md).
 
 Builds of `main` between

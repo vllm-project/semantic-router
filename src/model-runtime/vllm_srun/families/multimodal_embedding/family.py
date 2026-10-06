@@ -233,7 +233,7 @@ class MultimodalEmbeddingFamily(ModelFamily):
         if missing:
             raise RuntimeError(
                 f"Omni {'bundles' if kind == 'bundle' else 'models'} need {' and '.join(missing)}: "
-                f"pip install 'vllm-srun[{INSTALL[kind]}]'"
+                f"pip install './src/model-runtime[{INSTALL[kind]}]' from a repository checkout"
             )
 
     def describe(self, package: VerifiedPackage) -> ModelSpec:

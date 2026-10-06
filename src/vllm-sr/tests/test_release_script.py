@@ -27,17 +27,7 @@ def test_release_tags_the_release_version_and_starts_the_next_cycle(
 
     pyproject = tmp_path / "src" / "vllm-sr" / "pyproject.toml"
     pyproject.write_text(
-        f'[project]\nversion = "{current_version}"\n'
-        "[project.optional-dependencies]\n"
-        f'runtime = ["vllm-srun[multimodal]=={current_version}"]\n',
-        encoding="utf-8",
-    )
-    runtime = tmp_path / "src" / "model-runtime" / "pyproject.toml"
-    runtime.parent.mkdir(parents=True)
-    runtime.write_text(
-        f'[project]\nversion = "{current_version}"\n'
-        '[tool.mypy]\npython_version = "3.10"\n',
-        encoding="utf-8",
+        f'[project]\nversion = "{current_version}"\n', encoding="utf-8"
     )
     checker = tmp_path / "tools" / "release" / "check_version_contract.py"
     checker.parent.mkdir(parents=True)
@@ -55,12 +45,10 @@ def test_release_tags_the_release_version_and_starts_the_next_cycle(
 
     run(tmp_path, "bash", str(script), "0.4.0", "0.5.0")
 
-    for ref, version in (("v0.4.0", "0.4.0"), ("HEAD", "0.5.0")):
-        cli = run(tmp_path, "git", "show", f"{ref}:src/vllm-sr/pyproject.toml")
-        assert f'version = "{version}"' in cli
-        assert f'runtime = ["vllm-srun[multimodal]=={version}"]' in cli
-        assert (
-            run(tmp_path, "git", "show", f"{ref}:src/model-runtime/pyproject.toml")
-            == f'[project]\nversion = "{version}"\n[tool.mypy]\npython_version = "3.10"'
-        )
+    assert 'version = "0.4.0"' in run(
+        tmp_path, "git", "show", "v0.4.0:src/vllm-sr/pyproject.toml"
+    )
+    assert 'version = "0.5.0"' in run(
+        tmp_path, "git", "show", "HEAD:src/vllm-sr/pyproject.toml"
+    )
     assert run(tmp_path, "git", "status", "--porcelain") == ""

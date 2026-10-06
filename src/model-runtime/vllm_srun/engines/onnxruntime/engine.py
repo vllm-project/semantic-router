@@ -37,7 +37,10 @@ from ...plugins.base import (
 from . import graphs as graph_files
 from . import providers
 
-INSTALL_HINT = "install the onnx extra: pip install 'vllm-srun[onnx]'"
+INSTALL_HINT = (
+    "install the runtime's onnx extra from a repository checkout: "
+    "pip install './src/model-runtime[onnx]'"
+)
 NUMPY_TYPES = {
     "tensor(int64)": np.int64,
     "tensor(int32)": np.int32,

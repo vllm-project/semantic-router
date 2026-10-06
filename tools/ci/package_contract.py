@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and qualify the final CLI and runtime distributions before they can be published."""
+"""Build and qualify the final CLI distribution before it can be published."""
 
 from __future__ import annotations
 
@@ -14,14 +14,11 @@ from pathlib import Path
 
 import tomllib
 from check_cli_wheel import check_wheel
-from check_runtime_wheel import check_runtime_wheel
 from prepare_dev_package import prepare_version
 from runtime_evidence import host_platform
 
 ROOT = Path(__file__).resolve().parents[2]
 DISTRIBUTION_SUFFIXES = (".whl", ".tar.gz")
-# Both distributions share one version; vllm-sr[runtime] pins vllm-srun to it.
-DISTRIBUTIONS = ("vllm_sr", "vllm_srun")
 CHECKS = [
     "catalog.compiler",
     "catalog.completeness",
@@ -32,7 +29,6 @@ CHECKS = [
     "package.metadata",
     "package.resources",
     "package.installed",
-    "package.runtime",
 ]
 BUILD_ONLY_CHECKS = [
     "package.version",
@@ -78,43 +74,6 @@ def verify_resources(wheel: Path, sdist: Path) -> None:
                 )
 
 
-def verify_runtime_resources(wheel: Path, sdist: Path) -> None:
-    """Every runtime module and data file (contract, goldens) survives both formats."""
-    package_root = ROOT / "src/model-runtime"
-    paths = sorted(
-        path
-        for path in (package_root / "vllm_srun").rglob("*")
-        if path.is_file() and "__pycache__" not in path.parts
-    )
-    with zipfile.ZipFile(wheel) as whl, tarfile.open(sdist) as archive:
-        prefix = archive.getmembers()[0].name.split("/")[0]
-        for path in paths:
-            name = path.relative_to(package_root).as_posix()
-            member = archive.extractfile(prefix + "/" + name)
-            if (
-                member is None
-                or member.read() != path.read_bytes()
-                or whl.read(name) != path.read_bytes()
-            ):
-                raise ValueError(
-                    f"Packaged runtime file differs from the qualified source: {name}"
-                )
-
-
-def distribution_files(dist: Path) -> dict[str, tuple[Path, Path]]:
-    """The one wheel and source distribution of each package, by distribution."""
-    found = {}
-    for name in DISTRIBUTIONS:
-        wheels = list(dist.glob(f"{name}-*.whl"))
-        sources = list(dist.glob(f"{name}-*.tar.gz"))
-        if len(wheels) != 1 or len(sources) != 1:
-            raise ValueError(
-                f"Expected exactly one {name} wheel and one source distribution"
-            )
-        found[name] = (wheels[0], sources[0])
-    return found
-
-
 def verify_distribution(directory: Path, mode: str, tag: str) -> None:
     manifest = json.loads((directory / "manifest.json").read_text())
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
@@ -127,15 +86,8 @@ def verify_distribution(directory: Path, mode: str, tag: str) -> None:
             "Package candidate differs from the qualified source or publication context"
         )
     files = manifest["files"]
-    identities = sorted(
-        (name.split("-")[0], name.split("-")[1].removesuffix(suffix), suffix)
-        for name in files
-        for suffix in DISTRIBUTION_SUFFIXES
-        if name.endswith(suffix)
-    )
-    if len(identities) != len(files) or identities != sorted(
-        (distribution, manifest["version"], suffix)
-        for distribution in DISTRIBUTIONS
+    if len(files) != len(DISTRIBUTION_SUFFIXES) or any(
+        not any(name.endswith(suffix) for name in files)
         for suffix in DISTRIBUTION_SUFFIXES
     ):
         raise ValueError("Incomplete final package inventory")
@@ -244,25 +196,16 @@ def main() -> None:
 
     def version():
         project = ROOT / "src/vllm-sr"
-        runtime = ROOT / "src/model-runtime"
         if args.mode in {"main", "nightly"}:
             epoch = int(
                 subprocess.check_output(
                     ["git", "show", "-s", "--format=%ct", "HEAD"], text=True
                 )
             )
-            prepare_version(project, epoch, runtime=runtime)
-        cli = tomllib.loads((project / "pyproject.toml").read_text())["project"]
-        value = cli["version"]
-        runtime_version = tomllib.loads((runtime / "pyproject.toml").read_text())[
-            "project"
-        ]["version"]
-        if runtime_version != value or cli["optional-dependencies"]["runtime"] != [
-            f"vllm-srun[multimodal]=={value}"
-        ]:
-            raise ValueError(
-                "vllm-srun and vllm-sr[runtime] must carry vllm-sr's version"
-            )
+            prepare_version(project, epoch)
+        value = tomllib.loads((project / "pyproject.toml").read_text())["project"][
+            "version"
+        ]
         if args.mode == "release":
             if args.tag != "v" + value:
                 raise ValueError("Release tag does not match the final package version")
@@ -282,31 +225,23 @@ def main() -> None:
     )
     run(python, "tools/release/stage_model_catalog_package.py", "--check")
     dist = output / "dist"
-
-    def build():
-        for project in ("src/vllm-sr", "src/model-runtime"):
-            run(python, "-m", "build", project, "--outdir", str(dist))
-
-    check("package.build", build)
-    built = distribution_files(dist)
-    wheels, sources = [built["vllm_sr"][0]], [built["vllm_sr"][1]]
-    runtime_wheel, runtime_sdist = built["vllm_srun"]
-    files = [path for pair in built.values() for path in pair]
+    check(
+        "package.build",
+        lambda: run(python, "-m", "build", "src/vllm-sr", "--outdir", str(dist)),
+    )
+    wheels, sources = list(dist.glob("*.whl")), list(dist.glob("*.tar.gz"))
+    if len(wheels) != 1 or len(sources) != 1:
+        raise ValueError("Expected exactly one wheel and one source distribution")
     check(
         "package.metadata",
-        lambda: run(python, "-m", "twine", "check", *map(str, files)),
+        lambda: run(python, "-m", "twine", "check", str(wheels[0]), str(sources[0])),
     )
-
-    def resources():
-        verify_resources(wheels[0], sources[0])
-        verify_runtime_resources(runtime_wheel, runtime_sdist)
-
-    check("package.resources", resources)
+    check("package.resources", lambda: verify_resources(wheels[0], sources[0]))
     if not args.build_only:
         check("package.installed", lambda: check_wheel(wheels[0]))
-        check("package.runtime", lambda: check_runtime_wheel(runtime_wheel, wheels[0]))
     manifest["files"] = {
-        path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in files
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in wheels + sources
     }
     (dist / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 

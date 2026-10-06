@@ -128,16 +128,6 @@ artifacts are never promoted automatically.
    Python, crate, and Operator publishers.
 5. Verify every publisher before treating the GitHub release as complete.
 
-The Python publisher releases `vllm-srun` (the model runtime) with `vllm-sr`,
-at the same version, and uploads it first. Both upload with API tokens:
-`vllm-srun` with the `VLLM_SRUN_PYPI_API_TOKEN` secret, falling back to
-`PYPI_API_TOKEN`, and `vllm-sr` with `PYPI_API_TOKEN`. The manual TestPyPI
-dispatch uses `TEST_VLLM_SRUN_PYPI_API_TOKEN`, falling back to
-`TEST_PYPI_API_TOKEN`, and `TEST_PYPI_API_TOKEN`. The publisher checks both
-tokens before it uploads anything, so a missing secret fails the job without
-publishing one package of the pair. The dev channel publishes the pair from
-validated `main` commits too.
-
 Fleet Simulator uses its own package version and tag stream. Keep that release
 independent from the main Router version unless a documented compatibility
 constraint requires coordinated updates.

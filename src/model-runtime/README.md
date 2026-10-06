@@ -5,8 +5,8 @@ embedders and rerankers) behind one HTTP contract. One process can serve
 several models. The router manages it for `model_runtime` deployments, and
 `vllm-sr serve <hf-model> [<hf-model> ...]` runs it on its own.
 
-It is released with the `vllm-sr` CLI, with the same version:
-`pip install "vllm-sr[runtime]"` installs both. Install PyTorch first, from
+Every router image ships it; it is not published to PyPI. To run it on your
+own machine, install it from a checkout of the repository, after PyTorch from
 the [index that matches your hardware](https://pytorch.org/get-started/locally/)
 (CPU, CUDA or ROCm). On ROCm, answers byte-identical to the released model
 packages are guaranteed in the router images, which carry the release's own
@@ -14,7 +14,7 @@ PyTorch build.
 
 ```bash
 pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install vllm-srun
+pip install ./src/model-runtime
 vllm-srun serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
 curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
   "state": "Write a Python function that merges two sorted lists.",

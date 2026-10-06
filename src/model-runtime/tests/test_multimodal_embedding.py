@@ -59,7 +59,7 @@ def test_a_missing_extra_names_its_install(nano, monkeypatch):
     package = family.verify(PackageRef(nano))
     with pytest.raises(
         RuntimeError,
-        match=r"Omni bundles need Pillow: pip install 'vllm-srun\[multimodal,onnx\]'",
+        match=r"Omni bundles need Pillow: pip install '\./src/model-runtime\[multimodal,onnx\]'",
     ):
         family.describe(package)
 

@@ -52,7 +52,6 @@ domains:
       - tools/release/snapshot_model_catalog.py
       - tools/ci/package_contract.py
       - tools/ci/check_cli_wheel.py
-      - tools/ci/check_runtime_wheel.py
       - tools/ci/prepare_dev_package.py
       - config/schemas/recipe-metadata-v1.schema.json
       - config/schemas/recipe-probes-v1.schema.json
