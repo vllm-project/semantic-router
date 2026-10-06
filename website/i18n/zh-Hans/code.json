@@ -3256,5 +3256,509 @@
   },
   "homepage.install.channelDescription": {
     "message": "与最新文档一致，包含内置模型运行时。"
+  },
+  "homepage.runtimeModes.router.title": {
+    "message": "一个端点，连接你的模型集群。"
+  },
+  "homepage.runtimeModes.router.flow.client": {
+    "message": "应用与 Agent"
+  },
+  "homepage.runtimeModes.router.extproc": {
+    "message": "原生 HTTP 网关，通过 {flag} 启用 Envoy。"
+  },
+  "homepage.runtimeModes.engine.title": {
+    "message": "把模型能力融入自己的代码。"
+  },
+  "homepage.runtimeModes.engine.flow.client": {
+    "message": "你的应用"
+  },
+  "homepage.runtimeModes.engine.tasks": {
+    "message": "API 取决于所加载的模型。"
+  },
+  "homepage.runtimeModes.router.backend.cloud": {
+    "message": "云端"
+  },
+  "homepage.runtimeModes.router.backend.private": {
+    "message": "私有"
+  },
+  "homepage.runtimeModes.router.backend.local": {
+    "message": "本地"
+  },
+  "homepage.runtimeModes.router.visualCaption": {
+    "message": "选择、级联或组合多个模型"
+  },
+  "homepage.runtimeModes.engine.typedResults": {
+    "message": "结构化结果"
+  },
+  "homepage.runtimeModes.engine.vectors": {
+    "message": "向量与排序"
+  },
+  "homepage.runtimeModes.engine.visualCaption": {
+    "message": "模型输出，由你的应用掌控逻辑"
+  },
+  "homepage.runtimeModes.router.coreLabel": {
+    "message": "Router"
+  },
+  "homepage.runtimeModes.engine.coreLabel": {
+    "message": "Engine"
+  },
+  "homepage.capabilities.table.dimension": {
+    "message": "维度"
+  },
+  "homepage.capabilities.table.reality": {
+    "message": "当下的碎片化"
+  },
+  "homepage.capabilities.table.value": {
+    "message": "使用 vLLM SR"
+  },
+  "homepage.capabilities.table.aria": {
+    "message": "碎片化推理与 vLLM Semantic Router 的对比"
+  },
+  "homepage.capabilities.models.reality": {
+    "message": "不同模型擅长不同任务。"
+  },
+  "homepage.capabilities.models.value": {
+    "message": "让模型优势互补。"
+  },
+  "homepage.capabilities.compute.reality": {
+    "message": "GPU 的速度和容量各不相同。"
+  },
+  "homepage.capabilities.compute.value": {
+    "message": "从已配置的后端中选择。"
+  },
+  "homepage.capabilities.location.reality": {
+    "message": "边缘、私有环境与云端。"
+  },
+  "homepage.capabilities.location.value": {
+    "message": "在允许的区域内路由。"
+  },
+  "homepage.capabilities.preference.reality": {
+    "message": "任务不同，优先级也不同。"
+  },
+  "homepage.capabilities.preference.value": {
+    "message": "设定质量、延迟与成本的优先级。"
+  },
+  "homepage.momProof.architectureAlt": {
+    "message": "vLLM Semantic Router 在异构的闭源与开源模型池之间路由"
+  },
+  "homepage.momProof.architectureCopy": {
+    "message": "模型在限定范围内协作，Harness 继续掌控 Agent 循环。"
+  },
+  "homepage.momProof.architectureLabel": {
+    "message": "路由器侧协作"
+  },
+  "homepage.momProof.architectureTitle": {
+    "message": "一次调用，多模型协作。"
+  },
+  "homepage.momProof.description": {
+    "message": "一个 API，汇聚开放与闭源模型。"
+  },
+  "homepage.momProof.gpqa.alt": {
+    "message": "GPQA-Diamond 深色记分卡，VSR Closed 为 96.0"
+  },
+  "homepage.momProof.gpqa.result": {
+    "message": "96.0，对比 Fugu Ultra 95.5"
+  },
+  "homepage.momProof.gpqa.title": {
+    "message": "GPQA-Diamond"
+  },
+  "homepage.momProof.hle.alt": {
+    "message": "Humanity's Last Exam 深色记分卡，VSR Closed 为 50.0"
+  },
+  "homepage.momProof.hle.result": {
+    "message": "50.0，与 Fugu Ultra 持平"
+  },
+  "homepage.momProof.hle.title": {
+    "message": "Humanity's Last Exam"
+  },
+  "homepage.momProof.label": {
+    "message": "Mixture-of-Models"
+  },
+  "homepage.momProof.livecodebench.alt": {
+    "message": "LiveCodeBench 深色记分卡，VSR Closed 为 92.6"
+  },
+  "homepage.momProof.livecodebench.result": {
+    "message": "92.6，对比 Fugu Ultra 92.0"
+  },
+  "homepage.momProof.livecodebench.title": {
+    "message": "LiveCodeBench"
+  },
+  "homepage.momProof.title": {
+    "message": "让模型携手，变得更强。"
+  },
+  "homepage.sovereignty.cta": {
+    "message": "探索路由策略"
+  },
+  "homepage.sovereignty.description": {
+    "message": "先落实驻留、位置与授权限制，再选择模型。"
+  },
+  "homepage.sovereignty.label": {
+    "message": "数据主权"
+  },
+  "homepage.sovereignty.note": {
+    "message": "没有合规的路由时，请求将被拒绝。"
+  },
+  "homepage.sovereignty.stage.constraints": {
+    "message": "硬约束"
+  },
+  "homepage.sovereignty.stage.constraints.detail": {
+    "message": "驻留 · 本地性 · 授权"
+  },
+  "homepage.sovereignty.stage.eligible": {
+    "message": "合格池"
+  },
+  "homepage.sovereignty.stage.eligible.detail": {
+    "message": "仅限已批准路径"
+  },
+  "homepage.sovereignty.stage.rank": {
+    "message": "排序"
+  },
+  "homepage.sovereignty.stage.rank.detail": {
+    "message": "质量 · 延迟 · 成本"
+  },
+  "homepage.sovereignty.stage.request": {
+    "message": "请求"
+  },
+  "homepage.sovereignty.stage.request.detail": {
+    "message": "身份 + 上下文"
+  },
+  "homepage.sovereignty.title": {
+    "message": "你的数据，你的边界。"
+  },
+  "homepage.alternatives.heading": {
+    "message": "融入你的技术栈。"
+  },
+  "homepage.alternatives.description": {
+    "message": "Harness 负责 Agent 循环与工具执行，Router 负责选择模型与后端。"
+  },
+  "homepage.alternatives.decides.semanticRouter": {
+    "message": "每次请求的模型与策略"
+  },
+  "homepage.alternatives.decides.llmd": {
+    "message": "已选池内的健康副本"
+  },
+  "homepage.alternatives.reads.semanticRouter": {
+    "message": "请求语义与策略"
+  },
+  "homepage.alternatives.owns.semanticRouter": {
+    "message": "模型选择与协作"
+  },
+  "homepage.alternatives.owns.aiGateway": {
+    "message": "提供商接入与流量控制"
+  },
+  "homepage.alternatives.runs.llmd": {
+    "message": "池内调度器，例如 llm-d"
+  },
+  "team.members.1fanwang.role": {
+    "message": "AI 基础设施"
+  },
+  "team.members.1fanwang.bio": {
+    "message": "横跨 AI、智能体与数据基础设施，近段在 vLLM、Ray 和数据系统上做开发。"
+  },
+  "team.members.AayushSaini101.role": {
+    "message": "数据和 AI 领域高级软件工程师"
+  },
+  "team.members.AayushSaini101.bio": {
+    "message": "高级软件工程师，构建企业级 AI 智能体；Google Summer of Code 导师，AsyncAPI 技术指导委员会成员。"
+  },
+  "team.members.AayushSaini101.expertise.enterprise": {
+    "message": "企业级 AI"
+  },
+  "team.members.AayushSaini101.expertise.mentorship": {
+    "message": "开源导师"
+  },
+  "team.members.AayushSaini101.expertise.asyncapi": {
+    "message": "事件驱动 API"
+  },
+  "team.members.AbdallahSamara.role": {
+    "message": "高级软件工程师"
+  },
+  "team.members.AbdallahSamara.bio": {
+    "message": "软件工程师，爱钻研，专注云原生平台与 AI 基础设施。在做语义路由系统，也参与开源 LLM 编排项目。"
+  },
+  "team.members.AsaadBalum.role": {
+    "message": "高级软件工程师"
+  },
+  "team.members.AsaadBalum.bio": {
+    "message": "高级软件工程师，爱钻研，专攻云原生平台、Kubernetes 基础设施和 AI 赋能。"
+  },
+  "team.members.Bevisy.role": {
+    "message": "容器研发工程师"
+  },
+  "team.members.Bevisy.bio": {
+    "message": "Kata Containers 维护者，做 Kubernetes 和容器基础设施。"
+  },
+  "team.members.BoweiHe.role": {
+    "message": "MBZUAI / McGill 博士后"
+  },
+  "team.members.BoweiHe.bio": {
+    "message": "香港城市大学博士，青云计划人才，做过混元 LLM。"
+  },
+  "team.members.BoweiHe.expertise.research": {
+    "message": "学术研究"
+  },
+  "team.members.BoweiHe.expertise.llm": {
+    "message": "LLM 系统"
+  },
+  "team.members.BoweiHe.expertise.hunyuan": {
+    "message": "腾讯混元 LLM"
+  },
+  "team.members.ChenWang.role": {
+    "message": "高级资深研究科学家"
+  },
+  "team.members.ChenWang.bio": {
+    "message": "IBM 高级资深研究科学家，主攻前沿 AI 系统。"
+  },
+  "team.members.HaoWu.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.HaoWu.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.HaolunWu.role": {
+    "message": "总督金奖章 · McGill / Mila 博士 · Stanford 访问学者"
+  },
+  "team.members.HaolunWu.bio": {
+    "message": "研究可信 AI 与从反馈中学习，McGill、Mila 和 Stanford 都待过。"
+  },
+  "team.members.HaolunWu.expertise.feedback": {
+    "message": "从反馈中学习"
+  },
+  "team.members.HaolunWu.expertise.trustworthy": {
+    "message": "可信 AI"
+  },
+  "team.members.HaolunWu.expertise.alignment": {
+    "message": "AI 对齐"
+  },
+  "team.members.HenSchwartz.role": {
+    "message": "软件工程师"
+  },
+  "team.members.HenSchwartz.bio": {
+    "message": "软件工程师，爱钻研，专注云原生平台与 AI 基础设施。在做语义路由系统，也参与开源 LLM 编排项目。"
+  },
+  "team.members.HuaminChen.role": {
+    "message": "@Microsoft"
+  },
+  "team.members.HuaminChen.bio": {
+    "message": "长期耕耘前沿基础设施与 AI 系统，横跨云原生平台、开源生态与模型服务栈。"
+  },
+  "team.members.HuaminChen.expertise.cloud": {
+    "message": "云原生平台"
+  },
+  "team.members.HuaminChen.expertise.serving": {
+    "message": "模型服务栈"
+  },
+  "team.members.HuaminChen.expertise.ecosystem": {
+    "message": "开源生态"
+  },
+  "team.members.JaredforReal.role": {
+    "message": "软件工程师"
+  },
+  "team.members.JaredforReal.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.JintaoZhang.role": {
+    "message": "高级软件工程师"
+  },
+  "team.members.JintaoZhang.bio": {
+    "message": "Kong Inc. 高级软件工程师｜Microsoft MVP｜CNCF 大使｜Kubernetes Ingress-NGINX 维护者｜PyCon China 与 KCD Beijing 组织者。"
+  },
+  "team.members.LiavWeiss.role": {
+    "message": "软件工程师"
+  },
+  "team.members.LiavWeiss.bio": {
+    "message": "软件工程师，主攻后端与云原生系统，AI 基础设施、LLM 系统和 RAG 架构都上手做过。"
+  },
+  "team.members.MarinaKoushnir.role": {
+    "message": "开源贡献者"
+  },
+  "team.members.MarinaKoushnir.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.NoaLimoy.role": {
+    "message": "软件工程师"
+  },
+  "team.members.NoaLimoy.bio": {
+    "message": "软件工程师，爱钻研，专注云原生平台与 AI 基础设施，平时也参与开源。"
+  },
+  "team.members.OneZero-Y.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.OneZero-Y.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.Peterren.role": {
+    "message": "软件工程师"
+  },
+  "team.members.Peterren.bio": {
+    "message": "软件工程师，专注大规模推荐系统、后端工程、LLM 部署与推理。"
+  },
+  "team.members.QipingPan.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.QipingPan.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.SenanZedan.role": {
+    "message": "研发经理"
+  },
+  "team.members.SenanZedan.bio": {
+    "message": "爱亲自动手的工程经理，擅长把团队带成精锐，推着大家交出出色的成果。"
+  },
+  "team.members.SrinivasA.role": {
+    "message": "软件工程师"
+  },
+  "team.members.SrinivasA.bio": {
+    "message": "应用软件工程师，做过分布式控制系统，也做过大数据。"
+  },
+  "team.members.SteveLiu.role": {
+    "message": "@MBZUAI / McGill / Mila"
+  },
+  "team.members.SteveLiu.bio": {
+    "message": "CAE 与 IEEE Fellow；MBZUAI Associate VPR；McGill 与 Mila 教授；前 Samsung AI 研发副总裁；ACM SIGBED 主席。"
+  },
+  "team.members.SteveLiu.expertise.aiml": {
+    "message": "AI 与机器学习"
+  },
+  "team.members.SteveLiu.expertise.systems": {
+    "message": "智能系统"
+  },
+  "team.members.SteveLiu.expertise.cps": {
+    "message": "信息物理系统"
+  },
+  "team.members.WUKUNTAI-0211.role": {
+    "message": "软件工程师"
+  },
+  "team.members.WUKUNTAI-0211.bio": {
+    "message": "软件工程师，给大规模 LLM 服务和智能体搭 AI 基础设施，计算机视觉出身。"
+  },
+  "team.members.WUKUNTAI-0211.expertise.infrastructure": {
+    "message": "LLM 基础设施"
+  },
+  "team.members.WUKUNTAI-0211.expertise.agents": {
+    "message": "AI 智能体"
+  },
+  "team.members.WUKUNTAI-0211.expertise.vision": {
+    "message": "计算机视觉"
+  },
+  "team.members.XunzhuoLiu.role": {
+    "message": "@AMD"
+  },
+  "team.members.XunzhuoLiu.bio": {
+    "message": "为下一个计算时代建多模型混合（MoM）。"
+  },
+  "team.members.XunzhuoLiu.expertise.routing": {
+    "message": "LLM 路由"
+  },
+  "team.members.XunzhuoLiu.expertise.gateway": {
+    "message": "Kubernetes AI Gateway"
+  },
+  "team.members.XunzhuoLiu.expertise.opensource": {
+    "message": "开源基础设施"
+  },
+  "team.members.YankaiChen.role": {
+    "message": "McGill 大学 / MBZUAI 博士后"
+  },
+  "team.members.YankaiChen.bio": {
+    "message": "做智能体 AI、以人为本 AI 和知识挖掘的研究。"
+  },
+  "team.members.YankaiChen.expertise.agentic": {
+    "message": "智能体 AI"
+  },
+  "team.members.YankaiChen.expertise.hcai": {
+    "message": "以人为本的 AI"
+  },
+  "team.members.YankaiChen.expertise.mining": {
+    "message": "知识挖掘"
+  },
+  "team.members.Yehudit.role": {
+    "message": "软件工程师"
+  },
+  "team.members.Yehudit.bio": {
+    "message": "软件工程师，爱钻研，专注云原生平台与 AI 基础设施，平时也参与开源。"
+  },
+  "team.members.YossiOvadia.role": {
+    "message": "资深首席工程师"
+  },
+  "team.members.YossiOvadia.bio": {
+    "message": "琢磨好用的工具，让开发者和客户都省心。来自 Red Hat CTO 办公室。"
+  },
+  "team.members.YueZhu.role": {
+    "message": "杰出研究科学家"
+  },
+  "team.members.YueZhu.bio": {
+    "message": "IBM 杰出研究科学家，方向是 AI 研究和 LLM 推理。"
+  },
+  "team.members.aeft.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.aeft.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.akshayv.role": {
+    "message": "PMTS，Silo AI"
+  },
+  "team.members.akshayv.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.carlory.role": {
+    "message": "开源工程师"
+  },
+  "team.members.carlory.bio": {
+    "message": "DaoCloud 开源工程师，专注容器技术和云原生方案，热衷给 vLLM 等开源项目做贡献。"
+  },
+  "team.members.cryo-zd.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.cryo-zd.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.drivebyer.role": {
+    "message": "云原生工程师"
+  },
+  "team.members.drivebyer.bio": {
+    "message": "DaoCloud 工程师，也参与开源，专做实用的基础设施改进。"
+  },
+  "team.members.ramkrishs.role": {
+    "message": "计算机科学工程师"
+  },
+  "team.members.ramkrishs.bio": {
+    "message": "计算机科学工程师，在 Intuit 做软件系统。"
+  },
+  "team.members.samzong.role": {
+    "message": "AI 基础设施 / 云原生产品经理"
+  },
+  "team.members.samzong.bio": {
+    "message": "云原生 AI 基础设施产品负责人，关注 Kubernetes、GPU 资源调度和大规模 LLM 服务平台。"
+  },
+  "team.members.shraderdm.role": {
+    "message": "GTM 技术负责人"
+  },
+  "team.members.shraderdm.bio": {
+    "message": "Google GTM 技术负责人。"
+  },
+  "team.members.siloteemu.role": {
+    "message": "SMTS，Silo AI"
+  },
+  "team.members.siloteemu.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.theohsiung.role": {
+    "message": "初级软件工程师（研究科学家）"
+  },
+  "team.members.theohsiung.bio": {
+    "message": "AI 研究者兼软件工程师，AI for Science、LLM 系统、智能体基础设施、计算机视觉都做。"
+  },
+  "team.members.wilsonwu.role": {
+    "message": "云原生 / AI 工程师"
+  },
+  "team.members.wilsonwu.bio": {
+    "message": "云原生兼 AI 工程师，做企业方案，也搭开源 AI 基础设施。"
+  },
+  "team.members.yuluo-yx.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.yuluo-yx.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
   }
 }
