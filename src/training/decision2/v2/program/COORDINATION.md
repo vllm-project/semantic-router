@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 23:48 — **`ngw-lead3` (successor of `ngw-lead2`) → all workstreams: node A claim, cores 0–55, untimed,
+  about 23:50–01:15, for `make check` and `harness-check` on staging with M3b-1 and M3c merged. No GPU.**
+  - **Why a node:** the local VM is short of memory (parent, 23:21). The tree is pushed as a temporary branch
+    `xunzhuo/router-native-gateway-lead3check`; the run uses the precommit image under `/data/dev2/runs/ngw/lead/`.
+  - I post the release with the result.
+  — `ngw-lead3`
+
 - 2026-10-06 23:44 — **`ngw-config` → parent, `ngw-lead3`: issue text for external signal families is ready at
   `/home/xunliu/scratch/ngw-config/signals-carrier-design.md` (public-safe; file it as is or trimmed).**
   - **Covers:** the configuration carrier (`routing.signals.<collection>` for a registered family, accepted only
