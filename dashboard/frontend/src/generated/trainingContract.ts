@@ -15,7 +15,7 @@ export interface ArchitectureDriverDescriptor {
 }
 
 export interface Artifact {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   provenance: Provenance
@@ -37,7 +37,7 @@ export interface ArtifactResult {
 }
 
 export interface ArtifactVariant {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   artifact_id: string
@@ -51,7 +51,7 @@ export interface ArtifactVariantSpec {
 }
 
 export interface Attempt {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   number: number
@@ -63,7 +63,7 @@ export interface Attempt {
 }
 
 export interface BindingProposal {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   variant_id: string
@@ -78,7 +78,7 @@ export interface BindingProposalSpec {
 }
 
 export interface CapabilityCatalog {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   targets: Array<TargetDescriptor>
   trainers: Array<TrainerDescriptor>
   architectures: Array<ArchitectureDriverDescriptor>
@@ -152,7 +152,7 @@ export interface ConversionRule {
 }
 
 export interface DataAsset {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   name: string
@@ -165,7 +165,7 @@ export interface DataAssetSpec {
 }
 
 export interface DataSnapshot {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   asset_id: string
@@ -181,7 +181,7 @@ export type DiagnosticCode = "UNSUPPORTED_TARGET" | "UNKNOWN_CAPABILITY" | "INCO
 export type DiagnosticSeverity = "error" | "warning"
 
 export interface Evaluation {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   provenance: Provenance
@@ -222,7 +222,7 @@ export interface ExecutorDescriptor {
 }
 
 export interface Experiment {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   name: string
@@ -268,7 +268,7 @@ export interface HardwareProviderDescriptor {
 }
 
 export interface Metadata {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
 }
@@ -333,7 +333,7 @@ export interface Provenance {
 }
 
 export interface Qualification {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   provenance: Provenance
@@ -392,7 +392,7 @@ export interface RunSpec {
 }
 
 export interface RunTask {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   run_id: string
@@ -433,7 +433,7 @@ export interface SpanProfile {
 export type Status = "pending" | "running" | "cancelling" | "succeeded" | "failed" | "cancelled" | "skipped"
 
 export interface SubmitRunRequest {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   idempotency_key: string
   spec: RunSpec
 }
@@ -467,7 +467,7 @@ export interface TrainerDescriptor {
 }
 
 export interface TrainingPlanRequest {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   target_contract: Target
   architecture?: CapabilityID
   trainer: CapabilityID
@@ -479,14 +479,14 @@ export interface TrainingPlanRequest {
 }
 
 export interface TrainingPlanResponse {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   valid: boolean
   plan?: ResolvedTrainingPlan
   diagnostics?: Array<PlanDiagnostic>
 }
 
 export interface TrainingRun {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   spec: RunSpec
@@ -495,7 +495,7 @@ export interface TrainingRun {
 }
 
 export interface Upload {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   id: string
   created_at: string
   handle: string
@@ -504,7 +504,7 @@ export interface Upload {
 }
 
 export interface ValidationRequest {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   spec: RunSpec
 }
 
@@ -515,7 +515,7 @@ export interface ValidationResponse {
 export interface WorkerRequest {
   base_model?: ModelRef
   run_id: string
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   attempt_id: string
   task_id: string
   executor: Component
@@ -526,7 +526,7 @@ export interface WorkerRequest {
 }
 
 export interface WorkerResult {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   status: "running" | "succeeded" | "failed" | "cancelled"
   diagnostic?: string
   artifacts?: Array<ArtifactResult>
@@ -535,6 +535,6 @@ export interface WorkerResult {
 }
 
 export interface WorkerSubmission {
-  schema_version: "semantic-router.training/v1"
+  schema_version: "semantic-router.training/v2"
   worker_handle: string
 }

@@ -161,8 +161,7 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 	// Router Replay as a delivered one.
 	recordPrimaryOutputDigest(ctx, semanticResponse)
 	assistantContent := semanticAssistantContent(semanticResponse)
-	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
-	r.evaluateHallucinationSignal(ctx, assistantContent)
+	r.scoreResponseStageSignals(ctx, assistantContent)
 	commitSignalOutcomes := func() {
 		r.recordRouterReplayResponseJailbreak(ctx)
 		r.recordRouterReplayHallucination(ctx)
@@ -222,8 +221,7 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 // plugin can block or rewrite it and none runs; the observation is all that is
 // still possible, and the record says so.
 func (r *OpenAIRouter) observeResponseStageSignals(ctx *RequestContext, assistantContent string) {
-	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
-	r.evaluateHallucinationSignal(ctx, assistantContent)
+	r.scoreResponseStageSignals(ctx, assistantContent)
 	r.recordRouterReplayResponseJailbreak(ctx)
 	r.recordRouterReplayHallucination(ctx)
 }
