@@ -70,14 +70,14 @@ make check CHANGED_FILES="path/one path/two"
 常见定向套件包括：
 
 ```bash
-# Router 和原生绑定
+# Router
 make test-semantic-router
-make test-binding
 
-# 分类器
-make test-category-classifier
-make test-pii-classifier
-make test-jailbreak-classifier
+# 模型运行时（小型夹具，CPU）
+make model-runtime-test
+
+# 通过模型运行时运行已发布模型
+make test-models
 
 # Python CLI
 make vllm-sr-test

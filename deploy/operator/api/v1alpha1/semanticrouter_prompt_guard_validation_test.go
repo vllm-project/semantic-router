@@ -25,15 +25,13 @@ func TestPromptGuardContextAdmission(t *testing.T) {
 		{"omitted", `{}`, false},
 		{"nullable", `{"window":null}`, false},
 		{"explicit whole input", `{"max_sequence_length":32768}`, false},
-		{"local window", `{"variant":"mmbert32k","max_sequence_length":32768,"window":{"size":128,"overlap":63}}`, false},
+		{"local window", `{"max_sequence_length":32768,"window":{"size":128,"overlap":63}}`, false},
 		{"zero budget retains default", `{"max_sequence_length":0,"window":{"size":512}}`, false},
 		{"omitted budget retains default", `{"window":{"size":512}}`, false},
-		{"legacy candle", `{"variant":"candle"}`, false},
+		{"named backend", `{"backend":{}}`, false},
 		{"named backend window", `{"backend":{},"window":{"size":128}}`, true},
 		{"named backend budget", `{"backend":{},"max_sequence_length":32768}`, true},
 		{"negative budget", `{"max_sequence_length":-1}`, true},
-		{"candle budget", `{"variant":"candle","max_sequence_length":32768}`, true},
-		{"candle window", `{"variant":"candle","window":{"size":128}}`, true},
 		{"missing size", `{"window":{}}`, true},
 		{"zero size", `{"window":{"size":0}}`, true},
 		{"negative size", `{"window":{"size":-1}}`, true},
@@ -76,8 +74,8 @@ func TestPromptGuardWindowCELAndPruning(t *testing.T) {
 		{`{backend: {name: remote, protocol: http_classify}, window: {size: 128}}`, true},
 		{`{window: {size: 128, overlap: 63}, max_sequence_length: 32768}`, false},
 		{`{window: {size: 512}, max_sequence_length: 0}`, false},
-		{`{variant: candle}`, false},
-		{`{variant: candle, max_sequence_length: 1024}`, true},
+		{`{backend: {name: remote, protocol: http_classify}}`, false},
+		{`{backend: {name: remote, protocol: http_classify}, max_sequence_length: 1024}`, true},
 		{`{window: {size: 513}}`, true},
 		{`{window: {size: 128}, max_sequence_length: 64}`, true},
 		{`{window: {size: 128, overlap: 128}}`, true},
@@ -139,6 +137,9 @@ func TestGeneratedPromptGuardContextSchemasAgree(t *testing.T) {
 		budget := guard.Properties["max_sequence_length"]
 		if !window.Nullable || window.Type != "object" || budget.Type != "integer" || budget.Minimum == nil || *budget.Minimum != 0 {
 			t.Fatalf("%s lost nullable window or nonnegative budget", relative)
+		}
+		if _, exists := guard.Properties["variant"]; exists {
+			t.Fatalf("%s still declares the retired variant selector", relative)
 		}
 		size := window.Properties["size"]
 		overlap := window.Properties["overlap"]

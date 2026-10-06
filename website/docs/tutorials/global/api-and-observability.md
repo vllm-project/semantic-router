@@ -71,9 +71,9 @@ for the intended input lengths and deployment hardware. This setting can be
 updated through config hot reload;
 other HTTP routes keep their existing timeouts.
 
-A deadline returns `504 REQUEST_TIMEOUT` and cancels queued or cancellable
-inference. Native inference already running may finish later. Its model resources
-and admission slot remain held until it finishes, including during shutdown.
+A deadline returns `504 REQUEST_TIMEOUT` and cancels the preview's model calls:
+the model runtime skips work it has not started and finishes a pass already
+running. The preview's admission slot is free again once those calls return.
 `max_concurrency` is a positive worker limit, defaults to 16, and has no wait
 queue: when all slots are occupied, new previews return `429 OVERLOADED`.
 Changing this limit requires a deployment restart; hot reload rejects the change.
