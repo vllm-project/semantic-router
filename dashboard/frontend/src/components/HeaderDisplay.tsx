@@ -21,6 +21,14 @@ const HEADER_INFO: Record<
     label: 'Model',
     type: 'info',
   },
+  'x-vsr-effective-input-tokens': {
+    label: 'Rendered input tokens',
+    type: 'info',
+  },
+  'x-vsr-effective-max-output-tokens': {
+    label: 'Output token limit',
+    type: 'info',
+  },
   'x-vsr-selected-algorithm': {
     label: 'Algorithm',
     type: 'info',
@@ -124,6 +132,14 @@ const HEADER_INFO: Record<
   'x-vsr-matched-jailbreak': {
     label: 'Jailbreak Signal',
     type: 'danger',
+  },
+  'x-vsr-matched-safety': {
+    label: 'Safety Signal',
+    type: 'warning',
+  },
+  'x-vsr-matched-hallucination': {
+    label: 'Hallucination Signal',
+    type: 'warning',
   },
   'x-vsr-matched-pii': {
     label: 'PII Signal',

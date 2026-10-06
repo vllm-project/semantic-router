@@ -47,8 +47,20 @@ because repeated-question and prior-answer signals need earlier turns.
 | Explicit verification need after a wrong answer | Use the strongest verified-recovery route. |
 | No feedback signal | Use the local default. |
 
-Repeated dissatisfaction has a bounded lookback. Explicit correction and
-verification evidence take priority over the ordinary fallback.
+Repeated dissatisfaction has a bounded lookback. FactCheck estimates whether a
+request depends on external factual knowledge. The recipe combines that signal
+with feedback, domain, and source requirements through `verification_pressure`.
+The verified-recovery lane requires the resulting `feedback_needs_evidence`
+projection or an explicit verification marker; a raw FactCheck match alone does
+not bypass that policy or veto ordinary recovery. Code-repair routes keep their
+existing priority over verified recovery for coding failures.
+
+All score weights and thresholds remain fixed. A FactCheck match adds 0.34 to
+verification pressure, and persistent dissatisfaction and an explicit
+wrong-answer correction add up to 0.08 each. FactCheck with one of them stays
+below the 0.45 evidence threshold, so a repeated question follows the other
+recovery rules. FactCheck with a full-confidence verification marker (0.28) or
+a health or legal domain (0.18) reaches it, and verified recovery applies.
 
 ## Requirements
 

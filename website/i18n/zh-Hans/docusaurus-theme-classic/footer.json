@@ -33,7 +33,7 @@
   },
   "link.item.label.Hugging Face": {
     "message": "Hugging Face",
-    "description": "The label of footer link with label=Hugging Face linking to https://huggingface.co/LLM-Semantic-Router"
+    "description": "The label of footer link with label=Hugging Face linking to https://huggingface.co/vllm-sr"
   },
   "link.item.label.GitHub Discussions": {
     "message": "GitHub 讨论区",
@@ -58,6 +58,10 @@
   "link.item.label.Vision Paper": {
     "message": "愿景论文",
     "description": "The label of footer link with label=Vision Paper linking to /vision-paper"
+  },
+  "link.item.label.Decision Paper": {
+    "message": "Decision 论文",
+    "description": "The label of footer link with label=Decision Paper linking to /decision-paper"
   },
   "link.item.label.License": {
     "message": "许可证",

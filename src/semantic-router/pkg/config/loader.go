@@ -98,52 +98,91 @@ func configBaseDir(defaultDir string) (string, error) {
 
 // ParseYAMLBytes parses config YAML content without touching the filesystem.
 func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
-	return parseYAMLBytesWithOptions(data, "", true)
+	return parseYAMLBytesWithOptions(data, "", &processEnv)
 }
 
 func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, error) {
-	return parseYAMLBytesWithOptions(data, baseDir, true)
+	return parseYAMLBytesWithOptions(data, baseDir, &processEnv)
 }
 
 // ParseYAMLBytesWithoutEnvExpansion validates in-memory YAML while preserving
 // ${VAR} references verbatim. It is intended for read-only validation APIs
 // that must not expose process environment values in normalized output.
 func ParseYAMLBytesWithoutEnvExpansion(data []byte) (*RouterConfig, error) {
-	return parseYAMLBytesWithOptions(data, "", false)
+	return parseYAMLBytesWithOptions(data, "", nil)
 }
 
-func parseYAMLBytesWithOptions(
-	data []byte,
-	baseDir string,
-	expandEnvironment bool,
-) (*RouterConfig, error) {
-	raw, err := parseRawConfigMap(data)
+// ValidateYAMLBytesDeferringEnv validates a config that another process will
+// load with its own environment, so it resolves no reference from this one:
+// references take their defaults, and the config passes if it is valid with
+// the other references either kept as written or empty. External assets are
+// checked as in ParseYAMLBytes.
+func ValidateYAMLBytesDeferringEnv(data []byte) error {
+	_, err := deferredEnvExpander(data)
+	return err
+}
+
+// ParseYAMLBytesDeferringEnv parses a config for an editor of its routing,
+// entrypoints and recipes, such as the DSL, when another process loads the
+// config with its own environment. It checks the config as
+// ValidateYAMLBytesDeferringEnv does. Those three sections keep ${VAR}
+// references and $$ escapes as written, so the editor can write them back;
+// the other sections resolve references as that check did.
+func ParseYAMLBytesDeferringEnv(data []byte) (*RouterConfig, error) {
+	env, err := deferredEnvExpander(data)
 	if err != nil {
 		return nil, err
 	}
-	if normalizeErr := validateAndNormalizeRawConfig(raw); normalizeErr != nil {
-		return nil, normalizeErr
+	// Only the resolved form is checked; references kept as written fail typed checks, such as a token count.
+	cfg, err := decodeYAMLBytes(data, func(raw map[string]interface{}) {
+		for key, value := range raw {
+			if !routingSections[key] {
+				raw[key] = env.expandValue(value)
+			}
+		}
+	})
+	if err != nil {
+		return nil, err
 	}
+	applyParsedConfigDefaults(cfg)
+	return cfg, nil
+}
 
-	if expandEnvironment {
-		expandEnvSubstitutionsInMap(raw)
+// routingSections are the top-level sections that hold routing state.
+var routingSections = map[string]bool{"routing": true, "entrypoints": true, "recipes": true}
+
+// deferredEnvExpander returns the expander with which data passes
+// ValidateYAMLBytesDeferringEnv.
+func deferredEnvExpander(data []byte) (*envExpander, error) {
+	keep := &envExpander{lookup: noEnv, keepUnset: true}
+	_, err := parseYAMLBytesWithOptions(data, "", keep)
+	if err == nil {
+		return keep, nil
 	}
-	expandedData, marshalErr := yaml.Marshal(raw)
-	if marshalErr != nil {
-		return nil, fmt.Errorf("failed to marshal normalized config input: %w", marshalErr)
+	empty := &envExpander{lookup: noEnv}
+	if _, emptyErr := parseYAMLBytesWithOptions(data, "", empty); emptyErr == nil {
+		return empty, nil
 	}
+	return nil, err
+}
 
-	// Warn about unknown YAML fields (typos) before parsing into typed structs.
-	WarnUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
-
-	cfg, err := parseRouterConfigPayload(expandedData, raw)
+// parseYAMLBytesWithOptions keeps references as written and skips external
+// assets when env is nil.
+func parseYAMLBytesWithOptions(
+	data []byte,
+	baseDir string,
+	env *envExpander,
+) (*RouterConfig, error) {
+	var expand func(map[string]interface{})
+	if env != nil {
+		expand = env.expandMap
+	}
+	cfg, err := decodeYAMLBytes(data, expand)
 	if err != nil {
 		return nil, err
 	}
 	cfg.ConfigBaseDir = baseDir
-	documentDigest := sha256.Sum256(data)
-	cfg.DocumentHash = hex.EncodeToString(documentDigest[:])
-	cfg.SkipExternalAssetValidation = !expandEnvironment
+	cfg.SkipExternalAssetValidation = env == nil
 	if err := finalizeParsedConfig(cfg); err != nil {
 		return nil, err
 	}
@@ -155,15 +194,51 @@ func parseYAMLBytesWithOptions(
 	return cfg, nil
 }
 
+// decodeYAMLBytes builds a config without the checks of finalizeParsedConfig.
+// A non-nil expand rewrites the raw document before it is decoded.
+func decodeYAMLBytes(data []byte, expand func(map[string]interface{})) (*RouterConfig, error) {
+	raw, err := parseRawConfigMap(data)
+	if err != nil {
+		return nil, err
+	}
+	if normalizeErr := validateAndNormalizeRawConfig(raw); normalizeErr != nil {
+		return nil, normalizeErr
+	}
+
+	if expand != nil {
+		expand(raw)
+	}
+	expandedData, marshalErr := yaml.Marshal(raw)
+	if marshalErr != nil {
+		return nil, fmt.Errorf("failed to marshal normalized config input: %w", marshalErr)
+	}
+
+	if !isCanonicalConfig(raw) {
+		return nil, canonicalConfigRequiredError(raw)
+	}
+	if validationErr := validateKnownFields(raw, reflect.TypeOf(CanonicalConfig{})); validationErr != nil {
+		return nil, validationErr
+	}
+	cfg, err := parseCanonicalConfigPayload(expandedData, raw)
+	if err != nil {
+		return nil, err
+	}
+	documentDigest := sha256.Sum256(data)
+	cfg.DocumentHash = hex.EncodeToString(documentDigest[:])
+	return cfg, nil
+}
+
 func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 	validators := []func(map[string]interface{}) error{
 		normalizeResponseCacheAliases,
 		rejectDeprecatedUserConfigFields,
+		rejectRemovedEvaluationFields,
 		rejectRemovedStructureFields,
 		rejectRemovedTaxonomyLegacyFields,
 		rejectRemovedDecisionToolFields,
 		rejectRemovedRouterLearningFields,
 		rejectUnsupportedRouterLearningFields,
+		rejectRemovedModelExecutionFields,
 	}
 	for _, validate := range validators {
 		if err := validate(raw); err != nil {
@@ -171,6 +246,28 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 		}
 	}
 	return nil
+}
+
+func rejectRemovedEvaluationFields(raw map[string]interface{}) error {
+	removed := make([]string, 0)
+	if _, ok := raw["evaluation_catalog"]; ok {
+		removed = append(removed, "evaluation_catalog")
+	}
+	routing := nestedStringMap(raw["routing"])
+	if cards, ok := routing["modelCards"].([]interface{}); ok {
+		for index, rawCard := range cards {
+			if _, ok := nestedStringMap(rawCard)["evaluations"]; ok {
+				removed = append(removed, fmt.Sprintf("routing.modelCards[%d].evaluations", index))
+			}
+		}
+	}
+	if len(removed) == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		"removed config fields are no longer supported: %s; move benchmark definitions, indices, and model-linked records under evaluation",
+		strings.Join(removed, ", "),
+	)
 }
 
 func parseRawConfigMap(data []byte) (map[string]interface{}, error) {
@@ -452,13 +549,35 @@ func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]int
 		}
 	}
 	if tuning, ok := raw["tuning"]; ok {
-		if err := rejectUnknownMapFields(prefix+".tuning", nestedStringMap(tuning), []string{
+		tuningMap := nestedStringMap(tuning)
+		if err := rejectUnknownMapFields(prefix+".tuning", tuningMap, []string{
 			"idle_timeout_seconds",
 			"min_turns_before_switch",
 			"switch_margin",
 			"stability_weight",
+			"progress_gate",
 		}); err != nil {
 			return err
+		}
+		if gate, ok := tuningMap["progress_gate"]; ok {
+			if err := rejectUnknownMapFields(
+				prefix+".tuning.progress_gate",
+				nestedStringMap(gate),
+				[]string{
+					"enabled",
+					"mode",
+					"calibration_id",
+					"window_size",
+					"window_ttl_seconds",
+					"min_window_outcomes",
+					"min_consecutive_regressions",
+					"min_consecutive_recoveries",
+					"cooldown_seconds",
+					"max_switches_per_window",
+				},
+			); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -480,13 +599,6 @@ func rejectUnknownMapFields(prefix string, raw map[string]interface{}, allowed [
 	}
 	sort.Strings(unknown)
 	return fmt.Errorf("unsupported Router Learning config fields: %s", strings.Join(unknown, ", "))
-}
-
-func parseRouterConfigPayload(data []byte, raw map[string]interface{}) (*RouterConfig, error) {
-	if !isCanonicalConfig(raw) {
-		return nil, canonicalConfigRequiredError(raw)
-	}
-	return parseCanonicalConfigPayload(data, raw)
 }
 
 func parseCanonicalConfigPayload(data []byte, raw map[string]interface{}) (*RouterConfig, error) {
@@ -532,12 +644,23 @@ func canonicalConfigRequiredError(raw map[string]interface{}) error {
 		detail = fmt.Sprintf("unexpected top-level keys: %s", strings.Join(unsupported, ", "))
 	}
 	return fmt.Errorf(
-		"config file must use canonical v0.3 version/listeners/providers/routing/global; %s; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3 providers/routing/global",
+		"config file must use the canonical v0.3 hierarchy; %s; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3",
 		detail,
 	)
 }
 
 func finalizeParsedConfig(cfg *RouterConfig) error {
+	applyParsedConfigDefaults(cfg)
+	if err := validateConfigStructure(cfg); err != nil {
+		logging.ComponentDebugEvent("config", "config_validation_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return err
+	}
+	return nil
+}
+
+func applyParsedConfigDefaults(cfg *RouterConfig) {
 	logParsedDecisions(cfg)
 
 	// Apply default model registry if not specified in config.
@@ -548,13 +671,7 @@ func finalizeParsedConfig(cfg *RouterConfig) error {
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
 	}
-	if err := validateConfigStructure(cfg); err != nil {
-		logging.ComponentDebugEvent("config", "config_validation_failed", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return err
-	}
-	return nil
+	applyBatchConcurrencyMigration(cfg)
 }
 
 func logParsedDecisions(cfg *RouterConfig) {
@@ -569,14 +686,26 @@ func logParsedDecisions(cfg *RouterConfig) {
 }
 
 func deprecatedUserConfigFields(raw map[string]interface{}) []string {
-	fields := []string{}
-
 	routing := nestedStringMap(raw["routing"])
+	providers := nestedStringMap(raw["providers"])
+	fields := deprecatedRoutingConfigFields(routing)
+	fields = append(fields, deprecatedProviderConfigFields(providers)...)
+	fields = append(fields, deprecatedGlobalConfigFields(nestedStringMap(raw["global"]))...)
+	fields = append(fields, deprecatedDecisionConfigFields(routing)...)
+	return fields
+}
+
+func deprecatedRoutingConfigFields(routing map[string]interface{}) []string {
+	fields := []string{}
 	if _, ok := routing["models"]; ok {
 		fields = append(fields, "routing.models")
 	}
+	fields = append(fields, deprecatedModelCardFields(routing)...)
+	return fields
+}
 
-	providers := nestedStringMap(raw["providers"])
+func deprecatedProviderConfigFields(providers map[string]interface{}) []string {
+	fields := []string{}
 	for _, key := range []string{
 		"model_targets",
 		"backends",
@@ -589,31 +718,74 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 			fields = append(fields, "providers."+key)
 		}
 	}
+	providerDefaults := nestedStringMap(providers["defaults"])
+	for _, key := range []string{"default_model", "default_reasoning_effort", "reasoning_families"} {
+		if _, ok := providerDefaults[key]; ok {
+			fields = append(fields, "providers.defaults."+key)
+		}
+	}
+	fields = append(fields, deprecatedProviderModelFields(providers)...)
+	return fields
+}
 
-	if models, ok := providers["models"].([]interface{}); ok {
-		for index, rawModel := range models {
-			model := nestedStringMap(rawModel)
-			for _, key := range []string{
-				"access",
-				"endpoints",
-				"access_key",
-				"param_size",
-				"context_window_size",
-				"description",
-				"capabilities",
-				"loras",
-				"quality_score",
-				"modality",
-				"tags",
-			} {
-				if _, ok := model[key]; ok {
-					fields = append(fields, fmt.Sprintf("providers.models[%d].%s", index, key))
-				}
+func deprecatedProviderModelFields(providers map[string]interface{}) []string {
+	models, ok := providers["models"].([]interface{})
+	if !ok {
+		return nil
+	}
+	fields := []string{}
+	for index, rawModel := range models {
+		fields = append(fields, deprecatedProviderModelFieldNames(nestedStringMap(rawModel), index)...)
+	}
+	return fields
+}
+
+func deprecatedProviderModelFieldNames(model map[string]interface{}, index int) []string {
+	fields := []string{}
+	for _, key := range []string{
+		"access", "endpoints", "access_key", "param_size", "context_window_size",
+		"description", "capabilities", "loras", "quality_score", "modality", "tags",
+	} {
+		if _, ok := model[key]; ok {
+			fields = append(fields, fmt.Sprintf("providers.models[%d].%s", index, key))
+		}
+	}
+	if _, ok := model["reasoning_family"]; ok {
+		fields = append(fields, fmt.Sprintf("providers.models[%d].reasoning_family", index))
+	}
+	return append(fields, deprecatedBackendRefFields(model, index)...)
+}
+
+func deprecatedBackendRefFields(model map[string]interface{}, modelIndex int) []string {
+	refs, ok := model["backend_refs"].([]interface{})
+	if !ok {
+		return nil
+	}
+	fields := []string{}
+	for backendIndex, rawRef := range refs {
+		if _, ok := nestedStringMap(rawRef)["type"]; ok {
+			fields = append(fields, fmt.Sprintf(
+				"providers.models[%d].backend_refs[%d].type", modelIndex, backendIndex,
+			))
+		}
+	}
+	return fields
+}
+
+func deprecatedModelCardFields(routing map[string]interface{}) []string {
+	fields := []string{}
+	if cards, ok := routing["modelCards"].([]interface{}); ok {
+		for index, rawCard := range cards {
+			if _, ok := nestedStringMap(rawCard)["quality_score"]; ok {
+				fields = append(fields, fmt.Sprintf("routing.modelCards[%d].quality_score", index))
 			}
 		}
 	}
+	return fields
+}
 
-	global := nestedStringMap(raw["global"])
+func deprecatedGlobalConfigFields(global map[string]interface{}) []string {
+	fields := []string{}
 	if _, ok := global["modules"]; ok {
 		fields = append(fields, "global.modules")
 	}
@@ -622,9 +794,6 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 	if _, ok := embeddings["bert"]; ok {
 		fields = append(fields, "global.model_catalog.embeddings.bert")
 	}
-
-	fields = append(fields, deprecatedDecisionConfigFields(routing)...)
-
 	return fields
 }
 
@@ -665,11 +834,14 @@ func removedStructureFields(raw map[string]interface{}) []string {
 
 func unsupportedTopLevelConfigFields(raw map[string]interface{}) []string {
 	allowed := map[string]bool{
-		"version":   true,
-		"listeners": true,
-		"providers": true,
-		"routing":   true,
-		"global":    true,
+		"version":     true,
+		"listeners":   true,
+		"providers":   true,
+		"evaluation":  true,
+		"routing":     true,
+		"entrypoints": true,
+		"recipes":     true,
+		"global":      true,
 	}
 
 	fields := make([]string, 0)

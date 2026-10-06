@@ -71,30 +71,42 @@ else
 fi
 echo ""
 
+# A Dashboard config edit on Kubernetes is saved to a ConfigMap and activated
+# after rollout. The backup history needed for rollback must outlive that pod.
+log_info "Testing default Dashboard backup persistence..."
+helm template dashboard-release "$CHART_PATH" --set dashboard.enabled=true \
+    > "$TEMP_DIR/dashboard-default-template.yaml"
+python3 - "$TEMP_DIR/dashboard-default-template.yaml" <<'PY'
+import sys
+import yaml
+
+documents = [doc for doc in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")) if isinstance(doc, dict)]
+dashboard = next(
+    doc for doc in documents
+    if doc.get("kind") == "Deployment"
+    and doc.get("metadata", {}).get("labels", {}).get("app.kubernetes.io/component") == "dashboard"
+)
+claims = [
+    doc for doc in documents
+    if doc.get("kind") == "PersistentVolumeClaim"
+    and doc.get("metadata", {}).get("labels", {}).get("app.kubernetes.io/component") == "dashboard"
+]
+assert len(claims) == 1, "Dashboard backup PVC must render when Dashboard is enabled"
+pod = dashboard["spec"]["template"]["spec"]
+mounts = pod["containers"][0]["volumeMounts"]
+assert any(mount.get("name") == "dashboard-data" and mount.get("mountPath") == "/app/data" for mount in mounts)
+assert any(
+    volume.get("name") == "dashboard-data"
+    and volume.get("persistentVolumeClaim", {}).get("claimName") == claims[0]["metadata"]["name"]
+    for volume in pod["volumes"]
+)
+PY
+log_success "Dashboard config backups survive a rollout by default"
+echo ""
+
 # Test 3: Canonical config override must be atomic and preserve explicit gates
 log_info "Testing atomic canonical Router config rendering..."
-cat > "$TEMP_DIR/canonical-config.yaml" <<'EOF'
-configOverride:
-  version: v0.3
-  listeners:
-    - name: http
-      address: 0.0.0.0
-      port: 8899
-  providers:
-    models:
-      - name: local/custom
-  routing:
-    decisions:
-      - name: custom-route
-  global:
-    router:
-      skip_processing:
-        enabled: true
-      learning:
-        enabled: true
-        adaptation:
-          enabled: true
-EOF
+cp deploy/helm/testdata/backend-target-values.yaml "$TEMP_DIR/canonical-config.yaml"
 
 helm template canonical-release "$CHART_PATH" \
     -f "$TEMP_DIR/canonical-config.yaml" \
@@ -108,6 +120,25 @@ if ! grep -A1 "skip_processing:" "$TEMP_DIR/canonical-template.yaml" | grep -q "
     log_error "Canonical skip_processing=true was not preserved"
     exit 1
 fi
+
+log_info "Testing backend target compatibility rendering..."
+backend_fields=(
+    "base_url: https://provider.example/v1"
+    "provider_model_id: provider/model-id"
+    "api_key_env: PROVIDER_API_KEY"
+    "X-Tenant: production"
+    "chat_path: /chat/completions"
+    "weight: 75"
+)
+for field in "${backend_fields[@]}"; do
+    if ! grep -q "$field" "$TEMP_DIR/canonical-template.yaml"; then
+        log_error "Canonical backend target fields were not preserved: $field"
+        exit 1
+    fi
+done
+
+python3 tools/ci/check_backend_target_compatibility.py \
+    --rendered-helm "$TEMP_DIR/canonical-template.yaml"
 
 helm template canonical-false-release "$CHART_PATH" \
     -f "$TEMP_DIR/canonical-config.yaml" \
@@ -146,12 +177,71 @@ if helm template canonical-empty-release "$CHART_PATH" \
     log_error "An empty canonical config silently fell back to chart defaults"
     exit 1
 fi
-if ! grep -q "configOverride must be a non-empty mapping" \
+if ! grep -Eq "configOverride must be a non-empty mapping|configOverride: Must have at least 1 properties" \
     "$TEMP_DIR/canonical-empty-template.yaml"; then
     log_error "Empty canonical config failed without the expected safety error"
     exit 1
 fi
 log_success "Empty canonical config fails closed instead of using chart samples"
+echo ""
+
+log_info "Testing model deployment and recipe binding preservation..."
+helm template runtime-release "$CHART_PATH" \
+    -f deploy/helm/testdata/model-runtime-values.yaml \
+    > "$TEMP_DIR/model-runtime-template.yaml"
+python3 deploy/helm/check-model-runtime.py "$TEMP_DIR/model-runtime-template.yaml"
+log_success "Model deployments, input/admission budgets and isolated bindings are preserved"
+echo ""
+
+log_info "Testing custom workspace models mount rendering..."
+cat > "$TEMP_DIR/workspace-models-values.yaml" <<'YAML'
+extraVolumes:
+  - name: workspace-models
+    hostPath:
+      path: /opt/semantic-router/workspace-models
+      type: DirectoryOrCreate
+extraVolumeMounts:
+  - name: workspace-models
+    mountPath: /app/models
+YAML
+helm template workspace-release "$CHART_PATH" \
+    -f "$TEMP_DIR/workspace-models-values.yaml" \
+    > "$TEMP_DIR/workspace-models-template.yaml"
+python3 - "$TEMP_DIR/default-template.yaml" "$TEMP_DIR/workspace-models-template.yaml" <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+
+
+def router_pod(path):
+    for document in yaml.safe_load_all(Path(path).read_text(encoding="utf-8")):
+        if (
+            document
+            and document.get("kind") == "Deployment"
+            and document["metadata"]["labels"].get("app.kubernetes.io/component") == "router"
+        ):
+            return document["spec"]["template"]["spec"]
+    raise AssertionError(f"Router Deployment missing from {path}")
+
+
+default_pod, workspace_pod = map(router_pod, sys.argv[1:])
+for pod, expected_name in ((default_pod, "models-volume"), (workspace_pod, "workspace-models")):
+    mounts = [mount for mount in pod["containers"][0]["volumeMounts"] if mount["mountPath"] == "/app/models"]
+    assert len(mounts) == 1 and mounts[0]["name"] == expected_name, mounts
+    volumes = [volume for volume in pod["volumes"] if volume["name"] == expected_name]
+    assert len(volumes) == 1, volumes
+    backup_env = [
+        entry for entry in pod["containers"][0]["env"]
+        if entry["name"] == "VLLM_SR_CONFIG_BACKUP_DIR"
+    ]
+    assert len(backup_env) == 1, backup_env
+    assert backup_env[0]["value"] == "/app/models/.vllm-sr/config-backups", backup_env
+default_models = next(volume for volume in default_pod["volumes"] if volume["name"] == "models-volume")
+assert "persistentVolumeClaim" in default_models, default_models
+assert all(volume["name"] != "models-volume" for volume in workspace_pod["volumes"])
+PY
+log_success "Custom /app/models mount replaces the default model volume"
 echo ""
 
 
@@ -241,7 +331,30 @@ for expected in 'subPath: config.yaml' 'subPath: tools_db.json'; do
 done
 echo ""
 
-# Test 8: Validate Chart.yaml
+# Test 8: Validate the default router pod security contract
+log_info "Validating hardened router pod security defaults..."
+for expected in \
+    'runAsNonRoot: true' \
+    'runAsUser: 65532' \
+    'runAsGroup: 65532' \
+    'type: RuntimeDefault' \
+    'allowPrivilegeEscalation: false' \
+    'readOnlyRootFilesystem: true' \
+    'mountPath: /tmp' \
+    'mountPath: /app/models'; do
+    if ! grep -q "$expected" "$TEMP_DIR/default-template.yaml"; then
+        log_error "Missing hardened router pod setting: $expected"
+        exit 1
+    fi
+done
+if ! grep -A2 'capabilities:' "$TEMP_DIR/default-template.yaml" | grep -q 'ALL'; then
+    log_error "Router container does not drop all Linux capabilities"
+    exit 1
+fi
+log_success "Router pod defaults enforce the restricted security contract"
+echo ""
+
+# Test 9: Validate Chart.yaml
 log_info "Validating Chart.yaml..."
 if [ -f "$CHART_PATH/Chart.yaml" ]; then
     chart_name=$(grep "^name:" "$CHART_PATH/Chart.yaml" | awk '{print $2}')
@@ -257,7 +370,7 @@ else
 fi
 echo ""
 
-# Test 9: Check for common Helm best practices
+# Test 10: Check for common Helm best practices
 log_info "Checking Helm best practices..."
 best_practices_passed=true
 
@@ -291,7 +404,7 @@ if [ "$best_practices_passed" = false ]; then
 fi
 echo ""
 
-# Test 10: Dry-run install (requires cluster)
+# Test 11: Dry-run install (requires cluster)
 if kubectl cluster-info &> /dev/null; then
     log_info "Testing dry-run install..."
     if helm install test-release "$CHART_PATH" --dry-run --debug > "$TEMP_DIR/dry-run.log" 2>&1; then

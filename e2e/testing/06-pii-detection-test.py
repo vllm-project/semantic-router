@@ -21,11 +21,10 @@ This test validates PII detection across different classifier paths:
 This demonstrates inconsistent PII classifier usage between components.
 """
 
-import json
-import sys
 import time
 import unittest
 import uuid
+from http import HTTPStatus
 
 import requests
 
@@ -35,9 +34,12 @@ from test_base import SemanticRouterTestBase
 # Constants
 CLASSIFICATION_API_URL = "http://localhost:8080"
 ENVOY_URL = "http://localhost:8801"
-BATCH_ENDPOINT = "/api/v1/classify/batch"
-PII_ENDPOINT = "/api/v1/classify/pii"
+BATCH_ENDPOINT = "/api/v1/diagnostics/classify/batch"
+PII_ENDPOINT = "/api/v1/diagnostics/classify/pii"
 OPENAI_ENDPOINT = "/v1/chat/completions"
+DIFFERENTIAL_LATENCY_MS = 200
+MIN_DETECTION_RATE_PERCENT = 60
+MIN_SAFE_RESPONSE_LENGTH = 50
 
 # Base PII test cases - will be made unique each run to avoid caching
 PII_TEST_TEMPLATES = [
@@ -98,8 +100,6 @@ SAFE_TEST_TEMPLATES = [
 
 def generate_unique_test_cases():
     """Generate unique test cases with timestamp to avoid caching."""
-    import time
-
     timestamp = str(int(time.time() * 1000))[-8:]  # Last 8 digits of milliseconds
     unique_id = str(uuid.uuid4())[:8]
     cache_buster = f"{timestamp}-{unique_id}"
@@ -144,7 +144,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
             health_response = requests.get(
                 f"{CLASSIFICATION_API_URL}/health", timeout=5
             )
-            if health_response.status_code != 200:
+            if health_response.status_code != HTTPStatus.OK:
                 self.skipTest(
                     f"Classification API health check failed: {health_response.status_code}"
                 )
@@ -165,7 +165,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
                 json=test_payload,
                 timeout=30,
             )
-            if envoy_response.status_code >= 500:
+            if envoy_response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
                 self.skipTest(
                     f"Envoy/ExtProc health check failed: {envoy_response.status_code}"
                 )
@@ -180,7 +180,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
         """
         TEST 1: Batch API PII Detection (Unified Classifier Path)
 
-        WHAT IS TESTED: /api/v1/classify/batch with task_type="pii"
+        WHAT IS TESTED: /api/v1/diagnostics/classify/batch with task_type="pii"
         CLASSIFIER PATH: Unified classifier with PII detection models
         EXPECTED RESULT: ✅ WORKING - Should detect PII entities with high confidence
 
@@ -267,7 +267,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
         """
         TEST 2: Direct PII API Endpoint
 
-        WHAT IS TESTED: /api/v1/classify/pii endpoint (direct PII classification)
+        WHAT IS TESTED: /api/v1/diagnostics/classify/pii endpoint (direct PII classification)
         CLASSIFIER PATH: Different implementation from batch API
         EXPECTED RESULT: ❌ BROKEN - Returns empty results despite containing PII
 
@@ -299,7 +299,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
             timeout=10,
         )
 
-        if response.status_code == 200:
+        if response.status_code == HTTPStatus.OK:
             response_json = response.json()
             has_pii = response_json.get("has_pii", False)
             entities = response_json.get("entities", [])
@@ -327,7 +327,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
             )
 
             if entities:
-                print(f"\n📋 Detected PII Entities:")
+                print("\n📋 Detected PII Entities:")
                 for i, entity in enumerate(entities):
                     entity_type = entity.get("type", "unknown")
                     confidence = entity.get("confidence", 0.0)
@@ -348,10 +348,10 @@ class PIIDetectionTest(SemanticRouterTestBase):
                 )
                 # Document the discrepancy instead of failing
                 print(
-                    f"⚠️  NOTE: Batch endpoint correctly detects PII but direct endpoint doesn't"
+                    "⚠️  NOTE: Batch endpoint correctly detects PII but direct endpoint doesn't"
                 )
                 print(
-                    f"⚠️  This suggests different implementations between batch and direct PII endpoints"
+                    "⚠️  This suggests different implementations between batch and direct PII endpoints"
                 )
         else:
             self.print_response_info(
@@ -407,7 +407,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
         )
 
         # Check if the request went through
-        request_allowed = response.status_code == 200
+        request_allowed = response.status_code == HTTPStatus.OK
 
         response_content = ""
         if request_allowed:
@@ -419,7 +419,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
                         .get("message", {})
                         .get("content", "")
                     )
-            except:
+            except (AttributeError, IndexError, KeyError, TypeError, ValueError):
                 response_content = "Could not parse response"
 
         # Check if response potentially exposes PII patterns
@@ -534,10 +534,13 @@ class PIIDetectionTest(SemanticRouterTestBase):
             processing_time = (time.time() - start_time) * 1000
 
             # Analyze response for PII detection indicators
-            request_allowed = response.status_code == 200
+            request_allowed = response.status_code == HTTPStatus.OK
 
             # Check for PII policy violation response
-            is_pii_blocked = response.status_code == 403 or response.status_code == 400
+            is_pii_blocked = response.status_code in {
+                HTTPStatus.BAD_REQUEST,
+                HTTPStatus.FORBIDDEN,
+            }
 
             # Analyze response content
             response_content = ""
@@ -550,20 +553,15 @@ class PIIDetectionTest(SemanticRouterTestBase):
                             "content"
                         ]
                     model_used = response_json.get("model", "unknown")
-                except:
+                except (AttributeError, IndexError, KeyError, TypeError, ValueError):
                     response_content = "Could not parse response"
 
             # Check for PII-related routing decisions
             # ExtProc may route PII content to specific models or add safety measures
-            pii_safe_routing = model_used in [
-                "Model-A",
-                "safe-model",
-                "pii-compliant-model",
-            ]
 
             # Check response quality/safety indicators
             response_looks_safe = (
-                len(response_content) > 50
+                len(response_content) > MIN_SAFE_RESPONSE_LENGTH
                 and "sorry" not in response_content.lower()
                 and "can't help" not in response_content.lower()
             )
@@ -589,7 +587,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
 
             results.append(result)
 
-            print(f"  📊 Results:")
+            print("  📊 Results:")
             print(f"    Request Status: {response.status_code}")
             print(f"    Model Used: {model_used}")
             print(f"    Processing Time: {processing_time:.1f}ms")
@@ -604,9 +602,9 @@ class PIIDetectionTest(SemanticRouterTestBase):
         # Check for differential behavior between PII and safe content
         differential_routing = pii_test["model_used"] != safe_test["model_used"]
         differential_processing = (
-            abs(pii_test["processing_time_ms"] - safe_test["processing_time_ms"]) > 200
+            abs(pii_test["processing_time_ms"] - safe_test["processing_time_ms"])
+            > DIFFERENTIAL_LATENCY_MS
         )
-        differential_blocking = pii_test["is_blocked"] != safe_test["is_blocked"]
 
         # Overall PII detection indicators
         pii_detection_indicators = []
@@ -647,7 +645,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
         )
 
         # Print detailed analysis
-        print(f"\n📋 Detailed ExtProc PII Analysis:")
+        print("\n📋 Detailed ExtProc PII Analysis:")
         for result in results:
             status = (
                 "🔒"
@@ -720,7 +718,9 @@ class PIIDetectionTest(SemanticRouterTestBase):
 
         print(f"\n📊 Detailed Analysis of {len(results)} PII Classifications:")
 
-        for i, (result, test_case) in enumerate(zip(results, all_test_cases)):
+        for i, (result, test_case) in enumerate(
+            zip(results, all_test_cases, strict=False)
+        ):
             actual_category = result.get("category", "unknown")
             confidence = result.get("confidence", 0.0)
 
@@ -776,7 +776,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
 
         # Test should pass if detection rate is reasonable
         has_major_issues = (
-            detection_rate < 60
+            detection_rate < MIN_DETECTION_RATE_PERCENT
             or len(detection_failures) > 1
             or safe_misclassified_count > 1
         )

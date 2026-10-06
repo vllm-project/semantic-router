@@ -31,8 +31,19 @@ func (c *Classifier) buildPolicySignalDispatchers(
 	}
 	return []signalDispatch{
 		{
+			config.SignalTypeSafety, "Safety",
+			func() {
+				c.evaluateSafetySignals(requestFacts.Context, results, mu, textForSignal(config.SignalTypeSafety), usedSignals)
+			},
+		},
+		{
 			config.SignalTypeJailbreak, "Jailbreak",
 			func() {
+				if input := requestFacts.JailbreakInput; input != nil {
+					c.evaluateJailbreakSignalPieces(requestFacts.Context, results, mu,
+						jailbreakInputTexts(input.Current), jailbreakInputTexts(input.History))
+					return
+				}
 				c.evaluateJailbreakSignal(
 					requestFacts.Context,
 					results,
@@ -46,6 +57,7 @@ func (c *Classifier) buildPolicySignalDispatchers(
 			config.SignalTypePII, "PII",
 			func() {
 				c.evaluatePIISignal(
+					requestFacts.Context,
 					results,
 					mu,
 					textForSignal(config.SignalTypePII),
@@ -79,6 +91,18 @@ func (c *Classifier) buildPolicySignalDispatchers(
 		{
 			config.SignalTypeInputModality, "InputModality",
 			func() { c.evaluateInputModalitySignal(results, mu, requestFacts, usedSignals) },
+		},
+		{
+			config.SignalTypeDecision, "Decision",
+			func() {
+				c.evaluateDecisionModelSignals(
+					requestFacts.Context,
+					results,
+					mu,
+					textForSignal(config.SignalTypeDecision),
+					usedSignals,
+				)
+			},
 		},
 		{
 			config.SignalTypeClassifier, "Classifier",

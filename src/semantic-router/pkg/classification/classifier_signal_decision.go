@@ -77,6 +77,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		SignalConfidences:  signals.SignalConfidences,
 		AuthzRules:         signals.MatchedAuthzRules,
 		JailbreakRules:     signals.MatchedJailbreakRules,
+		SafetyRules:        signals.MatchedSafetyRules,
 		PIIRules:           signals.MatchedPIIRules,
 		KBRules:            signals.MatchedKBRules,
 		ConversationRules:  signals.MatchedConversationRules,
@@ -84,6 +85,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		MetadataRules:      signals.MatchedMetadataRules,
 		ClassifierRules:    signals.MatchedClassifierRules,
 		InputModalityRules: signals.MatchedInputModalityRules,
+		DecisionRules:      signals.MatchedDecisionRules,
 		ProjectionRules:    signals.MatchedProjectionRules,
 		SignalValues:       signals.SignalValues,
 		SignalErrors:       signals.SignalErrors,
@@ -100,7 +102,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 	} else {
 		result, diagnostics, err = engine.EvaluateDecisionsWithDiagnostics(sm)
 	}
-	signals.AppliedUnknownPolicies = diagnostics.AppliedUnknownPolicies
+	signals.Diagnostics = diagnostics
 	if err != nil {
 		return nil, traces, fmt.Errorf("decision evaluation failed: %w", err)
 	}

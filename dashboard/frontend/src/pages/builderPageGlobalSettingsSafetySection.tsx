@@ -1,8 +1,8 @@
-import React from 'react'
+import React, { useId } from 'react'
 
 import type { DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 import styles from './BuilderPage.module.css'
-import { getBool, getNum, getObj, getStr } from './builderPageGlobalSettingsSupport'
+import { getBool, getNum, getObj } from './builderPageGlobalSettingsSupport'
 
 interface GlobalSettingsSafetySectionProps {
   local: DSLFieldObject
@@ -15,6 +15,41 @@ interface GlobalSettingsSafetySectionProps {
   onSetDeepField: (p1: string, p2: string, p3: string, value: DSLFieldValue) => void
 }
 
+interface SafetySectionHeaderProps {
+  expanded: boolean
+  bodyId: string
+  onToggle: () => void
+}
+
+/** Toggle for the Safety section. Extracted to keep the section body on its own seam. */
+const SafetySectionHeader: React.FC<SafetySectionHeaderProps> = ({
+  expanded,
+  bodyId,
+  onToggle,
+}) => (
+  <button
+    type="button"
+    className={styles.gsSectionHeader}
+    onClick={onToggle}
+    aria-expanded={expanded}
+    aria-controls={bodyId}
+  >
+    <svg
+      className={styles.gsSectionChevron}
+      data-open={expanded}
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    >
+      <path d="M3 2l4 3-4 3" />
+    </svg>
+    <span className={styles.gsSectionTitle}>Safety</span>
+  </button>
+)
+
 const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = ({
   local,
   collapsedSections,
@@ -25,25 +60,17 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
   onSetNestedField,
   onSetDeepField,
 }) => {
+  const bodyId = useId()
+
   return (
     <div className={styles.gsSection}>
-      <div className={styles.gsSectionHeader} onClick={() => onToggleSection('safety')}>
-        <svg
-          className={styles.gsSectionChevron}
-          data-open={!collapsedSections['safety']}
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        >
-          <path d="M3 2l4 3-4 3" />
-        </svg>
-        <span className={styles.gsSectionTitle}>Safety</span>
-      </div>
+      <SafetySectionHeader
+        expanded={!collapsedSections['safety']}
+        bodyId={bodyId}
+        onToggle={() => onToggleSection('safety')}
+      />
       {!collapsedSections['safety'] && (
-        <div className={styles.gsSectionBody}>
+        <div id={bodyId} className={styles.gsSectionBody}>
           <div className={styles.gsSubSection}>
             <div className={styles.gsSubHeader}>
               <label className={styles.gsCheckbox}>
@@ -57,7 +84,6 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
                         ...current,
                         enabled: true,
                         threshold: getNum(current, 'threshold', 0.7),
-                        model_type: getStr(current, 'model_type', 'candle'),
                       })
                     } else {
                       onSetField('prompt_guard', { ...current, enabled: false })
@@ -88,27 +114,6 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
                     }
                   />
                 </div>
-                <div className={styles.gsRow}>
-                  <label className={styles.gsLabel}>Model</label>
-                  <div className={styles.gsRadioGroup}>
-                    {[
-                      { label: 'Candle (local)', value: 'candle' },
-                      { label: 'vLLM (external)', value: 'vllm' },
-                    ].map((option) => (
-                      <label key={option.value} className={styles.gsRadio}>
-                        <input
-                          type="radio"
-                          name="gs-pg-model"
-                          checked={getStr(promptGuard, 'model_type', 'candle') === option.value}
-                          onChange={() =>
-                            onSetNestedField('prompt_guard', 'model_type', option.value)
-                          }
-                        />
-                        <span>{option.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
               </div>
             )}
           </div>
@@ -135,7 +140,6 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
                           ...hallucinationModel,
                           threshold: getNum(hallucinationModel, 'threshold', 0.5),
                         },
-                        use_nli: getBool(current, 'use_nli', false),
                       })
                     } else {
                       onSetField('hallucination_mitigation', {
@@ -189,23 +193,6 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
                       )
                     }
                   />
-                </div>
-                <div className={styles.gsRow}>
-                  <label className={styles.gsLabel}>NLI Model</label>
-                  <label className={styles.gsCheckbox}>
-                    <input
-                      type="checkbox"
-                      checked={getBool(hallucination, 'use_nli', false)}
-                      onChange={(event) =>
-                        onSetNestedField(
-                          'hallucination_mitigation',
-                          'use_nli',
-                          event.target.checked,
-                        )
-                      }
-                    />
-                    <span>Enhanced explanations</span>
-                  </label>
                 </div>
               </div>
             )}

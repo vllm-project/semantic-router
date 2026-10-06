@@ -3,7 +3,7 @@
 # Configuration
 IMAGE_NAME ?= ghcr.io/vllm-project/semantic-router/vllm-sr
 ROUTER_IMAGE_NAME ?= $(IMAGE_NAME)
-ENVOY_IMAGE ?= envoyproxy/envoy:v1.34-latest
+ENVOY_IMAGE ?= envoyproxy/envoy:v1.35.3
 DASHBOARD_IMAGE_NAME ?= ghcr.io/vllm-project/semantic-router/dashboard
 IMAGE_TAG ?= latest
 FULL_IMAGE = $(IMAGE_NAME):$(IMAGE_TAG)
@@ -114,7 +114,7 @@ dev-serve:
 # Development test - validate config and render router/envoy outputs
 dev-test: install
 	@echo "Testing canonical configuration rendering..."
-	python -m cli.main validate --config $(CONFIG_FILE)
+	python -m cli.main config validate --config $(CONFIG_FILE)
 	python -m cli.main config router --config $(CONFIG_FILE) >/dev/null
 	python -m cli.main config envoy --config $(CONFIG_FILE) >/dev/null
 	@echo ""
@@ -129,7 +129,7 @@ docker-build:
 	@echo "Image: $(FULL_IMAGE)"
 	@echo "This may take a few minutes..."
 	@echo ""
-	cd ../.. && docker build -t $(FULL_IMAGE) -f src/vllm-sr/Dockerfile .
+	cd ../.. && docker build -t $(FULL_IMAGE) -f tools/docker/Dockerfile.extproc --target vllm-sr .
 	@echo ""
 	@echo "Docker image built: $(FULL_IMAGE)"
 	@echo ""
@@ -139,7 +139,7 @@ docker-build-router:
 	@echo "Image: $(FULL_ROUTER_IMAGE)"
 	@echo "This may take a few minutes..."
 	@echo ""
-	cd ../.. && docker build -t $(FULL_ROUTER_IMAGE) -f src/vllm-sr/Dockerfile .
+	cd ../.. && docker build -t $(FULL_ROUTER_IMAGE) -f tools/docker/Dockerfile.extproc --target vllm-sr .
 	@echo ""
 	@echo "Docker image built: $(FULL_ROUTER_IMAGE)"
 	@echo ""
@@ -149,6 +149,7 @@ docker-build-envoy:
 	@echo "Image: $(FULL_ENVOY_IMAGE)"
 	@echo ""
 	@docker image inspect $(FULL_ENVOY_IMAGE) >/dev/null 2>&1 || docker pull $(FULL_ENVOY_IMAGE)
+	@docker run --rm $(FULL_ENVOY_IMAGE) --version >/dev/null
 	@echo ""
 	@echo "Docker image available: $(FULL_ENVOY_IMAGE)"
 	@echo ""
@@ -186,7 +187,8 @@ docker-buildx: docker-buildx-setup
 	cd ../.. && docker buildx build \
 		--platform $(PLATFORMS) \
 		--tag $(FULL_IMAGE) \
-		--file src/vllm-sr/Dockerfile \
+		--file tools/docker/Dockerfile.extproc \
+		--target vllm-sr \
 		--load \
 		.
 	@echo ""
@@ -203,7 +205,8 @@ docker-buildx-push: docker-buildx-setup
 	cd ../.. && docker buildx build \
 		--platform $(PLATFORMS) \
 		--tag $(FULL_IMAGE) \
-		--file src/vllm-sr/Dockerfile \
+		--file tools/docker/Dockerfile.extproc \
+		--target vllm-sr \
 		--push \
 		.
 	@echo ""
@@ -218,7 +221,7 @@ install:
 # Configuration commands
 validate: install
 	@echo "Validating configuration..."
-	python -m cli.main validate --config $(CONFIG_FILE)
+	python -m cli.main config validate --config $(CONFIG_FILE)
 
 config-router: install
 	@echo "Printing canonical router configuration..."
@@ -306,7 +309,7 @@ rebuild-and-test: install
 	@read -p "Press Enter to continue or Ctrl+C to cancel..." dummy
 	@echo ""
 	@echo "1. Cleaning up old containers..."
-	@docker rm -f vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-sim-container vllm-sr-prometheus vllm-sr-grafana vllm-sr-jaeger 2>/dev/null || echo "  No containers to remove"
+	@docker rm -f vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-prometheus vllm-sr-grafana vllm-sr-jaeger 2>/dev/null || echo "  No containers to remove"
 	@echo ""
 	@echo "2. Rebuilding Docker images..."
 	@echo "  Building from: $$(cd ../.. && pwd)"

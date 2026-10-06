@@ -12,7 +12,9 @@ var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
 	"system_prompt":       pluginFieldsSystemPrompt,
 	"response_cache":      pluginFieldsResponseCache,
 	"context_compression": pluginFieldsStructuredConfiguration,
+	"prompt_cache":        pluginFieldsStructuredConfiguration,
 	"router_replay":       pluginFieldsRouterReplay,
+	"shadow_dispatch":     pluginFieldsStructuredConfiguration,
 	"memory":              pluginFieldsMemory,
 	"hallucination":       pluginFieldsHallucination,
 	"fast_response":       pluginFieldsFastResponse,
@@ -121,9 +123,6 @@ func pluginFieldsHallucination(p *config.DecisionPlugin) map[string]Value {
 	if cfg.Enabled {
 		fields["enabled"] = BoolValue{V: true}
 	}
-	if cfg.UseNLI {
-		fields["use_nli"] = BoolValue{V: true}
-	}
 	if cfg.HallucinationAction != "" {
 		fields["hallucination_action"] = StringValue{V: cfg.HallucinationAction}
 	}
@@ -161,6 +160,13 @@ func pluginFieldsRequestParams(p *config.DecisionPlugin) map[string]Value {
 		}
 		fields["blocked_params"] = ArrayValue{Items: items}
 	}
+	if cfg.DefaultMaxTokens != nil {
+		if cfg.DefaultMaxTokens.Auto {
+			fields["default_max_tokens"] = StringValue{V: "auto"}
+		} else {
+			fields["default_max_tokens"] = IntValue{V: cfg.DefaultMaxTokens.Value}
+		}
+	}
 	if cfg.MaxTokensLimit != nil {
 		fields["max_tokens_limit"] = IntValue{V: *cfg.MaxTokensLimit}
 	}
@@ -196,6 +202,9 @@ func pluginFieldsToolSelection(p *config.DecisionPlugin) map[string]Value {
 	}
 	if cfg.Strategy != "" {
 		fields["strategy"] = StringValue{V: cfg.Strategy}
+	}
+	if cfg.FallbackToEmpty != nil {
+		fields["fallback_to_empty"] = BoolValue{V: *cfg.FallbackToEmpty}
 	}
 	if cfg.RelevanceThreshold != nil {
 		fields["relevance_threshold"] = FloatValue{V: float64(*cfg.RelevanceThreshold)}
@@ -273,6 +282,13 @@ func addRAGCoreFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
 }
 
 func addRAGBackendAndFailureFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
+	if cfg.Rerank != nil {
+		rerank := make(map[string]Value)
+		if cfg.Rerank.TopK != nil {
+			rerank["top_k"] = IntValue{V: *cfg.Rerank.TopK}
+		}
+		fields["rerank"] = ObjectValue{Fields: rerank}
+	}
 	if backendConfig, ok := structuredPayloadObjectValue(cfg.BackendConfig); ok {
 		fields["backend_config"] = backendConfig
 	}

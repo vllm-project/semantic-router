@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -52,6 +53,33 @@ ROUTE "policy-route" (on_unknown = "fail_request") {
 		t,
 		roundTrip.Decisions[0].Rules.Conditions[1],
 	)
+}
+
+func TestClassifierRationaleRoundTrip(t *testing.T) {
+	for _, disabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("disabled_%t", disabled), func(t *testing.T) {
+			cfg := &config.RouterConfig{}
+			cfg.ClassifierRules = []config.ClassifierSignalRule{{
+				Name:             "risk",
+				Type:             config.ClassifierSignalTypeLLM,
+				Model:            "judge",
+				Labels:           []string{"SAFE", "RISKY"},
+				Instructions:     "Classify the input.",
+				DisableRationale: disabled,
+			}}
+			source, err := Decompile(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(source, "disable_rationale: true") != disabled {
+				t.Fatalf("rationale setting changed in DSL:\n%s", source)
+			}
+			roundTrip := mustCompilePolicyDSL(t, source)
+			if !reflect.DeepEqual(cfg.ClassifierRules, roundTrip.ClassifierRules) {
+				t.Fatalf("classifier changed after round trip: %#v", roundTrip.ClassifierRules)
+			}
+		})
+	}
 }
 
 func TestPolicySignalsRoundTripInsideIsolatedRecipes(t *testing.T) {
@@ -200,5 +228,29 @@ func assertPolicyDSLSource(t *testing.T, source string) {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("decompiled source missing %q:\n%s", expected, source)
 		}
+	}
+}
+
+func TestRouteOptionsAcceptCanonicalCommaAndLegacyWhitespace(t *testing.T) {
+	for _, separator := range []string{", ", " "} {
+		t.Run(fmt.Sprintf("separator_%q", separator), func(t *testing.T) {
+			source := fmt.Sprintf(`
+SIGNAL metadata cohort { key: "cohort" predicate: { equals: "test" } }
+ROUTE route (description = "Inspect cohort"%son_unknown = "fail_request") {
+ PRIORITY 100
+ WHEN metadata("cohort")
+ MODEL "model-a"
+}`, separator)
+			cfg := mustCompilePolicyDSL(t, source)
+			canonical, err := Decompile(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			roundTrip := mustCompilePolicyDSL(t, canonical)
+			if roundTrip.Decisions[0].Description != "Inspect cohort" ||
+				roundTrip.Decisions[0].Rules.OnUnknown != "fail_request" {
+				t.Fatalf("header options changed: %#v", roundTrip.Decisions[0])
+			}
+		})
 	}
 }

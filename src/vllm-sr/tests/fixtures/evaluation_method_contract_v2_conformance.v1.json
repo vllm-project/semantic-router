@@ -1,0 +1,452 @@
+{
+  "schema_version": "evaluation-method-conformance.v1",
+  "method_contract_version": "evaluation-method.v2",
+  "base_descriptor": {
+    "schema_version": "evaluation-method.v2",
+    "id": "conformance.method.v2",
+    "version": "evaluation-method.v2",
+    "status": "native-qualified",
+    "execution_owner": "benchmark_native",
+    "input_schema": "conformance-input",
+    "export_schema": "conformance-report",
+    "live_input_complete": true,
+    "live_grader": true,
+    "applicable_tracks": [
+      "routing",
+      "model_pool"
+    ],
+    "live_tracks": [
+      "routing"
+    ],
+    "produced_metric_ids": [
+      "conformance.score"
+    ],
+    "evidence_ceiling": "E3",
+    "native_parity": "native",
+    "required_artifact_ids": [
+      "records"
+    ],
+    "analysis_plan": {
+      "schema_version": "evaluation-method.v2",
+      "id": "conformance-case",
+      "analysis_unit": "case",
+      "cluster_unit": "case",
+      "slices": [
+        {
+          "schema_version": "evaluation-method.v2",
+          "id": "all"
+        }
+      ],
+      "curve_domain": "not_applicable",
+      "missingness": "fail_closed"
+    }
+  },
+  "cases": [
+    {
+      "id": "baseline-native-qualified",
+      "expected_valid": true,
+      "remove_fields": [],
+      "overrides": {}
+    },
+    {
+      "id": "non-native-may-declare-live-applicability",
+      "expected_valid": true,
+      "remove_fields": [],
+      "overrides": {
+        "status": "exploratory-import",
+        "execution_owner": "worker",
+        "live_input_complete": false,
+        "live_grader": false,
+        "native_parity": "source_qualified"
+      }
+    },
+    {
+      "id": "metric-identity-is-trimmed-text-not-portable-id",
+      "expected_valid": true,
+      "remove_fields": [],
+      "overrides": {
+        "produced_metric_ids": [
+          "quality/by-case"
+        ]
+      }
+    },
+    {
+      "id": "unknown-applicable-track",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "applicable_tracks": [
+          "routing",
+          "invented"
+        ]
+      }
+    },
+    {
+      "id": "unknown-live-track",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "live_tracks": [
+          "invented"
+        ]
+      }
+    },
+    {
+      "id": "live-track-must-be-applicable",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "applicable_tracks": [
+          "routing"
+        ],
+        "live_tracks": [
+          "model_pool"
+        ]
+      }
+    },
+    {
+      "id": "duplicate-applicable-track",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "applicable_tracks": [
+          "routing",
+          "routing"
+        ]
+      }
+    },
+    {
+      "id": "duplicate-live-track",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "live_tracks": [
+          "routing",
+          "routing"
+        ]
+      }
+    },
+    {
+      "id": "artifact-id-must-be-portable",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "required_artifact_ids": [
+          "records/raw"
+        ]
+      }
+    },
+    {
+      "id": "artifact-ids-must-be-unique",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "required_artifact_ids": [
+          "records",
+          "records"
+        ]
+      }
+    },
+    {
+      "id": "native-parity-requires-benchmark-native-owner",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "execution_owner": "worker"
+      }
+    },
+    {
+      "id": "metric-identity-must-be-trimmed",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "produced_metric_ids": [
+          " conformance.score"
+        ]
+      }
+    },
+    {
+      "id": "analysis-unit-must-not-be-blank",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "analysis_plan": {
+          "schema_version": "evaluation-method.v2",
+          "id": "conformance-case",
+          "analysis_unit": " ",
+          "cluster_unit": "case",
+          "slices": [
+            {
+              "schema_version": "evaluation-method.v2",
+              "id": "all"
+            }
+          ],
+          "curve_domain": "not_applicable",
+          "missingness": "fail_closed"
+        }
+      }
+    },
+    {
+      "id": "schema-version-is-required",
+      "expected_valid": false,
+      "remove_fields": [
+        "/schema_version"
+      ],
+      "overrides": {}
+    },
+    {
+      "id": "schema-version-rejects-null",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "schema_version": null
+      }
+    },
+    {
+      "id": "schema-version-rejects-wrong-type",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "schema_version": 2
+      }
+    },
+    {
+      "id": "version-is-required",
+      "expected_valid": false,
+      "remove_fields": [
+        "/version"
+      ],
+      "overrides": {}
+    },
+    {
+      "id": "version-rejects-null",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "version": null
+      }
+    },
+    {
+      "id": "version-rejects-wrong-type",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "version": 2
+      }
+    },
+    {
+      "id": "live-input-complete-is-required-for-non-native-methods",
+      "expected_valid": false,
+      "remove_fields": [
+        "/live_input_complete"
+      ],
+      "overrides": {
+        "status": "exploratory-import",
+        "execution_owner": "worker",
+        "live_grader": false,
+        "native_parity": "source_qualified"
+      }
+    },
+    {
+      "id": "live-input-complete-rejects-null-for-non-native-methods",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "status": "exploratory-import",
+        "execution_owner": "worker",
+        "live_input_complete": null,
+        "live_grader": false,
+        "native_parity": "source_qualified"
+      }
+    },
+    {
+      "id": "live-input-complete-rejects-wrong-type-for-non-native-methods",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "status": "exploratory-import",
+        "execution_owner": "worker",
+        "live_input_complete": "false",
+        "live_grader": false,
+        "native_parity": "source_qualified"
+      }
+    },
+    {
+      "id": "live-grader-is-required-for-non-native-methods",
+      "expected_valid": false,
+      "remove_fields": [
+        "/live_grader"
+      ],
+      "overrides": {
+        "status": "exploratory-import",
+        "execution_owner": "worker",
+        "live_input_complete": false,
+        "native_parity": "source_qualified"
+      }
+    },
+    {
+      "id": "live-grader-rejects-null-for-non-native-methods",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "status": "exploratory-import",
+        "execution_owner": "worker",
+        "live_input_complete": false,
+        "live_grader": null,
+        "native_parity": "source_qualified"
+      }
+    },
+    {
+      "id": "live-grader-rejects-wrong-type-for-non-native-methods",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "status": "exploratory-import",
+        "execution_owner": "worker",
+        "live_input_complete": false,
+        "live_grader": "false",
+        "native_parity": "source_qualified"
+      }
+    },
+    {
+      "id": "live-tracks-is-required-for-non-native-methods",
+      "expected_valid": false,
+      "remove_fields": [
+        "/live_tracks"
+      ],
+      "overrides": {
+        "status": "exploratory-import",
+        "execution_owner": "worker",
+        "live_input_complete": false,
+        "live_grader": false,
+        "native_parity": "source_qualified"
+      }
+    },
+    {
+      "id": "live-tracks-rejects-null-for-non-native-methods",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "status": "exploratory-import",
+        "execution_owner": "worker",
+        "live_input_complete": false,
+        "live_grader": false,
+        "live_tracks": null,
+        "native_parity": "source_qualified"
+      }
+    },
+    {
+      "id": "live-tracks-rejects-wrong-type-for-non-native-methods",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "status": "exploratory-import",
+        "execution_owner": "worker",
+        "live_input_complete": false,
+        "live_grader": false,
+        "live_tracks": "routing",
+        "native_parity": "source_qualified"
+      }
+    },
+    {
+      "id": "analysis-plan-schema-version-is-required",
+      "expected_valid": false,
+      "remove_fields": [
+        "/analysis_plan/schema_version"
+      ],
+      "overrides": {}
+    },
+    {
+      "id": "analysis-plan-schema-version-rejects-null",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "analysis_plan": {
+          "schema_version": null,
+          "id": "conformance-case",
+          "analysis_unit": "case",
+          "cluster_unit": "case",
+          "slices": [
+            {
+              "schema_version": "evaluation-method.v2",
+              "id": "all"
+            }
+          ],
+          "curve_domain": "not_applicable",
+          "missingness": "fail_closed"
+        }
+      }
+    },
+    {
+      "id": "analysis-plan-schema-version-rejects-wrong-type",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "analysis_plan": {
+          "schema_version": 2,
+          "id": "conformance-case",
+          "analysis_unit": "case",
+          "cluster_unit": "case",
+          "slices": [
+            {
+              "schema_version": "evaluation-method.v2",
+              "id": "all"
+            }
+          ],
+          "curve_domain": "not_applicable",
+          "missingness": "fail_closed"
+        }
+      }
+    },
+    {
+      "id": "analysis-plan-slice-schema-version-is-required",
+      "expected_valid": false,
+      "remove_fields": [
+        "/analysis_plan/slices/0/schema_version"
+      ],
+      "overrides": {}
+    },
+    {
+      "id": "analysis-plan-slice-schema-version-rejects-null",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "analysis_plan": {
+          "schema_version": "evaluation-method.v2",
+          "id": "conformance-case",
+          "analysis_unit": "case",
+          "cluster_unit": "case",
+          "slices": [
+            {
+              "schema_version": null,
+              "id": "all"
+            }
+          ],
+          "curve_domain": "not_applicable",
+          "missingness": "fail_closed"
+        }
+      }
+    },
+    {
+      "id": "analysis-plan-slice-schema-version-rejects-wrong-type",
+      "expected_valid": false,
+      "remove_fields": [],
+      "overrides": {
+        "analysis_plan": {
+          "schema_version": "evaluation-method.v2",
+          "id": "conformance-case",
+          "analysis_unit": "case",
+          "cluster_unit": "case",
+          "slices": [
+            {
+              "schema_version": 2,
+              "id": "all"
+            }
+          ],
+          "curve_domain": "not_applicable",
+          "missingness": "fail_closed"
+        }
+      }
+    }
+  ]
+}

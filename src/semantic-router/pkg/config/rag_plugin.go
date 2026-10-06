@@ -27,6 +27,9 @@ type RAGPluginConfig struct {
 	// - "system_prompt": Prepend to system prompt
 	InjectionMode string `json:"injection_mode,omitempty" yaml:"injection_mode,omitempty"`
 
+	// Optional neural scoring of structured retrieval candidates.
+	Rerank *RAGRerankConfig `json:"rerank,omitempty" yaml:"rerank,omitempty"`
+
 	// Backend-specific configuration
 	// Structure depends on Backend type:
 	// - "milvus": MilvusRAGConfig

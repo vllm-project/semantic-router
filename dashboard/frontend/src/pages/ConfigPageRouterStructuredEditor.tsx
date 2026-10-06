@@ -1,5 +1,6 @@
 import { KeyValueEditor } from '../components/KeyValueEditor'
 import { StringListEditor } from '../components/StringListEditor'
+import { JsonFieldEditor } from './builderPageJsonFieldEditor'
 import {
   createRouterStructuredValue,
   type RouterStructuredSchema,
@@ -37,7 +38,9 @@ function scalarValue(value: unknown): string | number {
 }
 
 function isCompound(schema: RouterStructuredSchema): boolean {
-  return ['object', 'object-list', 'string-list', 'number-list', 'string-map'].includes(schema.kind)
+  return ['object', 'object-list', 'string-list', 'number-list', 'string-map', 'json'].includes(
+    schema.kind,
+  )
 }
 
 function ReadOnlyScalar({ schema, value }: { schema: RouterStructuredSchema; value: unknown }) {
@@ -281,6 +284,25 @@ export default function ConfigPageRouterStructuredEditor({
       />
     )
   }
+  if (schema.kind === 'json') {
+    if (readOnly) {
+      return <pre className={styles.readonlyJson}>{JSON.stringify(value, null, 2)}</pre>
+    }
+    return (
+      <JsonFieldEditor
+        schema={{
+          key: schema.label,
+          label: schema.label,
+          type: 'json',
+          required: schema.required,
+          description: schema.description,
+          placeholder: schema.placeholder,
+        }}
+        value={value}
+        onChange={onChange}
+      />
+    )
+  }
   if (readOnly) return <ReadOnlyScalar schema={schema} value={value} />
   if (schema.kind === 'boolean') {
     return (
@@ -297,10 +319,11 @@ export default function ConfigPageRouterStructuredEditor({
   }
   if (schema.kind === 'select') {
     const current = typeof value === 'string' ? value : ''
+    const declaredOptions = (schema.options ?? []).filter((option) => option !== '')
     const options =
-      current && !schema.options?.includes(current)
-        ? [current, ...(schema.options ?? [])]
-        : (schema.options ?? [])
+      current && !declaredOptions.includes(current)
+        ? [current, ...declaredOptions]
+        : declaredOptions
     return (
       <select
         className={styles.select}

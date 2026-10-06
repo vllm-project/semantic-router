@@ -58,7 +58,7 @@ by the Gateway API route. The exact value must agree across all three objects:
 # Router config fragment
 providers:
   defaults:
-    default_model: local/general
+    model: local/general
   models:
     - name: local/general
       provider_model_id: served-general
@@ -67,6 +67,7 @@ providers:
         - name: general-pool
           endpoint: general-pool.inference.svc.cluster.local:8000
           protocol: http
+          provider: vllm
           weight: 100
 ```
 
@@ -102,7 +103,7 @@ later endpoint choice inside `general-pool`.
 Create and validate a complete config before applying it:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 Then deploy with the [Helm or Operator workflow](../configuration-workflows).
@@ -131,8 +132,8 @@ after the re-evaluated route, or verify their ordering explicitly.
   The [Istio guide](istio) shows the direct-Service version of this attachment.
 - **agentgateway:** attach an `AgentgatewayPolicy` in its pre-routing phase.
   See [agentgateway](agentgateway).
-- **Envoy AI Gateway / Envoy Gateway:** use the gateway's supported ExtProc
-  policy surface. See [Envoy AI Gateway](ai-gateway).
+- **Agent Router (formerly Envoy AI Gateway) / Envoy Gateway:** use the gateway's supported ExtProc
+  policy surface. See [Agent Router](ai-gateway).
 
 Do not apply attachment resources from one gateway implementation to another;
 their policy APIs and processing modes are not interchangeable.

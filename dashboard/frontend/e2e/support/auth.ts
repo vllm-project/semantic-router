@@ -64,11 +64,22 @@ const defaultSetupState = {
 
 const defaultSettings = {
   readonlyMode: false,
+  serverReadonly: false,
+  runtimeConfigWritable: true,
+  recipeStoreWritable: true,
   setupMode: false,
   platform: '',
   envoyUrl: '',
   routerEvalEndpoint: '',
+  srBenchAvailable: true,
+  srBenchUnavailableReason: '',
+  mlPipelineAvailable: true,
+  mlPipelineUnavailableReason: '',
 }
+
+export const dashboardSettingsResponse = (
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> => ({ ...defaultSettings, ...overrides })
 
 export async function mockAuthenticatedSession(
   page: Page,

@@ -1,0 +1,35 @@
+{
+  "dataset_title": "Modality Routing Dataset",
+  "exported_at_utc": "2026-09-17T02:00:43.796214+00:00",
+  "max_samples": 6000,
+  "synthesize_both": 0,
+  "vllm_endpoint": null,
+  "vllm_model": null,
+  "vllm_synthesis_enabled": false,
+  "label2id": {
+    "AR": 0,
+    "DIFFUSION": 1,
+    "BOTH": 2
+  },
+  "schema": {
+    "text": "string",
+    "label": "int64",
+    "label_name": "string"
+  },
+  "source_datasets": [
+    "FredZhang7/stable-diffusion-prompts-2.47M",
+    "succinctly/midjourney-prompts",
+    "Falah/image_generation_prompts_SDXL",
+    "nateraw/parti-prompts",
+    "fal/image-generation-prompts",
+    "OpenAssistant/oasst2",
+    "tatsu-lab/alpaca",
+    "databricks/databricks-dolly-15k",
+    "stingning/ultrachat",
+    "lmsys/lmsys-chat-1m",
+    "allenai/WildChat",
+    "mqliu/InterleavedBench"
+  ],
+  "split_strategy": "70% train / 15% validation / 15% test with random_state=42",
+  "shuffle_seed": 42
+}

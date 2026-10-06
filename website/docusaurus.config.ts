@@ -157,6 +157,46 @@ const config: Config = {
       {
         redirects: [
           {
+            from: '/blog/introduce-vela',
+            to: '/blog/vela-models',
+          },
+          {
+            from: [
+              '/docs/installation/native-backends',
+              '/docs/installation/runtime/engines-and-hardware',
+            ],
+            to: '/docs/model-runtime/overview',
+          },
+          {
+            from: [
+              '/docs/installation/runtime/in-process',
+              '/docs/installation/runtime/models-and-bindings',
+            ],
+            to: '/docs/model-runtime/deploy',
+          },
+          {
+            from: '/docs/installation/runtime/openvino',
+            to: '/docs/model-runtime/migrate',
+          },
+          {
+            from: [
+              '/docs/installation/runtime/safety',
+              '/docs/tutorials/global/safety-models-and-policy',
+            ],
+            to: '/docs/model-runtime/guides/safety',
+          },
+          {
+            from: [
+              '/docs/installation/runtime/embeddings',
+              '/docs/tutorials/global/remote-embeddings',
+            ],
+            to: '/docs/model-runtime/guides/embeddings',
+          },
+          {
+            from: '/docs/installation/runtime/lifecycle-diagnostics',
+            to: '/docs/model-runtime/troubleshooting',
+          },
+          {
             from: '/docs/installation/kubernetes',
             to: '/docs/installation/k8s/ai-gateway',
           },
@@ -241,11 +281,9 @@ const config: Config = {
       { name: 'ICBM', content: '37.7749, -122.4194' },
     ],
     navbar: {
-      // No `style` — the navbar follows the reader's color mode. The homepage
-      // opts back into dark chrome in shell.css, where its palette is pinned.
+      // Navbar and logo follow the reader's color mode on every page.
       logo: {
         alt: 'vLLM Semantic Router Logo',
-        // Logo follows color mode; homepage keeps dark chrome via theme/Navbar/Logo swizzle.
         src: 'img/vllm-sr-logo.light.png',
         srcDark: 'img/vllm-sr-logo.white.png',
       },
@@ -294,20 +332,24 @@ const config: Config = {
           position: 'right',
           items: [
             {
+              label: 'Model Hub',
+              to: '/models',
+            },
+            {
+              label: 'Leaderboard',
+              to: '/community/contributors',
+            },
+            {
               label: 'GitHub',
               href: 'https://github.com/vllm-project/semantic-router',
             },
             {
               label: 'Hugging Face',
-              href: 'https://huggingface.co/LLM-Semantic-Router',
+              href: 'https://huggingface.co/vllm-sr',
             },
             {
               label: 'Discussions',
               href: 'https://github.com/vllm-project/semantic-router/discussions',
-            },
-            {
-              label: 'Leaderboard',
-              to: '/community/contributors',
             },
           ],
         },
@@ -352,7 +394,7 @@ const config: Config = {
             },
             {
               label: 'Hugging Face',
-              href: 'https://huggingface.co/LLM-Semantic-Router',
+              href: 'https://huggingface.co/vllm-sr',
             },
             {
               label: 'GitHub Discussions',
@@ -382,6 +424,10 @@ const config: Config = {
             {
               label: 'Vision Paper',
               to: '/vision-paper',
+            },
+            {
+              label: 'Decision Paper',
+              to: '/decision-paper',
             },
 
             {

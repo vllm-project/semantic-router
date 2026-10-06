@@ -1,38 +1,16 @@
-# GitHub Copilot Instructions
+# GitHub Copilot instructions
 
-Use the repository harness for reviews and code suggestions.
+Read `AGENTS.md` and the nearest local `AGENTS.md` for changed directories.
+Use `make impact CHANGED_FILES="..."` for ownership and candidate checks, then
+`make check CHANGED_FILES="..."` for the daily deterministic gate. Select
+integration or E2E explicitly with `make verify DOMAIN=...` or
+`make verify PROFILE=...`; use `make harness-check` for harness/workflow edits.
 
-## Start Here
+Prioritize correctness, security, public contracts, missing behavior tests, and
+real dependency boundaries. Numeric size metrics are advisory: recommend an
+extraction only when it improves ownership, coupling, or testability.
 
-1. Read [`AGENTS.md`](../AGENTS.md) and
-   [`tools/agent/docs/README.md`](../tools/agent/docs/README.md).
-2. Resolve the task before proposing changes:
-
-   ```bash
-   make agent-report ENV=cpu CHANGED_FILES="path/to/file ..."
-   ```
-
-3. Follow the reported primary skill, context, nearest local `AGENTS.md`, and
-   validation commands.
-
-`tools/agent/docs/` is the human-readable contract. Manifests, scripts, Make
-targets, and workflows are the executable contract. Keep them aligned instead
-of restating their rules here.
-
-## Review Priorities
-
-Report concrete, file-specific findings in this order:
-
-1. correctness, security, and behavior regressions;
-2. public API or configuration compatibility;
-3. missing tests or affected E2E coverage;
-4. module-boundary and hotspot growth;
-5. drift between documentation and executable rules.
-
-Behavior-visible routing, startup, config, Docker, CLI, or API changes normally
-need E2E coverage. Harness changes need `make agent-validate`. Use the full gate
-reported by `make agent-report` before describing a change as complete.
-
-Keep suggestions within the requested subsystem, preserve DCO sign-off, and do
-not copy branch notes, AI/tool attribution, credentials, private paths, or test
-receipts into durable documentation.
+Behavior-visible routing, startup, config, Docker, CLI, API, or protocol
+changes need appropriate integration evidence; pure refactors do not. Keep
+suggestions inside the requested subsystem and never copy credentials, private
+infrastructure, local receipts, or AI/tool attribution into repository files.

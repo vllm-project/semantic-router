@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strings"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -48,8 +47,7 @@ func (r *OpenAIRouter) retrieveFromMilvus(traceCtx context.Context, ctx *Request
 		topK = *ragConfig.TopK
 	}
 
-	// Generate embedding for query
-	queryEmbedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
+	queryEmbedding, err := r.ragQueryEmbedding(traceCtx, query, ctx)
 	if err != nil {
 		// Log full error internally but don't expose it to avoid information disclosure
 		logging.Errorf("Failed to generate embedding for RAG query: %v", err)

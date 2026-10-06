@@ -4,8 +4,9 @@ Both configs are identical except ``algorithm.fusion.grounding.enabled``. They:
   - add a deterministic ``deliberate_sentinel`` regex keyword rule + a top-priority
     fusion decision keyed to it (the harness prepends the sentinel to every prompt),
   - bind the fusion panel/judge to a local Ollama proxy via provider backend_refs,
-  - wire the NLI model (models/mom-halugate-explainer) so PANEL-mode grounding
-    actually fires instead of silently falling back to plain fusion.
+  - enable hallucination mitigation so the router's hallucination detector, served
+    by the model runtime, backs grounding: it reads each answer against the
+    context, or against every peer answer in ``panel`` mode.
 
 Usage:
     .venv-bench/bin/python -m bench.grounded_fusion.make_configs \
@@ -24,7 +25,7 @@ PANEL = ["qwen3:8b", "llama3.1:8b", "gemma3:12b"]
 JUDGE = "qwen3:14b"
 OLLAMA_BACKEND = {
     "base_url": "http://localhost:11435/v1",
-    "provider": "openai",
+    "provider": "ollama",
     "chat_path": "/chat/completions",
 }
 
@@ -38,7 +39,6 @@ def _ollama_provider_model(name: str) -> dict:
             {
                 "name": f"ollama-{name.replace(':', '-')}",
                 "weight": 100,
-                "type": "chat",
                 **OLLAMA_BACKEND,
             }
         ],
@@ -52,7 +52,12 @@ def _model_card(name: str) -> dict:
         "context_window_size": 32768,
         "description": f"Local Ollama model {name} for the grounded-fusion benchmark.",
         "capabilities": ["chat", "reasoning"],
-        "quality_score": 0.7,
+        "evaluations": [
+            {
+                "benchmark": "vllm-sr/operator-rating@1.0.0",
+                "metrics": {"score": 0.7},
+            }
+        ],
         "modality": "ar",
         "tags": ["bench", "ollama"],
     }
@@ -97,7 +102,7 @@ def _fusion_decision(grounding_on: bool, policy: str = "weight") -> dict:
                 "judge_prompt_version": "fusion-v1",
                 "grounding": {
                     "enabled": grounding_on,
-                    "reference": "panel",  # DRACO ships no context -> cross-model NLI
+                    "reference": "panel",  # DRACO ships no context -> answers read against peers
                     # policy controls how the score is used. weight (default, no
                     # drop) is the production default; filter (hard-drop below
                     # min_score) is known to hurt on contested factual items and is
@@ -106,7 +111,7 @@ def _fusion_decision(grounding_on: bool, policy: str = "weight") -> dict:
                     "policy": policy,
                     "min_score": 0.34,
                     "min_keep": 1,
-                    "nli_contradiction_penalty": 1.0,
+                    "contradiction_penalty": 1.0,
                     "on_error": "fail" if grounding_on else "skip",
                 },
             },
@@ -142,10 +147,8 @@ def build(base: dict, grounding_on: bool, policy: str = "weight") -> dict:
         if store in c["global"].get("stores", {}):
             c["global"]["stores"][store]["enabled"] = False
 
-    # Ensure hallucination_mitigation is enabled so the detector + NLI model init
-    # (initializeHallucinationDetector -> wireFusionGroundingBackends). The NLI
-    # model for PANEL-mode grounding comes from the `explainer` block
-    # (models/mom-halugate-explainer), which the reference config already sets.
+    # Enable hallucination_mitigation so the router prepares its hallucination
+    # detector, the grounding backend for context-mode fusion.
     hm = c["global"]["model_catalog"]["modules"]["hallucination_mitigation"]
     hm["enabled"] = True
     return c

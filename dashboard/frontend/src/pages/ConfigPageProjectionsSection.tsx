@@ -6,7 +6,7 @@ import RoutingScopeSelector from '../components/RoutingScopeSelector'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
 import type { FieldConfig } from '../components/EditModal'
-import type { ViewSection } from '../components/ViewModal'
+import type { ViewField, ViewSection } from '../components/ViewModal'
 import type {
   ConfigData,
   ConfigProjections,
@@ -35,6 +35,8 @@ import {
 } from './configPageProjectionStructuredEditors'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { useRoutingScopeManager } from './configPageRoutingScopeSupport'
+import { FieldEditor } from './builderPageFormPrimitives'
+import { projectionFieldsFromRouterSchema } from '../lib/routerConfigSchema'
 import {
   cloneProjections,
   EMPTY_MAPPINGS,
@@ -42,6 +44,7 @@ import {
   EMPTY_PROJECTIONS,
   EMPTY_SCORES,
   ensureProjectionConfig,
+  projectionInputSource,
   type ProjectionDeleteTarget,
   type ProjectionMappingFormState,
   type ProjectionPartitionFormState,
@@ -54,6 +57,50 @@ interface ConfigPageProjectionsSectionProps {
   saveConfig: (config: ConfigData) => Promise<void>
   openEditModal: OpenEditModal
   openViewModal: OpenViewModal
+}
+
+function withGeneratedProjectionFields<TForm extends object>(
+  collection: string,
+  fields: FieldConfig<TForm>[],
+): FieldConfig<TForm>[] {
+  const known = new Set(fields.map((field) => field.name))
+  const generated = projectionFieldsFromRouterSchema(collection)
+    .filter((field) => !known.has(field.key))
+    .map<FieldConfig<TForm>>((field) => ({
+      name: field.key,
+      label: field.label,
+      section: 'Advanced',
+      fullWidth: true,
+      required: field.required,
+      description: field.description,
+      type: 'custom',
+      customRender: (value, onChange) => (
+        <FieldEditor schema={field} value={value} onChange={onChange} />
+      ),
+    }))
+  return [...fields, ...generated]
+}
+
+function generatedProjectionViewFields(
+  collection: string,
+  value: Record<string, unknown>,
+  knownFields: readonly string[],
+): ViewField[] {
+  const known = new Set(knownFields)
+  return projectionFieldsFromRouterSchema(collection)
+    .filter((field) => !known.has(field.key) && value[field.key] !== undefined)
+    .map((field) => {
+      const fieldValue = value[field.key]
+      const scalar =
+        typeof fieldValue === 'string' ||
+        typeof fieldValue === 'number' ||
+        typeof fieldValue === 'boolean'
+      return {
+        label: field.label,
+        value: scalar ? String(fieldValue) : <pre>{JSON.stringify(fieldValue, null, 2)}</pre>,
+        fullWidth: !scalar,
+      }
+    })
 }
 
 export default function ConfigPageProjectionsSection({
@@ -103,6 +150,8 @@ export default function ConfigPageProjectionsSection({
           ...(score.inputs || []).flatMap((input) => [
             input.type,
             input.name,
+            input.kb,
+            input.metric,
             input.value_source || '',
           ]),
         ]
@@ -130,45 +179,53 @@ export default function ConfigPageProjectionsSection({
     [mappings, search],
   )
 
-  const partitionFields: FieldConfig<ProjectionPartitionFormState>[] = [
-    { name: 'name', label: 'Name', type: 'text', required: true },
-    {
-      name: 'semantics',
-      label: 'Semantics',
-      type: 'select',
-      required: true,
-      options: ['exclusive', 'softmax_exclusive'],
-    },
-    {
-      name: 'members',
-      label: 'Members',
-      type: 'custom',
-      required: true,
-      description: 'Declared domain or embedding signals coordinated by this partition.',
-      customRender: (value, onChange) => (
-        <ProjectionMembersEditor value={value} onChange={onChange} />
-      ),
-    },
-    {
-      name: 'temperature',
-      label: 'Temperature',
-      type: 'number',
-      step: 0.01,
-      shouldHide: (data) => data.semantics !== 'softmax_exclusive',
-    },
-    {
-      name: 'default',
-      label: 'Default',
-      type: 'text',
-      description: 'Fallback member name used when no member wins.',
-    },
-  ]
+  const partitionFields = withGeneratedProjectionFields<ProjectionPartitionFormState>(
+    'partitions',
+    [
+      { name: 'name', label: 'Name', section: 'Identity', type: 'text', required: true },
+      {
+        name: 'semantics',
+        label: 'Semantics',
+        section: 'Identity',
+        type: 'select',
+        required: true,
+        options: ['exclusive', 'softmax_exclusive'],
+      },
+      {
+        name: 'members',
+        label: 'Members',
+        section: 'Definition',
+        type: 'custom',
+        required: true,
+        description: 'Declared domain or embedding signals coordinated by this partition.',
+        customRender: (value, onChange) => (
+          <ProjectionMembersEditor value={value} onChange={onChange} />
+        ),
+      },
+      {
+        name: 'temperature',
+        label: 'Temperature',
+        section: 'Identity',
+        type: 'number',
+        step: 0.01,
+        shouldHide: (data) => data.semantics !== 'softmax_exclusive',
+      },
+      {
+        name: 'default',
+        label: 'Default',
+        section: 'Identity',
+        type: 'text',
+        description: 'Fallback member name used when no member wins.',
+      },
+    ],
+  )
 
-  const scoreFields: FieldConfig<ProjectionScoreFormState>[] = [
-    { name: 'name', label: 'Name', type: 'text', required: true },
+  const scoreFields = withGeneratedProjectionFields<ProjectionScoreFormState>('scores', [
+    { name: 'name', label: 'Name', section: 'Identity', type: 'text', required: true },
     {
       name: 'method',
       label: 'Method',
+      section: 'Identity',
       type: 'select',
       required: true,
       options: ['weighted_sum'],
@@ -176,6 +233,7 @@ export default function ConfigPageProjectionsSection({
     {
       name: 'inputs',
       label: 'Inputs',
+      section: 'Definition',
       type: 'custom',
       required: true,
       description: 'Weighted signal, knowledge-base metric, or earlier projection contributions.',
@@ -183,13 +241,14 @@ export default function ConfigPageProjectionsSection({
         <ProjectionInputsEditor value={value} onChange={onChange} />
       ),
     },
-  ]
+  ])
 
-  const mappingFields: FieldConfig<ProjectionMappingFormState>[] = [
-    { name: 'name', label: 'Name', type: 'text', required: true },
+  const mappingFields = withGeneratedProjectionFields<ProjectionMappingFormState>('mappings', [
+    { name: 'name', label: 'Name', section: 'Identity', type: 'text', required: true },
     {
       name: 'source',
       label: 'Source Score',
+      section: 'Identity',
       type: 'select',
       required: true,
       options: scoreOptions.length > 0 ? scoreOptions : [''],
@@ -198,6 +257,7 @@ export default function ConfigPageProjectionsSection({
     {
       name: 'method',
       label: 'Method',
+      section: 'Identity',
       type: 'select',
       required: true,
       options: ['threshold_bands', 'multi_emit'],
@@ -205,6 +265,7 @@ export default function ConfigPageProjectionsSection({
     {
       name: 'calibration',
       label: 'Calibration',
+      section: 'Definition',
       type: 'custom',
       description: 'Optional confidence calibration applied to output bands.',
       customRender: (value, onChange) => (
@@ -214,6 +275,7 @@ export default function ConfigPageProjectionsSection({
     {
       name: 'outputs',
       label: 'Outputs',
+      section: 'Definition',
       type: 'custom',
       required: true,
       description: 'Named routing bands and their lower or upper threshold bounds.',
@@ -221,7 +283,7 @@ export default function ConfigPageProjectionsSection({
         <ProjectionOutputsEditor value={value} onChange={onChange} />
       ),
     },
-  ]
+  ])
 
   const withClonedConfig = async (mutate: (next: ConfigData) => void) => {
     if (!scopedConfig) return
@@ -247,6 +309,7 @@ export default function ConfigPageProjectionsSection({
         assertProjectionMembers(members, defaultMember)
         assertProjectionPartitionSettings(data.semantics, data.temperature)
         const nextPartition: ProjectionPartition = {
+          ...data,
           name: data.name.trim(),
           semantics: data.semantics,
           members,
@@ -266,6 +329,7 @@ export default function ConfigPageProjectionsSection({
     openEditModal<ProjectionPartitionFormState>(
       `Edit Partition: ${partition.name}`,
       {
+        ...partition,
         name: partition.name,
         semantics: partition.semantics,
         members: partition.members || [],
@@ -279,6 +343,8 @@ export default function ConfigPageProjectionsSection({
         assertProjectionMembers(members, defaultMember)
         assertProjectionPartitionSettings(data.semantics, data.temperature)
         const nextPartition: ProjectionPartition = {
+          ...partition,
+          ...data,
           name: data.name.trim(),
           semantics: data.semantics,
           members,
@@ -303,17 +369,27 @@ export default function ConfigPageProjectionsSection({
   const handleViewPartition = (partition: ProjectionPartition) => {
     const sections: ViewSection[] = [
       {
-        title: 'Partition',
+        title: 'Identity',
         fields: [
           { label: 'Name', value: partition.name },
           { label: 'Semantics', value: partition.semantics },
           { label: 'Temperature', value: partition.temperature ?? 'N/A' },
           { label: 'Default', value: partition.default || 'N/A' },
+        ],
+      },
+      {
+        title: 'Definition',
+        fields: [
           {
             label: 'Members',
             value: <ProjectionMembersEditor value={partition.members || []} readOnly />,
             fullWidth: true,
           },
+          ...generatedProjectionViewFields(
+            'partitions',
+            partition as unknown as Record<string, unknown>,
+            ['name', 'semantics', 'temperature', 'members', 'default'],
+          ),
         ],
       },
     ]
@@ -335,6 +411,7 @@ export default function ConfigPageProjectionsSection({
         const inputs = normalizeProjectionInputs(data.inputs)
         assertProjectionInputs(inputs)
         const nextScore: ProjectionScore = {
+          ...data,
           name: data.name.trim(),
           method: data.method,
           inputs,
@@ -352,6 +429,7 @@ export default function ConfigPageProjectionsSection({
     openEditModal<ProjectionScoreFormState>(
       `Edit Score: ${score.name}`,
       {
+        ...score,
         name: score.name,
         method: score.method,
         inputs: score.inputs || [],
@@ -361,6 +439,8 @@ export default function ConfigPageProjectionsSection({
         const inputs = normalizeProjectionInputs(data.inputs)
         assertProjectionInputs(inputs)
         const nextScore: ProjectionScore = {
+          ...score,
+          ...data,
           name: data.name.trim(),
           method: data.method,
           inputs,
@@ -383,15 +463,25 @@ export default function ConfigPageProjectionsSection({
   const handleViewScore = (score: ProjectionScore) => {
     const sections: ViewSection[] = [
       {
-        title: 'Projection Score',
+        title: 'Identity',
         fields: [
           { label: 'Name', value: score.name },
           { label: 'Method', value: score.method },
+        ],
+      },
+      {
+        title: 'Definition',
+        fields: [
           {
             label: 'Inputs',
             value: <ProjectionInputsEditor value={score.inputs || []} readOnly />,
             fullWidth: true,
           },
+          ...generatedProjectionViewFields('scores', score as unknown as Record<string, unknown>, [
+            'name',
+            'method',
+            'inputs',
+          ]),
         ],
       },
     ]
@@ -416,6 +506,7 @@ export default function ConfigPageProjectionsSection({
         assertProjectionOutputs(outputs)
         assertProjectionMappingOutputCount(data.method, outputs)
         const nextMapping: ProjectionMapping = {
+          ...data,
           name: data.name.trim(),
           source: data.source,
           method: data.method,
@@ -435,6 +526,7 @@ export default function ConfigPageProjectionsSection({
     openEditModal<ProjectionMappingFormState>(
       `Edit Mapping: ${mapping.name}`,
       {
+        ...mapping,
         name: mapping.name,
         source: mapping.source,
         method: mapping.method,
@@ -449,6 +541,8 @@ export default function ConfigPageProjectionsSection({
         assertProjectionOutputs(outputs)
         assertProjectionMappingOutputCount(data.method, outputs)
         const nextMapping: ProjectionMapping = {
+          ...mapping,
+          ...data,
           name: data.name.trim(),
           source: data.source,
           method: data.method,
@@ -507,11 +601,16 @@ export default function ConfigPageProjectionsSection({
   const handleViewMapping = (mapping: ProjectionMapping) => {
     const sections: ViewSection[] = [
       {
-        title: 'Projection Mapping',
+        title: 'Identity',
         fields: [
           { label: 'Name', value: mapping.name },
           { label: 'Source', value: mapping.source },
           { label: 'Method', value: mapping.method },
+        ],
+      },
+      {
+        title: 'Definition',
+        fields: [
           {
             label: 'Calibration',
             value: mapping.calibration ? (
@@ -526,6 +625,11 @@ export default function ConfigPageProjectionsSection({
             value: <ProjectionOutputsEditor value={mapping.outputs || []} readOnly />,
             fullWidth: true,
           },
+          ...generatedProjectionViewFields(
+            'mappings',
+            mapping as unknown as Record<string, unknown>,
+            ['name', 'source', 'method', 'calibration', 'outputs'],
+          ),
         ],
       },
     ]
@@ -583,11 +687,7 @@ export default function ConfigPageProjectionsSection({
     {
       key: 'sources',
       header: 'Sources',
-      render: (row) =>
-        row.inputs
-          ?.map((input) => `${input.type}:${input.name}`)
-          .slice(0, 3)
-          .join(', ') || 'N/A',
+      render: (row) => row.inputs?.map(projectionInputSource).slice(0, 3).join(', ') || 'N/A',
     },
   ]
 

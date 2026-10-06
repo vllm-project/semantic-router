@@ -1,7 +1,6 @@
-import React from 'react'
+import React, { useRef, useState } from 'react'
 import Translate, { translate } from '@docusaurus/Translate'
 import useBaseUrl from '@docusaurus/useBaseUrl'
-import IconExternalLink from '@theme/Icon/ExternalLink'
 import Claude from '@lobehub/icons/es/Claude/components/Mono'
 import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
 import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
@@ -14,7 +13,6 @@ import OpenAI from '@lobehub/icons/es/OpenAI/components/Mono'
 import Qwen from '@lobehub/icons/es/Qwen/components/Mono'
 import Zhipu from '@lobehub/icons/es/Zhipu/components/Mono'
 import { PillLink } from '@site/src/components/site/Chrome'
-import TerrainCanvas from './TerrainCanvas'
 import styles from './index.module.css'
 
 const heroModelLogos = [
@@ -31,65 +29,118 @@ const heroModelLogos = [
   { label: 'Grok', Icon: Grok },
 ]
 
+const FILM_DURATION = '2:55'
+
+/* The poster is the film's first frame, so starting playback never jumps.
+ * preload="none" keeps the film off the network until a visitor asks for it. */
+function HeroFilm(): JSX.Element {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [started, setStarted] = useState(false)
+  const src = useBaseUrl('/videos/vllm-sr-intro/vllm-sr-intro.mp4')
+  const poster = useBaseUrl('/videos/vllm-sr-intro/vllm-sr-intro-poster.webp')
+  const title = translate({
+    id: 'homepage.hero.film.title',
+    message: 'Reintroducing vLLM Semantic Router',
+  })
+
+  const start = () => {
+    setStarted(true)
+    videoRef.current?.play().catch(() => undefined)
+  }
+
+  const reset = () => {
+    videoRef.current?.load()
+    setStarted(false)
+  }
+
+  return (
+    <figure className={styles.film}>
+      <video
+        ref={videoRef}
+        className={styles.filmVideo}
+        poster={poster}
+        preload="none"
+        playsInline
+        controls={started}
+        width={1920}
+        height={1080}
+        aria-label={title}
+        onPlay={() => setStarted(true)}
+        onEnded={reset}
+      >
+        <source src={src} type="video/mp4" />
+      </video>
+      {!started && (
+        <button type="button" className={styles.filmPlay} onClick={start}>
+          <span className={styles.filmPlayPill}>
+            <span className={styles.filmPlayIcon} aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M8 5.6v12.8a.6.6 0 0 0 .92.5l10.1-6.4a.6.6 0 0 0 0-1L8.92 5.1A.6.6 0 0 0 8 5.6Z" />
+              </svg>
+            </span>
+            <Translate id="homepage.hero.film.play">Watch the film</Translate>
+            <span className={styles.filmDuration}>{FILM_DURATION}</span>
+          </span>
+        </button>
+      )}
+    </figure>
+  )
+}
+
 export default function SemanticTerrainHero(): JSX.Element {
-  const logoSrc = useBaseUrl('/img/vllm-sr-logo.white.png')
   const modelCopies = [0, 1]
   const modelRepeats = [0, 1, 2]
 
   return (
     <section className={styles.stage}>
-      <TerrainCanvas />
+      <div className={styles.heroBackdrop} aria-hidden="true">
+        <span className={styles.heroGlow} data-glow="a" />
+        <span className={styles.heroGlow} data-glow="b" />
+        <span className={styles.heroGlow} data-glow="c" />
+        <span className={styles.heroGrid} />
+      </div>
 
       <header className={styles.hero}>
-        <div className={styles.heroScrim} aria-hidden="true" />
         <div className="site-shell-container">
-          <div className={styles.copy}>
-            <div className={styles.brand}>
-              <img src={logoSrc} alt="vLLM Semantic Router" />
+          <div className={styles.heroInner}>
+            <div className={styles.intro}>
+              <div className={styles.introCopy}>
+                <h1 className={styles.title}>
+                  <Translate id="homepage.hero.line1">Make your</Translate>
+                  {' '}
+                  <span className={`${styles.accent} ${styles.nowrap}`}>
+                    <Translate id="homepage.hero.line2">Mixture-of-Models</Translate>
+                  </span>
+                  {' '}
+                  <Translate id="homepage.hero.line3">programmable.</Translate>
+                </h1>
+                <p className={styles.dek}>
+                  <Translate id="homepage.hero.dek">
+                    The right model, on the right compute, for every request.
+                  </Translate>
+                </p>
+              </div>
+              <div className={styles.actions}>
+                <PillLink
+                  className={styles.primaryCta}
+                  href="https://app.vllm-sr.ai/playground"
+                >
+                  <Translate id="homepage.hero.primaryCta">
+                    Try Playground
+                  </Translate>
+                  <span aria-hidden="true">→</span>
+                </PillLink>
+                <PillLink className={styles.secondaryCta} to="/docs/intro" muted>
+                  <Translate id="homepage.hero.secondaryCta">
+                    Read the Docs
+                  </Translate>
+                  <span aria-hidden="true">→</span>
+                </PillLink>
+              </div>
             </div>
-
-            <h1>
-              <span className={styles.accent}>
-                <Translate id="homepage.hero.line1">Build your</Translate>
-              </span>
-              <span>
-                <Translate id="homepage.hero.line2">
-                  Mixture-of-Models
-                </Translate>
-              </span>
-            </h1>
-
-            <p className={styles.description}>
-              <Translate id="homepage.hero.description">
-                System-level intelligence for heterogeneous LLM inference
-              </Translate>
-            </p>
-
-            <div className={styles.actions}>
-              <PillLink
-                className={styles.primaryCta}
-                href="https://app.vllm-sr.ai"
-                rel="noreferrer"
-                target="_blank"
-              >
-                <Translate id="homepage.hero.primaryCta">
-                  Try the Playground
-                </Translate>
-                <IconExternalLink />
-              </PillLink>
-              <PillLink
-                className={styles.secondaryCta}
-                to="/docs/intro"
-                muted
-              >
-                <Translate id="homepage.hero.secondaryCta">
-                  Explore the Docs
-                </Translate>
-              </PillLink>
-            </div>
+            <HeroFilm />
           </div>
         </div>
-
       </header>
 
       <section
@@ -99,11 +150,6 @@ export default function SemanticTerrainHero(): JSX.Element {
           message: 'Mixture-of-Models ecosystem',
         })}
       >
-        <span className={styles.modelBandLabel}>
-          <Translate id="homepage.hero.modelBand.eyebrow">
-            Mixture-of-Models
-          </Translate>
-        </span>
         <div className={styles.modelViewport} aria-hidden="true">
           <div className={styles.modelTrack}>
             {modelCopies.map(copyIndex => (

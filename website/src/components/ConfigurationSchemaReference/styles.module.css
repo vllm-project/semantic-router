@@ -1,0 +1,340 @@
+.reference {
+  display: grid;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  container-name: schema-reference;
+  container-type: inline-size;
+}
+
+.identity {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 10px;
+  background: var(--ifm-color-emphasis-300);
+}
+
+.identity > div,
+.identity > a {
+  height: 100%;
+  padding: 0.8rem 1rem;
+  background: var(--ifm-background-surface-color);
+}
+
+.identity span {
+  display: block;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.identity strong {
+  font-size: 0.82rem;
+}
+
+.identity > a {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  background: var(--ifm-background-surface-color);
+}
+
+.search span {
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.search input {
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 6px;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.34fr) minmax(0, 0.66fr);
+  align-items: start;
+  gap: 0.85rem;
+}
+
+.directory {
+  position: sticky;
+  top: calc(var(--ifm-navbar-height) + 1rem);
+  max-height: min(72vh, 760px);
+  overflow: auto;
+  padding: 0.8rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 10px;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.directory h3 {
+  margin: 0.75rem 0 0.35rem;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.directory > h3:first-child {
+  margin-top: 0;
+}
+
+.directory button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.55rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ifm-font-color-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.directory button:hover {
+  background: var(--ifm-color-emphasis-200);
+}
+
+.directory button[data-active='true'] {
+  background: color-mix(in srgb, var(--ifm-color-primary) 12%, var(--ifm-background-color));
+  box-shadow: inset 2px 0 0 var(--ifm-color-primary);
+  color: var(--ifm-color-primary-darkest);
+}
+
+.directory button span {
+  overflow: hidden;
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+}
+
+.directory button code {
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.62rem;
+}
+
+.detail {
+  min-width: 0;
+  min-height: 520px;
+  padding: clamp(1rem, 3vw, 1.6rem);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 10px;
+  background: var(--ifm-background-surface-color);
+}
+
+.detailHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.detailHeading span {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.detailHeading h3 {
+  margin: 0;
+}
+
+.detailHeading > code {
+  max-width: 46%;
+  overflow-wrap: anywhere;
+  font-size: 0.7rem;
+  text-align: right;
+}
+
+.detail > p {
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.82rem;
+}
+
+.shape {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.9rem 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 7px;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.shape span,
+.fieldsHeading span {
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.shape code {
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.shape small {
+  margin-left: auto;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.7rem;
+}
+
+.fieldsHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 0.5rem;
+}
+
+.fieldsHeading h4 {
+  margin: 0;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.68rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: 0.55rem;
+}
+
+.fields > section {
+  padding: 0.8rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 7px;
+}
+
+.fields header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.fields header code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fields header span,
+.fields header b {
+  padding: 0.13rem 0.32rem;
+  border-radius: 4px;
+  background: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.62rem;
+}
+
+.fields p,
+.fields small {
+  display: block;
+  margin: 0.42rem 0 0;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.74rem;
+}
+
+.empty {
+  display: grid;
+  height: 100%;
+  place-content: center;
+  gap: 0.35rem;
+  color: var(--ifm-color-emphasis-600);
+  text-align: center;
+}
+
+.emptyFields {
+  padding: 0.85rem;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.75rem;
+  text-align: center;
+  border: 1px dashed var(--ifm-color-emphasis-300);
+  border-radius: 7px;
+}
+
+.empty strong {
+  color: var(--ifm-font-color-base);
+}
+
+@container schema-reference (max-width: 820px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .directory {
+    position: static;
+    max-height: 340px;
+  }
+
+  .detail {
+    min-height: 380px;
+  }
+}
+
+@media (max-width: 760px) {
+  .identity {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .identity > a {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .directory {
+    max-height: 300px;
+  }
+
+  .shape {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .shape small {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .detailHeading {
+    display: grid;
+  }
+
+  .detailHeading > code {
+    max-width: 100%;
+    text-align: left;
+  }
+}

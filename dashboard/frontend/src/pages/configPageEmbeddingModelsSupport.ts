@@ -3,12 +3,12 @@ import { routerStructuredField } from './configPageRouterStructuredFields'
 import { normalizeRouterStructuredFields } from './configPageRouterStructuredSchema'
 
 const REMOTE_BACKEND = 'openai_compatible'
-const DEFAULT_LOCAL_BACKEND = 'candle'
+const DEFAULT_LOCAL_BACKEND = 'model_runtime'
 const DEFAULT_LOCAL_MODEL_TYPE = 'qwen3'
 const LOCAL_PROVIDER_TYPE = 'local'
 const REMOTE_PROVIDER_TYPE = 'remote'
 
-type EmbeddingBackend = 'candle' | 'openvino' | 'openai_compatible'
+type EmbeddingBackend = 'model_runtime' | 'openai_compatible'
 type EmbeddingProviderType = 'local' | 'remote'
 
 interface EmbeddingSummaryItem {
@@ -33,7 +33,7 @@ function trimmedString(value: unknown): string {
 
 function resolveBackend(embeddingConfig?: Record<string, unknown>): EmbeddingBackend {
   const backend = trimmedString(embeddingConfig?.backend).toLocaleLowerCase()
-  if (backend === DEFAULT_LOCAL_BACKEND || backend === 'openvino' || backend === REMOTE_BACKEND) {
+  if (backend === DEFAULT_LOCAL_BACKEND || backend === REMOTE_BACKEND) {
     return backend
   }
   if (trimmedString(embeddingConfig?.model_type).toLocaleLowerCase() === 'remote') {
@@ -71,19 +71,15 @@ function compactValue(value: unknown, fallback = 'Not set'): string {
 function inferLocalModelType(semantic: Record<string, unknown>): string {
   if (trimmedString(semantic.mmbert_model_path)) return 'mmbert'
   if (trimmedString(semantic.qwen3_model_path)) return 'qwen3'
-  if (trimmedString(semantic.gemma_model_path)) return 'gemma'
   if (trimmedString(semantic.multimodal_model_path)) return 'multimodal'
-  if (trimmedString(semantic.bert_model_path)) return 'bert'
   return DEFAULT_LOCAL_MODEL_TYPE
 }
 
 function localModelPath(semantic: Record<string, unknown>, modelType: string): unknown {
   const pathByType: Record<string, unknown> = {
     qwen3: semantic.qwen3_model_path,
-    gemma: semantic.gemma_model_path,
     mmbert: semantic.mmbert_model_path,
     multimodal: semantic.multimodal_model_path,
-    bert: semantic.bert_model_path,
   }
   return pathByType[modelType] ?? semantic.mmbert_model_path ?? semantic.qwen3_model_path
 }
@@ -146,16 +142,7 @@ export function embeddingModelsFields(): FieldConfig[] {
       options: [LOCAL_PROVIDER_TYPE, REMOTE_PROVIDER_TYPE],
       required: true,
       description:
-        'Choose whether embeddings run in-process or through a remote API. Remote mode currently applies to text embedding consumers only.',
-    },
-    {
-      name: 'local_backend',
-      label: 'Local Backend',
-      type: 'select',
-      options: ['candle', 'openvino'],
-      required: true,
-      description: 'Local inference engine used to execute the selected embedding model family.',
-      shouldHide: hideForRemote,
+        'Choose whether embeddings run in the built-in model runtime or through a remote API. Remote mode currently applies to text embedding consumers only.',
     },
     {
       name: 'remote_backend',
@@ -173,7 +160,7 @@ export function embeddingModelsFields(): FieldConfig[] {
       type: 'text',
       placeholder: 'mmbert',
       description:
-        'Embedding model family used by local consumers, such as mmbert, qwen3, gemma, multimodal, or bert.',
+        'Embedding model family used by local consumers: mmbert, qwen3 or multimodal.',
       shouldHide: hideForRemote,
     },
     {
@@ -184,31 +171,17 @@ export function embeddingModelsFields(): FieldConfig[] {
       shouldHide: hideForRemote,
     },
     {
-      name: 'gemma_model_path',
-      label: 'Gemma Model Path',
-      type: 'text',
-      placeholder: 'models/mom-embedding-flash',
-      shouldHide: hideForRemote,
-    },
-    {
       name: 'mmbert_model_path',
       label: 'mmBERT Model Path',
       type: 'text',
-      placeholder: 'models/mmbert-embed-32k-2d-matryoshka',
+      placeholder: 'models/Vela-1.0-Encoder-307M-Embedding',
       shouldHide: hideForRemote,
     },
     {
       name: 'multimodal_model_path',
       label: 'Multimodal Model Path',
       type: 'text',
-      placeholder: 'models/mom-embedding-multimodal',
-      shouldHide: hideForRemote,
-    },
-    {
-      name: 'bert_model_path',
-      label: 'BERT Model Path',
-      type: 'text',
-      placeholder: 'models/mom-embedding-bert',
+      placeholder: 'models/vela-1.0-omni-nano',
       shouldHide: hideForRemote,
     },
     { name: 'use_cpu', label: 'Use CPU', type: 'boolean', shouldHide: hideForRemote },
@@ -235,12 +208,10 @@ export function embeddingModelsEditData(data: unknown): EditFormData {
   return {
     ...semantic,
     provider_type: providerType,
-    local_backend: providerType === LOCAL_PROVIDER_TYPE ? backend : DEFAULT_LOCAL_BACKEND,
     remote_backend: providerType === REMOTE_PROVIDER_TYPE ? backend : REMOTE_BACKEND,
     model_type: localModelType,
     embedding_config: optimization,
     endpoint: semantic.endpoint,
-    bert: asRecord(catalog.bert) ?? {},
     __catalog: catalog,
     __embedding_config: embeddingConfig,
   }
@@ -259,6 +230,7 @@ function validateRemoteEndpoint(
   if (
     typeof dimensions === 'number' &&
     typeof targetDimension === 'number' &&
+    targetDimension > 0 &&
     dimensions !== targetDimension
   ) {
     throw new Error(
@@ -283,29 +255,32 @@ export function embeddingModelsCatalogValue(rawData: EditFormData): Record<strin
   const remote = providerType === REMOTE_PROVIDER_TYPE
   const backend = remote
     ? trimmedString(rawData.remote_backend) || REMOTE_BACKEND
-    : trimmedString(rawData.local_backend) || DEFAULT_LOCAL_BACKEND
+    : DEFAULT_LOCAL_BACKEND
   const dataForNormalization = remote ? rawData : { ...rawData, endpoint: undefined }
   const normalized = normalizeRouterStructuredFields('embedding_models', dataForNormalization)
   const rawModelType = normalized.model_type
   const rawOptimization = normalized.embedding_config
   const rawEndpoint = normalized.endpoint
-  const bert = normalized.bert
   const catalogValue = normalized.__catalog
   const existingEmbeddingConfigValue = normalized.__embedding_config
   const semanticFields = { ...normalized }
   delete semanticFields.backend
   delete semanticFields.provider_type
-  delete semanticFields.local_backend
   delete semanticFields.remote_backend
   delete semanticFields.model_type
   delete semanticFields.embedding_config
   delete semanticFields.endpoint
-  delete semanticFields.bert
   delete semanticFields.__catalog
   delete semanticFields.__embedding_config
   const catalog = asRecord(catalogValue) ?? {}
   const existingSemantic = asRecord(catalog.semantic) ?? {}
   const existingEmbeddingConfig = asRecord(existingEmbeddingConfigValue) ?? {}
+  const existingBackend = trimmedString(existingEmbeddingConfig.backend).toLocaleLowerCase()
+  if (existingBackend && existingBackend !== DEFAULT_LOCAL_BACKEND && existingBackend !== REMOTE_BACKEND) {
+    throw new Error(
+      `Embedding backend ${existingBackend} is retired; run vllm-sr config migrate to move this config to the model runtime.`,
+    )
+  }
   const optimization = {
     ...existingEmbeddingConfig,
     ...(asRecord(rawOptimization) ?? {}),
@@ -325,6 +300,5 @@ export function embeddingModelsCatalogValue(rawData: EditFormData): Record<strin
       embedding_config: optimization,
       ...(endpoint ? { endpoint: remote ? normalizedRemoteEndpoint(endpoint) : endpoint } : {}),
     },
-    bert: asRecord(bert) ?? {},
   }
 }

@@ -1,3 +1,5 @@
+import hashlib
+import json
 import os
 import stat
 from pathlib import Path
@@ -357,6 +359,35 @@ def test_materialize_preserves_dashboard_change_when_source_changes(
     assert preserved == active
     assert active.read_text(encoding="utf-8") == "version: dashboard-edit\n"
     assert "Preserving Dashboard or package changes" in caplog.text
+
+
+def test_materialize_replaces_dashboard_change_when_explicitly_requested(
+    tmp_path: Path,
+):
+    source = tmp_path / "config.yaml"
+    source.write_text("version: first\n", encoding="utf-8")
+    active = materialize_runtime_config(source, b"version: first-effective\n")
+    active.write_text("version: dashboard-edit\n", encoding="utf-8")
+    source.write_text("version: second\n", encoding="utf-8")
+
+    replaced = materialize_runtime_config(
+        source,
+        b"version: second-effective\n",
+        replace_active=True,
+    )
+
+    assert replaced == active
+    assert active.read_text(encoding="utf-8") == "version: second-effective\n"
+    provenance = json.loads(
+        _runtime_config_provenance_path(active).read_text(encoding="utf-8")
+    )
+    assert provenance["source_digest"] == (
+        "sha256:" + hashlib.sha256(source.read_bytes()).hexdigest()
+    )
+    assert (
+        provenance["last_materialized_active_digest"]
+        == "sha256:" + hashlib.sha256(active.read_bytes()).hexdigest()
+    )
 
 
 def test_materialize_uses_custom_host_state_without_container_path_leak(

@@ -1,0 +1,38 @@
+seed: 42
+output_dir: ${MM_EMBED_LARGE_OUTPUT_DIR}
+
+model:
+  model_name: Qwen/Qwen3-VL-Embedding-2B
+  trust_remote_code: true
+  max_text_length: 32768
+  truncate_dim: 1024
+  model_kwargs:
+    torch_dtype: bfloat16
+
+training:
+  epochs: 1
+  max_steps: 2
+  batch_size: 2
+  grad_accum_steps: 1
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.0
+  max_grad_norm: 1.0
+  mixed_precision: bf16
+  num_workers: 0
+  log_every: 1
+  save_every: 100
+  save_total_limit: 1
+  run_name: server-native-text-smoke
+
+loss:
+  type: cached_mnrl
+  scale: 20.0
+  mini_batch_size: 1
+
+data:
+  manifest_path: ${MM_EMBED_LARGE_DATA_ROOT}/train_manifest.jsonl
+  image_root: ${MM_EMBED_LARGE_DATA_ROOT}/images
+  audio_root: ${MM_EMBED_LARGE_DATA_ROOT}/audio
+  allow_missing_negative: true
+  allowed_modalities: [text]

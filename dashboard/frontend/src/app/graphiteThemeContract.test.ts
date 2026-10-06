@@ -82,13 +82,6 @@ const graphiteSurfaceContracts = [
     forbiddenPatterns: [/backdrop-filter\s*:/i, /border-radius:\s*999px/i, /radial-gradient\(/i],
   },
   {
-    path: '../pages/FleetSimPage.module.css',
-    forbiddenPatterns: [
-      /#d9e3f2\b/i,
-      /rgba?\(\s*(?:7\s*,\s*10\s*,\s*19|9\s*,\s*12\s*,\s*22|8\s*,\s*11\s*,\s*20|3\s*,\s*6\s*,\s*14|6\s*,\s*10\s*,\s*18)\b/i,
-    ],
-  },
-  {
     path: '../pages/OpenClawPage.module.css',
     forbiddenPatterns: [
       /#(?:0f172a|020617|3b82f6|22d3ee|a8b4c8|cbd5e1)\b/i,

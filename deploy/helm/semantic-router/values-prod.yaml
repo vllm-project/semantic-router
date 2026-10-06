@@ -43,10 +43,6 @@ readinessProbe:
   periodSeconds: 15
   failureThreshold: 3
 
-securityContext:
-  runAsNonRoot: true
-  allowPrivilegeEscalation: false
-
 dependencies:
   observability:
     jaeger:

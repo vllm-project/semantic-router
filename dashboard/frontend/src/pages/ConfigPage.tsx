@@ -22,12 +22,12 @@ import { ConfigFormat, detectConfigFormat } from '../types/config'
 import {
   CanonicalGlobalConfig,
   ConfigData,
-  SignalType,
   Tool,
   getDefaultModelName,
-  getNormalizedModels,
   getReasoningFamiliesMap,
 } from './configPageSupport'
+import { getNormalizedModels } from './configPageModelNormalization'
+import { responseErrorMessage } from './configPageRequestErrors'
 import type { OpenViewModal } from './configPageRouterSectionSupport'
 
 interface ConfigPageProps {
@@ -117,7 +117,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     try {
       const response = await fetch('/api/router/config/all')
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        throw new Error(await responseErrorMessage(response))
       }
       const data = await response.json()
       const normalized = projectCanonicalConfigForManager(data)
@@ -160,7 +160,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     try {
       const response = await fetch('/api/tools-db')
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        throw new Error(await responseErrorMessage(response))
       }
       const data = await response.json()
       setToolsData(data)
@@ -189,23 +189,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       })
 
       if (!response.ok) {
-        // Try to read error message from response body
-        const errorText = await response.text()
-        let errorMessage = `HTTP ${response.status}: ${response.statusText}`
-        if (errorText) {
-          try {
-            const errorJson = JSON.parse(errorText)
-            if (errorJson.error || errorJson.message) {
-              errorMessage = errorJson.message || errorJson.error
-            } else {
-              errorMessage = errorText
-            }
-          } catch {
-            // If not JSON, use the text as-is
-            errorMessage = errorText
-          }
-        }
-        throw new Error(errorMessage)
+        throw new Error(await responseErrorMessage(response))
       }
 
       // Refresh config after save
@@ -250,83 +234,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       .map((item) => item.trim())
       .filter(Boolean)
 
-  const removeSignalByName = (cfg: ConfigData, type: SignalType, targetName: string) => {
-    // match by type and name to remove the signal from the config
-    if (!cfg.signals) cfg.signals = {}
-
-    switch (type) {
-      case 'Keywords':
-        cfg.signals.keywords = (cfg.signals.keywords || []).filter((s) => s.name !== targetName)
-        break
-      case 'Embeddings':
-        cfg.signals.embeddings = (cfg.signals.embeddings || []).filter((s) => s.name !== targetName)
-        break
-      case 'Domain':
-        cfg.signals.domains = (cfg.signals.domains || []).filter((s) => s.name !== targetName)
-        break
-      case 'Preference':
-        cfg.signals.preferences = (cfg.signals.preferences || []).filter(
-          (s) => s.name !== targetName,
-        )
-        break
-      case 'Fact Check':
-        cfg.signals.fact_check = (cfg.signals.fact_check || []).filter((s) => s.name !== targetName)
-        break
-      case 'User Feedback':
-        cfg.signals.user_feedbacks = (cfg.signals.user_feedbacks || []).filter(
-          (s) => s.name !== targetName,
-        )
-        break
-      case 'Reask':
-        cfg.signals.reasks = (cfg.signals.reasks || []).filter((s) => s.name !== targetName)
-        break
-      case 'Language':
-        cfg.signals.language = (cfg.signals.language || []).filter((s) => s.name !== targetName)
-        break
-      case 'Context':
-        cfg.signals.context = (cfg.signals.context || []).filter((s) => s.name !== targetName)
-        break
-      case 'Structure':
-        cfg.signals.structure = (cfg.signals.structure || []).filter((s) => s.name !== targetName)
-        break
-      case 'Complexity':
-        cfg.signals.complexity = (cfg.signals.complexity || []).filter((s) => s.name !== targetName)
-        break
-      case 'Modality':
-        cfg.signals.modality = (cfg.signals.modality || []).filter((s) => s.name !== targetName)
-        break
-      case 'Authz':
-        cfg.signals.role_bindings = (cfg.signals.role_bindings || []).filter(
-          (s) => s.name !== targetName,
-        )
-        break
-      case 'Jailbreak':
-        cfg.signals.jailbreak = (cfg.signals.jailbreak || []).filter((s) => s.name !== targetName)
-        break
-      case 'PII':
-        cfg.signals.pii = (cfg.signals.pii || []).filter((s) => s.name !== targetName)
-        break
-      case 'KB':
-        cfg.signals.kb = (cfg.signals.kb || []).filter((s) => s.name !== targetName)
-        break
-      case 'Metadata':
-        cfg.signals.metadata = (cfg.signals.metadata || []).filter((s) => s.name !== targetName)
-        break
-      case 'Classifier':
-        cfg.signals.classifiers = (cfg.signals.classifiers || []).filter(
-          (s) => s.name !== targetName,
-        )
-        break
-      case 'Conversation':
-        cfg.signals.conversation = (cfg.signals.conversation || []).filter(
-          (s) => s.name !== targetName,
-        )
-        break
-      default:
-        break
-    }
-  }
-
   const removeDecisionByName = (cfg: ConfigData, targetName: string) => {
     cfg.decisions = (cfg.decisions || []).filter((d) => d.name !== targetName)
   }
@@ -362,8 +269,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       saveConfig={saveConfig}
       openEditModal={openEditModal}
       openViewModal={openViewModal}
-      listInputToArray={listInputToArray}
-      removeSignalByName={removeSignalByName}
     />
   )
 
@@ -475,6 +380,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
             <div>
               <h3>Error Loading Config</h3>
               <p>{error}</p>
+              <button type="button" className={styles.button} onClick={() => fetchConfig()}>
+                Retry
+              </button>
             </div>
           </div>
         )}

@@ -20,6 +20,7 @@ start those inference backends.
 | [Feedback Recovery](feedback/README.md) | Corrections, repeated dissatisfaction, failed code, and verification requests. |
 | [Knowledge](knowledge/README.md) | Evidence-based escalation from a small local model to a stronger model. |
 | [Multi-Objective](multi-objective/README.md) | Five request-facing balance, speed, cost, accuracy, and privacy profiles over one shared pool. |
+| [Vela AMD](vela-amd/README.md) | Explicit AMD execution of all ten Vela task models, with semantic routing and document reranking. |
 | [Privacy-First](privacy/README.md) | Local containment for sensitive and suspicious requests. |
 
 The [built-in virtual model catalog](built-in/README.md) is a separate
@@ -33,11 +34,12 @@ Read the Model Card first, start the required provider backends, then validate
 and serve the recipe's config:
 
 ```bash
-vllm-sr validate --config config/recipes/<name>/config.yaml
+vllm-sr config validate --config config/recipes/<name>/config.yaml
 vllm-sr serve --config config/recipes/<name>/config.yaml
 ```
 
-Single-profile recipes use the configured `vllm-sr/auto` entrypoint.
+Single-profile recipes use their configured automatic entrypoint, such as
+`vllm-sr/auto` or the Vela AMD recipe's `vela-auto`.
 Multi-profile recipes expose named virtual model IDs through top-level
 `entrypoints`.
 
@@ -74,8 +76,9 @@ into a built-in model or provision its runtime dependencies.
 When a managed recipe is mounted, Dashboard shows its Model Card and probe
 catalog. **Run** sends a probe to Playground, **Edit** prepares an editable
 request, and **Validate** evaluates routing without generating a model answer.
-See [Models and Recipes](../../website/docs/installation/models-and-recipes.md)
-for the user workflow.
+See [Configuration Workflows](../../website/docs/installation/configuration-workflows.md)
+for the Dashboard and probe workflow, and [Entrypoints and Recipes](../../website/docs/tutorials/global/entrypoints-and-recipes.md)
+for how virtual model names resolve to recipe-scoped routing policies.
 
 ## For contributors
 

@@ -1,0 +1,54 @@
+{
+  "schema_version": "confidence-calibration/v1",
+  "name": "fixture-confidence-calibration",
+  "method": "avg_logprob",
+  "score_domain": {"min": 0.0, "max": 1.0},
+  "normalization": {
+    "type": "linear_clamped",
+    "min_logprob": -3.0,
+    "max_logprob": 0.0
+  },
+  "dataset": {
+    "name": "checked-in-fixture",
+    "version": "v1",
+    "digest": "sha256:fixture"
+  },
+  "population": "Small fixed fixture for offline artifact verification",
+  "outcome": "Whether the model answer matches the answer key",
+  "expected_impact": "Verify deterministic threshold selection and reporting",
+  "models": {
+    "small": {"id": "small-fixture", "version": "v1"},
+    "large": {"id": "large-fixture", "version": "v1"}
+  },
+  "splits": {
+    "train": {
+      "small_results": "small-train.json",
+      "large_results": "large-train.json"
+    },
+    "calibration": {
+      "small_results": "small-calibration.json",
+      "large_results": "large-calibration.json"
+    },
+    "held_out": {
+      "small_results": "small-held_out.json",
+      "large_results": "large-held_out.json"
+    }
+  },
+  "objective": {
+    "primary_metric": "accuracy",
+    "max_escalation_rate": 0.5,
+    "min_net_uplift": 0
+  },
+  "fallback": {"on_no_safe_threshold": "retain_current"},
+  "policy": {
+    "current_threshold": 0.72,
+    "rollback_identity": "threshold-0.72"
+  },
+  "collection": {
+    "mode": "checked-in-fixture",
+    "temperature": 0,
+    "enable_thinking": false,
+    "max_tokens": {"small": 64, "large": 512}
+  },
+  "approval_state": "pending_review"
+}

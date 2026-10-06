@@ -10,7 +10,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-intent-classifier-merged',
     registry: {
       local_path: 'models/mmbert32k-intent-classifier-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-intent-classifier-merged',
+      repo_id: 'vllm-sr/mmbert32k-intent-classifier-merged',
       purpose: 'domain-classification',
       description: 'Merged intent classifier for multilingual routing decisions.',
       parameter_size: '307M',
@@ -19,7 +19,7 @@ const routerModels = [
       num_classes: 14,
       license: 'apache-2.0',
       model_card_url:
-        'https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-merged',
+        'https://huggingface.co/vllm-sr/mmbert32k-intent-classifier-merged',
       tags: ['text-classification', 'intent-classification'],
     },
     metadata: {
@@ -35,7 +35,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-factcheck-classifier-merged',
     registry: {
       local_path: 'models/mmbert32k-factcheck-classifier-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-factcheck-classifier-merged',
+      repo_id: 'vllm-sr/mmbert32k-factcheck-classifier-merged',
       purpose: 'hallucination-sentinel',
       description: 'Fact-check classifier used during hallucination mitigation.',
       parameter_size: '307M',
@@ -44,7 +44,7 @@ const routerModels = [
       num_classes: 2,
       license: 'apache-2.0',
       model_card_url:
-        'https://huggingface.co/llm-semantic-router/mmbert32k-factcheck-classifier-merged',
+        'https://huggingface.co/vllm-sr/mmbert32k-factcheck-classifier-merged',
       tags: ['text-classification', 'fact-check'],
     },
     metadata: {
@@ -61,7 +61,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-feedback-detector-merged',
     registry: {
       local_path: 'models/mmbert32k-feedback-detector-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-feedback-detector-merged',
+      repo_id: 'vllm-sr/mmbert32k-feedback-detector-merged',
       purpose: 'feedback-detection',
       description: 'User feedback classifier for satisfaction and correction signals.',
       parameter_size: '307M',
@@ -70,7 +70,7 @@ const routerModels = [
       num_classes: 4,
       license: 'apache-2.0',
       model_card_url:
-        'https://huggingface.co/llm-semantic-router/mmbert32k-feedback-detector-merged',
+        'https://huggingface.co/vllm-sr/mmbert32k-feedback-detector-merged',
       tags: ['text-classification', 'feedback-detection'],
     },
     metadata: {
@@ -87,7 +87,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-jailbreak-detector-merged',
     registry: {
       local_path: 'models/mmbert32k-jailbreak-detector-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-jailbreak-detector-merged',
+      repo_id: 'vllm-sr/mmbert32k-jailbreak-detector-merged',
       purpose: 'jailbreak-detection',
       description: 'Prompt injection and jailbreak detector aligned with the router registry.',
       parameter_size: '307M',
@@ -96,7 +96,7 @@ const routerModels = [
       num_classes: 2,
       license: 'apache-2.0',
       model_card_url:
-        'https://huggingface.co/llm-semantic-router/mmbert32k-jailbreak-detector-merged',
+        'https://huggingface.co/vllm-sr/mmbert32k-jailbreak-detector-merged',
       tags: ['text-classification', 'security'],
     },
     metadata: {
@@ -106,24 +106,28 @@ const routerModels = [
   },
   {
     name: 'mmbert_embedding_model',
+    recipe: 'default',
     type: 'embedding',
     loaded: true,
     state: 'ready',
     model_path: 'models/mmbert-embed-32k-2d-matryoshka',
     registry: {
       local_path: 'models/mmbert-embed-32k-2d-matryoshka',
-      repo_id: 'llm-semantic-router/mmbert-embed-32k-2d-matryoshka',
+      repo_id: 'vllm-sr/mmbert-embed-32k-2d-matryoshka',
       purpose: 'embedding',
       description: 'Multilingual 2D Matryoshka embedding model with long-context support.',
       parameter_size: '307M',
       embedding_dim: 768,
       max_context_length: 32768,
       license: 'apache-2.0',
-      model_card_url: 'https://huggingface.co/llm-semantic-router/mmbert-embed-32k-2d-matryoshka',
+      model_card_url: 'https://huggingface.co/vllm-sr/mmbert-embed-32k-2d-matryoshka',
       tags: ['embedding', 'matryoshka', 'multilingual'],
     },
     metadata: {
       model_type: 'mmbert',
+      provider: 'model_runtime',
+      device: 'rocm:0',
+      effective_input_tokens: '32768',
       max_sequence_length: '32768',
       default_dimension: '768',
       matryoshka_supported: 'true',
@@ -137,7 +141,7 @@ const routerModels = [
     model_path: 'models/mmbert32k-pii-detector-merged',
     registry: {
       local_path: 'models/mmbert32k-pii-detector-merged',
-      repo_id: 'llm-semantic-router/mmbert32k-pii-detector-merged',
+      repo_id: 'vllm-sr/mmbert32k-pii-detector-merged',
       purpose: 'pii-detection',
       description: 'PII detector for multilingual redaction and routing.',
       parameter_size: '307M',
@@ -145,7 +149,7 @@ const routerModels = [
       max_context_length: 32768,
       num_classes: 35,
       license: 'apache-2.0',
-      model_card_url: 'https://huggingface.co/llm-semantic-router/mmbert32k-pii-detector-merged',
+      model_card_url: 'https://huggingface.co/vllm-sr/mmbert32k-pii-detector-merged',
       tags: ['token-classification', 'pii'],
     },
     metadata: {
@@ -241,7 +245,7 @@ test.describe('Router model inventory surfaces', () => {
     await expect(page.getByTestId('status-services-section')).toContainText('Dashboard')
   })
 
-  test('renders six preview cards and opens the canonical Models workspace', async ({
+  test('opens the selected runtime details and restores focus on close', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1920, height: 1200 })
@@ -262,8 +266,104 @@ test.describe('Router model inventory surfaces', () => {
     await expect(page.getByText('AMD GPU', { exact: true })).toHaveCount(0)
 
     await embeddingPreview.click()
-    await expect(page).toHaveURL(/\/config\/models$/)
-    await expect(page.getByRole('heading', { name: 'Models', exact: true }).first()).toBeVisible()
+    const details = page.getByRole('dialog', { name: 'Runtime model details' })
+    await expect(details).toBeVisible()
+    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(details).toContainText('models/mmbert-embed-32k-2d-matryoshka')
+    await expect(details.getByText(routerModels[4].registry.description, { exact: true })).toBeVisible()
+    await expect(details).toContainText('Recipe')
+    await expect(details).toContainText('default')
+    await expect(details).toContainText('Provider')
+    await expect(details.getByText('model_runtime', { exact: true })).toBeVisible()
+    await expect(details).toContainText('rocm:0')
+    await expect(details).toContainText('32768')
+    await expect(details.getByRole('link', { name: /model card/i })).toHaveAttribute(
+      'href',
+      routerModels[4].registry.model_card_url,
+    )
+    await expect(details.getByRole('searchbox')).toHaveCount(0)
+    await expect(details.locator('[data-testid^="router-model-detail-"]')).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await expect(details).toHaveCount(0)
+    await expect(embeddingPreview).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(details).toBeVisible()
+    const closeButtons = details.getByRole('button', { name: 'Close', exact: true })
+    await expect(closeButtons.first()).toBeFocused()
+    await page.keyboard.press('Shift+Tab')
+    await expect(closeButtons.last()).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(closeButtons.first()).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(details.getByRole('link', { name: /model card/i })).toBeFocused()
+  })
+
+  test('keeps model-card HTML out of runtime descriptions', async ({ page }) => {
+    const embedding = routerModels[4]
+    const description = [
+      '<div align="center">',
+      '<img src="https://vllm-sr.ai/img/vllm-sr-logo.social.png" alt="vLLM Semantic Router" width="560" />',
+      '<p> <a href="https://vllm-sr.ai/"><strong>Docs</strong></a> |',
+      '<a href="https://vllm-sr.ai/blog/"><strong>Blog</strong></a> |',
+      '<a href="https://vllm-dev.slack.com/archives/C09CTGF8KCN"><strong>Slack</strong></a> |',
+      '<a href="https://github.com/vllm-project/semantic-router"><strong>GitHub</strong></a> </p> </div>',
+    ].join(' ')
+    await mockRouterInventoryShell(page, {
+      ...statusPayload,
+      models: {
+        ...statusPayload.models,
+        models: [{ ...embedding, registry: { ...embedding.registry, description } }],
+        summary: { ...statusPayload.models.summary, loaded_models: 1, total_models: 1 },
+      },
+    })
+    await page.goto('/dashboard')
+    await page.getByTestId('router-model-preview-mmbert_embedding_model').click()
+
+    const details = page.getByRole('dialog', { name: 'Runtime model details' })
+    await expect(details).toBeVisible()
+    await expect(details.getByText('Embedding', { exact: true }).first()).toBeVisible()
+    await expect(details).not.toContainText('<div')
+    await expect(details).not.toContainText('Docs')
+    await expect(details).not.toContainText('Blog')
+    await expect(details.getByRole('link')).toHaveCount(1)
+    await expect(details.getByRole('link', { name: /model card/i })).toHaveAttribute(
+      'href', embedding.registry.model_card_url,
+    )
+  })
+
+  test('keeps same-name runtimes scoped to the clicked recipe', async ({ page }) => {
+    const embedding = routerModels[4]
+    await mockRouterInventoryShell(page, {
+      ...statusPayload,
+      models: {
+        ...statusPayload.models,
+        models: [
+          {
+            ...embedding,
+            recipe: 'balance',
+            model_path: 'models/balance-embedding',
+            registry: { ...embedding.registry, local_path: 'models/balance-embedding' },
+          },
+          {
+            ...embedding,
+            recipe: 'vault',
+            model_path: 'models/vault-embedding',
+            registry: { ...embedding.registry, local_path: 'models/vault-embedding' },
+          },
+        ],
+        summary: { ...statusPayload.models.summary, loaded_models: 2, total_models: 2 },
+      },
+    })
+    await page.goto('/dashboard')
+    const previews = page.getByTestId('router-model-preview-mmbert_embedding_model')
+    await expect(previews).toHaveCount(2)
+    await previews.filter({ hasText: 'models/vault-embedding' }).click()
+
+    const details = page.getByRole('dialog', { name: 'Runtime model details' })
+    await expect(details).toContainText('vault')
+    await expect(details).toContainText('models/vault-embedding')
+    await expect(details).not.toContainText('models/balance-embedding')
+    await expect(page).toHaveURL(/\/dashboard$/)
   })
 
   test('makes degraded service health explicit without hiding healthy services', async ({ page }) => {

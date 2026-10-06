@@ -1,6 +1,10 @@
 package dsl
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
 
 // ---------- AST → JSON serialization ----------
 //
@@ -10,17 +14,20 @@ import "encoding/json"
 
 // ProgramJSON is the JSON-serializable form of Program.
 type ProgramJSON struct {
-	Strategy             string                         `json:"strategy,omitempty"`
-	Entrypoints          []*EntrypointDeclJSON          `json:"entrypoints,omitempty"`
-	Recipes              []*RecipeDeclJSON              `json:"recipes,omitempty"`
-	Signals              []*SignalDeclJSON              `json:"signals"`
-	ProjectionPartitions []*ProjectionPartitionDeclJSON `json:"projectionPartitions,omitempty"`
-	ProjectionScores     []*ProjectionScoreDeclJSON     `json:"projectionScores,omitempty"`
-	ProjectionMappings   []*ProjectionMappingDeclJSON   `json:"projectionMappings,omitempty"`
-	Routes               []*RouteDeclJSON               `json:"routes"`
-	Models               []*ModelDeclJSON               `json:"models"`
-	Plugins              []*PluginDeclJSON              `json:"plugins"`
-	TestBlocks           []*TestBlockDeclJSON           `json:"testBlocks,omitempty"`
+	CandidateRequirements *config.CandidateRequirements  `json:"candidateRequirements,omitempty"`
+	DataPolicy            *config.RoutingDataPolicy      `json:"dataPolicy,omitempty"`
+	ModelBindings         map[string]config.ModelBinding `json:"modelBindings,omitempty"`
+	Strategy              string                         `json:"strategy,omitempty"`
+	Entrypoints           []*EntrypointDeclJSON          `json:"entrypoints,omitempty"`
+	Recipes               []*RecipeDeclJSON              `json:"recipes,omitempty"`
+	Signals               []*SignalDeclJSON              `json:"signals"`
+	ProjectionPartitions  []*ProjectionPartitionDeclJSON `json:"projectionPartitions,omitempty"`
+	ProjectionScores      []*ProjectionScoreDeclJSON     `json:"projectionScores,omitempty"`
+	ProjectionMappings    []*ProjectionMappingDeclJSON   `json:"projectionMappings,omitempty"`
+	Routes                []*RouteDeclJSON               `json:"routes"`
+	Models                []*ModelDeclJSON               `json:"models"`
+	Plugins               []*PluginDeclJSON              `json:"plugins"`
+	TestBlocks            []*TestBlockDeclJSON           `json:"testBlocks,omitempty"`
 }
 
 // EntrypointDeclJSON is the JSON form of a request-facing recipe binding.
@@ -60,6 +67,8 @@ type ProjectionScoreDeclJSON struct {
 type ProjectionScoreInputJSON struct {
 	SignalType  string  `json:"signalType"`
 	SignalName  string  `json:"signalName"`
+	KB          string  `json:"kb,omitempty"`
+	Metric      string  `json:"metric,omitempty"`
 	Weight      float64 `json:"weight"`
 	ValueSource string  `json:"valueSource,omitempty"`
 	Match       float64 `json:"match,omitempty"`
@@ -154,6 +163,7 @@ type ModelDeclJSON struct {
 type ModelRefJSON struct {
 	Model     string   `json:"model"`
 	Reasoning *bool    `json:"reasoning,omitempty"`
+	Mode      string   `json:"mode,omitempty"`
 	Effort    string   `json:"effort,omitempty"`
 	LoRA      string   `json:"lora,omitempty"`
 	ParamSize string   `json:"paramSize,omitempty"`
@@ -237,11 +247,14 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 	}
 
 	result := &ProgramJSON{
-		Strategy: prog.Strategy,
-		Signals:  make([]*SignalDeclJSON, 0, len(prog.Signals)),
-		Routes:   make([]*RouteDeclJSON, 0, len(prog.Routes)),
-		Models:   make([]*ModelDeclJSON, 0, len(prog.Models)),
-		Plugins:  make([]*PluginDeclJSON, 0, len(prog.Plugins)),
+		ModelBindings:         cloneModelBindings(prog.ModelBindings),
+		CandidateRequirements: prog.CandidateRequirements.Clone(),
+		DataPolicy:            prog.DataPolicy.Clone(),
+		Strategy:              prog.Strategy,
+		Signals:               make([]*SignalDeclJSON, 0, len(prog.Signals)),
+		Routes:                make([]*RouteDeclJSON, 0, len(prog.Routes)),
+		Models:                make([]*ModelDeclJSON, 0, len(prog.Models)),
+		Plugins:               make([]*PluginDeclJSON, 0, len(prog.Plugins)),
 	}
 	for _, entrypoint := range prog.Entrypoints {
 		result.Entrypoints = append(result.Entrypoints, &EntrypointDeclJSON{
@@ -310,6 +323,8 @@ func appendProjectionScoreDecls(result *ProgramJSON, scores []*ProjectionScoreDe
 			scoreJSON.Inputs = append(scoreJSON.Inputs, &ProjectionScoreInputJSON{
 				SignalType:  input.SignalType,
 				SignalName:  input.SignalName,
+				KB:          input.KB,
+				Metric:      input.Metric,
 				Weight:      input.Weight,
 				ValueSource: input.ValueSource,
 				Match:       input.Match,
@@ -407,6 +422,7 @@ func routeDeclToJSON(r *RouteDecl) *RouteDeclJSON {
 		rj.Models = append(rj.Models, &ModelRefJSON{
 			Model:     m.Model,
 			Reasoning: m.Reasoning,
+			Mode:      m.Mode,
 			Effort:    m.Effort,
 			LoRA:      m.LoRA,
 			ParamSize: m.ParamSize,

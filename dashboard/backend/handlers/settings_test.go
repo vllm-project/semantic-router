@@ -26,6 +26,44 @@ func TestSettingsHandlerReflectsEffectiveReadonlyMode(t *testing.T) {
 	t.Run("keeps config editing available when only the package store is read-only", testSettingsStoreReadonly)
 }
 
+func TestSettingsHandlerReportsSRBenchConfiguration(t *testing.T) {
+	t.Parallel()
+	authContext := adminSettingsAuthContext("evaluation-admin")
+
+	available := requestSettings(t, &config.Config{
+		SRBenchAvailable: true,
+	}, authContext)
+	if !available.SRBenchAvailable || available.SRBenchUnavailableReason != "" {
+		t.Fatalf("available sr-bench response = %#v", available)
+	}
+
+	unavailable := requestSettings(t, &config.Config{
+		SRBenchUnavailableReason: "sr-bench service is not configured.",
+	}, authContext)
+	if unavailable.SRBenchAvailable || unavailable.SRBenchUnavailableReason != "sr-bench service is not configured." {
+		t.Fatalf("unavailable sr-bench response = %#v", unavailable)
+	}
+}
+
+func TestSettingsHandlerReportsMLPipelineConfiguration(t *testing.T) {
+	t.Parallel()
+	authContext := adminSettingsAuthContext("ml-pipeline-admin")
+
+	available := requestSettings(t, &config.Config{
+		MLPipelineAvailable: true,
+	}, authContext)
+	if !available.MLPipelineAvailable || available.MLPipelineUnavailableReason != "" {
+		t.Fatalf("available ML pipeline response = %#v", available)
+	}
+
+	unavailable := requestSettings(t, &config.Config{
+		MLPipelineUnavailableReason: "ML Pipeline is disabled. Enable it with ML_PIPELINE_ENABLED=true.",
+	}, authContext)
+	if unavailable.MLPipelineAvailable || unavailable.MLPipelineUnavailableReason == "" {
+		t.Fatalf("unavailable ML pipeline response = %#v", unavailable)
+	}
+}
+
 func requestSettings(t *testing.T, cfg *config.Config, authContext auth.AuthContext) SettingsResponse {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
@@ -51,7 +89,6 @@ func testSettingsReadUser(t *testing.T) {
 		RuntimeConfigWritable: true,
 		RecipeStoreWritable:   true,
 		RouterAPIURL:          "http://router:8080",
-		FleetSimURL:           "http://fleet-sim:8000",
 	}, auth.AuthContext{
 		UserID: "user-read-1",
 		Role:   auth.RoleRead,
@@ -63,11 +100,8 @@ func testSettingsReadUser(t *testing.T) {
 	if response.ServerReadonly || !response.RuntimeConfigWritable || !response.RecipeStoreWritable {
 		t.Fatalf("unexpected server capability response: %#v", response)
 	}
-	if !response.FleetSimEnabled {
-		t.Fatalf("fleetSimEnabled = false, want true")
-	}
-	if response.RouterEvalURL != "http://router:8080/api/v1/eval" {
-		t.Fatalf("routerEvalEndpoint = %q, want %q", response.RouterEvalURL, "http://router:8080/api/v1/eval")
+	if response.RouterEvalURL != "http://router:8080/api/v1/routing/preview" {
+		t.Fatalf("routerEvalEndpoint = %q, want %q", response.RouterEvalURL, "http://router:8080/api/v1/routing/preview")
 	}
 }
 
@@ -88,7 +122,7 @@ func testSettingsWriteUser(t *testing.T) {
 	if response.ReadonlyMode || response.ServerReadonly || !response.RuntimeConfigWritable || !response.RecipeStoreWritable {
 		t.Fatalf("unexpected writable server capability response: %#v", response)
 	}
-	if response.FleetSimEnabled || response.RouterEvalURL != fallbackRouterEvalEndpoint {
+	if response.RouterEvalURL != fallbackRouterEvalEndpoint {
 		t.Fatalf("unexpected optional service response: %#v", response)
 	}
 

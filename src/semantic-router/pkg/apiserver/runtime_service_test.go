@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"context"
 	"testing"
 
 	routerruntime "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
@@ -27,9 +28,10 @@ func TestLiveClassificationServiceFallsBackDuringStartup(t *testing.T) {
 	svc := newLiveClassificationService(
 		nil,
 		buildClassificationResolver(&routerruntime.Registry{}),
+		buildClassificationAcquirer(&routerruntime.Registry{}),
 	)
 
-	resp, err := svc.ClassifyIntent(services.IntentRequest{Text: "What is 2+2?"})
+	resp, err := svc.ClassifyIntent(context.Background(), services.IntentRequest{Text: "What is 2+2?"})
 	if err != nil {
 		t.Fatalf("ClassifyIntent during startup: unexpected error: %v", err)
 	}

@@ -8,7 +8,8 @@ spec:
   defaultModel: "qwen-2.5-7b"
   models:
     - name: "qwen-2.5-7b"
-      reasoningFamily: "qwen3"
+      reasoning:
+        family: "qwen3"
       pricing:
         inputTokenPrice: 0.0000005  # $0.5 per 1M input tokens
         outputTokenPrice: 0.000001   # $1 per 1M output tokens
@@ -17,7 +18,8 @@ spec:
           description: "Technical support specialist"
 
     - name: "qwen-2.5-72b"
-      reasoningFamily: "qwen3"
+      reasoning:
+        family: "qwen3"
       pricing:
         inputTokenPrice: 0.000003    # $3 per 1M input tokens
         outputTokenPrice: 0.000006   # $6 per 1M output tokens

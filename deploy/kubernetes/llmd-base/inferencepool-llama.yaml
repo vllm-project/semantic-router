@@ -53,13 +53,15 @@ spec:
       terminationGracePeriodSeconds: 130
       containers:
       - name: epp
-        image: ghcr.io/llm-d/llm-d-inference-scheduler:v0.3.2
+        image: ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.10.0
         imagePullPolicy: Always
         args:
         - --pool-name
         - vllm-llama3-8b-instruct
         - --pool-namespace
         - default
+        - --pool-group
+        - inference.networking.k8s.io
         - --v
         - '4'
         - --zap-encoder
@@ -70,6 +72,16 @@ spec:
         - '9003'
         - --config-file
         - /config/default-plugins.yaml
+        - --metrics-endpoint-auth=false
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         ports:
         - containerPort: 9002
         - containerPort: 9003
@@ -100,11 +112,28 @@ kind: ConfigMap
 metadata:
   name: plugins-config
 data:
-  default-plugins.yaml: "apiVersion: inference.networking.x-k8s.io/v1alpha1\nkind:\
-    \ EndpointPickerConfig\nplugins:\n- type: queue-scorer\n- type: kv-cache-utilization-scorer\n\
-    - type: prefix-cache-scorer\nschedulingProfiles:\n- name: default\n  plugins:\n\
-    \  - pluginRef: queue-scorer\n  - pluginRef: kv-cache-utilization-scorer\n  -\
-    \ pluginRef: prefix-cache-scorer\n"
+  default-plugins.yaml: |
+    apiVersion: llm-d.ai/v1alpha1
+    kind: EndpointPickerConfig
+    plugins:
+    - type: queue-scorer
+    - type: kv-cache-utilization-scorer
+    - type: prefix-cache-scorer
+    - type: metrics-data-source
+      parameters:
+        scheme: http
+        path: /metrics
+        insecureSkipVerify: true
+    - type: core-metrics-extractor
+    schedulingProfiles:
+    - name: default
+      plugins:
+      - pluginRef: queue-scorer
+        weight: 2
+      - pluginRef: kv-cache-utilization-scorer
+        weight: 2
+      - pluginRef: prefix-cache-scorer
+        weight: 3
 ---
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
@@ -115,7 +144,17 @@ rules:
   - inference.networking.x-k8s.io
   resources:
   - inferenceobjectives
+  - inferencemodelrewrites
   - inferencepools
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - llm-d.ai
+  resources:
+  - inferenceobjectives
+  - inferencemodelrewrites
   verbs:
   - get
   - watch

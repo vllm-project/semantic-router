@@ -2,6 +2,7 @@ package classification
 
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // TokenCounter defines the interface for counting tokens in text
@@ -30,17 +31,38 @@ func (c *CharacterBasedTokenCounter) CountTokens(text string) (int, error) {
 	return (byteLen + CharactersPerToken - 1) / CharactersPerToken, nil
 }
 
+// compiledContextRule holds a context rule's parsed band so the hot path does
+// no string parsing. Rules whose limits fail to parse are kept with ok=false so
+// their names stay visible in diagnostics but never match.
+type compiledContextRule struct {
+	name   string
+	bounds config.ContextBounds
+	ok     bool
+}
+
 // ContextClassifier classifies text based on token count rules
 type ContextClassifier struct {
 	tokenCounter TokenCounter
-	rules        []config.ContextRule
+	rules        []compiledContextRule
 }
 
-// NewContextClassifier creates a new ContextClassifier
+// NewContextClassifier creates a new ContextClassifier. Rules with invalid
+// token limits are reported once here and are skipped during classification;
+// config validation normally rejects them before this point.
 func NewContextClassifier(tokenCounter TokenCounter, rules []config.ContextRule) *ContextClassifier {
+	compiled := make([]compiledContextRule, 0, len(rules))
+	for _, rule := range rules {
+		bounds, err := rule.Bounds()
+		if err != nil {
+			logging.Warnf("context rule %q has an invalid token range and will never match: %v", rule.Name, err)
+			compiled = append(compiled, compiledContextRule{name: rule.Name})
+			continue
+		}
+		compiled = append(compiled, compiledContextRule{name: rule.Name, bounds: bounds, ok: true})
+	}
 	return &ContextClassifier{
 		tokenCounter: tokenCounter,
-		rules:        rules,
+		rules:        compiled,
 	}
 }
 
@@ -54,6 +76,11 @@ func (c *ContextClassifier) Classify(text string) ([]string, int, error) {
 // and a conservative request-envelope floor. The floor lets routing account
 // for prompt-bearing components that must not be copied into semantic signal
 // text (tool schemas/results and image payloads, for example).
+//
+// Bands are inclusive on both ends. Every matching rule is returned, in
+// configuration order, so overlapping bands report all of their names.
+// An open-ended band (no max_tokens) matches any count at or above its
+// minimum, which is how overflow above the largest bounded band is routed.
 func (c *ContextClassifier) ClassifyWithTokenFloor(text string, tokenFloor int) ([]string, int, error) {
 	tokenCount, err := c.tokenCounter.CountTokens(text)
 	if err != nil {
@@ -65,19 +92,14 @@ func (c *ContextClassifier) ClassifyWithTokenFloor(text string, tokenFloor int) 
 
 	var matchedRules []string
 	for _, rule := range c.rules {
-		min, err := rule.MinTokens.Value()
-		if err != nil {
-			// Skip rules with invalid token counts, log warning in real app
+		if !rule.ok || !rule.bounds.Matches(tokenCount) {
 			continue
 		}
-		max, err := rule.MaxTokens.Value()
-		if err != nil {
-			continue
+		if rule.bounds.Unbounded {
+			logging.Debugf("[Signal Computation] context rule %q matched %d tokens via its open-ended band (min=%d)",
+				rule.name, tokenCount, rule.bounds.Min)
 		}
-
-		if tokenCount >= min && tokenCount <= max {
-			matchedRules = append(matchedRules, rule.Name)
-		}
+		matchedRules = append(matchedRules, rule.name)
 	}
 
 	return matchedRules, tokenCount, nil

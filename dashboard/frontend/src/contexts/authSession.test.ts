@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  fetchCurrentAuthUser,
-  hasAuthenticatedSession,
-  type AuthUser,
-} from './authSession'
+import { fetchCurrentAuthUser, hasAuthenticatedSession, type AuthUser } from './authSession'
 
 function response(status: number, body?: unknown): Response {
   return {
@@ -45,7 +41,7 @@ describe('authSession', () => {
         email: 'user@example.test',
         name: 'User One',
       },
-      clearLocalToken: false,
+      status: 'authenticated',
     })
     expect(calls).toEqual([
       {
@@ -55,12 +51,45 @@ describe('authSession', () => {
     ])
   })
 
-  it('marks local token state stale when the server session is unauthorized', async () => {
+  it('reports only a definitive unauthorized response as unauthenticated', async () => {
     const fetcher: typeof fetch = async () => response(401)
 
     await expect(fetchCurrentAuthUser(fetcher)).resolves.toEqual({
-      user: null,
-      clearLocalToken: true,
+      status: 'unauthenticated',
     })
+  })
+
+  it.each([403, 429, 500, 503])(
+    'keeps HTTP %i separate from an invalid session',
+    async (status) => {
+      const fetcher: typeof fetch = async () => response(status)
+      await expect(fetchCurrentAuthUser(fetcher)).resolves.toMatchObject({ status: 'unavailable' })
+    },
+  )
+
+  it('reports network failures without invalidating the session', async () => {
+    const fetcher: typeof fetch = async () => {
+      throw new TypeError('Failed to fetch')
+    }
+    await expect(fetchCurrentAuthUser(fetcher)).resolves.toMatchObject({ status: 'unavailable' })
+  })
+
+  it.each([null, {}, { user: null }])(
+    'does not accept an incomplete successful response',
+    async (body) => {
+      const fetcher: typeof fetch = async () => response(200, body)
+      await expect(fetchCurrentAuthUser(fetcher)).resolves.toMatchObject({ status: 'unavailable' })
+    },
+  )
+
+  it('treats an unreadable response as unavailable rather than signed out', async () => {
+    const fetcher: typeof fetch = async () =>
+      ({
+        ...response(200),
+        json: async () => {
+          throw new SyntaxError('Invalid JSON')
+        },
+      }) as Response
+    await expect(fetchCurrentAuthUser(fetcher)).resolves.toMatchObject({ status: 'unavailable' })
   })
 })

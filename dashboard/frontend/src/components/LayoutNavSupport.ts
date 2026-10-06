@@ -1,7 +1,6 @@
-import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
 import type { ProductIconName } from './ProductIcon'
 
-export type LayoutDropdownKey = 'build' | 'analyze' | 'operate'
+export type LayoutDropdownKey = 'build' | 'operate'
 
 export type LayoutConfigSection =
   | 'models'
@@ -17,6 +16,8 @@ type LayoutRouteMenuItem = {
   label: string
   icon: ProductIconName
   to: string
+  reloadDocument?: boolean
+  target?: '_blank'
   matchMode?: 'exact' | 'prefix'
   activePathPattern?: RegExp
 }
@@ -55,6 +56,40 @@ export const PRIMARY_NAV_LINKS: LayoutNavLink[] = [
   { label: 'Playground', icon: 'playground', to: '/playground' },
 ]
 
+const CONFIG_SECTIONS = new Set<LayoutConfigSection>([
+  'models',
+  'signals',
+  'projections',
+  'decisions',
+  'entrypoints-recipes',
+  'global-config',
+  'mcp',
+])
+
+const CONFIG_SECTION_ALIASES: Record<string, LayoutConfigSection> = {
+  global: 'global-config',
+  'router-config': 'global-config',
+  routes: 'decisions',
+  endpoints: 'models',
+  entrypoints: 'entrypoints-recipes',
+  recipes: 'entrypoints-recipes',
+}
+
+export function normalizeConfigSection(section: string): LayoutConfigSection | undefined {
+  const normalized = section.toLowerCase()
+  if (CONFIG_SECTION_ALIASES[normalized]) return CONFIG_SECTION_ALIASES[normalized]
+  return CONFIG_SECTIONS.has(normalized as LayoutConfigSection)
+    ? (normalized as LayoutConfigSection)
+    : undefined
+}
+
+export function getConfigSectionFromPathname(pathname: string): LayoutConfigSection | undefined {
+  if (pathname !== '/config' && !pathname.startsWith('/config/')) return undefined
+
+  const section = pathname.split('/')[2] || 'global-config'
+  return normalizeConfigSection(section)
+}
+
 export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
   {
     key: 'routing',
@@ -65,6 +100,7 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
         title: 'Models',
         description: 'Connect models and compose public model endpoints.',
         items: [
+          { kind: 'route', label: 'Model Hub', icon: 'model', to: '/models' },
           { kind: 'config', label: 'Models', icon: 'model', configSection: 'models' },
           {
             kind: 'config',
@@ -167,46 +203,6 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
   },
 ]
 
-export const ANALYZE_MENU_CATEGORIES: LayoutMenuCategory[] = [
-  {
-    key: 'fleet-simulation',
-    label: 'Fleet Simulation',
-    description: 'Plan heterogeneous capacity before traffic reaches the live fleet.',
-    sections: [
-      {
-        title: 'Plan',
-        description: 'Define workloads and compare fleet strategies.',
-        items: FLEET_SIM_NAV_ITEMS.slice(0, 2).map((item) => ({
-          kind: 'route' as const,
-          label: item.label,
-          icon: 'fleet' as const,
-          to: item.to,
-        })),
-      },
-      {
-        title: 'Inventory',
-        description: 'Model the hardware pools available to the router.',
-        items: FLEET_SIM_NAV_ITEMS.slice(2, 3).map((item) => ({
-          kind: 'route' as const,
-          label: item.label,
-          icon: 'fleet' as const,
-          to: item.to,
-        })),
-      },
-      {
-        title: 'Runs',
-        description: 'Review completed and in-progress simulations.',
-        items: FLEET_SIM_NAV_ITEMS.slice(3).map((item) => ({
-          kind: 'route' as const,
-          label: item.label,
-          icon: 'fleet' as const,
-          to: item.to,
-        })),
-      },
-    ],
-  },
-]
-
 export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
   {
     key: 'runtime',
@@ -256,6 +252,20 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
             label: 'Global Config',
             icon: 'settings',
             configSection: 'global-config',
+          },
+          {
+            kind: 'route',
+            label: 'Schema Reference',
+            icon: 'code',
+            to: '/config/reference',
+          },
+          {
+            kind: 'route',
+            label: 'Router API Docs',
+            icon: 'code',
+            to: '/api/router/docs',
+            reloadDocument: true,
+            target: '_blank',
           },
         ],
       },

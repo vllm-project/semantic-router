@@ -119,7 +119,7 @@ def _dashboard_management_extra_env(
 
 
 class K8sBackend:
-    """DeploymentBackend implementation for Kubernetes via Helm."""
+    """Kubernetes deployment backend implemented through Helm."""
 
     def __init__(
         self,
@@ -136,7 +136,7 @@ class K8sBackend:
         self.profile = profile
         self.chart_dir = chart_dir or self._find_chart_dir()
 
-    # -- DeploymentBackend interface ------------------------------------------
+    # -- Deployment operations ------------------------------------------------
 
     def deploy(
         self,
@@ -349,7 +349,7 @@ class K8sBackend:
         if failed:
             raise SystemExit(failed)
 
-    def get_dashboard_url(self) -> str | None:
+    def _dashboard_service_query(self, jsonpath: str) -> str | None:
         cmd = [
             *self._kubectl_base_cmd(),
             "get",
@@ -360,12 +360,34 @@ class K8sBackend:
             f"app.kubernetes.io/instance={self.release_name},"
             "app.kubernetes.io/component=dashboard",
             "-o",
-            "jsonpath={.items[0].spec.clusterIP}:{.items[0].spec.ports[0].port}",
+            jsonpath,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        if result.returncode == 0 and result.stdout.strip():
-            return f"http://{result.stdout.strip()}"
-        return None
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+        return result.stdout.strip()
+
+    def get_dashboard_url(self) -> str | None:
+        """Return the in-cluster Dashboard address, not reachable from outside."""
+        address = self._dashboard_service_query(
+            "jsonpath={.items[0].spec.clusterIP}:{.items[0].spec.ports[0].port}"
+        )
+        return f"http://{address}" if address else None
+
+    def get_dashboard_port_forward(self) -> str | None:
+        """Return the command that makes the Dashboard reachable locally."""
+        service = self._dashboard_service_query(
+            "jsonpath={.items[0].metadata.name}:{.items[0].spec.ports[0].port}"
+        )
+        if service is None:
+            return None
+        name, _, port = service.partition(":")
+        if not name or not port:
+            return None
+        return (
+            f"{' '.join(self._kubectl_base_cmd())} port-forward "
+            f"--namespace {self.namespace} svc/{name} {port}:{port}"
+        )
 
     def is_running(self) -> bool:
         cmd = [
@@ -679,7 +701,28 @@ class K8sBackend:
             self.namespace,
             "--timeout=600s",
         ]
-        self._run(cmd, check=False)
+        result = self._run(cmd, check=False)
+        if result.returncode != 0:
+            # A failed wait means pods never became ready: reporting success
+            # here would hide broken rollouts behind a green summary.
+            self._log_failed_pod_diagnostics()
+            raise SystemExit(result.returncode)
+
+    def _log_failed_pod_diagnostics(self) -> None:
+        log.error("kubectl wait failed; current pod status:")
+        self._run_display(
+            [
+                *self._kubectl_base_cmd(),
+                "get",
+                "pods",
+                "-l",
+                f"app.kubernetes.io/instance={self.release_name}",
+                "--namespace",
+                self.namespace,
+                "-o",
+                "wide",
+            ]
+        )
 
     def _log_k8s_summary(self) -> None:
         success("Kubernetes deployment is ready")

@@ -1,17 +1,22 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import path from 'path'
+import path from 'node:path'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
   server: {
     port: 3001,
+    fs: {
+      // The public Model Hub snapshot is shared with the website instead of
+      // being checked in twice under both frontend trees.
+      allow: [path.resolve(import.meta.dirname, '../..')],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:8700',
@@ -33,8 +38,15 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+        manualChunks(id) {
+          if (
+            id.includes('/node_modules/react/') ||
+            id.includes('/node_modules/react-dom/') ||
+            id.includes('/node_modules/react-router/') ||
+            id.includes('/node_modules/react-router-dom/')
+          ) {
+            return 'react-vendor'
+          }
         },
       },
     },

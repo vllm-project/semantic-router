@@ -34,6 +34,7 @@ func hybridCacheOptionsFromConfig(config CacheConfig) HybridCacheOptions {
 		HNSWEfConstruction:  config.HNSWEfConstruction,
 		Milvus:              config.Milvus,
 		EmbeddingModel:      config.EmbeddingModel,
+		EmbeddingProvider:   config.EmbeddingProvider,
 	}
 }
 
@@ -47,9 +48,6 @@ func ValidateCacheConfig(config CacheConfig) error {
 	}
 	if config.TTLSeconds < 0 {
 		return fmt.Errorf("ttl_seconds cannot be negative, got: %d", config.TTLSeconds)
-	}
-	if t := config.PolarityGuard.ContradictionThreshold; config.PolarityGuard.UseNLI && (t < 0.0 || t > 1.0) {
-		return fmt.Errorf("polarity_guard.nli.contradiction_threshold must be between 0.0 and 1.0, got: %f", t)
 	}
 	return validateCacheBackend(config)
 }
@@ -106,7 +104,7 @@ func GetAvailableCacheBackends() []CacheBackendInfo {
 		{
 			Type:         InMemoryCacheType,
 			Name:         "In-Memory Cache",
-			Description:  "High-performance in-memory semantic cache with BERT embeddings",
+			Description:  "High-performance in-memory semantic cache with model runtime embeddings",
 			Capabilities: CapabilitiesForBackend(InMemoryCacheType),
 			Features: []string{
 				"Fast access",

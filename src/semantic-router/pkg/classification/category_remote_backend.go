@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 // categoryHTTPBackend adapts the shared complete-distribution sequence backend
@@ -16,6 +16,15 @@ import (
 type categoryHTTPBackend struct {
 	backend SequenceClassifierBackend
 }
+
+func (c *categoryHTTPBackend) Close() error {
+	if closer, ok := c.backend.(interface{ Close() error }); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
+func (c *categoryHTTPBackend) ownsAdmission() bool { return ownsModelAdmission(c.backend) }
 
 // fallbackToTop1OnProbabilityError reports whether the historical evaluator
 // fallback is meaningful for this implementation. The remote endpoint already
@@ -43,28 +52,28 @@ func (c *categoryHTTPBackend) classify(ctx context.Context, text string) (Sequen
 	return c.backend.Classify(ctx, text)
 }
 
-func (c *categoryHTTPBackend) Classify(ctx context.Context, text string) (candle_binding.ClassResult, error) {
+func (c *categoryHTTPBackend) Classify(ctx context.Context, text string) (tasks.ClassResult, error) {
 	result, err := c.classify(ctx, text)
 	if err != nil {
-		return candle_binding.ClassResult{}, err
+		return tasks.ClassResult{}, err
 	}
 	class, confidence := deriveArgmax(result.Probabilities)
 	if class < 0 {
-		return candle_binding.ClassResult{}, fmt.Errorf("category backend returned an empty probability distribution")
+		return tasks.ClassResult{}, fmt.Errorf("category backend returned an empty probability distribution")
 	}
-	return candle_binding.ClassResult{Class: class, Confidence: confidence}, nil
+	return tasks.ClassResult{Class: class, Confidence: confidence}, nil
 }
 
-func (c *categoryHTTPBackend) ClassifyWithProbabilities(ctx context.Context, text string) (candle_binding.ClassResultWithProbs, error) {
+func (c *categoryHTTPBackend) ClassifyWithProbabilities(ctx context.Context, text string) (tasks.ClassResultWithProbs, error) {
 	result, err := c.classify(ctx, text)
 	if err != nil {
-		return candle_binding.ClassResultWithProbs{}, err
+		return tasks.ClassResultWithProbs{}, err
 	}
 	class, confidence := deriveArgmax(result.Probabilities)
 	if class < 0 {
-		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("category backend returned an empty probability distribution")
+		return tasks.ClassResultWithProbs{}, fmt.Errorf("category backend returned an empty probability distribution")
 	}
-	return candle_binding.ClassResultWithProbs{
+	return tasks.ClassResultWithProbs{
 		Class:         class,
 		Confidence:    confidence,
 		Probabilities: append([]float32(nil), result.Probabilities...),

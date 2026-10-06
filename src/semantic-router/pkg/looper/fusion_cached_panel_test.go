@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,38 +30,36 @@ func cachedTestPanel() []*ModelResponse {
 	}
 }
 
-// placeboNLI is a deterministic seeded-random NLI: scores are reproducible for a
-// given (seed, premise, hypothesis) but carry no real signal. It mirrors the
-// random-weight placebo arm in the fusioneval driver, isolating "does the score
-// help" from "does any weighting help".
-func placeboNLI(seed uint64) NLIClassifyFunc {
-	return func(premise, hypothesis string) (float32, float32, error) {
+// placeboDetector is a deterministic seeded-random detector: its scores are
+// reproducible for a given (seed, context, answer) but carry no real signal.
+// It mirrors the random-weight placebo arm in the fusioneval driver, isolating
+// "does the score help" from "does any weighting help".
+func placeboDetector(seed uint64) HallucinationDetectFunc {
+	return func(_ context.Context, contextText, _, answer string) ([]string, float32, error) {
 		h := fnv.New64a()
 		var b [8]byte
 		binary.LittleEndian.PutUint64(b[:], seed)
 		_, _ = h.Write(b[:])
-		_, _ = h.Write([]byte(premise))
+		_, _ = h.Write([]byte(contextText))
 		_, _ = h.Write([]byte{0})
-		_, _ = h.Write([]byte(hypothesis))
+		_, _ = h.Write([]byte(answer))
 		r := rand.New(rand.NewSource(int64(h.Sum64()))) //nolint:gosec // deterministic test seed, overflow harmless
-		entail := float32(r.Float64())
-		contradict := float32(r.Float64() * (1 - float64(entail)))
-		return entail, contradict, nil
+		return []string{"placebo"}, float32(r.Float64()), nil
 	}
 }
 
 // runCachedPanelArm runs Execute against a fixed cached panel with the given
-// grounding config and NLI backend, capturing every prompt the judge saw. The
+// grounding config and detector, capturing every prompt the judge saw. The
 // stub fails the test if any panel model is called live, proving the short-circuit.
 func runCachedPanelArm(
 	t *testing.T,
 	p []*ModelResponse,
 	grounding *config.FusionGroundingConfig,
-	nli NLIClassifyFunc,
+	detect HallucinationDetectFunc,
 ) (body map[string]interface{}, judgePrompts []string) {
 	t.Helper()
-	if nli != nil {
-		withGroundingBackends(t, nli, nil)
+	if detect != nil {
+		withGroundingDetector(t, detect)
 	}
 	server := newFusionStubServer(t, func(model, prompt string) (string, int) {
 		if model != "judge" {
@@ -85,7 +84,7 @@ func runCachedPanelArm(
 			Grounding:      grounding,
 		},
 	}
-	resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
+	resp, err := newGroundedTestFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(resp.Body, &body))
 	return body, judgePrompts
@@ -141,6 +140,52 @@ func TestFusionExecute_CachedPanelSkipsLiveCalls(t *testing.T) {
 	assert.Equal(t, float64(12+23+34+34), usage["total_tokens"])
 }
 
+func TestFusionExecute_CachedPanelBelowUsableQuorumFailsBeforeJudge(t *testing.T) {
+	var judgeCalls atomic.Int64
+	server := newFusionStubServer(t, func(model, prompt string) (string, int) {
+		judgeCalls.Add(1)
+		return "unexpected judge response", http.StatusOK
+	})
+	defer server.Close()
+
+	req := newFusionTestRequest()
+	req.CachedPanel = []*ModelResponse{
+		{Model: "panel-a", Content: "usable", Usage: TokenUsage{PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12}},
+		{Model: "panel-b", Content: "  \n ", Usage: TokenUsage{PromptTokens: 20, CompletionTokens: 3, TotalTokens: 23}},
+	}
+	req.Algorithm = &config.AlgorithmConfig{
+		Type: "fusion",
+		Fusion: &config.FusionAlgorithmConfig{
+			Model:                  "judge",
+			AnalysisModels:         []string{"panel-a", "panel-b"},
+			MinSuccessfulResponses: 2,
+		},
+	}
+
+	_, err := newGroundedTestFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
+	require.Error(t, err)
+	assert.Zero(t, judgeCalls.Load())
+	evidence, ok := FusionQuorumEvidenceFromError(err)
+	require.True(t, ok)
+	assert.Equal(t, 1, evidence.UsableCount)
+	assert.Equal(t, TokenUsage{PromptTokens: 30, CompletionTokens: 5, TotalTokens: 35}, evidence.Usage)
+	assert.Equal(t, FusionPanelAttemptUnusable, evidence.Attempts[1].State)
+}
+
+func TestFusionExecute_CachedReasoningOnlyResponseMeetsQuorum(t *testing.T) {
+	panel := []*ModelResponse{
+		{Model: "panel-a", ReasoningContent: "reasoning-only evidence", Usage: TokenUsage{TotalTokens: 7}},
+		{Model: "panel-b", Content: "ordinary answer", Usage: TokenUsage{TotalTokens: 9}},
+	}
+
+	body, judgePrompts := runCachedPanelArm(t, panel, nil, nil)
+	require.Len(t, judgePrompts, 2)
+	assert.Contains(t, judgePrompts[0], "reasoning-only evidence")
+	choices := body["choices"].([]interface{})
+	message := choices[0].(map[string]interface{})["message"].(map[string]interface{})
+	assert.Equal(t, "final answer", message["content"])
+}
+
 // TestFusionExecute_CachedPanel_ArmIsolation_BvsC proves arms B (plain fusion)
 // and C (weight) synthesize from the identical cached panel and differ ONLY in
 // the grounding stage: B has no grounding block and no weighting directive; C
@@ -152,11 +197,11 @@ func TestFusionExecute_CachedPanel_ArmIsolation_BvsC(t *testing.T) {
 	bodyB, judgeB := runCachedPanelArm(t, p, nil, nil)
 
 	// Arm C: weight (grounding on, panel mode, policy defaults to weight).
-	highEntail := func(_, _ string) (float32, float32, error) { return 0.9, 0.05, nil }
+	supported := func(_ context.Context, _, _, _ string) ([]string, float32, error) { return nil, 0, nil }
 	bodyC, judgeC := runCachedPanelArm(t, p, &config.FusionGroundingConfig{
 		Enabled:   true,
 		Reference: config.FusionGroundingReferencePanel,
-	}, highEntail)
+	}, supported)
 
 	// Both arms feed the IDENTICAL panel content to the judge analysis stage.
 	for _, r := range p {
@@ -178,8 +223,8 @@ func TestFusionExecute_CachedPanel_ArmIsolation_BvsC(t *testing.T) {
 	assert.Contains(t, judgeC[1], "Weight each panel answer")
 }
 
-// TestFusionExecute_CachedPanel_PlaceboMechanism proves arm C (real NLI) and arm
-// D (seeded-random placebo NLI) synthesize from the identical panel but produce
+// TestFusionExecute_CachedPanel_PlaceboMechanism proves arm C (a real detector)
+// and arm D (a seeded-random placebo) synthesize from the identical panel but produce
 // different groundedness scores — so the A/B isolates the score's signal from the
 // mere act of weighting.
 func TestFusionExecute_CachedPanel_PlaceboMechanism(t *testing.T) {
@@ -189,14 +234,8 @@ func TestFusionExecute_CachedPanel_PlaceboMechanism(t *testing.T) {
 		Reference: config.FusionGroundingReferencePanel,
 	}
 
-	realNLI := func(_, hypothesis string) (float32, float32, error) {
-		if strings.Contains(hypothesis, "bad") {
-			return 0.1, 0.8, nil
-		}
-		return 0.9, 0.05, nil
-	}
-	bodyC, _ := runCachedPanelArm(t, p, grounding, realNLI)
-	bodyD, _ := runCachedPanelArm(t, p, grounding, placeboNLI(7))
+	bodyC, _ := runCachedPanelArm(t, p, grounding, unsupportedWhen("bad", 0.8))
+	bodyD, _ := runCachedPanelArm(t, p, grounding, placeboDetector(7))
 
 	scoresC := groundingScoresFromBody(t, bodyC)
 	scoresD := groundingScoresFromBody(t, bodyD)
@@ -209,18 +248,17 @@ func TestFusionExecute_CachedPanel_PlaceboMechanism(t *testing.T) {
 	assert.NotEqual(t, scoresC, scoresD)
 }
 
-// TestPlaceboNLI_DeterministicAndSpread guards the placebo's two required
+// TestPlaceboDetector_DeterministicAndSpread guards the placebo's two required
 // properties: reproducible for a fixed seed, and non-constant across inputs.
-func TestPlaceboNLI_DeterministicAndSpread(t *testing.T) {
-	nli := placeboNLI(42)
-	e1, c1, err := nli("premise one", "hypothesis one")
+func TestPlaceboDetector_DeterministicAndSpread(t *testing.T) {
+	detect := placeboDetector(42)
+	_, s1, err := detect(context.Background(), "context one", "q", "answer one")
 	require.NoError(t, err)
-	e2, c2, err := nli("premise one", "hypothesis one")
+	_, s2, err := detect(context.Background(), "context one", "q", "answer one")
 	require.NoError(t, err)
-	assert.Equal(t, e1, e2, "same inputs must yield identical scores")
-	assert.Equal(t, c1, c2)
+	assert.Equal(t, s1, s2, "same inputs must yield identical scores")
 
-	e3, _, err := nli("premise one", "a different hypothesis")
+	_, s3, err := detect(context.Background(), "context one", "q", "a different answer")
 	require.NoError(t, err)
-	assert.NotEqual(t, e1, e3, "different inputs must yield different scores")
+	assert.NotEqual(t, s1, s3, "different inputs must yield different scores")
 }

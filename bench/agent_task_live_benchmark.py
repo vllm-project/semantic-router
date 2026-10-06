@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import statistics
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -26,7 +28,17 @@ VSR_HEADERS = (
     "x-vsr-replay-id",
     "x-vsr-context-token-count",
     "x-vsr-matched-conversation",
+    "x-vsr-routing-latency-ms",
+    "x-vsr-cost",
+    "x-vsr-cost-currency",
 )
+NON_NEGATIVE_NUMBER_HEADERS = ("x-vsr-routing-latency-ms", "x-vsr-cost")
+COST_METRIC = "llm_model_cost_total"
+ROUTING_LATENCY_METRIC = "llm_model_routing_latency_seconds"
+COST_BASIS = "configured pricing (x-vsr-cost), not a provider bill"
+METRIC_SAMPLE = re.compile(r"^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{([^}]*)\})?\s+(\S+)")
+METRIC_LABEL = re.compile(r'(\w+)="((?:[^"\\]|\\.)*)"')
+MetricSamples = dict[tuple[str, tuple[tuple[str, str], ...]], float]
 CORE_ROUTER_HEADERS = (
     "x-vsr-selected-model",
     "x-vsr-selected-decision",
@@ -37,6 +49,12 @@ DIAGNOSTIC_ROUTER_HEADERS = (
     "x-vsr-session-phase",
     "x-vsr-selected-confidence",
     "x-vsr-context-token-count",
+)
+PROTOCOLS = ("chat", "responses")
+CONTINUATION_MODES = ("full-history", "previous-response-id")
+SYSTEM_INSTRUCTIONS = (
+    "You are a concise coding-agent benchmark assistant. Follow exact "
+    "answer-token instructions when they are present."
 )
 
 
@@ -73,11 +91,17 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--label", default="live-router")
     parser.add_argument("--evidence-ref", default="")
     parser.add_argument("--evidence-image-tag", default="")
-    parser.add_argument("--include-previous-response-id", action="store_true")
+    parser.add_argument("--protocol", choices=PROTOCOLS, default="chat")
+    parser.add_argument(
+        "--continuation-mode", choices=CONTINUATION_MODES, default="full-history"
+    )
     parser.add_argument("--baseline-base-url", default="")
     parser.add_argument("--baseline-model", default="")
     parser.add_argument("--baseline-label", default="direct-backend")
-    parser.add_argument("--baseline-include-previous-response-id", action="store_true")
+    parser.add_argument("--baseline-protocol", choices=PROTOCOLS, default="")
+    parser.add_argument(
+        "--baseline-continuation-mode", choices=CONTINUATION_MODES, default=""
+    )
     parser.add_argument("--extra-header", action="append", default=[])
     parser.add_argument(
         "--require-router-header",
@@ -104,7 +128,33 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-context-portability-violations", type=int, default=-1)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=None)
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--router-metrics-url",
+        default="",
+        help=(
+            "Router Prometheus endpoint, e.g. http://127.0.0.1:9190/metrics. When set, "
+            "the summary also reports the cost and routing time the router recorded."
+        ),
+    )
+    args = parser.parse_args(argv)
+    validate_protocol_args(parser, args)
+    return args
+
+
+def validate_protocol_args(
+    parser: argparse.ArgumentParser, args: argparse.Namespace
+) -> None:
+    if args.protocol == "chat" and args.continuation_mode != "full-history":
+        parser.error(
+            "--continuation-mode previous-response-id requires --protocol responses"
+        )
+    baseline_protocol = args.baseline_protocol or args.protocol
+    baseline_continuation = args.baseline_continuation_mode or args.continuation_mode
+    if baseline_protocol == "chat" and baseline_continuation != "full-history":
+        parser.error(
+            "--baseline-continuation-mode previous-response-id requires "
+            "--baseline-protocol responses"
+        )
 
 
 def default_output_dir() -> Path:
@@ -859,12 +909,12 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                     prompt=(
                         "Return the refactor plan. Include exact tokens "
                         "PLAN=extract-helper, BOUNDARY=small-orchestrator, "
-                        "VALIDATE=agent-ci-gate."
+                        "VALIDATE=check."
                     ),
                     expected_terms=(
                         "PLAN=extract-helper",
                         "BOUNDARY=small-orchestrator",
-                        "VALIDATE=agent-ci-gate",
+                        "VALIDATE=check",
                     ),
                 ),
             ),
@@ -1797,7 +1847,7 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                     tool_result=(
                         "Pre-commit failed in agent CI lint after changed-files "
                         "classification included a generated paper artifact. Local "
-                        "agent-lint passed after removing the artifact."
+                        "make check passed after removing the artifact."
                     ),
                 ),
                 TaskTurn(
@@ -1821,7 +1871,7 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                     prompt="Use the rerun result before finalizing the review note.",
                     tool_name="rerun_pr_gate",
                     tool_result=(
-                        "make agent-ci-gate on changed files passed; GitHub build-paper "
+                        "make check on changed files passed; GitHub build-paper "
                         "and unit checks are green; pre-commit is rerunning."
                     ),
                 ),
@@ -1830,12 +1880,12 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                     prompt=(
                         "Return the CI patch review. Include exact tokens "
                         "BUG=generated-artifact-staged, FIX=source-only-commit, "
-                        "VALIDATE=agent-ci-gate."
+                        "VALIDATE=check."
                     ),
                     expected_terms=(
                         "BUG=generated-artifact-staged",
                         "FIX=source-only-commit",
-                        "VALIDATE=agent-ci-gate",
+                        "VALIDATE=check",
                     ),
                 ),
             ),
@@ -1932,13 +1982,7 @@ def request_headers(args: argparse.Namespace, session_id: str) -> dict[str, str]
 
 def build_messages(task: TaskSpec, turn_index: int) -> list[dict[str, Any]]:
     turn = task.turns[turn_index]
-    system = {
-        "role": "system",
-        "content": (
-            "You are a concise coding-agent benchmark assistant. Follow exact "
-            "answer-token instructions when they are present."
-        ),
-    }
+    system = {"role": "system", "content": SYSTEM_INSTRUCTIONS}
     messages: list[dict[str, Any]] = [system]
     for prior_index, prior in enumerate(task.turns[:turn_index]):
         messages.append({"role": "user", "content": prior.prompt})
@@ -1991,24 +2035,86 @@ def tool_messages(
     ]
 
 
+def responses_message(role: str, content: str) -> dict[str, Any]:
+    return {"type": "message", "role": role, "content": content}
+
+
+def responses_tool_items(
+    task_name: str, turn_index: int, turn: TaskTurn
+) -> list[dict[str, Any]]:
+    call_id = f"call_{task_name}_{turn_index}"
+    return [
+        {
+            "type": "function_call",
+            "id": f"item_{task_name}_{turn_index}",
+            "call_id": call_id,
+            "name": turn.tool_name or "read_tool_result",
+            "arguments": json.dumps({"task": task_name}),
+        },
+        {
+            "type": "function_call_output",
+            "call_id": call_id,
+            "output": turn.tool_result,
+        },
+    ]
+
+
+def responses_turn_items(
+    task: TaskSpec, turn_index: int, *, include_history: bool
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    if include_history:
+        for prior_index, prior in enumerate(task.turns[:turn_index]):
+            items.append(responses_message("user", prior.prompt))
+            if prior.expected_terms:
+                items.append(responses_message("assistant", "Acknowledged."))
+            elif prior.tool_result:
+                items.extend(responses_tool_items(task.name, prior_index, prior))
+            else:
+                items.append(
+                    responses_message("assistant", "I will inspect the evidence.")
+                )
+
+    turn = task.turns[turn_index]
+    if turn.tool_result:
+        items.extend(responses_tool_items(task.name, turn_index, turn))
+    prompt = turn.prompt
+    if turn.expected_terms:
+        prompt = prompt + "\n\n" + scoring_instruction(turn.expected_terms)
+    items.append(responses_message("user", prompt))
+    return items
+
+
 def build_body(
     args: argparse.Namespace,
     task: TaskSpec,
     turn_index: int,
     previous_response_id: str,
 ) -> dict[str, Any]:
+    if args.protocol == "chat":
+        return {
+            "model": args.model,
+            "messages": build_messages(task, turn_index),
+            "temperature": args.temperature,
+            "max_tokens": args.max_tokens,
+        }
+
+    use_lineage = args.continuation_mode == "previous-response-id"
     body = {
         "model": args.model,
-        "messages": build_messages(task, turn_index),
+        "instructions": SYSTEM_INSTRUCTIONS,
+        "input": responses_turn_items(
+            task, turn_index, include_history=not use_lineage
+        ),
         "temperature": args.temperature,
-        "max_tokens": args.max_tokens,
+        "max_output_tokens": args.max_tokens,
     }
-    if args.include_previous_response_id and previous_response_id:
+    if use_lineage and previous_response_id:
         body["previous_response_id"] = previous_response_id
     return body
 
 
-def send_chat(
+def send_request(
     args: argparse.Namespace,
     task: TaskSpec,
     turn_index: int,
@@ -2016,8 +2122,8 @@ def send_chat(
     previous_response_id: str,
 ) -> dict[str, Any]:
     if args.dry_run:
-        return dry_response(task, turn_index)
-    url = args.base_url.rstrip("/") + "/chat/completions"
+        return dry_response(args.protocol, task, turn_index)
+    url = request_url(args.base_url, args.protocol)
     body = json.dumps(build_body(args, task, turn_index, previous_response_id)).encode(
         "utf-8"
     )
@@ -2048,6 +2154,11 @@ def send_chat(
         }
 
 
+def request_url(base_url: str, protocol: str) -> str:
+    endpoint = "chat/completions" if protocol == "chat" else "responses"
+    return base_url.rstrip("/") + "/" + endpoint
+
+
 def response_record(
     status: int, headers: dict[str, str], payload: str, started: float
 ) -> dict[str, Any]:
@@ -2067,9 +2178,41 @@ def response_record(
     }
 
 
-def dry_response(task: TaskSpec, turn_index: int) -> dict[str, Any]:
+def dry_response(protocol: str, task: TaskSpec, turn_index: int) -> dict[str, Any]:
     turn = task.turns[turn_index]
     content = " ".join(turn.expected_terms) if turn.expected_terms else "Acknowledged."
+    if protocol == "responses":
+        response_json = {
+            "id": f"dry_{task.name}_{turn_index}",
+            "object": "response",
+            "model": "dry-model",
+            "status": "completed",
+            "output": [
+                {
+                    "id": f"msg_dry_{task.name}_{turn_index}",
+                    "type": "message",
+                    "role": "assistant",
+                    "status": "completed",
+                    "content": [
+                        {"type": "output_text", "text": content, "annotations": []}
+                    ],
+                }
+            ],
+            "usage": {
+                "input_tokens": 100,
+                "output_tokens": 10,
+                "input_tokens_details": {"cached_tokens": 0},
+                "output_tokens_details": {"reasoning_tokens": 0},
+                "total_tokens": 110,
+            },
+        }
+    else:
+        response_json = {
+            "id": f"dry_{task.name}_{turn_index}",
+            "model": "dry-model",
+            "choices": [{"message": {"content": content}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 10},
+        }
     return {
         "status": HTTP_OK,
         "headers": {
@@ -2079,13 +2222,11 @@ def dry_response(task: TaskSpec, turn_index: int) -> dict[str, Any]:
             "x-vsr-selected-confidence": "0.0000",
             "x-vsr-replay-id": f"dry-replay-{task.name}-{turn_index}",
             "x-vsr-context-token-count": "42",
+            "x-vsr-routing-latency-ms": "0.250",
+            "x-vsr-cost": "0.00001",
+            "x-vsr-cost-currency": "USD",
         },
-        "json": {
-            "id": f"dry_{task.name}_{turn_index}",
-            "model": "dry-model",
-            "choices": [{"message": {"content": content}}],
-            "usage": {"prompt_tokens": 100, "completion_tokens": 10},
-        },
+        "json": response_json,
         "payload": "",
         "latency_ms": 1.0,
         "error": "",
@@ -2110,7 +2251,7 @@ def run_tasks(args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str,
             previous_response_id = ""
             previous_selected_model = ""
             for turn_index, turn in enumerate(task.turns):
-                result = send_chat(
+                result = send_request(
                     args, task, turn_index, session_id, previous_response_id
                 )
                 row = row_from_result(
@@ -2129,7 +2270,7 @@ def run_tasks(args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str,
                 previous_response_id = response_id(result)
                 if row["selected_model"]:
                     previous_selected_model = row["selected_model"]
-    elapsed = time.perf_counter() - started
+    elapsed = float(len(rows)) if args.dry_run else time.perf_counter() - started
     return rows, summarize(rows, elapsed, args.label)
 
 
@@ -2157,7 +2298,9 @@ def row_from_result(
     selected_model = selected_model_from(result)
     status = int(result.get("status") or 0)
     previous_response_id_sent = bool(
-        args.include_previous_response_id and previous_response_id
+        args.protocol == "responses"
+        and args.continuation_mode == "previous-response-id"
+        and previous_response_id
     )
     switched = bool(
         previous_selected_model
@@ -2174,8 +2317,11 @@ def row_from_result(
         "task_suite": task.suite,
         "task_instance": f"r{task_repetition:02d}:{task.name}",
         "session_id": session_id,
+        "turn_identity": f"{session_id}:turn-{turn_index:03d}",
         "turn": turn_index,
         "phase": turn.phase,
+        "protocol": args.protocol,
+        "continuation_mode": args.continuation_mode,
         "status": status,
         "success": HTTP_OK <= status < HTTP_REDIRECT_START,
         "latency_ms": round(float(result.get("latency_ms") or 0), 3),
@@ -2185,10 +2331,20 @@ def row_from_result(
         "tool_loop_switch_violation": turn.phase == "tool_loop" and switched,
         "context_portability_violation": previous_response_id_sent and switched,
         "previous_response_id_sent": previous_response_id_sent,
+        "previous_response_id": (
+            previous_response_id if previous_response_id_sent else ""
+        ),
         "response_id": response_json.get("id", ""),
-        "prompt_tokens": usage_value(response_json, "prompt_tokens"),
-        "completion_tokens": usage_value(response_json, "completion_tokens"),
+        "prompt_tokens": usage_value(response_json, "prompt_tokens", "input_tokens"),
+        "completion_tokens": usage_value(
+            response_json, "completion_tokens", "output_tokens"
+        ),
         "cached_tokens": cached_tokens(response_json),
+        "reasoning_tokens": reasoning_tokens(response_json),
+        "finish_reason": finish_reason(response_json),
+        "routing_latency_ms": header_float(result, "x-vsr-routing-latency-ms"),
+        "cost": header_float(result, "x-vsr-cost"),
+        "cost_currency": (result.get("headers") or {}).get("x-vsr-cost-currency", ""),
         "answer_score": score,
         "missing_terms": ",".join(missing),
         "answer_excerpt": answer_excerpt(content),
@@ -2208,6 +2364,26 @@ def selected_model_from(result: dict[str, Any]) -> str:
 
 
 def response_content(response_json: dict[str, Any]) -> str:
+    output_text = response_json.get("output_text")
+    if isinstance(output_text, str) and output_text:
+        return output_text
+    output = response_json.get("output")
+    if isinstance(output, list):
+        texts: list[str] = []
+        for item in output:
+            if not isinstance(item, dict) or item.get("type") != "message":
+                continue
+            parts = item.get("content")
+            if not isinstance(parts, list):
+                continue
+            for part in parts:
+                if (
+                    isinstance(part, dict)
+                    and part.get("type") == "output_text"
+                    and isinstance(part.get("text"), str)
+                ):
+                    texts.append(part["text"])
+        return "\n".join(texts)
     choices = response_json.get("choices")
     if not isinstance(choices, list) or not choices:
         return ""
@@ -2239,18 +2415,59 @@ def response_id(result: dict[str, Any]) -> str:
     return value if isinstance(value, str) else ""
 
 
-def usage_value(response_json: dict[str, Any], key: str) -> int:
+def usage_value(response_json: dict[str, Any], *keys: str) -> int:
     usage = response_json.get("usage") or {}
-    value = usage.get(key) if isinstance(usage, dict) else 0
-    return int(value or 0)
+    if not isinstance(usage, dict):
+        return 0
+    for key in keys:
+        value = usage.get(key)
+        if value is not None:
+            return int(value or 0)
+    return 0
 
 
 def cached_tokens(response_json: dict[str, Any]) -> int:
     usage = response_json.get("usage") if isinstance(response_json, dict) else {}
-    details = usage.get("prompt_tokens_details", {}) if isinstance(usage, dict) else {}
+    details = {}
+    if isinstance(usage, dict):
+        details = usage.get("prompt_tokens_details") or usage.get(
+            "input_tokens_details", {}
+        )
     if not isinstance(details, dict):
         return 0
     return int(details.get("cached_tokens") or 0)
+
+
+def reasoning_tokens(response_json: dict[str, Any]) -> int:
+    usage = response_json.get("usage") if isinstance(response_json, dict) else {}
+    details = {}
+    if isinstance(usage, dict):
+        details = usage.get("completion_tokens_details") or usage.get(
+            "output_tokens_details", {}
+        )
+    if not isinstance(details, dict):
+        return 0
+    return int(details.get("reasoning_tokens") or 0)
+
+
+def finish_reason(response_json: dict[str, Any]) -> str:
+    choices = response_json.get("choices")
+    if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+        return str(choices[0].get("finish_reason") or "")
+    status = response_json.get("status")
+    if status == "incomplete":
+        details = response_json.get("incomplete_details") or {}
+        if isinstance(details, dict) and details.get("reason"):
+            return str(details["reason"])
+    return str(status or "")
+
+
+def header_float(result: dict[str, Any], header: str) -> float | None:
+    value = (result.get("headers") or {}).get(header, "")
+    try:
+        return float(value) if value else None
+    except ValueError:
+        return None
 
 
 def summarize(
@@ -2275,6 +2492,10 @@ def summarize(
         "scored_task_count": len(scored_task_names),
         "scored_task_names": scored_task_names,
         "task_suites": counts(row.get("task_suite", "") for row in rows),
+        "protocols": counts(row["protocol"] for row in rows if row.get("protocol")),
+        "continuation_modes": counts(
+            row["continuation_mode"] for row in rows if row.get("continuation_mode")
+        ),
         "successes": sum(1 for row in rows if row["success"]),
         "success_rate": (
             round(sum(1 for row in rows if row["success"]) / len(rows), 4)
@@ -2307,6 +2528,23 @@ def summarize(
         "cached_prompt_ratio": (
             round(cached / prompt_tokens, 4) if prompt_tokens else None
         ),
+        "reasoning_tokens": sum(int(row.get("reasoning_tokens") or 0) for row in rows),
+        "finish_reason_counts": counts(
+            row["finish_reason"] for row in rows if row.get("finish_reason")
+        ),
+        "truncated_requests": sum(
+            1
+            for row in rows
+            if row.get("finish_reason") in ("length", "max_output_tokens")
+        ),
+        "routing_latency_ms": latency_summary(
+            [
+                float(row["routing_latency_ms"])
+                for row in rows
+                if row.get("routing_latency_ms") is not None
+            ]
+        ),
+        "cost": cost_summary(rows),
         "phase_counts": counts(row["phase"] for row in rows),
         "selected_model_counts": counts(
             row["selected_model"] for row in rows if row["selected_model"]
@@ -2364,6 +2602,12 @@ def valid_router_header_value(header: str, value: str) -> bool:
     if header == "x-vsr-context-token-count":
         try:
             parsed = int(value)
+        except ValueError:
+            return False
+        return parsed >= 0
+    if header in NON_NEGATIVE_NUMBER_HEADERS:
+        try:
+            parsed = float(value)
         except ValueError:
             return False
         return parsed >= 0
@@ -2467,6 +2711,86 @@ def percentile(ordered: list[float], pct: float) -> float:
     return ordered[lower] * (1 - weight) + ordered[upper] * weight
 
 
+def cost_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    totals: dict[str, float] = {}
+    counts: dict[str, int] = {}
+    for row in rows:
+        if row.get("cost") is None:
+            continue
+        currency = row.get("cost_currency") or "unknown"
+        totals[currency] = totals.get(currency, 0.0) + float(row["cost"])
+        counts[currency] = counts.get(currency, 0) + 1
+    priced = sum(counts.values())
+    return {
+        "basis": COST_BASIS,
+        "total": {key: round(value, 8) for key, value in sorted(totals.items())},
+        "mean_per_priced_request": {
+            key: round(value / counts[key], 8) for key, value in sorted(totals.items())
+        },
+        "priced_requests_by_currency": dict(sorted(counts.items())),
+        "priced_requests": priced,
+        "unpriced_requests": len(rows) - priced,
+    }
+
+
+def parse_metrics_text(text: str) -> MetricSamples:
+    samples: MetricSamples = {}
+    for line in text.splitlines():
+        match = METRIC_SAMPLE.match(line)
+        if not match or not match.group(1).startswith(
+            (COST_METRIC, ROUTING_LATENCY_METRIC)
+        ):
+            continue
+        try:
+            value = float(match.group(3))
+        except ValueError:
+            continue
+        labels = tuple(sorted(METRIC_LABEL.findall(match.group(2) or "")))
+        samples[(match.group(1), labels)] = value
+    return samples
+
+
+def read_router_metrics(args: argparse.Namespace) -> MetricSamples | None:
+    """Scrape router /metrics; it's optional, so a failure only warns."""
+    if not args.router_metrics_url or args.dry_run:
+        return None
+    try:
+        with urllib.request.urlopen(
+            args.router_metrics_url, timeout=args.timeout
+        ) as response:
+            return parse_metrics_text(response.read().decode("utf-8", errors="replace"))
+    except Exception as exc:  # pragma: no cover - network errors vary by platform
+        print(f"warning: could not read router metrics: {exc}", file=sys.stderr)
+        return None
+
+
+def metrics_delta(before: MetricSamples, after: MetricSamples) -> dict[str, Any]:
+    """What the router recorded between two scrapes, including any other traffic."""
+    cost_by_model: dict[str, dict[str, float]] = {}
+    for (name, labels), value in after.items():
+        if name != COST_METRIC:
+            continue
+        spent = value - before.get((name, labels), 0.0)
+        if spent <= 0:
+            continue
+        label_map = dict(labels)
+        model_costs = cost_by_model.setdefault(label_map.get("model", ""), {})
+        model_costs[label_map.get("currency", "")] = round(spent, 8)
+
+    def diff(suffix: str) -> float:
+        key = (ROUTING_LATENCY_METRIC + suffix, ())
+        return after.get(key, 0.0) - before.get(key, 0.0)
+
+    decisions = diff("_count")
+    return {
+        "cost_by_model": dict(sorted(cost_by_model.items())),
+        "routing_decisions": int(decisions),
+        "routing_latency_ms_mean": (
+            round(diff("_sum") / decisions * 1000, 3) if decisions > 0 else None
+        ),
+    }
+
+
 def write_outputs(
     rows: list[dict[str, Any]], summary: dict[str, Any], output_dir: Path
 ) -> None:
@@ -2509,11 +2833,14 @@ def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
 
 def render_markdown(summary: dict[str, Any]) -> str:
     latency = summary["latency_ms"]
+    routing = summary.get("routing_latency_ms") or {}
     return "\n".join(
         [
             "# Live Agent Task Benchmark",
             "",
             f"- label: {summary['label']}",
+            f"- protocols: {summary.get('protocols', {})}",
+            f"- continuation modes: {summary.get('continuation_modes', {})}",
             f"- requests: {summary['requests']}",
             f"- tasks: {summary['task_count']}",
             f"- request success rate: {summary['success_rate']}",
@@ -2526,6 +2853,12 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"- missing router headers: {summary['missing_router_header_counts']}",
             f"- invalid router headers: {summary['invalid_router_header_counts']}",
             f"- cached prompt ratio: {summary['cached_prompt_ratio']}",
+            f"- selected models: {summary.get('selected_model_counts', {})}",
+            f"- routing latency p50/p95 ms: {routing.get('p50')} / {routing.get('p95')}",
+            f"- cost ({COST_BASIS}): {summary.get('cost', {}).get('total')}",
+            "- truncated requests (length or max_output_tokens): "
+            f"{summary.get('truncated_requests')}",
+            f"- router metrics: {summary.get('router_metrics')}",
             f"- validation failures: {summary.get('validation_failures', [])}",
             "",
         ]
@@ -2538,6 +2871,10 @@ def compare_summaries(
     return {
         "router_label": router_summary["label"],
         "baseline_label": baseline_summary["label"],
+        "router_protocols": router_summary.get("protocols", {}),
+        "baseline_protocols": baseline_summary.get("protocols", {}),
+        "router_continuation_modes": router_summary.get("continuation_modes", {}),
+        "baseline_continuation_modes": baseline_summary.get("continuation_modes", {}),
         "requests": {
             "router": router_summary["requests"],
             "baseline": baseline_summary["requests"],
@@ -2612,6 +2949,12 @@ def render_comparison_markdown(comparison: dict[str, Any]) -> str:
             "",
             f"- router label: {comparison['router_label']}",
             f"- baseline label: {comparison['baseline_label']}",
+            f"- router protocols: {comparison.get('router_protocols', {})}",
+            f"- baseline protocols: {comparison.get('baseline_protocols', {})}",
+            "- router continuation modes: "
+            f"{comparison.get('router_continuation_modes', {})}",
+            "- baseline continuation modes: "
+            f"{comparison.get('baseline_continuation_modes', {})}",
             f"- success rate delta: {comparison['success_rate_delta']}",
             f"- task success rate delta: {comparison['task_success_rate_delta']}",
             f"- mean final score delta: {comparison['mean_final_score_delta']}",
@@ -2633,7 +2976,11 @@ def namespace_with(args: argparse.Namespace, **overrides: Any) -> argparse.Names
 def main() -> int:
     args = parse_args()
     output_dir = args.output_dir or default_output_dir()
+    metrics_before = read_router_metrics(args)
     rows, summary = run_tasks(args)
+    metrics_after = read_router_metrics(args) if metrics_before is not None else None
+    if metrics_before is not None and metrics_after is not None:
+        summary["router_metrics"] = metrics_delta(metrics_before, metrics_after)
     attach_evidence_identity(summary, args)
 
     baseline_summary = None
@@ -2645,7 +2992,10 @@ def main() -> int:
             base_url=args.baseline_base_url,
             model=args.baseline_model or args.model,
             label=args.baseline_label,
-            include_previous_response_id=args.baseline_include_previous_response_id,
+            protocol=args.baseline_protocol or args.protocol,
+            continuation_mode=(
+                args.baseline_continuation_mode or args.continuation_mode
+            ),
             evidence_ref="",
             evidence_image_tag="",
         )

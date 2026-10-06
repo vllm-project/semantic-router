@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import clsx from 'clsx'
 import Translate, { translate } from '@docusaurus/Translate'
 import Link from '@docusaurus/Link'
+import ThemedImage from '@theme/ThemedImage'
 import useBaseUrl from '@docusaurus/useBaseUrl'
 import Claude from '@lobehub/icons/es/Claude/components/Mono'
 import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
@@ -299,18 +300,21 @@ function QueryColumn({
 }
 
 function RouterPipeline({
-  logoSrc,
   activeQuery,
   onStageRef,
 }: {
-  logoSrc: string
   activeQuery: IncomingQuery
   onStageRef: (stageId: string, node: HTMLLIElement | null) => void
 }): JSX.Element {
+  const logoSources = {
+    light: useBaseUrl('/img/vllm-sr-logo.light.png'),
+    dark: useBaseUrl('/img/vllm-sr-logo.white.png'),
+  }
+
   return (
     <div className={styles.routerPipeline}>
       <header className={styles.pipelineHeader}>
-        <img src={logoSrc} alt="vLLM Semantic Router" />
+        <ThemedImage sources={logoSources} alt="vLLM Semantic Router" />
         <div>
           <span>
             <Translate id="homepage.integration.pipeline.eyebrow">System Level Intelligence</Translate>
@@ -482,9 +486,9 @@ function RoutingAnimation({
         <svg className={styles.flowLines} viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} preserveAspectRatio="none">
           <defs>
             <linearGradient id="integrationFlowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#75c5ff" stopOpacity="0.55" />
-              <stop offset="50%" stopColor="#30a2ff" stopOpacity="1" />
-              <stop offset="100%" stopColor="#0876c9" stopOpacity="0.75" />
+              <stop offset="0%" stopColor="var(--site-accent-strong)" stopOpacity="0.55" />
+              <stop offset="50%" stopColor="var(--site-accent)" stopOpacity="1" />
+              <stop offset="100%" stopColor="var(--site-brand-blue-deep)" stopOpacity="0.75" />
             </linearGradient>
             <filter id="integrationPacketGlow" x="-300%" y="-300%" width="700%" height="700%">
               <feGaussianBlur stdDeviation="3.2" result="blur" />
@@ -573,7 +577,6 @@ export default function IntegrationArchitecture(): JSX.Element {
   const [activeQueryIndex, setActiveQueryIndex] = useState(0)
   const [isAutoCycling, setIsAutoCycling] = useState(true)
   const [layout, setLayout] = useState<RouteLayout | null>(null)
-  const logoSrc = useBaseUrl('/img/vllm-sr-logo.white.png')
   const diagramRef = useRef<HTMLDivElement | null>(null)
   const queryRowRefs = useRef<Record<string, HTMLLIElement | null>>({})
   const stageRowRefs = useRef<Record<string, HTMLLIElement | null>>({})
@@ -761,7 +764,6 @@ export default function IntegrationArchitecture(): JSX.Element {
                 onRowRef={handleQueryRowRef}
               />
               <RouterPipeline
-                logoSrc={logoSrc}
                 activeQuery={activeQuery}
                 onStageRef={handleStageRowRef}
               />

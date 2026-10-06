@@ -1,26 +1,18 @@
 version: v0.3
 providers:
   defaults:
-    default_model: deepseek-v3
-    reasoning_families:
-      deepseek:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: high
+    model: deepseek-v3
+    reasoning_effort: high
   models:
     - name: deepseek-v3
-      reasoning_family: deepseek
+      reasoning:
+        family: deepseek
       pricing:
         prompt_per_1m: 0.27
         completion_per_1m: 1.1
     - name: deepseek-r1
-      reasoning_family: deepseek
+      reasoning:
+        family: deepseek
       pricing:
         prompt_per_1m: 0.55
         completion_per_1m: 2.2
@@ -120,8 +112,6 @@ global:
       metrics:
         windowed_metrics:
           enabled: false
-          model_metrics: false
-          queue_depth_estimation: false
       profiling:
         enabled: false
     authz: {}
@@ -129,11 +119,13 @@ global:
     management_api: {}
     router_replay:
       enabled: false
+      ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
       enabled: false
+      ttl_seconds: 0
     memory: {}
   integrations:
     tools:
@@ -148,9 +140,7 @@ global:
     embeddings:
       semantic:
         qwen3_model_path: ""
-        gemma_model_path: ""
         mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
-        bert_model_path: ""
         use_cpu: true
         embedding_config:
           model_type: mmbert
@@ -165,6 +155,11 @@ global:
       domain_classifier: models/mmbert32k-intent-classifier-merged
       pii_classifier: models/mmbert32k-pii-detector-merged
     modules:
+      safety:
+        safety:
+          use_cpu: false
+        hazard:
+          use_cpu: false
       prompt_compression:
         enabled: false
         max_tokens: 0
@@ -174,14 +169,12 @@ global:
         threshold: 0.7
         use_cpu: true
         jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-        variant: mmbert32k
         model_ref: prompt_guard
       classifier:
         domain:
           model_id: ""
           threshold: 0.5
           use_cpu: true
-          variant: mmbert32k
           category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
           model_ref: domain_classifier
         mcp:
@@ -192,7 +185,6 @@ global:
           model_id: ""
           threshold: 0.9
           use_cpu: true
-          use_mmbert_32k: true
           pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
           model_ref: pii_classifier
         preference: {}
@@ -202,12 +194,7 @@ global:
           model_id: ""
           threshold: 0
           use_cpu: false
-          use_mmbert_32k: false
         detector:
-          model_id: ""
-          threshold: 0
-          use_cpu: false
-        explainer:
           model_id: ""
           threshold: 0
           use_cpu: false
@@ -216,8 +203,6 @@ global:
         model_id: ""
         threshold: 0
         use_cpu: false
-        use_modernbert: false
-        use_mmbert_32k: false
         feedback_mapping_path: ""
       modality_detector:
         enabled: false

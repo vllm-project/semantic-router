@@ -7,7 +7,6 @@ import {
   filterSetupModels,
   getModelDraftFieldErrors,
   paginateSetupModels,
-  PROVIDER_OPTIONS,
   SETUP_MODELS_PER_PAGE,
   SETUP_STEP_LABELS,
   type ImportedSetupConfig,
@@ -21,6 +20,7 @@ import {
   type SetupRoutingMode,
   type SetupStep,
 } from "./setupWizardSupport";
+import { SETUP_PROVIDER_OPTIONS } from "./setupWizardProviderCatalog";
 
 interface RouteSummaryProps {
   currentRouteLabel: string;
@@ -284,7 +284,7 @@ export function ModelStepPanel({
       <div className={styles.modelList} aria-label="Connected models">
         {modelPage.items.map((model) => {
           const index = models.findIndex((candidate) => candidate.id === model.id);
-          const providerMeta = PROVIDER_OPTIONS.find(
+          const providerMeta = SETUP_PROVIDER_OPTIONS.find(
             (option) => option.id === model.providerKind,
           );
           const fieldErrors = fieldErrorsByModelId[model.id] ?? {};
@@ -368,7 +368,7 @@ export function ModelStepPanel({
                       )
                     }
                   >
-                    {PROVIDER_OPTIONS.map((option) => (
+                    {SETUP_PROVIDER_OPTIONS.map((option) => (
                       <option key={option.id} value={option.id}>
                         {option.label}
                       </option>

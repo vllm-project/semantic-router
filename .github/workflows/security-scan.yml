@@ -1,35 +1,45 @@
-name: Core Security
+name: Security
 
 on:
   workflow_call:
+    inputs:
+      verification:
+        type: string
+        default: ""
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
 
 permissions:
   contents: read
 
 jobs:
-  ast-security-scan:
-    name: AST supply chain security scan
-    runs-on: ubuntu-latest
+  security:
+    name: Code and Infrastructure Scans
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
     steps:
-      - name: Check out trusted scanner
+      - name: Check Out Trusted Scanner
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
           path: base
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check out pull request as data
+      - name: Check Out Planned Source as Data
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.sha }}
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
           path: pr-code
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Pin trusted scanner policy
+      - name: Pin Trusted Scanner Policy
         run: |
           if [ -f base/tools/security/ast-scan-allowlist.txt ]; then
             mkdir -p pr-code/tools/security
@@ -41,9 +51,9 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
-      - name: Install tree-sitter dependencies
+      - name: Install Scanner Dependencies
         run: |
           pip install \
             tree-sitter==0.25.2 \
@@ -53,15 +63,16 @@ jobs:
             tree-sitter-go==0.25.0 \
             tree-sitter-rust==0.24.0
 
-      - name: Test trusted AST scanner
+      - name: Test Trusted AST Scanner
         run: python3 base/tools/security/test_ast_security_scanner.py
 
-      - name: Run trusted AST codebase scan
+      - name: Scan Codebase with Trusted AST Scanner
         run: |
           python3 base/tools/security/ast_security_scanner.py \
             scan pr-code --fail-on HIGH
 
-      - name: Run trusted AST pull request diff scan
+      - name: Scan Pull Request Diff with Trusted AST Scanner
+        if: github.event_name == 'pull_request'
         run: |
           git -C pr-code remote add base \
             "${GITHUB_SERVER_URL}/${{ github.repository }}.git"
@@ -73,8 +84,123 @@ jobs:
 
       # Keep the legacy regex scanner advisory: it reports known baseline
       # false positives, while the AST codebase and PR-diff scans above gate HIGH.
-      - name: Run trusted regex fallback scan
+      - name: Run Advisory Regex Scan
         continue-on-error: true
         run: |
           python3 base/tools/security/scan_malicious_code.py \
             pr-code --fail-on HIGH
+
+      - name: Set Up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Render Maintained Helm Resources
+        working-directory: pr-code
+        shell: bash
+        run: |
+          mkdir -p .agent-harness/security/iac
+          make helm-ci-setup HELM_REPO_UPDATE=true
+
+          # Keep this repository's SARIF scoped to the resources maintained in
+          # this chart. Enabled dependency charts retain their own upstream
+          # security policy and would otherwise dominate the production render.
+          render_first_party() {
+            local excluded_source="${1:-}"
+            awk -v excluded_source="$excluded_source" '
+              function emit_document() {
+                if (keep && source != excluded_source) {
+                  printf "%s", document
+                }
+              }
+              /^---$/ {
+                emit_document()
+                document = $0 ORS
+                keep = 0
+                source = ""
+                next
+              }
+              {
+                document = document $0 ORS
+                if ($0 ~ /^# Source: semantic-router\/templates\//) {
+                  source = $0
+                  sub(/^# Source: semantic-router\/templates\//, "", source)
+                  keep = 1
+                }
+              }
+              END {
+                emit_document()
+              }
+            '
+          }
+
+          helm template security-default deploy/helm/semantic-router \
+            --namespace vllm-semantic-router-system \
+            | render_first_party \
+            > .agent-harness/security/iac/router-default.yaml
+          helm template security-production deploy/helm/semantic-router \
+            -f deploy/helm/semantic-router/values-prod.yaml \
+            --namespace vllm-semantic-router-system \
+            | render_first_party dashboard-deployment.yaml \
+            > .agent-harness/security/iac/router-production.yaml
+          helm template security-production deploy/helm/semantic-router \
+            -f deploy/helm/semantic-router/values-prod.yaml \
+            --namespace vllm-semantic-router-system \
+            --show-only templates/dashboard-deployment.yaml \
+            > .agent-harness/security/iac/dashboard-production.yaml
+
+          grep -q '# Source: semantic-router/templates/deployment.yaml' \
+            .agent-harness/security/iac/router-default.yaml
+          grep -q '# Source: semantic-router/templates/deployment.yaml' \
+            .agent-harness/security/iac/router-production.yaml
+          grep -q '# Source: semantic-router/templates/dashboard-deployment.yaml' \
+            .agent-harness/security/iac/dashboard-production.yaml
+
+      - name: Generate Trivy SARIF
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          scan-type: config
+          scan-ref: pr-code/.agent-harness/security/iac
+          format: sarif
+          output: pr-code/trivy-results.sarif
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          exit-code: "0"
+          trivyignores: pr-code/tools/security/trivy-iac.yaml
+
+      - name: Enforce High and Critical IaC Findings
+        working-directory: pr-code
+        run: |
+          trivy config \
+            --exit-code 1 \
+            --severity HIGH,CRITICAL \
+            --ignorefile tools/security/trivy-iac.yaml \
+            .agent-harness/security/iac
+
+      - name: Upload Trivy Results
+        if: >-
+          always()
+          && hashFiles('pr-code/trivy-results.sarif') != ''
+          && (github.event_name != 'pull_request'
+            || (github.event.pull_request.head.repo.full_name == github.repository
+              && github.actor != 'dependabot[bot]'))
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: pr-code/trivy-results.sarif
+          category: trivy/helm-router
+
+      - name: Record Security Evidence
+        if: inputs.verification != ''
+        working-directory: pr-code
+        env:
+          VERIFICATION: ${{ inputs.verification }}
+        run: |
+          python3 -m pip install PyYAML==6.0.3
+          python3 tools/ci/workflow_evidence.py --verification "$VERIFICATION" \
+            --check trusted-ast-scanner-contracts --check trusted-ast-codebase-scan \
+            --check rendered-helm-iac-scan --output .agent-harness/security-result.json
+      - uses: actions/upload-artifact@v4
+        if: inputs.verification != ''
+        with:
+          name: ci-result-security
+          path: pr-code/.agent-harness/security-result.json
+          include-hidden-files: true
+          if-no-files-found: error

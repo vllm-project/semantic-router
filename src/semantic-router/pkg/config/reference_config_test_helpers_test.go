@@ -127,24 +127,6 @@ func normalizeSliceItems(t testingT, items interface{}, path string) []interface
 	}
 }
 
-func mapValuesToSlice(t testingT, value map[string]interface{}, path string) []interface{} {
-	t.Helper()
-	keys := make([]string, 0, len(value))
-	for key := range value {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	result := make([]interface{}, 0, len(keys))
-	for _, key := range keys {
-		result = append(result, value[key])
-	}
-	if len(result) == 0 {
-		t.Fatalf("%s is empty", path)
-	}
-	return result
-}
-
 func assertMapCoversStructFields(t testingT, node map[string]interface{}, typ reflect.Type, path string, skip ...string) {
 	t.Helper()
 	for _, field := range requiredYAMLFields(t, typ, skip...) {

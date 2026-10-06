@@ -1,0 +1,210 @@
+/*
+Copyright 2025 vLLM Semantic Router.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package selection
+
+import (
+	"math"
+	"strconv"
+	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
+)
+
+func normalizeMultiFactorObjective(objective *MultiFactorObjective) {
+	if objective.Strategy == "" {
+		objective.Strategy = config.MultiFactorObjectiveWeighted
+	}
+	if objective.Strategy != config.MultiFactorObjectiveLexicographic {
+		objective.Strategy = config.MultiFactorObjectiveWeighted
+		objective.Priorities = nil
+		return
+	}
+	if len(objective.Priorities) == 0 {
+		objective.Priorities = []MultiFactorPriority{
+			{Factor: config.MultiFactorFactorQuality},
+			{Factor: config.MultiFactorFactorCost},
+			{Factor: config.MultiFactorFactorLatency},
+			{Factor: config.MultiFactorFactorLoad},
+		}
+	}
+	for index := range objective.Priorities {
+		objective.Priorities[index].Tolerance = math.Max(0, math.Min(1, objective.Priorities[index].Tolerance))
+	}
+}
+
+func (s *MultiFactorSelector) chooseCandidate(
+	signals []signalSet,
+	mins, maxs extrema,
+) (int, CandidateScores, float64, float64, []int, *selectiontrace.MultiFactorObjective) {
+	var bestIndex int
+	var candidateScores []float64
+	var bestScore, secondBest float64
+	var survivors []int
+	var trace *selectiontrace.MultiFactorObjective
+	if s.config.Objective.Strategy == config.MultiFactorObjectiveLexicographic {
+		bestIndex, candidateScores, bestScore, secondBest, survivors, trace = s.chooseLexicographic(signals)
+	} else {
+		bestIndex, candidateScores, bestScore, secondBest = s.chooseWeighted(signals, mins, maxs)
+	}
+	scores := make(CandidateScores, len(signals))
+	for i, signal := range signals {
+		scores[i] = CandidateScore{Candidate: signal.candidate, Score: candidateScores[i]}
+		if signal.hasQ {
+			scores[i].Evidence = signal.evidence
+		}
+	}
+	if winner := scores.Best(HigherIsBetter, s.qualityRelevant()); winner >= 0 {
+		bestIndex = winner
+	}
+	return bestIndex, scores, bestScore, secondBest, survivors, trace
+}
+
+func (s *MultiFactorSelector) chooseWeighted(
+	signals []signalSet,
+	mins, maxs extrema,
+) (int, []float64, float64, float64) {
+	candidateScores := make([]float64, len(signals))
+	bestIndex := 0
+	bestScore := math.Inf(-1)
+	secondBest := math.Inf(-1)
+	for index, signal := range signals {
+		score := s.scoreCandidate(signal, mins, maxs)
+		candidateScores[index] = score
+		if score > bestScore {
+			secondBest = bestScore
+			bestScore = score
+			bestIndex = index
+		} else if score > secondBest {
+			secondBest = score
+		}
+	}
+	return bestIndex, candidateScores, bestScore, secondBest
+}
+
+func (s *MultiFactorSelector) chooseLexicographic(
+	signals []signalSet,
+) (int, []float64, float64, float64, []int, *selectiontrace.MultiFactorObjective) {
+	active := make([]int, len(signals))
+	for index := range signals {
+		active[index] = index
+	}
+	candidateScores := make([]float64, len(signals))
+	trace := &selectiontrace.MultiFactorObjective{Stages: make([]selectiontrace.ObjectiveStage, 0, len(s.config.Objective.Priorities))}
+	denominator := float64(len(s.config.Objective.Priorities) + 1)
+	for stage, priority := range s.config.Objective.Priorities {
+		stageTrace := s.objectiveStageTrace(priority, signals, active)
+		if stageTrace.Action == selectiontrace.StageSkipped {
+			trace.Stages = append(trace.Stages, stageTrace)
+			continue
+		}
+		best := 0.0
+		bestSet := false
+		higherIsBetter := false
+		values := make(map[int]float64, len(active))
+		for _, index := range active {
+			value, available, higher := factorValue(signals[index], priority.Factor)
+			if !available {
+				continue
+			}
+			values[index] = value
+			higherIsBetter = higher
+			if !bestSet || (higher && value > best) || (!higher && value < best) {
+				best = value
+				bestSet = true
+			}
+		}
+		retained := make([]int, 0, len(active))
+		for position, index := range active {
+			value, available := values[index]
+			if available && withinRelativeTolerance(value, best, higherIsBetter, priority.Tolerance) {
+				retained = append(retained, index)
+				continue
+			}
+			candidateScores[index] = float64(stage) / denominator
+			stageTrace.Candidates[position].EliminationReason = selectiontrace.OutsideTolerance
+			if !available {
+				stageTrace.Candidates[position].EliminationReason = selectiontrace.MissingMeasurement
+			}
+		}
+		trace.Stages = append(trace.Stages, stageTrace)
+		active = retained
+		if len(active) == 1 {
+			break
+		}
+	}
+	for _, index := range active {
+		candidateScores[index] = 1
+		trace.FinalSurvivors = append(trace.FinalSurvivors, traceCandidate(signals[index].candidate))
+	}
+	winner := active[0]
+	secondBest := math.Inf(-1)
+	for index := range signals {
+		if index == winner {
+			continue
+		}
+		secondBest = math.Max(secondBest, candidateScores[index])
+	}
+	// Preserve the actual objective survivors for downstream adaptation and
+	// protection. Scores retain eliminated candidates for diagnostics only.
+	return winner, candidateScores, 1, secondBest, active, trace
+}
+
+func factorValue(signal signalSet, factor string) (float64, bool, bool) {
+	switch factor {
+	case config.MultiFactorFactorQuality:
+		return signal.quality, signal.hasQ, true
+	case config.MultiFactorFactorLatency:
+		return signal.latency, signal.hasLat, false
+	case config.MultiFactorFactorCost:
+		return signal.cost, signal.hasCost, false
+	case config.MultiFactorFactorLoad:
+		return signal.load, true, false
+	default:
+		return 0, false, false
+	}
+}
+
+func withinRelativeTolerance(value, best float64, higherIsBetter bool, tolerance float64) bool {
+	margin := math.Abs(best) * tolerance
+	if higherIsBetter {
+		return value >= best-margin
+	}
+	return value <= best+margin
+}
+
+func multiFactorObjectiveDescription(objective MultiFactorObjective) string {
+	if objective.Strategy != config.MultiFactorObjectiveLexicographic {
+		return config.MultiFactorObjectiveWeighted
+	}
+	parts := make([]string, 0, len(objective.Priorities))
+	for _, priority := range objective.Priorities {
+		parts = append(parts, priority.Factor+"±"+formatTolerance(priority.Tolerance))
+	}
+	return config.MultiFactorObjectiveLexicographic + "[" + strings.Join(parts, ",") + "]"
+}
+
+func formatTolerance(value float64) string {
+	if value == 0 {
+		return "0"
+	}
+	return strings.TrimRight(strings.TrimRight(fmtFloat(value), "0"), ".")
+}
+
+func fmtFloat(value float64) string {
+	return strconv.FormatFloat(value, 'f', 3, 64)
+}

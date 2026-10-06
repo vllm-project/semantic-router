@@ -6,15 +6,22 @@ import {
   type ConversationPreview,
   type Message,
 } from './ChatComponentTypes'
+import type { PlaygroundErrorPresentation } from './playgroundErrorPresentation'
 
 export interface ChatComponentProps {
   endpoint?: string
+  feedbackInsightsBasePath?: string
   invocation?: PlaygroundInvocation | null
   isFullscreenMode?: boolean
   onInvocationConsumed?: () => void
 }
 
 export type ClawPlaygroundView = 'control' | 'room'
+
+export function buildFeedbackInsightsHref(basePath: string | undefined, replayId: string) {
+  const normalizedBasePath = basePath?.replace(/\/+$/, '')
+  return normalizedBasePath ? `${normalizedBasePath}/${encodeURIComponent(replayId)}` : undefined
+}
 
 export const readClawModePreference = (): boolean => {
   if (typeof window === 'undefined') return false
@@ -83,7 +90,7 @@ export const getLiveThinkingProcess = (messages: readonly Message[]): string =>
 
 export const findQueuedErrorConversationId = (
   queues: Record<string, readonly unknown[] | undefined>,
-  conversationErrors: Record<string, string>,
+  conversationErrors: Record<string, PlaygroundErrorPresentation>,
 ): string | undefined =>
   Object.keys(queues).find(
     (conversationId) =>

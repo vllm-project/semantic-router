@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -14,69 +15,19 @@ type signalDispatch struct {
 	evaluate   func()
 }
 
-func (c *Classifier) buildSignalDispatchers(
-	results *SignalResults,
-	mu *sync.Mutex,
-	textForSignal func(string) string,
-	contextText string,
-	currentUserText string,
-	priorUserMessages []string,
-	nonUserMessages []string,
-	hasPriorAssistantReply bool,
-	imgArg string,
-	imgCache *requestImageEmbeddingCache, // may be nil; both image-consuming evaluators handle nil via cache.resolve's nil-receiver fallthrough
-	convFacts ConversationFacts,
-	requestCtx context.Context,
-	requestFacts RequestFacts,
-	usedSignals map[string]bool,
-) []signalDispatch {
-	dispatchers := c.buildPrimarySignalDispatchers(
-		results,
-		mu,
-		textForSignal,
-		currentUserText,
-		priorUserMessages,
-		hasPriorAssistantReply,
-		imgArg,
-		imgCache,
-		requestCtx,
-	)
+func (c *Classifier) buildSignalDispatchers(input SignalEvaluationInput, results *SignalResults, mu *sync.Mutex, textForSignal func(string) string, mediaCache *requestMediaEmbeddingCache, usedSignals map[string]bool) []signalDispatch {
+	dispatchers := c.buildPrimarySignalDispatchers(input, results, mu, textForSignal, mediaCache)
 	dispatchers = append(dispatchers, c.buildRequestFactSignalDispatchers(
-		results,
-		mu,
-		textForSignal,
-		contextText,
-		currentUserText,
-		imgArg,
-		imgCache,
-		requestFacts,
+		results, mu, textForSignal, input.ContextText, input.CurrentUserText,
+		input.ImageURL, mediaCache, input.RequestFacts, input.RequestFacts.Context,
 	)...)
-	return append(
-		dispatchers,
-		c.buildPolicySignalDispatchers(
-			results,
-			mu,
-			textForSignal,
-			priorUserMessages,
-			nonUserMessages,
-			convFacts,
-			requestFacts,
-			usedSignals,
-		)...,
-	)
+	return append(dispatchers, c.buildPolicySignalDispatchers(
+		results, mu, textForSignal, input.PriorUserMessages, input.NonUserMessages,
+		input.ConversationFacts, input.RequestFacts, usedSignals,
+	)...)
 }
 
-func (c *Classifier) buildPrimarySignalDispatchers(
-	results *SignalResults,
-	mu *sync.Mutex,
-	textForSignal func(string) string,
-	currentUserText string,
-	priorUserMessages []string,
-	hasPriorAssistantReply bool,
-	imgArg string,
-	imgCache *requestImageEmbeddingCache,
-	requestCtx context.Context,
-) []signalDispatch {
+func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, results *SignalResults, mu *sync.Mutex, textForSignal func(string) string, mediaCache *requestMediaEmbeddingCache) []signalDispatch {
 	return []signalDispatch{
 		{
 			config.SignalTypeKeyword, "Keyword",
@@ -85,31 +36,36 @@ func (c *Classifier) buildPrimarySignalDispatchers(
 		{
 			config.SignalTypeEmbedding, "Embedding",
 			func() {
-				c.evaluateEmbeddingSignal(results, mu, textForSignal(config.SignalTypeEmbedding), imgArg, imgCache)
+				c.evaluateEmbeddingSignal(input.RequestFacts.Context, results, mu, embeddingSignalInput{Text: textForSignal(config.SignalTypeEmbedding), Image: input.ImageURL, Audio: input.Audio}, mediaCache)
 			},
 		},
 		{
 			config.SignalTypeDomain, "Domain",
-			func() { c.evaluateDomainSignal(requestCtx, results, mu, textForSignal(config.SignalTypeDomain)) },
+			func() {
+				c.evaluateDomainSignal(input.RequestFacts.Context, results, mu, textForSignal(config.SignalTypeDomain))
+			},
 		},
 		{
 			config.SignalTypeFactCheck, "Fact-check",
-			func() { c.evaluateFactCheckSignal(results, mu, textForSignal(config.SignalTypeFactCheck)) },
+			func() {
+				c.evaluateFactCheckSignal(input.RequestFacts.Context, results, mu, textForSignal(config.SignalTypeFactCheck))
+			},
 		},
 		{
 			config.SignalTypeUserFeedback, "User feedback",
 			func() {
 				c.evaluateUserFeedbackSignal(
+					input.RequestFacts.Context,
 					results,
 					mu,
 					textForSignal(config.SignalTypeUserFeedback),
-					hasPriorAssistantReply,
+					input.HasPriorAssistantReply,
 				)
 			},
 		},
 		{
 			config.SignalTypeReask, "Reask",
-			func() { c.evaluateBoundedReaskSignal(results, mu, currentUserText, priorUserMessages) },
+			func() { c.evaluateBoundedReaskSignal(results, mu, input.CurrentUserText, input.PriorUserMessages) },
 		},
 		{
 			config.SignalTypePreference, "Preference",
@@ -129,8 +85,9 @@ func (c *Classifier) buildRequestFactSignalDispatchers(
 	contextText string,
 	currentUserText string,
 	imgArg string,
-	imgCache *requestImageEmbeddingCache,
+	imgCache *requestMediaEmbeddingCache,
 	requestFacts RequestFacts,
+	requestCtx context.Context,
 ) []signalDispatch {
 	return []signalDispatch{
 		{
@@ -158,12 +115,12 @@ func (c *Classifier) buildRequestFactSignalDispatchers(
 		{
 			config.SignalTypeComplexity, "Complexity",
 			func() {
-				c.evaluateComplexitySignal(results, mu, textForSignal(config.SignalTypeComplexity), imgArg, imgCache)
+				c.evaluateComplexitySignal(requestCtx, results, mu, textForSignal(config.SignalTypeComplexity), imgArg, imgCache)
 			},
 		},
 		{
 			config.SignalTypeModality, "Modality",
-			func() { c.evaluateModalitySignal(results, mu, textForSignal(config.SignalTypeModality)) },
+			func() { c.evaluateModalitySignal(requestCtx, results, mu, textForSignal(config.SignalTypeModality)) },
 		},
 	}
 }
@@ -190,12 +147,37 @@ func boundedReaskMessages(messages []string) []string {
 	return bounded
 }
 
-func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]bool, ready map[string]bool, wg *sync.WaitGroup) {
+// modelBackedSignalTypes call model deployments; their goroutines join the
+// stage's request bundle, so the bundle flushes once all of them have parked
+// or finished. Heuristic signals never delay a flush.
+var modelBackedSignalTypes = map[string]bool{
+	config.SignalTypeDomain:       true,
+	config.SignalTypeFactCheck:    true,
+	config.SignalTypeUserFeedback: true,
+	config.SignalTypeModality:     true,
+	config.SignalTypeSafety:       true,
+	config.SignalTypeJailbreak:    true,
+	config.SignalTypePII:          true,
+	config.SignalTypeClassifier:   true,
+	config.SignalTypeDecision:     true,
+	config.SignalTypeEmbedding:    true,
+	config.SignalTypeComplexity:   true,
+	config.SignalTypeKB:           true,
+	config.SignalTypeReask:        true,
+	config.SignalTypePreference:   true,
+}
+
+func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]bool, ready map[string]bool, bundle *modelservice.Bundle, wg *sync.WaitGroup) {
 	for _, d := range dispatchers {
 		if isSignalTypeUsed(usedSignals, d.signalType) && ready[d.signalType] {
+			leave := func() {}
+			if modelBackedSignalTypes[d.signalType] {
+				leave = bundle.Join()
+			}
 			wg.Add(1)
 			go func(dispatch signalDispatch) {
 				defer wg.Done()
+				defer leave()
 				dispatch.evaluate()
 			}(d)
 			continue

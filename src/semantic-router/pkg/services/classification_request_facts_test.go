@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -52,14 +53,14 @@ func TestClassificationServiceEvaluatesRequestEnvelopeFacts(t *testing.T) {
 	require.NoError(t, err)
 	service := NewClassificationService(classifier, cfg)
 
-	metadataResponse, err := service.ClassifyIntentForEval(IntentRequest{
+	metadataResponse, err := service.ClassifyIntentForEval(context.Background(), IntentRequest{
 		Metadata: map[string]string{"cohort": "canary"},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, metadataResponse.DecisionResult)
 	require.Equal(t, "metadata-route", metadataResponse.DecisionResult.DecisionName)
 
-	imageResponse, err := service.ClassifyIntentForEval(IntentRequest{
+	imageResponse, err := service.ClassifyIntentForEval(context.Background(), IntentRequest{
 		Messages: []IntentMessage{{
 			Role: "user",
 			Content: mustMessageContent(t, []map[string]interface{}{{
@@ -73,7 +74,7 @@ func TestClassificationServiceEvaluatesRequestEnvelopeFacts(t *testing.T) {
 	require.Equal(t, "image-route", imageResponse.DecisionResult.DecisionName)
 	require.Equal(t, float64(1), imageResponse.SignalValues["conversation:has-image"])
 
-	bytesResponse, err := service.ClassifyIntentForEval(IntentRequest{
+	bytesResponse, err := service.ClassifyIntentForEval(context.Background(), IntentRequest{
 		Messages: []IntentMessage{{
 			Role:    "user",
 			Content: mustMessageContent(t, " \t \n"),
@@ -84,7 +85,7 @@ func TestClassificationServiceEvaluatesRequestEnvelopeFacts(t *testing.T) {
 	require.Equal(t, "bytes-route", bytesResponse.DecisionResult.DecisionName)
 	require.Equal(t, float64(4), bytesResponse.SignalValues["structure:raw-bytes"])
 
-	topLevelBytesResponse, err := service.ClassifyIntentForEval(IntentRequest{
+	topLevelBytesResponse, err := service.ClassifyIntentForEval(context.Background(), IntentRequest{
 		Text: " \t \n",
 	})
 	require.NoError(t, err)
@@ -132,7 +133,7 @@ func TestClassificationServiceContextSignalUsesFullRequestTokenFloor(t *testing.
 	require.NoError(t, err)
 	service := NewClassificationService(classifier, cfg)
 
-	response, err := service.ClassifyIntentForEval(IntentRequest{
+	response, err := service.ClassifyIntentForEval(context.Background(), IntentRequest{
 		Messages: []IntentMessage{
 			{Role: "user", Content: mustMessageContent(t, strings.Repeat("p", 8_000))},
 			{
@@ -231,7 +232,7 @@ func TestClassifyIntentForEvalReturnsDiagnosticsWhenFailRequest(t *testing.T) {
 
 	for name, trace := range map[string]bool{"without trace": false, "with trace": true} {
 		t.Run(name, func(t *testing.T) {
-			response, evalErr := service.ClassifyIntentForEval(IntentRequest{
+			response, evalErr := service.ClassifyIntentForEval(context.Background(), IntentRequest{
 				Text:    "hello",
 				Options: &IntentOptions{Trace: trace},
 			})
@@ -288,7 +289,7 @@ func TestClassifyIntentScopesSignalsToDefaultRecipeDecisions(t *testing.T) {
 	require.NoError(t, err)
 	service := NewClassificationService(classifier, cfg)
 
-	response, err := service.ClassifyIntent(IntentRequest{
+	response, err := service.ClassifyIntent(context.Background(), IntentRequest{
 		Metadata: map[string]string{"cohort": "canary"},
 	})
 	require.NoError(t, err)

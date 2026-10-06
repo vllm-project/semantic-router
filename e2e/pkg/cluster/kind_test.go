@@ -2,9 +2,52 @@ package cluster
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestBatchClustersIsolateStorageAndModelMounts(t *testing.T) {
+	previous := ""
+	for _, name := range []string{"first", "second"} {
+		state := t.TempDir()
+		storage := filepath.Join(state, "storage")
+		models := filepath.Join(state, "models")
+		t.Setenv("E2E_KIND_STORAGE_DIR", storage)
+		t.Setenv("E2E_KIND_MODELS_DIR", models)
+		cluster := NewKindCluster(name, false)
+		configFile, err := cluster.createClusterConfig()
+		if err != nil {
+			t.Fatal(err)
+		}
+		content, err := os.ReadFile(configFile)
+		_ = os.Remove(configFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		config := string(content)
+		for _, path := range []string{storage, models} {
+			if strings.Count(config, "hostPath: "+path+"\n") != 2 {
+				t.Fatalf("both nodes must mount private directory %s: %s", path, config)
+			}
+		}
+		if previous != "" && strings.Contains(config, previous) {
+			t.Fatal("cluster inherited another profile's storage")
+		}
+		previous = state
+	}
+}
+
+func TestBatchClusterRejectsRelativeHostPaths(t *testing.T) {
+	for _, variable := range []string{"E2E_KIND_STORAGE_DIR", "E2E_KIND_MODELS_DIR"} {
+		t.Run(variable, func(t *testing.T) {
+			t.Setenv(variable, "relative/path")
+			if _, err := NewKindCluster("test", false).createClusterConfig(); err == nil {
+				t.Fatal("relative batch storage must be rejected")
+			}
+		})
+	}
+}
 
 func TestCreateClusterConfigWithoutWorkspaceModelsMount(t *testing.T) {
 	cluster := NewKindCluster("unit-test", false)
@@ -59,5 +102,32 @@ func TestWorkspaceModelsMountDoesNotOverlapKindStorageMount(t *testing.T) {
 			WorkspaceModelsNodeMountPath,
 			kindStorageNodeMountPath,
 		)
+	}
+}
+
+func TestCreateClusterArgsUsesPinnedNodeImage(t *testing.T) {
+	t.Setenv("KIND_NODE_IMAGE", "kindest/node:test@sha256:abc")
+	cluster := NewKindCluster("unit-test", false)
+
+	args := cluster.createClusterArgs("/tmp/kind-config.yaml")
+
+	expected := []string{
+		"create", "cluster", "--name", "unit-test",
+		"--image", "kindest/node:test@sha256:abc",
+		"--config", "/tmp/kind-config.yaml",
+	}
+	if strings.Join(args, " ") != strings.Join(expected, " ") {
+		t.Fatalf("createClusterArgs returned %v, want %v", args, expected)
+	}
+}
+
+func TestCreateClusterArgsKeepsDefaultNodeImageWhenUnset(t *testing.T) {
+	t.Setenv("KIND_NODE_IMAGE", "")
+	cluster := NewKindCluster("unit-test", false)
+
+	args := cluster.createClusterArgs("/tmp/kind-config.yaml")
+
+	if strings.Contains(strings.Join(args, " "), " --image ") {
+		t.Fatalf("createClusterArgs unexpectedly selected an image: %v", args)
 	}
 }

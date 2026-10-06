@@ -46,6 +46,10 @@ provider pool, live health, latency, load, and cost metadata.
 | Accuracy | Keeps ordinary work direct; explicit verification, expert comparison, multi-path reasoning, or workflows can use confidence, fusion, ReMoM, or Router Flow. |
 | Privacy | Contains jailbreak and sensitive-data signals locally and defaults to a local model. |
 
+In the balanced objective, FactCheck estimates the need for external knowledge;
+that signal alone does not establish high effort. Explicit verification, proof,
+and demanding reasoning retain the deliberate lane.
+
 Every objective includes an `omni` decision. Image-bearing requests use the
 shared local visual-language model; the privacy objective still gives attack
 containment higher priority.
@@ -69,6 +73,19 @@ not attempt to merge independent tool trajectories.
 - Looper support for orchestration routes.
 
 ## Data handling and safety
+
+Vela Guard scans up to 32,768 input tokens in overlapping 512-token windows.
+An attack detected in any window takes the security lane before the privacy
+lane. Both remain local with tools disabled; classifier errors and overload are
+reported in the signal trace. The bounded admission queue waits at most five
+seconds before reporting overload.
+
+The PII rule allows GPE entities such as cities and countries, so ordinary
+geography does not trigger privacy containment. Other detected entity types,
+including email and street addresses, remain restricted at the configured
+threshold. This is a type-level allowance: a person's city is also allowed by
+this PII rule. It does not distinguish public geography from personal location
+disclosure; explicit private-context signals still apply.
 
 Each objective has isolated routing state, but providers and supporting stores
 are shared infrastructure. The privacy objective keeps model traffic local and

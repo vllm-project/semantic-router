@@ -23,7 +23,7 @@ _VALID_CONFIG = {
     "version": "v0.3",
     "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
     "providers": {
-        "defaults": {"default_model": "test-model"},
+        "defaults": {"model": "test-model"},
         "models": [
             {
                 "name": "test-model",
@@ -32,6 +32,7 @@ _VALID_CONFIG = {
                         "name": "primary",
                         "endpoint": "host.docker.internal:8000",
                         "protocol": "http",
+                        "provider": "vllm",
                         "weight": 100,
                     }
                 ],

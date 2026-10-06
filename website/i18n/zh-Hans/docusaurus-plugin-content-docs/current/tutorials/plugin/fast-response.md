@@ -5,7 +5,7 @@ translation:
   outdated: false
 ---
 
-# 快速响应（Fast Response）
+# 快速响应
 
 ## 概览
 
@@ -38,5 +38,5 @@ plugins:
       message: The primary model is unavailable. Try again shortly.
 ```
 
-该插件不会调用模型，也不会生成响应内容。消息中不得包含请求数据，并且不要将该插件用作身份验证或速率限制控制。插件本身不会测量过载状态；decision 必须匹配应接收回退响应的流量。完整示例见：
+该插件不会调用模型，也不会生成响应内容。消息中不得包含请求数据，并且不要将该插件用作身份验证或速率限制控制。插件本身不会测量过载状态；决策必须匹配应接收回退响应的流量。完整示例见：
 [`config/fragments/plugin/fast-response/busy.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/fast-response/busy.yaml)。

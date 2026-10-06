@@ -5,8 +5,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 REPO_ROOT="$(cd "$PROJECT_DIR/../.." && pwd)"
 PYPROJECT_PATH="$PROJECT_DIR/pyproject.toml"
-CANDLE_CARGO_PATH="$REPO_ROOT/candle-binding/Cargo.toml"
-CANDLE_LOCK_PATH="$REPO_ROOT/candle-binding/Cargo.lock"
 
 RELEASE_VERSION="${1:-}"
 NEXT_VERSION="${2:-}"
@@ -22,9 +20,8 @@ Examples:
 When next-version is omitted, the script defaults to the next minor base
 version (for example 0.3.0 -> 0.4.0).
 
-The script updates every versioned surface validated by the release workflow:
-the vllm-sr Python package and the candle-semantic-router Rust crate. It also
-runs the repo-level release contract check before creating the stable tag.
+The script updates the vllm-sr Python package version and runs the
+repo-level release contract check before creating the stable tag.
 EOF
 }
 
@@ -49,19 +46,6 @@ current_version() {
   grep '^version = ' "$PYPROJECT_PATH" | sed 's/version = "\(.*\)"/\1/'
 }
 
-current_candle_version() {
-  python3 - "$CANDLE_CARGO_PATH" <<'PY'
-import re
-import sys
-from pathlib import Path
-
-content = Path(sys.argv[1]).read_text()
-package_section = re.split(r"^\[(?!package\])", content, maxsplit=1, flags=re.MULTILINE)[0]
-match = re.search(r'^version\s*=\s*"([^"]+)"', package_section, re.MULTILINE)
-print(match.group(1) if match else "")
-PY
-}
-
 write_pyproject_version() {
   local value
   value="$1"
@@ -69,59 +53,9 @@ write_pyproject_version() {
   rm -f "$PYPROJECT_PATH.bak"
 }
 
-write_candle_version() {
-  local value
-  value="$1"
-  python3 - "$CANDLE_CARGO_PATH" "$CANDLE_LOCK_PATH" "$value" <<'PY'
-import re
-import sys
-from pathlib import Path
-
-cargo_path = Path(sys.argv[1])
-lock_path = Path(sys.argv[2])
-version = sys.argv[3]
-
-def replace_one(path: Path, pattern: re.Pattern[str], label: str) -> None:
-    content = path.read_text()
-    updated, count = pattern.subn(rf'\g<prefix>{version}\g<suffix>', content, count=1)
-    if count != 1:
-        raise SystemExit(f"could not update {label} in {path}")
-    path.write_text(updated)
-
-replace_one(
-    cargo_path,
-    re.compile(
-        r'(?ms)(?P<prefix>^\[package\]\n(?:(?!^\[).)*?^version\s*=\s*")[^"]+(?P<suffix>")'
-    ),
-    "candle-binding package version",
-)
-
-replace_one(
-    lock_path,
-    re.compile(
-        r'(?ms)(?P<prefix>^\[\[package\]\]\nname = "candle-semantic-router"\nversion = ")[^"]+(?P<suffix>")'
-    ),
-    "candle-binding lockfile package version",
-)
-PY
-}
-
-write_version() {
-  local value
-  value="$1"
-  write_pyproject_version "$value"
-  write_candle_version "$value"
-}
-
-release_files_match() {
-  local expected
-  expected="$1"
-  [ "$(current_version)" = "$expected" ] && [ "$(current_candle_version)" = "$expected" ]
-}
-
 default_next_version() {
-  local major minor patch
-  IFS='.' read -r major minor patch <<EOF
+  local major minor
+  IFS='.' read -r major minor _ <<EOF
 $RELEASE_VERSION
 EOF
   printf '%s\n' "$((major + 0)).$((minor + 1)).0"
@@ -130,11 +64,11 @@ EOF
 commit_if_changed() {
   local message
   message="$1"
-  if git diff --quiet -- "$PYPROJECT_PATH" "$CANDLE_CARGO_PATH" "$CANDLE_LOCK_PATH"; then
+  if git diff --quiet -- "$PYPROJECT_PATH"; then
     return 1
   fi
 
-  git add "$PYPROJECT_PATH" "$CANDLE_CARGO_PATH" "$CANDLE_LOCK_PATH"
+  git add "$PYPROJECT_PATH"
   git commit -s -m "$message"
   return 0
 }
@@ -155,21 +89,19 @@ main() {
   cd "$REPO_ROOT"
   require_clean_worktree
 
-  local start_ref active_branch current candle_current tag_name
+  local start_ref active_branch current tag_name
   start_ref="$(git rev-parse --verify HEAD)"
   active_branch="$(git rev-parse --abbrev-ref HEAD)"
   current="$(current_version)"
-  candle_current="$(current_candle_version)"
   tag_name="v$RELEASE_VERSION"
 
   git rev-parse --verify "$tag_name" >/dev/null 2>&1 && die "tag already exists: $tag_name"
 
-  echo "Current release versions:"
-  echo "  vllm-sr                $current"
-  echo "  candle-semantic-router $candle_current"
+  echo "Current release version:"
+  echo "  vllm-sr $current"
 
-  if ! release_files_match "$RELEASE_VERSION"; then
-    write_version "$RELEASE_VERSION"
+  if [ "$current" != "$RELEASE_VERSION" ]; then
+    write_pyproject_version "$RELEASE_VERSION"
     commit_if_changed "chore(vllm-sr): release v$RELEASE_VERSION" || true
   fi
 
@@ -177,7 +109,7 @@ main() {
 
   git tag -a "$tag_name" -m "vLLM Semantic Router v$RELEASE_VERSION"
 
-  write_version "$NEXT_VERSION"
+  write_pyproject_version "$NEXT_VERSION"
   commit_if_changed "chore(vllm-sr): start $NEXT_VERSION dev cycle" || die "next version bump did not change pyproject.toml"
 
   cat <<EOF

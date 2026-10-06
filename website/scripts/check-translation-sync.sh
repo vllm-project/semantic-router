@@ -1,6 +1,6 @@
 #!/bin/bash
 # Check translation sync status between English source docs and translations.
-# Usage: ./scripts/check-translation-sync.sh [--locale LOCALE] [--fix-status] [--help]
+# Usage: ./scripts/check-translation-sync.sh [--locale LOCALE] [--coverage-only] [--fix-status] [--update-baseline] [--help]
 
 set -e
 
@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WEBSITE_DIR="$(dirname "$SCRIPT_DIR")"
 DOCS_DIR="$WEBSITE_DIR/docs"
 I18N_BASE="$WEBSITE_DIR/i18n"
+BASELINE_FILE="$I18N_BASE/translation-coverage-baseline.txt"
 
 find_git_bin() {
     local candidate
@@ -34,6 +35,8 @@ GIT_BIN="$(find_git_bin)" || exit 2
 
 LOCALE=""
 FIX_STATUS=false
+UPDATE_BASELINE=false
+COVERAGE_ONLY=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -48,6 +51,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --fix-status)
             FIX_STATUS=true
+            shift
+            ;;
+        --update-baseline)
+            UPDATE_BASELINE=true
+            shift
+            ;;
+        --coverage-only)
+            COVERAGE_ONLY=true
             shift
             ;;
         -h|--help)
@@ -67,7 +78,9 @@ or setup errors.
 
 Options:
   -l, --locale LOCALE   Check specific locale only (default: all)
-    --fix-status          Update unambiguous translation.outdated flags
+      --fix-status       Update unambiguous translation.outdated flags
+      --update-baseline  Record the current locale override paths and exit
+      --coverage-only    Check current-doc coverage without source drift metadata
   -h, --help            Show this help message
 EOF
             exit 0
@@ -78,6 +91,19 @@ EOF
             ;;
     esac
 done
+
+if $FIX_STATUS && $UPDATE_BASELINE; then
+    echo "--fix-status and --update-baseline cannot be used together" >&2
+    exit 2
+fi
+if $UPDATE_BASELINE && [[ -n "$LOCALE" ]]; then
+    echo "--locale and --update-baseline cannot be used together; the baseline covers every locale" >&2
+    exit 2
+fi
+if $COVERAGE_ONLY && { $FIX_STATUS || $UPDATE_BASELINE; }; then
+    echo "--coverage-only cannot be combined with a modifying option" >&2
+    exit 2
+fi
 
 # Colors
 RED='\033[0;31m'
@@ -173,6 +199,42 @@ if [[ ${#LOCALES[@]} -eq 0 ]]; then
     exit 2
 fi
 
+update_coverage_baseline() {
+    local tmp_file
+    tmp_file="$(mktemp "${BASELINE_FILE}.tmp.XXXXXX")"
+
+    {
+        echo "# Current documentation locale overrides."
+        echo "# Regenerate with: make docs-update-translation-baseline"
+        for locale in "${LOCALES[@]}"; do
+            local locale_dir="$I18N_BASE/$locale/docusaurus-plugin-content-docs/current"
+            while IFS= read -r -d '' translated_file; do
+                local rel_path="${translated_file#"$locale_dir"/}"
+                printf '%s\t%s\n' "$locale" "$rel_path"
+            done < <(find "$locale_dir" -type f \( -name "*.md" -o -name "*.mdx" \) -print0)
+        done
+    } > "$tmp_file"
+
+    {
+        sed -n '1,2p' "$tmp_file"
+        sed -n '3,$p' "$tmp_file" | LC_ALL=C sort
+    } > "${tmp_file}.sorted"
+    mv "${tmp_file}.sorted" "$BASELINE_FILE"
+    rm -f "$tmp_file"
+    echo "Updated $BASELINE_FILE"
+}
+
+if $UPDATE_BASELINE; then
+    update_coverage_baseline
+    exit 0
+fi
+
+if [[ ! -f "$BASELINE_FILE" ]]; then
+    echo "Translation coverage baseline not found: $BASELINE_FILE" >&2
+    echo "Run make docs-update-translation-baseline and review the generated paths." >&2
+    exit 2
+fi
+
 cd "$WEBSITE_DIR"
 
 total_likely_synced=0
@@ -199,12 +261,47 @@ check_locale() {
     local verification_count=0
     local status_mismatch_count=0
     local status_fixed_count=0
+    local coverage_regression_count=0
+    local stale_baseline_count=0
+    local unrecorded_coverage_count=0
+    local orphaned_translation_count=0
 
     declare -a outdated_files
     declare -a metadata_files
     declare -a verification_files
     declare -a status_mismatches
     declare -a status_fixed
+    declare -a fallback_sections
+    declare -a coverage_regressions
+    declare -a stale_baseline_entries
+    declare -a unrecorded_coverage
+    declare -a orphaned_translations
+
+    local baseline_locale
+    local baseline_path
+    while IFS=$'\t' read -r baseline_locale baseline_path; do
+        [[ -n "$baseline_locale" && "$baseline_locale" != \#* ]] || continue
+        [[ "$baseline_locale" == "$locale" ]] || continue
+
+        if [[ ! -f "$DOCS_DIR/$baseline_path" ]]; then
+            stale_baseline_entries+=("$baseline_path")
+            stale_baseline_count=$((stale_baseline_count + 1))
+        elif [[ ! -f "$WEBSITE_DIR/$i18n_dir/$baseline_path" ]]; then
+            coverage_regressions+=("$baseline_path")
+            coverage_regression_count=$((coverage_regression_count + 1))
+        fi
+    done < "$BASELINE_FILE"
+
+    while IFS= read -r -d '' translated_file; do
+        local translated_rel_path="${translated_file#"$WEBSITE_DIR/$i18n_dir"/}"
+        if [[ ! -f "$DOCS_DIR/$translated_rel_path" ]]; then
+            orphaned_translations+=("$translated_rel_path")
+            orphaned_translation_count=$((orphaned_translation_count + 1))
+        elif ! grep -Fqx "$locale"$'\t'"$translated_rel_path" "$BASELINE_FILE"; then
+            unrecorded_coverage+=("$translated_rel_path")
+            unrecorded_coverage_count=$((unrecorded_coverage_count + 1))
+        fi
+    done < <(find "$WEBSITE_DIR/$i18n_dir" -type f \( -name "*.md" -o -name "*.mdx" \) -print0)
 
     while IFS= read -r -d '' source_file; do
         local rel_path="${source_file#"$DOCS_DIR"/}"
@@ -218,6 +315,14 @@ check_locale() {
 
         if [[ ! -f "$i18n_file" ]]; then
             fallback_count=$((fallback_count + 1))
+            local section="${rel_path%%/*}"
+            [[ "$section" != "$rel_path" ]] || section="(root)"
+            fallback_sections+=("$section")
+            continue
+        fi
+
+        if $COVERAGE_ONLY; then
+            likely_synced_count=$((likely_synced_count + 1))
             continue
         fi
 
@@ -307,12 +412,39 @@ check_locale() {
             fi
         fi
 
-    done < <(find "$DOCS_DIR" -name "*.md" -type f -print0)
+    done < <(find "$DOCS_DIR" -type f \( -name "*.md" -o -name "*.mdx" \) -print0)
 
     echo -e "${CYAN}[$locale]${NC}"
 
     if [[ $fallback_count -gt 0 ]]; then
         echo -e "  ${CYAN}English fallback:${NC} $fallback_count page(s) have no locale override"
+        printf '%s\n' "${fallback_sections[@]}" \
+            | LC_ALL=C sort \
+            | uniq -c \
+            | while read -r count section; do
+                echo "    $section: $count"
+            done
+    fi
+
+    if [[ ${#coverage_regressions[@]} -gt 0 ]]; then
+        echo -e "  ${RED}Coverage regressions (baseline override deleted):${NC}"
+        printf '    %s\n' "${coverage_regressions[@]}"
+    fi
+
+    if [[ ${#stale_baseline_entries[@]} -gt 0 ]]; then
+        echo -e "  ${RED}Stale baseline entries (English source retired or moved):${NC}"
+        printf '    %s\n' "${stale_baseline_entries[@]}"
+    fi
+
+    if [[ ${#unrecorded_coverage[@]} -gt 0 ]]; then
+        echo -e "  ${YELLOW}Unrecorded coverage additions:${NC}"
+        printf '    %s\n' "${unrecorded_coverage[@]}"
+        echo "    Run make docs-update-translation-baseline and review the baseline diff."
+    fi
+
+    if [[ ${#orphaned_translations[@]} -gt 0 ]]; then
+        echo -e "  ${RED}Locale overrides without a current English source:${NC}"
+        printf '    %s\n' "${orphaned_translations[@]}"
     fi
 
     if [[ ${#outdated_files[@]} -gt 0 ]]; then
@@ -364,7 +496,7 @@ check_locale() {
     local sync_rate=0
     [[ $total -gt 0 ]] && sync_rate=$((likely_synced_count * 100 / total))
 
-    echo -e "  ${GREEN}✓${NC} $likely_synced_count translated and likely synced  ${CYAN}↪${NC} $fallback_count English fallback  ${YELLOW}↓${NC} $outdated_count  ${MAGENTA}!${NC} $metadata_count  ${CYAN}?${NC} $verification_count  ${YELLOW}~${NC} $status_mismatch_count  ${GREEN}+${NC} $status_fixed_count  (${sync_rate}% translated coverage)"
+    echo -e "  ${GREEN}✓${NC} $likely_synced_count translated and likely synced  ${CYAN}↪${NC} $fallback_count English fallback  ${RED}−${NC} $coverage_regression_count coverage regressions  ${YELLOW}↓${NC} $outdated_count  ${MAGENTA}!${NC} $metadata_count  ${CYAN}?${NC} $verification_count  ${YELLOW}~${NC} $status_mismatch_count  ${GREEN}+${NC} $status_fixed_count  (${sync_rate}% translated coverage)"
     echo ""
 
     total_likely_synced=$((total_likely_synced + likely_synced_count))
@@ -375,7 +507,14 @@ check_locale() {
     total_status_mismatch=$((total_status_mismatch + status_mismatch_count))
     total_status_fixed=$((total_status_fixed + status_fixed_count))
 
-    [[ $outdated_count -gt 0 ]] || [[ $metadata_count -gt 0 ]] || [[ $verification_count -gt 0 ]] || [[ $status_mismatch_count -gt 0 ]]
+    [[ $outdated_count -gt 0 ]] \
+        || [[ $metadata_count -gt 0 ]] \
+        || [[ $verification_count -gt 0 ]] \
+        || [[ $status_mismatch_count -gt 0 ]] \
+        || [[ $coverage_regression_count -gt 0 ]] \
+        || [[ $stale_baseline_count -gt 0 ]] \
+        || [[ $unrecorded_coverage_count -gt 0 ]] \
+        || [[ $orphaned_translation_count -gt 0 ]]
 }
 
 echo -e "${BLUE}=== Translation Sync Check ===${NC}"

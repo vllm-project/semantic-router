@@ -40,14 +40,16 @@ entrypoints:
     recipe: privacy
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
     - name: model-b
       backend_refs:
         - endpoint: 127.0.0.1:8001
+          provider: vllm
 `
 
 func TestRecipesOnlyConfigKeepsDecisionsReachable(t *testing.T) {
@@ -105,14 +107,16 @@ recipes:
               use_reasoning: false
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
     - name: model-b
       backend_refs:
         - endpoint: 127.0.0.1:8001
+          provider: vllm
 `
 	cfg, err := ParseYAMLBytes([]byte(yamlConfig))
 	if err != nil {
@@ -325,11 +329,12 @@ entrypoints:
     recipe: privacy
 providers:
   defaults:
-    default_model: base-model
+    model: base-model
   models:
     - name: base-model
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 `
 	_, err := ParseYAMLBytes([]byte(yamlConfig))
 	if err == nil {

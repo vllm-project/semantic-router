@@ -243,3 +243,26 @@ func requireFloatField(t *testing.T, sig *SignalDecl, name string, want float64)
 		t.Errorf("field %q: want %v, got %v", name, want, fv.V)
 	}
 }
+
+// TestDecompileToASTOmitsMaxTokensForOpenEndedContextRule locks in that an
+// open-ended band round-trips without inventing a max_tokens field.
+func TestDecompileToASTOmitsMaxTokensForOpenEndedContextRule(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{
+				ContextRules: []config.ContextRule{{
+					Name:      "overflow_ctx",
+					MinTokens: "64K",
+				}},
+			},
+		},
+	}
+
+	prog := DecompileToAST(cfg)
+
+	sig := findSignal(t, prog, "context", "overflow_ctx")
+	requireStringField(t, sig, "min_tokens", "64K")
+	if _, ok := sig.Fields["max_tokens"]; ok {
+		t.Fatalf("expected open-ended context rule to omit max_tokens, got %v", sig.Fields["max_tokens"])
+	}
+}

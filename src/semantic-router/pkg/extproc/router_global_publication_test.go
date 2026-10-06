@@ -30,7 +30,9 @@ func TestBuildRouterComponentsDoesNotPublishProcessGlobals(t *testing.T) {
 	previous := selection.NewRegistry()
 	selection.SetGlobalRegistry(previous)
 
-	cfg := &config.RouterConfig{}
+	cfg := &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{
+		ModelSelection: config.ModelSelectionConfig{Enabled: true},
+	}}
 	components, err := buildRouterComponents(cfg)
 	require.NoError(t, err)
 	require.NotNil(t, components.modelSelector,
@@ -52,7 +54,7 @@ func TestPublishRouterStateAdoptsCommittedRouterGlobals(t *testing.T) {
 	committed := selection.NewRegistry()
 	router := &OpenAIRouter{ModelSelector: committed}
 
-	publishRouterState(&config.RouterConfig{}, router, nil)
+	publishRouterState(&config.RouterConfig{}, router, nil, nil)
 
 	require.Same(t, committed, selection.GetGlobalRegistry(),
 		"publishRouterState did not adopt the committed router's selection registry")

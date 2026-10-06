@@ -14,7 +14,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("pii-entity-offsets", pkgtestcases.TestCase{
-		Description: "Verify /api/v1/classify/pii reports entity positions as code-point offsets",
+		Description: "Verify /api/v1/diagnostics/classify/pii reports entity positions as code-point offsets",
 		Tags:        []string{"kubernetes", "apiserver", "classification", "pii", "api"},
 		Fn:          testPIIEntityOffsets,
 	})
@@ -43,7 +43,7 @@ func testPIIEntityOffsets(
 	defer session.Close()
 
 	httpClient := session.HTTPClient(30 * time.Second)
-	url := session.URL("/api/v1/classify/pii")
+	url := session.URL("/api/v1/diagnostics/classify/pii")
 
 	// Multi-byte text: byte offsets would run past the end of the string.
 	nonASCII := "こんにちは、私は John Smith です。電話は 415-555-0134"
@@ -90,7 +90,7 @@ func classifyPIIWithPositions(
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("marshal /api/v1/classify/pii payload: %w", err)
+		return nil, fmt.Errorf("marshal /api/v1/diagnostics/classify/pii payload: %w", err)
 	}
 
 	resp, err := postJSON(ctx, httpClient, http.MethodPost, url, body)
@@ -98,12 +98,12 @@ func classifyPIIWithPositions(
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("expected /api/v1/classify/pii status 200, got %d: %s", resp.StatusCode, string(resp.Body))
+		return nil, fmt.Errorf("expected /api/v1/diagnostics/classify/pii status 200, got %d: %s", resp.StatusCode, string(resp.Body))
 	}
 
 	var document piiOffsetResponse
 	if err := json.Unmarshal(resp.Body, &document); err != nil {
-		return nil, fmt.Errorf("decode /api/v1/classify/pii response: %w", err)
+		return nil, fmt.Errorf("decode /api/v1/diagnostics/classify/pii response: %w", err)
 	}
 	return document.Entities, nil
 }

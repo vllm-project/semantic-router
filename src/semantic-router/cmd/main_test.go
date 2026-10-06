@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -17,21 +18,22 @@ func TestApplyKubernetesConfigUpdateEnsuresModelsBeforeReplace(t *testing.T) {
 	cfg := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}
 	order := make([]string, 0, 2)
 
-	ensureKubernetesConfigModels = func(got *config.RouterConfig) error {
+	ensureKubernetesConfigModels = func(_ context.Context, got *config.RouterConfig, _ startupstatus.StatusWriter) error {
 		order = append(order, "ensure")
 		if got != cfg {
 			t.Fatalf("ensureKubernetesConfigModels() cfg = %p, want %p", got, cfg)
 		}
 		return nil
 	}
-	replaceKubernetesRuntimeConfig = func(got *config.RouterConfig) {
+	activate := func(_ context.Context, got *config.RouterConfig) error {
 		order = append(order, "replace")
 		if got != cfg {
-			t.Fatalf("replaceKubernetesRuntimeConfig() cfg = %p, want %p", got, cfg)
+			t.Fatalf("activation cfg = %p, want %p", got, cfg)
 		}
+		return nil
 	}
 
-	if err := applyKubernetesConfigUpdate(cfg); err != nil {
+	if err := applyKubernetesConfigUpdate(context.Background(), cfg, activate, nil); err != nil {
 		t.Fatalf("applyKubernetesConfigUpdate() error = %v", err)
 	}
 
@@ -46,22 +48,43 @@ func TestApplyKubernetesConfigUpdateSkipsReplaceOnEnsureFailure(t *testing.T) {
 	defer restoreKubernetesUpdateSeams()
 
 	cfg := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}
-	ensureKubernetesConfigModels = func(got *config.RouterConfig) error {
+	ensureKubernetesConfigModels = func(_ context.Context, got *config.RouterConfig, _ startupstatus.StatusWriter) error {
 		if got != cfg {
 			t.Fatalf("ensureKubernetesConfigModels() cfg = %p, want %p", got, cfg)
 		}
 		return errors.New("download failed")
 	}
-	replaceKubernetesRuntimeConfig = func(got *config.RouterConfig) {
-		t.Fatalf("replaceKubernetesRuntimeConfig() should not be called on ensure failure")
+	activate := func(_ context.Context, got *config.RouterConfig) error {
+		t.Fatalf("activation should not be called on ensure failure")
+		return nil
 	}
 
-	err := applyKubernetesConfigUpdate(cfg)
+	err := applyKubernetesConfigUpdate(context.Background(), cfg, activate, nil)
 	if err == nil {
 		t.Fatal("applyKubernetesConfigUpdate() error = nil, want failure")
 	}
 	if got := err.Error(); got != "failed to ensure models for kubernetes config update: download failed" {
 		t.Fatalf("applyKubernetesConfigUpdate() error = %q", got)
+	}
+}
+
+func TestApplyKubernetesConfigUpdateDoesNotPublishAfterCancellation(t *testing.T) {
+	restoreKubernetesUpdateSeams := stubKubernetesUpdateSeams(t)
+	defer restoreKubernetesUpdateSeams()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ensureKubernetesConfigModels = func(context.Context, *config.RouterConfig, startupstatus.StatusWriter) error {
+		cancel()
+		return nil
+	}
+	activate := func(context.Context, *config.RouterConfig) error {
+		t.Fatal("activation called after cancellation")
+		return nil
+	}
+
+	err := applyKubernetesConfigUpdate(ctx, &config.RouterConfig{}, activate, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("applyKubernetesConfigUpdate() error = %v, want context canceled", err)
 	}
 }
 
@@ -130,10 +153,30 @@ func stubKubernetesUpdateSeams(t *testing.T) func() {
 	t.Helper()
 
 	originalEnsure := ensureKubernetesConfigModels
-	originalReplace := replaceKubernetesRuntimeConfig
 
 	return func() {
 		ensureKubernetesConfigModels = originalEnsure
-		replaceKubernetesRuntimeConfig = originalReplace
+	}
+}
+
+func TestApplyKubernetesConfigUpdateReturnsActivationFailure(t *testing.T) {
+	restore := stubKubernetesUpdateSeams(t)
+	defer restore()
+	ensureKubernetesConfigModels = func(context.Context, *config.RouterConfig, startupstatus.StatusWriter) error { return nil }
+	failure := errors.New("candidate warmup failed")
+	err := applyKubernetesConfigUpdate(context.Background(), &config.RouterConfig{}, func(context.Context, *config.RouterConfig) error { return failure }, nil)
+	if !errors.Is(err, failure) {
+		t.Fatalf("activation failure = %v", err)
+	}
+}
+
+func TestKubernetesNamespaceUsesPodNamespace(t *testing.T) {
+	t.Setenv("POD_NAMESPACE", "router-test")
+	if got := kubernetesNamespaceDefault(); got != "router-test" {
+		t.Fatal(got)
+	}
+	t.Setenv("POD_NAMESPACE", "")
+	if got := kubernetesNamespaceDefault(); got != "default" {
+		t.Fatal(got)
 	}
 }

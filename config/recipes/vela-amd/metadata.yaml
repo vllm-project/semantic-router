@@ -1,0 +1,19 @@
+schema_version: vllm-sr/recipe-metadata/v1
+id: vela-amd
+name: Vela AMD
+version: 0.1.0
+description: Run all ten Vela task models on AMD GPUs for signal inspection, semantic routing
+  and document reranking.
+authors:
+- name: vLLM Semantic Router Contributors
+  url: https://github.com/vllm-project/semantic-router/graphs/contributors
+license: Apache-2.0
+tags:
+- vela
+- amd
+- rocm
+- retrieval
+- routing
+links:
+  source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/vela-amd
+  documentation: https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md

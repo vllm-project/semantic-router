@@ -90,8 +90,6 @@ release: v9.9
         contract = release_contract.ReleaseContract(
             pyproject_version="9.8.7",
             sim_version="0.1.0",
-            candle_version="9.8.7",
-            candle_lock_version="9.8.7",
             helm_chart_version="9.8.7",
             helm_app_version="latest",
             release_images=("vllm-sr",),
@@ -100,6 +98,9 @@ release: v9.9
             output = Path(temporary) / "github-output"
             release_contract.write_github_outputs(output, contract, "9.8.7")
             self.assertIn("catalog_snapshot=v9.8", output.read_text(encoding="utf-8"))
+            self.assertIn(
+                'release_images_json=["vllm-sr"]', output.read_text(encoding="utf-8")
+            )
 
 
 if __name__ == "__main__":

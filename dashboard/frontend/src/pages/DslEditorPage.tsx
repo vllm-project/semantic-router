@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react'
 import Editor, { type OnMount, type BeforeMount, type Monaco } from '@monaco-editor/react'
 import type * as monacoNs from 'monaco-editor'
-import { useDSLStore } from '@/stores/dslStore'
+import { selectHasUnsavedChanges, useDSLStore } from '@/stores/dslStore'
 import {
   registerDSLLanguage,
   defineTheme,
@@ -54,7 +54,6 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
     wasmError,
     loading,
     compileError,
-    dirty,
     initWasm,
     setDslSource,
     compile,
@@ -63,6 +62,10 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
     reset,
     importYaml,
   } = useDSLStore()
+
+  // Derived from the store: the source differs from the last load, import, reset, or
+  // successful deploy snapshot. The reload guard and the (unsaved) label read this.
+  const unsaved = useDSLStore(selectHasUnsavedChanges)
 
   const [outputTab, setOutputTab] = useState<OutputTab>('yaml')
   const [copied, setCopied] = useState(false)
@@ -287,10 +290,8 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
       setShowImportModal(false)
       setImportText('')
       setImportError(null)
-    } catch {
-      setImportError(
-        'Failed to import YAML. Use a full router config or routing fragment; only the routing section is imported into DSL.',
-      )
+    } catch (err) {
+      setImportError(`Failed to import YAML: ${err instanceof Error ? err.message : String(err)}`)
     }
   }, [importText, importYaml])
 
@@ -347,7 +348,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
   }, [importUrl])
 
   // Diagnostic counts (3 severity levels per design doc)
-  const errorCount = diagnostics.filter((d) => d.level === 'error').length
+  const errorCount = diagnostics.filter((d) => d.level === 'error').length + (compileError ? 1 : 0)
   const warnCount = diagnostics.filter((d) => d.level === 'warning').length
   const constraintCount = diagnostics.filter((d) => d.level === 'constraint').length
 
@@ -374,7 +375,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
               <path d="M2 3h12M2 8h8M2 13h10" strokeLinecap="round" />
             </svg>
             DSL Editor
-            {dirty && (
+            {unsaved && (
               <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>(unsaved)</span>
             )}
           </div>
@@ -689,6 +690,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
             <div className={styles.outputContent}>
               {compileError && (
                 <div
+                  role="alert"
                   style={{
                     padding: 'var(--spacing-md)',
                     color: 'var(--color-danger)',

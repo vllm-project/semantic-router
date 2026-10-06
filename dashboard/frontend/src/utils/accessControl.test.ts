@@ -9,6 +9,7 @@ import {
   canManageOpenClaw,
   canManageUsers,
   canRunEvaluation,
+  canSubmitFeedback,
   canViewUsers,
   canWriteConfig,
   canWriteEvaluation,
@@ -65,6 +66,8 @@ describe('config write access', () => {
     expect(canAccessDashboardPath({ permissions: ['evaluation.read'] }, '/evaluation')).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['mcp.read'] }, '/config/mcp')).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/config/mcp')).toBe(false)
+    expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/models')).toBe(true)
+    expect(canAccessDashboardPath({ permissions: ['logs.read'] }, '/models')).toBe(false)
     expect(canAccessDashboardPath({ role: 'read' }, '/topology')).toBe(true)
     expect(canAccessDashboardPath({ role: 'read' }, '/status')).toBe(true)
   })
@@ -79,6 +82,14 @@ describe('config write access', () => {
     expect(canManageMCP({ permissions: ['mcp.manage'] })).toBe(true)
     expect(canManageMCP({ permissions: ['mcp.read'] })).toBe(false)
     expect(canManageOpenClaw({ permissions: ['openclaw.manage'] })).toBe(true)
+  })
+
+  it('shows feedback controls to all default roles but honors explicit permissions', () => {
+    expect(canSubmitFeedback({ role: 'admin' })).toBe(true)
+    expect(canSubmitFeedback({ role: 'write' })).toBe(true)
+    expect(canSubmitFeedback({ role: 'read' })).toBe(true)
+    expect(canSubmitFeedback({ role: 'read', permissions: ['feedback.submit'] })).toBe(true)
+    expect(canSubmitFeedback({ role: 'admin', permissions: [] })).toBe(false)
   })
 
   it('uses effective user permissions for user-management surfaces', () => {

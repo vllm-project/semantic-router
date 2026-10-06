@@ -77,14 +77,14 @@ func (r *SemanticRouterReconciler) generateService(sr *vllmv1alpha1.SemanticRout
 	ports := []corev1.ServicePort{
 		{
 			Name:       "grpc",
-			Port:       r.getInt32OrDefault(&sr.Spec.Service.GRPC.Port, DefaultGRPCPort),
-			TargetPort: intstr.FromInt(int(r.getInt32OrDefault(&sr.Spec.Service.GRPC.TargetPort, DefaultGRPCPort))),
+			Port:       servicePortOrDefault(sr.Spec.Service.GRPC.Port, DefaultGRPCPort),
+			TargetPort: intstr.FromInt32(servicePortOrDefault(sr.Spec.Service.GRPC.TargetPort, DefaultGRPCPort)),
 			Protocol:   corev1.ProtocolTCP,
 		},
 		{
 			Name:       "api",
-			Port:       r.getInt32OrDefault(&sr.Spec.Service.API.Port, DefaultAPIPort),
-			TargetPort: intstr.FromInt(int(r.getInt32OrDefault(&sr.Spec.Service.API.TargetPort, DefaultAPIPort))),
+			Port:       servicePortOrDefault(sr.Spec.Service.API.Port, DefaultAPIPort),
+			TargetPort: intstr.FromInt32(servicePortOrDefault(sr.Spec.Service.API.TargetPort, DefaultAPIPort)),
 			Protocol:   corev1.ProtocolTCP,
 		},
 	}
@@ -126,6 +126,15 @@ func (r *SemanticRouterReconciler) generateService(sr *vllmv1alpha1.SemanticRout
 			Selector: labels,
 		},
 	}
+}
+
+// Service ports are optional value fields, so omission decodes to zero rather
+// than nil. Unlike replica counts, a zero port is never a valid explicit value.
+func servicePortOrDefault(port, fallback int32) int32 {
+	if port == 0 {
+		return fallback
+	}
+	return port
 }
 
 func (r *SemanticRouterReconciler) generateHPA(sr *vllmv1alpha1.SemanticRouter) *autoscalingv2.HorizontalPodAutoscaler {

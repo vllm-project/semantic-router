@@ -11,15 +11,16 @@ import (
 
 func replayRoutingRecordMetadataTestContext() *RequestContext {
 	return &RequestContext{
-		RequestID:                     "req-1",
-		SessionID:                     "sess-replay-test",
-		TurnIndex:                     2,
-		VSRSelectedCategory:           "math",
-		VSRReasoningMode:              "on",
-		VSRSelectedDecisionConfidence: 0.91,
-		VSRSelectionMethod:            "router_dc",
-		VSRCacheHit:                   true,
-		ExpectStreamingResponse:       true,
+		RequestID:                           "req-1",
+		SessionID:                           "sess-replay-test",
+		TurnIndex:                           2,
+		VSRSelectedCategory:                 "math",
+		VSRReasoningMode:                    "on",
+		VSRSelectedDecisionConfidence:       0.91,
+		VSRSelectedDecisionConfidenceScored: true,
+		VSRSelectionMethod:                  "router_dc",
+		VSRCacheHit:                         true,
+		ExpectStreamingResponse:             true,
 		VSRLearningPolicies: testLearningPolicies(
 			replayTestProtectionPolicyWithTrace(&selection.SessionPolicyTrace{
 				Phase:             "user_turn",

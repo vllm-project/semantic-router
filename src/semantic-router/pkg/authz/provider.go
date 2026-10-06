@@ -13,11 +13,10 @@
 // The CredentialResolver chains multiple providers and returns the first match,
 // making the router agnostic to how credentials are supplied.
 //
-// Adding a new provider (e.g., Gemini):
-//  1. Add a constant to LLMProvider (ProviderGemini)
-//  2. Add a header constant to pkg/headers (UserGeminiKey)
-//  3. Register the header in HeaderInjectionProvider
-//  4. Use resolver.KeyForProvider(authz.ProviderGemini, ...) in the routing path
+// Provider IDs and default injected-header mappings are catalog data. The
+// constants below are source-compatibility conveniences for frequently used
+// native providers; LLMProvider accepts every validated catalog Provider ID,
+// so adding a compatible provider does not require another Go constant.
 package authz
 
 // LLMProvider identifies an upstream LLM provider.

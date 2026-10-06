@@ -10,7 +10,7 @@ import (
 
 func TestRouterClassifierProxyHandlerForwardsRouterRequests(t *testing.T) {
 	routerAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/config/kbs/example" {
+		if r.URL.Path != "/api/v1/storage/knowledge-bases/example" {
 			t.Fatalf("unexpected proxied path: %s", r.URL.Path)
 		}
 		if got := r.Header.Get("X-Test-Header"); got != "present" {
@@ -23,7 +23,7 @@ func TestRouterClassifierProxyHandlerForwardsRouterRequests(t *testing.T) {
 
 	handler := RouterClassifierProxyHandler(routerAPI.URL, false)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/router/config/kbs/example", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/router/api/v1/storage/knowledge-bases/example", nil)
 	req.Header.Set("X-Test-Header", "present")
 	rr := httptest.NewRecorder()
 	handler(rr, req)
@@ -38,13 +38,32 @@ func TestRouterClassifierProxyHandlerForwardsRouterRequests(t *testing.T) {
 
 func TestRouterClassifierProxyHandlerBlocksReadonlyMutations(t *testing.T) {
 	handler := RouterClassifierProxyHandler("http://router.internal", true)
-	req := httptest.NewRequest(http.MethodDelete, "/api/router/config/kbs/example", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/router/api/v1/storage/knowledge-bases/example", nil)
 	rr := httptest.NewRecorder()
 
 	handler(rr, req)
 
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 Forbidden, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestRouterClassifierProxyHidesRouterTransportErrors(t *testing.T) {
+	routerAPI := httptest.NewServer(http.NotFoundHandler())
+	routerAPIURL := routerAPI.URL
+	routerAPI.Close()
+
+	handler := RouterClassifierProxyHandler(routerAPIURL, false)
+	req := httptest.NewRequest(http.MethodGet, "/api/router/api/v1/storage/knowledge-bases", nil)
+	rr := httptest.NewRecorder()
+
+	handler(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502 Bad Gateway, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if got := strings.TrimSpace(rr.Body.String()); got != "Router API unavailable" {
+		t.Fatalf("expected a generic error without the Router address, got %q", got)
 	}
 }
 
@@ -70,7 +89,7 @@ func TestRouterClassifierProxyReplacesBrowserAuthorization(t *testing.T) {
 		false,
 		classifierProxyCredentialProvider{token: "classifier-service-token"},
 	)
-	req := httptest.NewRequest(http.MethodGet, "/api/router/config/kbs/example", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/router/api/v1/storage/knowledge-bases/example", nil)
 	req.Header.Set("Authorization", "Bearer dashboard-user-jwt")
 	rr := httptest.NewRecorder()
 
@@ -78,5 +97,25 @@ func TestRouterClassifierProxyReplacesBrowserAuthorization(t *testing.T) {
 
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestRouterClassifierProxyRejectsUnknownSubpathAndMethod(t *testing.T) {
+	calls := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++; w.WriteHeader(http.StatusNoContent) }))
+	defer upstream.Close()
+	handler := RouterClassifierProxyHandler(upstream.URL, false)
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodPost, "/api/router/api/v1/storage/knowledge-bases/example"},
+		{http.MethodGet, "/api/router/api/v1/storage/knowledge-bases/example/unknown"},
+	} {
+		w := httptest.NewRecorder()
+		handler(w, httptest.NewRequest(tc.method, tc.path, nil))
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("undeclared KB proxy allowed: %+v status=%d", tc, w.Code)
+		}
+	}
+	if calls != 0 {
+		t.Fatal("undeclared KB request reached Router")
 	}
 }

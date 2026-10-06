@@ -126,7 +126,7 @@ and traffic distributions determine the result.
 
 Runtime and training both use the query embedding followed by a fixed domain
 one-hot vector. The domain order is defined by `VSRCategories` in
-[`trainer.go`](trainer.go) and must remain identical to the Python data loader.
+[`features.go`](features.go) and must remain identical to the Python data loader.
 Changing the embedding model or its dimension requires retraining.
 
 ## Test changes
@@ -141,3 +141,20 @@ go test ./pkg/modelselection ./pkg/selection
 Unit tests cover artifact loading, feature construction, candidate matching,
 and selector behavior. Evaluate routing quality separately on a held-out
 workload before deploying a trained policy.
+
+Unit tests use small checked-in artifacts under `testdata/`; they never download
+models or discover a workspace cache. Inference is pure Go. Its selections are
+checked against fixtures recorded from the Rust bindings it replaced
+(`testdata/selection_binding_fixtures.json.gz`). To additionally exercise the
+published artifacts (`abdallah1008/semantic-router-ml-models` at revision
+`7c83fa3e0cade1a4f6cf4cd36766cdf959b3afa1`), prepare them separately and pass
+an explicit directory:
+
+```bash
+VLLM_SR_TEST_ML_MODELS_DIR=/absolute/path/to/ml-models \
+  go test ./pkg/modelselection -run 'Published|Pretrained'
+```
+
+The directory must contain `knn_model.json`, `kmeans_model.json`,
+`svm_model.json`, and `mlp_model.json`. Missing or invalid explicitly supplied
+artifacts fail the test.

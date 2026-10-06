@@ -1,15 +1,15 @@
 ---
-title: Deploy with Envoy AI Gateway
-description: Use Semantic Router for model selection while Envoy AI Gateway owns provider and gateway policy.
+title: Deploy with Agent Router
+description: Use Semantic Router for model selection or Responses state while Agent Router (formerly Envoy AI Gateway) owns provider and gateway policy.
 ---
 
-# Deploy with Envoy AI Gateway
+# Deploy with Agent Router
 
-Use this topology when Envoy AI Gateway already owns north-south traffic and
-provider integration, while Semantic Router should choose a model from the
-request's meaning. Envoy AI Gateway remains responsible for Gateway API
-resources, provider credentials, rate limits, and traffic policy. Semantic
-Router runs as an ExtProc service and returns the routing decision.
+Use this topology when Agent Router (formerly Envoy AI Gateway) already owns north-south traffic and
+provider integration. Semantic Router can either choose a model from the
+request's meaning or run only as an ExtProc service for OpenAI Responses state
+and protocol conversion. Agent Router remains responsible for Gateway API
+resources, provider credentials, rate limits, and traffic policy.
 
 For large request bodies or streamed immediate responses from Semantic Router, also see [Streamed ExtProc and immediate responses](./streamed-extproc). That guide shows how to switch the ExtProc filter from `BUFFERED` to `STREAMED` request bodies and how streamed Chat Completions clients receive looper or `fast_response` immediate responses.
 
@@ -20,21 +20,64 @@ The deployment consists of:
 - **Semantic Router** evaluates the selected recipe and chooses the logical
   model or provider alias.
 - **Envoy Gateway** provides the Kubernetes Gateway API data plane.
-- **Envoy AI Gateway** translates provider APIs and applies gateway-owned
+- **Agent Router** translates provider APIs and applies gateway-owned
   authentication, rate limiting, and traffic policy.
 - **Model providers** serve the selected model. This guide uses a demo backend;
   it does not install production inference capacity.
 
 Provider support changes independently of Semantic Router. Use the
-[Envoy AI Gateway provider documentation](https://aigateway.envoyproxy.io/docs/capabilities/llm-integrations/supported-providers/)
+[Agent Router provider documentation](https://theagentrouter.ai/docs/capabilities/llm-integrations/supported-providers/)
 to choose an `AIServiceBackend` and credential policy, then bind the provider
 names to the aliases used by your Semantic Router configuration.
+
+## Responses state without model selection
+
+Use the
+[`responses-state.yaml`](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/responses-state.yaml)
+profile when the external gateway already selects the route and backend, but
+clients need Semantic Router's OpenAI Responses implementation. The profile
+enables `POST /v1/responses`, `GET /v1/responses/{id}`, and
+`previous_response_id` conversation chaining. It converts Responses requests
+to the declared upstream wire format and converts upstream responses back to
+Responses objects.
+
+The ownership boundary is:
+
+| Concern | Owner |
+| --- | --- |
+| Public listener, Gateway/route, provider backend, credentials, rate limits, and traffic policy | External gateway |
+| Responses object storage, `previous_response_id` expansion, and request/response protocol conversion | Semantic Router ExtProc |
+
+This profile deliberately has no Semantic Router listener, backend reference,
+credential, routing signal, decision, or optional plugin. Model entries are
+protocol metadata only. Keep their names and `api_format` values aligned with
+the models accepted by the external gateway. Semantic Router rewrites the
+upstream API path as part of protocol conversion without clearing Envoy's route
+cache, so the route selected by the gateway remains authoritative.
+
+Install the chart with the state-only profile in place of the model-selection
+values used in Step 2:
+
+```bash
+helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
+  --version 0.0.0-latest \
+  --namespace vllm-semantic-router-system \
+  --create-namespace \
+  -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/responses-state.yaml
+```
+
+The included in-memory response store is intended for a single-replica demo or
+local validation; state is lost on restart. Configure the Response API Redis
+backend for durable or replicated production deployments. The external
+gateway's ExtProc filter must send buffered request and response headers and
+bodies to Semantic Router, and its route for `/v1/responses` must select the
+intended provider backend before request-body conversion runs.
 
 ## Prerequisites
 
 You need:
 
-- Kubernetes `1.32` or later for the pinned Envoy AI Gateway `v1.0.x` and
+- Kubernetes `1.32` or later for the pinned Agent Router `v1.0.x` and
   Envoy Gateway `v1.8.x` compatibility set; [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
   is sufficient for the demo;
 - Gateway API `v1.5.x` CRDs. The default Envoy Gateway Helm installation below
@@ -82,7 +125,7 @@ before adapting it to a real provider pool.
 
 ## Step 3: Install Envoy Gateway
 
-Install the Envoy Gateway release supported by Envoy AI Gateway `v1.0.0`:
+Install the Envoy Gateway release supported by Agent Router `v1.0.0`:
 
 ```bash
 export AIGW_VERSION=v1.0.0
@@ -97,10 +140,10 @@ helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
 kubectl wait --timeout=2m -n envoy-gateway-system deployment/envoy-gateway --for=condition=Available
 ```
 
-## Step 4: Install Envoy AI Gateway
+## Step 4: Install Agent Router
 
 Install the AI Gateway CRDs before the controller. These versions follow the
-upstream [`v1.0.x` compatibility matrix](https://aigateway.envoyproxy.io/docs/compatibility/).
+upstream [`v1.0.x` compatibility matrix](https://theagentrouter.ai/docs/compatibility/).
 
 ```bash
 # Install Envoy AI Gateway CRDs

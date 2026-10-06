@@ -25,9 +25,13 @@ func TestRecordSuccessfulLooperExecutionRecordsAggregateSessionUsageWithoutModel
 			},
 		}},
 	}}
+	// The production caller applies the looper's routing facts before reaching
+	// this recorder, so the test establishes the same precondition rather than
+	// having the recorder re-apply them.
 	ctx := &RequestContext{
-		RequestID: "req-looper-session",
-		SessionID: "session-looper",
+		RequestID:    "req-looper-session",
+		SessionID:    "session-looper",
+		RequestModel: "synthesizer",
 	}
 	decision := &config.Decision{Name: "panel"}
 	response := &looper.Response{

@@ -64,11 +64,10 @@ clean-qdrant: stop-qdrant ## Clean up Qdrant data
 	@rm -rf /tmp/qdrant-data 2>/dev/null || sudo -n rm -rf /tmp/qdrant-data 2>/dev/null || true
 	@echo "Qdrant data directory cleaned"
 
-test-qdrant: start-qdrant rust ## Run Qdrant integration tests
+test-qdrant: start-qdrant ## Run Qdrant integration tests
 	@$(LOG_TARGET)
 	@echo "Running Qdrant integration tests..."
-	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/ml-binding/target/release:$${PWD}/nlp-binding/target/release && \
-	export SKIP_QDRANT_TESTS=false && \
+	@export SKIP_QDRANT_TESTS=false && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v \
 		./pkg/cache/ \
 		./pkg/memory/ \

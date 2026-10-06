@@ -20,7 +20,8 @@ const DefaultUpdateInterval = 10 * time.Second
 // Default maximum models to track
 const DefaultMaxModels = 100
 
-// WindowedMetricsManager manages time-windowed metrics for load balancing
+// WindowedMetricsManager summarizes up to 10,000 observed completed responses per model.
+// It is not a census of attempts, provider failures, utilization or queue depth.
 type WindowedMetricsManager struct {
 	config         config.WindowedMetricsConfig
 	timeWindows    []time.Duration
@@ -31,10 +32,6 @@ type WindowedMetricsManager struct {
 	// Ring buffers for storing request data per model
 	requestBuffers map[string]*RequestRingBuffer
 	bufferMutex    sync.RWMutex
-
-	// Active request tracking for queue depth estimation
-	activeRequests map[string]int64
-	activeMutex    sync.RWMutex
 
 	// Stop channel for background goroutine
 	stopChan chan struct{}
@@ -48,8 +45,6 @@ type RequestData struct {
 	LatencySeconds   float64
 	PromptTokens     int64
 	CompletionTokens int64
-	IsError          bool
-	IsTimeout        bool
 }
 
 // RequestRingBuffer is a time-based ring buffer for storing request data
@@ -107,15 +102,6 @@ var (
 	// ModelTokensWindowed tracks token throughput by model, token type, and time window
 	ModelTokensWindowed *prometheus.GaugeVec
 
-	// ModelUtilization tracks utilization percentage by model and time window
-	ModelUtilization *prometheus.GaugeVec
-
-	// ModelQueueDepth tracks estimated queue depth by model
-	ModelQueueDepth *prometheus.GaugeVec
-
-	// ModelErrorRate tracks error rate by model and time window
-	ModelErrorRate *prometheus.GaugeVec
-
 	// ModelLatencyP50 tracks P50 latency by model and time window
 	ModelLatencyP50 *prometheus.GaugeVec
 
@@ -141,7 +127,7 @@ func InitializeWindowedMetrics(cfg config.WindowedMetricsConfig) error {
 		ModelLatencyWindowed = promauto.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "llm_model_latency_windowed_seconds",
-				Help: "Average latency by model and time window",
+				Help: "Mean latency of observed completed responses in the bounded model window",
 			},
 			[]string{"model", "time_window"},
 		)
@@ -149,7 +135,7 @@ func InitializeWindowedMetrics(cfg config.WindowedMetricsConfig) error {
 		ModelRequestsWindowed = promauto.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "llm_model_requests_windowed_total",
-				Help: "Total requests by model and time window",
+				Help: "Observed completed responses retained in the bounded model window (gauge)",
 			},
 			[]string{"model", "time_window"},
 		)
@@ -157,33 +143,9 @@ func InitializeWindowedMetrics(cfg config.WindowedMetricsConfig) error {
 		ModelTokensWindowed = promauto.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "llm_model_tokens_windowed_total",
-				Help: "Total tokens by model, token type, and time window",
+				Help: "Reported tokens retained in the bounded model window (gauge)",
 			},
 			[]string{"model", "token_type", "time_window"},
-		)
-
-		ModelUtilization = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "llm_model_utilization_percentage",
-				Help: "Estimated utilization percentage by model and time window",
-			},
-			[]string{"model", "time_window"},
-		)
-
-		ModelQueueDepth = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "llm_model_queue_depth_estimated",
-				Help: "Estimated queue depth by model",
-			},
-			[]string{"model"},
-		)
-
-		ModelErrorRate = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "llm_model_error_rate_windowed",
-				Help: "Error rate by model and time window",
-			},
-			[]string{"model", "time_window"},
 		)
 
 		ModelLatencyP50 = promauto.NewGaugeVec(
@@ -266,7 +228,6 @@ func NewWindowedMetricsManager(cfg config.WindowedMetricsConfig) (*WindowedMetri
 		updateInterval: updateInterval,
 		maxModels:      maxModels,
 		requestBuffers: make(map[string]*RequestRingBuffer),
-		activeRequests: make(map[string]int64),
 		stopChan:       make(chan struct{}),
 	}, nil
 }
@@ -326,55 +287,6 @@ func (m *WindowedMetricsManager) RecordRequest(req RequestData) {
 	buffer.Add(req)
 }
 
-// IncrementActiveRequests increments the active request count for queue depth tracking
-func (m *WindowedMetricsManager) IncrementActiveRequests(model string) {
-	if !m.config.QueueDepthEstimation {
-		return
-	}
-
-	key := model
-
-	m.activeMutex.Lock()
-	m.activeRequests[key]++
-	count := m.activeRequests[key]
-	m.activeMutex.Unlock()
-
-	// Update the gauge immediately (only if metrics are initialized)
-	if ModelQueueDepth == nil {
-		return
-	}
-	if model == "" {
-		model = consts.UnknownLabel
-	}
-	ModelQueueDepth.WithLabelValues(model).Set(float64(count))
-}
-
-// DecrementActiveRequests decrements the active request count
-func (m *WindowedMetricsManager) DecrementActiveRequests(model string) {
-	if !m.config.QueueDepthEstimation {
-		return
-	}
-
-	key := model
-
-	m.activeMutex.Lock()
-	m.activeRequests[key]--
-	if m.activeRequests[key] < 0 {
-		m.activeRequests[key] = 0
-	}
-	count := m.activeRequests[key]
-	m.activeMutex.Unlock()
-
-	// Update the gauge immediately (only if metrics are initialized)
-	if ModelQueueDepth == nil {
-		return
-	}
-	if model == "" {
-		model = consts.UnknownLabel
-	}
-	ModelQueueDepth.WithLabelValues(model).Set(float64(count))
-}
-
 // computeWindowedMetrics computes all windowed metrics
 func (m *WindowedMetricsManager) computeWindowedMetrics() {
 	now := time.Now()
@@ -400,15 +312,18 @@ func (m *WindowedMetricsManager) computeWindowedMetrics() {
 			if len(data) == 0 {
 				// Set zero values for empty windows
 				ModelRequestsWindowed.WithLabelValues(model, windowLabel).Set(0)
-				ModelLatencyWindowed.WithLabelValues(model, windowLabel).Set(0)
-				ModelErrorRate.WithLabelValues(model, windowLabel).Set(0)
+				ModelLatencyWindowed.DeleteLabelValues(model, windowLabel)
+				ModelLatencyP50.DeleteLabelValues(model, windowLabel)
+				ModelLatencyP95.DeleteLabelValues(model, windowLabel)
+				ModelLatencyP99.DeleteLabelValues(model, windowLabel)
+				ModelTokensWindowed.WithLabelValues(model, "prompt", windowLabel).Set(0)
+				ModelTokensWindowed.WithLabelValues(model, "completion", windowLabel).Set(0)
 				continue
 			}
 
 			// Compute metrics
 			var totalLatency float64
 			var totalPromptTokens, totalCompletionTokens int64
-			var errorCount int
 			latencies := make([]float64, 0, len(data))
 
 			for _, d := range data {
@@ -416,21 +331,16 @@ func (m *WindowedMetricsManager) computeWindowedMetrics() {
 				totalPromptTokens += d.PromptTokens
 				totalCompletionTokens += d.CompletionTokens
 				latencies = append(latencies, d.LatencySeconds)
-				if d.IsError || d.IsTimeout {
-					errorCount++
-				}
 			}
 
 			requestCount := float64(len(data))
 			avgLatency := totalLatency / requestCount
-			errorRate := float64(errorCount) / requestCount
 
 			// Update Prometheus metrics
 			ModelRequestsWindowed.WithLabelValues(model, windowLabel).Set(requestCount)
 			ModelLatencyWindowed.WithLabelValues(model, windowLabel).Set(avgLatency)
 			ModelTokensWindowed.WithLabelValues(model, "prompt", windowLabel).Set(float64(totalPromptTokens))
 			ModelTokensWindowed.WithLabelValues(model, "completion", windowLabel).Set(float64(totalCompletionTokens))
-			ModelErrorRate.WithLabelValues(model, windowLabel).Set(errorRate)
 
 			// Compute percentiles
 			if len(latencies) > 0 {
@@ -443,16 +353,6 @@ func (m *WindowedMetricsManager) computeWindowedMetrics() {
 				ModelLatencyP99.WithLabelValues(model, windowLabel).Set(p99)
 			}
 
-			// Compute utilization (requests per second / expected capacity)
-			// This is a simple approximation based on request rate
-			requestsPerSecond := requestCount / window.Seconds()
-			// Assume 100 req/s as theoretical max for utilization calculation
-			// This can be made configurable
-			utilization := (requestsPerSecond / 100.0) * 100.0
-			if utilization > 100.0 {
-				utilization = 100.0
-			}
-			ModelUtilization.WithLabelValues(model, windowLabel).Set(utilization)
 		}
 	}
 }
@@ -522,7 +422,7 @@ func partition(a []float64, low, high int) int {
 // Global helper functions for recording windowed metrics
 
 // RecordModelWindowedRequest records a request to the global windowed metrics manager
-func RecordModelWindowedRequest(model string, latencySeconds float64, promptTokens, completionTokens int64, isError, isTimeout bool) {
+func RecordModelWindowedRequest(model string, latencySeconds float64, promptTokens, completionTokens int64) {
 	globalWindowedManagerMutex.RLock()
 	manager := globalWindowedManager
 	globalWindowedManagerMutex.RUnlock()
@@ -537,35 +437,7 @@ func RecordModelWindowedRequest(model string, latencySeconds float64, promptToke
 		LatencySeconds:   latencySeconds,
 		PromptTokens:     promptTokens,
 		CompletionTokens: completionTokens,
-		IsError:          isError,
-		IsTimeout:        isTimeout,
 	})
-}
-
-// IncrementModelActiveRequests increments the active request count
-func IncrementModelActiveRequests(model string) {
-	globalWindowedManagerMutex.RLock()
-	manager := globalWindowedManager
-	globalWindowedManagerMutex.RUnlock()
-
-	if manager == nil {
-		return
-	}
-
-	manager.IncrementActiveRequests(model)
-}
-
-// DecrementModelActiveRequests decrements the active request count
-func DecrementModelActiveRequests(model string) {
-	globalWindowedManagerMutex.RLock()
-	manager := globalWindowedManager
-	globalWindowedManagerMutex.RUnlock()
-
-	if manager == nil {
-		return
-	}
-
-	manager.DecrementActiveRequests(model)
 }
 
 // GetWindowedMetricsManager returns the global windowed metrics manager

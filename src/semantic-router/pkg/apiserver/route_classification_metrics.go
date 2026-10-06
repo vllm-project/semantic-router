@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -8,7 +8,6 @@ type ClassificationMetricsResponse struct {
 	UnifiedClassifier        bool           `json:"unified_classifier"`
 	FactCheckClassifier      bool           `json:"fact_check_classifier"`
 	HallucinationDetector    bool           `json:"hallucination_detector"`
-	HallucinationExplainer   bool           `json:"hallucination_explainer"`
 	FeedbackDetector         bool           `json:"feedback_detector"`
 	DecisionCount            int            `json:"decision_count"`
 	ProjectionPartitionCount int            `json:"projection_partition_count"`
@@ -19,15 +18,15 @@ type ClassificationMetricsResponse struct {
 }
 
 func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWriter, _ *http.Request) {
-	cfg := s.currentConfig()
+	cfg, service, release := s.acquireClassificationRuntime()
+	defer release()
 	response := ClassificationMetricsResponse{
-		UnifiedClassifier:      s.classificationSvc.HasUnifiedClassifier(),
-		FactCheckClassifier:    s.classificationSvc.HasFactCheckClassifier(),
-		HallucinationDetector:  s.classificationSvc.HasHallucinationDetector(),
-		HallucinationExplainer: s.classificationSvc.HasHallucinationExplainer(),
-		FeedbackDetector:       s.classificationSvc.HasFeedbackDetector(),
-		RouterConfigAPI:        true,
-		SignalCounts:           map[string]int{},
+		UnifiedClassifier:     service.HasUnifiedClassifier(),
+		FactCheckClassifier:   service.HasFactCheckClassifier(),
+		HallucinationDetector: service.HasHallucinationDetector(),
+		FeedbackDetector:      service.HasFeedbackDetector(),
+		RouterConfigAPI:       true,
+		SignalCounts:          map[string]int{},
 	}
 	if cfg == nil {
 		s.writeJSONResponse(w, http.StatusOK, response)
@@ -50,6 +49,7 @@ func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWri
 		"context":               len(cfg.ContextRules),
 		"complexity":            len(cfg.ComplexityRules),
 		"jailbreak":             len(cfg.JailbreakRules),
+		"hallucination":         len(cfg.HallucinationRules),
 		"pii":                   len(cfg.PIIRules),
 		"projection_partitions": len(cfg.Projections.Partitions),
 		"projection_scores":     len(cfg.Projections.Scores),

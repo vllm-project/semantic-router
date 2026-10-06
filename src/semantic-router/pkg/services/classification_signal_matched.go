@@ -22,6 +22,7 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypeModality:      func(target *MatchedSignals) *[]string { return &target.Modality },
 	config.SignalTypeAuthz:         func(target *MatchedSignals) *[]string { return &target.Authz },
 	config.SignalTypeJailbreak:     func(target *MatchedSignals) *[]string { return &target.Jailbreak },
+	config.SignalTypeSafety:        func(target *MatchedSignals) *[]string { return &target.Safety },
 	config.SignalTypePII:           func(target *MatchedSignals) *[]string { return &target.PII },
 	config.SignalTypeKB:            func(target *MatchedSignals) *[]string { return &target.KB },
 	config.SignalTypeConversation:  func(target *MatchedSignals) *[]string { return &target.Conversation },
@@ -29,6 +30,7 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypeMetadata:      func(target *MatchedSignals) *[]string { return &target.Metadata },
 	config.SignalTypeClassifier:    func(target *MatchedSignals) *[]string { return &target.Classifier },
 	config.SignalTypeInputModality: func(target *MatchedSignals) *[]string { return &target.InputModality },
+	config.SignalTypeDecision:      func(target *MatchedSignals) *[]string { return &target.Decision },
 	config.SignalTypeProjection:    func(target *MatchedSignals) *[]string { return &target.Projection },
 }
 
@@ -52,6 +54,7 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 		Modality:      signals.MatchedModalityRules,
 		Authz:         signals.MatchedAuthzRules,
 		Jailbreak:     signals.MatchedJailbreakRules,
+		Safety:        signals.MatchedSafetyRules,
 		PII:           signals.MatchedPIIRules,
 		KB:            signals.MatchedKBRules,
 		Conversation:  signals.MatchedConversationRules,
@@ -59,6 +62,7 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 		Metadata:      signals.MatchedMetadataRules,
 		Classifier:    signals.MatchedClassifierRules,
 		InputModality: signals.MatchedInputModalityRules,
+		Decision:      signals.MatchedDecisionRules,
 		Projection:    signals.MatchedProjectionRules,
 	}
 }
@@ -125,11 +129,13 @@ func getUnmatchedSignals(
 	collectUnmatchedRuleNames(&unmatched.Modality, cfg.ModalityRules, signals.MatchedModalityRules, func(rule config.ModalityRule) string { return rule.Name })
 	collectUnmatchedAuthzRules(&unmatched.Authz, cfg.GetRoleBindings(), signals.MatchedAuthzRules)
 	collectUnmatchedRuleNames(&unmatched.Jailbreak, cfg.JailbreakRules, signals.MatchedJailbreakRules, func(rule config.JailbreakRule) string { return rule.Name })
+	collectUnmatchedRuleNames(&unmatched.Safety, cfg.SafetyRules, signals.MatchedSafetyRules, func(rule config.SafetyRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.PII, cfg.PIIRules, signals.MatchedPIIRules, func(rule config.PIIRule) string { return rule.Name })
 	collectUnmatchedProjectionOutputs(&unmatched.Projection, cfg.Projections.Mappings, signals.MatchedProjectionRules)
 	collectUnmatchedRuleNames(&unmatched.Metadata, cfg.MetadataRules, signals.MatchedMetadataRules, func(rule config.MetadataRule) string { return rule.Name })
 	collectUnmatchedClassifierRules(&unmatched.Classifier, cfg.ClassifierRules, signals.MatchedClassifierRules)
 	collectUnmatchedRuleNames(&unmatched.InputModality, cfg.InputModalityRules, signals.MatchedInputModalityRules, func(rule config.InputModalityRule) string { return rule.Name })
+	collectUnmatchedDecisionRules(&unmatched.Decision, cfg.DecisionRules, signals.MatchedDecisionRules)
 
 	return unmatched
 }
@@ -211,4 +217,21 @@ func makeStringSet(values []string) map[string]bool {
 		set[value] = true
 	}
 	return set
+}
+
+// collectUnmatchedDecisionRules lists decision signals with no matched answer;
+// a choice rule matches as "rule:choice".
+func collectUnmatchedDecisionRules(target *[]string, rules []config.DecisionSignalRule, matched []string) {
+	for _, rule := range rules {
+		hit := false
+		for _, name := range matched {
+			if name == rule.Name || strings.HasPrefix(name, rule.Name+":") {
+				hit = true
+				break
+			}
+		}
+		if !hit {
+			*target = append(*target, rule.Name)
+		}
+	}
 }

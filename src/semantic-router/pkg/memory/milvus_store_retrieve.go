@@ -22,7 +22,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 
 	defer func() {
 		duration := time.Since(startTime).Seconds()
-		RecordMemoryRetrieval(backend, operation, status, opts.UserID, duration, resultCount)
+		RecordMemoryRetrieval(backend, operation, status, duration, resultCount)
 	}()
 
 	limit, threshold, err := m.normalizeRetrieveOpts(opts)
@@ -34,7 +34,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	logging.Debugf("MilvusStore.Retrieve: query=%s, user_id='%s', limit=%d, threshold=%.4f, hybrid=%v (mode=%s)",
 		logging.ContentDescriptor(opts.Query), opts.UserID, limit, threshold, opts.HybridSearch, opts.HybridMode)
 
-	embedding, err := GenerateEmbedding(opts.Query, m.embeddingConfig)
+	embedding, err := GenerateEmbeddingWithContext(ctx, opts.Query, m.embeddingConfig)
 	if err != nil {
 		status = "error"
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)

@@ -37,7 +37,7 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 				HNSWM:               config.HNSWM,
 				HNSWEfConstruction:  config.HNSWEfConstruction,
 				EmbeddingModel:      config.EmbeddingModel,
-				PolarityGuard:       config.PolarityGuard,
+				EmbeddingProvider:   config.EmbeddingProvider,
 			}), nil
 		},
 	},
@@ -56,6 +56,7 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 				TTLSeconds:          config.TTLSeconds,
 				Config:              config.Redis,
 				EmbeddingModel:      config.EmbeddingModel,
+				EmbeddingProvider:   config.EmbeddingProvider,
 			})
 		},
 	},
@@ -74,6 +75,7 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 				TTLSeconds:          config.TTLSeconds,
 				Config:              config.Valkey,
 				EmbeddingModel:      config.EmbeddingModel,
+				EmbeddingProvider:   config.EmbeddingProvider,
 			})
 		},
 	},
@@ -92,6 +94,7 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 				TTLSeconds:          config.TTLSeconds,
 				Config:              config.Milvus,
 				EmbeddingModel:      config.EmbeddingModel,
+				EmbeddingProvider:   config.EmbeddingProvider,
 			})
 		},
 	},
@@ -107,6 +110,7 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 				TTLSeconds:          config.TTLSeconds,
 				Config:              config.Qdrant,
 				EmbeddingModel:      config.EmbeddingModel,
+				EmbeddingProvider:   config.EmbeddingProvider,
 			})
 		},
 	},

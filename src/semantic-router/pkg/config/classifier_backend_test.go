@@ -26,58 +26,6 @@ func categoryBackendTestConfig(backend *RemoteClassifierBackend) *RouterConfig {
 	}
 }
 
-func TestCategoryModelLegacySelectorsResolveDeterministically(t *testing.T) {
-	tests := []struct {
-		name    string
-		model   CategoryModel
-		variant string
-	}{
-		{name: "modernbert", model: CategoryModel{UseModernBERT: true}, variant: CategoryVariantModernBERT},
-		{name: "mmbert32k", model: CategoryModel{UseMmBERT32K: true}, variant: CategoryVariantMmBERT32K},
-		{name: "candle", model: CategoryModel{Variant: CategoryVariantCandle}, variant: CategoryVariantCandle},
-		{name: "omitted uses historical auto detect", model: CategoryModel{}, variant: ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.model.EffectiveVariant()
-			if err != nil || got != tt.variant {
-				t.Fatalf("EffectiveVariant() = %q, %v; want %q", got, err, tt.variant)
-			}
-		})
-	}
-}
-
-func TestCategoryModelRejectsContradictoryLocalSelectors(t *testing.T) {
-	for name, model := range map[string]CategoryModel{
-		"both legacy selectors":         {UseModernBERT: true, UseMmBERT32K: true},
-		"modernbert plus mmbert legacy": {UseMmBERT32K: true, Variant: CategoryVariantModernBERT},
-		"mmbert plus modern legacy":     {UseModernBERT: true, Variant: CategoryVariantMmBERT32K},
-		"candle plus legacy selector":   {UseModernBERT: true, Variant: CategoryVariantCandle},
-		"unknown canonical variant":     {Variant: "modern_bert_typo"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			if err := model.ValidateLocalVariant(); err == nil {
-				t.Fatal("expected deterministic local-selector validation error")
-			}
-		})
-	}
-}
-
-func TestCategoryModelAcceptsAgreeingCanonicalAndLegacySelectors(t *testing.T) {
-	for name, model := range map[string]CategoryModel{
-		"modernbert":                               {Variant: CategoryVariantModernBERT, UseModernBERT: true},
-		"mmbert32k":                                {Variant: CategoryVariantMmBERT32K, UseMmBERT32K: true},
-		"modernbert with explicit false mmbert":    {Variant: CategoryVariantModernBERT, UseMmBERT32K: false},
-		"mmbert32k with explicit false modernbert": {Variant: CategoryVariantMmBERT32K, UseModernBERT: false},
-	} {
-		t.Run(name, func(t *testing.T) {
-			if err := model.ValidateLocalVariant(); err != nil {
-				t.Fatalf("agreeing canonical and legacy selectors rejected: %v", err)
-			}
-		})
-	}
-}
-
 func TestValidateCategoryModelBackend(t *testing.T) {
 	deadline := 3000
 	valid := &RemoteClassifierBackend{
@@ -113,28 +61,12 @@ func TestValidateCategoryModelBackend(t *testing.T) {
 			zero := 0
 			cfg.CategoryModel.Backend.DeadlineMs = &zero
 		}, want: "deadline_ms"},
-		{name: "mixed canonical local selector", mutate: func(cfg *RouterConfig) {
-			cfg.CategoryModel.Variant = CategoryVariantMmBERT32K
-		}, want: "mutually exclusive"},
-		{name: "mixed legacy local selector", mutate: func(cfg *RouterConfig) {
-			cfg.CategoryModel.UseModernBERT = true
-		}, want: "mutually exclusive"},
-		{name: "mixed active legacy local selector", mutate: func(cfg *RouterConfig) {
-			cfg.CategoryModel.UseMmBERT32K = true
-		}, want: "mutually exclusive"},
-		{name: "backend plus agreeing canonical and legacy selector", mutate: func(cfg *RouterConfig) {
-			cfg.CategoryModel.Variant = CategoryVariantMmBERT32K
-			cfg.CategoryModel.UseMmBERT32K = true
-		}, want: "mutually exclusive"},
 		{name: "invalid endpoint port", mutate: func(cfg *RouterConfig) {
 			cfg.ExternalModels[0].ModelEndpoint.Port = 65536
 		}, want: "valid llm_endpoint"},
 		{name: "invalid endpoint protocol", mutate: func(cfg *RouterConfig) {
 			cfg.ExternalModels[0].ModelEndpoint.Protocol = "ftp"
 		}, want: "http or https"},
-		{name: "missing external model name", mutate: func(cfg *RouterConfig) {
-			cfg.ExternalModels[0].ModelName = ""
-		}, want: "llm_model_name"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -148,15 +80,6 @@ func TestValidateCategoryModelBackend(t *testing.T) {
 				t.Fatalf("error = %v, want substring %q", err, tt.want)
 			}
 		})
-	}
-	falseLegacyCfg := categoryBackendTestConfig(&RemoteClassifierBackend{
-		Protocol: RemoteClassifierProtocolHTTPClassify,
-		Model:    "named-category",
-	})
-	falseLegacyCfg.CategoryModel.UseModernBERT = false
-	falseLegacyCfg.CategoryModel.UseMmBERT32K = false
-	if err := ValidateCategoryModelBackend(falseLegacyCfg); err != nil {
-		t.Fatalf("explicit false legacy selectors should remain readable, got %v", err)
 	}
 }
 
@@ -222,120 +145,16 @@ func TestRemoteClassifierBackendYAMLRejectsTimeoutAlias(t *testing.T) {
 	}
 }
 
-func TestCanonicalCategoryVariantCompatibility(t *testing.T) {
-	legacyOverride := []byte(`
-version: v0.3
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          use_modernbert: true
-`)
-	cfg, err := ParseYAMLBytes(legacyOverride)
-	if err != nil {
-		t.Fatalf("legacy canonical override rejected: %v", err)
-	}
-	if got, want := cfg.CategoryModel.Variant, CategoryVariantModernBERT; got != want || cfg.CategoryModel.UseModernBERT {
-		t.Fatalf("legacy canonical override = variant=%q modern=%v, want canonical modernbert without legacy spelling", got, cfg.CategoryModel.UseModernBERT)
-	}
-
-	conflictingOverride := []byte(`
-version: v0.3
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          variant: modernbert
-          use_mmbert_32k: true
-`)
-	if _, err := ParseYAMLBytes(conflictingOverride); err == nil || !strings.Contains(err.Error(), "conflicts") {
-		t.Fatalf("expected explicit canonical/legacy conflict, got %v", err)
-	}
-
-	agreeingOverride := []byte(`
-version: v0.3
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          variant: modernbert
-          use_modernbert: true
-`)
-	agreeing, err := ParseYAMLBytes(agreeingOverride)
-	if err != nil {
-		t.Fatalf("agreeing canonical/legacy override rejected: %v", err)
-	}
-	if agreeing.CategoryModel.Variant != CategoryVariantModernBERT || agreeing.CategoryModel.UseModernBERT {
-		t.Fatalf("agreeing override was not canonicalized: variant=%q legacy=%v", agreeing.CategoryModel.Variant, agreeing.CategoryModel.UseModernBERT)
-	}
-
-	clearingOverride := []byte(`
-version: v0.3
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          use_mmbert_32k: false
-`)
-	cleared, err := ParseYAMLBytes(clearingOverride)
-	if err != nil {
-		t.Fatalf("legacy clear override rejected: %v", err)
-	}
-	if cleared.CategoryModel.Variant != "" || cleared.CategoryModel.UseMmBERT32K {
-		t.Fatalf("legacy false override did not clear inherited variant: variant=%q legacy=%v", cleared.CategoryModel.Variant, cleared.CategoryModel.UseMmBERT32K)
-	}
-}
-
-func TestCanonicalRemoteBackendReplacesInheritedLocalVariant(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-global:
-  model_catalog:
-    external:
-      - name: named-category
-        model_role: classification
-        llm_model_name: category-service
-        llm_endpoint:
-          address: 127.0.0.1
-          port: 8080
-    modules:
-      classifier:
-        domain:
-          backend:
-            protocol: http_classify
-            contract: label_distribution.v1
-            model: named-category
-`)
-	cfg, err := ParseYAMLBytes(canonicalYAML)
-	if err != nil {
-		t.Fatalf("remote canonical override rejected: %v", err)
-	}
-	if cfg.CategoryModel.Backend == nil || cfg.CategoryModel.Backend.Model != "named-category" {
-		t.Fatalf("remote backend was not decoded: %#v", cfg.CategoryModel.Backend)
-	}
-	if cfg.CategoryModel.Backend.Contract != RemoteClassifierContractLabelDistribution {
-		t.Fatalf("remote contract = %q, want %q", cfg.CategoryModel.Backend.Contract, RemoteClassifierContractLabelDistribution)
-	}
-	if cfg.CategoryModel.Variant != "" || cfg.CategoryModel.UseModernBERT || cfg.CategoryModel.UseMmBERT32K {
-		t.Fatalf("inherited local selector was not cleared for remote backend: variant=%q modern=%v mmbert=%v",
-			cfg.CategoryModel.Variant, cfg.CategoryModel.UseModernBERT, cfg.CategoryModel.UseMmBERT32K)
-	}
-}
-
 func TestReferenceConfigCategoryBackendReplacesDefaultVariant(t *testing.T) {
 	data := string(readReferenceConfigYAML(t))
 	data = strings.Replace(data,
-		"          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json\n",
+		"          category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json\n",
 		"          backend:\n"+
 			"            protocol: http_classify\n"+
 			"            contract: label_distribution.v1\n"+
 			"            model: external-classifier\n"+
 			"            deadline_ms: 5000\n"+
-			"          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json\n", 1)
+			"          category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json\n", 1)
 	if data == string(readReferenceConfigYAML(t)) {
 		t.Fatal("reference config category block was not found")
 	}
@@ -344,81 +163,128 @@ func TestReferenceConfigCategoryBackendReplacesDefaultVariant(t *testing.T) {
 	}
 }
 
-func TestCanonicalRemoteBackendAllowsExplicitFalseLegacySelector(t *testing.T) {
-	falseLegacyBackendYAML := []byte(`
-version: v0.3
-global:
-  model_catalog:
-    external:
-      - name: named-category
-        model_role: classification
-        llm_model_name: category-service
-        llm_endpoint:
-          address: 127.0.0.1
-          port: 8080
-    modules:
-      classifier:
-        domain:
-          use_mmbert_32k: false
-          backend:
-            protocol: http_classify
-            model: named-category
-`)
-	falseLegacyCfg, err := ParseYAMLBytes(falseLegacyBackendYAML)
-	if err != nil {
-		t.Fatalf("remote backend with explicit false legacy selector rejected: %v", err)
+func piiBackendTestConfig(backend *RemoteClassifierBackend) *RouterConfig {
+	cfg := &RouterConfig{}
+	cfg.PIIModel = PIIModel{Backend: backend, PIIMappingPath: "models/pii/pii_type_mapping.json"}
+	cfg.ExternalModels = []ExternalModelConfig{{
+		Name:          "named-pii",
+		ModelRole:     ModelRoleClassification,
+		ModelEndpoint: ClassifierVLLMEndpoint{Address: "10.0.0.5", Port: 8000},
+		ModelName:     "pii-spans",
+	}}
+	return cfg
+}
+
+func TestRemoteClassifierBackendAcceptsTokenSpansContract(t *testing.T) {
+	b := &RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPClassify, Contract: RemoteClassifierContractTokenSpans, Model: "named-pii"}
+	if err := b.Validate(); err != nil {
+		t.Fatalf("token_spans.v1 rejected: %v", err)
 	}
-	if falseLegacyCfg.CategoryModel.Variant != "" || falseLegacyCfg.CategoryModel.UseMmBERT32K {
-		t.Fatalf("explicit false legacy selector was not normalized for remote backend: variant=%q mmbert=%v",
-			falseLegacyCfg.CategoryModel.Variant, falseLegacyCfg.CategoryModel.UseMmBERT32K)
+	if got := b.EffectiveContract(RemoteClassifierContractLabelDistribution); got != RemoteClassifierContractTokenSpans {
+		t.Fatalf("explicit contract %q overridden to %q", RemoteClassifierContractTokenSpans, got)
 	}
 }
 
-func TestCanonicalRemoteBackendRejectsActiveLegacySelector(t *testing.T) {
-	trueLegacyBackendYAML := []byte(`
-version: v0.3
-global:
-  model_catalog:
-    external:
-      - name: named-category
-        model_role: classification
-        llm_model_name: category-service
-        llm_endpoint:
-          address: 127.0.0.1
-          port: 8080
-    modules:
-      classifier:
-        domain:
-          use_mmbert_32k: true
-          backend:
-            protocol: http_classify
-            model: named-category
-`)
-	if _, err := ParseYAMLBytes(trueLegacyBackendYAML); err == nil || !strings.Contains(err.Error(), "backend is mutually exclusive") {
-		t.Fatalf("expected backend with active legacy selector to be rejected, got %v", err)
+func TestValidatePIIModelBackend(t *testing.T) {
+	if err := ValidatePIIModelBackend(&RouterConfig{}); err != nil {
+		t.Fatalf("absent backend must be a no-op: %v", err)
+	}
+	valid := &RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPClassify, Model: "named-pii"}
+	if err := ValidatePIIModelBackend(piiBackendTestConfig(valid)); err != nil {
+		t.Fatalf("valid backend with defaulted contract rejected: %v", err)
+	}
+	tests := []struct {
+		name   string
+		mutate func(*RouterConfig)
+		want   string
+	}{
+		{name: "label distribution is the wrong shape for PII", mutate: func(cfg *RouterConfig) {
+			cfg.PIIModel.Backend.Contract = RemoteClassifierContractLabelDistribution
+		}, want: "incompatible"},
+		{name: "unknown contract", mutate: func(cfg *RouterConfig) {
+			cfg.PIIModel.Backend.Contract = "token_spans.v0"
+		}, want: "unsupported"},
+		{name: "chat protocol not supported", mutate: func(cfg *RouterConfig) {
+			cfg.PIIModel.Backend.Protocol = RemoteClassifierProtocolHTTPChat
+		}, want: "not supported"},
+		{name: "wrong role", mutate: func(cfg *RouterConfig) {
+			cfg.ExternalModels[0].ModelRole = ModelRoleGuardrail
+		}, want: "model_role"},
+		{name: "missing named model", mutate: func(cfg *RouterConfig) {
+			cfg.PIIModel.Backend.Model = "missing"
+		}, want: "not declared"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := piiBackendTestConfig(&RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPClassify, Model: "named-pii"})
+			tt.mutate(cfg)
+			err := ValidatePIIModelBackend(cfg)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("want error containing %q, got %v", tt.want, err)
+			}
+		})
 	}
 }
 
-func TestCanonicalCategoryVariantExportUsesCanonicalSelector(t *testing.T) {
-	cfg := &RouterConfig{
-		InlineModels: InlineModels{Classifier: Classifier{CategoryModel: CategoryModel{
-			Variant:       CategoryVariantModernBERT,
-			UseModernBERT: true,
-		}}},
+// classifier.pii.on_error takes the shared allow|block contract and nothing else.
+func TestPIIOnErrorValidatedAtParse(t *testing.T) {
+	badYAML := []byte(`
+version: v0.3
+global:
+  model_catalog:
+    modules:
+      classifier:
+        pii:
+          on_error: retry
+`)
+	_, err := ParseYAMLBytes(badYAML)
+	if err == nil || !strings.Contains(err.Error(), "on_error") {
+		t.Fatalf("unknown pii on_error must be rejected at parse, got %v", err)
 	}
-	exported := CanonicalGlobalFromRouterConfig(cfg)
-	if exported == nil {
-		t.Fatal("expected canonical global export")
-	}
-	domain := exported.ModelCatalog.Modules.Classifier.Domain.CategoryModel
-	if domain.Variant != CategoryVariantModernBERT || domain.UseModernBERT || domain.UseMmBERT32K {
-		t.Fatalf("exported category selector = variant=%q modern=%v mmbert=%v; want variant only", domain.Variant, domain.UseModernBERT, domain.UseMmBERT32K)
-	}
-	encoded, err := yaml.Marshal(exported.ModelCatalog.Modules.Classifier.Domain)
+
+	goodYAML := []byte(`
+version: v0.3
+global:
+  model_catalog:
+    modules:
+      classifier:
+        pii:
+          on_error: block
+`)
+	cfg, err := ParseYAMLBytes(goodYAML)
 	if err != nil {
-		t.Fatalf("marshal canonical export: %v", err)
+		t.Fatalf("pii on_error: block rejected: %v", err)
 	}
-	if strings.Contains(string(encoded), "use_modernbert") || strings.Contains(string(encoded), "use_mmbert_32k") {
-		t.Fatalf("canonical export retained deprecated selectors: %s", encoded)
+	if !cfg.PIIModel.IsBlock() {
+		t.Fatal("pii on_error: block was not decoded onto PIIModel")
+	}
+}
+
+// A remote-only PII configuration must still be reported as enabled, otherwise
+// NeedsPIIMappingForRouting is false and the mapping the adapter requires is
+// never loaded.
+func TestIsPIIClassifierEnabledAcceptsRemoteBackend(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.PIIModel.Backend = &RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPClassify, Model: "named-pii"}
+	cfg.PIIMappingPath = "models/pii/pii_type_mapping.json"
+	if !cfg.IsPIIClassifierEnabled() {
+		t.Fatal("backend-only PII config reported disabled")
+	}
+	cfg.PIIModel.Backend = nil
+	if cfg.IsPIIClassifierEnabled() {
+		t.Fatal("PII config with neither model_id nor backend reported enabled")
+	}
+}
+
+func TestFixedHTTPClassifierDoesNotRequireAnUnusedModelSelector(t *testing.T) {
+	cfg := categoryBackendTestConfig(&RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPClassify, Model: "named-category"})
+	cfg.ExternalModels[0].ModelName = ""
+	if err := ValidateCategoryModelBackend(cfg); err != nil {
+		t.Fatal(err)
+	}
+	cfg.ExternalModels[0].ModelRole = ModelRoleGuardrail
+	backend := &RemoteClassifierBackend{Protocol: RemoteClassifierProtocolHTTPChat, Model: "named-category", Contract: RemoteClassifierContractLabelDecision}
+	if _, err := ResolveRemoteClassifierBackend(cfg, backend, ModelRoleGuardrail, RemoteClassifierContractLabelDecision); err == nil {
+		t.Fatal("chat request accepted without its model selector")
 	}
 }

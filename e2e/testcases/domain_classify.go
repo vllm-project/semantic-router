@@ -39,7 +39,29 @@ type ClassificationResult struct {
 	Error            string
 }
 
+type domainClassificationFixture struct {
+	model          string
+	requiredRecipe string
+}
+
+func domainFixtureForProfile(profile string) (domainClassificationFixture, error) {
+	switch profile {
+	case "envoy-ai-gateway":
+		return domainClassificationFixture{model: "e2e-domain", requiredRecipe: "e2e-domain"}, nil
+	case "ml-model-selection", "production-stack":
+		// These profiles own top-level routing and retain their original MoM
+		// request contract. They do not declare the AI Gateway feature recipe.
+		return domainClassificationFixture{model: "MoM"}, nil
+	default:
+		return domainClassificationFixture{}, fmt.Errorf("domain-classify has no fixture contract for profile %q", profile)
+	}
+}
+
 func testDomainClassify(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	fixture, err := domainFixtureForProfile(opts.Profile)
+	if err != nil {
+		return err
+	}
 	if opts.Verbose {
 		fmt.Println("[Test] Testing domain classification accuracy")
 	}
@@ -64,7 +86,7 @@ func testDomainClassify(ctx context.Context, client *kubernetes.Clientset, opts 
 
 	for _, testCase := range testCases {
 		totalTests++
-		result := testSingleClassification(ctx, testCase.Question, testCase.Category, localPort, opts.Verbose)
+		result := testSingleClassification(ctx, testCase.Question, testCase.Category, localPort, fixture, opts.Verbose)
 		results = append(results, result)
 		if result.Correct {
 			correctTests++
@@ -114,7 +136,7 @@ func loadDomainClassifyCases(filepath string) ([]DomainClassifyCase, error) {
 	return cases, nil
 }
 
-func testSingleClassification(ctx context.Context, question, expectedCategory, localPort string, verbose bool) ClassificationResult {
+func testSingleClassification(ctx context.Context, question, expectedCategory, localPort string, fixture domainClassificationFixture, verbose bool) ClassificationResult {
 	result := ClassificationResult{
 		Question:         question,
 		ExpectedCategory: expectedCategory,
@@ -122,7 +144,7 @@ func testSingleClassification(ctx context.Context, question, expectedCategory, l
 
 	// Create chat completion request
 	requestBody := map[string]interface{}{
-		"model": "MoM",
+		"model": fixture.model,
 		"messages": []map[string]string{
 			{"role": "user", "content": question},
 		},
@@ -175,6 +197,14 @@ func testSingleClassification(ctx context.Context, question, expectedCategory, l
 			fmt.Printf("  Response Body: %s\n", string(bodyBytes))
 		}
 
+		return result
+	}
+
+	// The AI Gateway classifier fixture requires its isolated upstream path.
+	// Other profiles retain their own MoM routing and category assertions.
+	if fixture.requiredRecipe != "" && (resp.Header.Get("x-vsr-selected-recipe") != fixture.requiredRecipe ||
+		resp.Header.Get("x-vsr-response-path") != "upstream") {
+		result.Error = "classification response did not use the isolated Domain upstream path"
 		return result
 	}
 

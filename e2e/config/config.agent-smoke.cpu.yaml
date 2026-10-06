@@ -8,12 +8,13 @@ listeners:
 
 providers:
   defaults:
-    default_model: "smoke-model"
+    model: "smoke-model"
   models:
     - name: "smoke-model"
       provider_model_id: "smoke-model"
       backend_refs:
         - name: "primary"
+          provider: vllm
           weight: 100
           endpoint: "host.docker.internal:8000/v1"
           protocol: "http"
@@ -34,6 +35,9 @@ routing:
           use_reasoning: false
 
 global:
+  router:
+    auto_model_names:
+      - "vllm-sr/auto"
   stores:
     response_cache:
       enabled: false
@@ -42,8 +46,6 @@ global:
       semantic:
         mmbert_model_path: ""
         qwen3_model_path: ""
-        gemma_model_path: ""
-        bert_model_path: ""
         multimodal_model_path: ""
     modules:
       prompt_guard:
@@ -56,14 +58,11 @@ global:
           model_ref: ""
           model_id: ""
           category_mapping_path: ""
-          use_mmbert_32k: false
         pii:
           model_ref: ""
           model_id: ""
           pii_mapping_path: ""
-          use_mmbert_32k: false
       feedback_detector:
         enabled: false
         model_ref: ""
         model_id: ""
-        use_mmbert_32k: false

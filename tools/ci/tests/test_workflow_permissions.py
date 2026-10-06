@@ -4,10 +4,16 @@ import sys
 import unittest
 from pathlib import Path
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
 
-from validate_workflows import Workflow, validate_local_call  # noqa: E402
+from validate_workflows import (  # noqa: E402
+    UniqueKeyLoader,
+    Workflow,
+    validate_local_call,
+)
 
 
 def workflow(name: str, data: dict[str, object]) -> Workflow:
@@ -31,6 +37,12 @@ class ReusableWorkflowPermissionTests(unittest.TestCase):
                 },
             },
         )
+
+    def test_duplicate_workflow_output_keys_are_rejected(self) -> None:
+        with self.assertRaises(yaml.YAMLError):
+            yaml.load(
+                "outputs:\n  native: true\n  native: matrix\n", Loader=UniqueKeyLoader
+            )
 
     def test_rejects_callee_write_above_caller_ceiling(self) -> None:
         caller = workflow(
@@ -85,6 +97,33 @@ class ReusableWorkflowPermissionTests(unittest.TestCase):
         )
 
         self.assertEqual(errors, [])
+
+
+class CommunityLabelSyncConcurrencyTests(unittest.TestCase):
+    def setUp(self) -> None:
+        path = REPO_ROOT / ".github" / "workflows" / "community-labels.yml"
+        self.data = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    def test_pr_events_and_scheduled_sweep_use_independent_job_concurrency(
+        self,
+    ) -> None:
+        self.assertNotIn("concurrency", self.data)
+        jobs = self.data["jobs"]
+        pr_concurrency = jobs["pull-request-state"]["concurrency"]
+        sweep_concurrency = jobs["pull-request-sweep"]["concurrency"]
+
+        self.assertIn(
+            "github.event.workflow_run.pull_requests[0].number",
+            pr_concurrency["group"],
+        )
+        self.assertIn(
+            "github.event.check_suite.pull_requests[0].number",
+            pr_concurrency["group"],
+        )
+        self.assertEqual(sweep_concurrency["group"], "community-label-sync-sweep")
+        self.assertNotEqual(pr_concurrency["group"], sweep_concurrency["group"])
+        self.assertFalse(pr_concurrency["cancel-in-progress"])
+        self.assertFalse(sweep_concurrency["cancel-in-progress"])
 
 
 if __name__ == "__main__":

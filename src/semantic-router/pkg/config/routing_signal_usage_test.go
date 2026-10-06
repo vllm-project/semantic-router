@@ -275,9 +275,6 @@ func TestNamedRecipeModelNeedsCoverProjectionsAndPlugins(t *testing.T) {
 	if !cfg.NeedsLocalHallucinationModelsForRouting() {
 		t.Fatal("local hallucination models enabled by a named-recipe plugin were not required")
 	}
-	if !cfg.NeedsLocalHallucinationNLIForRouting() {
-		t.Fatal("NLI requested by a named-recipe hallucination plugin was not required")
-	}
 }
 
 func TestEndpointHallucinationBackendDoesNotNeedLocalModels(t *testing.T) {
@@ -289,9 +286,6 @@ func TestEndpointHallucinationBackendDoesNotNeedLocalModels(t *testing.T) {
 	}
 	if cfg.NeedsLocalHallucinationModelsForRouting() {
 		t.Fatal("endpoint hallucination detector must not require local model snapshots")
-	}
-	if cfg.NeedsLocalHallucinationNLIForRouting() {
-		t.Fatal("endpoint hallucination detector must not require a local NLI snapshot")
 	}
 }
 
@@ -334,7 +328,6 @@ func TestNamedRecipeScopeDoesNotOwnDefaultAuxiliaryAPIs(t *testing.T) {
 				Enabled:            true,
 				FactCheckModel:     FactCheckModelConfig{ModelID: "models/test-fact-check"},
 				HallucinationModel: HallucinationModelConfig{ModelID: "models/test-hallucination"},
-				NLIModel:           NLIModelConfig{ModelID: "models/test-nli"},
 			},
 			FeedbackDetector: FeedbackDetectorConfig{
 				Enabled: true,
@@ -351,8 +344,7 @@ func TestNamedRecipeScopeDoesNotOwnDefaultAuxiliaryAPIs(t *testing.T) {
 
 	if cfg.NeedsFactCheckModelForAPI() ||
 		cfg.NeedsFeedbackModelForAPI() ||
-		cfg.NeedsHallucinationDetectorForDefaultRuntime() ||
-		cfg.NeedsLocalHallucinationNLIForAPI() {
+		cfg.NeedsHallucinationDetectorForDefaultRuntime() {
 		t.Fatal("named recipe scope inherited default/API model consumers")
 	}
 }
@@ -372,4 +364,153 @@ func loadGenericMultiRecipeModelNeedsTestConfig(t *testing.T) *RouterConfig {
 
 func float64PtrForRoutingSignalUsageTest(v float64) *float64 {
 	return &v
+}
+
+func responseJailbreakPluginForRoutingSignalUsageTest(enabled bool) DecisionPlugin {
+	return DecisionPlugin{
+		Type: "response_jailbreak",
+		Configuration: MustStructuredPayload(map[string]interface{}{
+			"enabled": enabled,
+			"action":  "block",
+		}),
+	}
+}
+
+func keywordDecisionsForRoutingSignalUsageTest(plugins ...DecisionPlugin) []Decision {
+	return []Decision{{
+		Name:    "keyword-route",
+		Rules:   RuleNode{Operator: "OR", Conditions: []RuleNode{{Type: SignalTypeKeyword, Name: "probe"}}},
+		Plugins: plugins,
+	}}
+}
+
+// A response-direction rule is consumed by the selected decision's
+// response_jailbreak plugin, never by a decision rule, so the mapping has to
+// load on the rule (or on a plugin that classifies the response itself) alone.
+func TestNeedsJailbreakMappingForResponseStageConsumers(t *testing.T) {
+	responseRule := JailbreakRule{Name: "unsafe_completion", Direction: SignalDirectionResponse}
+
+	tests := []struct {
+		name        string
+		promptGuard bool
+		rules       []JailbreakRule
+		decisions   []Decision
+		want        bool
+	}{
+		{
+			name:        "response-direction rule with no decision reading it",
+			promptGuard: true,
+			rules:       []JailbreakRule{responseRule},
+			decisions:   keywordDecisionsForRoutingSignalUsageTest(),
+			want:        true,
+		},
+		{
+			name:        "response_jailbreak plugin classifies the response itself",
+			promptGuard: true,
+			decisions:   keywordDecisionsForRoutingSignalUsageTest(responseJailbreakPluginForRoutingSignalUsageTest(true)),
+			want:        true,
+		},
+		{
+			name:        "disabled response_jailbreak plugin",
+			promptGuard: true,
+			decisions:   keywordDecisionsForRoutingSignalUsageTest(responseJailbreakPluginForRoutingSignalUsageTest(false)),
+			want:        false,
+		},
+		{
+			name:        "request-direction rule nothing reads",
+			promptGuard: true,
+			rules:       []JailbreakRule{{Name: "prompt_injection"}},
+			decisions:   keywordDecisionsForRoutingSignalUsageTest(),
+			want:        false,
+		},
+		{
+			name:        "prompt_guard disabled",
+			promptGuard: false,
+			rules:       []JailbreakRule{responseRule},
+			decisions:   keywordDecisionsForRoutingSignalUsageTest(responseJailbreakPluginForRoutingSignalUsageTest(true)),
+			want:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := newRoutingSignalUsageTestConfig()
+			cfg.PromptGuard.Enabled = tt.promptGuard
+			cfg.JailbreakRules = tt.rules
+			cfg.Decisions = tt.decisions
+			if got := cfg.NeedsJailbreakMappingForRouting(); got != tt.want {
+				t.Fatalf("NeedsJailbreakMappingForRouting() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNeedsJailbreakMappingForResponseStageConsumersFollowsRecipeReachability(t *testing.T) {
+	profile := func(rules []JailbreakRule, plugins ...DecisionPlugin) RoutingProfile {
+		return RoutingProfile{
+			Signals:   Signals{JailbreakRules: rules},
+			Decisions: keywordDecisionsForRoutingSignalUsageTest(plugins...),
+		}
+	}
+	responseRule := []JailbreakRule{{Name: "unsafe_completion", Direction: SignalDirectionResponse}}
+
+	cfg := newRoutingSignalUsageTestConfig()
+	cfg.Recipes = []RoutingRecipe{
+		{Name: DefaultRecipeName, Profile: profile(nil)},
+		{Name: "guarded", Profile: profile(responseRule)},
+		{Name: "plugin-owned", Profile: profile(nil, responseJailbreakPluginForRoutingSignalUsageTest(true))},
+	}
+	if cfg.NeedsJailbreakMappingForRouting() {
+		t.Fatal("response-stage consumers in recipes without an entrypoint must not load the jailbreak mapping")
+	}
+
+	cfg.Entrypoints = []EntrypointMapping{{ModelNames: []string{"vllm-sr/guarded"}, Recipe: "guarded"}}
+	if !cfg.NeedsJailbreakMappingForRouting() {
+		t.Fatal("a response-direction rule in a reachable recipe must load the jailbreak mapping")
+	}
+
+	cfg.Entrypoints = []EntrypointMapping{{ModelNames: []string{"vllm-sr/plugin-owned"}, Recipe: "plugin-owned"}}
+	if !cfg.NeedsJailbreakMappingForRouting() {
+		t.Fatal("a response_jailbreak plugin in a reachable recipe must load the jailbreak mapping")
+	}
+
+	for i, want := range []bool{false, true, true} {
+		scoped := cfg.ConfigForRecipe(&cfg.Recipes[i])
+		if got := scoped.NeedsJailbreakMappingForRouting(); got != want {
+			t.Fatalf("recipe %q scoped NeedsJailbreakMappingForRouting() = %v, want %v", cfg.Recipes[i].Name, got, want)
+		}
+	}
+}
+
+// A declared hallucination rule is a consumer of the detector on its own: the
+// plugin only enforces on it, so the model has to be provisioned even when no
+// decision enables the plugin. use_nli on the rule provisions the explainer.
+func TestNeedsHallucinationDetectorForDeclaredRule(t *testing.T) {
+	cfg := newRoutingSignalUsageTestConfig()
+	cfg.HallucinationMitigation.HallucinationModel.ModelID = "models/halugate-detector"
+	cfg.Decisions = keywordDecisionsForRoutingSignalUsageTest()
+
+	if cfg.NeedsHallucinationDetectorForRouting() {
+		t.Fatal("no rule and no plugin must not provision the hallucination detector")
+	}
+	cfg.HallucinationRules = []HallucinationRule{{Name: "ungrounded_claims"}}
+	if !cfg.NeedsHallucinationDetectorForRouting() {
+		t.Fatal("a declared hallucination rule must provision the detector")
+	}
+
+	cfg.HallucinationRules = nil
+	cfg.Recipes = []RoutingRecipe{
+		{Name: DefaultRecipeName, Profile: RoutingProfile{Decisions: keywordDecisionsForRoutingSignalUsageTest()}},
+		{Name: "grounded", Profile: RoutingProfile{
+			Signals:   Signals{HallucinationRules: []HallucinationRule{{Name: "ungrounded_claims"}}},
+			Decisions: keywordDecisionsForRoutingSignalUsageTest(),
+		}},
+	}
+	if cfg.NeedsHallucinationDetectorForRouting() {
+		t.Fatal("a rule in a recipe without an entrypoint must not provision the detector")
+	}
+	cfg.Entrypoints = []EntrypointMapping{{ModelNames: []string{"vllm-sr/grounded"}, Recipe: "grounded"}}
+	if !cfg.NeedsHallucinationDetectorForRouting() {
+		t.Fatal("a rule in a reachable recipe must provision the detector")
+	}
 }

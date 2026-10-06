@@ -59,14 +59,41 @@ const standaloneEnvoyConfigYAML = `static_resources:
                 route:
                   cluster: semantic_router_cluster
                   timeout: 300s
-              # Default route - all other paths go through ExtProc, then Envoy
-              # handles upstream routing. ExtProc only emits model/decision
-              # signals; it does not choose individual endpoints.
+              {{- range .Models }}
               - match:
                   prefix: "/"
+                  headers:
+                  - name: x-selected-model
+                    string_match:
+                      exact: {{ quote .Name }}
                 route:
-                  cluster: dynamic_forward_proxy_cluster
+                  weighted_clusters:
+                    clusters:
+                    {{- range .Backends }}
+                    - name: {{ .Name }}
+                      weight: {{ .Weight }}
+                    {{- end }}
+                  auto_host_rewrite: true
                   timeout: 300s
+              {{- end }}
+              - match:
+                  prefix: "/"
+                {{- if .DefaultBackends }}
+                route:
+                  weighted_clusters:
+                    clusters:
+                    {{- range .DefaultBackends }}
+                    - name: {{ .Name }}
+                      weight: {{ .Weight }}
+                    {{- end }}
+                  auto_host_rewrite: true
+                  timeout: 300s
+                {{- else }}
+                direct_response:
+                  status: 503
+                  body:
+                    inline_string: "No model backends are configured"
+                {{- end }}
           http_filters:
           # ExtProc filter - semantic router processes requests first
           - name: envoy.filters.http.ext_proc
@@ -83,18 +110,8 @@ const standaloneEnvoyConfigYAML = `static_resources:
                 response_body_mode: "BUFFERED"
                 request_trailer_mode: "SKIP"
                 response_trailer_mode: "SKIP"
-              failure_mode_allow: true
+              failure_mode_allow: false
               message_timeout: 300s
-
-          # Dynamic Forward Proxy filter
-          - name: envoy.filters.http.dynamic_forward_proxy
-            typed_config:
-              "@type": type.googleapis.com/envoy.extensions.filters.http.dynamic_forward_proxy.v3.FilterConfig
-              dns_cache_config:
-                name: dynamic_forward_proxy_cache_config
-                dns_lookup_family: V4_ONLY
-                max_hosts: 1024
-                dns_min_refresh_rate: 20s
 
           # Router filter (must be last)
           - name: envoy.filters.http.router
@@ -156,26 +173,41 @@ const standaloneEnvoyConfigYAML = `static_resources:
         explicit_http_config:
           http_protocol_options: {}
 
-  # Dynamic Forward Proxy cluster - Envoy-owned upstream routing based on :authority
-  - name: dynamic_forward_proxy_cluster
-    connect_timeout: 300s
-    per_connection_buffer_limit_bytes: 52428800
-    lb_policy: CLUSTER_PROVIDED
-    cluster_type:
-      name: envoy.clusters.dynamic_forward_proxy
+  # Each discovered backend has its own cluster; the model route owns weights.
+  {{- range .Models }}
+  {{- range .Backends }}
+  - name: {{ .Name }}
+    connect_timeout: 10s
+    type: STRICT_DNS
+    dns_lookup_family: V4_ONLY
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: {{ .Name }}
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            hostname: {{ quote .Authority }}
+            address:
+              socket_address:
+                address: {{ quote .Host }}
+                port_value: {{ .Port }}
+    {{- if .TLS }}
+    transport_socket:
+      name: envoy.transport_sockets.tls
       typed_config:
-        "@type": type.googleapis.com/envoy.extensions.clusters.dynamic_forward_proxy.v3.ClusterConfig
-        allow_insecure_cluster_options: true
-        dns_cache_config:
-          name: dynamic_forward_proxy_cache_config
-          dns_lookup_family: V4_ONLY
-          max_hosts: 1024
-          dns_min_refresh_rate: 20s
-    typed_extension_protocol_options:
-      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
-        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
-        explicit_http_config:
-          http_protocol_options: {}
+        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+        sni: {{ quote .Host }}
+        common_tls_context:
+          validation_context:
+            trusted_ca:
+              filename: /etc/ssl/certs/ca-certificates.crt
+            match_typed_subject_alt_names:
+            - san_type: DNS
+              matcher:
+                exact: {{ quote .Host }}
+    {{- end }}
+  {{- end }}
+  {{- end }}
 
 admin:
   address:
@@ -184,13 +216,18 @@ admin:
       port_value: 19000
 `
 
-func (r *SemanticRouterReconciler) generateEnvoyConfig() string {
-	return standaloneEnvoyConfigYAML
-}
-
 func (r *SemanticRouterReconciler) reconcileEnvoyConfig(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
 	if gatewayMode != "standalone" {
 		return nil
+	}
+
+	canonical, err := r.buildCanonicalConfig(ctx, sr)
+	if err != nil {
+		return err
+	}
+	envoyConfig, err := generateStandaloneEnvoyConfig(canonical)
+	if err != nil {
+		return err
 	}
 
 	cm := &corev1.ConfigMap{
@@ -199,7 +236,7 @@ func (r *SemanticRouterReconciler) reconcileEnvoyConfig(ctx context.Context, sr 
 			Namespace: sr.Namespace,
 		},
 		Data: map[string]string{
-			"envoy.yaml": r.generateEnvoyConfig(),
+			"envoy.yaml": envoyConfig,
 		},
 	}
 
@@ -208,7 +245,7 @@ func (r *SemanticRouterReconciler) reconcileEnvoyConfig(ctx context.Context, sr 
 	}
 
 	found := &corev1.ConfigMap{}
-	err := r.Get(ctx, types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}, found)
+	err = r.Get(ctx, types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
 		return r.Create(ctx, cm)
 	} else if err != nil {
@@ -217,7 +254,7 @@ func (r *SemanticRouterReconciler) reconcileEnvoyConfig(ctx context.Context, sr 
 
 	if !reflect.DeepEqual(found.Data, cm.Data) {
 		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(ctx, types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}, found); err != nil {
+			if err = r.Get(ctx, types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}, found); err != nil {
 				return err
 			}
 			found.Data = cm.Data

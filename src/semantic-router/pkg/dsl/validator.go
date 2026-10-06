@@ -261,7 +261,7 @@ func (v *Validator) checkRouteReferences(route *RouteDecl) {
 		if !v.pluginNames[pr.Name] && !isInlinePluginType(pr.Name) {
 			fix := v.suggestPlugin(pr.Name)
 			v.addDiag(DiagWarning, pr.Pos,
-				fmt.Sprintf("Plugin %q is not defined as a template and is not a recognized inline plugin type. Supported inline types: system_prompt, response_cache, hallucination, memory, rag, tools, fast_response, request_params, router_replay, header_mutation, response_jailbreak. Define a template with PLUGIN %s <type> { ... } or use a supported type", pr.Name, pr.Name),
+				fmt.Sprintf("Plugin %q is not defined as a template and is not a recognized inline plugin type. Supported inline types: %s. Define a template with PLUGIN %s <type> { ... } or use a supported type", pr.Name, strings.Join(config.SupportedDecisionPluginTypes(), ", "), pr.Name),
 				fix,
 			)
 		}
@@ -407,6 +407,12 @@ func (v *Validator) checkConstraints() {
 		v.checkSignalConstraints(s)
 	}
 
+	for _, plugin := range v.prog.Plugins {
+		if config.NormalizeDecisionPluginType(plugin.PluginType) == config.DecisionPluginPromptCache {
+			v.checkPromptCachePluginConstraints(plugin.Pos, plugin.Fields)
+		}
+	}
+
 	// Check routes
 	for _, r := range v.prog.Routes {
 		v.checkRouteConstraints(r)
@@ -426,6 +432,11 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 
 	// Check field constraints
 	v.checkFieldConstraints(s.Fields, s.Pos, context)
+	if s.SignalType == "embedding" || s.SignalType == "complexity" {
+		if _, err := prototypeScoringFromSignal(s); err != nil {
+			v.addDiag(DiagConstraint, s.Pos, fmt.Sprintf("%s: %v", context, err), nil)
+		}
+	}
 
 	// Signal-type-specific required fields
 	switch s.SignalType {
@@ -443,7 +454,7 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 				nil,
 			)
 		}
-		if _, ok := s.Fields["candidates"]; !ok {
+		if _, ok := s.Fields["candidates"]; !ok && s.Fields["image_candidates"] == nil {
 			v.addDiag(DiagConstraint, s.Pos,
 				fmt.Sprintf("%s: 'candidates' field is recommended", context),
 				nil,
@@ -451,10 +462,22 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 		}
 	case "domain":
 		v.checkDomainSignalConstraints(s, context)
+	case "context":
+		v.checkContextSignalConstraints(s, context)
 	case "structure":
 		v.checkStructureSignalConstraints(s)
 	case "conversation":
 		v.checkConversationSignalConstraints(s)
+	}
+}
+
+// checkContextSignalConstraints rejects token bands the runtime would refuse:
+// neither limit set, unparsable or negative values, or min_tokens above
+// max_tokens. Equal values are an exact-match band, omitting max_tokens makes
+// the band open-ended, and omitting min_tokens means 0.
+func (v *Validator) checkContextSignalConstraints(s *SignalDecl, context string) {
+	if _, err := contextSignalBounds(s); err != nil {
+		v.addDiag(DiagConstraint, s.Pos, fmt.Sprintf("%s: %v", context, err), nil)
 	}
 }
 
@@ -523,18 +546,22 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 		)
 	}
 
-	switch r.OnUnknown {
-	case "", config.RuleOnUnknownNoMatch, config.RuleOnUnknownMatch, config.RuleOnUnknownFailRequest:
-	default:
+	if r.OnUnknown != "" && !config.UnknownPolicy(r.OnUnknown).IsValid() {
 		v.addDiag(DiagConstraint, r.Pos,
-			fmt.Sprintf("%s: on_unknown must be no_match, match, or fail_request, got %q", context, r.OnUnknown),
+			fmt.Sprintf("%s: on_unknown must be %s, got %q", context, config.UnknownPolicyChoices(), r.OnUnknown),
 			nil,
 		)
 	}
 
+	v.checkRouteAction(r, context)
+
 	// Check algorithm constraints
 	if r.Algorithm != nil {
 		v.checkAlgorithmConstraints(r.Algorithm, context)
+	}
+
+	for _, plugin := range r.Plugins {
+		v.checkPromptCachePluginRefConstraints(plugin)
 	}
 
 	for _, iter := range r.CandidateIterations {

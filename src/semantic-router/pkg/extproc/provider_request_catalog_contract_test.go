@@ -1,0 +1,634 @@
+package extproc
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
+)
+
+type catalogReasoningWireCase struct {
+	name            string
+	catalog         string
+	provider        string
+	providerModelID string
+	apiFormat       string
+	enabled         bool
+	mode            string
+	effort          string
+	wantTransport   modelcatalog.ReasoningTransport
+	wantControls    map[string]interface{}
+}
+
+// TestBuiltInCatalogReasoningWireContracts crosses the complete maintained
+// path: catalog model -> provider-model binding -> materialized profile ->
+// neutral protocol codec -> final provider request. Fixture-only transport
+// tests remain useful, but this table prevents the authored catalog and the
+// runtime adapter from drifting independently.
+func TestBuiltInCatalogReasoningWireContracts(t *testing.T) {
+	tests := []catalogReasoningWireCase{
+		{
+			name: "Azure Astra Chat xhigh effort", catalog: "openai/gpt-6-astra", provider: "azure-openai",
+			providerModelID: "astra-prod",
+			enabled:         true, effort: "xhigh", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls: map[string]interface{}{"reasoning_effort": "xhigh"},
+		},
+		{
+			name: "Azure Astra Responses max effort", catalog: "openai/gpt-6-astra", provider: "azure-openai",
+			providerModelID: "astra-prod",
+			apiFormat:       config.APIFormatResponses, enabled: true, effort: "max",
+			wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "max"}},
+		},
+		{
+			name: "OpenAI Astra Chat xhigh effort", catalog: "openai/gpt-6-astra", provider: "openai",
+			enabled: true, effort: "xhigh", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls: map[string]interface{}{"reasoning_effort": "xhigh"},
+		},
+		{
+			name: "OpenAI Astra Responses max effort", catalog: "openai/gpt-6-astra", provider: "openai",
+			apiFormat: config.APIFormatResponses, enabled: true, effort: "max",
+			wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "max"}},
+		},
+		{
+			name: "OpenAI Chat effort", catalog: "openai/gpt-5.6-sol", provider: "openai",
+			enabled: true, effort: "high", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls: map[string]interface{}{"reasoning_effort": "high"},
+		},
+		{
+			name: "OpenAI Responses disabled", catalog: "openai/gpt-5.6-sol", provider: "openai",
+			apiFormat: config.APIFormatResponses, enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "none"}},
+		},
+		{
+			name: "DeepSeek Chat thinking and effort", catalog: "deepseek/deepseek-v4-pro", provider: "deepseek",
+			enabled: true, effort: "max", wantTransport: modelcatalog.ReasoningTransportDeepSeekThinking,
+			wantControls: map[string]interface{}{
+				"thinking": map[string]interface{}{"type": "enabled"}, "reasoning_effort": "max",
+			},
+		},
+		{
+			name: "DeepSeek Responses effort", catalog: "deepseek/deepseek-v4-pro", provider: "deepseek",
+			apiFormat: config.APIFormatResponses, enabled: true, effort: "max",
+			wantTransport: modelcatalog.ReasoningTransportDeepSeekThinking,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "max"}},
+		},
+		{
+			name: "Anthropic adaptive thinking and effort", catalog: "anthropic/claude-fable-5", provider: "anthropic",
+			enabled: true, mode: config.ReasoningModeAdaptive, effort: "xhigh",
+			wantTransport: modelcatalog.ReasoningTransportOutputConfig,
+			wantControls: map[string]interface{}{
+				"thinking":      map[string]interface{}{"type": "adaptive"},
+				"output_config": map[string]interface{}{"effort": "xhigh"},
+			},
+		},
+		{
+			name: "Anthropic thinking disabled", catalog: "anthropic/claude-opus-4.8", provider: "anthropic",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportOutputConfig,
+			wantControls:  map[string]interface{}{"thinking": map[string]interface{}{"type": "disabled"}},
+		},
+		{
+			name: "Z.ai GLM switch disabled", catalog: "zai/glm-5.1", provider: "zai",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportThinkingObject,
+			wantControls:  map[string]interface{}{"thinking": map[string]interface{}{"type": "disabled"}},
+		},
+		{
+			name: "Z.ai GLM switch and effort", catalog: "zai/glm-5.2", provider: "zai",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			wantTransport: modelcatalog.ReasoningTransportThinkingEffort,
+			wantControls: map[string]interface{}{
+				"thinking": map[string]interface{}{"type": "enabled"}, "reasoning_effort": "high",
+			},
+		},
+	}
+	runCatalogReasoningWireCases(t, tests)
+}
+
+func TestBuiltInCatalogLocalRuntimeReasoningWireContracts(t *testing.T) {
+	tests := []catalogReasoningWireCase{
+		{
+			name: "vLLM Qwen top-level effort and template switch", catalog: "qwen/qwen3.8-27b", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "xhigh",
+			wantTransport: modelcatalog.ReasoningTransportEffortTemplateSwitch,
+			wantControls: map[string]interface{}{
+				"reasoning_effort":     "xhigh",
+				"chat_template_kwargs": map[string]interface{}{"enable_thinking": true},
+			},
+		},
+		{
+			name: "vLLM Qwen template switch disabled", catalog: "qwen/qwen3.8-27b", provider: "vllm",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportEffortTemplateSwitch,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": false,
+			}},
+		},
+		{
+			name: "vLLM Qwen Responses uses protocol-native reasoning object", catalog: "qwen/qwen3.8-27b", provider: "vllm",
+			apiFormat: config.APIFormatResponses, enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
+			wantTransport: modelcatalog.ReasoningTransportEffortTemplateSwitch,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "medium"}},
+		},
+		{
+			name: "SGLang Qwen top-level effort and template switch", catalog: "qwen/qwen3.8-27b", provider: "sglang",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "low",
+			wantTransport: modelcatalog.ReasoningTransportEffortTemplateSwitch,
+			wantControls: map[string]interface{}{
+				"reasoning_effort":     "low",
+				"chat_template_kwargs": map[string]interface{}{"enable_thinking": true},
+			},
+		},
+		{
+			name: "DashScope Qwen top-level effort and switch", catalog: "qwen/qwen3.8-max", provider: "dashscope",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
+			wantTransport: modelcatalog.ReasoningTransportEffortBooleanSwitch,
+			wantControls:  map[string]interface{}{"reasoning_effort": "medium", "enable_thinking": true},
+		},
+		{
+			name: "DashScope Qwen switch disabled", catalog: "qwen/qwen3.8-max", provider: "dashscope",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportEffortBooleanSwitch,
+			wantControls:  map[string]interface{}{"enable_thinking": false},
+		},
+		{
+			name: "DashScope Qwen Responses uses protocol-native reasoning object", catalog: "qwen/qwen3.8-max", provider: "dashscope",
+			apiFormat: config.APIFormatResponses, enabled: true, mode: config.ReasoningModeEnabled, effort: "xhigh",
+			wantTransport: modelcatalog.ReasoningTransportEffortBooleanSwitch,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "xhigh"}},
+		},
+		{
+			name: "vLLM Hunyuan native disabled sentinel", catalog: "tencent/hy3", provider: "vllm",
+			apiFormat: config.APIFormatResponses, enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"reasoning_effort": "no_think",
+			}},
+		},
+	}
+	runCatalogReasoningWireCases(t, tests)
+}
+
+func TestSameNamedLoRAUsesTheSelectedBaseProvider(t *testing.T) {
+	type observation struct {
+		path      string
+		authority string
+		model     string
+		authorize string
+	}
+	baseARequests := make(chan observation, 1)
+	baseBRequests := make(chan observation, 1)
+	newBackend := func(requests chan<- observation) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			body, err := io.ReadAll(request.Body)
+			if err != nil {
+				http.Error(writer, err.Error(), http.StatusBadRequest)
+				return
+			}
+			var payload struct {
+				Model string `json:"model"`
+			}
+			if err := json.Unmarshal(body, &payload); err != nil {
+				http.Error(writer, err.Error(), http.StatusBadRequest)
+				return
+			}
+			requests <- observation{
+				path: request.URL.RequestURI(), authority: request.Host,
+				model: payload.Model, authorize: request.Header.Get("Authorization"),
+			}
+			writer.WriteHeader(http.StatusOK)
+			_, _ = writer.Write([]byte(`{"id":"fixture-response"}`))
+		}))
+	}
+	baseA := newBackend(baseARequests)
+	defer baseA.Close()
+	baseB := newBackend(baseBRequests)
+	defer baseB.Close()
+
+	cfg := &config.RouterConfig{
+		BackendModels: config.BackendModels{
+			ModelConfig: map[string]config.ModelParams{
+				"base-a": {
+					PreferredEndpoints: []string{"base-a-backend"},
+					APIFormat:          config.APIFormatAnthropic,
+					LoRAs:              []config.LoRAAdapter{{Name: "shared"}},
+					AccessKeys:         map[string]string{"anthropic": "base-a-secret"},
+				},
+				"base-b": {
+					PreferredEndpoints: []string{"base-b-backend"},
+					APIFormat:          config.APIFormatResponses,
+					LoRAs:              []config.LoRAAdapter{{Name: "shared"}},
+					ExternalModelIDs:   map[string]string{"openai": "provider-b-model"},
+					AccessKeys:         map[string]string{"openai": "base-b-secret"},
+				},
+				"shared": {
+					ExternalModelIDs: map[string]string{
+						"anthropic": "provider-a-adapter",
+						"openai":    "provider-b-model",
+					},
+				},
+			},
+			VLLMEndpoints: []config.VLLMEndpoint{
+				{Name: "base-a-backend", Type: "anthropic", ProviderProfileName: "base-a-profile"},
+				{Name: "base-b-backend", Type: "openai", ProviderProfileName: "base-b-profile"},
+			},
+			ProviderProfiles: map[string]config.ProviderProfile{
+				"base-a-profile": {Type: "anthropic", BaseURL: baseA.URL},
+				"base-b-profile": {Type: "openai", BaseURL: baseB.URL},
+			},
+		},
+	}
+	router := &OpenAIRouter{
+		Config: cfg,
+		CredentialResolver: authz.NewCredentialResolver(
+			authz.NewStaticConfigProvider(cfg),
+		),
+	}
+	useReasoning := false
+	selected := config.ModelRef{Model: "base-b", LoRAName: "shared", ModelReasoningControl: config.ModelReasoningControl{UseReasoning: &useReasoning}}
+	decision := &config.Decision{Name: "shared-adapter", ModelRefs: []config.ModelRef{selected}}
+	request := testNeutralRequest("MoM", "route to the selected adapter")
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.VSRSelectedDecision = decision
+	ctx.VSRSelectedCandidate = &selected
+	ctx.VSREligibleModelRefs = []config.ModelRef{selected}
+
+	dispatch, err := router.resolveProviderDispatchForCandidate("shared", decision.Name, false, ctx)
+	require.NoError(t, err)
+	require.Equal(t, "base-b", dispatch.effectiveBackendModel())
+	require.Equal(t, "base-b-backend", dispatch.backendName)
+	require.Equal(t, "provider-b-model", dispatch.upstreamModel)
+	require.Equal(t, llmprotocol.OpenAIResponsesV1, dispatch.targetFormat)
+
+	response, err := router.handleEntrypointModelRouting(
+		request, "MoM", decision.Name, entropy.ReasoningDecision{}, "shared", ctx,
+	)
+	require.NoError(t, err)
+	require.Nil(t, response.GetImmediateResponse())
+	common := response.GetRequestBody().GetResponse()
+	require.NotNil(t, common)
+	emitted := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
+	require.Equal(t, "base-b", emitted[headers.SelectedModel], "Envoy must select the owning base route")
+	require.Equal(t, "/v1/responses", emitted[":path"], "wire protocol must come from the owning base")
+	require.Equal(t, "Bearer base-b-secret", emitted["Authorization"], "credential must come from the owning base")
+
+	// Model the local Envoy route table: x-selected-model selects the configured
+	// physical model key, while the body keeps the adapter identity for vLLM.
+	routeModel := emitted[headers.SelectedModel]
+	params, found := cfg.ModelConfig[routeModel]
+	require.True(t, found, "route header must name a configured provider model")
+	require.Len(t, params.PreferredEndpoints, 1)
+	endpoint, found := cfg.GetEndpointByName(params.PreferredEndpoints[0])
+	require.True(t, found)
+	address, err := endpoint.ResolveAddress(cfg.ProviderProfiles)
+	require.NoError(t, err)
+	profile, err := cfg.GetProviderProfileForEndpoint(endpoint.Name)
+	require.NoError(t, err)
+	baseURL := providerEndpointScheme(cfg, endpoint.Name, profile) + "://" + address
+	outbound, err := http.NewRequest(http.MethodPost, baseURL+emitted[":path"], bytes.NewReader(common.GetBodyMutation().GetBody()))
+	require.NoError(t, err)
+	for name, value := range emitted {
+		if !strings.HasPrefix(name, ":") {
+			outbound.Header.Set(name, value)
+		}
+	}
+	upstreamResponse, err := baseB.Client().Do(outbound)
+	require.NoError(t, err)
+	require.NoError(t, upstreamResponse.Body.Close())
+	require.Equal(t, http.StatusOK, upstreamResponse.StatusCode)
+
+	select {
+	case observed := <-baseBRequests:
+		assert.Equal(t, "/v1/responses", observed.path)
+		assert.Equal(t, strings.TrimPrefix(baseB.URL, "http://"), observed.authority)
+		assert.Equal(t, "provider-b-model", observed.model)
+		assert.Equal(t, "Bearer base-b-secret", observed.authorize)
+	default:
+		t.Fatal("selected base backend did not receive the request")
+	}
+	select {
+	case observed := <-baseARequests:
+		t.Fatalf("wrong base backend received the request: %+v", observed)
+	default:
+	}
+	assert.Equal(t, "shared", ctx.VSRSelectedModel, "the client-facing selection remains the adapter")
+}
+
+func TestBuiltInCatalogSpecializedReasoningWireContracts(t *testing.T) {
+	tests := []catalogReasoningWireCase{
+		{
+			name: "MiniMax adaptive mode", catalog: "minimax/minimax-m3", provider: "minimax",
+			enabled: true, mode: config.ReasoningModeAdaptive,
+			wantTransport: modelcatalog.ReasoningTransportThinkingObject,
+			wantControls:  map[string]interface{}{"thinking": map[string]interface{}{"type": "adaptive"}},
+		},
+		{
+			name: "MiniMax enabled mode", catalog: "minimax/minimax-m3", provider: "minimax",
+			enabled: true, mode: config.ReasoningModeEnabled,
+			wantTransport: modelcatalog.ReasoningTransportThinkingObject,
+			wantControls:  map[string]interface{}{"thinking": map[string]interface{}{"type": "enabled"}},
+		},
+		{
+			name: "Nemotron Super low effort flag", catalog: "nvidia/nemotron-3-super", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "low",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true, "low_effort": true,
+			}},
+		},
+		{
+			name: "Nemotron Super full effort omits low flag", catalog: "nvidia/nemotron-3-super", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true,
+			}},
+		},
+		{
+			name: "Nemotron Ultra medium effort flag", catalog: "nvidia/nemotron-3-ultra", provider: "sglang",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true, "medium_effort": true,
+			}},
+		},
+		{
+			name: "Nemotron Cascade switch disabled", catalog: "nvidia/nemotron-cascade-2-30b-a3b", provider: "vllm",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": false,
+			}},
+		},
+		{
+			name: "CompactifAI Nemotron switch", catalog: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", provider: "compactifai",
+			enabled: true, mode: config.ReasoningModeEnabled,
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true,
+			}},
+		},
+		{
+			name: "Novita top-level switch", catalog: "xiaomi/mimo-v2-flash", provider: "novita",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportTopLevelBoolean,
+			wantControls:  map[string]interface{}{"enable_thinking": false},
+		},
+		{
+			name: "OpenRouter normalized reasoning object", catalog: "qwen/qwen3.8-27b", provider: "openrouter",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "medium"}},
+		},
+		{
+			name: "OpenRouter GPT-6 Astra Chat reasoning object", catalog: "openai/gpt-6-astra", provider: "openrouter",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "high"}},
+		},
+	}
+	runCatalogReasoningWireCases(t, tests)
+}
+
+func runCatalogReasoningWireCases(t *testing.T, tests []catalogReasoningWireCase) {
+	t.Helper()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request, profile := renderCatalogReasoningWire(t, test)
+			transport, err := profile.ResolveReasoningTransport()
+			require.NoError(t, err)
+			assert.Equal(t, test.wantTransport, transport)
+			assert.Equal(t, test.wantControls, providerReasoningControls(request))
+		})
+	}
+}
+
+func renderCatalogReasoningWire(
+	t *testing.T,
+	test catalogReasoningWireCase,
+) (map[string]interface{}, config.ProviderProfile) {
+	t.Helper()
+	catalogID := test.catalog
+	providerID := test.provider
+	apiFormat := test.apiFormat
+	enabled := test.enabled
+	mode := test.mode
+	effort := test.effort
+	apiFormatLine := ""
+	if apiFormat != "" {
+		apiFormatLine = fmt.Sprintf("      api_format: %s\n", apiFormat)
+	}
+	providerModelIDLine := ""
+	if test.providerModelID != "" {
+		providerModelIDLine = fmt.Sprintf("      provider_model_id: %s\n", test.providerModelID)
+	}
+	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`
+version: v0.3
+providers:
+  models:
+    - name: routed
+      catalog: %s
+%s%s      backend_refs:
+        - name: primary
+          provider: %s
+          endpoint: 127.0.0.1:8000
+          protocol: http
+routing: {}
+`, catalogID, apiFormatLine, providerModelIDLine, providerID)))
+	require.NoError(t, err)
+
+	decision := config.Decision{Name: "route", ModelRefs: []config.ModelRef{{
+		Model: "routed",
+		ModelReasoningControl: config.ModelReasoningControl{
+			UseReasoning: boolPtr(enabled), ReasoningMode: mode, ReasoningEffort: effort,
+		},
+	}}}
+	router := &OpenAIRouter{Config: cfg}
+	target, err := wireFormatForModel(cfg.GetModelAPIFormat("routed"))
+	require.NoError(t, err)
+	request := llmprotocol.Request{
+		Generation: 1,
+		Model:      "routed",
+		Messages: []llmprotocol.Message{{
+			Role:    llmprotocol.RoleUser,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "hello"}},
+		}},
+	}
+	if target != llmprotocol.OpenAIChatV1 {
+		router.applySemanticReasoningMode(&request, "routed", target, enabled, &decision)
+	}
+	encoded, err := protocolcodec.NewBuiltinEngine().EncodeRequest(target, request, llmprotocol.Envelope{})
+	require.NoError(t, err)
+
+	params := cfg.ModelConfig["routed"]
+	require.Len(t, params.PreferredEndpoints, 1)
+	profile, ok := cfg.ProviderProfiles[params.PreferredEndpoints[0]]
+	require.True(t, ok)
+	adapted, err := router.adaptProviderRequest(
+		encoded.Body,
+		&providerDispatch{
+			logicalModel: "routed", targetFormat: target, decisionName: decision.Name,
+			useReasoning: enabled, profile: &profile,
+		},
+		&RequestContext{VSRSelectedDecision: &decision},
+	)
+	require.NoError(t, err)
+	return unmarshalReasoningRequest(t, adapted), profile
+}
+
+func providerReasoningControls(request map[string]interface{}) map[string]interface{} {
+	controls := map[string]interface{}{}
+	for _, field := range []string{
+		"reasoning", "reasoning_effort", "thinking", "thinking_mode",
+		"enable_thinking", "chat_template_kwargs", "output_config",
+	} {
+		if value, ok := request[field]; ok {
+			controls[field] = value
+		}
+	}
+	return controls
+}
+
+func TestAzureOpenAIProviderDispatch(t *testing.T) {
+	tests := []struct {
+		name         string
+		apiFormat    string
+		effort       string
+		request      string
+		wantPath     string
+		wantControls map[string]interface{}
+		wantTools    string
+	}{
+		{
+			name: "Chat xhigh", apiFormat: config.APIFormatOpenAI, effort: "xhigh",
+			request:      `{"model":"routed","messages":[{"role":"user","content":"hello"}]}`,
+			wantPath:     "/openai/deployments/astra-prod/chat/completions?api-version=2024-10-21",
+			wantControls: map[string]interface{}{"reasoning_effort": "xhigh"},
+		},
+		{
+			name: "Responses max with tools", apiFormat: config.APIFormatResponses, effort: "max",
+			request:      `{"model":"routed","messages":[{"role":"user","content":"weather in Paris"}],"tools":[{"type":"function","function":{"name":"lookup_weather","description":"Look up weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"],"additionalProperties":false},"strict":true}}]}`,
+			wantPath:     "/openai/v1/responses",
+			wantControls: map[string]interface{}{"reasoning": map[string]interface{}{"effort": "max"}},
+			wantTools:    `[{"type":"function","name":"lookup_weather","description":"Look up weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"],"additionalProperties":false},"strict":true}]`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			type observation struct {
+				path          string
+				apiKey        string
+				authorization string
+				body          []byte
+			}
+			received := make(chan observation, 1)
+			fixture := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				body, err := io.ReadAll(request.Body)
+				if err != nil {
+					http.Error(writer, err.Error(), http.StatusBadRequest)
+					return
+				}
+				received <- observation{
+					path: request.URL.RequestURI(), apiKey: request.Header.Get("api-key"),
+					authorization: request.Header.Get("Authorization"), body: body,
+				}
+				writer.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(fixture.Close)
+
+			cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`
+version: v0.3
+providers:
+  models:
+    - name: routed
+      catalog: openai/gpt-6-astra
+      api_format: %s
+      provider_model_id: astra-prod
+      backend_refs:
+        - name: primary
+          provider: azure-openai
+          endpoint: %s/openai/deployments/astra-prod
+          api_version: "2024-10-21"
+          api_key: azure-fixture-key
+routing: {}
+`, test.apiFormat, fixture.URL)))
+			require.NoError(t, err)
+			router := &OpenAIRouter{
+				Config: cfg,
+				CredentialResolver: authz.NewCredentialResolver(
+					authz.NewStaticConfigProvider(cfg),
+				),
+			}
+			decision := &config.Decision{Name: "azure", ModelRefs: []config.ModelRef{{
+				Model: "routed",
+				ModelReasoningControl: config.ModelReasoningControl{
+					UseReasoning: boolPtr(true), ReasoningEffort: test.effort,
+				},
+			}}}
+			ctx := routingTestContext(llmprotocol.OpenAIChatV1, nil)
+			ctx.VSRSelectedDecision = decision
+			request, immediate := router.prepareProtocolRequest([]byte(test.request), ctx)
+			require.Nil(t, immediate)
+			response, err := router.handleEntrypointModelRouting(
+				request, "routed", decision.Name, entropy.ReasoningDecision{UseReasoning: true}, "routed", ctx,
+			)
+			require.NoError(t, err)
+			require.Nil(t, response.GetImmediateResponse())
+			common := response.GetRequestBody().GetResponse()
+			require.NotNil(t, common)
+			emitted := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
+			dispatch, err := router.resolveProviderDispatch("routed", decision.Name, true)
+			require.NoError(t, err)
+			baseURL := providerEndpointScheme(cfg, dispatch.backendName, dispatch.profile) + "://" + dispatch.backendAddress
+			require.Equal(t, fixture.URL, baseURL)
+			outbound, err := http.NewRequest(
+				http.MethodPost, baseURL+emitted[":path"], bytes.NewReader(common.GetBodyMutation().GetBody()),
+			)
+			require.NoError(t, err)
+			for name, value := range emitted {
+				if !strings.HasPrefix(name, ":") {
+					outbound.Header.Set(name, value)
+				}
+			}
+			result, err := fixture.Client().Do(outbound)
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, result.Body.Close()) })
+			require.Equal(t, http.StatusOK, result.StatusCode)
+
+			observed := <-received
+			assert.Equal(t, test.wantPath, observed.path)
+			assert.Equal(t, "azure-fixture-key", observed.apiKey)
+			assert.Empty(t, observed.authorization)
+			wire := unmarshalReasoningRequest(t, observed.body)
+			assert.Equal(t, "astra-prod", wire["model"])
+			assert.Equal(t, test.wantControls, providerReasoningControls(wire))
+			tools, err := json.Marshal(wire["tools"])
+			require.NoError(t, err)
+			if test.wantTools == "" {
+				assert.Empty(t, wire["tools"])
+			} else {
+				assert.JSONEq(t, test.wantTools, string(tools))
+			}
+			t.Logf("path=%s api-key=%s model=%v reasoning=%v tools=%s",
+				observed.path, observed.apiKey, wire["model"], providerReasoningControls(wire), tools)
+		})
+	}
+}

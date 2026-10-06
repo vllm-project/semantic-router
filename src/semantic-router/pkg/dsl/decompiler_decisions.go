@@ -52,6 +52,9 @@ func candidateIterationModelRefOptions(model *config.ModelRef) string {
 	if model.ReasoningEffort != "" {
 		opts = append(opts, fmt.Sprintf("effort = %q", model.ReasoningEffort))
 	}
+	if model.ReasoningMode != "" {
+		opts = append(opts, fmt.Sprintf("mode = %q", model.ReasoningMode))
+	}
 	if model.LoRAName != "" {
 		opts = append(opts, fmt.Sprintf("lora = %q", model.LoRAName))
 	}
@@ -108,7 +111,13 @@ func decompileRuleNode(node *config.RuleCombination) string {
 		return "(" + strings.Join(parts, " OR ") + ")"
 	case "NOT":
 		if len(node.Conditions) == 1 {
-			inner := decompileRuleNode(&node.Conditions[0])
+			child := &node.Conditions[0]
+			inner := decompileRuleNode(child)
+			// AND is emitted without parentheses, but NOT must bind to the
+			// entire conjunction. OR already supplies its own parentheses.
+			if child.Type == "" && normalizedRuleOperator(child.Operator) == "AND" {
+				inner = "(" + inner + ")"
+			}
 			return "NOT " + inner
 		}
 	}
@@ -205,6 +214,9 @@ func (d *decompiler) decompileDecision(dec config.Decision) {
 	}
 	if ruleExpr := decompileRuleNode(&dec.Rules); ruleExpr != "" {
 		d.write("  WHEN %s\n", ruleExpr)
+	}
+	if dec.Action != nil {
+		d.write("  ACTION %s %q\n", dec.Action.Type, dec.Action.Destination)
 	}
 	d.writeDecisionModels(dec)
 	for _, iter := range dec.CandidateIterations {

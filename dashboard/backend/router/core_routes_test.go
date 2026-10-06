@@ -2,19 +2,107 @@ package router
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
-	"github.com/vllm-project/semantic-router/dashboard/backend/evaluationplane"
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
+
+func TestRegisterRecipeRoutesPassesStoreToRecipeService(t *testing.T) {
+	directory := filepath.Join("..", "..", "..", "config", "recipes", "accuracy")
+	configPath := filepath.Join(directory, "config.yaml")
+	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", directory)
+	t.Setenv(recipe.ManagementCredentialEnv, "")
+
+	store := recipe.NewStore(recipe.StoreOptions{
+		Root:       filepath.Join(t.TempDir(), "recipe-store"),
+		ConfigPath: configPath,
+	})
+	token, err := store.EnsureManagementCredential()
+	if err != nil {
+		t.Fatalf("EnsureManagementCredential(): %v", err)
+	}
+	configBytes, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("ReadFile(config): %v", err)
+	}
+	hash := sha256.Sum256(configBytes)
+	var authenticated []string
+	router := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+token {
+			http.Error(w, "missing service credential", http.StatusUnauthorized)
+			return
+		}
+		authenticated = append(authenticated, r.URL.Path)
+		switch r.URL.Path {
+		case "/api/v1/config/hash":
+			_, _ = fmt.Fprintf(w, `{"source_config_hash":%q,"generated_runtime_hash":%q,"active_runtime_hash":%q,"activation_status":"active"}`, hex.EncodeToString(hash[:]), hex.EncodeToString(hash[:]), hex.EncodeToString(hash[:]))
+		case "/api/v1/routing/preview":
+			_, _ = w.Write([]byte(`{
+  "requested_model":"vllm-sr/auto",
+  "selected_model":"gpt55-worker",
+  "selection_status":"selected",
+  "selection_method":"static",
+  "recipe":"default",
+  "routing_decision":"accuracy_direct",
+  "decision_result":{
+    "decision_name":"accuracy_direct",
+    "algorithm":"static",
+    "plugins":[],
+    "matched_signals":{}
+  },
+  "recommended_models":["gpt55-worker"],
+  "eval_trace":[{"decision_name":"accuracy_direct","matched":true}]
+}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer router.Close()
+
+	mux := http.NewServeMux()
+	registerRecipeRoutes(mux, &config.Config{
+		AbsConfigPath: configPath,
+		ConfigDir:     filepath.Dir(directory),
+		RouterAPIURL:  router.URL,
+	}, store)
+
+	descriptorResponse := httptest.NewRecorder()
+	mux.ServeHTTP(descriptorResponse, httptest.NewRequest(http.MethodGet, "/api/recipe", nil))
+	if descriptorResponse.Code != http.StatusOK {
+		t.Fatalf("GET /api/recipe status=%d body=%s", descriptorResponse.Code, descriptorResponse.Body.String())
+	}
+	var descriptor struct {
+		Digests struct {
+			Recipe string `json:"recipe"`
+		} `json:"digests"`
+	}
+	if err := json.NewDecoder(descriptorResponse.Body).Decode(&descriptor); err != nil {
+		t.Fatalf("decode descriptor: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/recipe/probes/accuracy_direct/direct_explanation/validate", nil)
+	request.Header.Set("If-Match", `"`+descriptor.Digests.Recipe+`"`)
+	validationResponse := httptest.NewRecorder()
+	mux.ServeHTTP(validationResponse, request)
+	if validationResponse.Code != http.StatusOK {
+		t.Fatalf("POST /api/recipe/probes/.../validate status=%d body=%s", validationResponse.Code, validationResponse.Body.String())
+	}
+	if got, want := authenticated, []string{"/api/v1/config/hash", "/api/v1/routing/preview", "/api/v1/config/hash"}; !slices.Equal(got, want) {
+		t.Fatalf("authenticated Router requests = %v, want %v", got, want)
+	}
+}
 
 func TestRegisterRecipeRoutesExposesUnmanagedDescriptor(t *testing.T) {
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", "")
@@ -210,7 +298,7 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		t.Fatal(err)
 	}
 	routerAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/config/kbs/example" || r.Method != http.MethodPost {
+		if r.URL.Path != "/api/v1/storage/knowledge-bases/example" || r.Method != http.MethodPut {
 			t.Fatalf("unexpected KBS proxy request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -238,7 +326,6 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		{method: http.MethodPost, path: "/api/router/config/rollback"},
 		{method: http.MethodPost, path: "/api/router/config/global/update"},
 		{method: http.MethodPost, path: "/api/router/config/global/raw/update"},
-		{method: http.MethodPost, path: "/api/router/config/defaults/update"},
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(target.method, target.path, strings.NewReader(`{}`)))
@@ -247,8 +334,22 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		}
 	}
 
+	for _, target := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/api/router/config/defaults"},
+		{method: http.MethodPost, path: "/api/router/config/defaults/update"},
+	} {
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, httptest.NewRequest(target.method, target.path, nil))
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("removed alias %s %s status=%d want=%d", target.method, target.path, response.Code, http.StatusNotFound)
+		}
+	}
+
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/router/config/kbs/example", strings.NewReader(`{}`)))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/api/router/api/v1/storage/knowledge-bases/example", strings.NewReader(`{}`)))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("KBS proxy status=%d want=%d body=%s", response.Code, http.StatusNoContent, response.Body.String())
 	}
@@ -258,7 +359,7 @@ func TestResolveToolsDBPathUsesRouterContractPath(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(`
-version: "0.3"
+version: v0.3
 global:
   integrations:
     tools:
@@ -276,150 +377,6 @@ global:
 	}
 }
 
-func TestRegisterEvaluationPlaneRoutesReplacesLegacyAPI(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("VLLM_SR_SOURCE_REVISION", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-	configPath := filepath.Join(root, "config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\nrouting:\n  modelCards: []\n"), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	mux := http.NewServeMux()
-	registerEvaluationRoutes(mux, &config.Config{
-		EvaluationEnabled: true,
-		EvaluationDataDir: filepath.Join(root, "evaluation"),
-		PythonPath:        "python3",
-		AbsConfigPath:     configPath,
-		RouterAPIURL:      "http://router.internal",
-		EnvoyURL:          "http://envoy.internal",
-	})
-
-	catalog := httptest.NewRecorder()
-	mux.ServeHTTP(catalog, httptest.NewRequest(http.MethodGet, "/api/evaluation/v1/catalog", nil))
-	if catalog.Code != http.StatusOK || strings.Contains(catalog.Body.String(), "router.internal") || strings.Contains(catalog.Body.String(), "envoy.internal") {
-		t.Fatalf("catalog status=%d body=%s", catalog.Code, catalog.Body.String())
-	}
-
-	create := httptest.NewRecorder()
-	mux.ServeHTTP(create, httptest.NewRequest(http.MethodPost, "/api/evaluation/v1/runs", strings.NewReader(`{
-		"name":"route test","description":"","suite_ids":["evaluation-smoke"],"track_ids":["routing"],
-		"mode":"replay","target_id":"fixture","change_profile":"schema_adapter",
-		"sample_limit":4,"concurrency":1,"seed":17,"auto_start":false
-	}`)))
-	if create.Code != http.StatusCreated {
-		t.Fatalf("create status=%d body=%s", create.Code, create.Body.String())
-	}
-
-	proxyCalls := 0
-	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
-		proxyCalls++
-		w.WriteHeader(http.StatusBadGateway)
-	})
-	for _, legacyPath := range []string{
-		"/api/evaluation",
-		"/api/evaluation/",
-		"/api/evaluation/tasks",
-		"/api/evaluation/tasks?limit=1",
-		"/api/evaluation/tasks/legacy-run",
-		"/api/evaluation/run",
-		"/api/evaluation/cancel/legacy-run",
-		"/api/evaluation/stream/legacy-run",
-		"/api/evaluation/results/legacy-run",
-		"/api/evaluation/export/legacy-run",
-		"/api/evaluation/history",
-		"/api/evaluation/datasets",
-		"/api/evaluation/datasets/legacy-dataset",
-		"/api/evaluation/unknown/path",
-		"/api/evaluation/v1/unknown",
-	} {
-		legacy := httptest.NewRecorder()
-		mux.ServeHTTP(legacy, httptest.NewRequest(http.MethodGet, legacyPath, nil))
-		if legacy.Code != http.StatusNotFound {
-			t.Fatalf("legacy route %s status=%d, want 404", legacyPath, legacy.Code)
-		}
-		if !strings.Contains(legacy.Header().Get("Cache-Control"), "no-store") {
-			t.Fatalf("legacy route %s missing no-store policy", legacyPath)
-		}
-	}
-	if proxyCalls != 0 {
-		t.Fatalf("legacy evaluation routes reached API fallback %d times", proxyCalls)
-	}
-}
-
-func TestRegisterEvaluationRoutesTombstonesLegacyPrefixWhenDisabled(t *testing.T) {
-	mux := http.NewServeMux()
-	registerEvaluationRoutes(mux, &config.Config{EvaluationEnabled: false})
-	proxyCalls := 0
-	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
-		proxyCalls++
-		w.WriteHeader(http.StatusBadGateway)
-	})
-
-	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/evaluation/tasks/legacy-run/start", nil))
-	if response.Code != http.StatusNotFound {
-		t.Fatalf("disabled legacy route status=%d, want 404 body=%s", response.Code, response.Body.String())
-	}
-	if proxyCalls != 0 {
-		t.Fatalf("disabled legacy route reached API fallback %d times", proxyCalls)
-	}
-}
-
-func TestEvaluationRoutesFailClosedWhenOnlyManagementCredentialExists(t *testing.T) {
-	root := t.TempDir()
-	configPath := filepath.Join(root, "config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\nrouting:\n  modelCards: []\n"), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	t.Setenv(recipe.ManagementCredentialEnv, "")
-	store := recipe.NewStore(recipe.StoreOptions{
-		Root: filepath.Join(root, "recipe-store"), ConfigPath: configPath,
-	})
-	_, credentialErr := store.EnsureManagementCredential()
-	if credentialErr != nil {
-		t.Fatalf("EnsureManagementCredential: %v", credentialErr)
-	}
-	mux := http.NewServeMux()
-	evaluationDir := filepath.Join(root, "evaluation")
-	t.Setenv("VLLM_SR_SOURCE_REVISION", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-	registerEvaluationRoutes(mux, &config.Config{
-		EvaluationEnabled: true, EvaluationDataDir: evaluationDir, PythonPath: "python3",
-		AbsConfigPath: configPath, RouterAPIURL: "http://router.internal",
-	}, store)
-	catalogResponse := httptest.NewRecorder()
-	mux.ServeHTTP(catalogResponse, httptest.NewRequest(http.MethodGet, "/api/evaluation/v1/catalog", nil))
-	if catalogResponse.Code != http.StatusOK {
-		t.Fatalf("catalog status=%d body=%s", catalogResponse.Code, catalogResponse.Body.String())
-	}
-	var catalog evaluationplane.Catalog
-	if err := json.NewDecoder(catalogResponse.Body).Decode(&catalog); err != nil {
-		t.Fatalf("decode catalog: %v", err)
-	}
-	var runtime *evaluationplane.CatalogTarget
-	for index := range catalog.Targets {
-		if catalog.Targets[index].ID == "runtime" {
-			runtime = &catalog.Targets[index]
-			break
-		}
-	}
-	if runtime == nil || runtime.Labels["router_auth"] != "dedicated-evaluation-credential-unavailable" || len(runtime.TrackIDs) != 0 {
-		t.Fatalf("runtime target did not fail closed without a dedicated evaluation credential: %#v", runtime)
-	}
-
-	create := httptest.NewRecorder()
-	mux.ServeHTTP(create, httptest.NewRequest(http.MethodPost, "/api/evaluation/v1/runs", strings.NewReader(`{
-		"name":"live routing","description":"","suite_ids":["live-routing-core"],"track_ids":["routing"],
-		"mode":"live","target_id":"runtime","change_profile":"recipe",
-		"sample_limit":4,"concurrency":1,"seed":17,"auto_start":false
-	}`)))
-	if create.Code != http.StatusBadRequest || !strings.Contains(create.Body.String(), "target cannot execute") {
-		t.Fatalf("create status=%d body=%s, want fail-closed 400", create.Code, create.Body.String())
-	}
-	runs, err := os.ReadDir(filepath.Join(evaluationDir, "runs"))
-	if err != nil || len(runs) != 0 {
-		t.Fatalf("rejected run persisted a bundle: entries=%v err=%v", runs, err)
-	}
-}
-
 func TestResolveToolsDBPathFallsBackWhenRouterContractCannotParse(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "config.yaml")
@@ -430,8 +387,9 @@ func TestResolveToolsDBPathFallsBackWhenRouterContractCannotParse(t *testing.T) 
 	got := resolveToolsDBPath(&config.Config{
 		AbsConfigPath: configPath,
 		ConfigDir:     configDir,
+		ConfigBaseDir: configDir,
 	})
-	want := filepath.Join(configDir, "config", "tools_db.json")
+	want := filepath.Join(configDir, defaultToolsDBPath)
 	if got != want {
 		t.Fatalf("resolveToolsDBPath() = %q, want %q", got, want)
 	}

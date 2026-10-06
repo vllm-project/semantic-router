@@ -32,6 +32,10 @@ from cli.utils import get_logger
 log = get_logger(__name__)
 render_observability_template = _render_observability_template
 
+# The router allows 30 seconds to drain and close native model owners.
+CONTAINER_STOP_GRACE_SECONDS = 40
+CONTAINER_STOP_COMMAND_TIMEOUT_SECONDS = CONTAINER_STOP_GRACE_SECONDS + 10
+
 
 def container_status(container_name):
     """
@@ -65,7 +69,7 @@ def container_status(container_name):
         return "error"
 
 
-def container_status_strict(container_name: str) -> str:
+def container_status_strict(container_name: str, *, timeout: float = 10) -> str:
     """Return one exact state or fail when absence cannot be proven.
 
     Activation recovery is destructive transaction work, so it must not use
@@ -86,7 +90,7 @@ def container_status_strict(container_name: str) -> str:
             capture_output=True,
             text=True,
             check=False,
-            timeout=10,
+            timeout=timeout,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         raise RuntimeError("managed container status inspection failed") from exc
@@ -117,16 +121,30 @@ def container_status_strict(container_name: str) -> str:
 
 
 def container_stop_container(container_name):
-    """Stop a container."""
+    """Stop a container with time for router drain and a bounded CLI wait."""
     runtime = get_container_runtime()
     try:
         log.info(f"Stopping container: {container_name}")
         subprocess.run(
-            [runtime, "stop", container_name], check=True, capture_output=True
+            [
+                runtime,
+                "stop",
+                "--time",
+                str(CONTAINER_STOP_GRACE_SECONDS),
+                container_name,
+            ],
+            check=True,
+            capture_output=True,
+            timeout=CONTAINER_STOP_COMMAND_TIMEOUT_SECONDS,
         )
         log.info(f"Container stopped: {container_name}")
         return True
-    except subprocess.CalledProcessError as exc:
+    except subprocess.TimeoutExpired:
+        log.error(
+            f"Timed out stopping container; stop is unconfirmed: {container_name}"
+        )
+        return False
+    except (OSError, subprocess.SubprocessError) as exc:
         log.error(f"Failed to stop container: {exc}")
         return False
 
@@ -144,7 +162,9 @@ def container_remove_container(container_name):
         return False
 
 
-def container_logs(container_name, follow=False, tail=None, *, merge_output=False):
+def container_logs(
+    container_name, follow=False, tail=None, *, merge_output=False, timeout=None
+):
     """Stream logs from a container and report whether the command succeeded."""
     return log_io.stream_container_logs(
         get_container_runtime(),
@@ -154,6 +174,7 @@ def container_logs(container_name, follow=False, tail=None, *, merge_output=Fals
         merge_output=merge_output,
         run=subprocess.run,
         logger=log,
+        timeout=timeout,
     )
 
 
@@ -164,26 +185,35 @@ def container_logs_output(container_name, tail=None):
     )
 
 
-def container_logs_since(container_name, since_timestamp):
+def container_logs_since(container_name, since_timestamp, *, timeout=None):
     """Get logs from a container since a specific timestamp."""
     return log_io.capture_container_logs_since(
         get_container_runtime(),
         container_name,
         since_timestamp,
         run=subprocess.run,
+        timeout=timeout,
     )
 
 
-def container_exec(container_name, command):
+def container_exec(container_name, command, *, timeout=None):
     """Execute a command in a running container."""
     runtime = get_container_runtime()
     cmd = [runtime, "exec", container_name, *command]
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True,
+            **({"timeout": timeout} if timeout is not None else {}),
+        )
         return (0, result.stdout, result.stderr)
     except subprocess.CalledProcessError as exc:
         return (exc.returncode, exc.stdout, exc.stderr)
+    except subprocess.TimeoutExpired:
+        return (124, "", "Container command timed out")
 
 
 def container_create_network(network_name):
@@ -257,7 +287,7 @@ def container_start_redis(
     stack_layout = stack_layout or resolve_runtime_stack()
     container_name = stack_layout.redis_container_name
     # Storage defaults to the data network, never the application network:
-    # sidecars, the simulator, and user-selected OpenClaw workloads all join the
+    # observability sidecars and user-selected OpenClaw workloads join the
     # latter, and reaching a storage port from one of them is the east-west half
     # of the exposure that loopback-only publication closes from the host side.
     network_name = network_name or stack_layout.data_network_name

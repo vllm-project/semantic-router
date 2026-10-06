@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -24,14 +24,18 @@ var validMemoryTypes = map[memory.MemoryType]bool{
 	memory.MemoryTypeEpisodic:   true,
 }
 
-// requireMemoryStore returns false after writing an error response when memory is unavailable.
-func (s *ClassificationAPIServer) requireMemoryStore(w http.ResponseWriter) bool {
-	if s.currentMemoryStore() == nil {
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "MEMORY_NOT_AVAILABLE",
-			"Memory store is not configured or not yet initialized. Enable memory in configuration.")
-		return false
+func (s *ClassificationAPIServer) acquireMemoryStore(w http.ResponseWriter) (memory.Store, func(), bool) {
+	if s != nil && s.runtimeRegistry != nil {
+		store, release, ok := s.runtimeRegistry.AcquireMemoryStore()
+		if ok {
+			return store, release, true
+		}
+	} else if s != nil && s.memoryStore != nil {
+		return s.memoryStore, func() {}, true
 	}
-	return true
+	s.writeErrorResponse(w, http.StatusServiceUnavailable, "MEMORY_NOT_AVAILABLE",
+		"Memory store is not configured or not yet initialized. Enable memory in configuration.")
+	return nil, nil, false
 }
 
 // extractUserID extracts the user_id with priority: auth header > query param fallback.
@@ -113,4 +117,22 @@ func (s *ClassificationAPIServer) parseMemoryListLimit(w http.ResponseWriter, li
 		return maxMemoryListLimit, true
 	}
 	return limit, true
+}
+
+func (s *ClassificationAPIServer) parseMemoryListOffset(w http.ResponseWriter, offsetStr string) (int, bool) {
+	if offsetStr == "" {
+		return 0, true
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_OFFSET",
+			"offset must be a non-negative integer")
+		return 0, false
+	}
+	if offset > 100_000 {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_OFFSET",
+			"offset exceeds maximum of 100000")
+		return 0, false
+	}
+	return offset, true
 }

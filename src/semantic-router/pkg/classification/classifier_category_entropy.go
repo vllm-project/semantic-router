@@ -12,14 +12,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
-// ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
-func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, entropy.ReasoningDecision, error) {
-	return c.ClassifyCategoryWithEntropyContext(context.Background(), text)
-}
-
 // ClassifyCategoryWithEntropyContext preserves the caller lifecycle while
-// evaluating a category backend. The context-free method above remains for
-// compatibility with service callers that do not expose a request context.
+// evaluating a category backend.
 func (c *Classifier) ClassifyCategoryWithEntropyContext(ctx context.Context, text string) (string, float64, entropy.ReasoningDecision, error) {
 	// Try keyword and embedding classifiers first
 	category, confidence, decision, matched, err := c.tryKeywordBasedClassification(text)

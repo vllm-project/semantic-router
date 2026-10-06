@@ -153,7 +153,9 @@ const OnboardingGuide: React.FC = () => {
   }
 
   if (!isOpen) {
-    if (status === 'completed') {
+    // Evaluation is a focused evidence workspace and is not part of this product guide.
+    // Keep the launcher from obscuring dense controls or sticky decision actions there.
+    if (status === 'completed' || location.pathname === '/evaluation') {
       return null
     }
 

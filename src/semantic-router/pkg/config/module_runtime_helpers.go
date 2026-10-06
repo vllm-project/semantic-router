@@ -51,14 +51,6 @@ func (c *RouterConfig) GetHallucinationModelThreshold() float32 {
 	return 0.5
 }
 
-// GetHallucinationAction returns the supported hallucination action.
-func (c *RouterConfig) GetHallucinationAction() string {
-	if c.HallucinationMitigation.OnHallucinationDetected == "" {
-		return "warn"
-	}
-	return "warn"
-}
-
 // IsFeedbackDetectorEnabled reports whether the configured feedback detector
 // has a default API or request-reachable routing consumer.
 func (c *RouterConfig) IsFeedbackDetectorEnabled() bool {

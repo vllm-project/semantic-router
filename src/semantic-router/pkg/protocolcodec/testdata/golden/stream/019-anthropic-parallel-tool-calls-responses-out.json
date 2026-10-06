@@ -52,7 +52,7 @@
       "event": "response.output_item.added",
       "data": {
         "item": {
-          "arguments": "{}",
+          "arguments": "",
           "call_id": "call_weather",
           "id": "call_weather",
           "name": "lookup_weather",
@@ -68,7 +68,7 @@
       "event": "response.output_item.added",
       "data": {
         "item": {
-          "arguments": "{}",
+          "arguments": "",
           "call_id": "call_time",
           "id": "call_time",
           "name": "lookup_time",

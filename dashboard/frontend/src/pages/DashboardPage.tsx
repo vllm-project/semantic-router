@@ -1,12 +1,15 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import RouterModelInventory from '../components/RouterModelInventory'
+import ViewModal from '../components/ViewModal'
 import ProductLoadingState from '../components/ProductLoadingState'
 import ProductIcon from '../components/ProductIcon'
 import {
   getLoadedModelCount,
+  getRouterModelConsumers,
   getModelStatusSummary,
   getTotalKnownModelCount,
+  type RouterModelInfo,
   type SystemStatus,
 } from '../utils/routerRuntime'
 import { DashboardMiniFlowDiagram } from './DashboardMiniFlowDiagram'
@@ -21,6 +24,7 @@ import {
   getAllDecisions,
 } from './dashboardPageStats'
 import { buildDecisionPreviewRows, buildSignalBreakdownRows } from './dashboardPageOverview'
+import { fetchDashboardJson, settleDashboardRequests } from './dashboardPageRequests'
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 import styles from './DashboardPage.module.css'
 
@@ -33,21 +37,14 @@ const DashboardPage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [selectedRuntimeModel, setSelectedRuntimeModel] = useState<RouterModelInfo | null>(null)
 
   const fetchStatus = useCallback(async () => {
-    const statusRes = await fetch('/api/status')
-    if (statusRes.ok) {
-      setStatus(await statusRes.json())
-    }
+    setStatus(await fetchDashboardJson<SystemStatus>('/api/status', 'System status'))
   }, [])
 
   const fetchConfig = useCallback(async () => {
-    const configResult = await fetch('/api/router/config/all')
-    if (configResult.ok) {
-      setConfig(await configResult.json())
-      setLastUpdated(new Date())
-      setError(null)
-    }
+    setConfig(await fetchDashboardJson<RouterConfig>('/api/router/config/all', 'Router config'))
   }, [])
 
   const statusRequest = useMemo(() => createVisibilityAwareRequest(fetchStatus), [fetchStatus])
@@ -56,19 +53,18 @@ const DashboardPage: React.FC = () => {
   const fetchAll = useCallback(
     async (manual = false) => {
       if (manual) setRefreshing(true)
-      try {
-        await Promise.all([
-          configRequest.run({ allowHidden: true }),
-          statusRequest.run({ allowHidden: true }),
-        ])
+      const failure = await settleDashboardRequests([
+        configRequest.run({ allowHidden: true }),
+        statusRequest.run({ allowHidden: true }),
+      ])
+      if (failure) {
+        setError(failure)
+      } else {
         setLastUpdated(new Date())
         setError(null)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
-      } finally {
-        setLoading(false)
-        setRefreshing(false)
       }
+      setLoading(false)
+      setRefreshing(false)
     },
     [configRequest, statusRequest],
   )
@@ -79,18 +75,9 @@ const DashboardPage: React.FC = () => {
         // Ignore transient status polling errors.
       })
     }
-    const pollConfig = () => {
-      void configRequest.run().catch((pollError) => {
-        setError(
-          pollError instanceof Error ? pollError.message : 'Failed to refresh dashboard config',
-        )
-      })
-    }
-    const onVisibilityChange = () => {
-      if (!document.hidden) {
-        pollStatus()
-        pollConfig()
-      }
+    // Full refreshes settle config and status together before touching "Updated".
+    const refreshWhenVisible = () => {
+      if (!document.hidden) void fetchAll()
     }
     const onConfigDeployed = () => {
       void fetchAll()
@@ -98,16 +85,16 @@ const DashboardPage: React.FC = () => {
 
     void fetchAll()
     const statusInterval = window.setInterval(pollStatus, 10000)
-    const configInterval = window.setInterval(pollConfig, 30000)
+    const refreshInterval = window.setInterval(refreshWhenVisible, 30000)
     window.addEventListener('config-deployed', onConfigDeployed)
-    document.addEventListener('visibilitychange', onVisibilityChange)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
     return () => {
       window.clearInterval(statusInterval)
-      window.clearInterval(configInterval)
+      window.clearInterval(refreshInterval)
       window.removeEventListener('config-deployed', onConfigDeployed)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
-  }, [configRequest, fetchAll, statusRequest])
+  }, [fetchAll, statusRequest])
 
   const signalStats = useMemo(
     () => (config ? countSignals(config) : { total: 0, byType: {} }),
@@ -125,7 +112,6 @@ const DashboardPage: React.FC = () => {
   const modelStatus = useMemo(() => getModelStatusSummary(status), [status])
   const loadedModels = useMemo(() => getLoadedModelCount(status?.models), [status])
   const knownModels = useMemo(() => getTotalKnownModelCount(status?.models), [status])
-  const previewModelLimit = 6
 
   const categorizedDecisions = useMemo(
     () => (config ? categorizeDecisions(config) : { guardrails: [], routing: [], fallbacks: [] }),
@@ -444,12 +430,40 @@ const DashboardPage: React.FC = () => {
         </div>
         <RouterModelInventory
           mode="preview"
-          previewLimit={previewModelLimit > 0 ? previewModelLimit : undefined}
           modelsInfo={status?.models}
           emptyMessage="Learned routing models will appear here when the router loads them."
-          onSelectModel={() => navigate('/config/models')}
+          onSelectModel={setSelectedRuntimeModel}
         />
       </div>
+
+      {selectedRuntimeModel && (
+        <ViewModal
+          isOpen
+          title="Runtime model details"
+          onClose={() => setSelectedRuntimeModel(null)}
+          sections={[
+            {
+              fields: [
+                {
+                  label: 'Runtime',
+                  fullWidth: true,
+                  value: (
+                    <RouterModelInventory
+                      mode="detail"
+                      modelsInfo={{
+                        models: getRouterModelConsumers(
+                          status?.models?.models ?? [],
+                          selectedRuntimeModel,
+                        ),
+                      }}
+                    />
+                  ),
+                },
+              ],
+            },
+          ]}
+        />
+      )}
 
       <div className={styles.bottomGrid}>
         {signalStats.total > 0 && (

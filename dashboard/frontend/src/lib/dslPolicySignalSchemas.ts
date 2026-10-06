@@ -38,6 +38,12 @@ export function getPolicySignalFieldSchema(signalType: string): FieldSchema[] | 
           required: true,
         },
         { key: 'instructions', label: 'Instructions', type: 'string' },
+        {
+          key: 'disable_rationale',
+          label: 'Disable Rationale',
+          type: 'boolean',
+          description: 'Only LLM classifiers support this option.',
+        },
         { key: 'use_cpu', label: 'Use CPU', type: 'boolean' },
       ]
     case 'input_modality':

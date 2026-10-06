@@ -3,6 +3,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 HALF_SCORE = 0.5
 MEAN_SCORE = 0.75
 MISSING_HEADER_COUNT = 2
@@ -42,6 +44,165 @@ def test_scored_turn_messages_include_exact_matching_instruction():
     assert "Scoring uses exact substring matching" in messages[-1]["content"]
     assert "ROOT_CAUSE=mutable-default" in messages[-1]["content"]
     assert "FIX=default-factory" in messages[-1]["content"]
+
+
+def test_chat_request_uses_full_history_without_responses_fields():
+    bench = load_benchmark_module()
+    args = bench.parse_args(["--protocol", "chat"])
+    task = bench.task_specs("smoke")[0]
+
+    body = bench.build_body(args, task, 1, "resp_previous")
+
+    assert body["messages"][0] == {
+        "role": "system",
+        "content": bench.SYSTEM_INSTRUCTIONS,
+    }
+    assert task.turns[0].prompt in [
+        message.get("content") for message in body["messages"]
+    ]
+    assert body["max_tokens"] == args.max_tokens
+    assert "input" not in body
+    assert "instructions" not in body
+    assert "max_output_tokens" not in body
+    assert "previous_response_id" not in body
+
+
+def test_responses_full_history_request_uses_native_items():
+    bench = load_benchmark_module()
+    args = bench.parse_args(
+        ["--protocol", "responses", "--continuation-mode", "full-history"]
+    )
+    task = bench.task_specs("smoke")[0]
+
+    body = bench.build_body(args, task, 1, "resp_previous")
+
+    assert body["instructions"] == bench.SYSTEM_INSTRUCTIONS
+    assert body["input"][0] == {
+        "type": "message",
+        "role": "user",
+        "content": task.turns[0].prompt,
+    }
+    assert [item["type"] for item in body["input"][-3:]] == [
+        "function_call",
+        "function_call_output",
+        "message",
+    ]
+    assert body["max_output_tokens"] == args.max_tokens
+    assert "messages" not in body
+    assert "max_tokens" not in body
+    assert "previous_response_id" not in body
+
+
+def test_responses_lineage_sends_only_new_turn_and_previous_response_id():
+    bench = load_benchmark_module()
+    args = bench.parse_args(
+        [
+            "--protocol",
+            "responses",
+            "--continuation-mode",
+            "previous-response-id",
+        ]
+    )
+    task = bench.task_specs("smoke")[0]
+
+    body = bench.build_body(args, task, 1, "resp_previous")
+
+    assert body["previous_response_id"] == "resp_previous"
+    assert body["instructions"] == bench.SYSTEM_INSTRUCTIONS
+    assert task.turns[0].prompt not in json.dumps(body["input"])
+    assert [item["type"] for item in body["input"]] == [
+        "function_call",
+        "function_call_output",
+        "message",
+    ]
+
+
+def test_chat_rejects_previous_response_id_continuation():
+    bench = load_benchmark_module()
+
+    with pytest.raises(SystemExit):
+        bench.parse_args(
+            ["--protocol", "chat", "--continuation-mode", "previous-response-id"]
+        )
+
+
+def test_protocol_selects_the_native_endpoint():
+    bench = load_benchmark_module()
+
+    assert (
+        bench.request_url("http://router.example/v1/", "chat")
+        == "http://router.example/v1/chat/completions"
+    )
+    assert (
+        bench.request_url("http://router.example/v1/", "responses")
+        == "http://router.example/v1/responses"
+    )
+
+
+def test_responses_fixture_parses_text_usage_and_completion_status():
+    bench = load_benchmark_module()
+    response = {
+        "id": "resp_1",
+        "model": "model-b",
+        "status": "completed",
+        "output": [
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [
+                    {"type": "output_text", "text": "first"},
+                    {"type": "output_text", "text": "second"},
+                ],
+            }
+        ],
+        "usage": {
+            "input_tokens": 21,
+            "output_tokens": 8,
+            "input_tokens_details": {"cached_tokens": 13},
+            "output_tokens_details": {"reasoning_tokens": 5},
+        },
+    }
+
+    assert bench.response_content(response) == "first\nsecond"
+    assert bench.usage_value(response, "prompt_tokens", "input_tokens") == 21
+    assert bench.usage_value(response, "completion_tokens", "output_tokens") == 8
+    assert bench.cached_tokens(response) == 13
+    assert bench.reasoning_tokens(response) == 5
+    assert bench.finish_reason(response) == "completed"
+
+
+def test_responses_lineage_dry_run_is_byte_stable(tmp_path):
+    bench = load_benchmark_module()
+    args = bench.parse_args(
+        [
+            "--protocol",
+            "responses",
+            "--continuation-mode",
+            "previous-response-id",
+            "--dry-run",
+        ]
+    )
+    first_dir = tmp_path / "first"
+    second_dir = tmp_path / "second"
+
+    first_rows, first_summary = bench.run_tasks(args)
+    second_rows, second_summary = bench.run_tasks(args)
+    bench.write_outputs(first_rows, first_summary, first_dir)
+    bench.write_outputs(second_rows, second_summary, second_dir)
+
+    assert first_rows == second_rows
+    assert first_summary == second_summary
+    assert first_summary["protocols"] == {"responses": len(first_rows)}
+    assert first_summary["continuation_modes"] == {
+        "previous-response-id": len(first_rows)
+    }
+    assert first_rows[0]["previous_response_id_sent"] is False
+    assert first_rows[1]["previous_response_id_sent"] is True
+    assert first_rows[1]["previous_response_id"] == first_rows[0]["response_id"]
+    for filename in ("turns.csv", "turns.jsonl", "summary.json", "summary.md"):
+        assert (first_dir / filename).read_bytes() == (
+            second_dir / filename
+        ).read_bytes()
 
 
 def test_dry_run_completes_all_tasks(tmp_path):
@@ -254,3 +415,99 @@ def test_router_diagnostics_validate_header_values():
         "invalid_router_header x-vsr-selected-confidence: 1 successful requests",
         "invalid_router_header x-vsr-context-token-count: 1 successful requests",
     ]
+
+
+def accounting_row(model, cost, routing_ms, finish, reasoning=0):
+    return {
+        "task": "a",
+        "success": True,
+        "status": 200,
+        "latency_ms": 10.0,
+        "answer_score": 1.0,
+        "scored_turn": True,
+        "model_switched": False,
+        "tool_loop_switch_violation": False,
+        "context_portability_violation": False,
+        "prompt_tokens": 10,
+        "completion_tokens": 2,
+        "cached_tokens": 0,
+        "phase": "final",
+        "selected_model": model,
+        "missing_terms": "",
+        "answer_excerpt": "",
+        "reasoning_tokens": reasoning,
+        "finish_reason": finish,
+        "routing_latency_ms": routing_ms,
+        "cost": cost,
+        "cost_currency": "USD" if cost is not None else "",
+    }
+
+
+def test_summary_reports_cost_routing_latency_and_truncation():
+    bench = load_benchmark_module()
+    rows = [
+        accounting_row("local", cost=0.0, routing_ms=0.4, finish="stop"),
+        accounting_row(
+            "cloud", cost=0.002, routing_ms=0.6, finish="length", reasoning=120
+        ),
+        accounting_row("cloud", cost=None, routing_ms=None, finish="stop"),
+    ]
+
+    summary = bench.summarize(rows, elapsed_seconds=1.0, label="router")
+
+    assert summary["selected_model_counts"] == {"cloud": 2, "local": 1}
+    assert summary["cost"]["total"] == {"USD": 0.002}
+    assert summary["cost"]["priced_requests"] == 2
+    assert summary["cost"]["unpriced_requests"] == 1
+    assert summary["routing_latency_ms"]["p50"] == 0.5
+    assert summary["truncated_requests"] == 1
+    assert summary["reasoning_tokens"] == 120
+
+
+def test_cost_summary_counts_priced_requests_per_currency():
+    bench = load_benchmark_module()
+    euro = accounting_row("eu", cost=0.01, routing_ms=0.5, finish="stop")
+    euro["cost_currency"] = "EUR"
+    rows = [
+        accounting_row("cloud", cost=0.002, routing_ms=0.5, finish="stop"),
+        accounting_row("cloud", cost=0.004, routing_ms=0.5, finish="stop"),
+        euro,
+        accounting_row("local", cost=None, routing_ms=None, finish="stop"),
+    ]
+
+    summary = bench.cost_summary(rows)
+
+    assert summary["total"] == {"EUR": 0.01, "USD": 0.006}
+    assert summary["priced_requests_by_currency"] == {"EUR": 1, "USD": 2}
+    assert summary["mean_per_priced_request"] == {"EUR": 0.01, "USD": 0.003}
+    assert summary["unpriced_requests"] == 1
+
+
+def test_router_metrics_delta_reports_cost_and_mean_routing_latency():
+    bench = load_benchmark_module()
+    before = bench.parse_metrics_text(
+        'llm_model_cost_total{currency="USD",model="cloud"} 0.5\n'
+        "llm_model_routing_latency_seconds_sum 1.0\n"
+        "llm_model_routing_latency_seconds_count 10\n"
+    )
+    after = bench.parse_metrics_text(
+        'llm_model_cost_total{currency="USD",model="cloud"} 0.75\n'
+        'llm_model_routing_latency_seconds_bucket{le="0.005"} 12\n'
+        "llm_model_routing_latency_seconds_sum 1.5\n"
+        "llm_model_routing_latency_seconds_count 14\n"
+    )
+
+    delta = bench.metrics_delta(before, after)
+
+    assert delta["cost_by_model"] == {"cloud": {"USD": 0.25}}
+    assert delta["routing_decisions"] == 4
+    assert delta["routing_latency_ms_mean"] == 125.0
+
+
+def test_accounting_headers_must_be_non_negative_numbers():
+    bench = load_benchmark_module()
+
+    assert bench.valid_router_header_value("x-vsr-cost", "0.000054")
+    assert bench.valid_router_header_value("x-vsr-routing-latency-ms", "0.412")
+    assert not bench.valid_router_header_value("x-vsr-cost", "-1")
+    assert not bench.valid_router_header_value("x-vsr-routing-latency-ms", "fast")

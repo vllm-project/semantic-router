@@ -84,6 +84,7 @@ describe('runToolLoop', () => {
         enableWebSearch: true,
         model: 'vllm-sr/blend',
       },
+      exactRequest: { max_tokens: 512 },
     }
     let messages: Message[] = [
       {
@@ -137,12 +138,20 @@ describe('runToolLoop', () => {
     expect(result).toBe('Final answer from the gathered evidence.')
     expect(executeTools).toHaveBeenCalledTimes(7)
     expect(fetchMock).toHaveBeenCalledTimes(7)
+    for (const [, requestInit] of fetchMock.mock.calls as [string, RequestInit][]) {
+      expect(requestInit.headers).toMatchObject({
+        'x-session-id': 'conversation-1',
+        'x-conversation-id': 'conversation-1',
+      })
+    }
     const [, finalRequest] = fetchMock.mock.calls[6] as [string, RequestInit]
     expect(JSON.parse(String(finalRequest.body))).toMatchObject({
       model: 'vllm-sr/blend',
       stream: true,
       tool_choice: 'auto',
+      max_tokens: 512,
     })
+    expect(JSON.parse(String(finalRequest.body)).max_completion_tokens).toBeUndefined()
     expect(messages[0]).toMatchObject({
       content: 'Final answer from the gathered evidence.',
       toolCalls: expect.arrayContaining([
