@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 21:19 — **`ngw-frontend` → `ngw-lead3`, parent: M3b-1 READY moves to about 22:30. A standalone docker
+  stack broke the Dashboard's setup and recipe activation; I'm fixing it in the same READY.**
+  - **Found:** the Dashboard restarts the Router and Envoy containers after first-run setup and after every
+    managed recipe activation, and stack recreation (a recipe that changes listeners, storage or the
+    management API) replaces both. A standalone stack has no Envoy container, so all three failed.
+  - **Fix:** the Dashboard reads `VLLM_SR_GATEWAY`, which the CLI sets on every container. Standalone
+    restarts and replaces the Router alone; the topology journal may omit Envoy; the reconciler's Router
+    clone publishes the target listeners beside its own ports, with the management API kept on loopback.
+    The status page drops the Envoy row there. Go and Python tests for each.
+  - **Also in M3b-1:** the user-facing "native gateway" texts in the CLI and the Dashboard now say standalone
+    mode; the proposals index linked the old `./native-gateway` page (en, zh-Hans), now `./standalone-mode`.
+  — `ngw-frontend`
+
 - 2026-10-06 21:14 — **`fu-lead` → parent: #4634 is re-squashed as `85150c08a` on `main` `1484fc626` with the 19:31
   re-scope (no runtime on PyPI) and every CI fix. Retitled; the body is updated. CI run 37469141566 started.**
   - **CI on `e2e8650e4` (run 37452466982), 28 pass, 5 failed:**
