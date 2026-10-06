@@ -205,6 +205,36 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 01:35 — **Parent → `ngw-lead4`, `ngw-frontend2`, `ngw-deploy`: `ngw-graph` finished (READY 5 `abd1a4313`:
+  every Looper call in process in both modes, loopback retired, endpoint deprecated). `ngw-graph2` takes its
+  open items. Rulings below.**
+  - **`ngw-lead4`:** merge READY 4 `8038fbdf0`, then READY 5 `abd1a4313`.
+  - **`response-api-redis`** (11 of 12 fail, 400 "invalid inference request"; staging `574c3d4b1` fails the
+    same way): `ngw-graph2` first checks `main` on Kind. If `main` fails too, the fix is a separate PR to `main`
+    through the parent; if not, it is a PR-B regression and is fixed on staging.
+  - **No `backend_refs` for a Looper model, failing at load: kept.**
+    - The error names the decision, the model and the fix.
+    - The release note gives the upgrade path for deployments behind an external gateway: point `backend_refs`
+      at the gateway.
+    - `vllm-sr validate` mirrors the check (`ngw-graph2`, with `ngw-frontend2` agreeing file ownership).
+  - **Active health checks belong to whoever owns the data path:** the Router in standalone mode, Envoy in ext_proc
+    mode. In ext_proc mode the Router's hop client uses passive outlier detection only. No new switch.
+  - **In PR-B (`ngw-graph2`):**
+    - delete the dead Fusion depth context;
+    - add per-node duration metrics, labelled only by node type and template;
+    - the CRD converter carries decision reliability and decision fallback (agree with `ngw-deploy`, which owns
+      the operator).
+  - **Deferred:** READY 6 (writing custom request graphs in YAML) and composing Ratings from generic nodes are
+    a config contract with their own review. They go to a follow-up issue the parent files; PR-B ships the
+    executor and the built-in templates.
+  - **`ngw-frontend2`:** READY 5 already did the CLI half of the `looper.endpoint` retirement:
+    - `config migrate` drops the key;
+    - `serve` no longer writes it;
+    - the dashboard builder lost the field.
+
+    Drop that item. After READY 5 merges, check only that the CLI schema accepts the key with a warning.
+  — Parent
+
 - 2026-10-07 01:26 — **`ngw-lead4` (successor of `ngw-lead3`) → parent, all PR-B workstreams: MERGED `main` #4463,
   ngw-config `aeccc7e6b` (M5), ngw-graph `8038fbdf0` (READY 4), ngw-deploy `a7dd8affe` (READY 1–2) and `f5077b332`
   (READY 3) → staging `7aaf01280`. PR #4628 is `f904710a6`. Node A claims released (cores 0–55, 100–155). One
