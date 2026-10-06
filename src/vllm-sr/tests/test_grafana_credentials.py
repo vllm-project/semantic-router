@@ -1,0 +1,348 @@
+"""Tests for per-stack Grafana admin credentials and the Grafana container wiring."""
+
+import configparser
+import os
+import stat
+import subprocess
+from pathlib import Path
+
+from cli import container_support_services, runtime_lifecycle
+from cli import grafana_credentials as gc
+from cli.main import main
+from cli.runtime_stack import resolve_runtime_stack
+from click.testing import CliRunner
+
+GRAFANA_SERVE_INI_TEMPLATE = (
+    Path(gc.__file__).resolve().parent / "templates" / "grafana.serve.ini"
+)
+CONTAINER_GRAFANA_INI_PATH = "/etc/grafana/grafana.ini"
+
+
+def _file_mode(path: Path) -> int:
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+def _password(tmp_path: Path, layout) -> str:
+    return gc.ensure_grafana_admin_password_file(
+        tmp_path, stack_layout=layout
+    ).read_text(encoding="utf-8")
+
+
+def _parse_grafana_ini(path: Path) -> configparser.ConfigParser:
+    parser = configparser.ConfigParser(inline_comment_prefixes=("#", ";"))
+    read = parser.read(path)
+    assert read, f"failed to parse Grafana ini at {path}"
+    return parser
+
+
+def _assert_ini_denies_anonymous_admin(path: Path) -> None:
+    """Anonymous users may view dashboards; they must not be org admins."""
+    ini = _parse_grafana_ini(path)
+    assert ini.getboolean("auth.anonymous", "enabled") is True
+    assert ini.get("auth.anonymous", "org_role") == "Viewer"
+    assert ini.getboolean("auth.basic", "enabled") is True
+    assert ini.getboolean("auth", "disable_login_form") is False
+    assert ini.get("security", "cookie_samesite") == "lax"
+    assert ini.getboolean("security", "cookie_secure") is False
+
+
+def _monkeypatch_grafana_container(monkeypatch, captured, *, render_templates=False):
+    monkeypatch.setattr(
+        container_support_services, "get_container_runtime", lambda: "docker"
+    )
+    monkeypatch.setattr(
+        container_support_services, "_replace_existing_container", lambda _name: None
+    )
+    if not render_templates:
+        monkeypatch.setattr(
+            container_support_services, "_render_template_copy", lambda *_a, **_k: None
+        )
+    monkeypatch.setattr(
+        container_support_services,
+        "_run_service_start",
+        lambda cmd, _label: captured.update(cmd=cmd) or (0, "", ""),
+    )
+    monkeypatch.setattr(
+        container_support_services,
+        "rekey_grafana_admin",
+        lambda container_name, runtime=None, **k: captured.update(
+            rekey_container=container_name
+        )
+        or (0, "", ""),
+    )
+
+
+def test_fresh_stack_generates_and_reuses_a_container_readable_password_file(
+    monkeypatch, tmp_path: Path
+):
+    monkeypatch.delenv(gc.GRAFANA_ADMIN_PASSWORD_ENV, raising=False)
+    layout = resolve_runtime_stack()
+    path = gc.grafana_password_path(tmp_path, stack_layout=layout)
+
+    first = _password(tmp_path, layout)
+    second = _password(tmp_path, layout)
+
+    assert len(first) >= 40
+    assert first == second, "a restart must keep the same credential"
+    assert path.exists()
+    assert _file_mode(path.parent) == 0o700
+    assert _file_mode(path) == 0o644
+    assert path.read_text(encoding="utf-8") == first
+    assert not path.read_bytes().endswith(b"\n")
+
+
+def test_explicit_env_password_is_materialized_for_the_container(
+    monkeypatch, tmp_path: Path
+):
+    explicit = "operator-provided-password"
+    monkeypatch.setenv(gc.GRAFANA_ADMIN_PASSWORD_ENV, explicit)
+    layout = resolve_runtime_stack()
+
+    path = gc.ensure_grafana_admin_password_file(tmp_path, stack_layout=layout)
+
+    assert path == gc.grafana_password_path(tmp_path, stack_layout=layout)
+    assert path.read_text(encoding="utf-8") == explicit
+    assert _password(tmp_path, layout) == explicit
+    assert _file_mode(path.parent) == 0o700
+    assert _file_mode(path) == 0o644
+    assert not path.read_bytes().endswith(b"\n")
+
+
+def test_each_stack_gets_its_own_password_file(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv(gc.GRAFANA_ADMIN_PASSWORD_ENV, raising=False)
+    default_layout = resolve_runtime_stack()
+    custom_layout = resolve_runtime_stack(stack_name="team-b", port_offset=100)
+
+    default_path = gc.grafana_password_path(tmp_path, stack_layout=default_layout)
+    custom_path = gc.grafana_password_path(tmp_path, stack_layout=custom_layout)
+
+    assert default_path != custom_path
+    assert _password(tmp_path, default_layout) != _password(tmp_path, custom_layout)
+
+
+def test_grafana_container_reads_password_from_secret_file_never_argv(
+    monkeypatch, tmp_path: Path
+):
+    monkeypatch.delenv(gc.GRAFANA_ADMIN_PASSWORD_ENV, raising=False)
+    captured: dict[str, object] = {}
+    _monkeypatch_grafana_container(monkeypatch, captured)
+    layout = resolve_runtime_stack()
+    (tmp_path / ".vllm-sr").mkdir(mode=0o700)
+
+    container_support_services.container_start_grafana(
+        "test-network", str(tmp_path), stack_layout=layout
+    )
+
+    command = list(captured["cmd"])
+    password = _password(tmp_path, layout)
+    mounted = gc.grafana_password_path(tmp_path, stack_layout=layout)
+    assert _file_mode(mounted) == 0o644
+    assert (
+        f"{gc.GRAFANA_ADMIN_PASSWORD_FILE_ENV}=" f"{gc.CONTAINER_GRAFANA_PASSWORD_PATH}"
+    ) in command
+    assert (
+        f"{tmp_path}/.vllm-sr/grafana-credentials/admin-password:"
+        f"{gc.CONTAINER_GRAFANA_PASSWORD_PATH}:ro,z"
+    ) in command
+    assert "GF_SECURITY_ADMIN_PASSWORD=admin" not in command
+    assert password not in command
+    assert not any(arg.startswith("GF_SECURITY_ADMIN_PASSWORD=") for arg in command)
+    assert not any(arg.startswith("GF_SECURITY_ADMIN_USER=") for arg in command)
+
+
+def test_grafana_container_mounts_the_explicit_password_file(monkeypatch, tmp_path):
+    explicit = "operator-supplied-password"
+    monkeypatch.setenv(gc.GRAFANA_ADMIN_PASSWORD_ENV, explicit)
+    captured: dict[str, object] = {}
+    _monkeypatch_grafana_container(monkeypatch, captured)
+    layout = resolve_runtime_stack()
+    (tmp_path / ".vllm-sr").mkdir(mode=0o700)
+
+    container_support_services.container_start_grafana(
+        "test-network", str(tmp_path), stack_layout=layout
+    )
+
+    command = list(captured["cmd"])
+    path = gc.grafana_password_path(tmp_path, stack_layout=layout)
+    assert path.is_file()
+    assert path.read_text(encoding="utf-8") == explicit
+    assert _file_mode(path) == 0o644
+    assert (
+        f"{gc.GRAFANA_ADMIN_PASSWORD_FILE_ENV}=" f"{gc.CONTAINER_GRAFANA_PASSWORD_PATH}"
+    ) in command
+    assert f"{path}:{gc.CONTAINER_GRAFANA_PASSWORD_PATH}:ro,z" in command
+    assert explicit not in command
+    assert not any(arg.startswith("GF_SECURITY_ADMIN_PASSWORD=") for arg in command)
+
+
+def test_shipped_grafana_ini_restricts_anonymous_users_to_viewer():
+    _assert_ini_denies_anonymous_admin(GRAFANA_SERVE_INI_TEMPLATE)
+
+
+def test_grafana_container_renders_and_mounts_ini_without_anonymous_admin(
+    monkeypatch, tmp_path: Path
+):
+    monkeypatch.delenv(gc.GRAFANA_ADMIN_PASSWORD_ENV, raising=False)
+    captured: dict[str, object] = {}
+    _monkeypatch_grafana_container(monkeypatch, captured, render_templates=True)
+    layout = resolve_runtime_stack()
+    (tmp_path / ".vllm-sr").mkdir(mode=0o700)
+
+    container_support_services.container_start_grafana(
+        "test-network", str(tmp_path), stack_layout=layout
+    )
+
+    rendered = tmp_path / ".vllm-sr" / "grafana" / "grafana.serve.ini"
+    _assert_ini_denies_anonymous_admin(rendered)
+    command = list(captured["cmd"])
+    assert f"{os.path.abspath(rendered)}:{CONTAINER_GRAFANA_INI_PATH}:ro" in command
+    assert f"127.0.0.1:{layout.grafana_port}:3000" in command
+
+
+def test_runtime_summary_prints_the_admin_password_file_path_not_the_secret(
+    monkeypatch, tmp_path: Path, capsys
+):
+    explicit = "operator-supplied-password"
+    monkeypatch.setenv(gc.GRAFANA_ADMIN_PASSWORD_ENV, explicit)
+    stack_layout = resolve_runtime_stack(stack_name="terminal-test", port_offset=200)
+    password_file = gc.grafana_password_path(tmp_path, stack_layout=stack_layout)
+
+    runtime_lifecycle.log_runtime_summary(
+        [{"name": "http-8899", "port": 8899}],
+        stack_layout,
+        dashboard_disabled=False,
+        enable_observability=True,
+        started_backends={"postgres", "redis"},
+        state_root_dir=str(tmp_path),
+    )
+
+    captured = capsys.readouterr()
+    compact = "".join(captured.out.split())
+    assert stack_layout.grafana_url in captured.out
+    assert "Grafana admin password file" in captured.out
+    assert "grafana-credentials" in compact
+    assert password_file.name in captured.out
+    assert "(admin/admin)" not in captured.out
+    assert "generated admin password" not in captured.out
+    assert explicit not in captured.out
+
+
+def test_main_cli_help_does_not_mention_admin_password(monkeypatch):
+    result = CliRunner().invoke(main, ["--help"])
+    assert result.exit_code == 0
+    assert "admin/admin" not in result.output
+
+
+def test_grafana_container_defaults_the_state_root_to_the_working_directory(
+    monkeypatch, tmp_path: Path
+):
+    # Regression: an omitted config_dir must resolve to $PWD/.vllm-sr for the
+    # credential file exactly as it does for the rendered templates, instead of
+    # raising after the previous Grafana container has already been removed.
+    monkeypatch.delenv(gc.GRAFANA_ADMIN_PASSWORD_ENV, raising=False)
+    monkeypatch.chdir(tmp_path)
+    captured: dict[str, object] = {}
+    _monkeypatch_grafana_container(monkeypatch, captured)
+    layout = resolve_runtime_stack()
+
+    container_support_services.container_start_grafana(
+        "test-network", stack_layout=layout
+    )
+
+    command = list(captured["cmd"])
+    working_directory = Path(os.getcwd())
+    mounted = working_directory / ".vllm-sr" / "grafana-credentials" / "admin-password"
+    assert mounted.is_file()
+    assert _file_mode(mounted) == 0o644
+    assert f"{mounted}:{gc.CONTAINER_GRAFANA_PASSWORD_PATH}:ro,z" in command
+    assert (
+        f"{working_directory / '.vllm-sr' / 'grafana' / 'grafana.serve.ini'}:"
+        f"{CONTAINER_GRAFANA_INI_PATH}:ro"
+    ) in command
+    assert captured.get("rekey_container") == layout.grafana_container_name
+
+
+def test_rekey_grafana_admin_executes_cli_without_secrets_in_argv(monkeypatch):
+    executed = []
+
+    def fake_run(command, **kwargs):
+        executed.append(command)
+        return subprocess.CompletedProcess(
+            args=command, returncode=0, stdout="ok", stderr=""
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    rc, _stdout, _stderr = container_support_services.rekey_grafana_admin(
+        "my-grafana-container", "docker"
+    )
+
+    assert rc == 0
+    assert len(executed) == 1
+    command = executed[0]
+    assert command[:4] == ["docker", "exec", "my-grafana-container", "sh"]
+    assert command[4] == "-c"
+    # The shell string must read from the mounted password path and never interpolate
+    # a raw secret into process arguments.
+    shell_command = command[5]
+    assert gc.CONTAINER_GRAFANA_PASSWORD_PATH in shell_command
+    assert "admin reset-admin-password" in shell_command
+    assert "--password-from-stdin" in shell_command
+    assert f"< {gc.CONTAINER_GRAFANA_PASSWORD_PATH}" in shell_command
+    assert "$(" not in shell_command
+    assert "`" not in shell_command
+    assert "cat " not in shell_command
+
+
+def test_rekey_grafana_admin_retries_until_success(monkeypatch):
+    attempts = 0
+
+    def fake_run(command, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            return subprocess.CompletedProcess(
+                args=command, returncode=1, stdout="", stderr="db locked"
+            )
+        return subprocess.CompletedProcess(
+            args=command, returncode=0, stdout="success", stderr=""
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        container_support_services, "GRAFANA_REKEY_POLL_INTERVAL_SECONDS", 0.001
+    )
+    rc, stdout, _stderr = container_support_services.rekey_grafana_admin(
+        "my-grafana-container", "docker", timeout=5
+    )
+
+    assert rc == 0
+    assert attempts == 3
+    assert stdout == "success"
+
+
+def test_container_start_grafana_fails_and_stops_container_when_rekey_fails(
+    monkeypatch, tmp_path: Path
+):
+    captured: dict[str, object] = {}
+    stopped_containers: list[str] = []
+    _monkeypatch_grafana_container(monkeypatch, captured)
+    monkeypatch.setattr(
+        container_support_services,
+        "container_stop_container",
+        lambda name: stopped_containers.append(name) or True,
+    )
+    monkeypatch.setattr(
+        container_support_services,
+        "rekey_grafana_admin",
+        lambda _name, **_k: (1, "", "database locked permanently"),
+    )
+    layout = resolve_runtime_stack()
+
+    status = container_support_services.container_start_grafana(
+        "test-network", config_dir=str(tmp_path), stack_layout=layout
+    )
+
+    assert status[0] == 1
+    assert "Failed to synchronize Grafana admin password" in status[2]
+    assert "database locked permanently" in status[2]
+    assert stopped_containers == [layout.grafana_container_name]
