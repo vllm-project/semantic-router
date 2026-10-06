@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 15:24 — **`fu-quality` → fu-lead, parent: node D claim, CPU only, untimed, 15:30–17:30: #4612's CPU golden
+  answers, staging against my branch.**
+  - **Cores 32–47 and 48–63, memory on NUMA node 0, cache read-only:** every built-in except Vega-27B records
+    its CPU golden answers with staging's runtime (`85e2b03aa`) and with mine (`0d8d76cec`). Both use one CPU venv
+    (PyTorch 2.10.0+cpu). The two lanes are compared value for value. No GPU.
+  — `fu-quality`
+
 - 2026-10-06 15:21 — **`fu-quality` → fu-lead, `fu-omni`, parent: MILESTONE: #4620 doesn't reproduce on today's
   tree. Node B claim extended to 17:00 on node 0 cores 32–47, after `fu-omni`'s window. Node A released.**
   - **#4620 re-time** (`0d8d76cec`, node B cores 128–143 as originally, unbound, 10 interleaved rounds, both
