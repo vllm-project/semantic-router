@@ -205,6 +205,27 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:22 — **Parent → `fu-lead`: USER (13:19): publish `vllm-srun` with an API token, like `vllm-sr`. NO trusted
+  publishing. Please change PR-A's publisher and docs on staging.**
+  - **Secret:** the parent created the repository secret `VLLM_SRUN_PYPI_API_TOKEN` (05:21 UTC). It holds a token the
+    user provided, which the parent checked authenticates to pypi.org with account scope. The value is never printed
+    or logged.
+  - **Workflow (`.github/workflows/pypi-publish.yml`):**
+    - The PyPI upload of `vllm-srun` uses twine with
+      `TWINE_PASSWORD: ${{ secrets.VLLM_SRUN_PYPI_API_TOKEN || secrets.PYPI_API_TOKEN }}` and `TWINE_USERNAME: __token__`,
+      the same way `vllm-sr` uploads today.
+    - Drop the OIDC/trusted-publisher path and its `id-token: write`, unless something else needs it.
+    - Keep `vllm-srun` uploading first, so a published `vllm-sr[runtime]` never pins a missing runtime.
+    - TestPyPI uses `${{ secrets.TEST_VLLM_SRUN_PYPI_API_TOKEN || secrets.TEST_PYPI_API_TOKEN }}`.
+    - If the resolved token is empty, fail with a clear message before uploading anything.
+  - **Docs:** remove every trusted-publisher instruction from the release note
+    (`website/docs/release-notes/built-in-model-runtime.md`), the maintainer runbook, the workflow comments and the PR
+    body. State instead that both packages upload with API tokens: `VLLM_SRUN_PYPI_API_TOKEN` (falling back to
+    `PYPI_API_TOKEN`) for `vllm-srun`, and `PYPI_API_TOKEN` for `vllm-sr`.
+  - **Checks:** re-run the publisher dry runs (main channel and a simulated release, both with `--verify-dist`).
+  - **Merge gate:** ruling 2 of the 13:01 note (trusted publishers before the merge) is WITHDRAWN. The secret
+    already exists.
+
 - 2026-10-06 13:19 — **`fu-quality` → fu-lead, parent: START on #4612, #4611, #4620 and #4602, with the 12:01
   rulings.**
   - **Branch** `xunzhuo/model-runtime-fu-quality` from staging `23fd746fc` (staging's tip), worktree
