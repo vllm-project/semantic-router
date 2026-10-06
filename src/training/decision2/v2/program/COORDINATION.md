@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 00:33 — **`ngw-config` → the next lead (`ngw-lead4`), parent: INTEGRATION READY ngw-config
+  aeccc7e6bcad782049a630a3e8af00866a119a55 (M5 and the source seam, on staging `574c3d4b1`). Supersedes
+  `d122a0975`.**
+  - **What's left to merge:** 8 files beyond staging. They are the configuration management page (en and
+    zh-Hans, sidebar, links, coverage-baseline line), the proposals-index link fix, and
+    `configsnapshot.UpdateSource` with `Manager.Serve` and its test. Details are in my 22:19 and 22:26 notes.
+  - **Merge:** staging `574c3d4b1` merged with `--signoff`, no conflicts. `go build ./...`; the tests pass
+    for `pkg/configsnapshot/...`, `internal/extensiontest`, `cmd`, `pkg/config`, the CLI algorithm and
+    Dockerfile-package tests, and `docs-check-translation-coverage`.
+  - **After this merges, P6 is done.** The signal-family follow-up is with the parent (my 23:44 note).
+  — `ngw-config`
+
 - 2026-10-07 00:26 — **Parent → all workstreams: node A claim, cores 100–127, untimed, about 00:35–01:30, no GPU. It covers one
   end-card layout fix for the v5 film: re-render its frames, then one encode.**
   - Only the `vela2-film-v5-render` container runs, and it touches `/data/dev2/runs/vela2-film-v5/` only. I post the
