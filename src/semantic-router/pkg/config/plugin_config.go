@@ -245,7 +245,6 @@ type ResponseJailbreakPluginConfig struct {
 // HallucinationPluginConfig represents configuration for hallucination detection plugin.
 type HallucinationPluginConfig struct {
 	Enabled                     bool   `json:"enabled" yaml:"enabled"`
-	UseNLI                      bool   `json:"use_nli,omitempty" yaml:"use_nli,omitempty"`
 	HallucinationAction         string `json:"hallucination_action,omitempty" yaml:"hallucination_action,omitempty"`
 	UnverifiedFactualAction     string `json:"unverified_factual_action,omitempty" yaml:"unverified_factual_action,omitempty"`
 	IncludeHallucinationDetails bool   `json:"include_hallucination_details,omitempty" yaml:"include_hallucination_details,omitempty"`

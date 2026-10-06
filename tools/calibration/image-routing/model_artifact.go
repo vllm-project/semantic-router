@@ -26,7 +26,7 @@ type artifactEvidence struct {
 }
 
 // modelArtifact verifies the derived deployment's content-addressed manifest.
-// Native preparation subsequently validates every task, graph and processor field.
+// The model runtime subsequently verifies every graph and processor it loads.
 func modelArtifact(dir, revision string) (artifactEvidence, error) {
 	result := artifactEvidence{Files: map[string]string{}}
 	data, err := os.ReadFile(filepath.Join(dir, omniManifestFile))

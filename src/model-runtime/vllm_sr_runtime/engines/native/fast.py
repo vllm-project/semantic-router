@@ -9,7 +9,9 @@ four scored panels), so it belongs to the exact profile:
   which round exactly like the ops they replace. GEMMs, attention and the
   gated-delta kernel are the eager path's. A layer call whose fused kernels
   fail (for example a compiler error on an unusual shape) runs the layer's
-  eager forward instead, and the shape is remembered.
+  eager forward instead, and the shape is remembered. A Qwen3.5 layer's
+  forest forward (``models/forest.py``) fuses the same steps except the
+  gated-delta preparation, whose convolution there is ``F.conv1d``.
 - **Lean LoRA.** An unmerged LoRA layer with a power-of-two scaling multiplies
   its factors in BF16 (the values autocast uses) with the scaling folded into B
   (exact for a power of two): 5 kernels instead of 9, the same products.
@@ -38,6 +40,7 @@ from torch import nn
 
 from ...accel.kernels import KernelSet
 from .models.common import attention
+from .models.forest import Forest, forest_attention, forest_gated_delta
 from .models.lora import LoRALinear
 from .models.tree import suffix_rule
 
@@ -96,6 +99,10 @@ def fused_unavailable(backbone: nn.Module, kernels: KernelSet) -> str | None:
             config["linear_key_head_dim"] == GATED_DELTA_HEAD_DIM
             and config["linear_value_head_dim"] == GATED_DELTA_HEAD_DIM
         )
+    if model_type == "qwen3":
+        checks["an FP32 stream (BF16 Qwen3 norms round differently)"] = (
+            backbone.norm.weight.dtype == torch.float32
+        )
     failed = [name for name, ok in checks.items() if not ok]
     return "needs " + ", ".join(failed) if failed else None
 
@@ -107,6 +114,7 @@ def install_fused(backbone: nn.Module) -> int:
         if type(layer).__name__ == "Qwen3_5Layer":
             layer._fused = _prepare_qwen3_5(layer)
             layer._fused_forward = types.MethodType(_qwen3_5_forward, layer)
+            _install_fused_forest(layer)
         elif type(layer).__name__ == "Qwen3Layer":
             layer._fused = _prepare_qwen3(layer)
             layer._fused_forward = types.MethodType(_qwen3_forward, layer)
@@ -121,6 +129,24 @@ def install_fused(backbone: nn.Module) -> int:
         layer.forward = types.MethodType(forward, layer)
         count += 1
     return count
+
+
+def _install_fused_forest(layer: nn.Module) -> None:
+    """Run the layer's forest forward fused where it applies, eagerly otherwise (as ``run_fused``)."""
+    eager = layer.forward_forest
+    fused = types.MethodType(_qwen3_5_forest, layer)
+
+    def forward_forest(self, prefix, blocks, *args):
+        key = ("forest", tuple(prefix.shape), tuple(blocks.shape))
+        if key in self._fused_failed or not fused_applies(prefix):
+            return eager(prefix, blocks, *args)
+        try:
+            return fused(prefix, blocks, *args)
+        except RuntimeError:
+            self._fused_failed.add(key)
+            return eager(prefix, blocks, *args)
+
+    layer.forward_forest = types.MethodType(forward_forest, layer)
 
 
 def _prepare_qwen3_5(layer: nn.Module) -> dict[str, Any]:
@@ -163,9 +189,9 @@ def _prepare_qwen3(layer: nn.Module) -> dict[str, Any]:
 
 
 def fused_applies(hidden_states: torch.Tensor) -> bool:
-    """The fused kernels reproduce the eager layer only under BF16 autocast on an FP32 stream."""
+    """The fused kernels reproduce the eager layer under BF16 autocast on an FP32 or BF16 stream."""
     return (
-        hidden_states.dtype == torch.float32
+        hidden_states.dtype in (torch.float32, torch.bfloat16)
         and hidden_states.is_cuda
         and torch.is_autocast_enabled("cuda")
         and torch.get_autocast_dtype("cuda") == torch.bfloat16
@@ -220,6 +246,69 @@ def _qwen3_5_forward(
     return _residual(kernels, hidden, mlp.down_proj(act))
 
 
+def _qwen3_5_forest(
+    layer, prefix, blocks, rotary, forest: Forest, kernels: KernelSet
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """``Qwen3_5Layer.forward_forest`` with fused norms, residuals, MLP gates, attention prep and gates."""
+    p = layer._fused
+    prefix, blocks = prefix.contiguous(), blocks.contiguous()
+    normed = [
+        kernels("add_rmsnorm")(x, None, p["w1_in"], p["eps"])[1]
+        for x in (prefix, blocks)
+    ]
+    if layer.kind == "linear_attention":
+        m = layer.linear_attn
+        mixed = forest_gated_delta(
+            m,
+            *normed,
+            forest,
+            kernels,
+            norm=lambda core, z: kernels("gated_rmsnorm")(
+                core.contiguous(),
+                z.contiguous(),
+                m.norm.weight,
+                m.norm.variance_epsilon,
+            ),
+        )
+    else:
+        mixed = forest_attention(
+            layer.self_attn,
+            *normed,
+            *rotary,
+            forest,
+            project=lambda m, h, table: _forest_projection(m, p, h, table, kernels),
+            gate=lambda m, out, gate: m.o_proj(
+                kernels("sigmoid_gate")(out.transpose(1, 2), gate)
+            ),
+        )
+    out = []
+    for stream, delta in zip((prefix, blocks), mixed, strict=True):
+        hidden, normed_post = kernels("add_rmsnorm")(
+            stream, delta.contiguous(), p["w1_post"], p["eps"]
+        )
+        mlp = layer.mlp
+        act = kernels("silu_mul")(mlp.gate_proj(normed_post), mlp.up_proj(normed_post))
+        out.append(_residual(kernels, hidden, mlp.down_proj(act)))
+    return out[0], out[1]
+
+
+def _forest_projection(m, p, h, rotary, kernels: KernelSet):
+    """``forest.project_attention`` through ``attn_prep``; the gate stays a view of the q projection."""
+    rows, length, _ = h.shape
+    hd = m.head_dim
+    qp = m.q_proj(h).contiguous()
+    kp = m.k_proj(h).contiguous()
+    vp = m.v_proj(h)
+    cos, sin = (t.contiguous() for t in rotary)
+    heads = qp.shape[-1] // (2 * hd)
+    kv_heads = kp.shape[-1] // hd
+    q, k = kernels("attn_prep")(
+        qp, kp, p["qw1"], p["kw1"], cos, sin, heads, kv_heads, hd, m.q_norm.eps
+    )
+    v = vp.view(rows, length, kv_heads, hd).transpose(1, 2)
+    return q, k, v, qp.view(rows, length, heads, 2 * hd)[..., hd:]
+
+
 def _tree_gated_delta(m, p, normed, tree, kernels: KernelSet):
     """``tree.tree_gated_delta`` with the fused kernels: the prefix from a zero state, every suffix from the
     prefix-end state with its convolution window starting in the prefix (rows ``[prefix tail | suffix]``,
@@ -271,6 +360,9 @@ def _tree_gated_delta(m, p, normed, tree, kernels: KernelSet):
 
 
 def _gated_delta(m, p, normed, mask, kernels: KernelSet):
+    if kernels.select("causal_conv1d").variant is not None:
+        # The model's released convolution (a kernel variant) is not what gdn_prep fuses.
+        return m(normed, mask, kernels)
     if getattr(mask, "is_tree", False):
         return _tree_gated_delta(m, p, normed, mask, kernels)
     if mask is not None:
@@ -546,7 +638,11 @@ class Graphs:
                 torch.cuda.current_stream().wait_stream(stream)
                 torch.cuda.synchronize()
                 graph = torch.cuda.CUDAGraph()
-                with torch.cuda.graph(graph, pool=self.pool):
+                # Device work is serialized, but other threads may still query the device
+                # meanwhile (placement); global capture mode would fail them and the capture.
+                with torch.cuda.graph(
+                    graph, pool=self.pool, capture_error_mode="thread_local"
+                ):
                     output = body()
             torch.cuda.synchronize()
         except Exception:
