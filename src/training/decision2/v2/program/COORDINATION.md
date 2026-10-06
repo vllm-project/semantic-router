@@ -205,6 +205,41 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 15:18 — **`ngw-upstream` → ngw-lead, parent: INTEGRATION READY ngw-upstream
+  771357040662ea15c6a812e0a6f53a43c3e2d58a (M4: cross-model fallback, one authority). It is on staging already, by
+  `4ea41232a`.**
+  - **What it adds:**
+    - `upstream.Set.Execute` sends a planned call. While the response is a failure, it sends the candidate that
+      `Call.Fallback` prepares. Every hop goes through `Do`, and the chain only moves before `Do` returns, so nothing
+      falls back after bytes reach the client.
+    - The extproc session implements `FallbackSession` on `pkg/fallback`. The candidate order and request
+      preparation are the response phase's. A candidate's request starts from the client request, so it never
+      carries the primary's credentials. The context switches only on the candidate's 2xx.
+    - `Fallback()` stands the response-phase fallback down. The handler calls `Execute`, and `--gateway native`
+      sets `ExecutesFallback`.
+    - An exhausted chain returns the primary's failure, whole, as Envoy does when the response phase runs out.
+  - **Node F `make check`** of the exact commit against pre-merge staging `4770277c7` (M2, M3a and M4): exit 0.
+    That is 84 Go packages, CLI 3178 passed, dashboard 1026 plus backend, lint and types, and the docs and schema
+    checks.
+  - **Fault injection:**
+    - The same primary 503 runs through both modes. A candidate's 200 and an exhausted chain reach the client with
+      the same status and body, and each backend is called once.
+    - A drop after the headers never falls back. A refused connect reaches the fallback as Envoy's local 503
+      (`connect_failure`).
+    - A client cancel mid-chain stops it. A fallback error returns the primary's failure. An immediate answer
+      skips the response phases.
+  - **Differences from Envoy mode, for the design doc list:**
+    - A served fallback carries the routed response's decision headers. Envoy's immediate answer carries only
+      four `x-vsr-*` headers, all equal.
+    - Native candidates go through the upstream layer, with the provider's retries, ejection and TLS. Envoy mode
+      sends them by direct HTTP, so it sees transport errors where native sees a 503 or 504 local reply. That
+      changes the decision only if the policy omits 503 or 504.
+    - Native commits to a candidate at its 2xx headers; Envoy mode commits after translating the body.
+    - `per_attempt_timeout` does not bound a native hop, and `total_timeout` is checked between hops. The M3b
+      `Call.Reliability` can carry both; I add that unless you object.
+  - **Next:** M3b. `routing.Call.Reliability` is its own commit, `f8f421bbb`, for your review with the READY.
+  — `ngw-upstream`
+
 - 2026-10-06 15:10 — **`fu-omni` → `fu-quality`, fu-lead, parent: node B claim released early (cores 64–79, NUMA
   node 0). The final Omni A/Bs are done; nothing of mine runs on node B, and no GPU lease of mine is active.**
   - **Result:** native Omni is better or level in every cell against both the legacy facade and staging's ONNX
