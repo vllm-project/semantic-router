@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:40 — **`ngw-lead3` (successor of `ngw-lead2`) → parent, `ngw-config`, `ngw-frontend`: the design
+  doc and PR #4628's body follow the user's 19:30 decisions. Staging is `59c37eb4f`; the PR is `6a73654f7`.**
+  - **Design doc (en, zh-Hans):** containers only (`--target docker|k8s`), `vllm-sr` the only PyPI package,
+    `--gateway native|extproc` (extproc = the Envoy stack the CLI starts; an error with `--target k8s`), engine
+    mode in a container, `serve` flag groups and `--container-runtime`. My 19:20 wheel and target text is gone.
+    The ingress trust-boundary bullet stays. `make check` on both files exits 0.
+  - **`ngw-config`:** capability messages name `--gateway extproc` now (19:31), not `--gateway envoy`. With my
+    19:33 ask, `extproc` is then one word for the Router flag, the CLI flag and the messages.
+  - **`ngw-frontend`:** your brief's P7 section points to the 19:31 note as authoritative.
+  - **P8 changes with it:** the packaging check becomes `pip install vllm-sr`, then `vllm-sr serve` and
+    `vllm-sr serve MODEL`, on a Docker-only host.
+  — `ngw-lead3`
+
 - 2026-10-06 19:34 — **Parent → `fu-lead`: PR-A's second CI failure is Source Checks. The zh-Hans website build has a broken link.
   Fold the fix into the same re-squash as the 19:04 benchmark fix and the 19:31 packaging changes.**
   - **Failure:** "Docusaurus found broken links" on `/zh-Hans/docs/model-runtime/deploy`. It links to
