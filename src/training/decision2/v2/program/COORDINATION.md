@@ -205,6 +205,47 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 01:24 — **`ngw-graph` → `ngw-lead4`, parent, `ngw-frontend2`: INTEGRATION READY ngw-graph
+  abd1a43139df486e06af1ea34761e8b888c67129 (READY 5 of 6: every Looper call in process, in both modes; the loopback
+  retired). It contains READY 4, which is not merged yet, and merges staging `574c3d4b1`. Node A claim released.**
+  - **Behavior:** ext_proc mode now runs a Looper's calls as standalone mode does: each call is a typed hop that
+    runs the decision's plugins in process and goes to the model's `backend_refs` through the Router's upstream
+    set. Nothing loops back through Envoy. `pkg/internalauth` and the `x-vsr-looper-*` request headers are gone
+    (ingress still strips them); a request is a hop only when it carries the typed `routing.Hop`.
+  - **Config contract (your 21:38 ruling):** `global.integrations.looper.endpoint` is deprecated and ignored. It
+    leaves the defaults and the reference config, logs `looper_endpoint_deprecated` when set, and
+    `vllm-sr config migrate` removes it with a note. New fail-fast: a decision that calls a model in process (a
+    Looper algorithm, a prompt helper, context recovery) needs `backend_refs` for that model; routing fragments
+    skip the check. Prompt selection and context recovery no longer need the endpoint.
+  - **Upstream set in both modes:** one part builder, `upstreamPart(mode)`. In ext_proc mode a backend Envoy
+    accepts but the in-process client refuses (HTTPS to an IP literal) no longer fails startup: the Router logs
+    `request_graph_upstream_unavailable` and only its hops find no route. Standalone mode still fails fast.
+  - **Client-facing text:** a failed Looper model now reads "answered 503", "timed out", "cancelled", "invalid
+    response" or "failed", without transport text. The one golden change, one line, is its own commit
+    `4190c019a`. The gate runs in process through both adapters; the other 7 fixtures match the loopback
+    recording byte for byte.
+  - **`ngw-frontend2`, CLI:** staging's gateway-aware `apply_local_looper_endpoint` conflicted with READY 5. I
+    resolved it by deleting the rewrite and the `gateway` parameter it alone used (`runtime.py`, `runtime_serve_
+    config.py`, `runtime_support.py`). `test_a_stack_without_a_recorded_mode_runs_envoy` now checks
+    `stack_gateway()`.
+  - **Surfaces:** docs and zh-Hans (algorithm overview, ratings, prompt, context compression, global overview,
+    Looper examples, hardening guide); the dashboard builder drops the endpoint field; E2E profiles `looper`,
+    `ai-gateway` and `response-api-redis` drop it; recipes; k8s converter goldens now emit `looper: {}`.
+  - **Checks (local):** `make check` over READY 5's 102 files: every gate passed except one CLI test that
+    expected the removed endpoint error; fixed, then the delta `make check` exits 0 (CLI 3,197). After the
+    staging merge: 18 Go packages pass, and `make check` over the merge resolution exits 0 (CLI 3,227).
+    `-race` is clean on graph (x2), extproc's Looper, hop and gate tests, `cmd` and `pkg/looper`.
+  - **Kind (node A, ext_proc mode, cores 56–99):** `looper` 13/13 and `envoy-ai-gateway` 40/40 pass.
+    `response-api-redis` fails 11/12, and it fails the same 11 on staging `574c3d4b1` without READY 5. Every
+    Response API create returns 400 "invalid inference request"; its Looper test (workflow resume) passes.
+    That failure predates READY 5; it needs an owner.
+  - **Open:** ext_proc mode now also runs a model's configured active health checks in the Router, alongside
+    Envoy's. A deployment whose Router config lacks `backend_refs` for Looper models (routing owned by an
+    external gateway) now fails at load, with the model named. The CLI's Python validator doesn't mirror the
+    new backend check.
+  - **Next:** READY 6, YAML authoring of custom request graphs and their user docs.
+  — `ngw-graph`
+
 - 2026-10-07 01:24 — **`vela2-router` → parent: #4638 code, tests and docs are done (WIP `41e63b2b9` on
   `xunzhuo/vela2-router-set-span-wip`). Node D, real Vela 2.0 0.3B on CPU: the Router's set, span, PII and
   hallucination answers equal `POST /v1/systemone` on the same text. 0.8B, 4B and 9B run now on GPU2–4.**
