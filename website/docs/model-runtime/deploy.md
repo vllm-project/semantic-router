@@ -174,7 +174,7 @@ On first start the runtime downloads the models a router uses into its model
 volume (`/app/models`, the chart's `persistence` claim, 10 GiB by default).
 Size the claim for the models you route with: Vela Omni Mini alone takes
 4.3 GB. In an air-gapped cluster, fetch them into it first
-([Troubleshooting](./troubleshooting.md#the-runtime-stays-in-loading-or-warming)).
+([Troubleshooting](model-runtime/troubleshooting.md#the-runtime-stays-in-loading-or-warming)).
 
 Models you keep on the CPU in the ROCm image run on its ROCm build of PyTorch.
 For most Vela task models that build fails the runtime's load-time check that
