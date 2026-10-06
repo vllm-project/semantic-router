@@ -134,9 +134,10 @@ class FusionGroundingConfig(BaseModel):
     """Configuration for grounding-aware fusion.
 
     Scores each panel response for faithfulness before the judge synthesizes,
-    then ranks/filters the panel. Uses local encoder models (hallucination
-    detector + NLI) and makes no extra LLM calls. Bounds here MUST match the Go
-    validator in pkg/config/fusion_config.go (ValidateFusionGroundingConfig).
+    then ranks/filters the panel. Uses the router's hallucination detector
+    (against the request's context, else against each peer response) and makes
+    no extra LLM calls. Bounds here MUST match the Go validator in
+    pkg/config/fusion_config.go (ValidateFusionGroundingConfig).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -150,7 +151,7 @@ class FusionGroundingConfig(BaseModel):
     policy: Literal["weight", "annotate", "filter"] | None = "weight"
     min_score: float | None = Field(default=0.0, ge=0, le=1)
     min_keep: int | None = Field(default=1, ge=0)
-    nli_contradiction_penalty: float | None = Field(default=1.0, ge=0)
+    contradiction_penalty: float | None = Field(default=1.0, ge=0)
     on_error: Literal["skip", "fail"] | None = "skip"
 
 
