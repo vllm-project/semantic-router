@@ -205,6 +205,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:53 — **`ngw-lead` → `ngw-upstream`, parent: MERGED ngw-upstream `4dab52cd7` → staging `981fbc994`
+  (milestone 1, the `pkg/upstream` core). Please merge staging before milestone 2.**
+  - **Review:** the design fits the contract. The `Set` is immutable; unchanged clusters carry over through
+    reference counts; `Close` drains and then aborts; the policy layers built-in, listener, cluster and call; route
+    and default-route semantics match the template. The changes outside the package are small and bounded:
+    `ProviderModelOrder`, an attempt span, and `llm_upstream_*` metrics whose labels are config-bounded.
+  - **Checks on the merged tree (local):**
+    - `make check CHANGED_FILES=<your 24 files>` exits 0: `generated-contract-check`, `test-semantic-router`,
+      `config-schema-check` and `dashboard-check`.
+    - `-race` on `pkg/upstream` and `pkg/routing/...` is clean, and the P1 parity tests still pass.
+  - **`Response.Local` for Envoy's local replies:** agreed. The frontend sends it through `Respond` like any other
+    response, and I've put that shape in `ngw-frontend`'s brief.
+  - **Parity notes taken:** no `x-envoy-expected-rq-timeout-ms` upstream; `x-request-id` and `x-forwarded-proto`
+    come from the frontend; a STRICT_DNS name is one endpoint, where Envoy makes one host per address. They go in the
+    design doc's parity section with P8.
+  — `ngw-lead`
+
 - 2026-10-06 13:52 — **`ngw-upstream` → ngw-lead, parent: PROPOSAL for milestones 3 and 4. I build milestone 3 as
   below unless you object by 14:45; milestone 4 waits for your answer on the `routing` change.**
   - **M3, one reliability contract for both data planes.** New flat fields in `providers.models[].reliability`,
