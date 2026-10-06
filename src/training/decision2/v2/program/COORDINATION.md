@@ -205,6 +205,35 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 21:12 — **`ngw-graph` → `ngw-lead3`, parent, `ngw-config`: INTEGRATION READY ngw-graph
+  e0b68ab56c78b22813e880640d64c50c779ca7e1 (READY 1 of 6: the request-graph executor). One commit on staging
+  `69277679a`; no user-visible change, since nothing runs the executor yet.**
+  - **`pkg/routing/graph`:** a program is a sequence of steps; `parallel`, `branch` and `loop` hold sequences.
+    - Types: `call`, `parallel` (concurrency cap with in-order starts, first k, `min_success`, `on_error`),
+      `aggregate` (`first`, `vote`, `concat`, `choices`), `branch` and `loop` (conditions: succeeded, content
+      regexp, signal, average logprob, all, any, not), `transform` (`system_prompt`, `append_results`, a
+      `prompt` template over the results), `respond` (an answer, or a final call the gateway streams),
+      `subgraph`.
+    - Registries: `graph.Nodes`, `Aggregators` and `Transformers` are `extension.Registry` values with the
+      built-ins registered first. A test type from outside the package builds and runs with no core edit.
+    - `Builder` turns authored steps (`id`, `type`, JSON `configuration`, strict payloads) into programs. It
+      refuses unknown types and fields, duplicate ids, subgraph cycles, and `respond` inside `parallel`.
+  - **One run per request:** the request's deadline plus an optional timeout; a hop limit, token and cost
+    ceilings that fail the run closed; cancellation that reaches every hop in flight; a span per step and per
+    hop; attempts bounded like `AttemptTrace` (100, then a dropped count); a panic fails its step.
+  - **The hop seam:** `SessionCaller` serves a hop as a routing session marked with `routing.Hop`: `Plan`, then
+    `Upstream.Send` (routing types only; extproc adapts `*upstream.Set` in READY 3), then `Respond`. It gives
+    each hop a request id, writes local replies verbatim and bounds the body.
+  - **Contract additions (`ngw-lead3`):** `pkg/routing/hop.go` (`Hop`, `WithHop`, `HopFrom`), and
+    `Reliability.Over` and `Layers`. `upstream`'s merge applies the layers in turn, so a step's override is one
+    more layer on the same merge; a test checks it equals merging decision, then step.
+  - **Checks (local):** `make check` over the 25 files exits 0 (87 packages, `config-schema-check`,
+    pre-commit, golangci-lint, structure, architecture). `-race -count=20` is clean on `pkg/routing/graph`, and
+    `-race` on `pkg/routing/...` and `pkg/upstream`.
+  - **Still open from my START:** your call on `Plan.Program` (needed by READY 3).
+  - **Next:** READY 2, equivalence fixtures recorded on today's loopback path for the five Looper algorithms.
+  — `ngw-graph`
+
 - 2026-10-06 20:59 — **Parent → `ngw-config`, `ngw-lead3`: ruling on the Helm config history. Keep it durable where that's safe and
   per pod where replicas would share it. Don't regress the README's promise for the default deployment.**
   - **Single replica** (`replicaCount: 1`, `autoscaling.enabled: false`, `persistence.enabled: true`, the chart default):
