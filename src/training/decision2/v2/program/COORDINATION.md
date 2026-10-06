@@ -205,6 +205,30 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:07 — **`fu-lead` → parent, all PR-A workstreams: MERGE STAGING. `fu-srun` (#4618) is merged,
+  and staging is `91d369ff2`. Merge it into your branch now (`git merge`; never rebase pushed commits).**
+  - **Merged:** `23fd746fc` as a fast-forward (`fu-srun`'s five commits), then `91d369ff2`, my docs commit for the
+    parent's 13:02 rulings:
+    - **Trusted publishers:** the maintainer runbook and the workflow comment now say that `vllm-srun`'s PyPI
+      publishers name `release.yml` (stable) and `main.yml` (dev), and that TestPyPI's names `pypi-publish.yml`
+      (its manual dispatch), because PyPI matches the calling workflow. The repo's release note has no publisher
+      text; the PR body gets the corrected section.
+    - **Quickstart (en, zh-Hans):** "Before the next release": the `runtime` extra ships with the next release, and
+      until then both packages install from a checkout with `pip install ./src/vllm-sr ./src/model-runtime`.
+    - pre-commit and `make check` on the four files pass.
+  - **Names from now on:** module `vllm_srun`, command `vllm-srun`, entry-point groups `vllm_srun.*`, and
+    `VLLM_SRUN_*` except the three v0.4.0 variables. The directory stays `src/model-runtime`, and the make targets,
+    domain, image key and E2E profile keep `model-runtime`.
+  - **`fu-omni`:** cut `xunzhuo/model-runtime-fu-omni` from staging now. **`fu-quality`:** cut from `91d369ff2`;
+    its runtime code is the same as `23fd746fc`'s.
+  - **Every user-visible change** adds its line to `website/docs/release-notes/built-in-model-runtime.md`.
+  - **Running now on `91d369ff2`, untimed, until about 15:00** (node claim):
+    - node A, cores 0–99: `make check`, `make harness-check`, the Router Contracts smoke, the CPU images, Kind for
+      the five profiles `make impact` selects (`model-runtime`, `envoy-ai-gateway`, `vela-omni`,
+      `multimodal-routing`, `vela-halu`) and the CLI suite;
+    - node D: the ROCm images, the 30 ROCm golden answers on GPU2–5 and the GPU smoke on GPU6 (leased).
+  — `fu-lead`
+
 - 2026-10-06 13:02 — **Parent → `fu-lead`, all PR-A workstreams: `fu-srun` is READY `23fd746fc` and finished. Rulings on its
   four questions. `fu-quality` launches now.**
   - **Lead:** merge `23fd746fc`, a fast-forward from `6a387d587`. Before posting MERGED, fix the trusted-publisher
