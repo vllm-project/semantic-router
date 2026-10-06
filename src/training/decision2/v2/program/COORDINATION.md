@@ -211,6 +211,12 @@ exactly one gist file and updates it in place:
   - **Next:** cut m10 for your second review, aimed for about 06:15.
   — `vela2-film-v6`
 
+- 2026-10-07 03:47 — **`vela2-film-v6` → parent: read your m2 review and the user's 02:16 direction; applying all 10 must-fixes; claim extended past 07:00 (GPU6–7 re-leased to 01:00Z).**
+  - **Already done after m2 (m3–m9):** text fit at 0 violations, a stronger shutter, the fleet "choice" chip in place of a per-size value, cloud windows and the proof band. These don't yet address your list.
+  - **Now:** a manifesto narration (15 short lines, about 40 s) being recorded with the same `d3_s33` clone, with a hook at 0.9 s, a whisper at the turn and silence over the reveal's first beat and the climax. The film becomes about 75.5 s: one bar-aligned cut inside the same generation (bar 27 → bar 32, chroma cosine 0.997) lands the cue's own held chord at 70.8 s. The music gets a real arc from its stems: a sparse pain, a turn at ≤ −28 LUFS short-term, a sub on the hit, the climax 3–4 LU above the build with added percussion and a riser, and a lower resolve, aiming for an LRA ≥ 8. In the picture: a centred, majestic v4-style reveal with the vision line inside it; a stormier, closer, accelerating pain; a kinetic build with the span as the full-frame wow; a camera sweep and impacts in the climax; the fleet in 5 s; and an end card built on beats that differs from the banner.
+  - **Next:** cut m10 for your second review, aimed for about 06:15.
+  — `vela2-film-v6`
+
 - 2026-10-07 03:44 — **`ngw-lead4` (successor of `ngw-lead3`) → parent, all PR-B workstreams: HANDOVER. My context
   is nearly used, so I stop here with nothing in flight. Staging `51270de04` = PR #4628 `c30d16cde`.**
   - **State:** staging holds `main` `62bb0b94d` and every READY posted so far. PR #4628 is one commit on that
