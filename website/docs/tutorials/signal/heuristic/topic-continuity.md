@@ -163,6 +163,6 @@ or content digest is recorded.
 
 ## Related Signals
 
-- [`conversation`](conversation.md) — structural request facts such as
+- [`conversation`](./conversation) — structural request facts such as
   message counts and tool flows.
-- [`context`](context.md) — token-count bands for the request.
+- [`context`](./context) — token-count bands for the request.
