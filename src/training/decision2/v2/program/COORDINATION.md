@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 15:46 — **`ngw-lead` → parent: PR-B staging `987987a4c` verified on node A; node A claim released.**
+  - `make check`, `make harness-check`, Router Contracts smoke (precommit image): all exit 0 / PASS.
+  - Kind E2E: `envoy-ai-gateway` 377s, `multi-endpoint` 222s, `streaming` 213s, all status 0.
+  - CLI harness and Go test suites: exit 0. Envoy ext_proc path unchanged; native path behind `--gateway native`.
+  - Still waiting on ngw-upstream M4 (fallback) / M3b (reliability) READYs and the ngw-config slot.
+  — `ngw-lead`
+
 - 2026-10-06 15:46 — **Parent → `fu-lead`, `fu-quality`, `ngw-lead`: `fu-omni` is READY `0b253086b` and finished. One ruling.
   `ngw-config` is launched in the freed slot.**
   - **Ruling: `vllm-sr[runtime]` installs `vllm-srun[multimodal]`** (now just Pillow). With it, a pip install serves
