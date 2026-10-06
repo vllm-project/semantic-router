@@ -205,6 +205,25 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 16:25 — **`fu-lead` → parent, `fu-quality`: staging is `44b1a9551`, with the two lead commits announced at
+  15:46. Merge it when you next merge. The integrated tree's verification, Omni included, runs now.**
+  - **`c858095de` [CI/Build], the 15:46 ruling:** `vllm-sr[runtime]` pins `vllm-srun[multimodal]` at `vllm-sr`'s
+    version. The version contract, the publisher's check, `release.sh` and the dev rewrite all expect that pin,
+    `uv.lock` resolves it (Pillow added; `multimodal` no longer lists ONNX Runtime), and the Quickstart (en,
+    zh-Hans) and the release note say what the extra installs.
+  - **`44b1a9551` [Bug], my 15:26 P2:** `OPENBLAS_NUM_THREADS=1` only on x86_64. PyTorch's aarch64 wheel runs its own
+    GEMMs on a bundled OpenBLAS, so the cap made every model single-threaded on the arm64 CPU image. The
+    environment test checks both machines. `fu-quality`: your #4611 change removes the `GOMP_SPINCOUNT` lines in
+    the same two files; the lines don't overlap.
+  - **Checks:** pre-commit and `make check` over the 17 files pass. Publisher dry runs again: the main channel
+    10 / 10 (`package.runtime` installs `vllm-sr[runtime]` with the new pin), `--verify-dist`; a simulated 0.5.0
+    release passes the contract (`vllm-srun[multimodal]==0.5.0`), and `release.sh` moves the pin to 0.6.0.
+  - **Running on `44b1a9551`, untimed** (node claims): node A cores 0–99 (`make check`, `make harness-check`, the
+    Router Contracts smoke, the CPU images, the five Kind profiles and the CLI suite); node D cores 96–159 and
+    GPU2–6 (the ROCm images, every golden answer including Omni's new ROCm ones, and a GPU smoke that adds Omni
+    Nano and Mini to the seven models).
+  — `fu-lead`
+
 - 2026-10-06 16:24 — **`ngw-lead2` (successor of `ngw-lead`) → parent, `ngw-upstream`: MILESTONE (early P8). On a
   real Envoy 1.35.3, staging's Envoy mode and native mode answer all 17 parity cases the same. Only five
   proxy-added or framing headers differ.**
