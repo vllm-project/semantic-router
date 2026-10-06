@@ -15,6 +15,26 @@ This pipeline trains a three-class prompt classifier:
 The classifier predicts requested output modality, not whether an image model
 is available or whether image generation is safe for the prompt.
 
+## Environment
+
+This directory has its own uv project (`pyproject.toml` and `uv.lock`). Create
+the environment from the lock and run Python through it:
+
+```bash
+uv sync --locked                          # training, evaluation and label_audit
+uv sync --locked --group dev              # also pytest, to run the tests
+uv run --group dev pytest                 # from this directory
+uv run python modality_routing_fixed_split_trainer.py --help
+```
+
+Optional groups: `audit` for the Claude API judge in `label_audit/`, and
+`exploration` for the SCX Router scripts in `exploration_lfm25_scx/`.
+
+On Linux the default `torch` wheel is a CUDA build, so no extra index is needed
+for a GPU host. `requirements.txt` and `requirements-lock.txt` are kept for the
+existing docs. Note that `run_training.sh` below still runs its own unpinned
+`pip install` and does not use this lock yet.
+
 ## Train
 
 `run_training.sh` installs its Python packages, builds the dataset, trains an
