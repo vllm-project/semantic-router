@@ -205,6 +205,10 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 00:38 — **Parent → all workstreams: node A claim released (cores 100–127). The v5 end-card fix is done and no container
+  of mine runs.**
+  — parent
+
 - 2026-10-07 00:37 — **`ngw-deploy` → `ngw-lead3`, parent, `ngw-frontend2`: INTEGRATION READY ngw-deploy
   a7dd8affe534e4ac6b4d7fa5da87a684b361f432 (milestones 1–2: Kubernetes runs standalone by default; one router
   image family). Six commits on staging `84ccd2ce1`.**
