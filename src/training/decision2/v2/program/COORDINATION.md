@@ -205,6 +205,34 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 01:00 — **`ngw-deploy` → `ngw-lead4`, parent, `ngw-frontend2`: INTEGRATION READY ngw-deploy
+  f5077b332661b0b890aecee0888d483e84dfdf69 (milestone 3: the `vllm-sr-sim` and OpenClaw-Helm removals, the
+  release note). It holds READY 1–2 (`a7dd8affe`) and a merge of staging `574c3d4b1`. Node A claim released.**
+  - **Fleet simulator removed:** `src/fleet-sim`, its image, the PyPI workflow, the release notes' tag stream
+    and the version contract's simulator checks, the CI lane and component contract, the make targets, its
+    domain and image registry entries, agent notes, ruff and `.gitignore` entries, and its current docs (en,
+    zh-Hans: pages, sidebar, labels, translation baseline). Guard tests for its absence go too.
+    - **Stays:** the v0.3 docs and the static files they link, the blog, the research page's arXiv entry, and
+      `static/img/fleet-sim/pareto-frontier.png`, which the image-routing prototypes hash. The upgrade guide
+      keeps the one-time cleanup of the old sidecar container.
+  - **OpenClaw, Helm side:** the chart's `dashboard.extraEnv` docs no longer name `OPENCLAW_*`; the chart and
+    the Operator have nothing else. **`ngw-frontend2`:** the `OPENCLAW_ENABLED=false` lines in the two
+    `deploy/` Dashboard manifests go with your Dashboard flag; `test_openclaw_shared_network.py` is yours.
+  - **Release note** (`release-notes/standalone-mode.md`): Kubernetes runs standalone (chart, Operator, how to
+    keep a gateway, rollback), one router image, both removals, and the renamed images and make targets. The
+    OpenClaw line is general; refine it with your change. Gateway Modes (en, zh-Hans) says how the chart and
+    the Operator pick the mode without the CLI. The chart README tells AMD users to add the device groups to
+    `supplementalGroups` (the Router runs as uid 65532).
+  - **Checks:** node A, precommit image: `make check` over the 38 changed files exits 0 (harness-check,
+    translation coverage, CLI suite, Dashboard, helm-lint, pre-commit); `make docs-build` exits 0 for en and
+    zh-Hans with no broken link. Locally: `tools/ci` 483 tests, release contract, harness validate.
+  - **READY 1–2 CI on `a7dd8affe`:** operator lane 37496957197 runs (its plan builds `vllm-sr`), and
+    `e2e.standalone` 37496971437 is queued. I'll report both.
+  - **For the CLI (`ngw-frontend2`):** the kubernetes target's summary suggests `port-forward svc/<release>
+    8080:8080`; in standalone mode clients use the first listener (8899 by default), as the chart's NOTES say.
+  - **Left on node A:** my images `vsr-ngwdeploy/*` and `/data/dev2/runs/ngw-deploy/`; no cluster or container.
+  — `ngw-deploy`
+
 - 2026-10-07 01:00 — **Parent → `ngw-frontend2`, `ngw-lead4`: your 00:57 plan is approved, with one ruling. `vllm-sr
   status` stays read-only.**
   - **Setup activation:** if setup finished while no `vllm-sr serve` was watching, only the next `vllm-sr serve`
