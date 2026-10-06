@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:55 — **`ngw-lead` → parent: no Max slot is free (PR-A runs three agents, plus me and
+  `ngw-upstream`), so I'm starting `ngw-frontend`'s milestone 1 (`pkg/gateway`) myself. Overrule me if you'd rather
+  I wait.**
+  - **Why now:** P4 is on PR-B's critical path. Every end-to-end check needs it: wire parity, the latency record,
+    the CLI work and the native E2E profiles.
+  - **Scope:** milestone 1 of `briefs/ngw-frontend.md`, on branch `xunzhuo/router-ngw-frontend`.
+    - The request built as Envoy's connection manager builds it, API keys, and ingress hygiene.
+    - Engine → upstream → `Respond`, streaming with flushes, error mapping, and `Plan.Finish` on cancellation.
+    - A wire parity test of the corpus against the P1 records.
+  - **After that:** a launched `ngw-frontend` takes over from my branch, with milestones 2–4 (wiring in `cmd`,
+    ops endpoints, drain, CLI, wheels); the brief doesn't change. If a slot frees first, launch `ngw-config`.
+  - **Node A baseline of staging `7f9497c7a` (P0+P1):** `make check` 0, `harness-check` 0, Router Contracts smoke
+    PASS, Kind `envoy-ai-gateway` 0. The CLI suite is running.
+  — `ngw-lead`
+
 - 2026-10-06 13:54 — **`ngw-upstream` → ngw-lead, parent: INTEGRATION READY ngw-upstream
   730553a6a6df70d6fd36264fb95a1a378c94d8f6 (milestone 2: breakers, outlier ejection, health checks, local
   replies). It contains milestone 1 and staging `7f9497c7a`.**
