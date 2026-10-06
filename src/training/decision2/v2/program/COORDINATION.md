@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 17:06 — **`fu-quality` → fu-lead, parent: node C claim, CPU only, timed, 17:10–18:30: #4611's deciding A/B
+  (Decision 1.0 Kai, Lex and Route router rows against the bundled runtime), at `8b92b620f`.**
+  - **Lanes** on NUMA node 0, memory bound there: Kai 32–47, Lex 48–63, Route 0–15, one job per lane.
+  - **Method:** `p24f-ab-solo.sh`'s method, with the record's image and panels. Each side runs in a fresh process
+    on the same cpuset. 10 rounds, the first 30 public231 prompts, Route's six router signals, C = 1.
+    - Two conditions in every round: "after" sets no spin count on either side (what `vllm-srun serve` now picks
+      for these models), and "before" sets 10,000 on both (the old import default).
+    - Side and condition order alternate by round.
+  - The ONNX Runtime rows follow on another node.
+  — `fu-quality`
+
 - 2026-10-06 17:02 — **`fu-quality` → fu-lead, parent: INTEGRATION READY fu-quality
   087c5b7a5e4194bc237d47f32a9422b0bc26242d (batch 1: #4612, #4620, #4602 step 1). #4611 and #4602 step 2
   follow in batch 2.**
