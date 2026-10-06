@@ -64,13 +64,16 @@ class NativeEngineModel(EngineModel):
         residency: dict[str, int] | None,
         branches: dict[str, nn.Module] | None = None,
         reduced_kind: str | None = None,
+        towers: dict[str, nn.Module] | None = None,
     ):
         """``reduced_kind`` asks for a reduced copy of every layer stack, which approximate batches run (``reduced.py``).
 
         A copy the device cannot run is skipped, and the receipt says why.
+        ``towers`` are the model's other backbones (``ModelSpec.towers``).
         """
         self.backbone = backbone
         self.branches = branches or {}
+        self.towers = towers or {}
         self.accelerator = accelerator
         self.device_info = device_info
         self.device = accelerator.torch_device(device_info)
@@ -97,7 +100,7 @@ class NativeEngineModel(EngineModel):
         self.kernels.use_variants(spec.kernel_variants)
         self.linear = self.kernels.select("linear")
         if self.linear.variant is not None:
-            for module in (backbone, *self.branches.values()):
+            for module in (backbone, *self.branches.values(), *self.towers.values()):
                 lay_out_linears(module, self.linear.fn)
         # Packed linears, contiguous GeGLU, norms and unpadded attention grids
         # (``packed(uniform=True)``) compute each row the same in any batch.
@@ -107,7 +110,11 @@ class NativeEngineModel(EngineModel):
             and self.linear.variant == onednn.PACKED
             and self.kernels.select("geglu").variant == CONTIGUOUS
         )
-        for module in (*self.stacks().values(), *self.reduced.values()):
+        for module in (
+            *self.stacks().values(),
+            *self.reduced.values(),
+            *self.towers.values(),
+        ):
             module.kernels = self.kernels
         self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
@@ -308,7 +315,10 @@ class NativeEngineModel(EngineModel):
 
         Packed rows stay packed and padded rows padded. A reduced batch runs its
         stack's reduced copy when one is loaded, and every stack has its graphs.
+        A batch that names a tower runs it on its named inputs.
         """
+        if batch.tower is not None:
+            return self._encode_tower(batch)
         backbone = (
             self.backbone if batch.branch is None else self.branches[batch.branch]
         )
@@ -343,6 +353,23 @@ class NativeEngineModel(EngineModel):
             hidden = backbone.encode(input_ids, layout, exits, batch.normalize_exits)
         return EncoderOutput(hidden=hidden)
 
+    def _encode_tower(self, batch: EncoderBatch) -> EncoderOutput:
+        """One tower's named outputs (all of them unless ``batch.outputs`` names some)."""
+        assert batch.tower is not None
+        tower = self.towers.get(batch.tower)
+        if tower is None:
+            raise ValueError(
+                f"no tower {batch.tower!r} is loaded; loaded: {sorted(self.towers)}"
+            )
+        inputs = {
+            name: value.to(self.device) for name, value in batch.graph_inputs.items()
+        }
+        with torch.inference_mode(), self.autocast():
+            outputs = tower(**inputs)
+        if batch.outputs:
+            outputs = {name: outputs[name] for name in batch.outputs}
+        return EncoderOutput(outputs=outputs)
+
     def _encode_decoder(self, batch: EncoderBatch) -> EncoderOutput:
         """A decoder's last layer (embedders such as Qwen3-Embedding): right-padded causal rows.
 
@@ -367,11 +394,14 @@ class NativeEngineModel(EngineModel):
             hidden = hidden[mask.to(hidden.device)]
         return EncoderOutput(hidden={last: hidden})
 
+    def _modules(self) -> tuple[nn.Module, ...]:
+        return (self.backbone, *self.branches.values(), *self.towers.values())
+
     def _parameters(self) -> list[nn.Parameter]:
         """Every parameter once (branches share the backbone's embedding)."""
         unique = {
             id(parameter): parameter
-            for module in (self.backbone, *self.branches.values())
+            for module in self._modules()
             for parameter in module.parameters()
         }
         return list(unique.values())
@@ -379,7 +409,7 @@ class NativeEngineModel(EngineModel):
     def _packed(self) -> list[onednn.PackedLinear]:
         return [
             layer
-            for module in (self.backbone, *self.branches.values())
+            for module in self._modules()
             for layer in module.modules()
             if isinstance(layer, onednn.PackedLinear)
         ]
@@ -421,6 +451,7 @@ class NativeEngineModel(EngineModel):
     def close(self) -> None:
         self.backbone = None  # type: ignore[assignment]
         self.branches = {}
+        self.towers = {}
         self.reduced = {}
         self.encoder_graphs = {}
         self.reduced_graphs = {}
@@ -443,8 +474,9 @@ class NativeEngine(Engine):
         }
 
     def supports(self, spec: ModelSpec, device: DeviceInfo) -> str | None:
-        if spec.backbone.model_type not in models.ARCHITECTURES:
-            return f"no native {spec.backbone.model_type!r} backbone"
+        for backbone in (spec.backbone, *spec.towers.values()):
+            if backbone.model_type not in models.ARCHITECTURES:
+                return f"no native {backbone.model_type!r} backbone"
         if (
             device.accelerator != "cpu"
             and not device.bf16
@@ -463,10 +495,7 @@ class NativeEngine(Engine):
         if options.threads:
             torch.set_num_threads(options.threads)
         backbone_spec = spec.backbone
-        with torch.device("meta"):
-            backbone = models.build(backbone_spec.model_type, backbone_spec.config)
-        # Rotary buffers are computed, not loaded: build them on a real device.
-        backbone.rotary_emb = type(backbone.rotary_emb)(backbone_spec.config)
+        backbone = build_on_meta(backbone_spec)
         load_backbone(backbone, backbone_spec.weight_files, backbone_spec.weight_prefix)
         lora = backbone_spec.lora
         if lora is not None:
@@ -486,12 +515,13 @@ class NativeEngine(Engine):
             name: load_branch(backbone, backbone_spec, name)
             for name in backbone_spec.branches
         }
-        modules = (backbone, *branches.values())
+        towers = {name: load_tower(tower) for name, tower in spec.towers.items()}
+        modules = (backbone, *branches.values(), *towers.values())
         leftovers = [
             name
             for module in modules
-            for name, parameter in module.named_parameters()
-            if parameter.is_meta
+            for name, tensor in (*module.named_parameters(), *module.named_buffers())
+            if tensor.is_meta
         ]
         if leftovers:
             raise ValueError(f"backbone parameters were not loaded: {leftovers[:3]}")
@@ -516,7 +546,26 @@ class NativeEngine(Engine):
             residency,
             branches,
             kind if options.reduced_precision and spec.encoder else None,
+            towers,
         )
+
+
+def build_on_meta(spec: BackboneSpec) -> nn.Module:
+    """The architecture without allocating weights; its computed buffers (rotary tables, indices) on the CPU."""
+    with torch.device("meta"):
+        module = models.build(spec.model_type, spec.config)
+    if hasattr(module, "rotary_emb"):
+        module.rotary_emb = type(module.rotary_emb)(spec.config)
+    if hasattr(module, "computed_buffers"):
+        module.computed_buffers()
+    return module
+
+
+def load_tower(spec: BackboneSpec) -> nn.Module:
+    """A tower (``ModelSpec.towers``): every tensor under its prefix must belong to it."""
+    tower = build_on_meta(spec)
+    load_backbone(tower, spec.weight_files, spec.weight_prefix, strict=True)
+    return tower
 
 
 def load_branch(backbone: nn.Module, spec: BackboneSpec, name: str) -> nn.Module:

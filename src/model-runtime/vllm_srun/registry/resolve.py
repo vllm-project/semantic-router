@@ -5,18 +5,15 @@ A local directory is used as is. A Hub repository is always resolved to a
 revision; any other repository without ``--revision`` is refused. Only the
 files a built-in entry pins, or else the files the package manifest lists,
 are downloaded; a package with neither gets its pointer files only, and its
-family fetches what it loads (``ModelFamily.fetch``). A prepared built-in
-entry whose bundle is staged locally resolves to it without the Hub.
-Transient Hub failures (connection errors, 429, 5xx) are retried with
-back-off. Tokens come from the environment or the Hugging Face token file,
-never from arguments.
+family fetches what it loads (``ModelFamily.fetch``). Transient Hub failures
+(connection errors, 429, 5xx) are retried with back-off. Tokens come from
+the environment or the Hugging Face token file, never from arguments.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import time
 from collections.abc import Iterable
@@ -25,25 +22,16 @@ from pathlib import Path
 from ..errors import PackageError
 from ..plugins.base import PackageRef
 from . import builtin
-from .tables.common import BuiltinModel
 
 REVISION = re.compile(r"[0-9a-f]{40}\Z")
 SHORT_REVISION = re.compile(r"[0-9a-f]{7,39}\Z")
 REPO_ID = re.compile(r"[A-Za-z0-9][\w.-]*/[\w.-]+\Z")
 POINTER_FILES = ("config.json", "MODEL_MANIFEST.json")
-PREPARED_DIR_ENV = "VLLM_SRUN_PREPARED_DIR"
-DEFAULT_PREPARED_DIR = "/opt/router-model-artifacts"
 DOWNLOAD_ATTEMPTS = 4
 TOO_MANY_REQUESTS = 429
 SERVER_ERROR = 500
 
 log = logging.getLogger("vllm_srun")
-
-
-def prepared_bundle(model: BuiltinModel) -> Path:
-    """Where a prepared entry's bundle is staged: ``vllm-sr/Vela-1.0-Omni-Nano`` -> ``<dir>/vela-1.0-omni-nano``."""
-    root = Path(os.environ.get(PREPARED_DIR_ENV, DEFAULT_PREPARED_DIR))
-    return root / model.repo_id.split("/", 1)[1].lower()
 
 
 def pinned_revision(repo_id: str, revision: str | None) -> str:
@@ -88,10 +76,6 @@ def resolve(
             f"{model!r} is neither a package directory nor a Hub repository ID"
         )
     commit = pinned_revision(repo_id, revision)
-    if known is not None and known.prepared and known.revision == commit:
-        bundle = prepared_bundle(known)
-        if bundle.is_dir():
-            return PackageRef(root=bundle.resolve(), repo_id=repo_id, revision=commit)
     root = download(repo_id, commit, cache_dir=cache_dir, offline=offline)
     return PackageRef(root=root, repo_id=repo_id, revision=commit)
 

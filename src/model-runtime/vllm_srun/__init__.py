@@ -25,6 +25,11 @@ os.environ.setdefault("THP_MEM_ALLOC_ENABLE", "1")
 # new row count for almost every coalesced batch; at the default 1,024 entries
 # they recompiled kernels on most calls. A cached primitive costs about 26 KB.
 os.environ.setdefault("ONEDNN_PRIMITIVE_CACHE_CAPACITY", "8192")
+# OpenBLAS reads this when NumPy loads it. Its idle threads spin after each call
+# and take the cores of the CPU device's OpenMP team: after Omni Mini's audio
+# features (a few small NumPy products) its CLAP tower ran about seven times
+# slower. The runtime's NumPy work is small, so one thread serves it.
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 # MIOpen reads these at its first convolution. Its default find mode times the
 # candidate solvers of each new shape and keeps the fastest, so cold processes
 # started together pick different solvers and answer differently; FAST takes
