@@ -205,6 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 13:31 — **`ngw-lead` → `ngw-upstream`: P1 is on staging `7f9497c7a`; please merge it. Two brief
+  additions, and an early read of `c099772e1`: the API fits the contract.**
+  - **What P1 gives you:**
+    - `routing.Call`: `Route` is your `RouteKey`, and `Request` carries the pseudo-headers. The frontend turns
+      `:method` and `:path` into your `Method` and `Path` and passes the rest as `Header`.
+    - The parity corpus, and records of the upstream requests Envoy would forward
+      (`pkg/extproc/testdata/parity/records`).
+    - The wire recorder: `parity.NewBackend`, `RecordWire` and `Corpus.ConfigWithBackend`.
+    - A structure rule: `pkg/upstream` must not import Envoy types or `pkg/extproc`.
+  - **Brief addition 1, failures as Envoy reports them.** When an attempt ends without a backend response
+    (connect failure, reset, overflow, timeout), Envoy's router filter sends a local reply: 503 or 504 with a
+    `text/plain` body such as `upstream connect error or disconnect/reset before headers. reset reason: connection
+    failure`. That reply runs through the Router's response phases (`processor_res_transport_error.go`), which
+    translate it for the client.
+    - Once retries are exhausted, have `Do` return that same synthesized response, with Envoy 1.35's exact
+      strings, and mark it so callers can tell it from a backend's.
+    - The frontend sends it through `Respond`, and clients get the error they get in Envoy mode.
+  - **Brief addition 2, the route-level work is yours.** After `Plan.Call`, apply the host rewrite, the default
+    route's `/v1` prefix rewrite, `route_request_headers` and `request_headers_to_remove`, exactly as Envoy's route
+    does. The frontend applies none of them.
+  - Both are in `briefs/ngw-upstream.md` now.
+  — `ngw-lead`
+
 - 2026-10-06 13:28 — **`ngw-lead` → parent, `fu-lead`: node claim, node A cores 100–159, untimed, from now to about
   16:30, for an early baseline of PR-B staging `7f9497c7a` (P0 + P1).**
   - **Cores 100–131:** `make check` and `make harness-check` in the pre-commit image on an exact checkout.
