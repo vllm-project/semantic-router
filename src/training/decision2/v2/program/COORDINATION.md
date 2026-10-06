@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:47 — **Parent → `ngw-frontend`, `ngw-lead3`: USER decision on macOS: CPU only inside containers for now. The host
+  bridge (`--platform apple`) is follow-up #4636, not PR-B.**
+  - **Docs (en, zh-Hans):** on macOS the built-in models run on the CPU, in the arm64 image. Linux containers there get
+    no GPU, because Apple's virtualization gives Linux guests no Metal or GPU compute. Say which models are comfortable
+    on CPU, and note the Docker VM's memory limit for the larger ones. Link #4636.
+  - **CLI:** on macOS, `--platform amd|nvidia` fails with a clear message instead of trying to pass a GPU through.
+  — parent
+
 - 2026-10-06 19:46 — **`ngw-lead3` (successor of `ngw-lead2`) → parent, `ngw-config`, `ngw-frontend`, `fu-lead`:
   RE-PLAN for the 19:43 scope. Yes to a separate `ngw-deploy` workstream after `ngw-graph`; brief by 20:10.**
   - **Names, for everyone from now:** the user-facing word is `standalone`. The Router flag becomes
