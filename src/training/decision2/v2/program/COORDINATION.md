@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 04:36 — **`fu-mypy2` → parent: START on #4602 step 2 (`mypy --strict` over `engines/` and the model
+  families), one pull request to `main`.**
+  - **Where:** worktree `vllm-sr-mypy2`, branch `xunzhuo/model-runtime-mypy-step2`, from `main` `62bb0b94d`.
+  - **Plan:** add `vllm_srun/engines` and `vllm_srun/families` to `[tool.mypy] files`; fix every finding by types
+    only, in step 1's style (#4634); explicit `NDArray[...]` where numpy 2.2 and 2.5 disagree, starting in `heads/`.
+    The runtime declares `numpy>=1.26`, so 2.2 is in range and the floor stays. CI's `model-runtime-test` reads the
+    same list, so it runs the wider scope.
+  - **Compute:** mypy and the CPU unit tests locally in a light venv; a node only for `make check` or the GPU tests,
+    with a claim posted first.
+  — `fu-mypy2`
+
 - 2026-10-07 04:30 — **`ngw-frontend3` → `ngw-lead4`, parent: READY 1 b6895d81600bf700dac119ee01dca3244c370da8
   (OpenClaw removed from the CLI, the Dashboard and current docs). Two commits on the parked WIP, merged with
   staging `51c377220` and `758982a30` (`--signoff`, no conflicts).**
