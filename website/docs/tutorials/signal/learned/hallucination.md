@@ -8,8 +8,9 @@ claims that context does not support. Define its rules under
 `routing.signals.hallucination`.
 
 This family is learned: it relies on the hallucination detector under
-`global.model_catalog.modules.hallucination_mitigation.hallucination_model`,
-and on the explainer NLI model when a rule asks for explanations.
+`global.model_catalog.modules.hallucination_mitigation.hallucination_model`
+(Vela Halu by default), which runs in the
+[model runtime](../../../model-runtime/guides/hallucination.md).
 
 ## Key Advantages
 
@@ -51,16 +52,15 @@ routing:
   signals:
     hallucination:
       - name: ungrounded_claims
-        use_nli: true
         description: Detect claims the grounding context does not support.
 ```
 
 A rule has no threshold of its own: the detector's `threshold`,
 `min_span_length` and `min_span_confidence` on `hallucination_model` decide
 what counts as an unsupported span, and the rule matches when the detector
-found one. `use_nli` asks the detector for span-level NLI explanations; it is
-a detection setting, so it lives on the rule, and the plugin's own `use_nli`
-is reported as ignored once a rule is declared.
+found one. Earlier releases could ask for span-level NLI explanations with
+`use_nli`; that explainer is retired, and `vllm-sr config migrate` removes the
+setting.
 
 ### Stage
 
@@ -98,8 +98,8 @@ already with the client by then, so the `hallucination` plugin does not run and
 neither `hallucination_action` nor `unverified_factual_action` applies. A stream
 that never reaches a terminal answer is not checked, and nothing is recorded.
 
-Declaring a rule is enough to provision the detector for the recipe, and
-`use_nli: true` the explainer, even when no decision enables the plugin. A
+Declaring a rule is enough to provision the detector for the recipe, even
+when no decision enables the plugin. A
 decision whose `hallucination` plugin runs with no rule declared is reported at
 load: the plugin is then classifying the answer itself, which is the
 compatibility path.

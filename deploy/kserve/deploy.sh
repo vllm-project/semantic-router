@@ -32,7 +32,6 @@ CACHE_PVC_SIZE="5Gi"
 #   - Vela-1.0-Encoder-307M-Embedding (default)
 #   - mom-embedding-ultra (explicit legacy mmBERT)
 #   - mom-embedding-pro   (Qwen3 embedding)
-#   - mom-embedding-flash (EmbeddingGemma)
 EMBEDDING_MODEL="Vela-1.0-Encoder-307M-Embedding"
 EMBEDDING_MODEL_REPO=""
 EMBEDDING_MODEL_REVISION="main"
@@ -82,7 +81,7 @@ Examples:
   $0 -n semantic --simulator --classifier-gpu
 
   # Deploy with custom storage class and a canonical embedding model
-  $0 -n myproject -i llama3-70b -m llama3-70b -s gp3-csi --embedding-model mom-embedding-flash
+  $0 -n myproject -i llama3-70b -m llama3-70b -s gp3-csi --embedding-model mom-embedding-pro
 
   # Dry run to see what will be deployed
   $0 -n semantic -i granite32-8b -m granite32-8b --dry-run
@@ -132,14 +131,14 @@ resolve_embedding_settings() {
     case "$1" in
         Vela-1.0-Encoder-307M-Embedding)
             EMBEDDING_MODEL="Vela-1.0-Encoder-307M-Embedding"
-            EMBEDDING_MODEL_REPO="llm-semantic-router/Vela-1.0-Encoder-307M-Embedding"
+            EMBEDDING_MODEL_REPO="vllm-sr/Vela-1.0-Encoder-307M-Embedding"
             EMBEDDING_MODEL_REVISION="1e57cebf5a7b7fec6e6973f05bbca97c5cca4436"
             EMBEDDING_MODEL_TYPE="mmbert"
             EMBEDDING_MODEL_PATH_KEY="mmbert_model_path"
             ;;
         mom-embedding-ultra|mmbert|mmbert-embedding|mmbert-embed-32k-2d-matryoshka)
             EMBEDDING_MODEL="mmbert-embed-32k-2d-matryoshka"
-            EMBEDDING_MODEL_REPO="llm-semantic-router/mmbert-embed-32k-2d-matryoshka"
+            EMBEDDING_MODEL_REPO="vllm-sr/mmbert-embed-32k-2d-matryoshka"
             EMBEDDING_MODEL_TYPE="mmbert"
             EMBEDDING_MODEL_PATH_KEY="mmbert_model_path"
             ;;
@@ -149,15 +148,9 @@ resolve_embedding_settings() {
             EMBEDDING_MODEL_TYPE="qwen3"
             EMBEDDING_MODEL_PATH_KEY="qwen3_model_path"
             ;;
-        mom-embedding-flash|gemma|embeddinggemma-300m)
-            EMBEDDING_MODEL="mom-embedding-flash"
-            EMBEDDING_MODEL_REPO="google/embeddinggemma-300m"
-            EMBEDDING_MODEL_TYPE="gemma"
-            EMBEDDING_MODEL_PATH_KEY="gemma_model_path"
-            ;;
         *)
             echo -e "${RED}Unsupported embedding model: $1${NC}"
-            echo "Use one of: Vela-1.0-Encoder-307M-Embedding, mom-embedding-ultra, mom-embedding-pro, mom-embedding-flash"
+            echo "Use one of: Vela-1.0-Encoder-307M-Embedding, mom-embedding-ultra, mom-embedding-pro"
             exit 1
             ;;
     esac

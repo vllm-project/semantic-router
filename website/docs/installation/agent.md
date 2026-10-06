@@ -12,15 +12,14 @@ import {
 
 # Install with an agent
 
-Paste this prompt into a coding agent that can use a terminal and access the
-machine where you want to run vLLM Semantic Router:
+Paste this prompt into a coding agent with terminal access to the target machine:
 
 <CodeBlock language="text">{AGENT_INSTALL_PROMPT}</CodeBlock>
 
-That is the complete bootstrap prompt. It points the agent to the public,
-self-contained <a href={AGENT_SKILL_PATH}>vLLM SR Skill</a>; installation details
-stay in the Skill instead of being copied into every prompt. The Dashboard is
-optional; the agent can verify it when you request Dashboard or Playground work.
+The <a href={AGENT_SKILL_PATH}>vLLM SR Skill</a> handles installation and
+verification. Dashboard and Playground checks are optional.
+
+Once the Router is running, [connect your agent harness](agent-harness).
 
 ## What the agent does
 
@@ -42,10 +41,8 @@ The Skill directs the agent to:
 6. Leave the config path, active revision, validation result, and routing
    evidence for review.
 
-Tell the agent your model endpoint URLs, routing objective, or deployment
-constraints in the same message when they are already known. Otherwise, the
-agent will discover what it can and ask only when a choice or permission is
-required.
+Include known endpoint URLs, routing goals, and deployment constraints. The
+agent discovers the rest and asks when a choice or permission is required.
 
 ## Direct contracts
 
@@ -66,8 +63,9 @@ Playground output when requested.
 | Test the complete data path | `vllm-sr route probe` |
 
 The management origin serves health, discovery, configuration, and OpenAPI.
-The routed inference origin separately serves OpenAI-compatible requests. An
-agent must discover both rather than infer one from the other.
+The routed inference origin separately serves the
+[supported inference protocols](protocol-compatibility). An agent must discover
+both rather than infer one from the other.
 
 ## Safety boundaries
 

@@ -16,17 +16,27 @@ from pathlib import Path
 import provider_mocker_image as mocker
 
 DUAL = ["linux/amd64", "linux/arm64"]
+ROUTER_DOCKERFILE = "tools/docker/Dockerfile.extproc"
 DEFINITIONS = {
     "dashboard": (".", "dashboard/backend/Dockerfile", DUAL),
-    "extproc": (".", "tools/docker/Dockerfile.extproc", DUAL),
-    "extproc-rocm": (".", "tools/docker/Dockerfile.extproc-rocm", ["linux/amd64"]),
+    "extproc": (".", ROUTER_DOCKERFILE, DUAL),
+    "extproc-rocm": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
     mocker.IMAGE: (mocker.CONTEXT, mocker.CONTEXT + "/Dockerfile", DUAL),
+    "model-runtime": ("src/model-runtime", "src/model-runtime/Dockerfile", DUAL),
     "operator": (".", "deploy/operator/Dockerfile", DUAL),
     "operator-bundle": ("deploy/operator", "deploy/operator/bundle/Dockerfile", DUAL),
-    "vllm-sr": (".", "src/vllm-sr/Dockerfile", DUAL),
-    "vllm-sr-cuda": (".", "src/vllm-sr/Dockerfile.cuda", ["linux/amd64"]),
-    "vllm-sr-rocm": (".", "src/vllm-sr/Dockerfile.rocm", ["linux/amd64"]),
+    "vllm-sr": (".", ROUTER_DOCKERFILE, DUAL),
+    "vllm-sr-cuda": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
+    "vllm-sr-rocm": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
     "vllm-sr-sim": (".", "src/fleet-sim/Dockerfile", DUAL),
+}
+# Router images are targets of one Dockerfile: (target, runtime accelerator).
+ROUTER_BUILDS = {
+    "extproc": ("extproc", "cpu"),
+    "extproc-rocm": ("extproc", "rocm"),
+    "vllm-sr": ("vllm-sr", "cpu"),
+    "vllm-sr-cuda": ("vllm-sr", "cuda"),
+    "vllm-sr-rocm": ("vllm-sr", "rocm"),
 }
 IMAGE_ENV = {
     "vllm-sr": ["VLLM_SR_IMAGE", "VLLM_SR_ROUTER_IMAGE"],
@@ -35,6 +45,7 @@ IMAGE_ENV = {
     "operator": ["E2E_PREBUILT_OPERATOR_IMAGE"],
     "operator-bundle": ["E2E_PREBUILT_OPERATOR_BUNDLE_IMAGE"],
     mocker.IMAGE: ["E2E_PREBUILT_PROVIDER_MOCKER_IMAGE", "PROVIDER_MOCKER_IMAGE"],
+    "model-runtime": ["E2E_PREBUILT_MODEL_RUNTIME_IMAGE"],
 }
 
 
@@ -99,7 +110,11 @@ def verify(directory: Path, image: str) -> dict:
     context, dockerfile, _ = DEFINITIONS[image]
     if manifest["source_sha"] != source_sha() or manifest["id"] != image:
         raise ValueError("Image belongs to a different source revision or definition")
-    if manifest["context"] != context or manifest["dockerfile"] != dockerfile:
+    if (
+        manifest["context"] != context
+        or manifest["dockerfile"] != dockerfile
+        or manifest.get("target", "") != ROUTER_BUILDS.get(image, ("", ""))[0]
+    ):
         raise ValueError("Image build definition changed")
     if manifest["sha256"] != sha256(archive) or manifest["images"] != oci_images(
         archive
@@ -257,11 +272,14 @@ def main() -> None:
     if not args.image:
         parser.error("--image is required")
     context, dockerfile, supported = DEFINITIONS[args.image]
+    target, accelerator = ROUTER_BUILDS.get(args.image, ("", ""))
     platforms = supported if args.multiarch else ["linux/amd64"]
     if args.command == "definition":
         values = {
             "context": context,
             "dockerfile": dockerfile,
+            "target": target,
+            "accelerator": accelerator,
             "platforms": ",".join(platforms),
             "date": datetime.now(timezone.utc).strftime("%Y%m%d"),
         }
@@ -284,6 +302,7 @@ def main() -> None:
             "source_sha": source_sha(),
             "context": context,
             "dockerfile": dockerfile,
+            "target": target,
             "build_args": os.environ["CI_IMAGE_BUILD_ARGS"].splitlines(),
             "mode": args.mode,
             "tag": args.tag,

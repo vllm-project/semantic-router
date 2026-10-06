@@ -93,12 +93,12 @@ export default function InstallQuickStartSection(): JSX.Element {
             {activeAudience === 'human'
               ? (
                   <Translate id="homepage.install.title.human">
-                    Install locally in one line
+                    Get started in one line
                   </Translate>
                 )
               : (
                   <Translate id="homepage.install.title.agent">
-                    Hand the setup to your agent
+                    Let your agent set it up
                   </Translate>
                 )}
           </h2>

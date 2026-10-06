@@ -41,7 +41,7 @@ def dataset_manifest(**overrides):
         "task": "jailbreak",
         "source": {
             "type": "huggingface",
-            "locator": "llm-semantic-router/jailbreak-detection-dataset",
+            "locator": "vllm-sr/jailbreak-detection-dataset",
             "revision": DATASET_REVISION,
         },
         "license": "unknown-upstream",
@@ -94,7 +94,7 @@ def artifact_manifest(**overrides):
         "id": "mmbert32k-jailbreak-detector-merged",
         "task": "jailbreak",
         "identity": {
-            "repo": "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
+            "repo": "vllm-sr/mmbert32k-jailbreak-detector-merged",
             "revision": ARTIFACT_REVISION,
             "digest": artifact_identity_digest(files),
         },
