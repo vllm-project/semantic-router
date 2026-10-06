@@ -73,7 +73,7 @@ running packaged remote code (`trust_remote_code`).
 | Config | The canonical layout stays. `provider: model_runtime` deployments may serve task bindings. The providers `candle`, `ort` and `openvino` and their execution fields are removed from the parser; `vllm-sr config migrate` rewrites them. |
 | Retirements | The NLI model (hallucination explainer, response-cache polarity guard) and the OpenVINO provider retire, as decided in the runtime proposal. Every other legacy model migrates or has a documented replacement (section 16). |
 | Exactness | Decision 2.0 `exact` stays byte-identical. Decision 1.0 `exact` targets bit-identity with the packages' bundled runtime on the same device class. Vela 1.0 `exact` is FP32 on every device, with parity records against the legacy path. |
-| Images | Every router image ships the runtime (CPU PyTorch in CPU images, the ROCm or CUDA wheel in GPU images), so the managed lifecycle works everywhere. The Rust build stages are deleted. |
+| Images | Every router image ships the runtime (CPU PyTorch in CPU images, the ROCm or CUDA wheel in GPU images), so the managed lifecycle works everywhere. Model-backed validation of the image runs in development CI: recipe conformance serves the maintained recipes' models through the CI-built image, and Published Models serves the published Vela models through the runtime from source. The release workflow rebuilds the tagged source without running tests (#4273), so the published digest itself is not model-run. The Rust build stages are deleted. |
 
 ## 3. Overview
 
