@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -199,6 +200,10 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 		input.RequestFacts.Context = context.Background()
 	}
 
+	// One request stage, one bundle: the model calls of every signal reach each
+	// runtime process as a single /v1/bundle call.
+	stage, bundle := modelservice.WithBundle(input.RequestFacts.Context, 0)
+	input.RequestFacts.Context = stage
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var mediaCache *requestMediaEmbeddingCache
@@ -207,7 +212,7 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 	}
 	dispatchers := c.buildSignalDispatchers(input, results, &mu, textForSignal, mediaCache, usedSignals)
 
-	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
+	runSignalDispatchers(dispatchers, usedSignals, ready, bundle, &wg)
 
 	wg.Wait()
 	results = c.applySignalGroups(results)

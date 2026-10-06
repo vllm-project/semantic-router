@@ -156,7 +156,6 @@ curl -sS http://localhost:8080/api/v1/diagnostics/classify/intent \
 | `POST` | `/api/v1/diagnostics/classify/combined` | Run intent, PII, and security classification |
 | `POST` | `/api/v1/diagnostics/classify/batch` | Run a selected classifier over a batch |
 | `POST` | `/api/v1/routing/preview` | Evaluate all configured signals |
-| `POST` | `/api/v1/diagnostics/nli` | Evaluate a premise/hypothesis pair |
 | `POST` | `/api/v1/diagnostics/embeddings` | Generate configured text or image embeddings |
 | `POST` | `/api/v1/diagnostics/similarity` | Compare a text pair |
 | `POST` | `/api/v1/diagnostics/similarity/batch` | Run batch similarity matching |
@@ -212,14 +211,14 @@ PII keep their prepared scan geometry; Hazard keeps its operating-point
 thresholds and policy digest. The shared Vela Encoder is an artifact used by
 task bindings, so it does not need a separate inference endpoint.
 
-The convenience classification, embedding, NLI, and similarity endpoints also
+The convenience classification, embedding, and similarity endpoints also
 accept an optional `recipe`. Omitting it retains their default-recipe behavior;
 a supplied recipe is resolved explicitly. The typed model endpoints are the
 preferred way to verify exactly which loaded model produced a result. Rerank
 batches obey `global.services.api.batch_classification.max_batch_size` (100 pairs when
 unset). Typed calls share their prepared resource's admission gate and have a
-two-minute request deadline; native inference retains its lease until it
-actually returns, even after cancellation. Actual coverage follows active configuration: discovering a task does not load it.
+two-minute request deadline; a model call retains its lease until the model
+runtime answers, even after cancellation. Actual coverage follows active configuration: discovering a task does not load it.
 
 ## Inspect models and metrics
 
@@ -539,6 +538,7 @@ Inspect configured and loaded model and classifier resources.
 | `GET` | `/api/v1/inventory/models` | Get information about loaded models |
 | `GET` | `/api/v1/inventory/classifier` | Get classifier information and status (secrets redacted without secret_view) |
 | `GET` | `/api/v1/inventory/embedding-models` | Get information about loaded embedding models |
+| `GET` | `/api/v1/inventory/model-runtime` | Get the model_runtime deployments: process, readiness, restarts and served model cards |
 | `GET` | `/v1/models` | OpenAI-compatible public model and Entrypoint listing |
 
 ### observability
@@ -620,7 +620,7 @@ Discover recipe-scoped plugin bindings, dependencies, and typed behavior preview
 
 ### diagnostics
 
-Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, NLI, and rerankers.
+Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, and rerankers.
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -631,7 +631,6 @@ Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, NLI, 
 | `POST` | `/api/v1/diagnostics/classify/user-feedback` | Classify user feedback type (satisfied, need_clarification, wrong_answer, want_different) |
 | `POST` | `/api/v1/diagnostics/classify/combined` | Perform combined classification (intent, PII, and security) |
 | `POST` | `/api/v1/diagnostics/classify/batch` | Batch classification with configurable task_type parameter |
-| `POST` | `/api/v1/diagnostics/nli` | Natural language inference classification for premise and hypothesis pairs |
 | `POST` | `/api/v1/diagnostics/embeddings` | Generate text, image, and audio embeddings |
 | `POST` | `/api/v1/diagnostics/similarity` | Calculate pairwise text similarity |
 | `POST` | `/api/v1/diagnostics/similarity/batch` | Calculate batch text-similarity matches |

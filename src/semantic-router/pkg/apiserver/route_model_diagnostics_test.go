@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -15,28 +15,40 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/runtimetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
 
 // Controlled typed handles verify HTTP->live generation->prepared inference.
 // These are not quality or hardware tests of the published Vela artifacts.
-func diagnosticTestHandle[I, O any](t *testing.T, runtime *native.Runtime, recipe, name, contract string, capability binding.Capability, infer func(I) (O, error)) *binding.Resolved[I, O] {
+// diagnosticHost is a runtime whose inventory and pool a test handle joins.
+type diagnosticHost interface {
+	ObserveBinding(binding.Event)
+	ResourcePool() *binding.Pool
+}
+
+type servingHost struct{ *serving.Runtime }
+
+func (h servingHost) ResourcePool() *binding.Pool { return h.Pool }
+
+func diagnosticTestHandle[I, O any](t *testing.T, runtime diagnosticHost, recipe, name, contract string, capability binding.Capability, infer func(I) (O, error)) *binding.Resolved[I, O] {
 	t.Helper()
 	return diagnosticTestContextHandle(t, runtime, recipe, name, contract, capability, func(_ context.Context, input I) (O, error) { return infer(input) })
 }
 
-func diagnosticTestContextHandle[I, O any](t *testing.T, runtime *native.Runtime, recipe, name, contract string, capability binding.Capability, infer func(context.Context, I) (O, error)) *binding.Resolved[I, O] {
+func diagnosticTestContextHandle[I, O any](t *testing.T, runtime diagnosticHost, recipe, name, contract string, capability binding.Capability, infer func(context.Context, I) (O, error)) *binding.Resolved[I, O] {
 	t.Helper()
 	task, err := binding.Register(binding.NewRegistry(runtime.ObserveBinding), contract, func(I) error { return nil }, func(I, O) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
-	resource, err := runtime.Pool.Acquire(context.Background(), binding.ResourceIdentity{Artifact: "models/" + name, Revision: "prepared-weights", Provider: "test", Device: "cpu", Precision: "fp32"}, "", nil, func(context.Context) (io.Closer, error) { return io.NopCloser(strings.NewReader("")), nil })
+	resource, err := runtime.ResourcePool().Acquire(context.Background(), binding.ResourceIdentity{Artifact: "models/" + name, Revision: "prepared-weights", Provider: "test", Device: "cpu", Precision: "fp32"}, "", nil, func(context.Context) (io.Closer, error) { return io.NopCloser(strings.NewReader("")), nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,8 +77,11 @@ func diagnosticRequest(t *testing.T, server *httptest.Server, path, body string)
 }
 
 func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) {
-	runtime := native.New(nil)
-	cfg, service := preparedInventoryService(t, runtime, &config.RouterConfig{Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}, {Name: "private"}}})
+	tasksRuntime, fake := servingtest.Runtime(t, map[string]runtimetest.Model{
+		"embed": {Embedding: &runtimetest.Embedder{Dimensions: []int{2, 4}, Layers: []int{7}, Modalities: []string{"text", "audio"}}},
+	})
+	cfg, service := preparedInventoryServiceWith(t, classification.RecipeRuntimeOptions{Runtime: tasksRuntime}, &config.RouterConfig{Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}, {Name: "private"}}})
+	runtime := tasksRuntime
 	registry := routerruntime.NewRegistry(cfg)
 	registry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{Config: cfg, ClassificationService: service})
 	server := httptest.NewServer((&ClassificationAPIServer{config: cfg, runtimeRegistry: registry}).setupRoutes())
@@ -75,7 +90,7 @@ func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) 
 	usage := &tasks.InputUsage{OriginalTokens: 3, ProcessedTokens: 3}
 	labels := []string{"first", "second"}
 	for _, name := range []string{"domain_classifier", "prompt_guard", "feedback_detector", "fact_check_classifier", "modality_detector", "safety.unsafe"} {
-		diagnosticTestHandle(t, runtime, "default", name, "label_distribution.v1", binding.Capability{Labels: labels}, func(input string) (tasks.LabelDistribution, error) {
+		diagnosticTestHandle(t, servingHost{runtime}, "default", name, "label_distribution.v1", binding.Capability{Labels: labels}, func(input string) (tasks.LabelDistribution, error) {
 			calls.Add(1)
 			if input != "query" {
 				t.Errorf("wrong input %q", input)
@@ -91,7 +106,7 @@ func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) 
 			t.Fatalf("%s: %d %s", name, status, body)
 		}
 	}
-	diagnosticTestHandle(t, runtime, "default", "classifier.risk", "label_scores.v1", binding.Capability{Labels: labels}, func(string) (tasks.LabelScores, error) {
+	diagnosticTestHandle(t, servingHost{runtime}, "default", "classifier.risk", "label_scores.v1", binding.Capability{Labels: labels}, func(string) (tasks.LabelScores, error) {
 		calls.Add(1)
 		return tasks.LabelScores{Scores: []float32{.8, .9}, Input: usage}, nil
 	})
@@ -100,7 +115,7 @@ func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) 
 		t.Fatalf("hazard: %d %s", status, body)
 	}
 	available := true
-	diagnosticTestHandle(t, runtime, "default", "pii_classifier", "token_spans.v1", binding.Capability{Labels: []string{"O", "B-person"}}, func(input string) (tasks.TokenClassificationResult, error) {
+	diagnosticTestHandle(t, servingHost{runtime}, "default", "pii_classifier", "token_spans.v1", binding.Capability{Labels: []string{"O", "B-person"}}, func(input string) (tasks.TokenClassificationResult, error) {
 		calls.Add(1)
 		return tasks.TokenClassificationResult{Entities: []tasks.TokenEntity{{EntityType: "person", Start: 0, End: len(input), Text: input, Confidence: .9}}, ScoresAvailable: &available, Input: usage}, nil
 	})
@@ -108,18 +123,25 @@ func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) 
 	if status != 200 || !strings.Contains(string(body), `"end":3`) {
 		t.Fatalf("pii byte offsets: %d %s", status, body)
 	}
-	diagnosticTestHandle(t, runtime, "default", "embedding", "embedding.v1", binding.Capability{Embedding: &binding.EmbeddingCapability{Dimension: 2, Layer: 7, AvailableDimensions: []int{2}, Audio: &binding.AudioCapability{SampleRates: []int{16000, 48000}, MaxSampleRate: 48000, MaxSeconds: 30, MaxChannels: 8, Layout: "channels_first"}}}, func(input embedding.TextRequest) (tasks.EmbeddingResult, error) {
-		calls.Add(1)
-		if input.Options.Dimension != 2 || input.Options.Layer != 7 {
-			t.Errorf("prepared representation lost: %+v", input)
-		}
-		return tasks.EmbeddingResult{Embedding: []float32{.3, .4}, Input: usage}, nil
-	})
+	provider, err := tasksRuntime.Embedding(context.Background(), config.ResolvedModelBinding{
+		Recipe: "default", Name: "embedding", Binding: config.ModelBinding{Deployment: "embed", Contract: "embedding.v1"},
+		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime:8100"},
+	}, 2, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = provider.Close() })
+	embedCalls := fake.Calls("embeddings")
 	status, body = diagnosticRequest(t, server, "embeddings", `{"recipe":"default","binding":"embedding","text":"query"}`)
-	if status != 200 || !strings.Contains(string(body), `"embedding":[0.3,0.4]`) || !strings.Contains(string(body), `"dimensions":[2]`) || !strings.Contains(string(body), `"sample_rates":[16000,48000]`) || !strings.Contains(string(body), `"max_seconds":30`) {
+	var embedded ModelDiagnosticResponse[ModelDiagnosticEmbeddingResult]
+	if err = json.Unmarshal(body, &embedded); err != nil {
+		t.Fatal(err)
+	}
+	if status != 200 || len(embedded.Result.Embedding) != 2 || fake.Calls("embeddings") != embedCalls+1 || !strings.Contains(string(body), `"dimensions":[2,4]`) || !strings.Contains(string(body), `"max_seconds":30`) {
 		t.Fatalf("embedding: %d %s", status, body)
 	}
-	diagnosticTestHandle(t, runtime, "default", "rag.reranker", "relevance_scores.v1", binding.Capability{}, func(input []tasks.QueryDocument) (tasks.RelevanceScores, error) {
+	calls.Add(1)
+	diagnosticTestHandle(t, servingHost{runtime}, "default", "rag.reranker", "relevance_scores.v1", binding.Capability{}, func(input []tasks.QueryDocument) (tasks.RelevanceScores, error) {
 		calls.Add(1)
 		if len(input) != 2 || input[0].Document != "a" || input[1].Document != "b" {
 			t.Errorf("pairs/order lost: %+v", input)
@@ -166,7 +188,7 @@ func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) 
 	}
 	// A recipe need not have a public model alias to be diagnosed. Sharing
 	// weights/name with default still resolves its own prepared consumer.
-	diagnosticTestHandle(t, runtime, "private", "domain_classifier", "label_distribution.v1", binding.Capability{Labels: labels}, func(string) (tasks.LabelDistribution, error) {
+	diagnosticTestHandle(t, servingHost{runtime}, "private", "domain_classifier", "label_distribution.v1", binding.Capability{Labels: labels}, func(string) (tasks.LabelDistribution, error) {
 		return tasks.LabelDistribution{Probabilities: []float32{.7, .3}}, nil
 	})
 	status, body = diagnosticRequest(t, server, "labels", `{"recipe":"private","binding":"domain_classifier","text":"query"}`)
@@ -176,7 +198,7 @@ func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) 
 }
 
 func TestModelDiagnosticsHTTPUsesPreparedWindowGeometry(t *testing.T) {
-	runtime := native.New(nil)
+	runtime := serving.New(nil, nil)
 	cfg, service := preparedInventoryService(t, runtime)
 	server := httptest.NewServer((&ClassificationAPIServer{config: cfg, classificationSvc: service}).setupRoutes())
 	t.Cleanup(server.Close)
@@ -187,15 +209,15 @@ func TestModelDiagnosticsHTTPUsesPreparedWindowGeometry(t *testing.T) {
 	}
 	capability := binding.Capability{Window: &binding.WindowCapability{Size: 5, Overlap: 1}, Labels: []string{"safe", "unsafe"}}
 	usage := &tasks.InputUsage{OriginalTokens: 8, ProcessedTokens: 8}
-	diagnosticTestHandle(t, runtime, "default", "prompt_guard", "label_distribution.v1", capability, func(input tasks.TextWindowsRequest) (tasks.WindowedLabelDistribution, error) {
+	diagnosticTestHandle(t, servingHost{runtime}, "default", "prompt_guard", "label_distribution.v1", capability, func(input tasks.TextWindowsRequest) (tasks.WindowedLabelDistribution, error) {
 		check(input)
 		return tasks.WindowedLabelDistribution{Windows: []tasks.LabelDistributionWindow{{Start: 0, End: 3, Probabilities: []float32{.9, .1}}, {Start: 2, End: 6, Probabilities: []float32{.1, .9}}}, ContentTokens: 6, Input: usage}, nil
 	})
-	diagnosticTestHandle(t, runtime, "default", "pii_classifier", "token_spans.v1", capability, func(input tasks.TextWindowsRequest) (tasks.WindowedTokenClassification, error) {
+	diagnosticTestHandle(t, servingHost{runtime}, "default", "pii_classifier", "token_spans.v1", capability, func(input tasks.TextWindowsRequest) (tasks.WindowedTokenClassification, error) {
 		check(input)
 		return tasks.WindowedTokenClassification{Result: tasks.TokenClassificationResult{Input: usage}, Windows: [][2]int{{0, 3}, {2, 6}}, ContentTokens: 6}, nil
 	})
-	diagnosticTestHandle(t, runtime, "default", "classifier.risk", "label_scores.v1", capability, func(input tasks.TextWindowsRequest) (tasks.WindowedLabelScores, error) {
+	diagnosticTestHandle(t, servingHost{runtime}, "default", "classifier.risk", "label_scores.v1", capability, func(input tasks.TextWindowsRequest) (tasks.WindowedLabelScores, error) {
 		check(input)
 		return tasks.WindowedLabelScores{Windows: []tasks.LabelScoresWindow{{Start: 0, End: 3, Scores: []float32{.9, .8}}}, ContentTokens: 3, Input: usage}, nil
 	})
@@ -208,12 +230,12 @@ func TestModelDiagnosticsHTTPUsesPreparedWindowGeometry(t *testing.T) {
 }
 
 func TestModelDiagnosticsHoldsLiveGenerationThroughInferenceAndUsesReplacement(t *testing.T) {
-	oldRuntime, nextRuntime := native.New(nil), native.New(nil)
+	oldRuntime, nextRuntime := serving.New(nil, nil), serving.New(nil, nil)
 	cfg, oldService := preparedInventoryService(t, oldRuntime)
 	_, nextService := preparedInventoryService(t, nextRuntime)
 	entered, finish := make(chan struct{}), make(chan struct{})
 	var leases atomic.Int32
-	diagnosticTestHandle(t, oldRuntime, "default", "domain_classifier", "label_distribution.v1", binding.Capability{Labels: []string{"a", "b"}}, func(string) (tasks.LabelDistribution, error) {
+	diagnosticTestHandle(t, servingHost{oldRuntime}, "default", "domain_classifier", "label_distribution.v1", binding.Capability{Labels: []string{"a", "b"}}, func(string) (tasks.LabelDistribution, error) {
 		close(entered)
 		<-finish
 		if leases.Load() != 1 {
@@ -221,7 +243,7 @@ func TestModelDiagnosticsHoldsLiveGenerationThroughInferenceAndUsesReplacement(t
 		}
 		return tasks.LabelDistribution{Probabilities: []float32{.9, .1}}, nil
 	})
-	diagnosticTestHandle(t, nextRuntime, "default", "domain_classifier", "label_distribution.v1", binding.Capability{Labels: []string{"a", "b"}}, func(string) (tasks.LabelDistribution, error) {
+	diagnosticTestHandle(t, servingHost{nextRuntime}, "default", "domain_classifier", "label_distribution.v1", binding.Capability{Labels: []string{"a", "b"}}, func(string) (tasks.LabelDistribution, error) {
 		return tasks.LabelDistribution{Probabilities: []float32{.1, .9}}, nil
 	})
 	registry := routerruntime.NewRegistry(cfg)
@@ -267,8 +289,8 @@ func TestModelDiagnosticsRerankBoundsBatchUsingLeasedConfig(t *testing.T) {
 		limit, count, status int
 	}{{"configured", 2, 3, 400}, {"at limit", 2, 2, 200}, {"default", 0, 101, 400}} {
 		t.Run(tc.name, func(t *testing.T) {
-			runtime := native.New(nil)
-			cfg, service := preparedInventoryService(t, runtime)
+			tasksRuntime := serving.New(nil, nil)
+			cfg, service := preparedInventoryServiceWith(t, classification.RecipeRuntimeOptions{Runtime: tasksRuntime})
 			cfg.API.BatchClassification.MaxBatchSize = tc.limit
 			registry := routerruntime.NewRegistry(cfg)
 			registry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{Config: cfg, ClassificationService: service})
@@ -276,7 +298,7 @@ func TestModelDiagnosticsRerankBoundsBatchUsingLeasedConfig(t *testing.T) {
 			stale.API.BatchClassification.MaxBatchSize = 1
 			api := &ClassificationAPIServer{config: stale, runtimeRegistry: registry}
 			calls := 0
-			diagnosticTestHandle(t, runtime, "default", "rag.reranker", "relevance_scores.v1", binding.Capability{}, func(pairs []tasks.QueryDocument) (tasks.RelevanceScores, error) {
+			diagnosticTestHandle(t, servingHost{tasksRuntime}, "default", "rag.reranker", "relevance_scores.v1", binding.Capability{}, func(pairs []tasks.QueryDocument) (tasks.RelevanceScores, error) {
 				calls++
 				return tasks.RelevanceScores{Scores: make([]float32, len(pairs))}, nil
 			})
@@ -295,14 +317,14 @@ func TestModelDiagnosticsRerankBoundsBatchUsingLeasedConfig(t *testing.T) {
 }
 
 func TestModelDiagnosticsDeadlineRetainsGenerationUntilNativeReturn(t *testing.T) {
-	runtime := native.New(nil)
+	runtime := serving.New(nil, nil)
 	cfg, service := preparedInventoryService(t, runtime)
 	registry := routerruntime.NewRegistry(cfg)
 	var leases atomic.Int32
 	registry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{Config: cfg, ClassificationService: service, AcquireClassification: func() (func(), bool) { leases.Add(1); return func() { leases.Add(-1) }, true }})
 	api := &ClassificationAPIServer{config: cfg, runtimeRegistry: registry}
 	entered, expired, finish := make(chan struct{}), make(chan struct{}), make(chan struct{})
-	diagnosticTestContextHandle(t, runtime, "default", "domain_classifier", "label_distribution.v1", binding.Capability{}, func(ctx context.Context, text string) (tasks.LabelDistribution, error) {
+	diagnosticTestContextHandle(t, servingHost{runtime}, "default", "domain_classifier", "label_distribution.v1", binding.Capability{}, func(ctx context.Context, text string) (tasks.LabelDistribution, error) {
 		deadline, ok := ctx.Deadline()
 		if !ok || time.Until(deadline) > apiWriteTimeout {
 			t.Error("API did not bound the diagnostic inference context")

@@ -53,8 +53,8 @@ reference. Configure the detector through
 
 Without a recipe model binding, `classifier.max_sequence_length: 0` keeps the
 512-token default. Long prompts receive representative head, middle, and tail
-samples for routing; the native classifier may also truncate to its token budget.
-This policy limits inference cost and does not classify every token.
+samples for routing, and the model runtime truncates any input still over the
+budget. This policy limits inference cost and does not classify every token.
 
 For unsampled modality input, bind `modality_detector` to a named deployment with
 `input.max_tokens` above 512. Set `input.overflow: reject` to reject input beyond

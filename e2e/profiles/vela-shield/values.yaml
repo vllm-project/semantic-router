@@ -1,5 +1,6 @@
-# Selects Vela Shield for the built-in safety module on its default Candle CPU
-# provider. No endpoint classifier or mock classification response participates.
+# Selects Vela Shield for the built-in safety module, which the Router serves
+# through its managed model runtime on CPU. No endpoint classifier or mock
+# classification response participates.
 config:
   version: v0.3
   listeners: []

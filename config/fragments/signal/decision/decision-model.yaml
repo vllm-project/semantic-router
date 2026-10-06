@@ -4,7 +4,7 @@ global:
       decision-kai:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
-        revision: 881bee413681d80ebeac86afcda8b4138dae516e
+        revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
         device: auto
         profile: exact
 routing:

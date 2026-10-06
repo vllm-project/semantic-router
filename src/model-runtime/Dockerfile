@@ -18,7 +18,7 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu "torch==${TORCH
 WORKDIR /opt/vllm-sr-runtime
 COPY pyproject.toml README.md ./
 COPY vllm_sr_runtime ./vllm_sr_runtime
-RUN pip install . \
+RUN pip install ".[multimodal]" \
     && useradd --uid 65532 --no-create-home --shell /usr/sbin/nologin runtime \
     && mkdir -p "$HF_HOME" \
     && chown runtime "$HF_HOME"

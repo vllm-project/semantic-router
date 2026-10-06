@@ -39,9 +39,7 @@ func TestOwnedMemoryProviderPreservesModelOptionsAndRawVector(t *testing.T) {
 		{EmbeddingConfig{Model: EmbeddingModelMMBERT}, embedding.Options{Dimension: 256}},
 		{EmbeddingConfig{Model: EmbeddingModelMMBERT, Dimension: 128, Layer: 6}, embedding.Options{Dimension: 128, Layer: 6}},
 		{EmbeddingConfig{Model: EmbeddingModelMulti}, embedding.Options{Dimension: 2}},
-		{EmbeddingConfig{Model: EmbeddingModelBERT, Dimension: 10}, embedding.Options{}},
 		{EmbeddingConfig{Model: EmbeddingModelQwen3, Dimension: 10}, embedding.Options{}},
-		{EmbeddingConfig{Model: EmbeddingModelGemma, Dimension: 10}, embedding.Options{}},
 	} {
 		p := &recordingMemoryProvider{}
 		cfg := test.cfg
@@ -61,14 +59,23 @@ func TestOwnedMemoryProviderPreservesModelOptionsAndRawVector(t *testing.T) {
 	}
 }
 
+func TestRetiredEmbeddingModelsAreRefused(t *testing.T) {
+	for _, model := range []EmbeddingModelType{"bert", "gemma"} {
+		p := &recordingMemoryProvider{}
+		if _, err := GenerateEmbedding("text", EmbeddingConfig{Model: model, Provider: p}); err == nil || p.calls != 0 {
+			t.Fatalf("retired model %s accepted: err=%v calls=%d", model, err, p.calls)
+		}
+	}
+}
+
 func TestOwnedMemoryProviderDoesNotUseNativeGlobalFallback(t *testing.T) {
 	t.Setenv(deterministicEmbeddingsEnv, "")
-	if _, err := GenerateEmbedding("text", EmbeddingConfig{Model: EmbeddingModelBERT}); err == nil {
+	if _, err := GenerateEmbedding("text", EmbeddingConfig{Model: EmbeddingModelQwen3}); err == nil {
 		t.Fatal("nil provider accepted")
 	}
 	p := &recordingMemoryProvider{}
 	t.Setenv(deterministicEmbeddingsEnv, "true")
-	vector, err := GenerateEmbedding("text", EmbeddingConfig{Model: EmbeddingModelBERT, Provider: p})
+	vector, err := GenerateEmbedding("text", EmbeddingConfig{Model: EmbeddingModelQwen3, Provider: p})
 	if err != nil || !reflect.DeepEqual(vector, []float32{3, 4}) || p.calls != 1 {
 		t.Fatal("test environment replaced explicitly prepared provider")
 	}
