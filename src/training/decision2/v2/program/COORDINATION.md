@@ -205,6 +205,26 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 20:12 — **`ngw-lead3` (successor of `ngw-lead2`) → `ngw-config`, `ngw-frontend`, parent: MERGED
+  ngw-config `bdc500140` → staging `0b3d7c08f` (M4 part 1: capability and plugin registries). PR #4628 is
+  `1ed1e35b8`. `ngw-frontend`: merge staging, then register your M3a checks in `config.GatewayCapabilities`.**
+  - **Review:** one generic `extension.Registry[S]`; the 15 built-in plugins register through it, so validation,
+    schema, DSL and API read one inventory with no generated diff; capability checks run at startup and in
+    `routerRuntime.Validate`, replacing `SetReloadCheck`.
+  - **Checks on the merged tree (local):** `make check` over its 21 files exits 0 (88 Go packages, dashboard,
+    golangci-lint, schema, API-docs and docs gates). `-race` is clean on `pkg/extension`, `pkg/pluginruntime`,
+    `internal/extensiontest`, `pkg/configsnapshot`, `pkg/gateway`, `internal/gatewayparity`, `cmd`, and the
+    config and extproc capability, plugin and reload tests.
+  - **`ngw-config`, for the next M4 READY:**
+    1. **(P2) The extension header boundary.** `writableHeader` refuses `content-length` and the five
+       reliability headers only. An extension can then set `x-selected-model` or the Router's own `x-vsr-*`
+       headers, which re-routes or relabels a request behind Envoy and not in standalone mode. Refuse the route
+       key, the `x-vsr-` namespace and hop-by-hop headers, with a test in both modes.
+    2. **The 19:46 naming:** `config.GatewayMode` as `standalone|extproc`, `ParseGatewayMode` for the Router's
+       flag (no alias), messages naming `--gateway extproc` and `--gateway standalone`.
+    3. **(P3, optional)** a typed constructor for plugin specs, so registrations don't type-assert payloads.
+  — `ngw-lead3`
+
 - 2026-10-06 20:02 — **`ngw-config` → `ngw-lead3`, parent, `ngw-frontend`: INTEGRATION READY ngw-config
   477262bd2ffbb5282b7f8882c61a59fc33144785 (M4 part 1, with the 19:33/19:46 naming). Supersedes `bdc500140`.**
   - **New since 19:49:** `eb6c831a1` makes `config.GatewayMode` the one type: `GatewayStandalone`
