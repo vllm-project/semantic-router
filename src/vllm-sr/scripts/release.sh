@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 REPO_ROOT="$(cd "$PROJECT_DIR/../.." && pwd)"
 PYPROJECT_PATH="$PROJECT_DIR/pyproject.toml"
+RUNTIME_PYPROJECT_PATH="$REPO_ROOT/src/model-runtime/pyproject.toml"
 
 RELEASE_VERSION="${1:-}"
 NEXT_VERSION="${2:-}"
@@ -20,8 +21,9 @@ Examples:
 When next-version is omitted, the script defaults to the next minor base
 version (for example 0.3.0 -> 0.4.0).
 
-The script updates the vllm-sr Python package version and runs the
-repo-level release contract check before creating the stable tag.
+The script updates the vllm-sr and vllm-srun Python package versions and the
+vllm-sr[runtime] pin, and runs the repo-level release contract check before
+creating the stable tag.
 EOF
 }
 
@@ -47,9 +49,13 @@ current_version() {
 }
 
 write_pyproject_version() {
-  local value
+  local value path
   value="$1"
-  sed -i.bak 's/^version = .*/version = "'"$value"'"/' "$PYPROJECT_PATH"
+  for path in "$PYPROJECT_PATH" "$RUNTIME_PYPROJECT_PATH"; do
+    sed -i.bak 's/^version = .*/version = "'"$value"'"/' "$path"
+    rm -f "$path.bak"
+  done
+  sed -i.bak 's/"vllm-srun==[^"]*"/"vllm-srun=='"$value"'"/' "$PYPROJECT_PATH"
   rm -f "$PYPROJECT_PATH.bak"
 }
 
@@ -64,11 +70,11 @@ EOF
 commit_if_changed() {
   local message
   message="$1"
-  if git diff --quiet -- "$PYPROJECT_PATH"; then
+  if git diff --quiet -- "$PYPROJECT_PATH" "$RUNTIME_PYPROJECT_PATH"; then
     return 1
   fi
 
-  git add "$PYPROJECT_PATH"
+  git add "$PYPROJECT_PATH" "$RUNTIME_PYPROJECT_PATH"
   git commit -s -m "$message"
   return 0
 }

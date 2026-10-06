@@ -7,6 +7,9 @@ discovered through Python entry points; see ``docs/design.md``.
 """
 
 import os
+import re
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 
 # libgomp reads this when PyTorch loads it, so it must be set before any
 # submodule imports torch. A short spin keeps PyTorch's idle OpenMP threads off
@@ -30,4 +33,22 @@ os.environ.setdefault("ONEDNN_PRIMITIVE_CACHE_CAPACITY", "8192")
 os.environ.setdefault("MIOPEN_FIND_MODE", "FAST")
 os.environ.setdefault("MIOPEN_LOG_LEVEL", "3")
 
-__version__ = "0.2.0"
+
+def _load_version() -> str:
+    """The checkout's pyproject version, else the installed distribution's."""
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    try:
+        match = re.search(
+            r'^version = "([^"]+)"$', pyproject.read_text(encoding="utf-8"), re.M
+        )
+    except FileNotFoundError:
+        match = None
+    if match is not None:
+        return match.group(1)
+    try:
+        return version("vllm-srun")
+    except PackageNotFoundError:
+        return "unknown"
+
+
+__version__ = _load_version()

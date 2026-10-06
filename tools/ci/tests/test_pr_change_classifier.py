@@ -385,6 +385,11 @@ class SelectionTests(unittest.TestCase):
         cli = make_plan(["src/vllm-sr/cli/core.py"], source_sha=SHA, profile="main")
         self.assertTrue(cli["publish_python"])
         self.assertIn("cli-package", cli["expected_verification_ids"])
+        runtime = make_plan(
+            ["src/model-runtime/vllm_srun/runtime.py"], source_sha=SHA, profile="main"
+        )
+        self.assertTrue(runtime["publish_python"])
+        self.assertIn("cli-package", runtime["expected_verification_ids"])
 
     def test_previous_release_is_explicit_compatible_and_not_head_parent(self):
         self.assertEqual(

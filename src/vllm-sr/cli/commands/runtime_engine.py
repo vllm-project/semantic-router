@@ -43,8 +43,8 @@ RUNTIME_LOG_LEVELS = {
 }
 INSTALL_HINT = (
     "Engine mode needs the vLLM Semantic Router model runtime (Python package "
-    "vllm_srun). Install it from a repository checkout with "
-    "`pip install ./src/model-runtime`, or run `vllm-sr serve --config ...` for "
+    "vllm-srun). Install PyTorch for your hardware first, then "
+    '`pip install "vllm-sr[runtime]"`, or run `vllm-sr serve --config ...` for '
     "router mode."
 )
 

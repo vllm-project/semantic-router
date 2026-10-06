@@ -11,7 +11,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+import tomllib
 from release_contract_markers import (
+    runtime_release_notes_markers,
     sim_release_notes_markers,
     sim_release_workflow_markers,
     sim_upgrade_docs_markers,
@@ -21,6 +23,9 @@ from snapshot_model_catalog import release_snapshot_errors
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PYPROJECT_PATH = REPO_ROOT / "src/vllm-sr/pyproject.toml"
+RUNTIME_PYPROJECT_PATH = REPO_ROOT / "src/model-runtime/pyproject.toml"
+RUNTIME_DISTRIBUTION = "vllm-srun"
+RUNTIME_EXTRA = "runtime"
 SIM_PYPROJECT_PATH = REPO_ROOT / "src/fleet-sim/pyproject.toml"
 HELM_CHART_PATH = REPO_ROOT / "deploy/helm/semantic-router/Chart.yaml"
 HELM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/helm-publish.yml"
@@ -46,6 +51,8 @@ IMAGE_NAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 @dataclass(frozen=True)
 class ReleaseContract:
     pyproject_version: str
+    runtime_version: str
+    runtime_requirements: tuple[str, ...]
     sim_version: str
     helm_chart_version: str
     helm_app_version: str
@@ -68,6 +75,18 @@ def parse_project_version(path: Path) -> str:
             f"could not find project version in {path.relative_to(REPO_ROOT)}"
         )
     return match.group(1)
+
+
+def parse_runtime_requirements(path: Path) -> tuple[str, ...]:
+    """The requirements of the vllm-sr extra that installs the model runtime."""
+
+    project = tomllib.loads(read_text(path))["project"]
+    extras = project.get("optional-dependencies", {})
+    if RUNTIME_EXTRA not in extras:
+        raise ValueError(
+            f"{path.relative_to(REPO_ROOT)} has no '{RUNTIME_EXTRA}' extra"
+        )
+    return tuple(extras[RUNTIME_EXTRA])
 
 
 def parse_chart_key(path: Path, key: str) -> str:
@@ -204,6 +223,8 @@ def parse_defined_images() -> set[str]:
 def collect_contract() -> ReleaseContract:
     return ReleaseContract(
         pyproject_version=parse_project_version(PYPROJECT_PATH),
+        runtime_version=parse_project_version(RUNTIME_PYPROJECT_PATH),
+        runtime_requirements=parse_runtime_requirements(PYPROJECT_PATH),
         sim_version=parse_project_version(SIM_PYPROJECT_PATH),
         helm_chart_version=parse_chart_key(HELM_CHART_PATH, "version"),
         helm_app_version=parse_chart_key(HELM_CHART_PATH, "appVersion"),
@@ -359,6 +380,28 @@ def validate_upgrade_runbook_fixtures(errors: list[str], release_version: str) -
     )
 
 
+def validate_runtime_package(
+    errors: list[str], contract: ReleaseContract, version: str
+) -> None:
+    """vllm-srun ships with vllm-sr: one version, pinned by the runtime extra."""
+
+    require_equal(
+        errors,
+        RUNTIME_PYPROJECT_PATH,
+        "vllm-srun version",
+        contract.runtime_version,
+        version,
+    )
+    require_equal(
+        errors,
+        PYPROJECT_PATH,
+        f"vllm-sr '{RUNTIME_EXTRA}' extra",
+        ", ".join(contract.runtime_requirements),
+        f"{RUNTIME_DISTRIBUTION}=={version}",
+    )
+    require_markers(errors, RELEASE_WORKFLOW_PATH, runtime_release_notes_markers())
+
+
 def validate_sim_release_workflow(errors: list[str]) -> None:
     require_markers(errors, SIM_WORKFLOW_PATH, sim_release_workflow_markers())
 
@@ -385,6 +428,7 @@ def validate(expected_version: str | None) -> tuple[ReleaseContract, list[str]]:
     require_equal(
         errors, PYPROJECT_PATH, "vllm-sr version", contract.pyproject_version, expected
     )
+    validate_runtime_package(errors, contract, expected)
 
     validate_source_helm_app_version(
         errors, contract.helm_app_version, expected_version
@@ -446,6 +490,10 @@ def main() -> int:
 
     print("Release version contract")
     print(f"  vllm-sr package:        {contract.pyproject_version}")
+    print(
+        f"  vllm-srun package:      {contract.runtime_version} "
+        f"(vllm-sr[{RUNTIME_EXTRA}]: {', '.join(contract.runtime_requirements)})"
+    )
     print(f"  helm chart source:      {contract.helm_chart_version}")
     print(f"  helm source appVersion: {contract.helm_app_version}")
     print(f"  vllm-sr-sim package:    {contract.sim_version} (independent tag stream)")

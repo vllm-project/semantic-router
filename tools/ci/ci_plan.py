@@ -221,7 +221,8 @@ def make_plan(
         or (
             profile == "main"
             and bool(
-                {"vllm-sr-cli", "generated-model-catalog"} & set(selection.domains)
+                {"vllm-sr-cli", "generated-model-catalog", "model-runtime"}
+                & set(selection.domains)
             )
         ),
         "multiarch": bool(publish_images),

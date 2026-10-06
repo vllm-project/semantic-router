@@ -38,6 +38,62 @@ class DevelopmentVersionTests(unittest.TestCase):
         self.assertEqual(versions[0], versions[1])
         self.assertLess(versions[1], versions[2])
 
+    def test_runtime_and_its_pin_take_the_same_development_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cli, runtime = root / "vllm-sr", root / "model-runtime"
+            cli.mkdir()
+            runtime.mkdir()
+            (cli / "pyproject.toml").write_text(
+                'version = "0.5.0"\nruntime = ["vllm-srun==0.5.0"]\n', encoding="utf-8"
+            )
+            (runtime / "pyproject.toml").write_text(
+                'version = "0.5.0"\npython_version = "3.10"\n', encoding="utf-8"
+            )
+            version = prepare_version(cli, 0, runtime=runtime)
+            self.assertEqual(version, "0.5.0.dev19700101000000")
+            self.assertEqual(
+                (cli / "pyproject.toml").read_text(encoding="utf-8"),
+                f'version = "{version}"\nruntime = ["vllm-srun=={version}"]\n',
+            )
+            self.assertEqual(
+                (runtime / "pyproject.toml").read_text(encoding="utf-8"),
+                f'version = "{version}"\npython_version = "3.10"\n',
+            )
+
+    def test_runtime_version_drift_fails_without_editing(self) -> None:
+        for cli_source, runtime_source in (
+            (
+                'version = "0.5.0"\nruntime = ["vllm-srun==0.5.0"]\n',
+                'version = "0.4.0"\n',
+            ),
+            (
+                'version = "0.5.0"\nruntime = ["vllm-srun==0.4.0"]\n',
+                'version = "0.5.0"\n',
+            ),
+        ):
+            with (
+                self.subTest(cli=cli_source, runtime=runtime_source),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                cli, runtime = root / "vllm-sr", root / "model-runtime"
+                cli.mkdir()
+                runtime.mkdir()
+                (cli / "pyproject.toml").write_text(cli_source, encoding="utf-8")
+                (runtime / "pyproject.toml").write_text(
+                    runtime_source, encoding="utf-8"
+                )
+                with self.assertRaises(ValueError):
+                    prepare_version(cli, 0, runtime=runtime)
+                self.assertEqual(
+                    (cli / "pyproject.toml").read_text(encoding="utf-8"), cli_source
+                )
+                self.assertEqual(
+                    (runtime / "pyproject.toml").read_text(encoding="utf-8"),
+                    runtime_source,
+                )
+
     def test_rejects_non_release_base_without_editing(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary)
@@ -94,6 +150,38 @@ class PythonPublisherContractTests(unittest.TestCase):
         self.assertEqual(callers, {"main.yml", "release.yml"})
         for step in self.publisher.jobs["build"]["steps"]:
             self.assertNotIn("secrets.", str(step))
+
+    def test_runtime_is_published_first_with_trusted_publishing(self) -> None:
+        for job_name in ("pypi", "testpypi"):
+            job = self.publisher.jobs[job_name]
+            self.assertEqual(
+                job["permissions"], {"contents": "read", "id-token": "write"}
+            )
+            steps = job["steps"]
+            runtime = next(
+                index
+                for index, step in enumerate(steps)
+                if step.get("uses", "").startswith("pypa/gh-action-pypi-publish@")
+            )
+            cli = next(
+                index
+                for index, step in enumerate(steps)
+                if "twine upload" in step.get("run", "")
+            )
+            self.assertEqual(steps[runtime]["with"]["packages-dir"], "runtime-dist/")
+            self.assertNotIn("secrets.", str(steps[runtime]))
+            self.assertIn("dist/vllm_sr-*.whl dist/vllm_sr-*.tar.gz", steps[cli]["run"])
+            if job_name == "pypi":
+                self.assertLess(runtime, cli)
+                self.assertTrue(steps[runtime]["with"]["skip-existing"])
+            else:
+                self.assertEqual(
+                    steps[runtime]["with"]["repository-url"],
+                    "https://test.pypi.org/legacy/",
+                )
+        for workflow in ("main.yml", "release.yml"):
+            caller = self.workflows[workflow].jobs["pypi"]
+            self.assertEqual(caller["permissions"]["id-token"], "write", workflow)
 
     def test_release_builds_distribution_without_runtime_wheel_smoke(self) -> None:
         steps = self.publisher.jobs["build"]["steps"]
@@ -284,7 +372,13 @@ class PythonPublisherContractTests(unittest.TestCase):
             )
 
     def _run_version_contract(
-        self, *, channel: str, version: str, tag: str, snapshot: str
+        self,
+        *,
+        channel: str,
+        version: str,
+        tag: str,
+        snapshot: str,
+        runtime: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         contract = next(
             step
@@ -296,7 +390,12 @@ class PythonPublisherContractTests(unittest.TestCase):
             project = root / "src" / "vllm-sr"
             project.mkdir(parents=True)
             (project / "pyproject.toml").write_text(
-                f'version = "{version}"\n', encoding="utf-8"
+                f'version = "{version}"\nruntime = ["vllm-srun=={runtime or version}"]\n',
+                encoding="utf-8",
+            )
+            (root / "src" / "model-runtime").mkdir()
+            (root / "src" / "model-runtime" / "pyproject.toml").write_text(
+                f'version = "{runtime or version}"\n', encoding="utf-8"
             )
             (root / "config" / "recipes" / "built-in" / snapshot).mkdir(parents=True)
             result = subprocess.run(
@@ -340,6 +439,17 @@ class PythonPublisherContractTests(unittest.TestCase):
                 channel="stable", version="0.3.0", tag=tag, snapshot="v0.3"
             )
             self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+
+    def test_runtime_version_must_match_the_cli(self) -> None:
+        result = self._run_version_contract(
+            channel="stable",
+            version="0.3.0",
+            tag="v0.3.0",
+            snapshot="v0.3",
+            runtime="0.2.0",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("vllm-srun '0.2.0'", result.stdout + result.stderr)
 
     def test_unknown_channel_fails_before_build(self) -> None:
         result = self._run_version_contract(

@@ -93,6 +93,14 @@ jobs:
             echo "::error::Package version '$PACKAGE_VERSION' does not match '$RELEASE_VERSION'"
             exit 1
           fi
+          RUNTIME_VERSION="$(
+            sed -n 's/^version = "\(.*\)"/\1/p' ../model-runtime/pyproject.toml | head -n1
+          )"
+          if [[ "$RUNTIME_VERSION" != "$RELEASE_VERSION" ]] ||
+             ! grep -Fqx "runtime = [\"vllm-srun==${RELEASE_VERSION}\"]" pyproject.toml; then
+            echo "::error::vllm-srun '$RUNTIME_VERSION' and vllm-sr[runtime] must carry '$RELEASE_VERSION'"
+            exit 1
+          fi
           if [[ "$PACKAGE_CHANNEL" == "stable" ]] &&
              [[ "${{ github.event_name }}" != "workflow_dispatch" ]] &&
              [[ "$RELEASE_TAG" != "v${RELEASE_VERSION}" ]]; then
@@ -133,6 +141,7 @@ jobs:
           python ../../tools/release/stage_model_catalog_package.py
           python ../../tools/release/stage_model_catalog_package.py --check
           python -m build
+          python -m build ../model-runtime --outdir dist
           twine check dist/*
           REQUIRED_FILES=(
             "cli/templates/config.template.yaml"
@@ -141,7 +150,7 @@ jobs:
             "cli/templates/grafana.serve.ini"
             "cli/templates/prometheus.serve.yaml"
           )
-          WHEEL_PATH="$(find dist -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          WHEEL_PATH="$(find dist -maxdepth 1 -type f -name 'vllm_sr-*.whl' -print -quit)"
           if [[ -z "$WHEEL_PATH" ]]; then
             echo "::error::Package build produced no wheel"
             exit 1
@@ -189,7 +198,13 @@ jobs:
 
       - name: Verify installed wheel capabilities
         if: inputs.channel == 'dev'
-        run: python tools/ci/check_cli_wheel.py src/vllm-sr/dist/*.whl
+        run: python tools/ci/check_cli_wheel.py src/vllm-sr/dist/vllm_sr-*.whl
+
+      - name: Verify installed runtime wheel
+        if: inputs.channel == 'dev'
+        run: |
+          python tools/ci/check_runtime_wheel.py \
+            src/vllm-sr/dist/vllm_srun-*.whl src/vllm-sr/dist/vllm_sr-*.whl
 
       - uses: actions/upload-artifact@v4
         with:
@@ -202,6 +217,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && !inputs.build-only
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -214,7 +232,18 @@ jobs:
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        run: twine upload --repository testpypi dist/*.whl dist/*.tar.gz
+        run: twine upload --repository testpypi dist/vllm_sr-*.whl dist/vllm_sr-*.tar.gz
+
+      - name: Stage the runtime distribution
+        run: |
+          mkdir runtime-dist
+          mv dist/vllm_srun-*.whl dist/vllm_srun-*.tar.gz runtime-dist/
+
+      - name: Publish explicit test runtime package
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: runtime-dist/
 
   pypi:
     name: Publish to PyPI
@@ -228,6 +257,9 @@ jobs:
         || (inputs.channel == 'stable' && startsWith(github.ref, 'refs/tags/v')))
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -250,8 +282,22 @@ jobs:
         run: python tools/ci/package_contract.py --verify-dist --output dist --mode "$MODE" --tag "$TAG"
       - run: pip install twine
 
+      - name: Stage the runtime distribution
+        run: |
+          mkdir runtime-dist
+          mv dist/vllm_srun-*.whl dist/vllm_srun-*.tar.gz runtime-dist/
+
+      # vllm-srun goes first, so a published vllm-sr[runtime] never pins a
+      # runtime that is missing. It uses PyPI trusted publishing (OIDC): the
+      # project's publisher names this repository and pypi-publish.yml.
+      - name: Publish verified runtime package
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: runtime-dist/
+          skip-existing: true
+
       - name: Publish verified package
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/*.whl dist/*.tar.gz --skip-existing
+        run: twine upload dist/vllm_sr-*.whl dist/vllm_sr-*.tar.gz --skip-existing

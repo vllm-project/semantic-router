@@ -118,6 +118,38 @@ class ReleaseVersionContractTests(unittest.TestCase):
                 self.assertEqual(len(errors), 1)
                 self.assertIn("stable vMAJOR.MINOR.PATCH", errors[0])
 
+    def test_runtime_package_shares_the_cli_version_and_extra_pin(self) -> None:
+        contract = release_contract.collect_contract()
+        self.assertEqual(contract.runtime_version, contract.pyproject_version)
+        self.assertEqual(
+            contract.runtime_requirements,
+            (f"vllm-srun=={contract.pyproject_version}",),
+        )
+        errors: list[str] = []
+        release_contract.validate_runtime_package(
+            errors, contract, contract.pyproject_version
+        )
+        self.assertEqual(errors, [])
+
+        for runtime_version, requirements, expected in (
+            ("0.2.0", ("vllm-srun==9.8.7",), "vllm-srun version has '0.2.0'"),
+            ("9.8.7", ("vllm-srun>=9.8",), "'runtime' extra has 'vllm-srun>=9.8'"),
+            ("9.8.7", (), "'runtime' extra has ''"),
+        ):
+            with self.subTest(runtime=runtime_version, requirements=requirements):
+                errors = []
+                drifted = release_contract.ReleaseContract(
+                    **{
+                        **contract.__dict__,
+                        "runtime_version": runtime_version,
+                        "runtime_requirements": requirements,
+                    }
+                )
+                with contextlib.redirect_stdout(io.StringIO()):
+                    release_contract.validate_runtime_package(errors, drifted, "9.8.7")
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn(expected, errors[0])
+
     def test_simulator_docs_use_an_independent_published_version(self) -> None:
         errors: list[str] = []
         release_contract.validate_sim_upgrade_docs(errors)

@@ -34,6 +34,7 @@ dependencies = [
 
 [project.optional-dependencies]
 bench = ["pyarrow>=18.0.0", "tomli>=2.0.1; python_version < '3.11'"]
+runtime = ["vllm-srun==0.4.0"]
 dev = [
     "pytest>=8.4.1",
     "black>=22.0.0",
@@ -47,6 +48,11 @@ Homepage = "https://github.com/vllm-project/vllm-semantic-router"
 Documentation = "https://github.com/vllm-project/vllm-semantic-router/blob/main/README.md"
 Repository = "https://github.com/vllm-project/vllm-semantic-router"
 Issues = "https://github.com/vllm-project/vllm-semantic-router/issues"
+
+# uv locks the runtime extra against the runtime in this checkout, whose
+# pinned version is published only with the next release; wheels keep the pin.
+[tool.uv.sources]
+vllm-srun = { path = "../model-runtime", editable = true }
 
 [tool.setuptools]
 packages = ["cli", "cli.commands", "cli.templates", "cli.model_assets", "cli.sr_bench", "cli.config_schema"]

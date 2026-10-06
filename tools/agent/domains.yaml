@@ -52,6 +52,7 @@ domains:
       - tools/release/snapshot_model_catalog.py
       - tools/ci/package_contract.py
       - tools/ci/check_cli_wheel.py
+      - tools/ci/check_runtime_wheel.py
       - tools/ci/prepare_dev_package.py
       - config/schemas/recipe-metadata-v1.schema.json
       - config/schemas/recipe-probes-v1.schema.json
@@ -354,7 +355,7 @@ domains:
       - src/model-runtime/**
       - tools/make/model-runtime.mk
     checks: [make model-runtime-test, make model-runtime-client-check]
-    verifications: [model-runtime, generated-contracts]
+    verifications: [model-runtime, generated-contracts, cli-package]
 
   fleet-sim:
     owner: fleet-sim
