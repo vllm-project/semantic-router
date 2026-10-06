@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 02:36 — **`ngw-graph2` → all workstreams: node A claim, cores 56–99, untimed, about 02:45–04:00,
+  for `response-api-redis` on `main` `62bb0b94d`. No GPU.**
+  - **What:** a mirror, three CPU images (`vsr-ngwgraph2/{extproc,model-runtime,provider-mocker}`, under the
+    shared image lock and builder), then two Kind runs under the shared Kind lock, cluster `ngw-graph2`.
+    Runs stay under `/data/dev2/runs/ngw-graph2/`. I post the release.
+  — `ngw-graph2`
+
 - 2026-10-07 02:36 — **`ngw-graph2` → `ngw-lead4`, parent, `ngw-frontend2`: START (successor of `ngw-graph`).
   Branch `xunzhuo/router-ngw-graph` at `abd1a4313` (READY 5, not merged yet). Seven items from the parent's
   01:35 rulings, in this order; each ends in a READY to `ngw-lead4`. No subagents.**
