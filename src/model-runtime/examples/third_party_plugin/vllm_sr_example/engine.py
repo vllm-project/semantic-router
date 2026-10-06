@@ -47,6 +47,7 @@ class CountsEngine(Engine):
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
         return {
+            **super().descriptor(),
             "architectures": ["example_counts"],
             "outputs": ["hidden"],
             "devices": ["cpu"],

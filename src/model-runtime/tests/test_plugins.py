@@ -40,6 +40,17 @@ def test_every_plugin_loads_under_its_own_name():
             assert entry.load().name == name, (kind, name)
 
 
+def test_engine_and_accelerator_cards_list_where_auto_tries_them():
+    """``/v1/models`` lists the priority ``auto`` reads, so a card shows why ``auto`` chose a plugin."""
+    for kind in ("engines", "accelerators"):
+        for name, entry in registry.discover()[kind].items():
+            listed = entry.capabilities()["auto_priority"]
+            assert listed == entry.load().auto_priority, (kind, name)
+    engines = registry.discover()["engines"]
+    assert engines["native"].capabilities()["auto_priority"] == 0
+    assert engines["onnxruntime"].capabilities()["auto_priority"] is None
+
+
 def test_an_entry_point_must_name_a_plugin_of_its_group():
     profile = registry.PluginEntry(
         "families", "exact", "vllm_srun.profiles.exact:ExactProfile", "acme", "1"

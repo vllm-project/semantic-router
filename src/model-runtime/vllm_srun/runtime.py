@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from .accel.autotune import KernelChoices, freeze_autotune
-from .config import ModelConfig, ServeConfig
+from .config import ONNX_RUNTIME_SPIN_COUNT, ModelConfig, ServeConfig
 from .errors import (
     PackageError,
     RuntimeServiceError,
@@ -328,6 +328,19 @@ class ServedModel:
             for served in process.served_models()
             if served is not config and device_kind(served.device) == "cpu"
         )
+        if (
+            self.engine == "onnxruntime"
+            and placement.device.accelerator == "cpu"
+            and neighbors - {self.engine}
+            and "GOMP_SPINCOUNT" not in os.environ
+        ):
+            log.warning(
+                "%s runs ONNX Runtime beside other CPU models on libgomp's default spin "
+                "count, which slows its runs after their forwards; name engine: onnxruntime "
+                "in its configuration or set GOMP_SPINCOUNT=%s",
+                self.label,
+                ONNX_RUNTIME_SPIN_COUNT,
+            )
         engine_options = default.engine_options(
             EngineOptions(threads=process.threads, cpu_neighbors=neighbors)
         )
@@ -340,9 +353,7 @@ class ServedModel:
             return placement.accelerator.execute(placement.device, work)
 
         engine_model = execute(
-            lambda: engine.load(
-                spec, placement.accelerator, placement.device, engine_options
-            )
+            engine.read(spec, placement.accelerator, placement.device, engine_options)
         )
         try:
             model = execute(lambda: family.load(package, spec, engine_model))
@@ -755,9 +766,10 @@ class Runtime:
         at once. Any other failure (no device with enough free memory, a
         download, a busy device) is retried ``load_attempts`` times in all,
         waiting ``load_retry_seconds`` and doubling up to 300 s, while the
-        model reports ``loading``; the other models serve between attempts,
-        but each attempt is device work, so the models of its device wait for
-        it. Every pass ends with ``freeze_heap``.
+        model reports ``loading``. The other models of its device keep serving
+        while an attempt reads the weights (``Engine.read``) and wait for its
+        device work: the copy to the device, the family's load and the golden
+        check. Every pass ends with ``freeze_heap``.
         """
         if self.config.autotune_cache:
             freeze_autotune(self.config.autotune_cache)

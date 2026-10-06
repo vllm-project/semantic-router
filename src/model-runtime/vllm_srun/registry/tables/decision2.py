@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .common import ORG, BuiltinModel, with_recorded
 
-DECISION2_MODELS = (
+DECISION2_MODELS: tuple[BuiltinModel, ...] = (
     BuiltinModel(
         repo_id=f"{ORG}/Decision-2.0-Kai-0.6B",
         revision="cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764",

@@ -16,6 +16,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -197,6 +198,14 @@ class BackboneSpec:
     weight_prefix: str = ""
     lora: LoRASpec | None = None
     branches: Mapping[str, BranchSpec] = field(default_factory=dict)
+
+    @property
+    def requires(self) -> Mapping[str, tuple[str, ...]]:
+        """The device capabilities the architecture needs, per accelerator (``ModelSpec.requires``).
+
+        Gated DeltaNet layers (Qwen3.5) solve triangular systems; on a CPU that needs LAPACK.
+        """
+        return {"cpu": ("lapack",)} if self.model_type == "qwen3_5_text" else {}
 
 
 @dataclass(frozen=True)
@@ -448,12 +457,32 @@ class Engine(ABC):
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
-        """Capability descriptor listed in ``/v1/models``: architectures, outputs, devices."""
-        return {}
+        """Capability descriptor listed in ``/v1/models``: ``auto_priority``, then architectures, outputs, devices.
+
+        An engine's own descriptor extends this one, so every card shows where
+        ``auto`` tries the engine.
+        """
+        return {"auto_priority": cls.auto_priority}
 
     @abstractmethod
     def supports(self, spec: ModelSpec, device: DeviceInfo) -> str | None:
         """None when the engine can run ``spec`` on ``device``, else the reason it cannot."""
+
+    def read(
+        self,
+        spec: ModelSpec,
+        accelerator: Accelerator,
+        device: DeviceInfo,
+        options: EngineOptions,
+    ) -> Callable[[], EngineModel]:
+        """The host work of a load (reading the weights), then the device work that finishes it.
+
+        The runtime runs this before it takes the device (``Accelerator.execute``),
+        so the other models of the device keep answering while the weights are
+        read, and runs the returned callable as device work. By default all of
+        ``load`` is device work.
+        """
+        return partial(self.load, spec, accelerator, device, options)
 
     @abstractmethod
     def load(

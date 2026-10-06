@@ -185,6 +185,7 @@ class TokenHead(TaskHead):
         if options.overflow == "window":
             if tokens > options.max_tokens:
                 raise InputTooLongError(tokens, options.max_tokens)
+            assert options.window is not None
             windows = plan_windows(len(encoded.content), self.envelope, *options.window)
             usage["windows"] = len(windows)
             ids = [encoded.framed(w.start, w.end) for w in windows]

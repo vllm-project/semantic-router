@@ -46,4 +46,5 @@ class SpanHead(nn.Module):
             mlp = self.v(
                 F.gelu(self.M(word)[:, None, :] + self.N(label)[None, :, :])
             ).squeeze(-1)
-            return bilinear + mlp
+            scores: torch.Tensor = bilinear + mlp
+            return scores

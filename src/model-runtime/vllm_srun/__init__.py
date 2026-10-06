@@ -12,10 +12,8 @@ import re
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-# libgomp reads this when PyTorch loads it, so it must be set before any
-# submodule imports torch. A short spin keeps PyTorch's idle OpenMP threads off
-# the cores an ONNX Runtime run takes right after a native forward.
-os.environ.setdefault("GOMP_SPINCOUNT", "10000")
+# libgomp's spin count is not a package default: it depends on what the
+# process serves (config.spin_count).
 # PyTorch's CPU allocator reads this when it loads. Models copy their weights
 # into process memory, and on 4 KiB pages where those land physically differs
 # from process to process: the same CPU forward ran about a quarter slower in

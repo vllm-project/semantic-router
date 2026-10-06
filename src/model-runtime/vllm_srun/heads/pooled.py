@@ -176,7 +176,7 @@ class EmbeddingSurface:
 
     def plan(
         self, request: SurfaceRequest, identity: str, max_input_tokens: int
-    ) -> SurfacePlan:
+    ) -> SurfacePlan[Item]:
         """Tokenize every input (with its ``input_type`` prompt) within the request's budget."""
         parsed = embedding.parse_request(request, self.info, max_input_tokens)
         head = self.heads[parsed.layer]
@@ -198,7 +198,7 @@ class EmbeddingSurface:
         )
         return embedding.plan(request, parsed, entries, rep)
 
-    def finish(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:
+    def finish(self, plan: SurfacePlan[Item], results: Any) -> dict[str, Any]:
         """The response, each vector the request's Matryoshka view of its pooled vector."""
         dimension = plan.state.request.dimension
         normalize = self.layout.normalize

@@ -126,9 +126,17 @@ def test_models_describe_both_models_and_the_plugins(client):
         "surfaces": ["classify", "embeddings", "rerank"],
         "formats": ["vllm-sr-example/1"],
     }
-    assert plugins[("vllm_srun.engines", "example_counts")]["capabilities"][
-        "outputs"
-    ] == ["hidden"]
+    engines = {
+        name: entry["capabilities"]
+        for (group, name), entry in plugins.items()
+        if group == "vllm_srun.engines"
+    }
+    assert engines["example_counts"]["outputs"] == ["hidden"]
+    assert {name: card["auto_priority"] for name, card in engines.items()} == {
+        "example_counts": None,
+        "native": 0,
+        "onnxruntime": None,
+    }
     health = client.get("/health").json()
     check("Health", health)
     assert health["status"] == "ready" and set(health["models"]) == {"keywords", "kai"}

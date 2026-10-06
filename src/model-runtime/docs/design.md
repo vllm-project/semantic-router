@@ -180,8 +180,10 @@ so the runtime has one discovery path.
 
 Every plugin class has a capability descriptor (`descriptor()`): a family's
 surfaces and package formats, an engine's architectures and outputs, an
-accelerator's validation status, a profile's numerics. `/v1/models` lists
-each active plugin with its distribution, version and descriptor.
+accelerator's validation status, a profile's numerics; engines and
+accelerators also list their `auto_priority`. `/v1/models` lists each active
+plugin with its distribution, version and descriptor, so a card shows why
+`auto` chose its engine and device.
 
 Everything else the runtime needs from a plugin is declared on its class, so
 no central list names a built-in: a family names its table of pinned models
@@ -237,7 +239,8 @@ then answers a repeated item from the model's result cache without a forward.
 `Results` are one value per item or `DEADLINE` (the `Expired` instance) for an
 expired item or plan. Results are shared with the cache, so `finish_surface`
 never mutates them. `mypy --strict` checks the plugin interfaces, the
-scheduler, the profiles and the runtime core in `make model-runtime-test`.
+scheduler, the profiles, the runtime core, the API, the registry, the shared
+heads and supervision in `make model-runtime-test`.
 
 Decision families subclass `DecisionModel` (`plugins/decisions.py`), the
 decisions mixin: it serves `/v1/decisions` through the family's `plan` (render
@@ -261,6 +264,7 @@ never parses a package format.
 class Engine(ABC):
     name: ClassVar[str]                     # "native" | "onnxruntime"
     def supports(self, spec: ModelSpec, device: DeviceInfo) -> str | None: ...
+    def read(self, spec, accelerator, device, options) -> Callable[[], EngineModel]: ...  # host work; returns the device work
     def load(self, spec, accelerator, device, options) -> EngineModel: ...
 
 class EngineModel(ABC):
@@ -276,6 +280,16 @@ returns hidden states by layer or named graph outputs. Readouts stay in the
 family: an engine that returns hidden states (native) and one that returns
 graph outputs with heads baked in (ONNX graphs as published) serve the same
 family, and the family records which one it used.
+
+A load is two steps. `read` does the host work and returns the device work
+that finishes the load; the runtime runs the first before it takes the
+device and the second as device work (section 10.2). The native engine reads
+the checkpoint into host memory there, in the dtypes the device holds, and
+leaves the copy to the device and the model's setup as device work. On the
+CPU it reads as device work too: there the host copy is the model's weights,
+and the CPU's torch work runs on its device thread (section 9). An engine
+without its own `read` (`onnxruntime`, and third-party engines by default)
+loads as device work.
 
 The engine defaults to `auto`: a built-in model's preferred engine for the
 placed device class (`BuiltinModel.engines`, set where an interleaved
@@ -757,8 +771,10 @@ third-party plugin by default, serves only when named) and takes the first
 available device with enough free memory. The memory estimate is the weight
 bytes under the dtype policy plus the activation bound; `--memory-budget`
 caps it per model. A model names the device capabilities it requires per
-accelerator (`ModelSpec.requires`), and placement refuses a device whose
-accelerator does not report one, before any weights load. The Qwen3.5
+accelerator (`ModelSpec.requires`; a backbone architecture declares its own
+once, in `BackboneSpec.requires`, and the families pass it on), and placement
+refuses a device whose accelerator does not report one, before any weights
+load. The Qwen3.5
 decoders require `lapack` on the CPU, since their gated-delta kernel solves
 triangular systems there: a PyTorch built without LAPACK (the ROCm image's)
 refuses them with that cause and the fix (a PyTorch with LAPACK, such as the
@@ -788,10 +804,12 @@ to load releases its worker and device memory. A package or golden-answer
 failure is final; any other load failure (no device with enough free memory,
 a download, a busy device) is retried `--load-attempts` times in all (5),
 after `--load-retry-seconds` (5 s) doubling up to 300 s, while the model
-reports `loading` with the reason. The others serve between its attempts, not
-during one: an attempt, like the first load, runs as device work (section 9),
-so the other models of its GPU, or those on the CPU's device thread, wait for
-the whole attempt, reading the weights from disk included.
+reports `loading` with the reason. An attempt, like the first load, reads the
+weights before it takes the device (`Engine.read`, section 5.2), so the other
+models of its GPU keep answering meanwhile; they wait only for its device
+work (section 9): the copy to the device, the family's load and each golden
+batch. On the CPU's device thread the native engine's read is device work
+too, so the other CPU models of the process wait for it.
 
 ### 10.3 Router-managed lifecycle
 
@@ -891,9 +909,11 @@ the devices of the available accelerators (`devices`) and the one
 accelerator in `auto_priority` order); the router reads `auto` before it
 groups its processes (section 13.4).
 
-Importing `vllm_srun` sets five environment defaults:
-`GOMP_SPINCOUNT`, `THP_MEM_ALLOC_ENABLE=1`, `ONEDNN_PRIMITIVE_CACHE_CAPACITY`,
-and MIOpen's `MIOPEN_FIND_MODE=FAST` with `MIOPEN_LOG_LEVEL=3`. MIOpen's
+Importing `vllm_srun` sets these environment defaults:
+`THP_MEM_ALLOC_ENABLE=1`, `ONEDNN_PRIMITIVE_CACHE_CAPACITY`, on x86_64
+`OPENBLAS_NUM_THREADS=1` (OpenBLAS's idle threads took the cores of the CPU
+device's OpenMP team after the runtime's small NumPy products), and MIOpen's
+`MIOPEN_FIND_MODE=FAST` with `MIOPEN_LOG_LEVEL=3`. MIOpen's
 default find mode times each new convolution shape's solvers, so cold
 processes picked different ones and answered differently; FAST never times.
 `THP_MEM_ALLOC_ENABLE` puts PyTorch's CPU allocations of 2 MiB or more on
@@ -903,6 +923,19 @@ and some processes ran the same CPU forward about a quarter slower
 (`decision1-performance.md`). They take effect only when
 PyTorch loads, and the plugin base layer imports PyTorch, so they cannot wait
 for `main`. A value the caller set is kept.
+
+libgomp's spin count depends on what a process serves, so `serve` chooses
+it from its models before anything imports PyTorch (`vllm-sr serve` runs the
+same `main`), and keeps a value the caller set. PyTorch's idle OpenMP threads
+spin that long after a native forward. Native CPU forwards run fastest on
+libgomp's default (300,000), while an ONNX Runtime run that follows on the
+same cores needs them asleep sooner, so a process with a model that names
+`engine: onnxruntime` on a `cpu` or `auto` device gets `GOMP_SPINCOUNT=10000`
+(`decision1-performance.md`, `embed-performance.md`). `engine: auto` counts
+as native: it tries `native` first, which runs every built-in model. A
+process that still serves ONNX Runtime beside other CPU models on the
+default (a third-party package only ONNX Runtime runs, or a runtime embedded
+in another program) logs a warning that names the fix.
 
 ## 13. Router integration
 

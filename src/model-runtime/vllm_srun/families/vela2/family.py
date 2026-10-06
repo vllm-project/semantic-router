@@ -54,8 +54,6 @@ LICENCES = {
         "components": [{"name": "backbone", "licence": "apache-2.0"}],
     },
 }
-# Gated DeltaNet layers (Qwen3.5) solve triangular systems; on a CPU that needs LAPACK.
-GATED_DELTA_REQUIRES = {"cpu": ("lapack",)}
 GOLDEN_STATE = {
     "request": "Hi, I'm Tom Baker (tom.baker@example.com). What is the maximum daily dose of paracetamol for an adult?",
     "source": "For adults, the maximum dose of paracetamol is 4 grams in 24 hours.",
@@ -196,9 +194,7 @@ class Vela2Family(ModelFamily):
             backbone=backbone,
             dtype=DtypePolicy(),
             max_input_tokens=details.max_input_tokens,
-            requires=(
-                GATED_DELTA_REQUIRES if backbone.model_type == "qwen3_5_text" else {}
-            ),
+            requires=backbone.requires,
         )
 
     def load(

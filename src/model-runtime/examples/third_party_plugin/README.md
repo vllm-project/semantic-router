@@ -51,7 +51,8 @@ vllm-srun serve /tmp/keywords --engine example_counts --device example_host \
    you ship them.
 2. Reuse a built-in engine through `ModelSpec`, or subclass `Engine` and
    `EngineModel` (`supports`, `load`, `forward` or `encode`); set
-   `auto_priority` if `--engine auto` may try it before the others.
+   `auto_priority` if `--engine auto` may try it before the others, and build
+   `descriptor()` on `super().descriptor()`, which lists it.
 3. For new hardware, subclass `Accelerator` (`available`, `devices`,
    `torch_device`, `kernels`); set `auto_priority` if `--device auto` may pick
    it. For a new batching policy, subclass `Profile` (`plan`, and `bind` for

@@ -17,11 +17,13 @@ from .config import (
     ModelConfig,
     ServeConfig,
     load_models_file,
+    spin_count,
     split_revision,
 )
 from .plugins import registry
 from .registry import builtin
 
+log = logging.getLogger("vllm_srun")
 SERVE_DEFAULTS = ServeConfig()
 MODEL_DEFAULTS = {field.name: field.default for field in fields(ModelConfig)}
 
@@ -301,6 +303,22 @@ def default_identity() -> None:
     )
 
 
+def choose_spin_count(config: ServeConfig) -> None:
+    """Set libgomp's spin count for the models this process serves (``spin_count``); a set value is kept.
+
+    libgomp reads it once, when PyTorch loads.
+    """
+    value = spin_count(config.served_models())
+    if value is None or "GOMP_SPINCOUNT" in os.environ:
+        return
+    if "torch" in sys.modules:
+        log.warning(
+            "PyTorch is already loaded, so GOMP_SPINCOUNT=%s takes effect only in a new process",
+            value,
+        )
+    os.environ["GOMP_SPINCOUNT"] = value
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     default_identity()
     args = build_parser().parse_args(argv)
@@ -309,9 +327,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             level=args.log_level.upper(),
             format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         )
+        config = config_from_args(args)
+        choose_spin_count(config)
         from .api.server import serve
 
-        serve(config_from_args(args))
+        serve(config)
         return 0
     if args.command == "models":
         for model in builtin.all_models():

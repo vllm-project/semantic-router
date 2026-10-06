@@ -476,6 +476,41 @@ stays available for a package that ships graphs: it matches the legacy ONNX
 Runtime execution on single texts (within 5 %) and beats it on batches, but
 it serves only the exits it has graphs for. Torch's OpenMP threads spin after
 a native forward and used to slow an ONNX Runtime run that followed in the
-same process (16 tokens: 13.0 → 19.8 ms); the runtime sets
-`GOMP_SPINCOUNT=10000` before torch loads, which removes that and leaves
-native unchanged.
+same process (16 tokens: 13.0 → 19.8 ms). `GOMP_SPINCOUNT=10000`, set before
+torch loads, removes that and leaves native unchanged. `vllm-srun serve` now
+sets it only for a process that serves an ONNX Runtime model on the CPU
+(design §12). Other processes keep libgomp's default, on which native CPU
+forwards run faster (`decision1-performance.md`).
+
+## CPU: ONNX Runtime beside native models, per-process spin count
+
+For #4611, at `8b92b620f`: `vllm-srun serve` serves Vela Embedding on
+`engine: onnxruntime` (the package's graphs) and Vela Domain on the native
+engine, over Unix sockets, with the result cache off. Node D, 16 cores with
+memory bound to NUMA node 0, and 10 interleaved rounds of fresh processes.
+"After" lets `serve` choose each process's spin count; "before" sets 10,000
+in every process (the old import default). Per round, length and pattern
+there are 30 samples. Each model is timed alone (50 ms after the last call)
+and right after the other model's call.
+
+- **One process for both models** (cores 16–31, 16 threads): `serve` picks
+  10,000 there too, so both conditions run the same spin.
+  - 23 of the 24 cells (p50 and p95, four patterns, 16 / 64 / 256 tokens) are
+    level.
+  - One reads worse: ONNX Runtime right after a native call at 256 tokens,
+    p50 +0.51 ms [+0.01, +1.01] on 60.2 ms. With the same spin on both sides
+    it is the one false positive the 24 intervals lead one to expect.
+- **Two processes on the same 16 cores** (48–63, 8 threads each, as the
+  router splits a CPU budget): the native process now runs libgomp's default.
+  - 22 of 24 cells are level.
+  - Two are worse, both ONNX Runtime right after a native forward in the
+    other process, at 16 tokens: p50 +0.40 ms [+0.02, +0.77] on 15.2 ms
+    (+2.6%) and p95 +0.78 ms [+0.16, +1.40] on 16.6 ms. The native process's
+    threads now spin longer on the cores the next ONNX Runtime run takes.
+  - At 64 and 256 tokens these patterns are level: p50 +0.48 [−0.37, +1.33]
+    and −0.14 [−1.17, +0.90].
+- **Where that applies:** no built-in model runs on ONNX Runtime by default
+  since #4619, and the router's images ship none. A deployment that runs an
+  ONNX Runtime model in its own process beside native CPU processes on shared
+  cores keeps the old timing by serving the models in one process, or by
+  setting `GOMP_SPINCOUNT=10000`, which `serve` keeps.

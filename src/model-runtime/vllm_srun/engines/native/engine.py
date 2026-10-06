@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
+from functools import partial
 from typing import Any
 
 import torch
@@ -459,6 +462,16 @@ class NativeEngineModel(EngineModel):
             torch.cuda.empty_cache()
 
 
+@dataclass
+class HostStacks:
+    """A backbone, its branches and towers loaded in host memory, in the dtypes the device holds them in."""
+
+    backbone: nn.Module
+    branches: dict[str, nn.Module]
+    towers: dict[str, nn.Module]
+    residency: dict[str, int] | None
+
+
 class NativeEngine(Engine):
     name = "native"
     auto_priority = 0
@@ -466,6 +479,7 @@ class NativeEngine(Engine):
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
         return {
+            **super().descriptor(),
             "architectures": sorted(models.ARCHITECTURES),
             "outputs": ["gathered", "hidden"],
             "encoder_layouts": ["padded", "packed"],
@@ -485,6 +499,24 @@ class NativeEngine(Engine):
             return f"{device.label} has no BF16 support"
         return None
 
+    def read(
+        self,
+        spec: ModelSpec,
+        accelerator: Accelerator,
+        device: DeviceInfo,
+        options: EngineOptions,
+    ) -> Callable[[], NativeEngineModel]:
+        """The checkpoint in host memory, in the dtypes the device holds; copying it there is the device work.
+
+        On the CPU the host copy is the model's weights, and every CPU torch
+        op of the process runs on the CPU's device thread (one OpenMP team),
+        so all of the load is device work there.
+        """
+        if device.accelerator == "cpu":
+            return partial(self.load, spec, accelerator, device, options)
+        stacks = self._host(spec, accelerator, device, options)
+        return partial(self._place, stacks, spec, accelerator, device, options)
+
     def load(
         self,
         spec: ModelSpec,
@@ -492,6 +524,16 @@ class NativeEngine(Engine):
         device: DeviceInfo,
         options: EngineOptions,
     ) -> NativeEngineModel:
+        stacks = self._host(spec, accelerator, device, options)
+        return self._place(stacks, spec, accelerator, device, options)
+
+    def _host(
+        self,
+        spec: ModelSpec,
+        accelerator: Accelerator,
+        device: DeviceInfo,
+        options: EngineOptions,
+    ) -> HostStacks:
         if options.threads:
             torch.set_num_threads(options.threads)
         backbone_spec = spec.backbone
@@ -533,20 +575,36 @@ class NativeEngine(Engine):
                 cast_parameters(module, getattr(torch, spec.dtype.gpu_weights))
             elif target.type != "cpu" and spec.dtype.bf16_resident:
                 residency = keep_linear_bf16(module)
+        return HostStacks(backbone, branches, towers, residency)
+
+    def _place(
+        self,
+        stacks: HostStacks,
+        spec: ModelSpec,
+        accelerator: Accelerator,
+        device: DeviceInfo,
+        options: EngineOptions,
+    ) -> NativeEngineModel:
+        target = accelerator.torch_device(device)
+        for module in (
+            stacks.backbone,
+            *stacks.branches.values(),
+            *stacks.towers.values(),
+        ):
             module.to(target).eval()
         kind = (
             spec.dtype.reduced_cpu if target.type == "cpu" else spec.dtype.reduced_gpu
         )
         return NativeEngineModel(
-            backbone,
+            stacks.backbone,
             accelerator,
             device,
             spec,
             options,
-            residency,
-            branches,
+            stacks.residency,
+            stacks.branches,
             kind if options.reduced_precision and spec.encoder else None,
-            towers,
+            stacks.towers,
         )
 
 
