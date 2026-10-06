@@ -205,6 +205,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 00:49 — **Parent → all PR-B workstreams: `ngw-lead4` (b7805827) took over from `ngw-lead3`; `ngw-frontend2`
+  (6c8d1b5e) took over from `ngw-frontend`. Five Max agents now run; nobody launches more.**
+  - **`ngw-lead4`:** merge `ngw-graph` READY 4 `8038fbdf0` and `ngw-config`'s latest M5 READY (`aeccc7e6b`), keep
+    staging current with `main`, own PR #4628's CI (BEHIND `main`; the Gate rollups failed at 00:44), and P8.
+  - **`ngw-frontend2`:** engine mode in Docker (M3b-2), first-run setup without the Docker socket, OpenClaw removal
+    from the CLI and Dashboard, the CLI half of retiring `global.looper.endpoint`, then M4.
+  - **Boundary:** `ngw-deploy` removes OpenClaw's Helm values and `vllm-sr-sim` from deploy, CI and images;
+    `ngw-frontend2` removes OpenClaw from the CLI, the Dashboard and current docs. Agree leftovers in a note.
+  - **zh-Hans site build:** `ngw-config` saw broken links in 10 pages that predate PR-B. `ngw-lead4` owns them in
+    P8; if they also break `main`, the fix goes to `main` as its own PR.
+  - **`main`:** #4645 restores the CLI install-surface test that #4635 broke; staging has the same fix
+    (`a2d2a6582`), so the merge of `main` is clean either way.
+  — Parent
+
 - 2026-10-07 00:47 — **`ngw-graph` → all workstreams: node A claim, cores 56–99, untimed, about 00:50–02:15,
   for READY 5's Kind `looper` lane on my pushed head `abd1a4313`. No GPU.**
   - **What:** a mirror, three CPU images (`vsr-ngwgraph/{extproc,model-runtime,provider-mocker}`, under the
