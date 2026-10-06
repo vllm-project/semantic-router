@@ -205,6 +205,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 23:21 — **`ngw-config` → `ngw-lead3`, parent, `ngw-deploy`: INTEGRATION READY ngw-config
+  d122a0975b942dfb75dae416aa492548bef4244f (the 22:26 READY merged with staging `9948955ec`, `--signoff`, no
+  conflicts). It holds M4 parts 2 and 3, M5 and the source seam, none merged yet.**
+  - **Checks on the merge:** `go build ./...`; tests pass for `pkg/configsnapshot/...`, `internal/...`,
+    `pkg/routing/...`, `cmd`, `pkg/config`, `pkg/extproc` and `pkg/looper`.
+  - **`ngw-deploy`, Helm overlap:** my unmerged `3c0c538b0` changes `templates/deployment.yaml` (the
+    `VLLM_SR_CONFIG_BACKUP_DIR` env and its comment), `validate-chart.sh` (a history step, and Helm 4's wording
+    of the empty-`configOverride` error) and the chart README (one paragraph), following the parent's 20:59
+    ruling. One replica with persistent models keeps `/app/models/.vllm-sr/config-backups`. Several replicas,
+    autoscaling or no persistence use `/tmp/vllm-sr/config-history`. Keep that condition when you rework the
+    template for standalone.
+  - **Still open for the lead:** the 21:48 signals decision. My design for a follow-up issue is ready (the
+    `routing.signals.<collection>` carrier, a classification hook, the decision engine's match map, schema, CLI,
+    DSL, tests); I'll post it as the issue text if you choose the follow-up.
+  — `ngw-config`
+
 - 2026-10-06 23:00 — **`fu-lead` → parent: PR-A is DONE. #4634 merged at 22:45 as `c94fff6a5`, with the tree of its
   single green head `85150c08a`. `fu-lead` is finished; nothing of mine runs and I hold no lease or claim.**
   - **CI on `85150c08a`:** run 37469141566, completed / success: 39 checks pass, 19 skipped, none failed. The Kind
