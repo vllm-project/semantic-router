@@ -21,7 +21,7 @@ from same_run_harness import (
     row_id_for,
     run_single_stream,
 )
-from same_run_pair import refuse_cross_host
+from same_run_pair import refuse_cross_host, refuse_mismatched_shape
 
 
 def _make_qsl(n: int) -> list[dict]:
@@ -44,6 +44,54 @@ def _fast_classify(text: str) -> dict:
         "forward_ns": 1_000_000,
         "e2e_ns": 1_000_000,
         "seq_len": len(text.split()),
+    }
+
+
+def _forward_stats(p99_ms: float) -> dict:
+    """A run.forward-shaped dict with only p99_ms meaningfully set."""
+    return {
+        "n": 1,
+        "mean_ms": p99_ms,
+        "p50_ms": p99_ms,
+        "p90_ms": p99_ms,
+        "p95_ms": p99_ms,
+        "p99_ms": p99_ms,
+        "max_ms": p99_ms,
+        "min_ms": p99_ms,
+    }
+
+
+def _run_fixture(
+    row_ids: list[str], forward_p99_ms: float, max_length: int = 256
+) -> dict:
+    host = {"cpu_model": "Intel", "core_count": 8, "ram_gb": 15.4}
+    return {
+        "host": host,
+        "model": "stub-model",
+        "run": {
+            "binding": "hf",
+            "max_length": max_length,
+            "batch_size": 1,
+            "peak_rss_mb": 100.0,
+            "cpu_s": 1.0,
+            "forward": _forward_stats(forward_p99_ms),
+        },
+        "records": [
+            {
+                "row_id": row_id,
+                "qsl_index": i,
+                "input_hash": row_id,
+                "label": "AR",
+                "output": "AR",
+                # Deliberately identical across runs: first-pass latency is
+                # fast in both, so a buggy delta computed from records[]
+                # alone would see no difference even though run.forward.p99_ms
+                # (built from every pass) diverges sharply below.
+                "forward_ms": 10.0,
+                "e2e_ms": 10.0,
+            }
+            for i, row_id in enumerate(row_ids)
+        ],
     }
 
 
@@ -116,6 +164,76 @@ class HostPairTests(unittest.TestCase):
             self.assertNotEqual(proc.returncode, 0)
             self.assertIn("refusing to pair cross-host", proc.stderr + proc.stdout)
             self.assertFalse(out_path.exists())
+
+
+class PairShapeTests(unittest.TestCase):
+    """Regression: same_run_pair must reject a non-fixed-shape comparison.
+
+    Before this fix, pairing silently intersected row IDs and ignored
+    run-setting mismatches, so a baseline with two rows at max_length=256
+    "successfully" paired with a one-row candidate at max_length=128.
+    """
+
+    def test_same_shape_pairs(self) -> None:
+        baseline = _run_fixture(["r1", "r2"], forward_p99_ms=10.0)
+        candidate = _run_fixture(["r1", "r2"], forward_p99_ms=10.0)
+        refuse_mismatched_shape(baseline, candidate)  # must not raise
+
+    def test_mismatched_row_coverage_refused(self) -> None:
+        baseline = _run_fixture(["r1", "r2"], forward_p99_ms=10.0)
+        candidate = _run_fixture(["r1"], forward_p99_ms=10.0)
+        with self.assertRaises(SystemExit) as ctx:
+            refuse_mismatched_shape(baseline, candidate)
+        self.assertIn("different row coverage", str(ctx.exception))
+
+    def test_mismatched_max_length_refused(self) -> None:
+        baseline = _run_fixture(["r1"], forward_p99_ms=10.0, max_length=256)
+        candidate = _run_fixture(["r1"], forward_p99_ms=10.0, max_length=128)
+        with self.assertRaises(SystemExit) as ctx:
+            refuse_mismatched_shape(baseline, candidate)
+        self.assertIn("different settings", str(ctx.exception))
+
+
+class PairLatencyTests(unittest.TestCase):
+    """Regression: paired latency deltas must use the full measurement
+    window (run.forward), not the first-pass-only records[] join.
+
+    Both fixtures below report identical 10 ms first-pass forward_ms, but
+    the candidate's run.forward.p99_ms is 99 ms because of a slow later
+    pass. Before this fix, delta_forward_p99_ms was computed by
+    recomputing percentiles from the paired records -- 10 - 10 = 0 -- and
+    completely missed the real +89 ms regression.
+    """
+
+    def test_delta_uses_full_measurement_window(self) -> None:
+        here = Path(__file__).resolve().parent
+        baseline = _run_fixture(["r1"], forward_p99_ms=10.0)
+        candidate = _run_fixture(["r1"], forward_p99_ms=99.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            base_path = Path(tmp) / "b.json"
+            cand_path = Path(tmp) / "c.json"
+            out_path = Path(tmp) / "p.json"
+            base_path.write_text(json.dumps(baseline))
+            cand_path.write_text(json.dumps(candidate))
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(here / "same_run_pair.py"),
+                    "--baseline",
+                    str(base_path),
+                    "--candidate",
+                    str(cand_path),
+                    "--output",
+                    str(out_path),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            report = json.loads(out_path.read_text())
+            self.assertEqual(report["paired"]["delta_forward_p99_ms"], 89.0)
 
 
 class MultiPassTests(unittest.TestCase):

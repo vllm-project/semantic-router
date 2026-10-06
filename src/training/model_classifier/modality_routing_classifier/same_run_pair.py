@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
 """Join two single-stream run JSONs on row_id (#3856).
 
-Refuses to pair runs whose host identity differs (cpu_model, core_count, ram_gb).
-That mismatch is the failure mode that produces a confident wrong Δ p99.
+Refuses to pair runs whose host identity differs (cpu_model, core_count, ram_gb),
+whose QSL row coverage differs, or whose run settings (max_length, batch_size)
+differ. Each of those mismatches is a failure mode that produces a confident
+wrong Δ p99 or a comparison between runs that were never apples-to-apples.
+
+records[] holds first-pass rows only (see same_run_harness.run_single_stream).
+Latency deltas are therefore computed from each run's own run.forward/run.e2e
+summaries, which are built from every measured pass, not from records[] --
+recomputing percentiles from the paired, first-pass-only records silently
+drops every later-pass sample and under/over-states the real delta.
 
 Routing agreement is reported as a pairing diagnostic. Quality metrics stay
 with the #3194 contract; this script does not emit a pooled accuracy.
@@ -15,7 +23,9 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from same_run_harness import host_identity, percentile, summarize
+from same_run_harness import host_identity
+
+RUN_SHAPE_KEYS = ("max_length", "batch_size")
 
 
 def output_of(record: dict) -> str:
@@ -46,6 +56,34 @@ def refuse_cross_host(baseline: dict, candidate: dict) -> None:
         )
 
 
+def refuse_mismatched_shape(baseline: dict, candidate: dict) -> None:
+    """Refuse runs that were never a same-row, fixed-shape comparison.
+
+    A row-ID intersection silently accepts a candidate that only covers a
+    subset of the baseline's QSL, or one run at a different max_length --
+    that is a different experiment, not a same-run pairing.
+    """
+    baseline_rows = {row["row_id"] for row in baseline["records"]}
+    candidate_rows = {row["row_id"] for row in candidate["records"]}
+    if baseline_rows != candidate_rows:
+        raise SystemExit(
+            "refusing to pair runs with different row coverage "
+            f"(baseline_rows={len(baseline_rows)}, candidate_rows={len(candidate_rows)}, "
+            f"only_in_baseline={len(baseline_rows - candidate_rows)}, "
+            f"only_in_candidate={len(candidate_rows - baseline_rows)})"
+        )
+
+    baseline_run = baseline.get("run") or {}
+    candidate_run = candidate.get("run") or {}
+    mismatched = {
+        key: (baseline_run.get(key), candidate_run.get(key))
+        for key in RUN_SHAPE_KEYS
+        if baseline_run.get(key) != candidate_run.get(key)
+    }
+    if mismatched:
+        raise SystemExit(f"refusing to pair runs with different settings: {mismatched}")
+
+
 def main() -> None:
     here = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(
@@ -63,6 +101,7 @@ def main() -> None:
     baseline = json.loads(args.baseline.read_text())
     candidate = json.loads(args.candidate.read_text())
     refuse_cross_host(baseline, candidate)
+    refuse_mismatched_shape(baseline, candidate)
 
     by_id = {row["row_id"]: row for row in candidate["records"]}
     paired = []
@@ -104,8 +143,6 @@ def main() -> None:
         )
 
     n = len(paired)
-    base_fwd = [r["baseline_forward_ms"] for r in paired]
-    cand_fwd = [r["candidate_forward_ms"] for r in paired]
     report = {
         "issue": "#3856",
         "scenario": "single-stream-paired",
@@ -139,12 +176,15 @@ def main() -> None:
                 "candidate_matched_gold_baseline_wrong": candidate_gold,
                 "both_wrong_different_labels": both_wrong,
             },
-            "baseline_forward": summarize(base_fwd),
-            "candidate_forward": summarize(cand_fwd),
-            "delta_forward_p99_ms": (
-                round(percentile(cand_fwd, 99) - percentile(base_fwd, 99), 3)
-                if n
-                else None
+            # Both summaries and the delta below come from each run's own
+            # run.forward stats (built from every measured pass), not from
+            # the first-pass-only records[] joined above.
+            "baseline_forward": baseline["run"]["forward"],
+            "candidate_forward": candidate["run"]["forward"],
+            "delta_forward_p99_ms": round(
+                candidate["run"]["forward"]["p99_ms"]
+                - baseline["run"]["forward"]["p99_ms"],
+                3,
             ),
             "delta_peak_rss_mb": round(
                 candidate["run"]["peak_rss_mb"] - baseline["run"]["peak_rss_mb"], 1
