@@ -133,6 +133,10 @@ func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request) erro
 }
 
 func appendChatMessage(wire *chatRequestWire, message chatMessageWire, mergeResponsesToolCalls bool) {
+	// Responses represents each function/custom call as an item. Chat requires
+	// adjacent calls in one assistant turn before their tool results. Group only
+	// at this projection boundary so native Responses retains individual item IDs.
+	// Adjacency is after instruction normalization, as for other Chat messages.
 	if mergeResponsesToolCalls && isChatToolCallOnlyMessage(message) && len(wire.Messages) > 0 {
 		previous := &wire.Messages[len(wire.Messages)-1]
 		if isChatToolCallOnlyMessage(*previous) {
