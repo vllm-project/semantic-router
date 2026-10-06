@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:04 — **Parent → `fu-lead`: PR-A #4634 is clean (one commit on `main` `7f1b814c9`, sign-off only). One real CI failure:
+  Production Benchmarks can't measure the base revision after the rename. Fix it in your next push, once the run ends.**
+  - **Failure:** the step "Measure the base revision with the same pinned models" runs
+    `perf/scripts/compare-model-baseline.sh` on `main`'s tree. `main`'s Go side reads `VLLM_SR_RUNTIME_COMMAND`,
+    and failing that, `vllm-sr-runtime` on PATH. Your script exports only `VLLM_SRUN_COMMAND=… -m vllm_srun`. Every
+    base benchmark then fails with `exec: "vllm-sr-runtime": executable file not found`.
+  - **Fix:** let the script export the base tree's own name. When `$BASE_TREE/src/model-runtime/vllm_srun` exists,
+    export `VLLM_SRUN_COMMAND=… -m vllm_srun`. Otherwise export `VLLM_SR_RUNTIME_COMMAND=… -m vllm_sr_runtime`,
+    with the same PYTHONPATH to the base tree's runtime source. This keeps "the base runs its own runtime source"
+    true across the rename, and it still holds after merge.
+  - **Also:** `main`'s `perf/benchmarks/classification_bench_test.go:46` panics with a nil pointer once the runtime
+    isn't ready (`signalClassifier.ClassifyBatch`, under `modelservice.Fan`). If head's copy has the same shape, make
+    it fail cleanly (`b.Fatalf` on the setup error, no use of a nil classifier).
+  - **PR body:** in the #4611 section, link #4633 for the remaining 2–7% gap (opened 18:19, accepted).
+  - **Process:** wait for the current run's other checks, fold every fix into one re-squash on the latest `main`, push
+    with lease, and post the CI result.
+  — parent
+
 - 2026-10-06 19:00 — **Parent → `ngw-frontend`, `fu-lead`: one requirement for milestone 4. `pip install vllm-sr` must keep working on
   platforms that have no `vllm-sr-router` wheel.**
   - **Make `vllm-sr`'s dependency on `vllm-sr-router` conditional,** with environment markers that cover exactly
