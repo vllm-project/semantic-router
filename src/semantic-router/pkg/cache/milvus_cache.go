@@ -34,7 +34,7 @@ type MilvusCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
-	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	embeddingModel      string // "mmbert" (default), "qwen3" or "multimodal"
 }
 
 // MilvusCacheOptions contains configuration parameters for Milvus cache initialization
@@ -268,6 +268,8 @@ func (c *MilvusCache) initializeCollection() error {
 func (c *MilvusCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
 	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
+
+func (c *MilvusCache) semanticEmbeddingProvider() embedding.Provider { return c.embeddingProvider }
 
 func (c *MilvusCache) embeddingDimension() int {
 	if c == nil || c.config == nil {

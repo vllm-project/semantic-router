@@ -45,9 +45,9 @@ global:
   model_catalog:
     deployments:
       shield:
-        artifact: models/Vela-1.0-Encoder-307M-Shield
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Shield
         revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
-        provider: candle
+        provider: model_runtime
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -61,7 +61,7 @@ global:
 		t.Fatal("recipe safety rule did not resolve the Shield deployment")
 	}
 	shield := GetModelByPath(velaShieldSelectionPath)
-	if bound.Deployment.Artifact != shield.LocalPath || bound.Deployment.Revision != shield.Revision || bound.Deployment.Provider != "candle" {
+	if bound.Deployment.Artifact != shield.RepoID || bound.Deployment.Revision != shield.Revision || bound.Deployment.Provider != ModelRuntimeProvider {
 		t.Fatalf("unexpected Shield deployment: %+v", bound.Deployment)
 	}
 	if bound.Binding.Contract != RemoteClassifierContractLabelDistribution || bound.Binding.Adapter != "modernbert" {

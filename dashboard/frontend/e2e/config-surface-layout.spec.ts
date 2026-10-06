@@ -79,7 +79,6 @@ const configResponse = {
       embeddings: {
         semantic: {
           mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
-          bert_model_path: 'models/mom-embedding-bert',
           use_cpu: true,
           embedding_config: {
             model_type: 'mmbert',
@@ -112,7 +111,6 @@ model_catalog:
   embeddings:
     semantic:
       mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
-      bert_model_path: models/mom-embedding-bert
       use_cpu: true
 `;
 

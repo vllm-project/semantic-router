@@ -2,7 +2,7 @@
 """
 Embedding generation for ML model selection training.
 
-Uses the SAME Qwen3-Embedding model that the router uses via Candle.
+Uses the SAME Qwen3-Embedding model that the router serves through its model runtime.
 This ensures training embeddings match inference embeddings exactly.
 
 The router uses: Qwen/Qwen3-Embedding-0.6B (1024-dim)
@@ -10,17 +10,27 @@ The router uses: Qwen/Qwen3-Embedding-0.6B (1024-dim)
 
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
-from tqdm import tqdm
+
+# Optional sentence-transformers import; the service only needs it when it
+# actually generates embeddings, not to start and serve health checks.
+try:
+    from sentence_transformers import SentenceTransformer
+
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
 
 
-# Default embedding model - MUST match router's Candle/Qwen3 model
-# Router uses: Qwen/Qwen3-Embedding-0.6B via Candle (1024-dim)
+# Default embedding model - MUST match the router's Qwen3 embedding model
+# Router uses: Qwen/Qwen3-Embedding-0.6B through the model runtime (1024-dim)
 # We use the same model via sentence-transformers for identical embeddings
 DEFAULT_MODEL = "Qwen/Qwen3-Embedding-0.6B"
+
+# Dimension the router-side contract expects; loading a model with a different
+# dimension only warns so alternative aliases stay usable for comparison.
+EXPECTED_ROUTER_DIM = 768
 
 # Model aliases - qwen3 is the default and matches the router
 EMBEDDING_MODELS = {
@@ -44,7 +54,7 @@ class EmbeddingGenerator:
     def __init__(
         self,
         model_name: str = DEFAULT_MODEL,
-        cache_dir: Optional[str] = None,
+        cache_dir: str | None = None,
         device: str = "cpu",
     ):
         """
@@ -59,9 +69,15 @@ class EmbeddingGenerator:
         if model_name in EMBEDDING_MODELS:
             model_name = EMBEDDING_MODELS[model_name]
 
+        if not SENTENCE_TRANSFORMERS_AVAILABLE:
+            raise RuntimeError(
+                "sentence-transformers is required for embedding generation. "
+                "Install with: pip install sentence-transformers"
+            )
+
         self.model_name = model_name
         print(f"Loading embedding model: {model_name}")
-        print(f"  (This is the SAME model the router uses via Candle)")
+        print("  (This is the SAME model the router serves through its model runtime)")
 
         # Qwen models require trust_remote_code=True
         is_qwen = "qwen" in model_name.lower()
@@ -75,12 +91,14 @@ class EmbeddingGenerator:
         self.dim = self.model.get_sentence_embedding_dimension()
         print(f"Embedding model loaded (dim={self.dim})")
 
-        if self.dim != 768:
-            print(f"  ⚠ Warning: Router expects 768-dim embeddings, got {self.dim}-dim")
+        if self.dim != EXPECTED_ROUTER_DIM:
+            print(
+                f"  ⚠ Warning: Router expects {EXPECTED_ROUTER_DIM}-dim embeddings, got {self.dim}-dim"
+            )
 
     def encode(
         self,
-        texts: List[str],
+        texts: list[str],
         batch_size: int = 32,
         show_progress: bool = True,
     ) -> np.ndarray:
@@ -110,12 +128,12 @@ class EmbeddingGenerator:
 
 
 def generate_embeddings_for_queries(
-    queries: List[str],
+    queries: list[str],
     model_name: str = DEFAULT_MODEL,
     batch_size: int = 32,
-    cache_dir: Optional[str] = None,
-    cache_file: Optional[str] = None,
-) -> Dict[str, np.ndarray]:
+    cache_dir: str | None = None,
+    cache_file: str | None = None,
+) -> dict[str, np.ndarray]:
     """
     Generate embeddings for a list of queries.
 
@@ -140,7 +158,7 @@ def generate_embeddings_for_queries(
     embeddings = generator.encode(queries, batch_size=batch_size)
 
     # Create mapping
-    result = {q: emb for q, emb in zip(queries, embeddings)}
+    result = dict(zip(queries, embeddings, strict=False))
 
     # Save cache
     if cache_file:

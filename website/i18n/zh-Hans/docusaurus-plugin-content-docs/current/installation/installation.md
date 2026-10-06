@@ -3,7 +3,7 @@ sidebar_position: 1
 title: 快速开始
 description: 安装 vLLM Semantic Router 并发送你的第一条已路由请求。
 translation:
-  source_commit: "12c2aa4feb5c5d40d90104d8b09cade1facf0bf5"
+  source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
   source_file: "docs/installation/installation.md"
   outdated: false
 ---
@@ -22,7 +22,7 @@ import {
 
 # 快速开始
 
-安装 vLLM Semantic Router，启动本地栈，并发送一条请求。
+安装 vLLM Semantic Router，发送第一条路由请求。
 
 ## 系统要求
 
@@ -92,6 +92,7 @@ curl http://localhost:8899/v1/chat/completions \
 
 ## 下一步
 
+- [接入 Agent Harness](agent-harness)
 - [选择部署方式](deployment-options)
 - [配置模型](model-configuration)
 - [配置路由](configuration)

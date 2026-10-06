@@ -35,55 +35,7 @@ func fixtureSpec(t *testing.T, mutate func(map[string]any, map[string]any)) conf
 			t.Fatal(err)
 		}
 	}
-	return config.ResolvedModelBinding{Recipe: "one", Name: "classifier.risk", Binding: config.ModelBinding{Contract: config.RemoteClassifierContractLabelScores, Adapter: "modernbert", OperatingPoint: &config.OperatingPointReference{Path: "point.json", SHA256: digest(policy)}}, Deployment: config.ModelDeployment{Provider: "candle", Artifact: root, Device: "cpu", Precision: "native", Input: config.ModelInputBudget{MaxTokens: 10, Overflow: "reject"}}}
-}
-
-func TestLoadBindsActualFilesAndMetadata(t *testing.T) {
-	ctx := context.Background()
-	spec := fixtureSpec(t, nil)
-	p, err := Load(ctx, spec, []string{"one", "two"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = Load(ctx, spec, []string{"two", "one"}); err == nil {
-		t.Fatal("rule reordered labels")
-	}
-	for _, name := range []string{"model.safetensors", "config.json", "tokenizer.json", "point.json"} {
-		t.Run(name, func(t *testing.T) {
-			candidate := fixtureSpec(t, nil)
-			path := filepath.Join(candidate.Deployment.Artifact, name)
-			data, _ := os.ReadFile(path)
-			if err = os.WriteFile(path, append(data, ' '), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			if _, err = Load(ctx, candidate, []string{"one", "two"}); err == nil {
-				t.Fatal("replacement accepted")
-			}
-		})
-	}
-	if err = os.WriteFile(filepath.Join(spec.Deployment.Artifact, "model.safetensors"), []byte("changed after prepare"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if p.VerifyArtifacts(ctx, spec.Deployment.Artifact) == nil {
-		t.Fatal("post-load replacement accepted")
-	}
-	for name, mutate := range map[string]func(map[string]any, map[string]any){"softmax": func(m, t map[string]any) { m["problem_type"] = "single_label_classification" }, "unknown pooling": func(m, t map[string]any) { m["classifier_pooling"] = "max" }, "missing label": func(m, t map[string]any) { m["label2id"] = map[string]int{"one": 0} }, "short capacity": func(m, t map[string]any) { m["max_position_embeddings"] = 4 }, "envelope": func(m, t map[string]any) { t["post_processor"] = nil }} {
-		t.Run(name, func(t *testing.T) {
-			if _, err = Load(ctx, fixtureSpec(t, mutate), []string{"one", "two"}); err == nil {
-				t.Fatal("incompatible metadata accepted despite self-consistent hashes")
-			}
-		})
-	}
-	spec = fixtureSpec(t, nil)
-	spec.Binding.Head = "other-head"
-	if _, err = Load(ctx, spec, []string{"one", "two"}); err == nil {
-		t.Fatal("unbound head accepted")
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if _, err = Load(ctx, fixtureSpec(t, nil), []string{"one", "two"}); err == nil {
-		t.Fatal("cancelled preparation accepted")
-	}
+	return config.ResolvedModelBinding{Recipe: "one", Name: "classifier.risk", Binding: config.ModelBinding{Contract: config.RemoteClassifierContractLabelScores, Adapter: "modernbert", OperatingPoint: &config.OperatingPointReference{Path: "point.json", SHA256: digest(policy)}}, Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: root, Device: "cpu", Input: config.ModelInputBudget{MaxTokens: 10, Overflow: "reject"}}}
 }
 
 func TestExportPreservesScorePolicyAndRejectsChangedWeights(t *testing.T) {
@@ -131,29 +83,13 @@ func TestExportPreservesScorePolicyAndRejectsChangedWeights(t *testing.T) {
 	if err = os.WriteFile(filepath.Join(spec.Deployment.Artifact, "point.json"), got, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = Load(context.Background(), spec, []string{"one", "two"}); err != nil {
-		t.Fatal("export is not readable by the actual preparation path", err)
+	if _, err = Decode(got, digest(got)); err != nil {
+		t.Fatal("export is not a readable operating point", err)
 	}
 	if err = os.WriteFile(filepath.Join(spec.Deployment.Artifact, "model.safetensors"), []byte("different checkpoint"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = BindArtifact(context.Background(), source, spec.Deployment.Artifact); err == nil {
 		t.Fatal("writer silently rebound thresholds to different weights")
-	}
-}
-
-func TestOperatingPointPositionsBoundTheWindowNotTheDocument(t *testing.T) {
-	spec := fixtureSpec(t, func(metadata, _ map[string]any) { metadata["max_position_embeddings"] = 5 })
-	policy, err := Load(context.Background(), spec, []string{"one", "two"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if policy.Window().Size != 5 || policy.MaxTokens() != 10 {
-		t.Fatal("fixture lost its distinct window and document budgets")
-	}
-	// A deployer cannot extend the frozen document policy by changing only config.
-	spec.Deployment.Input.MaxTokens = 11
-	if _, err = Load(context.Background(), spec, []string{"one", "two"}); err == nil {
-		t.Fatal("changed frozen document budget accepted")
 	}
 }

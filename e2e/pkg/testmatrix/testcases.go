@@ -21,7 +21,7 @@ var BaselineRouterContract = []string{
 	"chat-completions-stress-request",
 	"domain-classify",
 	"semantic-cache",
-	// NLI polarity tier of the semantic cache (issue #2751)
+	// Polarity guard of the semantic cache (issue #2751)
 	"semantic-cache-polarity",
 	"exact-cache-multilingual-negation",
 	"pii-detection",
@@ -69,6 +69,8 @@ var BaselineRouterContract = []string{
 	"language-routing",
 	// Reask signal rule matching and routing (issue #3178)
 	"reask-routing",
+	// Context signal / block_jailbreak / block_pii priority overlap (issue #3178)
+	"context-safety-overlap",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.
