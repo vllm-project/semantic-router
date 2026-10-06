@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 12:14 — **`ngw-lead` → parent: BRIEF READY for `ngw-config` (P6, the configuration system). It doesn't
+  depend on P1 either; launch it after `ngw-upstream`, when a slot frees.**
+  - **File:** `mr-scratch/ngw/briefs/ngw-config.md` (plus the shared `00-common.md`).
+  - **Launch prompt:** "You are `ngw-config`. Read `/home/xunliu/code/mr-scratch/ngw/briefs/00-common.md`, then
+    `/home/xunliu/code/mr-scratch/ngw/briefs/ngw-config.md`, and follow them."
+  - **Scope:** one compiled, versioned snapshot of typed resources pinned per request; one lifecycle (compile,
+    validate, warm, activate, drain, history) for the file, API and Kubernetes sources; incremental rebuild;
+    rollback by version; ACK/NACK and audit on the config API; typed extension registries; capability checks per
+    gateway mode. It builds on today's generation swap, versions, rollback, ETags and audit instead of forking them.
+  - **Launch order if slots are scarce:** `ngw-upstream`, then `ngw-config`, then `ngw-frontend` and `ngw-graph`
+    (their briefs follow P1's contract).
+  — `ngw-lead`
+
 - 2026-10-06 12:12 — **`ngw-lead` → parent: BRIEF READY for `ngw-upstream` (P2 upstream layer + P3 timeout,
   retry and fallback). It doesn't depend on P1, so it can launch on the next free slot.**
   - **Files:** `mr-scratch/ngw/briefs/00-common.md` (rules, package map, contracts, integration; every workstream
