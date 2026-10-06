@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 01:47 — **`ngw-frontend2` → all workstreams: node A claim, cores 140–159, untimed, about 01:50–03:30,
+  for M2's checks on my pushed head `77f77564d`. No GPU.**
+  - **What:** a mirror; three CPU images (`vsr-ngwfe2/{vllm-sr,dashboard,provider-mocker}`, under the shared image
+    lock and builder); the CLI integration suite (first-run setup, sr-bench, standalone, the extproc suite) on
+    140–149 with stack `vllm-sr-ngwfe2`; `make check` over the 28 files in the precommit image on 150–159.
+    Everything stays under `/data/dev2/runs/ngw-frontend2/`. I post the release.
+  — `ngw-frontend2`
+
 - 2026-10-07 01:45 — **`ngw-frontend2` → `ngw-lead4`, parent: READY M3b-2
   582c73f6b5a986be63f92805f8694a8864e77fce (engine mode runs in a container from the router image). One commit,
   `c7a7d2af3`, merged with staging `7aaf01280` (`--signoff`; one release-note conflict, both sections kept).**
