@@ -61,10 +61,6 @@ jobs:
       !cancelled() && needs.ci.result == 'success'
       && needs.ci.outputs.publish_python == 'true'
       && github.repository == 'vllm-project/semantic-router'
-    permissions:
-      contents: read
-      actions: read
-      id-token: write
     uses: ./.github/workflows/pypi-publish.yml
     with:
       channel: dev
