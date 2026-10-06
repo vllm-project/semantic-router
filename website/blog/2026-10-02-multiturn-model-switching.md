@@ -20,8 +20,10 @@ result is interpreted. Meanwhile, an inference router might prefer a different
 replica because it has a shorter queue or a useful cached prefix.
 
 These questions motivated a series of live benchmarks through vLLM Semantic
-Router, Envoy, and GPU-backed vLLM servers. In the final 960-call evaluation,
-one reactive switching policy reduced strong-model use by **31.8 percentage
+Router, Envoy, and GPU-backed vLLM servers. In the
+[final holdout](https://github.com/vllm-project/semantic-router/issues/4080#issuecomment-5938865660),
+five policies each ran 32 six-turn sessions: **160 sessions and 960 calls in total**.
+One reactive switching policy reduced strong-model use by **31.8 percentage
 points** and mean session latency by **550 ms**. It also failed three final checks
 that the control passed. A separate native-tool experiment showed why moving
 to a capable model *before* a known difficult boundary can help.
@@ -188,7 +190,7 @@ model lacks, selecting a capable owner *before* it issues the tool call gives
 that model both sides of the interaction. Once the call is active, preserving
 ownership avoids changing its continuation semantics halfway through.
 
-In a controlled native-tool benchmark, we compared this prospective choice
+In a separate controlled native-tool experiment, we compared this prospective choice
 with escalation after observed failure. Across eight paired seeds, selecting
 the stronger model at the known boundary improved tool-call success from
 62.5% to 100%, tool-continuation success from 0% to 75%, and final success from
@@ -198,7 +200,8 @@ the stronger model at the known boundary improved tool-call success from
 The boundary signal was supplied explicitly by the test fixture. This establishes
 why timing and ownership matter; learning to predict such boundaries remains
 application-specific work. Exercising the live path also revealed an ownership
-preservation defect, which was corrected before the later evaluation.
+preservation defect. The [tool-loop ownership fix](https://github.com/vllm-project/semantic-router/pull/4297)
+records that earlier bug and its correction before the later evaluation.
 
 A recent-outcome gate faces another problem. It may wait for a failure before
 allowing escalation. By then, the agent has already appended the incorrect
@@ -229,13 +232,22 @@ is different from sending the next ordinary turn to a stronger model.
 
 ## What the live measurements showed
 
-The final holdout ran **160 sessions and 960 calls** through Semantic Router,
+The [frozen holdout report](https://github.com/vllm-project/semantic-router/issues/4080#issuecomment-5938865660)
+evaluates the candidate agentic-context/multiturn-switch@2026-10-dev1.
+It ran **160 sessions and 960 calls** through Semantic Router,
 Envoy, and two vLLM servers hosting Qwen3-0.6B and Qwen3-8B on one NVIDIA L40S.
 Each policy received the same 16 held-out seeds across two six-turn workloads:
 ordered state retention and a one-off retrieval challenge followed by easy
 acknowledgements. The candidate thresholds were frozen before inspecting outcomes.
 
-| Policy | Final-turn success | Turn accuracy | Strong-model turns | Prefix-cache hit ratio | Mean latency/session |
+Each policy has **32 sessions and 192 calls**. The final-turn pass rate measures
+the task-defined last check, not correctness at every step or complete-agent-task
+success. In the state-retention workload it checks the ordered final synthesis;
+in the one-off challenge workload it checks the closing acknowledgement. That
+acknowledgement can pass despite a missed retrieval challenge, so read the
+final-turn rate alongside turn accuracy.
+
+| Policy | Final-turn pass rate | Turn accuracy | Strong-model turns | Prefix-cache hit ratio | Mean latency/session |
 |---|---:|---:|---:|---:|---:|
 | Strong model throughout | 100% | 66.7% | 100% | 80.8% | 1,793 ms |
 | Small model throughout | 50.0% | 53.6% | 0% | 80.8% | 456 ms |
@@ -243,14 +255,8 @@ acknowledgements. The candidate thresholds were frozen before inspecting outcome
 | Candidate gate, observe | 100% | 66.7% | 83.3% | 65.9% | 1,694 ms |
 | Candidate gate, enforce | 90.6% | 69.3% | 51.6% | 64.8% | 1,221 ms |
 
-“Final-turn success” is the task-defined last-turn check, not success on every
-step. In the state-retention workload it checks the ordered final synthesis;
-in the one-off challenge workload it checks the closing acknowledgement. The
-latter can pass despite a missed retrieval challenge, which is why turn accuracy
-must be reported alongside it. Each arm contains 32 sessions.
-
 Compared with the gate-disabled control, enforcement reduced strong-model use
-by 31.8 percentage points and mean latency by 550 ms. Final-turn success fell
+by 31.8 percentage points and mean latency by 550 ms. Final-turn passes fell
 from **32/32 to 29/32**. The paired bootstrap 95% interval for that difference
 was [-21.9, 0.0] percentage points; the turn-accuracy difference was also
 inconclusive. The candidate failed its quality requirement and remains rejected
@@ -270,18 +276,64 @@ latency figures are not production throughput or concurrency estimates.
 Prefix-cache ratios came from backend counter deltas, averaged per session.
 Strong-model share is a usage proxy, rather than a measured dollar saving.
 
-For endpoint composition, we added a separate simulator-backed integration
-contract using llm-d as the inference router. It checks selected model, pool,
+For endpoint composition, we added a separate
+[simulator-backed integration contract](https://github.com/vllm-project/semantic-router/pull/4443)
+using llm-d as the inference router. It checks selected model, pool,
 and endpoint membership with at least two ready replicas per pool. That test is
 under review; it supplies no real-GPU prefix-affinity or scheduling-performance
 measurement.
 
 ## Benchmarks to run on your own system
 
-Build the evaluation around complete agent tasks before tuning switch thresholds.
-Include long shared prefixes, changing instructions, retrieval, native tools,
-and tasks where an early error affects later steps. Use realistic task verifiers
-such as repository tests, validated tool arguments, or checked structured state.
+### Inspect a fixed session first
+
+The repository's [coding-agent replay](https://github.com/vllm-project/semantic-router/blob/96fa8d4f680882b65997f0a501c2653d5c7abedb/bench/agent_session_replay.py)
+sends a growing conversation with a tool catalog, a tool result, and a short
+follow-up. With Python 3.10 or newer and jq installed, run this from the repository
+root to inspect its request sequence without a model server or network calls:
+
+```bash
+python3 bench/agent_session_replay.py --dry-run > session-dry-run.json
+jq '{fixture, dry_run, tools, summary, turns: [.turns[] | {turn, phase, messages}]}' session-dry-run.json
+```
+
+The bundled fixture has ten tools and three requests. The dry run reports zero
+sent requests; its zero switch counts are not evidence that routing preserved
+continuity.
+
+For a live replay, remove --dry-run and set --base-url to your gateway's
+OpenAI-compatible endpoint, including its /v1 prefix. Use --api-key-env when
+authentication is required, and match --session-header and any --extra-header
+values to the [configured protection identity](/docs/tutorials/learning/protection).
+Extra headers use name=value syntax. Use a distinct session identity for each
+comparison run.
+
+The live report records selected models, switches, tool-loop switch violations,
+HTTP results, latency, and token usage. The replay does not execute tools or feed
+generated answers into later requests: the fixture supplies that history.
+
+The [current report](https://github.com/vllm-project/semantic-router/blob/96fa8d4f680882b65997f0a501c2653d5c7abedb/bench/agent_session_replay.py#L141-L179)
+counts HTTP 2xx responses as succeeded, even when a response body is malformed.
+It can exit zero while reporting a tool-loop switch violation. Require model
+identity on each turn before interpreting zero switches as continuity.
+[Missing cache usage is recorded as zero](https://github.com/vllm-project/semantic-router/blob/96fa8d4f680882b65997f0a501c2653d5c7abedb/bench/agentic_routing_live_benchmark.py#L415-L420),
+so retain backend usage receipts to distinguish unavailable telemetry from
+an actual zero-cache-hit result.
+
+### Measure complete tasks separately
+
+For workflows whose model outputs drive subsequent actions, use the
+[sr-bench task and target setup](/docs/benchmarking/sr-bench/tasks-and-targets)
+and [frozen-plan workflow](/docs/benchmarking/sr-bench/plan-and-run).
+The [results report](/docs/benchmarking/sr-bench/results) includes per-task switch
+counts and accuracy for tasks with and without switches. Those groups describe
+what happened; a paired policy comparison is needed to evaluate the effect of
+switching.
+
+Default sr-bench agent runs currently send no session identity, so they measure
+routing without session state. [Per-task identity](https://github.com/vllm-project/semantic-router/issues/4256)
+is tracked separately; do not treat the default run as a test of identity-based
+continuity protection.
 
 Compare a capable model held for the session, a small model held for the session,
 per-turn routing, and routing with continuity protection. Add cache-aware
@@ -330,7 +382,11 @@ agent's completed work.
 ### Implementation and measurement references
 
 - [Semantic Router continuity protection](/docs/tutorials/learning/protection)
-  and [memory and Replay](/docs/tutorials/learning/memory-and-replay).
+  and [memory and Replay](/docs/tutorials/learning/memory-and-replay), with the
+  [recent-outcome gate implementation](https://github.com/vllm-project/semantic-router/pull/3436).
+- [Protocol-correct Chat and Responses benchmark runner](https://github.com/vllm-project/semantic-router/pull/4082),
+  [coding-agent replay](https://github.com/vllm-project/semantic-router/pull/4154),
+  and [per-task continuity reporting](https://github.com/vllm-project/semantic-router/pull/4239).
 - [vLLM automatic prefix caching](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
   and [Gateway API Inference Extension](https://gateway-api-inference-extension.sigs.k8s.io/).
 - [Evaluation record and holdout results](https://github.com/vllm-project/semantic-router/issues/4080#issuecomment-5938865660).
