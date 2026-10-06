@@ -205,6 +205,50 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:31 — **Parent → `fu-lead`, `ngw-frontend`, `ngw-lead3`: USER decisions (19:30). Final CLI, environment and
+  packaging plan. It supersedes the parent's 19:00, 19:10 and 19:20 notes. Containers only, `--gateway native|extproc`,
+  no runtime on PyPI.**
+  - **Environments:** `--target docker` (default) and `--target k8s` only. No bare metal: no local target, no process
+    manager, no `vllm-srouter` wheel, no markers, no runtime detection, no fallback logic.
+  - **Packaging:** `vllm-sr` is the only PyPI package. The Router and `vllm-srun` ship only inside the images.
+    `vllm-srun` is not published, and there is no `vllm-sr[runtime]` extra. The repo secret
+    `VLLM_SRUN_PYPI_API_TOKEN` is deleted, and the token copy is gone.
+  - **Gateway, docker only:** `--gateway native|extproc`, default `native`.
+    - `native` starts only the Router container, with the runtime inside, and the Router serves the listeners.
+    - `extproc` is today's stack: an Envoy container the CLI starts, in front of the Router as ext_proc. The
+      five-header `allow_expression` rule is unchanged.
+    - With `--target k8s`, `--gateway` is an error that says Kubernetes uses the Helm chart's ext_proc gateway.
+    - Capability checks point to `--gateway extproc`.
+  - **Engine mode runs in Docker:** `vllm-sr serve MODEL` starts `vllm-srun serve` in a container from the same image.
+    - `--platform amd|nvidia` selects the GPU image and passthrough. Ports are mapped and the model cache is mounted.
+    - `--device` takes only what the image supports.
+    - Drop `--uds` unless a bind-mounted socket is trivial.
+    - Remove the host engine path. On macOS this means CPU only (no MPS), which the docs say.
+  - **Flags (in PR-B):** every `serve` flag belongs to one group: docker, k8s or engine mode.
+    - `--help` prints the groups, and a flag from the wrong group is an error.
+    - `--runtime` (docker/podman) becomes `--container-runtime`. The old name stays for one release as a hidden
+      alias that warns.
+    - Engine mode's `--profile` gets a non-clashing name (engine mode is unreleased, so no alias).
+  - **`fu-lead`, PR-A #4634:**
+    - Remove `vllm-srun`'s PyPI and TestPyPI jobs and their token references, the `runtime` extra, its version
+      contract and `release.sh` pin, and `uv.lock`'s extra.
+    - In the docs (Quickstart en and zh-Hans, release notes), drop every `pip install "vllm-sr[runtime]"`. Until
+      PR-B lands, engine mode's hint says the runtime ships in the images, or comes from a source checkout
+      (`make model-runtime-install`).
+    - Retitle the PR without "on PyPI". #4618 is re-scoped to the rename, so `Closes #4618` stays.
+    - Fold this and the 19:04 benchmark fix into one re-squash on the latest `main`.
+  - **`ngw-frontend`, PR-B:**
+    - Milestone 3a continues, with capability checks pointing to `--gateway extproc`.
+    - Milestone 3b is the gateway flag, engine mode in Docker (after PR-A merges; it touches `runtime_engine.py`,
+      so post the hunks to `fu-lead` or rebase first) and the flag cleanup above, with docs, release notes and a
+      startup line that names the gateway.
+    - Milestone 4 shrinks to the CLI integration suite (native on docker, engine mode in a container), `make impact`
+      registration, and a clean check on a Docker-only host: `pip install vllm-sr`, then `vllm-sr serve` and
+      `vllm-sr serve MODEL`. Existing Kind profiles keep `extproc`. There is no native Kind profile.
+  - **`ngw-lead3`:** bring the design doc on staging (en and zh-Hans) and the PR body in line. I updated #4623, #4618
+    and the gist.
+  — parent
+
 - 2026-10-06 19:30 — **`ngw-lead3` (successor of `ngw-lead2`) → `ngw-frontend`, `ngw-config`, parent: staging is
   `1a10a1fe0` (`main` #4629 merged, design doc rulings), and PR #4628 is `60b147fee`. Merge it before your READY.**
   - **Merged:** `main` `b620f2c18` (#4629, model-runtime only) with a signed-off merge commit. `make check` over the
