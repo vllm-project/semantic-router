@@ -5,6 +5,7 @@ import ast
 import importlib
 import importlib.util
 import logging
+import random
 import sys
 import unittest
 from collections.abc import Sequence
@@ -327,3 +328,58 @@ class DatasetContractTest(unittest.TestCase):
                 SimpleNamespace(seed=42, config="config.yaml", task="jailbreak")
             )
         dataset_revision.assert_not_called()
+
+    def test_conversational_slice_samples_titles_per_label(self):
+        sites = {
+            "physics": [
+                "Why is the sky blue?",
+                "Why is the sky  BLUE?",
+                "What is spin?",
+            ],
+            "cooking": ["How long to boil an egg?"],
+            "gaming": ["Why is the sky blue?", "Best opening move?"],
+        }
+        calls = []
+
+        def load(repo, data_files, revision, split):
+            calls.append((data_files, revision))
+            site = data_files.split(".")[0]
+            return [{"texts": [f" {title} ", "body"]} for title in sites[site]]
+
+        namespace = load_definitions(
+            "baseline_tasks.py",
+            {"TaskSpec", "load_rows", "load_site_rows"},
+            {
+                "dataclass": dataclass,
+                "random": random,
+                "BaselineError": ValueError,
+                "load_dataset": load,
+                "np": SimpleNamespace(
+                    array=lambda values, dtype: values, int64=int, ndarray=list
+                ),
+            },
+        )
+        spec = namespace["TaskSpec"](
+            dataset_repo="example/stackexchange",
+            split="train",
+            text_field="texts",
+            label_field="site",
+            revision="0" * 40,
+            site_labels=(
+                ("physics", "physics"),
+                ("cooking", "other"),
+                ("gaming", "other"),
+            ),
+            rows_per_label=2,
+        )
+        mapping = {"physics": 1, "other": 0}
+        texts, labels, available = namespace["load_rows"](spec, mapping, None)
+        self.assertEqual(available, 4)
+        self.assertEqual(labels, [1, 1, 0, 0])
+        self.assertEqual(len({" ".join(t.casefold().split()) for t in texts}), 4)
+        self.assertNotIn("Why is the sky blue?", texts[2:])
+        self.assertEqual({revision for _, revision in calls}, {"0" * 40})
+        self.assertEqual(namespace["load_rows"](spec, mapping, None)[0], texts)
+        self.assertEqual(namespace["load_rows"](spec, mapping, 3)[1:], ([1, 1, 0], 4))
+        with self.assertRaisesRegex(ValueError, "no 'other'"):
+            namespace["load_rows"](spec, {"physics": 1}, None)

@@ -47,6 +47,7 @@ def emit_baseline_manifests(
 ) -> dict[str, str]:
     manifest_dir = args.manifest_dir or (args.output_dir / "manifests")
     rows = list(zip(texts, labels.tolist(), strict=True))
+    task = spec.served_task or args.task
 
     dataset_id = _slug(spec.dataset_repo.rsplit("/", maxsplit=1)[-1])
     artifact_id = _slug(measured_repo.rsplit("/", maxsplit=1)[-1])
@@ -54,7 +55,7 @@ def emit_baseline_manifests(
 
     dataset = _build_dataset(
         dataset_id=dataset_id,
-        task=args.task,
+        task=task,
         spec=spec,
         dataset_revision=dataset_revision,
         rows=rows,
@@ -73,7 +74,7 @@ def emit_baseline_manifests(
     else:
         artifact_manifest = _build_measured_artifact(
             artifact_id=artifact_id,
-            task=args.task,
+            task=task,
             measured_repo=measured_repo,
             served_repo=artifact.hf_repo,
             served_path=artifact.model_path,
@@ -86,6 +87,7 @@ def emit_baseline_manifests(
 
     evaluation = _build_evaluation(
         evaluation_id=evaluation_id,
+        task=task,
         args=args,
         artifact_ref={
             "id": artifact_id,
@@ -218,6 +220,7 @@ def _build_dataset(
 def _build_evaluation(
     *,
     evaluation_id: str,
+    task: str,
     args: argparse.Namespace,
     artifact_ref: dict[str, Any],
     dataset_ref: dict[str, Any],
@@ -227,7 +230,7 @@ def _build_evaluation(
 ) -> dict[str, Any]:
     return build_evaluation_manifest(
         manifest_id=_slug(evaluation_id),
-        task=args.task,
+        task=task,
         artifact_ref=artifact_ref,
         dataset_ref=dataset_ref,
         split_rule=split_rule,

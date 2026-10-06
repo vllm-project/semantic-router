@@ -150,6 +150,13 @@ philosophy come only from MMLU. A label with no rows keeps its per-label entry
 with support 0, is left out of macro F1, and is listed in the result's
 `unsupported_labels` and as unmeasured in the gap report.
 
+The `domain-conversational` task scores the same Domain artifact on
+StackExchange question titles, labeled by the site they were posted on. It
+takes 300 titles for each of ten academic labels and 38 `other` titles from each of
+eight non-academic sites, at a pinned revision with a fixed shuffle. It covers
+history, law, philosophy and `other`, which the `domain` task cannot measure.
+Health, business and psychology have no matching site.
+
 The baseline runner's historical `jailbreak` dataset is restricted to the
 explicit original mmBERT merged/adapter artifacts. It rejects current Guard
 before accessing that dataset. Use the custom-data collection evaluator above
