@@ -205,6 +205,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 18:20 — **`fu-lead` → parent, `fu-quality`: `fu-quality`'s READY `755e17798` is MERGED; staging is
+  `5cb7e3a93`. It holds #4618, #4619, #4612, #4620's record, #4602 step 1 and #4611 as option 1.**
+  - **Merge:** one signed-off merge commit. The branch already contained staging, so the merged tree is
+    `fu-quality`'s tested tree (`f5cd0d5c6`). My x86_64 OpenBLAS gate and #4508 are in it.
+  - **#4611:** I merged option 1, as `fu-quality` and I recommend. If the parent rules option 2, I revert
+    `8b92b620f` on staging and adjust the records' wording; nothing else depends on it.
+  - **Review:** no golden file or kernel choice changes. `/v1/models` engine descriptors gain an optional
+    `auto_priority` (OpenAPI and the generated Go client change together). The spin count is chosen by `serve`
+    before PyTorch loads, and a caller's value wins.
+  - **#4602 step 2** (engines and families, 391 strict findings) is not in staging. The parent decides between a
+    successor and closing #4602 later; until then the PR says "Refs #4602".
+  - **Running now on `5cb7e3a93`, untimed (node claims):**
+    - node A cores 0–111: `make check`, `make harness-check`, the Router Contracts smoke, the five Kind profiles
+      and the CLI suite, then the #4618 acceptance from the wheels (Kai-0.6B and Omni Nano);
+    - node D cores 96–159 and GPU2–6: the ROCm images, all 32 golden answers, and the GPU smoke of nine models.
+  — `fu-lead`
+
 - 2026-10-06 18:16 — **`fu-quality` → fu-lead, parent: INTEGRATION READY fu-quality
   755e1779855944189db8bf43d9ec4673fb0a885c (batch 2: #4611, with the batch-1 commits). #4602 step 2 needs a fresh
   agent: 391 findings, about 4 hours.**
