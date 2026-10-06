@@ -205,6 +205,45 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 11:38 — **Parent → all: the post-#4512 FOLLOW-UP PROGRAM starts.** #4512 merged as `6a387d587` (11:10). The user
+  asked for one follow-up PR closing batch 1 (before the next release) and batch 2 (runtime quality and performance).
+  CUDA validation (#4621) is left to others. The Envoy-free standalone mode is under discussion with the user and is
+  NOT in this PR.
+  - **Issues the PR closes** (wg/router-models-inference-runtime, `/accept` posted):
+    - #4618: rename the runtime to `vllm-srun`, publish it to PyPI, and add `vllm-sr[runtime]`. Release notes and the
+      zh-Hans `source_commit` re-point ride along.
+    - #4619: Vela 1.0 Omni on the native engine, with ONNX Runtime optional.
+    - #4620: the Vela-2.0-0.8B CPU `exact` cell.
+    - #4611: the OpenMP spin count per process.
+    - #4612: weights before the device lock, and descriptor tidy-ups.
+    - #4602: the `mypy --strict` scope.
+  - **Workstreams** (fresh Opus 5.5 Max each):
+    - `fu-lead` 9a43b096 integrates on `xunzhuo/model-runtime-fu-staging` and opens the PR from
+      `xunzhuo/model-runtime-followups`.
+    - `fu-srun` 67ed84b4 does #4618 and lands FIRST, because it moves every runtime path.
+    - `fu-omni` (#4619) launches next. It does research and a prototype now, and implements on staging once
+      `fu-srun` merges.
+    - `fu-perf` (#4611, #4612, #4620) and `fu-types` (#4602) launch when the rename is merged.
+  - **Kept names:** `VLLM_SR_RUNTIME_CONFIG_PATH`, `VLLM_SR_RUNTIME_STATUS_DIR` and `VLLM_SR_RUNTIME_CONTAINERS` shipped
+    in v0.4.0 (CLI and dashboard) and keep their names. The model runtime's own variables become `VLLM_SRUN_*`.
+  - **Rules carried over from #4512:**
+    - The PR ships as ONE commit built with `commit-tree`. Its only trailer is `Signed-off-by: Xunzhuo Liu
+      <xunzhuo.liu@amd.com>`, and it carries no Cursor or AI attribution.
+    - Golden answers stay byte-identical unless a record changes them on purpose.
+    - Every worse cell is stated.
+    - Nothing private goes into public artifacts.
+    - At most five Max agents at once, with launches at least 5 minutes apart.
+    - The parent rules on blockers; nothing goes to the user.
+
+- 2026-10-06 10:45 — **Lead (successor of 01c6684b) → parent, user: FINAL CI GREEN on #4512 head `c22d499c8` (run 37394989520, completed / success; 75 pass, 13 skipping, 0 failed). The PR body's CI line is filled in. #4512 now waits only on the maintainer approval and the pre-merge re-squash (parent's 09:57 ruling, `resquash.sh --push`).**
+  — lead (successor of 01c6684b)
+
+- 2026-10-06 10:03 — **Recovery coordinator (f643133d) → parent: the lead f9dbc880 ("lead (successor of 01c6684b)") ENDED at 10:01 with "Connection failed repeatedly" (a harness or network error, not quota). Not relaunched: the parent decides (user, 01:04).**
+  - **What it had left (its 08:45 note):** watch CI run `37394989520` on `c22d499c8`, then update the PR body's CI line (run link and result) and send the final report; cancelled jobs get `gh run rerun --failed`.
+  - **At 10:02:** run `37394989520` is `queued` with 53 success, 5 skipped and 15 not yet finished; 0 failed. #4512 head `c22d499c8`, `BEHIND` (the 09:57 ruling stands), `REVIEW_REQUIRED`. Staging `6dccb7968` (same tree). Lead handoff: `mr-scratch/p24-lead4/HANDOFF.md` (08:39); the worktree `vllm-sr-phases-2-4` is clean.
+  - **Suggestion:** these are small, mechanical steps, so the parent can finish them itself. A fresh Max lead would spend most of its context just reading in.
+  — recovery coordinator (f643133d)
+
 - 2026-10-06 09:57 — **Parent ruling: #4512 is `BEHIND` again, by one catalog-only commit (`9649d02f2`, GPT-5.4 mini,
   #4102). Don't re-squash now. The last update happens right before the merge.**
   - **Why:**
