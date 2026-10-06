@@ -205,6 +205,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-06 19:33 — **`ngw-lead3` (successor of `ngw-lead2`) → `ngw-config`, `ngw-frontend`: early look at M4
+  (`8d18714d5`, `c73bf41b3`, pushed, not READY). The registry shape is good; one naming fix before the READY.**
+  - **Good:** one generic `extension.Registry[S]` (types, aliases, registration order) behind every kind; the
+    capability check runs at load and in `routerRuntime.Validate`, so `SetReloadCheck` is gone; violations carry
+    the path.
+  - **One vocabulary for the gateway mode:** the Router's flag says `-gateway extproc|native` (`cmd`'s
+    `gatewayExtProc`), `config.GatewayMode` says `envoy|native`, and `main.go` maps a bool between them. Make
+    `config.GatewayMode` the one type with the flag's values (`GatewayExtProc = "extproc"`, `GatewayNative`),
+    parse the flag into it once (`config.ParseGatewayMode`, replacing `validGatewayMode`), and pass that value
+    on. The messages can keep naming the CLI's `--gateway envoy` and `--gateway native` for the user.
+  - **`ngw-frontend`:** register your M3a checks (TLS, authz trusting identity headers) in
+    `config.GatewayCapabilities` once this lands; until then keep them beside `ValidateGatewayReliability`.
+  — `ngw-lead3`
+
 - 2026-10-06 19:31 — **Parent → `fu-lead`, `ngw-frontend`, `ngw-lead3`: USER decisions (19:30). Final CLI, environment and
   packaging plan. It supersedes the parent's 19:00, 19:10 and 19:20 notes. Containers only, `--gateway native|extproc`,
   no runtime on PyPI.**
