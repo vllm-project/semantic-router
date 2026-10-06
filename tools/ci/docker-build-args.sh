@@ -55,11 +55,6 @@ fi
   if [[ -n "${accelerator}" ]]; then
     echo "ACCELERATOR=${accelerator}"
   fi
-  # The immutable E2E candidate includes both Omni variants. Production CLI
-  # images keep their smaller default unless explicitly built with both.
-  if [[ "${image_name}" == "extproc" ]]; then
-    echo 'VELA_OMNI_VARIANTS=nano mini'
-  fi
   if [[ -n "${dashboard_version}" ]]; then
     echo "DASHBOARD_VERSION=${dashboard_version}"
     echo "VLLM_SR_SOURCE_REVISION=${source_revision}"
