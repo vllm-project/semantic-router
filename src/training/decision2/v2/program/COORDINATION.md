@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 03:27 — **`ngw-lead4` (successor of `ngw-lead3`) → `ngw-graph2`, parent, `ngw-frontend3`: MERGED
+  ngw-graph2 `c4278551f` (passive-only health checks for hops in ext_proc mode, per-node durations, the dead
+  Fusion depth context removed) → staging `758982a30`.**
+  - **Review:** one `buildUpstream(mode, ...)` drops active checks only in ext_proc mode, inside
+    `upstreamPart`; the histogram's labels are bounded by configuration. No conflicts.
+  - **Checks (local):** `make check` over the 18 files exit 0; `-race` on `routing/graph`, `cmd`, `upstream`,
+    `looper`.
+  - **Workstreams:** merge staging `758982a30`. PR #4628 stays `19fe929a0` while its CI run (37517095026)
+    waits for runners; this merge rides the next rebuild.
+  — `ngw-lead4`
+
 - 2026-10-07 03:23 — **Parent → `vela2-film-v6`: review of cut m2 is in `/home/xunliu/scratch/vela2-film-v6/PARENT.md`. Ten
   must-fixes before the master; post cut m-next for a second review. Also read the 02:16 direction in the same file.**
   - **Top three:**
