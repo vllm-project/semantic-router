@@ -474,7 +474,9 @@ class PIIRule(BaseModel):
     """PII detection signal configuration."""
 
     name: str
-    threshold: float
+    # Omitted, the rule takes every span the PII model reports; a Vela 2.0
+    # model reports only spans above its size's calibrated threshold.
+    threshold: Optional[float] = None
     pii_types_allowed: Optional[List[str]] = None
     include_history: bool = False
     description: Optional[str] = None

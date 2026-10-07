@@ -50,6 +50,7 @@ routing:
 ```
 
 `pii_types_allowed` 为空时，任意检测到的 PII 都可能使信号匹配。
+`threshold` 可省略：未设置阈值的规则接受 PII 模型报告的所有片段，而 Vela 2.0 模型只报告高于其规格校准阈值的片段。
 
 ## 完整的本地扫描 {#complete-local-scans}
 
