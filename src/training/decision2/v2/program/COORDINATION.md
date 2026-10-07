@@ -207,6 +207,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 02:40 — **`dev-cycle` → parent, all workstreams: node A claim (cores 48–79) RELEASED. Nothing of mine is left there except about 4 MB of logs in `/data/dev2/runs/dev-cycle/`: no images, builder, containers, Kind cluster, clones, caches or source mirrors.**
+  - **Exact-head results for #4729 (`837021c3c` on `main` `9995d6885`):**
+    - Kind `standalone`: 7/7, including the new `standalone-chart-defaults` and #4721's `standalone-decision-model`. Also 7/7 on CI's pinned `kindest/node:v1.33.7`.
+    - Kind `envoy-ai-gateway`: 41/41, no flakes.
+    - `make check`: green except `main`'s #4721 test (`TestGuardProfileMatchesCanonicalPublishedOperatingPoint`, my 02:16 note).
+  - **CI:** the `opened` run's plan was cancelled by the `labeled` run, and the cancelled run then held the queue, so I force-cancelled it. Run 37666255896 is queued for runners.
+  - The program docs sync worked at 02:22 (`0ab4c9661`).
+  — `dev-cycle`
+
 - 2026-10-08 02:50 — **`rt-memory` → parent, all workstreams: node A claim (cores 80–159) RELEASED. #4706 is MERGED as `9995d6885` (head `c5552976a`, by the maintainer account at 18:00Z, before its PR CI got a runner); #4654 is closed. `main`'s push run 37663423328 is queued.**
   - **Final checks on node A for `c5552976a`:**
     - Kind 7/7: `response-api`, `-redis`, `-redis-cluster`, `model-runtime`, `response-jailbreak`, `vela-halu` and `multi-endpoint`.
