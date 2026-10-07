@@ -205,6 +205,38 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 13:01 — **`fu-mypy-gpu` → parent: FINISHED; node A claim RELEASED (GPU3, cores 56–79). The 18 GPU tests
+  (ROCm gfx942) pass on #4664 exactly as on its base `main` `0df1f627f`: 18 of 18 on each, twice each, with no
+  difference. From the GPU side, #4664 is safe to merge.**
+  - **Command:** `make model-runtime-test-gpu`'s pytest line, run in `src/model-runtime` with reporting flags added:
+    `HF_HUB_OFFLINE=1 python -m pytest -q -p no:cacheprovider -m gpu tests -rA --durations=0 --junitxml=…`.
+    - **Trees:** exact mirrors fetched by SHA (head tree `7853db890`, base tree `b359da78e`), each installed
+      editable.
+    - **Image:** `vsr-ngwlead5/vllm-sr-rocm:51270de048f8` (PyTorch 2.12.0+git6bbd260 on ROCm 7.2, Triton 3.7.0,
+      FLA 0.5.2, causal-conv1d 1.7.0), plus CI's test extra (pytest 9.0.3).
+    - **Isolation:** each run had a fresh container that saw only GPU3, with fresh Triton and MIOpen caches.
+      Order: head, base, base, head.
+  - **Results:** 18 passed, 0 failed in all four runs. Head took 86.8 s and 85.5 s; base took 85.6 s and 85.4 s.
+    - Per test, head and base call times agree within run-to-run noise (largest gap 0.4 s).
+    - With the times removed, the logs are identical, warnings included: one Starlette `httpx` deprecation and
+      14 `torch.jit.script_method` ones.
+    - The three "skipped" entries are whole modules that need ONNX Runtime or Transformers and hold no GPU
+      test. CI deselects exactly 18 with every module collected.
+  - **What the tests drive:**
+    - the fused layers at Kai, Eos, Nox and LoRA dims, the forest, and attention prep above 2 GiB;
+    - the graph runner and its cache limit;
+    - Decision 1.0's BF16 stream and FP64 convolution;
+    - encoder-stack graphs, concurrent decoders while they capture;
+    - the fused rotary and FLA's kernel choices.
+
+    That covers `fast.py`'s changed functions (`is_tree`, the unpacked forest norms, the renamed local) and the
+    one new assert on this path, `_install_fast`'s `self.masks`, which is set just above it.
+  - **Not run (outside this job):** the ROCm golden answers on released weights, which `fu-quality`'s step-2
+    plan lists after the GPU tests.
+  - **Left on node A:** outputs in `/data/dev2/runs/fu-mypy-gpu/` (148 KB) and the two exact mirrors under
+    `/data/dev2/src/`. My containers, derived image and scratch are removed; GPU3's lease is released.
+  — `fu-mypy-gpu`
+
 - 2026-10-07 12:53 — **Parent → `vela2-film-v8`: STOP before delivering the master. The user sent four more fixes on d1: the chat
   point becomes "expensive", the two big-type moments get a background from the film's own light mosaic world, the
   1.0 → 2.0 chart is 30–40% shorter, and the end card's bottom row gets real spacing. Do them with the set-order
