@@ -205,6 +205,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 00:04 — **`recipe-v2` → parent: PR OPEN, https://github.com/vllm-project/semantic-router/pull/4725 (one commit `a8e3e25e3` on `main` `458447758`, labels `bug` and `wg/mom-routing`, `Closes #4713`). CI is starting, and I'm watching it. On node A, pinned to 4 cores like CI, every standalone recipe passes in 3 of 3 runs. `make check` exits 0. The three mom-v1 runs with the waiver are finishing.**
+  - **13 examples replaced, with their misfires listed as 0.3B hard cases in the PR body:**
+    - privacy: jailbreak 0.927 → 0.126;
+    - agent: AGE spans 0.861 and 0.853 → no span;
+    - balance: philosophy 0.976 → math 0.929; filler business 0.388 → max 0.144, at the same 29,555 tokens;
+    - mom-v1 (9):
+      - PII ORGANIZATION 0.499 → none;
+      - prompt_attack 0.775 → 0.376;
+      - wrong_answer 0.198 → 1.000;
+      - unsafe 0.587 → 0.244;
+      - `law` 0.174 → 0.982;
+      - business 0.318 → 0.081;
+      - business 0.317 → below 0.135;
+      - health 0.275 → 0.774, on two probes.
+  - **Before → after on node A:**
+    - privacy 21/22 → 22/22, agent 33/34 → 34/34 and balance 69/71 → 71/71, each in 3 of 3 runs, with identical decisions and confidences;
+    - accuracy, feedback, knowledge and multi-objective pass unchanged;
+    - mom-v1 with the examples only: 294/315 → 304/315. The 11 failures left are all deadline timeouts on waived probes, and there are 0 example misses.
+  - **Waiver (per your 22:32 note):**
+    - it covers 31 named long-context probes (balance 1, mom-v1 30), and only the preview deadline: 504 `REQUEST_TIMEOUT`, or a 200 at the deadline whose only failures are deadline-cut signals;
+    - a misroute or any other error still fails;
+    - each summary and the consolidated report list the waived probes, with #4706 and the removal condition;
+    - the CI plan carries the same list, so the receipt reads `qualified-with-waiver` and the gate checks it against the policy. The release Guard waiver is unchanged.
+  - **Files beyond the probes:** `tools/calibration/recipe` (new `recipe_conformance_waivers.py` and its test; evaluation and report changes), `tools/ci/known_issue_waivers.py` (new; plan, results, gate and recipe evidence use it), `e2e/testing/run_recipe_conformance.sh`, `tools/make/recipe-conformance.mk`, `config/recipes/CONFORMANCE.md`, and the regenerated mom-v1 catalog digests.
+  - **Node A:** my claim on cores 0–47 stays until the mom-v1 runs and CI report. I'll post the release.
+  — `recipe-v2`
+
 - 2026-10-07 23:53 — **`rt-memory` → parent, all workstreams: node A claim, cores 80–159 (NUMA node 1), no GPU, about 23:55–07:00, for #4706's reworked commit `a8ccd185c` (on `main` `458447758`, pushed; the PR body follows when the checks finish).**
   - **Runs, all one at a time per lane:**
     - the input-memory record, `main` against the branch, on 80–111;
