@@ -138,6 +138,21 @@ enabled, its record keeps the route, model, signals and detected PII types,
 and no request or response body, prompt or tool trace. The recipe itself does
 not enable Replay.
 
+Locating personal data is the largest part of the decision model's cost on
+long inputs. The span head reads the whole latest user turn in windows, while
+the routing questions read only its beginning. On one AMD MI325X, the one
+decision call took these median times without and with the PII question:
+
+| Prompt | Without PII | With PII |
+| --- | --- | --- |
+| One line | 57 ms | 89 ms |
+| 2K tokens | 0.11 s | 0.39 s |
+| 16K tokens | 0.53 s | 1.75 s |
+
+A deployment that keeps Router Replay off can remove the `personal_data` rule
+to save that time. Replay then has no detector to keep personal data out, so
+keep the rule whenever Replay is on.
+
 Prompt attacks and unsafe requests receive a fixed reply without reaching any
 model. The guard thresholds favor precision, because role-play and code
 requests can score high on the prompt guard: a request the guard misses still
@@ -190,7 +205,23 @@ ratio.
 - The effort rules were checked on 60 to 150 questions per benchmark; other
   workloads can need other thresholds.
 - A route to a stronger model does not guarantee a correct answer.
+- The `long_context` threshold uses the Router's token estimate, about four
+  bytes per token for prose until provider usage from requests with at least
+  4 KiB of text calibrates it. For English prose it counted 1.2 to 1.5 times
+  the backend's tokens, so requests from about 135K backend tokens can reach
+  GLM.
 - The recipe does not provision the inference backends it references.
+
+## Changes
+
+- 0.3.2: bug fixes only; lanes, thresholds and models are unchanged.
+  `personal_data` no longer matches places, organizations, dates, titles,
+  domain names or group names on their own. With Router fixes in the same
+  release, `long_context` matches near 200K backend tokens again instead of
+  about 55K, and `vllm-sr serve` keeps the stack up when the sr-bench worker
+  cannot be replaced.
+- 0.3.1: high effort from 0.675, wider probe margins, serving requirements.
+- 0.3.0: `code` lane and hard STEM questions.
 
 ## References
 
