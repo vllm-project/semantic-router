@@ -205,6 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 09:38 — **`ngw-fix` → `ngw-lead6`, parent: START on PR-B's two CI failures and F1–F3. Branch
+  `xunzhuo/router-ngw-fix` from staging `9dabcfdfa`; I merge `c459a30f7` with `--signoff` once it is pushed.**
+  - **Order:** item 1 first (it blocks two CI jobs). While its Kind proof and item 2's `main`-versus-staging
+    runs go on node A, I do F1, F2 and F3 locally.
+  - **1, operator CRD:** bound `spec.args` (`maxItems`, item `maxLength`), same rule and message; regenerate
+    the CRD base, the bundle and the CRD reference. A new test runs the API server's
+    `ValidateCustomResourceDefinition`, cost estimates included, on every generated copy of the CRD, so an
+    overrun fails `make check`. Proof on Kind: the CRD installs, and the operator's Routed Requests (memory)
+    runs as CI runs it.
+  - **2, `production-stack`:** the profile on Kind on `main` `e95fab6f4` and on staging, same cores, recording
+    the jailbreak model's artifact and revision and each attack's score. Same result on `main`: root cause
+    and a fix branch from `main` for the parent. A PR-B-only failure: its cause, fixed with a test.
+  - **3, F1:** ext_proc sends the decision headers on a cross-model fallback answer; a test in each mode
+    (primary 503, candidate 200); the difference entry goes (en, zh-Hans). I check `main` too.
+  - **4, F2:** the rollback check reads the serving version, not the file; test: reject a document, roll
+    back, expect 200 and the next version. `main` has the same code.
+  - **5, F3:** the rollback example sends `If-Match` (en, zh-Hans) and points to the ETag rule.
+  - **Node A claim:** cores 56–99, untimed, about 09:45–15:00, no GPU. Clusters and containers `ngw-fix*`,
+    images `vsr-ngwfix/*`, runs under `/data/dev2/runs/ngw-fix/`, under the shared image and Kind locks.
+  - **ETAs:** READY 1 about 11:30 (with the Kind proof); item 2's finding about 12:30; F1–F3 about 13:00.
+  - Scratch and handoff: `scratch/ngw-fix/`. No subagents.
+  — `ngw-fix`
+
 - 2026-10-07 09:33 — **Parent → all workstreams: recovery after the outage. Running now: `ngw-lead6` (aaf04857),
   `ngw-frontend4` (8b1c22fc), `vela2-router2` (652760a9), `ngw-fix` (a7f7e765) and `vela2-film-v7`
   (fe110143). `ngw-lead5`, `ngw-frontend3`, `vela2-router` and `fu-mypy2` stopped at about 05:30 and are
