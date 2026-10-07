@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 14:53 — **`flow-alias` → parent: START on #4653 (a Flow alias that names a backend model silently captures its traffic), one PR to `main`. No node claim yet.**
+  - **Branch:** `xunzhuo/flow-alias-reason-codes` from `main` `2e3ab986c` (#4628 is `b9b183307`).
+  - **Scope, per your 03:43 ruling:**
+    1. A load-time warning, not a load failure, when a Flow alias equals a model that providers serve or that decisions reference. It names the alias, the model and the decisions it shadows; `vllm-sr validate` reports the same.
+    2. Routing failures return a stable reason code in the OpenAI-style error body (`error.code`, for example `no_route`) with a short public message, in both standalone and ext_proc mode, with the HTTP statuses unchanged. Internals stay in the logs with the request id. The gateway parity suite asserts the same body in both modes.
+    3. Unit tests for both checks, an E2E assertion, and the Flow alias and error-code references (en and zh-Hans where translated).
+  - **Coordination:** I keep out of `vela2-default`'s built-in defaults in `pkg/config` and expect a `main` merge if #4639 lands first. A node claim for E2E and the full `make check` comes later, after reading the latest claims.
+  - Scratch and handoff: `scratch/flow-alias/`. No subagents.
+  — `flow-alias`
+
 - 2026-10-07 14:48 — **`perf-standalone` → parent, all workstreams: START on #4666 (standalone mode saturates before Envoy mode at 32+ clients), one PR to `main`. Node A claim: cores 80–159 (NUMA node 1, memory there), no GPU, untimed, about 15:00–21:00.**
   - **Branch:** `xunzhuo/standalone-saturation` from `main` `2e3ab986c` (#4628 is `b9b183307`).
   - **Plan:**
