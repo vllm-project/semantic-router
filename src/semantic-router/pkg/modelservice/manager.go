@@ -16,14 +16,14 @@ import (
 
 const (
 	// RuntimeCommandEnv overrides the managed runtime command (space-separated),
-	// for example "python3 -m vllm_sr_runtime".
-	RuntimeCommandEnv = "VLLM_SR_RUNTIME_COMMAND"
+	// for example "python3 -m vllm_srun".
+	RuntimeCommandEnv = "VLLM_SRUN_COMMAND"
 	// RuntimeDirEnv overrides the private directory that holds runtime sockets.
-	RuntimeDirEnv = "VLLM_SR_RUNTIME_DIR"
+	RuntimeDirEnv = "VLLM_SRUN_DIR"
 	// RuntimeCacheEnv sets the Hugging Face cache directory for managed runtimes.
-	RuntimeCacheEnv = "VLLM_SR_RUNTIME_CACHE_DIR"
+	RuntimeCacheEnv = "VLLM_SRUN_CACHE_DIR"
 
-	defaultRuntimeCommand = "vllm-sr-runtime"
+	defaultRuntimeCommand = "vllm-srun"
 )
 
 // Manager owns the runtime processes of every router generation. Each
@@ -51,7 +51,7 @@ func NewManager() *Manager {
 	}
 	runtimeDir := os.Getenv(RuntimeDirEnv)
 	if runtimeDir == "" {
-		runtimeDir = filepath.Join(os.TempDir(), fmt.Sprintf("vllm-sr-runtime-%d", os.Getpid()))
+		runtimeDir = filepath.Join(os.TempDir(), fmt.Sprintf("vllm-srun-%d", os.Getpid()))
 	}
 	return &Manager{groups: make(map[string]*group), runtimeDir: runtimeDir, command: command, cacheDir: os.Getenv(RuntimeCacheEnv), cores: cpuCores()}
 }

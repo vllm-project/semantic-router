@@ -6,8 +6,8 @@ import math
 
 import numpy as np
 import pytest
-from vllm_sr_runtime.families.vela2.calibration import Calibration
-from vllm_sr_runtime.testing.vela2 import PII_TYPES, calibration
+from vllm_srun.families.vela2.calibration import Calibration
+from vllm_srun.testing.vela2 import PII_TYPES, calibration
 
 
 @pytest.fixture

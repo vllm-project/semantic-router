@@ -483,7 +483,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
       schema: objectList(
         'External Model',
         {
-          llm_provider: text('Provider', { required: true }),
+          llm_provider: text('Provider'),
           model_role: text('Model Role', { required: true }),
           llm_endpoint: object('Endpoint', {
             address: text('Address'),

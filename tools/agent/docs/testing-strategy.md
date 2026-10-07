@@ -166,9 +166,9 @@ runner does not reduce them to health checks. The runtime resolves immutable Hub
 revisions from its registry and verifies every loaded file. The runner requires
 every selected case and rejects skipped or missing results.
 
-Prepared Omni bundles include a source identity, file hashes, and export parity.
-Preparation is shared by compatible runtime and conformance contracts. Image
-conformance uses the prepared Nano bundle and retains raw scores, threshold
+The runtime verifies the pinned Omni releases file by file. CI downloads each
+once and shares it between compatible runtime and conformance contracts. Image
+conformance uses the pinned Nano release and retains raw scores, threshold
 checks, prototype protocol and validation results, and fixture provenance.
 It does not replace deployed image extraction and routing tests. Reference-model
 parity and maximum-context qualifications that require explicit inputs remain

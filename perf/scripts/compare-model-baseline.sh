@@ -64,8 +64,22 @@ rm -rf "$BASE_TREE/perf"
 cp -R "$ROOT_DIR/perf" "$BASE_TREE/perf"
 
 # The base side runs its own runtime source on the installed dependencies.
-export PYTHONPATH="$BASE_TREE/src/model-runtime${PYTHONPATH:+:$PYTHONPATH}"
-export VLLM_SR_RUNTIME_COMMAND="${PERF_RUNTIME_PYTHON:-python3} -m vllm_sr_runtime"
+# Before #4618 the runtime was vllm_sr_runtime: it read VLLM_SR_RUNTIME_* and
+# found its plugins under its own entry-point groups, which the installed
+# vllm-srun doesn't declare. Such a base gets its package, with that metadata,
+# and the names it reads.
+if [[ -d "$BASE_TREE/src/model-runtime/vllm_srun" ]]; then
+  export PYTHONPATH="$BASE_TREE/src/model-runtime${PYTHONPATH:+:$PYTHONPATH}"
+  export VLLM_SRUN_COMMAND="${PERF_RUNTIME_PYTHON:-python3} -m vllm_srun"
+else
+  "${PERF_RUNTIME_PYTHON:-python3}" -m pip install --quiet --no-deps \
+    --target "$BASE_TEMP/runtime" "$BASE_TREE/src/model-runtime"
+  export PYTHONPATH="$BASE_TEMP/runtime${PYTHONPATH:+:$PYTHONPATH}"
+  export VLLM_SR_RUNTIME_COMMAND="${PERF_RUNTIME_PYTHON:-python3} -m vllm_sr_runtime"
+  if [[ -n "${VLLM_SRUN_CACHE_DIR:-}" ]]; then
+    export VLLM_SR_RUNTIME_CACHE_DIR="$VLLM_SRUN_CACHE_DIR"
+  fi
+fi
 (
   cd "$BASE_TREE/perf"
   export GIT_WORK_TREE="$BASE_TREE"

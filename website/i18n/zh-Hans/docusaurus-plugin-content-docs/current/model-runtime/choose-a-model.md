@@ -3,7 +3,7 @@ title: 选择模型、规模和硬件
 sidebar_label: 选择模型
 description: 每个任务该用哪个模型，决策模型需要多大，以及用什么硬件运行。
 translation:
-  source_commit: "9cfe4adeb9f83cf1795f24e369d3c79b84ef1728"
+  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/model-runtime/choose-a-model.md"
   outdated: false
 ---
@@ -55,7 +55,7 @@ Decision 1.0 模型（`vllm-sr/Decision-1.0-Kai-0.6B`、`-Lex-0.6B`、`-Route-0.
 `-0.8B`、`-4B`、`-9B`）支持选择多个标签或标出文本片段的问题；它是私有预览，需要具备访问权限的 Hugging Face token。
 在 CPU 上运行 0.3B。在 GPU 上，较大的几档可读取最多 16,384 个 token 的输入（0.3B 为 8,192）：其中 0.8B 成本最低，4B 和 9B 最准确。
 
-`vllm-sr-runtime models` 会列出每个内置模型及其固定的 revision。
+`vllm-srun models` 会列出每个内置模型及其固定的 revision。
 
 ## 硬件 {#hardware}
 

@@ -34,6 +34,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'installation/installation',
+        'installation/agent-harness',
         'installation/agent',
         'installation/shell-completion',
         {
