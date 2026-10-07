@@ -150,6 +150,9 @@ func (c *CachingStore) replaceCurrentGroup(ctx context.Context, versions []memor
 		return false, 0, fmt.Errorf("memory store does not support atomic consolidation")
 	}
 	replaced, deleted, err := replacer.replaceCurrentGroup(ctx, versions, summary)
+	// A committed merge must invalidate even when the first reply was lost
+	// and a retry observed the already-written summary. Backends report that
+	// replay as replaced.
 	if replaced {
 		c.invalidate(ctx, summary.UserID)
 	}

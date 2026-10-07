@@ -24,30 +24,57 @@ var (
 // creates the summary, and deletes the sources in a single Valkey script. A
 // failed comparison has no side effects, so a concurrent source update cannot
 // leave a summary containing stale content.
+//
+// The script is safe to retry. If Valkey commits the merge and the client
+// loses the reply, a replay sees every source gone and the same summary
+// already stored, and it returns the committed delete count instead of 0.
+// Callers treat that count as success and invalidate cached retrievals.
 const valkeyReplaceCurrentGroupScriptSource = `
 local source_count = tonumber(ARGV[1])
 local arg = 2
+local missing = 0
 
 for i = 1, source_count do
   local fields = redis.call('HMGET', KEYS[i], 'id', 'user_id', 'project_id', 'memory_type', 'content', 'created_at', 'updated_at', 'importance')
   if fields[1] == false or fields[1] == nil then
-    return 0
-  end
-  for j = 1, 8 do
-    if fields[j] ~= ARGV[arg + j - 1] then
-      return 0
+    missing = missing + 1
+  else
+    for j = 1, 8 do
+      if fields[j] ~= ARGV[arg + j - 1] then
+        return 0
+      end
     end
   end
   arg = arg + 8
 end
 
-if redis.call('EXISTS', KEYS[source_count + 1]) == 1 then
+local summary_key = KEYS[source_count + 1]
+if missing > 0 then
+  if missing == source_count and redis.call('EXISTS', summary_key) == 1 then
+    local field_count = tonumber(ARGV[arg])
+    local field_arg = arg + 1
+    local matches = 1
+    for i = 1, field_count do
+      if redis.call('HGET', summary_key, ARGV[field_arg]) ~= ARGV[field_arg + 1] then
+        matches = 0
+        break
+      end
+      field_arg = field_arg + 2
+    end
+    if matches == 1 then
+      return source_count
+    end
+  end
+  return 0
+end
+
+if redis.call('EXISTS', summary_key) == 1 then
   return -1
 end
 
 local field_count = tonumber(ARGV[arg])
 arg = arg + 1
-local hset_args = { KEYS[source_count + 1] }
+local hset_args = { summary_key }
 for i = 1, field_count do
   table.insert(hset_args, ARGV[arg])
   table.insert(hset_args, ARGV[arg + 1])

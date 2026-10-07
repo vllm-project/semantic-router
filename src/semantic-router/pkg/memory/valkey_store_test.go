@@ -459,6 +459,23 @@ func TestValkeyFieldsMapToMemory(t *testing.T) {
 		assert.Equal(t, time.UnixMilli(1_700_000_030_123), mem.LastAccessed)
 		assert.Equal(t, 4, mem.AccessCount)
 	})
+
+	t.Run("preserves content whitespace", func(t *testing.T) {
+		t.Parallel()
+		mem := valkeyFieldsMapToMemory(map[string]interface{}{
+			"id":      " mem_ws ",
+			"content": "  spaced fact  ",
+			"user_id": " user ",
+		})
+		assert.Equal(t, "mem_ws", mem.ID)
+		assert.Equal(t, "  spaced fact  ", mem.Content)
+		assert.Equal(t, "user", mem.UserID)
+
+		raw := valkeyFieldsMapToMemory(map[string]interface{}{
+			"content": []byte("  from bytes  "),
+		})
+		assert.Equal(t, "  from bytes  ", raw.Content)
+	})
 }
 
 // ---------------------------------------------------------------------------

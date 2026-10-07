@@ -188,7 +188,7 @@ func (s *InMemoryStore) List(ctx context.Context, opts ListOptions) (*ListResult
 		return nil, err
 	}
 	sortMemoriesForList(matching)
-	page := pageMemories(matching, offset, limit)
+	page := cloneMemories(pageMemories(matching, offset, limit))
 
 	return &ListResult{
 		Memories: page,
@@ -196,6 +196,31 @@ func (s *InMemoryStore) List(ctx context.Context, opts ListOptions) (*ListResult
 		Limit:    limit,
 		Offset:   offset,
 	}, nil
+}
+
+// cloneMemories copies each memory before the store lock is released. List
+// callers, including background consolidation, must not observe later Update
+// mutations of the stored objects.
+func cloneMemories(memories []*Memory) []*Memory {
+	if memories == nil {
+		return nil
+	}
+	cloned := make([]*Memory, len(memories))
+	for i, mem := range memories {
+		cloned[i] = cloneMemory(mem)
+	}
+	return cloned
+}
+
+func cloneMemory(mem *Memory) *Memory {
+	if mem == nil {
+		return nil
+	}
+	cloned := *mem
+	if mem.Embedding != nil {
+		cloned.Embedding = append([]float32(nil), mem.Embedding...)
+	}
+	return &cloned
 }
 
 // Get retrieves a memory by ID.

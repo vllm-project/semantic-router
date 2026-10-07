@@ -48,10 +48,9 @@ func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 		WithKeys([]string{key}).
 		WithArgs([]string{id, nowUnixMilli})
 
-	err := v.retryWithBackoff(ctx, func() error {
-		_, runErr := v.client.InvokeScriptWithOptions(ctx, *valkeyTrackRetrievalScript(), *scriptOptions)
-		return runErr
-	})
+	// HINCRBY is not idempotent. Retrying after a lost reply applies the
+	// increment twice, so each retrieval records access at most once.
+	_, err := v.client.InvokeScriptWithOptions(ctx, *valkeyTrackRetrievalScript(), *scriptOptions)
 	if err != nil {
 		return fmt.Errorf("record retrieval metadata failed: %w", err)
 	}
@@ -552,7 +551,7 @@ func valkeyFieldsMapToMemory(fields map[string]interface{}) *Memory {
 	mem := &Memory{}
 
 	mem.ID = valkeySearchStringField(fields, "id")
-	mem.Content = valkeySearchStringField(fields, "content")
+	mem.Content = valkeySearchContentField(fields)
 	mem.UserID = valkeySearchStringField(fields, "user_id")
 	if memType := valkeySearchStringField(fields, "memory_type"); memType != "" {
 		mem.Type = MemoryType(memType)
@@ -588,6 +587,23 @@ func valkeySearchStringField(fields map[string]interface{}, key string) string {
 		return ""
 	}
 	return value
+}
+
+// valkeySearchContentField keeps the stored text, including leading and
+// trailing whitespace. Identifier fields are trimmed; content is not.
+func valkeySearchContentField(fields map[string]interface{}) string {
+	raw, ok := fields["content"]
+	if !ok || raw == nil {
+		return ""
+	}
+	switch val := raw.(type) {
+	case string:
+		return val
+	case []byte:
+		return string(val)
+	default:
+		return fmt.Sprint(val)
+	}
 }
 
 func valkeySearchMillisField(fields map[string]interface{}, key string) (int64, bool) {
