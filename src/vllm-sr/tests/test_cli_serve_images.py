@@ -87,6 +87,8 @@ def test_serve_passes_role_specific_images_to_backend(monkeypatch, tmp_path: Pat
             "serve",
             "--config",
             str(config_path),
+            "--gateway",
+            "extproc",
             "--router-image",
             "test/router:latest",
             "--envoy-image",
@@ -139,5 +141,5 @@ def test_serve_rejects_startup_timeout_for_kubernetes_before_mutation(monkeypatc
     result = CliRunner().invoke(
         main, ["serve", "--target", "k8s", "--startup-timeout", "7200"]
     )
-    assert result.exit_code == 1
-    assert "supported only for local Docker" in result.output
+    assert result.exit_code == 2
+    assert "--startup-timeout applies to the docker target" in result.output

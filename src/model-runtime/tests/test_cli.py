@@ -1,9 +1,9 @@
 import os
 
 import pytest
-from vllm_sr_runtime import cli
-from vllm_sr_runtime.cli import build_parser, config_from_args, main
-from vllm_sr_runtime.plugins import registry
+from vllm_srun import cli
+from vllm_srun.cli import build_parser, config_from_args, main
+from vllm_srun.plugins import registry
 
 
 def test_serve_arguments_map_to_the_config():
@@ -89,10 +89,10 @@ BUILTIN_FAMILIES = (
 def test_every_built_in_family_writes_fixtures_it_detects(family, tmp_path):
     import importlib
 
-    from vllm_sr_runtime.plugins.base import PackageRef
+    from vllm_srun.plugins.base import PackageRef
 
     assert set(BUILTIN_FAMILIES) <= set(registry.names("families"))
-    module = importlib.import_module(f"vllm_sr_runtime.testing.{family}")
+    module = importlib.import_module(f"vllm_srun.testing.{family}")
     loaded = registry.plugin("families", family).load()()
     for variant in module.VARIANTS:
         output = tmp_path / variant
@@ -183,7 +183,7 @@ def test_a_uid_without_a_passwd_entry_gets_a_user_home_and_compile_cache(
     monkeypatch.delenv("TORCHINDUCTOR_CACHE_DIR", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path / "missing"))
     cli.default_identity()
-    assert os.environ["USER"] == "vllm-sr-runtime"
+    assert os.environ["USER"] == "vllm-srun"
     assert os.environ["HOME"] == str(tmp_path)
     assert os.environ["TORCHINDUCTOR_CACHE_DIR"] == str(tmp_path / "torchinductor")
 

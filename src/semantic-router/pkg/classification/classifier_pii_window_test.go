@@ -26,14 +26,14 @@ func TestPIIWindowInputsPreserveUnpreparedFallback(t *testing.T) {
 }
 
 func TestDefaultPIIWindowUsesCompleteInputWithoutChangingSource(t *testing.T) {
-	cfg := config.DefaultGlobalConfig()
+	cfg := vela1PIIConfig()
 	original := cfg.PIIModel
 	models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := models.cfg.PIIModel
-	registered := config.GetModelByPath(config.DefaultSystemModels().PIIClassifier)
+	registered := config.GetModelByPath(config.Vela1SystemModels().PIIClassifier)
 	if got.Window == nil || got.Window.Size != 512 || got.Window.Overlap != 255 || got.MaxSequenceLength != registered.MaxContextLength {
 		t.Fatalf("incorrect default: %+v", got)
 	}
@@ -60,7 +60,7 @@ func TestDefaultPIIWindowUsesCompleteInputWithoutChangingSource(t *testing.T) {
 }
 
 func TestDefaultPIIWindowRespectsArtifactSelection(t *testing.T) {
-	registered := config.GetModelByPath(config.DefaultSystemModels().PIIClassifier)
+	registered := config.GetModelByPath(config.Vela1SystemModels().PIIClassifier)
 	absolute, err := filepath.Abs(registered.LocalPath)
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +77,7 @@ func TestDefaultPIIWindowRespectsArtifactSelection(t *testing.T) {
 		{"absolute path", absolute, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			cfg := config.DefaultGlobalConfig()
+			cfg := vela1PIIConfig()
 			cfg.PIIModel.ModelID = test.artifact
 			original := cfg.PIIModel
 			models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
@@ -118,7 +118,7 @@ func TestDefaultPIIWindowPreservesExplicitPolicies(t *testing.T) {
 		"disabled": func(c *config.RouterConfig) { v := false; c.PIIModel.Enabled = &v },
 	} {
 		t.Run(name, func(t *testing.T) {
-			cfg := config.DefaultGlobalConfig()
+			cfg := vela1PIIConfig()
 			change(&cfg)
 			original := cfg.PIIModel
 			m := &classifierModelRuntime{cfg: &cfg}
@@ -130,8 +130,8 @@ func TestDefaultPIIWindowPreservesExplicitPolicies(t *testing.T) {
 			}
 		})
 	}
-	cfg := config.DefaultGlobalConfig()
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"pii-amd": {Artifact: config.DefaultSystemModels().PIIClassifier, Provider: config.ModelRuntimeProvider, Device: "rocm:0", Input: config.ModelInputBudget{MaxTokens: 8192, Overflow: "reject"}}}
+	cfg := vela1PIIConfig()
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"pii-amd": {Artifact: config.Vela1SystemModels().PIIClassifier, Provider: config.ModelRuntimeProvider, Device: "rocm:0", Input: config.ModelInputBudget{MaxTokens: 8192, Overflow: "reject"}}}
 	cfg.ModelBindings = map[string]config.ModelBinding{"pii_classifier": {Deployment: "pii-amd", Adapter: "mmbert32k", Contract: config.RemoteClassifierContractTokenSpans}}
 	models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 	if err != nil {
@@ -166,7 +166,7 @@ func (b *capturedWindowPII) ClassifyTokens(_ context.Context, text string) (task
 }
 
 func TestPIIWindowFullInputReachesSignalsAndDetailOffsets(t *testing.T) {
-	cfg := config.DefaultGlobalConfig()
+	cfg := vela1PIIConfig()
 	models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -190,4 +190,12 @@ func TestPIIWindowFullInputReachesSignalsAndDetailOffsets(t *testing.T) {
 	if len(failed.MatchedPIIRules) != 0 || len(failed.SignalErrors) != 2 {
 		t.Fatalf("failed window looked clean: %+v", failed.SignalErrors)
 	}
+}
+
+// vela1PIIConfig is the default configuration with PII pinned to Vela 1.0
+// PII, whose 32K windowed scan the Router resolves itself.
+func vela1PIIConfig() config.RouterConfig {
+	cfg := config.DefaultGlobalConfig()
+	cfg.PIIModel.ModelID = config.Vela1SystemModels().PIIClassifier
+	return cfg
 }

@@ -136,8 +136,9 @@ func (l *Lease) call(deployment string) (member, error) {
 	return m, nil
 }
 
-func (l *Lease) observe(m member, deployment, surface string, started time.Time, err error) {
+func (l *Lease) observe(m member, deployment, surface string, started time.Time, timing exchangeTiming, err error) {
 	requestDuration.WithLabelValues(deployment, surface).Observe(time.Since(started).Seconds())
+	timing.record(deployment, surface)
 	requestsTotal.WithLabelValues(deployment, ErrorReason(err)).Inc()
 	if errors.Is(err, ErrFailed) {
 		// A transport failure may mean the process died: probe now rather
@@ -146,13 +147,22 @@ func (l *Lease) observe(m member, deployment, surface string, started time.Time,
 	}
 }
 
-// Decide answers the request through a deployment, inside the context's bundle when there is one.
+// Decide answers the request through a deployment, inside the context's
+// bundle when there is one; the bundle may answer it together with the
+// stage's other questions to the same model and state.
 func (l *Lease) Decide(ctx context.Context, deployment string, request Request) (Response, error) {
 	m, err := l.call(deployment)
 	if err != nil {
 		return Response{}, err
 	}
 	cache := m.served.cache.active()
+	if InBundle(ctx) {
+		started := time.Now()
+		request.Model = m.served.name
+		response, timing, decideErr := m.group.client.decide(ctx, request, cache, deployment)
+		l.observe(m, deployment, "decisions", started, timing, decideErr)
+		return response, decideErr
+	}
 	var key cacheKey
 	if cache != nil {
 		key = decideKey(request)
@@ -163,8 +173,8 @@ func (l *Lease) Decide(ctx context.Context, deployment string, request Request) 
 	}
 	started := time.Now()
 	request.Model = m.served.name
-	response, err := m.group.client.Decide(ctx, request)
-	l.observe(m, deployment, "decisions", started, err)
+	response, timing, err := m.group.client.decide(ctx, request, nil, "")
+	l.observe(m, deployment, "decisions", started, timing, err)
 	if err == nil && cache != nil {
 		cacheTotal.WithLabelValues(deployment, "miss").Inc()
 		if complete(response) {
@@ -190,8 +200,8 @@ func (l *Lease) Classify(ctx context.Context, deployment string, request Classif
 		}
 	}
 	started := time.Now()
-	response, err := m.group.client.Classify(ctx, m.served.name, request)
-	l.observe(m, deployment, "classify", started, err)
+	response, timing, err := m.group.client.classify(ctx, m.served.name, request)
+	l.observe(m, deployment, "classify", started, timing, err)
 	if err == nil && cache != nil {
 		cacheTotal.WithLabelValues(deployment, "miss").Inc()
 		if classified(response) {
@@ -208,8 +218,8 @@ func (l *Lease) Embed(ctx context.Context, deployment string, request EmbedReque
 		return EmbedResponse{}, err
 	}
 	started := time.Now()
-	response, err := m.group.client.Embed(ctx, m.served.name, request)
-	l.observe(m, deployment, "embeddings", started, err)
+	response, timing, err := m.group.client.embed(ctx, m.served.name, request)
+	l.observe(m, deployment, "embeddings", started, timing, err)
 	return response, err
 }
 
@@ -220,8 +230,8 @@ func (l *Lease) Rerank(ctx context.Context, deployment string, request RerankReq
 		return RerankResponse{}, err
 	}
 	started := time.Now()
-	response, err := m.group.client.Rerank(ctx, m.served.name, request)
-	l.observe(m, deployment, "rerank", started, err)
+	response, timing, err := m.group.client.rerank(ctx, m.served.name, request)
+	l.observe(m, deployment, "rerank", started, timing, err)
 	return response, err
 }
 

@@ -13,8 +13,6 @@ import (
 // requests changes. This catches a status handler that reports process liveness
 // as routing readiness, even when the collector's own tests pass.
 func TestStatusHTTPTracksRouterReadinessAndRecovery(t *testing.T) {
-	setRunningManagedStatusContainers(t)
-
 	var phase atomic.Int32
 	var modelRequests atomic.Int32
 	routerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +55,7 @@ func TestStatusHTTPTracksRouterReadinessAndRecovery(t *testing.T) {
 		routerServer.URL,
 		routerServer.URL,
 		t.TempDir(),
+		StackState{},
 		statusCredentialProvider{token: "status-e2e-token"},
 	))
 	defer dashboardServer.Close()

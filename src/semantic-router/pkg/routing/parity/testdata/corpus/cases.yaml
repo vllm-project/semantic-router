@@ -1,0 +1,224 @@
+# Parity corpus: requests as a gateway's HTTP connection manager presents them,
+# each with the canned upstream response a fake backend returns. The same cases
+# drive the ext_proc adapter, the routing engine, and (end to end) both gateway
+# modes, so their records can be compared.
+cases:
+  - name: auto-code-route
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Write a python function that reverses a list."}]}'
+    upstream: chat-ok
+
+  - name: auto-urgent-route
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"vllm-sr/auto","messages":[{"role":"system","content":"Be brief."},{"role":"user","content":"This is urgent, summarize the plan."}],"temperature":0.2}'
+    upstream: chat-ok
+
+  - name: auto-essay-anthropic-backend
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Write a short poem about rivers."}],"max_tokens":64}'
+    upstream: anthropic-ok
+
+  - name: auto-no-match-default-model
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Hello there."}]}'
+    upstream: chat-ok
+
+  - name: explicit-remote-model
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+        - [authorization, Bearer client-key-not-forwarded]
+      body: '{"model":"general-large","messages":[{"role":"user","content":"Explain HTTP caching."}]}'
+    upstream: chat-ok
+
+  - name: unknown-model
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"no-such-model","messages":[{"role":"user","content":"hi"}]}'
+    upstream: chat-ok
+
+  # The Flow alias evaluates only workflows decisions, and the corpus has none.
+  - name: flow-alias-no-route
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"vllm-sr/flow","messages":[{"role":"user","content":"Plan the release."}]}'
+    upstream: chat-ok
+
+  - name: entrypoint-support-recipe
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"vllm-sr/support","messages":[{"role":"user","content":"I need a refund for my last invoice."}]}'
+    upstream: chat-ok
+
+  - name: streaming-code-route
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+        - [accept, text/event-stream]
+      body: '{"model":"vllm-sr/auto","stream":true,"messages":[{"role":"user","content":"Show me golang generics."}]}'
+    upstream: chat-sse
+
+  - name: models-list
+    request:
+      method: GET
+      path: /v1/models
+      headers:
+        - [accept, application/json]
+
+  - name: invalid-json-body
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"unterminated'
+    upstream: chat-ok
+
+  - name: missing-model-field
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+      body: '{"messages":[{"role":"user","content":"hi"}]}'
+    upstream: chat-ok
+
+  - name: upstream-503
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Compile this golang program."}]}'
+    upstream: chat-503
+
+  - name: upstream-429
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"general-small","messages":[{"role":"user","content":"Hello again."}]}'
+    upstream: chat-429
+
+  - name: skip-processing-header-ignored
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+        - [x-vsr-skip-processing, "true"]
+      body: '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"urgent: status update"}]}'
+    upstream: chat-ok
+
+  - name: client-selected-model-overwritten
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+        - [x-selected-model, general-large]
+      body: '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"urgent: restart the service"}]}'
+    upstream: chat-ok
+
+  # The edge drops the proxy-control headers only a trusted proxy may set
+  # (retry, timeout and tracing controls, the internal marker), as Envoy does
+  # before ext_proc; x-envoy-original-path is an edge-only header, which the
+  # template's HTTP connection manager keeps.
+  - name: client-envoy-control-headers
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+        - [x-envoy-internal, "true"]
+        - [x-envoy-max-retries, "5"]
+        - [x-envoy-retry-on, 5xx]
+        - [x-envoy-upstream-rq-timeout-ms, "1"]
+        - [x-envoy-force-trace, "true"]
+        - [x-envoy-original-path, /client/original]
+      body: '{"model":"general-small","messages":[{"role":"user","content":"Hello there."}]}'
+    upstream: chat-ok
+
+  - name: anthropic-messages-ingress
+    request:
+      method: POST
+      path: /v1/messages
+      headers:
+        - [content-type, application/json]
+        - [anthropic-version, "2023-06-01"]
+      body: '{"model":"vllm-sr/auto","max_tokens":64,"messages":[{"role":"user","content":"Write a python script to parse CSV."}]}'
+    upstream: chat-ok
+
+  - name: responses-api-not-enabled
+    request:
+      method: POST
+      path: /v1/responses
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"vllm-sr/auto","input":"Write an essay outline about tides.","store":false}'
+    upstream: anthropic-ok
+
+upstreams:
+  chat-ok:
+    status: 200
+    headers:
+      - [content-type, application/json]
+    body: '{"id":"chatcmpl-parity","object":"chat.completion","created":1700000000,"model":"upstream-model","choices":[{"index":0,"message":{"role":"assistant","content":"Hello from the upstream model."},"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":6,"total_tokens":18}}'
+
+  chat-sse:
+    status: 200
+    headers:
+      - [content-type, text/event-stream]
+    chunks:
+      - "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n"
+      - "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world.\"},\"finish_reason\":null}]}\n\n"
+      - "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":9,\"completion_tokens\":2,\"total_tokens\":11}}\n\ndata: [DONE]\n\n"
+
+  anthropic-ok:
+    status: 200
+    headers:
+      - [content-type, application/json]
+    body: '{"id":"msg_parity","type":"message","role":"assistant","model":"claude-compatible-1","content":[{"type":"text","text":"Rivers carve the land."}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}'
+
+  chat-503:
+    status: 503
+    headers:
+      - [content-type, application/json]
+    body: '{"error":{"message":"backend overloaded","type":"server_error"}}'
+
+  chat-429:
+    status: 429
+    headers:
+      - [content-type, application/json]
+      - [retry-after, "2"]
+    body: '{"error":{"message":"rate limited","type":"rate_limit_error"}}'

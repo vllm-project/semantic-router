@@ -152,6 +152,26 @@ func (registry *Registry) Provider(id string) (ProviderDefinition, bool) {
 	return cloneProvider(value), ok
 }
 
+// ProviderIdentity is the part of a provider definition that request-time
+// resolution reads: its identity, default protocol, reasoning transport and
+// auth. Unlike Provider, it copies none of the definition's collections.
+type ProviderIdentity struct {
+	ID                 string
+	DefaultProtocol    string
+	ReasoningTransport ReasoningTransport
+	Auth               ProviderAuth
+}
+
+func (registry *Registry) ProviderIdentity(id string) (ProviderIdentity, bool) {
+	value, ok := registry.providers[id]
+	return ProviderIdentity{
+		ID:                 value.ID,
+		DefaultProtocol:    value.DefaultProtocol,
+		ReasoningTransport: value.ReasoningTransport,
+		Auth:               value.Auth,
+	}, ok
+}
+
 func (registry *Registry) ReasoningFamily(id string) (ReasoningFamilyDefinition, bool) {
 	value, ok := registry.reasoningFamilies[id]
 	return cloneReasoningFamily(value), ok

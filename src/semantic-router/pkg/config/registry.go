@@ -19,7 +19,12 @@ const (
 	PurposeHazard                ModelPurpose = "hazard"                 // Identify independent content hazards
 	PurposeReranking             ModelPurpose = "reranking"              // Rank query-document pairs
 	PurposeSemanticSimilarity    ModelPurpose = "semantic-similarity"    // Compute semantic similarity
+	PurposeRoutingSignals        ModelPurpose = "routing-signals"        // Answer several built-in routing signals in one call
 )
+
+// Vela2SignalModel is the registry path of Vela 2.0 0.3B, the default model
+// of every built-in signal it answers.
+const Vela2SignalModel = "models/Vela-2.0-0.3B"
 
 // ModelSpec defines a model's metadata and capabilities
 type ModelSpec struct {
@@ -36,10 +41,9 @@ type ModelSpec struct {
 	// Only applied when the resolved repository still matches this entry.
 	DownloadExcludePatterns []string `json:"-" yaml:"-"`
 
-	// PreparedArtifact identifies an offline, manifest-verified runtime bundle.
-	// These releases cannot be provisioned by downloading native HF weights.
-	PreparedArtifact string `json:"prepared_artifact,omitempty" yaml:"prepared_artifact,omitempty"`
-	ArtifactBundle   string `json:"artifact_bundle,omitempty" yaml:"artifact_bundle,omitempty"`
+	// RuntimeProvisioned marks a release the model runtime downloads and
+	// verifies itself; the router provisions nothing for it.
+	RuntimeProvisioned bool `json:"-" yaml:"-"`
 
 	// Alternative names/aliases for this model
 	Aliases []string `json:"aliases,omitempty" yaml:"aliases,omitempty"`
@@ -74,6 +78,15 @@ type ModelSpec struct {
 	// Explicit recipe bindings always take precedence.
 	DefaultAdapter string `json:"default_adapter,omitempty" yaml:"default_adapter,omitempty"`
 
+	// SharedDeployment marks a model that answers several modules' signals:
+	// every module that names it on one device runs one implicit deployment,
+	// so the model loads once and a request's questions share one call.
+	SharedDeployment bool `json:"-" yaml:"-"`
+
+	// CPUProfile is the model_runtime profile an implicit CPU deployment of
+	// the model runs; the runtime's accuracy record for the model backs it.
+	CPUProfile string `json:"-" yaml:"-"`
+
 	// Number of classification classes (for classifiers)
 	NumClasses int `json:"num_classes,omitempty" yaml:"num_classes,omitempty"`
 
@@ -92,6 +105,25 @@ var velaShieldArtifactPatterns = append([]string{"lc/*", "heads/*", "demo.py", "
 // DefaultModelRegistry provides the structured model registry
 // Users can override this by specifying mom_registry in their config.yaml
 var DefaultModelRegistry = []ModelSpec{
+	// Vela 2.0 0.3B answers the built-in domain, Guard, safety, fact-check,
+	// feedback and modality signals as questions, and PII and hallucination
+	// with its span presets. The model runtime downloads and verifies it; on
+	// CPU, max_speed runs its float32-packed copy, which keeps its answers
+	// (src/model-runtime/docs/records/vela2-parity.md).
+	{
+		LocalPath:          Vela2SignalModel,
+		RepoID:             "vllm-sr/Vela-2.0-0.3B",
+		Revision:           "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+		Aliases:            []string{"Vela-2.0-0.3B"},
+		Purpose:            PurposeRoutingSignals,
+		Description:        "Answer the built-in routing signals in one call: domain, prompt attacks, safety, fact-check need, feedback and modality, with PII and hallucination spans. Supports up to 8K input.",
+		ParameterSize:      "309M encoder",
+		MaxContextLength:   8192,
+		RuntimeProvisioned: true,
+		SharedDeployment:   true,
+		CPUProfile:         "max_speed",
+		Tags:               []string{"vela", "vela2", "multi-task", "spans", "multilingual"},
+	},
 	// Vela releases use immutable revisions. Legacy aliases below retain their
 	// original repositories so an explicit old configuration stays reproducible.
 	{
@@ -444,8 +476,8 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:             []string{"embedding", "matryoshka", "2d-matryoshka", "multilingual", "modernbert", "long-context", "early-exit", "flash-attention-2"},
 	},
 
-	// Omni runtime bundles contain four verified ONNX graphs and the exact
-	// published processors. Native source snapshots are not runtime artifacts.
+	// Vela 1.0 Omni: the model runtime serves the pinned release from its own
+	// download of the published weights and configs.
 	{
 		LocalPath:     "models/vela-1.0-omni-nano",
 		RepoID:        "vllm-sr/Vela-1.0-Omni-Nano",
@@ -454,9 +486,9 @@ var DefaultModelRegistry = []ModelSpec{
 		Purpose:       PurposeEmbedding,
 		Description:   "Vela Omni Nano text, image, and raw audio embeddings in one normalized 384-dimensional space.",
 		ParameterSize: "164M", EmbeddingDim: 384, MaxContextLength: 512,
-		DefaultAdapter:   "vela_omni",
-		PreparedArtifact: "vela_omni", ArtifactBundle: "vela-1.0-omni-nano",
-		Tags: []string{"embedding", "multimodal", "text", "image", "audio"},
+		DefaultAdapter:     "vela_omni",
+		RuntimeProvisioned: true,
+		Tags:               []string{"embedding", "multimodal", "text", "image", "audio"},
 	},
 	{
 		LocalPath:     "models/vela-1.0-omni-mini",
@@ -466,9 +498,9 @@ var DefaultModelRegistry = []ModelSpec{
 		Purpose:       PurposeEmbedding,
 		Description:   "Vela Omni Mini text, image, and raw audio embeddings in one normalized 768-dimensional space with 32K text input.",
 		ParameterSize: "1.36B", EmbeddingDim: 768, MaxContextLength: 32768,
-		DefaultAdapter:   "vela_omni",
-		PreparedArtifact: "vela_omni", ArtifactBundle: "vela-1.0-omni-mini",
-		Tags: []string{"embedding", "multimodal", "text", "image", "audio", "long-context"},
+		DefaultAdapter:     "vela_omni",
+		RuntimeProvisioned: true,
+		Tags:               []string{"embedding", "multimodal", "text", "image", "audio", "long-context"},
 	},
 
 	// Embedding Models - Multi-Modal (Text/Image/Audio)

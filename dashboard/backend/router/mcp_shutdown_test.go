@@ -20,15 +20,9 @@ import (
 )
 
 func TestDashboardCloseDisconnectsMCPClients(t *testing.T) {
-	dashboard, _ := startDashboardServer(t)
-	if dashboard.mcpManager == nil {
-		t.Fatal("expected MCP manager")
-	}
-
-	if err := dashboard.mcpManager.Connect(context.Background(), mcp.BuiltinOpenClawServerID); err != nil {
-		t.Fatalf("connect built-in MCP server: %v", err)
-	}
-	state, err := dashboard.mcpManager.GetServerStatus(mcp.BuiltinOpenClawServerID)
+	dashboard := newMCPShutdownDashboard(t)
+	serverID, sessionClosed := connectHTTPMCPForShutdown(t, dashboard)
+	state, err := dashboard.mcpManager.GetServerStatus(serverID)
 	if err != nil {
 		t.Fatalf("get MCP server status before close: %v", err)
 	}
@@ -39,12 +33,20 @@ func TestDashboardCloseDisconnectsMCPClients(t *testing.T) {
 	if closeErr := dashboard.Close(); closeErr != nil {
 		t.Fatalf("close dashboard: %v", closeErr)
 	}
-	state, err = dashboard.mcpManager.GetServerStatus(mcp.BuiltinOpenClawServerID)
+	state, err = dashboard.mcpManager.GetServerStatus(serverID)
 	if err != nil {
 		t.Fatalf("get MCP server status after close: %v", err)
 	}
 	if state.Status != mcp.StatusDisconnected {
 		t.Fatalf("MCP status after close = %q, want %q", state.Status, mcp.StatusDisconnected)
+	}
+	select {
+	case sessionID := <-sessionClosed:
+		if sessionID == "" {
+			t.Fatal("HTTP MCP close request had no session ID")
+		}
+	default:
+		t.Fatal("dashboard close returned before closing the HTTP MCP session")
 	}
 }
 
@@ -61,10 +63,7 @@ func TestDashboardCloseTerminatesStdioMCPProcess(t *testing.T) {
 
 func testDashboardStdioShutdown(t *testing.T, mode string) {
 	t.Helper()
-	dashboard, _ := startDashboardServer(t)
-	if dashboard.mcpManager == nil {
-		t.Fatal("expected MCP manager")
-	}
+	dashboard := newMCPShutdownDashboard(t)
 
 	config, exitMarker := stdioMCPTestConfig(t, mode)
 	if err := dashboard.mcpManager.AddServer(config); err != nil {
@@ -82,9 +81,7 @@ func testDashboardStdioShutdown(t *testing.T, mode string) {
 	if _, err := dashboard.mcpManager.ExecuteTool(ctx, config.ID, "ping", nil); err != nil {
 		t.Fatalf("stdio connection did not survive initialization: %v", err)
 	}
-	if err := dashboard.mcpManager.Connect(context.Background(), mcp.BuiltinOpenClawServerID); err != nil {
-		t.Fatalf("connect built-in MCP server: %v", err)
-	}
+	httpServerID, _ := connectHTTPMCPForShutdown(t, dashboard)
 	if _, err := os.Stat(exitMarker); !os.IsNotExist(err) {
 		t.Fatalf("stdio helper exited before dashboard close: stat error = %v", err)
 	}
@@ -112,9 +109,9 @@ func testDashboardStdioShutdown(t *testing.T, mode string) {
 	if state.Status != mcp.StatusDisconnected {
 		t.Fatalf("stdio MCP status after close = %q, want %q", state.Status, mcp.StatusDisconnected)
 	}
-	builtInState, err := dashboard.mcpManager.GetServerStatus(mcp.BuiltinOpenClawServerID)
-	if err != nil || builtInState.Status != mcp.StatusDisconnected {
-		t.Fatalf("built-in MCP was not cleaned up: state=%+v, error=%v", builtInState, err)
+	httpState, err := dashboard.mcpManager.GetServerStatus(httpServerID)
+	if err != nil || httpState.Status != mcp.StatusDisconnected {
+		t.Fatalf("HTTP MCP was not cleaned up: state=%+v, error=%v", httpState, err)
 	}
 }
 
@@ -122,7 +119,7 @@ func TestDashboardCloseCancelsStdioInitialization(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("requires POSIX process signals")
 	}
-	dashboard, _ := startDashboardServer(t)
+	dashboard := newMCPShutdownDashboard(t)
 	config, exitMarker := stdioMCPTestConfig(t, "kill")
 	config.Connection.Env["SEMANTIC_ROUTER_MCP_STDIO_BLOCK_INITIALIZE"] = "1"
 	if err := dashboard.mcpManager.AddServer(config); err != nil {

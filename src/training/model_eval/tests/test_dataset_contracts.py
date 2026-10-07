@@ -15,7 +15,11 @@ from typing import Any
 from unittest.mock import Mock
 
 from src.training.model_eval import gap_report
-from src.training.model_eval.artifact_inventory import REGISTRY_ALIASES
+from src.training.model_eval.artifact_inventory import (
+    REGISTRY_ALIASES,
+    load_config,
+    served_artifacts,
+)
 from src.training.model_eval.constants import LEGACY_MODEL_REGISTRY, MODEL_REGISTRY
 from src.training.model_eval.dataset_contracts import (
     classification_label_id,
@@ -75,19 +79,26 @@ def legacy_mapping(task):
     }
 
 
-def domain_baseline():
-    class Split(list):
-        def filter(self, keep):
-            return Split(row for row in self if keep(row))
+class Split(list):
+    def filter(self, keep):
+        return Split(row for row in self if keep(row))
 
+    def select_columns(self, names):
+        return Split({name: row[name] for name in names} for row in self)
+
+
+def baseline_loader(load_dataset):
     return load_definitions(
         "baseline_tasks.py",
-        {"TaskSpec", "TASK_SPECS", "load_rows"},
+        {"TaskSpec", "TASK_SPECS", "load_split", "load_rows"},
         {
             "dataclass": dataclass,
             "LEGACY_MODEL_REGISTRY": LEGACY_MODEL_REGISTRY,
             "BaselineError": ValueError,
-            "load_dataset": lambda repo, split: Split(PUBLISHED_DOMAIN_ROWS),
+            "load_dataset": load_dataset,
+            "concatenate_datasets": lambda parts: Split(
+                row for part in parts for row in part
+            ),
             "np": SimpleNamespace(
                 array=lambda values, dtype: values, int64=int, ndarray=list
             ),
@@ -95,6 +106,10 @@ def domain_baseline():
             "MAX_REPORTED_UNMAPPED": 10,
         },
     )
+
+
+def domain_baseline():
+    return baseline_loader(lambda repo, split, revision: Split(PUBLISHED_DOMAIN_ROWS))
 
 
 class Rows:
@@ -155,7 +170,7 @@ class DatasetContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unrecognized"):
             load("jailbreak", args)
 
-    def test_fact_check_and_feedback_splits_only_score_their_legacy_checkpoints(self):
+    def test_feedback_split_only_scores_its_legacy_checkpoint(self):
         namespace = load_definitions(
             "baseline_tasks.py",
             {"TaskSpec", "TASK_SPECS"},
@@ -165,12 +180,103 @@ class DatasetContractTest(unittest.TestCase):
                 "BaselineError": ValueError,
             },
         )
-        specs = namespace["TASK_SPECS"]
-        for task in ("fact-check", "feedback"):
-            for key in ("id", "lora_id"):
-                specs[task].validate_artifact(LEGACY_MODEL_REGISTRY[task][key])
-            with self.assertRaisesRegex(ValueError, "only scores the checkpoint"):
-                specs[task].validate_artifact(MODEL_REGISTRY[task]["id"])
+        spec = namespace["TASK_SPECS"]["feedback"]
+        for key in ("id", "lora_id"):
+            spec.validate_artifact(LEGACY_MODEL_REGISTRY["feedback"][key])
+        with self.assertRaisesRegex(ValueError, "only scores the checkpoint"):
+            spec.validate_artifact(MODEL_REGISTRY["feedback"]["id"])
+
+    def test_fact_check_reads_the_pinned_corpus_matched_test_file_by_file(self):
+        # One file carries lang and the other does not, as the published files do.
+        published = {
+            "text/nf-cats/fact_check/test.jsonl": [
+                {"text": "a", "label": "FACT_CHECK_NEEDED", "source": "nf-cats"},
+                {"text": "b", "label": "NO_FACT_CHECK_NEEDED", "source": "nf-cats"},
+            ],
+            "text/open-question-type/fact_check/test.jsonl": [],
+            "text/search-arena/fact_check/test.jsonl": [
+                {"text": "c", "label": "NO_FACT_CHECK_NEEDED", "lang": "en"},
+            ],
+            "text/urs/fact_check/test.jsonl": [
+                {"text": "d", "label": "FACT_CHECK_NEEDED", "lang": "en"},
+            ],
+        }
+        reads = []
+
+        def load_dataset(repo, data_files, split, revision):
+            reads.append((repo, data_files, split, revision))
+            return Split(published[data_files])
+
+        namespace = baseline_loader(load_dataset)
+        spec = namespace["TASK_SPECS"]["fact-check"]
+        self.assertEqual(spec.split_rule, "by_source")
+        self.assertRegex(spec.revision, r"^[0-9a-f]{40}$")
+        self.assertFalse([name for name in spec.data_files if "dolly" in name])
+        for repo in (
+            LEGACY_MODEL_REGISTRY["fact-check"]["id"],
+            LEGACY_MODEL_REGISTRY["fact-check"]["lora_id"],
+            MODEL_REGISTRY["fact-check"]["id"],
+        ):
+            spec.validate_artifact(repo)
+        mapping = {"NO_FACT_CHECK_NEEDED": 0, "FACT_CHECK_NEEDED": 1}
+        texts, labels, available = namespace["load_rows"](
+            spec, mapping, None, spec.revision
+        )
+        self.assertEqual(
+            (texts, labels, available), (["a", "b", "c", "d"], [1, 0, 0, 1], 4)
+        )
+        self.assertEqual(
+            reads,
+            [
+                (spec.dataset_repo, name, "train", spec.revision)
+                for name in spec.data_files
+            ],
+        )
+
+    def test_pinned_split_is_read_and_recorded_at_its_pin(self):
+        class LoadReachedError(Exception):
+            pass
+
+        specs = baseline_loader(Mock())["TASK_SPECS"]
+        load_rows = Mock(side_effect=LoadReachedError)
+        resolve_revision = Mock()
+        measured = SimpleNamespace(
+            referenced=None, model_dir=Path("model"), repo="repo", revision="0" * 40
+        )
+        namespace = load_definitions(
+            "quality_baseline.py",
+            {"run"},
+            {
+                "argparse": argparse,
+                "Any": Any,
+                "logging": logging,
+                "logger": logging.getLogger("test"),
+                "torch": Mock(),
+                "np": Mock(),
+                "load_config": Mock(),
+                "served_artifacts": lambda config: {"fact-check": Mock()},
+                "TASK_SPECS": specs,
+                "resolve_measured_artifact": lambda args, served, validate: measured,
+                "resolve_hf_revision": resolve_revision,
+                "resolve_label_mapping": lambda model_dir, served: {"a": 0, "b": 1},
+                "SHORT_REVISION": 12,
+                "registry_drift": lambda inventory, registry: [],
+                "MODEL_REGISTRY": MODEL_REGISTRY,
+                "uncovered_artifacts": lambda config: [],
+                "check_registry_label_order": lambda task, repo, mapping: [],
+                "_provenance_findings": lambda args, measured: [],
+                "load_rows": load_rows,
+            },
+        )
+        with self.assertRaises(LoadReachedError):
+            namespace["run"](
+                SimpleNamespace(
+                    seed=42, config="config.yaml", task="fact-check", limit=None
+                )
+            )
+        spec = specs["fact-check"]
+        load_rows.assert_called_once_with(spec, {"a": 0, "b": 1}, None, spec.revision)
+        resolve_revision.assert_not_called()
 
     def test_legacy_checkpoints_are_checked_against_the_legacy_labels(self):
         check = label_order_check()
@@ -213,8 +319,9 @@ class DatasetContractTest(unittest.TestCase):
                 }
             )
         report = gap_report.render(baselines, gap_report.DEFAULT_CONFIG)
+        inventory = served_artifacts(load_config(gap_report.DEFAULT_CONFIG))
         for task in ("fact-check", "feedback"):
-            served = MODEL_REGISTRY[task]["id"].split("/")[-1]
+            served = inventory[task].artifact_name
             self.assertIn(
                 f"- {task}: no baseline has been measured for the served `{served}`",
                 report,
@@ -225,7 +332,9 @@ class DatasetContractTest(unittest.TestCase):
         namespace = domain_baseline()
         spec = namespace["TASK_SPECS"]["domain"]
         self.assertEqual(spec.split_rule, "by_source")
-        texts, labels, available = namespace["load_rows"](spec, DOMAIN_SUBSET, None)
+        texts, labels, available = namespace["load_rows"](
+            spec, DOMAIN_SUBSET, None, "revision"
+        )
         self.assertEqual((texts, labels, available), (["b", "d"], [1, 0], 2))
         spec.validate_artifact(MODEL_REGISTRY["intent"]["id"])
         for key in ("id", "lora_id"):
@@ -237,7 +346,7 @@ class DatasetContractTest(unittest.TestCase):
     def test_filtered_domain_report_leaves_labels_without_rows_unmeasured(self):
         namespace = domain_baseline()
         _, labels, _ = namespace["load_rows"](
-            namespace["TASK_SPECS"]["domain"], DOMAIN_SUBSET, None
+            namespace["TASK_SPECS"]["domain"], DOMAIN_SUBSET, None, "revision"
         )
         # Perfect predictions on the rows the filter keeps.
         metrics = load_definitions(

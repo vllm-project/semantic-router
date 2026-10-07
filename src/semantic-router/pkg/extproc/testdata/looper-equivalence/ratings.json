@@ -1,0 +1,118 @@
+{
+  "calls": [
+    {
+      "route": "model-a",
+      "model": "model-a",
+      "header": {
+        "x-fixture-hop": "per-hop"
+      },
+      "body": {
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "messages": [
+          {
+            "content": "Answer in one sentence.",
+            "role": "system"
+          },
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-a"
+      }
+    },
+    {
+      "route": "model-b",
+      "model": "model-b",
+      "header": {
+        "x-fixture-hop": "per-hop"
+      },
+      "body": {
+        "messages": [
+          {
+            "content": "Answer in one sentence.",
+            "role": "system"
+          },
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-b"
+      }
+    },
+    {
+      "route": "model-c",
+      "model": "model-c",
+      "header": {
+        "x-fixture-hop": "per-hop"
+      },
+      "body": {
+        "messages": [
+          {
+            "content": "Answer in one sentence.",
+            "role": "system"
+          },
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-c"
+      }
+    }
+  ],
+  "peak_concurrency": 2,
+  "response": {
+    "status": 200,
+    "header": {
+      "content-type": "application/json",
+      "x-vsr-config-version": "1",
+      "x-vsr-response-path": "looper",
+      "x-vsr-schema-version": "2",
+      "x-vsr-selected-confidence": "0.0000",
+      "x-vsr-selected-decision": "looper_route",
+      "x-vsr-selected-model": "model-c",
+      "x-vsr-selected-recipe": "default"
+    },
+    "body": {
+      "choices": [
+        {
+          "finish_reason": "stop",
+          "index": 0,
+          "message": {
+            "content": "model-a says Paris (1b997d5a)",
+            "role": "assistant"
+          }
+        },
+        {
+          "finish_reason": "stop",
+          "index": 1,
+          "message": {
+            "content": "model-b says Paris in detail (1b997d5a)",
+            "role": "assistant"
+          }
+        },
+        {
+          "finish_reason": "stop",
+          "index": 2,
+          "message": {
+            "content": "model-c says Paris in much more detail (1b997d5a)",
+            "role": "assistant"
+          }
+        }
+      ],
+      "created": "\u003cvolatile\u003e",
+      "id": "\u003cvolatile\u003e",
+      "model": "model-c",
+      "object": "chat.completion",
+      "usage": {
+        "completion_tokens": 15,
+        "prompt_tokens": 60,
+        "total_tokens": 75
+      }
+    }
+  }
+}

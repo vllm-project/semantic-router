@@ -176,6 +176,14 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 
 	boundedText := textForSignalFunc(input.Text, input.UncompressedText, input.SkipCompressionSignals)
 	textForSignal := func(signalType string) string {
+		// Every signal a Vela 2.0 model answers reads the request as it came,
+		// so their questions share one state and one call.
+		if c.signalReadsWholeText(signalType) {
+			if input.UncompressedText != "" {
+				return input.UncompressedText
+			}
+			return input.Text
+		}
 		if c.hasLongContextClassifier(signalType) {
 			if input.UncompressedText != "" && input.SkipCompressionSignals[signalType] {
 				return input.UncompressedText

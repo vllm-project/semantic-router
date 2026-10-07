@@ -600,7 +600,7 @@ func TestBuildModelSpecsAcceptsReferenceConfig(t *testing.T) {
 			t.Fatalf("router downloads the runtime-served %s: %+v", spec.LocalPath, spec)
 		}
 	}
-	assertRuntimeServed(t, cfg, specs, "models/Vela-1.0-Encoder-307M-Modality")
+	assertRuntimeServed(t, cfg, specs, config.Vela2SignalModel)
 }
 
 func TestBuildModelSpecsIncludesAllAMDDeployModels(t *testing.T) {

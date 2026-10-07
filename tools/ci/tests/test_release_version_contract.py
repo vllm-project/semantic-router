@@ -21,8 +21,6 @@ class ReleaseVersionContractTests(unittest.TestCase):
             release_contract.parse_release_images(),
             (
                 "dashboard",
-                "extproc",
-                "extproc-rocm",
                 "operator",
                 "operator-bundle",
                 "vllm-sr",
@@ -117,11 +115,6 @@ class ReleaseVersionContractTests(unittest.TestCase):
                     )
                 self.assertEqual(len(errors), 1)
                 self.assertIn("stable vMAJOR.MINOR.PATCH", errors[0])
-
-    def test_simulator_docs_use_an_independent_published_version(self) -> None:
-        errors: list[str] = []
-        release_contract.validate_sim_upgrade_docs(errors)
-        self.assertEqual(errors, [])
 
 
 if __name__ == "__main__":

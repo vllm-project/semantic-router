@@ -12,7 +12,7 @@ func TestDashboardCloseCancelsMCPConnectionTest(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("requires POSIX process signals")
 	}
-	dashboard, _ := startDashboardServer(t)
+	dashboard := newMCPShutdownDashboard(t)
 	config, exitMarker := stdioMCPTestConfig(t, "kill")
 	config.Connection.Env["SEMANTIC_ROUTER_MCP_STDIO_BLOCK_INITIALIZE"] = "1"
 	ctx, cancel := context.WithCancel(context.Background())
@@ -60,7 +60,7 @@ func TestDashboardCloseCancelsMCPConnectionTest(t *testing.T) {
 }
 
 func TestDashboardCloseRejectsMCPConnectionTest(t *testing.T) {
-	dashboard, _ := startDashboardServer(t)
+	dashboard := newMCPShutdownDashboard(t)
 	config, exitMarker := stdioMCPTestConfig(t, "eof")
 	if err := dashboard.Close(); err != nil {
 		t.Fatal(err)

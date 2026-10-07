@@ -8,9 +8,11 @@ standard: at least five interleaved rounds on the same cgroup-confined cores
 legacy. A row passes when its interval is at or better than legacy; a row
 whose interval straddles zero is level.
 
-- **Date:** 2026-10-05.
+- **Date:** 2026-10-05; Omni on the native engine
+  ([#4619](https://github.com/vllm-project/semantic-router/issues/4619)) on
+  2026-10-06.
 - **Runtime:** the CPU rows against legacy (Omni, the encoders and the
-  native-model probe) at `e0e0e2850`, in one run. The ROCm rows run the
+  native-model probe) at `e0e0e2850`, in one run; native Omni at `2afe0f878`. The ROCm rows run the
   router image's own runtime (`a580be6b9`); this branch's commits since
   change ONNX Runtime, Omni, request-option parsing and the heap freeze
   after a runtime loads, none of which `tools/embed_bench.py` or the native
@@ -93,7 +95,110 @@ set's pairs into one forward (the legacy scorer ran them one by one), and
 runs long documents packed with block-local attention instead of candle's
 dense padded path.
 
-## CPU: Omni, the legacy facade's ONNX Runtime adapter vs `Runtime.call`
+## CPU: Omni on the native engine (#4619)
+
+Since #4619 the runtime serves Omni's published weights on the native engine
+(design section 8.5). Two A/Bs by the method above, ten interleaved rounds
+each, with the runtime side at `2afe0f878` and the inputs of the section below:
+
+- **Against the legacy facade,** its ONNX Runtime 1.22 adapter on the prepared
+  bundles, as the section below measured the ONNX Runtime path.
+- **Against the ONNX Runtime path this replaces:** staging `91d369ff2`'s own
+  runtime serving the prepared bundles on its `onnxruntime` engine, with that
+  tree's defaults (`embed_legacy.py ab --baseline-engine onnxruntime
+  --baseline-runtime <staging>/src/model-runtime`).
+- **Cores and memory:** node B vCPUs 64–79, on NUMA node 0, in one cgroup
+  cpuset, with every process's memory bound to node 0 (`numactl --membind=0`).
+  On vCPUs 112–127 (NUMA node 1, with 25 GB free beside 585 GB of page cache)
+  30–50 % of a runtime's memory, its transparent huge pages first, landed on
+  node 0, and Mini audio took 515 or 685 ms depending on the process while
+  every other cell held still. Bound to node 0, six fresh processes took
+  493–509 ms. The baselines run under the same binding.
+- **The native process** runs NumPy's OpenBLAS on one thread, the package's
+  default since #4619: OpenBLAS's idle threads spin after each call and took
+  the cores of the CPU device's OpenMP team, slowing Omni Mini's CLAP tower
+  after its audio features seven times (91 → 14 ms).
+
+**Against the legacy facade, 1 caller (latency run).**
+
+| Job | Pairs | Legacy p50 / p95 ms | Native p50 / p95 ms | p50 Δ ms [95% CI] | p95 Δ ms [95% CI] |
+| --- | --- | --- | --- | --- | --- |
+| Nano text | 260 | 5.42 / 8.52 | 4.73 / 6.72 | -0.69 [-0.94, -0.39] better | -1.80 [-3.05, -1.42] better |
+| Nano image | 30 | 109.3 / 150.0 | 86.30 / 88.54 | -23.00 [-23.52, -22.43] better | -61.42 [-98.93, -22.21] better |
+| Nano audio | 40 | 218.2 / 352.7 | 45.29 / 73.03 | -172.9 [-179.6, -119.7] better | -279.7 [-320.5, -260.1] better |
+| Mini text | 260 | 28.21 / 74.15 | 21.31 / 48.36 | -6.90 [-8.03, -4.54] better | -25.79 [-31.54, -22.81] better |
+| Mini image | 30 | 290.1 / 373.3 | 237.2 / 248.6 | -52.88 [-54.52, -51.58] better | -124.7 [-136.3, -45.45] better |
+| Mini audio | 50 | 518.9 / 731.6 | 447.7 / 479.7 | -71.18 [-120.7, -53.48] better | -251.9 [-261.3, -212.8] better |
+
+**Against the legacy facade, sequential pairs of the 4-caller run.**
+
+| Job | Pairs | Legacy p50 / p95 ms | Native p50 / p95 ms | p50 Δ ms [95% CI] | p95 Δ ms [95% CI] |
+| --- | --- | --- | --- | --- | --- |
+| Nano text | 260 | 5.09 / 8.40 | 4.68 / 6.82 | -0.41 [-0.63, -0.21] better | -1.58 [-2.03, -1.06] better |
+| Nano image | 30 | 109.2 / 156.5 | 88.49 / 89.29 | -20.66 [-21.79, -19.98] better | -67.18 [-72.56, -1.71] better |
+| Nano audio | 40 | 162.4 / 352.7 | 44.38 / 72.12 | -118.1 [-167.9, -115.1] better | -280.6 [-283.9, -266.8] better |
+| Mini text | 260 | 28.18 / 74.44 | 21.82 / 49.29 | -6.36 [-7.57, -4.55] better | -25.15 [-30.31, -21.69] better |
+| Mini image | 30 | 293.9 / 370.2 | 239.6 / 242.0 | -54.26 [-55.77, -51.98] better | -128.2 [-140.4, -55.29] better |
+| Mini audio | 50 | 525.2 / 736.9 | 445.6 / 474.0 | -79.64 [-129.5, -54.39] better | -262.9 [-283.7, -220.2] better |
+
+**Against the legacy facade, 4 callers.**
+
+| Job | Rounds | Legacy req/s | Native req/s | Δ req/s [95% CI] |
+| --- | --- | --- | --- | --- |
+| Nano text | 10 | 233.2 | 257.0 | +23.74 [+16.69, +29.34] better |
+| Nano image | 10 | 9.24 | 11.27 | +2.03 [+1.96, +2.10] better |
+| Nano audio | 10 | 5.01 | 19.61 | +14.60 [+14.54, +14.68] better |
+| Mini text | 10 | 27.62 | 39.81 | +12.19 [+11.75, +12.32] better |
+| Mini image | 10 | 3.41 | 4.19 | +0.78 [+0.76, +0.80] better |
+| Mini audio | 10 | 1.83 | 2.23 | +0.40 [+0.39, +0.42] better |
+
+**Against the ONNX Runtime path, 1 caller (latency run).**
+
+| Job | Pairs | ONNX Runtime p50 / p95 ms | Native p50 / p95 ms | p50 Δ ms [95% CI] | p95 Δ ms [95% CI] |
+| --- | --- | --- | --- | --- | --- |
+| Nano text | 260 | 4.90 / 7.54 | 4.72 / 6.62 | -0.18 [-0.40, +0.11] level | -0.93 [-1.33, -0.54] better |
+| Nano image | 30 | 108.9 / 111.0 | 87.67 / 89.53 | -21.21 [-21.87, -20.68] better | -21.45 [-22.73, -20.51] better |
+| Nano audio | 40 | 122.2 / 178.8 | 45.88 / 71.23 | -76.35 [-84.43, -67.66] better | -107.6 [-116.4, -96.42] better |
+| Mini text | 260 | 27.17 / 69.09 | 22.05 / 49.64 | -5.12 [-5.43, -3.54] better | -19.45 [-24.20, -18.45] better |
+| Mini image | 30 | 292.9 / 297.8 | 239.3 / 252.0 | -53.66 [-54.89, -52.14] better | -45.84 [-59.58, -24.21] better |
+| Mini audio | 50 | 481.2 / 543.5 | 444.8 / 471.7 | -36.39 [-48.89, -32.72] better | -71.82 [-73.66, -45.77] better |
+
+**Against the ONNX Runtime path, sequential pairs of the 4-caller run.**
+
+| Job | Pairs | ONNX Runtime p50 / p95 ms | Native p50 / p95 ms | p50 Δ ms [95% CI] | p95 Δ ms [95% CI] |
+| --- | --- | --- | --- | --- | --- |
+| Nano text | 260 | 5.07 / 8.41 | 4.75 / 6.99 | -0.32 [-0.53, +0.09] level | -1.43 [-1.81, -1.05] better |
+| Nano image | 30 | 114.4 / 148.3 | 88.26 / 93.00 | -26.11 [-38.82, -22.42] better | -55.29 [-59.61, -33.44] better |
+| Nano audio | 40 | 120.0 / 181.1 | 49.32 / 69.41 | -70.63 [-90.53, -65.49] better | -111.7 [-115.6, -100.6] better |
+| Mini text | 260 | 27.16 / 69.77 | 22.29 / 50.07 | -4.87 [-5.28, -3.43] better | -19.71 [-24.91, -18.40] better |
+| Mini image | 30 | 293.7 / 298.0 | 240.0 / 242.4 | -53.67 [-55.42, -52.29] better | -55.61 [-56.94, -54.33] better |
+| Mini audio | 50 | 485.7 / 540.9 | 507.0 / 534.4 | +21.28 [-0.09, +32.70] level | -6.51 [-18.20, -2.40] better |
+
+**Against the ONNX Runtime path, 4 callers.**
+
+| Job | Rounds | ONNX Runtime req/s | Native req/s | Δ req/s [95% CI] |
+| --- | --- | --- | --- | --- |
+| Nano text | 10 | 249.2 | 259.7 | +10.45 [+6.33, +18.02] better |
+| Nano image | 10 | 8.97 | 11.32 | +2.35 [+2.31, +2.38] better |
+| Nano audio | 10 | 6.67 | 19.88 | +13.21 [+13.07, +13.34] better |
+| Mini text | 10 | 27.63 | 40.03 | +12.40 [+12.11, +12.57] better |
+| Mini image | 10 | 3.40 | 4.17 | +0.77 [+0.74, +0.78] better |
+| Mini audio | 10 | 1.97 | 1.99 | +0.02 [-0.04, +0.08] level |
+
+**Verdicts.** No cell is worse against either baseline. Against legacy every
+cell is better, including the one the ONNX Runtime path left open below
+(Nano text p95 between load windows: 6.82 against 8.40 ms). Against the ONNX
+Runtime path every cell is better or level. One level cell has a worse
+point: Mini audio's p50 between load windows (+21.3 ms, its interval reaching
+-0.09), where the same native process answered in 445 ms in the latency run.
+Its 4-caller rate (+0.02 req/s) and Nano text's two p50s are level with a
+better point. The node's 1-minute load was 18–31
+during the run (other workstreams' jobs on other vCPUs, untimed profiles on
+vCPUs 32–47 of the same NUMA node among them).
+
+## CPU: Omni on the ONNX Runtime bundle, the legacy facade's adapter vs `Runtime.call`
+
+Before #4619 (runtime at `e0e0e2850`, node B vCPUs 112–127).
 
 The corpus's 26 short texts (3–104 tokens), the bundle's 3 golden images
 (encoded bytes) and its 4 (Nano) or 5 (Mini) golden audio clips. Ten
@@ -362,7 +467,8 @@ in this image in every value (parity record).
   (four exits × five dimensions) from one forward; the graph engine runs one
   graph per scorer.
 - **Qwen3-Embedding:** PyTorch only (the pinned package ships no ONNX graph).
-- **Omni:** ONNX Runtime only (the prepared bundle is its graphs).
+- **Omni:** PyTorch since #4619 (the native section above); a prepared bundle
+  still runs on `engine: onnxruntime`.
 
 Decision: `auto` keeps native first for the three `task_heads` models, and no
 `BuiltinModel.engines` entry sets a CPU preference. `engine: onnxruntime`
@@ -370,6 +476,41 @@ stays available for a package that ships graphs: it matches the legacy ONNX
 Runtime execution on single texts (within 5 %) and beats it on batches, but
 it serves only the exits it has graphs for. Torch's OpenMP threads spin after
 a native forward and used to slow an ONNX Runtime run that followed in the
-same process (16 tokens: 13.0 → 19.8 ms); the runtime sets
-`GOMP_SPINCOUNT=10000` before torch loads, which removes that and leaves
-native unchanged.
+same process (16 tokens: 13.0 → 19.8 ms). `GOMP_SPINCOUNT=10000`, set before
+torch loads, removes that and leaves native unchanged. `vllm-srun serve` now
+sets it only for a process that serves an ONNX Runtime model on the CPU
+(design §12). Other processes keep libgomp's default, on which native CPU
+forwards run faster (`decision1-performance.md`).
+
+## CPU: ONNX Runtime beside native models, per-process spin count
+
+For #4611, at `8b92b620f`: `vllm-srun serve` serves Vela Embedding on
+`engine: onnxruntime` (the package's graphs) and Vela Domain on the native
+engine, over Unix sockets, with the result cache off. Node D, 16 cores with
+memory bound to NUMA node 0, and 10 interleaved rounds of fresh processes.
+"After" lets `serve` choose each process's spin count; "before" sets 10,000
+in every process (the old import default). Per round, length and pattern
+there are 30 samples. Each model is timed alone (50 ms after the last call)
+and right after the other model's call.
+
+- **One process for both models** (cores 16–31, 16 threads): `serve` picks
+  10,000 there too, so both conditions run the same spin.
+  - 23 of the 24 cells (p50 and p95, four patterns, 16 / 64 / 256 tokens) are
+    level.
+  - One reads worse: ONNX Runtime right after a native call at 256 tokens,
+    p50 +0.51 ms [+0.01, +1.01] on 60.2 ms. With the same spin on both sides
+    it is the one false positive the 24 intervals lead one to expect.
+- **Two processes on the same 16 cores** (48–63, 8 threads each, as the
+  router splits a CPU budget): the native process now runs libgomp's default.
+  - 22 of 24 cells are level.
+  - Two are worse, both ONNX Runtime right after a native forward in the
+    other process, at 16 tokens: p50 +0.40 ms [+0.02, +0.77] on 15.2 ms
+    (+2.6%) and p95 +0.78 ms [+0.16, +1.40] on 16.6 ms. The native process's
+    threads now spin longer on the cores the next ONNX Runtime run takes.
+  - At 64 and 256 tokens these patterns are level: p50 +0.48 [−0.37, +1.33]
+    and −0.14 [−1.17, +0.90].
+- **Where that applies:** no built-in model runs on ONNX Runtime by default
+  since #4619, and the router's images ship none. A deployment that runs an
+  ONNX Runtime model in its own process beside native CPU processes on shared
+  cores keeps the old timing by serving the models in one process, or by
+  setting `GOMP_SPINCOUNT=10000`, which `serve` keeps.

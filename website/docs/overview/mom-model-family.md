@@ -6,12 +6,9 @@ description: How virtual models turn a shared pool of independent models into st
 
 # Mixture of Models
 
-A **Mixture of Models (MoM)** is a serving architecture in which several
-independently deployed models act as one system. A routing policy decides which
-model, cascade, panel, or workflow should handle each request.
-
-The client does not need to know which physical backend won. It asks for a
-stable virtual model that represents the desired behavior.
+A **Mixture of Models (MoM)** presents independently deployed models as one
+virtual model. A recipe selects a model, cascade, panel, or bounded workflow for
+each request. Your harness uses a stable name and retains its task loop and tools.
 
 ```mermaid
 flowchart LR
@@ -36,7 +33,7 @@ internal architecture does not change the routing abstraction.
 
 | Kind | Example | Role |
 | --- | --- | --- |
-| **Provider model** | A vLLM, Ollama, or hosted model endpoint | Generates the application response. |
+| **Provider model** | A vLLM, Ollama, or hosted model endpoint | Generates the inference response. |
 | **Virtual model** | `vllm-sr/mom-v1-flash` | Gives clients a stable objective and selects a recipe. |
 | **Router system model** | An embedding or classifier asset | Helps detect intent, risk, similarity, or another routing signal. |
 
@@ -103,7 +100,7 @@ for the full schema and isolation rules.
 ## MoM V1
 
 MoM V1 offers five built-in recipes. Connect your own backends and choose the
-policy that fits your application:
+policy that fits your harness's model calls:
 
 | Public model | Recipe | Decisions |
 | --- | --- | --- |
@@ -126,7 +123,8 @@ model's published category thresholds.
 Assign Vault's other decisions to backends that meet your privacy requirements;
 the recipe cannot establish their physical location or provider retention.
 
-Vault's default Vela Guard, PII, and Hazard tasks each have a 32,768-token
+Vault's Guard and PII run on the default Vela 2.0 0.3B, which reads up to
+8,192 tokens and truncates beyond them. Its Hazard task has a 32,768-token
 triage input budget, including the conversation text evaluated by that task.
 This check runs before backend context checks. Exceeding it fails closed:
 Preview returns HTTP 503 with signal errors and no selected model. A larger

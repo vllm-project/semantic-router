@@ -46,7 +46,7 @@ The PR, main, nightly, and release entrypoints share one verification plan:
 Display categories, execution workers, and verification identities are separate.
 Catalog IDs identify results even when a display name changes. Job names describe
 the execution boundary; model names and feature cases appear in its report.
-Compatible component checks use one of three setup classes: **CLI and Fleet**,
+Compatible component checks use one of three setup classes: **CLI**,
 **Model Tools**, and **Router Tools**. Each selected contract runs in its own
 worker with its own test inventory, logs, and result. A failed contract leaves
 other independent checks running, but fails its worker and the Gate.
@@ -166,9 +166,9 @@ runner does not reduce them to health checks. The runtime resolves immutable Hub
 revisions from its registry and verifies every loaded file. The runner requires
 every selected case and rejects skipped or missing results.
 
-Prepared Omni bundles include a source identity, file hashes, and export parity.
-Preparation is shared by compatible runtime and conformance contracts. Image
-conformance uses the prepared Nano bundle and retains raw scores, threshold
+The runtime verifies the pinned Omni releases file by file. CI downloads each
+once and shares it between compatible runtime and conformance contracts. Image
+conformance uses the pinned Nano release and retains raw scores, threshold
 checks, prototype protocol and validation results, and fixture provenance.
 It does not replace deployed image extraction and routing tests. Reference-model
 parity and maximum-context qualifications that require explicit inputs remain

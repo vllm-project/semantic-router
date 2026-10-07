@@ -285,8 +285,22 @@ export function normalizeModelReliability(value: unknown): ProviderReliability |
     'health_check_path',
     'health_check_interval',
     'health_check_timeout',
+    'connect_timeout',
+    'total_timeout',
+    'idle_timeout',
+    'per_try_timeout',
+    'first_byte_timeout',
+    'retry_back_off_base',
+    'retry_back_off_max',
+    'retry_after_max',
   ] as const
-  const numberFields = ['retry_count', 'consecutive_5xx', 'max_ejection_percent'] as const
+  const numberFields = [
+    'retry_count',
+    'consecutive_5xx',
+    'max_ejection_percent',
+    'retry_budget_percent',
+    'retry_budget_min_concurrency',
+  ] as const
 
   for (const field of stringFields) {
     if (typeof source[field] === 'string' && source[field].trim()) {
@@ -297,6 +311,11 @@ export function normalizeModelReliability(value: unknown): ProviderReliability |
     if (typeof source[field] === 'number' && Number.isFinite(source[field])) {
       normalized[field] = source[field]
     }
+  }
+  const statusCodes = source.retriable_status_codes
+  if (Array.isArray(statusCodes)) {
+    const codes = statusCodes.filter((code): code is number => Number.isInteger(code))
+    if (codes.length > 0) normalized.retriable_status_codes = codes
   }
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }

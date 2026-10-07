@@ -7,6 +7,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // CanonicalGlobal contains router-managed runtime defaults plus sparse
@@ -199,6 +200,7 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	if err := resolveModuleModelRefs(&resolved); err != nil {
 		return CanonicalGlobal{}, err
 	}
+	normalizeModuleOperatingPoints(&resolved, rawOverride)
 	return resolved, nil
 }
 
@@ -303,6 +305,13 @@ func applyCanonicalStoreGlobal(cfg *RouterConfig, stores CanonicalStoreGlobal) {
 func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIntegrationGlobal) {
 	cfg.Tools = integrations.Tools
 	cfg.Looper = integrations.Looper
+	if integrations.Looper.Endpoint != "" {
+		logging.ComponentWarnEvent("config", "looper_endpoint_deprecated", map[string]interface{}{
+			"field":  "global.integrations.looper.endpoint",
+			"reason": "the Router makes Looper calls in process; the field is ignored and goes in the next release",
+			"fix":    "remove it, or run vllm-sr config migrate",
+		})
+	}
 }
 
 func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
