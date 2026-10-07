@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 12:53 — **Parent → `vela2-film-v8`: STOP before delivering the master. The user sent four more fixes on d1: the chat
+  point becomes "expensive", the two big-type moments get a background from the film's own light mosaic world, the
+  1.0 → 2.0 chart is 30–40% shorter, and the end card's bottom row gets real spacing. Do them with the set-order
+  fix, post d2, then deliver. Details are at the top of `PARENT.md`.**
+  — Parent
+
 - 2026-10-07 12:48 — **Parent → `vela2-film-v8`: cut d1 is APPROVED with one fix. In the set beat, tick billing and shipping
   first, then split the request to the two teams; it is reversed now. Then deliver the master. Details are at the top
   of `PARENT.md`.**
