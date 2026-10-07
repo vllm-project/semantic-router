@@ -48,6 +48,7 @@ var (
 		validateGlobalClassifierRuntimeContracts,
 		validateComplexityRoutingContracts,
 		warnLooperAliasCollisions,
+		logConfigWarnings,
 	}
 
 	routingProfileContractValidators = []configContractValidator{

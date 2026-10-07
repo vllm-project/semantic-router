@@ -28,6 +28,7 @@ from execution_batches import (
     image_producers,
     platform_batches,
 )
+from known_issue_waivers import planned_waiver
 from provider_mocker_image import (
     IMAGE as MOCKER_IMAGE,
 )
@@ -37,7 +38,6 @@ from provider_mocker_image import (
     published_from_plan,
     resolve_published,
 )
-from release_guard_waiver import planned_waiver
 from verification_catalog import (
     catalog_errors,
     full_cpu_ids,

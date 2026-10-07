@@ -186,8 +186,9 @@ vllm-sr serve --config config.yaml
 
 The router starts its own runtime for `decision-kai`. The first time, it
 downloads its own copy of the model into the `models/` directory next to your
-`config.yaml` and keeps it there for later starts. Send a request through the
-router and look at which route it took:
+`config.yaml` and keeps it there for later starts. `vllm-sr serve` returns once
+the model has loaded, and prints its state while it waits. Send a request
+through the router and look at which route it took:
 
 ```bash
 curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
@@ -197,9 +198,9 @@ curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
 ```
 
 `x-vsr-selected-decision` names the route, and
-`x-vsr-matched-decision-model` lists the decision signals that matched. While
-the model is still loading, the signal is unknown and `on_unknown: no_match`
-sends requests to `default-route`.
+`x-vsr-matched-decision-model` lists the decision signals that matched. If the
+runtime restarts later, the signal is unknown until the model is back and
+`on_unknown: no_match` sends requests to `default-route` meanwhile.
 
 To reuse the server you started in step 2 instead of a second copy of the
 model, replace `artifact` and `device` with its address, for example

@@ -17,6 +17,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any, Generic
 
+from ..errors import INVALID_QUESTION
 from .base import (
     Expired,
     ItemT,
@@ -53,6 +54,27 @@ class RequestPlan(Generic[ItemT]):
     items: Sequence[ItemT]
     errors: dict[str, dict[str, Any]]
     input_tokens: int
+
+
+def refuse_unanswerable(plan: RequestPlan[Any]) -> None:
+    """Fail a request whose questions are all invalid; nothing in it can be answered.
+
+    The ``ValueError`` becomes 400 invalid_request with every question's
+    reason. An invalid question among valid ones still fails alone, in its
+    answer.
+    """
+    if plan.items or len(plan.errors) < len(plan.question_ids):
+        return
+    if any(
+        plan.errors.get(question_id, {}).get("error") != INVALID_QUESTION
+        for question_id in plan.question_ids
+    ):
+        return
+    reasons = "; ".join(
+        f"{question_id}: {plan.errors[question_id].get('message', INVALID_QUESTION)}"
+        for question_id in plan.question_ids
+    )
+    raise ValueError(f"no question is valid ({reasons})")
 
 
 def well_formed(answer: dict[str, Any]) -> bool:
@@ -129,6 +151,7 @@ class DecisionModel(LoadedModel[ItemT, ResultT]):
         ):
             raise ValueError("questions must be a nonempty mapping of question IDs")
         plan = self.plan(body["state"], questions)
+        refuse_unanswerable(plan)
         items: list[Any] = list(plan.items)
         return SurfacePlan(SURFACE, items, plan.input_tokens, plan)
 

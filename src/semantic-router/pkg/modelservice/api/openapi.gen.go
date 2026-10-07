@@ -158,18 +158,22 @@ const (
 )
 
 // Answer One answer. Choice: choice, probabilities, confidence. Noul: noul (P(true)). Score: score (the expected
-// level), probabilities, confidence, legend. A failed question has only type and error.
+// level), probabilities, confidence, legend. A failed question has only type, error and, when the runtime
+// knows why, message.
 type Answer struct {
 	// AbstainProbability Probability of the model's abstain option, where it has one (not calibrated).
-	AbstainProbability *float64            `json:"abstain_probability,omitempty"`
-	Choice             *string             `json:"choice,omitempty"`
-	Confidence         *float64            `json:"confidence,omitempty"`
-	Error              *ItemError          `json:"error,omitempty"`
-	Legend             *map[string]string  `json:"legend,omitempty"`
-	Noul               *float64            `json:"noul,omitempty"`
-	Probabilities      *map[string]float64 `json:"probabilities,omitempty"`
-	Score              *float64            `json:"score,omitempty"`
-	Type               *string             `json:"type"`
+	AbstainProbability *float64           `json:"abstain_probability,omitempty"`
+	Choice             *string            `json:"choice,omitempty"`
+	Confidence         *float64           `json:"confidence,omitempty"`
+	Error              *ItemError         `json:"error,omitempty"`
+	Legend             *map[string]string `json:"legend,omitempty"`
+
+	// Message Why the question failed, naming the field, such as "set questions do not take ['colour']".
+	Message       *string             `json:"message,omitempty"`
+	Noul          *float64            `json:"noul,omitempty"`
+	Probabilities *map[string]float64 `json:"probabilities,omitempty"`
+	Score         *float64            `json:"score,omitempty"`
+	Type          *string             `json:"type"`
 }
 
 // AudioPart defines model for AudioPart.
@@ -692,8 +696,10 @@ type ProfileName = string
 
 // Question One question. `instructions` is required unless `preset` names a question the model defines (see
 // `presets` in /v1/models). Every family validates System One fields the same way: a question takes only
-// its type's fields (`choices` for Choice and Noul, `levels` for Score, `over`, `head` and `threshold`
-// where the model reads them), and any other field is answered with invalid_question.
+// its type's fields (`choices` for Choice and Noul, `levels` for Score, `labels` for Set and Span, `over`,
+// `head` and `threshold` where the model reads them), and any other field is answered with
+// invalid_question. `choices`, `levels` and `labels` are the Router config's ordered forms of `criteria`;
+// a question takes one or the other.
 type Question struct {
 	// Choices Ordered Choice or Noul options, an alternative to a criteria object.
 	Choices *[]ChoiceOption `json:"choices,omitempty"`
@@ -710,6 +716,9 @@ type Question struct {
 
 	// Instructions The question; non-blank text, an object or an array.
 	Instructions *interface{} `json:"instructions,omitempty"`
+
+	// Labels Ordered Set or Span labels, an alternative to a criteria object.
+	Labels *[]ChoiceOption `json:"labels,omitempty"`
 
 	// Levels Ordered Score level descriptions, an alternative to a criteria list.
 	Levels *[]interface{} `json:"levels,omitempty"`

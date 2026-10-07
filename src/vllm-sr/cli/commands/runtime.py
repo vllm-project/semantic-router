@@ -22,7 +22,10 @@ from cli.commands.runtime_config_mutation import (
 )
 from cli.commands.runtime_engine import ENGINE_HELP, run_engine_mode
 from cli.commands.runtime_help import SERVE_HELP
-from cli.commands.runtime_serve_config import _prepare_effective_serve_config
+from cli.commands.runtime_serve_config import (
+    _prepare_effective_serve_config,
+    validate_decision_model_flag,
+)
 from cli.commands.runtime_support import (
     append_passthrough_env_vars,
     apply_container_runtime_override,
@@ -50,6 +53,7 @@ from cli.consts import (
     SUPPORTED_CONTAINER_RUNTIMES,
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
+from cli.decision_model import DECISION_MODELS, DEFAULT_DECISION_MODEL
 from cli.deployment_backend import (
     DEFAULT_TARGET,
     TARGET_DOCKER,
@@ -186,6 +190,7 @@ def _deploy_serve_backend(
     startup_timeout: int | None,
     gateway: str,
     platform: str,
+    decision_model: str | None = None,
 ) -> None:
     """Deploy one prepared runtime."""
 
@@ -213,6 +218,7 @@ def _deploy_serve_backend(
         readonly=readonly,
         gateway=gateway,
         platform=platform,
+        decision_model=decision_model,
         **({"startup_timeout": startup_timeout} if startup_timeout is not None else {}),
     )
 
@@ -239,6 +245,7 @@ def _execute_serve(
     recipe_env_names: tuple[str, ...] = (),
     startup_timeout: int | None = None,
     gateway: str | None = None,
+    decision_model: str | None = None,
 ) -> None:
     """Bootstrap workspace, resolve config, and delegate to the deployment backend."""
     resolved_target = resolve_target(target)
@@ -250,6 +257,9 @@ def _execute_serve(
                 "--startup-timeout is supported only for local Docker deployments"
             )
     _validate_target_platform(resolved_target, platform)
+    decision_model = validate_decision_model_flag(
+        decision_model, resolved_target, _platform_hint(platform)
+    )
     apply_container_runtime_override(runtime)
     config_path, source_setup_mode = _resolve_serve_config(config, resolved_target)
     log.info(f"Using config file: {config_path}")
@@ -274,6 +284,7 @@ def _execute_serve(
                 replace_active_config=replace_active_config,
                 minimal=minimal,
                 readonly=readonly,
+                decision_model=decision_model,
             )
         )
         validate_setup_mode_flags(setup_mode, minimal, readonly)
@@ -313,6 +324,7 @@ def _execute_serve(
             startup_timeout=startup_timeout,
             gateway=resolved_gateway,
             platform=_platform_hint(platform),
+            decision_model=decision_model,
         )
     finally:
         if runtime_lock is not None:
@@ -426,6 +438,19 @@ def _execute_serve(
         "uses global.router.learning.adaptation/protection."
     ),
 )
+@click.option(
+    "--decision-model",
+    default=None,
+    metavar="NAME",
+    help=(
+        "The Vela model that answers the Router's questions: the built-in signals "
+        "and every routing.signals.decision question without a deployment. "
+        f"{', '.join(DECISION_MODELS)} (case-insensitive; default "
+        f"{DEFAULT_DECISION_MODEL}). The 4B and 9B need a GPU (--platform amd or "
+        "nvidia). serve writes it into the active config as a new configuration "
+        "version; later starts keep it."
+    ),
+)
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
     "--gateway",
@@ -450,7 +475,10 @@ def _execute_serve(
 @click.option(
     "--chart-dir",
     default=None,
-    help="Path to Helm chart directory (kubernetes target only)",
+    help=(
+        "Path to Helm chart directory (kubernetes target only; default: "
+        "./deploy/helm/semantic-router, else the published chart for this version)"
+    ),
 )
 @_container_runtime_options
 @click.option(
@@ -515,6 +543,7 @@ def serve(
     log_level: str | None,
     platform: str | None,
     algorithm: str | None,
+    decision_model: str | None,
     target: str | None,
     gateway: str | None,
     namespace: str | None,
@@ -580,6 +609,7 @@ def serve(
         recipe_env_names,
         startup_timeout,
         gateway,
+        decision_model=decision_model,
     )
 
 

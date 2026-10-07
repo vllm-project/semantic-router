@@ -11,6 +11,7 @@ from ...errors import (
     MAX_LENGTH_EXCEEDED,
     PackageError,
     QuestionError,
+    question_error,
 )
 from ...plugins.base import (
     BackboneSpec,
@@ -283,16 +284,15 @@ class Decision2Model(DecisionModel[RenderedItem, list[float] | None]):
                     self.info.limits["max_input_tokens"],
                 )
             except QuestionError as exc:
-                errors[question_id] = {
-                    "type": (
-                        question.get("type") if isinstance(question, dict) else None
-                    ),
-                    "error": (
+                errors[question_id] = question_error(
+                    question.get("type") if isinstance(question, dict) else None,
+                    exc,
+                    (
                         exc.code
                         if exc.code in (INVALID_QUESTION, MAX_LENGTH_EXCEEDED)
                         else INVALID_QUESTION
                     ),
-                }
+                )
                 continue
             tokens += len(encoded["ids"])
             items.append(

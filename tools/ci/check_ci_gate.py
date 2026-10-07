@@ -19,8 +19,8 @@ from execution_batches import (
     image_producers,
     platform_batches,
 )
+from known_issue_waivers import planned_waiver
 from provider_mocker_image import validate_acquisition
-from release_guard_waiver import planned_waiver
 from verification_catalog import full_cpu_ids, load_catalog
 
 
@@ -57,7 +57,7 @@ def evaluate_gate(
         if record.get("known_issue_waiver") != planned_waiver(
             plan.get("profile", ""), name
         ):
-            errors.append(f"{name}: known-issue waiver differs from release policy")
+            errors.append(f"{name}: known-issue waiver differs from waiver policy")
     if plan.get("full_cpu") and not (plan.get("draft") and plan.get("profile") == "pr"):
         missing = set(full_cpu_ids()) - set(required)
         if missing:
@@ -128,9 +128,7 @@ def evaluate_gate(
         waived = receipt.get("result") == "qualified-with-waiver"
         waiver = record.get("known_issue_waiver") if waived else None
         if waived and (
-            plan.get("profile") != "release"
-            or waiver != planned_waiver("release", name)
-            or not waiver
+            waiver != planned_waiver(plan.get("profile", ""), name) or not waiver
         ):
             errors.append(f"{name}: qualified-with-waiver is not allowed")
             waiver = None

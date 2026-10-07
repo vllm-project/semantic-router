@@ -27,7 +27,9 @@ paths:
               $ref: '#/components/schemas/DecisionRequest'
       responses:
         '200':
-          description: One answer per question, in request order; a failed question carries its own error.
+          description: |
+            One answer per question, in request order; a failed question carries its own error. A request in which
+            no question is valid is answered 400 invalid_request, with each question's reason in the message.
           headers:
             Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
@@ -270,8 +272,10 @@ components:
       description: |
         One question. `instructions` is required unless `preset` names a question the model defines (see
         `presets` in /v1/models). Every family validates System One fields the same way: a question takes only
-        its type's fields (`choices` for Choice and Noul, `levels` for Score, `over`, `head` and `threshold`
-        where the model reads them), and any other field is answered with invalid_question.
+        its type's fields (`choices` for Choice and Noul, `levels` for Score, `labels` for Set and Span, `over`,
+        `head` and `threshold` where the model reads them), and any other field is answered with
+        invalid_question. `choices`, `levels` and `labels` are the Router config's ordered forms of `criteria`;
+        a question takes one or the other.
       properties:
         type:
           type: string
@@ -295,6 +299,11 @@ components:
           type: array
           description: Ordered Score level descriptions, an alternative to a criteria list.
           items: {}
+        labels:
+          type: array
+          description: Ordered Set or Span labels, an alternative to a criteria object.
+          items:
+            $ref: '#/components/schemas/ChoiceOption'
         over:
           description: |
             The state field a question reads (typed-part models): a field name, or a list of field names it reads
@@ -386,7 +395,8 @@ components:
       required: [type]
       description: |
         One answer. Choice: choice, probabilities, confidence. Noul: noul (P(true)). Score: score (the expected
-        level), probabilities, confidence, legend. A failed question has only type and error.
+        level), probabilities, confidence, legend. A failed question has only type, error and, when the runtime
+        knows why, message.
       properties:
         type:
           type: string
@@ -417,6 +427,9 @@ components:
             type: string
         error:
           $ref: '#/components/schemas/ItemError'
+        message:
+          type: string
+          description: Why the question failed, naming the field, such as "set questions do not take ['colour']".
     ItemError:
       type: string
       enum: [invalid_question, invalid_input, max_length_exceeded, invalid_model_output, deadline_exceeded, unavailable]

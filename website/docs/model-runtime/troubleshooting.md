@@ -22,6 +22,29 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 `vsr_model_runtime_ready{deployment="..."} 1` means the deployment answers.
 The router log names each managed runtime process and why it stopped.
 
+## Startup waits for the models
+
+The router starts serving only once every model it manages for the
+configuration has loaded. Until then `/ready` returns `503` and
+`vllm-sr serve` keeps waiting, printing what the router waits for:
+
+```text
+Waiting for Router-managed model deployments, 0 of 1 ready: decision-kai (vllm-sr/Decision-2.0-Kai-0.6B) loading
+```
+
+`/startup-status` reports `phase: loading_model_deployments` and lists each
+deployment in `model_deployments` with its state:
+
+```bash
+curl -s localhost:8080/startup-status
+```
+
+A first start downloads the models, so it takes longer than the next ones. The
+wait ends after `VLLM_SRUN_READY_TIMEOUT` (10 minutes by default) with
+`did not become ready within 10m0s`; start again and the download resumes from
+the cache, or raise the timeout in the router's environment. A model that fails
+to load ends the wait at once with its reason (see below).
+
 ## A signal never matches
 
 The model is probably not ready yet, or its answers arrive too late.
@@ -90,8 +113,10 @@ When every model of a runtime process the router runs has failed, the router
 restarts that process (1 second at first, up to 60 seconds apart), so a passing
 cause such as a busy GPU or a full disk clears on its own. A model that fails
 beside models that still serve is retried by the runtime itself, so its
-process keeps running. A task model that still fails after three tries stops
-the router from starting. The common reasons:
+process keeps running. A model the router manages that still fails after three
+tries stops the router from starting, and on a configuration reload the new
+configuration is rejected while the previous one keeps serving. The common
+reasons:
 
 | Reason says | Do this |
 | --- | --- |

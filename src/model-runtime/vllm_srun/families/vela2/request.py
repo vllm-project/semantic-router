@@ -22,9 +22,16 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
-from ...errors import INVALID_QUESTION, QuestionError
+from ...errors import INVALID_QUESTION, QuestionError, question_error
 from ...systemone import QUESTION_TYPES as SYSTEM_ONE_TYPES
-from ...systemone import canonical, content, json_payload, named_options, read_question
+from ...systemone import (
+    canonical,
+    content,
+    json_payload,
+    listed_options,
+    named_options,
+    read_question,
+)
 from .calibration import SPAN_HEADS, Calibration
 
 ROLES = ("user", "context", "answer")
@@ -44,8 +51,10 @@ LABELLED_TYPES = ("set", "span")
 QUESTION_TYPES = (*SYSTEM_ONE_TYPES, *LABELLED_TYPES)
 FAMILY_FIELDS = frozenset({"over", "preset"})
 LABELLED_FIELDS = {
-    "set": frozenset({"type", "instructions", "criteria", "threshold"}),
-    "span": frozenset({"type", "instructions", "criteria", "threshold", "head"}),
+    "set": frozenset({"type", "instructions", "criteria", "labels", "threshold"}),
+    "span": frozenset(
+        {"type", "instructions", "criteria", "labels", "threshold", "head"}
+    ),
 }
 NOUL_DEFAULT_NO = "No. The statement or question is not satisfied."
 NOUL_DEFAULT_YES = "Yes. The statement or question is satisfied."
@@ -214,14 +223,23 @@ def _default_over(kind: str, state: State) -> str | tuple[str, ...]:
 
 
 def _labelled(question: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
-    """A Set or Span question's instructions and ``{label: description}`` criteria (1 to 255 labels)."""
+    """A Set or Span question's instructions and ``{label: description}`` criteria (1 to 255 labels).
+
+    ``labels`` is the ordered ``[{key, description}]`` form the Router config
+    uses, an alternative to the criteria object.
+    """
     kind = question["type"]
     unknown = set(question) - LABELLED_FIELDS[kind] - FAMILY_FIELDS
     if unknown:
         raise _invalid(f"{kind} questions do not take {sorted(unknown)}")
+    criteria = question.get("criteria")
+    if question.get("labels") is not None:
+        if criteria is not None:
+            raise _invalid("use criteria or labels, not both")
+        criteria = listed_options(question["labels"], "labels")
     return (
         content(question.get("instructions"), "instructions"),
-        named_options(question.get("criteria"), minimum=1),
+        named_options(criteria, minimum=1),
     )
 
 
@@ -251,14 +269,20 @@ class QuestionReader:
                 plan.questions.append(self.question(question_id, question, plan.state))
             except QuestionError as exc:
                 kind = question.get("type") if isinstance(question, dict) else None
-                plan.errors[question_id] = {"type": kind, "error": exc.code}
+                plan.errors[question_id] = question_error(kind, exc)
         taken = set(questions)
         for question in list(plan.questions):
             if question.kind == "set" and any(
                 f"{question.id}.{name}" in taken for name in question.names
             ):
                 plan.questions.remove(question)
-                plan.errors[question.id] = {"type": "set", "error": INVALID_QUESTION}
+                plan.errors[question.id] = question_error(
+                    "set",
+                    QuestionError(
+                        INVALID_QUESTION,
+                        f"a label answer {question.id}.<label> is another question's ID",
+                    ),
+                )
         return plan
 
     def question(self, question_id: str, question: Any, state: State) -> Question:

@@ -1066,7 +1066,11 @@ the same `process` share one process and one bundle.
   --uds <path>` when the configuration loads, and stops it when the group
   disappears or the router exits (SIGTERM, then SIGKILL after a 10 s grace
   period, logged as `runtime_process_killed`). Preparing a binding waits for the deployment's card while its model
-  is `loading` (up to `VLLM_SRUN_READY_TIMEOUT`, default 10 minutes). The supervisor
+  is `loading` (up to `VLLM_SRUN_READY_TIMEOUT`, default 10 minutes), and building a
+  router generation waits the same way for every managed deployment it leases, so the
+  decision models of decision signals and of the decision selector are ready before
+  the generation serves; `/ready` and `/startup-status` name the ones startup waits
+  for, and a reload keeps the previous generation serving meanwhile. The supervisor
   polls `/health` and `/v1/models`, restarts a dead or failed process with
   exponential back-off (1 s to 60 s), and marks only the affected deployments
   unavailable. Sockets live in a private 0700 directory.
@@ -1078,9 +1082,10 @@ the same `process` share one process and one bundle.
   `VLLM_SRUN_CACHE_DIR` keep their Phase 1 meaning. Every router image
   ships the runtime, so managed deployments work out of the box on CPU, and on
   GPUs with the GPU images.
-- **Fail-open** is unchanged: while a deployment is not ready its calls fail
-  at once, late answers are unknown at the consumer's timeout, and every
-  consumer follows its existing `on_error` / `on_unknown` policy.
+- **Fail-open** is unchanged once a generation serves: while a deployment is
+  not ready (a restarting process, an attached runtime that is not up) its
+  calls fail at once, late answers are unknown at the consumer's timeout, and
+  every consumer follows its existing `on_error` / `on_unknown` policy.
 
 ### 13.5 Client, supervisor, metrics
 
