@@ -772,6 +772,9 @@
             "$ref": "#/$defs/AdmissionConfig"
           },
           "type": "object"
+        },
+        "signal_timeout_ms": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -834,6 +837,9 @@
           "$ref": "#/$defs/RemoteClassifierBackend"
         },
         "on_error": {
+          "type": "string"
+        },
+        "on_unscanned": {
           "type": "string"
         },
         "model_ref": {
@@ -900,6 +906,9 @@
           "type": "array"
         },
         "on_error": {
+          "type": "string"
+        },
+        "on_unscanned": {
           "type": "string"
         },
         "model_ref": {
@@ -1383,6 +1392,9 @@
     },
     "CanonicalSystemModels": {
       "properties": {
+        "decision_model": {
+          "type": "string"
+        },
         "safety": {
           "type": "string"
         },
@@ -8273,6 +8285,15 @@
         "path": [
           "model_catalog",
           "admission"
+        ]
+      },
+      {
+        "key": "signal_timeout_ms",
+        "layer": "model_catalog",
+        "display_name": "Signal Timeout Ms",
+        "path": [
+          "model_catalog",
+          "signal_timeout_ms"
         ]
       }
     ]

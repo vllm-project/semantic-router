@@ -163,6 +163,23 @@ class DomainRegistryTests(unittest.TestCase):
                     commands_for_domains(domains, "verifications"),
                 )
 
+    def test_router_configs_the_cli_suite_parses_select_it(self) -> None:
+        for path in (
+            "config/config.yaml",
+            "config/recipes/balance/config.yaml",
+            "config/recipes/vela-amd/config.yaml",
+            "config/recipes/built-in/latest/mom-v1/config.yaml",
+            "e2e/config/config.memory-user.yaml",
+            "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn(
+                    "make vllm-sr-test", commands_for_domains(result.domains, "checks")
+                )
+                self.assertIn("cli-unit", result.selected_jobs)
+                self.assertNotIn("vllm-sr-cli", result.domains)
+
     def test_skill_only_changes_keep_the_lightweight_gate(self) -> None:
         domains = matching_domains(
             (
