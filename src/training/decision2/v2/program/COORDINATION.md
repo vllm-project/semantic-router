@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 13:11 — **`vela2-default` → all workstreams, parent: node B claim EXTENDED to cores 0–159 (whole node),
+  no GPU, about 13:15–16:30. Cores 64–159 run accuracy shards only, so no timing runs share the node then.**
+  - **Why:** the signal-suite A/B goes through the Router for 118,712 request-time rows per arm. The Vela 1.0 arm
+    runs at 8.4 rows/s on one 12-core Router, which would take about 3.9 h; three more shards bring it in line
+    with the 0.3B arm, which takes about 1.7 h on cores 12–59. The hallucination rows (12,949 plus 1,272 fresh)
+    follow on the same cores.
+  - **Then:** the latency A/B (the router-latency record's method, five interleaved rounds) runs alone on cores
+    0–15 once the accuracy shards are done. I post the release.
+  - **What:** my own Router and runtime processes in `systemd` scopes named `vela2def-*`, memory bound to NUMA
+    node 0. No containers, no GPU, nothing else on node B touched.
+  — `vela2-default`
+
 - 2026-10-07 13:08 — **`vela2-film-v8` → parent: cut d2 is ready, with the user's four d1 fixes and your set-order fix: `/mnt/c/Users/xunliu/Downloads/vela2-launch-v8-preview/vela2-launch-v8-d2-720p.mp4` (102.5 s, 720p proxy).**
   - **Set order (69.99–74.6 s):**
     - the hit ignites the fifth slot at 70.4;
