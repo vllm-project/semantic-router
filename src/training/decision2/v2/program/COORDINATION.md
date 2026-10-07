@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 23:26 — **`cli-window` → parent, all workstreams; cc `ux-fixes`, `decision-model`, `ux-agent-skill`, `ready-gate`: PR OPEN for #4714: https://github.com/vllm-project/semantic-router/pull/4724 (one commit `ac54df620` on `main` `6e617bd1b`, label `wg/developer-experience-ecosystem`, `Closes #4714`). CI is running and I'm watching it. Node A claim: cores 128–159 (NUMA node 1, measured idle, nothing pinned there), no GPU, untimed, about 23:30–01:30, for one `make check` on that commit.**
+  - **Root cause, reference side:** in Go `window` is an optional pointer with `omitempty`; `null` and an omitted key load to the same runtime config and export identically, and Go never writes `null`. The schema the CLI enforces is generated from those types and types `window` as an object (no field in it admits `null`). #4702 wrote `null` only because Go's reference coverage test wanted every module field except `backend`. So `config/config.yaml` omits both windows, the coverage test skips `window` for these two modules, and the schema stays as it is.
+  - **Test:** `test_vela_runtime_model_policy` asserts the Vela 2.0 reference through the modules' `model_id`s, and that materialization changes only `use_cpu`. It passes on `main`'s reference and on #4721's (`system: {decision_model, hazard}`), so either PR can land first.
+  - **CI gap:** a new `cli-reference-configs` domain selects `make vllm-sr-test` and CLI Unit Tests for `config/config.yaml`, the `balance` and `vela-amd` recipe configs, `config/recipes/built-in/**`, `e2e/config/config.memory-user.yaml` and the generated schema. It is not part of `vllm-sr-cli`, whose match also publishes the CLI package on `main`.
+  - **Local results:** the CLI suite runs 49/49 plus 3,304 pytest, and `make harness-check` passes. `make impact CHANGED_FILES=config/config.yaml` now lists `make vllm-sr-test` and `cli-unit`.
+  - **Overlaps:**
+    - **`decision-model` (#4721):** it edits other hunks of `config/config.yaml` and `reference_config_global_test.go`; both merge cleanly with mine.
+    - **`ux-fixes` (#4723), #4711 and #4504:** these rebase once #4724 lands.
+  - **Node A use:** container `cli-window-check` pinned to 128–159 in the precommit image, files under `/data/dev2/runs/cli-window/`. Not touched: cores 0–127, every GPU, the shared builders, and anyone else's containers. I post the release.
+  — `cli-window`
+
 - 2026-10-07 23:22 — **`ux-fixes` → parent, all workstreams; cc `cli-window`, `decision-model`, `rt-memory`, `ready-gate`: PR OPEN, https://github.com/vllm-project/semantic-router/pull/4723 (one commit `61761c2b3` on `main` `6e617bd1b`, label `wg/developer-experience-ecosystem`). It closes #4695–#4701, #4703, #4709 and #4710, fixes the `configuration-workflows.md` page, and is `Related #4694`. Node B claim (cores 128–159) EXTENDED to about 01:30.**
   - **Your 22:25 directive is in:**
     - **#4709:** the installer installs the interpreter's `pythonX.Y-venv` when `ensurepip` is missing, or prints the exact command when it has no root or sudo. Checked on a fresh `ubuntu:24.04` with `python3` and no `python3-venv`.
