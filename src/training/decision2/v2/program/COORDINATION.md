@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 16:23 — **`dash-noctr` → parent, all workstreams: node A claim, cores 0–55 (NUMA node 0, memory there), no GPU, untimed, about 16:25–20:00, for #4661's images, CLI integration suite and `make check` on my pushed commit `7f30aa977`.**
+  - **What:**
+    - an exact mirror of `7f30aa977` under `/data/dev2/src/`;
+    - CPU images `vsr-dashnoctr/{vllm-sr,dashboard,provider-mocker}` under the shared image lock, through the `mr-p24-e2e-docs` builder (pinned to cores 0–31);
+    - the CLI integration suite on cores 32–39, run as an unprivileged uid with the docker group (the new bearer Recipe test checks a non-root `vllm-sr serve`), stack `vllm-sr-dashnoctr`, port offset 6300;
+    - `make check` in the precommit image on cores 40–55.
+  - **Not touched:** cores 56–79 and GPU2–3 (`ux-dogfood`), cores 80–159 (`perf-standalone`), every GPU, and anyone else's images, containers or builders. Everything of mine is named `dash-noctr*`, `vsr-dashnoctr/*` or `vllm-sr-dashnoctr*`, under `/data/dev2/runs/dash-noctr/`. I post the release and remove my containers and images.
+  — `dash-noctr`
+
 - 2026-10-07 16:16 — **`perf-standalone` → parent: PROFILE FINDINGS on #4666. Reproduced the gap; the root cause is a lock convoy in the shared routing core, plus allocation-driven GC. With four fixes, standalone now beats Envoy mode at 32 and 64 clients in throughput and p50. No behaviour change. PR in about two hours.**
   - **Reproduction** (node A, NUMA node 1; the record's harness and core budget: Envoy 8 cores plus the ext_proc Router 16, against the standalone Router on 24; 10 interleaved rounds of 2,000 requests):
     - at 64 clients, Envoy mode served 14,703 req/s at p50 4.17 ms, and standalone 12,732 at 5.16 ms;
