@@ -40,22 +40,17 @@ import glob
 import json
 import os
 from collections import defaultdict
+from typing import Any
 from urllib.parse import unquote
 
 import yaml
 
 try:
-    from .constants import MODEL_REGISTRY
+    from .artifact_inventory import DEFAULT_CONFIG, load_config
 except ImportError:
-    from constants import MODEL_REGISTRY
+    from artifact_inventory import DEFAULT_CONFIG, load_config
 
 DEFAULT_OUTPUT_FILE = "config/config.eval.yaml"
-
-
-def served_model_path(role):
-    """Use the same native classifier identity as the served evaluator."""
-    return "models/" + MODEL_REGISTRY[role]["id"].split("/")[-1]
-
 
 DEFAULT_EMBEDDINGS = {
     "semantic": {
@@ -86,30 +81,18 @@ DEFAULT_TOOLS = {
     "fallback_to_empty": True,
 }
 
-DEFAULT_PROMPT_GUARD = {
-    "enabled": True,
-    "model_id": served_model_path("jailbreak"),
-    "threshold": 0.5,
-    "use_cpu": True,
-    "jailbreak_mapping_path": served_model_path("jailbreak")
-    + "/jailbreak_type_mapping.json",
-    "positive_labels": ["jailbreak"],
-}
 
-DEFAULT_DOMAIN_CLASSIFIER = {
-    "model_id": served_model_path("intent"),
-    "threshold": 0.5,
-    "use_cpu": True,
-    "category_mapping_path": served_model_path("intent") + "/category_mapping.json",
-    "fallback_category": "other",
-}
+def canonical_modules() -> dict[str, Any]:
+    """Copy the prompt guard and classifier modules from the maintained config."""
+    modules = load_config(DEFAULT_CONFIG)["global"]["model_catalog"]["modules"]
+    return {
+        "prompt_guard": modules["prompt_guard"],
+        "classifier": {
+            "domain": modules["classifier"]["domain"],
+            "pii": modules["classifier"]["pii"],
+        },
+    }
 
-DEFAULT_PII_CLASSIFIER = {
-    "model_id": served_model_path("pii"),
-    "threshold": 0.9,
-    "use_cpu": True,
-    "pii_mapping_path": served_model_path("pii") + "/pii_mapping.json",
-}
 
 CATEGORY_REASONING = {
     "math": True,
@@ -410,13 +393,7 @@ def generate_config_yaml(
             },
             "model_catalog": {
                 "embeddings": DEFAULT_EMBEDDINGS,
-                "modules": {
-                    "prompt_guard": DEFAULT_PROMPT_GUARD,
-                    "classifier": {
-                        "domain": DEFAULT_DOMAIN_CLASSIFIER,
-                        "pii": DEFAULT_PII_CLASSIFIER,
-                    },
-                },
+                "modules": canonical_modules(),
             },
         },
     }

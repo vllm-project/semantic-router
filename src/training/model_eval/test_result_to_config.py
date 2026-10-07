@@ -110,22 +110,12 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
     served = yaml.safe_load((root / "config/config.yaml").read_text())
     actual = config["global"]["model_catalog"]
     expected = served["global"]["model_catalog"]
-    guard = actual["modules"]["prompt_guard"]
-    for key in (
-        "model_id",
-        "threshold",
-        "positive_labels",
-        "jailbreak_mapping_path",
-    ):
-        assert guard[key] == expected["modules"]["prompt_guard"][key]
-    for role, mapping in (
-        ("domain", "category_mapping_path"),
-        ("pii", "pii_mapping_path"),
-    ):
-        classifier = actual["modules"]["classifier"][role]
-        default = expected["modules"]["classifier"][role]
-        assert classifier["model_id"] == default["model_id"]
-        assert classifier[mapping] == default[mapping]
+    assert actual["modules"]["prompt_guard"] == expected["modules"]["prompt_guard"]
+    for role in ("domain", "pii"):
+        assert (
+            actual["modules"]["classifier"][role]
+            == expected["modules"]["classifier"][role]
+        )
     assert actual["embeddings"]["semantic"]["mmbert_model_path"] == (
         expected["embeddings"]["semantic"]["mmbert_model_path"]
     )
