@@ -31,9 +31,6 @@ def test_fresh_amd_bootstrap_reaches_standby_specs_with_real_envoy_render(
     )
     docker = tmp_path / "docker"
     docker.touch()
-    monkeypatch.setattr(
-        container_start, "resolve_container_cli_path", lambda **kwargs: str(docker)
-    )
 
     def capture_specs(
         specs, *, storage_secret_values, bench_secret_values, bench_token_env
@@ -134,9 +131,6 @@ def test_external_bench_service_uses_dashboard_gateway_without_worker_lifecycle(
     )
     docker = tmp_path / "docker"
     docker.touch()
-    monkeypatch.setattr(
-        container_start, "resolve_container_cli_path", lambda **kwargs: str(docker)
-    )
 
     def capture_specs(specs, **kwargs):
         captured.extend(specs)

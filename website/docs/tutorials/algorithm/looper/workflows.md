@@ -49,7 +49,6 @@ Register the direct model slug:
 global:
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
       max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
       flow:
         model_names:
@@ -104,7 +103,8 @@ makes no model calls. An explicit planner override keeps that target and must
 pass the same stage checks; it is not replaced by another model on failure.
 If no eligible planner exists, the request fails closed. An explicit planner
 may be a separately configured helper outside the worker `modelRefs`, but must
-still have an operator-assigned backend. Worker calls remain constrained to
+still have an operator-assigned backend in `providers.models[].backend_refs`;
+without one, the configuration fails to load. Worker calls remain constrained to
 `modelRefs`; the executor rejects a plan that names a worker outside that list.
 Planner selection does not reduce a configured minimum of distinct successful
 workers.

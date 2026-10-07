@@ -16,6 +16,7 @@ const (
 // state belong in the routing groups; each family still owns its own rules.
 var (
 	globalConfigContractValidators = []configContractValidator{
+		validateListenerContracts,
 		validateRoutingPreviewConfig,
 		validateModelPricingContracts,
 		validateReasoningFamilyContracts,

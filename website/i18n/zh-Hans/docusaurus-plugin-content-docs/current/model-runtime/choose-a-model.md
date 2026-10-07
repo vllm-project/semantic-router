@@ -109,10 +109,10 @@ Vela 1.0，因为在 CPU 上 0.3B 比各自独立的 Vela 1.0 模型慢得多。
 | 硬件 | 状态 | 用法 |
 | --- | --- | --- |
 | CPU | 已验证 | 每个路由器镜像都能开箱即用地在 CPU 上运行模型。 |
-| AMD Instinct MI300X、MI325X | 已验证 | 设置 `device: rocm:0`。`vllm-sr serve --platform amd` 和 `extproc-rocm` 镜像自带 ROCm 版 PyTorch。 |
+| AMD Instinct MI300X、MI325X | 已验证 | 设置 `device: rocm:0`。`vllm-sr serve --platform amd` 和 `vllm-sr-rocm` 镜像自带 ROCm 版 PyTorch。 |
 | NVIDIA GPU | 可用，尚未验证 | 设置 `device: cuda:0`。`vllm-sr serve --platform nvidia` 自带 CUDA 版 PyTorch。 |
 | Intel GPU | 可用，尚未验证 | 设置 `device: xpu:0`，并把运行时安装在 XPU 版 PyTorch 旁边。 |
-| Apple 芯片 | 可用，尚未验证 | 设置 `device: mps`，并在 macOS 上安装运行时。 |
+| Apple 芯片 | 本版本仅支持 CPU | 在 macOS 上 docker 目标使用 CPU 镜像，因为 Docker 的 Linux 虚拟机拿不到 GPU。通过宿主机使用 GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/4636)。 |
 
 在 AMD GPU 上，路由器镜像自带运行时经过验证的软件栈：ROCm 7.2 版 PyTorch 2.12、FLA 0.5.2，以及为 ROCm 构建的 `causal-conv1d` 1.7.0。
 其中的 `causal-conv1d` 也包含 MI200 和 MI350 GPU 的代码，因此用到它的模型在这些 GPU 上也能运行，但只有 MI300X 和 MI325X 经过验证。

@@ -23,7 +23,6 @@ const readUser = {
     'evaluation.read',
     'logs.read',
     'mcp.read',
-    'openclaw.read',
     'tools.use',
     'topology.read',
   ],
@@ -546,8 +545,6 @@ test.describe('Layout top navigation', () => {
     const operateTrigger = workflowGroup.getByRole('button', { name: 'System' })
     await expect(workflowGroup.getByRole('button')).toHaveCount(2)
     await expect(workflowGroup.getByRole('button', { name: 'Analyze' })).toHaveCount(0)
-    await expect(page.getByRole('link', { name: 'Fleet Simulation' })).toHaveCount(0)
-    await expect(page.locator('a[href^="/fleet-sim"]')).toHaveCount(0)
     await expect(buildTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-build')
     await expect(operateTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-operate')
     await expect(buildTrigger).not.toHaveAttribute('aria-haspopup')
@@ -606,7 +603,6 @@ test.describe('Layout top navigation', () => {
     await page.keyboard.press('End')
     await expect(integrationsTab).toBeFocused()
     await expect(buildMenu.getByRole('link', { name: 'MCP Servers' })).toBeVisible()
-    await expect(buildMenu.getByRole('link', { name: 'OpenClaw' })).toBeVisible()
     await page.keyboard.press('Home')
     await expect(routingTab).toBeFocused()
     await page.keyboard.press('ArrowRight')
@@ -795,18 +791,6 @@ test.describe('Layout top navigation', () => {
     )
   })
 
-  test('removes Fleet Simulation navigation and redirects its retired direct route', async ({
-    page,
-  }) => {
-    await mockCommon(page)
-
-    await page.goto('/fleet-sim')
-
-    await expect(page).toHaveURL(/\/dashboard$/)
-    await expect(page.getByText('Fleet Simulation', { exact: true })).toHaveCount(0)
-    await expect(page.locator('a[href^="/fleet-sim"]')).toHaveCount(0)
-  })
-
   test('switches to compact navigation at 961px with full access and a long account name', async ({
     page,
   }) => {
@@ -829,8 +813,6 @@ test.describe('Layout top navigation', () => {
           'mcp.manage',
           'mcp.read',
           'mlpipeline.manage',
-          'openclaw.manage',
-          'openclaw.read',
           'replay.read',
           'tools.use',
           'topology.read',
@@ -1036,7 +1018,6 @@ test.describe('Layout top navigation', () => {
     await expect(buildMenu.getByRole('link', { name: 'ML Setup' })).toHaveCount(0)
     await buildMenu.getByRole('tab', { name: /Integration/ }).click()
     await expect(buildMenu.getByRole('link', { name: 'MCP Servers' })).toBeVisible()
-    await expect(buildMenu.getByRole('link', { name: 'OpenClaw' })).toBeVisible()
 
     await page.goto('/ml-setup')
 

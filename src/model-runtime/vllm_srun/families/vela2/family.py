@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any
+from typing import Any, cast
 
 from ...errors import DEADLINE_EXCEEDED, MAX_LENGTH_EXCEEDED, PackageError
 from ...plugins.base import (
@@ -32,11 +32,12 @@ from ...plugins.decisions import DecisionModel, RequestPlan
 from ...registry import builtin, policy
 from ...systemone import MAX_LEVELS, MAX_OPTIONS, MIN_LEVELS, MIN_OPTIONS
 from .answers import Answerer
-from .encoder_layout import MARKERS
+from .decoder_layout import DecoderTree
+from .encoder_layout import MARKERS, EncoderSequence
 from .layout import Row, Tokens, rows_of
 from .members import DecoderMember, EncoderMember
 from .package import DECODER, ENCODER, Vela2Package, member_of, verify
-from .request import QUESTION_TYPES, Plan, QuestionReader
+from .request import QUESTION_TYPES, Plan, Question, QuestionReader
 
 TOKEN_CACHE = 8192
 # On CPU, sequences packed into one 0.3B forward cost more per token together
@@ -127,9 +128,11 @@ class Vela2Family(ModelFamily):
 
     def verify(self, package: PackageRef) -> VerifiedPackage:
         known = builtin.lookup(package.repo_id) if package.repo_id else None
-        pinned = known is not None and known.revision == package.revision
-        details = verify(package.root, dict(known.files) if pinned else None)
-        if pinned and details.model_sha256 != known.model_sha256:
+        pinned = (
+            known if known is not None and known.revision == package.revision else None
+        )
+        details = verify(package.root, dict(pinned.files) if pinned else None)
+        if pinned and details.model_sha256 != pinned.model_sha256:
             raise PackageError(
                 f"{package.repo_id}@{package.revision} differs from the built-in identity"
             )
@@ -148,7 +151,7 @@ class Vela2Family(ModelFamily):
             model_sha256=details.model_sha256,
             max_input_tokens=details.max_input_tokens,
             licence=licence,
-            loaded_parameters=known.loaded_parameters if pinned else None,
+            loaded_parameters=pinned.loaded_parameters if pinned else None,
             details={"package": details},
         )
 
@@ -262,7 +265,7 @@ class Vela2Family(ModelFamily):
 
 
 @dataclass
-class Vela2Plan(RequestPlan):
+class Vela2Plan(RequestPlan[EncoderSequence | DecoderTree]):
     """A request planned for one Vela 2.0 model: its validated questions, rows and their model inputs."""
 
     request: Plan | None = None
@@ -270,7 +273,7 @@ class Vela2Plan(RequestPlan):
     mapping: list[Any] = field(default_factory=list)
 
 
-class Vela2Model(DecisionModel):
+class Vela2Model(DecisionModel[EncoderSequence | DecoderTree, Any]):
     """A Vela 2.0 package bound to an engine model."""
 
     def __init__(
@@ -347,9 +350,12 @@ class Vela2Model(DecisionModel):
             return self.member.run(items, packed=True, reduced=True)
         return self.member.run(items, packed=True)
 
-    def finish_surface(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:
+    def finish_surface(
+        self, plan: SurfacePlan[EncoderSequence | DecoderTree], results: Any
+    ) -> dict[str, Any]:
         state: Vela2Plan = plan.state
         request = state.request
+        assert request is not None
         answers: dict[str, Any] = {}
         if results is DEADLINE:
             for question_id in request.question_ids:
@@ -357,7 +363,7 @@ class Vela2Model(DecisionModel):
                     (q for q in request.questions if q.id == question_id), None
                 )
                 answers[question_id] = request.errors.get(question_id) or {
-                    "type": question.kind,
+                    "type": cast(Question, question).kind,
                     "error": DEADLINE_EXCEEDED,
                 }
             return {
@@ -365,9 +371,11 @@ class Vela2Model(DecisionModel):
                 "usage": {"input_tokens": 0, "output_tokens": 0},
             }
         if isinstance(self.member, EncoderMember):
-            raws = self.member.combine(state.rows, state.mapping, state.items, results)
+            sequences = cast(list[EncoderSequence], state.items)
+            raws = self.member.combine(state.rows, state.mapping, sequences, results)
         else:
-            raws = self.member.combine(state.mapping, state.items, results)
+            trees = cast(list[DecoderTree], state.items)
+            raws = self.member.combine(state.mapping, trees, results)
         row_of = {
             question.id: index
             for index, row in enumerate(state.rows)

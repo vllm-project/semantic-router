@@ -102,6 +102,9 @@ func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMetho
 		algorithm.Decision != nil {
 		return r.newDecisionModelSelector(*algorithm.Decision)
 	}
+	if selector := r.extensionAlgorithmSelector(method, algorithm, ctx); selector != nil {
+		return selector
+	}
 	registry := r.modelSelectorForRequest(ctx)
 	if registry == nil {
 		return nil

@@ -11,6 +11,7 @@ from urllib.parse import quote, urlsplit, urlunsplit
 import requests
 
 from cli.consts import DEFAULT_API_PORT
+from cli.runtime_stack import PORT_OFFSET_ENV, normalize_port_offset
 
 API_ROOT = "/api/v1"
 CONFIG_PATH = f"{API_ROOT}/config"
@@ -21,7 +22,7 @@ OBSERVABILITY_REPLAYS_PATH = f"{API_ROOT}/observability/replays"
 
 
 def default_management_base_url() -> str:
-    offset = int(os.getenv("VLLM_SR_PORT_OFFSET", "0"))
+    offset = normalize_port_offset(os.getenv(PORT_OFFSET_ENV, "0"))
     return f"http://localhost:{DEFAULT_API_PORT + offset}"
 
 

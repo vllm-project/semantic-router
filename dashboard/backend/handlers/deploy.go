@@ -307,8 +307,9 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	log.Printf("[Deploy] Config written to %s: version=%s, size=%d bytes", configPath, version, len(yamlBytes))
 
 	// Step 6: Propagate the new config to the managed runtime before returning.
-	if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
-		http.Error(w, formatRuntimeApplyError("Failed to apply deployed config to runtime", err), http.StatusInternalServerError)
+	restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
+	if applyErr != nil {
+		http.Error(w, formatRuntimeApplyError("Failed to apply deployed config to runtime", applyErr), http.StatusInternalServerError)
 		return
 	}
 	if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
@@ -335,6 +336,10 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 		DSLSnapshot: req.DSL,
 	})
 
+	if restartMessage != "" {
+		writeRestartRequiredResponse(w, version, restartMessage)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(DeployResponse{
 		Status:  "success",
@@ -570,8 +575,9 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 
 	log.Printf("[Rollback] Config rolled back to version %s, written to %s", version, configPath)
 
-	if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
-		http.Error(w, formatRuntimeApplyError("Failed to apply rolled back config to runtime", err), http.StatusInternalServerError)
+	restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
+	if applyErr != nil {
+		http.Error(w, formatRuntimeApplyError("Failed to apply rolled back config to runtime", applyErr), http.StatusInternalServerError)
 		return
 	}
 	if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
@@ -595,6 +601,10 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 		DSLSnapshot: readArchivedDSL(configDir),
 	})
 
+	if restartMessage != "" {
+		writeRestartRequiredResponse(w, version, restartMessage)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(DeployResponse{
 		Status:  "success",

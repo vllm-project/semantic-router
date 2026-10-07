@@ -61,24 +61,43 @@ def _base_clone_command(
     return command, primary_endpoint_network
 
 
+# The ports a Router publishes besides its management API and, in standalone
+# mode, the listeners: ext_proc gRPC and metrics.
+_ROUTER_SERVICE_PORTS = ("50051/tcp", "9190/tcp")
+
+
 def _clone_port_bindings(
     host: dict[str, Any],
     listeners: list[dict[str, Any]] | None,
     management: tuple[int, int] | None,
 ) -> dict[str, Any]:
     bindings = host.get("PortBindings") or {}
+    if listeners is not None and management is not None:
+        # A standalone Router: the target listeners replace the current ones.
+        own = {
+            port: bindings[port] for port in _ROUTER_SERVICE_PORTS if port in bindings
+        }
+        return _rewrite_router_management_bindings(
+            {**host, "PortBindings": {**own, **_listener_port_bindings(listeners)}},
+            management,
+        )
     if listeners is not None:
-        bindings = {}
-        for listener in listeners:
-            container_port = f"{listener['port']}/tcp"
-            bindings.setdefault(container_port, []).append(
-                {
-                    "HostIp": _listener_host_address(listener),
-                    "HostPort": str(listener["host_port"]),
-                }
-            )
-    elif management is not None:
+        return _listener_port_bindings(listeners)
+    if management is not None:
         bindings = _rewrite_router_management_bindings(host, management)
+    return bindings
+
+
+def _listener_port_bindings(listeners: list[dict[str, Any]]) -> dict[str, Any]:
+    bindings: dict[str, Any] = {}
+    for listener in listeners:
+        container_port = f"{listener['port']}/tcp"
+        bindings.setdefault(container_port, []).append(
+            {
+                "HostIp": _listener_host_address(listener),
+                "HostPort": str(listener["host_port"]),
+            }
+        )
     return bindings
 
 

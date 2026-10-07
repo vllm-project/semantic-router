@@ -231,6 +231,49 @@ _Appears in:_
 | `preferred_endpoints` _string array_ | PreferredEndpoints specifies which vLLM endpoints to prefer for this decision |  | Optional: \{\} <br /> |
 | `plugins` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg) array_ | Plugins contains policy configurations applied after rule matching |  | Optional: \{\} <br /> |
 | `algorithm` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Algorithm configures base model selection for this decision. It is<br />preserved as a router-owned object so supported algorithms can evolve<br />without requiring the operator CRD to duplicate every nested field. |  | Type: object <br />Optional: \{\} <br /> |
+| `reliability` _[DecisionReliabilityConfig](#decisionreliabilityconfig)_ | Reliability overrides the timeouts and retries of the provider model<br />that serves this decision's requests |  | Optional: \{\} <br /> |
+| `fallback` _[DecisionFallbackConfig](#decisionfallbackconfig)_ | Fallback overrides the cross-model fallback policy for this decision's<br />requests, over the recipe's and the router's |  | Optional: \{\} <br /> |
+
+#### DecisionFallbackConfig
+
+DecisionFallbackConfig is a decision's fallback block, with the router
+configuration's field names and meaning. A field left out keeps the
+recipe's or the router's value.
+
+_Appears in:_
+
+- [DecisionConfig](#decisionconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled turns cross-model fallback on or off for this decision |  | Optional: \{\} <br /> |
+| `max_attempts` _integer_ | MaxAttempts bounds the candidates tried, the first one included |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `total_timeout` _string_ | TotalTimeout bounds the whole fallback chain |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `per_attempt_timeout` _string_ | PerAttemptTimeout bounds each candidate's attempt |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `retryable_status_codes` _integer array_ | RetryableStatusCodes are the statuses that move on to the next candidate |  | items:Maximum: 599 <br />items:Minimum: 100 <br />Optional: \{\} <br /> |
+
+#### DecisionReliabilityConfig
+
+DecisionReliabilityConfig is a decision's reliability block, with the
+router configuration's field names and meaning. Durations are Go durations
+such as "30s"; "0s" turns a timeout off.
+
+_Appears in:_
+
+- [DecisionConfig](#decisionconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `total_timeout` _string_ | TotalTimeout bounds the whole call: every attempt and the response |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `per_try_timeout` _string_ | PerTryTimeout bounds each attempt until its response starts |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `idle_timeout` _string_ | IdleTimeout bounds the wait for more of a streamed response<br />(standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `first_byte_timeout` _string_ | FirstByteTimeout bounds the wait for the first response byte<br />(standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `retry_count` _integer_ | RetryCount is the number of retries after the first attempt |  | Maximum: 5 <br />Minimum: 0 <br />Optional: \{\} <br /> |
+| `retry_on` _string_ | RetryOn adds retry conditions, with Envoy's names (5xx, reset, ...) |  | Optional: \{\} <br /> |
+| `retriable_status_codes` _integer array_ | RetriableStatusCodes adds statuses retried under retriable-status-codes |  | items:Maximum: 599 <br />items:Minimum: 100 <br />Optional: \{\} <br /> |
+| `retry_back_off_base` _string_ | RetryBackOffBase is the base of the randomized exponential wait between<br />retries (standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `retry_back_off_max` _string_ | RetryBackOffMax caps that wait (standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `retry_after_max` _string_ | RetryAfterMax honors a response's Retry-After up to this bound<br />(standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
 
 #### EmbeddingEndpointConfig
 
@@ -336,7 +379,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `existingRef` _[GatewayReference](#gatewayreference)_ | ExistingRef references an existing Gateway to use |  | Optional: \{\} <br /> |
+| `existingRef` _[GatewayReference](#gatewayreference)_ | ExistingRef references an existing Gateway that calls the Router over<br />ext_proc. Setting it selects extproc mode. |  | Optional: \{\} <br /> |
 
 #### HNSWCacheConfig
 
@@ -381,7 +424,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `repository` _string_ | Repository is the container image repository | ghcr.io/vllm-project/semantic-router/extproc | Optional: \{\} <br /> |
+| `repository` _string_ | Repository is the container image repository | ghcr.io/vllm-project/semantic-router/vllm-sr | Optional: \{\} <br /> |
 | `tag` _string_ | Tag is the container image tag | latest | Optional: \{\} <br /> |
 | `pullPolicy` _[PullPolicy](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#pullpolicy-v1-core)_ | PullPolicy is the image pull policy | IfNotPresent | Enum: [Always Never IfNotPresent] <br />Optional: \{\} <br /> |
 | `imageRegistry` _string_ | ImageRegistry is an optional registry prefix |  | Optional: \{\} <br /> |
@@ -1161,8 +1204,8 @@ _Appears in:_
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#toleration-v1-core) array_ | Tolerations |  | Optional: \{\} <br /> |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#affinity-v1-core)_ | Affinity |  | Optional: \{\} <br /> |
 | `env` _[EnvVar](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#envvar-v1-core) array_ | Environment variables |  | Optional: \{\} <br /> |
-| `args` _string array_ | Container arguments |  | Optional: \{\} <br /> |
-| `gateway` _[GatewaySpec](#gatewayspec)_ | Gateway integration for reusing existing gateways |  | Optional: \{\} <br /> |
+| `args` _string array_ | Router arguments, after the gateway mode flags the Operator passes<br />(-gateway=standalone -listener-address=0.0.0.0, or -gateway=extproc).<br />The gateway mode follows spec.gateway, so args may not set those flags. |  | MaxItems: 64 <br />items:MaxLength: 4096 <br />Optional: \{\} <br /> |
+| `gateway` _[GatewaySpec](#gatewayspec)_ | Gateway selects what serves client traffic. Omitted, the Router runs<br />standalone: it serves the OpenAI-compatible API on port 8801 itself,<br />with no Envoy, and the Service exposes that port. With existingRef, the<br />Router serves ext_proc gRPC on port 50051 for that Gateway, whose<br />ext_proc policy and routes you manage. |  | Optional: \{\} <br /> |
 | `openshift` _[OpenShiftSpec](#openshiftspec)_ | OpenShift-specific features |  | Optional: \{\} <br /> |
 | `ingress` _[IngressSpec](#ingressspec)_ | Ingress configuration |  | Optional: \{\} <br /> |
 
@@ -1181,7 +1224,7 @@ _Appears in:_
 | `replicas` _integer_ | Replicas is the current number of replicas |  | Optional: \{\} <br /> |
 | `readyReplicas` _integer_ | ReadyReplicas is the number of ready replicas |  | Optional: \{\} <br /> |
 | `phase` _string_ | Phase represents the current phase of the SemanticRouter |  | Optional: \{\} <br /> |
-| `gatewayMode` _string_ | GatewayMode indicates deployment mode: standalone or gateway-integration |  | Optional: \{\} <br /> |
+| `gatewayMode` _string_ | GatewayMode is what serves client traffic: standalone (the Router's own<br />listener on port 8801) or gateway-integration (the Gateway in<br />spec.gateway, with the Router serving ext_proc) |  | Optional: \{\} <br /> |
 | `openshiftFeatures` _[OpenShiftFeaturesStatus](#openshiftfeaturesstatus)_ | OpenShiftFeatures tracks OpenShift-specific feature status |  | Optional: \{\} <br /> |
 
 #### ServiceAccountSpec

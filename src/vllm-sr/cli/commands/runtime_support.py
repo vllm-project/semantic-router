@@ -26,7 +26,6 @@ from cli.commands.runtime_kb import (
     _validate_package_kb_paths,
     _validate_runtime_kb_paths,
 )
-from cli.commands.runtime_looper import apply_local_looper_endpoint
 from cli.commands.runtime_management_credentials import (
     management_credential_env_names,
 )
@@ -75,7 +74,6 @@ PASSTHROUGH_ENV_RULES = (
     ("ANTHROPIC_API_KEY", True),
     ("OPENAI_API_KEY", True),
     ("OPENROUTER_API_KEY", True),
-    ("OPENCLAW_BASE_IMAGE", False),
     ("SR_LOG_LEVEL", False),
     ("SR_LOG_ENCODING", False),
     ("SR_LOG_DEVELOPMENT", False),
@@ -420,7 +418,6 @@ def _resolve_effective_config_document(
         stack = resolve_runtime_stack()
         changed = inject_local_service_runtime_defaults(config, stack) or changed
         changed = inject_local_store_runtime_defaults(config, stack) or changed
-        changed = apply_local_looper_endpoint(config, stack) or changed
         changed = apply_local_tracing_endpoint(config, stack) or changed
     normalized_algorithm = _normalized_algorithm_override(algorithm, setup_mode)
     apply_gpu_defaults = _platform_requires_gpu_defaults(platform)

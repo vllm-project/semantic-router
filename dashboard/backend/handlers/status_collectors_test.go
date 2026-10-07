@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -78,6 +81,38 @@ func TestCollectHostStatusUsesSplitManagedRuntime(t *testing.T) {
 		if service.Status != "running" {
 			t.Fatalf("service %q status = %q, want running", service.Name, service.Status)
 		}
+	}
+}
+
+func TestCollectHostStatusOfAStandaloneStackReportsNoEnvoy(t *testing.T) {
+	dockerPath := writeFakeStatusDockerCLI(t)
+	t.Setenv("PATH", filepath.Dir(dockerPath)+":"+os.Getenv("PATH"))
+	listener := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	t.Cleanup(listener.Close)
+
+	t.Setenv("VLLM_SR_GATEWAY", "standalone")
+	t.Setenv(routerContainerNameEnv, "lane-a-vllm-sr-router-container")
+	t.Setenv(envoyContainerNameEnv, "lane-a-vllm-sr-envoy-container")
+	t.Setenv(dashboardContainerNameEnv, "lane-a-vllm-sr-dashboard-container")
+	t.Setenv("TARGET_ENVOY_URL", listener.URL)
+	t.Setenv("TEST_ROUTER_CONTAINER", "lane-a-vllm-sr-router-container")
+	t.Setenv("TEST_ROUTER_STATUS", "running")
+	t.Setenv("TEST_DASHBOARD_CONTAINER", "lane-a-vllm-sr-dashboard-container")
+	t.Setenv("TEST_DASHBOARD_STATUS", "running")
+
+	status := collectHostStatus("", "", listener.URL)
+	if status.Overall != "healthy" {
+		t.Fatalf("overall status = %q, want healthy (%#v)", status.Overall, status.Services)
+	}
+	var names []string
+	for _, service := range status.Services {
+		names = append(names, service.Name)
+	}
+	if want := []string{"Routing access", "Router", "Dashboard"}; !reflect.DeepEqual(names, want) {
+		t.Fatalf("services = %v, want %v", names, want)
+	}
+	if !status.Services[0].Healthy {
+		t.Fatalf("routing access through the Router's listener = %#v", status.Services[0])
 	}
 }
 

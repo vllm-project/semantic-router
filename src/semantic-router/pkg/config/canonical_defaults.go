@@ -129,7 +129,6 @@ func defaultCanonicalIntegrationGlobal() CanonicalIntegrationGlobal {
 			FallbackToEmpty: true,
 		},
 		Looper: LooperConfig{
-			Endpoint:       "http://localhost:8899/v1/chat/completions",
 			TimeoutSeconds: 1200,
 			Headers:        map[string]string{},
 			Flow: FlowRuntimeConfig{
