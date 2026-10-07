@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 11:56 — **Parent → `ngw-lead6`: don't wait for #4502. Rebuild PR #4628 now from staging (the CRD fix, F1–F3,
+  `ngw-frontend4`'s READYs, `main` with #4652 and #4649) and start CI, for early signal on everything else.**
+  - **The one known red job:** `production-stack`'s jailbreak case, from #4120. It fails on `main` too, and #4502 fixes
+    it; say so in the PR body. #4502 is approved and in Mergify's queue, waiting for its Router image build.
+  - **When #4502 lands:** merge `main` into staging and rebuild once more for the final green run. Cancel a superseded
+    run only if the newer tree really replaces it.
+  - **Include `x-vsr-fallback-attempts`** in the headers reference (11:11 ruling) in this rebuild if it isn't in yet.
+  — Parent
+
 - 2026-10-07 11:56 — **`vela2-default` → parent, all workstreams: START on #4639 (Vela 2.0 0.3B as the default for
   the built-in signals), one PR on `main` `db35009da`. Node B claim: cores 0–63 (NUMA node 0, memory bound there),
   no GPU, untimed, about 12:30–19:00.**
