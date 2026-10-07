@@ -205,6 +205,43 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 10:36 — **`ngw-frontend4` → `ngw-lead6`, parent: READY M4 9ba05aae38ac667186814b96467f6a8472252965
+  (CLI integration suite, `make impact`, Docker-only host check). No new commits: READY 2's sha.**
+  - **CLI integration suite** (`run_cli_tests.py --integration-only`, all modules, as
+    `make vllm-sr-test-integration` runs it): 25/25 on node A, none skipped, 257 s. Images are CPU builds of
+    `12b07df2b`, which differs from `9ba05aae3` only by a rename and a comment. The modules:
+    - standalone on docker, the serve suite with `--gateway extproc` (`test_integration`, 12 tests);
+    - engine mode (3), first-run setup (with a save after setup), restart-required apply;
+    - model runtime, plugin example (4), sr-bench, storage isolation.
+  - **`make impact`:** the new files (`e2e/testing/vllm-sr-cli/test_integration_restart_required.py`, CLI and
+    Dashboard sources and tests) map to the `vllm-sr-cli` and `dashboard` domains and their checks and CI
+    jobs. CI's `make vllm-sr-test-integration` discovers every `test_integration_*.py`, so nothing new to
+    register.
+  - **Docker-only host check** (node A, Docker 29.8.1, host Python 3.12.3), all pass. Every `vllm-sr` command
+    ran under `env -i HOME=<home> PATH=<venv>/bin:/usr/bin:/bin` plus `VLLM_SR_STACK_NAME=hostcheck`,
+    `VLLM_SR_PORT_OFFSET=5800`, `VLLM_SR_IMAGE`, `VLLM_SR_ROUTER_IMAGE`, `VLLM_SR_DASHBOARD_IMAGE`,
+    `VLLM_SR_ENVOY_IMAGE=envoyproxy/envoy:v1.35.3` and `VLLM_SR_ENGINE_CACHE_DIR`. The images are the
+    locally built CPU `vllm-sr` and `dashboard` images; no repo tools were on PATH.
+    1. `docker run --rm -v <checkout>:/src:ro -v <out>/dist:/dist python:3.12-slim bash -c "cp -a /src
+       /tmp/repo && cd /tmp/repo/src/vllm-sr && pip wheel -q --no-deps -w /dist ."`
+       → `vllm_sr-0.4.0-py3-none-any.whl`, sha256 `97abb661…097fe`.
+    2. `python3 -m venv venv && venv/bin/pip install -q vllm_sr-0.4.0-py3-none-any.whl` → 34 packages.
+    3. `vllm-sr serve --config config.yaml --image-pull-policy ifnotpresent`: rc 0. The config is one
+       listener (8888) and one model on a provider mock. A chat on port 8888+5800 returns
+       `x-vsr-selected-model: test-model`; `vllm-sr status` says State Running, Router Running;
+       `vllm-sr stop` rc 0.
+    4. the same with `--gateway extproc`: rc 0, the chat routes through Envoy (same header), `status` adds
+       Envoy Running, `stop` rc 0.
+    5. `docker run --rm --entrypoint vllm-srun <router image> fixture /out/decision --family decision2
+       --variant qwen3 --seed 0` builds a test package; then `vllm-sr serve <pkgs>/decision --device cpu
+       --port 18190 --image-pull-policy ifnotpresent`. `/v1/models` lists `Decision-2.0-Tiny-Qwen3`
+       (`decision2`, ready) after about 6 s; Ctrl-C exits 0 and leaves no engine container.
+  - **Node A:** my claim (09:29, cores 140–159) is RELEASED. No container or process of mine runs. I
+    removed what `ngw-frontend`, `-2`, `-3` and my first build left: worktrees, venvs, about 30 GB of
+    images. Kept: the `vsr-ngwfe4/*:12b07df2be10` images for P8, run logs under
+    `/data/dev2/runs/ngw-frontend4/`, and the shared clone and caches.
+  — `ngw-frontend4`
+
 - 2026-10-07 10:36 — **`ngw-frontend4` → `ngw-lead6`, parent: READY 3 9ba05aae38ac667186814b96467f6a8472252965
   (the Looper schema check). Nothing new to commit: `19e713013`, already in READY 2's range, does it.**
   - **Schema:** the CLI schema still accepts `global.integrations.looper.endpoint`. Loading a config that sets
