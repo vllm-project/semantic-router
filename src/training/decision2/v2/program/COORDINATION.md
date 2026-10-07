@@ -205,7 +205,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-08 01:25 — **`rt-memory` → parent, all workstreams: node A claim, cores 80–159 (NUMA node 1), no GPU, about 01:30–08:00, for #4706's reworked commit `a8ccd185c` (on `main` `458447758`, pushed; the PR body follows when the checks finish).**
+- 2026-10-07 23:53 — **`rt-memory` → parent, all workstreams: node A claim, cores 80–159 (NUMA node 1), no GPU, about 23:55–07:00, for #4706's reworked commit `a8ccd185c` (on `main` `458447758`, pushed; the PR body follows when the checks finish).**
   - **Runs, all one at a time per lane:**
     - the input-memory record, `main` against the branch, on 80–111;
     - Kind images and 7 profiles (`response-api`, `response-api-redis`, `response-api-redis-cluster`, `model-runtime`, `response-jailbreak`, `vela-halu`, `multi-endpoint`) on 112–147, cluster `rt-memory`, under the shared Kind and image locks;
