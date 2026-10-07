@@ -205,6 +205,25 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 20:10 — **`ux-fixes` → parent, all workstreams: START on the new-user findings, ONE PR to `main` that closes #4695–#4701 and #4703 (your 20:02 note), `Related #4694`. Node B claim: cores 0–47 (NUMA node 0), no GPU, untimed, about 20:30–24:00, for images, the CLI integration suite and `make check`.**
+  - **Branch:** `xunzhuo/new-user-fixes` from `main` `320d5d49a` (with #4702), worktree `vllm-sr-ux-fixes`. #4695–#4701 now carry `accepted`.
+  - **Plan, one part per issue:**
+    - #4700, Router: a domain label no rule declares stops matching; labels no rule lists count as `other`, so the rule that lists `other` is the fallback. Auto-generated domains map their own names. Tests in `classification` and through both gateway modes.
+    - #4697, Router: a load-time warning when modality rules exist but `modality_detector` is off or can't run; `config validate` prints it. The modality page shows the block it needs. No default changes.
+    - #4696: `config validate` runs the Router's own parser (the stack's Router image offline, or `--endpoint`), so one set of rules decides; the modality detector reports all its problems at once.
+    - #4698: `config apply` on the local stack sends what `serve` would run (the stack's overlays), and `serve` restores the stack-owned management listener on a preserved document. Integration test.
+    - #4699: `config apply` turns `RESTART_REQUIRED` into the Dashboard's pending-activation flow (`vllm-sr status` shows it, `vllm-sr serve` applies it) and names the command; the Router's 409 no longer says Envoy in standalone mode; a timeout says the change may still activate.
+    - #4701: no orphaned-volume note on a fresh host; Envoy wording only with `--gateway extproc`; an audit of first-run and CLI messages.
+    - #4695: `main` to `0.5.0` (pyproject, lock, the latest catalog's compatibility window); the release contract learns the dev cycle; a source install pulls `:latest`; the Helm source default (`vllm-sr:v0.4.0`) can't run this chart's standalone args, which I fix or document.
+    - #4703: `labels` for Set and Span, a reason in every `invalid_question`, HTTP 400 when no question is valid, and Set/Span examples in `reference.md`.
+  - **Files, for the others:**
+    - `rt-memory` (#4654): in the runtime I touch `systemone.py`, `families/vela2/request.py`, `plugins/decisions.py` only where an error answer is built (not `plan_surface`), `openapi.yaml` only the error answer and the 400, and `reference.md` only the decisions examples. Whoever lands second merges `main`.
+    - `rt-timing` (#4667): I stay out of `api/app.py`, `runtime.py`, `scheduler/` and the response headers.
+    - #4693 (`ux-dogfood`'s docs): I don't edit its 25 files; my doc changes are the modality and domain signal pages, `reference.md`'s examples and the release-contract docs my code needs.
+    - `ux-agent-skill`: I don't touch the agent install skill or `installation/agent.md`.
+  - Scratch and handoff: `scratch/ux-fixes/`. No subagents.
+  — `ux-fixes`
+
 - 2026-10-07 20:06 — **`flaky-sup` → parent: PR OPEN for #4663: https://github.com/vllm-project/semantic-router/pull/4704 (one commit `9b9771ce9` on `main` `320d5d49a`, label `wg/router-models-inference-runtime`, `Closes #4663`). Test-only; CI is running and I'm watching it. No node was used.**
   - **Cause, confirmed:** the test cancelled the supervisor as soon as `cmd.Start()` returned, before the exec'd `sh` had necessarily run `trap '' TERM`. Under load, SIGTERM's default action then ended the shell within the 100 ms grace period, so nothing was killed or logged. A temporary diagnostic build logged the child's exit status: 7 of 7 failures were `signal: terminated`, with SIGTERM sent 1.0–9.2 ms after `Start`.
   - **Fix:** the shell creates a ready file right after its trap (`trap '' TERM; : > "$1"; sleep 30`), and the test cancels only once the file exists. One addition: the test now also checks that the process stopped no earlier than the grace period after the cancel. Before, a supervisor that killed at once passed. It's a lower bound, so it can't flake.
