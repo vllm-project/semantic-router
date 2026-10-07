@@ -105,28 +105,30 @@ func (c *Client) inputCap(model *string) int {
 // context's bundle when there is one. The context deadline is also sent as
 // options.deadline_ms so the runtime drops work it cannot start in time.
 func (c *Client) Decide(ctx context.Context, request Request) (Response, error) {
-	return c.decide(ctx, request, nil, "")
+	response, _, err := c.decide(ctx, request, nil, "")
+	return response, err
 }
 
 // decide is Decide with the served model's result cache for a bundled call:
 // the bundle may answer it together with other calls, so its flush looks up
-// and stores the call the runtime actually answers.
-func (c *Client) decide(ctx context.Context, request Request, cache *resultCache, deployment string) (Response, error) {
+// and stores the call the runtime actually answers. The timing is that of the
+// exchange that carried the call.
+func (c *Client) decide(ctx context.Context, request Request, cache *resultCache, deployment string) (Response, exchangeTiming, error) {
 	body, err := encodeDecisionRequest(ctx, request)
 	if err != nil {
-		return Response{}, err
+		return Response{}, exchangeTiming{}, err
 	}
 	if bundle := bundleFrom(ctx); bundle != nil {
 		return bundle.decide(ctx, c, &decisionCall{request: request, cache: cache, deployment: deployment}, body)
 	}
-	result, err := c.exchange(ctx, api.BundleTask{Decisions: &body})
+	result, timing, err := c.exchange(ctx, api.BundleTask{Decisions: &body})
 	if err != nil {
-		return Response{}, err
+		return Response{}, timing, err
 	}
 	if result.Decisions == nil {
-		return Response{}, fmt.Errorf("%w: missing decision response body", ErrFailed)
+		return Response{}, timing, fmt.Errorf("%w: missing decision response body", ErrFailed)
 	}
-	return decodeResponse(*result.Decisions, request.Questions), nil
+	return decodeResponse(*result.Decisions, request.Questions), timing, nil
 }
 
 func encodeDecisionRequest(ctx context.Context, request Request) (api.DecisionRequest, error) {
