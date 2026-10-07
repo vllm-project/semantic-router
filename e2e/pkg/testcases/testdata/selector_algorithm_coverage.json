@@ -8,9 +8,10 @@
   {
     "algorithm": "decision",
     "tier": "supported",
-    "status": "covered",
-    "profile": "decision-runtime",
-    "testcase": "decision-runtime-routing"
+    "status": "partial",
+    "profile": "model-runtime",
+    "testcase": "decision-runtime-routing",
+    "prerequisite": "decision-selector failure and fallback diagnostics"
   },
   {
     "algorithm": "hybrid",

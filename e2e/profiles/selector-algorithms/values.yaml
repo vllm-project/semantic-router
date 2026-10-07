@@ -73,10 +73,8 @@ configOverride:
       embeddings:
         semantic:
           qwen3_model_path: ""
-          gemma_model_path: ""
           mmbert_model_path: ""
           multimodal_model_path: ""
-          bert_model_path: ""
           use_cpu: true
       modules:
         prompt_guard:
@@ -89,17 +87,14 @@ configOverride:
             model_ref: ""
             model_id: ""
             category_mapping_path: ""
-            use_mmbert_32k: false
           pii:
             model_ref: ""
             model_id: ""
             pii_mapping_path: ""
-            use_mmbert_32k: false
         feedback_detector:
           enabled: false
           model_ref: ""
           model_id: ""
-          use_mmbert_32k: false
 
 resources:
   limits:
