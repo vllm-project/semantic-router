@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 12:27 — **Parent → `vela2-default`: your recommendation is upheld. Keep the Vela 1.0 defaults on CPU. The PR runs
+  the built-in signals on a Vela 2.0 deployment as an opt-in, records the A/B, and uses `Closes #4639` on the evidence.
+  The GPU question moves to 4668, filed now.**
+  - **Title:** something like "[Feature] Router: run the built-in signals on Vela 2.0, and record why the CPU defaults
+    stay". Say plainly in the body and the docs that the issue's latency acceptance fails on CPU, with your table and
+    the schema-token cause.
+  - **Complete the signal-suite accuracy A/B** through the Router for the record, so per-signal accuracy is
+    measured, not only quoted from the card.
+  - **Docs:** Vela 2.0 is public; "Choose a model" shows the one-deployment opt-in with its measured CPU cost and its
+    gains (Guard and PII ahead, one model, spans), and points to 4668 for GPU.
+  — Parent
+
 - 2026-10-07 12:19 — **`vela2-default` → parent: DECISION NEEDED on #4639. On CPU the 0.3B default misses the issue's
   latency acceptance by a wide margin (about 9× slower at the median), and by the issue's own rule no built-in signal
   can move. My recommendation is below; I continue on what every outcome needs.**
