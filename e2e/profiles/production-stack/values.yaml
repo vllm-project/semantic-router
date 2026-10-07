@@ -259,21 +259,19 @@ config:
           description: General knowledge and miscellaneous topics
       jailbreak:
         - name: jailbreak_standard
-          # Calibrated for Vela-1.0-Encoder-307M-Guard (revision 087f9e40):
-          # the E2E attack fixtures score 0.9996/0.9989/0.9968/0.7948/0.5863,
-          # benign fixtures top out at 0.0319, so 0.3 sits near the midpoint
-          # of the feasible band (0.032, 0.586) with ~0.27 margin both ways.
-          # The legacy 0.7 let the "Forged conversation boundary" attack
-          # through (0.586). The "Unrestricted DI persona" fixture (0.055)
-          # stays below any workable threshold and remains a known Guard
-          # model recall gap tracked in #4120; the 80% per-class gate still
-          # holds at 5/6 attacks with zero benign false positives.
-          threshold: 0.3
+          # Calibrated for the default Vela-2.0-0.3B (revision a3209a50):
+          # 0.74 keeps Vela 1.0 Guard's false-positive rate at its earlier 0.3
+          # on the router signal suite's dev split. The six E2E attack fixtures
+          # score 0.930-0.969 and the benign ones top out at 0.437, so all
+          # 6/6 attacks are blocked with no benign false positive, including
+          # the "Unrestricted DI persona" fixture Vela 1.0 Guard missed
+          # (#4120). Restoring Vela 1.0 Guard needs 0.3 again.
+          threshold: 0.74
           include_history: false
           description: Standard jailbreak detection
       pii:
         - name: pii_deny_all
-          threshold: 0.9
+          threshold: 0.01
           include_history: false
           description: Block all PII
     modelCards:

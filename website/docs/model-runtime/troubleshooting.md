@@ -86,7 +86,7 @@ the router from starting. The common reasons:
 | --- | --- |
 | a file hash does not match | The download is damaged or the repository changed. Delete that model from the cache and start again. |
 | a revision is required | A repository that is not built in needs `revision` with a 40-character commit. |
-| access denied, gated or private | Log in with `hf auth login` or set `HF_TOKEN` for the account that has access. Vela 2.0 is a private preview. |
+| access denied, gated or private | Log in with `hf auth login` or set `HF_TOKEN` for the account that has access. |
 | does not fit, out of memory | Use a smaller model, a GPU with more memory, or give the model its own `process`. |
 | device not available | The named GPU does not exist or the installed PyTorch has no support for it. Use `device: auto`, or install the right PyTorch build. |
 | built without LAPACK | The model needs LAPACK on the CPU, and this PyTorch (the ROCm image's) has none. Put the model on a GPU (`device: rocm:0`), or serve CPU models from the CPU image. The runtime does not retry it. |

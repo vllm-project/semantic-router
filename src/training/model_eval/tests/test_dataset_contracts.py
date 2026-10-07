@@ -15,7 +15,11 @@ from typing import Any
 from unittest.mock import Mock
 
 from src.training.model_eval import gap_report
-from src.training.model_eval.artifact_inventory import REGISTRY_ALIASES
+from src.training.model_eval.artifact_inventory import (
+    REGISTRY_ALIASES,
+    load_config,
+    served_artifacts,
+)
 from src.training.model_eval.constants import LEGACY_MODEL_REGISTRY, MODEL_REGISTRY
 from src.training.model_eval.dataset_contracts import (
     classification_label_id,
@@ -315,8 +319,9 @@ class DatasetContractTest(unittest.TestCase):
                 }
             )
         report = gap_report.render(baselines, gap_report.DEFAULT_CONFIG)
+        inventory = served_artifacts(load_config(gap_report.DEFAULT_CONFIG))
         for task in ("fact-check", "feedback"):
-            served = MODEL_REGISTRY[task]["id"].split("/")[-1]
+            served = inventory[task].artifact_name
             self.assertIn(
                 f"- {task}: no baseline has been measured for the served `{served}`",
                 report,

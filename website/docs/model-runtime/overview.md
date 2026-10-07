@@ -36,7 +36,7 @@ feature reports "unknown" and your routes fall back the way you configured.
 | Semantic cache, memory, RAG, tool selection, embedding signals | Vela 1.0 Embedding, Qwen3-Embedding-0.6B | [Embeddings](./guides/embeddings.md) |
 | Rerank retrieved documents | Vela 1.0 Reranker | [Rerank documents](./guides/rerank.md) |
 | Route on images and audio | Vela 1.0 Omni Nano and Mini | [Images and audio](./guides/multimodal.md) |
-| Ask your own routing questions in plain language | Decision 2.0, Decision 1.0, Vela 2.0 (private preview) | [Decision models](./guides/decisions.md) |
+| Ask your own routing questions in plain language | Decision 2.0, Decision 1.0, Vela 2.0 | [Decision models](./guides/decisions.md) |
 
 [Choose a model](model-runtime/choose-a-model.md) helps you pick a size and hardware.
 
