@@ -1,0 +1,76 @@
+{
+  "case": "models-list",
+  "phases": [
+    {
+      "phase": "request_headers",
+      "end_of_stream": true,
+      "header": [
+        {
+          "name": ":method",
+          "value": "GET"
+        },
+        {
+          "name": ":path",
+          "value": "/v1/models"
+        },
+        {
+          "name": ":authority",
+          "value": "localhost:8899"
+        },
+        {
+          "name": ":scheme",
+          "value": "http"
+        },
+        {
+          "name": "accept",
+          "value": "application/json"
+        },
+        {
+          "name": "x-forwarded-proto",
+          "value": "http"
+        },
+        {
+          "name": "x-request-id",
+          "value": "parity-models-list"
+        }
+      ],
+      "effect": {
+        "immediate": {
+          "status": 200,
+          "header": {
+            "set": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              },
+              {
+                "name": "x-vsr-config-version",
+                "value": "1"
+              }
+            ]
+          },
+          "body": "{\"object\":\"list\",\"data\":[{\"id\":\"vllm-sr/auto\",\"object\":\"model\",\"created\":0,\"owned_by\":\"vllm-semantic-router\",\"description\":\"Intelligent Router for Mixture-of-Models\",\"routing\":{\"resolution\":\"virtual\",\"selectable\":true,\"default_route\":true,\"recipe\":\"default\"}},{\"id\":\"auto\",\"object\":\"model\",\"created\":0,\"owned_by\":\"vllm-semantic-router\",\"description\":\"Intelligent Router for Mixture-of-Models\",\"routing\":{\"resolution\":\"virtual\",\"selectable\":true,\"default_route\":true,\"recipe\":\"default\"}},{\"id\":\"MoM\",\"object\":\"model\",\"created\":0,\"owned_by\":\"vllm-semantic-router\",\"description\":\"Intelligent Router for Mixture-of-Models\",\"routing\":{\"resolution\":\"virtual\",\"selectable\":true,\"default_route\":true,\"recipe\":\"default\"}},{\"id\":\"vllm-sr/support\",\"object\":\"model\",\"created\":0,\"owned_by\":\"vllm-semantic-router\",\"description\":\"Entrypoint for the support routing recipe\",\"routing\":{\"resolution\":\"virtual\",\"selectable\":true,\"recipe\":\"support\"}}]}"
+        }
+      }
+    }
+  ],
+  "response": {
+    "status": 200,
+    "header": [
+      {
+        "name": "content-type",
+        "value": "application/json"
+      },
+      {
+        "name": "x-vsr-config-version",
+        "value": "1"
+      },
+      {
+        "name": "content-length",
+        "value": "968"
+      }
+    ],
+    "body": "{\"object\":\"list\",\"data\":[{\"id\":\"vllm-sr/auto\",\"object\":\"model\",\"created\":0,\"owned_by\":\"vllm-semantic-router\",\"description\":\"Intelligent Router for Mixture-of-Models\",\"routing\":{\"resolution\":\"virtual\",\"selectable\":true,\"default_route\":true,\"recipe\":\"default\"}},{\"id\":\"auto\",\"object\":\"model\",\"created\":0,\"owned_by\":\"vllm-semantic-router\",\"description\":\"Intelligent Router for Mixture-of-Models\",\"routing\":{\"resolution\":\"virtual\",\"selectable\":true,\"default_route\":true,\"recipe\":\"default\"}},{\"id\":\"MoM\",\"object\":\"model\",\"created\":0,\"owned_by\":\"vllm-semantic-router\",\"description\":\"Intelligent Router for Mixture-of-Models\",\"routing\":{\"resolution\":\"virtual\",\"selectable\":true,\"default_route\":true,\"recipe\":\"default\"}},{\"id\":\"vllm-sr/support\",\"object\":\"model\",\"created\":0,\"owned_by\":\"vllm-semantic-router\",\"description\":\"Entrypoint for the support routing recipe\",\"routing\":{\"resolution\":\"virtual\",\"selectable\":true,\"recipe\":\"support\"}}]}"
+  },
+  "evidence": {}
+}

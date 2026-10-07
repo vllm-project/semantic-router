@@ -1,6 +1,6 @@
 replicaCount: 1
 image:
-  repository: ghcr.io/vllm-project/semantic-router/extproc
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
   tag: latest
   pullPolicy: Never
 config:
@@ -113,7 +113,6 @@ config:
         embedding_model: mmbert
     integrations:
       looper:
-        endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/chat/completions
         flow:
           state:
             store_backend: redis

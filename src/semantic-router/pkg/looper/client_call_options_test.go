@@ -27,19 +27,15 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		if got := request.Header.Get(headers.VSRLooperDecision); got != "decision-a" {
-			t.Errorf("%s = %q, want decision-a", headers.VSRLooperDecision, got)
+		if got := request.Header.Get(testHopDecision); got != "decision-a" {
+			t.Errorf("hop decision = %q, want decision-a", got)
 		}
-		if got := request.Header.Get(headers.VSRLooperIteration); got != "2" {
-			t.Errorf("%s = %q, want 2", headers.VSRLooperIteration, got)
-		}
-		if got := request.Header.Get(headers.VSRFusionDepth); got != "1" {
-			t.Errorf("%s = %q, want 1", headers.VSRFusionDepth, got)
+		if got := request.Header.Get(testHopIteration); got != "2" {
+			t.Errorf("hop iteration = %q, want 2", got)
 		}
 		if got := request.Header.Get("Authorization"); got != "Bearer secret-a" {
 			t.Errorf("Authorization = %q, want Bearer secret-a", got)
@@ -59,7 +55,7 @@ func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(&config.LooperConfig{Endpoint: server.URL})
+	client := hopsTo(&config.LooperConfig{}, server.URL)
 	request := openai.ChatCompletionNewParams{
 		Model:    "original-model",
 		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")},
@@ -71,7 +67,6 @@ func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
 		CallOptions{
 			DecisionName: "decision-a",
 			Iteration:    2,
-			FusionDepth:  1,
 			Mode:         ResponseJSON,
 		},
 	)
@@ -86,35 +81,11 @@ func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
 	}
 }
 
-func TestRequestHeadersUsesContextFusionDepthAsFallback(t *testing.T) {
-	client := NewClient(&config.LooperConfig{})
-	ctx := contextWithFusionDepth(context.Background(), 1)
-
-	header := client.requestHeaders(
-		ctx,
-		ModelTarget{},
-		CallOptions{DecisionName: "decision-a", Iteration: 1},
-	)
-	if got := header.Get(headers.VSRFusionDepth); got != "1" {
-		t.Fatalf("context %s = %q, want 1", headers.VSRFusionDepth, got)
-	}
-
-	header = client.requestHeaders(
-		ctx,
-		ModelTarget{},
-		CallOptions{DecisionName: "decision-a", Iteration: 1, FusionDepth: 2},
-	)
-	if got := header.Get(headers.VSRFusionDepth); got != "2" {
-		t.Fatalf("explicit %s = %q, want 2", headers.VSRFusionDepth, got)
-	}
-}
-
 func TestCallModelWithOptionsIsolatesConcurrentMetadata(t *testing.T) {
 	type observedRequest struct {
 		model         string
 		decision      string
 		iteration     string
-		fusionDepth   string
 		authorization string
 	}
 
@@ -138,9 +109,8 @@ func TestCallModelWithOptionsIsolatesConcurrentMetadata(t *testing.T) {
 		}
 		observed <- observedRequest{
 			model:         body.Model,
-			decision:      request.Header.Get(headers.VSRLooperDecision),
-			iteration:     request.Header.Get(headers.VSRLooperIteration),
-			fusionDepth:   request.Header.Get(headers.VSRFusionDepth),
+			decision:      request.Header.Get(testHopDecision),
+			iteration:     request.Header.Get(testHopIteration),
 			authorization: request.Header.Get("Authorization"),
 		}
 		<-release
@@ -149,7 +119,7 @@ func TestCallModelWithOptionsIsolatesConcurrentMetadata(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(&config.LooperConfig{Endpoint: server.URL})
+	client := hopsTo(&config.LooperConfig{}, server.URL)
 	type call struct {
 		target  ModelTarget
 		options CallOptions
@@ -161,7 +131,7 @@ func TestCallModelWithOptionsIsolatesConcurrentMetadata(t *testing.T) {
 		},
 		{
 			target:  ModelTarget{Name: "model-b", AccessKey: "secret-b"},
-			options: CallOptions{DecisionName: "decision-b", Iteration: 2, FusionDepth: 1, Mode: ResponseJSON},
+			options: CallOptions{DecisionName: "decision-b", Iteration: 2, Mode: ResponseJSON},
 		},
 	}
 
@@ -191,7 +161,7 @@ func TestCallModelWithOptionsIsolatesConcurrentMetadata(t *testing.T) {
 
 	want := map[string]observedRequest{
 		"model-a": {model: "model-a", decision: "decision-a", iteration: "1", authorization: "Bearer secret-a"},
-		"model-b": {model: "model-b", decision: "decision-b", iteration: "2", fusionDepth: "1", authorization: "Bearer secret-b"},
+		"model-b": {model: "model-b", decision: "decision-b", iteration: "2", authorization: "Bearer secret-b"},
 	}
 	for model, wantRequest := range want {
 		if gotRequest := got[model]; gotRequest != wantRequest {
@@ -227,11 +197,6 @@ func TestCallModelWithOptionsValidatesRequiredFields(t *testing.T) {
 			name:    "negative iteration",
 			target:  ModelTarget{Name: "model-a"},
 			options: CallOptions{Iteration: -1, Mode: ResponseJSON},
-		},
-		{
-			name:    "negative fusion depth",
-			target:  ModelTarget{Name: "model-a"},
-			options: CallOptions{Iteration: 1, FusionDepth: -1, Mode: ResponseJSON},
 		},
 		{
 			name:    "unsupported mode",

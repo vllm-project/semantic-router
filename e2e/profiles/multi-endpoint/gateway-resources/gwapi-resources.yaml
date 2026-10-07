@@ -88,6 +88,17 @@ spec:
     timeouts:
       request: 60s
       backendRequest: 60s
+  # Slow backend — qwen14b-slow alias, for decision reliability overrides
+  - matches:
+    - headers:
+      - type: Exact
+        name: x-ai-eg-model
+        value: qwen14b-slow
+    backendRefs:
+    - name: vllm-14b-slow
+    timeouts:
+      request: 60s
+      backendRequest: 60s
   # Default fallback — catch any unmatched request
   - backendRefs:
     - name: vllm-14b-dev
@@ -111,6 +122,11 @@ spec:
         name: semantic-router-extproc
         typedConfig:
           '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          # A decision's reliability block reaches Envoy's router through these
+          # per-request headers; ext_proc may set no other x-envoy-* header.
+          mutation_rules:
+            allow_expression:
+              regex: "^x-envoy-(upstream-rq-timeout-ms|upstream-rq-per-try-timeout-ms|max-retries|retry-on|retriable-status-codes)$"
           allow_mode_override: true
           grpcService:
             envoyGrpc:

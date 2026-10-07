@@ -200,8 +200,35 @@ type Listener struct {
 	Address string `yaml:"address"`
 	Port    int    `yaml:"port"`
 	Timeout string `yaml:"timeout,omitempty"`
-	// APIKeys are client bearer credentials enforced by the CLI-managed Envoy listener.
+	// APIKeys are client bearer credentials the listener enforces, in
+	// standalone mode and in the CLI-managed Envoy listener.
 	APIKeys []string `yaml:"api_keys,omitempty"`
+	// TLS, when set, makes a standalone Router serve this listener over TLS.
+	TLS *ListenerTLS `yaml:"tls,omitempty"`
+	// Identity, when set, decides whether a standalone Router keeps the client
+	// identity headers that requests on this listener carry.
+	Identity *ListenerIdentity `yaml:"identity,omitempty"`
+}
+
+// ListenerIdentity names the identity sources a standalone listener trusts.
+// It trusts none by default: with no authenticator in front of the Router,
+// a client could claim any identity, so its identity headers are dropped.
+type ListenerIdentity struct {
+	// TrustHeaders keeps the identity headers (the x-authz-* set and the
+	// names global.services.authz.identity sets) that an authenticating proxy
+	// or a trusted application in front of the listener asserts.
+	TrustHeaders bool `yaml:"trust_headers,omitempty"`
+	// TrustedPeers, when set, keeps those headers only on connections whose
+	// peer address is in one of these CIDRs; X-Forwarded-For is never read.
+	// Empty, every peer of a listener that trusts headers is trusted.
+	TrustedPeers []string `yaml:"trusted_peers,omitempty"`
+}
+
+// ListenerTLS is a listener's server certificate for one-way TLS. Relative
+// paths are relative to the configuration's directory.
+type ListenerTLS struct {
+	CertFile string `yaml:"cert_file"`
+	KeyFile  string `yaml:"key_file"`
 }
 
 type APIServer struct {
@@ -271,6 +298,10 @@ type BackendModels struct {
 	DefaultQualityIndex string                     `yaml:"-"`
 	VLLMEndpoints       []VLLMEndpoint             `yaml:"vllm_endpoints"`
 	ProviderProfiles    map[string]ProviderProfile `yaml:"provider_profiles,omitempty"`
+	// ProviderModelOrder lists providers.models aliases in authored order.
+	// VLLMEndpoints are sorted by alias, but the data plane's default route
+	// serves the first authored model that has a backend.
+	ProviderModelOrder []string `yaml:"-" json:"-"`
 }
 
 type ReasoningConfig struct {

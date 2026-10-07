@@ -10,7 +10,7 @@ func TestBuildCommandArgsIncludesSortedBuildArgs(t *testing.T) {
 
 	opts := BuildOptions{
 		Dockerfile:   "tools/docker/Dockerfile.extproc",
-		Tag:          "ghcr.io/vllm-project/semantic-router/extproc:e2e-test",
+		Tag:          "ghcr.io/vllm-project/semantic-router/vllm-sr:e2e-test",
 		BuildContext: ".",
 		BuildArgs: map[string]string{
 			"TARGETARCH":    "arm64",
@@ -24,7 +24,7 @@ func TestBuildCommandArgsIncludesSortedBuildArgs(t *testing.T) {
 		"-f", "tools/docker/Dockerfile.extproc",
 		"--build-arg", "BUILDPLATFORM=linux/arm64",
 		"--build-arg", "TARGETARCH=arm64",
-		"-t", "ghcr.io/vllm-project/semantic-router/extproc:e2e-test",
+		"-t", "ghcr.io/vllm-project/semantic-router/vllm-sr:e2e-test",
 		".",
 	}
 

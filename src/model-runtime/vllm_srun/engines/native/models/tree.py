@@ -15,10 +15,17 @@ can differ from the exact path by rounding (opt-in ``shared_context`` profile).
 from __future__ import annotations
 
 import inspect
-from typing import Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import torch
 import torch.nn.functional as F
+
+if TYPE_CHECKING:
+    from typing_extensions import TypeIs
+
+    from ....accel.kernels import KernelSet
+    from .qwen3_5 import GatedDeltaNet
 
 
 class Tree:
@@ -80,7 +87,18 @@ class Tree:
         return rows.reshape(-1, *rows.shape[2:])[self.flat]
 
 
-def _attend(query, key, value, causal: bool, scale: float):
+def is_tree(mask: object) -> TypeIs[Tree]:
+    """Whether a layer's mask is a shared-context ``Tree``, which runs the tree forward."""
+    return bool(getattr(mask, "is_tree", False))
+
+
+def _attend(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    causal: bool,
+    scale: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Attention output and its log-sum-exp per query ([B, H, L, D], [B, H, L])."""
     if query.is_cuda:
         out = torch.ops.aten._scaled_dot_product_efficient_attention(
@@ -105,7 +123,13 @@ def _attend(query, key, value, causal: bool, scale: float):
 
 
 def tree_attention(
-    query, key, value, tree: Tree, *, groups: int, scaling: float
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    tree: Tree,
+    *,
+    groups: int,
+    scaling: float,
 ) -> torch.Tensor:
     """Attention over a packed tree ([1, H, L, D] inputs); returns [1, L, H, D] like ``common.attention``."""
     if groups > 1:
@@ -127,7 +151,7 @@ def tree_attention(
         q[:, :, p:], k[:, :, :p], v[:, :, :p], False, scaling
     )
 
-    def rows(x):
+    def rows(x: torch.Tensor) -> torch.Tensor:
         return tree.rows(x[0].transpose(0, 1)).permute(0, 2, 1, 3)
 
     out_own, lse_own = _attend(
@@ -147,7 +171,16 @@ def varlen(rule: Any) -> bool:
     return "cu_seqlens" in inspect.signature(rule).parameters
 
 
-def suffix_rule(rule, tree: Tree, q, k, v, g, beta, start):
+def suffix_rule(
+    rule: Callable[..., tuple[torch.Tensor, torch.Tensor | None]],
+    tree: Tree,
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    g: torch.Tensor,
+    beta: torch.Tensor,
+    start: torch.Tensor,
+) -> torch.Tensor:
     """The gated delta rule over every suffix from the prefix-end state ``start`` ([1, S, ...] packed inputs)."""
     if varlen(rule):
         out, _ = rule(
@@ -163,7 +196,7 @@ def suffix_rule(rule, tree: Tree, q, k, v, g, beta, start):
 
 
 def tree_gated_delta(
-    m, hidden_states: torch.Tensor, tree: Tree, kernels
+    m: GatedDeltaNet, hidden_states: torch.Tensor, tree: Tree, kernels: KernelSet
 ) -> torch.Tensor:
     """``GatedDeltaNet.forward`` over a packed tree (no padding in the row), eager ops."""
     _, length, _ = hidden_states.shape
@@ -205,4 +238,5 @@ def tree_gated_delta(
     )
     core = torch.cat([out_prefix, out_suffix], dim=1)
     core = m.norm(core.reshape(-1, m.head_v_dim), z.reshape(-1, m.head_v_dim))
-    return m.out_proj(core.reshape(1, length, -1))
+    out: torch.Tensor = m.out_proj(core.reshape(1, length, -1))
+    return out

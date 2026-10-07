@@ -124,7 +124,6 @@ class SelectionTests(unittest.TestCase):
         )
         for job in (
             "image-router",
-            "image-local",
             "image-fixtures",
             "image-distribution",
             "package",
@@ -230,7 +229,7 @@ class SelectionTests(unittest.TestCase):
         plan = make_plan([path], source_sha=SHA)
         self.assertIn("operator", plan["expected_verification_ids"])
         self.assertTrue(
-            {"operator", "operator-bundle", "extproc", "provider-mocker"}
+            {"operator", "operator-bundle", "vllm-sr", "provider-mocker"}
             <= set(plan["images"])
         )
         self.assertNotIn(
@@ -253,7 +252,6 @@ class SelectionTests(unittest.TestCase):
     def test_component_tools_have_execution_owners_after_quality_split(self):
         cases = {
             "src/vllm-sr/cli/core.py": "cli-unit",
-            "src/fleet-sim/tests/test_simulation.py": "fleet-sim",
             "src/training/tests/test_export.py": "training",
             "tools/ci/training-test-requirements.txt": "training",
             "bench/redteam/test_datasets.py": "training",
@@ -299,9 +297,9 @@ class SelectionTests(unittest.TestCase):
                 plan = make_plan([], source_sha=SHA, requested=(identifier,))
                 self.assertEqual(plan["expected_verification_ids"], [identifier])
                 self.assertEqual(
-                    plan["verifications"][0]["images"], ["extproc", "provider-mocker"]
+                    plan["verifications"][0]["images"], ["vllm-sr", "provider-mocker"]
                 )
-                self.assertEqual(set(plan["images"]), {"extproc", "provider-mocker"})
+                self.assertEqual(set(plan["images"]), {"vllm-sr", "provider-mocker"})
 
     def test_full_cpu_profiles_share_explicit_inventory(self):
         plans = [
@@ -354,7 +352,7 @@ class SelectionTests(unittest.TestCase):
                 self.assertEqual(record["runtime"], "model-runtime")
                 self.assertEqual(record["device"], "cpu")
                 self.assertEqual(record["platform"], "linux/amd64")
-                self.assertEqual(record["images"], ["extproc", "provider-mocker"])
+                self.assertEqual(record["images"], ["vllm-sr", "provider-mocker"])
         for path in (
             "e2e/profiles/local-classifier-backend/profile.go",
             "e2e/testcases/local_classifier_routing.go",
