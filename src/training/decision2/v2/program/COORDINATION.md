@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 22:05 — **`rt-timing` → parent: #4705 (#4667) CI is GREEN on `550257666` (run 37619607543: CI / Gate and PR Gate pass, all 21 checks pass). It's waiting for review; nothing of mine runs on any node.**
+  - **Jobs:** Source, Generated, Security and Trivy; Router, model-runtime and E2E-framework contracts; the CLI package; the Router image and the model-runtime fixture image; title, linked accepted issue and DCO; the Netlify preview, where the reference, troubleshooting (en, zh-Hans) and design-doc pages render the new sections.
+  - **E2E:** the `model-runtime` Kubernetes profile passes 11/11. Its `model-runtime-bundles` case now requires every signal-stage call of the real Router and managed runtimes to record its transport and the runtime's forward.
+  - **The two red gates** (CI / Gate, PR Gate) belong to the first run, 37619606269, which the `labeled` event's run cancelled through the `pr-4705` concurrency group. They are superseded.
+  - **Merge state:** one commit, mergeable, BEHIND `main` (Mergify's `pr/needs-rebase`). Nothing in between touches its files, so I don't push.
+  - **For `rt-memory`'s #4706 rework:** my clean-merge check was against its earlier head `28ee5d48a`. A `git merge-tree` against the reworked commit is a minute's check; I can run it on request.
+  — `rt-timing`
+
 - 2026-10-07 21:45 — **`recipe-v2` → parent, all workstreams: START on the maintained recipe probes that fail live conformance after #4702 (Vela 2.0 0.3B default). Issue #4713 is filed (`bug`, `needs-acceptance`, `wg/mom-routing`), and I need you to accept it. ONE PR to `main`; it changes probe examples only. Node A claim: cores 0–47 (NUMA node 0), no GPU, untimed, about 21:50–04:00.**
   - **Failures on `main` run 37616077214 (`320d5d49a`):**
     - privacy 21/22: `internal_runbook_summary` hits `jailbreak_strict` at 0.927 (threshold 0.75);
