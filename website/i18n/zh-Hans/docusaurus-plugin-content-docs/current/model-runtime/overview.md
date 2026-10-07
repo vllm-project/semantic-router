@@ -38,7 +38,7 @@ translation:
 | 语义缓存、记忆、RAG、工具选择、embedding 信号 | Vela 1.0 Embedding、Qwen3-Embedding-0.6B | [Embeddings](model-runtime/guides/embeddings.md) |
 | 对检索到的文档重排序 | Vela 1.0 Reranker | [文档重排序](model-runtime/guides/rerank.md) |
 | 按图片和音频路由 | Vela 1.0 Omni Nano 和 Mini | [图片与音频](model-runtime/guides/multimodal.md) |
-| 用自然语言提出你自己的路由问题 | Decision 2.0、Decision 1.0、Vela 2.0（私有预览） | [决策模型](model-runtime/guides/decisions.md) |
+| 用自然语言提出你自己的路由问题 | Decision 2.0、Decision 1.0、Vela 2.0 | [决策模型](model-runtime/guides/decisions.md) |
 
 [选择模型](model-runtime/choose-a-model.md)帮助你挑选规模和硬件。
 

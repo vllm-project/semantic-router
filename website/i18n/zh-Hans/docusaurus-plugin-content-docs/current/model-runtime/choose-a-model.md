@@ -35,6 +35,8 @@ translation:
 比早期版本使用的原生绑定快三倍
 （[测量记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela1-performance.md)）。
 它们大多最多读取 32,768 个 token；更长或更短的上限列在每个模型卡片和 `GET /v1/models` 中。
+这些就是默认模型：未配置模型时，每个内置信号都在它的 Vela 1.0 模型上运行。
+[Vela 2.0](#vela-20) 可以在一次调用中回答其中除 Hazard、embedding、重排序和 Omni 之外的全部信号。
 
 ## 决策模型 {#decision-models}
 
@@ -55,10 +57,52 @@ Decision 1.0 模型（`vllm-sr/Decision-1.0-Kai-0.6B`、`-Lex-0.6B`、`-Route-0.
 `-0.8B`、`-4B`、`-9B`）支持选择多个标签（`set`）或标出文本片段（`span`）的问题，路由器可以基于这两类回答路由。
 它的路由片段头（router span head）还能回答 [`pii`](tutorials/signal/learned/pii.md#vela-20) 和
 [`hallucination`](tutorials/signal/learned/hallucination.md#vela-20) 信号，因此一个部署即可替代单独的 PII 和 Halu 模型。
-它是私有预览，需要具备访问权限的 Hugging Face token。
 在 CPU 上运行 0.3B。在 GPU 上，较大的几档可读取最多 16,384 个 token 的输入（0.3B 为 8,192）：其中 0.8B 成本最低，4B 和 9B 最准确。
 
 `vllm-srun models` 会列出每个内置模型及其固定的 revision。
+
+## 在 Vela 2.0 上运行内置信号 {#vela-20}
+
+Vela 2.0 已在 Hugging Face 公开（[合集](https://huggingface.co/collections/vllm-sr/vela-20)）。
+它的一个部署即可回答路由器的 domain、jailbreak、safety、fact check、user feedback、modality、PII 和 hallucination 信号。
+每个信号都会提出该模型针对它训练过的问题，并沿用对应 Vela 1.0 模型的标签，因此规则、阈值和策略照旧读取答案；
+一个请求的所有问题在一次调用中提出。把这些信号绑定到该部署：
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+    bindings:
+      domain_classifier: {deployment: vela2, contract: label_distribution.v1}
+      prompt_guard: {deployment: vela2, contract: label_distribution.v1}
+      fact_check_classifier: {deployment: vela2, contract: label_distribution.v1}
+      feedback_detector: {deployment: vela2, contract: label_distribution.v1}
+      modality_detector: {deployment: vela2, contract: label_distribution.v1}
+      pii_classifier: {deployment: vela2, contract: token_spans.v1}
+      hallucination_detector: {deployment: vela2, contract: token_spans.v1}
+```
+
+safety 规则以 `safety.<规则名>` 绑定。模型会读取完整文本，因此部署不设 `input`，信号也不设 `window`；
+如果你的配置设置了 `prompt_guard` 和 PII 的窗口，请删除它们。Hazard 类别、embedding、多模态 embedding 和重排序仍使用各自的 Vela 1.0 模型。
+要让某个信号回到 Vela 1.0，删除它的绑定即可。
+
+你得到的是：一个模型、每个请求一次调用回答所有信号，以及 PII 和无依据断言的片段。代价是 CPU 时间：默认模型保留在
+Vela 1.0，因为在 CPU 上 0.3B 比各自独立的 Vela 1.0 模型慢得多。每个请求都要把问题、选项和 17 个 PII 标签
+（至少 560 个 token）送进一次 3.07 亿参数的前向计算，而每个 Vela 1.0 模型只读取请求本身。经由路由器、在 12 个 CPU 核上，
+针对[延迟记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md)中的五个请求信号：
+
+| 路由器，12 个 CPU 核 | p50 | p95 | 每秒请求数 |
+| --- | ---: | ---: | ---: |
+| Vela 1.0（默认） | 16 ms | 59 ms | 38 |
+| Vela 2.0 0.3B | 128 ms | 154 ms | 7.5 |
+
+在 [router signal suite](https://huggingface.co/datasets/vllm-sr/router-signal-suite) 的留出数据上（经由路由器），0.3B ACCURACY_SUMMARY_ZH。
+[A/B 记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-router-signals.md)列出了每个信号和文件的结果。
+[#4668](https://github.com/vllm-project/semantic-router/issues/4668) 评估在 GPU 上以 Vela 2.0 作为默认模型。
 
 ## 硬件 {#hardware}
 

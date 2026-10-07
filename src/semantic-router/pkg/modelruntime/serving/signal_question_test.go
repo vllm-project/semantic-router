@@ -177,8 +177,14 @@ func TestBuiltInSignalQuestionsShareOneCall(t *testing.T) {
 	var spans tasks.TokenClassificationResult
 	errs := make([]error, 3)
 	for i, call := range []func() error{
-		func() (err error) { domainOut, err = domain.Call(ctx, string(config.DefaultRecipeName), text); return err },
-		func() (err error) { guardOut, err = guard.Call(ctx, string(config.DefaultRecipeName), text); return err },
+		func() (err error) {
+			domainOut, err = domain.Call(ctx, string(config.DefaultRecipeName), text)
+			return err
+		},
+		func() (err error) {
+			guardOut, err = guard.Call(ctx, string(config.DefaultRecipeName), text)
+			return err
+		},
 		func() (err error) { spans, err = pii.Call(ctx, string(config.DefaultRecipeName), text); return err },
 	} {
 		leave := bundle.Join()
@@ -209,9 +215,13 @@ func TestBuiltInSignalQuestionsFailPreparationTheyCannotServe(t *testing.T) {
 		t.Fatalf("a consumer window on a model that reads the whole text: %v", err)
 	}
 	cases := map[string]config.ResolvedModelBinding{
-		"a System One model":        sequenceBinding("domain_classifier", "kai", endpoint),
-		"a custom classifier":       sequenceBinding("classifier.topics", "vela", endpoint),
-		"a head":                    func() config.ResolvedModelBinding { s := sequenceBinding("domain_classifier", "vela", endpoint); s.Binding.Head = "domain"; return s }(),
+		"a System One model":  sequenceBinding("domain_classifier", "kai", endpoint),
+		"a custom classifier": sequenceBinding("classifier.topics", "vela", endpoint),
+		"a head": func() config.ResolvedModelBinding {
+			s := sequenceBinding("domain_classifier", "vela", endpoint)
+			s.Binding.Head = "domain"
+			return s
+		}(),
 		"a declared input budget": func() config.ResolvedModelBinding {
 			s := sequenceBinding("fact_check_classifier", "vela", endpoint)
 			s.Deployment.Input = config.ModelInputBudget{MaxTokens: 512, Overflow: "truncate"}

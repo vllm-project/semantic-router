@@ -33,7 +33,10 @@ request takes about 12 ms, three times faster than the native bindings that
 earlier releases used
 ([measurements](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela1-performance.md)).
 Most of them read up to 32,768 tokens; longer or shorter limits are listed on
-each model card and in `GET /v1/models`.
+each model card and in `GET /v1/models`. These are the defaults: with no model
+configured, each built-in signal runs on its Vela 1.0 model.
+[Vela 2.0](#vela-20) can answer all of them in one call, except Hazard,
+embeddings, reranking and Omni.
 
 ## Decision models
 
@@ -57,13 +60,69 @@ and answer the same kinds of questions. Vela 2.0 (`vllm-sr/Vela-2.0-0.3B`,
 spans of text (`span`), and the router routes on both. Its router span head
 also answers the [`pii`](tutorials/signal/learned/pii.md#vela-20) and
 [`hallucination`](tutorials/signal/learned/hallucination.md#vela-20) signals,
-so one deployment can replace the separate PII and Halu models. It is a
-private preview and needs a Hugging Face token with access. On a CPU, run the
-0.3B. On a GPU, the larger sizes read inputs of up to 16,384 tokens (the 0.3B
-reads 8,192): the 0.8B costs the least of them, and the 4B and 9B are the most
-accurate.
+so one deployment can replace the separate PII and Halu models. On a CPU,
+run the 0.3B. On a GPU, the larger sizes read inputs of up to 16,384 tokens
+(the 0.3B reads 8,192): the 0.8B costs the least of them, and the 4B and 9B
+are the most accurate.
 
 `vllm-srun models` prints every built-in model with its pinned revision.
+
+## Run the built-in signals on Vela 2.0 {#vela-20}
+
+Vela 2.0 is public on Hugging Face
+([collection](https://huggingface.co/collections/vllm-sr/vela-20)). One
+deployment of it can answer the router's domain, jailbreak, safety, fact
+check, user feedback, modality, PII and hallucination signals. Each signal
+asks the question the model was trained on for it, with the labels of its
+Vela 1.0 model, so rules, thresholds and policies read the answer as before,
+and a request asks all of them in one call. Bind the signals to the
+deployment:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+    bindings:
+      domain_classifier: {deployment: vela2, contract: label_distribution.v1}
+      prompt_guard: {deployment: vela2, contract: label_distribution.v1}
+      fact_check_classifier: {deployment: vela2, contract: label_distribution.v1}
+      feedback_detector: {deployment: vela2, contract: label_distribution.v1}
+      modality_detector: {deployment: vela2, contract: label_distribution.v1}
+      pii_classifier: {deployment: vela2, contract: token_spans.v1}
+      hallucination_detector: {deployment: vela2, contract: token_spans.v1}
+```
+
+A safety rule binds as `safety.<rule name>`. The model reads the whole text,
+so the deployment takes no `input` and the signals no `window`; remove the
+`prompt_guard` and PII windows if your configuration sets them. Hazard
+categories, embeddings, multimodal embeddings and reranking keep their Vela
+1.0 models. To go back to Vela 1.0 for a signal, remove its binding.
+
+What you get is one model and one call for every signal, and spans for PII
+and unsupported claims. What it costs is CPU time: the defaults stay on Vela
+1.0 because on a CPU the 0.3B is much slower than the separate Vela 1.0
+models. Every request carries the questions, their options and the 17 PII
+labels (at least 560 tokens) through one 307M-parameter forward, where each
+Vela 1.0 model reads only the request. Through the Router on 12 CPU cores,
+for the five request signals of the
+[latency record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md):
+
+| Router on 12 CPU cores | p50 | p95 | Requests per second |
+| --- | ---: | ---: | ---: |
+| Vela 1.0 (the defaults) | 16 ms | 59 ms | 38 |
+| Vela 2.0 0.3B | 128 ms | 154 ms | 7.5 |
+
+On the [router signal suite](https://huggingface.co/datasets/vllm-sr/router-signal-suite)'s
+held-out rows, through the Router, the 0.3B is ACCURACY_SUMMARY. The
+[A/B record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-router-signals.md)
+has every signal and file. [#4668](https://github.com/vllm-project/semantic-router/issues/4668)
+evaluates Vela 2.0 as the default on GPUs: on one AMD Instinct MI325X the 0.3B
+answers the same router questions in about 7 ms at the median
+([measurements](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-performance.md#against-the-vela-10-path)).
 
 ## Hardware
 

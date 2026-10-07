@@ -264,6 +264,35 @@ func (c *Classifier) hasLongContextClassifier(signalType string) bool {
 	return false
 }
 
+// signalReadsWholeText reports whether a signal's prepared model asks a Vela
+// 2.0 model the signal's question. That model reads a whole text, windowing
+// what exceeds its own input itself, so the signal asks about the request as
+// it is, in the same call as the request's other questions about it.
+func (c *Classifier) signalReadsWholeText(signalType string) bool {
+	if c == nil {
+		return false
+	}
+	var consumer interface{}
+	switch signalType {
+	case config.SignalTypeDomain:
+		consumer = c.categoryInference
+	case config.SignalTypeJailbreak:
+		consumer = c.jailbreakInference
+	case config.SignalTypeFactCheck:
+		if c.factCheckClassifier != nil {
+			consumer = c.factCheckClassifier.backend
+		}
+	case config.SignalTypeUserFeedback:
+		if c.feedbackDetector != nil {
+			consumer = c.feedbackDetector.backend
+		}
+	case config.SignalTypeModality:
+		consumer = c.modalityInference
+	}
+	reader, ok := consumer.(interface{ readsWholeText() bool })
+	return ok && reader.readsWholeText()
+}
+
 func (c *Classifier) piiInputSpans(text string) []signalChunkSpan {
 	if c.piiReadsWholeText() && text != "" {
 		return []signalChunkSpan{{Text: text}}
@@ -309,7 +338,7 @@ func (c *Classifier) jailbreakModelInputs(text string) []string {
 	if text == "" {
 		return nil
 	}
-	if c != nil && c.Config != nil && c.Config.PromptGuard.Window != nil {
+	if (c != nil && c.Config != nil && c.Config.PromptGuard.Window != nil) || c.signalReadsWholeText(config.SignalTypeJailbreak) {
 		return []string{text}
 	}
 	return c.jailbreakInputs(text)

@@ -136,7 +136,8 @@ func (r *Runtime) questionSequence(ctx context.Context, spec config.ResolvedMode
 	}
 	capability := binding.Capability{
 		Contract: spec.Binding.Contract, Provider: Provider, Device: card.Device, Precision: card.Dtype, Labels: question.labels(),
-		Limits: binding.Limits{ModelTokens: card.MaxInputTokens, Overflow: spec.Deployment.Input.Overflow},
+		Question: question.key,
+		Limits:   binding.Limits{ModelTokens: card.MaxInputTokens, Overflow: spec.Deployment.Input.Overflow},
 	}
 	t := &target{spec: spec, deployment: spec.Binding.Deployment, card: card, resource: resource}
 	asked := question.question(spec)

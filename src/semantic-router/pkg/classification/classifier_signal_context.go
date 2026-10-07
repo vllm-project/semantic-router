@@ -176,7 +176,7 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 
 	boundedText := textForSignalFunc(input.Text, input.UncompressedText, input.SkipCompressionSignals)
 	textForSignal := func(signalType string) string {
-		if c.hasLongContextClassifier(signalType) {
+		if c.hasLongContextClassifier(signalType) || c.signalReadsWholeText(signalType) {
 			if input.UncompressedText != "" && input.SkipCompressionSignals[signalType] {
 				return input.UncompressedText
 			}

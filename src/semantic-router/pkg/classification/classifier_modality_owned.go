@@ -24,6 +24,12 @@ func (m *ownedModalityClassifier) Close() error {
 	return m.handle.Close()
 }
 
+// readsWholeText reports whether the classifier asks a Vela 2.0 model the
+// modality question, which reads a whole text however long it is.
+func (m *ownedModalityClassifier) readsWholeText() bool {
+	return m != nil && m.handle != nil && m.handle.Capability().Question != ""
+}
+
 func (m *ownedModalityClassifier) Classify(ctx context.Context, text string) (ModalityClassificationResult, error) {
 	if m == nil || m.handle == nil {
 		return ModalityClassificationResult{}, fmt.Errorf("modality classifier was not prepared")

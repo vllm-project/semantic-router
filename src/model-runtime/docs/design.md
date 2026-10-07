@@ -522,8 +522,8 @@ IDs, one or several. A Hub model is always resolved to a 40-hex commit: with
 without it, a built-in model uses its pinned revision and any other repository
 needs an explicit revision. Downloads go into the HF cache with an allow-list
 derived from the family's inventory. A token comes from the environment or the
-HF token file, never from argv. Private repositories (Vela 2.0 today) need a
-token with access.
+HF token file, never from argv. Gated and private repositories need a token
+with access.
 
 ### 7.2 Verification
 
@@ -551,7 +551,7 @@ Before any model code runs, the family verifies the package:
 | `decision2` | `vllm-sr/Decision-2.0-{Kai-0.6B, Eos-0.8B, Sol-2B, Nox-4B, Lux-9B, Vega-27B}` | Kai `cd49ea38`, Eos `3594047d`, Sol `64235bef`, Nox `25e8f67d`, Lux `78bf3c03`, Vega `7aec49ae` (runtime-only revisions of the Phase 1 pins, same weights and identity) |
 | `decision1` | `vllm-sr/Decision-1.0-{Kai-0.6B, Lex-0.6B, Route-0.6B}` (Vela encoder runtime); `{Eos-0.8B, Sol-2B, Nox-4B, Lux-9B}` (Qwen3.5 runtime) | Kai `79263ba4`, Lex `a5ba6895`, Route `deed1f29`, Eos `2ca39a23`, Sol `5c698b1a`, Nox `7f65e1db`, Lux `2064c84d` |
 | `task_heads` | `vllm-sr/Vela-1.0-Encoder-307M-{Domain, Guard, Safety, Shield, FactCheck, Feedback, Modality, Hazard, PII, Halu, Embedding, Reranker}`, `Qwen/Qwen3-Embedding-0.6B` | The revisions the router pinned (section 16.3), for example Domain `f6354f54`, PII `6d3300c4`, Halu `ca875312`, Embedding `1e57cebf`, Reranker `a388e41c` |
-| `vela2` | `vllm-sr/Vela-2.0-{0.3B, 0.8B, 4B, 9B}` (private preview) | 0.3B `a3209a50`, 0.8B `a778eb2a`, 4B `c1e64d4f`, 9B `bc876163` |
+| `vela2` | `vllm-sr/Vela-2.0-{0.3B, 0.8B, 4B, 9B}` | 0.3B `a3209a50`, 0.8B `a778eb2a`, 4B `c1e64d4f`, 9B `bc876163` |
 | `multimodal_embedding` | `vllm-sr/Vela-1.0-Omni-{Nano, Mini}` | Nano `2ff2d663`, Mini `801bae3a` (the published weights, section 8.5) |
 
 Each family names its table (`ModelFamily.builtin_table`); the built-in

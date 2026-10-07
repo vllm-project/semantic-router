@@ -1,4 +1,4 @@
-"""Vela 2.0 (Phase 3, private preview): 0.3B, 0.8B, 4B and 9B.
+"""Vela 2.0 (Phase 3): 0.3B, 0.8B, 4B and 9B.
 
 Entries pin a revision, the SHA-256 of every file the family loads, the
 expected identity and parameter count; references live in
@@ -8,7 +8,7 @@ each one's backbone comes from (Eos-0.8B, Nox-4B, Lux-9B), the same tuning
 keys. ``reduced`` names the copy
 ``max_speed`` may load per device class, where ``docs/records/vela2-parity.md``
 and ``vela2-performance.md`` show it at the accuracy floor and faster. The
-repositories are private: a token with access is needed to download them.
+repositories are public; the pins are the revisions the records measured.
 """
 
 from __future__ import annotations
@@ -37,7 +37,6 @@ def _vela(
         backbone=backbone,
         min_device_memory_gib=memory,
         files=files,
-        access="private",
         reduced=reduced or {},
     )
 

@@ -106,6 +106,16 @@ func (c *ModalityDetectionConfig) GetLowerThresholdRatio() float32 {
 //   - ConfidenceThreshold (if set) is in the range (0, 1]
 //   - ConfidenceThreshold is required when method is "classifier" or "hybrid"
 func (c *ModalityDetectionConfig) Validate() error {
+	return c.validate(false)
+}
+
+// ValidateBound validates a detector whose classifier is a modality_detector
+// binding's deployment, so it needs no classifier.model_path.
+func (c *ModalityDetectionConfig) ValidateBound() error {
+	return c.validate(true)
+}
+
+func (c *ModalityDetectionConfig) validate(bound bool) error {
 	if c == nil {
 		return nil // nil config is valid (not referenced by any signal when unset)
 	}
@@ -114,7 +124,7 @@ func (c *ModalityDetectionConfig) Validate() error {
 	if err := validateModalityDetectionMethod(method); err != nil {
 		return err
 	}
-	if err := c.validateMethodRequirements(method); err != nil {
+	if err := c.validateMethodRequirements(method, bound); err != nil {
 		return err
 	}
 	return c.validateThresholds(method)
@@ -132,10 +142,10 @@ func validateModalityDetectionMethod(method string) error {
 	return nil
 }
 
-func (c *ModalityDetectionConfig) validateMethodRequirements(method string) error {
+func (c *ModalityDetectionConfig) validateMethodRequirements(method string, bound bool) error {
 	switch method {
 	case ModalityDetectionClassifier:
-		if c.Classifier == nil || c.Classifier.ModelPath == "" {
+		if !bound && (c.Classifier == nil || c.Classifier.ModelPath == "") {
 			return fmt.Errorf("modality_detection: method %q requires classifier.model_path to be set", method)
 		}
 
@@ -145,7 +155,7 @@ func (c *ModalityDetectionConfig) validateMethodRequirements(method string) erro
 		}
 
 	case ModalityDetectionHybrid:
-		hasClassifier := c.Classifier != nil && c.Classifier.ModelPath != ""
+		hasClassifier := bound || (c.Classifier != nil && c.Classifier.ModelPath != "")
 		hasKeywords := len(c.Keywords) > 0
 		if !hasClassifier && !hasKeywords {
 			return fmt.Errorf("modality_detection: method %q requires at least one of classifier.model_path or keywords to be configured", method)
