@@ -191,21 +191,17 @@ func assertReferenceConfigToolSessionsCoverage(t testingT, toolSessions map[stri
 func assertReferenceConfigSemanticCacheCoverage(t testingT, semanticCache map[string]interface{}) {
 	assertMapCoversStructFields(t, semanticCache, reflect.TypeOf(responseCacheStoreReference{}), "global.stores.response_cache")
 	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "milvus"), reflect.TypeOf(MilvusConfig{}), "global.stores.response_cache.milvus")
-	polarityGuard := mustMapAt(t, semanticCache, "polarity_guard")
-	assertMapCoversStructFields(t, polarityGuard, reflect.TypeOf(PolarityGuardConfig{}), "global.stores.response_cache.polarity_guard")
-	assertMapCoversStructFields(t, mustMapAt(t, polarityGuard, "nli"), reflect.TypeOf(PolarityGuardNLIConfig{}), "global.stores.response_cache.polarity_guard.nli")
 }
 
 type responseCacheStoreReference struct {
-	BackendType         string               `yaml:"backend_type,omitempty"`
-	Enabled             bool                 `yaml:"enabled"`
-	SimilarityThreshold *float32             `yaml:"similarity_threshold,omitempty"`
-	MaxEntries          int                  `yaml:"max_entries,omitempty"`
-	TTLSeconds          int                  `yaml:"ttl_seconds,omitempty"`
-	EvictionPolicy      string               `yaml:"eviction_policy,omitempty"`
-	Milvus              *MilvusConfig        `yaml:"milvus,omitempty"`
-	EmbeddingModel      string               `yaml:"embedding_model,omitempty"`
-	PolarityGuard       *PolarityGuardConfig `yaml:"polarity_guard,omitempty"`
+	BackendType         string        `yaml:"backend_type,omitempty"`
+	Enabled             bool          `yaml:"enabled"`
+	SimilarityThreshold *float32      `yaml:"similarity_threshold,omitempty"`
+	MaxEntries          int           `yaml:"max_entries,omitempty"`
+	TTLSeconds          int           `yaml:"ttl_seconds,omitempty"`
+	EvictionPolicy      string        `yaml:"eviction_policy,omitempty"`
+	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
+	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
 }
 
 func assertReferenceConfigMemoryCoverage(t testingT, memory map[string]interface{}) {
@@ -327,14 +323,11 @@ func assertReferenceConfigModelModuleCoverage(t testingT, modules map[string]int
 
 func assertReferenceConfigClassifierModuleCoverage(t testingT, classifier map[string]interface{}) {
 	assertMapCoversStructFields(t, classifier, reflect.TypeOf(CanonicalClassifierModule{}), "global.model_catalog.modules.classifier")
-	// backend and local selectors are mutually exclusive. The canonical local
-	// variant is supplied by defaults, so the exhaustive reference does not need
-	// to force a variant line that users must delete before adding a backend.
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "domain"), reflect.TypeOf(CanonicalCategoryModule{}), "global.model_catalog.modules.classifier.domain", "backend", "variant", "use_modernbert", "use_mmbert_32k")
+	// backend replaces the local model, so the reference shows the local form.
+	assertMapCoversStructFields(t, mustMapAt(t, classifier, "domain"), reflect.TypeOf(CanonicalCategoryModule{}), "global.model_catalog.modules.classifier.domain", "backend")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "mcp"), reflect.TypeOf(MCPCategoryModel{}), "global.model_catalog.modules.classifier.mcp")
-	// pii.backend is the remote token_spans.v1 attachment and is mutually
-	// exclusive with the local use_mmbert_32k path the reference config shows,
-	// same as domain.backend above.
+	// pii.backend is the remote token_spans.v1 attachment that replaces the
+	// local model the reference config shows, same as domain.backend above.
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "pii"), reflect.TypeOf(CanonicalPIIModule{}), "global.model_catalog.modules.classifier.pii", "backend")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "preference"), reflect.TypeOf(PreferenceModelConfig{}), "global.model_catalog.modules.classifier.preference")
 	assertMapCoversStructFields(
@@ -363,5 +356,4 @@ func assertReferenceConfigHallucinationModuleCoverage(t testingT, hallucination 
 	assertMapCoversStructFields(t, hallucination, reflect.TypeOf(CanonicalHallucinationModule{}), "global.model_catalog.modules.hallucination_mitigation")
 	assertMapCoversStructFields(t, mustMapAt(t, hallucination, "fact_check"), reflect.TypeOf(CanonicalFactCheckModule{}), "global.model_catalog.modules.hallucination_mitigation.fact_check")
 	assertMapCoversStructFields(t, mustMapAt(t, hallucination, "detector"), reflect.TypeOf(CanonicalHallucinationDetector{}), "global.model_catalog.modules.hallucination_mitigation.detector")
-	assertMapCoversStructFields(t, mustMapAt(t, hallucination, "explainer"), reflect.TypeOf(CanonicalExplainerModule{}), "global.model_catalog.modules.hallucination_mitigation.explainer")
 }

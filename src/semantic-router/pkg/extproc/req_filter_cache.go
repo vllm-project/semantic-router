@@ -401,6 +401,9 @@ func refreshCachedSemanticResponse(response *llmprotocol.Response, ctx *RequestC
 	if ctx != nil && ctx.SourceFormat == llmprotocol.OpenAIResponsesV1 {
 		response.ID = "resp_" + strings.TrimPrefix(response.ID, "item_")
 	}
+	if publicID := responseObjectPublicID(ctx); publicID != "" {
+		response.ID = publicID
+	}
 	response.CreatedAt = time.Now().UTC()
 	for index := range response.Output {
 		response.Output[index].ID = llmprotocol.StableID(response.ID, fmt.Sprint(index))

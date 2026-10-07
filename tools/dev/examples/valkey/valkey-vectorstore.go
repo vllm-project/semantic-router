@@ -6,7 +6,9 @@ import (
 	"log"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
@@ -29,33 +31,66 @@ var sampleDocs = []doc{
 	{"c10", "f5", "china.txt", "China has the second largest economy in the world and a long history of innovation."},
 }
 
+// runtimeEmbedding serves the Vela embedding model from a model runtime this
+// example starts (VLLM_SRUN_COMMAND, else vllm-srun on PATH).
+func runtimeEmbedding(ctx context.Context) (*serving.EmbeddingProvider, func(), error) {
+	deployment, err := config.ImplicitModelRuntimeDeployment("models/Vela-1.0-Encoder-307M-Embedding", true)
+	if err != nil {
+		return nil, nil, err
+	}
+	deployment = deployment.WithDefaults()
+	manager := modelservice.NewManager()
+	lease, err := manager.AcquireDeployments(map[string]config.ModelDeployment{"embedding": deployment})
+	if err != nil {
+		_ = manager.Shutdown(ctx)
+		return nil, nil, err
+	}
+	stop := func() {
+		_ = lease.Close()
+		_ = manager.Shutdown(context.Background())
+	}
+	provider, err := serving.New(lease, nil).Embedding(ctx, config.ResolvedModelBinding{
+		Recipe:     "example",
+		Name:       "embedding",
+		Binding:    config.ModelBinding{Deployment: "embedding", Contract: "embedding.v1"},
+		Deployment: deployment,
+	}, 0, 0)
+	if err != nil {
+		stop()
+		return nil, nil, err
+	}
+	return provider, func() { _ = provider.Close(); stop() }, nil
+}
+
 func main() {
 	fmt.Println("Valkey Vector Store Backend Example")
 	fmt.Println("====================================")
 
 	ctx := context.Background()
+	fmt.Println("\n1. Starting the model runtime for embeddings...")
+	embedder, stopRuntime, err := runtimeEmbedding(ctx)
+	if err != nil {
+		log.Fatalf("Failed to start the embedding model: %v", err)
+	}
+	defer stopRuntime()
+	fmt.Println("✓ Embedding model ready")
+
 	backend := initBackend()
 	defer backend.Close()
 
 	storeID := fmt.Sprintf("demo_%d", time.Now().UnixNano())
-	createCollection(ctx, backend, storeID)
+	createCollection(ctx, backend, storeID, embedder.Dimension())
 	defer cleanupCollection(ctx, backend, storeID)
 
-	embedAndInsert(ctx, backend, storeID)
+	embedAndInsert(ctx, backend, embedder, storeID)
 	time.Sleep(500 * time.Millisecond)
-	runSearches(ctx, backend, storeID)
-	runFilteredSearch(ctx, backend, storeID)
+	runSearches(ctx, backend, embedder, storeID)
+	runFilteredSearch(ctx, backend, embedder, storeID)
 
 	fmt.Println("\n✓ Example completed successfully!")
 }
 
 func initBackend() *vectorstore.ValkeyBackend {
-	fmt.Println("\n1. Initializing embedding model...")
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		log.Fatalf("Failed to initialize embedding model: %v", err)
-	}
-	fmt.Println("✓ Embedding model initialized")
-
 	fmt.Println("\n2. Connecting to Valkey...")
 	backend, err := vectorstore.NewValkeyBackend(vectorstore.ValkeyBackendConfig{
 		Host:             "localhost",
@@ -71,8 +106,7 @@ func initBackend() *vectorstore.ValkeyBackend {
 	return backend
 }
 
-func createCollection(ctx context.Context, backend *vectorstore.ValkeyBackend, storeID string) {
-	dimension := 384
+func createCollection(ctx context.Context, backend *vectorstore.ValkeyBackend, storeID string, dimension int) {
 	fmt.Printf("\n3. Creating collection %q (dimension=%d)...\n", storeID, dimension)
 	if err := backend.CreateCollection(ctx, storeID, dimension); err != nil {
 		log.Fatalf("Failed to create collection: %v", err)
@@ -89,17 +123,21 @@ func cleanupCollection(ctx context.Context, backend *vectorstore.ValkeyBackend, 
 	}
 }
 
-func embedAndInsert(ctx context.Context, backend *vectorstore.ValkeyBackend, storeID string) {
+func embedAndInsert(ctx context.Context, backend *vectorstore.ValkeyBackend, embedder *serving.EmbeddingProvider, storeID string) {
 	fmt.Println("\n4. Embedding and inserting documents...")
+	contents := make([]string, len(sampleDocs))
+	for i, d := range sampleDocs {
+		contents[i] = d.content
+	}
+	embeddings, err := embedder.EmbedBatch(ctx, contents)
+	if err != nil {
+		log.Fatalf("Failed to embed documents: %v", err)
+	}
 	chunks := make([]vectorstore.EmbeddedChunk, 0, len(sampleDocs))
 	for i, d := range sampleDocs {
-		embedding, err := candle_binding.GetEmbedding(d.content, 0)
-		if err != nil {
-			log.Fatalf("Failed to embed document %d: %v", i, err)
-		}
 		chunks = append(chunks, vectorstore.EmbeddedChunk{
 			ID: d.id, FileID: d.fileID, Filename: d.filename,
-			Content: d.content, Embedding: embedding,
+			Content: d.content, Embedding: embeddings[i],
 			ChunkIndex: i, VectorStoreID: storeID,
 		})
 	}
@@ -109,7 +147,7 @@ func embedAndInsert(ctx context.Context, backend *vectorstore.ValkeyBackend, sto
 	fmt.Printf("✓ Inserted %d chunks\n", len(chunks))
 }
 
-func runSearches(ctx context.Context, backend *vectorstore.ValkeyBackend, storeID string) {
+func runSearches(ctx context.Context, backend *vectorstore.ValkeyBackend, embedder *serving.EmbeddingProvider, storeID string) {
 	fmt.Println("\n5. Searching for similar documents (threshold=0.80)...")
 	for _, query := range []string{
 		"What is the capital of France?",
@@ -117,7 +155,7 @@ func runSearches(ctx context.Context, backend *vectorstore.ValkeyBackend, storeI
 		"Most populated city in Asia",
 	} {
 		fmt.Printf("\n  Query: %q\n", query)
-		qEmb, err := candle_binding.GetEmbedding(query, 0)
+		qEmb, err := embedder.Embed(ctx, query)
 		if err != nil {
 			log.Fatalf("Failed to embed query: %v", err)
 		}
@@ -134,9 +172,9 @@ func runSearches(ctx context.Context, backend *vectorstore.ValkeyBackend, storeI
 	}
 }
 
-func runFilteredSearch(ctx context.Context, backend *vectorstore.ValkeyBackend, storeID string) {
+func runFilteredSearch(ctx context.Context, backend *vectorstore.ValkeyBackend, embedder *serving.EmbeddingProvider, storeID string) {
 	fmt.Println("\n6. Searching with file_id filter (only germany.txt)...")
-	qEmb, err := candle_binding.GetEmbedding("capital city", 0)
+	qEmb, err := embedder.Embed(ctx, "capital city")
 	if err != nil {
 		log.Fatalf("Failed to embed query: %v", err)
 	}

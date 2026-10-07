@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/tutorials/algorithm/selection/svm.md"
   outdated: false
 ---
@@ -11,7 +11,7 @@ translation:
 
 `svm` 使用已训练的线性或 RBF 支持向量分类器，把请求特征映射到候选模型。
 
-**实现**：通过 [Linfa](https://github.com/rust-ml/linfa)（`linfa-svm`）用 Rust 实现。
+**实现**：在路由器内部用 Go 运行。
 
 ## 主要优势
 
@@ -101,7 +101,7 @@ global:
 
 ## 训练
 
-训练流水线见 [ML Model Selection README](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/modelselection/README.md)。SVM 模型用 Linfa 的 SVM 实现，在已标注的查询到模型分配数据上训练。
+训练流水线见 [ML Model Selection README](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/modelselection/README.md)。SVM 模型用 scikit-learn 的 SVC，在已标注的查询到模型分配数据上训练。
 
 训练示例和标签可能包含敏感请求数据；请相应地治理它们及派生产物。完整示例见：
 [`config/fragments/algorithm/selection/svm.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/svm.yaml)。
