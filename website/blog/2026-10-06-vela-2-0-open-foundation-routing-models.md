@@ -39,25 +39,26 @@ Decision 2.0 (Eos-0.8B, Nox-4B, Lux-9B) is the current generation of that idea. 
 
 Vela 2.0 adds both. To our knowledge, it is the first model in the Choice / Noul / Score decision-model family that also answers span questions.
 
-## One read, every question
+## One request, every question {#one-read-every-question}
 
 Every Vela 2.0 model takes the same request: a *state* (plain text, or named parts such as `request`, `context` and `answer`) and any number of named questions of five types. Choice, Noul and Score keep the decision format unchanged. **Span** questions return `{label, start, end, text, probability}` with offsets into the part they are asked over, and **set** questions return any number of labels, each with its own probability.
 
-In the decoders the state is read once. Every question is attached as its own block, with an attention mask that lets the block see the state and itself and nothing else.
+In the decoders, the state prefix is read once per rendered sequence. Every question continues from that prefix in its own causal block. Full-attention layers reuse the prefix's keys and values; Gated-DeltaNet layers reuse its recurrent state and convolution tail. Each block sees the prefix and itself, with no connection to another question's block.
 
 <ArticleFigure
-  src="/img/blog/vela2-one-read.png"
-  width={2880} height={1680}
-  alt="The state is encoded once; each question block attends to the state and to itself only."
+  src="/img/blog/vela-2-0/architecture/11-state-prefix-and-question-isolation.svg"
+  width={1500} height={1190}
+  alt="Decoder execution reuses a state prefix for isolated Choice, Span and Set question blocks. Additional span questions and long-target windows use additional rendered sequences."
+  diagram
 >
-  The state is read once. Each question block sees only the state and itself, so adding a question never changes another answer; in FP32 the isolation is exact.
+  For a fixed rendered state, each decoder question sees only the prefix and its own causal block. The prefix forks independently at every layer.
 </ArticleFigure>
 
-This is what makes one model practical for a router. The questions a deployment asks can change from request to request, and each answer stays the same whatever else is asked alongside it.
+This keeps questions isolated for a fixed rendered state. Extra span questions use separate rendered sequences, and span targets longer than 2,048 tokens use additional window sequences. Adding questions can also change how text is truncated to fit the input budget. These sequences stay behind one API call. The 0.3B encoder uses the same interface but reads the questions and state together in a bidirectional sequence.
 
 ## Spans inside a decision model
 
-A span question is a grid of yes/no decisions: one for every word of the text and every label in the question. Is `Tom` part of a PERSON? Is `tom.baker@example.com` an EMAIL_ADDRESS? Words that say yes for the same label and sit next to each other become one span, with character offsets into the original text. The question's entry in `answers` is a Noul taken from the same grid: its highest word probability, which is above the threshold exactly when at least one span was found.
+A span question is a grid of yes/no decisions: one for every word of the text and every label in the question. Is `Tom` part of a PERSON? Is `tom.baker@example.com` an EMAIL_ADDRESS? Words that say yes for the same label and sit next to each other become one span, with character offsets into the original text. The question's entry in `answers` also exposes the grid's highest word probability as a Noul.
 
 A span question looks like any other question, with a label block in place of options:
 
@@ -68,32 +69,40 @@ A span question looks like any other question, with a label block in place of op
         "over": "request"}
 ```
 
-Inside a decoder, the question block is laid out as its instructions, then one label block per label (name and description), then a second copy of the text the question is asked over. One forward pass produces every vector the span head needs:
+Inside a decoder, the span block is laid out as its instructions, then one label block per label (name and description), then a second copy of the target text. For one short-target span question, the tree forward produces every vector the selected span head needs:
 
-1. **A vector per label.** The mean hidden state over the label's whole block (its name and its description), plus a learned slot embedding for its position in the question.
-2. **A vector per word.** The hidden state of the word's first sub-word token, read from the second copy of the text.
+1. **A vector per label.** LayerNorm of the mean hidden state over the label's whole block, plus a learned slot embedding. With two or more labels, these vectors are centred by subtracting their mean.
+2. **A vector per word.** The hidden state of the word's first sub-word token, read from the second copy of the text, then LayerNorm and centring over the target's words.
 3. **A score per word × label.** A bilinear + MLP scorer rates every pair in FP32.
-4. **Spans.** Pairs above the calibrated threshold are switched on, neighbouring words with the same label are merged, and word offsets become character offsets.
+4. **Spans.** The grid logits are temperature-scaled and passed through a sigmoid. Pairs above the chosen threshold are switched on, neighbouring words with the same label are merged, and word offsets become character offsets.
+
+Conceptually, for one span question:
 
 ```python
-h      = backbone(request_tokens)                    # one pass: state, question blocks, text copies
-labels = mean_pool(h, label_blocks) + slot_emb       # [L, d]  one vector per label
-words  = h[first_subword_of_each_word_in_copy]       # [W, d]  one vector per word
-grid   = scorer(words, labels)                       # [W, L]  bilinear + MLP, FP32
-spans  = merge_neighbours(grid > threshold)          # labelled character spans
+parts_h, blocks_h = tree_backbone(state_prefix, question_blocks)
+head   = choose_span_head(question)                  # router or broad weights
+labels = head.label_norm(mean_pool(blocks_h, label_blocks))  # [L, H]
+labels = labels + head.slot_embedding[arange(L).clamp(max=63)]
+labels = labels - labels.mean(0) if L >= 2 else labels
+words  = head.word_norm(blocks_h[first_subword_positions_in_copy])  # [W, H]
+words  = words - words.mean(0)
+logits = head.bilinear_plus_mlp(words, labels)         # [W, L], FP32
+probs  = sigmoid(logits / head_temperature)
+spans  = decode_spans(probs, threshold)                # highest-label words, merge, trim
 ```
 
 <ArticleFigure
-  src="/img/blog/vela2-span-heads.png"
-  width={2880} height={1800}
-  alt="Span head v2: label vectors from the label block, word vectors from the repeated target, a word-by-label score grid, and the rule that sends each span question to the router or the broad head."
+  src="/img/blog/vela-2-0/architecture/10-decoder-span-heads.svg"
+  width={1460} height={1410}
+  alt="SpanHeadV2 selects word and label states, applies LayerNorm, word and label centring and a 64-slot embedding, then sums bilinear and GELU MLP scores. Router and broad heads use independently selected weights."
+  diagram
 >
-  Left: the word × label grid for <code>Hi, I'm Tom Baker (tom.baker@example.com)</code>. Right: the rule that picks a span head for each question.
+  Router and broad heads share this topology, with independent parameters. Dispatch selects the head and its calibration; the resulting word × label grid is decoded into spans.
 </ArticleFigure>
 
 Two choices make this work in a causal decoder:
 
-- **Read words from a second copy.** Under a causal mask, a word's state sees only the words to its left, which is the wrong view for deciding where an entity starts and ends. In the second copy, placed after the labels, every word has already seen the whole text and every label it is asked about. Texts up to 2,048 tokens are copied whole; longer ones are read in overlapping windows of up to 1,800 tokens, and word scores are averaged across windows.
+- **Read words from a second copy.** Under a causal mask, a word's state sees only the words to its left, which is the wrong view for deciding where an entity starts and ends. In the second copy, placed after the labels, every word has already seen the whole text and every label it is asked about. Targets up to 2,048 tokens are copied whole; longer ones are read in overlapping windows of up to 1,800 tokens with stride 1,536. Word logits are averaged across covering windows before temperature scaling and sigmoid.
 - **Read each label from its whole block.** Our first decoder span head read each label at a single marker token. The label vectors came out almost identical (pairwise cosine 0.997), so the head learned *whether* a word is an entity but not *which* one. Pooling over the name and description separates the labels, and it lets a question use labels the model has never seen: the label is understood from its description.
 
 On development data, the two changes together raise short-text PII F1 from 0.828 to 0.959, and PII F1 on long documents from about 0.06 to 0.94.
@@ -107,7 +116,7 @@ The decoders carry two span heads of the same form with separate weights:
 - the **router head**, trained on PII, unsupported claims and toxic spans, the signals a router acts on;
 - the **broad head**, trained on open extraction: named entities of any type, relations, entity mentions and extractive evidence for a question.
 
-The broad head trains last, with the backbone, the decision heads and the router head frozen. Every router output is therefore bitwise identical with and without it; we checked this on 700 rows per model. The application does not pick a head. A fixed rule sends PII, hallucination and toxic questions to the router head and every other label set to the broad head, and the response names the head that answered. An explicit `head` field overrides the rule.
+The broad head trains last, with the backbone, the decision heads and the router head frozen. Every router output is therefore bitwise identical with and without it; we checked this on 700 rows per model. By default, dispatch recognises the `pii`, `halu` and `toxic` question IDs, the router's label sets, PII subsets and hallucination aliases. Other labels go to the broad head, and the response names the head that answered. An explicit `head` field overrides the rule.
 
 The result is one model that is a router signal model and an open extractor at once, with no change to its routing behaviour. The 0.3B encoder ships with the router head.
 
@@ -123,7 +132,7 @@ Vela 2.0 sits between two lines of work: span extractors that read labels at req
 | Decision 2.0 | yes | — | — | — |
 | **Vela 2.0** | **yes** | **any label, two heads** | **yes** | **yes** |
 
-GLiNER showed that a span extractor can read its labels from the request instead of a fixed output layer, and GLiNER2 extended that to classification and structured extraction in one schema. Vela 2.0 follows GLiNER2's label resampling during training. What it adds is the decision format around the spans: one request carries safety, domain and policy questions next to the span questions, answered in one forward pass of a model that also handles grounded inputs.
+GLiNER showed that a span extractor can read its labels from the request instead of a fixed output layer, and GLiNER2 extended that to classification and structured extraction in one schema. Vela 2.0 follows GLiNER2's label resampling during training. What it adds is the decision format around the spans: one request carries safety, domain and policy questions next to the span questions, answered through the same interface by a model that also handles grounded inputs.
 
 ## Results
 
@@ -194,11 +203,12 @@ General decisions on the Jev Decision Index 0.2.1 (38 benchmarks).
 
 ## Four sizes, one interface
 
-<ArticleFigure
-  src="/img/blog/vela2-family.jpg"
-  width={1920} height={1080}
-  alt="The four Vela 2.0 sizes with their safety macro AUC over 14 public sets."
-/>
+<ArticleChartGallery label="Choose a Vela 2.0 architecture" charts={[
+  { label: '0.3B encoder', src: '/img/blog/vela-2-0/architecture/01-vela-2.0-0.3b-architecture.svg', width: 1240, height: 1570, diagram: true, alt: 'Vela 2.0 0.3B: a 22-layer ModernBERT encoder with hidden width 768, GEGLU width 1152, cosine plus MLP decision readout and word-label cosine span readout.', children: 'The 0.3B encodes schema and typed state together. Its 22-layer bidirectional backbone feeds a cosine plus option MLP decision readout and a cosine span readout.' },
+  { label: '0.8B decoder', src: '/img/blog/vela-2-0/architecture/02-vela-2.0-0.8b-architecture.svg', width: 1240, height: 1570, diagram: true, alt: 'Vela 2.0 0.8B: 24 Qwen3.5 hybrid layers, hidden width 1024, SwiGLU width 3584, CandidateHead and separate router or broad span heads.', children: 'The 0.8B uses six cycles of three Gated-DeltaNet layers and one gated causal GQA layer. Its decision and span heads use bilinear plus GELU MLP scores.' },
+  { label: '4B decoder', src: '/img/blog/vela-2-0/architecture/03-vela-2.0-4b-architecture.svg', width: 1240, height: 1570, diagram: true, alt: 'Vela 2.0 4B: 32 Qwen3.5 hybrid layers, hidden width 2560, SwiGLU width 9216, CandidateHead and separate router or broad span heads.', children: 'The 4B keeps the decoder topology with 32 layers, hidden width 2560 and SwiGLU width 9216. It is an independently trained checkpoint.' },
+  { label: '9B decoder', src: '/img/blog/vela-2-0/architecture/04-vela-2.0-9b-architecture.svg', width: 1240, height: 1570, diagram: true, alt: 'Vela 2.0 9B: 32 Qwen3.5 hybrid layers, hidden width 4096, SwiGLU width 12288, CandidateHead and separate router or broad span heads.', children: 'The 9B has 32 layers, hidden width 4096 and SwiGLU width 12288. The decoder checkpoints share an operator layout, not weights.' },
+]} />
 
 | Model | Initialised from | Parameters | Input | Span heads |
 | --- | --- | ---: | ---: | --- |
@@ -208,6 +218,28 @@ General decisions on the Jev Decision Index 0.2.1 (38 benchmarks).
 | [Vela-2.0-9B](https://huggingface.co/vllm-sr/Vela-2.0-9B) | Decision-2.0-Lux-9B | 7.9B | 16,384 tokens | router + broad |
 
 The request and response are the same at every size, so a deployment can start with the 0.3B on CPU and move to a decoder without changing a line of client code. The 0.3B also exports to ONNX.
+
+<details>
+<summary>Backbone and readout operators</summary>
+
+The backbone diagrams expand the attention, recurrence, gating and feed-forward operators behind the four model views.
+
+<ArticleChartGallery label="Choose a backbone operator" charts={[
+  { label: 'Encoder attention and GEGLU', src: '/img/blog/vela-2-0/architecture/05-encoder-attention-geglu.svg', width: 1580, height: 1470, diagram: true, alt: 'ModernBERT attention with QKV projection, 12 heads, Q and K RoPE, local or global bidirectional masking, and GEGLU feed-forward split branches.', children: 'The encoder combines local and global bidirectional attention with GEGLU. RoPE transforms queries and keys; it is not an addition to token embeddings.' },
+  { label: 'Gated-DeltaNet', src: '/img/blog/vela-2-0/architecture/07-gated-deltanet.svg', width: 1600, height: 1840, diagram: true, alt: 'Decoder linear layers: QKV projection and depthwise causal convolution, SiLU, Q and K normalisation, gated delta recurrence, gated RMSNorm and output projection.', children: 'Three layers in each decoder cycle use Gated-DeltaNet. Question blocks start from the prefix recurrence state and convolution tail.' },
+  { label: 'Gated GQA and SwiGLU', src: '/img/blog/vela-2-0/architecture/08-gated-gqa-swiglu.svg', width: 1600, height: 1840, diagram: true, alt: 'Decoder full-attention layers: grouped queries and KV heads, Q and K RMSNorm and RoPE, causal scaled attention, an output gate, and SwiGLU feed-forward split branches.', children: 'Every fourth decoder layer uses gated causal grouped-query attention. SwiGLU supplies the feed-forward sublayer after either token mixer.' },
+]} />
+
+The readout differs between the encoder and the decoders even though the client interface stays the same.
+
+<ArticleChartGallery label="Choose a decision readout" charts={[
+  { label: 'Encoder readouts', src: '/img/blog/vela-2-0/architecture/06-encoder-readouts.svg', width: 1600, height: 1470, diagram: true, alt: 'The encoder combines normalised option and question projections with a pooled target for a cosine score, adds an option MLP score, and uses separate normalised word and label projections for spans.', children: 'The encoder adds a cosine decision score to an option MLP score. Its span grid uses normalised word and label projections with a learned temperature.' },
+  { label: 'Decoder CandidateHead', src: '/img/blog/vela-2-0/architecture/09-decoder-candidate-head.svg', width: 1500, height: 1330, diagram: true, alt: 'The decoder CandidateHead applies separate LayerNorms to the option endpoint and question-block endpoint, sums scaled bilinear and additive GELU MLP scores, then applies softmax for Choice, Noul and Score or independent sigmoid for Set.', children: 'The decoder CandidateHead sums bilinear and additive GELU MLP scores. Choice, Noul and Score use softmax; Set adds a scalar bias and uses independent sigmoid probabilities.' },
+]} />
+
+The diagrams trace the public `system_one()` path at fixed model revisions. <a href="/img/blog/vela-2-0/architecture/README.md">Source notes and editable SVG generators</a> accompany the figures.
+
+</details>
 
 ## Training
 
@@ -266,7 +298,7 @@ result = m.system_one(
                                 "other": "a subject that fits none of the listed areas"}}})
 ```
 
-Two span questions and a Choice, one call. The recorded output (trimmed):
+Two span questions and a Choice, one call. The decoder evaluates the two span questions in separate rendered sequences. The recorded output (trimmed):
 
 ```json
 {
@@ -295,7 +327,7 @@ python vela2_serve.py --model . --device cuda --port 8001
 
 ## Towards open foundation routing models
 
-Vela 2.0 is a step from a set of routing classifiers towards one routing model: a model that reads a request once, answers whatever the deployment asks, points at the exact words behind its answers, and takes new labels without retraining. The next step is to bring it into vLLM Semantic Router as a native signal backend, so that one Vela 2.0 call replaces the per-signal classifiers on the request path.
+Vela 2.0 is a step from a set of routing classifiers towards one routing model: a model that answers whatever the deployment asks, points at the exact words behind its answers, and takes new labels without retraining. The next step is to bring it into vLLM Semantic Router as a native signal backend, so that one Vela 2.0 call replaces the per-signal classifiers on the request path.
 
 - Models: [Vela 2.0 collection](https://huggingface.co/collections/vllm-sr/vela-20) ([0.3B](https://huggingface.co/vllm-sr/Vela-2.0-0.3B), [0.8B](https://huggingface.co/vllm-sr/Vela-2.0-0.8B), [4B](https://huggingface.co/vllm-sr/Vela-2.0-4B), [9B](https://huggingface.co/vllm-sr/Vela-2.0-9B))
 - Decision 2.0 bases: [Eos-0.8B](https://huggingface.co/vllm-sr/Decision-2.0-Eos-0.8B), [Nox-4B](https://huggingface.co/vllm-sr/Decision-2.0-Nox-4B), [Lux-9B](https://huggingface.co/vllm-sr/Decision-2.0-Lux-9B)

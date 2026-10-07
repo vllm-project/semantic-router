@@ -57,6 +57,10 @@
   background: #fff;
 }
 
+.diagramFigure .image {
+  max-height: none;
+}
+
 .caption {
   margin-top: 0.85rem;
   color: var(--site-muted-bright);
