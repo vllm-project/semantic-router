@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import collections
 import copy
+import functools
 import glob
 import http.client
 import http.server
@@ -265,14 +266,24 @@ def cmd_run(args: argparse.Namespace) -> None:
     rows = [row for row in read_jsonl(args.rows) if row["id"] not in done]
     client = Client(args.port)
     lock = threading.Lock()
-    out = open(args.out, "a", encoding="utf-8")
     count = [0]
     started = time.time()
+    with open(args.out, "a", encoding="utf-8") as out:
+        run_rows(client, rows, out, lock, count, started, args.workers)
+    print(f"done {count[0]} rows in {time.time() - started:.0f}s", flush=True)
+
+
+def run_rows(client: Client, rows: list[dict[str, Any]], out: Any, lock: threading.Lock,
+             count: list[int], started: float, workers: int) -> None:  # fmt: skip
 
     def one(row: dict[str, Any]) -> None:
         try:
             status, ms, parsed = client.post("/api/v1/routing/preview", row["body"])
-        except Exception as exc:  # recorded, never dropped
+        except (
+            OSError,
+            http.client.HTTPException,
+            RuntimeError,
+        ) as exc:  # recorded, never dropped
             status, ms, parsed = 0, 0.0, {"error": str(exc)[:300]}
         parsed.pop("original_text", None)
         line = json.dumps({"id": row["id"], "task": row["task"], "file": row["file"], "status": status,
@@ -287,10 +298,8 @@ def cmd_run(args: argparse.Namespace) -> None:
                     flush=True,
                 )
 
-    with ThreadPoolExecutor(args.workers) as pool:
+    with ThreadPoolExecutor(workers) as pool:
         list(pool.map(one, rows))
-    out.close()
-    print(f"done {count[0]} rows in {time.time() - started:.0f}s", flush=True)
 
 
 # ---------------------------------------------------------------- record
@@ -372,8 +381,11 @@ def recording_handler(upstream: str, log: Any, lock: threading.Lock) -> type:
                     log.write(json.dumps(entry, ensure_ascii=False) + "\n")
                     log.flush()
 
-        do_GET = forward
-        do_POST = forward
+        def do_GET(self) -> None:
+            self.forward()
+
+        def do_POST(self) -> None:
+            self.forward()
 
     return Handler
 
@@ -389,9 +401,10 @@ def cmd_record(args: argparse.Namespace, rest: list[str]) -> int:
     socket_path = rest[rest.index("--uds") + 1]
     real = socket_path + ".real"
     rest[rest.index("--uds") + 1] = real
+    # No thread runs yet, so the child's preexec_fn cannot deadlock.
     child = subprocess.Popen(
-        [args.real, *rest], preexec_fn=die_with_parent
-    )  # noqa: S603
+        [args.real, *rest], preexec_fn=die_with_parent  # noqa: PLW1509
+    )
     for signum in (signal.SIGTERM, signal.SIGINT):
         signal.signal(signum, lambda number, _frame: child.send_signal(number))
     while not os.path.exists(real):
@@ -399,21 +412,17 @@ def cmd_record(args: argparse.Namespace, rest: list[str]) -> int:
             return child.returncode
         time.sleep(0.2)
     os.makedirs(args.log_dir, exist_ok=True)
-    log = open(
-        os.path.join(args.log_dir, os.path.basename(socket_path) + ".jsonl"),
-        "a",
-        encoding="utf-8",
-    )
-    if os.path.exists(socket_path):
-        os.unlink(socket_path)
-    server = UnixServer(socket_path, recording_handler(real, log, threading.Lock()))
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    code = child.wait()
-    server.shutdown()
+    log_path = os.path.join(args.log_dir, os.path.basename(socket_path) + ".jsonl")
+    with open(log_path, "a", encoding="utf-8") as log:
+        if os.path.exists(socket_path):
+            os.unlink(socket_path)
+        server = UnixServer(socket_path, recording_handler(real, log, threading.Lock()))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        code = child.wait()
+        server.shutdown()
     for path in (socket_path, real):
         if os.path.exists(path):
             os.unlink(path)
-    log.close()
     return code
 
 
@@ -466,8 +475,12 @@ def recorded_answers(log_dirs: list[str]) -> dict[tuple[str, str], dict[str, Any
                             if isinstance(inputs, (str, dict))
                             else inputs or []
                         )
-                        for index, text in enumerate(inputs):
-                            text = text.get("text") if isinstance(text, dict) else text
+                        for index, item_input in enumerate(inputs):
+                            text = (
+                                item_input.get("text")
+                                if isinstance(item_input, dict)
+                                else item_input
+                            )
                             if isinstance(text, str):
                                 item = (response.get("results") or [{}])[index]
                                 answers[(text, "any")][body.get("model") or "?"] = {
@@ -564,7 +577,7 @@ def cmd_join(args: argparse.Namespace) -> None:
         raise SystemExit("join pairs each --run with its own --log-dir")
     rows = {row["id"]: row for row in read_jsonl(args.rows)}
     scorer = vela1_scores if args.arm == "vela1" else vela2_scores
-    handles: dict[tuple[str, str], Any] = {}
+    by_file: dict[tuple[str, str], list[dict[str, Any]]] = collections.defaultdict(list)
     missing: collections.Counter[str] = collections.Counter()
     seen: set[str] = set()
     failed = 0
@@ -592,17 +605,13 @@ def cmd_join(args: argparse.Namespace) -> None:
                 "ms": result["ms"],
                 "matched": decision.get("matched_signals"),
             }
-            key = (row["task"], row["file"])
-            if key not in handles:
-                os.makedirs(f"{args.out}/{row['task']}", exist_ok=True)
-                handles[key] = open(
-                    f"{args.out}/{row['task']}/{row['file']}.pred.jsonl",
-                    "w",
-                    encoding="utf-8",
-                )
-            handles[key].write(json.dumps(entry, ensure_ascii=False) + "\n")
-    for handle in handles.values():
-        handle.close()
+            by_file[(row["task"], row["file"])].append(entry)
+    for (task, stem), entries in by_file.items():
+        os.makedirs(f"{args.out}/{task}", exist_ok=True)
+        with open(f"{args.out}/{task}/{stem}.pred.jsonl", "w", encoding="utf-8") as out:
+            out.writelines(
+                json.dumps(entry, ensure_ascii=False) + "\n" for entry in entries
+            )
     print(
         f"{len(seen)} rows joined; previews that failed: {failed}; without a recorded answer: {dict(missing)}"
     )
@@ -676,7 +685,6 @@ def cmd_halu(args: argparse.Namespace) -> None:
                     jobs.put((stem, row))
     total = jobs.qsize()
     lock = threading.Lock()
-    handles: dict[str, Any] = {}
 
     def worker(port: int) -> None:
         client = Client(port)
@@ -687,17 +695,20 @@ def cmd_halu(args: argparse.Namespace) -> None:
                 return
             try:
                 result = ask_halu(args.side, row, client)
-            except Exception as exc:  # recorded, never dropped
+            except (
+                OSError,
+                http.client.HTTPException,
+                RuntimeError,
+                KeyError,
+                ValueError,
+            ) as exc:  # recorded, never dropped
                 result = {"error": str(exc)[:300]}
             result["id"] = row["id"]
-            with lock:
-                if stem not in handles:
-                    handles[stem] = open(
-                        f"{args.out}/hallucination/{stem}.pred.jsonl",
-                        "a",
-                        encoding="utf-8",
-                    )
-                handles[stem].write(json.dumps(result, ensure_ascii=False) + "\n")
+            line = json.dumps(result, ensure_ascii=False) + "\n"
+            with lock, open(
+                f"{args.out}/hallucination/{stem}.pred.jsonl", "a", encoding="utf-8"
+            ) as out:
+                out.write(line)
 
     threads = [
         threading.Thread(target=worker, args=(int(port),))
@@ -708,8 +719,6 @@ def cmd_halu(args: argparse.Namespace) -> None:
         thread.start()
     for thread in threads:
         thread.join()
-    for handle in handles.values():
-        handle.close()
     print(f"done {total} rows")
 
 
@@ -854,7 +863,7 @@ def cmd_score(args: argparse.Namespace) -> None:
         "rounds": args.rounds,
         "tasks": {},
     }
-    lines = [f"| signal | file | rows | metric | {args.a_name} | {args.b_name} | {args.b_name} − {args.a_name} [95% CI] |",
+    lines = [f"| signal | file | rows | metric | {args.a_name} | {args.b_name} | {args.b_name} - {args.a_name} [95% CI] |",
              "| --- | --- | ---: | --- | ---: | ---: | ---: |"]  # fmt: skip
     for ti, task in enumerate(args.tasks.split(",")):
         golds = {
@@ -894,8 +903,10 @@ def cmd_score(args: argparse.Namespace) -> None:
                 "fresh": [s for s in series if s.startswith("fresh-")],
                 "in_distribution": [s for s in series if s == "test" or s.startswith("test-")]}  # fmt: skip
         means: dict[str, Any] = {}
-        for name, stems in sets.items():
-            stems = [s for s in stems if entries[s]["metric"] in ("AUC", "accuracy")]
+        for name, candidates in sets.items():
+            stems = [
+                s for s in candidates if entries[s]["metric"] in ("AUC", "accuracy")
+            ]
             if not stems:
                 continue
             ma = np.mean(np.stack([series[s][0] for s in stems]), axis=0)
@@ -953,9 +964,12 @@ def cmd_verdicts(args: argparse.Namespace) -> None:
         }
         sets = {"held_out": HELD_OUT.get(task, []), "fresh": [s for s in golds if s.startswith("fresh-")],
                 "in_distribution": [s for s in golds if s == "test" or s.startswith("test-")]}  # fmt: skip
-        for name, stems in sets.items():
+        for name, members in sets.items():
             stems = [
-                s for p in stems for s in COMBOS.get(task, {}).get(p, [p]) if s in golds
+                s
+                for p in members
+                for s in COMBOS.get(task, {}).get(p, [p])
+                if s in golds
             ]
             result = {}
             for arm, root in (("a", args.a), ("b", args.b)):
@@ -1043,6 +1057,20 @@ def floor_point(
     }
 
 
+def positive_score(
+    task: str, positive: str, preds: dict[str, Any], row: dict[str, Any]
+) -> float:
+    return scores_of(task, preds[row["id"]]["scores"]).get(positive, 0.0)
+
+
+def arm_pair(point: dict[str, Any], name: str) -> str:
+    """Both arms' value of a calibration point's metric on one file set."""
+    if name not in point:
+        return "—"
+    metric = point["metric"]
+    return f"{point[name]['a'][metric]:.3f} / {point[name]['b'][metric]:.3f}"
+
+
 def cmd_calibrate(args: argparse.Namespace) -> None:
     """Maps each Vela 1.0 threshold to the one that keeps its operating point on the suite's dev rows.
 
@@ -1055,8 +1083,8 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
 
     spec = json.loads(Path(args.thresholds).read_text(encoding="utf-8"))
     report: dict[str, Any] = {"a": args.a_name, "b": args.b_name, "tasks": {}}
-    lines = [f"| signal | {args.a_name} threshold | {args.b_name} threshold | kept rate ({args.a_name} / {args.b_name}) | "
-             f"dev {args.a_name} / {args.b_name} | test {args.a_name} / {args.b_name} |",
+    lines = [(f"| signal | {args.a_name} threshold | {args.b_name} threshold | kept rate ({args.a_name} / {args.b_name}) | "
+              f"dev {args.a_name} / {args.b_name} | test {args.a_name} / {args.b_name} |"),
              "| --- | ---: | ---: | --- | --- | --- |"]  # fmt: skip
     for task, thresholds in spec.items():
         files = suite_files(args.suite, task)
@@ -1103,10 +1131,7 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
                         }
             else:
                 positive = POSITIVE[task]
-
-                def score(p: dict[str, Any], r: dict[str, Any]) -> float:
-                    return scores_of(task, p[r["id"]]["scores"]).get(positive, 0.0)
-
+                score = functools.partial(positive_score, task, positive)
                 negatives = [r for r in rows if r["label"] != positive]
                 false_positives = np.mean([score(pa, r) >= t1 for r in negatives])
                 matched = matched_threshold(
@@ -1132,20 +1157,14 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
                             for arm, q, t in (("a", qa, t1), ("b", qb, t2))
                         }  # fmt: skip
             points.append(point)
-            m, k = point["metric"], point["rate"]
-
-            def pair(name: str) -> str:
-                if name not in point:
-                    return "—"
-                return f"{point[name]['a'][m]:.3f} / {point[name]['b'][m]:.3f}"
-
+            k = point["rate"]
             kept = (
                 f"{point['dev']['a'][k]:.3f} / {point['dev']['b'][k]:.3f}"
                 if "dev" in point
                 else "—"
             )
             lines.append(
-                f"| {task} | {t1:g} | {point['b']:.2f} | {k.replace('_', ' ')} {kept} | {pair('dev')} | {pair('test')} |"
+                f"| {task} | {t1:g} | {point['b']:.2f} | {k.replace('_', ' ')} {kept} | {arm_pair(point, 'dev')} | {arm_pair(point, 'test')} |"
             )
         report["tasks"][task] = {"dev_rows": len(rows), "points": points}
     Path(args.out).write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
@@ -1202,7 +1221,7 @@ def main() -> int:
     p.add_argument("--b", required=True)
     p.add_argument("--a-name", default="vela1")
     p.add_argument("--b-name", default="vela2")
-    p.add_argument("--tasks", default=",".join(TASKS + ["hallucination"]))
+    p.add_argument("--tasks", default=",".join([*TASKS, "hallucination"]))
     p.add_argument("--rounds", type=int, default=2000)
     p.add_argument("--seed", type=int, default=20261007)
     p.add_argument("--out", required=True)
@@ -1211,7 +1230,7 @@ def main() -> int:
     p.add_argument("--suite", required=True)
     p.add_argument("--a", required=True)
     p.add_argument("--b", required=True)
-    p.add_argument("--tasks", default=",".join(TASKS + ["hallucination"]))
+    p.add_argument("--tasks", default=",".join([*TASKS, "hallucination"]))
     p.add_argument("--out", required=True)
     p = sub.add_parser("calibrate")
     p.add_argument("--suite", required=True)

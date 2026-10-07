@@ -21,14 +21,14 @@ const (
 	productionStackPIIDecision       = "block_pii"
 )
 
-// The request number keeps each prompt distinct. After a history question a
-// bare "Variation 20." reads as a date, which a profile that denies every PII
-// type would block, so the number sits in a parenthesized request label.
+// The request number keeps each prompt distinct. The default PII model reads a
+// number after a history question as a date, which a profile that denies every
+// PII type blocks, so no template asks about history.
 var productionStackPromptTemplates = []string{
 	"In computer science, explain how a hash table handles collisions and give one practical use case. (request %d)",
 	"In biology, summarize how photosynthesis converts light into stored chemical energy. (request %d)",
 	"In business, explain the difference between revenue and profit with a short example. (request %d)",
-	"In history, explain why the printing press accelerated the spread of knowledge. (request %d)",
+	"In physics, explain why a heavy and a light object fall at the same rate in a vacuum. (request %d)",
 }
 
 type productionStackRequestResult struct {
