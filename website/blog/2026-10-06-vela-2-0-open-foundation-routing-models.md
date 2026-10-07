@@ -1,7 +1,7 @@
 ---
 slug: vela-2-0-open-foundation-routing-models
-title: "Vela 2.0: Towards Open Foundation Routing Models"
-description: "Vela 2.0 adds span answers to the decision-model format: four open models (0.3B to 9B) that answer every routing signal, from safety and domain to PII and unsupported claims, in one request."
+title: "Vela 2.0: Open Foundation Routing Models"
+description: "Bringing span-level decisions to System One: four open routing models, from a compact CPU encoder to a 9B flagship, combining routing, safety checks and text spans through one interface."
 authors: [adaamko, Xunzhuo]
 tags: [vela, routing-models, signals, pii, hallucination, safety, semantic-router]
 image: /img/blog/vela2-hero.jpg
@@ -12,36 +12,70 @@ import { ArticleChartGallery, ArticleFigure, ArticleMetrics, ArticleVideo } from
 <ArticleVideo
   src="/videos/vela-2-0/vela-2-0-launch.mp4"
   poster="/img/blog/vela-2-0/launch-poster.jpg"
-  title="Vela 2.0: Towards Open Foundation Routing Models"
+  title="Vela 2.0: Open Foundation Routing Models"
   landscape
 >
   Still one model. Still one request. Now with spans. Sound on.
 </ArticleVideo>
 
-**A router asks many small questions before it picks a model. Vela 2.0 answers all of them in one request.**
+**Open Foundation Routing Models. Bringing span-level decisions to System One.**
 
-Is the request harmful? Which domain is it about? Which words are personal data? Which claims in the answer does the context not support? Vela 2.0 answers every one of these as a typed question, with Choice, yes/no and Score answers, plus labelled character spans for any label you name. It comes in four sizes: a 307M encoder that runs on CPU, and 0.8B, 4B and 9B decoders built on the open Decision 2.0 models.
+Vela 2.0 is a family of open models for routing, safety checks and span-level decisions. Define your options, labels and rubrics at request time; get structured answers with probabilities and character-offset spans through one SystemOne-compatible interface.
 
 [**Explore the four models →**](https://huggingface.co/collections/vllm-sr/vela-20) · [**Read about Decision →**](/blog/decision-models)
 
 <!-- truncate -->
 
+1. **One model for routing and guardrails.** Combine domain, safety, PII and hallucination questions in one request.
+2. **Decisions that locate text.** Find personal data, unsupported claims and extractive evidence as labelled spans with character offsets.
+3. **Tasks defined by your application.** Supply choices, yes/no criteria, ordered rubrics and label sets when you call the model.
+
+## Choose your model
+
+| Model | Positioning | Parameters | Input | Span heads |
+| --- | --- | ---: | ---: | --- |
+| [Vela-2.0-0.3B](https://huggingface.co/vllm-sr/Vela-2.0-0.3B) | Compact encoder for CPU and ONNX deployments | 307M | 8,192 tokens | router |
+| [Vela-2.0-0.8B](https://huggingface.co/vllm-sr/Vela-2.0-0.8B) | Smallest hybrid model with open-label extraction | 756M | 16,384 tokens | router + broad |
+| [Vela-2.0-4B](https://huggingface.co/vllm-sr/Vela-2.0-4B) | Balanced hybrid model for routing and safety | 4.2B | 16,384 tokens | router + broad |
+| [Vela-2.0-9B](https://huggingface.co/vllm-sr/Vela-2.0-9B) | Flagship: strongest measured general decisions and long-document PII in the family | 7.9B | 16,384 tokens | router + broad |
+
+## Quickstart
+
+Start with the 0.3B encoder on CPU:
+
+```bash
+pip install torch "transformers>=5.17" safetensors tokenizers numpy
+```
+
+```python
+from transformers import AutoModel
+
+m = AutoModel.from_pretrained("vllm-sr/Vela-2.0-0.3B", trust_remote_code=True)
+result = m.system_one(
+    state={"request": "Email Tom Baker at tom.baker@example.com."},
+    questions={
+        "route": {"type": "choice", "instructions": "What does this request ask for?",
+                  "criteria": {"email": "send an email", "other": "another task"},
+                  "over": "request"},
+        "pii": {"type": "span", "instructions": "Which spans are personal information?",
+                "criteria": m.vela2_engine.cal["pii_schema"]["labels"], "over": "request"}})
+print(result["answers"])
+print(result["spans"])
+```
+
+The same question format works at every size. [The GPU example below](#try-it) combines request routing with PII and grounded hallucination checks.
+
 ## Why decision models
 
-Vela 1.0 gave every routing signal its own model: Safety, Hazard, Guard, Domain, Modality, FactCheck, Feedback, PII and Halu, each with a fixed head and a closed label set. That works until the router needs a new signal. Then it needs a new dataset, a new model and a new deployment, and none of the existing models can help.
+Vela 1.0 gave each routing signal its own model and fixed label set. [Decision models](/blog/decision-models) let the application define the question and its answers at request time: a **Choice** among options, a **Noul** (yes/no) probability or a **Score** over ordered levels.
 
-[Decision models](/blog/decision-models) remove the fixed label set. The application writes the question and its options at request time, and the model returns a typed answer: a **Choice** among the options, a **Noul** (yes/no) probability or a **Score** over ordered levels. One model, any number of questions, and the labels live in the request rather than in the weights.
+Vela 2.0 brings **Span** and **Set** answers to that interface, alongside training on the router's safety, prompt-attack, PII and hallucination signals. One request can ask which route to take, whether it is safe and which words require action.
 
-Decision 2.0 (Eos-0.8B, Nox-4B, Lux-9B) is the current generation of that idea. Each model reads its input with a Qwen3.5 text backbone and never generates text: it scores the options it is given. For the router, two pieces were still missing:
-
-- **Spans.** PII entities and unsupported claims are pieces of text, not options. A routing model has to say *where* they are.
-- **Routing accuracy.** A general decision model is not trained on the router's own signals. GLiNER2.5-Decide, for example, reaches a macro AUC of 0.704 on 14 public safety sets, too low to gate traffic on.
-
-Vela 2.0 adds both. To our knowledge, it is the first model in the Choice / Noul / Score decision-model family that also answers span questions.
+The hybrid models build on Decision 2.0's Eos-0.8B, Nox-4B and Lux-9B, using Qwen3.5 text backbones to score supplied answers without generating text. The compact encoder starts from Decision-1.0-Kai's Choice trunk.
 
 ## One request, every question {#one-read-every-question}
 
-Every Vela 2.0 model takes the same request: a *state* (plain text, or named parts such as `request`, `context` and `answer`) and any number of named questions of five types. Choice, Noul and Score keep the decision format unchanged. **Span** questions return `{label, start, end, text, probability}` with offsets into the part they are asked over, and **set** questions return any number of labels, each with its own probability.
+Every Vela 2.0 model takes the same request: a *state* (plain text, or named parts such as `request`, `context` and `answer`) and named questions of five types. Choice, Noul and Score keep the decision format unchanged. **Span** questions return `{label, start, end, text, probability}` with offsets into the part they are asked over; **set** questions select labels with a probability for each.
 
 In the decoders, the state prefix is read once per rendered sequence. Every question continues from that prefix in its own causal block. Full-attention layers reuse the prefix's keys and values; Gated-DeltaNet layers reuse its recurrent state and convolution tail. Each block sees the prefix and itself, with no connection to another question's block.
 
@@ -54,7 +88,14 @@ In the decoders, the state prefix is read once per rendered sequence. Every ques
   For a fixed rendered state, each decoder question sees only the prefix and its own causal block. The prefix forks independently at every layer.
 </ArticleFigure>
 
-This keeps questions isolated for a fixed rendered state. Extra span questions use separate rendered sequences, and span targets longer than 2,048 tokens use additional window sequences. Adding questions can also change how text is truncated to fit the input budget. These sequences stay behind one API call. The 0.3B encoder uses the same interface but reads the questions and state together in a bidirectional sequence.
+The 0.3B encoder uses the same interface, reading the questions and state together in a bidirectional sequence.
+
+<details>
+<summary>Decoder execution and long inputs</summary>
+
+Questions are isolated for a fixed rendered state. Extra span questions use separate rendered sequences, and span targets longer than 2,048 tokens use additional window sequences. Adding questions can change how text is truncated to fit the input budget. These sequences stay behind one API call.
+
+</details>
 
 ## Spans inside a decision model
 
@@ -130,13 +171,15 @@ Vela 2.0 sits between two lines of work: span extractors that read labels at req
 | GLiNER2 | classification | entities and structured fields | — | — |
 | LettuceDetect | — | fixed label (unsupported) | yes | hallucination only |
 | Decision 2.0 | yes | — | — | — |
-| **Vela 2.0** | **yes** | **any label, two heads** | **yes** | **yes** |
+| **Vela 2.0** | **yes** | **router spans; hybrids add a broad head** | **yes** | **yes** |
 
-GLiNER showed that a span extractor can read its labels from the request instead of a fixed output layer, and GLiNER2 extended that to classification and structured extraction in one schema. Vela 2.0 follows GLiNER2's label resampling during training. What it adds is the decision format around the spans: one request carries safety, domain and policy questions next to the span questions, answered through the same interface by a model that also handles grounded inputs.
+GLiNER showed that a span extractor can read its labels from the request, and GLiNER2 extended that to classification and structured extraction in one schema. Vela 2.0 combines the SystemOne decision format with routing-specific training and grounded checks, following GLiNER2's label resampling recipe.
 
 ## Results
 
-Every comparison below is on identical rows, scored by one harness, with seeds, checkpoints and thresholds chosen on development data only.
+The router comparisons use identical test rows and paired bootstraps; open extraction uses a shared harness. The charts retain the reported evaluation protocols, described below and in each [model card](https://huggingface.co/collections/vllm-sr/vela-20).
+
+**Selection protocol.** Checkpoint selection used development splits. The [0.3B card](https://huggingface.co/vllm-sr/Vela-2.0-0.3B) records that final release selection also considered test results and its shipped PII threshold floor was lowered after the test effect was observed.
 
 <ArticleMetrics items={[
   { label: 'Prompt attacks', value: '0.989', before: '0.792', baseline: 'Vela 1.0 Guard', measure: 'AUC · unseen attack families · 9B', source: 'https://huggingface.co/vllm-sr/Vela-2.0-9B' },
@@ -145,11 +188,11 @@ Every comparison below is on identical rows, scored by one harness, with seeds, 
 ]} />
 
 <ArticleChartGallery label="Choose a Vela 2.0 result" charts={[
-  { label: 'Router signals', src: '/img/blog/vela-2-0/router-tasks.png', width: 2448, height: 1496, alt: 'Vela 2.0 9B against each Vela 1.0 specialist on the specialist test rows: prompt attacks 0.792 to 0.989, HateCheck 0.646 to 0.855, RTP-LX 0.761 to 0.801, long-document PII 0.908 to 0.940, hallucination 0.875 to 0.885, domain 0.831 to 0.844, short PII 0.976 to 0.985.', children: 'One Vela 2.0 9B against the Vela 1.0 specialists, each on its own test rows. The largest gains are where specialists generalise worst: unseen prompt-attack families and multilingual hate speech.' },
+  { label: 'Router signals', src: '/img/blog/vela-2-0/router-tasks.png', width: 2448, height: 1496, alt: 'Vela 2.0 9B against each Vela 1.0 specialist on the specialist test rows: prompt attacks 0.792 to 0.989, HateCheck 0.646 to 0.855, RTP-LX 0.761 to 0.801, long-document PII 0.908 to 0.940, hallucination 0.875 to 0.885, domain 0.831 to 0.844, short PII 0.976 to 0.985.', children: 'One Vela 2.0 9B against the Vela 1.0 specialists on identical test rows. PII uses the research scorer with per-length development thresholds.' },
   { label: 'Safety', src: '/img/blog/vela-2-0/safety-family.png', width: 2448, height: 1496, alt: 'Macro AUC over 14 public safety sets: GLiNER2.5-Decide 0.704, Vela 2.0 0.3B 0.871, 0.8B 0.875, 4B 0.921, 9B 0.921.', children: 'Macro AUC over 14 public safety and prompt-attack sets. Vela 2.0 is trained on these signal families and Decide is not: this is what routing-specific training adds to a decision model.' },
   { label: 'Evidence', src: '/img/blog/vela-2-0/evidence.png', width: 2448, height: 1496, alt: 'ACL-Verbatim word-F1: Vela 2.0 9B 24.5, 4B 24.4, 0.8B 23.6, GLiFormer-large 7.0, GLiNER-large-v2.5 4.6, GLiNER2.5-small 4.6, GLiNER2.5-Decide 2.3.', children: 'The broad head finds the exact words that answer a question, on a set held out of training, at every decoder size.' },
   { label: 'Latency', src: '/img/blog/vela-2-0/latency.png', width: 2448, height: 1496, alt: 'Seconds per router request with seven questions on one A40: 0.3B 0.09, 0.8B 0.13, 4B 0.40 to 0.49, 9B 0.60 to 0.71.', children: 'One router request, seven questions including PII and hallucination spans, on one A40.' },
-  { label: 'General decisions', src: '/img/blog/vela-2-0/jev-index.png', width: 2448, height: 1496, alt: 'Jev Decision Index 0.2.1: Eos-0.8B 20.14 and Vela 2.0 0.8B 16.01; Nox-4B 42.55 and Vela 2.0 4B 31.63; Lux-9B 46.23 and Vela 2.0 9B 41.09.', children: 'The Jev Decision Index over 38 general decision benchmarks. Each Vela 2.0 decoder against the Decision 2.0 model it was fine-tuned from.' },
+  { label: 'General decisions', src: '/img/blog/vela-2-0/jev-index.png', width: 2448, height: 1496, alt: 'Jev Decision Index 0.2.1: Eos-0.8B 20.14 and Vela 2.0 0.8B 16.01; Nox-4B 42.55 and Vela 2.0 4B 31.63; Lux-9B 46.23 and Vela 2.0 9B 41.09.', children: 'Jev Decision Index 0.2.1, 38 benchmarks, with optional Noul calibration disabled. Each hybrid model is compared with its Decision 2.0 base.' },
 ]} />
 
 **Router signals.** One 9B model is ahead of or level with every Vela 1.0 specialist on the specialist's own test rows, and clearly ahead where specialists generalise worst: prompt attacks from unseen families (0.792 → 0.989 AUC, paired 95% CI +15.4 to +23.9 points) and multilingual hate speech (0.646 → 0.855). It also leads on RTP-LX request harm (0.761 → 0.801), PII in 8K-token documents (0.908 → 0.940 F1), hallucination spans (0.875 → 0.885 example-F1) and domain (0.831 → 0.844 macro-F1). The 0.3B encoder reaches 0.995 F1 on short-text PII, ahead of the Vela 1.0 PII model (0.976), and runs on CPU.
@@ -162,12 +205,14 @@ Every comparison below is on identical rows, scored by one harness, with seeds, 
 
 **Cost.** A full router request takes 0.09 s on an A40 for the 0.3B, 0.13 s for the 0.8B, 0.40–0.49 s for the 4B and 0.60–0.71 s for the 9B. That is one call for every signal, where Vela 1.0 needed one model per signal.
 
-**General decisions.** Vela 2.0 is fine-tuned for routing, and it keeps most of what its base can do. On the Jev Decision Index (edition 0.2.1, 38 general decision benchmarks), scored with a harness that reproduces the published Decision 2.0 scores within 0.1 points, the 9B reaches 41.09 against 46.23 for Lux-9B, keeping 89% of its base. The 4B keeps 74% (31.63 against 42.55 for Nox-4B) and the 0.8B 79% (16.01 against 20.14 for Eos-0.8B). On fast-decisions, the benchmark GLiNER2.5-Decide was built for, the 9B is level with Decide (62.5 against 62.9). A deployment that only needs general decisions is best served by Decision 2.0; a router that also needs safety, PII and hallucination signals and spans gets them from Vela 2.0 without giving up its general questions.
+**General decisions.** On the Jev Decision Index 0.2.1 (38 benchmarks), the 9B reaches 41.09 against 46.23 for Lux-9B, keeping 89% of its base; the 4B keeps 74% and the 0.8B 79%. The harness reproduces the published Decision 2.0 scores within 0.1 points. On fast-decisions, the 9B scores 62.5 against 62.9 for GLiNER2.5-Decide, while also answering the router's safety and span questions.
+
+**Noul calibration.** The Jev chart and table use `noul_calibration=False`. With it enabled, the model cards report 16.01 / 31.91 / 41.63 for 0.8B / 4B / 9B. This optional setting is separate from the router's trained safety thresholds.
 
 <details>
 <summary>Full numbers</summary>
 
-Router signals against the Vela 1.0 specialists, on each specialist's own test rows. Differences are paired bootstraps over identical rows.
+Router signals against the Vela 1.0 specialists, on each specialist's own test rows. Differences are paired bootstraps over identical rows. **PII uses the research scorer's per-length development thresholds**, rather than the shipped runtime calibration.
 
 | Task | Vela 1.0 | Vela 2.0 0.3B | Vela 2.0 9B | Δ 9B vs Vela 1.0 [95% CI] |
 | --- | ---: | ---: | ---: | ---: |
@@ -178,6 +223,8 @@ Router signals against the Vela 1.0 specialists, on each specialist's own test r
 | PII, 8K-token documents (F1) | 0.908 | 0.894 | **0.940** | +3.2 [−1.1, +7.0] |
 | Hallucination, 10,698 examples (example-F1) | 0.875 | 0.848 | **0.885** | +1.0 [+0.4, +1.7] |
 | Domain (macro-F1) | 0.831 | 0.825 | **0.844** | +1.3 [−0.3, +2.8] |
+
+**PII protocol.** The 0.3B's 8K value above is 0.894 with the research scorer; its exported runtime gives 0.896 with the test-blind 0.001 threshold floor and 0.929 with the shipped floor selected after observing the test effect. For 9B, the table's short-text value is 0.985; shipped calibration gives 0.987. These protocols are documented in the model cards.
 
 Open extraction with the broad head, every model scored by one harness. The harness reproduces the GLiFormer-base card on all seven NER sets and the GLiNER-large-v2.5 average within 0.2 points. Latency is the mean over 100 questions on one A40.
 
@@ -191,7 +238,7 @@ Open extraction with the broad head, every model scored by one harness. The harn
 | GLiNER2.5-Decide | 51.5 | 2.3 | 415 |
 | GLiNER2.5-small | 42.5 | 4.6 | **197** |
 
-General decisions on the Jev Decision Index 0.2.1 (38 benchmarks).
+General decisions on the Jev Decision Index 0.2.1 (38 benchmarks), with `noul_calibration=False`.
 
 | Size | Decision 2.0 base | Vela 2.0 | Kept |
 | --- | ---: | ---: | ---: |
@@ -210,14 +257,7 @@ General decisions on the Jev Decision Index 0.2.1 (38 benchmarks).
   { label: '9B decoder', src: '/img/blog/vela-2-0/architecture/04-vela-2.0-9b-architecture.svg', width: 1240, height: 1570, diagram: true, alt: 'Vela 2.0 9B: 32 Qwen3.5 hybrid layers, hidden width 4096, SwiGLU width 12288, CandidateHead and separate router or broad span heads.', children: 'The 9B has 32 layers, hidden width 4096 and SwiGLU width 12288. The decoder checkpoints share an operator layout, not weights.' },
 ]} />
 
-| Model | Initialised from | Parameters | Input | Span heads |
-| --- | --- | ---: | ---: | --- |
-| [Vela-2.0-0.3B](https://huggingface.co/vllm-sr/Vela-2.0-0.3B) | Decision-1.0-Kai-0.6B, encoder | 307M | 8,192 tokens | router |
-| [Vela-2.0-0.8B](https://huggingface.co/vllm-sr/Vela-2.0-0.8B) | Decision-2.0-Eos-0.8B | 756M | 16,384 tokens | router + broad |
-| [Vela-2.0-4B](https://huggingface.co/vllm-sr/Vela-2.0-4B) | Decision-2.0-Nox-4B | 4.2B | 16,384 tokens | router + broad |
-| [Vela-2.0-9B](https://huggingface.co/vllm-sr/Vela-2.0-9B) | Decision-2.0-Lux-9B | 7.9B | 16,384 tokens | router + broad |
-
-The request and response are the same at every size, so a deployment can start with the 0.3B on CPU and move to a decoder without changing a line of client code. The 0.3B also exports to ONNX.
+The four checkpoints share the question format, with independently trained backbones and readout weights. The 0.3B supports CPU and ONNX deployment; the hybrid models add the broad span head through the same interface.
 
 <details>
 <summary>Backbone and readout operators</summary>
@@ -251,7 +291,15 @@ The diagrams trace the public `system_one()` path at fixed model revisions. <a h
   The decoders train in three stages from the released Decision 2.0 models. Each later stage freezes everything trained before it.
 </ArticleFigure>
 
-All four sizes share one data recipe. Every source is written as parts, typed questions and answers, and labels are resampled at every draw: options are anonymised, dropped and paraphrased, so the model learns to read labels rather than memorise them. Stage 1 fine-tunes the whole Decision 2.0 base for 4,000 steps, with a KL term to the frozen base on replayed Decision 2.0 rows to keep its general decisions. Stage 2 trains the router span head, and stage 3 the broad span head (90% open extraction: named entities, relations, entity mentions and extractive evidence from SQuAD 2.0, HotpotQA and Natural Questions train data; 10% router span replay). The 0.3B encoder trains in one stage of 101,000 steps from Kai's Choice trunk, about 6.9 hours on one AMD MI325X.
+All four sizes use shared signal families and schema resampling. Sources become parts, typed questions and answers; options are anonymised, dropped and paraphrased so the model learns to read labels.
+
+The hybrid models train in three stages:
+
+1. **Routing recipe.** Fine-tune the whole Decision 2.0 base for 4,000 steps, with a KL term on replayed base-model rows to retain general decisions.
+2. **Router spans.** Train the router span head on the frozen backbone.
+3. **Open extraction.** Train the broad head with everything else frozen: 90% named entities, relations, entity mentions and extractive evidence; 10% router span replay. Evidence sources include the training splits of SQuAD 2.0, HotpotQA and Natural Questions.
+
+The 0.3B encoder trains in one stage of 101,000 steps from Kai's Choice trunk, about 6.9 hours on one AMD MI325X.
 
 <details>
 <summary>Stage-1 data mix</summary>
@@ -267,15 +315,13 @@ All four sizes share one data recipe. Every source is written as parts, typed qu
 | Router tasks | Global-MMLU, Aya, DiffusionDB, WildFeedback, router PII recipe, Presidio replay | 3.8% |
 | Small in-house set | | ~2% |
 
-A synthetic row is kept only when a blind re-label agrees with it (71% do). Training rows are deduplicated against every evaluation set. Every size was trained with three seeds, and the released seed was chosen on development rows only.
+A synthetic row is kept only when a blind re-label agrees with it (71% do). Training rows are deduplicated against every evaluation set. Each size was trained with three seeds, with checkpoint selection on development rows. The 0.3B final release selection also considered test results, as noted with the evaluation protocol above.
 
 </details>
 
 ## Try it
 
-```bash
-pip install torch "transformers>=5.17" safetensors tokenizers numpy
-```
+With the same dependencies installed, use a hybrid model on GPU to combine request routing, PII and unsupported-claim spans:
 
 ```python
 from transformers import AutoModel
@@ -327,10 +373,12 @@ python vela2_serve.py --model . --device cuda --port 8001
 
 ## Towards open foundation routing models
 
-Vela 2.0 is a step from a set of routing classifiers towards one routing model: a model that answers whatever the deployment asks, points at the exact words behind its answers, and takes new labels without retraining. The next step is to bring it into vLLM Semantic Router as a native signal backend, so that one Vela 2.0 call replaces the per-signal classifiers on the request path.
+Vela 2.0 brings routing decisions and span answers into one model family. The next step is native signal-backend integration in vLLM Semantic Router, replacing per-signal classifiers with one Vela 2.0 request.
 
 - Models: [Vela 2.0 collection](https://huggingface.co/collections/vllm-sr/vela-20) ([0.3B](https://huggingface.co/vllm-sr/Vela-2.0-0.3B), [0.8B](https://huggingface.co/vllm-sr/Vela-2.0-0.8B), [4B](https://huggingface.co/vllm-sr/Vela-2.0-4B), [9B](https://huggingface.co/vllm-sr/Vela-2.0-9B))
 - Decision 2.0 bases: [Eos-0.8B](https://huggingface.co/vllm-sr/Decision-2.0-Eos-0.8B), [Nox-4B](https://huggingface.co/vllm-sr/Decision-2.0-Nox-4B), [Lux-9B](https://huggingface.co/vllm-sr/Decision-2.0-Lux-9B)
 - Paper: *Vela 2.0: Towards Open Foundation Routing Models*, forthcoming
+
+**License.** Weights, code and documentation are Apache-2.0. The [0.3B tokenizer carries the Gemma Terms of Use](https://huggingface.co/vllm-sr/Vela-2.0-0.3B/blob/main/DISTRIBUTION_TERMS.md); training data retain their source licenses, including CC-BY-SA share-alike terms. Each model card links its notices and license scope.
 
 We thank the Decision 2.0 team for releasing the base models openly; the label resampling follows GLiNER2's recipe.
