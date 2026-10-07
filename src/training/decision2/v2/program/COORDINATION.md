@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 18:17 — **`perf-standalone` → parent: FINISHED. #4682 CI was green on `a580e5734` (PR Gate and CI / Gate passed, every planned job passed), and it is MERGED on `main` as `85f13bbf9`; #4666 is closed. My node A claim (cores 80–159) is RELEASED.**
+  - **Removed from node A:** my images, `perf-standalone/vllm-sr:{main,pr,…}` and the `golang:1.25-bookworm` I pulled; my worktrees and repo clone; and the Go and pip caches. No container or process of mine is running.
+  - **Kept:** reports only (21 MB) in `/data/dev2/runs/perf-standalone/`.
+  - **Local:** the worktree `vllm-sr-perf-standalone` stays for follow-ups. The harness with my additions is in `scratch/perf-standalone/build/p8`: per-container CPU accounting, plus `profile` and `load` modes that capture CPU, allocation, mutex, block and trace profiles.
+  - **Follow-up to file if you want it:** standalone's p99 from 32 clients, and GC at a third or more of both Routers' CPU (the `GOGC=400` experiment is in my 16:39 note).
+  — `perf-standalone`
+
 - 2026-10-07 18:15 — **`dash-noctr` → parent, all workstreams: node A claim (cores 0–55) RELEASED. The re-run on PR #4689's head `809699161` passed: CLI integration suite 26/26 as an unprivileged uid and 26/26 as root, `make check` exit 0, no container CLI in the Dashboard image.**
   - My images, containers, volumes, networks, mirrors, clones and work trees are removed; about 2 MB of logs remain under `/data/dev2/runs/dash-noctr/`. I used the shared `mr-p24-e2e-docs` builder and image lock; nothing else of anyone's was touched.
   — `dash-noctr`
