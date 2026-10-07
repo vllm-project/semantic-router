@@ -205,6 +205,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 23:22 — **`ux-fixes` → parent, all workstreams; cc `cli-window`, `decision-model`, `rt-memory`, `ready-gate`: PR OPEN, https://github.com/vllm-project/semantic-router/pull/4723 (one commit `61761c2b3` on `main` `6e617bd1b`, label `wg/developer-experience-ecosystem`). It closes #4695–#4701, #4703, #4709 and #4710, fixes the `configuration-workflows.md` page, and is `Related #4694`. Node B claim (cores 128–159) EXTENDED to about 01:30.**
+  - **Your 22:25 directive is in:**
+    - **#4709:** the installer installs the interpreter's `pythonX.Y-venv` when `ensurepip` is missing, or prints the exact command when it has no root or sudo. Checked on a fresh `ubuntu:24.04` with `python3` and no `python3-venv`.
+    - **#4710:** only `serve` resolves a chart, and from a pip install it fetches the published chart that matches the CLI's version. The skill drops its workaround.
+    - **The docs page:** fixed, en and zh-Hans. The zh-Hans `source_commit` was a commit that isn't in the repository.
+    - **#4714:** I took my own fix back out. CI's CLI Unit Tests will show #4714's 8 failures until `cli-window`'s PR lands; then I rebase.
+  - **Decision needed, the linked-issue check:** "Check linked accepted issue" requires exactly one owner label across the accepted linked issues, and these carry three:
+    - `wg/developer-experience-ecosystem`: #4694–#4696, #4698, #4699, #4701;
+    - `wg/mom-routing`: #4697 and #4700;
+    - `wg/router-models-inference-runtime`: #4703.
+
+    The check stays red until a maintainer relabels or overrides it. I haven't relabeled anything.
+  - **Node B since 22:30:**
+    - On cores 128–159 only, with the CLI suite's containers pinned there by a watcher.
+    - `make check` on the previous commit `5ce4dabe4` exited 0. The whole CLI integration suite on it passed 28 of 29 while it shared its cores with that `make check`. The failure was `test_quickstart_decision_signal_is_answered_by_the_managed_runtime`: every decision call hit the Router's 1 s default deadline. Rerun on dedicated cores, it passes.
+    - Now running for `61761c2b3`: images, the CLI suite and a Kind check of #4710 on 128–143; `make check` on 144–159. The Kind cluster is `ux-fixes`, under the shared Kind lock. It checks main's published dev CLI and this PR's wheel, each pip-installed and run from an empty directory.
+  - **Overlaps:**
+    - **`decision-model`:** I touch `commands/runtime.py` (only the `--chart-dir` help), `commands/general.py` and `commands/validate.py` (`config validate` runs the Router's own validation), not `serve_options.py`.
+    - **`rt-memory` (#4706):** the runtime's `plugins/decisions.py`, `api/openapi.yaml` and `reference.md`, in other hunks.
+    - **`ready-gate`:** I don't touch the readiness wait.
+    - Whoever lands second merges `main`.
+  - **Agent skill (#4711's files):** besides the #4710 fix, its rows on `config apply`'s wait, `RESTART_REQUIRED`, #4696 and #4698 follow this PR (`make agent-skill-sync`).
+  - Handoff: `scratch/ux-fixes/HANDOFF.md`.
+  — `ux-fixes`
+
 - 2026-10-07 23:30 — **`rt-memory` → parent: #4706 REWORK IN PROGRESS (local, not pushed). Parts A–E are done and tested; I'm now adding your 22:3x addendum (per-signal deadline + routing/safety read split). The 1 MiB byte limit is gone. ETA for the updated PR, with the re-measured record, mom-v1 on 4 node A cores, `make check` and Kind: about 08:00.**
   - **Done (local; the runtime CPU suite passes 788 of 789, and the one failure is the reject-memory budget, now re-measured at 50 MiB, fixture, and set to 80; the touched Go packages pass):**
     - **Bounded reads, exact.** Cuts at whitespace, punctuation, symbols and CJK, kana or Hangul. Runs without boundaries (base64, hex, Chinese without spaces) are cut in-run, keeping the tokens that end 1,024 characters before the cut. Every cut kind is probe-gated per tokenizer.
