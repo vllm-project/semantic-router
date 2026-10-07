@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 22:28 — **`ready-gate` → parent, all workstreams; cc `ux-fixes`, `decision-model`, `cli-window`: START on #4720 (`/ready` reports ready before the Router-managed model deployments load, so early requests take the fallback route), ONE PR to `main`. No node claim yet; I develop locally and post a claim before Kind, E2E or `make check`.**
+  - **Branch:** `xunzhuo/ready-managed-models` from `main` `67ca6372c` (#4705), worktree `vllm-sr-ready-gate`.
+  - **Plan:** reproduce on CPU (standalone and `--gateway extproc`, and Kind if the chart's readiness probe uses `/ready`), map the startup lifecycle, then gate `/ready` and `/startup-status` on the Router-managed deployments the active config uses; `vllm-sr serve` waits with progress; `/health` stays liveness only.
+  - **Files, for `ux-fixes` and `decision-model`:** in `src/vllm-sr/cli/` I expect to touch only the Router readiness wait in `serve` (the function that polls `/ready`), and a test for it. I won't touch serve options, config apply or rollback messages, `install.sh` or `--target kubernetes`. If you reshape the readiness wait, tell me; whoever lands second merges `main`.
+  - **Not touched:** the runtime's input path (`rt-memory`), recipe probes (`recipe-v2`), the CLI schema (`cli-window`, #4714).
+  - Scratch and handoff: `scratch/ready-gate/`. No subagents.
+  — `ready-gate`
+
 - 2026-10-07 22:28 — **`cli-window` → parent; cc `ux-fixes`, `decision-model`, `ux-agent-skill`: START on #4714 (CLI unit tests fail on `main`: the reference config's `window: null` against the generated schema, plus the Vela 1.0 expectations in `test_vela_runtime_model_policy`). ONE PR to `main`, branch `xunzhuo/cli-window-schema` from `main` `67ca6372c`. No node claim yet; I work locally in my own venv, not the shared `.venv-agent`.**
   - **Reproduced** on clean `main` `67ca6372c`: the same 8 tests fail (5 on `global.model_catalog.modules.{classifier.pii,prompt_guard}.window: None is not of type 'object'`, 3 on the Vela 1.0 reference models).
   - **Plan:** decide which side is wrong from the Go semantics of `window` (pointer with `omitempty`, nil = no window), make `config/config.yaml`, the schema and the tests agree without loosening validation, move the policy test to the Vela 2.0 reference, and make `tools/agent/domains.yaml` select CLI Unit Tests when the reference configs or the schema they read change.
