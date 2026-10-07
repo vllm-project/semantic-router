@@ -13,14 +13,15 @@ import torch
 
 from src.training.kv_mapper.artifact import CompatibilitySpec, Manifest, write_artifact
 
+if importlib.util.find_spec("vllm"):
+    from vllm.config.kv_transfer import KVTransferConfig
+    from vllm.distributed.kv_transfer.kv_connector.factory import KVConnectorFactory
+    from vllm.distributed.kv_transfer.kv_connector.v1.base import KVConnectorRole
+
 
 @unittest.skipUnless(importlib.util.find_spec("vllm"), "vLLM is not installed")
 class VllmConnectorTests(unittest.TestCase):
     def test_factory_loads_plugin_and_fail_closed_prefill(self) -> None:
-        from vllm.config.kv_transfer import KVTransferConfig
-        from vllm.distributed.kv_transfer.kv_connector.factory import KVConnectorFactory
-        from vllm.distributed.kv_transfer.kv_connector.v1.base import KVConnectorRole
-
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder)
             compat = CompatibilitySpec(
