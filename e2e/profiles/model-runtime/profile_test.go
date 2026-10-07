@@ -111,7 +111,7 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 			t.Fatalf("%s names %s, which runtime_with_fixtures.py does not write", name, deployment.Artifact)
 		}
 	}
-	attached := map[string]string{"attached-decisions": "decision-a", "attached-feedback": "feedback-a"}
+	attached := map[string]string{"attached-decisions": "decision-a", "attached-feedback": "feedback-a", "attached-vela2": "vela2-a"}
 	for name, served := range attached {
 		deployment := deployments[name]
 		if !strings.Contains(deployment.Endpoint, "model-runtime-attached.") || deployment.ServedName != served {

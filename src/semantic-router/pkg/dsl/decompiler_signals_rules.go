@@ -249,15 +249,7 @@ func (d *decompiler) decompileDecisionModelSignals() {
 func decisionQuestionValue(question config.DecisionQuestion) map[string]interface{} {
 	value := map[string]interface{}{"type": question.Type, "instructions": question.Instructions}
 	if len(question.Choices) > 0 {
-		choices := make([]interface{}, 0, len(question.Choices))
-		for _, choice := range question.Choices {
-			entry := map[string]interface{}{"key": choice.Key}
-			if choice.Description != "" {
-				entry["description"] = choice.Description
-			}
-			choices = append(choices, entry)
-		}
-		value["choices"] = choices
+		value["choices"] = decisionChoicesValue(question.Choices)
 	}
 	if len(question.Levels) > 0 {
 		levels := make([]interface{}, 0, len(question.Levels))
@@ -266,7 +258,28 @@ func decisionQuestionValue(question config.DecisionQuestion) map[string]interfac
 		}
 		value["levels"] = levels
 	}
+	if len(question.Labels) > 0 {
+		value["labels"] = decisionChoicesValue(question.Labels)
+	}
+	if question.Threshold != nil {
+		value["threshold"] = *question.Threshold
+	}
+	if question.Head != "" {
+		value["head"] = question.Head
+	}
 	return value
+}
+
+func decisionChoicesValue(choices []config.DecisionChoice) []interface{} {
+	entries := make([]interface{}, 0, len(choices))
+	for _, choice := range choices {
+		entry := map[string]interface{}{"key": choice.Key}
+		if choice.Description != "" {
+			entry["description"] = choice.Description
+		}
+		entries = append(entries, entry)
+	}
+	return entries
 }
 
 func numericPredicateValue(predicate *config.NumericPredicate) map[string]interface{} {

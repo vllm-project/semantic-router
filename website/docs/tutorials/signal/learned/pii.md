@@ -88,6 +88,39 @@ not a successful partial scan. Existing `on_error` and decision `rules.on_unknow
 policies determine its routing effect. Remote backends and explicitly selected
 truncation retain the partial-result behavior described below.
 
+## Vela 2.0
+
+Bind `pii_classifier` to a Vela 2.0 deployment and the signal asks the model's
+ready-made PII question, answered by its router span head, instead of a
+separate PII model. The PII question then travels in the same call as the
+deployment's [`decision`](tutorials/signal/learned/decision.md) questions about the same text:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+    bindings:
+      pii_classifier:
+        deployment: vela2
+        contract: token_spans.v1
+```
+
+- The model finds the same 17 entity types as Vela 1.0 PII and names them in
+  its spans, so the binding takes no `mapping_path`.
+- It reads the whole text itself, a long one in windows, so the router sends
+  each text in one piece: the deployment sets no `input` and the PII module no
+  `window`.
+- The model's calibrated threshold decides which spans it reports. A rule's
+  `threshold` and `pii_types_allowed` then apply to those spans as they do for
+  Vela 1.0; the model's span probability is the mean over the span's words.
+- `head` may only be `router`, the span head that answers the PII question.
+
+Existing configurations keep their Vela 1.0 PII binding.
+
 ## Remote backend (token_spans.v1)
 
 With no `backend`, PII detection keeps its local model. A remote PII classifier

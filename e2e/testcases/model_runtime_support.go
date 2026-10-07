@@ -28,6 +28,7 @@ const (
 	mrModalityDeployment  = "vela-modality"
 	mrAttachedDecisions   = "attached-decisions"
 	mrAttachedFeedback    = "attached-feedback"
+	mrAttachedVela2       = "attached-vela2"
 	mrOfflineDeployment   = "decision-offline"
 	mrAttachedService     = "model-runtime-attached"
 	mrDecisionsProcess    = "decisions"
@@ -43,7 +44,7 @@ var (
 	// GPU resolves to the CPU.
 	mrAutoDeployments     = []string{mrEmbeddingDeployment}
 	mrManagedDeployments  = append([]string{mrDecisionDeployment}, mrDeviceGroup...)
-	mrAttachedDeployments = []string{mrAttachedDecisions, mrAttachedFeedback}
+	mrAttachedDeployments = []string{mrAttachedDecisions, mrAttachedFeedback, mrAttachedVela2}
 )
 
 // modelRuntimeSession holds the connections the model-runtime contracts use.

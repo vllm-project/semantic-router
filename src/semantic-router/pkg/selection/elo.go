@@ -282,11 +282,13 @@ func (e *EloSelector) InitializeFromConfig(modelConfig map[string]config.ModelPa
 				e.categoryRatings[category.Name] = make(map[string]*ModelRating)
 			}
 			for _, ms := range category.ModelScores {
-				// Convert static scores to Elo ratings (scale 0-1 -> 1000-2000)
-				rating := EloMinRatingFromScore + (ms.Score * EloRatingRange)
-				e.categoryRatings[category.Name][ms.Model] = &ModelRating{
-					Model:  ms.Model,
-					Rating: rating,
+				if _, exists := e.categoryRatings[category.Name][ms.Model]; !exists {
+					// Convert static scores to Elo ratings (scale 0-1 -> 1000-2000)
+					rating := EloMinRatingFromScore + (ms.Score * EloRatingRange)
+					e.categoryRatings[category.Name][ms.Model] = &ModelRating{
+						Model:  ms.Model,
+						Rating: rating,
+					}
 				}
 			}
 		}
