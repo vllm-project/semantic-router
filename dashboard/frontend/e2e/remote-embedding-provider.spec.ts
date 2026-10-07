@@ -118,11 +118,11 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
     await expect(modal.getByLabel('mmBERT Model Path')).toBeVisible()
     await expect(modal.getByLabel('Base URL')).toHaveCount(0)
 
-    await expect(modal.getByLabel('Local Backend')).toBeVisible()
+    await expect(modal.getByLabel('Local Model Type')).toBeVisible()
     await expect(modal.getByLabel('API Protocol')).toHaveCount(0)
     await modal.getByLabel('Provider Type').selectOption('remote')
     await expect(modal.getByLabel('mmBERT Model Path')).toHaveCount(0)
-    await expect(modal.getByLabel('Local Backend')).toHaveCount(0)
+    await expect(modal.getByLabel('Local Model Type')).toHaveCount(0)
     await modal.getByLabel('API Protocol').selectOption('openai_compatible')
     await modal.getByLabel('Base URL').fill('https://embedding.example.com/v1')
     await modal.getByLabel('Model', { exact: true }).fill('text-embedding-3-small')
@@ -179,7 +179,7 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
     await expect.poll(() => updateBody).not.toBeNull()
     expect(updateBody).toMatchObject({
       model_catalog: {
-        embeddings: { semantic: { embedding_config: { backend: 'candle', top_k: 0 } } },
+        embeddings: { semantic: { embedding_config: { backend: 'model_runtime', top_k: 0 } } },
       },
     })
     expect(updateBody).not.toHaveProperty('model_catalog.embeddings.bert')

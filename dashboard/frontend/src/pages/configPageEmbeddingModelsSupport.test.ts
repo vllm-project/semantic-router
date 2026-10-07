@@ -172,12 +172,6 @@ describe('embedding models config support', () => {
     )
   })
 
-  it('does not add the removed embeddings.bert block, which the Router rejects', () => {
-    expect(embeddingModelsCatalogValue(embeddingModelsEditData(localCatalog))).not.toHaveProperty(
-      'bert',
-    )
-  })
-
   it('summarizes provider mode and remote model without exposing credentials', () => {
     const remote = embeddingModelsCatalogValue({
       ...embeddingModelsEditData(localCatalog),
