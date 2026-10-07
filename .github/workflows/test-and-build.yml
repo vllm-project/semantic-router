@@ -23,9 +23,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
+        uses: ./.github/actions/setup-go-ci
 
       - name: Install system dependencies
         run: |
@@ -42,15 +40,6 @@ jobs:
 
       - name: Validate Helm chart
         run: make helm-ci-validate HELM_NAMESPACE=test-namespace
-
-      - name: Cache Go dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
 
       - name: Check Go modules and vet source
         run: make check-go-mod-tidy vet
