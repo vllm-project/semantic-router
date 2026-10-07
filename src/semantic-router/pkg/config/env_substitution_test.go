@@ -181,13 +181,15 @@ func TestExpandStringKeepsUnsetReferences(t *testing.T) {
 	}
 }
 
-func deferredEnvDocument(maxTokens, apiKey string) []byte {
+func deferredEnvDocument(maxTokens, apiKey, ejectionTime string) []byte {
 	return []byte(`version: v0.3
 providers:
   defaults:
     model: model-a
   models:
     - name: model-a
+      reliability:
+        base_ejection_time: ` + ejectionTime + `
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
@@ -220,20 +222,27 @@ func TestValidateYAMLBytesDeferringEnv(t *testing.T) {
 	// Values in this process must not decide the outcome.
 	t.Setenv("DEFER_PROBE_MAX", "not-a-count")
 	t.Setenv("DEFER_PROBE_KEY", "")
+	t.Setenv("DEFER_PROBE_EJECT", "soon")
 	tests := []struct {
-		name      string
-		maxTokens string
-		apiKey    string
-		wantErr   string
+		name         string
+		maxTokens    string
+		apiKey       string
+		ejectionTime string
+		wantErr      string
 	}{
 		{name: "required value without a default", maxTokens: "64K", apiKey: "${DEFER_PROBE_KEY}"},
 		{name: "token count without a default", maxTokens: "${DEFER_PROBE_MAX}", apiKey: "sk-probe"},
+		{
+			name:      "required value with a token count and a duration without defaults",
+			maxTokens: "${DEFER_PROBE_MAX}", apiKey: "${DEFER_PROBE_KEY}", ejectionTime: "${DEFER_PROBE_EJECT}",
+		},
+		{name: "unbraced references sharing a prefix", maxTokens: "$DEFER_PROBE_MAX", apiKey: "$DEFER_PROBE"},
 		{name: "default", maxTokens: "${DEFER_PROBE_MAX:-64K}", apiKey: "sk-probe"},
 		{name: "invalid default", maxTokens: "${DEFER_PROBE_MAX:-lots}", apiKey: "sk-probe", wantErr: "invalid token count format: lots"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateYAMLBytesDeferringEnv(deferredEnvDocument(tt.maxTokens, tt.apiKey))
+			err := ValidateYAMLBytesDeferringEnv(deferredEnvDocument(tt.maxTokens, tt.apiKey, tt.ejectionTime))
 			if tt.wantErr == "" && err != nil {
 				t.Fatalf("ValidateYAMLBytesDeferringEnv() error = %v", err)
 			}
@@ -248,7 +257,7 @@ func TestParseYAMLBytesDeferringEnvKeepsRoutingAsWritten(t *testing.T) {
 	t.Setenv("DEFER_PROBE_MAX", "not-a-count")
 	t.Setenv("DEFER_PROBE_HOST", "process-host")
 	document := strings.Replace(
-		string(deferredEnvDocument("${DEFER_PROBE_MAX:-64K}", "${DEFER_PROBE_KEY}")),
+		string(deferredEnvDocument("${DEFER_PROBE_MAX:-64K}", "${DEFER_PROBE_KEY}", "")),
 		"endpoint: 127.0.0.1:8000", "endpoint: ${DEFER_PROBE_HOST:-127.0.0.1}:8000", 1,
 	)
 
@@ -263,7 +272,7 @@ func TestParseYAMLBytesDeferringEnvKeepsRoutingAsWritten(t *testing.T) {
 		t.Fatalf("backend address = %q, want the reference default", got)
 	}
 
-	_, err = ParseYAMLBytesDeferringEnv(deferredEnvDocument("${DEFER_PROBE_MAX:-lots}", "sk-probe"))
+	_, err = ParseYAMLBytesDeferringEnv(deferredEnvDocument("${DEFER_PROBE_MAX:-lots}", "sk-probe", ""))
 	if err == nil || !strings.Contains(err.Error(), "invalid token count format: lots") {
 		t.Fatalf("ParseYAMLBytesDeferringEnv() error = %v, want the invalid default", err)
 	}

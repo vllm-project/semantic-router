@@ -101,6 +101,36 @@ const envReferenceContextRouting = `routing:
           use_reasoning: false
 `
 
+// The RAG key is valid only as written, the context limit only when unset.
+const envReferenceMixedRouting = `routing:
+  modelCards:
+    - name: test-model
+  signals:
+    context:
+      - name: long_context
+        min_tokens: 8K
+        max_tokens: ${DEPLOY_TEST_CONTEXT_MAX}
+  decisions:
+    - name: long-context-docs
+      priority: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: context
+            name: long_context
+      modelRefs:
+        - model: test-model
+          use_reasoning: false
+      plugins:
+        - type: rag
+          configuration:
+            enabled: true
+            backend: openai
+            backend_config:
+              vector_store_id: vs_docs
+              api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
+`
+
 const envReferenceKBRouting = `routing:
   modelCards:
     - name: test-model
@@ -196,6 +226,16 @@ func TestDeployHandler_LeavesEnvironmentReferencesToRouter(t *testing.T) {
 			written: []string{
 				"min_tokens: ${DEPLOY_TEST_CONTEXT_MIN:-8K}",
 				"max_tokens: ${DEPLOY_TEST_CONTEXT_MAX}",
+			},
+		},
+		{
+			name:   "required key with unset formatted values",
+			config: strings.Replace(envReferenceProviderConfig, "${DEPLOY_TEST_EJECTION_TIME:-30s}", "${DEPLOY_TEST_EJECTION_TIME}", 1),
+			deploy: envReferenceMixedRouting,
+			written: []string{
+				"api_key: ${DEPLOY_TEST_OPENAI_API_KEY}",
+				"max_tokens: ${DEPLOY_TEST_CONTEXT_MAX}",
+				"base_ejection_time: ${DEPLOY_TEST_EJECTION_TIME}",
 			},
 		},
 		{
