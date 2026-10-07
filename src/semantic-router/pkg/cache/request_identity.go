@@ -36,7 +36,7 @@ func BuildSemanticRequestIdentity(request llmprotocol.Request) (RequestIdentity,
 	if err != nil {
 		return RequestIdentity{}, err
 	}
-	query := semanticRequestQuery(normalized)
+	query := SemanticRequestQuery(normalized)
 
 	compatible, err := cloneSemanticRequest(normalized)
 	if err != nil {
@@ -83,7 +83,7 @@ func cloneSemanticRequest(request llmprotocol.Request) (llmprotocol.Request, err
 	return cloned, nil
 }
 
-func semanticRequestQuery(request llmprotocol.Request) string {
+func SemanticRequestQuery(request llmprotocol.Request) string {
 	for index := len(request.Messages) - 1; index >= 0; index-- {
 		message := request.Messages[index]
 		if message.Role != llmprotocol.RoleUser {
