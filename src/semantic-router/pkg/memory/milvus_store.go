@@ -85,7 +85,7 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 	if options.EmbeddingConfig != nil {
 		embeddingCfg = *options.EmbeddingConfig
 	} else {
-		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelBERT}
+		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelMMBERT}
 	}
 
 	dimension, err := StorageDimension(cfg.Milvus.Dimension, embeddingCfg)

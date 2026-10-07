@@ -131,6 +131,7 @@ func (p *Profile) GetTestCases() []string {
 		testmatrix.RouterSmoke,
 		[]string{
 			"llm-d-inference-gateway-health",
+			"llm-d-semantic-endpoint-selection",
 		},
 	)
 }

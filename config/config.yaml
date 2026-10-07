@@ -550,11 +550,9 @@ routing:
     # Hallucination rules check the model's answer against the grounding
     # context the request carried (tool results or retrieved context), so they
     # only exist once the model has answered; the selected decision's
-    # hallucination plugin enforces on them. use_nli asks the detector for
-    # span-level NLI explanations.
+    # hallucination plugin enforces on them.
     hallucination:
       - name: ungrounded_claims
-        use_nli: true
         description: Detect claims the grounding context does not support.
 
     pii:
@@ -684,6 +682,45 @@ routing:
       - name: audio_input
         description: Request contains at least one audio content part.
         modality: audio
+
+    # Typed questions answered by a decision model through the built-in model
+    # runtime (global.model_catalog.deployments, provider model_runtime).
+    decision:
+      - name: needs_reasoning
+        description: The decision model judges that the request needs multi-step reasoning.
+        deployment: decision-kai
+        question:
+          type: noul
+          instructions: Does answering this request need multi-step reasoning?
+        predicate:
+          gte: 0.7
+        timeout_ms: 1000
+      - name: request_kind
+        description: What kind of work the request asks for.
+        deployment: decision-kai
+        question:
+          type: choice
+          instructions: What kind of request is this?
+          choices:
+            - key: code
+              description: Writing, reviewing or debugging code
+            - key: math
+              description: Mathematics or quantitative reasoning
+            - key: chat
+              description: Anything else
+        timeout_ms: 1000
+      - name: difficulty
+        description: Expected difficulty on a three-level scale.
+        deployment: decision-kai
+        question:
+          type: score
+          instructions: How difficult is this request?
+          levels:
+            - Trivial
+            - Moderate
+            - Hard
+        predicate:
+          gte: 1.5
 
     classifiers:
       - name: content-risk
@@ -916,6 +953,13 @@ routing:
               enabled: true
               candidate_pool_size: 30
               min_combined_score: 0.4
+            # Session-scoped sticky selection (issue #3347): opt-in, disabled
+            # by default. See website/docs/tutorials/plugin/tool-selection.md.
+            sticky:
+              enabled: false
+              max_tools: 16
+              max_new_tools_per_turn: 2
+              pin_called_tools: true
       emits:
         - kind: retention
           retention:
@@ -965,7 +1009,6 @@ routing:
         - type: hallucination
           configuration:
             enabled: true
-            use_nli: true
             hallucination_action: header
             unverified_factual_action: header
             include_hallucination_details: true
@@ -1154,15 +1197,16 @@ routing:
           synthesis_template: ""
           judge_prompt_version: fusion-v1
           # Grounding-aware synthesis: score panel responses for faithfulness
-          # (hallucination detector against context, else cross-model NLI) and
-          # use the scores to guide the judge. Disabled by default.
+          # with the hallucination detector (against the request's context, else
+          # against each peer response) and use the scores to guide the judge.
+          # Disabled by default.
           grounding:
             enabled: false
             reference: hybrid          # hybrid | context | panel
             policy: weight             # weight | annotate | filter (see below)
             min_score: 0.0             # filter policy only: drop below this (0-1)
             min_keep: 1                # filter policy only: keep at least this many
-            nli_contradiction_penalty: 1.0
+            contradiction_penalty: 1.0 # panel reference: weight of a peer's contradiction
             on_error: skip             # skip (fall back to plain fusion) | fail
             # policy controls how the scores are used:
             #   weight   (default) keep every response; tell the judge to weight
@@ -1479,6 +1523,33 @@ routing:
             Choose qwen3-8b for ordinary requests and qwen3-32b for hard
             reasoning, coding, or multi-step analysis.
           timeout_seconds: 5
+
+    - name: decision_model_route
+      description: Let a decision model pick the model for hard code requests.
+      priority: 126
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: request_kind
+            label: code
+          - type: decision
+            name: needs_reasoning
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+        - model: qwen3-32b
+          use_reasoning: true
+      algorithm:
+        type: decision
+        decision:
+          deployment: decision-kai
+          instructions: Which model should answer this request?
+          candidates:
+            qwen3-8b: Fast general model for routine code
+            qwen3-32b: Strong reasoning model for hard code
+          timeout_ms: 1000
 
     - name: content_privacy_route
       description: Route requests that cross the Hazard privacy operating point.
@@ -2099,14 +2170,6 @@ global:
       ttl_seconds: 7200
       eviction_policy: lru
       embedding_model: mmbert
-      # Negation/antonym guard for the in-memory backend. "lexical" is the
-      # model-free default; "nli" or "lexical+nli" additionally verifies the
-      # winning candidate once with the hallucination explainer NLI model and
-      # rejects it above nli.contradiction_threshold (~70 ms/hit on CPU).
-      polarity_guard:
-        mode: lexical
-        nli:
-          contradiction_threshold: 0.5
       milvus:
         connection:
           host: milvus
@@ -2158,7 +2221,7 @@ global:
         timeout: 10
         collection_prefix: "mem:"
         index_name: mem_idx
-        dimension: 384
+        dimension: 256
         metric_type: COSINE
         index_m: 16
         index_ef_construction: 200
@@ -2168,7 +2231,7 @@ global:
       milvus:
         address: milvus:19530
         collection: agentic_memory
-        dimension: 384
+        dimension: 256
         num_partitions: 32
       qdrant:
         host: qdrant
@@ -2177,7 +2240,7 @@ global:
         use_tls: false
         connect_timeout: 10
         collection: agentic_memory
-        dimension: 384
+        dimension: 256
       redis_cache:
         enabled: false
         address: "localhost:6379"
@@ -2185,9 +2248,9 @@ global:
         db: 0
         key_prefix: "memory_cache:"
         password: ""
-      embedding_model: bert
+      embedding_model: mmbert
       default_retrieval_limit: 10
-      # Calibrated for mom-embedding-light with weighted hybrid scoring.
+      # Weighted hybrid scoring. The value predates Vela Embedding; check it on your own data.
       default_similarity_threshold: 0.40
       hybrid_search: true
       hybrid_mode: weighted
@@ -2291,6 +2354,30 @@ global:
         conn_max_lifetime: 300
         table_name: vector_store_registry
 
+    # Session-scoped sticky tool-set selection's shared store (issue #3347).
+    # Constructed only when at least one decision's tool_selection.sticky is
+    # enabled; see website/docs/tutorials/plugin/tool-selection.md. backend:
+    # redis is a self-consistent, Validate()-passing sample (matching
+    # response_api's store_backend: redis above) rather than
+    # vector_store's exhaustive-multiple-backends-at-once shape: local has
+    # no backend-specific sub-block of its own to also need coverage for,
+    # so there's no field-coverage reason to show both backends here, and
+    # this block is parsed and validated for real by
+    # TestReferenceConfigUsesStrictCanonicalSchema. Switch to backend: local
+    # and drop the redis block entirely for a single-process deployment.
+    tool_sessions:
+      backend: redis
+      ttl_seconds: 1800
+      max_sessions: 10000
+      max_sessions_per_identity: 128
+      max_state_bytes: 16384
+      timeout_ms: 50
+      redis:
+        address: redis:6379
+        password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
+        database: 2
+        key_prefix: "vsr:session-tools:v1:"
+
   integrations:
     tools:
       enabled: true
@@ -2358,33 +2445,44 @@ global:
     bindings: {}
     # Named physical deployments and their shared admission budgets.
     deployments:
+      # Decision 2.0 served by the built-in model runtime. The Router starts and
+      # supervises it on a private Unix socket; set endpoint to attach to an
+      # engine started elsewhere with `vllm-sr serve <hf-model>`.
+      decision-kai:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
+        device: auto
+        profile: exact
       content-risk:
-        artifact: models/Vela-1.0-Encoder-307M-Hazard
-        provider: candle
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
+        revision: 5dd25f2cc3c98f338e6a79b667662d60f936a28d
         device: cpu
-        precision: fp32
+        profile: exact
         input:
           max_tokens: 32768
           overflow: reject
       document-ranker:
-        artifact: models/Vela-1.0-Encoder-307M-Reranker
-        provider: candle
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
+        revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
         device: cpu
-        precision: native
+        profile: exact
         input:
           max_tokens: 4096
           overflow: reject
     embeddings:
       semantic:
         qwen3_model_path: models/mom-embedding-pro
-        gemma_model_path: models/mom-embedding-flash
         mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         multimodal_model_path: models/vela-1.0-omni-nano
-        bert_model_path: models/mom-embedding-light
         use_cpu: true
         embedding_config:
           full_context: false
-          backend: candle
+          # model_runtime embeds with the built-in model runtime;
+          # openai_compatible calls the endpoint below.
+          backend: model_runtime
           model_type: mmbert
           preload_embeddings: true
           target_dimension: 0
@@ -2415,12 +2513,11 @@ global:
       pii_classifier: models/Vela-1.0-Encoder-307M-PII
       fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
       hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
-      hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
     # admission bounds concurrent inference per system model deployment.
     # Keys must match global.model_catalog.system entries (prompt_guard,
     # domain_classifier, pii_classifier, fact_check_classifier,
-    # hallucination_detector, hallucination_explainer, feedback_detector).
+    # hallucination_detector, feedback_detector).
     # max_concurrency: inference slots running at once (>= 1).
     # max_queue: bounded wait queue beyond the slots (0 = no queue).
     # queue_timeout_ms: longest a request may wait for a slot; on expiry the
@@ -2627,7 +2724,6 @@ global:
         model_id: models/Vela-1.0-Encoder-307M-Guard
         threshold: 0.5
         use_cpu: true
-        variant: mmbert32k
         max_sequence_length: 0
         # Optional token windows. The total input budget above remains 512
         # when zero; larger budgets require a qualified checkpoint and policy.
@@ -2677,7 +2773,6 @@ global:
           model_id: models/Vela-1.0-Encoder-307M-PII
           threshold: 0.9
           use_cpu: true
-          use_mmbert_32k: true
           pii_mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
           # allow (default) keeps a classify error or a provider-declared
           # truncation as a non-match for that content; block treats it as a
@@ -2709,10 +2804,8 @@ global:
           model_id: models/Vela-1.0-Encoder-307M-FactCheck
           threshold: 0.95
           use_cpu: true
-          use_mmbert_32k: true
         detector:
-          backend: candle
-          endpoint: ""
+          backend: model_runtime
           include_explanation: false
           model_ref: hallucination_detector
           model_id: models/Vela-1.0-Encoder-307M-Halu
@@ -2721,13 +2814,6 @@ global:
           min_span_length: 1
           min_span_confidence: 0.0
           context_window_size: 50
-          enable_nli_filtering: false
-          nli_entailment_threshold: 0.75
-        explainer:
-          model_ref: hallucination_explainer
-          model_id: models/mom-halugate-explainer
-          threshold: 0.9
-          use_cpu: true
       feedback_detector:
         enabled: true
         model_ref: feedback_detector
@@ -2735,8 +2821,6 @@ global:
         model_id: models/Vela-1.0-Encoder-307M-Feedback
         threshold: 0.7
         use_cpu: true
-        use_modernbert: false
-        use_mmbert_32k: true
         feedback_mapping_path: ''
       modality_detector:
         enabled: true

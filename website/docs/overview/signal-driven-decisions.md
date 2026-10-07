@@ -6,13 +6,13 @@ description: How signals, projections, decisions, plugins, algorithms, and model
 
 # Routing Pipeline
 
-Semantic Router separates request understanding, policy, and model execution.
-Each layer answers a different question, which keeps routing rules readable and
-prevents one classifier or optimization score from becoming the whole policy.
+Routed model calls pass through separate stages for request understanding,
+policy, and model execution. The selected recipe defines those stages; the
+harness owns the surrounding task loop and tool execution.
 
 ```mermaid
 flowchart LR
-    Request["Request"] --> Signals["Signals<br/>What do we know?"]
+    Request["Harness model call"] --> Signals["Signals<br/>What do we know?"]
     Signals --> Projections["Projections<br/>How does evidence combine?"]
     Projections --> Decisions["Decisions<br/>Which route is eligible?"]
     Decisions --> Algorithms["Algorithms<br/>Which candidate or plan?"]
@@ -117,6 +117,22 @@ uses the configured default provider model.
 
 See [Virtual Models](../tutorials/global/entrypoints-and-recipes)
 for the complete configuration contract.
+
+## Example: a coding call with tools
+
+A harness sends a conversation, tool definitions, and a virtual model name.
+The entrypoint selects a recipe; signals identify the coding request and its
+conversation facts. Decisions establish the route and candidate set, then
+capability and context checks narrow that set before the algorithm selects a
+model. Route plugins can apply tool policy or context compression when
+configured. The response returns to the harness, which owns any tool execution
+and the next task step.
+
+For multi-turn routing, configure session identity and protection deliberately.
+An active tool loop or nonportable provider state can restrict model switches;
+a candidate excluded by policy cannot be restored merely to preserve continuity.
+See the [agent harness guide](/docs/installation/agent-harness) for these
+integration boundaries.
 
 ## Workload, Router, and pool
 

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from cli.config_schema import surface_types
 
 from .config_contract import QuorumFailurePolicy
+from .models_decision import DecisionSelectionConfig
 
 SUPPORTED_ALGORITHM_TYPES = frozenset(surface_types("algorithms"))
 
@@ -133,9 +134,10 @@ class FusionGroundingConfig(BaseModel):
     """Configuration for grounding-aware fusion.
 
     Scores each panel response for faithfulness before the judge synthesizes,
-    then ranks/filters the panel. Uses local encoder models (hallucination
-    detector + NLI) and makes no extra LLM calls. Bounds here MUST match the Go
-    validator in pkg/config/fusion_config.go (ValidateFusionGroundingConfig).
+    then ranks/filters the panel. Uses the router's hallucination detector
+    (against the request's context, else against each peer response) and makes
+    no extra LLM calls. Bounds here MUST match the Go validator in
+    pkg/config/fusion_config.go (ValidateFusionGroundingConfig).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -149,7 +151,7 @@ class FusionGroundingConfig(BaseModel):
     policy: Literal["weight", "annotate", "filter"] | None = "weight"
     min_score: float | None = Field(default=0.0, ge=0, le=1)
     min_keep: int | None = Field(default=1, ge=0)
-    nli_contradiction_penalty: float | None = Field(default=1.0, ge=0)
+    contradiction_penalty: float | None = Field(default=1.0, ge=0)
     on_error: Literal["skip", "fail"] | None = "skip"
 
 
@@ -536,6 +538,7 @@ class AlgorithmConfig(BaseModel):
     hybrid: HybridSelectionConfig | None = None
     multi_factor: MultiFactorSelectionConfig | None = None
     prompt: PromptSelectionConfig | None = None
+    decision: DecisionSelectionConfig | None = None
     # Behavior on algorithm failure: "skip" or "fail"
     on_error: str | None = "skip"
 
@@ -550,4 +553,8 @@ class AlgorithmConfig(BaseModel):
                 raise ValueError("prompt on_error must be fallback")
         elif self.prompt is not None:
             raise ValueError("prompt configuration requires algorithm.type=prompt")
+        if self.type == "decision" and self.decision is None:
+            raise ValueError("algorithm.type=decision requires decision configuration")
+        if self.type != "decision" and self.decision is not None:
+            raise ValueError("decision configuration requires algorithm.type=decision")
         return self

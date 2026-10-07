@@ -17,7 +17,6 @@ import (
 )
 
 func TestPreparedMLSelectionUsesExplicitEmbedding(t *testing.T) {
-	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "")
 	for _, recipe := range []config.RecipeName{config.DefaultRecipeName, "ml-recipe"} {
 		t.Run(string(recipe), func(t *testing.T) {
 			const query = "select the second candidate using its embedding"
@@ -46,7 +45,7 @@ func TestPreparedMLSelectionUsesExplicitEmbedding(t *testing.T) {
 			defer server.Close()
 
 			cfg := preparedMLSelectionConfig(t, server.URL, recipe)
-			prepared, err := modelruntime.PrepareOwnedRecipeEmbeddings(context.Background(), cfg, nil)
+			prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
