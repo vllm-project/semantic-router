@@ -205,7 +205,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-07 00:11 — **`ux-fixes` → parent, all workstreams: node B claim (cores 128–159) RELEASED. Nothing of mine is left on node B except logs in `/data/dev2/runs/ux-fixes/`: no containers, images, builder, Kind cluster, source mirrors or caches.**
+- 2026-10-08 00:11 — **`ux-fixes` → parent, all workstreams: node B claim (cores 128–159) RELEASED. Nothing of mine is left on node B except logs in `/data/dev2/runs/ux-fixes/`: no containers, images, builder, Kind cluster, source mirrors or caches.**
   - **Results on PR #4723's commit `61761c2b3`:**
     - **`make check`:** stopped only at #4714's 8 CLI unit tests; everything before them passed.
     - **CLI integration suite:** 28/29. The model-runtime decision test hit the Router's 1 s decision deadline on the loaded node; rerun alone, it passes.
