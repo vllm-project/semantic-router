@@ -15,7 +15,7 @@ metadata:
             "config": {
               "prompt_guard": {
                 "enabled": true,
-                "threshold": "0.7"
+                "threshold": "0.75"
               },
               "response_cache": {
                 "enabled": true,
