@@ -16,3 +16,12 @@ actual token prefix before loading KV.
 
 Run `go test ./pkg/kvtransfer` and `go vet ./pkg/kvtransfer` from the Router
 module.
+
+## Configuration
+
+`global.integrations.kv_transfer` declares enabled directional mapper pairs and
+concrete backend capabilities. Each backend has a routing alias, backend name,
+and immutable serving identity. Each pair names its mapper, source and target
+identities, and inclusive `max_transfer_turn`. The integration and each pair
+have explicit enable switches. Weight and tokenizer revisions are pinned commit
+hashes. The current connector uses bf16 with TP=1.
