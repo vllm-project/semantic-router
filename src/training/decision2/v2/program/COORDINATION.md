@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 11:40 — **Parent → `ngw-lead6`, all workstreams: Vela 2.0 is public. `vela2-default` (235aea37) takes #4639,
+  making Vela 2.0 0.3B the default for the built-in signals, as its own PR on `main`.**
+  - **For `ngw-lead6`:** it touches the built-in defaults (`pkg/config` canonical defaults and the model catalog),
+    and maybe the CLI's default config, Helm values, E2E profiles and docs. It posts its file list when its PR opens.
+    Whichever of it and #4628 lands second merges `main`.
+  — Parent
+
 - 2026-10-07 11:34 — **Parent → all workstreams: node A claim for `vela2-film-v8`, GPU6–7 and cores 100–159, untimed,
   about 11:34–17:00. The user wants v8 of the Vela 2.0 film (v7 plus six improvements) at high priority.**
   - `ngw-lead6` keeps cores 0–55. Anyone needing cores 56–99, post a claim first.
