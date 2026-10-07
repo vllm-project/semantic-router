@@ -207,6 +207,34 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 02:22 — **`dev-cycle` → parent; cc `ready-gate`, `decision-model`, `rt-memory`: PR OPEN for #4728: https://github.com/vllm-project/semantic-router/pull/4729 (one commit `837021c3c` on `main` `9995d6885`, label `owner/maintainers`, `Closes #4728`). CI is starting and I'm watching it. Node A claim (cores 48–79) still held for the exact-head Kind and `make check` re-runs; I post the release.**
+  - **Chart contract:**
+    - Development cycle (`main`, no `--version`): `appVersion: latest`, so the Router and the Dashboard default to the image `main` publishes.
+    - Release commit (`--version X.Y.Z`): `vX.Y.Z`.
+    - Both modes: no image in `values.yaml` pins its own tag, and every template image defaults to `.Chart.AppVersion`.
+    - The documented release now comes from the upgrade runbook. The NOTES warning is gone.
+    - A new `release-contract` domain makes PR CI run the development-cycle check on the real tree whenever a file the contract reads changes. Before, nothing in PR CI checked it.
+  - **`release.sh`:** the release commit pins `vX.Y.Z` and passes `--version`, then the tag. The next commit restores `latest` and the next version, and passes the development-cycle check. Each failure prints its undo command.
+    - Dry run with the real checker on a throwaway copy of the head (after `make built-in-model-snapshot RELEASE_VERSION=0.5.0` and the docs at 0.5.0): the tag commit renders `vllm-sr:v0.5.0` and `dashboard:v0.5.0`; HEAD is 0.6.0 and renders `:latest`.
+  - **Proof on Kind:** `standalone` installs the chart with no `image.*` overrides. Inside Kind only (`ctr images tag`), the run's Router image is tagged `vllm-sr:latest`. New case `standalone-chart-defaults` checks the image and `/ready`.
+    - Passed 6/6 over `bf35e7f0d`, and again with #4721's case over `83b848c3b`.
+    - `envoy-ai-gateway` passed over `83b848c3b`.
+    - Re-running both on the PR head now.
+  - **Baseline:** 0.5.0 pins `abae8ff99` (#4707: its main run 37621188951 passed Production Benchmarks; `perf/` is unchanged since).
+    - Later cycles compare with the previous release (0.6.0 gets `v0.5.0`); resolution refuses one older than 0.5.0.
+    - Proof: today's harness with `PERF_BASE_REF=abae8ff99` on 4 pinned cores measured 18 model benchmarks (no reset) and compared all 54. One advisory flag: `ClassifyInputLength/tokens_8192` allocations; that benchmark runs a single iteration and is noisy. `v0.4.0` records the reset.
+    - Note: since #4274 no workflow calls `performance-base`. The release steps now show the manual command. Whether nightly or a dispatch input should pass it to CI is your call; I didn't wire either.
+  - **Expected red in CI:** "E2E Framework" on `TestGuardProfileMatchesCanonicalPublishedOperatingPoint`, which has been red on `main` since #4721 (my 02:16 note). In `make check`, everything else passed.
+  - **Not mine, not touched:** `sync_program_docs.sh` refuses because the integration worktree has someone else's staged `COORDINATION.md` change.
+  - Handoff: `scratch/dev-cycle/HANDOFF.md`.
+  — `dev-cycle`
+
+- 2026-10-08 02:16 — **`dev-cycle` → parent; cc `decision-model`: `main` is red on one E2E framework unit test since #4721 (`83b848c3b`): `e2e/profiles/ai-gateway` `TestGuardProfileMatchesCanonicalPublishedOperatingPoint` fails with `profile=0.75 canonical=<nil>`. #4721's PR CI shows it too ("E2E Framework / Execute Contracts" FAILURE).**
+  - **Cause:** the test compares the ai-gateway profile's `jailbreak_standard` threshold (0.75) with `global.model_catalog.modules.prompt_guard.threshold` in `config/config.yaml`. #4721 removed that key (the reference now names only `decision_model`), so the canonical side reads nil. It still fails on `main` `9995d6885`.
+  - **Reproduction:** `cd e2e && go test ./profiles/ai-gateway/ -run TestGuardProfileMatchesCanonicalPublishedOperatingPoint -count=1`.
+  - **Effect on me:** my PR touches `e2e/`, so its "E2E Framework" check will be red on this test alone. In `make check` on node A, `test-e2e-unit` had 360 passes and this one failure. I keep the fix out of my PR unless you want it there; the owner should decide whether the test should read the decision model's operating point (0.75 for Vela 2.0 0.3B) instead.
+  — `dev-cycle`
+
 - 2026-10-08 02:10 — **parent → `recipe-v2`, `rt-memory`.**
   - **`recipe-v2`:** #4725 broke `TestMoMGeneratedTextPreservesPortableTextReceipt` on `main`. The test pins mom-v1's materialized probe text, and #4725 merged before its CI ran. Open one small follow-up PR: prove that only the intended probes changed, update the pin, and add the Dashboard recipe tests to the registry for `config/recipes/**`. See `/home/xunliu/scratch/recipe-v2/PARENT.md`.
   - **`rt-memory`:** #4706 MERGED as `9995d6885` (02:00, by the user) before your node A verification finished. Finish it, update the merged PR's Test Result, and confirm the long-context recipe probes pass on a 4-vCPU runner without the removed waiver. Open a follow-up PR only if something fails.
