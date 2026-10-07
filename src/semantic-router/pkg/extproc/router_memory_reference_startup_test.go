@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,6 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
@@ -133,4 +136,56 @@ func stubRouterSessionStateStore(t *testing.T) *trackingRouterSessionStateStore 
 		sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	})
 	return store
+}
+
+// velaEmbeddingViews are the widths Vela Embedding's card advertises
+// (MATRYOSHKA_DIMENSIONS in the runtime's heads/pooled.py), largest first.
+var velaEmbeddingViews = []int{768, 512, 256, 128, 64}
+
+// servedViews is a prepared provider whose card advertises views.
+type servedViews struct {
+	embedding.Provider
+	views []int
+}
+
+func (p servedViews) EmbeddingInfo() embedding.ModelInfo {
+	return embedding.ModelInfo{Dimension: p.Dimension(), Dimensions: p.views}
+}
+
+// TestReferenceMemoryStoresUseAWidthVelaEmbeddingServes sizes every memory
+// backend of the reference config against Vela Embedding's card. A width the
+// model doesn't serve fails the store's sizing, and the router then starts
+// with memory disabled and only a warning in its log.
+func TestReferenceMemoryStoresUseAWidthVelaEmbeddingServes(t *testing.T) {
+	loaded, err := loadRouterConfig(writeReferenceConfigCopy(t, "", ""))
+	require.NoError(t, err)
+	require.True(t, loaded.Memory.Enabled)
+	require.Equal(t, string(memory.EmbeddingModelMMBERT), detectMemoryEmbeddingModel(loaded))
+	require.NotNil(t, loaded.Memory.Valkey)
+	require.NotNil(t, loaded.Memory.Qdrant)
+
+	base, err := embedding.NewFuncProvider(config.EmbeddingBackendModelRuntime, velaEmbeddingViews[0], func(context.Context, string) ([]float32, error) {
+		return nil, assert.AnError
+	})
+	require.NoError(t, err)
+	prepared := memory.EmbeddingConfig{Model: memory.EmbeddingModelMMBERT, Provider: servedViews{base, velaEmbeddingViews}}
+	for backend, configured := range map[string]int{
+		"milvus": loaded.Memory.Milvus.Dimension,
+		"valkey": loaded.Memory.Valkey.Dimension,
+		"qdrant": loaded.Memory.Qdrant.Dimension,
+	} {
+		width, err := memory.StorageDimension(configured, prepared)
+		require.NoError(t, err, backend)
+		assert.Equal(t, configured, width, backend)
+	}
+
+	var found bool
+	for _, requirement := range config.EmbeddingRequirements(loaded, string(memory.EmbeddingModelMMBERT), true) {
+		if requirement.Consumer == "memory" {
+			found = true
+			assert.Equal(t, string(memory.EmbeddingModelMMBERT), requirement.Model)
+			assert.Contains(t, velaEmbeddingViews, requirement.Dimension)
+		}
+	}
+	assert.True(t, found, "the reference config's memory store needs a prepared embedding")
 }

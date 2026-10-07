@@ -25,25 +25,6 @@ const (
 	ModelRoleMemoryExtraction = "memory_extraction"
 )
 
-// PromptGuardConfig.Variant values, selecting which local Candle-backed
-// jailbreak classifier variant to use. Mutually exclusive with Protocol - see
-// PromptGuardConfig's doc comment. An empty/unset value passed directly to
-// createJailbreakInference falls back to PromptGuardVariantCandle. This is
-// NOT the same as the canonical-config default: canonical resolution starts
-// from defaultPromptGuardModule()'s baseline (PromptGuardVariantMmBERT32K,
-// matching the bundled mmbert32k model it also defaults ModelID to) and
-// overlays user YAML, so a canonical-resolved config with no explicit
-// variant gets mmbert32k, not candle. A user who wants the plain candle
-// variant under canonical resolution must set variant: candle explicitly.
-const (
-	// PromptGuardVariantCandle runs the bundled Candle model locally
-	// (LoRA/BERT auto-detect, falling back to ModernBERT).
-	PromptGuardVariantCandle = "candle"
-	// PromptGuardVariantMmBERT32K runs the bundled mmBERT-32K model locally
-	// (32K context, YaRN RoPE, multilingual).
-	PromptGuardVariantMmBERT32K = "mmbert32k"
-)
-
 // PromptGuardConfig.OnError values live in classifier_on_error.go as
 // OnErrorAllow/OnErrorBlock - shared with every other pluggable classifier
 // backend (CategoryModel, PIIModel, ClassifierSignalRule), not just prompt

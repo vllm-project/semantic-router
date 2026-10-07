@@ -33,8 +33,9 @@ config:
       kbs: []
       embeddings:
         semantic:
-          # Prepared Vela Omni artifact loaded by the manifest-validated ORT
-          # adapter. Text, image and audio share its full 384-dimension space.
+          # Vela Omni Nano, served by the model runtime's multimodal embedding
+          # family from its published repository. Text, image and audio share
+          # its full 384-dimension space.
           multimodal_model_path: models/vela-1.0-omni-nano
           embedding_config:
             model_type: multimodal

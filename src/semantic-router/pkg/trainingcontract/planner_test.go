@@ -95,7 +95,7 @@ func TestPlanSupportedSelector(t *testing.T) {
 	}
 }
 
-func TestPlanSupportedNeuralWithExportConversion(t *testing.T) {
+func TestPlanSupportedNeuralQualifiesOnTheModelRuntime(t *testing.T) {
 	planner := NewPlanner(DefaultRegistry())
 	arch := CapabilityID("architecture/hf-modernbert@v1")
 
@@ -111,16 +111,16 @@ func TestPlanSupportedNeuralWithExportConversion(t *testing.T) {
 		},
 		QualificationTargets: []QualificationTargetRequest{
 			{
-				Key:       "candle-cpu",
-				Runtime:   "runtime/candle@v1",
+				Key:       "runtime-cpu",
+				Runtime:   "runtime/model-runtime@v1",
 				Hardware:  "hardware/cpu@v1",
 				Precision: "precision/fp32@v1",
 			},
 			{
-				Key:       "onnx-cuda",
-				Runtime:   "runtime/onnxruntime@v1",
-				Hardware:  "hardware/cuda@v1",
-				Precision: "precision/fp16@v1",
+				Key:       "runtime-rocm",
+				Runtime:   "runtime/model-runtime@v1",
+				Hardware:  "hardware/rocm@v1",
+				Precision: "precision/fp32@v1",
 			},
 		},
 	}
@@ -135,41 +135,45 @@ func TestPlanSupportedNeuralWithExportConversion(t *testing.T) {
 	for i, task := range plan.Tasks {
 		taskKeys[i] = task.Key
 	}
-	expectedTasks := []string{"train", "evaluate", "export-format-onnx-v1", "qualify-candle-cpu", "qualify-onnx-cuda"}
+	expectedTasks := []string{"train", "evaluate", "qualify-runtime-cpu", "qualify-runtime-rocm"}
 	if !reflect.DeepEqual(taskKeys, expectedTasks) {
 		t.Errorf("expected tasks %v, got %v", expectedTasks, taskKeys)
 	}
-
-	// Check dependencies
-	for _, task := range plan.Tasks {
-		switch task.Key {
-		case "export-format-onnx-v1":
-			if !reflect.DeepEqual(task.DependsOn, []string{"train"}) {
-				t.Errorf("export-format-onnx-v1 should depend on train, got %v", task.DependsOn)
-			}
-		case "qualify-candle-cpu":
-			if !reflect.DeepEqual(task.DependsOn, []string{"evaluate"}) {
-				t.Errorf("qualify-candle-cpu should depend on evaluate, got %v", task.DependsOn)
-			}
-		case "qualify-onnx-cuda":
-			if !reflect.DeepEqual(task.DependsOn, []string{"export-format-onnx-v1", "evaluate"}) {
-				t.Errorf("qualify-onnx-cuda should depend on export-format-onnx-v1 and evaluate, got %v", task.DependsOn)
-			}
+	for _, task := range plan.Tasks[2:] {
+		if !reflect.DeepEqual(task.DependsOn, []string{"evaluate"}) {
+			t.Errorf("%s should depend on evaluate only, got %v", task.Key, task.DependsOn)
 		}
 	}
 
-	// Verify two artifact variants: primary (safetensors) and converted (onnx)
-	if len(plan.ArtifactVariants) != 2 {
-		t.Fatalf("expected 2 variants, got %d", len(plan.ArtifactVariants))
+	// The model runtime loads the trained Safetensors checkpoint as it is: no conversion.
+	if len(plan.ArtifactVariants) != 1 {
+		t.Fatalf("expected only the primary variant, got %+v", plan.ArtifactVariants)
 	}
 	primary := plan.ArtifactVariants[0]
-	if primary.Format != "format/safetensors@v1" || len(primary.Qualifications) != 1 || primary.Qualifications[0].Key != "candle-cpu" {
-		t.Errorf("unexpected primary variant: %+v", primary)
+	if primary.Format != "format/safetensors@v1" || len(primary.Qualifications) != 2 {
+		t.Fatalf("unexpected primary variant: %+v", primary)
+	}
+	for _, qualification := range primary.Qualifications {
+		if qualification.Runtime != "runtime/model-runtime@v1" || qualification.Connector != "sr.model-runtime.openapi.v2" {
+			t.Errorf("unexpected qualification: %+v", qualification)
+		}
 	}
 
-	converted := plan.ArtifactVariants[1]
-	if converted.Format != "format/onnx@v1" || len(converted.Qualifications) != 1 || converted.Qualifications[0].Key != "onnx-cuda" {
-		t.Errorf("unexpected converted variant: %+v", converted)
+	req.QualificationTargets = []QualificationTargetRequest{
+		{Key: "runtime-fp16", Runtime: "runtime/model-runtime@v1", Hardware: "hardware/rocm@v1", Precision: "precision/fp16@v1"},
+	}
+	resp = planner.Plan(req)
+	if resp.Valid || len(resp.Diagnostics) != 1 || resp.Diagnostics[0].Code != CodeIncompatiblePrecision {
+		t.Fatalf("the model runtime serves classifiers in FP32 only, got valid=%v diagnostics=%+v", resp.Valid, resp.Diagnostics)
+	}
+
+	for _, hardware := range []CapabilityID{"hardware/cuda@v1", "hardware/metal@v1"} {
+		req.QualificationTargets = []QualificationTargetRequest{
+			{Key: "runtime-unvalidated", Runtime: "runtime/model-runtime@v1", Hardware: hardware, Precision: "precision/fp32@v1"},
+		}
+		if resp = planner.Plan(req); resp.Valid {
+			t.Fatalf("the model runtime has no readiness reference on %s, but the plan is valid", hardware)
+		}
 	}
 }
 
@@ -236,6 +240,21 @@ func TestPlanStructuredRejectionDiagnostics(t *testing.T) {
 			modify: func(r *TrainingPlanRequest) {
 				r.QualificationTargets = []QualificationTargetRequest{
 					{
+						Key:       "model-runtime",
+						Runtime:   "runtime/model-runtime@v1",
+						Hardware:  "hardware/cpu@v1",
+						Precision: "precision/fp32@v1",
+					},
+				}
+			},
+			expectedCode: CodeUnsupportedQualification,
+			expectedFld:  "qualification_targets.model-runtime.runtime",
+		},
+		{
+			name: "retired embedded runtime",
+			modify: func(r *TrainingPlanRequest) {
+				r.QualificationTargets = []QualificationTargetRequest{
+					{
 						Key:       "candle",
 						Runtime:   "runtime/candle@v1",
 						Hardware:  "hardware/cpu@v1",
@@ -243,7 +262,7 @@ func TestPlanStructuredRejectionDiagnostics(t *testing.T) {
 					},
 				}
 			},
-			expectedCode: CodeUnsupportedQualification,
+			expectedCode: CodeUnknownCapability,
 			expectedFld:  "qualification_targets.candle.runtime",
 		},
 	}
@@ -293,7 +312,7 @@ func TestExtensionWithoutEditingSwitchStatement(t *testing.T) {
 		DisplayName:       "Custom Third-Party Architecture Driver",
 		SupportedTargets:  []Target{LabelScores},
 		SupportedFormats:  []CapabilityID{"format/safetensors@v1"},
-		SupportedRuntimes: []CapabilityID{"runtime/candle@v1"},
+		SupportedRuntimes: []CapabilityID{"runtime/model-runtime@v1"},
 	}
 	if err := registry.RegisterArchitecture(customArch); err != nil {
 		t.Fatal(err)
@@ -339,9 +358,9 @@ func TestExtensionWithoutEditingSwitchStatement(t *testing.T) {
 		TrainingPrecision: "precision/bf16@v1",
 		QualificationTargets: []QualificationTargetRequest{
 			{
-				Key:       "candle",
-				Runtime:   "runtime/candle@v1",
-				Hardware:  "hardware/cuda@v1",
+				Key:       "model-runtime",
+				Runtime:   "runtime/model-runtime@v1",
+				Hardware:  "hardware/rocm@v1",
 				Precision: "precision/fp32@v1",
 			},
 		},
@@ -366,18 +385,28 @@ func TestExtensionWithoutEditingSwitchStatement(t *testing.T) {
 func TestPlanEnforcesDescriptorConstraints(t *testing.T) {
 	registry := DefaultRegistry()
 	minK, maxK := 1.0, 64.0
-	onnxOnly := ArchitectureDriverDescriptor{
-		ID:                "architecture/onnx-only@v1",
-		Family:            "onnx-only",
+	edge := RuntimeAdapterDescriptor{
+		ID:                  "runtime/custom-edge@v1",
+		Component:           Component{Name: "custom-edge", Version: "1"},
+		DisplayName:         "Custom Edge Runtime",
+		SupportedTargets:    []Target{LabelScores},
+		AcceptedFormats:     []CapabilityID{"format/safetensors@v1"},
+		SupportedHardware:   []CapabilityID{"hardware/cpu@v1"},
+		SupportedPrecisions: []CapabilityID{"precision/fp32@v1"},
+		Connector:           "custom.edge.v1",
+	}
+	runtimeOnly := ArchitectureDriverDescriptor{
+		ID:                "architecture/model-runtime-only@v1",
+		Family:            "model-runtime-only",
 		SupportedTargets:  []Target{LabelScores},
-		SupportedFormats:  []CapabilityID{"format/onnx@v1"},
-		SupportedRuntimes: []CapabilityID{"runtime/onnxruntime@v1"},
+		SupportedFormats:  []CapabilityID{"format/safetensors@v1"},
+		SupportedRuntimes: []CapabilityID{"runtime/model-runtime@v1"},
 	}
 	trainer := TrainerDescriptor{
 		ID:                     "trainer/constrained@v1",
 		Component:              Component{Name: "constrained", Version: "1"},
 		SupportedTargets:       []Target{LabelScores},
-		SupportedArchitectures: []CapabilityID{onnxOnly.ID},
+		SupportedArchitectures: []CapabilityID{runtimeOnly.ID},
 		SupportedExecutors:     []CapabilityID{"executor/train@v1"},
 		SupportedHardware:      []CapabilityID{"hardware/cuda@v1"},
 		SupportedPrecisions:    []CapabilityID{"precision/fp16@v1"},
@@ -387,7 +416,10 @@ func TestPlanEnforcesDescriptorConstraints(t *testing.T) {
 			"layers": {Type: "array"},
 		},
 	}
-	if err := registry.RegisterArchitecture(onnxOnly); err != nil {
+	if err := registry.RegisterRuntime(edge); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.RegisterArchitecture(runtimeOnly); err != nil {
 		t.Fatal(err)
 	}
 	if err := registry.RegisterTrainer(trainer); err != nil {
@@ -403,7 +435,7 @@ func TestPlanEnforcesDescriptorConstraints(t *testing.T) {
 			TrainingPrecision: "precision/fp16@v1",
 			Parameters:        map[string]any{"k": 8.0, "layers": []any{256.0, 128.0}},
 			QualificationTargets: []QualificationTargetRequest{{
-				Key: "onnx-cuda", Runtime: "runtime/onnxruntime@v1", Hardware: "hardware/cuda@v1", Precision: "precision/fp16@v1",
+				Key: "runtime-rocm", Runtime: "runtime/model-runtime@v1", Hardware: "hardware/rocm@v1", Precision: "precision/fp32@v1",
 			}},
 		}
 	}
@@ -422,9 +454,9 @@ func TestPlanEnforcesDescriptorConstraints(t *testing.T) {
 		{"not an array", func(r *TrainingPlanRequest) { r.Parameters["layers"] = "256,128" }, CodeInvalidParameter, "parameters.layers"},
 		{"runtime outside architecture", func(r *TrainingPlanRequest) {
 			r.QualificationTargets[0] = QualificationTargetRequest{
-				Key: "candle-cpu", Runtime: "runtime/candle@v1", Hardware: "hardware/cpu@v1", Precision: "precision/fp32@v1",
+				Key: "edge-cpu", Runtime: edge.ID, Hardware: "hardware/cpu@v1", Precision: "precision/fp32@v1",
 			}
-		}, CodeIncompatibleArchitecture, "qualification_targets.candle-cpu.runtime"},
+		}, CodeIncompatibleArchitecture, "qualification_targets.edge-cpu.runtime"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -510,8 +542,8 @@ func TestPlanRejectsDuplicateQualificationKeys(t *testing.T) {
 		TrainingPrecision: "precision/bf16@v1",
 		Parameters:        map[string]any{"r": 16},
 		QualificationTargets: []QualificationTargetRequest{
-			{Key: "a", Runtime: "runtime/candle@v1", Hardware: "hardware/cpu@v1", Precision: "precision/fp32@v1"},
-			{Key: "a", Runtime: "runtime/onnxruntime@v1", Hardware: "hardware/cuda@v1", Precision: "precision/fp16@v1"},
+			{Key: "a", Runtime: "runtime/model-runtime@v1", Hardware: "hardware/cpu@v1", Precision: "precision/fp32@v1"},
+			{Key: "a", Runtime: "runtime/model-runtime@v1", Hardware: "hardware/rocm@v1", Precision: "precision/fp32@v1"},
 		},
 	}
 
@@ -537,49 +569,68 @@ func TestPlanRejectsDuplicateQualificationKeys(t *testing.T) {
 	}
 }
 
-func TestPlanPreservesFormatVersionsInConversionIdentities(t *testing.T) {
-	registry := DefaultRegistry()
-	formatV2 := CapabilityID("format/onnx@v2")
-	runtimeV2 := CapabilityID("runtime/onnxruntime-v2@v1")
-	architectureID := CapabilityID("architecture/hf-modernbert@v1")
-	architecture, ok := registry.GetArchitecture(architectureID)
+// registerConvertedRuntime registers, out of tree, an ONNX format version, a
+// runtime that accepts only that format, and the export rule from Safetensors,
+// and lets the built-in ModernBERT architecture qualify on that runtime.
+func registerConvertedRuntime(t *testing.T, registry *CapabilityRegistry, version string) CapabilityID {
+	t.Helper()
+	format := CapabilityID("format/onnx@v" + version)
+	runtime := CapabilityID("runtime/onnx-edge-v" + version + "@v1")
+	architecture, ok := registry.GetArchitecture("architecture/hf-modernbert@v1")
 	if !ok {
 		t.Fatal("expected built-in ModernBERT architecture")
 	}
-	architecture.SupportedFormats = append(append([]CapabilityID(nil), architecture.SupportedFormats...), formatV2)
-	architecture.SupportedRuntimes = append(append([]CapabilityID(nil), architecture.SupportedRuntimes...), runtimeV2)
+	architecture.SupportedFormats = append(append([]CapabilityID(nil), architecture.SupportedFormats...), format)
+	architecture.SupportedRuntimes = append(append([]CapabilityID(nil), architecture.SupportedRuntimes...), runtime)
 	if err := registry.RegisterArchitecture(architecture); err != nil {
 		t.Fatal(err)
 	}
 	if err := registry.RegisterFormat(ArtifactFormatDescriptor{
-		ID:             formatV2,
-		Component:      Component{Name: "onnx", Version: "2"},
-		DisplayName:    "Open Neural Network Exchange v2",
+		ID:             format,
+		Component:      Component{Name: "onnx", Version: version},
+		DisplayName:    "Open Neural Network Exchange v" + version,
 		FileExtensions: []string{".onnx"},
-		DirectRuntimes: []CapabilityID{runtimeV2},
+		DirectRuntimes: []CapabilityID{runtime},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := registry.RegisterRuntime(RuntimeAdapterDescriptor{
-		ID:                  runtimeV2,
-		Component:           Component{Name: "onnxruntime", Version: "2"},
-		DisplayName:         "ONNX Runtime v2 Engine",
+		ID:                  runtime,
+		Component:           Component{Name: "onnx-edge-v" + version, Version: "1"},
+		DisplayName:         "ONNX edge runtime v" + version,
 		SupportedTargets:    []Target{LabelScores},
-		AcceptedFormats:     []CapabilityID{formatV2},
+		AcceptedFormats:     []CapabilityID{format},
 		SupportedHardware:   []CapabilityID{"hardware/cuda@v1"},
 		SupportedPrecisions: []CapabilityID{"precision/fp16@v1"},
-		Connector:           "sr.onnxruntime.embedded.v2",
+		Connector:           "custom.onnx-edge.v" + version,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.RegisterExecutor(ExecutorDescriptor{
+		ID:                "executor/onnx-exporter@v1",
+		Component:         Component{Name: "onnx-exporter", Version: "1"},
+		DisplayName:       "Safetensors to ONNX Exporter",
+		SupportedHardware: []CapabilityID{"hardware/cpu@v1", "hardware/cuda@v1"},
+		IsolationLevel:    "container",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := registry.RegisterConversion(ConversionRule{
 		SourceFormat: "format/safetensors@v1",
-		TargetFormat: formatV2,
+		TargetFormat: format,
 		Executor:     "executor/onnx-exporter@v1",
 		Hardware:     []CapabilityID{"hardware/cpu@v1", "hardware/cuda@v1"},
 	}); err != nil {
 		t.Fatal(err)
 	}
+	return runtime
+}
+
+func TestPlanPreservesFormatVersionsInConversionIdentities(t *testing.T) {
+	registry := DefaultRegistry()
+	runtimeV1 := registerConvertedRuntime(t, registry, "1")
+	runtimeV2 := registerConvertedRuntime(t, registry, "2")
+	architectureID := CapabilityID("architecture/hf-modernbert@v1")
 
 	response := NewPlanner(registry).Plan(TrainingPlanRequest{
 		SchemaVersion:     Version,
@@ -590,7 +641,8 @@ func TestPlanPreservesFormatVersionsInConversionIdentities(t *testing.T) {
 		TrainingPrecision: "precision/bf16@v1",
 		Parameters:        map[string]any{"r": 16},
 		QualificationTargets: []QualificationTargetRequest{
-			{Key: "onnx-v1", Runtime: "runtime/onnxruntime@v1", Hardware: "hardware/cuda@v1", Precision: "precision/fp16@v1"},
+			{Key: "runtime-cpu", Runtime: "runtime/model-runtime@v1", Hardware: "hardware/cpu@v1", Precision: "precision/fp32@v1"},
+			{Key: "onnx-v1", Runtime: runtimeV1, Hardware: "hardware/cuda@v1", Precision: "precision/fp16@v1"},
 			{Key: "onnx-v2", Runtime: runtimeV2, Hardware: "hardware/cuda@v1", Precision: "precision/fp16@v1"},
 		},
 	})
@@ -602,12 +654,24 @@ func TestPlanPreservesFormatVersionsInConversionIdentities(t *testing.T) {
 	}
 
 	taskKeys := make([]string, len(response.Plan.Tasks))
+	dependencies := map[string][]string{}
 	for i, task := range response.Plan.Tasks {
 		taskKeys[i] = task.Key
+		dependencies[task.Key] = task.DependsOn
 	}
-	wantTaskKeys := []string{"train", "evaluate", "export-format-onnx-v1", "export-format-onnx-v2", "qualify-onnx-v1", "qualify-onnx-v2"}
+	wantTaskKeys := []string{"train", "evaluate", "export-format-onnx-v1", "export-format-onnx-v2", "qualify-runtime-cpu", "qualify-onnx-v1", "qualify-onnx-v2"}
 	if !reflect.DeepEqual(taskKeys, wantTaskKeys) {
 		t.Fatalf("expected distinct versioned tasks %v, got %v", wantTaskKeys, taskKeys)
+	}
+	for key, want := range map[string][]string{
+		"export-format-onnx-v1": {"train"},
+		"qualify-runtime-cpu":   {"evaluate"},
+		"qualify-onnx-v1":       {"export-format-onnx-v1", "evaluate"},
+		"qualify-onnx-v2":       {"export-format-onnx-v2", "evaluate"},
+	} {
+		if !reflect.DeepEqual(dependencies[key], want) {
+			t.Errorf("%s depends on %v, want %v", key, dependencies[key], want)
+		}
 	}
 	if len(response.Plan.ArtifactVariants) != 3 {
 		t.Fatalf("expected primary and two converted variants, got %+v", response.Plan.ArtifactVariants)
@@ -617,7 +681,7 @@ func TestPlanPreservesFormatVersionsInConversionIdentities(t *testing.T) {
 		format        CapabilityID
 		qualification string
 	}{
-		{key: "primary", format: "format/safetensors@v1"},
+		{key: "primary", format: "format/safetensors@v1", qualification: "runtime-cpu"},
 		{key: "converted-format-onnx-v1", format: "format/onnx@v1", qualification: "onnx-v1"},
 		{key: "converted-format-onnx-v2", format: "format/onnx@v2", qualification: "onnx-v2"},
 	}
@@ -625,9 +689,6 @@ func TestPlanPreservesFormatVersionsInConversionIdentities(t *testing.T) {
 		variant := response.Plan.ArtifactVariants[i]
 		if variant.Key != want.key || variant.Format != want.format {
 			t.Errorf("variant %d = (%q, %q), want (%q, %q)", i, variant.Key, variant.Format, want.key, want.format)
-		}
-		if want.qualification == "" {
-			continue
 		}
 		if len(variant.Qualifications) != 1 || variant.Qualifications[0].Key != want.qualification {
 			t.Errorf("variant %q has qualifications %+v, want only %q", variant.Key, variant.Qualifications, want.qualification)

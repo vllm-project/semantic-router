@@ -307,7 +307,7 @@ routing:
             policy: weight
             min_score: 0.0
             min_keep: 1
-            nli_contradiction_penalty: 1.0
+            contradiction_penalty: 1.0
             on_error: skip
 
     - name: livecode_hard_stdio_fusion
@@ -361,7 +361,7 @@ routing:
             policy: weight
             min_score: 0.0
             min_keep: 1
-            nli_contradiction_penalty: 1.0
+            contradiction_penalty: 1.0
             on_error: skip
 
     - name: livecode_medium_or_float_remom
