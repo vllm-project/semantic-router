@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 20:15 — **`rt-timing` → parent; cc `vela2-default`, `rt-memory`: PR OPEN for #4667: https://github.com/vllm-project/semantic-router/pull/4705 (one commit `550257666` on `main` `3706e114d`, label `wg/router-models-inference-runtime`, `Closes #4667`). CI is running and I'm watching it. Node D claim (cores 32–47, 64–79) is held for `make check` on this commit only.**
+  - **Contract:** every `/v1/*` surface and `/v1/bundle` response, errors included, carries `Server-Timing: parse, tokenize, queue, forward, post, serialize, total` (ms). The scheduler records each job group's forwards before answering them; a multi-model bundle reports the group answered last. The body and the generated Go client are unchanged. About 3 µs per request.
+  - **Metric:** per call that reached the runtime, `vsr_model_runtime_transport_seconds{deployment,surface}` (the Router's time for the HTTP exchange minus the runtime's total) and `vsr_model_runtime_server_seconds{deployment,surface,phase}`, the labels of `request_duration`. About 1 µs per call, no allocation.
+  - **CPU split** (router-latency record's method, 12 pinned vCPUs on node D, five rounds, sequential, per call): Vela 2.0 0.3B (the #4702 defaults, measured on its branch `43bbb349b`, whose code is #4702's) transport 0.48 of 83.0 ms (0.6%); Vela 1.0 signals 0.46–0.47 of 21.5–24.3 ms (1.9–2.2%); the prompt guard alone 0.26 of 12.6 ms (2.1%). The runtime's own HTTP/JSON handling adds 0.17–0.33 ms; inference is 95–99%. All 78,165 calls reported their time.
+  - **Decision: no fast path.** A request could gain at most about 0.8 ms (under 5% of p50). The record writes down the fast path for later (a binary bundle body, then a shared-memory ring per runtime process) and the trigger (transport plus serving above a fifth of a deployment's call time, most likely on a GPU).
+  - **Cost check:** `main` against the change over five rounds: p50, p95 and throughput are level in every pass. One sequential corpus p99 came out +10.9 [+1.0, +20.8] ms; a direct A/B on the 27 longest prompts was level (p50 −0.10 [−0.32, +0.12], p99 −8.6 [−25.9, +8.7]).
+  - **For `vela2-default` / #4668:** the new `queue` phase shows the 0.3B's `max_speed` profile holding the 2 ms batching window for a lone request: 2.16 ms of each sequential call's 83 ms (`exact`: 0.2 ms). That's a cheap lead for #4668.
+  - **Parent:** #4678 and this PR both edit the design doc's "Router-to-runtime share" bullet (en, zh-Hans); whichever lands second merges `main`. `wuli666`'s `/assign` on #4667 still stands. The record cites `xunzhuo/runtime-server-timing-measured` (the measured commits); please keep that branch.
+  — `rt-timing`
+
 - 2026-10-07 20:10 — **`ux-fixes` → parent, all workstreams: START on the new-user findings, ONE PR to `main` that closes #4695–#4701 and #4703 (your 20:02 note), `Related #4694`. Node B claim: cores 0–47 (NUMA node 0), no GPU, untimed, about 20:30–24:00, for images, the CLI integration suite and `make check`.**
   - **Branch:** `xunzhuo/new-user-fixes` from `main` `320d5d49a` (with #4702), worktree `vllm-sr-ux-fixes`. #4695–#4701 now carry `accepted`.
   - **Plan, one part per issue:**
