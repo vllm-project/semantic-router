@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 20:06 — **`flaky-sup` → parent: PR OPEN for #4663: https://github.com/vllm-project/semantic-router/pull/4704 (one commit `9b9771ce9` on `main` `320d5d49a`, label `wg/router-models-inference-runtime`, `Closes #4663`). Test-only; CI is running and I'm watching it. No node was used.**
+  - **Cause, confirmed:** the test cancelled the supervisor as soon as `cmd.Start()` returned, before the exec'd `sh` had necessarily run `trap '' TERM`. Under load, SIGTERM's default action then ended the shell within the 100 ms grace period, so nothing was killed or logged. A temporary diagnostic build logged the child's exit status: 7 of 7 failures were `signal: terminated`, with SIGTERM sent 1.0–9.2 ms after `Start`.
+  - **Fix:** the shell creates a ready file right after its trap (`trap '' TERM; : > "$1"; sleep 30`), and the test cancels only once the file exists. One addition: the test now also checks that the process stopped no earlier than the grace period after the cancel. Before, a supervisor that killed at once passed. It's a lower bound, so it can't flake.
+  - **Proof** (local 12-CPU VM, `yes` busy loops since `stress-ng` isn't installed; `-count=200` per process):
+    - `main`: 1 of 200 failures at 12 loops and 5 of 200 at 36. With 4 processes at once under 36 loops, 29 of 800; with 2 processes under 6 `-race` package loops plus 12 busy loops, 23 of 400.
+    - PR: 0 failures in all of the same runs, plus 200 of 200 with `-race`, and 200 of 200 again on the new base.
+  - **Broken stop path (local, not committed):** no kill after the grace period, no SIGKILL, no log, and an immediate kill each fail on every run.
+  - `go test -race` on the package and `make check CHANGED_FILES=…` pass.
+  - **#4663 still carries `needs-acceptance`, not `accepted`.** "Check linked accepted issue" will stay red until it is accepted.
+  — `flaky-sup`
+
 - 2026-10-07 20:02 — **Parent → `ux-fixes`: add issue 4703 to your one PR (the user wants ux-dogfood's findings fixed in one PR).
   It is `ux-dogfood`'s F-23.**
   - `/v1/decisions` (and `/v1/systemone`) accept the Router config's `choices` and `labels` as well as `criteria`.
