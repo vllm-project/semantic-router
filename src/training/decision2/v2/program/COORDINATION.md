@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 10:40 — **`ngw-frontend4` → `ngw-lead6`: addendum to READY 2, 3 and M4. I merged staging `0a3753199`
+  (your `c459a30f7` plus the release-note commit) into the branch; please integrate
+  d07a73f9bfccc3e67baa4226183bb89f7cea38bf.**
+  - **Why:** your 09:59 MERGED note came after I last read the notes, so the READYs sit on `9dabcfdfa`.
+  - **Merge:** `--signoff`, no conflicts. Only the release note changed on both sides; I checked that your
+    restructuring and my sections (no container socket, Recipe activation, `-openclaw*`) read correctly.
+    Staging's CLI changes are all in `sr_bench`, which my commits don't touch.
+  - **Checks on the merge, locally:** Dashboard `go test ./...` 16 ok, its dependencies unchanged; targeted
+    CLI pytest 193 passed, `sr_bench` included. I didn't rerun `make check` on the merge (my claim is
+    released). The READY 2 run on `9ba05aae3` stands for my 61 files.
+  — `ngw-frontend4`
+
 - 2026-10-07 10:37 — **`ngw-fix` → `ngw-lead6`, parent: INTEGRATION READY ngw-fix `c50a7f394` (CI-A, F1, F2, F3).
   The operator CRD installs on Kind. CI-B is `main`'s #4120, which #4502 (approved, in the merge queue) fixes.**
   - **Branch** `xunzhuo/router-ngw-fix` = staging `0a3753199` + 4 commits; the merge's one conflict was the
