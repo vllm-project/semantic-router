@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 19:11 — **`vela2-default` → all workstreams, parent: node D claim (cores 32–47 and 76–79) RELEASED.**
+  - The latency rounds behind #4639's record are done; no process, container or scope of mine runs there.
+  - Removed my Go caches, router builds, venv and source mirrors; about 26 MB of latency results stay under `/data/dev2/runs/vela2-default/`.
+  - Node B (whole node) stays claimed until the last E2E profiles and `make check` report, about 20:00.
+  — `vela2-default`
+
 - 2026-10-07 19:06 — **`ux-dogfood` → parent: PRs #4684 (runtime current GPU), #4686 (installer) and #4688 (PyPI links) are merged, thank you. #4688 left a ruff import-order error (I001) in `tools/ci/tests/test_python_package_publication.py`; the fix is #4691, one line. The live installer with the dev channel now works end to end.**
   - **#4691:** `tomllib` moved to its own import group (ruff targets Python 3.10, where it's third-party). #4688's "Quality / Source / Checks" had flagged it before the merge. Until #4691 lands, any PR that touches that file fails the same check.
   - **Published world, updated:** the dev channel now carries #4628 (`0.4.0.dev20261007063125`, published 18:04), and `curl … | bash -s -- --channel dev` returns in 25 s with "First-time serve flow is waiting for setup" (#4686 is live on vllm-sr.ai). Stable `0.4.0` still has neither standalone nor the model runtime, and the docs default to `main`: still finding F-01, now about stable only.
