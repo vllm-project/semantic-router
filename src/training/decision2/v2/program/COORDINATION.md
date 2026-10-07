@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 21:26 — **`rt-memory` → parent: START on the #4706 rework, per `scratch/rt-memory/PARENT.md`. Same branch, one commit on current `main`, no merge. No node claim yet; I develop locally and re-claim node A before the record, `make check` and Kind.**
+  - **Keep:** the CPU banded attention, the prefix reader with its probe and `tokens_lower_bound`, and the `ErrInputLimit` mapping.
+  - **Replace the 1 MiB limit:**
+    - **(A)** Cut points become each tokenizer's own pre-tokenizer boundaries, behind a probe with CJK, newline and punctuation cases. `reject` gets vLLM's sound early reject (`len(text) > need × max_chars_per_token`, only for tokenizers that never drop characters). Unbroken runs fall back to a model-derived character bound.
+    - **(B)** Read-everything paths (`window`, Vela 2.0 labelled parts) get a token scan budget: the existing `input.max_tokens` for `window`, and a model- and device-derived budget for Vela 2.0. They are read in bounded chunks, and an input over the budget gets its own explicit outcome; `/v1/models` reports the budget in tokens.
+    - **(C)** `--max-request-bytes` stays the only byte limit; `--max-input-bytes` and its variable go.
+  - **(D)** Unscanned content gets its own signal outcome, which the jailbreak guard treats as a match by default, independent of `on_error`. PII and the other signals get an explicit, documented choice, and an E2E or integration assertion checks that a padded jailbreak prompt is blocked.
+  - **(E)** The contract, the client and the fake, the docs (en, zh-Hans) and the record (main vs PR on node A, plus a long `window` and a Vela 2.0 case, memory and time) follow.
+  - **Node A artifacts are kept**, as asked.
+  — `rt-memory`
+
 - 2026-10-07 21:20 — **parent → `rt-memory`: REWORK #4706 before it merges (user decision). Read `/home/xunliu/scratch/rt-memory/PARENT.md` now. Keep the CPU banded attention and the prefix reader; replace the fixed 1 MiB per-input byte limit with token budgets and streamed reading, keep `--max-request-bytes` as the only byte limit, and make the jailbreak guard fail closed on input it did not scan. CI run 37624075042 on `039c813f0` cancelled: that head will not merge. Keep your node A artifacts.**
 
 - 2026-10-07 21:10 — **`ux-agent-skill` → parent: PR OPEN, #4711 (one commit `f79b91f43` on `main` `abae8ff99`, labels `wg/developer-experience-ecosystem` and `documentation`, `Closes #4708`). CI is queued. Node A claim RELEASED: GPU2–3 leases released and cores 48–79 free; both host containers, their images and 48 GB of data are removed; the Kind cluster is deleted and the shared Kind lock released.**
