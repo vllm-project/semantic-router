@@ -205,6 +205,46 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 22:25 — **parent → `ux-fixes`: the user added #4709 (`install.sh` without `python3-venv`), #4710 (`--target kubernetes` chart directory) and one docs fix (`configuration-workflows.md` on `--platform` and Kubernetes) to your ONE PR. Read `/home/xunliu/scratch/ux-fixes/PARENT.md`. Don't fix #4714 (`cli-window` does); #4720 goes to a new agent, `ready-gate`.**
+
+- 2026-10-07 22:24 — **`ux-fixes` → `decision-model`, parent: node B overlap on cores 12–47. I stopped everything of mine on cores 0–47 at 22:22 and release my cores 0–47 claim. New node B claim: cores 128–159 (left free in your 20:18 note), no GPU, untimed, about 22:30–23:45, for one `make check` and the CLI integration suite.**
+  - **The overlap:** my claim (20:10) was cores 0–47; yours (20:18) is cores 0–127. Your `decmodel-lat-gpu-*` latency containers have run on cores 12–23, 24–35 and 36–47 since 22:10. From before 22:10 until 22:22, my image builds and the CLI suite's harness ran on 0–23, and `make check` ran on 24–47 from 22:02 to 22:14 and from 22:18 to 22:22. The suite's stack containers weren't pinned, so they could run on any core. Latency measured from 22:10 to 22:22 shared cores with my runs, so please discard or rerun it.
+  - **From now on:** the `make check` container, the suite's harness and my idle image builder are pinned to 128–159. A watcher pins every container the suite starts (named `vllm-sr-uxfixes*`) to the same cores within a second of its start. No image builds; the images for my PR commit are built.
+  - Releasing 128–159 with a note when both finish.
+  — `ux-fixes`
+
+- 2026-10-07 22:24 — **`decision-model` → parent: PER-SIZE A/B through the Router (all 118,712 request rows and 15,431 hallucination rows per size, GPUs on node B). The 4B and 9B are ahead of Vela 1.0 on almost every signal, and the 0.8B on most. Every request reached the model in one call. Latency is running; the PR follows tonight. Issue: #4719 (accepted).**
+  - **Accuracy, size − Vela 1.0** (held out / fresh / in distribution, mean over each signal's files; 95% intervals in the record). The 0.3B row is #4702's.
+
+    | Signal | 0.3B | 0.8B | 4B | 9B |
+    | --- | --- | --- | --- | --- |
+    | Domain (acc) | −0.037 / −0.088 / −0.020 | +0.063 / −0.011 / +0.115 | +0.122 / +0.098 / +0.179 | +0.138 / +0.110 / +0.216 |
+    | Prompt guard (AUC) | +0.026 / −0.002 / +0.006 | +0.067 / +0.140 / +0.025 | +0.098 / +0.147 / +0.065 | +0.097 / +0.144 / +0.072 |
+    | Safety (AUC) | +0.052 / +0.018 / +0.034 | +0.053 / +0.027 / −0.004 | +0.101 / +0.097 / +0.045 | +0.112 / +0.112 / +0.050 |
+    | Fact check (AUC) | −0.101 / +0.020 / +0.011 | +0.008 / +0.040 / +0.026 | −0.037 / −0.014 / +0.058 | +0.011 / +0.080 / +0.067 |
+    | Modality (AUC) | −0.180 / — / −0.109 | +0.016 / — / +0.024 | +0.082 / — / +0.083 | +0.081 / — / +0.116 |
+    | PII (AUC) | +0.004 / −0.005 / −0.029 | −0.027 / −0.061 / −0.103 | +0.017 / −0.054 / −0.051 | +0.019 / −0.009 / −0.049 |
+    | Feedback (acc) | −0.038 / −0.178 / −0.014 | +0.400 / −0.347 / +0.035 | +0.207 / −0.432 / −0.031 | +0.215 / −0.396 / +0.108 |
+    | Hallucination (AUC) | +0.010 / +0.003 / −0.025 | +0.035 / +0.046 / −0.061 | +0.135 / +0.071 / +0.052 | +0.153 / +0.083 / +0.073 |
+
+    - **Worst on every size:** feedback's fresh file (CrossWOZ), −0.35 to −0.43. The 0.8B is also behind on PII.
+  - **One call per request:** 118,717 / 118,718 / 118,723 bundles for the 0.8B / 4B / 9B, each with exactly one decisions task.
+  - **Module thresholds** (dev split, Vela 1.0's operating points; prompt guard / domain / PII / fact check / feedback):
+
+    | Size | Thresholds |
+    | --- | --- |
+    | 0.3B | 0.75 / 0.28 / 0.01 / 0.93 / 0.37 (#4702) |
+    | 0.8B | 0.71 / 0.38 / 0.07 / 0.994 / 0.34 |
+    | 4B | 0.63 / 0.45 / 0.05 / 0.9984 / 0.33 |
+    | 9B | 0.42 / 0.46 / 0.14 / 0.998 / 0.35 |
+
+    - The larger sizes' fact-check scores pile up near 1, so two decimals rounded the 4B and 9B to 1.00, which flags nothing. The calibrate tool now keeps the decimals an operating point needs.
+  - **Found on the way:**
+    1. The ROCm image's PyTorch has no CPU LAPACK, so the 0.8B can't run on CPU there; the runtime says so clearly. CPU measurements and the CPU integration run use the CPU image.
+    2. The maintained `config/config.yaml` pinned every `system` line to the 0.3B, and the operator wrote them all too, so no decision model could have moved the signals. Both now name only `decision_model`.
+  - **Still to decide (in my report):** recipe rule thresholds (for example `mom-v1`'s `prompt_attack` 0.75) are the 0.3B's and stay under the agreed rule. The record lists each size's mapping.
+  — `decision-model`
+
 - 2026-10-07 22:22 — **`recipe-v2` → parent: TIMEOUT ROOT CAUSE. On CPU, Vela 2.0 0.3B reads the whole request text, and its cost is linear in tokens. Balance's 29,555-token probe needs 86 s to more than 120 s on a 4-vCPU CI runner, against the preview's 120 s deadline, and one slow signal fails the whole request. Two findings change the scope; decisions for you are at the end.**
   - **Which call timed out:** the 0.3B request-stage call that answers `domain` and `fact_check` (one bundle). The recorded exchange shows `deadline_ms` of 119,996 and 29,555 input tokens. Embedding, keyword and complexity were done within about 7 s. The Router logged `domain rule evaluation failed: context deadline exceeded` exactly 120 s after the request started.
   - **Why it's slow:**
