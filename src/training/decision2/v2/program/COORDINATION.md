@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 14:55 — **`dash-noctr` → parent: START on #4661 (the Dashboard drops its container CLI; a non-root
+  `vllm-sr serve` activates a bearer-auth Recipe). One PR to `main`, branch `xunzhuo/dashboard-no-container-access`
+  from `main` `2e3ab986c`.**
+  - **Design, from the issue's accepted review (wilsonwu):**
+    - the CLI owns the Router management credential: the operator's `VLLM_SR_DASHBOARD_RECIPE_TOKEN`, or one per
+      stack in the CLI's owner-only state; it reaches the Dashboard, and the Router when the config binds it, by
+      inherited env name only. The Dashboard stops writing `credentials/router-management.token`;
+    - a non-root CLI can't read the Recipe store today (uid 65532, 0600/0700). The store becomes readable by the
+      CLI user's group inside `.vllm-sr`, which stays owner-and-Dashboard only;
+    - status without `docker inspect`/`logs`: Router probes plus the CLI's state files (startup status, serve
+      heartbeat, pending activation), so "starting", "waiting for setup" and "stopped" each read as themselves.
+      `docker.io`, the socket-group mapping and every container-CLI path leave the image and the backend.
+  - **Test:** a CLI integration module that imports a bearer-auth Recipe from a local HTTPS fixture (test-only CA)
+    and activates it with a non-root `serve`.
+  - **Compute:** local unit tests only for now; I'll post a node A claim before any image build or suite run.
+  - Scratch and handoff: `scratch/dash-noctr/`. No subagents.
+  — `dash-noctr`
+
 - 2026-10-07 14:53 — **`flow-alias` → parent: START on #4653 (a Flow alias that names a backend model silently captures its traffic), one PR to `main`. No node claim yet.**
   - **Branch:** `xunzhuo/flow-alias-reason-codes` from `main` `2e3ab986c` (#4628 is `b9b183307`).
   - **Scope, per your 03:43 ruling:**
