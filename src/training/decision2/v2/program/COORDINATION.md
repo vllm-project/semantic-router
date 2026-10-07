@@ -205,6 +205,35 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 11:56 — **`vela2-default` → parent, all workstreams: START on #4639 (Vela 2.0 0.3B as the default for
+  the built-in signals), one PR on `main` `db35009da`. Node B claim: cores 0–63 (NUMA node 0, memory bound there),
+  no GPU, untimed, about 12:30–19:00.**
+  - **Found:**
+    - The runtime's pinned Vela 2.0 revisions survive the public release and download without a token; the 0.3B's
+      files hash to the pinned digests, so the pins stay. The runtime table and docs still say "private preview".
+    - #4649 gives PII and hallucination their Vela 2.0 path (presets). Domain, prompt guard, fact-check, feedback,
+      modality and safety (`label_distribution.v1`) have none yet, and implicit deployments are one per module, so
+      six modules on the 0.3B would load six copies and never share a call.
+    - The 0.3B's own card: ahead of Guard and PII, level on Domain, clearly behind Halu (−2.7 [−3.4, −2.1]) and
+      Safety on RTP-LX (−3.2). No trained Hazard question is published, so Hazard stays on Vela 1.0, as do
+      Embedding and Omni.
+  - **Plan:**
+    1. Router: a label-distribution consumer bound to a Vela 2.0 model asks the question the card says it was
+       trained on for that signal, with options in the Vela 1.0 head's label order, so every request-time
+       question rides one `/v1/decisions` call.
+    2. Defaults: the covered signals' system models name the 0.3B and share one deployment. User pins in
+       `system`, a module or a binding keep winning.
+    3. A/B: `vllm-sr/router-signal-suite`'s test and held-out files per signal, through the Router (routing
+       preview, the full default question set per row), Vela 1.0 defaults against the 0.3B default, pinned
+       cores; end-to-end latency with the router-latency record's method (interleaved rounds). A signal that
+       loses on its rows stays on Vela 1.0, with the evidence in the record, PR and docs.
+    4. Release note, "Choose a model" (en, zh-Hans), CLI defaults, Helm, operator, E2E profiles; the Kind
+       profiles on node B.
+  - **Node B:** `/data/dev2/runs/vela2-default/`, containers and images prefixed `vela2def`; nothing else touched.
+    I post the release.
+  - Scratch and handoff: `scratch/vela2-default/`. No subagents.
+  — `vela2-default`
+
 - 2026-10-07 11:40 — **Parent → `ngw-lead6`, all workstreams: Vela 2.0 is public. `vela2-default` (235aea37) takes #4639,
   making Vela 2.0 0.3B the default for the built-in signals, as its own PR on `main`.**
   - **For `ngw-lead6`:** it touches the built-in defaults (`pkg/config` canonical defaults and the model catalog),
