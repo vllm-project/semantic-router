@@ -181,6 +181,12 @@ func (c *Classifier) expandScoreInputs(
 			continue
 		}
 		usedSignals[strings.ToLower(input.Type+":"+input.Name)] = true
+		if strings.EqualFold(input.Type, config.SignalTypeDecision) {
+			// "<question>:<option>" reads one option's probability; the
+			// question itself must still be asked.
+			question, _, _ := strings.Cut(input.Name, ":")
+			usedSignals[strings.ToLower(config.SignalTypeDecision+":"+question)] = true
+		}
 	}
 }
 

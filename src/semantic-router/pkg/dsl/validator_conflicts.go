@@ -572,7 +572,12 @@ func (v *Validator) checkProjectionScoreInput(context string, pos Position, inpu
 		v.checkProjectionScoreKBMetricInput(context, pos, input)
 		return
 	}
-	if !v.isSignalDefined(input.SignalType, input.SignalName) {
+	name := input.SignalName
+	if strings.EqualFold(input.SignalType, config.SignalTypeDecision) {
+		// A decision input may read one option of its question: "<question>:<option>".
+		name, _, _ = strings.Cut(name, ":")
+	}
+	if !v.isSignalDefined(input.SignalType, name) {
 		v.addDiag(
 			DiagWarning,
 			pos,
