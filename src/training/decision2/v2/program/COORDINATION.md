@@ -205,6 +205,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 23:30 — **`rt-memory` → parent: #4706 REWORK IN PROGRESS (local, not pushed). Parts A–E are done and tested; I'm now adding your 22:3x addendum (per-signal deadline + routing/safety read split). The 1 MiB byte limit is gone. ETA for the updated PR, with the re-measured record, mom-v1 on 4 node A cores, `make check` and Kind: about 08:00.**
+  - **Done (local; the runtime CPU suite passes 788 of 789, and the one failure is the reject-memory budget, now re-measured at 50 MiB, fixture, and set to 80; the touched Go packages pass):**
+    - **Bounded reads, exact.** Cuts at whitespace, punctuation, symbols and CJK, kana or Hangul. Runs without boundaries (base64, hex, Chinese without spaces) are cut in-run, keeping the tokens that end 1,024 characters before the cut. Every cut kind is probe-gated per tokenizer.
+      - Checked against whole tokenization on all 6 built-in tokenizer designs and 10 adversarial text kinds: 0 mismatches.
+      - The probe caught a real WordPiece hazard (marks stripped under the 100-character word limit) and a look-ahead normalizer.
+    - **Sound early reject** at budget × longest vocabulary entry (× 3 under NFC); none for tokenizers that drop characters.
+    - **New item code `scan_budget_exceeded`.** It covers `window` reads over `max_tokens`, and Vela 2.0 parts over `limits.max_scan_tokens`.
+      - The Vela 2.0 scan budget is device-derived, can be set in the models-file option, and per request with decisions `options.max_tokens`.
+      - The Router sends a question deployment's `input: {overflow: window, max_tokens}` as that budget.
+      - Windows within the budget are identical to `main`'s (tested). `word_windows` now uses bisection, with the same output.
+    - **The jailbreak rule fails closed on unscanned content**, under a distinct type `unscanned` and whatever `on_error` says. Unscanned means an input limit, the scan budget, or a truncated read. The truncated read was already an untyped "incomplete" error that `on_error: allow` let through. This holds on the request and response paths.
+    - **PII keeps `on_error`** (documented).
+    - Contract 2.1.0, the Go client regenerated, the runtime fake updated.
+    - **Integration test:** a padded attack, past a Vela 2.0 scan budget and past a long-context guard's input, is blocked under the default `on_error`.
+  - **Addendum, decisions I'm taking unless you object:**
+    - Vela 2.0 decisions get `options.overflow: truncate` (read only the first `max_tokens`, no error).
+    - **Routing questions** (domain, fact-check, feedback, modality, decision rules, the model selector) ask with `truncate` at the scan budget. The CPU default drops from 4 inputs to 1 (8,192 tokens for the 0.3B); a GPU keeps 32.
+    - **Safety questions** (`prompt_guard`, `safety.*` and PII spans) ask in `window` mode up to a larger hard cap. The cap is configurable; its default is 16 inputs on a CPU and 64 on a GPU.
+      - A safety scan that misses its signal deadline, or a text over the cap, is unscanned.
+      - For jailbreak and safety that is a match by default, with an explicit opt-out.
+      - **PII follows the same rule** (fail closed, with an opt-out), so long text routes as private.
+    - **Per-signal deadline:** model-runtime signals get the request deadline minus max(1 s, 10%), or 45 s when the request has none (serving). It is configurable; a routing signal that times out resolves through `on_error`.
+  - **Risk to flag now:** on 4 CPU cores the 0.3B scans about 1,270 tokens/s (CI runners 250–350). So a safety scan of the 30K–240K mom-v1 probes cannot finish within any deadline under 120 s, and fails closed if those decisions read jailbreak or PII. I'll report the numbers and options rather than loosen anything.
+  — `rt-memory`
+
 - 2026-10-07 23:04 — **`decision-model` → parent; cc `ux-fixes`: PR OPEN for #4719: https://github.com/vllm-project/semantic-router/pull/4721 (one commit `92625851e` on `main` `6e617bd1b`, label `wg/router-models-inference-runtime`, `Closes #4719`). CI is running; `make check` runs on node B now. Node B GPU0–7 leases are RELEASED; cores stay claimed until `make check` reports.**
   - **Verified on this change** (images built from it):
     - **CPU:** `vllm-sr serve --decision-model Vela-2.0-0.8B` writes the field as a new version (`config versions` lists two), `status` shows it, every binding runs on `@Vela-2.0-0.8B`, a decision question without a `deployment` is answered, and a restart without the flag keeps it. The 9B without `--platform` fails before startup.
