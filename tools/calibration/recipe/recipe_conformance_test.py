@@ -319,6 +319,7 @@ class RecipeConformanceTest(unittest.TestCase):
         )
         by_name = {recipe.name: recipe for recipe in inventory}
         self.assertEqual(by_name["vela-amd"].required_devices, ("rocm:0",))
+        self.assertEqual(by_name["decision-balance"].required_devices, ("gpu",))
         with tempfile.TemporaryDirectory() as directory:
             args = recipe_conformance.build_parser().parse_args(
                 ["--output-dir", directory, "plan", "--shards", "3"]
@@ -332,11 +333,14 @@ class RecipeConformanceTest(unittest.TestCase):
                 for shard in matrix["include"]
                 for name in shard["recipes"].split(",")
             }
-            self.assertEqual(planned, set(by_name) - {"vela-amd"})
+            self.assertEqual(planned, set(by_name) - {"decision-balance", "vela-amd"})
             receipt = json.loads((Path(directory) / "cpu-eligibility.json").read_text())
             self.assertEqual(
                 receipt["excluded"],
-                [{"recipe": "vela-amd", "required_devices": ["rocm:0"]}],
+                [
+                    {"recipe": "decision-balance", "required_devices": ["gpu"]},
+                    {"recipe": "vela-amd", "required_devices": ["rocm:0"]},
+                ],
             )
 
     def test_accelerator_requirements_follow_devices_not_recipe_names(self) -> None:

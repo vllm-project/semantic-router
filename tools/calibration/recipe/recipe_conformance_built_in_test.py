@@ -203,11 +203,14 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                     }
                 ],
             )
+            hardware = {"decision-balance", "vela-amd"}
             self.assertTrue(
-                all("vela-amd" not in row["recipes"].split(",") for row in matrix)
+                all(not hardware & set(row["recipes"].split(",")) for row in matrix)
             )
             receipt = json.loads((Path(directory) / "cpu-eligibility.json").read_text())
-            self.assertEqual(receipt["excluded"][0]["recipe"], "vela-amd")
+            self.assertEqual(
+                {excluded["recipe"] for excluded in receipt["excluded"]}, hardware
+            )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "built-in/latest").mkdir(parents=True)

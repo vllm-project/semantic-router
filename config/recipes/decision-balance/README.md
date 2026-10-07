@@ -1,0 +1,163 @@
+# Decision Balance Recipe Model Card
+
+## Overview
+
+Decision Balance turns three open models into one virtual model,
+`vllm-sr/auto`, and spends reasoning only where a request needs it. The
+Vela-2.0-4B decision model answers every routing question in one call per
+request: what kind of work the request is, how much reasoning it needs,
+whether exact facts matter, what a good answer needs, and whether the user is
+correcting an earlier answer. A projection turns those answers into a
+reasoning effort; decisions and algorithms turn the effort into a model and
+its reasoning setting.
+
+## Model details
+
+| Model | Role | Relative cost per 1M output tokens |
+| --- | --- | ---: |
+| `zai/glm-5.3-flash` | Agentic work, exact facts, corrections, long inputs and research-level requests | 4.35 |
+| `qwen/qwen3.8-flash-next` | Fast reasoning for code, mathematics and instruction following | 1.99 |
+| `qwen/qwen3.8-27b` | Default model; images and everyday requests | 1.00 |
+
+Costs are relative GPU-seconds per output token, measured on AMD Instinct
+MI325X at 32 concurrent requests with each model on its own replica (GLM on
+four GPUs, Flash-Next on two, the 27B on one), and close to that 4 : 2 : 1 GPU
+ratio. Input tokens are priced at a tenth of output tokens. The currency is
+`XXX`, the ISO code for no currency: these are units, not prices.
+
+The Qwen3.8 models run with thinking off (`use_reasoning: false`) or at
+`reasoning_effort` `medium` or `xhigh`. GLM-5.3-Flash always thinks; the recipe
+sets its `reasoning_effort` to `low`, `high` or `max` per decision.
+
+## Intended use
+
+Use this recipe to serve one virtual model over a pool with a strong but
+expensive model, a fast mid-size model and a small default, when most traffic
+needs little reasoning and a minority needs a lot. It suits mixed assistant
+traffic: chat, writing, code, mathematics, factual questions, tool use and
+image questions.
+
+It is not a privacy or compliance policy: every model in the pool may see any
+request. Choose a privacy recipe when requests must stay on a restricted
+model.
+
+## Routing behavior
+
+The decision model answers these questions in the call that also answers the
+prompt guard and safety signals:
+
+| Question | Type | Asks |
+| --- | --- | --- |
+| `task` | choice | What kind of work the request asks for: chat, writing, code, stem, facts, analysis, agentic or document |
+| `difficulty` | score | How much reasoning a strong expert needs, from 0 (none) to 4 (research level) |
+| `precise_facts` | noul | Whether the answer depends on specific facts most people would have to look up |
+| `needs` | set | Which of deliberation, tools, verification, long output and creativity a good answer needs |
+| `correction` | noul | Whether the user says the assistant's previous answer was wrong |
+
+Heuristic signals cover what needs no model: images, declared tools, an active
+tool loop, an earlier assistant answer, input length and a request for a brief
+answer.
+
+The effort score is `0.3 × difficulty + 0.35 × P(deliberation) +
+0.1 × P(verification) − 0.35 × brief request`, banded into off (below 0.4),
+medium (below 0.8), high (below 1.15) and max.
+
+Decisions, highest priority first:
+
+| Decision | When | Model | Algorithm |
+| --- | --- | --- | --- |
+| `guard` | Prompt attack or unsafe request | No model; a fixed reply | `fast_response` plugin |
+| `long_context` | Input of 200K tokens or more | GLM-5.3-Flash, high | `static` |
+| `vision` | The request carries an image | Qwen3.8-27B, medium | `static` |
+| `recovery` | An earlier answer exists and the user says it was wrong | GLM-5.3-Flash, max | `static` |
+| `agentic` | An active tool loop, or declared tools the request needs | GLM-5.3-Flash, high | `static` |
+| `facts` | Facts most people would look up, for a facts, analysis or writing task below max effort | GLM-5.3-Flash, low | `static` |
+| `frontier` | Max effort | GLM-5.3-Flash max or Flash-Next xhigh | `decision`: the decision model chooses from the candidates' descriptions |
+| `hard` | High effort | Flash-Next or 27B, both xhigh | `multi_factor` |
+| `standard` | Medium effort | Flash-Next or 27B, both medium | `multi_factor` |
+| `fast` | Everything else | Qwen3.8-27B, thinking off | `static` |
+
+`frontier` uses no second decision model: its `algorithm: decision` names no
+deployment, so Vela-2.0-4B, which already answered the request's questions,
+also chooses the model. `hard` and `standard` weigh quality (0.25), cost
+(0.4), latency (0.1) and current load (0.25). With equal load the 27B wins on
+cost; when it carries more in-flight requests than Flash-Next, Flash-Next takes
+the request.
+
+## Requirements
+
+- OpenAI-compatible endpoints for the three models, served under their model
+  names (`--served-model-name zai/glm-5.3-flash` and so on) or with
+  `provider_model_id` changed to match. Enable reasoning and tool-call parsing
+  on each server.
+- GLM-5.3-Flash with a 1M-token context for the `long_context` decision.
+- A GPU for the Router: Vela-2.0-4B runs on a GPU only, so serve with
+  `--platform amd` or `--platform nvidia`.
+- Backends that accept the reasoning controls above: top-level
+  `reasoning_effort` with `chat_template_kwargs.enable_thinking` for Qwen3.8,
+  `chat_template_kwargs.reasoning_effort` for GLM-5.3.
+
+## Data handling and safety
+
+The recipe does not enable Router Replay, so it stores no request or response
+content by itself. Prompt attacks and unsafe requests receive a fixed reply
+without reaching any model. The guard thresholds favor precision: a request
+the guard misses still reaches a model, which applies its own safety
+training.
+
+Every routed request's text, up to the decision model's input limit, is read
+by the decision model inside the Router. Requests are sent to whichever
+backend the route selects; all three models may see any request.
+
+## Quick start
+
+```bash
+vllm-sr config validate --config config/recipes/decision-balance/config.yaml
+vllm-sr serve --config config/recipes/decision-balance/config.yaml --platform amd
+```
+
+Point the three `backend_refs` endpoints at your servers first. Then send
+requests to `vllm-sr/auto`; the `x-vsr-selected-decision` and
+`x-vsr-selected-model` response headers show the lane and model.
+
+## Evaluation
+
+The probes cover every decision and the entrypoint, with negative variants for
+well-known facts, declared but unused tools and follow-ups that are not
+corrections, plus multilingual, multi-turn, tool, image and long-input
+variants. See [`probes.yaml`](probes.yaml) and the
+[conformance guide](../CONFORMANCE.md).
+
+Quality evidence comes from the built-in catalog's third-party Artificial
+Analysis records: `hard` ranks candidates on the `vllm-sr/reasoning@1.0.0`
+index (GPQA Diamond and HLE) at xhigh effort. At medium effort the catalog has
+no record for Flash-Next, so `standard` uses an operator index,
+`decision-balance/operator-reasoning@1.0.0`, whose records are labelled
+operator ratings: the 27B's from its medium-effort third-party records, and
+Flash-Next's estimated from its xhigh records and the 27B's medium-to-xhigh
+ratio.
+
+## Limitations
+
+- Routing quality depends on the decision model's answers. Its difficulty
+  score separates everyday from multi-step requests well, but the boundary
+  between high and max effort is coarse.
+- `multi_factor` compares two candidates, so each factor favors one of them
+  outright; small load differences can switch the model.
+- Relative costs were measured on one hardware and serving stack and on short
+  inputs. On long inputs the measured cost of the dense 27B rises above
+  Flash-Next's.
+- Operator ratings are estimates, not measurements.
+- A route to a stronger model does not guarantee a correct answer.
+- The recipe does not provision the inference backends it references.
+
+## References
+
+- [Recipe metadata](metadata.yaml)
+- [Runtime configuration](config.yaml)
+- [Routing DSL](recipe.dsl)
+- [Evaluation probes](probes.yaml)
+- [Recipe authoring and conformance](../CONFORMANCE.md)
+- [Decision signal](../../../website/docs/tutorials/signal/learned/decision.md)
+- [Decision model selection](../../../website/docs/tutorials/algorithm/selection/decision.md)
+- [Multi Factor](../../../website/docs/tutorials/algorithm/selection/multi-factor.md)

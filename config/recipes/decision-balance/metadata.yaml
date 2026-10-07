@@ -1,0 +1,21 @@
+schema_version: vllm-sr/recipe-metadata/v1
+id: decision-balance
+name: Decision Balance
+version: 0.1.0
+description: >-
+  A balanced Mixture-of-Models over GLM-5.3-Flash, Qwen3.8-Flash-Next and
+  Qwen3.8-27B in which the Vela-2.0-4B decision model answers every routing
+  question in one call and spends reasoning only where the request needs it.
+authors:
+  - name: vLLM Semantic Router Contributors
+    url: https://github.com/vllm-project/semantic-router/graphs/contributors
+license: Apache-2.0
+tags:
+  - cost
+  - decision-model
+  - general-purpose
+  - quality
+  - reasoning-effort
+links:
+  source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/decision-balance
+  documentation: https://github.com/vllm-project/semantic-router/blob/main/config/recipes/decision-balance/README.md
