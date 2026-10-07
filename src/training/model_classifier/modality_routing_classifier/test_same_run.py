@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
-"""Unit tests for the #3856 same-run helper (no model download)."""
+"""Unit tests for the #3856 same-run helper.
+
+No real-model download and no network access: the model-runtime adapter
+tests use a tiny local `vllm-srun fixture` (seconds to generate, randomly
+initialized) rather than the production Vela model.
+"""
 
 from __future__ import annotations
 
 import json
 import os
-import stat
+import shutil
 import subprocess
 import sys
 import tempfile
-import textwrap
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from same_run_harness import (
     host_identity,
-    load_candle_adapter,
+    load_model_runtime_adapter,
     percentile,
     row_id_for,
     run_single_stream,
@@ -313,147 +317,89 @@ class MultiPassTests(unittest.TestCase):
         self.assertEqual(meta["scored_queries"], 3)
 
 
-class CandleAdapterTests(unittest.TestCase):
-    """Regression: load_candle_adapter must use the real Go helper, not a phantom import."""
+class ModelRuntimeAdapterTests(unittest.TestCase):
+    """Regression: load_model_runtime_adapter must talk to a real vllm-srun
+    process, not a mocked HTTP shape -- same standard Xunzhuo held the old
+    candle adapter to (a real compiled helper, not a phantom import).
 
-    def _clear_helper_env(self) -> None:
-        os.environ.pop("CANDLE_CLASSIFY_HELPER", None)
+    candle-binding was deleted upstream in #4512; every native model now
+    runs behind the standalone vllm-srun HTTP service instead of in-process.
+    `vllm-srun fixture --family task_heads --variant modality` writes a tiny,
+    randomly-initialized model with the real AR/DIFFUSION/BOTH label set, no
+    network access, loading in well under a second -- the real thing, just
+    small, not a mock of it.
+    """
 
-    def test_missing_helper_raises_system_exit(self) -> None:
-        """SystemExit with a build hint when no binary is available."""
-        self._clear_helper_env()
+    @classmethod
+    def setUpClass(cls) -> None:
+        if shutil.which("vllm-srun") is None:
+            raise unittest.SkipTest(
+                "vllm-srun not installed (pip install ./src/model-runtime)"
+            )
+        # The fixture is local-only; force offline so a test that would
+        # otherwise attempt a network call fails fast instead of hanging.
+        # load_model_runtime_adapter's subprocess inherits this.
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        cls.tmp = tempfile.mkdtemp(prefix="model-runtime-fixture-")
+        cls.fixture_dir = os.path.join(cls.tmp, "modality-fixture")
+        subprocess.run(
+            [
+                "vllm-srun",
+                "fixture",
+                cls.fixture_dir,
+                "--family",
+                "task_heads",
+                "--variant",
+                "modality",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        os.environ.pop("HF_HUB_OFFLINE", None)
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_missing_vllm_srun_raises_system_exit(self) -> None:
+        """SystemExit with an install hint when the package is absent."""
         with mock.patch("shutil.which", return_value=None), self.assertRaises(
             SystemExit
         ) as ctx:
-            load_candle_adapter("any-model", 256)
+            load_model_runtime_adapter("any-model", 256)
         msg = str(ctx.exception)
-        self.assertIn("candle-classify", msg)
-        self.assertIn("CANDLE_CLASSIFY_HELPER", msg)
+        self.assertIn("vllm-srun", msg)
 
-    def test_helper_protocol_with_mock_binary(self) -> None:
-        """A compliant Go helper binary produces a valid ClassifyResult."""
-        helper_src = textwrap.dedent(
-            f"""\
-            #!{sys.executable}
-            import sys, json
-            for line in sys.stdin:
-                req = json.loads(line)
-                resp = {{
-                    "label": "AR",
-                    "seq_len": len(req["text"].split()),
-                    "tokenize_ns": 1_000_000,
-                    "forward_ns": 5_000_000,
-                    "helper_cpu_s": 0.25,
-                    "helper_rss_mb": 210.5,
-                }}
-                print(json.dumps(resp), flush=True)
-            """
-        )
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as fh:
-            fh.write(helper_src)
-            helper_path = fh.name
-
-        os.chmod(helper_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
+    def test_classify_round_trips_against_real_server(self) -> None:
+        """A real vllm-srun fixture server produces a valid ClassifyResult."""
+        classify = load_model_runtime_adapter(self.fixture_dir, max_length=256)
         try:
-            os.environ["CANDLE_CLASSIFY_HELPER"] = helper_path
-            classify = load_candle_adapter("stub-model", 256)
-            try:
-                result = classify("hello world test")
-                self.assertEqual(result["output"], "AR")
-                self.assertEqual(result["seq_len"], 3)
-                self.assertEqual(result["tokenize_ns"], 1_000_000)
-                self.assertGreater(result["e2e_ns"], 0)
-                self.assertEqual(classify.helper_stats["cpu_s"], 0.25)
-                self.assertEqual(classify.helper_stats["peak_rss_mb"], 210.5)
-            finally:
-                classify.close()
+            result = classify("a short prompt")
+            self.assertIn(result["output"], ("AR", "DIFFUSION", "BOTH"))
+            self.assertGreater(result["e2e_ns"], 0)
+            self.assertEqual(result["tokenize_ns"], 0)
         finally:
-            self._clear_helper_env()
-            os.unlink(helper_path)
+            classify.close()
 
     def test_run_single_stream_attributes_helper_resources(self) -> None:
-        """Regression: helper CPU/RSS must be folded into cpu_s/peak_rss_mb.
-
-        Before this fix, run_single_stream measured only the parent process
-        via time.process_time()/getrusage(RUSAGE_SELF). Since --binding
-        candle runs inference in a child process, a helper that burns real
-        CPU and allocates real memory was invisible: the parent only pays
-        for pipe I/O, fractions of a millisecond. This reproduces Xunzhuo's
-        review probe — a protocol-compatible helper that deliberately burns
-        CPU and reports real RSS — and asserts the harness attributes it.
+        """Regression: the server subprocess's CPU/RSS must be folded into
+        cpu_s/peak_rss_mb, read from /proc/<pid> now instead of a
+        self-reporting JSON field (model-runtime's /metrics has no
+        process-level CPU/RSS -- confirmed no ProcessCollector is attached).
+        Same regression shape the round-2 fix proved for the old helper.
         """
-        helper_src = textwrap.dedent(
-            f"""\
-            #!{sys.executable}
-            import sys, json, time
-            for line in sys.stdin:
-                req = json.loads(line)
-                # Deliberately burn measurable CPU on every request.
-                deadline = time.process_time() + 0.05
-                while time.process_time() < deadline:
-                    pass
-                resp = {{
-                    "label": "AR",
-                    "seq_len": 0,
-                    "tokenize_ns": 0,
-                    "forward_ns": 1_000_000,
-                    "helper_cpu_s": time.process_time(),
-                    "helper_rss_mb": 137.0,
-                }}
-                print(json.dumps(resp), flush=True)
-            """
-        )
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as fh:
-            fh.write(helper_src)
-            helper_path = fh.name
-
-        os.chmod(helper_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
+        classify = load_model_runtime_adapter(self.fixture_dir, max_length=256)
         try:
-            os.environ["CANDLE_CLASSIFY_HELPER"] = helper_path
-            classify = load_candle_adapter("stub-model", 256)
-            try:
-                qsl = _make_qsl(2)
-                _, _, meta = run_single_stream(
-                    classify, qsl, warmup_n=0, min_duration_s=0.0
-                )
-                self.assertTrue(meta["includes_helper_resources"])
-                # 2 requests x ~0.05s deliberate CPU burn each. Before the
-                # fix this was ~0.0 (parent pipe I/O only).
-                self.assertGreater(meta["cpu_s"], 0.08)
-                self.assertGreaterEqual(meta["peak_rss_mb"], 137.0)
-            finally:
-                classify.close()
+            qsl = _make_qsl(3)
+            _, _, meta = run_single_stream(
+                classify, qsl, warmup_n=1, min_duration_s=0.0
+            )
+            self.assertTrue(meta["includes_helper_resources"])
+            self.assertGreater(meta["cpu_s"], 0.0)
+            self.assertGreater(meta["peak_rss_mb"], 0.0)
         finally:
-            self._clear_helper_env()
-            os.unlink(helper_path)
-
-    def test_helper_error_response_raises(self) -> None:
-        """A helper that returns an error dict raises RuntimeError."""
-        helper_src = textwrap.dedent(
-            f"""\
-            #!{sys.executable}
-            import sys, json
-            for line in sys.stdin:
-                print(json.dumps({{"error": "model not found"}}), flush=True)
-            """
-        )
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as fh:
-            fh.write(helper_src)
-            helper_path = fh.name
-
-        os.chmod(helper_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
-        try:
-            os.environ["CANDLE_CLASSIFY_HELPER"] = helper_path
-            classify = load_candle_adapter("bad-model", 256)
-            try:
-                with self.assertRaises(RuntimeError) as ctx:
-                    classify("some text")
-                self.assertIn("model not found", str(ctx.exception))
-            finally:
-                classify.close()
-        finally:
-            self._clear_helper_env()
-            os.unlink(helper_path)
+            classify.close()
 
 
 if __name__ == "__main__":

@@ -15,6 +15,26 @@ This pipeline trains a three-class prompt classifier:
 The classifier predicts requested output modality, not whether an image model
 is available or whether image generation is safe for the prompt.
 
+## Environment
+
+This directory has its own uv project (`pyproject.toml` and `uv.lock`). Create
+the environment from the lock and run Python through it:
+
+```bash
+uv sync --locked                          # training, evaluation and label_audit
+uv sync --locked --group dev              # also pytest, to run the tests
+uv run --group dev pytest                 # from this directory
+uv run python modality_routing_fixed_split_trainer.py --help
+```
+
+Optional groups: `audit` for the Claude API judge in `label_audit/`, and
+`exploration` for the SCX Router scripts in `exploration_lfm25_scx/`.
+
+On Linux the default `torch` wheel is a CUDA build, so no extra index is needed
+for a GPU host. `requirements.txt` and `requirements-lock.txt` are kept for the
+existing docs. Note that `run_training.sh` below still runs its own unpinned
+`pip install` and does not use this lock yet.
+
 ## Train
 
 `run_training.sh` installs its Python packages, builds the dataset, trains an
@@ -86,7 +106,7 @@ run on the same host.
 ```bash
 python same_run_harness.py \
   --qsl exported_modality_routing_dataset/test.jsonl \
-  --model llm-semantic-router/mmbert32k-modality-router-merged \
+  --model vllm-sr/Vela-1.0-Encoder-307M-Modality \
   --binding hf \
   --role baseline \
   --warmup 20 --max-length 256 --min-duration-s 60 \
@@ -117,46 +137,42 @@ python same_run_pair.py \
 The pair script exits non-zero and writes no output file if the two runs came
 from different machines (`cpu_model`, `core_count`, or `ram_gb` differ).
 
-**Run production baseline (`--binding candle`, `ClassifyMmBert32KModality`):**
+**Run production baseline (`--binding model-runtime`, `vllm-sr/Vela-1.0-Encoder-307M-Modality`):**
 
-Unlike `--binding hf`, candle does not auto-download — build the native
-library and helper once, then point `--model` at a local model directory:
+The production path serves models through a standalone HTTP service
+(`vllm-srun`, the model runtime that replaced the in-process native bindings
+in [#4512](https://github.com/vllm-project/semantic-router/pull/4512)).
+Install it once, from the repository root:
 
 ```bash
-# 1. Build the native library (from repository root)
-cd candle-binding
-cargo build --release --no-default-features   # CPU; see candle-binding/README.md for CUDA/Metal
-go build -o candle-classify ./cmd/classify-helper/
-export LD_LIBRARY_PATH="$PWD/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"  # DYLD_LIBRARY_PATH on macOS
-export CANDLE_CLASSIFY_HELPER="$PWD/candle-classify"
-cd ..
-
-# 2. Download a local copy of the model (candle needs a directory, not a Hub ID)
-huggingface-cli download llm-semantic-router/mmbert32k-modality-router-merged \
-  --local-dir /tmp/mmbert32k-modality
-
-# 3. Run
-cd src/training/model_classifier/modality_routing_classifier
-python same_run_harness.py \
-  --qsl exported_modality_routing_dataset/test.jsonl \
-  --model /tmp/mmbert32k-modality \
-  --binding candle \
-  --role baseline \
-  --warmup 20 --max-length 256 --min-duration-s 60 \
-  --output same_run_candle_singlestream.json
+pip install ./src/model-runtime
 ```
 
-Passing a Hub ID instead of a local directory for `--binding candle` fails
-fast with a message telling you which `huggingface-cli download` command to
-run. `cpu_s` and `peak_rss_mb` for this binding include the helper
-subprocess's own resource usage (`run.includes_helper_resources: true`),
-since inference happens in that child process, not in the Python harness.
+Then run the harness — it spawns and manages its own `vllm-srun serve`
+subprocess for the run, and downloads the model from the Hub on first use (no
+token needed, it's public):
+
+```bash
+python same_run_harness.py \
+  --qsl exported_modality_routing_dataset/test.jsonl \
+  --model vllm-sr/Vela-1.0-Encoder-307M-Modality \
+  --binding model-runtime \
+  --role baseline \
+  --warmup 20 --max-length 256 --min-duration-s 60 \
+  --output same_run_model_runtime_singlestream.json
+```
+
+`cpu_s` and `peak_rss_mb` for this binding include the model-runtime
+subprocess's own resource usage, read from `/proc/<pid>` after every request
+(`run.includes_helper_resources: true`), since inference happens in that
+child process over HTTP, not in the Python harness itself.
 
 Quality metrics (per-class precision, recall, threshold selection) are defined
 by [#3194](https://github.com/vllm-project/semantic-router/issues/3194). The
 harness emits `records[].label` and `records[].output` per row.
 
-**Unit tests (no model download required):**
+**Unit tests (no real-model download; spins up a tiny local `vllm-srun`
+fixture for the model-runtime adapter):**
 
 ```bash
 python test_same_run.py

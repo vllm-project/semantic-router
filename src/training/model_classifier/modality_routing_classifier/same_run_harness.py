@@ -13,11 +13,14 @@ from __future__ import annotations
 import argparse
 import atexit
 import hashlib
+import http.client
 import json
 import os
 import platform
 import resource
 import shutil
+import signal
+import socket
 import subprocess
 import sys
 import time
@@ -26,9 +29,12 @@ from datetime import datetime, timezone
 from importlib.metadata import version as _package_version_lookup
 from pathlib import Path
 from typing import TypedDict
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 LABELS = ("AR", "DIFFUSION", "BOTH")
 HOST_IDENTITY_KEYS = ("cpu_model", "core_count", "ram_gb")
+HTTP_OK = 200
 METRIC_CONTRACT = "https://github.com/vllm-project/semantic-router/issues/3194"
 
 
@@ -95,7 +101,7 @@ def host_fingerprint(binding: str) -> dict:
         "ram_gb": _ram_gb(),
         "python_version": platform.python_version(),
         "torch_version": torch_version,
-        "candle_version": os.environ.get("CANDLE_BINDING_VERSION"),
+        "model_runtime_version": _package_version("vllm_srun"),
         "binding": binding,
         "platform": platform.platform(),
     }
@@ -145,7 +151,7 @@ def load_qsl(path: Path) -> list[dict]:
 
 
 def load_hf_adapter(model_id: str, max_length: int):
-    # Lazy: --binding candle must not require torch/transformers installed.
+    # Lazy: --binding model-runtime must not require torch/transformers installed.
     import torch  # noqa: PLC0415
     from transformers import (  # noqa: PLC0415  # fmt: skip
         AutoModelForSequenceClassification,
@@ -187,104 +193,172 @@ def load_hf_adapter(model_id: str, max_length: int):
     return classify
 
 
-def load_candle_adapter(model_id: str, max_length: int):
-    """Production path: persistent Go helper wrapping ClassifyMmBert32KModality.
+def _free_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
 
-    The helper reads one JSON line per request from stdin and writes one JSON
-    line per response to stdout:
-      request:  {"text": "...", "max_length": 256}
-      response: {"label": "AR", "seq_len": 128, "tokenize_ns": 0,
-                 "forward_ns": 5000000, "helper_cpu_s": 0.482,
-                 "helper_rss_mb": 412.3}
 
-    helper_cpu_s and helper_rss_mb are the helper's OWN cumulative
-    getrusage(RUSAGE_SELF) readings (CPU seconds and lifetime-peak RSS),
-    reported on every response. Inference for this binding runs in that
-    child process, not in this Python process, so run_single_stream folds
-    these into cpu_s/peak_rss_mb — otherwise those fields would only reflect
-    pipe I/O overhead in the parent and silently miss the actual model cost.
+def _proc_cpu_and_rss(pid: int) -> tuple[float, float]:
+    """Read a subprocess's own cumulative CPU seconds and lifetime-peak RSS.
 
-    Build the helper:
-      cd candle-binding && go build -o candle-classify ./cmd/classify-helper/
-    Then either:
-      export CANDLE_CLASSIFY_HELPER=/path/to/candle-classify
-      # or put candle-classify on PATH
+    model-runtime's /metrics has no process-level CPU/RSS (only app counters
+    like request duration and queue depth — confirmed no ProcessCollector is
+    attached), so unlike the old candle helper, which self-reported
+    getrusage(RUSAGE_SELF) inside every JSON response, we read the same
+    information externally from the OS's own per-process accounting.
+    Returns (0.0, 0.0) if the process has already exited rather than raising,
+    so run_single_stream's fold logic always gets numbers to work with.
     """
-    helper = os.environ.get("CANDLE_CLASSIFY_HELPER") or shutil.which("candle-classify")
-    if not helper:
-        raise SystemExit(
-            "--binding candle requires a compiled Go helper binary.\n"
-            "Build:  cd candle-binding && go build -o candle-classify ./cmd/classify-helper/\n"
-            "Export: CANDLE_CLASSIFY_HELPER=/path/to/candle-classify"
-        )
-
     try:
-        proc = subprocess.Popen(
-            [helper, "--model", model_id, "--max-length", str(max_length)],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-        )
-    except FileNotFoundError as exc:
-        raise SystemExit(
-            f"candle helper binary not found or not executable: {helper!r}"
-        ) from exc
+        stat = Path(f"/proc/{pid}/stat").read_text()
+        # comm (field 2) can itself contain spaces or parens, so split on the
+        # last ')' before indexing fields positionally -- a naive .split()
+        # would silently misalign every field after it.
+        after_comm = stat.rsplit(")", 1)[1].split()
+        utime_ticks = int(after_comm[11])  # field 14 overall
+        stime_ticks = int(after_comm[12])  # field 15 overall
+        clk_tck = os.sysconf("SC_CLK_TCK")
+        cpu_s = (utime_ticks + stime_ticks) / clk_tck
 
-    if proc.poll() is not None:
-        err = proc.stderr.read()
-        raise SystemExit(
-            f"candle helper exited on startup (model={model_id!r}): {err.strip()}"
-        )
+        peak_rss_mb = 0.0
+        for line in Path(f"/proc/{pid}/status").read_text().splitlines():
+            if line.startswith("VmHWM:"):
+                peak_rss_mb = float(line.split()[1]) / 1024.0  # kB -> MB
+                break
+        return cpu_s, peak_rss_mb
+    except (FileNotFoundError, ProcessLookupError, IndexError, ValueError):
+        return 0.0, 0.0
 
-    def _terminate_helper() -> None:
-        proc.terminate()
+
+def _wait_model_runtime_ready(base_url: str, proc: subprocess.Popen) -> None:
+    """Poll GET /health until 200, mirroring e2e/testing/vllm-sr-cli's
+    ServeProcess.wait_ready: exponential backoff 0.25s -> 2.0s, 180s total
+    deadline, and check proc.poll() every iteration to fail fast with the
+    captured log instead of spinning for 180s against an already-dead process.
+    """
+    deadline = time.monotonic() + 180.0
+    interval = 0.25
+    last_status = None
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            raise SystemExit(
+                f"model-runtime exited with {proc.returncode} before becoming ready; "
+                f"check its log output above"
+            )
         try:
-            proc.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-        for stream in (proc.stdin, proc.stdout, proc.stderr):
-            try:
-                if stream and not stream.closed:
-                    stream.close()
-            except Exception:
-                pass
+            request = urllib_request.Request(base_url + "/health")
+            with urllib_request.urlopen(request, timeout=5) as response:
+                if response.status == HTTP_OK:
+                    return
+                last_status = response.status
+        except (urllib_error.URLError, ConnectionError, TimeoutError) as exc:
+            last_status = str(exc)
+        time.sleep(interval)
+        interval = min(interval * 2, 2.0)
+    raise SystemExit(f"model-runtime not ready within 180s: {last_status}")
 
-    atexit.register(_terminate_helper)
+
+def load_model_runtime_adapter(model_id: str, max_length: int):
+    """Production path: spawn `vllm-srun serve` and classify over HTTP.
+
+    candle-binding (and the Go helper that wrapped it) was deleted upstream
+    in #4512; every native model now runs behind this standalone HTTP service
+    instead of in-process. classify.helper_stats is refreshed from
+    /proc/<pid> after every request so run_single_stream's existing
+    snapshot/fold logic (unchanged since the round-2 resource-accounting fix)
+    keeps working without modification -- only how the numbers get into
+    helper_stats changes.
+
+    Install:
+      pip install ./src/model-runtime
+    """
+    srun = shutil.which("vllm-srun")
+    if not srun:
+        raise SystemExit(
+            "--binding model-runtime requires the vllm-srun package.\n"
+            "Install: pip install ./src/model-runtime"
+        )
+
+    port = _free_port()
+    base_url = f"http://127.0.0.1:{port}"
+    # Do NOT force HF_HUB_OFFLINE=1 here: the production path must be allowed
+    # to download the model on first run (unlike the test fixture, which has
+    # no network access at all and should fail fast instead of hanging).
+    proc = subprocess.Popen(
+        [srun, "serve", model_id, "--device", "cpu", "--port", str(port)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+
+    def _terminate() -> None:
+        if proc.poll() is None:
+            proc.send_signal(signal.SIGINT)  # as a reader would with Ctrl-C
+            try:
+                proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+
+    atexit.register(_terminate)
+    _wait_model_runtime_ready(base_url, proc)
+
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=60)
 
     def classify(text: str) -> ClassifyResult:  # type: ignore[return]
-        request = json.dumps({"text": text, "max_length": max_length}) + "\n"
+        nonlocal conn
+        body = json.dumps(
+            {
+                "model": model_id,
+                "input": text,
+                # Matches the HF adapter's truncation=True, max_length=max_length:
+                # the default overflow policy is "reject", which would raise on
+                # any row longer than max_tokens instead of truncating it.
+                "options": {"max_tokens": max_length, "overflow": "truncate"},
+            }
+        ).encode()
+        headers = {"Content-Type": "application/json"}
         t_submit = time.perf_counter_ns()
         try:
-            proc.stdin.write(request)
-            proc.stdin.flush()
-            line = proc.stdout.readline()
-        except BrokenPipeError as exc:
-            err = proc.stderr.read()
-            raise RuntimeError(f"candle helper pipe broken: {err.strip()}") from exc
+            conn.request("POST", "/v1/classify", body, headers)
+            response = conn.getresponse()
+            payload = response.read()
+        except (http.client.HTTPException, OSError):
+            # Retry once on a fresh connection -- a single transient reset
+            # should not fail the whole run.
+            conn.close()
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=60)
+            conn.request("POST", "/v1/classify", body, headers)
+            response = conn.getresponse()
+            payload = response.read()
         t_return = time.perf_counter_ns()
         elapsed = t_return - t_submit
-        if not line:
-            err = proc.stderr.read()
-            raise RuntimeError(f"candle helper closed stdout: {err.strip()}")
-        data = json.loads(line)
-        if "error" in data:
-            raise RuntimeError(f"candle helper returned error: {data['error']}")
-        classify.helper_stats["cpu_s"] = float(data.get("helper_cpu_s", 0.0))
-        classify.helper_stats["peak_rss_mb"] = float(data.get("helper_rss_mb", 0.0))
+        if response.status != HTTP_OK:
+            raise RuntimeError(
+                f"model-runtime classify failed ({response.status}): {payload[:500]!r}"
+            )
+        data = json.loads(payload)
+        result = data["results"][0]
+        if "error" in result:
+            raise RuntimeError(f"model-runtime returned error: {result['error']}")
+        cpu_s, peak_rss_mb = _proc_cpu_and_rss(proc.pid)
+        classify.helper_stats["cpu_s"] = cpu_s
+        classify.helper_stats["peak_rss_mb"] = peak_rss_mb
         return {
-            "output": str(data["label"]),
-            "tokenize_ns": int(data.get("tokenize_ns", 0)),
-            "forward_ns": int(data.get("forward_ns", elapsed)),
+            "output": str(result["label"]),
+            # /v1/classify gives no tokenize/forward split, same honest
+            # simplification the old candle helper already used.
+            "tokenize_ns": 0,
+            "forward_ns": elapsed,
             "e2e_ns": elapsed,
-            "seq_len": int(data.get("seq_len", 0)),
+            "seq_len": int(data.get("usage", {}).get("input_tokens", 0)),
         }
 
-    classify.close = _terminate_helper  # type: ignore[attr-defined]
-    # Cumulative getrusage(RUSAGE_SELF) readings from the helper process,
-    # updated after every response. run_single_stream reads this to fold
-    # the helper's real CPU/RSS cost into the reported run metrics.
+    classify.close = _terminate  # type: ignore[attr-defined]
+    # Cumulative /proc readings for the model-runtime subprocess, updated
+    # after every response. run_single_stream reads this to fold the
+    # subprocess's real CPU/RSS cost into the reported run metrics.
     classify.helper_stats = {"cpu_s": 0.0, "peak_rss_mb": 0.0}  # type: ignore[attr-defined]
     return classify
 
@@ -292,8 +366,8 @@ def load_candle_adapter(model_id: str, max_length: int):
 def load_adapter(binding: str, model_id: str, max_length: int):
     if binding == "hf":
         return load_hf_adapter(model_id, max_length)
-    if binding == "candle":
-        return load_candle_adapter(model_id, max_length)
+    if binding == "model-runtime":
+        return load_model_runtime_adapter(model_id, max_length)
     raise SystemExit(f"unknown binding: {binding}")
 
 
@@ -416,13 +490,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--model",
-        default="llm-semantic-router/mmbert32k-modality-router-merged",
+        default="vllm-sr/Vela-1.0-Encoder-307M-Modality",
     )
     parser.add_argument(
         "--binding",
         default="hf",
-        choices=["hf", "candle"],
-        help="hf = HuggingFace transformers; candle = Go helper wrapping ClassifyMmBert32KModality",
+        choices=["hf", "model-runtime"],
+        help="hf = HuggingFace transformers; model-runtime = vllm-srun serve over HTTP",
     )
     parser.add_argument("--role", default="baseline", choices=["baseline", "candidate"])
     parser.add_argument("--warmup", type=int, default=20)
