@@ -164,7 +164,6 @@ routing:
     pii:
       - name: personal_data
         description: Personal data located by the decision model's span head.
-        threshold: 0.05
         include_history: false
         pii_types_allowed: []
     safety:

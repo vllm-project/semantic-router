@@ -52,7 +52,6 @@ SIGNAL safety unsafe_request {
 }
 
 SIGNAL pii personal_data {
-  threshold: 0.05
   description: "Personal data located by the decision model's span head."
 }
 
