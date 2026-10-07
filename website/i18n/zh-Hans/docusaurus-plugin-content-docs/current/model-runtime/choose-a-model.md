@@ -82,11 +82,13 @@ domain、prompt guard、safety、fact check、user feedback、modality、PII 和
 - **领先：** prompt guard（留出集 AUC +0.026；在 E2E 攻击样例上它拦下全部六个攻击，Vela 1.0 Guard 拦下五个）和
   safety（留出集 +0.052，在每个数据集上都领先）。一个模型、一次调用回答所有信号。
 - **持平：** PII 和 hallucination 在留出集和新留出集上持平。
-- **落后：** domain（准确率留出集 −0.037、新留出集 −0.088）、fact check（留出集 AUC −0.101）、user feedback
-  （留出集 −0.038、新留出集 −0.178）和 modality（留出集 AUC −0.180）：0.3B 漏掉了大多数要求生成新图片的请求。
+- **落后最多：** modality（留出集 AUC −0.180；0.3B 漏掉了大多数要求生成新图片的请求）和 user feedback
+  （准确率留出集 −0.038、新留出集 −0.178）。
+- **落后：** domain（准确率留出集 −0.037、新留出集 −0.088）和 fact check（留出集 AUC −0.101）。
 - **CPU 时间：** 每个请求都要把问题、选项和 17 个 PII 标签（至少 560 个 token）送进一次 3.07 亿参数的前向计算，
   而每个 Vela 1.0 模型只读取请求本身。在 12 个 CPU 核上，针对
-  [延迟记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md)中的五个请求信号：
+  [延迟记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md)中的五个请求信号，
+  请求的中位耗时约为原来的 4.9 倍：
 
 | 路由器，12 个 CPU 核 | p50 | p95 | 每秒请求数 | 并发 16 时 |
 | --- | ---: | ---: | ---: | ---: |
@@ -125,7 +127,30 @@ global:
       feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
 ```
 
-modality 分类器在 `classifier.model_path` 中写明 `models/Vela-1.0-Encoder-307M-Modality`。只想恢复一个信号时，只写它那一行。
+modality 分类器在 `classifier.model_path` 中写明 `models/Vela-1.0-Encoder-307M-Modality`。
+
+只想恢复一个信号时，只写它那一行。以 user feedback 为例：
+
+```yaml
+global:
+  model_catalog:
+    system:
+      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
+```
+
+| 信号 | `global.model_catalog` 下的一行 |
+| --- | --- |
+| Domain | `system.domain_classifier: models/Vela-1.0-Encoder-307M-Domain` |
+| Prompt guard | `system.prompt_guard: models/Vela-1.0-Encoder-307M-Guard` |
+| Safety | `system.safety: models/Vela-1.0-Encoder-307M-Safety` |
+| Fact check | `system.fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck` |
+| User feedback | `system.feedback_detector: models/Vela-1.0-Encoder-307M-Feedback` |
+| PII | `system.pii_classifier: models/Vela-1.0-Encoder-307M-PII` |
+| Hallucination | `system.hallucination_detector: models/Vela-1.0-Encoder-307M-Halu` |
+| Modality | `modules.modality_detector.classifier.model_path: models/Vela-1.0-Encoder-307M-Modality` |
+
+配置自己设置的规则阈值保持不变。内置配方的规则按 0.3B 校准，因此改回 Vela 1.0 的信号要连同它的 Vela 1.0
+规则阈值一起改回。在 `mom-v1` 中，它们是 prompt guard 0.5、safety 0.5 和 PII 0.7；记录列出了每个配方的值。
 
 ## 硬件 {#hardware}
 

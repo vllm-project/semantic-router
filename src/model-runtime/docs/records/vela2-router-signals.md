@@ -13,16 +13,19 @@ on the CPU latency.
 
 - **Accuracy:** through the Router, against the Vela 1.0 specialists on the
   built-in signals' evaluation rows. The 0.3B is ahead on prompt attacks
-  (held-out AUC +0.026) and safety (+0.052), level on PII and hallucination
-  held-out, and behind on domain (accuracy −0.037), fact check (held-out AUC
-  −0.101), feedback (−0.038, fresh −0.178) and modality (held-out AUC −0.180).
+  (held-out AUC +0.026) and safety (+0.052), and level on PII and hallucination
+  held-out. Modality (held-out AUC −0.180) and feedback (accuracy −0.038, fresh
+  −0.178) regress most; domain (−0.037) and fact check (held-out AUC −0.101) are
+  behind too.
 - **Latency:** with `max_speed`, the 0.3B's default CPU profile, a request takes
-  79 ms at the median against 16 ms on the Vela 1.0 models, and the Router
-  serves 11.9 against 38.9 requests per second on 12 cores (12.8 against 51.8 at
-  concurrency 16).
+  79 ms at the median against 16 ms on the Vela 1.0 models, about 4.9 times as
+  long, and the Router serves 11.9 against 38.9 requests per second on 12 cores
+  (12.8 against 51.8 at concurrency 16).
 - **One call per request:** every built-in signal of a request reaches the 0.3B
   in one `/v1/decisions` task, however long the request. On a heavily loaded
   host, 0.4% of requests sent one question in a second call.
+- **Restore:** one block brings back every Vela 1.0 specialist, and one line
+  any single signal ([below](#restore-the-vela-10-specialists)).
 
 - **Date:** 2026-10-07.
 - **Machine:** AMD EPYC 9575F, CPU only. The accuracy runs and the latency
@@ -397,6 +400,16 @@ files:
   test files that flags 7.5% of the negatives and catches 88.8% of the sensitive
   requests, against Vela 1.0's 12.1% and 90.5% at 0.9. At 0.9 the 0.3B would
   catch only 72.9%.
+  - On the suite's 21,251 subject questions (the domain rows), the 0.3B puts a
+    span on 19.1% at 0.01, against Vela 1.0's 25.2% at 0.9 and 49.6% at 0.01.
+    A span made only of digits and operators appears on 4.1% against 9.2% at
+    0.9: Vela 1.0 reads many numbers as `CREDIT_CARD` or `IBAN_CODE`.
+    `mom-v1`'s `personal_data` rule, which allows only `NRP`, matches 18.0% of
+    them at 0.01, against 37.1% on Vela 1.0 at its earlier 0.7.
+  - The 0.3B still reads some bare numbers as spans: "What is 2 + 2?" gets a
+    `DATE_TIME` span on "2" at 0.86, and "What is 3 + 5?" a `PHONE_NUMBER` span
+    on "+" at 0.76, where Vela 1.0 finds none. A rule that denies every PII type
+    blocks them.
 - **Hallucination:** the Router counts the hallucination spans the 0.3B returns
   with no threshold of its own (`min_span_confidence` 0), so there is nothing
   to map.
@@ -405,7 +418,54 @@ The module defaults take these values: prompt guard 0.75, domain 0.28, PII 0.01,
 fact check 0.93 and feedback 0.37. A module that runs any other model and sets
 no threshold keeps the one it defaulted to before (0.5, 0.5, 0.9, 0.95, 0.7).
 The maintained recipes and E2E profiles that run the defaults take the mapped
-values of the thresholds they set; those that pin a model keep theirs.
+values of the thresholds they set; those that pin a model keep theirs:
+
+| Configuration | Rules | Vela 1.0 | 0.3B |
+| --- | --- | ---: | ---: |
+| `mom-v1` | `prompt_attack` | 0.5 | 0.75 |
+| `mom-v1` | `unsafe` | 0.5 | 0.46 |
+| `mom-v1` | `personal_data`, `personal_attribute` | 0.7 | 0.01 |
+| `privacy` | `jailbreak_strict` | 0.45 | 0.75 |
+| `privacy` | `pii_strict` | 0.85 | 0.01 |
+| `agent` | `pii_strict` | 0.9 | 0.01 |
+| `config/config.yaml` | `unsafe-content` | 0.5 | 0.46 |
+| `config/config.yaml`, fragments | `unsafe_completion` | 0.85 | 0.77 |
+| `config/config.yaml`, fragments | `restricted_pii` | 0.85 | 0.01 |
+| `config/config.yaml` | modality `confidence_threshold` | 0.7 | 0.51 |
+| E2E `envoy-ai-gateway`, `routing-strategies`, `streaming`, `aibrix` | prompt guard | 0.5–0.7 | 0.75 |
+| E2E `production-stack` | prompt guard | 0.3 | 0.74 |
+| E2E `multi-endpoint` | prompt guard | 0.5, 0.9 | 0.75, 0.77 |
+| E2E, every PII rule | PII | 0.4–0.9 | 0.01 |
+| E2E `hallucination` | fact check | 0.65 | 0.86 |
+
+## E2E profiles
+
+Beyond their thresholds, four E2E cases changed with the default. Each tripped
+on a signal the case does not test:
+
+- **`production-stack` load tests:** after a history question the 0.3B read
+  the request number as a `DATE_TIME` span, and the profile denies every PII
+  type. The template asks a physics question and ends in "(request N)", and
+  the load tests pass with it.
+- **`envoy-ai-gateway`, `decision-priority-selection`:** one query named
+  "urgent", so `urgent_request` (priority 30) outranked the thinking decision
+  on either model; it no longer does. "What is 2 + 2?" became "How do I solve a
+  quadratic equation?" (the `DATE_TIME` span above).
+- **`envoy-ai-gateway`, `tool-selection`'s PII precedence:** the case runs on its
+  own recipe, `e2e-pii-precedence`, which holds only the baseline's PII block
+  and the weather tool selection. The 0.3B scores the case's
+  `__TOOL_SELECTION_ADD_WEATHER__` marker before payment data as an injection
+  (0.83, wherever the marker sits), so on the default routing the jailbreak
+  block outranked both.
+- **`envoy-ai-gateway`, `security-window-provenance`:** the 0.3B reads a prompt
+  whole up to 8,192 tokens, so its score names no window. Its prepared binding
+  says so (`overflow: truncate`, no `window_size`), and the case reads that
+  from the model inventory: a guard that scans keeps the window checks, and one
+  that reads the whole prompt must name no window.
+
+An attack at the end of 7,821 tokens of benign text scores 0.95 on the 0.3B;
+at the end of 22,541 tokens it scores 0.58, below 0.75, because the model reads
+only the first 8,192. `security-long-text` places its attack at 1,677 tokens.
 
 ## Restore the Vela 1.0 specialists
 
@@ -426,8 +486,21 @@ global:
 ```
 
 A modality classifier names `models/Vela-1.0-Encoder-307M-Modality` as its
-`classifier.model_path`. Signal rule thresholds are the configuration's own:
-the table above maps them both ways.
+`classifier.model_path`. One line brings back one signal:
+
+| Signal | Line under `global.model_catalog` |
+| --- | --- |
+| Domain | `system.domain_classifier: models/Vela-1.0-Encoder-307M-Domain` |
+| Prompt guard | `system.prompt_guard: models/Vela-1.0-Encoder-307M-Guard` |
+| Safety | `system.safety: models/Vela-1.0-Encoder-307M-Safety` |
+| Fact check | `system.fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck` |
+| User feedback | `system.feedback_detector: models/Vela-1.0-Encoder-307M-Feedback` |
+| PII | `system.pii_classifier: models/Vela-1.0-Encoder-307M-PII` |
+| Hallucination | `system.hallucination_detector: models/Vela-1.0-Encoder-307M-Halu` |
+| Modality | `modules.modality_detector.classifier.model_path: models/Vela-1.0-Encoder-307M-Modality` |
+
+Signal rule thresholds are the configuration's own: a signal moved back takes
+its Vela 1.0 rule thresholds with it, the left column of the tables above.
 
 ## Reproduce
 

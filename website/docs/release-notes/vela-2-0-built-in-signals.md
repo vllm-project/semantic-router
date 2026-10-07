@@ -32,20 +32,23 @@ longer run on eight Vela 1.0 specialists.
 
 [#4639](https://github.com/vllm-project/semantic-router/issues/4639) asked for
 accuracy level or better on every signal and router latency level or better,
-both measured on a CPU. The maintainers chose to switch although both fail.
-Through the Router, on the
+both measured on a CPU. The maintainers chose to switch although both fail,
+accepting the modality and user feedback regressions. Through the Router, on the
 [router signal suite](https://huggingface.co/datasets/vllm-sr/router-signal-suite)
 ([A/B record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-router-signals.md)):
 
 - **Ahead:** prompt guard (held-out AUC +0.026) and safety (+0.052).
 - **Level:** PII and hallucination on held-out and fresh files.
-- **Behind:** domain (accuracy −0.037 held-out), fact check (held-out AUC
-  −0.101), user feedback (−0.038 held-out, −0.178 fresh) and modality
-  (held-out AUC −0.180).
+- **Behind, most:** modality (held-out AUC −0.180; the 0.3B misses most
+  requests for a new image) and user feedback (accuracy −0.038 held-out,
+  −0.178 fresh).
+- **Behind:** domain (accuracy −0.037 held-out) and fact check (held-out AUC
+  −0.101).
 - **CPU latency:** on 12 cores a request takes 79 ms at the median against
-  16 ms on Vela 1.0, and the Router serves 11.9 against 38.9 requests per
-  second (12.8 against 51.8 at concurrency 16). Every request carries the questions, their
-  options and the 17 PII labels (at least 560 tokens) through one forward.
+  16 ms on Vela 1.0, about 4.9 times as long, and the Router serves 11.9
+  against 38.9 requests per second (12.8 against 51.8 at concurrency 16).
+  Every request carries the questions, their options and the 17 PII labels (at
+  least 560 tokens) through one forward.
   [#4668](https://github.com/vllm-project/semantic-router/issues/4668) works on
   the CPU latency. On a GPU the 0.3B answers in about 7 ms.
 
@@ -68,7 +71,34 @@ feedback 0.7 → 0.37.
 
 ## Restore Vela 1.0
 
-One `global.model_catalog.system` block brings the specialists back, with their
-default thresholds; see
-[Choose a model](model-runtime/choose-a-model.md#vela-20). A signal you name
-there alone returns to its specialist, and the others stay on the 0.3B.
+One block brings the specialists back, with their default thresholds:
+
+```yaml
+global:
+  model_catalog:
+    system:
+      safety: models/Vela-1.0-Encoder-307M-Safety
+      prompt_guard: models/Vela-1.0-Encoder-307M-Guard
+      domain_classifier: models/Vela-1.0-Encoder-307M-Domain
+      pii_classifier: models/Vela-1.0-Encoder-307M-PII
+      fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
+      hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
+      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
+```
+
+One line brings back one signal, and the others stay on the 0.3B:
+
+| Signal | Line under `global.model_catalog` |
+| --- | --- |
+| Domain | `system.domain_classifier: models/Vela-1.0-Encoder-307M-Domain` |
+| Prompt guard | `system.prompt_guard: models/Vela-1.0-Encoder-307M-Guard` |
+| Safety | `system.safety: models/Vela-1.0-Encoder-307M-Safety` |
+| Fact check | `system.fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck` |
+| User feedback | `system.feedback_detector: models/Vela-1.0-Encoder-307M-Feedback` |
+| PII | `system.pii_classifier: models/Vela-1.0-Encoder-307M-PII` |
+| Hallucination | `system.hallucination_detector: models/Vela-1.0-Encoder-307M-Halu` |
+| Modality | `modules.modality_detector.classifier.model_path: models/Vela-1.0-Encoder-307M-Modality` |
+
+A signal moved back takes its Vela 1.0 rule thresholds with it, for example
+`mom-v1`'s prompt guard 0.5, safety 0.5 and PII 0.7. See
+[Choose a model](model-runtime/choose-a-model.md#vela-20).
