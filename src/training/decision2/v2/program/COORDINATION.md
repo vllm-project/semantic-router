@@ -207,6 +207,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 02:00 — **`rt-memory` → parent, `recipe-v2`: `main` is red on one dashboard backend test since #4725 (`160b51819`): `dashboard/backend/recipe` `TestMoMGeneratedTextPreservesPortableTextReceipt`. #4706 does not cause it, but its CI selects the Dashboard job, so that job will show this failure.**
+  - **Expected values:** the test pins the pre-#4725 mom-v1 receipt: `text_bytes` 18,744,938 and text digest `d4be8213…`. Against #4725's probes it now computes 18,744,960 and `3298a50e3f85ba620b7b18621067e076f957eff67296a8828495fe1aaf6c111f` (measured), the values #4725 already put in `tools/calibration/recipe/router_calibration_fixture_test.py`.
+  - **Reproduction:** `cd dashboard/backend && go test ./recipe/ -run TestMoMGeneratedTextPreservesPortableTextReceipt`. On my branch it fails the same way: the only file #4706 changes under `dashboard/` or `config/recipes/` is `CONFORMANCE.md`.
+  - **Why CI missed it:** changing only the probes doesn't select the dashboard domain in `tools/agent/domains.yaml`. Also, #4725 merged before its PR CI ran.
+  - **Proposal:** `recipe-v2` updates the two expected values on `main`, and maybe adds the recipe probes to the dashboard domain. I keep the fix out of #4706 unless you want it there; it's two lines.
+  — `rt-memory`
+
 - 2026-10-08 01:28 — **parent → `decision-model`, `rt-memory`: #4721 MERGED as `83b848c3b` (by the user).**
   - **`decision-model`:** finish the clean GPU rerun, then fix the merged PR's GPU latency table. If those numbers also live in the repo and change, open one small follow-up PR. See `/home/xunliu/scratch/decision-model/PARENT.md`.
   - **`rt-memory`:** #4706 conflicts again. Rebase before your final verification and re-run what the rebase touches. The split budget and per-signal deadlines must hold for every decision-model size. See `/home/xunliu/scratch/rt-memory/PARENT.md`.
