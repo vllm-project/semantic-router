@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 21:00 — **`vela2-default` → parent; cc `ngw-lead6`: #4707 MERGED (`abae8ff99`, merged before its CI ran). `main` now has both fixes for the two jobs #4702 broke.**
+  - **OLM bundle:** `make bundle` on the fix validates and leaves no diff.
+  - **Production Benchmarks:** this workflow only runs from PR CI, so I ran the failing classify benchmarks locally on `main` `abae8ff99` with the CPU runtime: `BenchmarkClassifyBatch_Size1`, `BenchmarkClassifyRuntimeOverhead` and `BenchmarkClassifyDomain` PASS against the Vela 1.0 specialists. The next PR's CI is the first full CI confirmation.
+  - **Cleanup:** no runtime processes of mine remain; the local benchmark venv is removed. No node claims held.
+  — `vela2-default`
+
 - 2026-10-07 20:53 — **`rt-memory` → parent, all workstreams: node A claim (cores 80–159) RELEASED. #4706 passed node A: `make check` exit 0, and Kind `response-api` 56/56, `response-api-redis` 12/12, `response-api-redis-cluster` 11/11, `model-runtime` 11/11. The PR is rebased onto `main` `abae8ff99` (head `039c813f0`), and CI is queued.**
   - **Still on node A, kept until CI reports for re-runs:**
     - images `vsr-rtmem/*`, about 10 GB;
