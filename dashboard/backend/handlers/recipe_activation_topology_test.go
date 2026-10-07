@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -178,7 +179,11 @@ func TestActivationPlanRejectsManagementBindChangeBeforeJournal(t *testing.T) {
 	assertNoActivationJournal(t, store)
 }
 
+// The management credential `vllm-sr serve` passes the Dashboard.
+const testManagementCredential = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" //nolint:gosec // Test fixture, not a credential.
+
 func TestActivationPlanRequiresRecreationForManagementAuthChange(t *testing.T) {
+	t.Setenv(recipe.ManagementCredentialEnv, testManagementCredential)
 	store, summary, configPath := importedActivationFixture(t, "accuracy")
 	current := withManagedManagementListener(mustReadFile(t, configPath), 8080, "disabled")
 	if err := writeActivationConfig(configPath, current); err != nil {
@@ -381,8 +386,10 @@ func TestDeactivationThatRecreatesTheStackIsLeftToServe(t *testing.T) {
 	}
 }
 
-func TestBearerActivationProvisionsAPrivateCredentialForServe(t *testing.T) {
+func TestBearerActivationBindsTheCredentialServePassedWithoutWritingIt(t *testing.T) {
 	store, summary, configPath := importedActivationFixture(t, "accuracy")
+	token := testManagementCredential
+	t.Setenv(recipe.ManagementCredentialEnv, token)
 	activator := topologyTestActivator(store, configPath, testTopologyForManagedRuntime(), withManagementBearer, nil)
 	request := activationRequest(summary)
 	plan, err := activator.Preview(context.Background(), request)
@@ -397,45 +404,48 @@ func TestBearerActivationProvisionsAPrivateCredentialForServe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := store.ManagementCredential()
-	if err != nil || len(token) != 64 {
-		t.Fatalf("credential provisioning failed: err=%v", err)
-	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Contains(encoded, []byte(token)) || bytes.Contains(mustReadFile(t, configPath), []byte(token)) {
+	runtimeConfig := mustReadFile(t, configPath)
+	if bytes.Contains(encoded, []byte(token)) || bytes.Contains(runtimeConfig, []byte(token)) {
 		t.Fatal("management credential leaked into response or runtime config")
 	}
-	info, err := os.Stat(filepath.Join(store.Root(), "credentials", "router-management.token"))
+	if !bytes.Contains(runtimeConfig, []byte("env: "+recipe.ManagementCredentialEnv)) {
+		t.Fatalf("runtime config does not bind the credential by name:\n%s", runtimeConfig)
+	}
+	err = filepath.WalkDir(store.Root(), func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil || entry.IsDir() {
+			return walkErr
+		}
+		if bytes.Contains(mustReadFile(t, path), []byte(token)) {
+			t.Errorf("the Recipe store wrote the management credential to %s", path)
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("credential mode=%v", info.Mode())
 	}
 }
 
-func TestBearerActivationKeepsTheRuntimeCredentialAndTheStoredOne(t *testing.T) {
+func TestBearerActivationWithoutACredentialSaysWhoProvidesIt(t *testing.T) {
 	store, summary, configPath := importedActivationFixture(t, "accuracy")
-	persistedToken, err := store.EnsureManagementCredential()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv(recipe.ManagementCredentialEnv, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	t.Setenv(recipe.ManagementCredentialEnv, "")
+	previous := mustReadFile(t, configPath)
 	activator := topologyTestActivator(store, configPath, testTopologyForManagedRuntime(), withManagementBearer, nil)
-	request := activationRequest(summary)
-	plan, err := activator.Preview(context.Background(), request)
-	if err != nil {
-		t.Fatal(err)
+
+	_, err := activator.Preview(context.Background(), activationRequest(summary))
+	var packageErr *recipe.PackageError
+	if !errors.As(err, &packageErr) || packageErr.Code != recipe.ErrorActivationIncompatible ||
+		!strings.Contains(packageErr.Safe, "vllm-sr serve") {
+		t.Fatalf("Preview() error = %v, want an explanation that names vllm-sr serve", err)
 	}
-	if _, err := activator.Activate(context.Background(), confirmed(request, plan)); err != nil {
-		t.Fatal(err)
+	if _, state, _ := store.ActivationStatus(); state != recipe.ActivationNone {
+		t.Fatalf("activation state = %q, want none", state)
 	}
-	credentialPath := filepath.Join(store.Root(), "credentials", "router-management.token")
-	if persistedAfter := strings.TrimSpace(string(mustReadFile(t, credentialPath))); persistedAfter != persistedToken {
-		t.Fatalf("persisted credential changed from %q to %q", persistedToken, persistedAfter)
+	if !bytes.Equal(mustReadFile(t, configPath), previous) {
+		t.Fatal("a refused activation changed the runtime config")
 	}
 }
 

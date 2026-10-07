@@ -133,6 +133,7 @@ def test_dashboard_docker_published_address(monkeypatch, host_bind, expected):
             "runtime_container_config": "/app/config.yaml",
             "container_recipe_store_dir": "/app/recipes",
             "log_spool_gid": "1000",
+            "recipe_store_gid": "1000",
         },
         stack_layout=stack,
         inherited_sensitive_env=set(),

@@ -12,6 +12,7 @@ SERVER_READONLY=${DASHBOARD_READONLY:-false}
 RUNTIME_CONFIG_WRITABLE=${DASHBOARD_RUNTIME_CONFIG_WRITABLE:-true}
 RECIPE_STORE_WRITABLE=${DASHBOARD_RECIPE_STORE_WRITABLE:-true}
 LOG_SPOOL_GID=${VLLM_SR_LOG_SPOOL_GID:-}
+RECIPE_STORE_GID=${VLLM_SR_RECIPE_STORE_GID:-65532}
 K8S_CONFIGMAP_TARGET=
 if [ -n "${VLLM_SR_K8S_CONFIGMAP_NAME:-}" ] &&
    [ -n "${VLLM_SR_K8S_CONFIGMAP_NAMESPACE:-}" ]; then
@@ -58,6 +59,9 @@ if [ -n "$LOG_SPOOL_GID" ]; then
     esac
     add_nonroot_group_gid "$LOG_SPOOL_GID"
 fi
+case "$RECIPE_STORE_GID" in
+    ""|*[!0-9]*|0) echo "Invalid Recipe store group" >&2; exit 1 ;;
+esac
 
 # Atomic runtime-config replacement needs group write access to the containing
 # state directory, not only to the current file. Preserve the host owner's UID
@@ -107,13 +111,18 @@ if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ] &
         python3 "$PERMISSION_HELPER" prepare-file "$VLLM_SR_ENVOY_CONFIG_PATH" "$ENVOY_STATE_GID"
     fi
 fi
+# `vllm-sr serve` reads the Recipe store before it starts the stack and
+# recovers interrupted activations, as the user who runs it: the CLI passes
+# that user's group, and the store is shared with it. `.vllm-sr` around it
+# stays open only to its owner and the Dashboard. The CLI owns the Router
+# management credential and passes it in the environment, so the copy an
+# earlier Dashboard kept in the store goes first.
 if [ "$SERVER_READONLY" != "true" ] && [ "$RECIPE_STORE_WRITABLE" = "true" ] &&
    [ -d "$RECIPE_STORE_DIR" ]; then
-    RECIPE_STORE_GID=65532
     add_nonroot_group_gid "$RECIPE_STORE_GID"
-    python3 "$PERMISSION_HELPER" prepare-tree \
-        "$RECIPE_STORE_DIR" "$RECIPE_STORE_GID" \
-        --credential-relative-path credentials/router-management.token
+    python3 "$PERMISSION_HELPER" remove-stale-file \
+        "$RECIPE_STORE_DIR/credentials/router-management.token"
+    python3 "$PERMISSION_HELPER" prepare-tree "$RECIPE_STORE_DIR" "$RECIPE_STORE_GID"
 fi
 if [ -d /app/data ]; then
     DATA_GID=65532
@@ -122,21 +131,9 @@ if [ -d /app/data ]; then
         --exclude-path /app/data/evaluation
 fi
 
-# The dashboard is deliberately nonroot. `vllm-sr serve` mounts no
-# container-runtime socket; when an operator mounts one, the status page reads
-# container states and log tails through it. Map the socket's numeric group
-# inside the image before gosu rebuilds supplementary groups for the nonroot
-# account. Never broaden the socket's host permissions.
-CONTAINER_SOCKET_PATH=${VLLM_SR_CONTAINER_SOCKET_PATH:-/var/run/docker.sock}
-if [ -e "$CONTAINER_SOCKET_PATH" ] || [ -L "$CONTAINER_SOCKET_PATH" ]; then
-    if CONTAINER_SOCKET_GID=$(python3 "$PERMISSION_HELPER" socket-gid "$CONTAINER_SOCKET_PATH" 2>/dev/null); then
-        add_nonroot_group_gid "$CONTAINER_SOCKET_GID"
-    else
-        echo "Warning: Dashboard container management is unavailable because the runtime socket cannot be shared safely; continuing without socket access" >&2
-    fi
-fi
-
-# Switch to nonroot user and execute the dashboard backend.
+# The dashboard is deliberately nonroot and holds no container runtime: it
+# reads status from HTTP probes and the stack's files, and logs from the
+# spool. Switch to nonroot user and execute the dashboard backend.
 if ! command -v gosu >/dev/null 2>&1; then
     echo "gosu is required to initialize Dashboard supplementary groups" >&2
     exit 1

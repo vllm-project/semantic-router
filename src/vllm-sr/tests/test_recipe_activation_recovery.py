@@ -1,5 +1,7 @@
 import hashlib
 import json
+import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -7,6 +9,7 @@ from cli import core
 from cli import recipe_activation_recovery as recovery
 from cli import recipe_activation_transaction as activation_transaction
 from cli import recipe_topology_reconcile as topology
+from cli.recipe_activation_recovery_io import RecipeStoreAccessError
 from cli.recipe_package import RECIPE_FILES, recipe_digest
 
 TRANSACTION_ID = "0123456789abcdef0123456789abcdef"
@@ -212,6 +215,38 @@ def test_recovery_without_previous_package_removes_active_pointer(tmp_path: Path
 
     assert runtime_config.read_bytes() == previous
     assert not (store_dir / "active.json").exists()
+
+
+def test_a_restored_pointer_stays_readable_by_the_dashboard(tmp_path: Path):
+    pointer = _previous_pointer(realized_digest="sha256:" + "e" * 64)
+    runtime_config, store_dir, _transaction_dir, _previous, _target = (
+        _write_crashed_activation(tmp_path, previous_pointer=pointer)
+    )
+
+    assert _recover(runtime_config, store_dir) is True
+
+    # The Dashboard reads the store through the group it shares with this user.
+    assert stat.S_IMODE((store_dir / "active.json").stat().st_mode) == 0o640
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "geteuid") or os.geteuid() == 0,
+    reason="root reads a store it is not given",
+)
+def test_a_store_this_user_cannot_read_says_how_to_share_it(tmp_path: Path):
+    active = _write_valid_active_package(tmp_path)
+    objects = active["store_dir"] / "objects"
+    objects.chmod(0)
+    try:
+        with pytest.raises(RecipeStoreAccessError) as raised:
+            recovery.active_recipe_package_for_stack(
+                state_root_dir=tmp_path, stack_name="vllm-sr"
+            )
+    finally:
+        objects.chmod(0o700)
+    message = str(raised.value)
+    assert str(active["store_dir"]) in message
+    assert f"sudo chgrp -R {os.getgid()} {active['store_dir']}" in message
 
 
 def test_active_recipe_package_for_stack_validates_full_state(tmp_path: Path):

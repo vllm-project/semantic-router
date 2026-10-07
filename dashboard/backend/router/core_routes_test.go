@@ -23,16 +23,13 @@ func TestRegisterRecipeRoutesPassesStoreToRecipeService(t *testing.T) {
 	directory := filepath.Join("..", "..", "..", "config", "recipes", "accuracy")
 	configPath := filepath.Join(directory, "config.yaml")
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", directory)
-	t.Setenv(recipe.ManagementCredentialEnv, "")
+	token := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	t.Setenv(recipe.ManagementCredentialEnv, token)
 
 	store := recipe.NewStore(recipe.StoreOptions{
 		Root:       filepath.Join(t.TempDir(), "recipe-store"),
 		ConfigPath: configPath,
 	})
-	token, err := store.EnsureManagementCredential()
-	if err != nil {
-		t.Fatalf("EnsureManagementCredential(): %v", err)
-	}
 	configBytes, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("ReadFile(config): %v", err)
