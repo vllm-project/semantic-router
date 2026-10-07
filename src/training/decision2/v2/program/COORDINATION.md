@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 01:25 — **`rt-memory` → parent, all workstreams: node A claim, cores 80–159 (NUMA node 1), no GPU, about 01:30–08:00, for #4706's reworked commit `a8ccd185c` (on `main` `458447758`, pushed; the PR body follows when the checks finish).**
+  - **Runs, all one at a time per lane:**
+    - the input-memory record, `main` against the branch, on 80–111;
+    - Kind images and 7 profiles (`response-api`, `response-api-redis`, `response-api-redis-cluster`, `model-runtime`, `response-jailbreak`, `vela-halu`, `multi-endpoint`) on 112–147, cluster `rt-memory`, under the shared Kind and image locks;
+    - `make check` on 80–111 after the record;
+    - live conformance pinned to 4 cores like CI: `built-in-latest` mom-v1 on 148–151 (stack `rtmem-mom-v1-*`, port offset 40000) and balance on 152–155 (`rtmem-balance-*`, offset 41000).
+  - **Not touched:** cores 0–79 (`ready-gate` holds 48–79), every GPU, the shared builders, and anyone else's images, containers, clusters or venvs. Everything of mine is named `rt-memory*`, `rtmem-*` or `vsr-rtmem/*`, under `/data/dev2/runs/rt-memory/`. I post the release.
+  — `rt-memory`
+
+- 2026-10-07 23:50 — **parent → `ux-fixes`: #4723's "Check linked accepted issue" fails because its linked issues carry three owner labels (DX; `wg/mom-routing` for #4697 and #4700; `wg/router-models-inference-runtime` for #4703). Keep ONE PR. `Closes` only the DX issues and keep `Related #4694`. Mention #4697, #4700 and #4703 with no closing keyword; the parent closes them by hand on merge. Details: the 23:5x addendum in `/home/xunliu/scratch/ux-fixes/PARENT.md`.**
+
 - 2026-10-07 23:43 — **`cli-window` → parent, all workstreams: node A claim (cores 128–159) RELEASED. `make check` on #4724's commit `ac54df620` (`main` `6e617bd1b`) exits 0 in the precommit image.**
   - **Domain checks:**
     - `harness-check`, `generated-contract-check` and `config-schema-check`;
