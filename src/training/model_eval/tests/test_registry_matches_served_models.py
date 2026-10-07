@@ -19,17 +19,22 @@ from src.training.model_eval.constants import (
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 MODELS_MK = REPOSITORY_ROOT / "tools/make/models.mk"
-ROUTER_CONFIG = REPOSITORY_ROOT / "config/config.yaml"
+# The Router's defaults serve Vela 2.0 0.3B for these roles; the evaluation
+# scores the Vela 1.0 specialists the Router serves when
+# global.model_catalog.system restores them (Vela1SystemModels).
+ROUTER_DEFAULTS = (
+    REPOSITORY_ROOT / "src/semantic-router/pkg/config/canonical_defaults.go"
+)
 
-# Registry role -> the `model_catalog.system` key in config.yaml that names the
-# checkpoint the router loads for that role. The two vocabularies grew up
-# separately, so the mapping has to be written out rather than derived.
+# Registry role -> the Vela1SystemModels field that names the checkpoint the
+# router loads for that role. The two vocabularies grew up separately, so the
+# mapping has to be written out rather than derived.
 ROLE_TO_CONFIG_KEY = {
-    "feedback": "feedback_detector",
-    "jailbreak": "prompt_guard",
-    "fact-check": "fact_check_classifier",
-    "intent": "domain_classifier",
-    "pii": "pii_classifier",
+    "feedback": "FeedbackDetector",
+    "jailbreak": "PromptGuard",
+    "fact-check": "FactCheckClassifier",
+    "intent": "DomainClassifier",
+    "pii": "PIIClassifier",
 }
 
 # What the registry used to say. These repos still resolve, which is exactly
@@ -66,15 +71,24 @@ def read_make_variable(name: str) -> list[str]:
 
 
 def read_served_model(config_key: str) -> str:
-    """Return the checkpoint basename config.yaml gives one system classifier."""
-    config = ROUTER_CONFIG.read_text(encoding="utf-8")
+    """Return the checkpoint basename Vela1SystemModels gives one system classifier."""
+    source = ROUTER_DEFAULTS.read_text(encoding="utf-8")
+    block = re.search(
+        r"func Vela1SystemModels\(\) CanonicalSystemModels \{(.*?)\n\}",
+        source,
+        re.DOTALL,
+    )
+    if block is None:
+        raise AssertionError(f"Vela1SystemModels is not defined in {ROUTER_DEFAULTS}")
     matches = re.findall(
-        rf"^\s*{re.escape(config_key)}:\s*models/(\S+)\s*$", config, re.MULTILINE
+        rf'^\s*{re.escape(config_key)}:\s*"models/(\S+)",\s*$',
+        block.group(1),
+        re.MULTILINE,
     )
     if len(matches) != 1:
         raise AssertionError(
-            f"expected exactly one '{config_key}: models/...' line in "
-            f"{ROUTER_CONFIG}, found {len(matches)}"
+            f"expected exactly one '{config_key}: \"models/...\"' line in "
+            f"Vela1SystemModels, found {len(matches)}"
         )
     return matches[0]
 
