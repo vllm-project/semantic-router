@@ -26,6 +26,13 @@ const (
 // of every built-in signal it answers.
 const Vela2SignalModel = "models/Vela-2.0-0.3B"
 
+// Registry paths of the larger Vela 2.0 sizes a decision model may name.
+const (
+	Vela2Model08B = "models/Vela-2.0-0.8B"
+	Vela2Model4B  = "models/Vela-2.0-4B"
+	Vela2Model9B  = "models/Vela-2.0-9B"
+)
+
 // ModelSpec defines a model's metadata and capabilities
 type ModelSpec struct {
 	// Primary local path (canonical name)
@@ -87,6 +94,11 @@ type ModelSpec struct {
 	// the model runs; the runtime's accuracy record for the model backs it.
 	CPUProfile string `json:"-" yaml:"-"`
 
+	// RequiresGPU marks a model whose implicit deployment runs on a GPU only:
+	// a module that names it runs it on the best GPU, and a host without one
+	// cannot serve it.
+	RequiresGPU bool `json:"-" yaml:"-"`
+
 	// Number of classification classes (for classifiers)
 	NumClasses int `json:"num_classes,omitempty" yaml:"num_classes,omitempty"`
 
@@ -122,6 +134,51 @@ var DefaultModelRegistry = []ModelSpec{
 		RuntimeProvisioned: true,
 		SharedDeployment:   true,
 		CPUProfile:         "max_speed",
+		Tags:               []string{"vela", "vela2", "multi-task", "spans", "multilingual"},
+	},
+	// The larger Vela 2.0 sizes answer the same questions and span presets as
+	// the 0.3B; global.model_catalog.system.decision_model selects one. They
+	// are Qwen3.5 hybrid decoders: the 0.8B runs on a CPU at seconds per
+	// request, and the 4B and 9B run on a GPU only.
+	{
+		LocalPath:          Vela2Model08B,
+		RepoID:             "vllm-sr/Vela-2.0-0.8B",
+		Revision:           "a778eb2ae2304cfa72fca7e53a19136dea5be012",
+		Aliases:            []string{"Vela-2.0-0.8B"},
+		Purpose:            PurposeRoutingSignals,
+		Description:        "Answer the built-in routing signals in one call, with PII and hallucination spans. Supports up to 16K input.",
+		ParameterSize:      "756M decoder",
+		MaxContextLength:   16384,
+		RuntimeProvisioned: true,
+		SharedDeployment:   true,
+		Tags:               []string{"vela", "vela2", "multi-task", "spans", "multilingual"},
+	},
+	{
+		LocalPath:          Vela2Model4B,
+		RepoID:             "vllm-sr/Vela-2.0-4B",
+		Revision:           "c1e64d4f872cb38bc58502e6888340100bab9d55",
+		Aliases:            []string{"Vela-2.0-4B"},
+		Purpose:            PurposeRoutingSignals,
+		Description:        "Answer the built-in routing signals in one call, with PII and hallucination spans, on a GPU. Supports up to 16K input.",
+		ParameterSize:      "4.2B decoder",
+		MaxContextLength:   16384,
+		RuntimeProvisioned: true,
+		SharedDeployment:   true,
+		RequiresGPU:        true,
+		Tags:               []string{"vela", "vela2", "multi-task", "spans", "multilingual"},
+	},
+	{
+		LocalPath:          Vela2Model9B,
+		RepoID:             "vllm-sr/Vela-2.0-9B",
+		Revision:           "bc8761637d8788619dfbaf6d8890128efe85fd40",
+		Aliases:            []string{"Vela-2.0-9B"},
+		Purpose:            PurposeRoutingSignals,
+		Description:        "Answer the built-in routing signals in one call, with PII and hallucination spans, on a GPU. Supports up to 16K input.",
+		ParameterSize:      "7.9B decoder",
+		MaxContextLength:   16384,
+		RuntimeProvisioned: true,
+		SharedDeployment:   true,
+		RequiresGPU:        true,
 		Tags:               []string{"vela", "vela2", "multi-task", "spans", "multilingual"},
 	},
 	// Vela releases use immutable revisions. Legacy aliases below retain their

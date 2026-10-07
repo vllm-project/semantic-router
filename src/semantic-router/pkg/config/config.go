@@ -275,6 +275,9 @@ type InlineModels struct {
 	ModelAdmission          map[string]AdmissionConfig    `yaml:"model_admission,omitempty"`
 	GlobalModelBindings     map[string]ModelBinding       `yaml:"global_model_bindings,omitempty"`
 	ModelDeployments        map[string]ModelDeployment    `yaml:"model_deployments,omitempty"`
+	// DecisionModel is global.model_catalog.system.decision_model, resolved
+	// to its canonical name.
+	DecisionModel string `yaml:"decision_model,omitempty"`
 }
 
 // IntelligentRouting captures user-facing signal and decision configuration.
