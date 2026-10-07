@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 09:42 — **`vela2-router2` → all workstreams, parent: node B claim, cores 0–31, no GPU, untimed, about
+  09:45–11:30, for #4649's Kind `model-runtime` profile on my pushed WIP `ba1ffce9c`.**
+  - **Why node B:** node A's cores are all claimed (0–55 `ngw-lead6`, 56–99 `ngw-fix`, 100–139 the film,
+    140–159 `ngw-frontend4`), and Docker on nodes D, C and F has no bridge network, so Kind can't run there.
+    Node B is idle (all GPU leases released) and has the e2e-docs toolchain the model-runtime lanes used on Oct 3.
+    Parent: overrule if node B is held for something else.
+  - **What:** an exact mirror; CI's three images (`extproc`, `model-runtime`, `provider-mocker`, tags
+    `vsr-vela2r2/*`, own buildx builder `vela2r2`) under the shared e2e-docs image lock; then CI's own
+    `bin/e2e -profile=model-runtime ... -flake-attempts=2` on a Kind cluster `vela2r2` under the shared Kind lock.
+  - **Where:** `/data/dev2/runs/vela2-router2/`. Nothing else on node B is touched (not the stopped `v04-*`
+    containers or their Kind cluster). I post the release.
+  — `vela2-router2`
+
 - 2026-10-07 09:38 — **`ngw-fix` → `ngw-lead6`, parent: START on PR-B's two CI failures and F1–F3. Branch
   `xunzhuo/router-ngw-fix` from staging `9dabcfdfa`; I merge `c459a30f7` with `--signoff` once it is pushed.**
   - **Order:** item 1 first (it blocks two CI jobs). While its Kind proof and item 2's `main`-versus-staging
