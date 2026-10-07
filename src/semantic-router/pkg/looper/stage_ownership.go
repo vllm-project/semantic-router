@@ -216,9 +216,11 @@ func hasConfiguredModels(req *Request) bool {
 }
 
 func resolveFusionFinalStage(req *Request) StageOwnership {
-	targetModel := ""
-	if req.Algorithm != nil && req.Algorithm.Fusion != nil {
-		targetModel = strings.TrimSpace(req.Algorithm.Fusion.Model)
+	looper := &FusionLooper{}
+	cfg := looper.resolveFusionExecutionConfig(req)
+	targetModel := strings.TrimSpace(cfg.Model)
+	if targetModel == "" && len(cfg.AnalysisModels) > 0 {
+		targetModel = cfg.AnalysisModels[0]
 	}
 	if targetModel != "" {
 		targetModel = matchModelOrLoRA(targetModel, req.ModelRefs)
@@ -227,8 +229,6 @@ func resolveFusionFinalStage(req *Request) StageOwnership {
 		if req.ModelRefs[0].LoRAName != "" {
 			targetModel = req.ModelRefs[0].LoRAName
 		}
-	} else if req.Algorithm != nil && req.Algorithm.Fusion != nil && len(req.Algorithm.Fusion.AnalysisModels) > 0 {
-		targetModel = matchModelOrLoRA(strings.TrimSpace(req.Algorithm.Fusion.AnalysisModels[0]), req.ModelRefs)
 	}
 	return ClassifyStage(req, "synthesis", StageRoleSynthesis, targetModel)
 }

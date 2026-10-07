@@ -101,6 +101,31 @@ func TestFusionFinalStageOwnership(t *testing.T) {
 		assert.Equal(t, StreamingEligible, ownership.Eligibility)
 	})
 
+	t.Run("fallback to AnalysisModels[0] preserving LoRA when analysis_models and model_refs have different order", func(t *testing.T) {
+		req := &Request{
+			IsStreaming: true,
+			Algorithm: &config.AlgorithmConfig{
+				Type: config.DecisionAlgorithmFusion,
+				Fusion: &config.FusionAlgorithmConfig{
+					AnalysisModels: []string{"worker-b", "worker-a"},
+				},
+			},
+			ModelRefs: []config.ModelRef{
+				{Model: "worker-a"},
+				{Model: "worker-b", LoRAName: "worker-b-lora"},
+			},
+		}
+
+		ownership := ResolveFinalStageOwnership(req)
+		assert.Equal(t, config.DecisionAlgorithmFusion, ownership.AlgorithmType)
+		assert.Equal(t, "synthesis", ownership.StageName)
+		assert.Equal(t, "worker-b-lora", ownership.TargetModel)
+		assert.Equal(t, StageRoleSynthesis, ownership.StageRole)
+		assert.True(t, ownership.IsFinalUserVisible)
+		assert.Equal(t, StreamingEligible, ownership.Eligibility)
+		assert.Equal(t, BufferingReasonNone, ownership.BufferingReason)
+	})
+
 	t.Run("fallback to buffering when non-streaming", func(t *testing.T) {
 		req := &Request{
 			IsStreaming: false,
