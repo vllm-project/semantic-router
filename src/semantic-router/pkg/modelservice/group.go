@@ -343,13 +343,17 @@ func (g *group) waitCard(ctx context.Context, model string) (ModelCard, error) {
 func (g *group) status() []DeploymentStatus {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	artifacts := make(map[string]string, len(g.plan.models))
+	for _, entry := range g.plan.models {
+		artifacts[entry.Name] = entry.Model
+	}
 	statuses := make([]DeploymentStatus, 0, len(g.plan.members))
 	for _, deployment := range g.plan.deployments() {
 		served := g.models[g.plan.members[deployment]]
 		status := DeploymentStatus{
 			Name: deployment, Managed: g.managed, Endpoint: g.client.Endpoint(), Process: g.plan.name,
-			Model: served.name, Ready: served.ready.Load(), State: served.state, Reason: served.reason,
-			Restarts: g.restarts,
+			Model: served.name, Artifact: artifacts[served.name], Ready: served.ready.Load(), State: served.state,
+			Reason: served.reason, Restarts: g.restarts,
 		}
 		if served.card != nil {
 			card := *served.card
