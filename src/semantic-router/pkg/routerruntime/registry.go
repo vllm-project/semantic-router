@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
@@ -18,25 +19,29 @@ import (
 // Registry is the narrow runtime-owned dependency seam shared by startup,
 // reload, extproc, and the API server.
 type Registry struct {
-	modelPool             *binding.Pool
-	configPublicationMu   sync.Mutex
-	mu                    sync.RWMutex
-	config                *config.RouterConfig
-	classificationService *services.ClassificationService
-	acquireGeneration     AcquireClassification
-	memoryStore           memory.Store
-	vectorStore           *VectorStoreRuntime
-	modelSelector         *selection.Registry
-	learningRuntime       LearningRuntime
-	replayRuntime         ReplayRuntime
-	responseCache         *cache.ResponseCacheService
-	contextCompression    *contextcompression.Service
-	compressionRecovery   contextcompression.RecoveryStore
-	plugins               pluginruntime.Capabilities
-	configActivation      ConfigActivation
-	instanceID            string
-	startupStatus         *localStartupSnapshot
-	configListeners       []func(*config.RouterConfig)
+	modelPool              *binding.Pool
+	configPublicationMu    sync.Mutex
+	mu                     sync.RWMutex
+	config                 *config.RouterConfig
+	classificationService  *services.ClassificationService
+	acquireGeneration      AcquireClassification
+	memoryStore            memory.Store
+	vectorStore            *VectorStoreRuntime
+	modelSelector          *selection.Registry
+	learningRuntime        LearningRuntime
+	replayRuntime          ReplayRuntime
+	responseCache          *cache.ResponseCacheService
+	contextCompression     *contextcompression.Service
+	compressionRecovery    contextcompression.RecoveryStore
+	plugins                pluginruntime.Capabilities
+	configActivation       ConfigActivation
+	configRejection        *ConfigActivation
+	configSnapshot         *configsnapshot.Snapshot
+	configLifecycle        *configsnapshot.Manager
+	configAttemptListeners []func(configsnapshot.Attempt)
+	instanceID             string
+	startupStatus          *localStartupSnapshot
+	configListeners        []func(*config.RouterConfig)
 }
 
 // RouterRuntimeSnapshot is the router-owned management surface published as
@@ -49,7 +54,9 @@ type Registry struct {
 type AcquireClassification func() (release func(), ok bool)
 
 type RouterRuntimeSnapshot struct {
-	Config                *config.RouterConfig
+	Config *config.RouterConfig
+	// ConfigSnapshot is the configuration snapshot Config was compiled into.
+	ConfigSnapshot        *configsnapshot.Snapshot
 	ClassificationService *services.ClassificationService
 	AcquireClassification AcquireClassification
 	MemoryStore           memory.Store
@@ -438,6 +445,7 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 	if snapshot.Config != nil {
 		r.config = snapshot.Config
 	}
+	r.configSnapshot = snapshot.ConfigSnapshot
 	r.classificationService = snapshot.ClassificationService
 	r.acquireGeneration = snapshot.AcquireClassification
 	r.memoryStore = snapshot.MemoryStore

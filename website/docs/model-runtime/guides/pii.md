@@ -73,10 +73,40 @@ Keep `overflow: window` for PII: the model reads the whole request in
 512-token windows that overlap by 255 tokens. `truncate` would scan only the
 beginning, and `reject` makes the signal unknown for longer requests.
 
+### On Vela 2.0
+
+Vela 2.0 finds the same 17 types with its router span head, as a ready-made
+question. Bind `pii_classifier` to a Vela 2.0 deployment and the PII question
+travels in the same call as the [decision questions](model-runtime/guides/decisions.md) the
+request asks that deployment about the same text:
+
+```yaml alternative
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+    bindings:
+      pii_classifier:
+        deployment: vela2
+        contract: token_spans.v1
+```
+
+The model reads the whole request itself, so the deployment takes no `input`
+and the PII module no `window`. See the
+[`pii` signal](tutorials/signal/learned/pii.md#vela-20) for how rule
+thresholds apply to its spans.
+
 ## When the scan cannot finish
 
-If the model is not ready or a scan fails, the signal is unknown. The PII
-module's `on_error` decides what that means: `allow` (default) treats the
+If the model is not ready or a scan fails, the signal is unknown. Content the
+model did not read (over its input or
+[scan cap](model-runtime/reference.md#long-inputs), truncated, or not scanned
+by the signals' deadline) matches as `unscanned` unless the module sets
+`on_unscanned: allow`. The PII module's `on_error` decides what an unknown
+signal means: `allow` (default) treats the
 unread text as clean, and `block` matches it as `classification_error`, so
 text that could not be checked cannot pass as clean.
 
@@ -100,3 +130,13 @@ curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
 Each span has its `label`, `start` and `end` (in characters, end exclusive),
 the `text` and its `probability`. Through the router, `x-vsr-matched-pii`
 lists the PII rules that matched.
+
+On Vela 2.0, ask the ready-made question on `/v1/decisions`; the spans are in
+`spans.pii`:
+
+```bash
+curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
+  "state": "Hi, I am Tom Baker, write to tom.baker@example.com.",
+  "questions": {"pii": {"preset": "pii"}}
+}'
+```

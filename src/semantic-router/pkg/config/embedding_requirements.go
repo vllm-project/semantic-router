@@ -72,7 +72,7 @@ func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices boo
 				dimension = 256
 			}
 		case "multimodal":
-			// Zero selects the prepared artifact's complete output.
+			// Zero selects the model's complete output.
 		default:
 			dimension = 0
 		}

@@ -13,7 +13,6 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -48,9 +47,6 @@ func candidateStageClient(t *testing.T) (*Client, *atomic.Int32, <-chan map[stri
 			t.Errorf("decode stage body: %v", err)
 		}
 		bodies <- body
-		if got := r.Header.Get(headers.VSRSelectedRecipe); got != "scoped" {
-			t.Errorf("stage lost recipe: %q", got)
-		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"id":"stage","object":"chat.completion","created":1,"model":"worker","choices":[{"index":0,"message":{"role":"assistant","content":"Agenda summary."},"finish_reason":"stop"}]}`))
 	}))

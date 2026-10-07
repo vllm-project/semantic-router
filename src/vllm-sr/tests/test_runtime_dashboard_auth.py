@@ -37,11 +37,6 @@ def test_local_stack_scopes_jwt_secret_and_hides_its_value(
     )
     docker_bin = tmp_path / "docker"
     docker_bin.write_text("")
-    monkeypatch.setattr(
-        container_start,
-        "resolve_container_cli_path",
-        lambda preferred_path=None: str(docker_bin),
-    )
     config = tmp_path / "config.yaml"
     config.write_text("version: v0.3\nlisteners: []\n")
     commands = []

@@ -1,12 +1,12 @@
 import pytest
-from vllm_sr_runtime.errors import INVALID_QUESTION, MAX_LENGTH_EXCEEDED, QuestionError
-from vllm_sr_runtime.systemone import (
+from vllm_srun.errors import INVALID_QUESTION, MAX_LENGTH_EXCEEDED, QuestionError
+from vllm_srun.systemone import (
     canonical,
     json_payload,
     question_options,
     valid_state,
 )
-from vllm_sr_runtime.text.segments import SUFFIX, encode, segments
+from vllm_srun.text.segments import SUFFIX, encode, segments
 
 
 def test_segments_reproduce_the_scored_prompt():

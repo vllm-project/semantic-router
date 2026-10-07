@@ -3,23 +3,23 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vllm-sr-runtime-example"
+name = "vllm-srun-example"
 version = "0.1.0"
 description = "Example out-of-tree plugin for the vllm-sr model runtime: a keyword family, a counting engine, a host accelerator and a one-by-one profile"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
-dependencies = ["vllm-sr-runtime"]
+dependencies = ["vllm-srun"]
 
-[project.entry-points."vllm_sr_runtime.families"]
+[project.entry-points."vllm_srun.families"]
 example_keywords = "vllm_sr_example.family:KeywordFamily"
 
-[project.entry-points."vllm_sr_runtime.engines"]
+[project.entry-points."vllm_srun.engines"]
 example_counts = "vllm_sr_example.engine:CountsEngine"
 
-[project.entry-points."vllm_sr_runtime.accelerators"]
+[project.entry-points."vllm_srun.accelerators"]
 example_host = "vllm_sr_example.accelerator:HostAccelerator"
 
-[project.entry-points."vllm_sr_runtime.profiles"]
+[project.entry-points."vllm_srun.profiles"]
 example_one_by_one = "vllm_sr_example.profile:OneByOneProfile"
 
 [tool.setuptools.packages.find]

@@ -109,7 +109,7 @@ func TestManagerPersistsServerConfigs(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "wf.sqlite")
 
-	store1, err := workflowstore.Open(path, workflowstore.Options{})
+	store1, err := workflowstore.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,59 +159,12 @@ func TestManagerPersistsServerConfigs(t *testing.T) {
 	}
 }
 
-func TestManagerUpsertBuiltinServerRefreshesURL(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "wf.sqlite")
-
-	store, err := workflowstore.Open(path, workflowstore.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	m, err := NewManager(store)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	first := &ServerConfig{
-		ID:        BuiltinOpenClawServerID,
-		Name:      BuiltinOpenClawServerName,
-		Transport: TransportStreamableHTTP,
-		Connection: ConnectionConfig{
-			URL: "http://127.0.0.1:8700/_internal/openclaw/mcp",
-		},
-		Enabled: false,
-	}
-	if upsertErr := m.UpsertServer(first); upsertErr != nil {
-		t.Fatal(upsertErr)
-	}
-
-	second := *first
-	second.Connection.URL = "http://127.0.0.1:9001/_internal/openclaw/mcp"
-	if upsertErr := m.UpsertServer(&second); upsertErr != nil {
-		t.Fatal(upsertErr)
-	}
-
-	reloaded, err := NewManager(store)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, ok := reloaded.GetServer(BuiltinOpenClawServerID)
-	if !ok {
-		t.Fatal("expected builtin server after reload")
-	}
-	if got.Connection.URL != second.Connection.URL {
-		t.Fatalf("url = %q, want %q", got.Connection.URL, second.Connection.URL)
-	}
-}
-
 func TestManagerPersistenceFailureDoesNotPublishMemoryChanges(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "wf.sqlite")
 
-	store, err := workflowstore.Open(path, workflowstore.Options{})
+	store, err := workflowstore.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}

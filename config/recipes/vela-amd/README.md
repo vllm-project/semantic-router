@@ -79,7 +79,7 @@ responses as application data.
 
 ## Quick start
 
-Install the CLI using the [installation guide](https://vllm-sr.ai/docs/installation/installation),
+Install the CLI using the [installation guide](https://vllm-sr.ai/docs/installation/),
 connect the backend described above, and download the recipe:
 
 ```bash

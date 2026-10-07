@@ -26,9 +26,12 @@ const fakeRuntimeEnv = "MODELSERVICE_FAKE_RUNTIME"
 // fakeRuntimeFailOnceEnv names a marker file: the first fake process to start
 // creates it and reports every model failed; later processes load normally.
 // fakeRuntimeFailAlwaysEnv makes every fake process report its models failed.
+// fakeRuntimeHoldEnv names a file: until it exists, a fake process reports its
+// models loading.
 const (
 	fakeRuntimeFailOnceEnv   = "MODELSERVICE_FAKE_FAIL_ONCE"
 	fakeRuntimeFailAlwaysEnv = "MODELSERVICE_FAKE_FAIL_ALWAYS"
+	fakeRuntimeHoldEnv       = "MODELSERVICE_FAKE_HOLD"
 )
 
 // fakeAutoEnv is the device the fake's devices command reports for auto;
@@ -113,7 +116,28 @@ func serveManagedFake(args []string) {
 			fake.SetFailed(entry.Name, "fake load failure")
 		}
 	}
+	if hold := os.Getenv(fakeRuntimeHoldEnv); hold != "" {
+		holdModels(fake, document.Models, hold)
+	}
 	_ = http.Serve(listener, fake.Handler())
+}
+
+// holdModels reports the models loading until the hold file exists.
+func holdModels(fake *runtimetest.Runtime, models []modelEntry, hold string) {
+	for _, entry := range models {
+		fake.SetReady(entry.Name, false)
+	}
+	go func() {
+		for {
+			if _, err := os.Stat(hold); err == nil {
+				for _, entry := range models {
+					fake.SetReady(entry.Name, true)
+				}
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
 }
 
 func sampleRequest(state string) Request {
@@ -160,7 +184,7 @@ func TestPlanProcessesGroupsByDeviceAndProcessKey(t *testing.T) {
 		"remote":  {Provider: config.ModelRuntimeProvider, Endpoint: "http://shared:8100", ServedName: "vela-domain"},
 		"remote2": {Provider: config.ModelRuntimeProvider, Endpoint: "http://shared:8100"},
 	}
-	plans := planProcesses(deployments, []string{"vllm-sr-runtime"}, "", 0, "")
+	plans := planProcesses(deployments, []string{"vllm-srun"}, "", 0, "")
 	byName := map[string]*processPlan{}
 	for _, plan := range plans {
 		byName[plan.name] = plan
@@ -175,11 +199,11 @@ func TestPlanProcessesGroupsByDeviceAndProcessKey(t *testing.T) {
 	if attached := byName["attached"]; attached.members["remote"] != "vela-domain" || attached.members["remote2"] != "remote2" {
 		t.Fatalf("attached members select by served name: %+v", attached.members)
 	}
-	again := planProcesses(deployments, []string{"vllm-sr-runtime"}, "", 0, "")
+	again := planProcesses(deployments, []string{"vllm-srun"}, "", 0, "")
 	if again[0].key != plans[0].key {
 		t.Fatal("the same composition must keep its key so generations share the process")
 	}
-	changed := planProcesses(deployments, []string{"vllm-sr-runtime"}, "/cache", 0, "")
+	changed := planProcesses(deployments, []string{"vllm-srun"}, "/cache", 0, "")
 	for _, plan := range changed {
 		if plan.name == "cpu" && plan.key == cpu.key {
 			t.Fatal("a changed composition must start a new process")
@@ -196,7 +220,7 @@ func TestPlanProcessesSpreadsCPUModelsOverThreadShares(t *testing.T) {
 	for _, name := range []string{"Domain", "FactCheck", "Feedback", "Guard", "PII"} {
 		deployments[strings.ToLower(name)] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-" + name, Device: "cpu"}
 	}
-	plans := planProcesses(deployments, []string{"vllm-sr-runtime"}, "", 16, "")
+	plans := planProcesses(deployments, []string{"vllm-srun"}, "", 16, "")
 	byName := map[string]*processPlan{}
 	for _, plan := range plans {
 		byName[plan.name] = plan
@@ -214,7 +238,7 @@ func TestPlanProcessesSpreadsCPUModelsOverThreadShares(t *testing.T) {
 	}
 
 	t.Setenv(CPUProcessesEnv, "2")
-	capped := planProcesses(deployments, []string{"vllm-sr-runtime"}, "", 16, "")
+	capped := planProcesses(deployments, []string{"vllm-srun"}, "", 16, "")
 	names := map[string]int{}
 	for _, plan := range capped {
 		names[plan.name] = plan.threads
@@ -228,11 +252,11 @@ func TestPlanProcessesSpreadsCPUModelsOverThreadShares(t *testing.T) {
 }
 
 func TestManagedCommandAndModelsFile(t *testing.T) {
-	got := strings.Join(managedCommand([]string{"vllm-sr-runtime"}, "/run/x.sock", "/run/x.models.json", "/cache", 0), " ")
-	if want := "vllm-sr-runtime serve --models /run/x.models.json --uds /run/x.sock --max-request-bytes 67108864 --max-bundle-tasks 1024 --cache-dir /cache"; got != want {
+	got := strings.Join(managedCommand([]string{"vllm-srun"}, "/run/x.sock", "/run/x.models.json", "/cache", 0), " ")
+	if want := "vllm-srun serve --models /run/x.models.json --uds /run/x.sock --max-request-bytes 67108864 --max-bundle-tasks 1024 --cache-dir /cache"; got != want {
 		t.Fatalf("command\n got %s\nwant %s", got, want)
 	}
-	if got := strings.Join(managedCommand([]string{"vllm-sr-runtime"}, "/run/x.sock", "/run/x.models.json", "", 4), " "); !strings.HasSuffix(got, "--max-bundle-tasks 1024 --threads 4") {
+	if got := strings.Join(managedCommand([]string{"vllm-srun"}, "/run/x.sock", "/run/x.models.json", "", 4), " "); !strings.HasSuffix(got, "--max-bundle-tasks 1024 --threads 4") {
 		t.Fatalf("a CPU share passes its thread count: %s", got)
 	}
 	plan := planProcesses(map[string]config.ModelDeployment{
@@ -497,7 +521,7 @@ func TestCardRefusesARuntimeOfAnotherContractMajor(t *testing.T) {
 }
 
 func TestRuntimeAPIMajorIsTheContractsMajor(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "model-runtime", "vllm_sr_runtime", "api", "openapi.yaml"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "model-runtime", "vllm_srun", "api", "openapi.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}

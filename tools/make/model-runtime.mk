@@ -3,7 +3,7 @@
 # ======== model-runtime.mk ========
 
 MODEL_RUNTIME_DIR := src/model-runtime
-MODEL_RUNTIME_OPENAPI := $(MODEL_RUNTIME_DIR)/vllm_sr_runtime/api/openapi.yaml
+MODEL_RUNTIME_OPENAPI := $(MODEL_RUNTIME_DIR)/vllm_srun/api/openapi.yaml
 MODEL_RUNTIME_PYTHON ?= $(AGENT_PYTHON)
 MODEL_RUNTIME_TORCH ?= torch==2.10.0
 MODEL_RUNTIME_TORCH_INDEX ?= https://download.pytorch.org/whl/cpu
@@ -17,7 +17,7 @@ model-runtime-install: ## Install the model runtime with CPU PyTorch, every engi
 	@"$(MODEL_RUNTIME_PYTHON)" -m pip install "$(MODEL_RUNTIME_TORCH)" --index-url "$(MODEL_RUNTIME_TORCH_INDEX)"
 	@"$(MODEL_RUNTIME_PYTHON)" -m pip install -e "$(MODEL_RUNTIME_DIR)[test,reference,onnx,multimodal]"
 
-model-runtime-test: ## Type-check the plugin API and run the model runtime tests on CPU (tiny fixtures; GPU cases are deselected)
+model-runtime-test: ## Type-check the runtime, its engines and families, and run the model runtime tests on CPU (tiny fixtures; GPU cases are deselected)
 	@$(LOG_TARGET)
 	@cd $(MODEL_RUNTIME_DIR) && "$(MODEL_RUNTIME_PYTHON)" -m mypy
 	@cd $(MODEL_RUNTIME_DIR) && HF_HUB_OFFLINE=1 "$(MODEL_RUNTIME_PYTHON)" -m pytest -q -p no:cacheprovider -m "not gpu" tests

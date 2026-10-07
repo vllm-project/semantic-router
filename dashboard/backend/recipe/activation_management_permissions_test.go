@@ -3,6 +3,7 @@ package recipe
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -23,72 +24,47 @@ func TestManagementCredentialHasNarrowReplayReadAndDetailPermissions(t *testing.
 	}
 }
 
-func TestManagementCredentialUsesExplicitRuntimeEnvironmentWithoutPersistingIt(t *testing.T) {
+func TestManagementCredentialComesFromTheEnvironmentAndIsNeverWritten(t *testing.T) {
 	token := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	t.Setenv(ManagementCredentialEnv, token)
 	store := NewStore(StoreOptions{Root: t.TempDir()})
-
-	got, err := store.ManagementCredential()
-	if err != nil {
-		t.Fatalf("ManagementCredential() error = %v", err)
-	}
-	if got != token {
-		t.Fatalf("ManagementCredential() = %q, want runtime token", got)
-	}
-	if _, err := store.readManagementCredentialLocked(); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("runtime token must not be persisted, read error = %v", err)
-	}
-}
-
-func TestManagementCredentialPrefersExplicitRuntimeEnvironmentOverPersistedActivationToken(t *testing.T) {
-	runtimeToken := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	persistedToken := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
-	t.Setenv(ManagementCredentialEnv, runtimeToken)
-	store := NewStore(StoreOptions{Root: t.TempDir()})
 	if err := store.ensureLayout(); err != nil {
 		t.Fatalf("ensure store layout: %v", err)
 	}
-	if err := writeFileAtomically(
-		store.managementCredentialPath(), []byte(persistedToken+"\n"), 0o600,
-	); err != nil {
-		t.Fatalf("persist stale activation token: %v", err)
-	}
 
 	got, err := store.ManagementCredential()
-	if err != nil {
-		t.Fatalf("ManagementCredential() error = %v", err)
+	if err != nil || got != token || !store.HasManagementCredential() {
+		t.Fatalf("ManagementCredential() = %q, %v; want the runtime token", got, err)
 	}
-	if got != runtimeToken {
-		t.Fatalf("ManagementCredential() = %q, want explicit runtime token", got)
+	if _, err := os.Lstat(filepath.Join(store.Root(), "credentials")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the store keeps a credentials directory: %v", err)
 	}
 }
 
-func TestEnsureManagementCredentialUsesExplicitRuntimeEnvironmentWithoutReplacingPersistedToken(t *testing.T) {
-	runtimeToken := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	persistedToken := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
-	t.Setenv(ManagementCredentialEnv, runtimeToken)
+func TestManagementCredentialIgnoresATokenAnEarlierDashboardWrote(t *testing.T) {
+	t.Setenv(ManagementCredentialEnv, "")
 	store := NewStore(StoreOptions{Root: t.TempDir()})
-	if err := store.ensureLayout(); err != nil {
-		t.Fatalf("ensure store layout: %v", err)
+	stale := filepath.Join(store.Root(), "credentials", "router-management.token")
+	if err := os.MkdirAll(filepath.Dir(stale), 0o700); err != nil {
+		t.Fatal(err)
 	}
-	if err := writeFileAtomically(
-		store.managementCredentialPath(), []byte(persistedToken+"\n"), 0o600,
-	); err != nil {
-		t.Fatalf("persist stale activation token: %v", err)
+	if err := os.WriteFile(stale, []byte("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
 
-	got, err := store.EnsureManagementCredential()
-	if err != nil {
-		t.Fatalf("EnsureManagementCredential() error = %v", err)
+	if _, err := store.ManagementCredential(); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("ManagementCredential() error = %v, want os.ErrNotExist", err)
 	}
-	if got != runtimeToken {
-		t.Fatalf("EnsureManagementCredential() = %q, want explicit runtime token", got)
+	if store.HasManagementCredential() {
+		t.Fatal("a token on disk counted as the management credential")
 	}
-	persisted, err := store.readManagementCredentialLocked()
-	if err != nil {
-		t.Fatalf("read persisted activation token: %v", err)
-	}
-	if persisted != persistedToken {
-		t.Fatalf("persisted activation token = %q, want unchanged stale token", persisted)
+}
+
+func TestManagementCredentialRejectsAMalformedEnvironmentValue(t *testing.T) {
+	t.Setenv(ManagementCredentialEnv, "not-a-management-token")
+	store := NewStore(StoreOptions{Root: t.TempDir()})
+
+	if _, err := store.ManagementCredential(); err == nil || errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("ManagementCredential() error = %v, want a validation error", err)
 	}
 }

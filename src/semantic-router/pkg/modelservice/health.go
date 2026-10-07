@@ -9,7 +9,7 @@ import (
 )
 
 // RuntimeAPIMajor is the major version of the runtime contract
-// (src/model-runtime/vllm_sr_runtime/api/openapi.yaml info.version) this
+// (src/model-runtime/vllm_srun/api/openapi.yaml info.version) this
 // client was generated from. A runtime that serves another major is refused.
 const RuntimeAPIMajor = "2"
 

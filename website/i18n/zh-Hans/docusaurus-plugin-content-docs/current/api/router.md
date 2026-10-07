@@ -7,7 +7,7 @@ translation:
 
 # 路由器接口 {#router-api}
 
-Router 数据面通过 Envoy 监听器接收模型请求。在标准本地栈中，监听器为 `http://localhost:8899`；配方可在 `listeners` 下选择不同地址或端口。
+Router 数据面在配置的监听器上接收模型请求。默认的 standalone 模式下由 Router 自己服务这些请求；使用 `--gateway extproc` 时由 Envoy 服务，并通过 ext_proc 调用 Router。在标准本地栈中，监听器为 `http://localhost:8899`；配方可在 `listeners` 下选择不同地址或端口。
 
 推理请使用数据面。健康检查、配置、诊断和回放查询请使用管理 API，通常绑定到 `127.0.0.1:8080`。见 [Router 管理 API](./apiserver)。
 
@@ -113,6 +113,40 @@ curl -sS http://localhost:8899/v1/messages \
 deployment Chat 路径从 URL 读取模型名；Responses 和 v1 Chat 路径从请求体读取模型名。监听器配置 `api_keys` 时，Router 用客户端的 `api-key` 验证请求，并在转发给 provider 前移除该请求头。
 
 GitHub Copilot CLI 使用 Azure 模式时，设置 `COPILOT_PROVIDER_TYPE=azure`、指向监听器的 `COPILOT_PROVIDER_BASE_URL`，以及作为 Router 模型名的 `COPILOT_PROVIDER_WIRE_MODEL`。设置 `COPILOT_PROVIDER_WIRE_API=responses` 后，CLI 使用 `/openai/v1/responses`；设置 `COPILOT_PROVIDER_AZURE_API_VERSION` 后使用 `/openai/responses`。Router 接受 Responses 请求中的 `reasoning.summary`：对 Responses 后端会转发该设置；对 Chat Completions 或 Messages 后端仍会处理请求，但丢弃摘要设置并在 `x-vsr-protocol-warnings` 中说明。
+
+## 路由错误 {#routing-errors}
+
+Router 无法路由某个请求时，会直接应答该请求，不调用任何后端。错误采用客户端所用的协议。在 OpenAI Chat Completions 和 Responses 的错误中，`error.code` 是稳定的原因码，`error.message` 是简短消息。除预算错误外，消息不包含模型、决策或请求内容：
+
+```json
+{"error":{"type":"invalid_request_error","code":"no_route","message":"no route matched the request","param":null}}
+```
+
+| 代码 | 状态码 | `error.type` | 含义 |
+| --- | --- | --- | --- |
+| `model_not_found` | 400 | `invalid_request_error` | 请求指定的模型不由该 Router 提供。 |
+| `no_route` | 400 | `invalid_request_error` | 没有决策匹配，且没有可用的默认模型。auto 别名或 entrypoint 会回退到 `providers.defaults.model`；Looper 别名（如 `vllm-sr/flow`）只评估其算法的决策，没有回退。 |
+| `context_length_exceeded` | 400 或 422 | `invalid_request_error` | 请求超出了可服务它的模型的容量：400 来自[请求预算检查](#request-budget-errors)，422 来自模型的 `context_window_size`。 |
+| `max_output_tokens_exceeded` | 400 | `invalid_request_error` | 请求的输出超过了配置的模型上限。见[请求预算错误](#request-budget-errors)。 |
+| `decision_unresolved` | 503 | `server_error` | 某个决策所需的信号不可用，导致该决策无法评估，且其 `rules.on_unknown` 为 `fail_request`。`x-vsr-applied-unknown-policy` 会给出该决策。 |
+| `no_eligible_model` | 503 | `server_error` | 选择策略拒绝了匹配决策的所有候选模型。 |
+
+Router 会以 `WARN` 级别记录每一次此类失败，带上请求的 `x-request-id`、原因码和 Router 自己的原因：请求指定的模型、到达的配方和决策，以及错误本身。Anthropic Messages 客户端会在 Anthropic 的错误信封中收到相同的状态码和消息；该信封没有 code 字段。
+
+## 请求预算错误 {#request-budget-errors}
+
+设置 `candidate_requirements.context: known_limits` 后，Router 会用候选模型配置的上限检查估算的输入加上有效输出额度。如果所有候选模型都只因预算检查失败，Router 返回 HTTP 400：
+
+| 错误码 | 含义 |
+| --- | --- |
+| `context_length_exceeded` | 准备好的输入与请求的输出放不下。 |
+| `max_output_tokens_exceeded` | 请求的输出超过了配置的模型上限。 |
+
+缺少能力、上限未知、选择证据不可用以及混合失败，保持选择错误的行为，即 `no_eligible_model`。预算检查本身不会截断请求；需要时请启用[上下文压缩](../tutorials/plugin/context-compression.md)。
+
+这些计数是估算值。后端仍可能拒绝请求；其有效的 HTTP 状态码和有意义的消息会被保留。vLLM 的整数错误码在 OpenAI 兼容错误中以字符串形式暴露：`code: 400` 的 `BadRequestError` 会变成 `code: "400"` 的 `invalid_request_error`。
+
+在生成开始前被拒绝的流式请求，收到的是同样的非 2xx JSON 错误，而不是成功的 SSE 流。启用回放时，回放会记录失败的状态码和响应体；Router 的预算拒绝使用 `terminal_reason: request_budget_exceeded`。
 
 ## 路由回放 {#router-replay}
 

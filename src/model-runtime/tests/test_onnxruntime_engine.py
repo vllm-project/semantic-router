@@ -9,10 +9,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
-from vllm_sr_runtime.accel.cpu import CPUAccelerator
-from vllm_sr_runtime.engines.onnxruntime import graphs, providers
-from vllm_sr_runtime.engines.onnxruntime.engine import OnnxRuntimeEngine
-from vllm_sr_runtime.plugins.base import (
+from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.engines.onnxruntime import graphs, providers
+from vllm_srun.engines.onnxruntime.engine import OnnxRuntimeEngine
+from vllm_srun.plugins.base import (
     BackboneSpec,
     DeviceInfo,
     DtypePolicy,
@@ -20,7 +20,7 @@ from vllm_sr_runtime.plugins.base import (
     EngineOptions,
     ModelSpec,
 )
-from vllm_sr_runtime.testing import onnx_graphs
+from vllm_srun.testing import onnx_graphs
 
 pytest.importorskip("onnxruntime")
 pytest.importorskip("onnx")
@@ -285,7 +285,7 @@ def test_extra_graph_inputs_and_missing_inputs(tmp_path):
 def test_truncated_protobuf_is_a_package_error(tmp_path):
     path = tmp_path / "broken.onnx"
     path.write_bytes(b"\x0a\xff")
-    from vllm_sr_runtime.errors import PackageError
+    from vllm_srun.errors import PackageError
 
     with pytest.raises(PackageError):
         graphs.read_graph(path)
@@ -311,7 +311,7 @@ def test_graphs_linked_into_a_blob_store_load_like_a_hub_snapshot(tmp_path):
 
 def test_external_data_without_a_length_runs_to_the_end_of_its_file(tmp_path):
     import onnx
-    from vllm_sr_runtime.errors import PackageError
+    from vllm_srun.errors import PackageError
 
     path = onnx_graphs.token_graph(
         tmp_path / "onnx/model.onnx", external="weights.data"
@@ -340,7 +340,7 @@ def test_external_data_without_a_length_runs_to_the_end_of_its_file(tmp_path):
 
 def test_external_data_must_stay_next_to_the_graph(tmp_path):
     import onnx
-    from vllm_sr_runtime.errors import PackageError
+    from vllm_srun.errors import PackageError
 
     path = onnx_graphs.token_graph(
         tmp_path / "onnx/model.onnx", external="weights.data"

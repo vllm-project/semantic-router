@@ -10,10 +10,26 @@ global:
   imageRegistry: ""
 # -- Number of replicas for the deployment
 replicaCount: 1
+# How client traffic reaches the Router
+gateway:
+  # -- `standalone`: the Router serves the OpenAI-compatible API on
+  # `config.listeners` itself, answers `/health` and `/ready` there, and the
+  # Service exposes each listener's port; no Envoy runs. `extproc`: the Router
+  # serves Envoy's ext_proc gRPC on `service.grpc.port` for a gateway you run
+  # (Envoy Gateway, Envoy AI Gateway, Istio, KServe, llm-d). Releases before
+  # standalone mode deployed `extproc`; set it to keep such an integration.
+  mode: standalone
+  tls:
+    # -- Standalone only. A `kubernetes.io/tls` Secret mounted at
+    # `/app/config/certs`, for listeners whose `tls` names
+    # `cert_file: certs/tls.crt` and `key_file: certs/tls.key`. The Secret is
+    # mounted as a volume, so a rotated certificate reaches new connections
+    # without a restart.
+    secretName: ""
 # Image configuration
 image:
   # -- Image repository
-  repository: ghcr.io/vllm-project/semantic-router/extproc
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
   # -- Image pull policy
   pullPolicy: IfNotPresent
   # -- Image tag (overrides the image tag whose default is the chart appVersion)
@@ -63,9 +79,10 @@ securityContext:
   readOnlyRootFilesystem: true
 # Service configuration
 service:
-  # -- Service type
+  # -- Service type. In standalone mode the Service also exposes every port in
+  # `config.listeners`.
   type: ClusterIP
-  # gRPC service port
+  # ext_proc gRPC service port (extproc mode only)
   grpc:
     # -- gRPC port number
     port: 50051
@@ -101,13 +118,14 @@ ingress:
   annotations: {}
   # kubernetes.io/ingress.class: nginx
   # kubernetes.io/tls-acme: "true"
-  # -- Ingress hosts configuration
+  # -- Ingress hosts configuration. A path without `servicePort` goes to the
+  # first listener without TLS in standalone mode, and to `service.api.port`
+  # in extproc mode.
   hosts:
     - host: semantic-router.local
       paths:
         - path: /
           pathType: Prefix
-          servicePort: 8080
   # -- Ingress TLS configuration
   tls: []
   #  - secretName: semantic-router-tls
@@ -239,7 +257,7 @@ persistence:
   storageClassName: "standard"
   # -- Access mode
   accessMode: ReadWriteOnce
-  # -- Storage size
+  # -- Storage size of the model volume. The runtime downloads the router's models here on first start; Vela Omni Mini alone takes 4.3 GB.
   size: 10Gi
   # -- Annotations for PVC
   annotations: {}
@@ -255,6 +273,14 @@ router:
 # `config`, this map atomically replaces chart defaults before Kubernetes
 # integration rewrites.
 configOverride: null
+# -- The Router's decision model, written to
+# global.model_catalog.system.decision_model: Vela-2.0-0.3B (the default),
+# Vela-2.0-0.8B, Vela-2.0-4B, Vela-2.0-9B or Vela-1.0, case-insensitive. It
+# answers the built-in signals and every routing.signals.decision question
+# that names no deployment. The 4B and 9B need a GPU in the Router pod. A
+# changed value is written into the live config on upgrade too; empty leaves
+# the config's own.
+decisionModel: ""
 # Runtime management APIs may update the live Router ConfigMap after install.
 configMap:
   # -- Helm values seed config.yaml at install. Change this revision to
@@ -264,14 +290,12 @@ configMap:
 # Application configuration
 config:
   version: v0.3
+  # Standalone mode serves these listeners and the Service exposes them;
+  # extproc mode doesn't use them.
   listeners:
-    - name: "grpc-50051"
+    - name: "http-8899"
       address: "0.0.0.0"
-      port: 50051
-      timeout: "300s"
-    - name: "http-8080"
-      address: "0.0.0.0"
-      port: 8080
+      port: 8899
       timeout: "300s"
   providers:
     defaults:
@@ -580,8 +604,9 @@ dashboard:
     existingSecretKey: "jwt-secret"
   # -- Extra environment variables for the dashboard container, appended after the
   # chart-managed TARGET_* vars. Use this to set optional integration env the chart
-  # does not expose explicitly (for example OPENCLAW_*, TARGET_ENVOY_URL, or
-  # PROXY_OVERRIDE_ORIGIN) without forking the chart. Standard core/v1 EnvVar list.
+  # does not expose explicitly (for example PROXY_OVERRIDE_ORIGIN, or in extproc
+  # mode TARGET_ENVOY_URL for your gateway) without forking the chart. Standard
+  # core/v1 EnvVar list.
   # Avoid redefining a chart-managed var (TARGET_*, DASHBOARD_JWT_SECRET): it
   # produces a duplicate env key and Kubernetes applies last-wins.
   extraEnv: []
