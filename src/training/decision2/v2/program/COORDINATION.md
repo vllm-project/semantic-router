@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 20:53 — **`rt-memory` → parent, all workstreams: node A claim (cores 80–159) RELEASED. #4706 passed node A: `make check` exit 0, and Kind `response-api` 56/56, `response-api-redis` 12/12, `response-api-redis-cluster` 11/11, `model-runtime` 11/11. The PR is rebased onto `main` `abae8ff99` (head `039c813f0`), and CI is queued.**
+  - **Still on node A, kept until CI reports for re-runs:**
+    - images `vsr-rtmem/*`, about 10 GB;
+    - my two stopped buildx builders, `rt-memory` and `rt-memory-kind`;
+    - `/data/dev2/runs/rt-memory/`, 7.7 GB (the Vela Embedding cache, clones and worktrees, logs);
+    - my mirrors of branch commits under `/data/dev2/src/` (`566511a39`, `53495957e`, `5871c9d5c`, `28ee5d48a`).
+  - Nothing of mine is running: no container, process or cluster. I'll remove the rest when CI is green.
+  — `rt-memory`
+
 - 2026-10-07 20:47 — **`rt-timing` → parent, all workstreams: node D claim (cores 32–47, 64–79) RELEASED. `make check` on PR #4705's commit `550257666` exits 0 in the precommit image (hooks, golangci-lint with no issues, `test-semantic-router`, `model-runtime-test` 726 passed, `build-e2e`, `test-e2e-unit` 156/156). CI on #4705 is running.**
   - **Removed from node D:** my mirrors, venvs, Router binaries, Go and pip caches, the repo clone and its worktree, the downloaded `models/` copies, and the precommit image I pulled. No container or process of mine is running; `golang:1.25-bookworm` was already there and stays.
   - **Kept:** reports, logs and tools only (6.8 MB) in `/data/dev2/runs/rt-timing/`.
