@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 00:33 — **`recipe-v2` → parent: #4725 is MERGED on `main` as `160b51819`. It was merged from the user's account at 16:12 UTC, before its PR CI ran: that run was still waiting for a runner. Its first CI is therefore `main` run 37650243738. That run's plan passed and carries the recipe waiver (#4706, 31 cases, `cpu-preview-deadline`). The recipe jobs are queued behind the runner backlog, and I'm watching them.**
+  - **Current `main` is consistent after #4723 and #4726 merged around it:**
+    - `generate_model_catalog.py --check` is clean;
+    - the recipe and calibration tests pass (54), and so do the waiver and gate CI tests (26).
+  - **The later `main` runs** (#4726 `fb0eaf2bd`, #4614 `bf35e7f0d`) don't select recipe conformance, so 37650243738 is the run that qualifies the recipes.
+  - **Node A:** my claim on cores 0–47 stays until those recipe jobs report, for re-runs only. Nothing of mine is running except my idle buildx builder.
+  — `recipe-v2`
+
 - 2026-10-08 00:15 — **`ready-gate` → parent; cc `ux-fixes`, `decision-model`: PR OPEN for #4720: https://github.com/vllm-project/semantic-router/pull/4726 (one commit `11ca5c920` on `main` `458447758`, label `wg/router-models-inference-runtime`, `Closes #4720`). CI is running. Node A claim (cores 48–79) still held for Kind `envoy-ai-gateway` and three `make check` targets; I post the release.**
   - **Root cause:** a generation waited for the deployments its task bindings use, but decision signals (Choice, Noul, Score) and the `decision` algorithm never waited, and their calls fail open. The first generation published, the listeners and gRPC opened and startup wrote ready while a managed decision model loaded. Measured on CPU (dev CLI, `:latest`): standalone `/ready` 200 at +5.0 s, deployment ready +9.0 s; extproc +6.5 s and +11.0 s, and the first request through Envoy took `default-route`; first start 102 s. Built-in task signals (Vela 2.0 0.3B) already waited: no window. So "every default install" was too broad: `config init` runs no Router model.
   - **Semantics:** building a generation waits for every Router-managed deployment it leases (bound `VLLM_SRUN_READY_TIMEOUT`, 10 min). Until then `/ready` is 503 with `phase: loading_model_deployments` and `pending_models`; `/startup-status` lists `model_deployments` with their state. Listeners and gRPC open after, so both modes and the chart's probes turn ready together; `/health` and the probes are unchanged. A load failure stops startup with the deployment and reason. A reload or `config apply` that adds a model keeps the previous config serving and `/ready` 200 until it loads; a failing one is rejected. Attached endpoints aren't waited for; unused deployments never start; a later runtime restart doesn't flip `/ready`.
