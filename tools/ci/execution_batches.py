@@ -9,16 +9,13 @@ from collections import defaultdict
 MAX_CONTRACT_MINUTES = 330
 
 IMAGE_PRODUCERS = {
-    "image-router": ("extproc",),
-    "image-local": ("vllm-sr",),
+    "image-router": ("vllm-sr",),
     "image-dashboard": ("dashboard",),
     "image-operator": ("operator", "operator-bundle"),
     "image-fixtures": ("provider-mocker", "model-runtime"),
     "image-distribution": (
-        "extproc-rocm",
         "vllm-sr-cuda",
         "vllm-sr-rocm",
-        "vllm-sr-sim",
     ),
 }
 EXECUTOR_JOBS = (
@@ -40,7 +37,7 @@ EXECUTOR_JOBS = (
     "e2e-dashboard",
 )
 ALL_DISPATCH_JOBS = ("plan", *IMAGE_PRODUCERS, *EXECUTOR_JOBS)
-LANE_IMAGES = frozenset({"extproc", "provider-mocker", "dashboard"})
+LANE_IMAGES = frozenset({"vllm-sr", "provider-mocker", "dashboard"})
 
 
 def content_digest(value: object) -> str:
@@ -53,14 +50,14 @@ def dispatch_job(record: dict) -> str:
     executor = record["executor"]
     if executor == "e2e":
         images = set(record["images"])
-        if images == {"extproc"}:
+        if images == {"vllm-sr"}:
             return "e2e-router"
         if images in (
-            {"extproc", "provider-mocker"},
-            {"extproc", "provider-mocker", "model-runtime"},
+            {"vllm-sr", "provider-mocker"},
+            {"vllm-sr", "provider-mocker", "model-runtime"},
         ):
             return "e2e-fixtures"
-        if images == {"extproc", "dashboard"}:
+        if images == {"vllm-sr", "dashboard"}:
             return "e2e-dashboard"
         raise ValueError(f"undeclared E2E image dependency lane: {sorted(images)}")
     return executor

@@ -39,7 +39,7 @@ active lifecycle operation finishes.
 
 An empty local workspace starts the Dashboard in setup mode. Use it to bind
 model endpoints, choose a baseline policy, preview the result, and activate a
-complete config.
+complete config; the waiting `vllm-sr serve` then starts the Router from it.
 
 After activation, the **Mixture-of-Models** workspace separates three tasks:
 

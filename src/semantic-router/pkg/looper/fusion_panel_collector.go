@@ -94,7 +94,7 @@ func (c *fusionPanelCollector) recordAttempt(
 	switch {
 	case result.err != nil:
 		evidence.State = fusionPanelErrorState(result.err)
-		evidence.Error = result.err.Error()
+		evidence.Error = modelFailureReason(result.err)
 	case !isUsableFusionPanelResponse(result.resp):
 		evidence.State = FusionPanelAttemptUnusable
 		evidence.Error = unusableFusionPanelReason

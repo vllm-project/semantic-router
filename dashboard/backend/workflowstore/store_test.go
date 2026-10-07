@@ -11,7 +11,7 @@ func TestMLJobSurvivesStoreReopen(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "wf.sqlite")
 
-	s1, err := Open(path, Options{})
+	s1, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestMLJobSurvivesStoreReopen(t *testing.T) {
 	}
 	_ = s1.Close()
 
-	s2, err := Open(path, Options{})
+	s2, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestMLJobSurvivesStoreReopen(t *testing.T) {
 func TestRecoverInterruptedMLJobs(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	s, err := Open(filepath.Join(dir, "wf.sqlite"), Options{})
+	s, err := Open(filepath.Join(dir, "wf.sqlite"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,32 +102,5 @@ func TestRecoverInterruptedMLJobs(t *testing.T) {
 	}
 	if len(events) != 1 || events[0].Step != mlPipelineRecoveredStep || events[0].Percent != running.Progress || events[0].Message != "restart" {
 		t.Fatalf("running events %+v", events)
-	}
-}
-
-func TestOpenClawMessageAppendIncremental(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	s, err := Open(filepath.Join(dir, "wf.sqlite"), Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-
-	room := "team-alpha"
-	m1 := `{"id":"m1","roomId":"` + room + `","content":"a"}`
-	m2 := `{"id":"m2","roomId":"` + room + `","content":"b"}`
-	if appendErr := s.AppendOpenClawRoomMessage(room, "m1", m1); appendErr != nil {
-		t.Fatal(appendErr)
-	}
-	if appendErr := s.AppendOpenClawRoomMessage(room, "m2", m2); appendErr != nil {
-		t.Fatal(appendErr)
-	}
-	lines, err := s.ListOpenClawRoomMessages(room)
-	if err != nil || len(lines) != 2 {
-		t.Fatalf("messages: %v, %v", lines, err)
-	}
-	if lines[0] != m1 || lines[1] != m2 {
-		t.Fatalf("order/content: %v", lines)
 	}
 }

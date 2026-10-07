@@ -565,8 +565,6 @@ config:
     integrations:
       tools:
         enabled: false
-      looper:
-        endpoint: http://looper-provider-mocker.default.svc.cluster.local:8000/v1/chat/completions
 
 resources:
   limits:

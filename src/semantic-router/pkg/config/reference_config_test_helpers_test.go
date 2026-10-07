@@ -199,7 +199,11 @@ func collectYAMLFields(t testingT, typ reflect.Type, fields map[string]bool, ski
 
 		name, inline := parseYAMLTag(field, tag)
 		if inline {
-			collectYAMLFields(t, indirectType(field.Type), fields, skipSet)
+			// An inline map holds registered extension blocks, which have no
+			// fixed names to cover.
+			if indirectType(field.Type).Kind() == reflect.Struct {
+				collectYAMLFields(t, indirectType(field.Type), fields, skipSet)
+			}
 			continue
 		}
 		if name == "" {

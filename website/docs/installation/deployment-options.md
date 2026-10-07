@@ -28,6 +28,10 @@ Gateway and inference-platform integrations do not replace Router policy. They
 connect semantic model selection to infrastructure that owns traffic or model
 lifecycle.
 
+On Docker and Kubernetes alike, the Router serves clients itself by default.
+[Gateway Modes](gateway-modes) explains when to put an Envoy-based gateway in
+front of it instead.
+
 Before committing to a path, check its project-maintained status, recurring
 test evidence, and external ownership boundary in the
 [Deployment Support](support-matrix).
