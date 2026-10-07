@@ -247,9 +247,6 @@ type CacheConfig struct {
 	MaxMemoryEntries int `yaml:"max_memory_entries,omitempty"` // Max entries in HNSW for hybrid cache
 
 	// EmbeddingModel specifies which embedding model to use
-	// Options: "bert" (default), "qwen3", "gemma", "mmbert", "multimodal"
+	// Options: "mmbert" (default), "qwen3", "multimodal"
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
-
-	// PolarityGuard configures the optional NLI polarity tier of the in-memory backend (#2751)
-	PolarityGuard PolarityGuardOptions `yaml:"polarity_guard,omitempty"`
 }

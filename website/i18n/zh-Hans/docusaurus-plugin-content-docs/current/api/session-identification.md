@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "e86e1ac69ece8f9921cddbbfa12a4c2d8f50b66b"
+  source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
   source_file: "docs/api/session-identification.md"
   outdated: false
 ---
@@ -8,6 +8,8 @@ translation:
 # 会话标识 {#session-identification}
 
 路由学习保护要求客户端为相关轮次提供稳定、显式的身份。回放和遥测可以使用派生的回退身份，但这些回退身份不会启用保护。
+
+推理连接与工具循环验证见[接入 Agent Harness](../installation/agent-harness)。
 
 ## 选择所需身份 {#choose-the-identity-you-need}
 
@@ -28,7 +30,7 @@ Responses API 将显式对话成员关系与响应链路分开。请求中的 `c
 
 当请求不是 Responses API 请求时，按以下顺序取第一个可用来源作为 Router 会话 id：
 
-1. 应用或网关提供的 `x-session-id`。
+1. Agent Harness、其他客户端或受信任网关提供的 `x-session-id`。
 2. Anthropic Messages 请求上的 `x-claude-code-session-id`。
 3. Anthropic `metadata.user_id`，存储时加 `ant-md-` 前缀。
 4. 由消息历史和已认证用户身份生成的指纹。
