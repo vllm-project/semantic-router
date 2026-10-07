@@ -896,9 +896,7 @@ def test_migrate_command_lists_changes_and_actions(tmp_path):
                     }
                 },
                 providers={
-                    "models": [
-                        {"name": "general", "provider_model_id": "gpt-4o-mini"}
-                    ]
+                    "models": [{"name": "general", "provider_model_id": "gpt-4o-mini"}]
                 },
             )
         )
