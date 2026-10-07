@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 12:47 — **`vela2-film-v8` → parent: cut d1 is ready for review, with all seven items in: `/mnt/c/Users/xunliu/Downloads/vela2-launch-v8-preview/vela2-launch-v8-d1-720p.mp4` (105.0 s, 720p proxy).**
+  - **Length, 105.0 s:** v7's 100 s, minus the cue bar cut at the stop (−2.5 s), plus two repeated peak bars for the charts' reading time (+5 s) and one bar for item 7 (+2.5 s). Everything before 50 s keeps v7's timing.
+  - **1. "One more thing." (50.0–52.5 s):** a full-frame card in 150 px type on a dark ground. The music drops at 50.0 and closes to silence at 51.2, in the pause after "And…", so "…one more thing." is heard alone. The release hit at 52.5 lands on the build's downbeat: the type bursts into squares that ignite the fourth slot (span) and land on "Tom Baker" and the email, under v7's spotlight. "where?" pops at 48.5, before the card.
+  - **2. First half (0–30 s):** the hub, models, card, nine blocks, chat window and gauge are 1.3–1.6× larger and framed tighter. Behind them sit a perspective mosaic grid floor, pixel motes at three depths and storm light rays. Colour carries meaning: each model and its routed tiles share a colour, and the questions are the film's blue. Every line, chip and label keeps v7's times.
+  - **3. Span use (59–67 s):** the two names (50 px) flip to mask tiles square by square. "masked before any model sees it" (50 px) appears, and the masked request flies into a large model block. Then "4 grams" and "6 grams" come out of the source and answer cards as 110 px pills, side by side; "6 grams" is struck through and flagged red, with "unsupported 0.982".
+  - **4. Proof (74.6–97.5 s):** on the dusk sky with no panels. First the structural beat, one change per beat: "9 models → 1", "fixed labels → any question", "fixed span labels → any span label". Then Vela 1.0 against 2.0 in four rows (prompt attacks, hate speech, request harm, PII in 8K docs), with 48 px labels, 60 px numbers and bars growing on the beats. Then the four sails grow, with safety macro AUC and then seconds per request on an A40 (60 and 52 px), and "CPU · ONNX" on the 0.3B. Measured group reading times: 5.0 / 7.7 / 8.1 s against the 4.9 / 7.3 / 7.6 s needed.
+  - **5. Answers (45–48 s):** three large objects in a column beside the sail: 1.6× glyphs, 40–80 px text, each landing on a beat (45.0, 46.2, 47.5).
+  - **6. L16 (64.1 s):** "Or flag a claim the source doesn't support." Re-recorded with the same narrator (44 takes, all ASR WER 0; picked t41).
+  - **7. "And… one last thing." (67.2–70.0 s):** a full-frame card in 128 px type; the music breaks for half a bar, with about 0.8 s of near-silence after the voice, then the hit at 70.0. The fifth slot ignites as set, and "billing" and "shipping" light together (48 px) as the request splits to both teams. The new line was recorded with the same voice (24 takes, WER 0). The peak still lands at 75.0 s, on v7's mark.
+  - **Audio:** −14.0 LUFS, −1.9 dBTP. Every line now sits within ±0.25 LU of the median (v7 was ±3 LU). ASR WER 0 on all 19 lines, voice and mix; audibility passes.
+  - **Picture QA:** judder 0; all oracle picture legs pass (the audio leg reports "quiet" from the two deliberate silences, as v7 did).
+  - **Fixing now for d2 (about 15 minutes):**
+    - contrast on the lower chart rows (a soft dusk halo behind the type) and on the grey labels;
+    - text under the dark cards still counted by the checks;
+    - the flag's source and answer cards stay readable until item 7;
+    - two one-sample overlaps.
+  - I'll fold your review into d2 if it arrives first.
+
 - 2026-10-07 12:41 — **`fu-mypy3` → parent: FINISHED. #4664 (#4602 step 2) CI is GREEN on `700e746d7`
   (run 37565825263: 17 jobs pass, 13 skipped by the plan, none failed). Ready for review; no node or GPU used.**
   - CI's Model Runtime job installs numpy 2.5.3 and mypy 2.4.0 and reports "no issues found in 104 source files" and
