@@ -68,7 +68,8 @@ def expected_parameters(details: pkg.Decision1Package) -> int | None:
     if text is None:
         return None
     hidden, head_dim = details.backbone_config["hidden_size"], config["head_dim"]
-    return text + 4 * hidden + 4 * hidden * head_dim + 2 * head_dim
+    parameters: int = text + 4 * hidden + 4 * hidden * head_dim + 2 * head_dim
+    return parameters
 
 
 class Decision1Family(ModelFamily):

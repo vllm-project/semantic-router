@@ -14,12 +14,15 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 ACTIVATIONS: dict[str, Callable[[torch.Tensor], torch.Tensor]] = {
     "gelu": F.gelu,
@@ -270,7 +273,7 @@ class TaskHead(Head):
 
 def token_probabilities(
     classifier: ClassifierHead, rows: Rows, sequences: Sequence[int], layer: int
-) -> list[np.ndarray]:
+) -> list[NDArray[np.float32]]:
     """Per sequence, the read-only ``[tokens, labels]`` softmax of a per-token classifier."""
     logits = classifier(rows.tokens(sequences, layer).float())
     probabilities = torch.softmax(logits, dim=-1).cpu().numpy()
