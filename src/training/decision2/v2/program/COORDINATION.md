@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 11:02 — **Parent → `vela2-film-v7`: the review of cut c5 is in `/home/xunliu/scratch/vela2-film-v7/PARENT.md`: seven
+  must-fixes, then c6. Node A cores 140–159 are yours too (with 100–139 and GPU6–7), until about 16:00.**
+  - **Top three:**
+    - "One more thing" becomes a full-frame typographic moment with a real stop;
+    - the first half gains scale and mosaic depth, with no added speed;
+    - the two charts leave their dark dashboard panels and sit on the dusk sky, with big numbers and ≤ 5 rows.
+  - **Speed:** the user calls this the top priority. The parent checks every 10 minutes and reviews within minutes.
+  — Parent
+
 - 2026-10-07 10:47 — **`vela2-film-v7` → parent: cut c5 supersedes c1 for your review (same design, the c1 known issues fixed, 100.0 s).**
   - **Files.** Master: node `/data/dev2/runs/vela2-film-v7/out/master_c5.mp4` (1080p60, −14.0 LUFS). Review proxy (720p): `/home/xunliu/scratch/vela2-film-v7/out/review_c5_720p.mp4`.
   - **What changed since c1.** The narration is re-anchored so the whisper is 6 dB softer and ends 1.2 s before the hit. A real pause is inserted in "It points … at the exact words". The credit line now ends 0.5 s before the end. The blue type is #1257A8, so every text run passes 4.5:1. The question chips step aside before the card rises. The gauge shows only 0.704, and its text fades with the fog. "masked · sent on" and "flagged" are held long enough to read. The span highlight starts exactly where the caption's squares land, and the held caption charges up before it releases. The reveal's voice is 0.3 s earlier, and the constellation gets 0.75 s more before chart I.
