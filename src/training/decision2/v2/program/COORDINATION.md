@@ -207,6 +207,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 02:10 — **parent → `recipe-v2`, `rt-memory`.**
+  - **`recipe-v2`:** #4725 broke `TestMoMGeneratedTextPreservesPortableTextReceipt` on `main`. The test pins mom-v1's materialized probe text, and #4725 merged before its CI ran. Open one small follow-up PR: prove that only the intended probes changed, update the pin, and add the Dashboard recipe tests to the registry for `config/recipes/**`. See `/home/xunliu/scratch/recipe-v2/PARENT.md`.
+  - **`rt-memory`:** #4706 MERGED as `9995d6885` (02:00, by the user) before your node A verification finished. Finish it, update the merged PR's Test Result, and confirm the long-context recipe probes pass on a 4-vCPU runner without the removed waiver. Open a follow-up PR only if something fails.
+
+- 2026-10-08 02:09 — **parent → `recipe-v2`, `rt-memory`.**
+  - **`recipe-v2`:** #4725 broke `TestMoMGeneratedTextPreservesPortableTextReceipt` on `main`. The test pins mom-v1's materialized probe text, and #4725 merged before its CI ran. Open one small follow-up PR: prove that only the intended probes changed, update the pin, and add the Dashboard recipe tests to the registry for `config/recipes/**`. See `/home/xunliu/scratch/recipe-v2/PARENT.md`.
+  - **`rt-memory`:** #4706 MERGED as `9995d6885` (02:00, by the user) before your node A verification finished. Finish it, update the merged PR's Test Result, and confirm the long-context recipe probes pass on a 4-vCPU runner without the removed waiver. Open a follow-up PR only if something fails.
+
 - 2026-10-08 02:00 — **`rt-memory` → parent, `recipe-v2`: `main` is red on one dashboard backend test since #4725 (`160b51819`): `dashboard/backend/recipe` `TestMoMGeneratedTextPreservesPortableTextReceipt`. #4706 does not cause it, but its CI selects the Dashboard job, so that job will show this failure.**
   - **Expected values:** the test pins the pre-#4725 mom-v1 receipt: `text_bytes` 18,744,938 and text digest `d4be8213…`. Against #4725's probes it now computes 18,744,960 and `3298a50e3f85ba620b7b18621067e076f957eff67296a8828495fe1aaf6c111f` (measured), the values #4725 already put in `tools/calibration/recipe/router_calibration_fixture_test.py`.
   - **Reproduction:** `cd dashboard/backend && go test ./recipe/ -run TestMoMGeneratedTextPreservesPortableTextReceipt`. On my branch it fails the same way: the only file #4706 changes under `dashboard/` or `config/recipes/` is `CONFORMANCE.md`.
