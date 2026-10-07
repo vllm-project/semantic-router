@@ -6,6 +6,8 @@ import os
 import re
 from dataclasses import dataclass, fields
 
+import click
+
 from cli.consts import (
     DEFAULT_API_PORT,
     DEFAULT_DASHBOARD_PORT,
@@ -16,6 +18,7 @@ from cli.consts import (
 )
 
 STACK_NAME_ENV = "VLLM_SR_STACK_NAME"
+MAX_PORT = 65535
 PORT_OFFSET_ENV = "VLLM_SR_PORT_OFFSET"
 BENCH_PORT_ENV = "VLLM_SR_BENCH_PORT"
 DEFAULT_ENVOY_CONTAINER_NAME = "vllm-sr-envoy-container"
@@ -279,12 +282,37 @@ def normalize_stack_name(raw_value: str | None) -> str:
     return cleaned
 
 
+# The offset is added to every derived port, so the largest base binds the range.
+MAX_BASE_PORT = max(
+    DEFAULT_ROUTER_PORT,
+    DEFAULT_API_PORT,
+    DEFAULT_DASHBOARD_PORT,
+    DEFAULT_METRICS_PORT,
+    DEFAULT_MILVUS_PORT,
+    DEFAULT_JAEGER_OTLP_PORT,
+    DEFAULT_JAEGER_UI_PORT,
+    DEFAULT_PROMETHEUS_PORT,
+    DEFAULT_GRAFANA_PORT,
+    DEFAULT_REDIS_PORT,
+    DEFAULT_POSTGRES_PORT,
+)
+MAX_PORT_OFFSET = MAX_PORT - MAX_BASE_PORT
+
+
 def normalize_port_offset(raw_value: str | int | None) -> int:
     if raw_value in (None, ""):
         return 0
-    offset = int(raw_value)
-    if offset < 0:
-        raise ValueError(f"{PORT_OFFSET_ENV} must be >= 0, got {offset}")
+    try:
+        offset = int(raw_value)
+    except ValueError:
+        raise click.ClickException(
+            f"{PORT_OFFSET_ENV} must be an integer between 0 and {MAX_PORT_OFFSET}"
+        ) from None
+    if not 0 <= offset <= MAX_PORT_OFFSET:
+        raise click.ClickException(
+            f"{PORT_OFFSET_ENV} must be between 0 and {MAX_PORT_OFFSET} so derived"
+            f" ports stay within {MAX_PORT}, got {offset}"
+        )
     return offset
 
 

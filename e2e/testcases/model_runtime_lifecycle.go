@@ -51,8 +51,8 @@ func testModelRuntimeLifecycle(ctx context.Context, client *kubernetes.Clientset
 		return fmt.Errorf("attached runtime: %w", err)
 	}
 	served := modelIDs(attached.Data)
-	if strings.Join(served, ",") != "decision-a,feedback-a" {
-		return fmt.Errorf("the attached runtime serves %v, want decision-a and feedback-a", served)
+	if strings.Join(served, ",") != "decision-a,feedback-a,vela2-a" {
+		return fmt.Errorf("the attached runtime serves %v, want decision-a, feedback-a and vela2-a", served)
 	}
 	if err = checkLivenessAndReadiness(ctx, session.attachedRuntime(), attached.APIVersion); err != nil {
 		return fmt.Errorf("attached runtime: %w", err)
@@ -150,7 +150,7 @@ func checkInventory(ctx context.Context, session *modelRuntimeSession) (map[stri
 	if err := checkInventoryLabels(ctx, session, listed[mrDomainDeployment]); err != nil {
 		return nil, err
 	}
-	for name, servedName := range map[string]string{mrAttachedDecisions: "decision-a", mrAttachedFeedback: "feedback-a"} {
+	for name, servedName := range map[string]string{mrAttachedDecisions: "decision-a", mrAttachedFeedback: "feedback-a", mrAttachedVela2: "vela2-a"} {
 		deployment := listed[name]
 		if deployment.Managed || !deployment.Ready || deployment.ServedName != servedName ||
 			deployment.Endpoint != "http://"+mrAttachedService+"."+modelruntime.RouterNamespace+".svc.cluster.local:8100" {
