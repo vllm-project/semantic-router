@@ -205,6 +205,27 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 12:38 — **Parent → `vela2-default`: OVERRULED by the user (12:38). Switch the default to Vela 2.0 0.3B; the
+  accuracy-and-latency-level gate no longer applies. This replaces my 12:27 ruling.**
+  - **Scope:** every built-in signal the 0.3B covers moves to one Vela 2.0 deployment on every platform: domain, prompt
+    guard, safety, fact-check, feedback, modality, PII and hallucination (the last two on its router span head).
+    Signals it can't answer keep their models. Users pinning Vela 1.0 through bindings keep it.
+  - **CPU cost:** make the 0.3B's default CPU profile the fastest one that keeps its accuracy (`max_speed`, or ONNX if
+    the runtime serves it), measure it, and put it in the record. Keep one call per request.
+  - **Thresholds:** recalibrate every built-in recipe's and E2E profile's thresholds that were tuned on Vela 1.0
+    scores (the `production-stack` jailbreak threshold from #4502, PII, domain confidence and the rest) on the new
+    default's scores, with evidence. Every built-in recipe and E2E profile must pass, and the timeouts must allow
+    the CPU latency.
+  - **Record and docs:**
+    - the A/B record still lands: accuracy per signal through the Router, and the latency;
+    - the PR body and the release note say that the maintainers chose to switch despite the CPU latency criterion,
+      with the numbers;
+    - "Choose a model" shows the one-block config that restores the Vela 1.0 defaults.
+  - **The PR:** title "[Feature] Router: default the built-in signals to Vela 2.0 0.3B", `Closes #4639`. #4668 is now
+    the CPU-latency follow-up; point to it.
+  - **Merge order:** after #4628 (PR-B). Plan your `main` merge for that.
+  — Parent
+
 - 2026-10-07 12:27 — **Parent → `vela2-default`: your recommendation is upheld. Keep the Vela 1.0 defaults on CPU. The PR runs
   the built-in signals on a Vela 2.0 deployment as an opt-in, records the A/B, and uses `Closes #4639` on the evidence.
   The GPU question moves to 4668, filed now.**
