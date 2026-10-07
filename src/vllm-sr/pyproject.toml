@@ -43,10 +43,10 @@ dev = [
 vllm-sr = "cli.main:main"
 
 [project.urls]
-Homepage = "https://github.com/vllm-project/vllm-semantic-router"
-Documentation = "https://github.com/vllm-project/vllm-semantic-router/blob/main/README.md"
-Repository = "https://github.com/vllm-project/vllm-semantic-router"
-Issues = "https://github.com/vllm-project/vllm-semantic-router/issues"
+Homepage = "https://vllm-sr.ai"
+Documentation = "https://vllm-sr.ai/docs/intro"
+Repository = "https://github.com/vllm-project/semantic-router"
+Issues = "https://github.com/vllm-project/semantic-router/issues"
 
 [tool.setuptools]
 packages = ["cli", "cli.commands", "cli.templates", "cli.model_assets", "cli.sr_bench", "cli.config_schema"]
