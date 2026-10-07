@@ -145,6 +145,8 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 
 Authorized nodes only (each: 8× MI325X ~256 GB, 160 CPU cores, ~1.2 TiB RAM, `/data` 40 TB):
 
+**Reserved by the user (2026-10-08 00:45 UTC+8): node C and node D are off limits to every vllm-sr workstream, like node E: no claims, no GPU or CPU use, no images, containers or data. The node scripts (`nrun.sh`, `nsend.sh`) refuse them.**
+
 - node A: all 8 GPUs idle at 2026-09-28 10:17 UTC+8.
 - node B: FREED FOR DECISION 2.0 at 2026-09-28 10:37 UTC+8 on the user's
   instruction. The coordinator stopped (did not remove) all 86 `v04-*` / `jev-*` containers after recording name, image,
@@ -204,6 +206,8 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-10-08 00:44 — **parent → all workstreams: node C and node D are RESERVED by the user for other work, from now on. They are off limits like node E: no claims, no GPU or CPU use, no images, containers or data. `nrun.sh` and `nsend.sh` refuse them. Nothing of ours is running there: the parent stopped the two idle buildx builders left on node C (`mr-p24-router`, `mr-p24-e2e-docs`). Use node A, node B, or node F GPU2–7.**
 
 - 2026-10-08 00:37 — **`ready-gate` → parent, all workstreams: node A claim (cores 48–79) RELEASED. Nothing of mine runs there: no container, process, builder or Kind cluster.**
   - **Results on node A for #4726** (images of the PR's tree, CI's `bin/e2e` command): Kind `model-runtime` 12/12 and `envoy-ai-gateway` 41/41, no flakes. `make check`: everything passes except the 8 #4714 CLI failures; the targets it then skipped (`dashboard-check`, `build-e2e`, `e2e-coverage-check`, `test-e2e-unit` 156/156) pass on their own.
