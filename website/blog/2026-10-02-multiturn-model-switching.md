@@ -1,7 +1,7 @@
 ---
 slug: multiturn-model-switching
 title: "Beyond Prompt Routing: Model Selection, Conversation State, and KV Cache"
-description: "960 live calls reveal what model switching saves—and what it can break. An architecture for combining semantic routing, conversation protection, and cache-aware inference."
+description: "960 live calls reveal what model switching saves and what it can break. An architecture for combining semantic routing, conversation protection, and cache-aware inference."
 authors: [anupsharma, 1fanwang]
 tags: [evaluation, agentic, mixture-of-models, routing, vllm, architecture]
 image: /img/vllm-sr-logo.social.png
@@ -20,7 +20,8 @@ flight, changing models can also change how the result is interpreted.
 We benchmarked these tradeoffs through vLLM Semantic Router, Envoy, and GPU-backed
 vLLM servers. In the [960-call holdout](https://github.com/vllm-project/semantic-router/issues/4080#issuecomment-5938865660), one reactive switching policy reduced
 strong-model use by **31.8 percentage points** and mean session latency by
-**550 ms**—but failed three final checks that the control passed. A separate
+**550 ms** compared with a gate-disabled control, but failed three final checks
+that the control passed. A separate
 native-tool experiment showed the benefit of choosing a capable model *before*
 a difficult boundary.
 
@@ -39,7 +40,7 @@ Four kinds of state matter when a conversation changes models:
 | History | Complete, correctly ordered messages and tool results. Earlier mistakes travel too. |
 | Tool ownership | A compatible continuation of the model's pending call/result sequence. |
 | Provider-managed state | Access to stored context, or reconstruction before moving to another backend. |
-| KV cache | Compatible prefix computations available at the destination—not just a session ID. |
+| KV cache | Compatible prefix computations available at the destination, not just a session ID. |
 
 Router-owned Responses history can become portable after expansion into a full
 request. That does not make all state portable: active tool loops and nonportable
@@ -95,7 +96,7 @@ evidence that the task step was correct.
 
 For a fleet with many models and thousands of replicas, keep **model choice**
 separate from **replica scheduling**. The request flow below illustrates one
-request selecting model B, then replica B1—not searching every pod indiscriminately.
+request selecting model B, then replica B1, rather than searching every pod indiscriminately.
 
 <figure style={{width: '92%', maxWidth: '100%', marginInline: 'auto', textAlign: 'center'}}>
   <a href="/img/blog/multiturn-routing/routing-architecture.svg" target="_blank" rel="noopener noreferrer" aria-label="Open the routing architecture diagram at full size">
@@ -129,14 +130,14 @@ Three integration choices make this composition reliable:
 2. **Make the model-to-pool contract explicit.** Carry the final model selection
    through the gateway. Assert endpoint membership and, for shared pools,
    model/adapter compatibility. A protected owner becoming unavailable needs
-   explicit recovery—not an arbitrary fallback halfway through a tool loop.
+   explicit recovery, not an arbitrary fallback halfway through a tool loop.
 3. **Trace the whole request.** Join routing reason, final model, endpoint,
    token usage, cache evidence, latency, and task verdict. This separates a
    capability mismatch from a cold prefix or a busy replica.
 
 ## What the live benchmarks showed
 
-The frozen candidate, `agentic-context/multiturn-switch@2026-10-dev1`, ran
+The holdout for the frozen candidate, `agentic-context/multiturn-switch@2026-10-dev1`, ran
 **160 sessions and 960 calls** using Qwen3-0.6B and Qwen3-8B
 on two vLLM servers sharing one NVIDIA L40S, behind Envoy and Semantic Router.
 Each of five policies received the same 16 held-out seeds across two six-turn
@@ -160,10 +161,10 @@ acknowledgement in the retrieval workload. An acknowledgement can pass after a
 failed retrieval, which is why intermediate turn accuracy matters too.
 
 Compared with the gate-disabled control, enforcement used fewer strong-model
-turns and finished faster, but final checks fell from **32/32 to 29/32**. Its
-paired bootstrap 95% interval was [-21.9, 0.0] percentage points; the apparent
-turn-accuracy improvement was also inconclusive. The candidate did not meet
-our quality requirement and was rejected for enforcement.
+turns and finished faster, but final checks fell from **32/32 to 29/32**. The
+paired difference was -9.4 percentage points, with a bootstrap 95% interval of
+[-21.9, 0.0]; the apparent turn-accuracy improvement was also inconclusive. The
+candidate did not meet our quality requirement and was rejected for enforcement.
 
 These are controlled switching measurements, **not semantic-classifier accuracy
 or production-scale throughput**. Signals and proposals were controlled, calls
@@ -233,7 +234,7 @@ actually finishes the job.
 ### Start with a reproducible replay
 
 From the repository root, with Python 3.10+ and jq, inspect the bundled
-[coding-agent session](https://github.com/vllm-project/semantic-router/blob/96fa8d4f680882b65997f0a501c2653d5c7abedb/bench/agent_session_replay.py)
+[coding-agent session](https://github.com/vllm-project/semantic-router/blob/62bb0b94d2ff567ff49c2a236b7bd5270f37e897/bench/agent_session_replay.py)
 without sending a request:
 
 ```bash
@@ -244,17 +245,18 @@ python3 bench/agent_session_replay.py --dry-run | \
 It plans three requests with ten tools. To replay them through your own gateway:
 
 ```bash
+REPLAY_ID="blog-replay-$(date +%s)"
 python3 bench/agent_session_replay.py \
   --base-url http://127.0.0.1:8899/v1 \
-  --session-id blog-replay-001 \
-  --extra-header x-conversation-id=blog-replay-001
+  --session-id "$REPLAY_ID" \
+  --extra-header "x-conversation-id=$REPLAY_ID"
 ```
 
 Match the identity headers to your protection configuration, use a fresh ID for
 each comparison, and add `--api-key-env` when authentication is required.
 
 <details>
-<summary>What this replay measures—and what it does not</summary>
+<summary>What this replay measures, and what it does not</summary>
 
 The fixture supplies the history: generated answers are not fed into later
 requests, and tools are not executed. It measures request shape and routing
@@ -286,6 +288,6 @@ Do not treat those defaults as tests of session-scoped protection.
 - [vLLM prefix caching](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
   and [Gateway API Inference Extension](https://gateway-api-inference-extension.sigs.k8s.io/).
 - [Evaluation record and holdout results](https://github.com/vllm-project/semantic-router/issues/4080#issuecomment-5938865660).
-  Router revision: `0ee9955fc6ae0d79104e33bc933ae0f75ed52acf`;
-  Qwen3-0.6B: `c1899de289a04d12100db370d81485cdf75e47ca`;
-  Qwen3-8B: `b968826d9c46dd6066d109eabc6255188de91218`.
+  Router revision: [`0ee9955fc6ae0d79104e33bc933ae0f75ed52acf`](https://github.com/vllm-project/semantic-router/commit/0ee9955fc6ae0d79104e33bc933ae0f75ed52acf);
+  Qwen3-0.6B: [`c1899de289a04d12100db370d81485cdf75e47ca`](https://huggingface.co/Qwen/Qwen3-0.6B/tree/c1899de289a04d12100db370d81485cdf75e47ca);
+  Qwen3-8B: [`b968826d9c46dd6066d109eabc6255188de91218`](https://huggingface.co/Qwen/Qwen3-8B/tree/b968826d9c46dd6066d109eabc6255188de91218).
