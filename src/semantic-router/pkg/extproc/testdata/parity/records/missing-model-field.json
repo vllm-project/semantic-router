@@ -1,0 +1,118 @@
+{
+  "case": "missing-model-field",
+  "phases": [
+    {
+      "phase": "request_headers",
+      "header": [
+        {
+          "name": ":method",
+          "value": "POST"
+        },
+        {
+          "name": ":path",
+          "value": "/v1/chat/completions"
+        },
+        {
+          "name": ":authority",
+          "value": "localhost:8899"
+        },
+        {
+          "name": ":scheme",
+          "value": "http"
+        },
+        {
+          "name": "content-type",
+          "value": "application/json"
+        },
+        {
+          "name": "content-length",
+          "value": "45"
+        },
+        {
+          "name": "x-forwarded-proto",
+          "value": "http"
+        },
+        {
+          "name": "x-request-id",
+          "value": "parity-missing-model-field"
+        }
+      ],
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "accept-encoding",
+              "value": ""
+            }
+          ],
+          "remove": [
+            "x-vsr-fusion-depth",
+            "x-vsr-internal-auth",
+            "x-vsr-looper-decision",
+            "x-vsr-looper-iteration",
+            "x-vsr-looper-request",
+            "x-vsr-selected-recipe"
+          ]
+        }
+      }
+    },
+    {
+      "phase": "request_body",
+      "end_of_stream": true,
+      "body": "{\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}",
+      "effect": {
+        "immediate": {
+          "status": 400,
+          "header": {
+            "set": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              },
+              {
+                "name": "x-vsr-schema-version",
+                "value": "2"
+              },
+              {
+                "name": "x-vsr-response-path",
+                "value": "error"
+              },
+              {
+                "name": "x-vsr-config-version",
+                "value": "1"
+              }
+            ]
+          },
+          "body": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"model_required\",\"message\":\"model is required\",\"param\":null}}"
+        }
+      }
+    }
+  ],
+  "response": {
+    "status": 400,
+    "header": [
+      {
+        "name": "content-type",
+        "value": "application/json"
+      },
+      {
+        "name": "x-vsr-schema-version",
+        "value": "2"
+      },
+      {
+        "name": "x-vsr-response-path",
+        "value": "error"
+      },
+      {
+        "name": "x-vsr-config-version",
+        "value": "1"
+      },
+      {
+        "name": "content-length",
+        "value": "109"
+      }
+    ],
+    "body": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"model_required\",\"message\":\"model is required\",\"param\":null}}"
+  },
+  "evidence": {}
+}

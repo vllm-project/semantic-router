@@ -156,7 +156,7 @@ def config_apply(
 @_connection_options
 @_user_errors
 def config_versions(endpoint: str | None, timeout: float, token_env: str) -> None:
-    """List immutable configuration backup versions."""
+    """List the configuration history, newest first."""
 
     _json(_client(endpoint, timeout, token_env).config_versions().payload)
 
@@ -171,7 +171,12 @@ def config_rollback(
     timeout: float,
     token_env: str,
 ) -> None:
-    """Compare-and-swap the active configuration to a backup version."""
+    """Compare-and-swap the active configuration to a recorded version.
+
+    VERSION is a configuration version number from `vllm-sr config versions`,
+    or the timestamp of a backup. The restored document activates as a new
+    version.
+    """
 
     client = _client(endpoint, timeout, token_env)
     etag = client.get_config().etag

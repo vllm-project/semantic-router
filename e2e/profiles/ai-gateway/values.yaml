@@ -1249,13 +1249,6 @@ config:
         similarity_threshold: 0.2
         tools_db_path: config/tools_db.json
         fallback_to_empty: true
-      # The canonical default (localhost:8899) assumes a router-owned listener
-      # that this profile's config.listeners: [] does not configure. Point the
-      # looper's per-call HTTP client directly at the same base-model backend
-      # the router itself routes to, reusing its existing LoRA adapters
-      # (issue #2694 e2e coverage) instead of standing up new infra.
-      looper:
-        endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1/chat/completions
 toolsDb:
   - tool:
       type: function

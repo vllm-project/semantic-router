@@ -585,6 +585,7 @@ func (r *OpenAIRouter) applyDecisionHeaderMutations(state *routeHeaderState, ctx
 	setHeaders, removeHeaders := r.buildHeaderMutations(ctx.VSRSelectedDecision)
 	state.setHeaders = append(state.setHeaders, setHeaders...)
 	state.removeHeaders = append(state.removeHeaders, removeHeaders...)
+	r.runRequestExtensions(state, ctx)
 }
 
 func buildRequestBodyContinueResponse(

@@ -165,8 +165,7 @@ def _service_child_env(
     The values travel in this one child's environment, paired with the
     inheriting ``-e NAME`` flag, so they never appear in a command line. They
     are never assigned into ``os.environ``: that would expose them to every
-    other process the CLI spawns, including ``docker exec`` and OpenClaw
-    workloads. ``None`` means "inherit", which is what every other service
+    other process the CLI spawns, including ``docker exec``. ``None`` means "inherit", which is what every other service
     gets.
     """
 

@@ -13,9 +13,9 @@ func (r *SemanticRouterReconciler) buildCanonicalConfig(ctx context.Context, sr 
 		Version: "v0.3",
 		Listeners: []routerconfig.Listener{
 			{
-				Name:    "grpc-50051",
+				Name:    DefaultListenerName,
 				Address: "0.0.0.0",
-				Port:    50051,
+				Port:    int(DefaultListenerPort),
 				Timeout: "300s",
 			},
 		},

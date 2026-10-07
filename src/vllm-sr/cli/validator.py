@@ -29,6 +29,7 @@ from cli.validator_latency import (
     validate_latency_aware_algorithm_config,
 )
 from cli.validator_prompt import validate_prompt_dependencies
+from cli.validator_inprocess_models import validate_inprocess_model_backends
 from cli.validator_projection_embedding import (
     validate_embedding_modality_compatibility,
     validate_projection_score_dependencies,
@@ -568,6 +569,7 @@ def validate_user_config(
     # Validate algorithm configurations
     errors.extend(validate_algorithm_configurations(config))
     errors.extend(validate_prompt_dependencies(config))
+    errors.extend(validate_inprocess_model_backends(config))
 
     # Validate projection score dependency ordering
     errors.extend(validate_projection_score_dependencies(config))

@@ -178,7 +178,7 @@ On **Step 2 — Choose routing**, keep the **Single-model baseline** if you only
 
 On **Step 3 — Review & activate**, confirm the model summary, then click **Activate configuration**.
 
-Activation writes `config.yaml` to the current directory and exits setup mode. Envoy starts on port `8899` and routes requests through Semantic Router to your Ollama backend.
+Activation writes the configuration and exits setup mode. The `vllm-sr serve` that is still waiting in your terminal then starts the Router, which serves port `8899` and routes requests to your Ollama backend.
 
 ## 7. Test through Semantic Router
 

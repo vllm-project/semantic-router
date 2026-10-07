@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"strconv"
+
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
@@ -24,6 +26,15 @@ func appendImmediateResponseHeader(response *ext_proc.ProcessingResponse, key, v
 	immediate.Headers.SetHeaders = append(immediate.Headers.SetHeaders, &core.HeaderValueOption{
 		Header: &core.HeaderValue{Key: key, RawValue: []byte(value)},
 	})
+}
+
+// appendConfigVersionToImmediateResponse names the configuration snapshot
+// version that produced a Router-generated response.
+func appendConfigVersionToImmediateResponse(response *ext_proc.ProcessingResponse, ctx *RequestContext) {
+	if ctx == nil || ctx.ConfigVersion == 0 {
+		return
+	}
+	appendImmediateResponseHeader(response, headers.VSRConfigVersion, strconv.FormatUint(ctx.ConfigVersion, 10))
 }
 
 func appendRecipeHeaderToImmediateResponse(response *ext_proc.ProcessingResponse, ctx *RequestContext) {

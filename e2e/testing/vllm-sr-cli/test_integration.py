@@ -534,6 +534,8 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         interceptor_env, pull_log = self._pull_interceptor_env()
         cmd = [
             "serve",
+            "--gateway",
+            "extproc",
             "--router-image",
             PULL_POLICY_PROBE_IMAGE,
             "--envoy-image",
