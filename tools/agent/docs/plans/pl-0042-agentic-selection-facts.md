@@ -323,11 +323,77 @@ must be confirmed with maintainers before the PR that depends on it merges.
   shown almost every request as a rejected envelope. It now checks for an
   envelope first.
 - [ ] `TASK-08` Add maintained E2E coverage for authenticated, untrusted, malformed,
-  stale, nested-delegation, and conflicting-constraint requests.
+  stale, nested-delegation, and conflicting-constraint requests. Tests are
+  written and wired into the `routing-strategies` profile, but have not yet
+  passed a run. Tick this when that profile passes in CI.
+
+  Two test cases, one contract each, in `e2e/testcases/`:
+
+  - `agentic-facts-routing` sends a reviewer envelope and checks the selected
+    decision: no envelope, authenticated, untrusted, malformed, stale, nested
+    within the depth bound, nested past it, and conflicting lineage. Only the
+    trusted and valid cases may reach the reviewer decision; every other case
+    must still return 200 on the default decision, because a rejected
+    envelope is ignored, not fatal.
+  - `agentic-facts-eligibility` checks capability narrowing. A control case
+    with no requirement selects the higher-quality model; requiring the other
+    model's capability selects that model instead; requiring a capability no
+    model has returns 422, and the 422 body names the reason without any model
+    name or caller value.
+
+  The profile gains one recipe, `agentic-facts-policy`, reached through its own
+  entrypoint, and two models used only by that recipe. Shared model cards are
+  untouched, so no other recipe or test in the profile sees a change.
+  `agentic_facts` is enabled for the whole profile; the other tests send no
+  envelope, so they are unaffected.
+
+  `routing-strategies` was chosen because it runs on pull requests and already
+  hosts `metadata-routing`. Replay is not checked end to end: the
+  `router-replay` profile runs only on manual selection, and its test token
+  lacks `replay.detail`, so reasons would arrive redacted. Replay is covered by
+  the `TASK-07` unit tests instead.
+
+  E2E cannot check two things, both covered elsewhere: that the carrier and
+  trust headers are removed before the backend (the mock backend records only
+  the request body; unit tests cover both removal paths), and that a gateway
+  strips a client-supplied trust marker (a deployment responsibility under
+  `CONFIRM-03`; the test plays the trusted gateway itself).
+
+  Checked without a cluster: the profile config parses with `config.Parse`, and
+  every test envelope is accepted or rejected by `agenticfacts.Validate` for the
+  intended reason. A full local run did not complete: the router downloads about
+  3 GB of embedding models at startup, and on the development machine the Kind
+  cluster reached only about 0.1 MB/s, so the router could not become ready
+  within its 60-minute startup limit. This is a local network limit, not a test
+  failure; the first real result will come from CI.
+
+  Follow-ups found during this task, recorded here and deliberately not changed
+  because they alter shared CI or E2E infrastructure:
+
+  - **CI does not re-run these tests on later changes.** `routing-strategies`
+    is selected only when files under its `paths` in
+    `tools/agent/test-domain-registry.yaml` change. This pull request selects it
+    because it edits the profile's `values.yaml`, but a later pull request that
+    touches only agentic facts code will not. A possible fix, needing a
+    maintainer decision, is adding `e2e/testcases/agentic_facts_*.go`,
+    `src/semantic-router/pkg/agenticfacts/**`, and
+    `src/semantic-router/pkg/extproc/req_filter_agentic_*.go` to those paths,
+    following the `istio` and `router-replay` profiles.
+  - **`E2E_USE_WORKSPACE_MODELS=true` fails for every profile using the Helm
+    chart.** The chart always mounts `models-volume` at `/app/models`
+    (`deploy/helm/semantic-router/templates/deployment.yaml`), and the runner's
+    overlay in `e2e/pkg/framework/runner_lifecycle.go` adds a second mount at
+    the same path, so Kubernetes rejects the deployment with "mountPath must be
+    unique". This predates this plan.
 
 ## Next Action
 
-Start `TASK-08` on `feat/3379-agentic-facts-schema`.
+Open the pull request for `feat/3379-agentic-facts-schema` and read the
+`routing-strategies` result in CI. If it passes, tick `TASK-08`. If it fails,
+the per-case failure lines name the case and the decision or model it got.
+
+After that, close out `TASK-01` and raise the two `TASK-08` follow-ups with
+maintainers.
 
 Every `CONFIRM` item except `CONFIRM-01` is now implemented and externally
 visible in code rather than recorded as a default, so all of them need a
@@ -336,10 +402,8 @@ rest because they were decided here rather than by the proposal: `CONFIRM-06`,
 which exempts a route action's destination from caller-declared capability
 filtering, and `CONFIRM-09`, which removed two envelope fields.
 
-`TASK-08` can use Replay to check its cases: each of the untrusted, malformed,
-stale, and conflicting requests should produce `agentic_facts_status:
-rejected` with a known reason, and an authenticated valid request should
-produce `accepted`.
+`TASK-08` checks routing through response headers rather than Replay; the
+reason is recorded in its task entry.
 
 ## Operating Rules
 
