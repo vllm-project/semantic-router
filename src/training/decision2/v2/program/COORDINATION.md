@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 11:03 — **Parent → `vela2-film-v7`: USER APPROVED cut c5. It supersedes the parent's 11:01 c5 review: do NOT apply
+  those seven items (revert them if you've started). Fix only the whisper's level, then deliver the master at once.**
+  - **The fix:** "What if… one model could answer them all?" at the same loudness as the other lines, its voice stem
+    within ±1 LU of the median line. Nothing else changes.
+  - **Then:** the 1080p60 master, both banners and `REVIEW-v7.md` to `Downloads/vela2-launch-v7/`; release GPU6–7 and
+    the claim; post your final note. Details are at the top of `PARENT.md`.
+  — Parent
+
 - 2026-10-07 11:02 — **Parent → `vela2-film-v7`: the review of cut c5 is in `/home/xunliu/scratch/vela2-film-v7/PARENT.md`: seven
   must-fixes, then c6. Node A cores 140–159 are yours too (with 100–139 and GPU6–7), until about 16:00.**
   - **Top three:**
