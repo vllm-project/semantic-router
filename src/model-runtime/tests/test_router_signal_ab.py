@@ -56,6 +56,29 @@ def test_recorded_answers_keep_a_decisions_answer_with_its_question_set(
     }
 
 
+def test_a_row_finds_the_trimmed_and_the_sampled_text_its_consumers_received(
+    ab, tmp_path
+) -> None:
+    def classify(model: str, text: str, p: float) -> dict:
+        return {"path": "/v1/bundle", "request": {"tasks": [{"id": "1", "classify": {"model": model, "input": [{"text": text}]}}]},
+                "response": {"results": [{"id": "1", "classify": {"labels": ["a", "b"], "results": [{"probabilities": [p, 1 - p]}]}}]}}  # fmt: skip
+
+    head, middle, tail = " head " + "h" * 80, "m" * 80, "t" * 80 + " tail "
+    text = head + "x" * 100 + middle + "y" * 100 + tail
+    sampled = ab.SAMPLED.join([head, middle, tail])
+    entries = [classify("@domain_classifier", sampled, 0.1), classify("@pii_classifier", text.strip(), 0.2),
+               classify("@prompt_guard", text, 0.3), classify("@feedback_detector", ab.SAMPLED.join(["a", "b", "c"]), 0.4)]  # fmt: skip
+    (tmp_path / "cpu.sock.jsonl").write_text(
+        "".join(json.dumps(e) + "\n" for e in entries)
+    )
+    outputs = ab.Answers([str(tmp_path)]).outputs(text, "request")
+    assert {model: item["probabilities"][0] for model, item in outputs.items()} == {
+        "@domain_classifier": 0.1,
+        "@pii_classifier": 0.2,
+        "@prompt_guard": 0.3,
+    }
+
+
 def test_pii_scores_count_only_sensitive_identifiers(ab) -> None:
     spans = [
         {"label": "GPE", "probability": 0.99},
@@ -82,6 +105,31 @@ def test_verdicts_read_the_routers_matched_rules(ab) -> None:
     assert ab.verdict(
         "hallucination", {"label": "hallucinated"}, {"spans": [{"start": 0}]}
     )
+
+
+def test_a_matched_threshold_keeps_the_share_of_values_it_admits(ab) -> None:
+    values = [0.1, 0.2, 0.3, 0.4]
+    assert ab.matched_threshold(0.25, values, above=True) == pytest.approx(0.35)
+    assert ab.matched_threshold(0.5, values, above=False) == pytest.approx(0.25)
+    assert ab.matched_threshold(0.0, values, above=True) == pytest.approx(0.7)
+    assert ab.matched_threshold(1.0, values, above=True) == pytest.approx(0.05)
+    assert ab.matched_threshold(0.0, values, above=False) == pytest.approx(0.05)
+
+
+def test_a_confidence_floor_falls_back_below_its_threshold(ab) -> None:
+    rows = [{"id": "1", "label": "math"}, {"id": "2", "label": "other"}]
+    preds = {
+        "1": {"scores": {"math": 0.6, "other": 0.4}},
+        "2": {"scores": {"math": 0.55, "other": 0.45}},
+    }
+    assert ab.floor_point("domain", rows, preds, 0.5) == {
+        "below": 0.0,
+        "balanced_accuracy": 0.5,
+    }
+    assert ab.floor_point("domain", rows, preds, 0.58) == {
+        "below": 0.5,
+        "balanced_accuracy": 1.0,
+    }
 
 
 def test_the_vela2_arm_differs_only_in_its_model_catalog(ab, tmp_path) -> None:

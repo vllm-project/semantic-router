@@ -12,12 +12,15 @@ rows    writes one routing-preview request per request-time row of the suite (a 
 record  is a managed runtime command (VLLM_SRUN_COMMAND) that starts the real runtime on a
         side socket and serves the Router's socket itself, appending every exchange to a log.
 run     sends the rows to POST /api/v1/routing/preview of a running Router (resumable).
-join    reads a run and its recorded exchanges and writes, per task and file, the
-        probabilities the Router received for each row (the suite's prediction layout).
+join    reads runs, each with its own recorded exchanges (the first run that answers a row
+        wins), and writes, per task and file, the probabilities the Router received for each
+        row (the suite's prediction layout).
 halu    asks the hallucination rows as the Router's detector asks them; the routing preview
         never reaches that response-time signal.
 score   compares two arms per file and per signal with group-bootstrap paired intervals.
 verdicts  compares how often each arm's Router verdict at its default thresholds is right.
+calibrate maps Vela 1.0 thresholds to the ones that keep their operating points on the
+        suite's dev rows (the false-positive rate, or the share of rows below a confidence floor).
 """
 
 from __future__ import annotations
@@ -523,15 +526,50 @@ def vela2_scores(task: str, outputs: dict[str, Any]) -> dict[str, float] | None:
     return item.get("probabilities")
 
 
+SAMPLED = "\n... [content sampled for routing signal evaluation] ...\n"
+
+
+class Answers:
+    """A run's recorded outputs, found by the text each consumer received.
+
+    The Router hands PII its text trimmed, and above its sampling budget it hands the
+    semantic signals a head, a middle and a tail of the text joined by SAMPLED.
+    """
+
+    def __init__(self, log_dirs: list[str]):
+        self.answers = recorded_answers(log_dirs)
+        self.sampled: dict[tuple[str, str], list[tuple[list[str], tuple[str, str]]]] = (
+            collections.defaultdict(list)
+        )
+        for text, kind in self.answers:
+            parts = text.split(SAMPLED)
+            if len(parts) == 3:
+                self.sampled[(parts[0][:64], kind)].append((parts, (text, kind)))
+
+    def outputs(self, text: str, kind: str) -> dict[str, Any]:
+        merged: dict[str, Any] = {}
+        for key in ("any", kind):
+            for parts, sampled in self.sampled.get((text[:64], key), []):
+                head, middle, tail = parts
+                if text.startswith(head) and text.endswith(tail) and middle in text:
+                    merged.update(self.answers[sampled])
+        for candidate in (text.strip(), text):
+            merged.update(self.answers.get((candidate, "any"), {}))
+            merged.update(self.answers.get((candidate, kind), {}))
+        return merged
+
+
 def cmd_join(args: argparse.Namespace) -> None:
+    if len(args.run) != len(args.log_dir):
+        raise SystemExit("join pairs each --run with its own --log-dir")
     rows = {row["id"]: row for row in read_jsonl(args.rows)}
-    answers = recorded_answers(args.log_dir)
     scorer = vela1_scores if args.arm == "vela1" else vela2_scores
     handles: dict[tuple[str, str], Any] = {}
     missing: collections.Counter[str] = collections.Counter()
     seen: set[str] = set()
     failed = 0
-    for run in args.run:
+    for run, log_dir in zip(args.run, args.log_dir, strict=True):
+        answers = Answers([log_dir])
         for result in read_jsonl(run):
             if result["id"] in seen:
                 continue
@@ -542,10 +580,7 @@ def cmd_join(args: argparse.Namespace) -> None:
             body = row["body"]
             text = body.get("text") or body["messages"][-1]["content"]
             kind = "feedback" if row["task"] == "feedback" else "request"
-            scores = scorer(
-                row["task"],
-                {**answers.get((text, "any"), {}), **answers.get((text, kind), {})},
-            )
+            scores = scorer(row["task"], answers.outputs(text, kind))
             if scores is None:
                 missing[row["task"]] += 1
                 continue
@@ -944,6 +979,169 @@ def cmd_verdicts(args: argparse.Namespace) -> None:
     print(json.dumps(out, indent=1))
 
 
+# Below its threshold the Router falls back to a category (domain), abstains (feedback) or
+# consults keywords (modality); every other threshold is a binary signal's score threshold.
+FLOORS = {"domain": "other", "feedback": "NO_FEEDBACK", "modality": None}
+
+
+def top_label(scores: dict[str, Any]) -> tuple[str, float]:
+    """The Router's reading of a distribution: its most probable label and that probability."""
+    items = [(k, float(v)) for k, v in scores.items() if not k.startswith("_")]
+    return max(items, key=lambda item: item[1]) if items else ("", 0.0)
+
+
+def matched_threshold(rate: float, values: Any, above: bool) -> float:
+    """The threshold that puts a share ``rate`` of ``values`` at or above it (``above``) or
+    below it, midway between the two values it falls between."""
+    import numpy as np
+
+    v = np.sort(np.asarray(values, dtype=float))
+    k = int(round(rate * len(v)))
+    if above:
+        v = v[::-1]
+    if 0 < k < len(v):
+        return float((v[k - 1] + v[k]) / 2)
+    edge = v[0] if k <= 0 else v[-1]
+    # Past the last value: midway to 1 on the side the threshold keeps clear, else to 0.
+    return float(edge + (1.0 - edge) / 2 if (k <= 0) == above else edge / 2)
+
+
+def floor_point(
+    task: str, rows: list[dict[str, Any]], preds: dict[str, Any], t: float
+) -> dict[str, float]:
+    """A confidence floor's share of rows below it, and the Router verdict's balanced accuracy
+    (modality: on the rows above it, where the classifier decides)."""
+    hits: dict[str, list[bool]] = collections.defaultdict(list)
+    below = 0
+    for row in rows:
+        label, p = top_label(preds[row["id"]]["scores"])
+        if p < t:
+            below += 1
+            if FLOORS[task] is None:
+                continue
+            label = FLOORS[task]
+        if task == "modality":
+            hits[row["label"]].append(
+                (label in ("DIFFUSION", "BOTH")) == (row["label"] == "DIFFUSION")
+            )
+        else:
+            hits[row["label"]].append(label.lower() == row["label"].lower())
+    balanced = (
+        sum(sum(v) / len(v) for v in hits.values()) / len(hits)
+        if hits
+        else float("nan")
+    )
+    return {
+        "below": round(below / len(rows), 4),
+        "balanced_accuracy": round(balanced, 4),
+    }
+
+
+def cmd_calibrate(args: argparse.Namespace) -> None:
+    """Maps each Vela 1.0 threshold to the one that keeps its operating point on the suite's dev rows.
+
+    A binary signal keeps its false-positive rate on the dev negatives; a confidence floor keeps
+    its share of dev rows below it. Each point also reports the rate it keeps and the
+    true-positive rate or balanced accuracy both arms reach there, on dev and on the
+    in-distribution test files.
+    """
+    import numpy as np
+
+    spec = json.loads(Path(args.thresholds).read_text(encoding="utf-8"))
+    report: dict[str, Any] = {"a": args.a_name, "b": args.b_name, "tasks": {}}
+    lines = [f"| signal | {args.a_name} threshold | {args.b_name} threshold | kept rate ({args.a_name} / {args.b_name}) | "
+             f"dev {args.a_name} / {args.b_name} | test {args.a_name} / {args.b_name} |",
+             "| --- | ---: | ---: | --- | --- | --- |"]  # fmt: skip
+    for task, thresholds in spec.items():
+        files = suite_files(args.suite, task)
+        sets = {
+            "dev": ["dev"],
+            "test": sorted(s for s in files if s == "test" or s.startswith("test-")),
+        }
+        data = {}
+        for name, stems in sets.items():
+            gold = [
+                row
+                for s in stems
+                for path in files.get(s, [])
+                for row in read_jsonl(path)
+            ]
+            pa, pb = predictions(args.a, task, stems), predictions(args.b, task, stems)
+            data[name] = ([r for r in gold if r["id"] in pa and r["id"] in pb], pa, pb)
+        rows, pa, pb = data["dev"]
+        points = []
+        for t1 in thresholds:
+            if task in FLOORS:
+                below = np.mean(
+                    [top_label(pa[r["id"]]["scores"])[1] < t1 for r in rows]
+                )
+                t2 = matched_threshold(
+                    float(below),
+                    [top_label(pb[r["id"]]["scores"])[1] for r in rows],
+                    above=False,
+                )
+                point = {
+                    "a": t1,
+                    "b": round(t2, 4),
+                    "metric": "balanced_accuracy",
+                    "rate": "below",
+                }
+                for name, (rs, qa, qb) in data.items():
+                    if rs:
+                        point[name] = {
+                            "a": floor_point(task, rs, qa, t1),
+                            "b": floor_point(task, rs, qb, t2),
+                        }
+            else:
+                positive = POSITIVE[task]
+
+                def score(p: dict[str, Any], r: dict[str, Any]) -> float:
+                    return scores_of(task, p[r["id"]]["scores"]).get(positive, 0.0)
+
+                negatives = [r for r in rows if r["label"] != positive]
+                fpr = np.mean([score(pa, r) >= t1 for r in negatives])
+                t2 = matched_threshold(
+                    float(fpr), [score(pb, r) for r in negatives], above=True
+                )
+                point = {
+                    "a": t1,
+                    "b": round(t2, 4),
+                    "metric": "true_positive_rate",
+                    "rate": "false_positive_rate",
+                }
+                for name, (rs, qa, qb) in data.items():
+                    pos = [r for r in rs if r["label"] == positive]
+                    neg = [r for r in rs if r["label"] != positive]
+                    if pos and neg:
+                        point[name] = {
+                            arm: {"false_positive_rate": round(float(np.mean([score(q, r) >= t for r in neg])), 4),
+                                  "true_positive_rate": round(float(np.mean([score(q, r) >= t for r in pos])), 4)}
+                            for arm, q, t in (("a", qa, t1), ("b", qb, t2))
+                        }  # fmt: skip
+            points.append(point)
+            m, k = point["metric"], point["rate"]
+
+            def pair(name: str) -> str:
+                if name not in point:
+                    return "—"
+                return f"{point[name]['a'][m]:.3f} / {point[name]['b'][m]:.3f}"
+
+            kept = (
+                f"{point['dev']['a'][k]:.3f} / {point['dev']['b'][k]:.3f}"
+                if "dev" in point
+                else "—"
+            )
+            lines.append(
+                f"| {task} | {t1:g} | {point['b']:.3f} | {k.replace('_', ' ')} {kept} | {pair('dev')} | {pair('test')} |"
+            )
+        report["tasks"][task] = {"dev_rows": len(rows), "points": points}
+    Path(args.out).write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
+    text = "\n".join(lines) + "\n"
+    if args.md:
+        Path(args.md).write_text(text, encoding="utf-8")
+    print(text)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1002,13 +1200,26 @@ def main() -> int:
     p.add_argument("--b", required=True)
     p.add_argument("--tasks", default=",".join(TASKS + ["hallucination"]))
     p.add_argument("--out", required=True)
+    p = sub.add_parser("calibrate")
+    p.add_argument("--suite", required=True)
+    p.add_argument("--a", required=True)
+    p.add_argument("--b", required=True)
+    p.add_argument("--a-name", default="Vela 1.0")
+    p.add_argument("--b-name", default="Vela 2.0 0.3B")
+    p.add_argument(
+        "--thresholds",
+        required=True,
+        help='JSON {signal: [Vela 1.0 thresholds]}, e.g. {"jailbreak": [0.5]}',
+    )
+    p.add_argument("--out", required=True)
+    p.add_argument("--md")
     args, rest = ap.parse_known_args()
     if args.cmd == "record":
         return cmd_record(args, rest)
     if rest:
         ap.error(f"unrecognized arguments: {' '.join(rest)}")
     commands = {"config": cmd_config, "rows": cmd_rows, "run": cmd_run, "join": cmd_join, "halu": cmd_halu,
-                "score": cmd_score, "verdicts": cmd_verdicts}  # fmt: skip
+                "score": cmd_score, "verdicts": cmd_verdicts, "calibrate": cmd_calibrate}  # fmt: skip
     commands[args.cmd](args)
     return 0
 

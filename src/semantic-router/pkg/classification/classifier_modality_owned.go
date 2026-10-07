@@ -62,12 +62,13 @@ func buildOwnedModalityOption(
 		return nil, nil
 	}
 	_, explicit := models.plan.Lookup(models.recipe, "modality_detector")
-	if !explicit && (md.Classifier == nil || md.Classifier.ModelPath == "") {
+	path, useCPU, ok := md.ClassifierModel()
+	if !explicit && !ok {
 		return nil, nil
 	}
-	path, useCPU, limit := "", true, 0
+	limit := 0
 	if md.Classifier != nil {
-		path, useCPU, limit = md.Classifier.ModelPath, md.Classifier.UseCPU, md.Classifier.MaxSequenceLength
+		limit = md.Classifier.MaxSequenceLength
 	}
 	spec, err := models.localSpec("modality_detector", path, "mmbert32k", config.RemoteClassifierContractLabelDistribution, useCPU, limit)
 	var handle *binding.Resolved[string, tasks.LabelDistribution]

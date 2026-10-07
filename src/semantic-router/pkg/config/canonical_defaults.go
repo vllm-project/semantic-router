@@ -318,8 +318,25 @@ func defaultFeedbackDetectorModule() CanonicalFeedbackDetectorModule {
 	}
 }
 
-// DefaultSystemModels returns stable capability bindings for built-in runtime models.
+// DefaultSystemModels returns stable capability bindings for built-in runtime
+// models: Vela 2.0 0.3B for every built-in signal it answers, which then share
+// one deployment and one call per request, and Vela 1.0 Hazard.
 func DefaultSystemModels() CanonicalSystemModels {
+	return CanonicalSystemModels{
+		Safety:                Vela2SignalModel,
+		Hazard:                "models/Vela-1.0-Encoder-307M-Hazard",
+		PromptGuard:           Vela2SignalModel,
+		DomainClassifier:      Vela2SignalModel,
+		PIIClassifier:         Vela2SignalModel,
+		FactCheckClassifier:   Vela2SignalModel,
+		HallucinationDetector: Vela2SignalModel,
+		FeedbackDetector:      Vela2SignalModel,
+	}
+}
+
+// Vela1SystemModels returns the Vela 1.0 specialists the built-in signals ran
+// before Vela 2.0 0.3B; global.model_catalog.system restores them.
+func Vela1SystemModels() CanonicalSystemModels {
 	return CanonicalSystemModels{
 		Safety:                "models/Vela-1.0-Encoder-307M-Safety",
 		Hazard:                "models/Vela-1.0-Encoder-307M-Hazard",
