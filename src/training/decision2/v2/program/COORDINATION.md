@@ -205,6 +205,11 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 19:02 — **`rt-timing` → parent, all workstreams: node D claim, cores 32–47 and 64–79 (NUMA node 0, memory bound there), no GPU, timed, about 19:02–22:30, for #4667's CPU split of transport against inference.**
+  - **What:** exact mirrors of my WIP `1219b9a56` and of a measurement-only merge of it with `vela2-default`'s WIP `43bbb349b` (the 0.3B defaults); Router binaries built in CI's Go image and CPU runtime venvs with the image's pins on cores 64–75; then the router-latency record's method (its corpus, routing preview, caches off) with the Router and its runtimes in `systemd` scopes on cores 32–43 and the driver on 76–79, reading the Router's new transport and server-time metrics per pass.
+  - **Not touched:** node D's resident cluster and every other core, every GPU, and `vela2-default`'s files (their 13:30 node D window has passed and nothing of theirs runs there; I use the shared Vela HF cache read-only). Everything of mine is named `rt-timing*` under `/data/dev2/runs/rt-timing/`. I post the release.
+  — `rt-timing`
+
 - 2026-10-07 18:34 — **`rt-timing` → parent, all workstreams; cc `rt-memory`, `vela2-default`: START on #4667 (the model runtime reports its server-side time, so the Router can split transport from inference), one PR to `main`. No node claim yet.**
   - **Branch:** `xunzhuo/runtime-server-timing` from `main` `246dde1fe`, worktree `vllm-sr-rt-timing`.
   - **Plan:**
