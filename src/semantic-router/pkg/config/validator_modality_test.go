@@ -19,11 +19,11 @@ func TestModalityClassifierRunsVela2WithoutAModelPath(t *testing.T) {
 	if err := validateGlobalModalityContracts(cfg); err != nil {
 		t.Fatalf("the classifier method runs Vela 2.0 0.3B without a model_path: %v", err)
 	}
-	if model, useCPU, ok := cfg.ModalityDetector.ClassifierModel(); !ok || model != Vela2SignalModel || !useCPU {
+	if model, useCPU, ok := cfg.ModalityClassifierModel(); !ok || model != Vela2SignalModel || !useCPU {
 		t.Fatalf("classifier model = %q (cpu %t, ok %t), want Vela 2.0 0.3B on CPU", model, useCPU, ok)
 	}
 	cfg.ModalityDetector.Classifier = &ModalityClassifierConfig{ModelPath: "models/Vela-1.0-Encoder-307M-Modality", UseCPU: true}
-	if model, _, _ := cfg.ModalityDetector.ClassifierModel(); model != "models/Vela-1.0-Encoder-307M-Modality" {
+	if model, _, _ := cfg.ModalityClassifierModel(); model != "models/Vela-1.0-Encoder-307M-Modality" {
 		t.Fatalf("an explicit model_path must win, got %q", model)
 	}
 	cfg.ModalityDetector.ConfidenceThreshold = 0
@@ -41,7 +41,7 @@ func TestHybridModalityNeedsAClassifierKeywordsOrABinding(t *testing.T) {
 	if err := validateGlobalModalityContracts(keywordsOnly); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok := keywordsOnly.ModalityDetector.ClassifierModel(); ok {
+	if _, _, ok := keywordsOnly.ModalityClassifierModel(); ok {
 		t.Fatal("a hybrid detector without a classifier block stays keyword-only")
 	}
 	bound := classifierModalityConfig(ModalityDetectionHybrid, map[string]ModelBinding{

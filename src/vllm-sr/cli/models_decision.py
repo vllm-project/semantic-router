@@ -111,7 +111,9 @@ class DecisionSignalRule(BaseModel):
 
     name: str
     description: str | None = None
-    deployment: str
+    # Without one, the question asks the decision model
+    # (global.model_catalog.system.decision_model).
+    deployment: str | None = None
     question: DecisionQuestion
     predicate: NumericPredicate | None = None
     timeout_ms: int | None = Field(default=None, ge=0, le=MAX_DECISION_TIMEOUT_MS)
@@ -122,8 +124,11 @@ class DecisionSignalRule(BaseModel):
             raise ValueError(
                 "decision signal name must be nonempty, trimmed and without ':'"
             )
-        if not self.deployment.strip():
-            raise ValueError("deployment is required")
+        if self.deployment is not None and not self.deployment.strip():
+            raise ValueError(
+                "deployment must name a model_runtime deployment; omit it to ask "
+                "the decision model"
+            )
         if self.question.type == "score" and self.predicate is None:
             raise ValueError(
                 "a score question requires a predicate on its expected level"

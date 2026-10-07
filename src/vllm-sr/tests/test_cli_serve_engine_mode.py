@@ -77,7 +77,7 @@ def engine(monkeypatch, tmp_path):
 def router_serve(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        runtime_commands, "_execute_serve", lambda *args: calls.append(args)
+        runtime_commands, "_execute_serve", lambda *args, **kwargs: calls.append(args)
     )
     return calls
 

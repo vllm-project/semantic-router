@@ -356,16 +356,7 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 		Embeddings: CanonicalEmbeddingModels{
 			Semantic: cfg.EmbeddingModels,
 		},
-		System: CanonicalSystemModels{
-			Safety:                cfg.SafetyModels.Safety.ModelID,
-			Hazard:                cfg.SafetyModels.Hazard.ModelID,
-			PromptGuard:           cfg.PromptGuard.ModelID,
-			DomainClassifier:      cfg.CategoryModel.ModelID,
-			PIIClassifier:         cfg.PIIModel.ModelID,
-			FactCheckClassifier:   cfg.HallucinationMitigation.FactCheckModel.ModelID,
-			HallucinationDetector: cfg.HallucinationMitigation.HallucinationModel.ModelID,
-			FeedbackDetector:      cfg.FeedbackDetector.ModelID,
-		},
+		System:    canonicalSystemModelsFromRouterConfig(cfg),
 		External:  append([]ExternalModelConfig(nil), cfg.ExternalModels...),
 		KBs:       append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
 		Admission: cloneAdmissionMap(cfg.ModelAdmission),
@@ -663,4 +654,30 @@ func normalizedConfigSource(source ConfigSource) ConfigSource {
 		return ConfigSourceFile
 	}
 	return source
+}
+
+// canonicalSystemModelsFromRouterConfig writes the decision model, unless it
+// is the default, and only the system lines that bind a module to another
+// model than the decision model does, so the document still follows it.
+func canonicalSystemModelsFromRouterConfig(cfg *RouterConfig) CanonicalSystemModels {
+	system := CanonicalSystemModels{
+		Safety:                cfg.SafetyModels.Safety.ModelID,
+		Hazard:                cfg.SafetyModels.Hazard.ModelID,
+		PromptGuard:           cfg.PromptGuard.ModelID,
+		DomainClassifier:      cfg.CategoryModel.ModelID,
+		PIIClassifier:         cfg.PIIModel.ModelID,
+		FactCheckClassifier:   cfg.HallucinationMitigation.FactCheckModel.ModelID,
+		HallucinationDetector: cfg.HallucinationMitigation.HallucinationModel.ModelID,
+		FeedbackDetector:      cfg.FeedbackDetector.ModelID,
+	}
+	spec := cfg.DecisionModelSpec()
+	if spec.Name != DefaultDecisionModel {
+		system.DecisionModel = spec.Name
+	}
+	for _, line := range systemLines {
+		if value := line.value(&system); *value == *line.value(&spec.System) {
+			*value = ""
+		}
+	}
+	return system
 }

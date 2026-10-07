@@ -21,6 +21,7 @@ import type {
   ToolIntegrationConfig,
   VectorStoreConfig,
 } from './configPageSupport'
+import { DEFAULT_DECISION_MODEL } from './decisionModelSupport'
 
 export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   router_core: {
@@ -164,13 +165,9 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   external_models: [],
   knowledge_bases: [],
   admission: {},
+  // Every module follows the decision model unless a line binds it.
   system_models: {
-    prompt_guard: 'models/Vela-2.0-0.3B',
-    domain_classifier: 'models/Vela-2.0-0.3B',
-    pii_classifier: 'models/Vela-2.0-0.3B',
-    fact_check_classifier: 'models/Vela-2.0-0.3B',
-    hallucination_detector: 'models/Vela-2.0-0.3B',
-    feedback_detector: 'models/Vela-2.0-0.3B',
+    decision_model: DEFAULT_DECISION_MODEL,
   } satisfies CanonicalSystemModels,
   embedding_models: {
     qwen3_model_path: '',

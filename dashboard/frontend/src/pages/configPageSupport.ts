@@ -701,6 +701,9 @@ export interface AdvancedToolFilteringConfig {
 }
 
 export interface CanonicalSystemModels {
+  decision_model?: string
+  safety?: string
+  hazard?: string
   prompt_guard?: string
   domain_classifier?: string
   pii_classifier?: string

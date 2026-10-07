@@ -43,7 +43,15 @@ SERVE_OPTION_GROUPS = (
         "Router options (docker and kubernetes targets)",
         frozenset({MODE_DOCKER, MODE_KUBERNETES}),
         "router mode; engine mode serves only models",
-        ("config", "target", "gateway", "minimal", "readonly", "algorithm"),
+        (
+            "config",
+            "target",
+            "gateway",
+            "minimal",
+            "readonly",
+            "algorithm",
+            "decision_model",
+        ),
     ),
     OptionGroup(
         "Container options (docker target and engine mode)",
@@ -86,6 +94,11 @@ _MOVED_OPTIONS = {
     (MODE_ENGINE, "profile"): (
         "--profile is the kubernetes deployment profile; engine mode takes "
         "--runtime-profile"
+    ),
+    (MODE_ENGINE, "decision_model"): (
+        "--decision-model applies to the Router stack: it chooses the model that "
+        "answers the Router's questions. Engine mode (vllm-sr serve MODEL) serves "
+        "the models you name; drop MODEL to serve the Router"
     ),
 }
 

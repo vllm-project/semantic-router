@@ -1444,6 +1444,15 @@ spec:
                         rule: '!(has(self.hard_below) && has(self.easy_above)) ||
                           double(self.hard_below) < double(self.easy_above)'
                     type: array
+                  decision_model:
+                    description: |-
+                      DecisionModel is the Vela model that answers the Router's questions,
+                      global.model_catalog.system.decision_model: Vela-2.0-0.3B (the
+                      default), Vela-2.0-0.8B, Vela-2.0-4B, Vela-2.0-9B or Vela-1.0, in any
+                      case. It answers the built-in signals and every decision question that
+                      names no deployment; the 4B and 9B need a GPU in the Router pod.
+                    pattern: ^([Vv][Ee][Ll][Aa]-(2\.0-(0\.3[Bb]|0\.8[Bb]|4[Bb]|9[Bb])|1\.0))?$
+                    type: string
                   decisions:
                     description: Routing decisions based on signals (domain, complexity,
                       etc.)
@@ -1981,7 +1990,8 @@ spec:
                         minimum: 0
                         type: integer
                       model_id:
-                        default: models/Vela-2.0-0.3B
+                        description: ModelID binds the guard to one model; empty runs
+                          the decision model.
                         type: string
                       on_error:
                         description: |-
@@ -2004,9 +2014,9 @@ spec:
                           type: string
                         type: array
                       threshold:
-                        default: "0.75"
-                        description: Jailbreak detection threshold (0.0-1.0). Stored
-                          as string to avoid float precision issues.
+                        description: |-
+                          Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float
+                          precision issues; empty takes the threshold calibrated for the model.
                         pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
                         type: string
                       use_cpu:

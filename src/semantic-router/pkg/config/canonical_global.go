@@ -105,6 +105,9 @@ type CanonicalModelModules struct {
 
 // CanonicalSystemModels centralizes stable capability bindings for built-in models.
 type CanonicalSystemModels struct {
+	// DecisionModel is the Vela model that answers the built-in signals and
+	// the decision questions that name no deployment (decision_model.go).
+	DecisionModel         string `yaml:"decision_model,omitempty"`
 	Safety                string `yaml:"safety,omitempty"`
 	Hazard                string `yaml:"hazard,omitempty"`
 	PromptGuard           string `yaml:"prompt_guard,omitempty"`
@@ -183,6 +186,9 @@ func (m CanonicalHallucinationModule) runtimeConfig() HallucinationMitigationCon
 func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPayload) (CanonicalGlobal, error) {
 	defaults := DefaultCanonicalGlobal()
 	if rawOverride == nil && override == nil {
+		if err := applyDecisionModel(&defaults, nil); err != nil {
+			return CanonicalGlobal{}, err
+		}
 		if err := resolveModuleModelRefs(&defaults); err != nil {
 			return CanonicalGlobal{}, err
 		}
@@ -195,6 +201,9 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	}
 	normalizeSparseCanonicalEmbeddingOverride(&resolved, rawOverride)
 	if err := rejectLegacyPromptGuardProtocol(rawOverride); err != nil {
+		return CanonicalGlobal{}, err
+	}
+	if err := applyDecisionModel(&resolved, rawOverride); err != nil {
 		return CanonicalGlobal{}, err
 	}
 	if err := resolveModuleModelRefs(&resolved); err != nil {
@@ -315,6 +324,7 @@ func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIn
 }
 
 func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
+	cfg.DecisionModel = modelCatalog.System.DecisionModel
 	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
 	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)

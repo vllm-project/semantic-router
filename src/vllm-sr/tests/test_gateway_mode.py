@@ -81,7 +81,7 @@ def test_kubernetes_values_carry_the_gateway_and_a_gpu_platform(tmp_path):
 def captured_serve(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        runtime_commands, "_execute_serve", lambda *args: calls.append(args)
+        runtime_commands, "_execute_serve", lambda *args, **kwargs: calls.append(args)
     )
     return calls
 

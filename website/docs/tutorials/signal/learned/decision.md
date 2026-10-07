@@ -33,7 +33,30 @@ your question.
 
 ## Configuration
 
-Name the model as a `model_runtime` deployment, then ask it questions:
+A question that names no `deployment` asks the Router's decision model,
+`global.model_catalog.system.decision_model` (Vela 2.0 0.3B unless you
+[choose a size](model-runtime/choose-a-model.md#choose-a-size)). It joins the
+call that answers the built-in signals, so one model answers every question
+the Router asks of a request in one call:
+
+```yaml
+routing:
+  signals:
+    decision:
+      - name: needs_tools
+        question:
+          type: noul
+          instructions: Does answering this request need a tool call?
+        predicate:
+          gte: 0.7
+```
+
+With `decision_model: Vela-1.0` the Vela 1.0 specialists answer only the
+built-in signals, so such a question is a load error that asks for a
+`deployment`.
+
+To ask another model, such as a Decision 2.0 model, name it as a
+`model_runtime` deployment and give each question its `deployment`:
 
 ```yaml
 global:

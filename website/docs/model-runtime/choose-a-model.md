@@ -183,6 +183,79 @@ built-in recipes' rules are calibrated to the 0.3B, so a signal moved back
 takes its Vela 1.0 rule thresholds with it. In `mom-v1` those are prompt guard
 0.5, safety 0.5 and PII 0.7; the record lists every recipe's.
 
+`decision_model: Vela-1.0` (below) restores every specialist in one line.
+
+## Choose a size {#choose-a-size}
+
+The decision model is the Vela model that answers the Router's questions:
+every built-in signal above, and every
+[`decision` question](tutorials/signal/learned/decision.md) that names no
+`deployment`, in one call per request. One flag or one line chooses it:
+
+```bash
+vllm-sr serve --decision-model Vela-2.0-4B --platform amd
+```
+
+```yaml
+global:
+  model_catalog:
+    system:
+      decision_model: Vela-2.0-4B
+```
+
+`serve` writes the line into the active configuration as a new version, which
+`vllm-sr config versions` lists and `vllm-sr config rollback` undoes; later
+starts keep it, and `vllm-sr status` shows it. The Helm chart's
+`decisionModel` value and the operator's `spec.config.decision_model` set the
+same field. Names are case-insensitive.
+
+Measured through the Router on the router signal suite, against the Vela 1.0
+specialists, and for the latency record's five request signals
+([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-decision-model-sizes.md)):
+
+| Decision model | Hardware | Held-out accuracy against Vela 1.0 | p50 on a GPU | p50 on 12 CPU cores |
+| --- | --- | --- | ---: | ---: |
+| `Vela-2.0-0.3B` (default) | CPU or GPU | Ahead on prompt guard and safety, behind on domain, modality and feedback | 6.9 ms | 79 ms |
+| `Vela-2.0-0.8B` | CPU or GPU | Ahead on domain, prompt guard, safety, modality and hallucination; behind on PII | 40.7 ms | about 3 s |
+| `Vela-2.0-4B` | GPU, about 17 GB | Ahead on every signal but fact check | 56.8 ms | GPU only |
+| `Vela-2.0-9B` | GPU, about 32 GB | Ahead on every signal | 79.0 ms | GPU only |
+| `Vela-1.0` | CPU or GPU | The specialists themselves | n/a | 16 ms |
+
+- **GPU:** one AMD Instinct MI325X, sequential requests. At concurrency 16 a
+  GPU serves about 146 (0.3B), 25 (0.8B), 17 (4B) and 12 (9B) requests per
+  second.
+- **The 4B and 9B need a GPU.** `vllm-sr serve` refuses them with
+  `--platform cpu` or on a host without the platform's GPU, and the Router
+  refuses them where the model runtime finds no GPU. On a GPU they run whatever
+  a module's `use_cpu` says.
+- **The 0.8B on a CPU** is a decoder: a request takes seconds, as the table
+  shows. Serve it on a GPU, or keep the 0.3B on a CPU.
+- **Every size** is behind Vela 1.0 on user feedback's fresh file (CrossWOZ)
+  and on PII in distribution. Per-signal numbers with intervals are in the
+  record.
+- **`Vela-1.0`** restores the nine specialists. They answer only the built-in
+  signals, so a `decision` question without a `deployment` is then a load
+  error.
+- **Anything else** is an error. A Decision 2.0 model (Kai, Eos, Sol, Nox,
+  Lux, Vega) answers your own questions: declare it as a deployment and name
+  it in the question's `deployment`.
+
+Each size has its own module thresholds, which a module that sets none takes
+when you switch:
+
+| Decision model | Prompt guard | Domain | PII | Fact check | User feedback |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `Vela-2.0-0.3B` | 0.75 | 0.28 | 0.01 | 0.93 | 0.37 |
+| `Vela-2.0-0.8B` | 0.71 | 0.38 | 0.07 | 0.994 | 0.34 |
+| `Vela-2.0-4B` | 0.63 | 0.45 | 0.05 | 0.9984 | 0.33 |
+| `Vela-2.0-9B` | 0.42 | 0.46 | 0.14 | 0.998 | 0.35 |
+| `Vela-1.0` | 0.5 | 0.5 | 0.9 | 0.95 | 0.7 |
+
+Rule thresholds a configuration sets, such as the built-in recipes', stay;
+the record maps each to every size (for example `mom-v1`'s `prompt_attack`
+0.75 is 0.71 on the 0.8B, 0.63 on the 4B and 0.42 on the 9B). A
+`system.<module>` line or a binding keeps that one signal on its own model.
+
 ## Hardware
 
 | Hardware | Status | Use |
