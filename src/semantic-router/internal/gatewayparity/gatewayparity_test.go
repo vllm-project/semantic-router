@@ -86,7 +86,36 @@ func TestNativeGatewayServesTheParityCorpus(t *testing.T) {
 			}
 			assertSameClientResponse(t, want.Response, got.Response)
 			assertSameUpstreamRequest(t, want, got)
+			if code, ok := routingFailureCodes[got.Case]; ok {
+				assertRoutingFailureCode(t, got.Response, code)
+			}
 		})
+	}
+}
+
+// routingFailureCodes are the corpus cases the Router cannot route, with the
+// reason code both modes must return for them.
+var routingFailureCodes = map[string]string{
+	"unknown-model":       "model_not_found",
+	"flow-alias-no-route": "no_route",
+}
+
+func assertRoutingFailureCode(t *testing.T, response *parity.Message, code string) {
+	t.Helper()
+	if response.Status != 400 {
+		t.Fatalf("status = %d, want 400", response.Status)
+	}
+	var body struct {
+		Error struct {
+			Type string `json:"type"`
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(response.Body, &body); err != nil {
+		t.Fatalf("the error body is not JSON: %v: %s", err, response.Body)
+	}
+	if body.Error.Type != "invalid_request_error" || body.Error.Code != code {
+		t.Fatalf("error = %+v, want an invalid_request_error with code %q", body.Error, code)
 	}
 }
 
