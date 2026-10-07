@@ -470,9 +470,10 @@ decisions:
     expected_decision: fast
     expected_algorithm: static
     expected_alias: qwen/qwen3.8-27b
-    objective: Common knowledge is not a precise-facts request.
+    objective: Common knowledge is not a precise-facts request, and naming a place is not personal data.
     forbidden_signals:
       decision: [precise_facts]
+      pii: [personal_data]
     variants:
       - id: french_capital
         query: What is the capital of France?

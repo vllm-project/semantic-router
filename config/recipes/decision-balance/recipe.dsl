@@ -52,7 +52,8 @@ SIGNAL safety unsafe_request {
 }
 
 SIGNAL pii personal_data {
-  description: "Personal data located by the decision model's span head."
+  pii_types_allowed: ["GPE", "ORGANIZATION", "DATE_TIME", "NRP", "TITLE", "DOMAIN_NAME"]
+  description: "Personal data located by the decision model's span head. Places, organizations, dates, titles, domain names and nationality, religious or political group names do not identify a person on their own."
 }
 
 SIGNAL decision task {

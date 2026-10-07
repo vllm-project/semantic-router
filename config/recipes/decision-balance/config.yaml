@@ -163,9 +163,18 @@ routing:
         include_history: false
     pii:
       - name: personal_data
-        description: Personal data located by the decision model's span head.
+        description: >-
+          Personal data located by the decision model's span head. Places,
+          organizations, dates, titles, domain names and nationality, religious
+          or political group names do not identify a person on their own.
         include_history: false
-        pii_types_allowed: []
+        pii_types_allowed:
+          - GPE
+          - ORGANIZATION
+          - DATE_TIME
+          - NRP
+          - TITLE
+          - DOMAIN_NAME
     safety:
       - name: unsafe_request
         labels: [safe, unsafe]

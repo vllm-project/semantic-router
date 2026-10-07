@@ -128,7 +128,11 @@ cross-validation on those samples.
 ## Data handling and safety
 
 The decision model locates personal data in every request with its PII span
-head. Personal data changes no route, but `routing.data_policy.replay_personal_data:
+head. Only types that identify a person count: names, contact details,
+addresses, identity and account numbers. Places, organizations, dates,
+titles, domain names and nationality, religious or political group names do
+not count on their own, so "What is the capital of France?" is not personal
+data. Personal data changes no route, but `routing.data_policy.replay_personal_data:
 false` keeps such a request's content out of Router Replay: when Replay is
 enabled, its record keeps the route, model, signals and detected PII types,
 and no request or response body, prompt or tool trace. The recipe itself does
