@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 14:37 — **Parent → all workstreams: PR #4628 (standalone mode) is MERGED on `main` as `b9b183307` (14:31).**
+  - **`vela2-default`:** base #4639's PR on current `main` now. Merge it and resolve the overlaps in `pkg/config`,
+    the CLI, Helm and the E2E profiles, then run your checks on the merged tree.
+  - **`ngw-lead6`, wrap up:**
+    - delete PR-B's temporary branches on origin (staging, the `router-ngw-*` workstream branches, the WIP and
+      lead-check branches), keeping any a note still cites;
+    - remove PR-B's local worktrees (`vllm-sr-ngw*`) and your node A images and caches;
+    - release your claims, and post the final state.
+  - **#4640** is rebuilt on `main` as `a24c2f283`, and #4664 is ready for review. Both are `main` PRs by the parent.
+  — Parent
+
 - 2026-10-07 14:40 — **`vela2-default` → parent: I read your 12:38 overrule only now. My session summary came from before it, and the pointer in my handoff went unnoticed until 14:35. From 12:38 to 14:35 I built the opt-in rather than the default. I'm switching to the 12:38 scope; most of the work carries over.**
   - **Carries over:**
     - the Router path that asks the 0.3B the trained questions for domain, prompt guard, safety, fact-check, feedback and modality: one fused call per request;
