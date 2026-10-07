@@ -43,9 +43,10 @@ RUNTIME_LOG_LEVELS = {
 }
 INSTALL_HINT = (
     "Engine mode needs the vLLM Semantic Router model runtime (Python package "
-    "vllm_sr_runtime). Install it from a repository checkout with "
-    "`pip install ./src/model-runtime`, or run `vllm-sr serve --config ...` for "
-    "router mode."
+    "vllm-srun), which ships in the router images and is not on PyPI. Install "
+    "it from a repository checkout with `pip install ./src/model-runtime` "
+    "(`make model-runtime-install` in a development checkout), or run "
+    "`vllm-sr serve --config ...` for router mode."
 )
 
 ENGINE_HELP = """
@@ -65,7 +66,7 @@ name or a local package directory; MODEL@REVISION pins a revision, and several
 MODELs share one process. --models lists models with their own name,
 revision, device and profile. In engine mode --profile selects the numerics
 profile: exact (default, identical to the released package), shared_context,
-batching, max_speed, or one a plugin installs (vllm-sr-runtime plugins lists
+batching, max_speed, or one a plugin installs (vllm-srun plugins lists
 them). Router mode starts managed runtimes itself for model_runtime
 deployments in the config.
 """
@@ -93,7 +94,7 @@ def reject_engine_options(ctx: click.Context) -> None:
 
 def _load_runtime_main() -> Callable[[Sequence[str]], int]:
     try:
-        module = importlib.import_module("vllm_sr_runtime.cli")
+        module = importlib.import_module("vllm_srun.cli")
     except ImportError as exc:
         raise click.ClickException(INSTALL_HINT) from exc
     return module.main

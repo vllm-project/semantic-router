@@ -36,10 +36,9 @@ type ModelSpec struct {
 	// Only applied when the resolved repository still matches this entry.
 	DownloadExcludePatterns []string `json:"-" yaml:"-"`
 
-	// PreparedArtifact identifies an offline, manifest-verified runtime bundle.
-	// These releases cannot be provisioned by downloading native HF weights.
-	PreparedArtifact string `json:"prepared_artifact,omitempty" yaml:"prepared_artifact,omitempty"`
-	ArtifactBundle   string `json:"artifact_bundle,omitempty" yaml:"artifact_bundle,omitempty"`
+	// RuntimeProvisioned marks a release the model runtime downloads and
+	// verifies itself; the router provisions nothing for it.
+	RuntimeProvisioned bool `json:"-" yaml:"-"`
 
 	// Alternative names/aliases for this model
 	Aliases []string `json:"aliases,omitempty" yaml:"aliases,omitempty"`
@@ -444,8 +443,8 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:             []string{"embedding", "matryoshka", "2d-matryoshka", "multilingual", "modernbert", "long-context", "early-exit", "flash-attention-2"},
 	},
 
-	// Omni runtime bundles contain four verified ONNX graphs and the exact
-	// published processors. Native source snapshots are not runtime artifacts.
+	// Vela 1.0 Omni: the model runtime serves the pinned release from its own
+	// download of the published weights and configs.
 	{
 		LocalPath:     "models/vela-1.0-omni-nano",
 		RepoID:        "vllm-sr/Vela-1.0-Omni-Nano",
@@ -454,9 +453,9 @@ var DefaultModelRegistry = []ModelSpec{
 		Purpose:       PurposeEmbedding,
 		Description:   "Vela Omni Nano text, image, and raw audio embeddings in one normalized 384-dimensional space.",
 		ParameterSize: "164M", EmbeddingDim: 384, MaxContextLength: 512,
-		DefaultAdapter:   "vela_omni",
-		PreparedArtifact: "vela_omni", ArtifactBundle: "vela-1.0-omni-nano",
-		Tags: []string{"embedding", "multimodal", "text", "image", "audio"},
+		DefaultAdapter:     "vela_omni",
+		RuntimeProvisioned: true,
+		Tags:               []string{"embedding", "multimodal", "text", "image", "audio"},
 	},
 	{
 		LocalPath:     "models/vela-1.0-omni-mini",
@@ -466,9 +465,9 @@ var DefaultModelRegistry = []ModelSpec{
 		Purpose:       PurposeEmbedding,
 		Description:   "Vela Omni Mini text, image, and raw audio embeddings in one normalized 768-dimensional space with 32K text input.",
 		ParameterSize: "1.36B", EmbeddingDim: 768, MaxContextLength: 32768,
-		DefaultAdapter:   "vela_omni",
-		PreparedArtifact: "vela_omni", ArtifactBundle: "vela-1.0-omni-mini",
-		Tags: []string{"embedding", "multimodal", "text", "image", "audio", "long-context"},
+		DefaultAdapter:     "vela_omni",
+		RuntimeProvisioned: true,
+		Tags:               []string{"embedding", "multimodal", "text", "image", "audio", "long-context"},
 	},
 
 	// Embedding Models - Multi-Modal (Text/Image/Audio)

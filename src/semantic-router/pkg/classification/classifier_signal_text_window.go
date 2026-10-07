@@ -265,17 +265,30 @@ func (c *Classifier) hasLongContextClassifier(signalType string) bool {
 }
 
 func (c *Classifier) piiInputSpans(text string) []signalChunkSpan {
-	if ((c != nil && c.Config != nil && c.Config.PIIModel.Window != nil) || c.hasLongContextClassifier(config.SignalTypePII)) && text != "" {
+	if c.piiReadsWholeText() && text != "" {
 		return []signalChunkSpan{{Text: text}}
 	}
 	return piiSignalChunkSpans(text)
 }
 
 func (c *Classifier) piiInputs(text string) []string {
-	if (c != nil && c.Config != nil && c.Config.PIIModel.Window != nil) || c.hasLongContextClassifier(config.SignalTypePII) {
+	if c.piiReadsWholeText() {
 		return []string{text}
 	}
 	return piiSignalChunks(text)
+}
+
+// piiReadsWholeText reports whether the PII model reads a whole text: through
+// token windows, a long-context budget, or a decision model's ready-made PII
+// question, which then shares the call of the deployment's other questions.
+func (c *Classifier) piiReadsWholeText() bool {
+	if c == nil || c.Config == nil {
+		return false
+	}
+	if reader, ok := c.piiInference.(interface{ readsWholeText() bool }); ok && reader.readsWholeText() {
+		return true
+	}
+	return c.Config.PIIModel.Window != nil || c.hasLongContextClassifier(config.SignalTypePII)
 }
 
 func (c *Classifier) jailbreakInputs(text string) []string {

@@ -107,6 +107,7 @@ Router 把头分到两个面：
 | `x-vsr-matched-conversation` | `conversation` |
 | `x-vsr-matched-event` | `event` |
 | `x-vsr-matched-input-modality` | `input_modality` |
+| `x-vsr-matched-decision-model` | `decision`（noul 与 score 规则名；choice 为 `rule:choice`；set 或 span 每个匹配的标签为 `rule:label`） |
 
 ## 投影头
 

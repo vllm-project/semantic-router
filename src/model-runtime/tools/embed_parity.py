@@ -1,6 +1,6 @@
 """Parity records for the embedding and rerank models (embed workstream).
 
-    python3 tools/embed_parity.py omni --bundle DIR --output OUT.json [--threads N]
+    python3 tools/embed_parity.py omni --bundle DIR [--snapshot DIR [--device rocm:N]] --output OUT.json [--threads N]
     python3 tools/embed_parity.py encoder --package DIR --output OUT.json [--threads N] [--device rocm:N]
     python3 tools/embed_parity.py reduced --package DIR --kind bfloat16 --output OUT.json [--device rocm:N]
 
@@ -14,16 +14,19 @@ views of the last one) or every pair scorer's logits and rerank order. With
 ``--device`` the native engine runs on that GPU against the CPU reference
 under the GPU bar (cosine >= 0.9995); the onnxruntime side is a CPU record.
 
-``omni`` serves a prepared Vela Omni bundle that kept its goldens
-(``VELA_OMNI_KEEP_GOLDEN=1``) through ``MultimodalEmbeddingFamily`` and the
-``onnxruntime`` engine on the CPU, and compares every stage with the bundle's
-official-reference goldens (``golden/index.json``): token IDs, image pixels,
+``omni`` serves Vela Omni through ``MultimodalEmbeddingFamily``: with
+``--snapshot`` the published repository's files on the native engine (the
+CPU, or ``--device``), else the prepared bundle on the ``onnxruntime``
+engine on the CPU. It compares every stage with the official-reference
+goldens of a bundle that kept them (``--bundle``, exported with
+``VELA_OMNI_KEEP_GOLDEN=1``; ``golden/index.json``): token IDs, image pixels,
 16 kHz and 48 kHz audio, Whisper and CLAP features, CLAP window embeddings and
 their aggregate, and every end-to-end embedding (text, padded text, Mini's
 instruction roles, PNG and JPEG images, mono and stereo audio of one to three
 CLAP windows). Media go through the request path as the router sends them:
 images as their file bytes, audio as float32 WAV of the golden PCM. Passes when
-every embedding has cosine >= 0.99999 and |delta| <= 1e-4 (design section 17).
+every embedding has cosine >= 0.99999 and |delta| <= 1e-4 on the CPU, and
+cosine >= 0.9995 on a GPU (design section 17).
 """
 
 from __future__ import annotations
@@ -45,17 +48,19 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from embed_corpus import RERANK, texts  # noqa: E402
-from vllm_sr_runtime.accel.cpu import CPUAccelerator  # noqa: E402
-from vllm_sr_runtime.engines.native.engine import NativeEngine  # noqa: E402
-from vllm_sr_runtime.engines.onnxruntime.engine import OnnxRuntimeEngine  # noqa: E402
-from vllm_sr_runtime.families.multimodal_embedding import audio  # noqa: E402
-from vllm_sr_runtime.families.multimodal_embedding.family import (  # noqa: E402
+from vllm_srun.accel.cpu import CPUAccelerator  # noqa: E402
+from vllm_srun.engines.native.engine import NativeEngine  # noqa: E402
+from vllm_srun.engines.onnxruntime.engine import OnnxRuntimeEngine  # noqa: E402
+from vllm_srun.families.multimodal_embedding import audio  # noqa: E402
+from vllm_srun.families.multimodal_embedding import bundle as bundles  # noqa: E402
+from vllm_srun.families.multimodal_embedding.family import (  # noqa: E402
     MultimodalEmbeddingFamily,
 )
-from vllm_sr_runtime.families.task_heads.family import TaskHeadsFamily  # noqa: E402
-from vllm_sr_runtime.heads.embedding import matryoshka, pool  # noqa: E402
-from vllm_sr_runtime.heads.relevance import RelevanceLayout  # noqa: E402
-from vllm_sr_runtime.plugins.base import (  # noqa: E402
+from vllm_srun.families.multimodal_embedding.readout import unit  # noqa: E402
+from vllm_srun.families.task_heads.family import TaskHeadsFamily  # noqa: E402
+from vllm_srun.heads.embedding import matryoshka, pool  # noqa: E402
+from vllm_srun.heads.relevance import RelevanceLayout  # noqa: E402
+from vllm_srun.plugins.base import (  # noqa: E402
     DeviceInfo,
     EncoderBatch,
     EngineOptions,
@@ -112,19 +117,47 @@ def float_wav(pcm: np.ndarray, rate: int) -> bytes:
 
 
 class OmniParity:
-    def __init__(self, bundle: Path, threads: int | None):
+    def __init__(
+        self,
+        bundle: Path,
+        threads: int | None,
+        snapshot: Path | None = None,
+        device: str = "cpu",
+    ):
         family = MultimodalEmbeddingFamily()
-        self.package = family.verify(PackageRef(bundle))
-        spec = family.describe(self.package)
-        engine_model = OnnxRuntimeEngine().load(
-            spec, CPUAccelerator(), CPU, EngineOptions(threads=threads)
-        )
-        self.model = family.load(self.package, spec, engine_model)
         self.root = bundle
+        self.source = bundles.load(bundle).source
+        self.device = device
+        if snapshot is None:
+            self.package = family.verify(PackageRef(bundle))
+            spec = family.describe(self.package)
+            engine_model = OnnxRuntimeEngine().load(
+                spec, CPUAccelerator(), CPU, EngineOptions(threads=threads)
+            )
+            self.engine = "onnxruntime"
+        else:
+            self.package = family.verify(PackageRef(snapshot, *self.source))
+            spec = family.describe(self.package)
+            info = device_info(device)
+            if device == "cpu":
+                self.accelerator: Any = CPUAccelerator()
+            else:
+                from vllm_srun.accel.rocm import ROCmAccelerator
+
+                self.accelerator = ROCmAccelerator()
+            engine_model = self.accelerator.execute(
+                info,
+                lambda: NativeEngine().load(
+                    spec, self.accelerator, info, EngineOptions(threads=threads)
+                ),
+            )
+            self.engine = "native"
+        self.model = family.load(self.package, spec, engine_model)
         self.index = json.loads(
             (bundle / "golden/index.json").read_text(encoding="utf-8")
         )
         self.cases: list[dict[str, Any]] = []
+        self.min_cosine = MIN_COSINE if device == "cpu" else GPU_MIN_COSINE
 
     def embed(
         self, part: Any, input_type: str | None = None
@@ -137,7 +170,14 @@ class OmniParity:
         )
         started = time.perf_counter()
         plan = self.model.plan_surface("embeddings", request)
-        response = self.model.finish_surface(plan, self.model.run(plan.items))
+        results = (
+            self.model.run(plan.items)
+            if self.engine == "onnxruntime"
+            else self.accelerator.execute(
+                device_info(self.device), lambda: self.model.run(plan.items)
+            )
+        )
+        response = self.model.finish_surface(plan, results)
         elapsed = (time.perf_counter() - started) * 1000
         entry = response["data"][0]
         if "embedding" not in entry:
@@ -146,7 +186,9 @@ class OmniParity:
 
     def record(self, name: str, stages: dict[str, dict[str, float]], ms: float) -> None:
         final = stages["embedding"]
-        passed = final["cosine"] >= MIN_COSINE and final["max_abs"] <= MAX_ABS
+        passed = final["cosine"] >= self.min_cosine and (
+            self.device != "cpu" or final["max_abs"] <= MAX_ABS
+        )
         self.cases.append(
             {"name": name, "passed": passed, "ms": round(ms, 3), **stages}
         )
@@ -197,8 +239,16 @@ class OmniParity:
             self.record(f"image/{index}", stages, ms)
 
     def clap_embeddings(self, features: np.ndarray) -> np.ndarray:
+        """Each CLAP window's normalized embedding ``[windows, 512]`` (the goldens' stage)."""
         import torch
 
+        if self.engine == "native":
+            windows = features.reshape(-1, 1, *features.shape[-2:])
+            pooled = self.model._tower("clap", input_features=windows)
+            with torch.inference_mode():
+                vectors = unit(self.model.readout.clap_projection(pooled).float())
+            assert vectors is not None
+            return vectors.cpu().numpy()
         vectors = []
         for window in features:
             batch = EncoderBatch(
@@ -261,14 +311,23 @@ class OmniParity:
         self.texts()
         self.images()
         self.audio()
+        import torch
+
         return {
             "model": self.package.model_name,
-            "source": self.package.details["bundle"].source,
-            "bundle_sha256": self.package.model_sha256,
+            "source": self.source,
+            "model_sha256": self.package.model_sha256,
             "variant": self.index["variant"],
-            "engine": "onnxruntime",
-            "provider": "CPUExecutionProvider",
-            "thresholds": {"min_cosine": MIN_COSINE, "max_abs": MAX_ABS},
+            "engine": self.engine,
+            "device": self.device,
+            "torch": torch.__version__,
+            "provider": (
+                "CPUExecutionProvider" if self.engine == "onnxruntime" else None
+            ),
+            "thresholds": {
+                "min_cosine": self.min_cosine,
+                "max_abs": MAX_ABS if self.device == "cpu" else None,
+            },
             "passed": all(case["passed"] for case in self.cases),
             "cases": self.cases,
         }
@@ -288,7 +347,7 @@ def device_info(name: str) -> DeviceInfo:
     """The device as placement reports it (architecture included, which selects fused kernels)."""
     if name == "cpu":
         return CPU
-    from vllm_sr_runtime.accel.rocm import ROCmAccelerator
+    from vllm_srun.accel.rocm import ROCmAccelerator
 
     return ROCmAccelerator().devices()[int(name.partition(":")[2] or 0)]
 
@@ -302,7 +361,7 @@ def load_task_model(
     reduced: str | None = None,
 ) -> Any:
     """A ``task_heads`` model on one engine; ``reduced`` consents to that copy kind."""
-    from vllm_sr_runtime.accel.rocm import ROCmAccelerator
+    from vllm_srun.accel.rocm import ROCmAccelerator
 
     family = TaskHeadsFamily(RegistryOptions(model_options=options or {}))
     verified = family.verify(PackageRef(package))
@@ -667,6 +726,8 @@ def main() -> int:
         "omni", help="Vela Omni bundle vs its official-reference goldens"
     )
     omni.add_argument("--bundle", type=Path, required=True)
+    omni.add_argument("--snapshot", type=Path, default=None)
+    omni.add_argument("--device", default="cpu")
     omni.add_argument("--output", type=Path, required=True)
     omni.add_argument("--threads", type=int, default=None)
     encoder = commands.add_parser(
@@ -688,7 +749,10 @@ def main() -> int:
     reduced.add_argument("--device", default="cpu")
     args = parser.parse_args()
     if args.command == "omni":
-        result = OmniParity(args.bundle.resolve(), args.threads).run()
+        snapshot = args.snapshot.resolve() if args.snapshot else None
+        result = OmniParity(
+            args.bundle.resolve(), args.threads, snapshot, args.device
+        ).run()
     elif args.command == "reduced":
         result = ReducedParity(
             args.package.resolve(), args.kind, args.device, args.threads

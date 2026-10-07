@@ -3,7 +3,7 @@ title: 选择模型、规模和硬件
 sidebar_label: 选择模型
 description: 每个任务该用哪个模型，决策模型需要多大，以及用什么硬件运行。
 translation:
-  source_commit: "9cfe4adeb9f83cf1795f24e369d3c79b84ef1728"
+  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/model-runtime/choose-a-model.md"
   outdated: false
 ---
@@ -20,11 +20,11 @@ translation:
 | 发现需要事实核查的请求 | `vllm-sr/Vela-1.0-Encoder-307M-FactCheck` | 307M | 它标出需要核查，但不核查事实 |
 | 读取用户对上一个回答的反应 | `vllm-sr/Vela-1.0-Encoder-307M-Feedback` | 307M | 满意、需要澄清、回答错误、想要别的、无反馈 |
 | 区分文本请求和图片请求 | `vllm-sr/Vela-1.0-Encoder-307M-Modality` | 307M | 只读取书面请求 |
-| 发现个人信息 | `vllm-sr/Vela-1.0-Encoder-307M-PII` | 307M | 17 种实体类型，给出精确的字符片段 |
+| 发现个人信息 | `vllm-sr/Vela-1.0-Encoder-307M-PII` | 307M | 17 种实体类型，给出精确的字符片段；Vela 2.0 也能找出它们，且与它的其他问题在同一次调用中回答 |
 | 拦截提示词注入和越狱 | `vllm-sr/Vela-1.0-Encoder-307M-Guard` | 307M | |
 | 标记不安全内容 | `vllm-sr/Vela-1.0-Encoder-307M-Safety` 或 `-Shield` | 307M | Shield 是另一种安全模型 |
 | 指出风险类别 | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | 307M | 12 个独立的危害类别，带已发布的阈值 |
-| 对照来源检查回答 | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | 307M | 标出回答中无依据的片段 |
+| 对照来源检查回答 | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | 307M | 标出回答中无依据的片段；Vela 2.0 也能标出 |
 | 用于缓存、记忆、RAG 和工具的 embedding | `vllm-sr/Vela-1.0-Encoder-307M-Embedding` | 307M | 更小的维度和更少的层以质量换速度 |
 | 更大或带指令的文本 embedding | `Qwen/Qwen3-Embedding-0.6B` | 0.6B | 1,024 维 |
 | 对检索到的文档重排序 | `vllm-sr/Vela-1.0-Encoder-307M-Reranker` | 307M | |
@@ -52,10 +52,13 @@ translation:
 
 Decision 1.0 模型（`vllm-sr/Decision-1.0-Kai-0.6B`、`-Lex-0.6B`、`-Route-0.6B`、`-Eos-0.8B`、
 `-Sol-2B`、`-Nox-4B`、`-Lux-9B`）也已内置，回答同类问题。Vela 2.0（`vllm-sr/Vela-2.0-0.3B`、
-`-0.8B`、`-4B`、`-9B`）支持选择多个标签或标出文本片段的问题；它是私有预览，需要具备访问权限的 Hugging Face token。
+`-0.8B`、`-4B`、`-9B`）支持选择多个标签（`set`）或标出文本片段（`span`）的问题，路由器可以基于这两类回答路由。
+它的路由片段头（router span head）还能回答 [`pii`](tutorials/signal/learned/pii.md#vela-20) 和
+[`hallucination`](tutorials/signal/learned/hallucination.md#vela-20) 信号，因此一个部署即可替代单独的 PII 和 Halu 模型。
+它是私有预览，需要具备访问权限的 Hugging Face token。
 在 CPU 上运行 0.3B。在 GPU 上，较大的几档可读取最多 16,384 个 token 的输入（0.3B 为 8,192）：其中 0.8B 成本最低，4B 和 9B 最准确。
 
-`vllm-sr-runtime models` 会列出每个内置模型及其固定的 revision。
+`vllm-srun models` 会列出每个内置模型及其固定的 revision。
 
 ## 硬件 {#hardware}
 

@@ -47,6 +47,19 @@ The model is probably not ready yet, or its answers arrive too late.
   router log and `GET /health` show the stage.
 - **No network:** the runtime downloads from the Hugging Face Hub. Offline,
   copy the model into the cache first, or point `artifact` at a local copy.
+  For example, fetch Vela Omni Nano at its pinned revision into the cache of
+  the runtimes a router image manages (its model volume), then start with
+  `HF_HUB_OFFLINE=1`:
+
+  ```bash
+  hf download vllm-sr/Vela-1.0-Omni-Nano \
+    --revision 2ff2d66385dbdd661a560ec3e8bcb45a0527d92e \
+    --cache-dir /app/models/model-runtime
+  ```
+
+  Mini's revision is `801bae3ad28df6891408f0e0441c676b30e132e3`. Router images
+  no longer carry an Omni bundle, so a router that routes images needs this
+  once in an air-gapped cluster.
 - **`warming` for a long time on CPU:** the self-check runs a few requests
   through the model. Large decision models on a CPU are slow; use a GPU or
   `vllm-sr/Decision-2.0-Kai-0.6B`.
@@ -150,8 +163,8 @@ scans should use so nothing is missed.
 
 ## Requests are slower than expected
 
-- Look at `vllm_sr_runtime_request_duration_seconds` and
-  `vllm_sr_runtime_queue_duration_seconds` on the runtime's `/metrics`. Time
+- Look at `vllm_srun_request_duration_seconds` and
+  `vllm_srun_queue_duration_seconds` on the runtime's `/metrics`. Time
   spent queueing means the model is saturated: add a GPU, use a smaller model
   or another process.
 - On CPU, models of one process share the CPU threads. Start the runtime with

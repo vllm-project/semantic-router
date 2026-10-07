@@ -105,3 +105,34 @@ same builder and started on the same cores.
   runtime downloads each model it serves.
 - **The two images start alike.** `vllm-sr` and `extproc` run the same router
   and runtime; `vllm-sr` adds the CLI's assets and its start script.
+
+## Without ONNX Runtime and the Omni bundle (#4619)
+
+Vela Omni runs on the native engine from its published files, so the images
+no longer install ONNX Runtime (now the optional `onnx` extra) or carry a
+prepared Omni bundle.
+
+- **Date:** 2026-10-06.
+- **Commits:** before, staging `91d369ff2`; after, `1ff74ff22`.
+- **Builds:** node D's Docker daemon (BuildKit, its layer cache),
+  `tools/docker/Dockerfile.extproc` with `--build-arg ACCELERATOR=cpu|rocm`
+  and `--target extproc|vllm-sr`. The staging ROCm images are the integration
+  lead's verification builds from the same daemon and file.
+- **Sizes:** the sum of each image's layers, uncompressed (`docker history`),
+  the "Unpacked" column above.
+
+| Image | Before (GB) | After (GB) | Change |
+| --- | --- | --- | --- |
+| `extproc` | 2.341 | 1.607 | −0.734 (−31 %) |
+| `vllm-sr` | 2.352 | 1.617 | −0.735 (−31 %) |
+| `extproc-rocm` | 14.386 | 13.656 | −0.730 (−5 %) |
+| `vllm-sr-rocm` | 14.397 | 13.667 | −0.730 (−5 %) |
+
+- **What left:** the Omni Nano bundle's layer (`/opt/router-model-artifacts`,
+  662 MB) and ONNX Runtime 1.30 with its dependencies (the runtime's
+  third-party layer, 232 → 159 MB on the CPU). Every other layer is unchanged.
+- **The E2E candidate image** (`extproc` in CI) was built with both Omni
+  variants, so it also loses Mini's 5.1 GB bundle.
+- **Startup:** a router that routes images now downloads Omni Nano (0.67 GB)
+  into its model volume on its first start, as it downloads every other model;
+  later starts load it from there.

@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "bd165583b47ccf9640f66790945985d60c40c0dc"
+  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/tutorials/signal/learned/modality.md"
   outdated: false
 ---

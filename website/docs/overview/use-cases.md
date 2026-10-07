@@ -1,27 +1,38 @@
 ---
 sidebar_position: 3
 title: Use Cases
-description: How semantic routing applies across cloud services, data centers, edge deployments, and enterprise hybrid environments.
+description: Programmable model decisions for agent harnesses across cloud, data center, edge, and enterprise environments.
 ---
 
 # Use Cases
 
-Semantic routing is useful anywhere an application should ask for an outcome
-without knowing the physical model topology. The same request contract can sit
-over hosted APIs, a shared data-center fleet, a small edge pool, or a hybrid
-enterprise deployment. What changes is the policy boundary and the system that
-owns model execution.
+Route each model call by task, capability, and policy. A stable entrypoint lets
+your harness use hosted APIs, data-center fleets, edge models, or a hybrid pool
+while retaining its task loop and tools.
+
+## Decisions inside an agent task
+
+| Harness need | Router policy | Harness responsibility |
+| --- | --- | --- |
+| A coding or research call needs a different model capability. | Match request signals to a specialist lane and filter candidates by declared capabilities and context capacity. | Choose the next task step and execute any returned tool calls. |
+| A tool-using session continues across turns. | When session protection is configured, preserve an eligible model owner through active tool loops or nonportable provider state. | Supply the conversation and stable session identity; manage tool results and task state. |
+| A selected inference call benefits from verification. | Run a configured, bounded cascade, panel, or multi-model workflow. | Decide how to use the returned answer in the larger task. |
+| Sensitive work needs an approved execution path. | Apply explicit eligibility and data-handling policy over configured local or remote backends. | Enforce the same boundary in tools, task storage, and other external services. |
+
+Start with the [agent harness guide](/docs/installation/agent-harness) and
+[Agent Routing recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/agent/README.md).
+
+## Deployment environments
 
 The environments below are not mutually exclusive. Many deployments use a
 data-center pool for general traffic, an edge model for private or offline work,
 and selected cloud providers for specialized capabilities.
 
-This is the practical Mixture-of-Models pattern: clients use a stable virtual
-model identity, a recipe describes the routing behavior, and deployment-specific
-provider bindings connect the recipe's logical model roles to the endpoints
-available in each environment.
+In a Mixture-of-Models setup, the virtual model name stays stable. A recipe
+defines its behavior; provider bindings connect logical model roles to each
+environment's endpoints.
 
-## At a glance
+### At a glance
 
 | Environment | Typical problem | What Semantic Router decides | What remains outside the Router |
 | --- | --- | --- | --- |
@@ -32,7 +43,7 @@ available in each environment.
 
 ## Cloud: one policy over several model services
 
-Cloud applications often integrate more than one model provider. A provider may
+Agent harnesses often call more than one model provider. A provider may
 offer the best vision model, another may be preferred for long context, and a
 smaller hosted model may be the economical default for routine chat.
 
@@ -43,7 +54,7 @@ Semantic Router can expose one stable model API while decisions account for:
 - cost, latency, or quality objectives within the eligible set; and
 - explicit escalation or rejection when pre-routing evidence rules out a path.
 
-This keeps provider selection out of application code. It does not make provider
+This keeps provider selection out of harness integration code. It does not make provider
 accounts interchangeable: credentials, quotas, data-use terms, and regional
 availability still need to be managed explicitly.
 

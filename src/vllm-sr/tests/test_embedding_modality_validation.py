@@ -123,7 +123,7 @@ def test_explicit_binding_defers_media_capability_to_loaded_provider():
     }
     raw["global"]["model_catalog"]["deployments"] = {
         "omni": {
-            "artifact": "/opt/router-model-artifacts/vela-1.0-omni-nano",
+            "artifact": "vllm-sr/Vela-1.0-Omni-Nano",
             "provider": "model_runtime",
             "device": "cpu",
         }

@@ -202,7 +202,7 @@ PROXY_PID=$!
 wait_for_url fault-proxy "http://127.0.0.1:${SOAK_BACKEND_PORT}/health"
 
 # The router starts its classifiers in the model runtime (make model-runtime-install).
-export VLLM_SR_RUNTIME_COMMAND="${VLLM_SR_RUNTIME_COMMAND:-${SR_ROOT}/.venv-agent/bin/vllm-sr-runtime}"
+export VLLM_SRUN_COMMAND="${VLLM_SRUN_COMMAND:-${SR_ROOT}/.venv-agent/bin/vllm-srun}"
 
 if [[ -z "${SOAK_CONFIG}" ]]; then
   derived_router="${SOAK_LOG_DIR}/config.soak.yaml"
