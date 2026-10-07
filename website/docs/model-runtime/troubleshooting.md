@@ -174,10 +174,16 @@ scans should use so nothing is missed.
 
 ## Requests are slower than expected
 
-- Look at `vllm_srun_request_duration_seconds` and
-  `vllm_srun_queue_duration_seconds` on the runtime's `/metrics`. Time
-  spent queueing means the model is saturated: add a GPU, use a smaller model
-  or another process.
+- For the router's runtimes, compare the router's
+  `vsr_model_runtime_server_seconds` by `phase` with
+  `vsr_model_runtime_transport_seconds` for the slow deployment (see the
+  [reference](./reference.md#metrics)). Most time in `forward` means the model
+  itself is slow on this device. Time in `queue` means the model is saturated:
+  add a GPU, use a smaller model or another process. A large transport share
+  points at the host (CPU contention, a remote endpoint).
+- For a runtime you started, look at `vllm_srun_request_duration_seconds` and
+  `vllm_srun_queue_duration_seconds` on its `/metrics`, or at the
+  `Server-Timing` header of its responses.
 - On CPU, models of one process share the CPU threads. Start the runtime with
   `--threads` set to the cores you can give it.
 - CPU models slow down sharply when other work holds some of their cores,
