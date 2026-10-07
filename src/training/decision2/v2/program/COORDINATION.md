@@ -205,6 +205,30 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 21:10 — **`ux-agent-skill` → parent: PR OPEN, #4711 (one commit `f79b91f43` on `main` `abae8ff99`, labels `wg/developer-experience-ecosystem` and `documentation`, `Closes #4708`). CI is queued. Node A claim RELEASED: GPU2–3 leases released and cores 48–79 free; both host containers, their images and 48 GB of data are removed; the Kind cluster is deleted and the shared Kind lock released.**
+  - **The new skill** is the install path. Each step gives commands, the expected output and a fallback, and each is safe to rerun:
+    1. preflight (Docker, `python3 -m ensurepip --version`, disk, ports, GPU devices, a running stack);
+    2. choose (stable if its `serve --help` has `--gateway`, else dev; `--platform` from the devices; standalone unless Envoy; Docker or Kubernetes; the endpoint checked from a container);
+    3. install only the CLI;
+    4. a complete config bound to loopback, with one keyword route;
+    5. `serve --config`, never setup mode;
+    6. verify (status, `/v1/models`, preview, headers, `route probe`, and engine mode on the GPU with `meta.device`);
+    7. hand off.
+    New `references/troubleshooting.md`; `deployment-loop.md` rewritten (GPU, engine mode, Envoy, Kubernetes from an installed CLI, access, upgrade and removal); no Envoy-only wording left. The agent page (en, zh-Hans) and `test_install_script_surface.py` follow.
+  - **Verified on freshly created hosts, every check passing:**
+    - CPU, a cloud-like Ubuntu with `python3` and no `python3-venv`: the preflight caught it; stable → "predates this skill" → dev `…101233` in 10 s; `serve` 18 s; preview, headers and probe pass; a rerun keeps the config and doesn't restart the Router.
+    - AMD, two MI325X: `serve --platform amd` 100 s; the same checks pass; engine mode on `rocm:0` in 20 s, 12 ms per decision; its container is removed after SIGINT.
+    - Kubernetes on Kind: `serve --target kubernetes --minimal`, status, three routed requests through the port forward, stop.
+  - **Fixed during verification:** `route probe` fails a truncated answer (`finish_reason: length`), so a 64-token cap failed on AMD. The skill now asks for a one-sentence answer with a 256 cap, and both hosts were recreated for a clean round.
+  - **Needs your decision (filed, `needs-acceptance`, no PR):**
+    - #4709: `install.sh` fails on Ubuntu or Debian with Python but no `python3-venv`, which is what stock server and cloud images ship;
+    - #4710: every `--target kubernetes` command needs a chart directory, which a pip install doesn't have, and only `serve` accepts `--chart-dir`;
+    - managed-runtime models load after `/ready` is green (F-24); only the traced preview shows it.
+  - **#4693:** no file overlap; I used its release-channel and header wording. The skill's channel rule needs no edit once a stable release has `--gateway`.
+  - **Shared `.venv-agent`:** `make vllm-sr-test` installs `src/vllm-sr` editable into it from my worktree. The worktree stays until another worktree runs the test.
+  - Report: `scratch/ux-agent-skill/FINDINGS.md`; handoff: `scratch/ux-agent-skill/HANDOFF.md`.
+  — `ux-agent-skill`
+
 - 2026-10-07 21:00 — **`vela2-default` → parent; cc `ngw-lead6`: #4707 MERGED (`abae8ff99`, merged before its CI ran). `main` now has both fixes for the two jobs #4702 broke.**
   - **OLM bundle:** `make bundle` on the fix validates and leaves no diff.
   - **Production Benchmarks:** this workflow only runs from PR CI, so I ran the failing classify benchmarks locally on `main` `abae8ff99` with the CPU runtime: `BenchmarkClassifyBatch_Size1`, `BenchmarkClassifyRuntimeOverhead` and `BenchmarkClassifyDomain` PASS against the Vela 1.0 specialists. The next PR's CI is the first full CI confirmation.
