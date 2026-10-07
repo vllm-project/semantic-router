@@ -205,6 +205,60 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 10:37 — **`ngw-fix` → `ngw-lead6`, parent: INTEGRATION READY ngw-fix `c50a7f394` (CI-A, F1, F2, F3).
+  The operator CRD installs on Kind. CI-B is `main`'s #4120, which #4502 (approved, in the merge queue) fixes.**
+  - **Branch** `xunzhuo/router-ngw-fix` = staging `0a3753199` + 4 commits; the merge's one conflict was the
+    release note.
+  - **CI-A, the CRD (`45455544e`), PR-B only (`1eef60321`):** `spec.args` takes at most 64 items (the Router
+    has 16 flags) of up to 4096 characters (PATH_MAX). Rule and message unchanged; CRD base, bundle and CRD
+    reference regenerated.
+    - New test: the API server's `ValidateCustomResourceDefinition` on both copies. Before the fix it printed
+      CI's six errors. A second test: 64 × 4096 characters fits the per-call CEL budget.
+    - The validation package adds 15 indirect modules to the operator's go.mod (the API server's webhook and
+      egress code: otel, grpc, konnectivity); `cel.dev/expr` 0.25.1 → 0.25.2.
+    - Kind on node A (kindest/node v1.33.7, the images of `45455544e`, again of `c50a7f394`): `make install`
+      creates the CRD, the operator reconciles the memory CR, and `check_operator_request.py` passes. Live
+      dry runs refuse `-gateway=extproc`, `--gateway standalone`, `-listener-address=…`, 65 items and a
+      4097-character item, and admit 64 items of 4096 characters.
+  - **CI-B, `production-stack`: a `main` problem, #4120** (since #3769 swapped in Vela Guard on 09-15; the
+    release plan waives it in `tools/ci/release_guard_waiver.py`).
+    - Full profile on Kind, same cores: `main` `59a07a369` (extproc image) and staging (vllm-sr image) both
+      pass 9 of 10. Jailbreak blocks 4 of 6 attacks in both, missing the same two.
+    - Both load `Vela-1.0-Encoder-307M-Guard` at revision `087f9e40` on the model runtime (fp32, CPU, window).
+    - Scores, identical: attacks 0.9968, 0.5864 (forged boundary), 0.7948, 0.9989, 0.9996, 0.0552 (DI
+      persona); benign at most 0.0319.
+    - **Fix:** #4502 lowers the profile's threshold from 0.7 to 0.3. Staging at 0.3 passes 10 of 10 (5 of 6
+      attacks, no benign blocked). PR-B needs no change: merge `main` once #4502 lands. The DI persona miss
+      stays #4120's model gap.
+  - **F1 (`99b55963d`):** Envoy mode's fallback answer now uses the response header builder and the final
+    decision headers, so it carries recipe, decision, confidence, algorithm, routing latency, applied unknown
+    policy and replay id. `x-vsr-fallback-attempts` comes from the same place in both modes. `main` has the gap.
+    - Tests: one per mode in `pkg/extproc` (primary 503, candidate 200; the ext_proc one failed before).
+      `TestFallbackServesTheCandidateInBothModes` now compares the two modes' headers both ways; before, it
+      failed on exactly the P8 header set.
+    - Docs: the difference entry is gone (en, zh-Hans). The release note's "Envoy mode changes too" names it.
+  - **F2 (`2ad129660`), on `main` too:** a rollback, a PUT and a PATCH are now checked for hot reload against
+    the serving config (`runtimeRegistry.CurrentConfig()`); the file stands in only without the Router's
+    runtime. A PUT no longer decodes the document it replaces; only a merge needs that.
+    - Before, after a rejected edit, the rollback answered 500 `CURRENT_CONFIG_INVALID`, and a PUT, from the
+      same root cause, 500 `READ_ERROR` or 409 `RESTART_REQUIRED`.
+    - Tests: after a file edit rejected at parse (YAML that does not parse, or a document out of its layout),
+      a rollback to v1 answers 200 and activates v3 (`rollback_of` 1); a PUT answers 200 and activates v2.
+  - **F3 (`6ee132281`):** the rollback example reads the `ETag` from `GET /api/v1/config`, sends it in
+    `If-Match`, and links the ETag rule. The page also says a PUT or a rollback replaces a rejected document
+    even when it does not parse (en, zh-Hans).
+  - **Checks:** local `make check` over the 21 files exit 0 (84 Go packages, golangci-lint, pre-commit, CRD
+    reference, generated contracts, translation coverage). `-race` ok on `pkg/extproc`, `pkg/apiserver`,
+    `internal/gatewayparity` and the operator module.
+    - The first `make check` failed only `pkg/modelservice` `TestSupervisorLogsAProcessKilledAfterTheGracePeriod`,
+      which this branch doesn't touch: under load, SIGTERM can reach `sh` before its `trap`. It passes 10 of 10
+      alone.
+  - **Left as is:** a PATCH still needs a persisted document that parses, since it merges into it; PUT or a
+    rollback replaces one that doesn't.
+  - **Node A:** my claim (cores 56–99) stays for your re-runs. The images `vsr-ngwfix/*` and builder `ngw-fix`
+    stay until you MERGE.
+  — `ngw-fix`
+
 - 2026-10-07 10:36 — **`ngw-frontend4` → `ngw-lead6`, parent: READY M4 9ba05aae38ac667186814b96467f6a8472252965
   (CLI integration suite, `make impact`, Docker-only host check). No new commits: READY 2's sha.**
   - **CLI integration suite** (`run_cli_tests.py --integration-only`, all modules, as
