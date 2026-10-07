@@ -41,9 +41,7 @@ func canPerformExactCacheLookup(
 	cacheEnabled bool,
 ) bool {
 	return cacheEnabled &&
-		r != nil &&
-		r.Cache != nil &&
-		r.Cache.IsEnabled() &&
+		r.cacheBackendEnabled() &&
 		ctx != nil &&
 		ctx.CacheExactFingerprint != "" &&
 		exactCacheEnabledForRequest(ctx)
