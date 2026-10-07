@@ -85,7 +85,7 @@ func TestDecisionSignalContracts(t *testing.T) {
 		"noul keys":        func(cfg *RouterConfig) { cfg.DecisionRules[0].Question.Choices = []DecisionChoice{{Key: "yes"}} },
 		"score predicate":  func(cfg *RouterConfig) { cfg.DecisionRules[2].Predicate = nil },
 		"score levels":     func(cfg *RouterConfig) { cfg.DecisionRules[2].Question.Levels = []string{"only"} },
-		"type":             func(cfg *RouterConfig) { cfg.DecisionRules[0].Question.Type = "set" },
+		"type":             func(cfg *RouterConfig) { cfg.DecisionRules[0].Question.Type = "rank" },
 		"instructions":     func(cfg *RouterConfig) { cfg.DecisionRules[0].Question.Instructions = " " },
 		"timeout":          func(cfg *RouterConfig) { cfg.DecisionRules[0].TimeoutMs = MaxDecisionTimeoutMs + 1 },
 		"colon in name":    func(cfg *RouterConfig) { cfg.DecisionRules[0].Name = "a:b" },
@@ -100,6 +100,91 @@ func TestDecisionSignalContracts(t *testing.T) {
 		mutate(cfg)
 		if err := validateDecisionSignalContracts(cfg); err == nil {
 			t.Fatalf("%s: expected a validation error", name)
+		}
+	}
+}
+
+// labelledDecisionConfig adds a Vela 2.0 deployment with a set and a span question.
+func labelledDecisionConfig() *RouterConfig {
+	cfg := decisionSignalConfig()
+	cfg.ModelDeployments["vela"] = ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-2.0-0.3B"}
+	threshold := 0.4
+	cfg.DecisionRules = append(cfg.DecisionRules,
+		DecisionSignalRule{Name: "topics", Deployment: "vela", Question: DecisionQuestion{
+			Type: DecisionQuestionSet, Instructions: "Which topics does the request mention?", Threshold: &threshold,
+			Labels: []DecisionChoice{{Key: "billing", Description: "payments or invoices"}, {Key: "shipping"}},
+		}},
+		DecisionSignalRule{Name: "places", Deployment: "vela", Question: DecisionQuestion{
+			Type: DecisionQuestionSpan, Instructions: "Which spans name a place?", Head: DecisionSpanHeadBroad,
+			Labels: []DecisionChoice{{Key: "city", Description: "a city"}},
+		}},
+	)
+	return cfg
+}
+
+func TestSetAndSpanQuestionContracts(t *testing.T) {
+	if err := validateDecisionSignalContracts(labelledDecisionConfig()); err != nil {
+		t.Fatal(err)
+	}
+	set, span := 3, 4
+	cases := map[string]func(*RouterConfig){
+		"no labels":           func(cfg *RouterConfig) { cfg.DecisionRules[set].Question.Labels = nil },
+		"duplicate label":     func(cfg *RouterConfig) { cfg.DecisionRules[set].Question.Labels[1].Key = "billing" },
+		"untrimmed label":     func(cfg *RouterConfig) { cfg.DecisionRules[span].Question.Labels[0].Key = " city" },
+		"choices on a set":    func(cfg *RouterConfig) { cfg.DecisionRules[set].Question.Choices = []DecisionChoice{{Key: "a"}} },
+		"levels on a span":    func(cfg *RouterConfig) { cfg.DecisionRules[span].Question.Levels = []string{"a", "b"} },
+		"threshold above one": func(cfg *RouterConfig) { high := 1.5; cfg.DecisionRules[set].Question.Threshold = &high },
+		"unknown head":        func(cfg *RouterConfig) { cfg.DecisionRules[span].Question.Head = "wide" },
+		"head on a set":       func(cfg *RouterConfig) { cfg.DecisionRules[set].Question.Head = DecisionSpanHeadRouter },
+		"labels on a choice":  func(cfg *RouterConfig) { cfg.DecisionRules[1].Question.Labels = []DecisionChoice{{Key: "x"}} },
+		"threshold on a noul": func(cfg *RouterConfig) { low := 0.2; cfg.DecisionRules[0].Question.Threshold = &low },
+		"too many labels": func(cfg *RouterConfig) {
+			labels := make([]DecisionChoice, MaxDecisionLabels+1)
+			for index := range labels {
+				labels[index] = DecisionChoice{Key: strings.Repeat("l", index+1)}
+			}
+			cfg.DecisionRules[set].Question.Labels = labels
+		},
+		"label answer key": func(cfg *RouterConfig) {
+			cfg.DecisionRules = append(cfg.DecisionRules, DecisionSignalRule{Name: "topics.billing", Deployment: "vela", Question: DecisionQuestion{Type: DecisionQuestionNoul, Instructions: "?"}})
+		},
+	}
+	for name, mutate := range cases {
+		cfg := labelledDecisionConfig()
+		mutate(cfg)
+		if err := validateDecisionSignalContracts(cfg); err == nil {
+			t.Fatalf("%s: expected a validation error", name)
+		}
+	}
+	cfg := labelledDecisionConfig()
+	cfg.DecisionRules = append(cfg.DecisionRules, DecisionSignalRule{Name: "topics.billing", Deployment: "decider", Question: DecisionQuestion{Type: DecisionQuestionNoul, Instructions: "?"}})
+	if err := validateDecisionSignalContracts(cfg); err != nil {
+		t.Fatalf("a label answer key only collides within one deployment's call: %v", err)
+	}
+}
+
+func TestSetAndSpanConditionsNameADeclaredLabel(t *testing.T) {
+	cfg := labelledDecisionConfig()
+	accept := []RuleNode{
+		{Type: SignalTypeDecision, Name: "topics", Label: "shipping"},
+		{Type: SignalTypeDecision, Name: "places", Label: "city"},
+	}
+	for _, node := range accept {
+		if err := validateDecisionLeafNode(cfg, "d", &node); err != nil {
+			t.Fatalf("%+v: %v", node, err)
+		}
+	}
+	reject := map[string]RuleNode{
+		"set without label":      {Type: SignalTypeDecision, Name: "topics"},
+		"span without label":     {Type: SignalTypeDecision, Name: "places"},
+		"undeclared set label":   {Type: SignalTypeDecision, Name: "topics", Label: "refunds"},
+		"undeclared span label":  {Type: SignalTypeDecision, Name: "places", Label: "PERSON"},
+		"a choice key on a span": {Type: SignalTypeDecision, Name: "places", Label: "code"},
+	}
+	for name, node := range reject {
+		err := validateDecisionLeafNode(cfg, "d", &node)
+		if err == nil || !strings.Contains(err.Error(), "declared label") {
+			t.Fatalf("%s: expected a declared-label error, got %v", name, err)
 		}
 	}
 }

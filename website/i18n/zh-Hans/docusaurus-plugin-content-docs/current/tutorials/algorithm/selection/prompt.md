@@ -54,7 +54,7 @@ routing:
 ```
 
 `model` 必须是在 `routing.modelCards` 中声明、并由 `providers.models` 支持的具体模型，且必须使用 OpenAI 兼容 API 格式。候选基础模型名必须唯一；当 LoRA 或推理变体共享同一基础模型时，使用单独的决策。候选名称和可用的模型卡片描述由运行时添加。选择器接收当前用户回合，并返回包含精确候选名称和简短理由的固定 JSON 对象。
-内部辅助调用使用 `global.integrations.looper.endpoint`，它必须指向路由器的 OpenAI 兼容 chat 端点。
+路由器在进程内发起辅助调用，发送到辅助模型的 `providers.models[].backend_refs`。
 
 模型生成的理由文本不会按原文记录或持久化。回放存储有界的结果/回退原因码，指标暴露选择器耗时和回退次数，不含请求内容。
 

@@ -93,6 +93,13 @@
       "reason": "Serves the published Vela Domain, PII and Guard package through a managed model_runtime deployment (VLLM_SR_DOMAIN_MODEL, VLLM_SR_PII_MODEL, VLLM_SR_JAILBREAK_MODEL); each published-model test must pass without skipping."
     },
     {
+      "package": "./pkg/classification",
+      "test": "TestVela2RouterMatchesSystemOne",
+      "source": "src/semantic-router/pkg/classification/vela2_systemone_parity_test.go",
+      "profile": "external-vela2-runtime",
+      "reason": "Compares the Router's set, span, PII and hallucination answers with POST /v1/systemone on a live runtime serving a Vela 2.0 model (VLLM_SRUN_VELA2_ENDPOINT); core CI serves no Vela 2.0 model, so core runs the fixture-backed set, span and binding tests instead."
+    },
+    {
       "package": "./pkg/extproc",
       "test": "TestMemoryEmbeddingIdentityPersistent",
       "source": "src/semantic-router/pkg/extproc/router_memory_identity_integration_test.go",

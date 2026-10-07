@@ -10,9 +10,33 @@ This page lists the details the guides leave out. The design behind them is in
 
 ## Commands
 
-`vllm-sr serve MODEL ...` runs the runtime in your current Python environment.
-Without a `MODEL` argument, `vllm-sr serve` starts the router instead.
-`vllm-srun serve` is the same server with every option.
+`vllm-sr serve MODEL ...` (engine mode) runs the runtime in the foreground, in
+a Docker or Podman container from a router image. Without a `MODEL` argument,
+`vllm-sr serve` starts the router instead.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `MODEL ...` | | Hub repositories, built-in model names or local package directories, which the container reads through read-only mounts. Several models share one process. `MODEL@REVISION` pins a revision. |
+| `--models FILE` | | A models file instead of `MODEL` arguments. Its local packages are mounted too. |
+| `--revision SHA` | | The 40-character commit to load, for one `MODEL`. |
+| `--platform` | `cpu` | The image and the GPU passthrough: `cpu` (`vllm-sr`), `amd` (`vllm-sr-rocm` with the ROCm devices) or `nvidia` (`vllm-sr-cuda` with the NVIDIA GPUs). macOS runs `cpu` only. |
+| `--device` | `auto` | `auto`, or what the image runs: `cpu`, `rocm[:N]` with `--platform amd`, `cuda[:N]` with `--platform nvidia`, or a plugin's accelerator in an image that has the plugin. |
+| `--host` | `127.0.0.1` | Host address the runtime's port is published on. |
+| `--port` | `8100` | Host port the runtime is published on. |
+| `--runtime-profile` | `exact` | `exact`, `shared_context`, `batching`, `max_speed`, or one a plugin adds. |
+| `--image` | the platform's image | Another image, for example one with a plugin installed. |
+| `--image-pull-policy` | `always` | `always`, `ifnotpresent` or `never`. |
+| `--container-runtime` | detected | `docker` or `podman`. |
+| `--log-level` | `info` | The runtime's log level. |
+
+Engine mode keeps what the runtime downloads and compiles in
+`~/.cache/vllm-sr/models` (`$XDG_CACHE_HOME/vllm-sr/models` when that is set);
+`VLLM_SR_ENGINE_CACHE_DIR` moves it. `HF_TOKEN`, `HF_ENDPOINT` and
+`HF_HUB_OFFLINE` reach the container by name, never on its command line.
+
+`vllm-srun serve` is the same server with every option. It is the command the
+images run; on your own machine it needs a source checkout
+(`make model-runtime-install`).
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -90,6 +114,30 @@ several models. The contract is the OpenAPI document served at
 A response carries the answers and `usage`. Add
 `"options": {"return_meta": true}` to a request to also get `meta`: the
 revision, model digest, profile, engine, device and timings that answered it.
+
+The responses of `/v1/decisions`, `/v1/systemone`, `/v1/classify`,
+`/v1/embeddings`, `/v1/rerank` and `/v1/bundle`, errors included, carry the
+runtime's own time for the request in a `Server-Timing` header, in
+milliseconds:
+
+```text
+Server-Timing: parse;dur=0.021, tokenize;dur=0.153, queue;dur=0.008, forward;dur=4.871, post;dur=0.034, serialize;dur=0.019, total;dur=5.141
+```
+
+| Phase | Time spent |
+| --- | --- |
+| `parse` | Reading and decoding the request body. |
+| `tokenize` | Validating, rendering and tokenizing the request. |
+| `queue` | Waiting for the model, before its first forward and between its forwards. |
+| `forward` | Running its forwards, readout included. |
+| `post` | Assembling the answers. |
+| `serialize` | Encoding the response. |
+| `total` | From the handler's start until the response is ready to send. What it holds beyond the phases is the server's own overhead. |
+
+A bundle whose tasks go to several models reports the `queue`, `forward` and
+`post` of the model that answered last. A client's own time for the call minus
+`total` is the transport: its encoding and decoding, the connection and the
+HTTP exchange. The router records it as a metric for every call.
 
 A request that cannot be served at all returns an HTTP error with
 `{"error": {"code", "message"}}`: 400 `invalid_request`, 404
@@ -193,9 +241,27 @@ Router (port 9190):
 | --- | --- | --- |
 | `vsr_model_runtime_ready` | `deployment` | 1 while the deployment answers. |
 | `vsr_model_runtime_requests_total` | `deployment`, `outcome` | Calls by outcome: `ok`, `timeout`, `unavailable`, `overloaded`, `rejected`, `failed`. |
-| `vsr_model_runtime_request_duration_seconds` | `deployment` | Latency of calls that reached the runtime. |
+| `vsr_model_runtime_request_duration_seconds` | `deployment`, `surface` | Latency of calls that reached the runtime. |
+| `vsr_model_runtime_transport_seconds` | `deployment`, `surface` | The part of each call's exchange outside the runtime: the router's time for the HTTP exchange minus the runtime's `Server-Timing` total. |
+| `vsr_model_runtime_server_seconds` | `deployment`, `surface`, `phase` | The runtime's own time for each call's exchange, by `phase`: `parse`, `tokenize`, `queue`, `forward`, `post`, `serialize`, and `other` for the rest of its total. |
 | `vsr_model_runtime_unknown_answers_total` | `deployment`, `reason` | Answers left unknown, by reason. |
 | `vsr_model_runtime_restarts_total` | `deployment` | Restarts of managed processes. |
+
+The router times each HTTP exchange around its client, so its own encoding and
+decoding count as transport. A bundled call records the exchange of its
+bundle, so the transport and server metrics of a deployment's calls compare
+with its `vsr_model_runtime_request_duration_seconds`. What a call's duration
+holds beyond its exchange is the router's own share: waiting for the other
+calls of its bundle and fusing them. The transport share of a deployment's
+calls over five minutes:
+
+```promql
+sum by (deployment) (rate(vsr_model_runtime_transport_seconds_sum[5m]))
+  / sum by (deployment) (rate(vsr_model_runtime_request_duration_seconds_sum[5m]))
+```
+
+For a runtime that sends no `Server-Timing` header (an older or a third-party
+runtime), the router records no transport or server samples.
 
 Runtime (`GET /metrics`): `vllm_srun_requests_total` by endpoint and
 status, `vllm_srun_request_duration_seconds`,
@@ -218,5 +284,6 @@ bytes a model's loaded weights take, reduced-precision copies included).
 - Tokens come from `HF_TOKEN` or the Hugging Face token file, never from
   command-line arguments, and are never logged.
 - Request text is never logged, and metrics carry no request content.
-- `vllm-sr serve MODEL` listens on `127.0.0.1` unless you pass `--host`. The
-  runtime has no authentication; expose it only on a trusted network.
+- `vllm-sr serve MODEL` publishes the runtime on `127.0.0.1` unless you pass
+  `--host`. The runtime has no authentication; expose it only on a trusted
+  network.

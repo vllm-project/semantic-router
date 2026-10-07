@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -36,6 +36,9 @@ from .task import (
     TaskHead,
     token_probabilities,
 )
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 # Rust's char::is_whitespace (Unicode White_Space); Python's isspace also strips U+001C-U+001F.
 WHITESPACE = "".join(
@@ -94,7 +97,7 @@ def trim(text: str, start: int, end: int) -> tuple[int, int]:
 def bio_spans(
     text: str,
     offsets: Sequence[tuple[int, int]],
-    probabilities: np.ndarray,
+    probabilities: NDArray[np.float32],
     labels: Sequence[str],
 ) -> list[dict[str, Any]]:
     """Labelled spans from per-token label probabilities (``[tokens, labels]``)."""
@@ -133,7 +136,7 @@ def bio_spans(
 
 
 def token_rows(
-    offsets: Sequence[tuple[int, int]], probabilities: np.ndarray
+    offsets: Sequence[tuple[int, int]], probabilities: NDArray[np.float32]
 ) -> list[dict[str, Any]]:
     return [
         {"start": start, "end": end, "probabilities": row.tolist()}

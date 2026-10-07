@@ -116,7 +116,7 @@ const Contributing: React.FC = () => {
                   <span className={styles.stepNumber}>1</span>
                   <div>
                     <h4><Translate id="contributing.process.step1.title">Claim Accepted Work</Translate></h4>
-                    <p><Translate id="contributing.process.step1.desc">New reports move from needs-acceptance to accepted and ready-for-dev; comment to claim ready-for-dev work before implementation.</Translate></p>
+                    <p><Translate id="contributing.process.step1.desc">New reports move from needs-acceptance to accepted and ready-for-dev; claim ready-for-dev work by commenting /assign before implementation.</Translate></p>
                     <p>
                       <a href="https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">CONTRIBUTING.md</a>
                       {' · '}

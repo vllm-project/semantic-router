@@ -2,14 +2,11 @@ package handlers
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"reflect"
-	"slices"
 	"sort"
 	"strings"
 
@@ -18,8 +15,7 @@ import (
 )
 
 type runtimeTopologyInventory struct {
-	Storage          []string
-	ContainerRunning map[string]bool
+	Storage []string
 }
 
 type activationPlanInputs struct {
@@ -35,11 +31,8 @@ type activationPlanInputs struct {
 	targetManagedCredential  bool
 }
 
-type runtimeTopologyReconciler interface {
+type runtimeTopologySource interface {
 	Inventory(context.Context) (runtimeTopologyInventory, error)
-	Apply(context.Context, recipe.ActivationTopologyState, string) error
-	Rollback(context.Context, recipe.ActivationTopologyState) error
-	Commit(context.Context, recipe.ActivationTopologyState) error
 }
 
 func (a *RecipeActivator) Preview(ctx context.Context, request recipe.ActivateRequest) (recipe.ActivationPlan, error) {
@@ -90,11 +83,14 @@ func (a *RecipeActivator) prepareDeactivation(ctx context.Context) (recipe.Activ
 	}
 	inventory, err := a.topology.Inventory(ctx)
 	if err != nil {
-		return active, recipe.ActivationPlan{}, nil, nil, packageTopologyInventoryError("Managed runtime topology could not be inspected.", err)
+		return active, recipe.ActivationPlan{}, nil, nil, activationFailed("Managed runtime topology could not be inspected.", err)
 	}
 	plan, err := buildActivationPlan(active.RecipeDigest, previousConfig, baseline, inventory, a.store.HasManagementCredential())
 	if err != nil {
 		return active, recipe.ActivationPlan{}, nil, nil, activationIncompatible(err)
+	}
+	if credentialErr := a.requireManagementCredential(plan); credentialErr != nil {
+		return active, recipe.ActivationPlan{}, nil, nil, credentialErr
 	}
 	plan.Effects[0] = "restore the durable source runtime config"
 	plan.PlanDigest = ""
@@ -128,11 +124,14 @@ func (a *RecipeActivator) prepareActivation(ctx context.Context, request recipe.
 	}
 	inventory, err := a.topology.Inventory(ctx)
 	if err != nil {
-		return recipe.PackageSummary{}, recipe.ActivationPlan{}, nil, nil, packageTopologyInventoryError("Managed runtime topology could not be inspected.", err)
+		return recipe.PackageSummary{}, recipe.ActivationPlan{}, nil, nil, activationFailed("Managed runtime topology could not be inspected.", err)
 	}
 	plan, err := buildActivationPlan(target.RecipeDigest, previousConfig, realizedConfig, inventory, a.store.HasManagementCredential())
 	if err != nil {
 		return recipe.PackageSummary{}, recipe.ActivationPlan{}, nil, nil, activationIncompatible(err)
+	}
+	if credentialErr := a.requireManagementCredential(plan); credentialErr != nil {
+		return recipe.PackageSummary{}, recipe.ActivationPlan{}, nil, nil, credentialErr
 	}
 	return target, plan, previousConfig, realizedConfig, nil
 }
@@ -145,7 +144,7 @@ func buildActivationPlan(recipeDigest string, currentConfig, targetConfig []byte
 	if validationErr := validateActivationPlanManagement(inputs, credentialAvailable); validationErr != nil {
 		return recipe.ActivationPlan{}, validationErr
 	}
-	plan := newActivationPlan(recipeDigest, inputs, inventory, credentialAvailable)
+	plan := newActivationPlan(recipeDigest, inputs, credentialAvailable)
 	encoded, err := json.Marshal(plan)
 	if err != nil {
 		return recipe.ActivationPlan{}, err
@@ -154,8 +153,8 @@ func buildActivationPlan(recipeDigest string, currentConfig, targetConfig []byte
 	return plan, nil
 }
 
-func newActivationPlan(recipeDigest string, inputs activationPlanInputs, inventory runtimeTopologyInventory, credentialAvailable bool) recipe.ActivationPlan {
-	storage := activationStorageDiff(inputs, inventory)
+func newActivationPlan(recipeDigest string, inputs activationPlanInputs, credentialAvailable bool) recipe.ActivationPlan {
+	storage := activationStorageDiff(inputs)
 	recreate, managementBoundaryChanged := activationPlanNeedsRecreation(inputs, storage, credentialAvailable)
 	plan := recipe.ActivationPlan{
 		RecipeDigest:     recipeDigest,
@@ -172,21 +171,24 @@ func newActivationPlan(recipeDigest string, inputs activationPlanInputs, invento
 	return plan
 }
 
-func activationStorageDiff(inputs activationPlanInputs, inventory runtimeTopologyInventory) recipe.ActivationStorageDiff {
+// activationStorageDiff compares the storage the stack runs with the target's.
+// Repair stays empty: the Dashboard can't see container states, and the next
+// `vllm-sr serve` starts every storage container the config needs.
+func activationStorageDiff(inputs activationPlanInputs) recipe.ActivationStorageDiff {
 	add, remove := storageDelta(inputs.currentStorage, inputs.targetStorage)
 	return recipe.ActivationStorageDiff{
 		Before: inputs.currentStorage,
 		After:  inputs.targetStorage,
 		Add:    add,
 		Remove: remove,
-		Repair: storageRepairSet(inputs.currentStorage, inputs.targetStorage, inventory.ContainerRunning),
+		Repair: []string{},
 	}
 }
 
 func activationPlanNeedsRecreation(inputs activationPlanInputs, storage recipe.ActivationStorageDiff, credentialAvailable bool) (bool, bool) {
 	managementBoundaryChanged := !reflect.DeepEqual(inputs.currentManagementConfig, inputs.targetManagementConfig)
 	topologyChanged := !reflect.DeepEqual(inputs.currentListeners, inputs.targetListeners) ||
-		managementBoundaryChanged || len(storage.Add) > 0 || len(storage.Remove) > 0 || len(storage.Repair) > 0
+		managementBoundaryChanged || len(storage.Add) > 0 || len(storage.Remove) > 0
 	authRequiresRecreation := inputs.targetManagementConfig.Auth.Mode == routerconfig.ManagementAuthModeBearer &&
 		(!inputs.targetManagedCredential || !inputs.currentManagedCredential || !credentialAvailable)
 	return topologyChanged || authRequiresRecreation, managementBoundaryChanged
@@ -201,17 +203,31 @@ func activationPlanManagementAuth(mode string) recipe.ActivationManagementAuth {
 	return auth
 }
 
+// configureActivationRecreation turns a plan the running containers can't take
+// into a pending activation: the Dashboard publishes the config, and the next
+// `vllm-sr serve` creates the containers anew from it.
 func configureActivationRecreation(plan *recipe.ActivationPlan, recreate, managementBoundaryChanged bool) {
-	if recreate {
-		plan.Mode = recipe.ActivationModeStackRecreation
-		plan.RequiresConfirmation = true
-		plan.Effects = append(plan.Effects, "recreate the managed Router and Envoy containers")
-		if managementBoundaryChanged {
-			plan.Effects = append(plan.Effects, "apply the target Router management listener and authentication boundary")
-		}
-		if len(plan.Storage.Add) > 0 || len(plan.Storage.Remove) > 0 || len(plan.Storage.Repair) > 0 {
-			plan.Effects = append(plan.Effects, "reconcile the exact managed storage sidecar set")
-		}
+	if !recreate {
+		return
+	}
+	plan.Mode = recipe.ActivationModeStackRecreation
+	plan.RequiresConfirmation = true
+	containers := "the managed Router and Envoy containers"
+	if !managedStackRunsEnvoy() {
+		containers = "the managed Router container, which serves the listeners"
+	}
+	plan.Effects = []string{
+		plan.Effects[0],
+		"record a pending restart: the next `vllm-sr serve` recreates " + containers + "; until then they keep serving",
+	}
+	if managementBoundaryChanged {
+		plan.Effects = append(plan.Effects, "the recreated Router takes the target management listener and authentication boundary")
+	}
+	if len(plan.Storage.Add) > 0 {
+		plan.Effects = append(plan.Effects, "the next `vllm-sr serve` starts the storage the Recipe adds")
+	}
+	if len(plan.Storage.Remove) > 0 {
+		plan.Effects = append(plan.Effects, "storage the Recipe stops using keeps its data and runs until `vllm-sr stop`")
 	}
 }
 
@@ -266,31 +282,6 @@ func validateActivationPlanManagement(inputs activationPlanInputs, credentialAva
 	return nil
 }
 
-func storageRepairSet(before, after []string, running map[string]bool) []string {
-	beforeSet := map[string]struct{}{}
-	for _, backend := range before {
-		beforeSet[backend] = struct{}{}
-	}
-	repair := []string{}
-	for _, backend := range after {
-		if _, exists := beforeSet[backend]; !exists {
-			continue
-		}
-		isRunning, statusKnown := running[managedContainerNameForStorage(backend)]
-		if statusKnown && !isRunning {
-			repair = append(repair, backend)
-		}
-	}
-	sort.Strings(repair)
-	return repair
-}
-
-func activationInventoryMatchesPlan(inventory runtimeTopologyInventory, plan recipe.ActivationPlan) bool {
-	before := normalizedStorageSet(inventory.Storage)
-	return slices.Equal(before, plan.Storage.Before) &&
-		slices.Equal(storageRepairSet(before, plan.Storage.After, inventory.ContainerRunning), plan.Storage.Repair)
-}
-
 func normalizedStorageSet(values []string) []string {
 	seen := map[string]struct{}{}
 	for _, value := range values {
@@ -327,57 +318,6 @@ func storageDelta(before, after []string) ([]string, []string) {
 		}
 	}
 	return add, remove
-}
-
-func topologyStateForPlan(plan recipe.ActivationPlan, transaction recipe.ActivationTransaction, inventory runtimeTopologyInventory) recipe.ActivationTopologyState {
-	credentialEnv := ""
-	if plan.ManagementAuth.Mode == routerconfig.ManagementAuthModeBearer {
-		credentialEnv = recipe.ManagementCredentialEnv
-	}
-	state := recipe.ActivationTopologyState{
-		TransactionID: transaction.ID,
-		PlanDigest:    plan.PlanDigest,
-		Listeners:     append([]recipe.ActivationListener(nil), plan.ListenersAfter...),
-		StorageBefore: append([]string(nil), plan.Storage.Before...),
-		StorageAfter:  append([]string(nil), plan.Storage.After...),
-		CredentialEnv: credentialEnv,
-	}
-	for _, service := range []string{"router", "envoy"} {
-		name := managedContainerNameForService(service)
-		state.Containers = append(state.Containers, recipe.ActivationContainerTransition{
-			Service: service, Name: name, BackupName: topologyBackupName(name, transaction.ID), Action: "replace", WasRunning: inventory.ContainerRunning[name],
-		})
-	}
-	for _, backend := range plan.Storage.Add {
-		name := managedContainerNameForStorage(backend)
-		state.Containers = append(state.Containers, recipe.ActivationContainerTransition{
-			Service: backend, Name: name, Action: "add", WasRunning: false,
-		})
-	}
-	for _, backend := range plan.Storage.Remove {
-		name := managedContainerNameForStorage(backend)
-		state.Containers = append(state.Containers, recipe.ActivationContainerTransition{
-			Service: backend, Name: name, BackupName: topologyBackupName(name, transaction.ID), Action: "remove", WasRunning: inventory.ContainerRunning[name],
-		})
-	}
-	for _, backend := range plan.Storage.Repair {
-		name := managedContainerNameForStorage(backend)
-		state.Containers = append(state.Containers, recipe.ActivationContainerTransition{
-			Service: backend, Name: name, BackupName: topologyBackupName(name, transaction.ID), Action: "repair", WasRunning: inventory.ContainerRunning[name],
-		})
-	}
-	return state
-}
-
-func topologyBackupName(name, transactionID string) string {
-	suffix := "-recipe-backup-" + transactionID[:12]
-	limit := 128 - len(suffix)
-	if len(name) > limit {
-		digest := sha256.Sum256([]byte(name))
-		disambiguator := "-" + hex.EncodeToString(digest[:4])
-		name = name[:limit-len(disambiguator)] + disambiguator
-	}
-	return name + suffix
 }
 
 func requireActivationConfirmation(request recipe.ActivateRequest, plan recipe.ActivationPlan) error {

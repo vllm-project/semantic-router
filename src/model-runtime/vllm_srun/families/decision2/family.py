@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
-
-import torch
+from typing import Any, cast
 
 from ...errors import (
     INVALID_MODEL_OUTPUT,
@@ -28,8 +26,9 @@ from ...plugins.base import (
 from ...plugins.decisions import DecisionModel, RenderedItem, RequestPlan
 
 __all__ = ["Decision2Family", "Decision2Model"]
-from ...heads.candidate import forward_logits, load_head
+from ...heads.candidate import CandidateHead, forward_logits, load_head
 from ...registry import builtin, policy
+from ...registry.artifacts import read_json
 from ...registry.resolve import download_base
 from ...systemone import (
     GOLDEN_STATE,
@@ -69,7 +68,7 @@ class Decision2Family(ModelFamily):
         root = package.root
         pointer, manifest, manifest_sha256 = pkg.verify_manifest(root)
         licence = policy.check(manifest, self.options.accept_licences)
-        decision_config = pkg.read_json(root / "decision_config.json")
+        decision_config = read_json(root / "decision_config.json")
         backbone_type = pkg.check_decision_config(decision_config)
         base_root = None
         if manifest["profile"] == "qwen-adapter":
@@ -96,7 +95,7 @@ class Decision2Family(ModelFamily):
             raise PackageError("a qwen-full package cannot hold a LoRA checkpoint")
         model_sha256 = pkg.model_identity(root, decision_config, base_root)
         identity = (
-            manifest.get("identity")
+            cast(dict[str, Any], manifest.get("identity"))
             if isinstance(manifest.get("identity"), dict)
             else {}
         )
@@ -145,7 +144,7 @@ class Decision2Family(ModelFamily):
         details: pkg.Decision2Package = package.details["package"]
         root = details.root
         if details.profile == "qwen-full":
-            config = pkg.read_json(root / "backbone" / "config.json")
+            config = read_json(root / "backbone" / "config.json")
             files = tuple(sorted((root / "backbone").glob("*.safetensors")))
             backbone = BackboneSpec(
                 model_type=_model_type(config, details.backbone_type),
@@ -155,12 +154,12 @@ class Decision2Family(ModelFamily):
         else:
             base_root = details.base_root
             assert base_root is not None
-            full = pkg.read_json(base_root / "config.json")
+            full = read_json(base_root / "config.json")
             config = full.get("text_config", full)
             files = tuple(sorted(base_root.glob("*.safetensors")))
             contract = details.decision_config["lora"]
             lora = LoRASpec(
-                adapter_config=pkg.read_json(root / "adapter" / "adapter_config.json"),
+                adapter_config=read_json(root / "adapter" / "adapter_config.json"),
                 weight_files=(root / "adapter" / "adapter_model.safetensors",),
                 rank=int(contract["rank"]),
                 alpha=float(contract["alpha"]),
@@ -243,15 +242,16 @@ def _model_type(config: dict[str, Any], declared: str) -> str:
         raise PackageError(
             f"backbone config model_type {model_type!r} differs from decision_config ({declared})"
         )
-    return model_type
+    checked: str = model_type
+    return checked
 
 
-class Decision2Model(DecisionModel):
+class Decision2Model(DecisionModel[RenderedItem, list[float] | None]):
     def __init__(
         self,
         info: ModelInfo,
         engine_model: EngineModel,
-        head: torch.nn.Module,
+        head: CandidateHead,
         tokenizer: Tokenizer,
         details: pkg.Decision2Package,
     ):
@@ -264,7 +264,7 @@ class Decision2Model(DecisionModel):
     def forward_token_budget(self) -> int | None:
         return self.engine_model.max_forward_tokens()
 
-    def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan:
+    def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan[RenderedItem]:
         if not valid_state(state):
             raise ValueError("state must be text, an object, or an array")
         items: list[RenderedItem] = []

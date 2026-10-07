@@ -13,6 +13,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
@@ -40,6 +41,9 @@ type runtimeOptions struct {
 	enableAPI              bool
 	secure                 bool
 	downloadOnly           bool
+	gateway                config.GatewayMode
+	listenerAddress        string
+	configHistoryLimit     int
 }
 
 func parseRuntimeOptions() runtimeOptions {
@@ -57,6 +61,9 @@ func parseRuntimeOptions() runtimeOptions {
 		kubeconfig             = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
 		namespace              = flag.String("namespace", kubernetesNamespaceDefault(), "Kubernetes namespace to watch for CRDs")
 		downloadOnly           = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
+		gatewayMode            = flag.String("gateway", string(config.GatewayExtProc), "What serves client traffic: extproc (the ext_proc gRPC server behind an Envoy-based gateway) or standalone (the OpenAI-compatible API on the configured listeners)")
+		listenerAddress        = flag.String("listener-address", "", "Standalone mode only: bind every listener on this address instead of its configured one, as in a container whose configured address governs the host port publication")
+		configHistoryLimit     = flag.Int("config-history-limit", configsnapshot.DefaultHistoryLimit, "How many configuration versions to keep for rollback, beside the configuration file")
 	)
 	flag.Parse()
 
@@ -74,6 +81,9 @@ func parseRuntimeOptions() runtimeOptions {
 		enableAPI:              *enableAPI,
 		secure:                 *secure,
 		downloadOnly:           *downloadOnly,
+		gateway:                config.GatewayMode(*gatewayMode),
+		listenerAddress:        *listenerAddress,
+		configHistoryLimit:     *configHistoryLimit,
 	}
 }
 

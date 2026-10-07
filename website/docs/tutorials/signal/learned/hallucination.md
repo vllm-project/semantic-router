@@ -9,7 +9,7 @@ claims that context does not support. Define its rules under
 
 This family is learned: it relies on the hallucination detector under
 `global.model_catalog.modules.hallucination_mitigation.hallucination_model`
-(Vela Halu by default), which runs in the
+(Vela 2.0 0.3B's span head by default, or Vela Halu), which runs in the
 [model runtime](../../../model-runtime/guides/hallucination.md).
 
 ## Key Advantages
@@ -103,6 +103,35 @@ when no decision enables the plugin. A
 decision whose `hallucination` plugin runs with no rule declared is reported at
 load: the plugin is then classifying the answer itself, which is the
 compatibility path.
+
+## Vela 2.0
+
+Bind `hallucination_detector` to a Vela 2.0 deployment and the detector asks
+the model's ready-made hallucination question, answered by its router span
+head, about the answer, with the request and the grounding context as the
+other parts of the question's state:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+    bindings:
+      hallucination_detector:
+        deployment: vela2
+        contract: token_spans.v1
+```
+
+The model reads the whole answer and applies its own calibrated threshold, so
+the detector's `threshold` applies to Vela 1.0 Halu only; `min_span_length`
+and `min_span_confidence` filter the spans of both. The
+check runs at the response stage, in that stage's call to the deployment. The
+same deployment can answer the request's
+[`decision`](tutorials/signal/learned/decision.md) and
+[`pii`](tutorials/signal/learned/pii.md#vela-20) questions.
 
 ## Dependencies and Limitations
 

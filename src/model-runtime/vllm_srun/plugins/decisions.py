@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import math
 from abc import abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Generic
 
 from .base import (
     Expired,
@@ -46,11 +46,11 @@ class RenderedItem:
 
 
 @dataclass
-class RequestPlan:
+class RequestPlan(Generic[ItemT]):
     """A request after validation and rendering, before execution."""
 
     question_ids: list[str]
-    items: list[RenderedItem]
+    items: Sequence[ItemT]
     errors: dict[str, dict[str, Any]]
     input_tokens: int
 
@@ -107,7 +107,7 @@ class DecisionModel(LoadedModel[ItemT, ResultT]):
     """A loaded model that serves ``/v1/decisions`` through ``plan`` and ``answer``."""
 
     @abstractmethod
-    def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan:
+    def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan[ItemT]:
         """Validate and render every question; failures become per-question errors."""
 
     def answer(self, item: RenderedItem, logits: list[float] | None) -> dict[str, Any]:
@@ -138,7 +138,7 @@ class DecisionModel(LoadedModel[ItemT, ResultT]):
         """Every question's answer, in request order: its error, or ``answer`` of its readout."""
         from ..errors import DEADLINE_EXCEEDED
 
-        request_plan: RequestPlan = plan.state
+        request_plan: RequestPlan[RenderedItem] = plan.state
         answered: dict[str, dict[str, Any]] = {}
         for index, item in enumerate(request_plan.items):
             if isinstance(results, Expired):

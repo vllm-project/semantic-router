@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from cli.commands import runtime as rt  # noqa: E402
 from cli.deployment_backend import resolve_target  # noqa: E402
-from cli.k8s_backend import K8sBackend  # noqa: E402
+from cli.k8s_backend import K8sBackend, client_service_port  # noqa: E402
 from cli.main import main  # noqa: E402
 from click.testing import CliRunner  # noqa: E402
 
@@ -449,7 +449,7 @@ class TestK8sBackend:
         )
         monkeypatch.setattr(backend, "_run", lambda *a, **kw: None)
         monkeypatch.setattr(backend, "_wait_for_pods", lambda: None)
-        monkeypatch.setattr(backend, "_log_k8s_summary", lambda: None)
+        monkeypatch.setattr(backend, "_log_k8s_summary", lambda _port: None)
         monkeypatch.setattr(
             "cli.k8s_backend.load_profile_values", lambda *a, **kw: None
         )
@@ -533,7 +533,7 @@ class TestCLITargetRouting:
         runner = CliRunner()
         runner.invoke(main, ["stop", "--target", "k8s"])
 
-        assert built and built[0] == "k8s"
+        assert built and built[0] == "kubernetes"
 
     def test_k8s_runtime_mode_flags_reach_backend(self, monkeypatch, tmp_path):
         captured = {}
@@ -706,46 +706,100 @@ class TestCLITargetRouting:
         }
 
     @pytest.mark.parametrize(
-        ("override_args", "env_name", "env_value"),
+        ("override_args", "env_name", "env_value", "expected"),
         [
-            (["--platform", "amd"], None, None),
-            ([], "VLLM_SR_PLATFORM", "nvidia"),
-            ([], "DASHBOARD_PLATFORM", "amd"),
+            (["--platform", "amd"], None, None, "amd"),
+            ([], "VLLM_SR_PLATFORM", "nvidia", "nvidia"),
+            ([], "DASHBOARD_PLATFORM", "amd", "amd"),
         ],
     )
-    def test_k8s_gpu_platform_fails_before_workspace_or_backend_mutation(
+    def test_kubernetes_gpu_platform_reaches_the_backend(
         self,
         monkeypatch,
         tmp_path,
         override_args,
         env_name,
         env_value,
+        expected,
     ):
         monkeypatch.delenv("VLLM_SR_PLATFORM", raising=False)
         monkeypatch.delenv("DASHBOARD_PLATFORM", raising=False)
         if env_name is not None:
             monkeypatch.setenv(env_name, env_value)
+        captured = {}
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            "version: v0.3\nlisteners:\n  - name: http\n    port: 8899\n",
+            encoding="utf-8",
+        )
 
-        bootstrap = MagicMock(side_effect=AssertionError("workspace was mutated"))
-        backend_builder = MagicMock(side_effect=AssertionError("backend was called"))
-        monkeypatch.setattr(rt, "ensure_bootstrap_workspace", bootstrap)
-        monkeypatch.setattr(rt, "_build_backend", backend_builder)
-        missing_config = tmp_path / "missing" / "config.yaml"
+        class _FakeK8s:
+            def deploy(self, **kwargs):
+                captured.update(kwargs)
+
+        monkeypatch.setattr(rt, "_build_backend", lambda *_args, **_kwargs: _FakeK8s())
 
         result = CliRunner().invoke(
             main,
             [
                 "serve",
                 "--config",
-                str(missing_config),
+                str(config_path),
                 "--target",
-                "k8s",
+                "kubernetes",
                 *override_args,
             ],
         )
 
-        assert result.exit_code == 1
-        assert "supported only for local Docker deployments" in result.output
-        bootstrap.assert_not_called()
-        backend_builder.assert_not_called()
-        assert list(tmp_path.iterdir()) == []
+        assert result.exit_code == 0, result.output
+        assert captured["platform"] == expected
+        assert captured["gateway"] == "standalone"
+
+
+def _values(mode=None, listeners=None, api_port=None):
+    values = {"configOverride": {"listeners": listeners or []}}
+    if mode is not None:
+        values["gateway"] = {"mode": mode}
+    if api_port is not None:
+        values["service"] = {"api": {"port": api_port}}
+    return values
+
+
+_TLS = {"cert_file": "certs/tls.crt", "key_file": "certs/tls.key"}
+
+
+@pytest.mark.parametrize(
+    ("values", "port"),
+    [
+        (_values(listeners=[{"name": "http", "port": 8899}]), 8899),
+        (_values("standalone", [{"name": "edge", "port": 9000}]), 9000),
+        (
+            _values(
+                "standalone",
+                [
+                    {"name": "https", "port": 8443, "tls": _TLS},
+                    {"name": "http", "port": 8899},
+                ],
+            ),
+            8899,
+        ),
+        (_values("standalone", [{"name": "https", "port": 8443, "tls": _TLS}]), 8443),
+        (_values("standalone"), 8899),
+        (_values("extproc", [{"name": "http", "port": 8899}]), 8080),
+        (_values("extproc", api_port=18080), 18080),
+    ],
+)
+def test_client_service_port_follows_the_charts_client_port(values, port):
+    assert client_service_port(values) == port
+
+
+def test_kubernetes_summary_port_forwards_the_client_port(capsys):
+    backend = K8sBackend.__new__(K8sBackend)
+    backend.namespace = "test-ns"
+    backend.release_name = "sr"
+
+    backend._log_k8s_summary(8899)
+
+    out = capsys.readouterr().out
+    assert "kubectl port-forward -n test-ns svc/sr 8899:8899" in out
+    assert "8080:8080" not in out

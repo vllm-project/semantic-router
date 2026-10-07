@@ -85,7 +85,7 @@ RAG 和 memory 证据默认受类型化来源保护。仅当该路由明确接�
 
 若载荷无法在配置预算内安全缩减，则在 `fail_open` 下原样发送，或在显式 `fail_closed` 下让路由失败。
 
-历史压缩保护每条 system 消息、当前用户轮次、最近一条 assistant 轮次以及完整的工具交换。可选的 `recoverable` 目标会把原始内容存入共享 Redis/Valkey 存储，注入保留的 `vsr_context_retrieve` 工具，并使用配置的 Looper 端点进行非流式后续请求。恢复按请求和受信任用户限定范围，并受 TTL、字节和检索次数限制。流式请求会保留可恢复目标，而不是暴露内部工具。
+历史压缩保护每条 system 消息、当前用户轮次、最近一条 assistant 轮次以及完整的工具交换。可选的 `recoverable` 目标会把原始内容存入共享 Redis/Valkey 存储，注入保留的 `vsr_context_retrieve` 工具，并在进程内发起非流式后续调用。恢复按请求和受信任用户限定范围，并受 TTL、字节和检索次数限制。流式请求会保留可恢复目标，而不是暴露内部工具。
 
 ## 请求控制 {#request-controls}
 

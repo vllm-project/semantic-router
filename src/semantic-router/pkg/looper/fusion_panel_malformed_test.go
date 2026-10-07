@@ -87,6 +87,6 @@ func TestFusionLooperMalformedHTTPSuccessDoesNotMeetQuorum(t *testing.T) {
 		evidence.Attempts[1].State,
 		evidence.Attempts[2].State,
 	})
-	assert.Contains(t, evidence.Attempts[1].Error, "failed to parse response")
-	assert.Contains(t, evidence.Attempts[2].Error, "request failed with status 502")
+	assert.Equal(t, "invalid response", evidence.Attempts[1].Error)
+	assert.Equal(t, "answered 502", evidence.Attempts[2].Error)
 }

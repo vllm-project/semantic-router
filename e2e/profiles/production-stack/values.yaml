@@ -259,12 +259,19 @@ config:
           description: General knowledge and miscellaneous topics
       jailbreak:
         - name: jailbreak_standard
-          threshold: 0.7
+          # Calibrated for the default Vela-2.0-0.3B (revision a3209a50):
+          # 0.74 keeps Vela 1.0 Guard's false-positive rate at its earlier 0.3
+          # on the router signal suite's dev split. The six E2E attack fixtures
+          # score 0.930-0.969 and the benign ones top out at 0.437, so all
+          # 6/6 attacks are blocked with no benign false positive, including
+          # the "Unrestricted DI persona" fixture Vela 1.0 Guard missed
+          # (#4120). Restoring Vela 1.0 Guard needs 0.3 again.
+          threshold: 0.74
           include_history: false
           description: Standard jailbreak detection
       pii:
         - name: pii_deny_all
-          threshold: 0.9
+          threshold: 0.01
           include_history: false
           description: Block all PII
     modelCards:

@@ -134,12 +134,12 @@ SIGNAL complexity code_reasoning {
 
 SIGNAL jailbreak jailbreak_strict {
   method: "classifier"
-  threshold: 0.45
+  threshold: 0.75
   description: "Strict jailbreak classifier for routing suspicious prompts into local containment."
 }
 
 SIGNAL pii pii_strict {
-  threshold: 0.85
+  threshold: 0.01
   description: "Detect personally identifiable information that should remain on local infrastructure."
 }
 
