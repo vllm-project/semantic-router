@@ -205,6 +205,43 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 16:39 — **`perf-standalone` → parent: PR OPEN for #4666: https://github.com/vllm-project/semantic-router/pull/4682 (one commit `a580e5734` on `main` `2e3ab986c`, label `wg/data-plane-networking`, `Closes #4666`). CI is running and I'm watching it. Node A claim (cores 80–159) is held until CI reports, for re-runs only.**
+  - **What changed** (all in the routing core both modes share, except the access log):
+    - `pkg/latency`: the TTFT and TPOT windows are a ring plus an incrementally sorted copy, under a plain mutex. A percentile no longer needs a copy, a sort or an allocation under the lock.
+    - `catalog.ProviderIdentity`: the request path stops deep-copying the provider catalog five times per request.
+    - The logging helpers check before they build fields. `ComponentEventFunc` serves the access log.
+    - `protocolcodec` caches its per-type field maps.
+    - `BenchmarkNativeGatewayClients` in `internal/gatewayparity` covers 1, 8, 32 and 64 clients.
+    - Docs: the design doc's Results (en, zh-Hans) keep the first record with the new one next to it, and the release note drops "Envoy mode sustains 5–10% more".
+  - **Record** (the record's harness and core budget on node A, NUMA node 1; images of `main` and of the PR in one session; req/s, Envoy mode → standalone):
+
+    | Clients | `main` | PR |
+    | --- | --- | --- |
+    | 1 | 1,268 → 1,621 | 1,692 → 2,318 |
+    | 8 | 7,726 → 9,286 | 10,831 → 14,523 |
+    | 32 | 14,264 → 13,074 | 26,744 → 27,935 (+1,191 ± 722) |
+    | 64 | 14,759 → 12,737 | 30,152 → 29,473 (−680 ± 721, level) |
+
+    - **Longer rounds** (10,000 requests a round instead of the record's 2,000, which last about 70 ms at these rates): at 64 clients, 28,837 → 30,319 (+1,482 ± 675); at 32, 26,370 → 28,830 (+2,460 ± 529).
+    - **p50 with the PR, Envoy mode → standalone:** 1.97 → 1.70 ms at 64 clients and 1.03 → 0.93 ms at 32. Standalone's p50 is lower at every load.
+    - **Acceptance:** met at 32 clients in both throughput and p50. At 64, p50 is met; throughput is level in the record's 2,000-request rounds and ahead in 10,000-request rounds.
+    - 1 and 8 clients improved in both modes.
+  - **Behaviour on the PR image:**
+    - wire parity 18 of 18 (only the documented Envoy-only headers differ);
+    - faults 8 of 10 identical (reset-always and timeout-always differ as documented);
+    - Looper 7 of 7;
+    - reload under load: 279,999 requests, 0 failed, no version going back.
+  - **Checks:**
+    - `make check` exits 0 in the precommit image on cores 136–159: golangci-lint 0 issues, `test-semantic-router`, `generated-contract-check`, `config-schema-check`, `dashboard-check`.
+    - Locally: the touched packages, `cmd`, `pkg/extproc` and `internal/gatewayparity`.
+  - **Root causes:**
+    1. A lock convoy on `pkg/latency`'s global TTFT `RWMutex`. Each request copied the window out under the read lock, allocating, and then sorted it. A reader stalled in a GC assist made the waiting writer block every request.
+    2. About 296 KB allocated per request, which drove GC to roughly 45% of CPU. The worst sources were the catalog copies, field building in the logging helpers ahead of the sampler, and per-request reflection in `protocolcodec`.
+  - **Left for you:**
+    - #4666 still carries `needs-acceptance`. "Check linked accepted issue" may go red until it is accepted.
+    - **Follow-up, not filed:** standalone's p99 at 64 clients is 8.4 ms against 4.5 ms. Both Routers are CPU-bound, and GC is a third or more of their CPU. A `GOGC=400` experiment, set by environment only, gave 51.8k against 40.9k req/s. A GC policy or further allocation cuts (tracing attributes, JSON, semantic-cache identity) would be a separate change.
+  — `perf-standalone`
+
 - 2026-10-07 16:23 — **`dash-noctr` → parent, all workstreams: node A claim, cores 0–55 (NUMA node 0, memory there), no GPU, untimed, about 16:25–20:00, for #4661's images, CLI integration suite and `make check` on my pushed commit `7f30aa977`.**
   - **What:**
     - an exact mirror of `7f30aa977` under `/data/dev2/src/`;
