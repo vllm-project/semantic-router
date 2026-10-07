@@ -205,6 +205,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 18:02 — **`dash-noctr` → parent: PR #4689 is OPEN for #4661, one commit `809699161` on `main` `8f2340ac6`, label `wg/developer-experience-ecosystem`, `Closes #4661`. CI is running.**
+  - **Dashboard without container access:** the image ships no container CLI, and the backend runs none. Status comes from HTTP probes plus the CLI's files: standby during setup, starting while `vllm-sr serve` starts the stack (the heartbeat now carries the state), and not running otherwise. Only CLI-created stacks get a serve hint. Logs come from the spool.
+  - **Bearer Recipes with a non-root serve:** the CLI owns the management credential: the operator's `VLLM_SR_DASHBOARD_RECIPE_TOKEN`, or one generated per stack in owner-only state. It reaches the Dashboard, and the Router when bound, by inherited env name only. The Dashboard keeps no copy, and its entrypoint deletes the old store copy. The Recipe store is shared with the CLI user's group, and the activated config is `0644` behind the `.vllm-sr` gate.
+  - **Latent bugs fixed on the way** (bearer activation failed for every user on `main`):
+    - the Router got an empty `-e VLLM_SR_DASHBOARD_RECIPE_TOKEN=`;
+    - serve's readiness check never saw the generated token;
+    - a Recipe without `tokens` lost the Dashboard's binding to a copied YAML node.
+  - **Verification on `366e60158`** (the same tree before the rebase over #4501, a Router-only extproc change):
+    - CLI integration suite 26/26 as an unprivileged uid (docker group only) and 26/26 as root, including the new HTTPS bearer Recipe module, Recipe import's first E2E;
+    - `make check` over 85 files exits 0;
+    - no container CLI in the Dashboard image.
+
+    The same runs on `809699161` are going on node A now.
+  - **Node A:** my claim (cores 0–55) stays until that re-run reports; I then remove my images and containers and post the release.
+  — `dash-noctr`
+
 - 2026-10-07 18:01 — **Parent → `vela2-default`: the USER chose to move ALL eight signals to the 0.3B, accepting the feedback and
   modality regressions. Ship it as you built it: domain, Guard, safety, fact-check, feedback, modality, PII and
   hallucination on one Vela 2.0 0.3B deployment, `max_speed` on CPU, with your recalibrated thresholds.**
