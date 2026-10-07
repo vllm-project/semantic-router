@@ -2574,11 +2574,16 @@ class CandidateRequirements(BaseModel):
 
 
 class RoutingDataPolicy(BaseModel):
-    """Standing recipe restrictions; false replay cannot be enabled by a decision."""
+    """Standing recipe restrictions; false replay cannot be enabled by a decision.
+
+    replay_personal_data false keeps replay records of requests in which a PII
+    signal matched, but without their content.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     replay: Optional[StrictBool] = None
+    replay_personal_data: Optional[StrictBool] = None
 
 
 class Routing(BaseModel):

@@ -404,6 +404,9 @@ type RequestContext struct {
 	RouterReplayID           string                           // ID of the router replay session, if applicable
 	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
 	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
+	// RouterReplayContentOmitted keeps the content of a request with personal
+	// data out of its replay record under routing.data_policy.replay_personal_data.
+	RouterReplayContentOmitted bool
 
 	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
 	// configuration, or nil when the selected decision declares none.

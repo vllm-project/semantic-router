@@ -41,6 +41,44 @@ def test_recipe_policy_fields_reject_invalid_contract(payload):
             model.model_validate(payload)
 
 
+def test_personal_data_replay_limit_needs_a_pii_signal():
+    def config(signals):
+        return UserConfig.model_validate(
+            {
+                "version": "v0.3",
+                "providers": {
+                    "defaults": {"model": "small"},
+                    "models": [
+                        {"name": "small", "backend_refs": [{"endpoint": "small:8000"}]}
+                    ],
+                },
+                "routing": {
+                    "data_policy": {"replay_personal_data": False},
+                    "signals": signals,
+                    "decisions": [
+                        {
+                            "name": "everything",
+                            "priority": 1,
+                            "rules": {"operator": "AND", "conditions": []},
+                            "modelRefs": [{"model": "small"}],
+                        }
+                    ],
+                },
+            }
+        )
+
+    errors = validate_recipe_contracts(config({}))
+    assert [error.field for error in errors] == [
+        "routing.data_policy.replay_personal_data"
+    ]
+    assert (
+        validate_recipe_contracts(
+            config({"pii": [{"name": "personal_data", "threshold": 0.05}]})
+        )
+        == []
+    )
+
+
 def test_recipe_policy_schema_discovery():
     doc = schema_document()
     for path in ("routing.candidate_requirements", "recipes.routing.data_policy"):

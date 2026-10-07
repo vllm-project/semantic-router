@@ -432,6 +432,9 @@ multimodal input, provider truncation, LoRA, Looper, and shadow dispatch.
 A recipe's `replay: false` prevents router replay capture even if a decision tries
 to enable it, including requests rejected before a decision is available. Absent
 or true adds no restriction to the existing global and decision configuration.
+`replay_personal_data: false` keeps capturing the routing evidence of a request
+in which one of the recipe's PII signals matched, but none of its content; it
+needs a `routing.signals.pii` rule.
 This field does not control other stores, logs, or backend retention. Operators
 must assign deployments that meet their privacy requirements.
 

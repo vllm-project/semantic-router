@@ -63,6 +63,9 @@ func (d *decompiler) decompileRoutingPolicies() {
 		if policy.Replay != nil {
 			fields["replay"] = *policy.Replay
 		}
+		if policy.ReplayPersonalData != nil {
+			fields["replay_personal_data"] = *policy.ReplayPersonalData
+		}
 		d.write("  data_policy: %s\n", formatPluginConfigValue(fields))
 	}
 }

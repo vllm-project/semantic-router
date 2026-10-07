@@ -154,6 +154,46 @@ func TestReplayDataPolicyBlocksResponseCaptureWithExistingBinding(t *testing.T) 
 	}
 }
 
+func TestPersonalDataReplayKeepsTheRouteButNotTheContent(t *testing.T) {
+	no := false
+	for _, test := range []struct {
+		name        string
+		policy      *bool
+		piiDetected bool
+		keepContent bool
+	}{
+		{name: "personal data under the limit", policy: &no, piiDetected: true, keepContent: false},
+		{name: "no personal data under the limit", policy: &no, piiDetected: false, keepContent: true},
+		{name: "personal data without the limit", policy: nil, piiDetected: true, keepContent: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := routerreplay.NewRecorder(store.NewMemoryStore(8, 60))
+			t.Cleanup(func() { _ = recorder.Close() })
+			router := &OpenAIRouter{ReplayRecorder: recorder}
+			recipe := replayPolicyRecipe(t, "private", nil)
+			recipe.Profile.DataPolicy.ReplayPersonalData = test.policy
+			ctx := replayPolicyRequest(t)
+			ctx.Routing.SelectRecipe(&recipe)
+			ctx.PIIDetected, ctx.PIIEntities = test.piiDetected, []string{"EMAIL_ADDRESS"}
+			enabled := config.DefaultRouterReplayPluginConfig()
+			ctx.RouterReplayPluginConfig = &enabled
+			router.startRouterReplay(ctx, "public-entry", "model", "ordinary")
+			router.attachRouterReplayResponse(ctx, []byte(`{"text":"Out of office until Monday."}`), true)
+			record, ok := recorder.GetRecord(ctx.RouterReplayID)
+			if !ok {
+				t.Fatal("the request must still have a replay record")
+			}
+			content := record.RequestBody != "" || record.Prompt != "" || record.ResponseBody != ""
+			if content != test.keepContent {
+				t.Fatalf("content kept = %v, want %v: request %q prompt %q response %q", content, test.keepContent, record.RequestBody, record.Prompt, record.ResponseBody)
+			}
+			if record.Decision != "ordinary" || record.PIIDetected != test.piiDetected {
+				t.Fatalf("the routing evidence must stay: decision %q pii %v", record.Decision, record.PIIDetected)
+			}
+		})
+	}
+}
+
 func replayPolicyRecipe(t *testing.T, name config.RecipeName, replay *bool) config.RoutingRecipe {
 	t.Helper()
 	payload, err := config.NewStructuredPayload(config.RouterReplayPluginConfig{Enabled: true})

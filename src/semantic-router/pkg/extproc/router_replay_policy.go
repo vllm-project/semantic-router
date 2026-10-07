@@ -1,6 +1,9 @@
 package extproc
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+import (
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+)
 
 // replayConfigForRequest resolves the standing policy independently of a
 // matched decision. Shared runtime services retain their existing settings.
@@ -35,6 +38,33 @@ func (r *OpenAIRouter) replayAllowedForRequest(ctx *RequestContext) bool {
 		}
 	}
 	return r.Config == nil || r.Config.DataPolicy.ReplayAllowed()
+}
+
+// personalDataReplayAllowed reports whether the request's routing profile
+// lets replay keep the content of a request in which a PII signal matched.
+func (r *OpenAIRouter) personalDataReplayAllowed(ctx *RequestContext) bool {
+	if r == nil {
+		return false
+	}
+	if ctx != nil {
+		if recipe := ctx.Routing.SelectedRecipe(); recipe != nil {
+			return recipe.Profile.DataPolicy.ReplayPersonalDataAllowed()
+		}
+		if ctx.Routing.IsPassthrough() {
+			return true
+		}
+	}
+	return r.Config == nil || r.Config.DataPolicy.ReplayPersonalDataAllowed()
+}
+
+// omitReplayContent keeps a record's routing evidence, including which PII
+// types matched, and drops everything the request or response said.
+func omitReplayContent(record *routerreplay.RoutingRecord) {
+	record.RequestBody, record.RequestBodyTruncated = "", false
+	record.ResponseBody, record.ResponseBodyTruncated = "", false
+	record.Prompt, record.PromptTruncated = "", false
+	record.ToolDefinitions, record.ToolDefinitionsTruncated = "", false
+	record.ToolTrace = nil
 }
 
 func (r *OpenAIRouter) effectiveReplayConfigForRequest(ctx *RequestContext, decision *config.Decision) *config.RouterReplayPluginConfig {

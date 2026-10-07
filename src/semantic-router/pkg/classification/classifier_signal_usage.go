@@ -11,7 +11,12 @@ import (
 // evaluation of unused local signals.
 // Returns a map with keys in format "type:name" (e.g., "keyword:math_keywords").
 func (c *Classifier) getUsedSignals() map[string]bool {
-	return c.getUsedSignalsForDecisions(c.Config.AllRoutingDecisions())
+	used := c.getUsedSignalsForDecisions(c.Config.AllRoutingDecisions())
+	if !c.Config.DataPolicy.ReplayPersonalDataAllowed() {
+		// The replay data policy reads whether a request carries personal data.
+		collectSignalKeys(used, config.SignalTypePII, c.Config.PIIRules, func(r config.PIIRule) string { return r.Name })
+	}
+	return used
 }
 
 // getUsedSignalsForDecisions computes usage for an explicit local decision

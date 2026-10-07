@@ -59,6 +59,27 @@ Set `routing.data_policy.replay: false` inside the recipe. This blocks all Repla
 capture for that recipe, including rejected requests and decisions that otherwise
 opt in. It does not change provider-side retention or delete existing records.
 
+### Keep personal data out of Replay
+
+Set `routing.data_policy.replay_personal_data: false` to keep the records of
+requests that carry personal data without their content:
+
+```yaml
+routing:
+  data_policy:
+    replay_personal_data: false
+  signals:
+    pii:
+      - name: personal_data
+        pii_types_allowed: []
+```
+
+When a PII signal of the recipe matches, the record keeps the route, model,
+signals and detected PII types, but no request or response body, prompt, tool
+definitions or tool trace. The recipe's PII signals are then evaluated for
+every request, even if no decision references them, and a PII classification
+that fails counts as personal data. The policy needs at least one PII signal.
+
 Request bodies, responses, and tool traces can contain secrets or personal data.
 Capture only what you need and restrict access with `replay.read` and
 `replay.detail`. See the [Replay API and privacy controls](../../api/router#router-replay).

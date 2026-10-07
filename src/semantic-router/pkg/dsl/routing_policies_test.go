@@ -59,6 +59,30 @@ ENTRYPOINT {model_names: ["secondary"] recipe: secondary}
 	}
 }
 
+func TestPersonalDataReplayPolicyRoundTrips(t *testing.T) {
+	cfg, errs := Compile(`ROUTING {data_policy: {replay_personal_data: false}}
+SIGNAL pii personal_data {pii_types_allowed: []}
+ROUTE everything {PRIORITY 1 WHEN pii("personal_data") MODEL "local"}
+`)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	if cfg.DataPolicy.ReplayPersonalDataAllowed() {
+		t.Fatal("the compiled policy lost replay_personal_data: false")
+	}
+	text, err := DecompileConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "replay_personal_data: false") {
+		t.Fatalf("decompiled DSL lost the personal data limit:\n%s", text)
+	}
+	again, errs := Compile(text)
+	if len(errs) > 0 || !reflect.DeepEqual(again.DataPolicy, cfg.DataPolicy) {
+		t.Fatalf("round trip changed the data policy: %v %+v", errs, again.DataPolicy)
+	}
+}
+
 func TestRoutingPoliciesRejectInvalidDSL(t *testing.T) {
 	for _, source := range []string{
 		`ROUTING {candidate_requirements: {context: bounded}}`,

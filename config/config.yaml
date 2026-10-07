@@ -168,6 +168,9 @@ evaluation:
         score: 0.79
 routing:
   strategy: priority
+  # Replay keeps the route of a request in which a PII signal matched, not its content.
+  data_policy:
+    replay_personal_data: false
   # Optional recipe-local consumer bindings to named model deployments.
   model_bindings:
     classifier.content-risk:

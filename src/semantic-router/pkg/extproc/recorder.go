@@ -112,6 +112,10 @@ func (r *OpenAIRouter) startRouterReplay(
 
 	configureReplayRecorder(recorder, ctx.RouterReplayPluginConfig)
 	record := buildReplayRoutingRecord(ctx, originalModel, selectedModel, decisionName)
+	if ctx.PIIDetected && !r.personalDataReplayAllowed(ctx) {
+		omitReplayContent(&record)
+		ctx.RouterReplayContentOmitted = true
+	}
 	r.populateReplayIdentity(&record, ctx)
 	if !persistReplayRecord(ctx, recorder, record) {
 		return
@@ -468,11 +472,14 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 		return
 	}
 
-	if len(responseBody) > 0 {
+	if len(responseBody) > 0 && !ctx.RouterReplayContentOmitted {
 		_ = recorder.AttachResponse(ctx.RouterReplayID, responseBody)
 	}
 	if isFinal {
 		attachPrimaryOutputDigest(ctx, recorder)
+	}
+	if ctx.RouterReplayContentOmitted {
+		return
 	}
 	if responseTrace := buildReplayResponseToolTrace(ctx, responseBody); responseTrace != nil {
 		if stored, ok := recorder.GetRecord(ctx.RouterReplayID); ok {

@@ -34,7 +34,7 @@ func (c *RouterConfig) UsesSignalTypeInRouting(signalType string) bool {
 		return false
 	}
 
-	return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+	return profileUsesSignalType(c.Decisions, c.Projections, c.DataPolicy, c.PIIRules, normalizedType)
 }
 
 // UsesSignalTypeInReachableRouting reports whether a request-reachable routing
@@ -51,13 +51,13 @@ func (c *RouterConfig) UsesSignalTypeInReachableRouting(signalType string) bool 
 		return false
 	}
 	if c.RoutingScope != "" {
-		return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+		return profileUsesSignalType(c.Decisions, c.Projections, c.DataPolicy, c.PIIRules, normalizedType)
 	}
 	if len(c.Recipes) == 0 {
 		if !c.IsRecipeReachableForRouting(DefaultRecipeName) {
 			return false
 		}
-		return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+		return profileUsesSignalType(c.Decisions, c.Projections, c.DataPolicy, c.PIIRules, normalizedType)
 	}
 	for _, recipe := range c.ReachableRoutingRecipes() {
 		if recipeUsesSignalType(recipe, normalizedType) {
@@ -71,7 +71,8 @@ func recipeUsesSignalType(recipe *RoutingRecipe, signalType string) bool {
 	if recipe == nil {
 		return false
 	}
-	return decisionsUseSignalType(recipe.Profile.Decisions, recipe.Profile.Projections, signalType)
+	profile := recipe.Profile
+	return profileUsesSignalType(profile.Decisions, profile.Projections, profile.DataPolicy, profile.Signals.PIIRules, signalType)
 }
 
 func decisionsUseSignalType(decisions []Decision, projections Projections, signalType string) bool {
@@ -398,4 +399,13 @@ func collectSignalNames(node *RuleNode, signalType string) []string {
 		names = append(names, collectSignalNames(&node.Conditions[i], signalType)...)
 	}
 	return names
+}
+
+// profileUsesSignalType adds the signals a routing profile's data policy reads
+// to those its decisions use: a personal-data replay limit reads PII.
+func profileUsesSignalType(decisions []Decision, projections Projections, policy *RoutingDataPolicy, piiRules []PIIRule, signalType string) bool {
+	if signalType == SignalTypePII && asksPIIForDataPolicy(policy, piiRules) {
+		return true
+	}
+	return decisionsUseSignalType(decisions, projections, signalType)
 }
