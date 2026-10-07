@@ -63,7 +63,7 @@ answer.
 
 The effort score is `0.3 × difficulty + 0.35 × P(deliberation) +
 0.1 × P(verification) − 0.35 × brief request`, banded into off (below 0.4),
-medium (below 0.8), high (below 1.15) and max. A STEM task that the decision
+medium (below 0.675), high (below 1.15) and max. A STEM task that the decision
 model rates at least multi-step (`difficulty` 2 or more) also runs at high
 effort: asking for only the final answer lowers the deliberation answer, not
 the reasoning the problem needs.
@@ -98,7 +98,9 @@ medium effort solved more problems than either Qwen model at extra-high, with
 less than half the output tokens, so code goes to `code` instead of `standard`
 or `hard`. With thinking off, both Qwen models lost 27 to 40 points on
 multiple-choice knowledge and STEM questions, so `fast` keeps only requests
-whose effort score stays below 0.4.
+whose effort score stays below 0.4. The 0.675 boundary between medium and high,
+the STEM difficulty of 2 and the `code` lane were chosen together by repeated
+cross-validation on those samples.
 
 ## Requirements
 
@@ -110,8 +112,18 @@ whose effort score stays below 0.4.
 - A GPU for the Router: Vela-2.0-4B runs on a GPU only, so serve with
   `--platform amd` or `--platform nvidia`.
 - Backends that accept the reasoning controls above: top-level
-  `reasoning_effort` with `chat_template_kwargs.enable_thinking` for Qwen3.8,
-  `chat_template_kwargs.reasoning_effort` for GLM-5.3.
+  `reasoning_effort` with `chat_template_kwargs.enable_thinking` for Qwen3.8
+  (`false` for the thinking-off `fast` lane), `chat_template_kwargs.reasoning_effort`
+  for GLM-5.3.
+- On AMD GPUs with vLLM 0.31:
+  - Qwen3.8-27B served with `--attention-backend TRITON_ATTN`. The default
+    backend falls back to a decode kernel without KV splitting for the 27B's
+    256-wide attention heads, so its cost per output token grows with input
+    length and passes Flash-Next's from about 8K tokens.
+  - GLM-5.3-Flash with the sparse-attention indexer fix of
+    [vllm-project/vllm#59412](https://github.com/vllm-project/vllm/pull/59412)
+    until a release includes it. Without it, answers that depend on more
+    than about 2K tokens of prompt and reasoning silently degrade.
 
 ## Data handling and safety
 
@@ -167,9 +179,9 @@ ratio.
   between high and max effort is coarse.
 - `multi_factor` compares two candidates, so each factor favors one of them
   outright; small load differences can switch the model.
-- Relative costs were measured on one hardware and serving stack and on short
-  inputs. On long inputs the measured cost of the dense 27B rises above
-  Flash-Next's.
+- Relative costs were measured on one hardware and serving stack with about 1K
+  input tokens. Prices are per token, so they do not model a decode cost that
+  grows with input length.
 - Operator ratings are estimates, not measurements.
 - The effort rules were checked on 60 to 150 questions per benchmark; other
   workloads can need other thresholds.

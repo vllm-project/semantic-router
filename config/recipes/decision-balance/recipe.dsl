@@ -92,7 +92,7 @@ PROJECTION mapping effort {
   source: "effort_score"
   method: "threshold_bands"
   calibration: { method: "sigmoid_distance", slope: 10 }
-  outputs: [{ name: "effort_off", lt: 0.4 }, { name: "effort_medium", gte: 0.4, lt: 0.8 }, { name: "effort_high", gte: 0.8, lt: 1.15 }, { name: "effort_max", gte: 1.15 }]
+  outputs: [{ name: "effort_off", lt: 0.4 }, { name: "effort_medium", gte: 0.4, lt: 0.675 }, { name: "effort_high", gte: 0.675, lt: 1.15 }, { name: "effort_max", gte: 1.15 }]
 }
 
 # =============================================================================

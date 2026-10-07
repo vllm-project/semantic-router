@@ -341,11 +341,15 @@ decisions:
           Answer with the letter only.
         expected_signals:
           decision: [difficulty, "task:stem"]
-        tags: [language:en, collision]
-        notes: >-
-          A letter-only reply lowers the deliberation answer below the effort
-          threshold; a STEM task the decision model rates multi-step still runs
-          at extra-high effort.
+          projection: [effort_high]
+        tags: [language:en]
+        notes: A letter-only reply still runs at extra-high effort.
+      - id: agentic_without_tools
+        query: Plan and execute a migration of our PostgreSQL database to a new cluster, run the commands, verify replication, and roll back if checks fail.
+        expected_signals:
+          projection: [effort_high]
+        tags: [language:en, class:negative]
+        notes: Without declared tools the request is planned in text, not routed to the agent lane.
 
   - id: code
     model: vllm-sr/auto
@@ -354,8 +358,8 @@ decisions:
     expected_alias: qwen/qwen3.8-flash-next
     objective: Code that needs reasoning goes to the strongest coder of the pool at medium effort.
     variants:
-      - id: palindrome_function
-        query: Write a Python function that checks whether a string is a palindrome, ignoring case and punctuation.
+      - id: interval_merge
+        query: Write a Go function that merges overlapping intervals and returns them sorted. Include tests.
         expected_signals:
           decision: ["task:code"]
           projection: [effort_medium]
@@ -364,7 +368,6 @@ decisions:
         query: 用 Python 写一个快速排序，并解释时间复杂度。
         expected_signals:
           decision: ["task:code"]
-          projection: [effort_medium]
         tags: [language:zh]
       - id: lru_cache
         query: Implement an LRU cache in Java with O(1) get and put, and explain the invariants.
@@ -384,29 +387,28 @@ decisions:
         expected_signals:
           projection: [effort_medium]
         tags: [language:en]
-      - id: database_comparison
-        query: Compare PostgreSQL and MongoDB for an e-commerce backend.
+      - id: compound_interest
+        query: How much will 1,000 dollars grow to in 5 years at 4% interest compounded yearly?
         expected_signals:
           projection: [effort_medium]
         tags: [language:en]
-      - id: chinese_comparison
-        query: 比较一下 PostgreSQL 和 MongoDB 在电商后端中的优缺点。
-        expected_signals:
-          projection: [effort_medium]
-        tags: [language:zh]
-      - id: routine_algebra
-        query: Solve the system of equations 2x + 3y = 7 and x - y = 1.
+      - id: sky_physics
+        query: Why is the sky blue? Explain the physics.
         expected_signals:
           decision: ["task:stem"]
           projection: [effort_medium]
         tags: [language:en, collision]
         notes: A STEM task below the difficulty threshold stays at medium effort.
-      - id: agentic_without_tools
-        query: Plan and execute a migration of our PostgreSQL database to a new cluster, run the commands, verify replication, and roll back if checks fail.
+      - id: chinese_protocol
+        query: 解释一下 TCP 拥塞控制是如何工作的。
         expected_signals:
           projection: [effort_medium]
-        tags: [language:en, class:negative]
-        notes: Without declared tools the request is planned in text, not routed to the agent lane.
+        tags: [language:zh]
+      - id: chinese_api_comparison
+        query: 解释一下 REST 和 GraphQL 的区别，各适合什么场景。
+        expected_signals:
+          projection: [effort_medium]
+        tags: [language:zh]
 
   - id: fast
     model: vllm-sr/auto

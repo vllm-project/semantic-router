@@ -1,7 +1,7 @@
 schema_version: vllm-sr/recipe-metadata/v1
 id: decision-balance
 name: Decision Balance
-version: 0.3.0
+version: 0.3.1
 description: >-
   A balanced Mixture-of-Models over GLM-5.3-Flash, Qwen3.8-Flash-Next and
   Qwen3.8-27B in which the Vela-2.0-4B decision model answers every routing
