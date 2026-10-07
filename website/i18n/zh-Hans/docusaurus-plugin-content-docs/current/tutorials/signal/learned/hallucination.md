@@ -11,7 +11,7 @@ translation:
 
 `hallucination` 对照请求携带的依据上下文（例如工具结果或检索文档）检查模型回答，并报告上下文不支持的主张。在 `routing.signals.hallucination` 下定义其规则。
 
-该族为学习型：依赖 `global.model_catalog.modules.hallucination_mitigation.hallucination_model` 下的幻觉检测器，以及规则要求解释时的解释器 NLI 模型。
+该族为学习型：依赖 `global.model_catalog.modules.hallucination_mitigation.hallucination_model` 下的幻觉检测器（默认是 Vela 2.0 0.3B 的片段头，也可以是 Vela Halu），以及规则要求解释时的解释器 NLI 模型。
 
 ## 主要优势 {#key-advantages}
 

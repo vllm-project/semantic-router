@@ -1,0 +1,5 @@
+build/
+*.egg-info/
+**/__pycache__/
+Dockerfile
+.dockerignore

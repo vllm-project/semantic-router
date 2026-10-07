@@ -2,9 +2,7 @@ package router
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"strings"
 
@@ -16,11 +14,9 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
-const internalOpenClawMCPPath = "/_internal/openclaw/mcp"
-
 // SetupMCP configures MCP related routes
 // Returns MCP Manager instance for lifecycle management
-func SetupMCP(mux routeRegistrar, cfg *config.Config, wf *workflowstore.Store, openClawHandler *handlers.OpenClawHandler) *mcp.Manager {
+func SetupMCP(mux routeRegistrar, cfg *config.Config, wf *workflowstore.Store) *mcp.Manager {
 	if !cfg.MCPEnabled {
 		log.Printf("MCP feature disabled")
 		return nil
@@ -29,11 +25,6 @@ func SetupMCP(mux routeRegistrar, cfg *config.Config, wf *workflowstore.Store, o
 	mcpManager, err := mcp.NewManager(wf)
 	if err != nil {
 		log.Fatalf("MCP manager: %v", err)
-	}
-
-	// Register built-in OpenClaw MCP endpoint and server config.
-	if cfg.OpenClawEnabled && openClawHandler != nil {
-		registerBuiltInOpenClawMCP(mux, cfg.Port, mcpManager, openClawHandler)
 	}
 
 	// Create MCP handler
@@ -46,45 +37,6 @@ func SetupMCP(mux routeRegistrar, cfg *config.Config, wf *workflowstore.Store, o
 	go mcpManager.ConnectEnabled(context.Background())
 
 	return mcpManager
-}
-
-func registerBuiltInOpenClawMCP(
-	mux routeRegistrar,
-	port string,
-	mcpManager *mcp.Manager,
-	openClawHandler *handlers.OpenClawHandler,
-) {
-	openClawMCPHandler := handlers.NewOpenClawMCPHandler(openClawHandler)
-	registerRoute(mux, auth.Route("/api/openclaw/mcp",
-		auth.ReadPolicy(http.MethodGet, auth.PermMcpManage, auth.SensitivitySecret, auth.ResourceOwnerOpenClaw),
-		auth.MutationPolicy(http.MethodPost, auth.PermMcpManage, "openclaw.mcp.call", auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 2<<20),
-		auth.MutationPolicy(http.MethodDelete, auth.PermMcpManage, "openclaw.mcp.delete", auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 2<<20),
-	), openClawMCPHandler)
-	registerRoute(mux, auth.PublicRoute(internalOpenClawMCPPath, http.MethodGet, http.MethodPost, http.MethodDelete), loopbackOnly(openClawMCPHandler))
-
-	serverURL := fmt.Sprintf("http://127.0.0.1:%s%s", port, internalOpenClawMCPPath)
-	if err := mcpManager.UpsertServer(&mcp.ServerConfig{
-		ID:          mcp.BuiltinOpenClawServerID,
-		Name:        mcp.BuiltinOpenClawServerName,
-		Description: "Built-in MCP server for OpenClaw team, worker, and connection management",
-		Transport:   mcp.TransportStreamableHTTP,
-		Connection: mcp.ConnectionConfig{
-			URL: serverURL,
-		},
-		Enabled: false,
-		Options: &mcp.ServerOptions{
-			Timeout: 30000,
-		},
-	}); err != nil {
-		log.Printf("Failed to register built-in OpenClaw MCP server: %v", err)
-		return
-	}
-
-	log.Printf(
-		"Built-in OpenClaw MCP endpoints registered: /api/openclaw/mcp (public), %s (loopback-only) (server id: %s)",
-		internalOpenClawMCPPath,
-		mcp.BuiltinOpenClawServerID,
-	)
 }
 
 func registerMCPAPIRoutes(mux routeRegistrar, mcpHandler *handlers.MCPHandler) {
@@ -176,33 +128,4 @@ func registerMCPToolRoutes(mux routeRegistrar, mcpHandler *handlers.MCPHandler) 
 		}
 		mcpHandler.ExecuteToolStreamHandler().ServeHTTP(w, r)
 	})
-}
-
-func loopbackOnly(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isLoopbackRequest(r.RemoteAddr) {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func isLoopbackRequest(remoteAddr string) bool {
-	host := strings.TrimSpace(remoteAddr)
-	if host == "" {
-		return false
-	}
-
-	parsedHost, _, err := net.SplitHostPort(remoteAddr)
-	if err == nil {
-		host = parsedHost
-	}
-
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
 }

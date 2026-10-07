@@ -228,7 +228,7 @@ def padded_marker_logits(
         0, positions, hidden
     )
     batch = {name: value.to(device) for name, value in collate(items, 0).items()}
-    scores = readout(
+    scores: torch.Tensor = readout(
         kind,
         rows.view(len(items), width, hidden.shape[-1]),
         ~batch["attention_mask"],

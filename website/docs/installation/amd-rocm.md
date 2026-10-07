@@ -58,7 +58,7 @@ docker run -d \
   --name vllm \
   --network vllm-sr-network \
   --restart unless-stopped \
-  -p 8090:8000 \
+  -p 8000:8000 \
   -v "$VLLM_HF_CACHE:/root/.cache/huggingface" \
   --device=/dev/kfd \
   --device=/dev/dri \
@@ -90,6 +90,12 @@ docker run -d \
     --gpu-memory-utilization 0.85
 ```
 
+The host port is only for checking the backend yourself; the Router reaches it
+as `vllm:8000` on `vllm-sr-network`. Keep it off 8090, which the local stack's
+sr-bench service uses, or `vllm-sr serve` stops with "sr-bench port 8090 is
+already in use". With `VLLM_ROCM_USE_AITER=1`, the first start compiles AITER
+kernels, which can take tens of minutes on a host with few free CPU cores.
+
 This command mounts only the model cache. Do not mount an entire home directory
 into a model-serving container. The example also omits `SYS_PTRACE`, an
 unconfined seccomp profile, and `--trust-remote-code`; add broader privileges or
@@ -106,10 +112,10 @@ Wait for model loading to finish, then verify the backend independently of the
 Router:
 
 ```bash
-curl --fail http://127.0.0.1:8090/health
-curl --fail http://127.0.0.1:8090/v1/models
+curl --fail http://127.0.0.1:8000/health
+curl --fail http://127.0.0.1:8000/v1/models
 
-curl --fail http://127.0.0.1:8090/v1/chat/completions \
+curl --fail http://127.0.0.1:8000/v1/chat/completions \
   -H 'content-type: application/json' \
   -d '{
     "model": "qwen/qwen3.5-rocm",
@@ -123,16 +129,26 @@ checks routing configuration; it does not prove that a provider can generate.
 
 ## Install and configure Semantic Router
 
-Install the CLI:
+Install the CLI as the [Quickstart](installation/installation.md#install) describes. To
+install only the CLI, without starting the stack:
 
 ```bash
 curl -fsSL https://vllm-sr.ai/install.sh | \
-  bash -s -- --channel stable --mode cli --runtime skip --no-launch
+  bash -s -- --mode cli --runtime skip --no-launch
 ```
 
-For a simple one-model deployment, open the Dashboard at
-`http://localhost:8700`, add an OpenAI-compatible backend at `vllm:8000`, and
-activate the generated config.
+For a simple one-model deployment, start the stack. Plain `vllm-sr serve`
+keeps the Router and its models on the CPU; `--platform amd` runs the Router's
+models on the GPU as well
+([Run Vela routing models on AMD](#run-vela-routing-models-on-amd)):
+
+```bash
+vllm-sr serve
+```
+
+Then open the Dashboard at `http://localhost:8700`, connect a model with
+provider vLLM, the served model name and the address `vllm:8000`, and activate
+the generated config.
 
 To evaluate the maintained balance recipe, download it into the current
 workspace instead of relying on a repository-relative path:
@@ -153,7 +169,7 @@ configuration before replacing aliases, thresholds, prices, or provider roles.
 
 ## Verify the routed path
 
-Send a request through Envoy using the automatic entrypoint:
+Send a request through the Router's listener using the automatic entrypoint:
 
 ```bash
 curl --fail --include http://127.0.0.1:8899/v1/chat/completions \

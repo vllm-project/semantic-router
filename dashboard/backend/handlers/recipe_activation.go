@@ -18,6 +18,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 const (
@@ -36,12 +37,14 @@ type RecipeActivatorOptions struct {
 	ApplyRuntime   func(string, string) (string, error)
 	VerifyRuntime  func(context.Context, string) error
 	VerifyEnvoy    func(context.Context) error
-	Topology       runtimeTopologyReconciler
+	Topology       runtimeTopologySource
 	AttemptTimeout time.Duration
 }
 
 // RecipeActivator coordinates a rollback-capable activation transaction under
-// the same deploy lock used by ordinary Dashboard config deployment.
+// the same deploy lock used by ordinary Dashboard config deployment. An
+// activation the running containers can't take is committed as a pending
+// activation that the next `vllm-sr serve` applies.
 type RecipeActivator struct {
 	store          *recipe.Store
 	configPath     string
@@ -50,14 +53,15 @@ type RecipeActivator struct {
 	realizeConfig  func([]byte, string) ([]byte, error)
 	verifyRuntime  func(context.Context, string) error
 	verifyEnvoy    func(context.Context) error
-	topology       runtimeTopologyReconciler
+	topology       runtimeTopologySource
 	attemptTimeout time.Duration
 }
 
-type activationTopologyExecution struct {
-	state      *recipe.ActivationTopologyState
-	credential string
-}
+const (
+	recipeRecreationDetail   = "the activated Recipe needs the containers recreated"
+	recipeRestorationDetail  = "the restored source config needs the containers recreated"
+	serveRecoversTopologyMsg = "A Recipe activation that recreated containers is waiting for recovery. Run `vllm-sr stop`, then `vllm-sr serve`."
+)
 
 func NewRecipeActivator(options RecipeActivatorOptions) *RecipeActivator {
 	activator := &RecipeActivator{
@@ -87,7 +91,7 @@ func NewRecipeActivator(options RecipeActivatorOptions) *RecipeActivator {
 	}
 	activator.topology = options.Topology
 	if activator.topology == nil {
-		activator.topology = newManagedRuntimeTopologyReconciler(options.Store, options.ConfigPath)
+		activator.topology = environmentRuntimeTopology{}
 	}
 	return activator
 }
@@ -122,6 +126,13 @@ func (a *RecipeActivator) activateLocked(ctx context.Context, request recipe.Act
 		if activeCheckErr == nil {
 			return recipe.ActivateResult{Status: "active", RecipeDigest: target.RecipeDigest}, nil
 		}
+		if _, pending := asRestartNeeded(activeCheckErr); pending {
+			return recipe.ActivateResult{
+				Status:       recipe.ActivationResultRestartRequired,
+				Message:      restartRequiredMessage(a.configPath),
+				RecipeDigest: target.RecipeDigest,
+			}, nil
+		}
 	}
 	target, plan, previousConfig, realizedConfig, err := a.prepareActivation(ctx, request)
 	if err != nil {
@@ -148,42 +159,35 @@ func (a *RecipeActivator) activateLocked(ctx context.Context, request recipe.Act
 }
 
 func (a *RecipeActivator) executeActivation(ctx context.Context, target recipe.PackageSummary, plan recipe.ActivationPlan, transaction recipe.ActivationTransaction, previousConfig, realizedConfig []byte) (recipe.ActivateResult, error) {
-	topology, err := a.prepareActivationTopology(ctx, plan, transaction)
+	published, restart, err := a.publishActivation(ctx, plan, realizedConfig, recipeRecreationDetail)
 	if err != nil {
 		return recipe.ActivateResult{}, a.failAndRollback(ctx, transaction, previousConfig, err)
-	}
-	if publishConfigErr := a.publishActivationConfig(ctx, realizedConfig, topology); publishConfigErr != nil {
-		return recipe.ActivateResult{}, a.failAndRollback(ctx, transaction, previousConfig, publishConfigErr)
-	}
-	realizedConfig, err = readActivationConfig(a.configPath)
-	if err != nil {
-		return recipe.ActivateResult{}, a.failAndRollback(ctx, transaction, previousConfig, err)
-	}
-	realizedDigest := activationDigest(realizedConfig)
-	if verificationErr := a.verifyRuntimeAttempt(ctx, realizedDigest); verificationErr != nil {
-		return recipe.ActivateResult{}, a.failAndRollback(ctx, transaction, previousConfig, verificationErr)
-	}
-	if authorizationErr := revalidateRecipeMutation(ctx); authorizationErr != nil {
-		return recipe.ActivateResult{}, a.failAndRollback(ctx, transaction, previousConfig, authorizationErr)
 	}
 	pointer := recipe.ActivePointer{
 		RecipeDigest:         target.RecipeDigest,
 		ConfigDigest:         target.ConfigDigest,
-		RealizedConfigDigest: realizedDigest,
+		RealizedConfigDigest: activationDigest(published),
 	}
 	if commitErr := a.store.PrepareActivationCommit(transaction, pointer); commitErr != nil {
 		return recipe.ActivateResult{}, a.failAndRollback(ctx, transaction, previousConfig, commitErr)
 	}
-	if commitErr := a.commitActivation(ctx, transaction, topology.state); commitErr != nil {
-		return recipe.ActivateResult{}, activationCommitIncomplete(commitErr)
-	}
-	return recipe.ActivateResult{
+	result := recipe.ActivateResult{
 		Status:               "active",
 		RecipeDigest:         target.RecipeDigest,
 		PreviousRecipeDigest: transaction.PreviousRecipeDigest,
 		PlanDigest:           plan.PlanDigest,
 		Mode:                 plan.Mode,
-	}, nil
+	}
+	if restart != nil {
+		if recordErr := recordPendingActivation(a.configPath, published, activationReasonRestart, restart.detail); recordErr != nil {
+			return recipe.ActivateResult{}, activationCommitIncomplete(recordErr)
+		}
+		result.Status, result.Message = recipe.ActivationResultRestartRequired, restartRequiredMessage(a.configPath)
+	}
+	if commitErr := a.store.FinalizeActivationCommit(transaction); commitErr != nil {
+		return recipe.ActivateResult{}, activationCommitIncomplete(commitErr)
+	}
+	return result, nil
 }
 
 func (a *RecipeActivator) Deactivate(ctx context.Context, requests ...recipe.DeactivateRequest) (recipe.DeactivateResult, error) {
@@ -231,102 +235,84 @@ func (a *RecipeActivator) deactivateLocked(ctx context.Context, requests ...reci
 }
 
 func (a *RecipeActivator) executeDeactivation(ctx context.Context, active recipe.ActivePointer, plan recipe.ActivationPlan, transaction recipe.ActivationTransaction, previousConfig, baseline []byte) (recipe.DeactivateResult, error) {
-	topology, err := a.prepareActivationTopology(ctx, plan, transaction)
+	published, restart, err := a.publishActivation(ctx, plan, baseline, recipeRestorationDetail)
 	if err != nil {
 		return recipe.DeactivateResult{}, a.failDeactivationAndRollback(ctx, transaction, previousConfig, err)
-	}
-	if publishConfigErr := a.publishActivationConfig(ctx, baseline, topology); publishConfigErr != nil {
-		return recipe.DeactivateResult{}, a.failDeactivationAndRollback(ctx, transaction, previousConfig, publishConfigErr)
-	}
-	restored, err := readActivationConfig(a.configPath)
-	if err == nil {
-		err = a.verifyRuntimeAttempt(ctx, activationDigest(restored))
-	}
-	if err != nil {
-		return recipe.DeactivateResult{}, a.failDeactivationAndRollback(ctx, transaction, previousConfig, err)
-	}
-	if authorizationErr := revalidateRecipeMutation(ctx); authorizationErr != nil {
-		return recipe.DeactivateResult{}, a.failDeactivationAndRollback(ctx, transaction, previousConfig, authorizationErr)
 	}
 	if commitErr := a.store.PrepareDeactivationCommit(transaction); commitErr != nil {
 		return recipe.DeactivateResult{}, a.failDeactivationAndRollback(ctx, transaction, previousConfig, commitErr)
 	}
-	if commitErr := a.commitDeactivation(ctx, transaction, topology.state); commitErr != nil {
+	result := recipe.DeactivateResult{Status: "inactive", PreviousRecipeDigest: active.RecipeDigest, PlanDigest: plan.PlanDigest, Mode: plan.Mode}
+	if restart != nil {
+		if recordErr := recordPendingActivation(a.configPath, published, activationReasonRestart, restart.detail); recordErr != nil {
+			return recipe.DeactivateResult{}, activationCommitIncomplete(recordErr)
+		}
+		result.Status, result.Message = recipe.ActivationResultRestartRequired, restartRequiredMessage(a.configPath)
+	}
+	if commitErr := a.store.FinalizeDeactivationCommit(transaction); commitErr != nil {
 		return recipe.DeactivateResult{}, activationCommitIncomplete(commitErr)
 	}
-	return recipe.DeactivateResult{Status: "inactive", PreviousRecipeDigest: active.RecipeDigest, PlanDigest: plan.PlanDigest, Mode: plan.Mode}, nil
+	return result, nil
 }
 
-func (a *RecipeActivator) prepareActivationTopology(ctx context.Context, plan recipe.ActivationPlan, transaction recipe.ActivationTransaction) (activationTopologyExecution, error) {
-	if plan.Mode != recipe.ActivationModeStackRecreation {
-		return activationTopologyExecution{}, nil
-	}
-	inventory, err := a.topology.Inventory(ctx)
-	if err == nil && !activationInventoryMatchesPlan(inventory, plan) {
-		err = errors.New("managed storage topology changed after preview")
-	}
-	if err != nil {
-		return activationTopologyExecution{}, err
-	}
-	if authorizationErr := revalidateRecipeMutation(ctx); authorizationErr != nil {
-		return activationTopologyExecution{}, authorizationErr
-	}
-	state := topologyStateForPlan(plan, transaction, inventory)
-	if topologyStoreErr := a.store.WriteActivationTopology(transaction, state); topologyStoreErr != nil {
-		return activationTopologyExecution{}, topologyStoreErr
-	}
-	execution := activationTopologyExecution{state: &state}
-	if state.CredentialEnv != "" {
-		execution.credential, err = a.store.EnsureManagementCredential()
-	}
-	return execution, err
-}
-
-func (a *RecipeActivator) publishActivationConfig(ctx context.Context, config []byte, topology activationTopologyExecution) error {
+// publishActivation writes config as the runtime config and returns it as
+// written, with the restart it needs, if any. The running containers take it,
+// or it waits for the next `vllm-sr serve` to create them anew: when the plan
+// recreates them (recreationDetail says why), when Envoy's generated config
+// changes, or when the Router refuses it only as restart_required. Anything
+// else must become active or the activation fails.
+func (a *RecipeActivator) publishActivation(ctx context.Context, plan recipe.ActivationPlan, config []byte, recreationDetail string) ([]byte, *restartNeededError, error) {
 	if err := revalidateRecipeMutation(ctx); err != nil {
-		return err
+		return nil, nil, err
 	}
 	if err := writeActivationConfig(a.configPath, config); err != nil {
-		return err
+		return nil, nil, err
 	}
-	if topology.state != nil {
-		if err := refreshManagedSplitEnvoyConfig(a.configPath); err != nil {
-			return err
+	restart, err := a.applyPublishedConfig(ctx, plan, recreationDetail)
+	if err != nil {
+		return nil, nil, err
+	}
+	published, err := readActivationConfig(a.configPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	if plan.Mode != recipe.ActivationModeStackRecreation {
+		verificationErr := a.verifyRuntimeAttempt(ctx, activationDigest(published))
+		if routerRestart, ok := asRestartNeeded(verificationErr); ok {
+			restart, verificationErr = routerRestart, nil
 		}
-		if err := revalidateRecipeMutation(ctx); err != nil {
-			return err
+		if verificationErr != nil {
+			return nil, nil, verificationErr
 		}
-		return a.topology.Apply(ctx, *topology.state, topology.credential)
 	}
 	if err := revalidateRecipeMutation(ctx); err != nil {
-		return err
+		return nil, nil, err
+	}
+	return published, restart, nil
+}
+
+func (a *RecipeActivator) applyPublishedConfig(ctx context.Context, plan recipe.ActivationPlan, recreationDetail string) (*restartNeededError, error) {
+	if plan.Mode == recipe.ActivationModeStackRecreation {
+		if _, err := refreshManagedSplitEnvoyConfig(a.configPath); err != nil {
+			return nil, err
+		}
+		return &restartNeededError{detail: recreationDetail}, nil
+	}
+	if err := revalidateRecipeMutation(ctx); err != nil {
+		return nil, err
 	}
 	realizedPath, err := a.applyRuntime(a.configPath, a.configDir)
+	restart, _ := asRestartNeeded(err)
+	if restart != nil {
+		err = nil
+	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if filepath.Clean(realizedPath) != a.configPath {
-		return errors.New("runtime config synchronization selected a different active path")
+		return nil, errors.New("runtime config synchronization selected a different active path")
 	}
-	return nil
-}
-
-func (a *RecipeActivator) commitActivation(ctx context.Context, transaction recipe.ActivationTransaction, topology *recipe.ActivationTopologyState) error {
-	if topology != nil {
-		if err := a.topology.Commit(ctx, *topology); err != nil {
-			return err
-		}
-	}
-	return a.store.FinalizeActivationCommit(transaction)
-}
-
-func (a *RecipeActivator) commitDeactivation(ctx context.Context, transaction recipe.ActivationTransaction, topology *recipe.ActivationTopologyState) error {
-	if topology != nil {
-		if err := a.topology.Commit(ctx, *topology); err != nil {
-			return err
-		}
-	}
-	return a.store.FinalizeDeactivationCommit(transaction)
+	return restart, nil
 }
 
 func (a *RecipeActivator) verifyActivatedRuntime(ctx context.Context, digest string) error {
@@ -361,6 +347,9 @@ func (a *RecipeActivator) recoverLocked(ctx context.Context) error {
 	if err != nil {
 		return activationRollbackFailed(err)
 	}
+	if a.recreatedContainers(transaction) {
+		return recipe.NewPackageError(recipe.ErrorActivationConflict, http.StatusConflict, serveRecoversTopologyMsg, nil)
+	}
 	switch transaction.State {
 	case recipe.ActivationRollbackFinalizing:
 		return a.recoverFinalizingRollback(transaction)
@@ -385,11 +374,18 @@ func (a *RecipeActivator) recoverFinalizingRollback(transaction recipe.Activatio
 	return nil
 }
 
-func (a *RecipeActivator) recoverCommit(ctx context.Context, transaction recipe.ActivationTransaction) error {
-	topologyState, err := a.recoveryCommitTopology(transaction)
-	if err != nil {
-		return activationCommitIncomplete(err)
+// recreatedContainers reports a transaction an earlier Dashboard began when it
+// still recreated containers itself. Only `vllm-sr serve`, which owns the
+// containers, can roll it back or finish it.
+func (a *RecipeActivator) recreatedContainers(transaction recipe.ActivationTransaction) bool {
+	if transaction.TopologyMode == recipe.ActivationTopologyManaged {
+		return true
 	}
+	_, err := a.store.ActivationTopology(transaction)
+	return !errors.Is(err, os.ErrNotExist)
+}
+
+func (a *RecipeActivator) recoverCommit(ctx context.Context, transaction recipe.ActivationTransaction) error {
 	expectedDigest, isDeactivation, err := a.recoveryCommitDigest(transaction)
 	if err != nil {
 		return activationCommitIncomplete(err)
@@ -397,13 +393,11 @@ func (a *RecipeActivator) recoverCommit(ctx context.Context, transaction recipe.
 	if expectedDigest != transaction.CommitConfigDigest {
 		return activationCommitIncomplete(errors.New("committing runtime config digest does not match the journal"))
 	}
-	if verificationErr := a.verifyActivatedRuntime(ctx, expectedDigest); verificationErr != nil {
+	// A commit that waits for `vllm-sr serve` is complete once its pointer is
+	// written; the running containers keep the previous config until then.
+	verificationErr := a.verifyActivatedRuntime(ctx, expectedDigest)
+	if _, pending := asRestartNeeded(verificationErr); verificationErr != nil && !pending {
 		return activationCommitIncomplete(verificationErr)
-	}
-	if topologyState != nil {
-		if commitErr := a.topology.Commit(ctx, *topologyState); commitErr != nil {
-			return activationCommitIncomplete(commitErr)
-		}
 	}
 	if isDeactivation {
 		err = a.store.FinalizeDeactivationCommit(transaction)
@@ -414,23 +408,6 @@ func (a *RecipeActivator) recoverCommit(ctx context.Context, transaction recipe.
 		return activationCommitIncomplete(err)
 	}
 	return nil
-}
-
-func (a *RecipeActivator) recoveryCommitTopology(transaction recipe.ActivationTransaction) (*recipe.ActivationTopologyState, error) {
-	if transaction.State != "committing" {
-		return nil, nil
-	}
-	topology, err := a.store.ActivationTopology(transaction)
-	if err != nil {
-		if transaction.TopologyMode == recipe.ActivationTopologyManaged || !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
-		return nil, nil
-	}
-	if transaction.TopologyMode == recipe.ActivationTopologyNone {
-		return nil, errors.New("hot-switch transaction unexpectedly contains a topology journal")
-	}
-	return &topology, nil
 }
 
 func (a *RecipeActivator) recoveryCommitDigest(transaction recipe.ActivationTransaction) (string, bool, error) {
@@ -495,12 +472,10 @@ func (a *RecipeActivator) independentRollbackContext(parent context.Context) (co
 	return context.WithTimeout(context.WithoutCancel(parent), a.attemptTimeout)
 }
 
+// rollback restores the previous runtime config. A restart the restored config
+// needs is the one it needed before the transaction began, so it stays as it
+// was rather than failing the rollback.
 func (a *RecipeActivator) rollback(ctx context.Context, transaction recipe.ActivationTransaction, previousConfig []byte) error {
-	// WriteActivationTopology durably upgrades the transaction from a hot switch
-	// to managed topology, but the BeginActivation value held by this process is
-	// intentionally immutable. Always make rollback decisions from the durable
-	// journal so an apply or verification failure after topology persistence can
-	// still restore the previous runtime.
 	current, _, err := a.store.Transaction()
 	if err != nil {
 		return err
@@ -508,72 +483,34 @@ func (a *RecipeActivator) rollback(ctx context.Context, transaction recipe.Activ
 	if current.ID != transaction.ID {
 		return errors.New("activation transaction changed unexpectedly")
 	}
-	topologyState, hasTopology, err := a.rollbackTopology(current)
-	if err != nil {
-		return err
+	if a.recreatedContainers(current) {
+		return errors.New("only `vllm-sr serve` can recover a Recipe activation that recreated containers")
 	}
-	if err := writeActivationConfig(a.configPath, previousConfig); err != nil {
-		return err
+	if writeErr := writeActivationConfig(a.configPath, previousConfig); writeErr != nil {
+		return writeErr
 	}
-	if hasTopology {
-		return a.rollbackManagedRuntime(ctx, current, topologyState)
-	}
-	return a.rollbackHotSwitchRuntime(ctx, current)
-}
-
-func (a *RecipeActivator) rollbackTopology(transaction recipe.ActivationTransaction) (recipe.ActivationTopologyState, bool, error) {
-	topologyState, topologyErr := a.store.ActivationTopology(transaction)
-	// WriteActivationTopology persists the validated topology before upgrading
-	// the transaction journal. A process or filesystem failure between those
-	// writes therefore leaves a pending/none transaction whose durable topology
-	// is the authoritative evidence that managed rollback is required. Preserve
-	// that classification if an initial rollback attempt marked the transaction
-	// inconsistent so recovery remains retryable.
-	topologyWriteCrashWindow := topologyErr == nil &&
-		transaction.TopologyMode == recipe.ActivationTopologyNone &&
-		(transaction.State == "pending" || transaction.State == recipe.ActivationInconsistent)
-	if topologyErr == nil && transaction.TopologyMode != recipe.ActivationTopologyManaged && !topologyWriteCrashWindow {
-		return recipe.ActivationTopologyState{}, false, errors.New("hot-switch transaction unexpectedly contains a topology journal")
-	}
-	if errors.Is(topologyErr, os.ErrNotExist) && transaction.TopologyMode == recipe.ActivationTopologyManaged {
-		return recipe.ActivationTopologyState{}, false, errors.New("managed activation transaction is missing its topology journal")
-	}
-	if topologyErr != nil && !errors.Is(topologyErr, os.ErrNotExist) {
-		return recipe.ActivationTopologyState{}, false, topologyErr
-	}
-	return topologyState, topologyErr == nil, nil
-}
-
-func (a *RecipeActivator) rollbackManagedRuntime(ctx context.Context, transaction recipe.ActivationTransaction, topology recipe.ActivationTopologyState) error {
-	if err := refreshManagedSplitEnvoyConfig(a.configPath); err != nil {
-		return err
-	}
-	if err := a.topology.Rollback(ctx, topology); err != nil {
-		return err
-	}
-	return a.verifyAndCompleteRollback(ctx, transaction)
-}
-
-func (a *RecipeActivator) rollbackHotSwitchRuntime(ctx context.Context, transaction recipe.ActivationTransaction) error {
 	realizedPath, err := a.applyRuntime(a.configPath, a.configDir)
+	if _, restart := asRestartNeeded(err); restart {
+		err = nil
+	}
 	if err != nil {
 		return err
 	}
 	if filepath.Clean(realizedPath) != a.configPath {
 		return errors.New("rollback selected a different active runtime config path")
 	}
-	return a.verifyAndCompleteRollback(ctx, transaction)
-}
-
-func (a *RecipeActivator) verifyAndCompleteRollback(ctx context.Context, transaction recipe.ActivationTransaction) error {
 	restoredConfig, err := readActivationConfig(a.configPath)
 	if err != nil {
 		return err
 	}
-	if err := a.verifyActivatedRuntime(ctx, activationDigest(restoredConfig)); err != nil {
-		return err
+	verificationErr := a.verifyActivatedRuntime(ctx, activationDigest(restoredConfig))
+	if _, restart := asRestartNeeded(verificationErr); restart {
+		verificationErr = nil
 	}
-	return a.store.CompleteRollback(transaction)
+	if verificationErr != nil {
+		return verificationErr
+	}
+	return a.store.CompleteRollback(current)
 }
 
 func applyRecipeRuntime(configPath string, configDir string) (string, error) {
@@ -582,8 +519,14 @@ func applyRecipeRuntime(configPath string, configDir string) (string, error) {
 		return "", err
 	}
 	if isRunningInContainer() && isManagedContainerConfigPath(configPath) && managedRuntimeUsesSplitContainers() {
-		if err := restartSetupManagedServices(effectiveConfigPath); err != nil {
+		// The Router hot-reloads a Recipe hot switch. Envoy reads its config
+		// when it starts, so a changed one waits for `vllm-sr serve`.
+		envoyChanged, err := refreshManagedSplitEnvoyConfig(effectiveConfigPath)
+		if err != nil {
 			return "", err
+		}
+		if envoyChanged {
+			return effectiveConfigPath, &restartNeededError{detail: envoyRestartDetail}
 		}
 		return effectiveConfigPath, nil
 	}
@@ -668,8 +611,11 @@ func validateActivationConfigDestination(path string) error {
 	return nil
 }
 
+// writeActivationTempFile stages the active config with the mode of every
+// config the Dashboard saves: `vllm-sr serve` reads it as its own user, and the
+// `.vllm-sr` directory, not the file, keeps other users out.
 func writeActivationTempFile(file *os.File, data []byte) error {
-	err := file.Chmod(0o600)
+	err := file.Chmod(0o644)
 	if err == nil {
 		_, err = file.Write(data)
 	}
@@ -688,9 +634,23 @@ func activationDigest(data []byte) string {
 }
 
 type routerConfigHash struct {
-	GeneratedRuntimeHash string `json:"generated_runtime_hash"`
-	ActiveRuntimeHash    string `json:"active_runtime_hash"`
-	ActivationStatus     string `json:"activation_status"`
+	GeneratedRuntimeHash string               `json:"generated_runtime_hash"`
+	ActiveRuntimeHash    string               `json:"active_runtime_hash"`
+	ActivationStatus     string               `json:"activation_status"`
+	Activation           *routerConfigAttempt `json:"activation"`
+}
+
+// routerConfigAttempt is the Router's latest attempt to activate a document.
+type routerConfigAttempt struct {
+	DocumentHash string               `json:"document_hash"`
+	Status       string               `json:"status"`
+	Reasons      []routerConfigReason `json:"reasons"`
+}
+
+type routerConfigReason struct {
+	Code    string `json:"code"`
+	Path    string `json:"path"`
+	Message string `json:"message"`
 }
 
 func newRouterActivationVerifier(routerAPIURL string, client *http.Client, credentialProvider ...routerauth.CredentialProvider) func(context.Context, string) error {
@@ -721,6 +681,9 @@ func newRouterActivationVerifier(routerAPIURL string, client *http.Client, crede
 				last = response
 				if response.ActivationStatus == "active" && response.GeneratedRuntimeHash == expected && response.ActiveRuntimeHash == expected {
 					return nil
+				}
+				if detail, done, restart := judgeRouterAttempt(response, expected); done && restart {
+					return &restartNeededError{detail: detail}
 				}
 			}
 			select {
@@ -787,4 +750,15 @@ func activationCommitIncomplete(cause error) error {
 
 func activationIncompatible(cause error) error {
 	return recipe.NewPackageError(recipe.ErrorActivationIncompatible, http.StatusConflict, "Recipe package is incompatible with the running stack.", cause)
+}
+
+// requireManagementCredential refuses a plan with bearer authentication when
+// the Dashboard has no management credential: the Router `vllm-sr serve`
+// creates for it would accept nothing from the Dashboard.
+func (a *RecipeActivator) requireManagementCredential(plan recipe.ActivationPlan) error {
+	if plan.ManagementAuth.Mode != routerconfig.ManagementAuthModeBearer || a.store.HasManagementCredential() {
+		return nil
+	}
+	return recipe.NewPackageError(recipe.ErrorActivationIncompatible, http.StatusConflict,
+		"This Recipe turns on bearer authentication for the Router management API, and the Dashboard has no management credential. Start the stack with `vllm-sr serve`, which provides it, or set "+recipe.ManagementCredentialEnv+" for both the Dashboard and the Router.", nil)
 }

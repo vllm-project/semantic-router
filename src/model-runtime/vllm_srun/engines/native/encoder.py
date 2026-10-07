@@ -18,10 +18,12 @@ from __future__ import annotations
 
 import bisect
 from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
-from torch import nn
+
+if TYPE_CHECKING:
+    from .models import EncoderBackbone
 
 ROW_BUCKETS = (1, 2, 4, 8, 16, 32, 64)
 WIDTH_BUCKETS = (16, 32, 48, 64, 96, 128, 192, 256, 384)
@@ -32,6 +34,8 @@ CAPTURE_AFTER = 2
 # while it is at most LAUNCH_BOUND_TOKENS (launch overhead outweighs the padding).
 MAX_PADDING = 0.25
 LAUNCH_BOUND_TOKENS = 1024
+# A graph's bucket and outputs: (rows, width, exits, normalize).
+GraphKey = tuple[int, int, tuple[int, ...], bool]
 
 
 def pads_little(padded: int, real: int) -> bool:
@@ -50,7 +54,7 @@ class EncoderGraphs:
 
     def __init__(
         self,
-        backbone: nn.Module,
+        backbone: EncoderBackbone,
         device: torch.device,
         *,
         capture_after: int = CAPTURE_AFTER,
@@ -62,9 +66,9 @@ class EncoderGraphs:
         self.capture_after = capture_after
         self.max_graphs = max_graphs
         self.max_tokens = max_tokens
-        self.graphs: dict[tuple, dict[str, Any]] = {}
-        self.seen: dict[tuple, int] = {}
-        self.failed: set[tuple] = set()
+        self.graphs: dict[GraphKey, dict[str, Any]] = {}
+        self.seen: dict[GraphKey, int] = {}
+        self.failed: set[GraphKey] = set()
         self.pool: Any = None
         self.stats = {"captures": 0, "replays": 0, "eager": 0, "packed": 0, "failed": 0}
 
@@ -128,7 +132,9 @@ class EncoderGraphs:
             for layer, value in entry["output"].items()
         }
 
-    def _pad(self, input_ids, lengths, rows, width):
+    def _pad(
+        self, input_ids: torch.Tensor, lengths: Sequence[int], rows: int, width: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Packed IDs as ``[rows, width]`` padded rows, their key mask and the packed positions."""
         positions = torch.cat(
             [
@@ -147,12 +153,25 @@ class EncoderGraphs:
             index,
         )
 
-    def _forward(self, ids, valid, exits, normalize):
+    def _forward(
+        self,
+        ids: torch.Tensor,
+        valid: torch.Tensor,
+        exits: tuple[int, ...],
+        normalize: bool,
+    ) -> dict[int, torch.Tensor]:
         rows, width = ids.shape
         layout = self.backbone.masked(valid, rows, width, self.device)
         return self.backbone.encode(ids, layout, exits, normalize)
 
-    def _capture(self, key, ids, valid, exits, normalize) -> dict[str, Any] | None:
+    def _capture(
+        self,
+        key: GraphKey,
+        ids: torch.Tensor,
+        valid: torch.Tensor,
+        exits: tuple[int, ...],
+        normalize: bool,
+    ) -> dict[str, Any] | None:
         static = {"ids": ids.clone(), "valid": valid.clone()}
 
         def body() -> dict[int, torch.Tensor]:
@@ -161,7 +180,7 @@ class EncoderGraphs:
         try:
             if self.pool is None:
                 self.pool = torch.cuda.graph_pool_handle()
-            stream = torch.cuda.Stream()
+            stream = torch.cuda.Stream()  # type: ignore[no-untyped-call]  # torch leaves Stream's constructor unannotated
             stream.wait_stream(torch.cuda.current_stream())
             with torch.cuda.stream(stream):
                 for _ in range(2):

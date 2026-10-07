@@ -60,7 +60,8 @@ class SiglipEmbeddings(nn.Module):
             raise ValueError(
                 f"the image has {embeddings.shape[1]} patches; the model takes {self.num_positions}"
             )
-        return embeddings + self.position_embedding.weight[None]
+        positioned: torch.Tensor = embeddings + self.position_embedding.weight[None]
+        return positioned
 
 
 class SiglipAttention(nn.Module):
@@ -90,7 +91,8 @@ class SiglipAttention(nn.Module):
             enable_gqa=False,
         )
         output = output.transpose(1, 2).contiguous().reshape(batch, length, hidden)
-        return self.out_proj(output)
+        out: torch.Tensor = self.out_proj(output)
+        return out
 
 
 class SiglipMLP(nn.Module):
@@ -104,7 +106,8 @@ class SiglipMLP(nn.Module):
         self.fc2 = nn.Linear(config["intermediate_size"], config["hidden_size"])
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        return self.fc2(self.act(self.fc1(hidden_states)))
+        out: torch.Tensor = self.fc2(self.act(self.fc1(hidden_states)))
+        return out
 
 
 class SiglipLayer(nn.Module):
@@ -120,7 +123,8 @@ class SiglipLayer(nn.Module):
         hidden_states = hidden_states + self.self_attn(
             self.layer_norm1(hidden_states), kernels
         )
-        return hidden_states + self.mlp(self.layer_norm2(hidden_states))
+        out: torch.Tensor = hidden_states + self.mlp(self.layer_norm2(hidden_states))
+        return out
 
 
 class SiglipEncoder(nn.Module):
@@ -150,11 +154,16 @@ class PoolingAttention(nn.Module):
         query, memory = query.transpose(0, 1), memory.transpose(0, 1)
         targets, batch, hidden = query.shape
         head_dim = hidden // self.heads
-        w_q, w_kv = self.in_proj_weight.split([hidden, 2 * hidden])
-        b_q, b_kv = self.in_proj_bias.split([hidden, 2 * hidden])
+        w_q, w_kv = torch.split(self.in_proj_weight, [hidden, 2 * hidden])
+        b_q, b_kv = torch.split(self.in_proj_bias, [hidden, 2 * hidden])
         q = F.linear(query, w_q, b_q)
         kv = F.linear(memory, w_kv, b_kv)
-        kv = kv.unflatten(-1, (2, hidden)).unsqueeze(0).transpose(0, -2).squeeze(-2)
+        kv = (
+            torch.unflatten(kv, -1, (2, hidden))
+            .unsqueeze(0)
+            .transpose(0, -2)
+            .squeeze(-2)
+        )
         k, v = kv.contiguous()
         q = q.view(targets, batch * self.heads, head_dim).transpose(0, 1)
         k = k.view(k.shape[0], batch * self.heads, head_dim).transpose(0, 1)
@@ -162,8 +171,8 @@ class PoolingAttention(nn.Module):
         scores = torch.bmm(q * math.sqrt(1.0 / float(head_dim)), k.transpose(-2, -1))
         output = torch.bmm(F.softmax(scores, dim=-1), v)
         output = output.transpose(0, 1).contiguous().view(targets * batch, hidden)
-        output = self.out_proj(output).view(targets, batch, hidden)
-        return output.transpose(0, 1)
+        projected: torch.Tensor = self.out_proj(output).view(targets, batch, hidden)
+        return projected.transpose(0, 1)
 
 
 class SiglipPoolingHead(nn.Module):
@@ -177,7 +186,7 @@ class SiglipPoolingHead(nn.Module):
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         probe = self.probe.repeat(hidden_states.shape[0], 1, 1)
-        pooled = self.attention(probe, hidden_states)
+        pooled: torch.Tensor = self.attention(probe, hidden_states)
         pooled = pooled + self.mlp(self.layernorm(pooled))
         return pooled[:, 0]
 

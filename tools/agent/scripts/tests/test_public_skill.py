@@ -122,6 +122,7 @@ class PublicSkillTests(unittest.TestCase):
                 "route-verification.md",
                 "sr-bench.md",
                 "recipe-tuning.md",
+                "troubleshooting.md",
             },
         )
         # Specialized references may be discovered through another reference;

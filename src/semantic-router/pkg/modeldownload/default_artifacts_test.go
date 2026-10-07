@@ -69,5 +69,5 @@ routing:
 	if len(specs) != 0 || cfg.PIIModel.PIIMappingPath != "" {
 		t.Fatalf("default PII needs no mapping file, its card carries the labels: mapping %q, downloads %+v", cfg.PIIModel.PIIMappingPath, specs)
 	}
-	assertRuntimeServed(t, cfg, specs, "models/Vela-1.0-Encoder-307M-PII")
+	assertRuntimeServed(t, cfg, specs, config.DefaultSystemModels().PIIClassifier)
 }

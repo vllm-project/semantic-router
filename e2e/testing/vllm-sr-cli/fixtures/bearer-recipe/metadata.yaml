@@ -1,0 +1,15 @@
+schema_version: vllm-sr/recipe-metadata/v1
+id: bearer-fixture
+name: Bearer Management API Fixture
+version: 0.1.0
+description: >-
+  Routes every request to one test model and turns on bearer authentication
+  for the Router management API. The CLI integration suite imports it.
+authors:
+  - name: vLLM Semantic Router Contributors
+    url: https://github.com/vllm-project/semantic-router/graphs/contributors
+license: Apache-2.0
+tags:
+  - test
+links:
+  source: https://github.com/vllm-project/semantic-router/tree/main/e2e/testing/vllm-sr-cli/fixtures/bearer-recipe

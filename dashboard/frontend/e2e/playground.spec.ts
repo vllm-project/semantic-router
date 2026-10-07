@@ -152,22 +152,6 @@ test.describe('Playground Chat Component', () => {
     await page.goto('/playground')
   })
 
-  test('defaults HireClaw mode off for a fresh session', async ({ page }) => {
-    const menu = await openComposerAddMenu(page)
-    const hireClawToggle = menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' })
-
-    await expect(hireClawToggle).toBeVisible()
-    await expect(hireClawToggle).toHaveAttribute('aria-checked', 'false')
-    await expect(
-      menu.getByRole('menuitemcheckbox', { name: /Open ClawRoom view|Exit ClawRoom view/i }),
-    ).toHaveCount(0)
-
-    const storedValue = await page.evaluate(() =>
-      window.localStorage.getItem('sr:playground:claw-mode'),
-    )
-    expect(storedValue).toBe('false')
-  })
-
   test('renders chat interface', async ({ page }) => {
     // Verify main elements are present
     await expect(page.getByPlaceholder('Ask me anything...')).toBeVisible()
@@ -305,7 +289,6 @@ test.describe('Playground Chat Component', () => {
     const menu = page.getByRole('menu', { name: 'Add to prompt' })
     const attachFiles = menu.getByRole('menuitem', { name: 'Attach files' })
     const webSearch = menu.getByRole('menuitemcheckbox', { name: 'Disable Web Search' })
-    const hireClaw = menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' })
 
     await expect(menu).toBeVisible()
     await expect(trigger).toHaveAttribute('aria-expanded', 'true')
@@ -313,7 +296,7 @@ test.describe('Playground Chat Component', () => {
     await expect(webSearch).toHaveAttribute('aria-checked', 'true')
 
     await page.keyboard.press('End')
-    await expect(hireClaw).toBeFocused()
+    await expect(webSearch).toBeFocused()
     await page.keyboard.press('Home')
     await expect(attachFiles).toBeFocused()
 
@@ -440,7 +423,6 @@ test.describe('Playground Chat Component', () => {
               prompt: 'Restore this legacy task',
               createdAt: Date.now(),
               requestOptions: {
-                enableClawMode: false,
                 enableWebSearch: false,
                 model: 'MoM',
               },

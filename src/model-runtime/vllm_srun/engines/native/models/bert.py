@@ -25,7 +25,7 @@ from .modernbert import ACTIVATIONS, FULL, Group, Layout, length_groups
 MODEL_TYPE = "bert"
 
 
-def _group(lengths: Sequence[int], width: int, device: Any) -> Group:
+def _group(lengths: Sequence[int], width: int, device: torch.device | str) -> Group:
     """One grid over packed rows of ``lengths``; a mask only where a row is padded."""
     width = max(*lengths, width)
     padded = any(length != width for length in lengths)
@@ -61,7 +61,8 @@ class BertEmbeddings(nn.Module):
             torch.zeros_like(input_ids)
         )
         embeddings += self.position_embeddings(positions)
-        return self.LayerNorm(embeddings)
+        normed: torch.Tensor = self.LayerNorm(embeddings)
+        return normed
 
 
 class BertSelfAttention(nn.Module):
@@ -136,7 +137,8 @@ class BertSelfOutput(nn.Module):
     def forward(
         self, hidden_states: torch.Tensor, residual: torch.Tensor
     ) -> torch.Tensor:
-        return self.LayerNorm(self.dense(hidden_states) + residual)
+        normed: torch.Tensor = self.LayerNorm(self.dense(hidden_states) + residual)
+        return normed
 
 
 class BertAttention(nn.Module):
@@ -170,7 +172,8 @@ class BertOutput(nn.Module):
     def forward(
         self, hidden_states: torch.Tensor, residual: torch.Tensor
     ) -> torch.Tensor:
-        return self.LayerNorm(self.dense(hidden_states) + residual)
+        normed: torch.Tensor = self.LayerNorm(self.dense(hidden_states) + residual)
+        return normed
 
 
 class BertLayer(nn.Module):
@@ -185,7 +188,8 @@ class BertLayer(nn.Module):
     ) -> torch.Tensor:
         attended = self.attention.self(hidden_states, layout, kernels)
         hidden_states = self.attention.output(attended, hidden_states)
-        return self.output(self.intermediate(hidden_states), hidden_states)
+        out: torch.Tensor = self.output(self.intermediate(hidden_states), hidden_states)
+        return out
 
 
 class BertEncoder(nn.Module):
@@ -219,7 +223,7 @@ class BertBackbone(nn.Module):
     def packed(
         self,
         lengths: Sequence[int],
-        device: Any,
+        device: torch.device | str,
         width: int | None = None,
         uniform: bool = False,
     ) -> Layout:
@@ -243,7 +247,11 @@ class BertBackbone(nn.Module):
         )
 
     def padded(
-        self, attention_mask: torch.Tensor | None, rows: int, width: int, device: Any
+        self,
+        attention_mask: torch.Tensor | None,
+        rows: int,
+        width: int,
+        device: torch.device | str,
     ) -> Layout:
         """Padded ``[rows, width]`` rows; a key mask only when some position is padding."""
         mask = None
@@ -252,7 +260,9 @@ class BertBackbone(nn.Module):
             mask = valid[:, None, None, :].expand(rows, 1, width, width)
         return Layout((Group(rows, width, {FULL: mask}),))
 
-    def masked(self, valid: torch.Tensor, rows: int, width: int, device: Any) -> Layout:
+    def masked(
+        self, valid: torch.Tensor, rows: int, width: int, device: torch.device | str
+    ) -> Layout:
         """Padded rows masked from a device-side key mask, never read back (graphs)."""
         mask = valid[:, None, None, :].expand(rows, 1, width, width)
         return Layout((Group(rows, width, {FULL: mask}),))

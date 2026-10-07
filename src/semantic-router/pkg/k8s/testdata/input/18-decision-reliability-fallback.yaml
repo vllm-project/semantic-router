@@ -1,0 +1,63 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: reliability-pool
+  namespace: default
+spec:
+  defaultModel: "qwen-2.5-7b"
+  models:
+    - name: "qwen-2.5-7b"
+      reasoning:
+        family: "qwen3"
+    - name: "qwen-2.5-72b"
+      reasoning:
+        family: "qwen3"
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: reliability-route
+  namespace: default
+spec:
+  signals:
+    keywords:
+      - name: "long_report"
+        operator: "OR"
+        keywords: ["full report", "long report"]
+        caseSensitive: false
+
+  decisions:
+    - name: "long_report"
+      priority: 100
+      description: "Long reports get more time and their own fallback policy"
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "long_report"
+      modelRefs:
+        - model: "qwen-2.5-72b"
+      reliability:
+        total_timeout: "600s"
+        per_try_timeout: "300s"
+        retry_count: 1
+        retry_on: "reset"
+        retriable_status_codes: [429]
+      fallback:
+        enabled: true
+        max_attempts: 2
+        total_timeout: "900s"
+        per_attempt_timeout: "450s"
+        retryable_status_codes: [502, 503, 504]
+
+    - name: "default_route"
+      priority: 10
+      description: "Everything else keeps the provider model's reliability and the router's fallback"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "keyword"
+            name: "long_report"
+      modelRefs:
+        - model: "qwen-2.5-7b"

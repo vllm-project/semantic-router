@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
@@ -21,44 +20,34 @@ type authorizationTestTopology struct {
 	beforeInventory func()
 }
 
-func TestRecipeTopologyInventoryRevocationPreventsTopologyJournalWrite(t *testing.T) {
+func TestStackRecreationRevokedAfterPublishingLeavesNothingPending(t *testing.T) {
 	store, summary, configPath := importedActivationFixture(t, "accuracy")
-	topology := &authorizationTestTopology{fakeRuntimeTopology: testTopologyForManagedRuntime()}
-	activator := NewRecipeActivator(RecipeActivatorOptions{
-		Store: store, ConfigPath: configPath, ConfigDir: filepath.Dir(configPath), Topology: topology,
-		RealizeConfig: func(raw []byte, _ string) ([]byte, error) {
-			return []byte(strings.Replace(string(raw), "port: 8899", "port: 9999", 1)), nil
-		},
-		ApplyRuntime:  func(path, _ string) (string, error) { return path, nil },
-		VerifyRuntime: func(context.Context, string) error { return nil },
-		VerifyEnvoy:   func(context.Context) error { return nil },
-	})
-	plan, err := activator.Preview(context.Background(), activationRequest(summary))
+	original := mustReadFile(t, configPath)
+	activator := topologyTestActivator(store, configPath, testTopologyForManagedRuntime(), movedListener, nil)
+	request := activationRequest(summary)
+	plan, err := activator.Preview(context.Background(), request)
 	if err != nil || plan.Mode != recipe.ActivationModeStackRecreation {
 		t.Fatalf("stack recreation plan = %+v, %v", plan, err)
 	}
-	transaction, err := store.BeginActivation(summary.RecipeDigest, mustReadFile(t, configPath))
-	if err != nil {
-		t.Fatal(err)
-	}
-	revoked := false
-	topology.beforeInventory = func() { revoked = true }
 	ctx := auth.WithPermissionRevalidator(context.Background(), func(context.Context) error {
-		if revoked {
+		if !bytes.Equal(original, mustReadFile(t, configPath)) {
 			return auth.ErrPermissionDenied
 		}
 		return nil
 	})
-	_, err = activator.prepareActivationTopology(ctx, plan, transaction)
-	if packageErr, ok := recipe.AsPackageError(err); !ok || packageErr.Status != http.StatusForbidden {
-		t.Fatalf("topology preparation after revocation = %v", err)
+
+	_, err = activator.Activate(ctx, confirmed(request, plan))
+	assertActivationPermissionRevoked(t, err)
+	if !bytes.Equal(original, mustReadFile(t, configPath)) {
+		t.Fatal("a revoked activation left its config published")
 	}
-	if _, err := store.ActivationTopology(transaction); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("revoked request wrote topology journal: %v", err)
+	if _, err := os.Stat(pendingActivationPath(configPath, pendingActivationSuffix)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a revoked activation recorded a pending activation: %v", err)
 	}
-	if len(topology.applied) != 0 {
-		t.Fatal("revoked request applied topology")
+	if _, state, err := store.ActivationStatus(); err != nil || state != recipe.ActivationNone {
+		t.Fatalf("activation state = %q, %v", state, err)
 	}
+	assertNoActivationJournal(t, store)
 }
 
 func (topology *authorizationTestTopology) Inventory(ctx context.Context) (runtimeTopologyInventory, error) {

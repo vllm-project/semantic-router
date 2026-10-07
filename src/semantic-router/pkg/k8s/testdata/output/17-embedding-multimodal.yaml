@@ -179,8 +179,7 @@ global:
       similarity_threshold: 0.2
       tools_db_path: config/tools_db.json
       fallback_to_empty: true
-    looper:
-      endpoint: ""
+    looper: {}
   model_catalog:
     embeddings:
       semantic:

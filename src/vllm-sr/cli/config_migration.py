@@ -15,6 +15,7 @@ from cli.config_contract import (
 )
 from cli.config_migration_catalog import migrate_v03_catalog_contract
 from cli.config_migration_global import normalize_global_layout, place_global_block
+from cli.config_migration_looper import drop_looper_endpoint
 from cli.config_migration_model_runtime import (
     migrate_model_runtime_contract,
     migrate_prompt_guard_backend,
@@ -82,9 +83,9 @@ def migrate_config_data(
         router_owns_transport=router_owns_transport,
     )
     migrate_prompt_guard_backend(canonical)
-    migrate_model_runtime_contract(
-        canonical, notes if notes is not None else MigrationNotes()
-    )
+    notes = notes if notes is not None else MigrationNotes()
+    migrate_model_runtime_contract(canonical, notes)
+    drop_looper_endpoint(canonical, notes)
 
     return canonical
 

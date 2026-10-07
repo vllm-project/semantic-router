@@ -28,6 +28,8 @@ paths:
       responses:
         '200':
           description: One answer per question, in request order; a failed question carries its own error.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
             application/json:
               schema:
@@ -52,6 +54,8 @@ paths:
       responses:
         '200':
           description: Same as /v1/decisions.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
             application/json:
               schema:
@@ -76,6 +80,8 @@ paths:
       responses:
         '200':
           description: One result per input, in input order; a failed input carries its own error.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
             application/json:
               schema:
@@ -100,6 +106,8 @@ paths:
       responses:
         '200':
           description: One embedding per input, in input order.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
             application/json:
               schema:
@@ -124,6 +132,8 @@ paths:
       responses:
         '200':
           description: Documents by descending relevance.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
             application/json:
               schema:
@@ -148,6 +158,8 @@ paths:
       responses:
         '200':
           description: One result per task, in task order, each with the status it would have had alone.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
             application/json:
               schema:
@@ -206,9 +218,26 @@ paths:
               schema:
                 type: string
 components:
+  headers:
+    ServerTiming:
+      description: |
+        The runtime's own time for the request in milliseconds, as a W3C Server Timing list:
+        `parse;dur=0.021, tokenize;dur=0.153, queue;dur=0.008, forward;dur=4.871, post;dur=0.034,
+        serialize;dur=0.019, total;dur=5.141`. `parse` reads and decodes the body. `tokenize` validates,
+        renders and tokenizes the request. `queue` is the time it waited for its model, before and between
+        its forwards. `forward` runs its forwards, readout included. `post` assembles the answers.
+        `serialize` encodes the response. `total` runs from the handler's start until the response is ready
+        to send; what it holds beyond the phases is the server's own overhead. A bundle whose tasks go to
+        several models reports the queue, forward and post of the model answered last. A client's time for
+        the call minus `total` is the transport: its own encoding and decoding, the connection and the HTTP
+        exchange.
+      schema:
+        type: string
   responses:
     Error:
       description: A request-level error.
+      headers:
+        Server-Timing: {$ref: '#/components/headers/ServerTiming'}
       content:
         application/json:
           schema:

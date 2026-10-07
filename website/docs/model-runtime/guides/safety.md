@@ -58,8 +58,8 @@ to 32,768 tokens, in overlapping windows.
 
 | Feature | Binding | Contract | Default model |
 | --- | --- | --- | --- |
-| Jailbreak | `prompt_guard` | `label_distribution.v1` | `vllm-sr/Vela-1.0-Encoder-307M-Guard` |
-| Safety rule `<name>` | `safety.<name>` | `label_distribution.v1` | `vllm-sr/Vela-1.0-Encoder-307M-Safety` |
+| Jailbreak | `prompt_guard` | `label_distribution.v1` | `vllm-sr/Vela-2.0-0.3B` (or `vllm-sr/Vela-1.0-Encoder-307M-Guard`) |
+| Safety rule `<name>` | `safety.<name>` | `label_distribution.v1` | `vllm-sr/Vela-2.0-0.3B` (or `vllm-sr/Vela-1.0-Encoder-307M-Safety`) |
 | Hazard of rule `<name>` | `safety.<name>.hazard` | `label_scores.v1` | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` |
 
 To use Shield for every safety rule, change the module's model:

@@ -47,7 +47,7 @@ flowchart LR
 
 Semantic Router 不能保证首选模型有即时容量。服务层可能排队、拒绝，或使用显式兼容的回退。跨模型回退仍需要自己的安全契约，因为更换逻辑模型不等于选择另一副本。
 
-机队规模和容量规划仍是离线关注点。Fleet Simulator 可以评估候选机队形态，而不把优化器放进请求路径。
+机队规模和容量规划仍是离线关注点，不在请求路径中。
 
 ## 范围与非目标 {#scope-and-non-goals}
 
@@ -66,6 +66,5 @@ Semantic Router 不能保证首选模型有即时容量。服务层可能排队�
 
 ## 参考资料 {#references}
 
-- [Fleet Simulator 概览](../fleet-sim/overview)
 - [延迟感知选择](../tutorials/algorithm/selection/latency-aware)
 - [模型执行回退](./model-execution-fallback)
