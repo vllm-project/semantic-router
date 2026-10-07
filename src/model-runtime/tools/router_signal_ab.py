@@ -2,8 +2,9 @@
 """Router signal A/B on the router signal suite (docs/records/vela2-router-signals.md).
 
 Compares two Router configurations on the evaluation rows of the built-in signals in
-vllm-sr/router-signal-suite: the Vela 1.0 defaults (``vela1``) and every signal Vela 2.0
-answers bound to one Vela 2.0 0.3B deployment (``vela2``).
+vllm-sr/router-signal-suite: the Router's defaults, where every signal Vela 2.0 answers runs
+on one Vela 2.0 0.3B deployment (``vela2``), and the one-block restore of the Vela 1.0
+specialists (``vela1``).
 
 config  writes an arm's Router configuration: ``full`` (every built-in request signal, with
         decisions that read each one) or ``latency`` (router-latency-cpu.yaml's signals).
@@ -69,13 +70,13 @@ PII_ALLOWED = [
 SENSITIVE = {"PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "STREET_ADDRESS", "CREDIT_CARD", "IBAN_CODE",
              "US_SSN", "US_DRIVER_LICENSE", "IP_ADDRESS"}  # fmt: skip
 ASSISTANT = "Here is my answer to your question."
-VELA2 = {
-    "provider": "model_runtime",
-    "artifact": "vllm-sr/Vela-2.0-0.3B",
-    "device": "cpu",
-}
-LABELS = "label_distribution.v1"
-SPANS = "token_spans.v1"
+# global.model_catalog.system that restores the Vela 1.0 specialists.
+VELA1_SYSTEM = {
+    consumer: f"models/Vela-1.0-Encoder-307M-{task}"
+    for consumer, task in (("safety", "Safety"), ("prompt_guard", "Guard"), ("domain_classifier", "Domain"),
+                           ("pii_classifier", "PII"), ("fact_check_classifier", "FactCheck"),
+                           ("hallucination_detector", "Halu"), ("feedback_detector", "Feedback"))
+}  # fmt: skip
 
 
 # ---------------------------------------------------------------- config
@@ -143,14 +144,18 @@ def latency_config(port: int, record: Path) -> dict[str, Any]:
     return config
 
 
-def bind_vela2(config: dict[str, Any], consumers: dict[str, str]) -> dict[str, Any]:
+def arm_config(config: dict[str, Any], arm: str) -> dict[str, Any]:
+    """An arm of a configuration: ``vela2`` keeps the Router's defaults (a modality
+    classifier without ``model_path`` runs Vela 2.0 0.3B too); ``vela1`` adds the one-block
+    restore of the Vela 1.0 specialists and names Vela 1.0 Modality."""
     config = copy.deepcopy(config)
+    modules = config.get("global", {}).get("model_catalog", {}).get("modules", {})
+    if arm == "vela2":
+        if "modality_detector" in modules:
+            modules["modality_detector"]["classifier"] = {"use_cpu": True}
+        return config
     catalog = config.setdefault("global", {}).setdefault("model_catalog", {})
-    catalog["deployments"] = {"vela2": dict(VELA2)}
-    catalog["bindings"] = {
-        name: {"contract": contract, "deployment": "vela2"}
-        for name, contract in consumers.items()
-    }
+    catalog["system"] = dict(VELA1_SYSTEM)
     return config
 
 
@@ -163,15 +168,9 @@ def cmd_config(args: argparse.Namespace) -> None:
 
     if args.set == "full":
         config = full_config(args.port)
-        consumers = {"domain_classifier": LABELS, "prompt_guard": LABELS, "fact_check_classifier": LABELS,
-                     "feedback_detector": LABELS, "modality_detector": LABELS, "safety.unsafe_request": LABELS,
-                     "pii_classifier": SPANS, "hallucination_detector": SPANS}  # fmt: skip
     else:
         config = latency_config(args.port, Path(args.latency_record))
-        consumers = {"domain_classifier": LABELS, "prompt_guard": LABELS, "fact_check_classifier": LABELS,
-                     "feedback_detector": LABELS, "pii_classifier": SPANS}  # fmt: skip
-    if args.arm == "vela2":
-        config = bind_vela2(config, consumers)
+    config = arm_config(config, args.arm)
     yaml.dump(config, sys.stdout, Dumper=NoAliases, sort_keys=False, allow_unicode=True)
 
 

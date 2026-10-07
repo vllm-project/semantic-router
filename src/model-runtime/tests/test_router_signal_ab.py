@@ -135,15 +135,16 @@ def test_a_confidence_floor_falls_back_below_its_threshold(ab) -> None:
     }
 
 
-def test_the_vela2_arm_differs_only_in_its_model_catalog(ab, tmp_path) -> None:
+def test_the_arms_differ_only_in_their_model_catalog(ab) -> None:
     base = ab.full_config(18899)
-    bound = ab.bind_vela2(base, {"domain_classifier": ab.LABELS})
-    assert {k: v for k, v in bound.items() if k != "global"} == {
-        k: v for k, v in base.items() if k != "global"
-    }
-    catalog = bound["global"]["model_catalog"]
-    assert catalog["deployments"]["vela2"]["artifact"] == "vllm-sr/Vela-2.0-0.3B"
-    assert catalog["bindings"] == {
-        "domain_classifier": {"contract": ab.LABELS, "deployment": "vela2"}
-    }
+    vela2, vela1 = ab.arm_config(base, "vela2"), ab.arm_config(base, "vela1")
+    for arm in (vela2, vela1):
+        assert {k: v for k, v in arm.items() if k != "global"} == {
+            k: v for k, v in base.items() if k != "global"
+        }
+    modules = vela2["global"]["model_catalog"]["modules"]
+    assert modules["modality_detector"]["classifier"] == {"use_cpu": True}
+    assert "system" not in vela2["global"]["model_catalog"]
+    catalog = vela1["global"]["model_catalog"]
+    assert catalog["system"] == ab.VELA1_SYSTEM
     assert catalog["modules"] == base["global"]["model_catalog"]["modules"]

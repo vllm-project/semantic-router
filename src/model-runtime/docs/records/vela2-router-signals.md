@@ -21,7 +21,8 @@ on the CPU latency.
   serves 11.9 against 38.9 requests per second on 12 cores (12.8 against 51.8 at
   concurrency 16).
 - **One call per request:** every built-in signal of a request reaches the 0.3B
-  in one `/v1/decisions` task, however long the request.
+  in one `/v1/decisions` task, however long the request. On a heavily loaded
+  host, 0.4% of requests sent one question in a second call.
 
 - **Date:** 2026-10-07.
 - **Machine:** AMD EPYC 9575F, CPU only. The accuracy runs and the latency
@@ -31,8 +32,8 @@ on the CPU latency.
   (`golang:1.25-bookworm`, the image recipe's flags). The Vela 1.0 arm ran on an
   earlier build of it; no later commit changes a request to a Vela 1.0 model.
   The model runtime is `main`'s (`db35009da`), in a Python 3.12 environment
-  with PyTorch 2.10.0 (CPU), as the router image pins it. This change touches no
-  runtime code path.
+  with PyTorch 2.10.0 (CPU), as the router image pins it. In the runtime this
+  change only marks the Vela 2.0 table's repositories public.
 - **Models:** the Vela 1.0 specialists at their pinned revisions (Domain
   `f6354f54`, Guard `087f9e40`, Safety `6e70e725`, FactCheck `99ede1ab`,
   Feedback `47434a7f`, Modality `5384b899`, PII `6d3300c4`, Halu `ca875312`)
