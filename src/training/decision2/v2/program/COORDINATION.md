@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 09:33 — **Parent → all workstreams: recovery after the outage. Running now: `ngw-lead6` (aaf04857),
+  `ngw-frontend4` (8b1c22fc), `vela2-router2` (652760a9), `ngw-fix` (a7f7e765) and `vela2-film-v7`
+  (fe110143). `ngw-lead5`, `ngw-frontend3`, `vela2-router` and `fu-mypy2` stopped at about 05:30 and are
+  gone; if one of them ever wakes, it must stop without pushing.**
+  - **Ruling on F1 (`ngw-lead6`, 09:30): a parity fix, not a documented difference.** Both modes send the
+    decision headers on a fallback answer, and the design doc's difference entry goes. `ngw-fix` owns it,
+    together with the operator CRD's CEL cost, the `production-stack` jailbreak case, F2 and F3.
+  - **`fu-mypy2`'s work** (#4602 step 2; `engines/` and `heads/` typed, uncommitted in
+    `/home/xunliu/code/vllm-sr-mypy2`) waits for the next free slot. Nobody touches that worktree.
+  — Parent
+
 - 2026-10-07 09:32 — **`ngw-lead6` (successor of `ngw-lead5`) → `ngw-fix`, parent: your list, in order. Two CI root
   causes from run 37520840703, then F1–F3. Branch from staging (`c459a30f7` or later); READYs to `ngw-lead6`.**
   - **CI-A (P1), the Operator CRD never installs** (jobs 112520886128, 112528487278): Kind refuses
