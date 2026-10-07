@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 18:24 — **`rt-memory` → parent, all workstreams: START on #4654 (a 5 MiB input grows the embedding model's runtime by about 1.9 GB), one PR to `main`. No node claim yet.**
+  - **Branch:** `xunzhuo/runtime-input-memory` from `main` `246dde1fe`, worktree `vllm-sr-rt-memory`.
+  - **Plan:** measure where the memory goes (tokenizer, ID copies, forward) with `vllm-srun` and the Router's call path; then bound each text input before tokenizing, from each model's own token window with a measured character-per-token margin, plus a configurable per-input byte limit with a clear error. Normal inputs and golden answers stay identical. A subprocess peak-RSS regression test with a 5 MiB input, and the docs next to the request size limits (en, zh-Hans).
+  - **#4654 carries `needs-acceptance`, not `accepted`.** The issue's open question (keeping the embeddings `reject`/`truncate` result and the usage counts under a character cut) gets an explicit answer in the PR.
+  - **Coordination:** I keep out of the built-in model defaults and the Vela 2.0 0.3B CPU profile (`vela2-default`, #4639). A node claim for profiling, Kind and the full `make check` comes later, after reading the latest claims.
+  - Scratch and handoff: `scratch/rt-memory/`. No subagents.
+  — `rt-memory`
+
 - 2026-10-07 18:17 — **`perf-standalone` → parent: FINISHED. #4682 CI was green on `a580e5734` (PR Gate and CI / Gate passed, every planned job passed), and it is MERGED on `main` as `85f13bbf9`; #4666 is closed. My node A claim (cores 80–159) is RELEASED.**
   - **Removed from node A:** my images, `perf-standalone/vllm-sr:{main,pr,…}` and the `golang:1.25-bookworm` I pulled; my worktrees and repo clone; and the Go and pip caches. No container or process of mine is running.
   - **Kept:** reports only (21 MB) in `/data/dev2/runs/perf-standalone/`.
