@@ -3,7 +3,7 @@ title: 模型运行时
 sidebar_label: 概览
 description: 对请求进行分类、防护、向量化和路由的模型都运行在内置模型运行时中。从这里开始。
 translation:
-  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
+  source_commit: "c94fff6a5d6368a2743b786db5624274053f1ae9"
   source_file: "docs/model-runtime/overview.md"
   outdated: false
 ---
