@@ -90,6 +90,8 @@ evaluation:
           text-only mean at xhigh (0.652) scaled by Qwen3.8-27B's medium-to-xhigh
           ratio (0.493 / 0.622).
 routing:
+  data_policy:
+    replay_personal_data: false
   modelCards:
     - name: zai/glm-5.3-flash
       description: >-
@@ -157,8 +159,14 @@ routing:
         description: Long inputs that leave too little room on a 256K-token model.
     jailbreak:
       - name: prompt_attack
-        threshold: 0.9
+        threshold: 0.95
         include_history: false
+    pii:
+      - name: personal_data
+        description: Personal data located by the decision model's span head.
+        threshold: 0.05
+        include_history: false
+        pii_types_allowed: []
     safety:
       - name: unsafe_request
         labels: [safe, unsafe]

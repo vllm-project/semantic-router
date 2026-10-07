@@ -404,6 +404,12 @@ decisions:
         expected_signals:
           keywords: [brief_request]
         tags: [language:en]
+      - id: personal_data
+        query: Hi, I'm Dana Lee (dana.lee@example.com, +1 415 555 0100). Please draft a two-sentence out-of-office reply for me.
+        expected_signals:
+          pii: [personal_data]
+        tags: [language:en, signal:pii]
+        notes: Personal data changes no route; the replay data policy keeps this request's content out of Replay.
 
   - id: fast_common_knowledge
     model: vllm-sr/auto

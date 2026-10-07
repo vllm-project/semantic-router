@@ -1,4 +1,12 @@
 # =============================================================================
+# ROUTING PROFILE
+# =============================================================================
+
+ROUTING {
+  data_policy: { replay_personal_data: false }
+}
+
+# =============================================================================
 # SIGNALS
 # =============================================================================
 
@@ -33,7 +41,7 @@ SIGNAL conversation has_prior_answer {
 }
 
 SIGNAL jailbreak prompt_attack {
-  threshold: 0.9
+  threshold: 0.95
 }
 
 SIGNAL safety unsafe_request {
@@ -41,6 +49,11 @@ SIGNAL safety unsafe_request {
   labels: ["safe", "unsafe"]
   unsafe_labels: ["unsafe"]
   threshold: 0.9
+}
+
+SIGNAL pii personal_data {
+  threshold: 0.05
+  description: "Personal data located by the decision model's span head."
 }
 
 SIGNAL decision task {

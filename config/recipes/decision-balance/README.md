@@ -44,7 +44,7 @@ model.
 ## Routing behavior
 
 The decision model answers these questions in the call that also answers the
-prompt guard and safety signals:
+prompt guard, safety and PII signals:
 
 | Question | Type | Asks |
 | --- | --- | --- |
@@ -99,11 +99,17 @@ the request.
 
 ## Data handling and safety
 
-The recipe does not enable Router Replay, so it stores no request or response
-content by itself. Prompt attacks and unsafe requests receive a fixed reply
-without reaching any model. The guard thresholds favor precision: a request
-the guard misses still reaches a model, which applies its own safety
-training.
+The decision model locates personal data in every request with its PII span
+head. Personal data changes no route, but `routing.data_policy.replay_personal_data:
+false` keeps such a request's content out of Router Replay: when Replay is
+enabled, its record keeps the route, model, signals and detected PII types,
+and no request or response body, prompt or tool trace. The recipe itself does
+not enable Replay.
+
+Prompt attacks and unsafe requests receive a fixed reply without reaching any
+model. The guard thresholds favor precision, because role-play and code
+requests can score high on the prompt guard: a request the guard misses still
+reaches a model, which applies its own safety training.
 
 Every routed request's text, up to the decision model's input limit, is read
 by the decision model inside the Router. Requests are sent to whichever
