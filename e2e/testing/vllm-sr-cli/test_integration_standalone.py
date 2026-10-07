@@ -39,6 +39,7 @@ class TestStandaloneDocker(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
             self.assertEqual(
                 self.container_status(self.ENVOY_CONTAINER_NAME), "not found"
             )
+            self.assert_dashboard_holds_no_container_runtime()
             listener_port = 8888 + self.runtime_stack.port_offset
             with urllib_request.urlopen(
                 f"http://localhost:{listener_port}/ready", timeout=10

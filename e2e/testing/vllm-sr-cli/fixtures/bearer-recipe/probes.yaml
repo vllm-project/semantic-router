@@ -1,0 +1,21 @@
+schema_version: v1
+name: bearer-fixture
+description: >
+  One probe: every request routes to the test model.
+routing_assets:
+  yaml: config/recipes/bearer-fixture/config.yaml
+  dsl: config/recipes/bearer-fixture/recipe.dsl
+router_eval_endpoint: /api/v1/routing/preview
+acceptance:
+  min_probe_pass_rate: 100.0
+  min_decision_pass_rate: 100.0
+coverage: {}
+decisions:
+  - id: bearer_route
+    expected_decision: bearer_route
+    expected_algorithm: static
+    expected_alias: test-model
+    variants:
+      - id: hello
+        query: Say hello.
+        tags: [smoke]

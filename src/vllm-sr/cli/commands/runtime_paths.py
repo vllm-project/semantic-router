@@ -36,6 +36,17 @@ DASHBOARD_STATE_GID = 65532
 log = get_logger(__name__)
 
 
+def cli_user_share_gid() -> int:
+    """The host group through which the CLI's user and the Dashboard share files.
+
+    The Dashboard joins it for the log spool and the Recipe store. GID 0 never
+    reaches a container: a root CLI reads everything anyway and uses the
+    Dashboard's own group instead.
+    """
+
+    return DASHBOARD_STATE_GID if os.getgid() == 0 else os.getgid()
+
+
 def _current_posix_user_id() -> int | None:
     """Return the effective filesystem owner id where POSIX ownership applies."""
 
