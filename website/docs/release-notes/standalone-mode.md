@@ -17,9 +17,9 @@ vllm-sr serve --gateway extproc
 `--gateway extproc` starts the Envoy container in front of the Router exactly
 as earlier releases did, with the same Envoy configuration. Choose it for Envoy
 features the standalone Router does not have yet, such as token-bucket rate
-limiting, mTLS, JWT or OIDC, or advanced route matching. Envoy mode also
-sustains about 5–10% more requests per second at 32 or more concurrent clients;
-below that, standalone mode answers faster (see the design doc's
+limiting, mTLS, JWT or OIDC, or advanced route matching. Throughput is not a
+reason to: from 1 to 64 concurrent clients standalone mode answers faster and
+serves as many or more requests per second (see the design doc's
 [results](../proposals/standalone-mode#results)).
 
 ## What changes for a standalone stack
