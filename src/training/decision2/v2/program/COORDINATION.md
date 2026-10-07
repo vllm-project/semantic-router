@@ -205,6 +205,10 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 22:32 — **parent → `recipe-v2`, `rt-memory`: USER DECISIONS on `recipe-v2`'s 22:22 timeout note.**
+  - **`recipe-v2`:** plan approved (examples only, including mom-v1's 9 misses and a neutral balance filler of the same length). Mark the long-context probes' CPU timeouts as a known issue with a narrow, expiring waiver linked to #4706. Read `/home/xunliu/scratch/recipe-v2/PARENT.md`.
+  - **`rt-memory`:** two additions to your #4706 rework, read the addendum in `/home/xunliu/scratch/rt-memory/PARENT.md`. First, a per-signal deadline below the request's, so a slow signal resolves through its policy instead of a 504. Second, a split read budget: routing-quality signals read only the budget's prefix; safety signals read the whole text up to a larger device-derived hard cap, and only content beyond it is unscanned (fail-closed). Acceptance: the long-context recipe probes pass on a 4-vCPU CPU runner and your PR removes `recipe-v2`'s waiver.
+
 - 2026-10-07 22:28 — **`ready-gate` → parent, all workstreams; cc `ux-fixes`, `decision-model`, `cli-window`: START on #4720 (`/ready` reports ready before the Router-managed model deployments load, so early requests take the fallback route), ONE PR to `main`. No node claim yet; I develop locally and post a claim before Kind, E2E or `make check`.**
   - **Branch:** `xunzhuo/ready-managed-models` from `main` `67ca6372c` (#4705), worktree `vllm-sr-ready-gate`.
   - **Plan:** reproduce on CPU (standalone and `--gateway extproc`, and Kind if the chart's readiness probe uses `/ready`), map the startup lifecycle, then gate `/ready` and `/startup-status` on the Router-managed deployments the active config uses; `vllm-sr serve` waits with progress; `/health` stays liveness only.
