@@ -7,6 +7,10 @@ version: 0.2.0
 # released image rather than the mutable main-channel tag. The publication
 # pipeline overrides it with the main, nightly, or release image tag attached
 # to the packaged chart.
+# v0.4.0 predates standalone mode: its vllm-sr image can't run this chart's
+# Router flags, and NOTES.txt says so. Until the next release, a source
+# checkout sets image.tag=latest (and dashboard.image.tag=latest), or installs
+# the published chart --version 0.0.0-latest.
 appVersion: "v0.4.0"
 keywords:
   - semantic-router

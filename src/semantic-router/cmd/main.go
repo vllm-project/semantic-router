@@ -29,8 +29,11 @@ const (
 )
 
 func main() {
-	logo.PrintVLLMLogo()
 	opts := parseRuntimeOptions()
+	if opts.validateConfig {
+		os.Exit(validateConfigFile(opts.configPath, opts.gateway, os.Stdout))
+	}
+	logo.PrintVLLMLogo()
 	initializeRuntimeLogger()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	runErr := runRouterProcess(ctx, opts)
@@ -53,6 +56,9 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		return parseErr
 	}
 	opts.gateway = mode
+	if mode == config.GatewayStandalone {
+		logging.RenameComponent("extproc", "router")
+	}
 	if opts.configHistoryLimit == 0 {
 		opts.configHistoryLimit = configsnapshot.DefaultHistoryLimit
 	}

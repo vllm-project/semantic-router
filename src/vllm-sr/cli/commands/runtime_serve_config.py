@@ -22,6 +22,7 @@ from cli.commands.runtime_observability import (
 )
 from cli.commands.runtime_paths import (
     _runtime_config_output_path,
+    _same_document,
     materialize_runtime_config,
     resolve_state_root_dir,
 )
@@ -147,8 +148,9 @@ def _prepare_docker_runtime_config(
                     readonly=readonly,
                 ),
             )
-            source_candidate_selected = (
-                effective_config_path.read_bytes() == effective_config_bytes
+            active_bytes = effective_config_path.read_bytes()
+            source_candidate_selected = active_bytes == effective_config_bytes or (
+                _same_document(active_bytes, effective_config_bytes)
             )
         setup_mode = is_setup_mode_config(effective_config_path)
         if not setup_mode and not package_active:

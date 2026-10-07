@@ -26,6 +26,7 @@ type ClassificationAPIServer struct {
 	runtimeConfig         *liveRuntimeConfig
 	runtimeRegistry       *routerruntime.Registry
 	configPath            string // path to the router config file (for read/update/rollback)
+	gatewayMode           config.GatewayMode
 	memoryStore           memory.Store
 	knowledgeBaseMapCache *knowledgeBaseMapCache
 	startupStateLoader    func() *startupstatus.State

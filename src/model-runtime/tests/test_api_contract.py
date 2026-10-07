@@ -100,9 +100,30 @@ def test_per_question_errors_do_not_fail_siblings(client):
     )
     body = post(client, {"state": STATE, "questions": questions}).json()
     check("DecisionResponse", body)
-    assert body["answers"]["bad"] == {"type": "set", "error": "invalid_question"}
-    assert body["answers"]["tiny"] == {"type": "choice", "error": "invalid_question"}
+    bad, tiny = body["answers"]["bad"], body["answers"]["tiny"]
+    assert (bad["type"], bad["error"]) == ("set", "invalid_question")
+    assert (tiny["type"], tiny["error"]) == ("choice", "invalid_question")
+    # Each failed question says why, naming the field.
+    assert bad["message"] and "criteria" in tiny["message"]
     assert "error" not in body["answers"]["domain"]
+
+
+def test_a_request_without_a_valid_question_is_refused(client):
+    response = post(
+        client,
+        {
+            "state": STATE,
+            "questions": {
+                "bad": {"type": "noul", "instructions": "x", "colour": "blue"},
+                "worse": {"type": "rank", "instructions": "x"},
+            },
+        },
+    )
+    assert response.status_code == 400
+    error = response.json()["error"]
+    assert error["code"] == "invalid_request"
+    assert "bad: noul questions do not take ['colour']" in error["message"]
+    assert "worse: type must be one of" in error["message"]
 
 
 CHOICES = [{"key": "a"}, {"key": "b"}]
@@ -222,7 +243,9 @@ def test_overlong_question_is_rejected_not_truncated(client):
     body = post(
         client, {"state": "word " * 5000, "questions": {"q": QUESTIONS["reasoning"]}}
     ).json()
-    assert body["answers"]["q"] == {"type": "noul", "error": "max_length_exceeded"}
+    answer = body["answers"]["q"]
+    assert (answer["type"], answer["error"]) == ("noul", "max_length_exceeded")
+    assert "exceeds max_length" in answer["message"]
 
 
 def test_deadline_exceeded_is_reported_per_question(client):

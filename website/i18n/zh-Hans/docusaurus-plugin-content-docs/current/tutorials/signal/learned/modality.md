@@ -49,7 +49,23 @@ routing:
         description: Requests that need both text and image generation behavior.
 ```
 
-保持规则名与决策要引用的路由行为对齐。通过 `global.model_catalog.modules.modality_detector` 配置检测器。
+保持规则名与决策要引用的路由行为对齐。
+
+检测器默认关闭，因此这些规则只有在配置了 `modality_detector` 块时才会匹配。使用 `method: classifier` 且不设置 `classifier.model_path` 时，它运行 Vela 2.0 0.3B，其校准后的 `confidence_threshold` 为 0.51：
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      modality_detector:
+        enabled: true
+        method: classifier
+        confidence_threshold: 0.51
+```
+
+没有这个块时，Router 加载配置时会记录 `modality_detector_disabled` 警告，`vllm-sr config validate` 也会通过 Router 自身的校验打印同一警告。`method: keyword` 需要 `keywords`；`method: hybrid` 还需要 `lower_threshold_ratio`，以及分类器或关键词。
+
+基于 `BOTH` 的决策必须同时引用一个 AR 模型（在 `routing.modelCards` 中设 `modality: ar`）和一个扩散模型（`modality: diffusion`），或者引用一个全模态模型（`modality: omni`）。
 
 ## 依赖与限制 {#dependencies-and-limitations}
 

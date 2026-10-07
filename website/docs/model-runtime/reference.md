@@ -194,6 +194,131 @@ vector space, so you can keep vectors of different settings apart.
 Results come back in task order, each with the status it would have had on
 its own.
 
+### Decisions
+
+A request names a `state` and its `questions`. A question's options are
+`criteria`, or the ordered list the Router config uses for the same thing:
+
+| Type | `criteria` | Or, as in the Router config |
+| --- | --- | --- |
+| `choice` | `{key: description}`, 2 to 255 options | `choices: [{key, description}]` |
+| `noul` | `{false: description, true: description}`, both optional | `choices: [{key, description}]` with keys `false` and `true` |
+| `score` | `[description, ...]`, 2 to 10 levels | `levels: [description, ...]` |
+| `set`, `span` | `{label: description}`, 1 to 255 labels | `labels: [{key, description}]` |
+
+A question takes one form or the other, and only its type's fields. Vela 2.0
+answered these two requests on CPU; the numbers are rounded.
+
+```json title="POST /v1/decisions"
+{
+  "model": "Vela-2.0-0.3B",
+  "state": "Write a Python function that merges two sorted lists and explain its running time.",
+  "questions": {
+    "domain": {
+      "type": "choice",
+      "instructions": "Which domain does this request belong to?",
+      "choices": [
+        {"key": "code", "description": "Programming"},
+        {"key": "math", "description": "Mathematics"},
+        {"key": "other"}
+      ]
+    },
+    "reasoning": {"type": "noul", "instructions": "Does answering this request need multi-step reasoning?"},
+    "difficulty": {
+      "type": "score",
+      "instructions": "How difficult is this request?",
+      "levels": ["Trivial", "Moderate", "Hard"]
+    }
+  }
+}
+```
+
+```json title="Response"
+{
+  "model": "Vela-2.0-0.3B",
+  "answers": {
+    "domain": {
+      "type": "choice",
+      "choice": "code",
+      "confidence": 0.99,
+      "probabilities": {"code": 1.0, "math": 0.0, "other": 0.0},
+      "abstain_probability": 0.01
+    },
+    "reasoning": {"type": "noul", "noul": 0.34},
+    "difficulty": {
+      "type": "score",
+      "score": 1.3,
+      "confidence": 0.28,
+      "legend": {"0": "Trivial", "1": "Moderate", "2": "Hard"},
+      "probabilities": {"0": 0.13, "1": 0.43, "2": 0.43}
+    }
+  }
+}
+```
+
+A Set answers each label as a Noul under `<id>.<label>`, and lists the labels
+at or above its threshold in `sets`. A Span returns the text it found in
+`spans`, with Unicode code point offsets, end exclusive, and a Noul under its
+ID. `thresholds` gives the threshold each question applied; set `threshold` on
+the question to choose another.
+
+```json title="POST /v1/decisions"
+{
+  "model": "Vela-2.0-0.3B",
+  "state": "My card was charged twice and the parcel never arrived. Write to me at jane.doe@example.com.",
+  "questions": {
+    "problems": {
+      "type": "set",
+      "instructions": "Which problems does the customer report?",
+      "labels": [
+        {"key": "billing", "description": "A payment or charge problem"},
+        {"key": "shipping", "description": "A delivery problem"},
+        {"key": "account", "description": "A login or account problem"}
+      ]
+    },
+    "contacts": {
+      "type": "span",
+      "instructions": "Find the personal contact details.",
+      "labels": [{"key": "EMAIL_ADDRESS", "description": "An email address"}]
+    }
+  }
+}
+```
+
+```json title="Response"
+{
+  "model": "Vela-2.0-0.3B",
+  "answers": {
+    "problems.billing": {"type": "noul", "noul": 0.95},
+    "problems.shipping": {"type": "noul", "noul": 0.7},
+    "problems.account": {"type": "noul", "noul": 0.03},
+    "contacts": {"type": "noul", "noul": 1.0}
+  },
+  "spans": {
+    "contacts": [
+      {"label": "EMAIL_ADDRESS", "start": 71, "end": 91, "text": "jane.doe@example.com", "probability": 1.0}
+    ]
+  },
+  "sets": {
+    "problems": {
+      "selected": ["billing", "shipping"],
+      "probabilities": {"billing": 0.95, "shipping": 0.7, "account": 0.03}
+    }
+  },
+  "thresholds": {"problems": 0.3, "contacts": 0.65}
+}
+```
+
+An invalid question is answered `{"type", "error": "invalid_question",
+"message"}`, where the message names the field, such as `set questions do not
+take ['colour']`; the other questions are answered as usual. A request in which
+no question is valid is answered 400 `invalid_request`, with each question's
+reason in the message.
+
+`src/model-runtime/tools/reference_examples.py --url <runtime>` sends this
+section's requests to a runtime that serves Vela 2.0 0.3B and checks that the
+answers match.
+
 ## Router configuration
 
 | Field | Where | Meaning |

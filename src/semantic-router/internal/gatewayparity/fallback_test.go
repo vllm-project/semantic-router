@@ -174,12 +174,20 @@ const clientTag = "X-Client-Tag"
 
 func postChat(t *testing.T, frontend *httptest.Server) answer {
 	t.Helper()
+	return postChatWithHeaders(t, frontend, nil)
+}
+
+func postChatWithHeaders(t *testing.T, frontend *httptest.Server, extra map[string]string) answer {
+	t.Helper()
 	req, err := http.NewRequest(http.MethodPost, frontend.URL+"/v1/chat/completions", strings.NewReader(fallbackRequest))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(clientTag, "from-the-client")
+	for name, value := range extra {
+		req.Header.Set(name, value)
+	}
 	resp, err := frontend.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)

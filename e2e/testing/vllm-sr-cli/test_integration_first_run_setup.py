@@ -123,7 +123,12 @@ class TestFirstRunSetup(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
                     activated["message"], "Setup saved. The Router is starting."
                 )
                 # serve starts the Router, waits for it and exits.
-                self._wait_for_serve_success(serve_process)
+                output = "".join(self._wait_for_serve_success(serve_process))
+                # A standalone first run names no Envoy, and no older stack's
+                # orphaned volumes on a host that never ran one.
+                self.assertIn("with the Router on standby", output)
+                self.assertNotIn("Envoy", output)
+                self.assertNotIn("orphaned volumes", output)
                 headers = self._send_mock_chat_completion(mock_container)
                 self.assertEqual(headers.get("x-vsr-selected-model"), "test-model")
                 router = self._status_service("Router")

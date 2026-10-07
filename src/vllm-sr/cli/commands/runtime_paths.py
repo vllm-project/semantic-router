@@ -520,7 +520,10 @@ def materialize_runtime_config(
 
     The CLI records the digest it last materialized. A Dashboard or package
     activation changes the active digest without changing that receipt, so a
-    later ``serve`` preserves the active file and reports the divergence.
+    later ``serve`` preserves the active file and reports the divergence. An
+    active document that says the same as the source (such as the one
+    ``vllm-sr config apply`` sent, re-encoded by the Router) is not a
+    divergence.
     ``replace_active`` is the explicit deployment boundary for replacing that
     drifted active document from the selected source config.
     ``before_replace`` lets restart orchestration stop old file consumers before
@@ -543,7 +546,7 @@ def materialize_runtime_config(
                 f"Runtime config must be a regular file: {runtime_config_path}"
             )
         active_data = runtime_config_path.read_bytes()
-        if active_data == effective_data:
+        if active_data == effective_data or _same_document(active_data, effective_data):
             _write_provenance(provenance_path, source_data, active_data)
             return runtime_config_path
 
@@ -581,8 +584,10 @@ def materialize_runtime_config(
         if active_digest != provenance["last_materialized_active_digest"]:
             log.warning(
                 "Preserving Dashboard or package changes in runtime config %s; "
-                "source updates were not materialized",
+                "source updates were not materialized. To serve %s instead, "
+                "rerun with --replace-active-config",
                 runtime_config_path,
+                source_config_path,
             )
             return runtime_config_path
 
@@ -591,6 +596,14 @@ def materialize_runtime_config(
     _atomic_write_private_bytes(runtime_config_path, effective_data)
     _write_provenance(provenance_path, source_data, effective_data)
     return runtime_config_path
+
+
+def _same_document(first: bytes, second: bytes) -> bool:
+    try:
+        parsed = yaml.safe_load(first)
+        return parsed is not None and parsed == yaml.safe_load(second)
+    except yaml.YAMLError:
+        return False
 
 
 def _write_runtime_config(source_config_path: Path, config: dict[str, object]) -> Path:
