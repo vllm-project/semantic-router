@@ -88,11 +88,21 @@ func collectSignalRefs(expr BoolExpr, negated bool, info *routeSignalInfo) {
 		collectSignalRefs(e.Expr, !negated, info)
 	case *SignalRefExpr:
 		if negated {
-			info.negatedRefs[e.SignalType] = append(info.negatedRefs[e.SignalType], e.SignalName)
+			info.negatedRefs[e.SignalType] = append(info.negatedRefs[e.SignalType], guardSignalName(e))
 		} else {
-			info.positiveRefs[e.SignalType] = append(info.positiveRefs[e.SignalType], e.SignalName)
+			info.positiveRefs[e.SignalType] = append(info.positiveRefs[e.SignalType], guardSignalName(e))
 		}
 	}
+}
+
+// guardSignalName is the exact reference that route guards compare. A
+// labelled reference names its label, so conditions on different options of
+// one decision question or classifier are different references.
+func guardSignalName(ref *SignalRefExpr) string {
+	if label, ok := ref.Fields["label"].(StringValue); ok && label.V != "" {
+		return ref.SignalName + ":" + label.V
+	}
+	return ref.SignalName
 }
 
 func containsString(ss []string, target string) bool {
