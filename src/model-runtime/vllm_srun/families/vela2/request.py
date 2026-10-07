@@ -360,5 +360,7 @@ class QuestionReader:
             }
         if question.get("type") not in (None, expanded["type"]):
             raise _invalid(f"preset {name} is a {expanded['type']} question")
-        kept = {key: question[key] for key in ("over", "threshold") if key in question}
+        kept: dict[str, Any] = {
+            key: question[key] for key in ("over", "threshold") if key in question
+        }
         return {**expanded, "preset": name, **kept}, named

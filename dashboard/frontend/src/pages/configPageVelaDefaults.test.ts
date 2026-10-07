@@ -8,19 +8,19 @@ import {
 } from './configPageEmbeddingModelsSupport'
 
 describe('Vela defaults and explicit legacy models', () => {
-  it('keeps the fallback editor defaults aligned without promoting unpublished heads', () => {
+  it('keeps the fallback editor defaults aligned with the Vela 2.0 0.3B defaults', () => {
     expect(DEFAULT_SECTIONS.system_models).toMatchObject({
-      domain_classifier: 'models/Vela-1.0-Encoder-307M-Domain',
-      pii_classifier: 'models/Vela-1.0-Encoder-307M-PII',
-      fact_check_classifier: 'models/Vela-1.0-Encoder-307M-FactCheck',
-      feedback_detector: 'models/Vela-1.0-Encoder-307M-Feedback',
-      prompt_guard: 'models/Vela-1.0-Encoder-307M-Guard',
-      hallucination_detector: 'models/Vela-1.0-Encoder-307M-Halu',
+      domain_classifier: 'models/Vela-2.0-0.3B',
+      pii_classifier: 'models/Vela-2.0-0.3B',
+      fact_check_classifier: 'models/Vela-2.0-0.3B',
+      feedback_detector: 'models/Vela-2.0-0.3B',
+      prompt_guard: 'models/Vela-2.0-0.3B',
+      hallucination_detector: 'models/Vela-2.0-0.3B',
     })
     expect(DEFAULT_SECTIONS.system_models).not.toHaveProperty('safety')
     expect(DEFAULT_SECTIONS.system_models).not.toHaveProperty('hazard')
     expect(DEFAULT_SECTIONS.hallucination_mitigation).toMatchObject({
-      fact_check: { threshold: 0.85 },
+      fact_check: { threshold: 0.93 },
       detector: {
         threshold: 0.5,
         min_span_length: 1,
@@ -31,7 +31,7 @@ describe('Vela defaults and explicit legacy models', () => {
       multimodal_model_path: 'models/vela-1.0-omni-nano',
       embedding_config: { target_dimension: 0 },
     })
-    expect(DEFAULT_SECTIONS.feedback_detector).toMatchObject({ threshold: 0.7 })
+    expect(DEFAULT_SECTIONS.feedback_detector).toMatchObject({ threshold: 0.37 })
     expect(DEFAULT_SECTIONS.feedback_detector).not.toHaveProperty('max_sequence_length')
   })
 

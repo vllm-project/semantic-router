@@ -5,7 +5,6 @@ import {
   mockAuthenticatedSession,
   TEST_CSRF_TOKEN,
 } from './support/auth'
-import { openComposerAddMenu } from './support/playground'
 
 const baseSetupState = {
   setupMode: false,
@@ -822,17 +821,6 @@ test.describe('Dashboard auth flow', () => {
     await expect(page).toHaveURL(/\/config$/)
     await expect(page.getByRole('link', { name: 'Users' })).toHaveCount(0)
 
-    await page.goto('/playground')
-    const composerMenu = await openComposerAddMenu(page)
-    await expect(
-      composerMenu.getByRole('menuitemcheckbox', { name: /Enable HireClaw|Disable HireClaw/i }),
-    ).toBeDisabled()
-    await expect(
-      composerMenu.getByRole('menuitemcheckbox', {
-        name: /Open ClawRoom view|Exit ClawRoom view/i,
-      }),
-    ).toHaveCount(0)
-
     await page.goto('/builder')
     const deployButton = page.getByRole('button', { name: 'Deploy' })
     await expect(deployButton).toBeDisabled()
@@ -1074,15 +1062,15 @@ test.describe('Dashboard auth flow', () => {
 
     const urls = await page.evaluate(() => {
       const iframe = document.createElement('iframe')
-      iframe.src = '/embedded/openclaw/demo/'
+      iframe.src = '/embedded/grafana/'
 
-      const source = new EventSource('/api/openclaw/rooms/room-1/stream')
+      const source = new EventSource('/api/ml-pipeline/stream/job-1')
       const sourceUrl = source.url
       source.close()
 
       const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
       const socket = new WebSocket(
-        `${wsProtocol}://${window.location.host}/api/openclaw/rooms/room-1/ws`,
+        `${wsProtocol}://${window.location.host}/embedded/grafana/api/live/ws`,
       )
       const socketUrl = socket.url
       socket.close()

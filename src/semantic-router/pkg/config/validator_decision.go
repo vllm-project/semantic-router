@@ -465,12 +465,6 @@ func validateDecisionContextCompressionRecovery(
 		!compression.Recovery.Enabled {
 		return nil
 	}
-	if !cfg.Looper.IsEnabled() {
-		return fmt.Errorf(
-			"decision %q: context_compression recovery requires global.integrations.looper.endpoint",
-			decision.Name,
-		)
-	}
 	store := strings.TrimSpace(compression.Recovery.Store)
 	if store == "response_cache" {
 		store = strings.TrimSpace(cfg.SemanticCache.BackendType)
@@ -696,6 +690,9 @@ func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRe
 		return validateDecisionSelectorConfig(decisionName, modelRefs, algorithm)
 	case "multi_factor":
 		return validateDecisionMultiFactorAlgorithm(decisionName, algorithm.MultiFactor)
+	}
+	if _, registered, err := DecodeDecisionAlgorithm(decisionName, algorithm); registered {
+		return err
 	}
 	return nil
 }

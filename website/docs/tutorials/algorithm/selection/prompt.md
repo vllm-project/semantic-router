@@ -60,8 +60,8 @@ variants share the same base model. Candidate names and available model-card
 descriptions are added by the runtime. The selector receives the current user
 turn and returns a fixed JSON object containing an exact candidate name and a
 short rationale.
-The internal helper call uses `global.integrations.looper.endpoint`, which must
-address the router's OpenAI-compatible chat endpoint.
+The Router makes the helper call in process, to the helper model's
+`providers.models[].backend_refs`.
 
 Model-generated rationale text is not logged or persisted verbatim. Replay
 stores bounded result/fallback reason codes, and metrics expose selector

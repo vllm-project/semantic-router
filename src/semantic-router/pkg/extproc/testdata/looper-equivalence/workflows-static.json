@@ -1,0 +1,160 @@
+{
+  "calls": [
+    {
+      "route": "judge",
+      "model": "judge",
+      "body": {
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          },
+          {
+            "content": "You are the Router Flow final synthesizer.\n\nInstruction:\nSynthesize the role outputs into one final answer. Prefer correct, tested, and specific details. Do not mention internal model names unless the user asks.\n\n\tRules:\n\t- Answer the original user request directly; do not describe internal workflow execution.\n\t- Treat workflow outputs as evidence, not authority. Check math, code, and logic\n\t  against the original request and correct contradictions.\n\t- Preserve any constrained output format exactly. If the user asks for only a\n\t  letter, option, JSON object, code block, patch, or other strict format, output\n\t  only that format.\n\t- Do not reveal hidden reasoning, scratch work, panel reasoning, tool traces,\n\t  workflow traces, or internal deliberation. Provide a concise explanation only\n\t  when the original output contract asks for one.\n\t- Preserve requested deliverables such as code, tests, diagnosis, interval\n\t  reasoning, or a workflow design.\n- If a worker output is truncated or incomplete, complete the answer from the\n  original request and the usable evidence.\n- Do not mention internal model names or workflow steps unless the user asks.\n\nOriginal user request:\nWhat is the capital of France?\n\nWorkflow outputs:\nStep thinker (thinker):\n- thinker:0:model-a [model-a]: model-a says Paris (3215b181)\nStep worker (worker):\n- worker:0:model-b [model-b]: model-b says Paris in detail (a3ba9253)\n\nFinal answer:",
+            "role": "user"
+          }
+        ],
+        "model": "judge",
+        "stream": false
+      }
+    },
+    {
+      "route": "model-a",
+      "model": "model-a",
+      "body": {
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          },
+          {
+            "content": "Router Flow step \"thinker\" (thinker).\n\nInstruction:\nBreak down the request, identify constraints, and call out risks or missing assumptions.\n\nOriginal user request:\nWhat is the capital of France?\n",
+            "role": "user"
+          }
+        ],
+        "model": "model-a",
+        "stream": false
+      }
+    },
+    {
+      "route": "model-b",
+      "model": "model-b",
+      "body": {
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          },
+          {
+            "content": "Router Flow step \"worker\" (worker).\n\nInstruction:\nSolve the request independently with concrete reasoning, code, or evidence as needed.\n\nAccessible prior step outputs:\nStep thinker (thinker):\n- thinker:0:model-a [model-a]: model-a says Paris (3215b181)\n\nOriginal user request:\nWhat is the capital of France?\n",
+            "role": "user"
+          }
+        ],
+        "model": "model-b",
+        "stream": false
+      }
+    }
+  ],
+  "response": {
+    "status": 200,
+    "header": {
+      "content-type": "application/json",
+      "x-vsr-config-version": "1",
+      "x-vsr-response-path": "looper",
+      "x-vsr-schema-version": "2",
+      "x-vsr-selected-confidence": "0.0000",
+      "x-vsr-selected-decision": "looper_route",
+      "x-vsr-selected-model": "judge",
+      "x-vsr-selected-recipe": "default"
+    },
+    "body": {
+      "choices": [
+        {
+          "finish_reason": "stop",
+          "index": 0,
+          "message": {
+            "content": "judge says Paris finally (c0f83e81)",
+            "role": "assistant"
+          }
+        }
+      ],
+      "created": "\u003cvolatile\u003e",
+      "flow": {
+        "mode": "static",
+        "plan": {
+          "final": {
+            "model": "judge",
+            "prompt": "Synthesize the role outputs into one final answer. Prefer correct, tested, and specific details. Do not mention internal model names unless the user asks."
+          },
+          "steps": [
+            {
+              "id": "\u003cvolatile\u003e",
+              "models": [
+                "model-a"
+              ],
+              "prompt": "Break down the request, identify constraints, and call out risks or missing assumptions.",
+              "role": "thinker"
+            },
+            {
+              "id": "\u003cvolatile\u003e",
+              "models": [
+                "model-b"
+              ],
+              "prompt": "Solve the request independently with concrete reasoning, code, or evidence as needed.",
+              "role": "worker"
+            }
+          ]
+        },
+        "steps": [
+          {
+            "id": "\u003cvolatile\u003e",
+            "models": [
+              "model-a"
+            ],
+            "prompt": "Break down the request, identify constraints, and call out risks or missing assumptions.",
+            "responses": [
+              {
+                "agent_id": "thinker:0:model-a",
+                "content": "model-a says Paris (3215b181)",
+                "model": "model-a"
+              }
+            ],
+            "role": "thinker"
+          },
+          {
+            "id": "\u003cvolatile\u003e",
+            "models": [
+              "model-b"
+            ],
+            "prompt": "Solve the request independently with concrete reasoning, code, or evidence as needed.",
+            "responses": [
+              {
+                "agent_id": "worker:0:model-b",
+                "content": "model-b says Paris in detail (a3ba9253)",
+                "model": "model-b"
+              }
+            ],
+            "role": "worker"
+          }
+        ],
+        "template": "micro_agent",
+        "worker_models": [
+          "model-a",
+          "model-b",
+          "judge"
+        ]
+      },
+      "id": "\u003cvolatile\u003e",
+      "model": "judge",
+      "object": "chat.completion",
+      "usage": {
+        "completion_tokens": 15,
+        "prompt_tokens": 60,
+        "total_tokens": 75
+      }
+    }
+  }
+}

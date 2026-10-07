@@ -22,14 +22,16 @@ type Artifact struct {
 }
 
 // Resolve returns the catalog model of a benchmark task: domain, pii,
-// jailbreak or embedding.
+// jailbreak or embedding. The classifier tasks measure the per-task
+// label_distribution.v1 and token_spans.v1 contracts, which the Vela 1.0
+// specialists serve; the default Vela 2.0 0.3B deployment does not.
 func Resolve(name, root string) (Artifact, error) {
-	defaults := config.DefaultGlobalConfig()
+	specialists := config.Vela1SystemModels()
 	paths := map[string]string{
-		"domain":    defaults.CategoryModel.ModelID,
-		"pii":       defaults.PIIModel.ModelID,
-		"jailbreak": defaults.PromptGuard.ModelID,
-		"embedding": defaults.EmbeddingModels.MmBertModelPath,
+		"domain":    specialists.DomainClassifier,
+		"pii":       specialists.PIIClassifier,
+		"jailbreak": specialists.PromptGuard,
+		"embedding": config.DefaultGlobalConfig().EmbeddingModels.MmBertModelPath,
 	}
 	spec := config.GetModelByPath(paths[name])
 	if spec == nil || spec.RepoID == "" || spec.Revision == "" {

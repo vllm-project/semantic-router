@@ -53,7 +53,7 @@ docker run -d \
   --name vllm \
   --network vllm-sr-network \
   --restart unless-stopped \
-  -p 8090:8000 \
+  -p 8000:8000 \
   -v "$VLLM_HF_CACHE:/root/.cache/huggingface" \
   --device=/dev/kfd \
   --device=/dev/dri \
@@ -85,6 +85,8 @@ docker run -d \
     --gpu-memory-utilization 0.85
 ```
 
+主机端口只用于你自己检查后端；Router 通过 `vllm-sr-network` 上的 `vllm:8000` 访问它。不要使用 8090：本地栈的 sr-bench 服务占用该端口，否则 `vllm-sr serve` 会因“sr-bench port 8090 is already in use”而停止。设置 `VLLM_ROCM_USE_AITER=1` 时，首次启动会编译 AITER 内核，在空闲 CPU 核心较少的主机上可能需要几十分钟。
+
 该命令只挂载模型缓存。不要将整个家目录挂载到模型服务容器中。该示例也省略了 `SYS_PTRACE`、未受限的 seccomp 配置文件和 `--trust-remote-code`；仅当经过审核且已固定的工作负载明确需要时，才添加更广泛的权限或远程模型代码。
 
 根据可用硬件调整 `--max-model-len`、`--max-num-seqs`、张量并行和 GPU 内存利用率。以较小限制启动成功的模型，在复制这些参考值后可能失败或驱逐有用的缓存。
@@ -94,10 +96,10 @@ docker run -d \
 等待模型加载完成，然后独立于 Router 验证后端：
 
 ```bash
-curl --fail http://127.0.0.1:8090/health
-curl --fail http://127.0.0.1:8090/v1/models
+curl --fail http://127.0.0.1:8000/health
+curl --fail http://127.0.0.1:8000/v1/models
 
-curl --fail http://127.0.0.1:8090/v1/chat/completions \
+curl --fail http://127.0.0.1:8000/v1/chat/completions \
   -H 'content-type: application/json' \
   -d '{
     "model": "qwen/qwen3.5-rocm",
@@ -110,14 +112,20 @@ curl --fail http://127.0.0.1:8090/v1/chat/completions \
 
 ## 安装并配置 Semantic Router
 
-安装 CLI：
+按[快速开始](installation/installation.md#安装)安装 CLI。只安装 CLI、不启动栈：
 
 ```bash
 curl -fsSL https://vllm-sr.ai/install.sh | \
-  bash -s -- --channel stable --mode cli --runtime skip --no-launch
+  bash -s -- --mode cli --runtime skip --no-launch
 ```
 
-对于简单的单模型部署，打开 `http://localhost:8700` 的控制面板，添加位于 `vllm:8000` 的 OpenAI 兼容后端，并激活生成的配置。
+对于简单的单模型部署，启动栈。普通的 `vllm-sr serve` 把 Router 及其模型留在 CPU 上；`--platform amd` 也会把 Router 的模型放到 GPU 上（见[在 AMD 上运行 Vela 路由模型](#run-vela-routing-models-on-amd)）：
+
+```bash
+vllm-sr serve
+```
+
+然后打开 `http://localhost:8700` 的控制面板，以 vLLM 为提供方、填入 served model name 和地址 `vllm:8000` 接入模型，并激活生成的配置。
 
 若要评估维护中的 balance 配方，请将其下载到当前工作区，而不是依赖仓库相对路径：
 
@@ -134,7 +142,7 @@ balance 配方期望示例后端暴露的五个别名。阅读其 [Model Card](h
 
 ## 验证已路由路径
 
-通过 Envoy 使用自动入口点发送请求：
+通过 Router 的监听器使用自动入口点发送请求：
 
 ```bash
 curl --fail --include http://127.0.0.1:8899/v1/chat/completions \

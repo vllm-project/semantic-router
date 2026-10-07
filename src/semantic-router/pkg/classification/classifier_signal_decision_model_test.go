@@ -2,6 +2,7 @@ package classification
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"testing"
 
@@ -115,6 +116,53 @@ func TestDecisionSignalsBatchPerDeploymentAndMatch(t *testing.T) {
 	}
 	if _, failed := results.SignalErrors["decision:hard"]; failed {
 		t.Fatal("answered signals carry no error")
+	}
+}
+
+func TestSetAndSpanAnswersMatchLabelsAndPublishEveryProbability(t *testing.T) {
+	strict, low := 0.95, 0.5
+	labels := []config.DecisionChoice{{Key: "billing"}, {Key: "shipping"}, {Key: "refunds"}}
+	set := config.DecisionSignalRule{Name: "topics", Question: config.DecisionQuestion{Type: config.DecisionQuestionSet, Labels: labels}}
+	setAnswer := modelservice.Answer{Type: "set", Probabilities: map[string]float64{"billing": 0.9, "shipping": 0.2, "refunds": 0.6}, Selected: []string{"billing", "refunds"}}
+	span := config.DecisionSignalRule{Name: "places", Question: config.DecisionQuestion{Type: config.DecisionQuestionSpan, Labels: []config.DecisionChoice{{Key: "city"}, {Key: "country"}}}}
+	spanAnswer := modelservice.Answer{Type: "span", Noul: 0.97, Spans: []modelservice.Span{
+		{Label: "city", Text: "Paris", Probability: 0.97}, {Label: "city", Text: "Lyon", Probability: 0.4}, {Label: "street", Text: "Rue", Probability: 0.9},
+	}}
+	cases := []struct {
+		name      string
+		rule      config.DecisionSignalRule
+		predicate *config.NumericPredicate
+		answer    modelservice.Answer
+		want      []string
+	}{
+		{name: "set: the labels the model selected", rule: set, answer: setAnswer, want: []string{"topics:billing", "topics:refunds"}},
+		{name: "set: labels whose probability meets the predicate", rule: set, predicate: &config.NumericPredicate{GTE: &strict}, answer: setAnswer},
+		{name: "set: a predicate replaces the selection", rule: set, predicate: &config.NumericPredicate{LT: &low}, answer: setAnswer, want: []string{"topics:shipping"}},
+		{name: "span: labels with a span", rule: span, answer: spanAnswer, want: []string{"places:city"}},
+		{name: "span: a span meeting the predicate", rule: span, predicate: &config.NumericPredicate{LTE: &low}, answer: spanAnswer, want: []string{"places:city"}},
+		{name: "span: no span meets it", rule: span, predicate: &config.NumericPredicate{GTE: &strict}, answer: modelservice.Answer{Type: "span", Spans: spanAnswer.Spans[1:]}},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			test.rule.Predicate = test.predicate
+			results := newSignalResults()
+			if got := applyDecisionAnswer(results, test.rule, test.answer); !slices.Equal(got, test.want) {
+				t.Fatalf("matched %v, want %v", got, test.want)
+			}
+		})
+	}
+	results := newSignalResults()
+	applyDecisionAnswer(results, set, setAnswer)
+	if results.SignalValues["decision:topics:shipping"] != 0.2 || results.SignalValues["decision:topics"] != 0.9 {
+		t.Fatalf("set values = %v", results.SignalValues)
+	}
+	results = newSignalResults()
+	applyDecisionAnswer(results, span, spanAnswer)
+	if results.SignalValues["decision:places:city"] != 0.97 || results.SignalValues["decision:places:country"] != 0 || results.SignalValues["decision:places"] != 0.97 {
+		t.Fatalf("span values = %v", results.SignalValues)
+	}
+	if _, undeclared := results.SignalValues["decision:places:street"]; undeclared {
+		t.Fatal("a span of an undeclared label is not published")
 	}
 }
 

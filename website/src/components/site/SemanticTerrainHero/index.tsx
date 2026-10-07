@@ -106,17 +106,31 @@ export default function SemanticTerrainHero(): JSX.Element {
             <div className={styles.intro}>
               <div className={styles.introCopy}>
                 <h1 className={styles.title}>
-                  <Translate id="homepage.hero.line1">Make your</Translate>
-                  {' '}
-                  <span className={`${styles.accent} ${styles.nowrap}`}>
-                    <Translate id="homepage.hero.line2">Mixture-of-Models</Translate>
-                  </span>
-                  {' '}
-                  <Translate id="homepage.hero.line3">programmable.</Translate>
+                  <Translate
+                    id="homepage.hero.title"
+                    values={{
+                      beyond: (
+                        <span className={styles.accent}>
+                          <Translate id="homepage.hero.beyond">beyond any one model.</Translate>
+                        </span>
+                      ),
+                    }}
+                  >
+                    {'Intelligence {beyond}'}
+                  </Translate>
                 </h1>
                 <p className={styles.dek}>
-                  <Translate id="homepage.hero.dek">
-                    The right model, on the right compute, for every request.
+                  <Translate
+                    id="homepage.hero.dek"
+                    values={{
+                      decisionLayer: (
+                        <strong>
+                          <Translate id="homepage.hero.decisionLayer">decision layer</Translate>
+                        </strong>
+                      ),
+                    }}
+                  >
+                    {'An open, programmable {decisionLayer} for models and compute.'}
                   </Translate>
                 </p>
               </div>
@@ -124,15 +138,17 @@ export default function SemanticTerrainHero(): JSX.Element {
                 <PillLink
                   className={styles.primaryCta}
                   href="https://app.vllm-sr.ai/playground"
+                  target="_blank"
+                  rel="noreferrer"
                 >
                   <Translate id="homepage.hero.primaryCta">
-                    Try Playground
+                    Try the Playground
                   </Translate>
                   <span aria-hidden="true">→</span>
                 </PillLink>
-                <PillLink className={styles.secondaryCta} to="/docs/intro" muted>
+                <PillLink className={styles.secondaryCta} to="/docs/installation/" muted>
                   <Translate id="homepage.hero.secondaryCta">
-                    Read the Docs
+                    Get started
                   </Translate>
                   <span aria-hidden="true">→</span>
                 </PillLink>
@@ -147,7 +163,7 @@ export default function SemanticTerrainHero(): JSX.Element {
         className={styles.modelBand}
         aria-label={translate({
           id: 'homepage.hero.modelBand.aria',
-          message: 'Mixture-of-Models ecosystem',
+          message: 'Models for programmable inference',
         })}
       >
         <div className={styles.modelViewport} aria-hidden="true">

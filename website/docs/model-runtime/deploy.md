@@ -130,7 +130,7 @@ unavailable while the router restarts it; the other models keep answering.
 Start a runtime anywhere the router can reach, then point a deployment at it:
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Lux-9B vllm-sr/Vela-1.0-Encoder-307M-PII --device rocm:0 --host 0.0.0.0 --port 8100
+vllm-sr serve vllm-sr/Decision-2.0-Lux-9B vllm-sr/Vela-1.0-Encoder-307M-PII --platform amd --device rocm:0 --host 0.0.0.0 --port 8100
 ```
 
 ```yaml
@@ -166,9 +166,13 @@ share of the cores as `--threads`.
 
 The router image already contains the CPU runtime, so managed deployments work
 in any cluster. The ROCm router image,
-`ghcr.io/vllm-project/semantic-router/extproc-rocm`, contains the runtime with
-PyTorch for ROCm: give the router pod an AMD GPU and set `device: rocm:0` on a
-deployment, and the router runs that model on the GPU itself.
+`ghcr.io/vllm-project/semantic-router/vllm-sr-rocm`, contains the runtime with
+PyTorch for ROCm, and `vllm-sr-cuda` the runtime with PyTorch for CUDA: give
+the router pod a GPU (`amd.com/gpu` or `nvidia.com/gpu` in its resource
+limits) and set `device: rocm:0` or `device: cuda:0` on a deployment, and the
+router runs that model on the GPU itself. `vllm-sr serve --target kubernetes
+--platform amd|nvidia` writes the image and the GPU limit into the chart's
+values for you.
 
 On first start the runtime downloads the models a router uses into its model
 volume (`/app/models`, the chart's `persistence` claim, 10 GiB by default).
@@ -206,7 +210,7 @@ spec:
     spec:
       containers:
         - name: runtime
-          image: ghcr.io/vllm-project/semantic-router/extproc-rocm:latest
+          image: ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest
           command: ["vllm-srun"]
           args: ["serve", "vllm-sr/Decision-2.0-Lux-9B", "--device", "rocm:0", "--host", "0.0.0.0", "--port", "8100"]
           resources:

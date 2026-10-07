@@ -1809,7 +1809,6 @@ global:
       eviction_policy: fifo
   integrations:
     looper:
-      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
       timeout_seconds: 1200
       flow:
         state:

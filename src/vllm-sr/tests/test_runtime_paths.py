@@ -212,6 +212,42 @@ def test_private_runtime_state_subdirectory_hardens_existing_owned_directories(
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX ownership only")
+def test_runtime_config_output_keeps_the_dashboard_group_share(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    runtime_dir = tmp_path / ".vllm-sr"
+    runtime_dir.mkdir()
+    runtime_dir.chmod(0o2770)
+    monkeypatch.setattr(runtime_paths, "DASHBOARD_STATE_GID", runtime_dir.stat().st_gid)
+
+    _runtime_config_output_path(tmp_path / "config.yaml")
+    runtime_paths.write_private_state_bytes(runtime_dir / "state.json", b"{}\n")
+
+    assert stat.S_IMODE(runtime_dir.stat().st_mode) == 0o2770
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX ownership only")
+@pytest.mark.parametrize(
+    ("mode", "gid_offset"),
+    [(0o2775, 0), (0o2777, 0), (0o2770, 1), (0o0570, 0)],
+    ids=["others-read", "others-write", "another-group", "owner-not-rwx"],
+)
+def test_runtime_config_output_hardens_anything_but_the_dashboard_share(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: int, gid_offset: int
+):
+    runtime_dir = tmp_path / ".vllm-sr"
+    runtime_dir.mkdir()
+    runtime_dir.chmod(mode)
+    monkeypatch.setattr(
+        runtime_paths, "DASHBOARD_STATE_GID", runtime_dir.stat().st_gid + gid_offset
+    )
+
+    _runtime_config_output_path(tmp_path / "config.yaml")
+
+    assert stat.S_IMODE(runtime_dir.stat().st_mode) == 0o700
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX ownership only")
 def test_runtime_config_output_rejects_directory_owned_by_another_user(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):

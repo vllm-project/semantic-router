@@ -1,3 +1,4 @@
+{{- $standalone := eq (include "semantic-router.gatewayMode" .) "standalone" -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -8,10 +9,19 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
+  {{- if $standalone }}
+  {{- range (include "semantic-router.listeners" . | fromYaml).items }}
+  - port: {{ .port }}
+    targetPort: {{ .portName }}
+    protocol: TCP
+    name: {{ .portName }}
+  {{- end }}
+  {{- else }}
   - port: {{ .Values.service.grpc.port }}
     targetPort: {{ .Values.service.grpc.targetPort }}
     protocol: {{ .Values.service.grpc.protocol }}
     name: grpc
+  {{- end }}
   - port: {{ .Values.service.api.port }}
     targetPort: {{ .Values.service.api.targetPort }}
     protocol: {{ .Values.service.api.protocol }}
@@ -20,6 +30,7 @@ spec:
     {{- include "semantic-router.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: router
 ---
+{{- if not $standalone }}
 # Headless per-pod DNS for gRPC ext_proc client-side load balancing (issue #2417).
 apiVersion: v1
 kind: Service
@@ -42,6 +53,7 @@ spec:
     {{- include "semantic-router.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: router
 ---
+{{- end }}
 {{- if .Values.service.metrics.enabled }}
 apiVersion: v1
 kind: Service

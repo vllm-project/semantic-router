@@ -42,9 +42,14 @@ For example, from this directory:
 
 ```bash
 cd classifier_model_fine_tuning_lora
-python ft_linear_lora.py --help
-python ft_linear_lora.py --mode train --model bert-base-uncased
+uv sync --locked
+uv run python ft_linear_lora.py --help
+uv run python ft_linear_lora.py --mode train --model bert-base-uncased
 ```
+
+`classifier_model_fine_tuning_lora/` has its own `pyproject.toml` and `uv.lock`, so
+`uv sync --locked` gives the same environment on every machine. The other tasks
+use their own requirements files until they get a project of their own.
 
 Use `--help` as the source of truth for script options; do not copy output from
 an old training run into this README.

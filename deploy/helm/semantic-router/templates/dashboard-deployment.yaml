@@ -72,6 +72,15 @@ spec:
           value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
         - name: TARGET_ROUTER_METRICS_URL
           value: "http://{{ include "semantic-router.fullname" . }}-metrics:{{ .Values.service.metrics.port }}/metrics"
+        - name: VLLM_SR_GATEWAY
+          value: {{ include "semantic-router.gatewayMode" . | quote }}
+        {{- if eq (include "semantic-router.gatewayMode" .) "standalone" }}
+        {{- $primary := include "semantic-router.primaryListener" . | fromYaml }}
+        # Standalone: the Playground and readiness checks reach the Router's
+        # listener directly.
+        - name: TARGET_ENVOY_URL
+          value: "{{ $primary.scheme }}://{{ include "semantic-router.fullname" . }}:{{ $primary.port }}"
+        {{- end }}
         {{- if .Values.dashboard.jwtSecret.existingSecret }}
         - name: DASHBOARD_JWT_SECRET
           valueFrom:

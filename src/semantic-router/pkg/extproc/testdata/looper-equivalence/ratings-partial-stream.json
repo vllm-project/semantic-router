@@ -1,0 +1,132 @@
+{
+  "calls": [
+    {
+      "route": "model-a",
+      "model": "model-a",
+      "body": {
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-a",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      }
+    },
+    {
+      "route": "model-b",
+      "model": "model-b",
+      "body": {
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-b",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      }
+    },
+    {
+      "route": "model-c",
+      "model": "model-c",
+      "body": {
+        "messages": [
+          {
+            "content": "What is the capital of France?",
+            "role": "user"
+          }
+        ],
+        "model": "model-c",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      }
+    }
+  ],
+  "response": {
+    "status": 200,
+    "header": {
+      "content-type": "text/event-stream",
+      "x-vsr-config-version": "1",
+      "x-vsr-response-path": "looper",
+      "x-vsr-schema-version": "2",
+      "x-vsr-selected-confidence": "0.0000",
+      "x-vsr-selected-decision": "looper_route",
+      "x-vsr-selected-model": "model-c",
+      "x-vsr-selected-recipe": "default"
+    },
+    "events": [
+      {
+        "choices": [
+          {
+            "delta": {
+              "role": "assistant"
+            },
+            "index": 0
+          },
+          {
+            "delta": {
+              "role": "assistant"
+            },
+            "index": 1
+          }
+        ],
+        "created": "\u003cvolatile\u003e",
+        "id": "\u003cvolatile\u003e",
+        "model": "model-a,model-c",
+        "object": "chat.completion.chunk"
+      },
+      {
+        "choices": [
+          {
+            "delta": {
+              "content": "model-a says Paris (1b997d5a)"
+            },
+            "index": 0
+          },
+          {
+            "delta": {
+              "content": "model-c says Paris in much more detail (1b997d5a)"
+            },
+            "index": 1
+          }
+        ],
+        "created": "\u003cvolatile\u003e",
+        "id": "\u003cvolatile\u003e",
+        "model": "model-a,model-c",
+        "object": "chat.completion.chunk"
+      },
+      {
+        "choices": [
+          {
+            "delta": {},
+            "finish_reason": "stop",
+            "index": 0
+          },
+          {
+            "delta": {},
+            "finish_reason": "stop",
+            "index": 1
+          }
+        ],
+        "created": "\u003cvolatile\u003e",
+        "id": "\u003cvolatile\u003e",
+        "model": "model-a,model-c",
+        "object": "chat.completion.chunk"
+      },
+      "[DONE]"
+    ]
+  }
+}

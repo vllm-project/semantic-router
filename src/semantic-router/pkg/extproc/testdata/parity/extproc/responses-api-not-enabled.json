@@ -1,0 +1,38 @@
+[
+  {
+    "immediateResponse": {
+      "bodyText": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"not_found\",\"message\":\"resource not found\",\"param\":null}}",
+      "headers": {
+        "setHeaders": [
+          {
+            "header": {
+              "key": "content-type",
+              "rawValueText": "application/json"
+            }
+          },
+          {
+            "header": {
+              "key": "x-vsr-schema-version",
+              "rawValueText": "2"
+            }
+          },
+          {
+            "header": {
+              "key": "x-vsr-response-path",
+              "rawValueText": "error"
+            }
+          },
+          {
+            "header": {
+              "key": "x-vsr-config-version",
+              "rawValueText": "1"
+            }
+          }
+        ]
+      },
+      "status": {
+        "code": "NotFound"
+      }
+    }
+  }
+]
