@@ -45,7 +45,7 @@ external project.
 | Option | Classification | Project coverage |
 | --- | --- | --- |
 | [Helm chart](configuration-workflows#helm) | Maintained reference stack | **Contract.** Router, optional Dashboard, ingress, autoscaling, persistence, and observability resources. Gateways and storage remain external. |
-| [Local deployment](docker) | Maintained reference stack | **PR CI.** The CLI manages Router, Envoy, Dashboard, and support services. You provide custom model endpoints and harden local defaults. |
+| [Local deployment](docker) | Maintained reference stack | **PR CI.** The CLI manages the Router, the Dashboard, and support services, and Envoy with `--gateway extproc`. You provide custom model endpoints and harden local defaults. |
 | [Kubernetes Operator](k8s/operator) | Maintained reference stack | **PR CI + Contract.** The project owns CRDs, reconciliation, Router workloads, Services, and routing APIs. Kubernetes schedules workloads; your gateway carries traffic. |
 
 ## Supported integrations

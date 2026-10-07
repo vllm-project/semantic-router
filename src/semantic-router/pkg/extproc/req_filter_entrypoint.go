@@ -63,7 +63,7 @@ func (r *OpenAIRouter) requestModelActsAsAuto(modelName string) bool {
 func (r *OpenAIRouter) decisionCandidatesForRequest(originalModel string, ctx *RequestContext) []config.Decision {
 	if ctx != nil && ctx.Routing.SelectedRecipe() != nil {
 		recipe := ctx.Routing.SelectedRecipe()
-		if r.Config.IsReMoMModelName(originalModel) || r.Config.IsFusionModelName(originalModel) || r.Config.IsFlowModelName(originalModel) {
+		if r.looperAliasAlgorithm(originalModel) != "" {
 			return r.decisionCandidatesForRequestModel(originalModel)
 		}
 		if recipe.Profile.Decisions == nil {
@@ -78,18 +78,8 @@ func (r *OpenAIRouter) decisionCandidatesForRequest(originalModel string, ctx *R
 }
 
 func (r *OpenAIRouter) decisionCandidatesForRequestModel(modelName string) []config.Decision {
-	if r == nil || r.Config == nil {
-		return nil
-	}
-	algorithm := ""
-	switch {
-	case r.Config.IsReMoMModelName(modelName):
-		algorithm = config.DecisionAlgorithmReMoM
-	case r.Config.IsFusionModelName(modelName):
-		algorithm = config.DecisionAlgorithmFusion
-	case r.Config.IsFlowModelName(modelName):
-		algorithm = config.DecisionAlgorithmWorkflows
-	default:
+	algorithm := r.looperAliasAlgorithm(modelName)
+	if algorithm == "" {
 		return nil
 	}
 	candidates := make([]config.Decision, 0)
@@ -99,4 +89,22 @@ func (r *OpenAIRouter) decisionCandidatesForRequestModel(modelName string) []con
 		}
 	}
 	return candidates
+}
+
+// looperAliasAlgorithm returns the decision algorithm a request for a direct
+// Looper alias evaluates, or "" when the name is not one.
+func (r *OpenAIRouter) looperAliasAlgorithm(modelName string) string {
+	if r == nil || r.Config == nil {
+		return ""
+	}
+	switch {
+	case r.Config.IsReMoMModelName(modelName):
+		return config.DecisionAlgorithmReMoM
+	case r.Config.IsFusionModelName(modelName):
+		return config.DecisionAlgorithmFusion
+	case r.Config.IsFlowModelName(modelName):
+		return config.DecisionAlgorithmWorkflows
+	default:
+		return ""
+	}
 }

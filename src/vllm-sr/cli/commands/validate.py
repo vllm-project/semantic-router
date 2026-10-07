@@ -15,7 +15,12 @@ from cli.models import UserConfig
 from cli.parser import ConfigParseError, parse_user_config
 from cli.terminal import echo, error, fields, heading, success
 from cli.validation_error import ValidationError
-from cli.validator import print_validation_errors, validate_user_config
+from cli.validator import (
+    collect_validation_warnings,
+    print_validation_errors,
+    print_validation_warnings,
+    validate_user_config,
+)
 
 
 def _count_items(value) -> int:
@@ -142,6 +147,7 @@ def validate_command(config_path: str):
         sys.exit(1)
 
     success("Configuration is valid")
+    print_validation_warnings(collect_validation_warnings(user_config))
     heading("Configuration summary")
     fields(
         (

@@ -6,21 +6,24 @@ sidebar_label: Container Connectivity
 # Container Connectivity
 
 Use this guide when the local stack starts but cannot reach a model backend, or
-when the host cannot reach the Router, Envoy, Dashboard, or metrics endpoints.
+when the host cannot reach the Router, Dashboard, or metrics endpoints.
 
 ## Start with the failing hop
 
-A routed request crosses several network boundaries:
+A routed request crosses several network boundaries. In standalone mode, the
+default, the Router serves the listener itself; with `--gateway extproc`, Envoy
+sits in front of it:
 
 ```text
-client -> Envoy -> Router -> selected provider backend
+client -> Router -> selected provider backend                 # standalone
+client -> Envoy -> Router -> selected provider backend        # --gateway extproc
 ```
 
 Check each hop in that order:
 
 ```bash
 vllm-sr status
-vllm-sr logs envoy
+vllm-sr logs envoy        # only with --gateway extproc
 vllm-sr logs router
 curl -sS http://localhost:8899/v1/models
 ```
@@ -114,7 +117,7 @@ The default local stack publishes these user-facing endpoints:
 
 | Endpoint | Default address |
 |----------|-----------------|
-| OpenAI-compatible listener through Envoy | `http://localhost:8899` |
+| OpenAI-compatible listener (the Router, or Envoy with `--gateway extproc`) | `http://localhost:8899` |
 | Dashboard | `http://localhost:8700` |
 | Router management API | `http://localhost:8080` |
 | Router metrics | `http://localhost:9190/metrics` |
@@ -144,7 +147,7 @@ metrics source before debugging panels:
 curl -sS http://localhost:9190/metrics | head
 ```
 
-Then confirm that Prometheus can scrape the Router and Envoy targets. Empty
+Then confirm that Prometheus can scrape the Router target, and the Envoy target with `--gateway extproc`. Empty
 panels can be correct when no request has exercised the corresponding path; for
 example, rejection and cache metrics remain empty until a policy rejects or a
 cache handles a request.
@@ -160,7 +163,7 @@ Also verify:
 
 - The local stack is running and `vllm-sr status` identifies the failing
   component.
-- Envoy's `/v1/models` endpoint is reachable from the client.
+- The listener's `/v1/models` endpoint is reachable from the client.
 - The provider endpoint is not `localhost` unless it truly runs in the same
   container.
 - The backend listens on a reachable interface and exposes `/v1/models`.

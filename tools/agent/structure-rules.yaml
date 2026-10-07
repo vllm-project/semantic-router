@@ -1,15 +1,5 @@
 version: 2
 
-limits:
-  file_lines:
-    warn: 800
-  function_lines:
-    warn: 100
-  nesting:
-    warn: 4
-  interface_methods:
-    warn: 5
-
 root_files:
   allowed:
     - .dockerignore
@@ -30,29 +20,6 @@ root_files:
     - SECURITY.md
     - install.sh
     - netlify.toml
-
-languages:
-  go:
-    globs:
-      - src/**/*.go
-      - dashboard/backend/**/*.go
-      - dashboard/wasm/**/*.go
-      - e2e/**/*.go
-      - deploy/**/*.go
-      - tools/**/*.go
-      - bench/grounded_fusion/fusioneval/**/*.go
-  python:
-    globs:
-      - src/**/*.py
-      - e2e/**/*.py
-      - tools/**/*.py
-      - bench/**/*.py
-  typescript:
-    parser: typescript
-    globs:
-      - dashboard/frontend/src/**/*.ts
-      - dashboard/frontend/src/**/*.tsx
-      - dashboard/frontend/e2e/evaluation/**/*.ts
 
 ignore_globs:
   - website/**
@@ -111,9 +78,6 @@ architecture:
       focus:
         - src/vllm-sr/cli/evaluation/*.py
         - src/vllm-sr/cli/evaluation/**/*.py
-      test_patterns:
-        - '**/test_*.py'
-        - '**/*_test.py'
       cycle_policy: no-new
       forbidden_edges:
         - name: evaluation-python-must-not-depend-on-command-entrypoints
@@ -137,9 +101,6 @@ architecture:
         - dashboard/frontend/src/components/evaluation-plane/*.tsx
         - dashboard/frontend/src/components/evaluation-plane/**/*.ts
         - dashboard/frontend/src/components/evaluation-plane/**/*.tsx
-      test_patterns:
-        - '**/*.test.ts'
-        - '**/*.test.tsx'
       aliases:
         '@/': dashboard/frontend/src/
       cycle_policy: no-new
@@ -156,11 +117,3 @@ architecture:
             - dashboard/frontend/src/pages/*.tsx
             - dashboard/frontend/src/pages/**/*.ts
             - dashboard/frontend/src/pages/**/*.tsx
-  health_scopes:
-    - name: evaluation-go
-      root: dashboard/backend/evaluationplane
-      include:
-        - dashboard/backend/evaluationplane/*.go
-        - dashboard/backend/evaluationplane/**/*.go
-      test_patterns:
-        - '**/*_test.go'

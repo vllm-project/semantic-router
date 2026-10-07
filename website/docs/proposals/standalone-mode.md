@@ -50,7 +50,8 @@ and the Looper executor carries over.
    docker and kubernetes, both modes and engine mode. The former `extproc` and `extproc-rocm` images are alias
    tags of the same digests for one release. Upstream Envoy is used only for docker `extproc`.
 6. The Router keeps talking to the model runtime over HTTP/JSON on a Unix domain socket. A binary fast path is
-   considered only after the overhead is measured.
+   considered only after the overhead is measured. Measured on CPU, the transport is about 2% of a runtime call,
+   so there is none (see [Results](#results)).
 7. Timeout, retry and fallback are part of the first release.
 8. Looper request graphs run entirely inside the Router and never loop back through Envoy.
 9. The configuration system is modular and versioned, supports hot reload and rollback, and borrows the core
@@ -553,23 +554,47 @@ backends:
 - **Packaging:** on a host with only Docker, the CLI's wheel in a clean venv runs `vllm-sr serve` in both gateway
   modes and `vllm-sr serve MODEL` on CPU. The ROCm image's Router, run as the chart runs it (uid 65532, read-only
   root, no capabilities), reaches the GPU through its render group only.
-- **Performance:** 10 interleaved rounds of 2,000 requests per mode and concurrency, with a request that matches
-  no decision; means over rounds, with 95% intervals within 5% except the standalone p99 at 32 and 64 clients
-  (about ±1.9 ms). Envoy runs on 8 cores and the ext_proc Router on 16; the standalone Router runs on 16 cores
-  for 1 and 8 clients and on 24 for 32 and 64.
+- **Performance:** 10 interleaved rounds per mode and concurrency, with a request that matches no decision;
+  means over rounds, with 95% intervals. Envoy runs on 8 cores and the ext_proc Router on 16.
+  - **On the merged tree** (2,000 requests a round), with the standalone Router on 16 cores for 1 and 8 clients
+    and on 24 for 32 and 64:
 
-  | Clients | p50, ext_proc → standalone | p99, ext_proc → standalone | Requests/s, ext_proc → standalone |
-  | --- | --- | --- | --- |
-  | 1 | 0.74 → 0.57 ms | 2.02 → 1.82 ms | 1,280 → 1,644 |
-  | 8 | 0.87 → 0.64 ms | 1.77 → 1.56 ms | 7,771 → 9,737 |
-  | 32 | 2.17 → 2.20 ms | 4.55 → 6.28 ms | 14,067 → 13,435 |
-  | 64 | 4.20 → 5.06 ms | 9.36 → 10.92 ms | 14,561 → 13,080 |
+    | Clients | p50, ext_proc → standalone | p99, ext_proc → standalone | Requests/s, ext_proc → standalone |
+    | --- | --- | --- | --- |
+    | 1 | 0.74 → 0.57 ms | 2.02 → 1.82 ms | 1,280 → 1,644 |
+    | 8 | 0.87 → 0.64 ms | 1.77 → 1.56 ms | 7,771 → 9,737 |
+    | 32 | 2.17 → 2.20 ms | 4.55 → 6.28 ms | 14,067 → 13,435 |
+    | 64 | 4.20 → 5.06 ms | 9.36 → 10.92 ms | 14,561 → 13,080 |
 
-  Standalone mode is faster up to moderate concurrency. From 32 clients it saturates 5–10% below Envoy with
-  ext_proc, and more cores barely move its ceiling; profiling that path is a follow-up.
+    From 32 clients standalone mode saturated 5–10% below Envoy mode, and more cores barely moved its ceiling.
+  - **After [#4666](https://github.com/vllm-project/semantic-router/issues/4666)**, on the same node (2,000
+    requests a round), with the standalone Router on 24 cores at every level, the same total as Envoy mode:
+
+    | Clients | p50, ext_proc → standalone | p99, ext_proc → standalone | Requests/s, ext_proc → standalone |
+    | --- | --- | --- | --- |
+    | 1 | 0.57 → 0.41 ms | 1.12 → 0.95 ms | 1,692 → 2,318 |
+    | 8 | 0.66 → 0.43 ms | 1.40 → 1.34 ms | 10,831 → 14,523 |
+    | 32 | 1.03 → 0.93 ms | 2.54 → 3.46 ms | 26,744 → 27,935 |
+    | 64 | 1.97 → 1.70 ms | 4.52 → 8.43 ms | 30,152 → 29,473 |
+
+    The ceiling came from the routing core, which both modes share. Every request updated the TTFT history under
+    a global lock and then copied the history out under it, so a copy stalled by garbage collection held up every
+    request queued behind it. Requests also allocated about 300 KB each, mostly defensive copies of the provider
+    catalog and log fields that the sampler then dropped. Without these, both modes about double. Standalone mode
+    answers faster at every load and serves more requests per second up to 32 clients. At 64 clients the two are
+    level in rounds of 2,000 requests, about 70 ms at these rates (−680 ± 721 requests/s); in rounds of 10,000,
+    standalone mode serves 30,319 against 28,837 requests/s at 64 clients and 28,830 against 26,370 at 32. Its p99
+    from 32 clients is higher: both Routers are CPU-bound there, and garbage collection still takes a third or more
+    of their CPU. `BenchmarkNativeGatewayClients` in `internal/gatewayparity` sends the same request through the
+    standalone path from 1, 8, 32 and 64 clients in process, so a request-path regression shows up without Envoy
+    or Docker.
 - **Router-to-runtime share:** with one CPU jailbreak signal (the 307M Vela Guard), a standalone request takes
-  13.9 ms, 12.4 ms (89%) of it in the runtime call. The runtime does not report its own compute time yet, so the
-  transport's part of that call is unmeasured; measuring it comes before any fast path.
+  13.9 ms, 12.4 ms (89%) of it in the runtime call. The runtime now reports its own time for every request, and
+  the Router records each call's transport ([#4667](https://github.com/vllm-project/semantic-router/issues/4667)).
+  On CPU, inference is 95–99% of a call. The transport is 0.6% for the Vela 2.0 0.3B defaults, 1.9–2.2% for the
+  Vela 1.0 signals and 2.1% for the Guard alone, and the runtime's own HTTP and JSON handling takes 0.4–1.6%.
+  A fast path could save a request at most about 0.8 ms, so the Router keeps HTTP/JSON
+  ([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/runtime-transport-cpu.md)).
 
 ## Risks and mitigations
 

@@ -832,8 +832,8 @@ _Appears in:_
 | `max_sequence_length` _integer_ | MaxSequenceLength limits the total tokenized input, including special<br />tokens. Omission or zero retains the 512-token budget. The model loader<br />validates the requested budget against the loaded model's capacity. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window enables explicit scanning of all input tokens. Omission or null<br />keeps whole-input inference. Only the local model supports it. |  | Optional: \{\} <br /> |
 | `enabled` _boolean_ |  | true | Optional: \{\} <br /> |
-| `model_id` _string_ |  | models/Vela-1.0-Encoder-307M-Guard | Optional: \{\} <br /> |
-| `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues. | 0.5 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
+| `model_id` _string_ |  | models/Vela-2.0-0.3B | Optional: \{\} <br /> |
+| `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues. | 0.75 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  | true | Optional: \{\} <br /> |
 | `jailbreak_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
 | `positive_labels` _string array_ | PositiveLabels lists the jailbreak_mapping labels that count as unsafe,<br />for a custom backend whose positive class isn't named "jailbreak"<br />(e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset. |  | Optional: \{\} <br /> |
