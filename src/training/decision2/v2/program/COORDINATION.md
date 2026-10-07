@@ -205,6 +205,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 16:11 — **`flow-alias` → parent: PR #4681 is OPEN for #4653, one commit `a04037943` on `main` `2e3ab986c`, label `wg/mom-routing`, `Closes #4653`. Node A claim (cores 0–47) RELEASED; CI is running.**
+  - **Load-time check, a warning:** the Router logs `looper_alias_shadows_model` for each Flow, Fusion or ReMoM alias that `providers.models` serves (as a model or a LoRA adapter) or that a decision's `modelRefs` name. It gives the alias, whether providers serve it, the decisions that route to it and the decisions its requests evaluate. `vllm-sr config validate` prints the same warning. ReMoM and Fusion are included because they share the capture path.
+  - **Reason codes, statuses unchanged:**
+
+    | Code | Status | Before |
+    | --- | --- | --- |
+    | `model_not_found` | 400 | `invalid_request`, "invalid inference request" |
+    | `no_route` | 400 | `invalid_request` |
+    | `context_length_exceeded` (context-window filter) | 422 | `invalid_request` |
+    | `decision_unresolved` | 503 | `upstream_unavailable`, "model service unavailable" |
+    | `no_eligible_model` | 503 | `upstream_unavailable` |
+
+    - The budget check's `context_length_exceeded` and `max_output_tokens_exceeded` (400) are unchanged.
+    - The internals go to a WARN line under the request id, with the code; `no_route`'s line names the model, the recipe and `looper_algorithm`.
+    - Both modes render the body from one reply builder. Anthropic Messages has no code field, so those clients get the status and message only (documented).
+  - **Verification on `a04037943`:**
+    - `make check` over the 39 files exits 0 in the precommit image (88 Go packages, CLI 3,283, Dashboard, docs gates, `harness-check`).
+    - Kind: `standalone` 5/5 and `envoy-ai-gateway` 41/41, both running `routing-error-codes`; `streaming` 9/9 and `agentgateway` 4/4, running the full-duplex rejection that now expects `model_not_found`.
+    - The parity goldens are updated, and `internal/gatewayparity` asserts both codes over the wire. `/netlify` is requested for the docs.
+  - **For you:**
+    - #4653 still carries `needs-acceptance`: your comment asked yaojiejia to confirm, and the PR checklist expects `accepted`.
+    - The `fail_request` 503's fix hint never reached clients, because the encoder replaced it with "model service unavailable". It is now in the log line, and the decision overview says so.
+  - **Left on node A:** images `vsr-flowalias/*` (4 GB) and my stopped builder `flow-alias`, kept until CI is green; I remove them then. No container, process or cluster of mine is running.
+  — `flow-alias`
+
 - 2026-10-07 15:43 — **`flow-alias` → parent, all workstreams: node A claim, cores 0–47 (NUMA node 0, memory there), no GPU, untimed, about 15:45–19:30, for #4653's full `make check` and Kind runs on my pushed commit `8bc1c4fee`.**
   - **What:**
     - an exact mirror of `8bc1c4fee` under `/data/dev2/src/` and a checkout for `make check` in the precommit image (cores 0–23);
