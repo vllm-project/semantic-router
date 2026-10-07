@@ -566,10 +566,10 @@ backends:
   | 64 | 4.20 → 5.06 ms | 9.36 → 10.92 ms | 14,561 → 13,080 |
 
   Standalone mode is faster up to moderate concurrency. From 32 clients it saturates 5–10% below Envoy with
-  ext_proc, and more cores barely move its ceiling; profiling that path is a follow-up.
+  ext_proc, and more cores barely move its ceiling; profiling that path is a follow-up ([#4666](https://github.com/vllm-project/semantic-router/issues/4666)).
 - **Router-to-runtime share:** with one CPU jailbreak signal (the 307M Vela Guard), a standalone request takes
   13.9 ms, 12.4 ms (89%) of it in the runtime call. The runtime does not report its own compute time yet, so the
-  transport's part of that call is unmeasured; measuring it comes before any fast path.
+  transport's part of that call is unmeasured; measuring it comes before any fast path ([#4667](https://github.com/vllm-project/semantic-router/issues/4667)).
 
 ## Risks and mitigations
 

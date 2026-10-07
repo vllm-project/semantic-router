@@ -20,7 +20,7 @@ features the standalone Router does not have yet, such as token-bucket rate
 limiting, mTLS, JWT or OIDC, or advanced route matching. Envoy mode also
 sustains about 5–10% more requests per second at 32 or more concurrent clients;
 below that, standalone mode answers faster (see the design doc's
-[results](../proposals/standalone-mode#results)).
+[results](../proposals/standalone-mode#results)). [#4666](https://github.com/vllm-project/semantic-router/issues/4666) tracks closing the gap.
 
 ## What changes for a standalone stack
 

@@ -4,7 +4,7 @@ description: Router 自己提供 OpenAI 兼容接口并在进程内执行路由�
 created: 2026-10-06
 status: Implemented
 translation:
-  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
+  source_commit: "b9b183307e97f3ce8448d2838d0f1bf99972d336"
   source_file: "docs/proposals/standalone-mode.md"
   outdated: false
 ---
@@ -494,10 +494,10 @@ looper 不再是“绕回 Envoy”的特殊流程，而是在 Router 内部执�
   | 64 | 4.20 → 5.06 ms | 9.36 → 10.92 ms | 14,561 → 13,080 |
 
   中等并发以内 standalone 模式更快。从 32 个客户端起，它在比 Envoy + ext_proc 低 5–10% 的吞吐处饱和，
-  加核也几乎不提高上限；对这条路径做 profiling 是后续工作。
+  加核也几乎不提高上限；对这条路径做 profiling 是后续工作（[#4666](https://github.com/vllm-project/semantic-router/issues/4666)）。
 - **Router 到 runtime 的占比：** 一个 CPU 上的 jailbreak 信号（307M 的 Vela Guard）下，standalone 请求耗时
   13.9 ms，其中 12.4 ms（89%）在 runtime 调用里。runtime 还不报告自己的计算时间，所以这次调用里传输占多少
-  尚未测出；先测出它，再考虑任何快路径。
+  尚未测出；先测出它，再考虑任何快路径（[#4667](https://github.com/vllm-project/semantic-router/issues/4667)）。
 
 ## 风险与对策
 
