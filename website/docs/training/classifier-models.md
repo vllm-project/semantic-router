@@ -82,7 +82,7 @@ FactCheck contract and training/development files are already prepared.
 python -m src.training.model_classifier.sequence_repair.train \
   --method full --fresh-head \
   --base /models/vela-base \
-  --base-id llm-semantic-router/Vela-1.0-Encoder-307M \
+  --base-id vllm-sr/Vela-1.0-Encoder-307M \
   --base-revision "${VELA_BASE_REVISION:?Set the downloaded revision}" \
   --contract /data/factcheck/contract.json \
   --train /data/factcheck/train.jsonl --dev /data/factcheck/dev.jsonl \
@@ -136,9 +136,9 @@ Export the selected model with
 It includes the trained weights, tokenizer, and task-specific label mappings.
 PII uses its own export workflow.
 
-Finally, configure [local model bindings](../installation/runtime/in-process.md)
+Finally, configure [local model bindings](../model-runtime/deploy.md)
 and send representative requests through
-[route preview](../installation/runtime/lifecycle-diagnostics.md). Check the
+[route preview](model-runtime/troubleshooting.md). Check the
 actual signal and decision as well as model confidence.
 
 The [artifact index](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_artifacts.json)

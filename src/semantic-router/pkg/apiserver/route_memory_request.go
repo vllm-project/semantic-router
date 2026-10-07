@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -117,4 +117,22 @@ func (s *ClassificationAPIServer) parseMemoryListLimit(w http.ResponseWriter, li
 		return maxMemoryListLimit, true
 	}
 	return limit, true
+}
+
+func (s *ClassificationAPIServer) parseMemoryListOffset(w http.ResponseWriter, offsetStr string) (int, bool) {
+	if offsetStr == "" {
+		return 0, true
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_OFFSET",
+			"offset must be a non-negative integer")
+		return 0, false
+	}
+	if offset > 100_000 {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_OFFSET",
+			"offset exceeds maximum of 100000")
+		return 0, false
+	}
+	return offset, true
 }

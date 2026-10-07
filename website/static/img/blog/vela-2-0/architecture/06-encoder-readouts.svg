@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1470" viewBox="0 0 1600 1470" role="img"><title>Vela 2.0 0.3B: schema-conditioned readouts</title><desc>Bottom-up option cosine plus raw-option MLP readout and word-first-subtoken versus label-marker cosine span readout. Five 768-to-256 biased projections reuse one shared LayerNorm. Learned tau and inference calibration temperatures are distinct.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<g data-box="60.0 1280 1480 70">
+<rect x="60.0" y="1280" width="1480" height="70" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="800" y="1323.84" font-size="26" text-anchor="middle" class="math">Final-normalized encoder states H ∈ ℝ^(L×768)</text>
+</g>
+<g data-box="35.0 1150 250 76">
+<rect x="35.0" y="1150" width="250" height="76" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="160" y="1182.1200000000001" font-size="24" text-anchor="middle" class="">Option marker hₒ</text>
+<text x="160" y="1210.2" font-size="24" text-anchor="middle" class="">[O] or [ABS]</text>
+</g>
+<path d="M160,1280 L160,1226" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="75.0 1035 170 55">
+<rect x="75.0" y="1035" width="170" height="55" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="160" y="1071.0" font-size="25" text-anchor="middle" class="">LayerNorm*</text>
+</g>
+<path d="M160,1150 L160,1090" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="302.5 1150 235 76">
+<rect x="302.5" y="1150" width="235" height="76" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="420" y="1182.1200000000001" font-size="24" text-anchor="middle" class="">Question marker hq</text>
+<text x="420" y="1210.2" font-size="24" text-anchor="middle" class="">[Q]</text>
+</g>
+<path d="M420,1280 L420,1226" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="335.0 1035 170 55">
+<rect x="335.0" y="1035" width="170" height="55" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="420" y="1071.0" font-size="25" text-anchor="middle" class="">LayerNorm*</text>
+</g>
+<path d="M420,1150 L420,1090" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="565.0 1150 250 76">
+<rect x="565.0" y="1150" width="250" height="76" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="690" y="1182.1200000000001" font-size="24" text-anchor="middle" class="">Target-range mean p</text>
+<text x="690" y="1210.2" font-size="24" text-anchor="middle" class="">[SEG] + part tokens</text>
+</g>
+<path d="M690,1280 L690,1226" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="605.0 1035 170 55">
+<rect x="605.0" y="1035" width="170" height="55" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="690" y="1071.0" font-size="25" text-anchor="middle" class="">LayerNorm*</text>
+</g>
+<path d="M690,1150 L690,1090" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="955.0 1150 250 76">
+<rect x="955.0" y="1150" width="250" height="76" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1080" y="1182.1200000000001" font-size="24" text-anchor="middle" class="">First word subtokens</text>
+<text x="1080" y="1210.2" font-size="24" text-anchor="middle" class="">W×768</text>
+</g>
+<path d="M1080,1280 L1080,1226" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="995.0 1035 170 55">
+<rect x="995.0" y="1035" width="170" height="55" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="1080" y="1071.0" font-size="25" text-anchor="middle" class="">LayerNorm*</text>
+</g>
+<path d="M1080,1150 L1080,1090" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1245.0 1150 250 76">
+<rect x="1245.0" y="1150" width="250" height="76" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1370" y="1182.1200000000001" font-size="24" text-anchor="middle" class="">[E] label markers</text>
+<text x="1370" y="1210.2" font-size="24" text-anchor="middle" class="">E×768</text>
+</g>
+<path d="M1370,1280 L1370,1226" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1285.0 1035 170 55">
+<rect x="1285.0" y="1035" width="170" height="55" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="1370" y="1071.0" font-size="25" text-anchor="middle" class="">LayerNorm*</text>
+</g>
+<path d="M1370,1150 L1370,1090" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="55.0 925 210 76">
+<rect x="55.0" y="925" width="210" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="160" y="956.63" font-size="26" text-anchor="middle" class="">Wₒ</text>
+<text x="160" y="987.05" font-size="26" text-anchor="middle" class="">768 → 256</text>
+</g>
+<path d="M160,1035 L160,1001" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="315.0 925 210 76">
+<rect x="315.0" y="925" width="210" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="420" y="956.63" font-size="26" text-anchor="middle" class="">Wq</text>
+<text x="420" y="987.05" font-size="26" text-anchor="middle" class="">768 → 256</text>
+</g>
+<path d="M420,1035 L420,1001" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="585.0 925 210 76">
+<rect x="585.0" y="925" width="210" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="690" y="956.63" font-size="26" text-anchor="middle" class="">Wp</text>
+<text x="690" y="987.05" font-size="26" text-anchor="middle" class="">768 → 256</text>
+</g>
+<path d="M690,1035 L690,1001" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="975.0 925 210 76">
+<rect x="975.0" y="925" width="210" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1080" y="956.63" font-size="26" text-anchor="middle" class="">Wt</text>
+<text x="1080" y="987.05" font-size="26" text-anchor="middle" class="">768 → 256</text>
+</g>
+<path d="M1080,1035 L1080,1001" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1265.0 925 210 76">
+<rect x="1265.0" y="925" width="210" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1370" y="956.63" font-size="26" text-anchor="middle" class="">We</text>
+<text x="1370" y="987.05" font-size="26" text-anchor="middle" class="">768 → 256</text>
+</g>
+<path d="M1370,1035 L1370,1001" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="300" cy="825" r="23" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="300" y="833.99" font-size="29" text-anchor="middle" class="">+</text>
+<path d="M160,925 L160,825 L277,825" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M420,925 L420,825 L323,825" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="190.0 730 220 60">
+<rect x="190.0" y="730" width="220" height="60" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="300" y="768.5" font-size="25" text-anchor="middle" class="">L2 normalize u</text>
+</g>
+<path d="M300,802 L300,790" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="580.0 805 220 60">
+<rect x="580.0" y="805" width="220" height="60" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="690" y="843.5" font-size="25" text-anchor="middle" class="">L2 normalize v</text>
+</g>
+<path d="M690,925 L690,865" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="355.0 605 290 76">
+<rect x="355.0" y="605" width="290" height="76" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="500" y="652.52" font-size="28" text-anchor="middle" class="math">dot(u, v) / τ</text>
+</g>
+<path d="M300,730 L300,705 L440,705 L440,681" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M690,805 L690,715 L560,715 L560,681" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="40.0 535 300 92">
+<rect x="40.0" y="535" width="300" height="92" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="190" y="575.12" font-size="24" text-anchor="middle" class="">MLP: 768 → 1536 → 1</text>
+<text x="190" y="603.2" font-size="24" text-anchor="middle" class="">ReLU · Dropout(0.1)</text>
+</g>
+<path d="M160,1130 L25,1130 L25,581 L40,581" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="160" cy="1130" r="3.5" fill="#111"/>
+<circle cx="340" cy="430" r="23" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="340" y="438.99" font-size="29" text-anchor="middle" class="">+</text>
+<path d="M190,535 L190,430 L317,430" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M500,605 L500,430 L363,430" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="590" y="385.0" font-size="26" text-anchor="middle" class="math">z = cosine + MLP</text>
+<g data-box="40.0 275 600 82">
+<rect x="40.0" y="275" width="600" height="82" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="340" y="309.875" font-size="25" text-anchor="middle" class="">z / Ttype: softmax or sigmoid</text>
+<text x="340" y="339.125" font-size="25" text-anchor="middle" class="">Choice · Noul · Score / Set</text>
+</g>
+<path d="M340,407 L340,357" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="40.0 125 600 88">
+<rect x="40.0" y="125" width="600" height="88" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="340" y="162.875" font-size="25" text-anchor="middle" class="">Choice: argmax · Noul: P(yes)</text>
+<text x="340" y="192.125" font-size="25" text-anchor="middle" class="">Score: E[level] · Set: p &gt; θ</text>
+</g>
+<path d="M340,275 L340,213" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="977.5 805 205 60">
+<rect x="977.5" y="805" width="205" height="60" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="1080" y="843.5" font-size="25" text-anchor="middle" class="">L2 normalize</text>
+</g>
+<path d="M1080,925 L1080,865" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1267.5 805 205 60">
+<rect x="1267.5" y="805" width="205" height="60" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="1370" y="843.5" font-size="25" text-anchor="middle" class="">L2 normalize</text>
+</g>
+<path d="M1370,925 L1370,865" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="985.0 670 490 84">
+<rect x="985.0" y="670" width="490" height="84" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="1230" y="705.385" font-size="27" text-anchor="middle" class="math">Z = t eᵀ / τspan</text>
+<text x="1230" y="736.975" font-size="27" text-anchor="middle" class="math">Z ∈ ℝ^(W×E)</text>
+</g>
+<path d="M1080,805 L1080,780 L1150,780 L1150,754" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1370,805 L1370,780 L1310,780 L1310,754" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1015.0 530 430 78">
+<rect x="1015.0" y="530" width="430" height="78" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="1230" y="562.63" font-size="26" text-anchor="middle" class="">Sigmoid(Z / Tspan)</text>
+<text x="1230" y="593.05" font-size="26" text-anchor="middle" class="">Tspan = 0.29268</text>
+</g>
+<path d="M1230,670 L1230,608" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1230,530 L1230,500 L1490,500 L1490,220 L1370,220 L1370,195" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="1230" cy="500" r="3.5" fill="#111"/>
+<g data-box="1180.0 115 380 80">
+<rect x="1180.0" y="115" width="380" height="80" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1370" y="149.12" font-size="24" text-anchor="middle" class="">Noul view</text>
+<text x="1370" y="177.2" font-size="24" text-anchor="middle" class="">max word-label probability</text>
+</g>
+<g data-box="870.0 365 420 88">
+<rect x="870.0" y="365" width="420" height="88" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1080" y="403.12" font-size="24" text-anchor="middle" class="">Max label per word · p &gt; θ</text>
+<text x="1080" y="431.2" font-size="24" text-anchor="middle" class="">Merge neighbors · trim edges</text>
+</g>
+<path d="M1230,500 L1080,500 L1080,453" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="905.0 230 350 84">
+<rect x="905.0" y="230" width="350" height="84" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1080" y="266.12" font-size="24" text-anchor="middle" class="">Labeled spans</text>
+<text x="1080" y="294.2" font-size="24" text-anchor="middle" class="">Unicode character offsets</text>
+</g>
+<path d="M1080,365 L1080,314" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="420" y="1385.0" font-size="31" text-anchor="middle" class="serif">(a) Option cosine + MLP</text>
+<text x="1230" y="1385.0" font-size="31" text-anchor="middle" class="serif">(b) Word–label cosine</text>
+<text x="800" y="1422.0" font-size="24" text-anchor="middle" class="">* Shared readout LayerNorm parameters; learned τ; external calibration temperatures T.</text>
+<text x="800" y="1454.0" font-size="24" text-anchor="middle" class="">Dropout is inactive in inference. Additional span questions run as separate encoder sequences.</text>
+</svg>

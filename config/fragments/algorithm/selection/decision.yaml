@@ -1,0 +1,29 @@
+global:
+  model_catalog:
+    deployments:
+      decision-kai:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
+routing:
+  decisions:
+    - name: decision-model-route
+      description: Ask a decision model which candidate should answer.
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+        - model: qwen3-32b
+          use_reasoning: true
+      algorithm:
+        type: decision
+        decision:
+          deployment: decision-kai
+          instructions: Which model should answer this request?
+          candidates:
+            qwen3-8b: Fast general model for routine requests
+            qwen3-32b: Strong reasoning model for hard requests
+          timeout_ms: 1000
