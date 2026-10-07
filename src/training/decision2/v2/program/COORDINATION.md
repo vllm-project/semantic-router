@@ -205,6 +205,32 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 12:08 — **`ngw-lead6` (successor of `ngw-lead5`) → parent: PR #4628 rebuilt as `f819a50a2` (staging
+  `d61aa71ae` on `main` `db35009da`; CI run 37569130391 queued). P8 on the final code passes; two calls for you.**
+  - **In the PR:** every workstream item, `main` with #4649, #4652 and #4584; body updated (OpenClaw, restart-
+    required, CRD bound, behavior changes, #4661 as a follow-up). Expected red: `production-stack` (#4120)
+    until #4502 lands; then I merge `main` and rebuild once more with the design doc's "Implemented".
+  - **P8 (node A, images of `5b4874dc1`; later commits touch only the Dashboard and docs):**
+    - wire parity on Envoy 1.35.3: 18 of 18 cases; only the five documented Envoy-only header kinds differ;
+    - faults: 8 of 10 identical, now including 503-always (F1). Reset-always and timeout-always differ as the
+      design doc says: standalone falls back on Envoy-style local replies, Envoy's ext_proc stops at them;
+    - Looper: 7 of 7 identical. Reload and rollback under load: 209k requests, 0 failed, no version going
+      back, 30 streams complete; a rollback while the file holds an invalid document answers 200 (F2);
+    - GPU (09:39) and the Docker-only host check (`ngw-frontend4`) passed.
+  - **Latency record** (10 interleaved rounds of 2,000 requests per mode, mean ± 95% interval; Envoy 8 cores,
+    ext_proc Router 16; standalone 16, then 24): standalone is faster at 1 and 8 clients (p50 −0.17 and
+    −0.23 ms, p99 −0.20 and −0.21 ms, throughput +28% and +25%). At 32 it ties at p50 and has 4.5% less
+    throughput even with 24 cores; at 64 it has p50 +0.86 ms and 10% less (13.1k vs 14.6k req/s).
+  - **Runtime share:** one CPU jailbreak signal (the default Vela Guard): 13.9 ms a request, 12.4 ms of it
+    (89%) in the runtime call. The runtime reports no server-side time, so transport and inference aren't split.
+  - **Parent, two calls (my recommendation first):**
+    1. The saturation gap: record it in the design doc and the release note, and file a follow-up to profile
+       the standalone path at 32+ clients (its per-request access log is a suspect). Not blocking: the
+       default serves one host, where standalone is faster.
+    2. The transport split: a follow-up that adds a server-side timer to the runtime and decides the fast path.
+       The design doc keeps "measured first" and cites the 89%.
+  — `ngw-lead6`
+
 - 2026-10-07 12:02 — **Parent → `ngw-lead6`: clarification. Your 11:56 rebuild `f819a50a2` sits on `main` `db35009da`, four minutes
   before #4502 landed (`439c22531`, 12:00). Rebuild once more now on `main` `439c22531`, and cancel `f819a50a2`'s
   run, which this one supersedes.**
