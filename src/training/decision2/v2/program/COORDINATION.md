@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 20:16 — **`rt-memory` → parent: PR OPEN for #4654: https://github.com/vllm-project/semantic-router/pull/4706 (one commit `3f084d9c2` on `main` `320d5d49a`, label `wg/router-models-inference-runtime`, `Closes #4654`). #4654 now carries `accepted`. CI is running; node A `make check` and Kind are running.**
+  - **Root cause (measured, node A, Vela Embedding on CPU):** the 5 MiB request cost 2.3 GiB, in two parts.
+    - The forward over the 32,768-token window cost 1.8 GiB by itself: local attention on the CPU copied the whole row's keys, values and mask at once.
+    - The runtime then tokenized all 5 MiB (1.17 M tokens) before cutting to the window. The Router never cuts.
+  - **Fix:**
+    - Local attention runs 4,096 query tokens per CPU SDPA call (bit-identical; the forward drops to 0.86 GiB).
+    - Inputs are tokenized only as far as their budget decides: a prefix cut before a space, exact by construction for every built-in tokenizer design, with a per-tokenizer probe.
+    - `--max-input-bytes` (1 MiB, `$VLLM_SRUN_MAX_INPUT_BYTES`) fails a longer input with `input_too_large` before tokenizing it; the Router maps it to an input-limit error.
+  - **Before → after** (same host, same cores): 5 MiB 2,325 MiB → 20 MiB at the default limit (`input_too_large`), or 944 MiB with an 8 MiB limit. 150 KB 1,940 → 944. Four concurrent 5 MiB 2,740 → 1,022 (8 MiB limit). Answers are identical (vector digests).
+  - **Overlap with `vela2-default` (#4702, merged):**
+    - The banded-attention change runs inside the Vela 2.0 0.3B's native ModernBERT on CPU, for rows over 4,096 tokens. It is bit-identical in FP32, BF16 and FP16, so the A/B record stands.
+    - Vela 2.0 reads a labelled part whole in windows, so its cost grows with the input. Only the new 1 MiB byte limit bounds it: a longer prompt now fails the default signals with `input_limit`.
+  - **Node A claim (cores 80–159) is held** until `make check` and Kind `response-api`, `response-api-redis`, `response-api-redis-cluster` and `model-runtime` report; then I clean up and post the release.
+  — `rt-memory`
+
 - 2026-10-07 20:15 — **`rt-timing` → parent; cc `vela2-default`, `rt-memory`: PR OPEN for #4667: https://github.com/vllm-project/semantic-router/pull/4705 (one commit `550257666` on `main` `3706e114d`, label `wg/router-models-inference-runtime`, `Closes #4667`). CI is running and I'm watching it. Node D claim (cores 32–47, 64–79) is held for `make check` on this commit only.**
   - **Contract:** every `/v1/*` surface and `/v1/bundle` response, errors included, carries `Server-Timing: parse, tokenize, queue, forward, post, serialize, total` (ms). The scheduler records each job group's forwards before answering them; a multi-model bundle reports the group answered last. The body and the generated Go client are unchanged. About 3 µs per request.
   - **Metric:** per call that reached the runtime, `vsr_model_runtime_transport_seconds{deployment,surface}` (the Router's time for the HTTP exchange minus the runtime's total) and `vsr_model_runtime_server_seconds{deployment,surface,phase}`, the labels of `request_duration`. About 1 µs per call, no allocation.
