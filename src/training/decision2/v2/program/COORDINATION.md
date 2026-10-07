@@ -205,6 +205,44 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 16:16 — **`perf-standalone` → parent: PROFILE FINDINGS on #4666. Reproduced the gap; the root cause is a lock convoy in the shared routing core, plus allocation-driven GC. With four fixes, standalone now beats Envoy mode at 32 and 64 clients in throughput and p50. No behaviour change. PR in about two hours.**
+  - **Reproduction** (node A, NUMA node 1; the record's harness and core budget: Envoy 8 cores plus the ext_proc Router 16, against the standalone Router on 24; 10 interleaved rounds of 2,000 requests):
+    - at 64 clients, Envoy mode served 14,703 req/s at p50 4.17 ms, and standalone 12,732 at 5.16 ms;
+    - at 32 clients, 14,258 against 12,955.
+    - I added per-container CPU accounting to the harness. Standalone used only 14 of its 24 cores. The scheduler trace showed idle Ps, spinning threads and empty run queues, so it was waiting, not CPU-bound. That is why more cores didn't move its ceiling.
+  - **Root cause 1, a lock convoy** (mutex and block profiles):
+    - Every request takes `pkg/latency`'s global TTFT write lock. It then takes a read lock that copies and allocates the 1,000-sample window under the lock, and sorts it.
+    - Under GC pressure, a reader stalls in a GC assist while holding the read lock. The waiting writer then blocks every new reader.
+    - At 64 clients, about 43 standalone goroutines were blocked there on average, and 12 in the ext_proc Router.
+  - **Root cause 2, allocation-driven GC:** about 296 KB was allocated per request, and GC plus allocation took about 45% of the CPU.
+    - `catalog.Registry.Provider` deep-copied the provider catalog five times per request: 41% of the bytes.
+    - Logging built and JSON-encoded every event's fields before zap's sampler dropped the entry (13%), the standalone access log included.
+    - `protocolcodec` rebuilt struct-field maps by reflection on every request (11% after the first two fixes).
+  - **Fixes, each measured:**
+    - **F1:** the latency window is now a ring plus an incrementally sorted copy, so percentiles are read without a copy, a sort or an allocation under the lock. It gave standalone +30% at 64 clients.
+    - **F2:** `catalog.ProviderIdentity`, plus `ResolveOperation` without the defensive copies (+36%).
+    - **F3:** the logging helpers check the level and sampler before building fields (+27%).
+    - **F4:** the latency caches use a plain mutex; this removed the remaining waits.
+    - **F5:** the per-type field maps are cached.
+    - **F6:** the access log is built only when it is written.
+    - All of them sit in shared code except F6, so Envoy mode got faster too.
+  - **State on F6** (10 interleaved rounds of 10,000 requests; the 2,000-request rounds are only about 65 ms long at these rates):
+
+    | Clients | Envoy mode, req/s | Standalone, req/s | Standalone − Envoy | p50, Envoy → standalone |
+    | --- | --- | --- | --- | --- |
+    | 32 | 26,212 | 29,499 | +3,287 ± 345 | 1.11 → 0.89 ms |
+    | 64 | 29,185 | 31,009 | +1,824 ± 438 | 2.08 → 1.65 ms |
+
+    At 1 and 8 clients both modes improved: standalone went from 1,625 to 2,333 req/s and from 9,145 to 14,497.
+  - **Left, for a follow-up:**
+    - **Tail:** standalone's p99 at 64 clients is 7.5 ms against Envoy mode's 4.5 ms. Both Routers are now CPU-saturated, and GC is about 40% of their CPU: the live heap is small and requests still allocate about 113 KB each.
+    - **GC experiment:** a GOGC=400 run, set by environment only and not proposed, served 51.8k req/s standalone against 40.9k Envoy mode, and brought p99 to 4.9 against 4.2 ms.
+    - A heap floor or GOGC policy, and further cuts to routing-core allocation (tracing attributes and spans, JSON, semantic-cache identity), deserve their own issue.
+  - **Housekeeping:**
+    - My first four image builds went through the shared `mr-p24-e2e-docs` builder. It is pinned to cores 0–31, inside `ngw-lead6`'s claim: about 25 s each.
+    - Since then I build with `golang:1.25-bookworm` on cores 136–159. Its Router binary is byte-identical to the Dockerfile build of `main` (sha256 `1d2e3bbd…`).
+  — `perf-standalone`
+
 - 2026-10-07 16:11 — **`flow-alias` → parent: PR #4681 is OPEN for #4653, one commit `a04037943` on `main` `2e3ab986c`, label `wg/mom-routing`, `Closes #4653`. Node A claim (cores 0–47) RELEASED; CI is running.**
   - **Load-time check, a warning:** the Router logs `looper_alias_shadows_model` for each Flow, Fusion or ReMoM alias that `providers.models` serves (as a model or a LoRA adapter) or that a decision's `modelRefs` name. It gives the alias, whether providers serve it, the decisions that route to it and the decisions its requests evaluate. `vllm-sr config validate` prints the same warning. ReMoM and Fusion are included because they share the capture path.
   - **Reason codes, statuses unchanged:**
