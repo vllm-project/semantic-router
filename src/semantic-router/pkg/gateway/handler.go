@@ -28,6 +28,9 @@ type Serving struct {
 	Upstream Upstream
 	// APIKeys, when set, are the only client keys the listener accepts.
 	APIKeys []string
+	// Models, when set, are the only request models the listener accepts;
+	// the routing core enforces them on the model it parses.
+	Models []string
 	// IdentityHeaders are dropped from client requests in addition to the
 	// built-in x-authz-* identity headers: the names the configuration reads
 	// a client identity from, which no authenticator in front asserts.
@@ -139,6 +142,7 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		writeUnauthorized(w)
 		return
 	}
+	ctx = routing.WithListenerModels(ctx, serving.Models)
 	body, err := readBody(r, h.opts.MaxRequestBodyBytes)
 	if errors.Is(err, errBodyTooLarge) {
 		writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")

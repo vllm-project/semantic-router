@@ -203,6 +203,10 @@ type Listener struct {
 	// APIKeys are client bearer credentials the listener enforces, in
 	// standalone mode and in the CLI-managed Envoy listener.
 	APIKeys []string `yaml:"api_keys,omitempty"`
+	// Models, when set, are the only request models a standalone listener
+	// accepts, by exact `model` value; others get 403 model_not_allowed and
+	// /v1/models lists only these. Empty accepts every model.
+	Models []string `yaml:"models,omitempty"`
 	// TLS, when set, makes a standalone Router serve this listener over TLS.
 	TLS *ListenerTLS `yaml:"tls,omitempty"`
 	// Identity, when set, decides whether a standalone Router keeps the client

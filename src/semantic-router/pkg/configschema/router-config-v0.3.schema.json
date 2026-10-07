@@ -3470,6 +3470,12 @@
           },
           "type": "array"
         },
+        "models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "tls": {
           "$ref": "#/$defs/ListenerTLS"
         },

@@ -418,6 +418,10 @@ type RequestContext struct {
 	LooperIteration int                   // The iteration number if this is a looper request
 	LooperLogprobs  *looperLogprobOptions // Native Chat evidence requested by an authenticated internal hop
 
+	// ListenerModels, when set, are the only request models the listener the
+	// client request arrived on accepts.
+	ListenerModels routing.ListenerModels
+
 	// SourceFormat and SemanticRequest are the authoritative public protocol
 	// contract and neutral request.
 	SourceFormat    llmprotocol.WireFormat

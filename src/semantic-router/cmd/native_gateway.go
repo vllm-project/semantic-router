@@ -122,7 +122,7 @@ func listenNative(cfg *config.RouterConfig, bindAddress string, base gateway.Opt
 		bound = append(bound, &nativeListener{name: spec.Name, server: gateway.NewServer(handler, serverOpts), listener: ln})
 		logging.ComponentEvent("router", "standalone_listener_started", map[string]interface{}{
 			"listener": spec.Name, "address": ln.Addr().String(), "api_keys": len(spec.APIKeys) > 0,
-			"tls": serverOpts.TLS != nil,
+			"models": spec.Models, "tls": serverOpts.TLS != nil,
 		})
 	}
 	return bound, nil
@@ -208,6 +208,7 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 		Engine:          routing.NewEngine(lease.Router, s.engine),
 		Upstream:        set,
 		APIKeys:         listenerAPIKeys(cfg, listener),
+		Models:          listenerModels(cfg, listener),
 		IdentityHeaders: []string{cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader()},
 		TrustIdentity:   listenerIdentityTrust(cfg, listener),
 	}, lease.Release, nil
@@ -217,6 +218,15 @@ func listenerAPIKeys(cfg *config.RouterConfig, name string) []string {
 	for _, listener := range cfg.Listeners {
 		if listener.Name == name {
 			return listener.APIKeys
+		}
+	}
+	return nil
+}
+
+func listenerModels(cfg *config.RouterConfig, name string) []string {
+	for _, listener := range cfg.Listeners {
+		if listener.Name == name {
+			return listener.Models
 		}
 	}
 	return nil

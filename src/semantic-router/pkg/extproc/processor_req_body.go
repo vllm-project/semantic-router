@@ -42,6 +42,9 @@ func (r *OpenAIRouter) handleRequestBody(
 	}
 
 	originalModel := strings.TrimSpace(snapshot.Model)
+	if rejected := r.listenerModelRejection(originalModel, ctx); rejected != nil {
+		return rejected, nil
+	}
 	if ctx.RequestModel == "" {
 		ctx.RequestModel = originalModel
 	}

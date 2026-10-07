@@ -322,7 +322,7 @@ func TestPerformDecisionEvaluationSelectsRecipeByEntrypoint(t *testing.T) {
 func TestModelsListingIncludesEntrypointNames(t *testing.T) {
 	router := newEntrypointTestRouter(t)
 
-	response, err := router.handleModelsRequest("/v1/models")
+	response, err := router.handleModelsRequest("/v1/models", nil)
 	if err != nil {
 		t.Fatalf("handleModelsRequest failed: %v", err)
 	}
@@ -369,7 +369,7 @@ func TestModelsListingUsesExplicitRoutingMetadata(t *testing.T) {
 		},
 	}
 
-	response, err := router.handleModelsRequest("/v1/models")
+	response, err := router.handleModelsRequest("/v1/models", nil)
 	if err != nil {
 		t.Fatalf("handleModelsRequest failed: %v", err)
 	}

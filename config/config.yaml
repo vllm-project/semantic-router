@@ -20,6 +20,9 @@ listeners:
     tls:
       cert_file: certs/tls.crt
       key_file: certs/tls.key
+    # Standalone mode: accept only these request models (exact `model` values);
+    # others get 403 model_not_allowed. Absent or empty accepts every model.
+    models: [exhaustive-reference]
     # Standalone mode drops client identity headers unless the listener trusts
     # them: here, from an authenticating proxy on a private network.
     identity:

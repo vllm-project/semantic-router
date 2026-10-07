@@ -86,6 +86,13 @@ class Listener(BaseModel):
         "'Authorization: Bearer <key>' or, for Azure OpenAI clients, "
         "'api-key: <key>'; other requests are rejected with HTTP 401.",
     )
+    models: Optional[List[str]] = Field(
+        default=None,
+        description="The only request models this listener accepts, by exact "
+        "'model' value; other models are rejected with HTTP 403 "
+        "model_not_allowed and /v1/models lists only these. Empty accepts "
+        "every model. Standalone mode enforces it; --gateway extproc rejects it.",
+    )
     tls: Optional[ListenerTLS] = Field(
         default=None,
         description="Serve this listener over TLS. Standalone mode serves it; "

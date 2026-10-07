@@ -29,7 +29,7 @@ global:
 | 节 | 拥有 |
 | --- | --- |
 | `version` | Canonical schema 版本。使用 `v0.3`。 |
-| `listeners` | 公共 Router 监听器：地址、端口、空闲超时、可选的客户端 API key，以及在 standalone 模式下由 Router 提供的可选单向 TLS（`tls.cert_file`、`tls.key_file`）；以及 listener 信任的身份来源（`identity.trust_headers`、`identity.trusted_peers`，默认不信任任何来源），由 Router 在 standalone 模式下遵循。 |
+| `listeners` | 公共 Router 监听器：地址、端口、空闲超时、可选的客户端 API key、可选的请求模型白名单（`models`，为空时接受所有模型），以及在 standalone 模式下由 Router 提供的可选单向 TLS（`tls.cert_file`、`tls.key_file`）；以及 listener 信任的身份来源（`identity.trust_headers`、`identity.trusted_peers`，默认不信任任何来源），由 Router 在 standalone 模式下遵循。 |
 | `providers` | 逻辑 provider 模型、物理后端端点、定价、能力和默认值。 |
 | `evaluation` | 可选的运维人员拥有的基准定义、带版本的索引 DAG，以及与模型关联的记录。 |
 | `routing` | 默认配方：model card、信号、投影、决策、strategy、算法和路由插件。 |

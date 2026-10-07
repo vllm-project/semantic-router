@@ -49,6 +49,8 @@ See the [release note](../release-notes/standalone-mode).
 - **API keys:** with `api_keys` set, a client sends one of them as
   `Authorization: Bearer <key>` or `api-key: <key>`; other requests get an
   OpenAI-style 401. The key is removed before the request reaches a provider.
+- **Model allow-list:** with `models` set, the listener accepts only those
+  request models (see [Model allow-list](#model-allow-list)).
 - **TLS:** `tls` serves the listener over TLS 1.2 or later, with HTTP/2 or
   HTTP/1.1 negotiated by ALPN. Relative paths are relative to the config file's
   directory. The Router reloads the key pair when its files change, so a renewed
@@ -82,8 +84,45 @@ See the [release note](../release-notes/standalone-mode).
   metrics port (9190).
 - **Reloads:** the Router reloads its config in place. A change to a listener's
   address, port, timeout or `tls` paths, or a new or removed listener, is
-  rejected as `restart_required` until the Router restarts; API keys reload in
-  place.
+  rejected as `restart_required` until the Router restarts; API keys and model
+  allow-lists reload in place.
+
+### Model allow-list
+
+A listener's `models` lists the only request `model` values it accepts. Use it
+to give a public key access to the router's auto model and nothing else, while
+an internal listener keeps every model:
+
+```yaml
+listeners:
+  - name: dashboard-internal   # first listener: the Dashboard Playground uses it
+    address: 127.0.0.1
+    port: 8898
+  - name: public
+    address: 0.0.0.0
+    port: 8899
+    api_keys: ["${WORKSHOP_KEY}"]
+    models: [vllm-sr/auto]
+```
+
+- Names match exactly (case-sensitive, after trimming the request value), and
+  aliases are not expanded: list every name clients may send. Empty or absent,
+  the listener accepts every model.
+- The check runs after the API key check and before any signal, cache or
+  decision, on the model the Router parsed for routing. Any other model,
+  including a provider model that would otherwise pass through, gets
+  `403` with `{"error": {"code": "model_not_allowed", ...}}` in the client's
+  protocol. A request without a model gets `400 model_required`.
+- `GET /v1/models` on the listener lists only the allowed names the catalog
+  has.
+- The model calls a decision makes in process (Looper and request-graph hops)
+  are not client requests and are not restricted, so `vllm-sr/auto` can still
+  reach every provider model its decisions name.
+- The listener ignores the `x-vsr-skip-processing` opt-out even when
+  `global.router.skip_processing.enabled` is on, because a skipped request
+  would bypass the check.
+- `--gateway extproc` rejects a listener with `models` as unsupported: the
+  Envoy listener the CLI generates does not enforce it yet.
 
 ### Identity headers
 

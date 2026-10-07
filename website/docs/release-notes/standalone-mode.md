@@ -49,6 +49,10 @@ serves as many or more requests per second (see the design doc's
   standalone mode, and a renewed certificate in those files serves new
   connections without a restart. `--gateway extproc` refuses it rather than
   serve the listener in cleartext.
+- `listeners[].models` restricts a standalone listener to the request models it
+  lists, for example a public key to `vllm-sr/auto` only; other models get
+  `403 model_not_allowed` and `/v1/models` lists only the allowed names.
+  `--gateway extproc` refuses it, since its Envoy listener does not enforce it.
 - `--gateway standalone|extproc` and `--platform cpu|amd|nvidia` work on the
   kubernetes target too. The CLI writes them into the generated Helm values as
   `gateway.mode`, the image repository and a GPU request.

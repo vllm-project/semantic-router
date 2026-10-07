@@ -44,6 +44,7 @@ vllm-sr serve --target kubernetes --config config.yaml
   请求体上限 500 MiB，最多 50,000 个连接，与 Envoy 模板的限制一致。
 - **API key：** 设置 `api_keys` 后，客户端需以 `Authorization: Bearer <key>` 或 `api-key: <key>` 发送其中之一；
   其他请求得到 OpenAI 风格的 401。key 在请求到达 provider 之前被移除。
+- **模型白名单：** 设置 `models` 后，该 listener 只接受这些请求模型（见[模型白名单](#model-allow-list)）。
 - **TLS：** `tls` 让该 listener 以 TLS 1.2 及以上提供服务，通过 ALPN 协商 HTTP/2 或 HTTP/1.1。相对路径相对于配置
   文件所在目录。证书文件变化时 Router 会重新加载密钥对，因此续期后的证书（轮换的 Kubernetes Secret、cert-manager）
   无需重启即可用于新连接；加载失败时继续使用之前的密钥对。`--gateway extproc` 不提供该能力。
@@ -68,7 +69,36 @@ vllm-sr serve --target kubernetes --config config.yaml
 - **探针：** 进程运行时 `GET /health` 就会应答；路由核心可以接收流量后 `GET /ready` 才应答。Prometheus 指标仍在
   Router 的指标端口（9190）。
 - **重新加载：** Router 原地重新加载配置。修改 listener 的地址、端口、超时或 `tls` 路径，或者新增、删除 listener，
-  都会以 `restart_required` 被拒绝，直到 Router 重启；API key 可原地重新加载。
+  都会以 `restart_required` 被拒绝，直到 Router 重启；API key 和模型白名单可原地重新加载。
+
+### 模型白名单 {#model-allow-list}
+
+listener 的 `models` 列出它接受的全部请求 `model` 值。可以用它让公开 key 只能访问 Router 的自动模型，而内部
+listener 仍可使用所有模型：
+
+```yaml
+listeners:
+  - name: dashboard-internal   # 第一个 listener：Dashboard Playground 使用它
+    address: 127.0.0.1
+    port: 8898
+  - name: public
+    address: 0.0.0.0
+    port: 8899
+    api_keys: ["${WORKSHOP_KEY}"]
+    models: [vllm-sr/auto]
+```
+
+- 名称精确匹配（区分大小写，请求值去除首尾空白后比较），不展开别名：请列出客户端可能发送的每个名称。为空或不设置时，
+  listener 接受所有模型。
+- 检查在 API key 检查之后、任何 signal、缓存或 decision 之前进行，使用的是 Router 为路由解析出的同一个模型。其他模型
+  （包括原本会直通的 provider 模型）得到 `403`，错误码 `model_not_allowed`，并以客户端协议返回。没有模型的请求得到
+  `400 model_required`。
+- 该 listener 上的 `GET /v1/models` 只列出目录中存在的允许名称。
+- decision 在进程内发起的模型调用（Looper 和 request-graph hop）不是客户端请求，不受限制，因此 `vllm-sr/auto`
+  仍可到达其 decision 指定的所有 provider 模型。
+- 即使开启了 `global.router.skip_processing.enabled`，该 listener 也会忽略 `x-vsr-skip-processing`，因为跳过的请求
+  会绕过检查。
+- `--gateway extproc` 会以 unsupported 拒绝带 `models` 的 listener：CLI 生成的 Envoy listener 目前还不执行它。
 
 ### 身份 header {#identity-headers}
 

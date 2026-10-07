@@ -7,6 +7,31 @@ import (
 	"strings"
 )
 
+// CapabilityListenerModels is a listener's model allow-list, which only the
+// standalone gateway enforces: the Envoy listener the CLI generates does not
+// yet, so behind Envoy every model would stay reachable.
+const CapabilityListenerModels = "listener_models"
+
+func init() {
+	GatewayCapabilities.MustRegister(CapabilityListenerModels, GatewayCapability{
+		Modes: []GatewayMode{GatewayStandalone},
+		Uses: func(cfg *RouterConfig) []CapabilityUse {
+			var uses []CapabilityUse
+			for _, listener := range cfg.Listeners {
+				if len(listener.Models) > 0 {
+					uses = append(uses, CapabilityUse{
+						Path:    "listeners[" + listener.Name + "].models",
+						Subject: fmt.Sprintf("listener '%s': models", listener.Name),
+					})
+				}
+			}
+			return uses
+		},
+		Unserved: "is unsupported with --gateway extproc, whose Envoy listener does not enforce it; " +
+			"serve with --gateway standalone or remove it",
+	})
+}
+
 // validateListenerContracts checks the listener settings every gateway mode
 // reads the same way.
 func validateListenerContracts(cfg *RouterConfig) error {
@@ -14,6 +39,9 @@ func validateListenerContracts(cfg *RouterConfig) error {
 		if listener.TLS != nil &&
 			(strings.TrimSpace(listener.TLS.CertFile) == "" || strings.TrimSpace(listener.TLS.KeyFile) == "") {
 			return fmt.Errorf("listener '%s': tls needs both cert_file and key_file", listener.Name)
+		}
+		if err := validateListenerModels(listener); err != nil {
+			return err
 		}
 		if listener.Identity == nil {
 			continue
@@ -24,6 +52,22 @@ func validateListenerContracts(cfg *RouterConfig) error {
 		if _, err := listener.Identity.PeerPrefixes(); err != nil {
 			return fmt.Errorf("listener '%s': %w", listener.Name, err)
 		}
+	}
+	return nil
+}
+
+// validateListenerModels checks that every allowed model is a distinct name
+// a request can send: request models are matched exactly, after trimming.
+func validateListenerModels(listener Listener) error {
+	seen := make(map[string]bool, len(listener.Models))
+	for index, model := range listener.Models {
+		if model == "" || strings.TrimSpace(model) != model {
+			return fmt.Errorf("listener '%s': models[%d] %q must be a model name without surrounding spaces", listener.Name, index, model)
+		}
+		if seen[model] {
+			return fmt.Errorf("listener '%s': models lists %q twice", listener.Name, model)
+		}
+		seen[model] = true
 	}
 	return nil
 }
