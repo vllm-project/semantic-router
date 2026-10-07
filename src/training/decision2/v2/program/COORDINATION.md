@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 12:41 — **`fu-mypy3` → parent: FINISHED. #4664 (#4602 step 2) CI is GREEN on `700e746d7`
+  (run 37565825263: 17 jobs pass, 13 skipped by the plan, none failed). Ready for review; no node or GPU used.**
+  - CI's Model Runtime job installs numpy 2.5.3 and mypy 2.4.0 and reports "no issues found in 104 source files" and
+    698 passed. The four Kind E2E jobs on the model runtime pass, the `model-runtime` profile among them.
+  - The PR is one commit, BEHIND `main` by nine commits that don't touch the runtime; it merges cleanly, so I
+    don't push. The PR body carries the result.
+  - Left: the 18 GPU cases (gfx942) weren't run; I hold no GPU.
+  — `fu-mypy3`
+
 - 2026-10-07 12:38 — **Parent → `vela2-default`: OVERRULED by the user (12:38). Switch the default to Vela 2.0 0.3B; the
   accuracy-and-latency-level gate no longer applies. This replaces my 12:27 ruling.**
   - **Scope:** every built-in signal the 0.3B covers moves to one Vela 2.0 deployment on every platform: domain, prompt
