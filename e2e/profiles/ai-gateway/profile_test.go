@@ -40,6 +40,27 @@ func TestFeatureRecipesReuseBaselinePluginContracts(t *testing.T) {
 	}
 }
 
+func TestPIIPrecedenceRecipeOrdersOnlyTheBaselinePIIBlockAndToolSelection(t *testing.T) {
+	config := profileConfig(t)
+	baseline := profileMap(t, config, "routing")
+	routing := profileMap(t, profileNamed(t, config["recipes"], "e2e-pii-precedence"), "routing")
+	signals := profileMap(t, routing, "signals")
+	if len(signals) != 2 || len(routing["decisions"].([]any)) != 2 {
+		t.Fatalf("PII precedence recipe must hold only the PII block and one tool selection: %#v", routing)
+	}
+	for _, name := range []string{"block_pii", "tool_selection_add_weather_decision"} {
+		if !reflect.DeepEqual(profileNamed(t, baseline["decisions"], name), profileNamed(t, routing["decisions"], name)) {
+			t.Fatalf("PII precedence recipe changed the baseline decision %s", name)
+		}
+	}
+	for signalType, name := range map[string]string{"keywords": "tool_selection_add_weather", "pii": "pii_deny_all"} {
+		original := profileNamed(t, profileMap(t, baseline, "signals")[signalType], name)
+		if !reflect.DeepEqual(original, profileNamed(t, signals[signalType], name)) {
+			t.Fatalf("PII precedence recipe changed the baseline signal %s", name)
+		}
+	}
+}
+
 func TestProtocolAndCacheRecipesReachTheirOwnedBoundaries(t *testing.T) {
 	config := profileConfig(t)
 	baselineCache := profileNamed(t, profileMap(t, config, "routing")["decisions"], "other_decision")["plugins"]
@@ -95,7 +116,7 @@ func TestExactCacheRecipeKeepsMultilingualNegationOnAnExactOnlyPolicy(t *testing
 
 func TestFeatureEntrypointsPreserveDefaultSecurityPrecedence(t *testing.T) {
 	config := profileConfig(t)
-	for _, recipe := range []string{"e2e-protocol", "e2e-plugins", "e2e-cache", "e2e-cache-exact", "e2e-domain", "e2e-fallback"} {
+	for _, recipe := range []string{"e2e-protocol", "e2e-plugins", "e2e-pii-precedence", "e2e-cache", "e2e-cache-exact", "e2e-domain", "e2e-fallback"} {
 		found := false
 		for _, raw := range config["entrypoints"].([]any) {
 			entrypoint := raw.(map[string]any)

@@ -98,15 +98,17 @@ CPU. Measured through the Router on the
   blocks all six attacks, Vela 1.0 Guard five) and safety (+0.052 held-out, and
   ahead on every set). One model and one call serve every signal.
 - **Level:** PII and hallucination on held-out and fresh files.
-- **Behind:** domain (accuracy −0.037 held-out, −0.088 fresh), fact check
-  (held-out AUC −0.101), user feedback (−0.038 held-out, −0.178 fresh) and
-  modality (held-out AUC −0.180). The 0.3B misses most requests that ask for a
-  new image.
+- **Behind, most:** modality (held-out AUC −0.180; the 0.3B misses most
+  requests that ask for a new image) and user feedback (accuracy −0.038
+  held-out, −0.178 fresh).
+- **Behind:** domain (accuracy −0.037 held-out, −0.088 fresh) and fact check
+  (held-out AUC −0.101).
 - **CPU time:** every request carries the questions, their options and the 17
   PII labels (at least 560 tokens) through one 307M-parameter forward, where
   each Vela 1.0 model reads only the request. On 12 CPU cores, for the five
   request signals of the
-  [latency record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md):
+  [latency record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md),
+  the median request takes about 4.9 times as long:
 
 | Router on 12 CPU cores | p50 | p95 | Requests per second | At concurrency 16 |
 | --- | ---: | ---: | ---: | ---: |
@@ -154,7 +156,32 @@ global:
 ```
 
 A modality classifier names `models/Vela-1.0-Encoder-307M-Modality` as its
-`classifier.model_path`. To restore one signal only, name its line alone.
+`classifier.model_path`.
+
+To bring back one signal only, set its line alone. User feedback, for example:
+
+```yaml
+global:
+  model_catalog:
+    system:
+      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
+```
+
+| Signal | Line under `global.model_catalog` |
+| --- | --- |
+| Domain | `system.domain_classifier: models/Vela-1.0-Encoder-307M-Domain` |
+| Prompt guard | `system.prompt_guard: models/Vela-1.0-Encoder-307M-Guard` |
+| Safety | `system.safety: models/Vela-1.0-Encoder-307M-Safety` |
+| Fact check | `system.fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck` |
+| User feedback | `system.feedback_detector: models/Vela-1.0-Encoder-307M-Feedback` |
+| PII | `system.pii_classifier: models/Vela-1.0-Encoder-307M-PII` |
+| Hallucination | `system.hallucination_detector: models/Vela-1.0-Encoder-307M-Halu` |
+| Modality | `modules.modality_detector.classifier.model_path: models/Vela-1.0-Encoder-307M-Modality` |
+
+Rule thresholds that a configuration sets itself stay where they are. The
+built-in recipes' rules are calibrated to the 0.3B, so a signal moved back
+takes its Vela 1.0 rule thresholds with it. In `mom-v1` those are prompt guard
+0.5, safety 0.5 and PII 0.7; the record lists every recipe's.
 
 ## Hardware
 
