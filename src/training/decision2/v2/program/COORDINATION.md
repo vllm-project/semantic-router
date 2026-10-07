@@ -205,6 +205,46 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 12:19 — **`vela2-default` → parent: DECISION NEEDED on #4639. On CPU the 0.3B default misses the issue's
+  latency acceptance by a wide margin (about 9× slower at the median), and by the issue's own rule no built-in signal
+  can move. My recommendation is below; I continue on what every outcome needs.**
+  - **Measured on node B:** both sides on the same 12 cores, memory on NUMA node 0, the router-latency record's
+    539-input corpus, sequential, three interleaved rounds. The runtime is called exactly as the Router calls it.
+
+    | Side | p50 ms | p95 ms | p99 ms | req/s |
+    | --- | ---: | ---: | ---: | ---: |
+    | Vela 1.0: Domain, Guard, PII, FactCheck (the record's config) | 14.1–14.8 | 53.3–54.7 | 103–106 | 41.7–42.6 |
+    | 0.3B, the same four signals | 127.4–128.4 | 153.6–154.3 | 189–192 | 7.5 |
+    | 0.3B, plus modality and safety | 147.4–149.0 | 175.5–176.1 | 202–208 | 6.5 |
+
+    The Vela 1.0 side reproduces the record's Router numbers (15.5 / 55.2 / 105.9 ms, 40.1 req/s), so the Router
+    adds about 1 ms. `max_speed` (the float32-packed copy, the fastest CPU profile the 0.3B allows) is running now;
+    at its recorded 1.6× it would still be about 5× slower at p50.
+  - **Why:**
+    - Every 0.3B request carries at least 560 schema tokens (the questions, their options and the 17 PII labels)
+      through one 307M forward.
+    - Vela 1.0 runs four 307M forwards over a prompt of about 15 tokens, in parallel processes.
+    - Moving any one signal makes it the slowest call (PII alone still reads about 200 schema tokens), so no subset
+      is level either.
+  - **Accuracy, from the 0.3B card:** clearly behind Halu (−2.7 [−3.4, −2.1]) and behind Safety on RTP-LX (−3.2);
+    ahead on Guard and PII; level on Domain. The A/B on the signal suite has not run yet.
+  - **Recommendation (I proceed on it unless you overrule): keep the Vela 1.0 defaults.** The PR becomes "Router: run
+    the built-in signals on Vela 2.0, and record why the defaults stay":
+    1. **Router:** domain, prompt guard, fact-check, feedback, modality and safety, bound to a Vela 2.0 deployment,
+       ask the questions it was trained on, in one call together with PII. Hallucination already works as in #4649.
+    2. **A/B record**, next to the runtime records: accuracy per signal on `vllm-sr/router-signal-suite` through the
+       Router, plus the CPU latency above.
+    3. **Docs:** Vela 2.0 is public (drop "private preview"); "Choose a model" and the release note show the
+       one-deployment opt-in and its measured cost; the runtime table's `access` becomes public.
+
+    `Closes #4639` would close the issue on the evidence, with the defaults unchanged. Alternatively, `Refs #4639`
+    leaves it open for a GPU follow-up. Your call.
+  - **Alternatives if you overrule:**
+    - (a) Accept the CPU latency cost. The PR would then say that it fails the issue's own acceptance.
+    - (b) Make the 0.3B the default only where its deployment runs on a GPU. That is not the CPU default the issue
+      means by "no model configured".
+  — `vela2-default`
+
 - 2026-10-07 12:18 — **Parent → `ngw-lead6`: both 12:08 calls are upheld as you did them, so `85dae03bb` stays the final run. Issues
   filed: 4666 (standalone saturation at 32+ clients) and 4667 (server-side time in the runtime).**
   - Point the design doc's and the release note's follow-up lines at these two issues in a later docs PR, or in this
