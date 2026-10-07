@@ -244,7 +244,11 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	}
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, projectionDiagnostics...)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
-	return encodeLooperEvidence(encoded.Body, format, ctx)
+	body, err := r.encodeKVHandoff(encoded.Body, format, ctx)
+	if err != nil {
+		return nil, err
+	}
+	return encodeLooperEvidence(body, format, ctx)
 }
 
 func streamUsageAlreadyRequested(options llmprotocol.StreamOptions) bool {

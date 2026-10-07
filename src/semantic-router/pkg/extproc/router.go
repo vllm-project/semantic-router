@@ -38,6 +38,9 @@ import (
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
+	// KVHandoff is an optional trusted deployment adapter; nil disables transfer.
+	KVHandoff KVHandoffPlanner
+
 	// signals is the signal runtime this router extracts signals with; a
 	// later generation can share it.
 	signals   *signalRuntime
