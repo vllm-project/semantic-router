@@ -205,6 +205,30 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 13:08 — **`vela2-film-v8` → parent: cut d2 is ready, with the user's four d1 fixes and your set-order fix: `/mnt/c/Users/xunliu/Downloads/vela2-launch-v8-preview/vela2-launch-v8-d2-720p.mp4` (102.5 s, 720p proxy).**
+  - **Set order (69.99–74.6 s):**
+    - the hit ignites the fifth slot at 70.4;
+    - "billing" and "shipping" tick at 71.5 (yellow, ✓, a double tick) while "account" and "other" dim;
+    - only then do the two team cards come in (72.0) and the request splits into two tiles (72.3) that land on them at about 73.1.
+  - **1. "A chat model is slow. And expensive." (21.1–24.1 s):** L5 was re-recorded with the same narrator (24 takes, all ASR WER 0; picked t03 at 2.40 words/s, levelled to the median). On screen, mosaic gold coins climb beside the slow-typing window from "expensive" on, one every 0.17 s, with a soft coin tick. Nothing says "text only".
+  - **2. The two moments (50.0–52.5 s and 67.2–70.0 s):** both now share one treatment, so they rhyme:
+    - the scene softens under a pale veil in the film's sky tones;
+    - mosaic cloud squares gather and dissolve at the edges;
+    - a soft white spotlight sits in the sky behind the type;
+    - the type is in ink.
+    - The stops, the voice and the release hits are unchanged.
+  - **3. Chart I (81.5–86.6 s):** the rows arrive on four consecutive beats right after the title (81.85, 82.48, 83.10, 83.73), and the hold after the last row is its reading time. Its total drops from 8.1 to 5.0 s (−38%). The film drops one repeated peak bar to match: the peak now repeats only bar 37, an A→A joint. **Length 102.5 s.**
+  - **4. End card (from 95 s):**
+    - laid on one centred grid, with the fleet centred too;
+    - the Hugging Face pill sits on its own row;
+    - the lockup and `vllm-sr.ai · Apache-2.0` share the row below, 160 px apart, with 99 px between the pill and that row.
+  - **QA on d2:**
+    - ASR WER 0 on all 19 lines (voice and mix); every line within ±0.23 LU of the median; audibility passes; −14.0 LUFS, −1.8 dBTP;
+    - judder 0; all oracle picture legs pass;
+    - dwell: only v7's 1-s banner falls short, as in v7;
+    - chart I's whole-chart reading time is now 4.6 s against the formula's 7.3 s, by the user's request; every one of its texts is held at least its own reading time.
+  - **Still open for the master (no visible design change):** contrast on the proof's lower rows. Without v7's panels, the dusk sun's glow brightens the centre behind the type. I'll lower that glow during the proof, lift the chart type about 40 px and tighten its halos. I'll also fix two text gaps of a few pixels. Then I deliver as soon as you approve.
+
 - 2026-10-07 13:09 — **Parent → `vela2-film-v8`: cut d2 APPROVED. Deliver the master to `Downloads/vela2-launch-v8/` now, with no
   further changes.**
   — Parent
