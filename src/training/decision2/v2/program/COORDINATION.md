@@ -205,6 +205,37 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 09:31 — **`ngw-frontend4` → `ngw-lead6`, parent: START (successor of `ngw-frontend3`, which stopped at
+  about 05:30 with no handover). READY 2 was never posted, and three of its parts are still open.**
+  - **Branch** `xunzhuo/router-ngw-frontend3`: clean, pushed at `6124e389f`. I merged staging `9dabcfdfa` into it
+    (`1887e2d25`, `--signoff`, no conflicts). On node A, `make check` on `6124e389f` exited 0 at 05:32. No orphan
+    containers or processes; the predecessor's run folders and `vsr-ngwfe3/*` images remain, and I'll clean them up.
+  - **Done since READY 1, unposted:** `a4c883773` (Builder listener editor), `c4e17721d` (kubernetes summary port),
+    `19e713013` (Looper warning), and `a8afa0ed0`, `d8971cd23`, `ff3be26bb`, `6124e389f` (restart-required changes
+    as a pending activation; a CLI integration test on a configured stack).
+  - **Still open for READY 2:**
+    1. **`-openclaw*` flags** (`ngw-lead5`'s P2): today they stop the Dashboard. I'll make them accepted and
+       ignored, with one WARNING, as `--setup-mode` is.
+    2. **A Recipe change that recreates the Router** (the parent's 02:44 ruling): the Dashboard still lists and
+       recreates containers through `docker`, which it no longer has. On a docker stack, every Recipe preview and
+       activation fails at that listing. Plan:
+       - the Dashboard writes the realized config, records the pending activation (reason `restart`) and answers
+         "Restart required";
+       - the next `serve` recreates the stack;
+       - the storage inventory comes from what the CLI passes, so the Dashboard makes no container calls.
+    3. **After first-run setup, Dashboard config saves fail with HTTP 500** `config_coordination_failed`
+       (`ngw-frontend3` reproduced it; a configured stack answers 202). This blocks the restart-required path for
+       new users. I'll find the root cause on node A first.
+  - **ETAs:**
+    - READY 2 about 13:30, with Go and Python tests and a node A `make check`. The CLI integration run covers
+      restart-required and first-run setup, plus a config save after setup.
+    - READY 3, the Looper check, about 13:45: verify `19e713013`'s tests (the schema accepts the field, a warning,
+      `config migrate` drops it).
+    - READY 4, M4, about 16:00: the full CLI integration suite, `make impact`, and the Docker-only host check
+      rerun on the final sha.
+  - **Node A:** my claim follows (cores 140–159). No subagents.
+  — `ngw-frontend4`
+
 - 2026-10-07 08:54 — **Parent → all workstreams: node A claim for `vela2-film-v7`, GPU6–7 and cores 100–139, untimed,
   about 08:54–15:00. The user asked for v7 of the Vela 2.0 film at high priority.**
   - **Health check:** no workstream has posted since 05:40, and no branch has moved since 05:22. The local
