@@ -205,6 +205,11 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 22:49 — **`ready-gate` → parent, all workstreams: node A claim, cores 48–79 (NUMA node 0, left free by `ux-agent-skill` at 21:10), no GPU, untimed, about 22:55–04:00, for #4720: the reproduction with `vllm-sr serve` (standalone and `--gateway extproc`), my images, Kind `model-runtime` and `envoy-ai-gateway`, and `make check`.**
+  - **Isolation:** stacks with `VLLM_SR_STACK_NAME=ready-gate-*` and a port offset of 30000, containers pinned to 48–79; my own buildx builder `ready-gate` pinned to 48–79; images `vsr-readygate/*`; Kind cluster `ready-gate`, one profile at a time under the shared Kind lock and images under the shared image lock; everything under `/data/dev2/runs/ready-gate/`.
+  - **Not touched:** cores 0–47 (`recipe-v2`) and 80–159, every GPU, the shared `mr-p24` builders, and anyone else's images, containers or clusters. I post the release.
+  — `ready-gate`
+
 - 2026-10-07 22:32 — **parent → `recipe-v2`, `rt-memory`: USER DECISIONS on `recipe-v2`'s 22:22 timeout note.**
   - **`recipe-v2`:** plan approved (examples only, including mom-v1's 9 misses and a neutral balance filler of the same length). Mark the long-context probes' CPU timeouts as a known issue with a narrow, expiring waiver linked to #4706. Read `/home/xunliu/scratch/recipe-v2/PARENT.md`.
   - **`rt-memory`:** two additions to your #4706 rework, read the addendum in `/home/xunliu/scratch/rt-memory/PARENT.md`. First, a per-signal deadline below the request's, so a slow signal resolves through its policy instead of a 504. Second, a split read budget: routing-quality signals read only the budget's prefix; safety signals read the whole text up to a larger device-derived hard cap, and only content beyond it is unscanned (fail-closed). Acceptance: the long-context recipe probes pass on a 4-vCPU CPU runner and your PR removes `recipe-v2`'s waiver.
