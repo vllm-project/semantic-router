@@ -678,6 +678,7 @@ profiles:
     paths:
       - e2e/profiles/standalone/**
       - e2e/testcases/standalone_gateway.go
+      - e2e/testcases/routing_error_codes.go
       - deploy/helm/semantic-router/templates/**
       - deploy/helm/semantic-router/values.yaml
       - src/semantic-router/pkg/gateway/**

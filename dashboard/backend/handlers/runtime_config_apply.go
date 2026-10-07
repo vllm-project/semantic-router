@@ -307,10 +307,6 @@ func propagateConfigToRuntime(configPath string, configDir string) error {
 		return awaitManagedRuntime(effectiveConfigPath)
 	}
 
-	if getDockerContainerStatus(managedContainerNameForService("envoy")) == "running" {
-		return propagateConfigToManagedContainer()
-	}
-
 	return nil
 }
 
@@ -375,29 +371,6 @@ func refreshManagedSplitEnvoyConfig(configPath string) (bool, error) {
 	return previousErr != nil || !bytes.Equal(previous, current), nil
 }
 
-func propagateConfigToManagedContainer() error {
-	effectiveConfigPath, err := syncRuntimeConfigInManagedContainer()
-	if err != nil {
-		return err
-	}
-
-	return regenerateAndReloadEnvoyInManagedContainer(effectiveConfigPath)
-}
-
-func regenerateAndReloadEnvoyInManagedContainer(configPath string) error {
-	if output, err := generateEnvoyConfigInManagedContainer(configPath); err != nil {
-		return fmt.Errorf("failed to regenerate Envoy config in %s: %w (output: %s)", managedContainerNameForService("envoy"), err, strings.TrimSpace(output))
-	} else {
-		log.Printf("Config propagation: %s", strings.TrimSpace(output))
-	}
-
-	if err := restartManagedService("envoy", 20*time.Second); err != nil {
-		return fmt.Errorf("failed to restart Envoy in %s: %w", managedContainerNameForService("envoy"), err)
-	}
-
-	return nil
-}
-
 func generateEnvoyConfigWithPython(configPath string, outputPath string) (string, error) {
 	cliRoot := detectPythonCLIRoot()
 	if cliRoot == "" {
@@ -458,74 +431,6 @@ func splitEnvoyConfigPathForRuntimeConfig(configPath string) string {
 		return filepath.Join(configDir, "envoy.yaml")
 	}
 	return detectEnvoyConfigPath()
-}
-
-func generateEnvoyConfigInManagedContainer(configPath string) (string, error) {
-	containerName := managedContainerNameForService("envoy")
-	outputPath := defaultEnvoyConfigPath
-	pythonBinary := "python3"
-	if managedRuntimeUsesSplitContainers() {
-		containerName = managedRuntimeSyncContainerName()
-		outputPath = defaultSplitEnvoyConfigPath
-		pythonBinary = dashboardVenvPythonPath
-	}
-	pythonScript := fmt.Sprintf(`
-from cli.config_generator import generate_envoy_config_from_user_config
-from cli.parser import parse_user_config
-
-user_config = parse_user_config(%q)
-generate_envoy_config_from_user_config(user_config, %q)
-print("Regenerated Envoy config: %s")
-`, configPath, outputPath, outputPath)
-
-	return execInManagedContainer(containerName, 30*time.Second, pythonBinary, "-c", pythonScript)
-}
-
-func execInManagedContainer(containerName string, timeout time.Duration, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if err := validateManagedContainerExecArgs(args); err != nil {
-		return "", err
-	}
-
-	commandArgs := append([]string{"exec", containerName}, args...)
-	// #nosec G204 -- commandArgs are validated against a strict allowlist above and the container name is constant.
-	cmd := exec.CommandContext(ctx, "docker", commandArgs...)
-	output, err := cmd.CombinedOutput()
-	return string(output), err
-}
-
-func validateManagedContainerExecArgs(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("managed container command is required")
-	}
-
-	if isPythonCommand(args[0]) {
-		return validateManagedContainerPythonArgs(args)
-	}
-
-	return fmt.Errorf("unsupported managed container command: %s", args[0])
-}
-
-func validateManagedContainerPythonArgs(args []string) error {
-	if len(args) == 3 && args[1] == "-c" {
-		return nil
-	}
-
-	return fmt.Errorf("unsupported python3 invocation in managed container")
-}
-
-func isPythonCommand(command string) bool {
-	base := strings.ToLower(filepath.Base(strings.TrimSpace(command)))
-	return base != "" && strings.HasPrefix(base, "python")
-}
-
-func restartManagedService(service string, timeout time.Duration) error {
-	if !managedServiceUsesContainerLifecycle(service) {
-		return fmt.Errorf("unsupported managed service restart: %s", service)
-	}
-	return restartOrStartManagedSplitContainerService(service, timeout)
 }
 
 func detectPythonCLIRoot() string {
