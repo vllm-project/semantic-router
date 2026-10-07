@@ -40,6 +40,7 @@ from typing import Any
 
 from ..errors import RuntimeServiceError
 from ..plugins.base import DEADLINE, Batch, Job, LoadedModel, Profile, Results
+from ..timing import RunTiming
 from .planner import cost
 
 __all__ = ["DEADLINE", "Scheduler", "SchedulerLimits"]
@@ -66,6 +67,7 @@ class _Pending:
     remaining: int = 0
     finish: float = 0.0
     started: bool = False
+    timing: RunTiming | None = None
 
 
 @dataclass(order=True)
@@ -152,14 +154,15 @@ class Scheduler:
         *,
         deadlines: list[float | None],
         profile: str,
+        timing: RunTiming | None = None,
     ) -> list[Future[Results[Any]]]:
         """Queue one job per item list at once, as one group (a bundle's tasks for this model).
 
         ``deadlines`` holds each job's own deadline. Admission counts every
         job not yet answered, queued or planned, and refuses the whole group
-        or none of it.
+        or none of it. ``timing`` records the group's forwards.
         """
-        futures, pending = self._jobs(item_lists, deadlines, profile)
+        futures, pending = self._jobs(item_lists, deadlines, profile, timing)
         if not pending:
             return futures
         tokens = sum(entry.tokens for entry in pending)
@@ -184,6 +187,7 @@ class Scheduler:
         *,
         deadlines: list[float | None],
         profile: str,
+        timing: RunTiming | None = None,
     ) -> list[Future[Results[Any]]] | None:
         """Run a group on the calling thread if the scheduler is idle, else None.
 
@@ -199,7 +203,7 @@ class Scheduler:
                 return None
             self._owned = True
         try:
-            futures, pending = self._jobs(item_lists, deadlines, profile)
+            futures, pending = self._jobs(item_lists, deadlines, profile, timing)
             with self._lock:
                 self._admit(pending)
             self._plan(pending)
@@ -217,6 +221,7 @@ class Scheduler:
         item_lists: list[list[Any]],
         deadlines: list[float | None],
         profile: str,
+        timing: RunTiming | None,
     ) -> tuple[list[Future[Results[Any]]], list[_Pending]]:
         if profile not in self.profiles:
             raise RuntimeServiceError(
@@ -239,7 +244,9 @@ class Scheduler:
                 profile=profile,
                 group=group,
             )
-            pending.append(_Pending(job, future, sum(cost(item) for item in items)))
+            pending.append(
+                _Pending(job, future, sum(cost(item) for item in items), timing=timing)
+            )
         return futures, pending
 
     def _admit(self, pending: list[_Pending]) -> None:
@@ -396,12 +403,15 @@ class Scheduler:
                 work = partial(self.model.run, items)
             values = self.execute(work)
         except Exception as exc:
+            _timed(planned, started, time.monotonic())
             if self.device_fault(exc):
                 self._failure = exc
             for pending in planned.owners:
                 _fail(pending.future, exc)
             return
-        seconds = time.monotonic() - started
+        ended = time.monotonic()
+        _timed(planned, started, ended)
+        seconds = ended - started
         tokens = sum(cost(item) for item in items)
         self.observe(
             "forward", {"seconds": seconds, "rows": len(items), "tokens": tokens}
@@ -440,6 +450,13 @@ class Scheduler:
         error = RuntimeServiceError("not_ready", "the runtime is shutting down")
         for pending in itertools.chain(queued, planned):
             _fail(pending.future, error)
+
+
+def _timed(planned: _Planned, started: float, ended: float) -> None:
+    """Record a forward in the timing of every group it ran items for, before any is answered."""
+    for pending in planned.owners:
+        if pending.timing is not None and not pending.future.done():
+            pending.timing.ran(planned.sequence, ended - started, ended)
 
 
 def _resolve(future: Future[Results[Any]], result: Results[Any]) -> None:
