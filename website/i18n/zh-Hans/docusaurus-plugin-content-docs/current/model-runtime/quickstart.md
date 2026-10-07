@@ -2,7 +2,7 @@
 title: 快速开始
 description: 安装模型运行时，运行一个模型，向它发送请求，再让路由器使用它。
 translation:
-  source_commit: "b9b183307e97f3ce8448d2838d0f1bf99972d336"
+  source_commit: "2e7e0775e88b0fc9426daf7c4fa0fe6e0ec20654"
   source_file: "docs/model-runtime/quickstart.md"
   outdated: false
 ---
@@ -171,7 +171,8 @@ vllm-sr serve --config config.yaml
 ```
 
 路由器会为 `decision-kai` 启动自己的运行时。首次启动时，它把模型的一份副本下载到
-`config.yaml` 旁边的 `models/` 目录，供以后启动复用。通过路由器发送一个请求，看看它选择了哪条路由：
+`config.yaml` 旁边的 `models/` 目录，供以后启动复用。`vllm-sr serve` 在模型加载完成后才返回，
+等待期间会打印模型的状态。通过路由器发送一个请求，看看它选择了哪条路由：
 
 ```bash
 curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
@@ -181,7 +182,7 @@ curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
 ```
 
 `x-vsr-selected-decision` 给出路由名称，`x-vsr-matched-decision-model` 列出匹配的决策信号。
-模型仍在加载时，该信号为未知，`on_unknown: no_match` 会把请求送到 `default-route`。
+如果运行时之后重启，在模型恢复之前该信号为未知，`on_unknown: no_match` 会在此期间把请求送到 `default-route`。
 
 如果想复用第 2 步启动的服务，而不是再运行一份模型，把 `artifact` 和 `device` 换成它的地址，
 例如 `endpoint: http://host.docker.internal:8100`，并用 `--host 0.0.0.0` 启动那个服务，

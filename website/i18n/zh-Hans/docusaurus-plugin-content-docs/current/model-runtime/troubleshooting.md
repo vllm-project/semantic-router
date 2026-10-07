@@ -3,7 +3,7 @@ title: 故障排查与常见问题
 sidebar_label: 故障排查与常见问题
 description: 修复模型运行时的常见问题，并解答常见疑问。
 translation:
-  source_commit: "c94fff6a5d6368a2743b786db5624274053f1ae9"
+  source_commit: "67ca6372c5cfdc6551ad666fe4fdbb71c70ebdaa"
   source_file: "docs/model-runtime/troubleshooting.md"
   outdated: false
 ---
@@ -25,6 +25,26 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 
 `vsr_model_runtime_ready{deployment="..."} 1` 表示该 deployment 可以作答。
 路由器日志会列出每个托管运行时进程以及它停止的原因。
+
+## 启动会等待模型 {#startup-waits-for-the-models}
+
+只有当路由器为当前配置托管的每个模型都加载完成后，它才开始服务。在此之前，`/ready` 返回 `503`，
+`vllm-sr serve` 会一直等待，并打印路由器还在等待什么：
+
+```text
+Waiting for Router-managed model deployments, 0 of 1 ready: decision-kai (vllm-sr/Decision-2.0-Kai-0.6B) loading
+```
+
+`/startup-status` 报告 `phase: loading_model_deployments`，并在 `model_deployments` 中列出每个
+deployment 及其状态：
+
+```bash
+curl -s localhost:8080/startup-status
+```
+
+首次启动要下载模型，因此比之后的启动更久。等待在 `VLLM_SRUN_READY_TIMEOUT`（默认 10 分钟）后结束，
+并报告 `did not become ready within 10m0s`；再次启动即可从缓存继续下载，或在路由器的环境中调大该超时。
+模型加载失败时，等待会立即结束并给出原因（见下文）。
 
 ## 信号从不匹配 {#a-signal-never-matches}
 
@@ -76,7 +96,7 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 `GET /v1/models` 会给出每个模型失败的原因。由路由器运行模型时，路由器日志会带有同样的原因，例如
 `model runtime is not ready: model @domain_classifier failed to load: ...`。
 路由器运行的某个运行时进程中所有模型都加载失败时，路由器会重启该进程（首次等待 1 秒，之后最长间隔 60 秒），
-因此 GPU 被占用、磁盘已满这类暂时性原因消除后，模型会自行恢复。与仍在服务的模型同处一个进程的模型加载失败时，由运行时自己重试，该进程会继续运行。重试三次仍然失败的任务模型会让路由器无法启动。常见原因：
+因此 GPU 被占用、磁盘已满这类暂时性原因消除后，模型会自行恢复。与仍在服务的模型同处一个进程的模型加载失败时，由运行时自己重试，该进程会继续运行。路由器托管的模型重试三次仍然失败时，路由器无法启动；配置重新加载时，新配置会被拒绝，上一份配置继续服务。常见原因：
 
 | 原因提示 | 处理方法 |
 | --- | --- |

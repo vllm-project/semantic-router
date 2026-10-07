@@ -238,20 +238,38 @@ loaded and passed its self-check.
 
 ## When a model is not ready
 
-At startup the router waits until the task models its routes use have
-loaded: domain, PII, guard, safety, fact-check, feedback and hallucination
-models, and your own classifiers. If one of them fails to load, the router
-does not start, and its log names the model and the reason (see
-[Troubleshooting](model-runtime/troubleshooting.md#the-runtime-reports-failed)). This
-holds for an attached runtime too, so start it before the router. Decision
-models do not hold up the start: until one answers, its signals are unknown.
+The router serves a configuration only once the models it runs for it have
+loaded. At startup it waits for every deployment it manages: the task models
+its routes use (domain, PII, guard, safety, fact-check, feedback and
+hallucination models, and your own classifiers) and the decision models that
+`decision` signals and the `decision` selection algorithm ask. It also waits
+for the task models of an attached runtime, so start that runtime before the
+router. While it waits, `/health` answers and `/ready` returns `503`;
+`/startup-status` lists each managed deployment with its state (`starting`,
+`loading`, `warming`, `ready`, ...), and `vllm-sr serve` prints the ones it
+still waits for. The wait, a first download included, is bounded by
+`VLLM_SRUN_READY_TIMEOUT` (10 minutes by default). If a model fails to load or
+is not ready in time, the router does not start; its log and its last startup
+status (`phase: error`) name the deployment and the reason (see
+[Troubleshooting](model-runtime/troubleshooting.md#the-runtime-reports-failed)).
+
+The router does not wait for a decision model on an attached runtime, which has
+a lifecycle of its own: until it answers, its signals are unknown. A deployment
+that the configuration declares but that nothing uses is never started and does
+not hold up the start.
+
+A configuration reload or `vllm-sr config apply` that adds a model waits the
+same way while the previous configuration keeps serving. `/ready` stays `200`,
+`GET /api/v1/config/hash` reports the activation as `pending`, and the new
+configuration serves once its models are ready. If one fails to load, the
+reload is rejected and the previous configuration serves on.
 
 Once the router is serving, requests never wait for a model that cannot
 answer:
 
 | Situation | What a feature sees |
 | --- | --- |
-| The model is still downloading or loading | Unknown |
+| An attached runtime's decision model is still downloading or loading | Unknown |
 | The answer arrives after the feature's timeout | Unknown |
 | The runtime is overloaded | Unknown |
 | The runtime process crashed | Unknown until the router has restarted it (back-off from 1 s to 60 s) |

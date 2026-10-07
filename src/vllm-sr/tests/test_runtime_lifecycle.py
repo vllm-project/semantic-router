@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from cli import runtime_lifecycle
 from cli.runtime_stack import resolve_runtime_stack
@@ -320,3 +322,110 @@ def test_inspection_failure_after_ready_cannot_report_success(monkeypatch):
         )
     assert exc.value.code == 1
     assert len(inspections) == 2
+
+
+def _router_wait_fakes(monkeypatch, ready_after, statuses):
+    """/ready answers 503 (curl exit 22) until ready_after probes; each
+    /startup-status read returns the next of statuses."""
+    _readiness_clock(monkeypatch)
+    calls = {"ready": 0, "status": [], "logs": 0}
+
+    def execute(_container, command, *, timeout):
+        assert 0 < timeout <= 5
+        if command[-1].endswith("/startup-status"):
+            calls["status"].append(command)
+            return (
+                0,
+                json.dumps(statuses[min(len(calls["status"]), len(statuses)) - 1]),
+                "",
+            )
+        calls["ready"] += 1
+        return (0 if calls["ready"] > ready_after else 22), "", ""
+
+    def logs(*_args, **_kwargs):
+        calls["logs"] += 1
+
+    monkeypatch.setattr(runtime_lifecycle, "container_exec", execute)
+    monkeypatch.setattr(runtime_lifecycle, "container_logs", logs)
+    return calls
+
+
+def test_router_wait_says_which_model_deployments_are_still_loading(
+    monkeypatch, capsys
+):
+    loading = (
+        "Waiting for Router-managed model deployments, 0 of 1 ready: "
+        "decider (vllm-sr/Decision-2.0-Kai-0.6B) loading"
+    )
+    warming = loading.replace("loading", "warming")
+    calls = _router_wait_fakes(
+        monkeypatch,
+        ready_after=3,
+        statuses=[
+            {"phase": "loading_model_deployments", "message": loading},
+            {"phase": "loading_model_deployments", "message": loading},
+            {"phase": "loading_model_deployments", "message": warming},
+        ],
+    )
+
+    runtime_lifecycle.wait_for_router_health(resolve_runtime_stack())
+
+    err = " ".join(capsys.readouterr().err.split())
+    assert err.count(loading) == 1
+    assert err.count(warming) == 1
+    assert "Router is ready" in err
+    assert calls["status"][0] == [
+        "curl",
+        "-s",
+        "--max-time",
+        "5.000",
+        "http://localhost:8080/startup-status",
+    ]
+
+
+def test_router_wait_stops_at_once_when_startup_failed(monkeypatch, capsys):
+    message = (
+        'create ExtProc server: model_runtime deployment "decider": '
+        "model runtime is not ready: model decider failed to load: out of memory"
+    )
+    calls = _router_wait_fakes(
+        monkeypatch,
+        ready_after=100,
+        statuses=[{"phase": "error", "ready": False, "message": message}],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        runtime_lifecycle.wait_for_router_health(resolve_runtime_stack())
+
+    assert exc.value.code == 1
+    assert calls["ready"] == 1
+    assert calls["logs"] == 1
+    err = " ".join(capsys.readouterr().err.split())
+    assert f"Router startup failed: {message}" in err
+
+
+def test_router_wait_reads_startup_status_only_when_the_router_answers(monkeypatch):
+    _readiness_clock(monkeypatch)
+    commands = []
+
+    def execute(_container, command, *, timeout):
+        commands.append(command[-1])
+        # Connection refused: the management API is not listening yet.
+        return (7 if len(commands) < 3 else 0), "", ""
+
+    monkeypatch.setattr(runtime_lifecycle, "container_exec", execute)
+    runtime_lifecycle.wait_for_router_health(resolve_runtime_stack())
+    assert all(endpoint.endswith("/ready") for endpoint in commands)
+
+
+def test_router_startup_status_reads_with_the_readiness_credential():
+    command = runtime_lifecycle._router_management_command(
+        "/startup-status", 9090, "CATALOG_MANAGEMENT_TOKEN", 5.0
+    )
+    assert command[:2] == ["sh", "-c"]
+    assert 'curl -s --max-time "$3" -H @-' in command[2]
+    assert command[-3:] == [
+        "CATALOG_MANAGEMENT_TOKEN",
+        "http://localhost:9090/startup-status",
+        "5.000",
+    ]

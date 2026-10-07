@@ -56647,6 +56647,38 @@
                     "message": {
                       "type": "string"
                     },
+                    "model_deployments": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "artifact": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "process": {
+                            "type": "string"
+                          },
+                          "ready": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "state",
+                          "ready"
+                        ]
+                      }
+                    },
                     "pending_models": {
                       "nullable": true,
                       "type": "array",
@@ -56832,6 +56864,38 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "model_deployments": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "artifact": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "process": {
+                            "type": "string"
+                          },
+                          "ready": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "state",
+                          "ready"
+                        ]
+                      }
                     },
                     "pending_models": {
                       "nullable": true,
