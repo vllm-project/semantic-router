@@ -63,8 +63,11 @@ func buildOwnedModalityOption(
 	if md.Classifier != nil {
 		path, useCPU, limit = md.Classifier.ModelPath, md.Classifier.UseCPU, md.Classifier.MaxSequenceLength
 	}
-	spec := models.localSpec("modality_detector", path, "mmbert32k", config.RemoteClassifierContractLabelDistribution, useCPU, limit)
-	handle, err := load(context.Background(), spec)
+	spec, err := models.localSpec("modality_detector", path, "mmbert32k", config.RemoteClassifierContractLabelDistribution, useCPU, limit)
+	var handle *binding.Resolved[string, tasks.LabelDistribution]
+	if err == nil {
+		handle, err = load(context.Background(), spec)
+	}
 	if err != nil {
 		if md.GetMethod() == config.ModalityDetectionHybrid && !explicit {
 			logging.Warnf("Modality classifier preparation failed; using configured keyword fallback: %v", err)

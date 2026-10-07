@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -293,10 +293,8 @@ func (h *HNSWIndex) selectNeighbors(candidates []int, m int, queryEmb []float32,
 	return takeHNSWNeighborIndices(neighbors, m)
 }
 
-// distance calculates cosine similarity (as dot product since embeddings are normalized)
+// distance is the negated dot product of normalized embeddings, so a higher
+// similarity is a smaller distance.
 func (h *HNSWIndex) distance(a, b []float32) float32 {
-	// We use negative dot product so that larger similarity = smaller distance
-	// Use SIMD-optimized dot product (AVX2/AVX512)
-	dotProduct := dotProductSIMD(a, b)
-	return -dotProduct // Negate so higher similarity = lower distance
+	return -dotProduct(a, b)
 }

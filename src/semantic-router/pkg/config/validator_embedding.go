@@ -103,10 +103,9 @@ func validateRemoteEmbeddingModelType(rawModelType string) []string {
 }
 
 // validateMmBertModelPath rejects classic BERT models in the mmbert_model_path
-// slot. Classic BERT (e.g. all-MiniLM-L12-v2) uses a different tensor layout
-// than ModernBERT/mmBERT and will crash the Rust loader with a cryptic tensor
-// name mismatch. Catching it here gives the user a clear message at config-load
-// time instead of a crash at model-init time.
+// slot: the model runtime has no family for classic BERT (e.g.
+// all-MiniLM-L12-v2), so catching it here gives the user a clear message at
+// config-load time instead of a failed deployment at startup.
 func validateMmBertModelPath(modelPath string) error {
 	if modelPath == "" {
 		return nil
@@ -117,10 +116,8 @@ func validateMmBertModelPath(modelPath string) error {
 	}
 	if model.Purpose == PurposeSemanticSimilarity {
 		return fmt.Errorf(
-			"mmbert_model_path is set to %q, which is a classic BERT model (%s, %s). "+
-				"Classic BERT models are not compatible with the mmBERT loader. "+
-				"Use 'bert_model_path' for this model instead, or set mmbert_model_path "+
-				"to a ModernBERT-based model such as 'models/mmbert-embed-32k-2d-matryoshka'",
+			"mmbert_model_path is set to %q, which is a classic BERT model (%s, %s) that the model runtime does not serve; "+
+				"set mmbert_model_path to Vela Embedding ('models/Vela-1.0-Encoder-307M-Embedding') or use an OpenAI-compatible embedding endpoint",
 			modelPath, model.RepoID, model.ParameterSize,
 		)
 	}

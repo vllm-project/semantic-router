@@ -44,11 +44,9 @@ def safety_document():
             "model_catalog": {
                 "deployments": {
                     "local": {
-                        "provider": "ort",
-                        "artifact": "models/qualified",
+                        "provider": "model_runtime",
+                        "artifact": "/models/qualified",
                         "device": "rocm:0",
-                        "precision": "native",
-                        "custom_ops_profile": "ck_flash_attention",
                         "input": {"max_tokens": 32768},
                     }
                 },
@@ -66,7 +64,7 @@ def safety_document():
     }
 
 
-def test_safety_binding_and_rocm_profile_survive_public_schema_and_validation():
+def test_safety_binding_and_rocm_deployment_survive_public_schema_and_validation():
     document = safety_document()
     original = copy.deepcopy(document)
     assert validate_config_structure(document) == []
@@ -82,7 +80,7 @@ def test_safety_binding_and_rocm_profile_survive_public_schema_and_validation():
 
 @pytest.mark.parametrize(
     "change",
-    ["wrong_contract", "foreign_head", "mapping", "cpu_profile", "bad_profile"],
+    ["wrong_contract", "foreign_head", "mapping", "bad_device"],
 )
 def test_safety_invalid_binding_is_rejected_before_launch(change):
     document = safety_document()
@@ -94,8 +92,6 @@ def test_safety_invalid_binding_is_rejected_before_launch(change):
         bindings["safety.foreign"] = bindings.pop("safety.risk")
     elif change == "mapping":
         bindings["safety.risk"]["mapping_path"] = "unused.json"
-    elif change == "cpu_profile":
-        deployment["device"] = "cpu"
     else:
-        deployment["custom_ops_profile"] = "untrusted"
+        deployment["device"] = "Metal 0"
     assert validate_model_runtime_references(UserConfig.model_validate(document))

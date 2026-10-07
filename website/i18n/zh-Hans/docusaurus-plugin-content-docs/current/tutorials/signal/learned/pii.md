@@ -2,7 +2,7 @@
 translation:
   source_commit: "a65e60e035f593b80c0a9c1963c34a53abe90444"
   source_file: "docs/tutorials/signal/learned/pii.md"
-  outdated: false
+  outdated: true
 ---
 
 # 个人身份信息信号 {#pii-signal}
@@ -57,7 +57,7 @@ routing:
 每次前向计算最多处理 512 个 token，相邻窗口重叠 255 个内容 token。
 窗口由模型 tokenizer 确定；覆盖范围不依赖字符估算或窗口边界处的重新分词。
 
-Candle 和 ORT 保留原始 UTF-8 偏移，按周围上下文为每个 token 选择一次观测，
+模型运行时以原文中的字符偏移报告实体片段，按周围上下文为每个 token 选择一次观测，
 最后统一解码 BIO 实体。重叠不会重复计算输入用量或实体置信度。
 这保证已准入 token 的完整覆盖，不保证检测准确率，也不等于单次 32K 前向的质量。
 
@@ -71,7 +71,6 @@ global:
     modules:
       classifier:
         pii:
-          use_mmbert_32k: true
           max_sequence_length: 32768  # 完整文本预算，含特殊 token。
           window: {size: 512, overlap: 255}
 ```

@@ -79,6 +79,7 @@ type Metric = {
   before: string
   measure: string
   source: string
+  baseline?: string
 }
 
 export function ArticleMetrics({ items }: { items: Metric[] }) {
@@ -90,7 +91,7 @@ export function ArticleMetrics({ items }: { items: Metric[] }) {
           <dd>
             <strong>{item.value}</strong>
             <span>{item.measure}</span>
-            <small>{`from ${item.before} · previous mmBERT`}</small>
+            <small>{`from ${item.before} · ${item.baseline ?? 'previous mmBERT'}`}</small>
           </dd>
         </div>
       ))}
@@ -100,14 +101,14 @@ export function ArticleMetrics({ items }: { items: Metric[] }) {
 
 type Chart = FigureProps & { label: string }
 
-export function ArticleChartGallery({ charts }: { charts: Chart[] }) {
+export function ArticleChartGallery({ charts, label = 'Choose an Omni benchmark' }: { charts: Chart[], label?: string }) {
   const [selected, setSelected] = useState(0)
   const panelId = useId()
   const chart = charts[selected]
 
   return (
     <div className={styles.chartGallery}>
-      <div className={styles.chartChoices} role="group" aria-label="Choose an Omni benchmark">
+      <div className={styles.chartChoices} role="group" aria-label={label}>
         {charts.map((item, index) => (
           <button
             type="button"

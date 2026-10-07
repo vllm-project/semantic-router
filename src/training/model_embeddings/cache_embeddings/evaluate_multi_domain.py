@@ -67,7 +67,7 @@ def download_test_set(domain: str) -> str:
 
     print(f"  Downloading {domain} test set from HuggingFace...")
     return hf_hub_download(
-        repo_id="llm-semantic-router/cache-embedding-test-sets",
+        repo_id="vllm-sr/cache-embedding-test-sets",
         filename=filename,
         repo_type="dataset",
     )

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -146,12 +147,37 @@ func boundedReaskMessages(messages []string) []string {
 	return bounded
 }
 
-func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]bool, ready map[string]bool, wg *sync.WaitGroup) {
+// modelBackedSignalTypes call model deployments; their goroutines join the
+// stage's request bundle, so the bundle flushes once all of them have parked
+// or finished. Heuristic signals never delay a flush.
+var modelBackedSignalTypes = map[string]bool{
+	config.SignalTypeDomain:       true,
+	config.SignalTypeFactCheck:    true,
+	config.SignalTypeUserFeedback: true,
+	config.SignalTypeModality:     true,
+	config.SignalTypeSafety:       true,
+	config.SignalTypeJailbreak:    true,
+	config.SignalTypePII:          true,
+	config.SignalTypeClassifier:   true,
+	config.SignalTypeDecision:     true,
+	config.SignalTypeEmbedding:    true,
+	config.SignalTypeComplexity:   true,
+	config.SignalTypeKB:           true,
+	config.SignalTypeReask:        true,
+	config.SignalTypePreference:   true,
+}
+
+func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]bool, ready map[string]bool, bundle *modelservice.Bundle, wg *sync.WaitGroup) {
 	for _, d := range dispatchers {
 		if isSignalTypeUsed(usedSignals, d.signalType) && ready[d.signalType] {
+			leave := func() {}
+			if modelBackedSignalTypes[d.signalType] {
+				leave = bundle.Join()
+			}
 			wg.Add(1)
 			go func(dispatch signalDispatch) {
 				defer wg.Done()
+				defer leave()
 				dispatch.evaluate()
 			}(d)
 			continue
