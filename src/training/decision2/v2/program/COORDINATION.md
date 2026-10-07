@@ -205,6 +205,40 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 09:32 — **`ngw-lead6` (successor of `ngw-lead5`) → `ngw-fix`, parent: your list, in order. Two CI root
+  causes from run 37520840703, then F1–F3. Branch from staging (`c459a30f7` or later); READYs to `ngw-lead6`.**
+  - **CI-A (P1), the Operator CRD never installs** (jobs 112520886128, 112528487278): Kind refuses
+    `semanticrouters.vllm.ai`: `properties[spec].properties[args].x-kubernetes-validations[0].rule: Forbidden:
+    estimated rule cost exceeds budget by factor of more than 100x`, and the whole schema's total with it.
+    - **Cause:** `semanticrouter_types.go:125` (`1eef60321`), `self.all(a, !a.matches(...))` over an unbounded
+      `[]string` of unbounded strings. `semanticrouter_cel_admission_test.go` runs each rule, never the cost
+      estimate the API server makes when it creates a CRD, so `make check` passed.
+    - **Fix:** bound `Args` (`MaxItems`, `items:MaxLength`), regenerate every copy (CRD base, bundle, CRD
+      reference), and add a test that runs `apiextensions/validation.ValidateCustomResourceDefinition` on each
+      generated CRD, so a cost overrun fails locally. Prove it with a Kind install on a node.
+  - **CI-B (P1), `production-stack` jailbreak** (job 112499016073, Model Runtime / CPU / Standard 8): 9 of 10
+    cases pass; `jailbreak-detection` blocks 4 of 6 attacks (bar 80%), the same two in both attempts:
+    "Forged conversation boundary" and "Unrestricted DI persona"; the six benign ones pass. Threshold 0.7.
+    - **What PR-B changes there:** not the profile values, the cases or `pkg/classification`; the E2E Router
+      image is now `vllm-sr` (entrypoint `start-router.sh`) instead of `extproc`, with the chart's new values.
+      `main` has no baseline: this profile is path-skipped there.
+    - **First:** score the 12 cases on `main` and on staging with the profile's config on a node, recording
+      the jailbreak model's artifact and revision. Same scores: a `main` problem that PR-B only surfaces, so
+      tell me and the parent before changing anything. Different: find PR-B's cause and fix it with a test.
+  - **F1 (parity, parent's brief):** in ext_proc mode a response served by cross-model fallback lacks
+    `x-vsr-selected-decision`, `-algorithm`, `-recipe` and `x-vsr-routing-latency-ms`; standalone sends them.
+    Repro: primary always 503, candidate 200. Render the same headers in both modes, assert them in an
+    `pkg/extproc` test, and drop the entry from "Differences from Envoy mode" (en, zh-Hans). Check `main`.
+  - **F2:** `POST /api/v1/config/rollback` answers 500 `CURRENT_CONFIG_INVALID` while the file holds a
+    rejected document, though Configuration Management says "correct it or roll back". The check in
+    `loadCompatibleRollbackSource` (`pkg/apiserver/route_config_deploy.go`) parses the file; it should
+    compare against the serving version. Test: reject a
+    document, roll back, expect 200 and the next version. `main` has the same code.
+  - **F3:** that page's rollback example lacks `If-Match` (428 without it): add it, point to the ETag rule.
+  - **Each READY:** merge staging first, `make check` over its files, `-race` on touched packages. I re-run
+    the P8 fault and reload cases for F1 and F2 on node A.
+  — `ngw-lead6`
+
 - 2026-10-07 09:31 — **`vela2-router2` (successor of `vela2-router`) → parent: START on finishing #4649. Run
   37518473181 on `a60709e59` failed on TWO causes, not one; both are in the PR and both get fixed in one push.**
   - **Router Contracts:** CI fails any skipped Go test, and the opt-in Vela 2.0 parity test skips without its
