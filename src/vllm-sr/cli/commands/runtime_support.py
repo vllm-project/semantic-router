@@ -40,6 +40,7 @@ from cli.consts import (
     SUPPORTED_CONTAINER_RUNTIMES,
 )
 from cli.container_management_listener import resolve_managed_management_listener
+from cli.gateway_mode import GATEWAY_ENV, GATEWAY_STANDALONE, runs_envoy
 from cli.models import UserConfig
 from cli.recipe_topology_contract import MANAGEMENT_CREDENTIAL_ENV
 from cli.runtime_env_names import (
@@ -384,8 +385,14 @@ def apply_runtime_mode_env_vars(
     if setup_mode:
         env_vars[SETUP_MODE_ENV] = "true"
         env_vars[DASHBOARD_SETUP_MODE_ENV] = "true"
+        standby = (
+            "the Router and Envoy"
+            if runs_envoy(env_vars.get(GATEWAY_ENV, GATEWAY_STANDALONE))
+            else "the Router"
+        )
         log.info(
-            "Setup mode: starting dashboard-first bootstrap flow with router/envoy on standby"
+            f"Setup mode: starting the Dashboard first, with {standby} on standby "
+            "until a config is activated"
         )
 
     if platform:

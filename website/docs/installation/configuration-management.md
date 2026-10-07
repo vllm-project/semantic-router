@@ -59,13 +59,18 @@ vllm-sr config plan --config config.yaml    # check the change against the runni
 vllm-sr config apply --config config.yaml   # activate it
 ```
 
-`vllm-sr config apply` waits 15 seconds by default. A change that loads
-another model can take longer; pass `--timeout 120`. A timeout doesn't cancel
-the change: `vllm-sr config versions` shows whether it activated.
+`vllm-sr config apply` waits up to 120 seconds for the change to activate,
+which covers loading another model; pass `--timeout` to wait longer. A timeout
+doesn't cancel the change: `vllm-sr config versions` shows whether it
+activated.
 
-A change that needs a restart, such as a listener's new port, is refused with
-`restart_required` and nothing is saved. Apply it with a restart that replaces
-the active document, Dashboard edits included, with `config.yaml`:
+A change that needs a restart, such as a listener's new port, is saved instead,
+as the Dashboard saves one: `config apply` answers "Restart required: run
+`vllm-sr serve` to apply.", `vllm-sr status` reports the saved change, and the
+next `vllm-sr serve` applies it.
+
+To serve `config.yaml` instead of the active document, Dashboard edits
+included, restart with:
 
 ```bash
 vllm-sr serve --config config.yaml --replace-active-config

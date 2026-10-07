@@ -96,8 +96,10 @@ vllm-sr config plan --config candidate.yaml \
 ```
 
 Apply a hot-reloadable change with `vllm-sr config apply`. If the plan reports
-`RESTART_REQUIRED`, use the deployment workflow. For an authorized local-stack
-replacement, run `vllm-sr serve --config candidate.yaml --replace-active-config`.
+`RESTART_REQUIRED`, use the deployment workflow; on a local stack,
+`vllm-sr config apply` saves the change and the next `vllm-sr serve` applies
+it. For an authorized local-stack replacement, run
+`vllm-sr serve --config candidate.yaml --replace-active-config`.
 Confirm readiness and the active revision before testing.
 
 Set `ENTRYPOINT` to the published entrypoint you are evaluating, then preview a

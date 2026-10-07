@@ -2,7 +2,7 @@
 title: 配置工作流
 description: 选择 CLI、控制面板、Helm、Operator 和 DSL 如何编写并应用同一份 canonical Router 配置。
 translation:
-  source_commit: "8ded1a3c28a4af8358c8d638955b0318caeb8ed4"
+  source_commit: "b9b183307e97f3ce8448d2838d0f1bf99972d336"
   source_file: "docs/installation/configuration-workflows.md"
   outdated: false
 ---
@@ -98,9 +98,9 @@ helm upgrade --install semantic-router \
   -f values.yaml
 ```
 
-`vllm-sr serve --target k8s --config config.yaml` 将所选文档作为原子覆盖传递，因此 chart 示例路由不能合并到其中。该命令拒绝空文档或仅包含 setup 的文档，并且不会注入本地 Docker 服务地址或知识库路径。先运行 `vllm-sr config validate`，以便 schema 和引用错误在部署前失败。
+`vllm-sr serve --target kubernetes --config config.yaml` 将所选文档作为原子覆盖传递，因此 chart 示例路由不能合并到其中。该命令拒绝空文档或仅包含 setup 的文档，并且不会注入本地 Docker 服务地址或知识库路径。先运行 `vllm-sr config validate`，以便 schema 和引用错误在部署前失败。
 
-通过 Helm 或 Operator 选择 Kubernetes GPU 镜像、资源和设备插件。本地 `--platform amd` 和 `--platform nvidia` 快捷方式不会配置 Kubernetes 调度。
+在 Kubernetes 上，`--platform amd` 和 `--platform nvidia` 会选择 ROCm 或 CUDA 版 Router 镜像（除非显式指定了镜像），并申请一个 `amd.com/gpu` 或 `nvidia.com/gpu`，因此 Router Pod 会被调度到其设备插件提供该 GPU 的节点上。节点选择器、容忍度、其他资源以及设备插件本身仍通过 Helm values 或 Operator 配置。
 
 chart 将控制面板作为自己的 Deployment 和 Service 运行，并且该 Deployment 默认禁用。Router Service 仅承载 gRPC 和 HTTP API 端口，因此仅在启用控制面板后，端口 8700 才会出现在集群中。
 

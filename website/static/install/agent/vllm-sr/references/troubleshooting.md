@@ -22,7 +22,7 @@ Find the symptom, apply its fix, and rerun the step of the
 | `serve` prints `Waiting for setup` and doesn't return | No complete `config.yaml`, so the stack is in Dashboard setup mode. Stop waiting (Ctrl-C), run `vllm-sr stop`, and check the directory: setup mode writes its own `config.yaml` there. Replace that file with the main skill's configuration and serve with `--config config.yaml`. |
 | `… port N is already in use` | Something else publishes that port (8090 is the stack's sr-bench service). `docker ps` and `ss -ltnp` show the owner. Ask the user before stopping anything, or start this stack with a `VLLM_SR_PORT_OFFSET` ([Deployment](https://vllm-sr.ai/install/agent/vllm-sr/references/deployment-loop.md#stack-identity)). |
 | `config validate` fails | It names the field. `vllm-sr config schema --section PATH` shows what that section accepts. |
-| `serve` passes `config validate` and the Router still refuses the config | The Router validates more than the CLI ([#4696](https://github.com/vllm-project/semantic-router/issues/4696)). Its error names the setting; `vllm-sr config validate --config config.yaml --endpoint http://127.0.0.1:8080` uses the running Router's parser. |
+| `config validate` says only the CLI's own checks ran | It found no Router image or container runtime, so the Router's own validation didn't run. `vllm-sr config validate --config config.yaml --endpoint http://127.0.0.1:8080` asks the running Router instead. |
 | `serve` times out | Image pulls, model downloads or GPU kernel compilation took longer than the budget. Read `vllm-sr logs router`, then rerun with `--startup-timeout 3600`. The containers stay up for inspection after a timeout. |
 | `Platform 'amd' selected but missing AMD GPU devices` | `/dev/kfd` or `/dev/dri` isn't visible, so the models fall back to the CPU. Check `ls -l /dev/kfd /dev/dri` and that the ROCm driver is loaded on the host. |
 | NVIDIA: `could not select device driver "" with capabilities: [[gpu]]` | Docker has no NVIDIA runtime. The NVIDIA Container Toolkit is missing; ask the user to install it. |
@@ -44,10 +44,9 @@ Find the symptom, apply its fix, and rerun the step of the
 | Symptom | Cause and fix |
 | --- | --- |
 | Editing `config.yaml` changes nothing | The Docker stack serves `.vllm-sr/runtime-config.yaml`. Apply edits with `vllm-sr config apply --config config.yaml` ([Configuration](https://vllm-sr.ai/install/agent/vllm-sr/references/configuration-loop.md)). |
-| `config apply`: `RESTART_REQUIRED` | The change touches listeners or the provider topology. `vllm-sr serve --config config.yaml --replace-active-config` restarts on it. |
-| `config apply`: `Router management API request timed out after 15s` | The change can still activate. Check `vllm-sr config versions` before retrying. |
-| `status`: `Restart required` | A change saved in the Dashboard needs `vllm-sr serve --config config.yaml` to apply it. |
-| `Router management API is not reachable` after a `config apply` and a plain `serve` | `serve` kept the applied document ([#4698](https://github.com/vllm-project/semantic-router/issues/4698)). `vllm-sr serve --config config.yaml --replace-active-config` restores the source file. |
+| `config apply`: `Restart required: run vllm-sr serve to apply.` | The change touches a listener (with `--gateway extproc`, also the provider topology). `config apply` saved it; `vllm-sr serve --config config.yaml` applies it. |
+| `config apply`: `Router management API request timed out after 120s` | The change can still activate. Check `vllm-sr config versions` before retrying. |
+| `status`: `Restart required` | A change saved in the Dashboard or with `vllm-sr config apply` needs `vllm-sr serve --config config.yaml` to apply it. |
 
 ## Kubernetes
 

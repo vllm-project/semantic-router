@@ -196,7 +196,8 @@ def maybe_finish_setup_mode(
         log.error("Setup mode started without dashboard enabled")
         raise SystemExit(1)
 
-    log.info("Setup mode detected: skipping Router and Envoy health checks")
+    services = "Router and Envoy" if envoy else "Router"
+    log.info(f"Setup mode detected: skipping {services} health checks")
     log.info("Waiting for Dashboard to become healthy...")
     dashboard_container = _runtime_service_container_name(stack_layout, "dashboard")
     _wait_for_setup_dashboard(dashboard_container, startup_timeout)

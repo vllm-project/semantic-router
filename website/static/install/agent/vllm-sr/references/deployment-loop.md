@@ -68,22 +68,20 @@ Use a complete configuration (main skill, step 4); setup mode isn't available
 on Kubernetes. Model endpoints must be reachable from the pods: a Service DNS
 name or an address on the cluster's network, not `host.docker.internal`.
 
-You need `kubectl` with a context for the target cluster, `helm` 3, and the
-chart. A pip or curl install carries no chart, and the CLI looks for it at
-`deploy/helm/semantic-router` under the current directory, for every
-`--target kubernetes` command. Put it there, choosing the version that matches
-the CLI: `0.0.0-latest` for a dev build, or the release number such as `0.4.0`.
+You need `kubectl` with a context for the target cluster, and `helm` 3. A pip
+or curl install carries no chart: `serve --target kubernetes` installs
+`deploy/helm/semantic-router` when the current directory has one, and otherwise
+the published chart that matches the CLI (`0.0.0-latest` for a dev build, the
+release number for a release); `--chart-dir` names another. `status`, `logs`,
+`stop` and `dashboard` need no chart.
 
 ```bash
-mkdir -p deploy/helm
-helm pull oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version 0.0.0-latest --untar --untardir deploy/helm
 vllm-sr config validate --config config.yaml
 vllm-sr serve --target kubernetes --config config.yaml --namespace NAMESPACE
 ```
 
-Run it, and the later commands, from that directory. On Kubernetes, set the
-listener's `address` to `0.0.0.0`: the Service, not the host, publishes it.
+On Kubernetes, set the listener's `address` to `0.0.0.0`: the Service, not the
+host, publishes it.
 Add `--context` to name a kubectl context, `--platform amd` or `nvidia` for the
 GPU image and a request for one `amd.com/gpu` or `nvidia.com/gpu`,
 `--gateway extproc` for an Envoy-based gateway in the cluster, and `--minimal`

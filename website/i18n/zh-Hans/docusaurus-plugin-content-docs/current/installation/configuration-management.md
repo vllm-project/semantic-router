@@ -2,7 +2,7 @@
 title: 配置管理
 description: 运行中的 Router 如何激活一次配置变更、变更会重建什么、被拒绝的变更如何报告，以及如何列出和回滚版本。
 translation:
-  source_commit: "b9b183307e97f3ce8448d2838d0f1bf99972d336"
+  source_commit: "2e7e0775e88b0fc9426daf7c4fa0fe6e0ec20654"
   source_file: "docs/installation/configuration-management.md"
   outdated: false
 ---
@@ -44,9 +44,11 @@ vllm-sr config plan --config config.yaml    # 对照运行中的 Router 检查�
 vllm-sr config apply --config config.yaml   # 激活它
 ```
 
-`vllm-sr config apply` 默认等待 15 秒。需要加载新模型的变更可能更久；传入 `--timeout 120`。超时不会取消变更：`vllm-sr config versions` 会显示它是否已激活。
+`vllm-sr config apply` 最多等待 120 秒让变更生效，足以加载新模型；需要更久时传入 `--timeout`。超时不会取消变更：`vllm-sr config versions` 会显示它是否已激活。
 
-需要重启的变更（例如 listener 换了端口）会以 `restart_required` 被拒绝，且不会保存。用一次重启来应用它，用 `config.yaml` 替换生效的文档（包括控制面板中的编辑）：
+需要重启的变更（例如 listener 换了端口）会像控制面板那样被保存下来：`config apply` 提示“Restart required: run `vllm-sr serve` to apply.”，`vllm-sr status` 会报告这次保存的变更，下一次 `vllm-sr serve` 会应用它。
+
+要改为用 `config.yaml` 替换生效的文档（包括控制面板中的编辑）并重启：
 
 ```bash
 vllm-sr serve --config config.yaml --replace-active-config

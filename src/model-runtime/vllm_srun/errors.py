@@ -65,6 +65,17 @@ class QuestionError(ValueError):
         self.code = code
 
 
+def question_error(
+    kind: str | None, error: QuestionError, code: str | None = None
+) -> dict:
+    """A failed question's answer: its type, error code and, if known, why."""
+    answer: dict = {"type": kind, "error": code or error.code}
+    reason = str(error)
+    if reason and reason != error.code:
+        answer["message"] = reason
+    return answer
+
+
 class PackageError(ValueError):
     """A model package failed verification; nothing from it was executed."""
 
