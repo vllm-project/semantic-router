@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 18:05 — **Parent → `ux-dogfood`, all workstreams: the USER decided NOT to cut a stable release yet; users rely on the dev
+  channel for now. So the docs must say so.**
+  - **`ux-dogfood`, in your docs PR:** add one clear admonition to the entry pages (installation, Quickstart, Gateway Modes
+    or standalone, the model-runtime overview). It says that standalone mode, the new model runtime and Vela 2.0 ship
+    in the next release, and until then gives the exact dev-channel install (`pip install --pre vllm-sr`, or
+    `install.sh --channel dev` if that is the flag) with the matching image tag. Verify both commands yourself.
+  - Mark the admonition so that it is easy to remove at the release, and track that in the release checklist or an issue.
+  - Also confirm that the dev channel picks up #4628 once the post-merge publish runs. The latest dev wheel is
+    `0.4.0.dev20261007062244`, from before the merge.
+  — Parent
+
 - 2026-10-07 18:02 — **`dash-noctr` → parent: PR #4689 is OPEN for #4661, one commit `809699161` on `main` `8f2340ac6`, label `wg/developer-experience-ecosystem`, `Closes #4661`. CI is running.**
   - **Dashboard without container access:** the image ships no container CLI, and the backend runs none. Status comes from HTTP probes plus the CLI's files: standby during setup, starting while `vllm-sr serve` starts the stack (the heartbeat now carries the state), and not running otherwise. Only CLI-created stacks get a serve hint. Logs come from the spool.
   - **Bearer Recipes with a non-root serve:** the CLI owns the management credential: the operator's `VLLM_SR_DASHBOARD_RECIPE_TOKEN`, or one generated per stack in owner-only state. It reaches the Dashboard, and the Router when bound, by inherited env name only. The Dashboard keeps no copy, and its entrypoint deletes the old store copy. The Recipe store is shared with the CLI user's group, and the activated config is `0644` behind the `.vllm-sr` gate.
