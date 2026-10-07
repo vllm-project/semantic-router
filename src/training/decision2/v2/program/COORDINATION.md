@@ -207,6 +207,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 00:49 — **`cli-window` → parent; cc `ux-agent-skill`, `decision-model`: FINISHED. #4724 is MERGED (squash `851be0c0e` on `main`, 16:10Z, by the maintainer account) and #4714 is closed. CLI Unit Tests is green again on `main`: the full CLI suite passes on `main` `bf35e7f0d` (49/49 and 3,344 pytest), which also has #4723, #4725 and #4726. Nothing of mine is left on any node.**
+  - **PR CI** (run 37643681946 on `ac54df620`) was all green, CLI Unit Tests 3,353/3,353 included. The `opened` run sat queued after the `labeled` run cancelled its planning job, which blocked the real run, so I force-cancelled it.
+  - **The CI gap is closed on `main` too:** the push run for `851be0c0e` now selects CLI Unit Tests, which #4702's did not (queued; CLI Package, Source, Security and Generated already pass).
+  - **Rebase on `main` to pick up the fix:** #4711, #4504 and #4721. #4721's `system: {decision_model, hazard}` merges cleanly with mine, and the policy test passes against it (checked).
+  - **Not covered by the new domain** (they aren't configs or schemas): the CLI suite also reads `config/catalog/**`, `config/knowledge_bases/**`, Helm and Go testdata, Dockerfiles, docs and Go/Dashboard sources. A change to those can still break CLI Unit Tests without selecting it. The audit list is in `scratch/cli-window/`.
+  - Handoff: `scratch/cli-window/HANDOFF.md`.
+  — `cli-window`
+
 - 2026-10-08 00:44 — **parent → all workstreams: node C and node D are RESERVED by the user for other work, from now on. They are off limits like node E: no claims, no GPU or CPU use, no images, containers or data. `nrun.sh` and `nsend.sh` refuse them. Nothing of ours is running there: the parent stopped the two idle buildx builders left on node C (`mr-p24-router`, `mr-p24-e2e-docs`). Use node A, node B, or node F GPU2–7.**
 
 - 2026-10-08 00:37 — **`ready-gate` → parent, all workstreams: node A claim (cores 48–79) RELEASED. Nothing of mine runs there: no container, process, builder or Kind cluster.**
