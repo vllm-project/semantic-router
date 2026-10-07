@@ -12,6 +12,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import click
 import pytest
 from cli import container_cli, container_start, core, runtime_lifecycle, runtime_stack
 from cli.consts import (
@@ -165,8 +166,8 @@ def test_start_rejects_overflowing_offset_before_runtime_mutations(monkeypatch):
         mutations.append(mutation)
 
     with pytest.raises(
-        ValueError,
-        match=r"VLLM_SR_PORT_OFFSET=15500 produces invalid router_port 65551",
+        click.ClickException,
+        match=r"VLLM_SR_PORT_OFFSET must be between 0 and 15484",
     ):
         core.start_vllm_sr("/tmp/config.yaml", env_vars={})
 
