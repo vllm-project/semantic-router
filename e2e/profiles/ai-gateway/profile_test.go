@@ -113,8 +113,9 @@ func TestFeatureEntrypointsPreserveDefaultSecurityPrecedence(t *testing.T) {
 		priority                     int
 		threshold                    float64
 	}{
-		{"block_jailbreak", "jailbreak", "jailbreak_standard", 1000, 0.5},
-		{"block_pii", "pii", "pii_deny_all", 999, 0.7},
+		// Vela 2.0 0.3B's thresholds for Vela 1.0's 0.5 and 0.7.
+		{"block_jailbreak", "jailbreak", "jailbreak_standard", 1000, 0.75},
+		{"block_pii", "pii", "pii_deny_all", 999, 0.01},
 	} {
 		decision := profileNamed(t, routing["decisions"], test.name)
 		signal := profileNamed(t, profileMap(t, routing, "signals")[test.signalType], test.signalName)
