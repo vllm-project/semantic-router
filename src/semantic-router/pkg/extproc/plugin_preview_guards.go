@@ -149,14 +149,12 @@ func (r *OpenAIRouter) PreviewHallucination(ctx context.Context, input pluginrun
 	if classifier == nil || !classifier.IsHallucinationDetectionEnabled() {
 		return result, pluginruntime.ErrUnavailable
 	}
-	useNLI := policy.UseNLI
 	rules := r.hallucinationRules(request)
 	if len(rules) > 0 {
 		result.DetectionSource = "response_signal"
-		useNLI = hallucinationRulesUseNLI(rules)
 	}
 	result.BackendCalls = true
-	evidence, err := r.detectHallucinationEvidence(classifier, request, input.Response, useNLI)
+	evidence, err := r.detectHallucinationEvidence(request.embeddingContext(), classifier, request, input.Response)
 	if err != nil {
 		result.Reason = "detection_failed"
 		return result, nil

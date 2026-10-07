@@ -29,7 +29,12 @@ version. Development CLI builds use `:latest`; `--image` and the documented
 image environment overrides select a different build when needed.
 
 With no `--config`, `vllm-sr serve` uses `config.yaml` in the current directory
-or opens first-run setup in the Dashboard. The default local endpoints are:
+or opens first-run setup in the Dashboard. During setup the command keeps
+running: when you activate a config in the Dashboard, it starts the Router from
+that config and waits for it to become ready. If you stop it first, the next
+`vllm-sr serve` starts the Router, and `vllm-sr status` says when setup is
+complete. The Dashboard never gets the container runtime's socket. The default
+local endpoints are:
 
 | Endpoint | Default | Purpose |
 | --- | --- | --- |

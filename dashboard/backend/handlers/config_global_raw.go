@@ -92,12 +92,9 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 			return
 		}
 
-		if err := propagateConfigToRuntime(configPath, configDir); err != nil {
-			if restoreErr := restorePreviousRuntimeConfig(configPath, configDir, existingData); restoreErr != nil {
-				http.Error(w, fmt.Sprintf("Failed to apply config to runtime: %v. Failed to restore previous config: %v", err, restoreErr), http.StatusInternalServerError)
-				return
-			}
-			http.Error(w, fmt.Sprintf("Failed to apply config to runtime: %v. Previous config restored.", err), http.StatusInternalServerError)
+		restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
+		if applyErr != nil {
+			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", applyErr), http.StatusInternalServerError)
 			return
 		}
 		if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
@@ -105,6 +102,10 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 		}
 		if configActivationDeferred() {
 			writeDeferredConfigResponse(w)
+			return
+		}
+		if restartMessage != "" {
+			writeRestartRequiredResponse(w, "", restartMessage)
 			return
 		}
 

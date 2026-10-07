@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import math
-import os
 import time
 from collections.abc import Callable
 
@@ -21,16 +20,15 @@ from cli.container_cli import (
     container_logs_since,
     container_network_connect,
     container_remove_container,
-    container_start_container,
     container_start_grafana,
     container_start_jaeger,
     container_start_prometheus,
     container_status,
     container_status_strict,
     container_stop_container,
-    load_openclaw_registry,
 )
 from cli.container_runtime import get_container_runtime
+from cli.gateway_mode import GATEWAY_EXTPROC, runs_envoy
 from cli.runtime_lifecycle_lock import acquire_runtime_lifecycle_lock
 from cli.runtime_stack import RuntimeStackLayout
 from cli.terminal import echo, fields, heading, progress, success
@@ -97,8 +95,8 @@ def stop_runtime_before_config_replacement(stack_layout: RuntimeStackLayout) -> 
 
 
 def ensure_shared_network(shared_network_name: str) -> None:
-    """Create the shared OpenClaw bridge network used by local stacks."""
-    _ensure_network(shared_network_name, "shared OpenClaw")
+    """Create the stack's shared bridge network."""
+    _ensure_network(shared_network_name, "shared")
 
 
 def ensure_data_network(data_network_name: str) -> None:
@@ -160,7 +158,7 @@ def start_observability_stack(
 def connect_runtime_container(
     shared_network_name: str, stack_layout: RuntimeStackLayout
 ) -> None:
-    """Attach the runtime container to the shared OpenClaw bridge network."""
+    """Attach the runtime containers to the stack's shared bridge network."""
     connected = []
     for container_name in stack_layout.runtime_container_names:
         if container_status(container_name) == "not found":
@@ -188,6 +186,8 @@ def maybe_finish_setup_mode(
     dashboard_disabled: bool,
     stack_layout: RuntimeStackLayout,
     startup_timeout: int = HEALTH_CHECK_TIMEOUT,
+    *,
+    envoy: bool = True,
 ) -> bool:
     """Wait for dashboard-only setup mode and print next-step guidance."""
     if not setup_mode:
@@ -211,10 +211,13 @@ def maybe_finish_setup_mode(
         (
             ("Dashboard", stack_layout.dashboard_url),
             ("Configure", "Add your first model in the dashboard"),
-            ("Activate", "Activate a runnable config to enable routing"),
+            (
+                "Activate",
+                "Activate a runnable config; this command then starts the Router",
+            ),
         )
     )
-    _log_runtime_commands(dashboard_disabled=False)
+    _log_runtime_commands(dashboard_disabled=False, envoy=envoy)
     return True
 
 
@@ -368,6 +371,8 @@ def wait_and_verify_runtime(
     management_port: int = DEFAULT_API_PORT,
     readiness_token_env: str | None = None,
     startup_timeout: int = HEALTH_CHECK_TIMEOUT,
+    *,
+    envoy: bool = True,
 ) -> None:
     """Wait for readiness and verify every required runtime container."""
     wait_for_router_health(
@@ -376,7 +381,7 @@ def wait_and_verify_runtime(
         readiness_token_env=readiness_token_env,
         startup_timeout=startup_timeout,
     )
-    for service in ("router", "envoy"):
+    for service in ("router", "envoy") if envoy else ("router",):
         ensure_runtime_container_not_exited(
             stack_layout.service_container_name(service), timeout=5
         )
@@ -412,52 +417,6 @@ def _runtime_service_container_name(
     return stack_layout.service_container_name(service)
 
 
-def recover_openclaw_containers(
-    config_dir: str, env_vars: dict[str, str], shared_network_name: str
-) -> None:
-    """Reconnect and restart previously stopped OpenClaw containers."""
-    openclaw_data_dir = resolve_openclaw_data_dir(config_dir, env_vars)
-    openclaw_entries = load_openclaw_registry(openclaw_data_dir)
-    if not openclaw_entries:
-        return
-
-    log.info(f"Recovering {len(openclaw_entries)} OpenClaw container(s)...")
-    for entry in openclaw_entries:
-        name = entry.get("name") or entry.get("containerName")
-        if not name:
-            continue
-        status = container_status(name)
-        if status == "not found":
-            log.warning(f"OpenClaw container {name} no longer exists, skipping")
-            continue
-
-        return_code, _stdout, _stderr = container_network_connect(
-            shared_network_name, name
-        )
-        if return_code == 0:
-            log.info(f"Connected {name} to {shared_network_name}")
-        else:
-            log.warning(f"Failed to connect {name} to {shared_network_name}")
-
-        if status != "running":
-            log.info(f"Starting OpenClaw container: {name}")
-            container_start_container(name)
-
-
-def resolve_openclaw_data_dir(
-    config_dir: str, env_vars: dict[str, str] | None = None
-) -> str:
-    """Resolve the persisted OpenClaw data directory for the current workspace."""
-    env_vars = env_vars or {}
-    default_path = os.path.join(config_dir, ".vllm-sr", "openclaw-data")
-    openclaw_data_dir = (
-        env_vars.get("OPENCLAW_DATA_DIR")
-        or os.getenv("OPENCLAW_DATA_DIR")
-        or default_path
-    )
-    return os.path.abspath(openclaw_data_dir)
-
-
 def log_runtime_summary(
     listeners,
     stack_layout: RuntimeStackLayout,
@@ -465,9 +424,10 @@ def log_runtime_summary(
     enable_observability: bool,
     started_backends: set[str] | None = None,
     config: dict | None = None,
+    gateway: str = GATEWAY_EXTPROC,
 ) -> None:
     """Print the local endpoints and common follow-up commands."""
-    success("vLLM Semantic Router is running")
+    success(f"vLLM Semantic Router is running ({gateway} gateway)")
     echo()
     heading("Endpoints")
     endpoints = []
@@ -478,7 +438,8 @@ def log_runtime_summary(
         port = listener.get("port", "unknown")
         if isinstance(port, int):
             port += stack_layout.port_offset
-        endpoints.append((name, f"http://localhost:{port}"))
+        scheme = "https" if listener.get("tls") else "http"
+        endpoints.append((name, f"{scheme}://localhost:{port}"))
     endpoints.append(("Metrics", stack_layout.metrics_url))
     fields(endpoints)
 
@@ -504,7 +465,7 @@ def log_runtime_summary(
             )
         )
 
-    _log_runtime_commands(dashboard_disabled)
+    _log_runtime_commands(dashboard_disabled, envoy=runs_envoy(gateway))
     _print_curl_example(listeners, stack_layout, config)
 
 
@@ -554,14 +515,19 @@ def _print_matching_lines(text: str) -> None:
             progress(f"  {line}")
 
 
-def _log_runtime_commands(dashboard_disabled: bool) -> None:
+def _log_runtime_commands(dashboard_disabled: bool, *, envoy: bool = True) -> None:
+    services = ["router"]
+    if envoy:
+        services.insert(0, "envoy")
+    if not dashboard_disabled:
+        services.append("dashboard")
     commands = []
     if not dashboard_disabled:
         commands.append(("Dashboard", "vllm-sr dashboard"))
     commands.extend(
         (
-            ("Logs", "vllm-sr logs <envoy|router|dashboard> [-f]"),
-            ("Status", "vllm-sr status [envoy|router|dashboard|all]"),
+            ("Logs", f"vllm-sr logs <{'|'.join(services)}> [-f]"),
+            ("Status", f"vllm-sr status [{'|'.join([*services, 'all'])}]"),
         )
     )
     commands.append(("Stop", "vllm-sr stop"))

@@ -166,7 +166,7 @@ vllm-sr serve
 
 在 **Step 3 — Review & activate** 上，确认模型摘要，然后点击 **Activate configuration**。
 
-激活会将 `config.yaml` 写入当前目录并退出设置模式。Envoy 在端口 `8899` 启动，并将请求通过 Semantic Router 路由到你的 Ollama 后端。
+激活会写入配置并退出设置模式。终端里仍在等待的 `vllm-sr serve` 随后启动 Router，由它在端口 `8899` 提供服务，并把请求路由到你的 Ollama 后端。
 
 ## 7. 通过 Semantic Router 测试
 

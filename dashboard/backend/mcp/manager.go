@@ -122,6 +122,7 @@ func (m *Manager) UpsertServer(config *ServerConfig) error {
 }
 
 // UpdateServer updates a server configuration and persists it.
+
 func (m *Manager) UpdateServer(config *ServerConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

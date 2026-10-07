@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1840" viewBox="0 0 1600 1840" role="img"><title>Vela 2.0 gated causal GQA and SwiGLU: exact operator detail</title><desc>Bottom-to-top GQA with a joint query/gate projection, Q/K RMSNorm, partial 64-of-256-dimension RoPE, four-way KV head repetition, scaled dot product, causal visibility mask, softmax, value sum, concatenation and sigmoid output gating. A separate SwiGLU panel expands its two parallel projections, SiLU, elementwise product and down projection.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<text x="550" y="120.0" font-size="27" text-anchor="middle" class="math">Mixer output  ·  L × d</text>
+<g data-box="310.0 165 480 68">
+<rect x="310.0" y="165" width="480" height="68" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="550" y="207.84" font-size="26" text-anchor="middle" class="">Output Linear: hq × 256 → d</text>
+</g>
+<path d="M550,165 L550,136" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="550" cy="305" r="21" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="550" y="314.61" font-size="31" text-anchor="middle" class="">⊙</text>
+<path d="M550,284 L550,233" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="345.0 400 410 66">
+<rect x="345.0" y="400" width="410" height="66" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="550" y="441.84" font-size="26" text-anchor="middle" class="">Concatenate query heads</text>
+</g>
+<path d="M550,400 L550,326" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="332.5 510 435 66">
+<rect x="332.5" y="510" width="435" height="66" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="550" y="551.84" font-size="26" text-anchor="middle" class="">Attention weights × V</text>
+</g>
+<path d="M550,510 L550,466" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="192.5 620 515 66">
+<rect x="192.5" y="620" width="515" height="66" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="450" y="661.84" font-size="26" text-anchor="middle" class="">Softmax over visible tokens</text>
+</g>
+<path d="M450,620 L450,595 L550,595 L550,576" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="172.5 728 555 83">
+<rect x="172.5" y="728" width="555" height="83" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="450" y="763.375" font-size="25" text-anchor="middle" class="">Add causal visibility mask</text>
+<text x="450" y="792.625" font-size="25" text-anchor="middle" class="">shared prefix + own question</text>
+</g>
+<path d="M450,728 L450,686" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="192.5 850 515 66">
+<rect x="192.5" y="850" width="515" height="66" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="450" y="892.18" font-size="27" text-anchor="middle" class="">QKᵀ / √256</text>
+</g>
+<path d="M450,850 L450,811" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="87.5 1270 385 88">
+<rect x="87.5" y="1270" width="385" height="88" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="280" y="1307.875" font-size="25" text-anchor="middle" class="">Linear, split Q / G</text>
+<text x="280" y="1337.125" font-size="25" text-anchor="middle" class="">d → 2 hq × 256</text>
+</g>
+<g data-box="500.0 1270 240 88">
+<rect x="500.0" y="1270" width="240" height="88" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="620" y="1307.875" font-size="25" text-anchor="middle" class="">Linear K</text>
+<text x="620" y="1337.125" font-size="25" text-anchor="middle" class="">d → hkv × 256</text>
+</g>
+<g data-box="770.0 1270 240 88">
+<rect x="770.0" y="1270" width="240" height="88" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="890" y="1307.875" font-size="25" text-anchor="middle" class="">Linear V</text>
+<text x="890" y="1337.125" font-size="25" text-anchor="middle" class="">d → hkv × 256</text>
+</g>
+<g data-box="120.0 1150 320 65">
+<rect x="120.0" y="1150" width="320" height="65" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="280" y="1191.0" font-size="25" text-anchor="middle" class="">RMSNorm: Q, 256 / head</text>
+</g>
+<g data-box="460.0 1150 320 65">
+<rect x="460.0" y="1150" width="320" height="65" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="620" y="1191.0" font-size="25" text-anchor="middle" class="">RMSNorm: K, 256 / head</text>
+</g>
+<path d="M330,1270 L330,1240 L280,1240 L280,1215" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M620,1270 L620,1215" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="120.0 1040 320 82">
+<rect x="120.0" y="1040" width="320" height="82" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="280" y="1074.875" font-size="25" text-anchor="middle" class="">Partial RoPE: Q</text>
+<text x="280" y="1104.125" font-size="25" text-anchor="middle" class="">first 64 / 256 dimensions</text>
+</g>
+<g data-box="460.0 1040 320 82">
+<rect x="460.0" y="1040" width="320" height="82" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="620" y="1074.875" font-size="25" text-anchor="middle" class="">Partial RoPE: K</text>
+<text x="620" y="1104.125" font-size="25" text-anchor="middle" class="">first 64 / 256 dimensions</text>
+</g>
+<path d="M280,1150 L280,1122" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M620,1150 L620,1122" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="482.5 940 275 64">
+<rect x="482.5" y="940" width="275" height="64" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="620" y="980.5" font-size="25" text-anchor="middle" class="">Repeat K heads 4×</text>
+</g>
+<g data-box="767.5 940 275 64">
+<rect x="767.5" y="940" width="275" height="64" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="905" y="980.5" font-size="25" text-anchor="middle" class="">Repeat V heads 4×</text>
+</g>
+<path d="M620,1040 L620,1004" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M890,1270 L890,1025 L905,1025 L905,1004" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M280,1040 L280,975 L345,975 L345,916" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M620,940 L620,927 L560,927 L560,916" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M905,940 L905,920 L980,920 L980,543 L767.5,543" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="1005" y="745.0" font-size="27" text-anchor="middle" class="math">V</text>
+<g data-box="25.0 368 210 68">
+<rect x="25.0" y="368" width="210" height="68" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="130" y="410.5" font-size="25" text-anchor="middle" class="">Sigmoid(G)</text>
+</g>
+<path d="M150,1270 L150,1240 L55,1240 L55,458 L130,458 L130,436" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M130,368 L130,305 L529,305" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="81" y="855.0" font-size="27" text-anchor="middle" class="math">G</text>
+<g data-box="80.0 1450 940 70">
+<rect x="80.0" y="1450" width="940" height="70" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="550" y="1493.84" font-size="26" text-anchor="middle" class="">H = RMSNorm(X)  ·  L × d</text>
+</g>
+<path d="M550,1450 L550,1400" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M280,1400 L890,1400" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="550" cy="1400" r="3.5" fill="#111"/>
+<circle cx="280" cy="1400" r="3.5" fill="#111"/>
+<path d="M280,1400 L280,1358" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="620" cy="1400" r="3.5" fill="#111"/>
+<path d="M620,1400 L620,1358" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="890" cy="1400" r="3.5" fill="#111"/>
+<path d="M890,1400 L890,1358" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1075,220 L1075,1520" fill="none" stroke="#B7B7B7" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1340" y="730.0" font-size="27" text-anchor="middle" class="math">FFN output  ·  L × d</text>
+<g data-box="1130.0 790 420 75">
+<rect x="1130.0" y="790" width="420" height="75" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="1340" y="836.34" font-size="26" text-anchor="middle" class="">Down Linear: dff → d</text>
+</g>
+<path d="M1340,790 L1340,745" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="1340" cy="985" r="21" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="1340" y="994.61" font-size="31" text-anchor="middle" class="">⊙</text>
+<path d="M1340,964 L1340,865" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1090.0 1090 220 66">
+<rect x="1090.0" y="1090" width="220" height="66" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1200" y="1132.18" font-size="27" text-anchor="middle" class="">SiLU</text>
+</g>
+<path d="M1200,1090 L1200,985 L1319,985" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1470,1270 L1470,985 L1361,985" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1080.0 1270 240 88">
+<rect x="1080.0" y="1270" width="240" height="88" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="1200" y="1307.875" font-size="25" text-anchor="middle" class="">Gate Linear</text>
+<text x="1200" y="1337.125" font-size="25" text-anchor="middle" class="">d → dff</text>
+</g>
+<g data-box="1355.0 1270 230 88">
+<rect x="1355.0" y="1270" width="230" height="88" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="1470" y="1307.875" font-size="25" text-anchor="middle" class="">Up Linear</text>
+<text x="1470" y="1337.125" font-size="25" text-anchor="middle" class="">d → dff</text>
+</g>
+<path d="M1200,1270 L1200,1156" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1100.0 1450 480 70">
+<rect x="1100.0" y="1450" width="480" height="70" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1340" y="1478.875" font-size="25" text-anchor="middle" class="">U = RMSNorm(Y)</text>
+<text x="1340" y="1508.125" font-size="25" text-anchor="middle" class="">Y = mixer residual add</text>
+</g>
+<path d="M1340,1450 L1340,1400" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1200,1400 L1470,1400" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="1340" cy="1400" r="3.5" fill="#111"/>
+<circle cx="1200" cy="1400" r="3.5" fill="#111"/>
+<path d="M1200,1400 L1200,1358" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="1470" cy="1400" r="3.5" fill="#111"/>
+<path d="M1470,1400 L1470,1358" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M70,1542 L1530,1542" fill="none" stroke="#111" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="160" y="1570.0" font-size="25" text-anchor="middle" class="">Model</text>
+<text x="425" y="1570.0" font-size="25" text-anchor="middle" class="">d</text>
+<text x="750" y="1570.0" font-size="25" text-anchor="middle" class="">Query / KV heads</text>
+<text x="1120" y="1570.0" font-size="25" text-anchor="middle" class="">Head dimension</text>
+<text x="1420" y="1570.0" font-size="25" text-anchor="middle" class="">dff</text>
+<path d="M70,1585 L1530,1585" fill="none" stroke="#111" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="160" y="1623.0" font-size="25" text-anchor="middle" class="">0.8B</text>
+<text x="425" y="1623.0" font-size="25" text-anchor="middle" class="">1024</text>
+<text x="750" y="1623.0" font-size="25" text-anchor="middle" class="">8 / 2</text>
+<text x="1120" y="1623.0" font-size="25" text-anchor="middle" class="">256</text>
+<text x="1420" y="1623.0" font-size="25" text-anchor="middle" class="">3584</text>
+<text x="160" y="1661.0" font-size="25" text-anchor="middle" class="">4B</text>
+<text x="425" y="1661.0" font-size="25" text-anchor="middle" class="">2560</text>
+<text x="750" y="1661.0" font-size="25" text-anchor="middle" class="">16 / 4</text>
+<text x="1120" y="1661.0" font-size="25" text-anchor="middle" class="">256</text>
+<text x="1420" y="1661.0" font-size="25" text-anchor="middle" class="">9216</text>
+<text x="160" y="1699.0" font-size="25" text-anchor="middle" class="">9B</text>
+<text x="425" y="1699.0" font-size="25" text-anchor="middle" class="">4096</text>
+<text x="750" y="1699.0" font-size="25" text-anchor="middle" class="">16 / 4</text>
+<text x="1120" y="1699.0" font-size="25" text-anchor="middle" class="">256</text>
+<text x="1420" y="1699.0" font-size="25" text-anchor="middle" class="">12288</text>
+<path d="M70,1715 L1530,1715" fill="none" stroke="#111" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="800" y="1747.0" font-size="24" text-anchor="middle" class="">RoPE θ = 10⁷; RMSNorm ε = 10⁻⁶. Independent checkpoints; shared operator topology.</text>
+<text x="800" y="1800.0" font-size="31" text-anchor="middle" class="serif">(h) Gated causal grouped-query attention and SwiGLU</text>
+</svg>

@@ -6,7 +6,7 @@ on:
       verification:
         description: Verification ID from tools/ci/verification_catalog.yaml (or e2e.PROFILE) to run on the selected branch or tag.
         type: string
-        default: native.image-calibration-cpu
+        default: platform.image-calibration-cpu
         required: true
   workflow_call:
     inputs:
@@ -57,19 +57,6 @@ jobs:
     with:
       images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-router'].build_images) }}
       published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-router'].published_images) }}
-      mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
-      tag: ${{ inputs.tag }}
-      multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
-    secrets: inherit
-
-  image-local:
-    name: Artifacts / Local Runtime Image
-    needs: plan
-    if: toJSON(fromJSON(needs.plan.outputs.image_producers)['image-local'].images) != '[]'
-    uses: ./.github/workflows/build-artifacts.yml
-    with:
-      images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-local'].build_images) }}
-      published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-local'].published_images) }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
@@ -127,12 +114,6 @@ jobs:
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
     secrets: inherit
 
-  native-build:
-    name: Artifacts / Native Libraries
-    needs: plan
-    if: needs.plan.outputs.build_native == 'true'
-    uses: ./.github/workflows/build-native.yml
-
   quality:
     name: Quality / Source
     needs: plan
@@ -145,15 +126,13 @@ jobs:
 
   generated:
     name: Quality / Generated
-    needs: [plan, native-build]
+    needs: [plan]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.generated != '[]'
-      && needs.native-build.result == 'success'
     uses: ./.github/workflows/check-generated.yml
     with:
       verifications: ${{ needs.plan.outputs.generated }}
-      native-artifact: ${{ needs.native-build.outputs.artifact-name }}
 
   security:
     name: Quality / Security
@@ -172,41 +151,35 @@ jobs:
 
   core:
     name: Tests / Components / Router
-    needs: [plan, native-build]
+    needs: [plan]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.core != '[]'
-      && needs.native-build.result == 'success'
     uses: ./.github/workflows/test-and-build.yml
     with:
       verification: ${{ toJSON(fromJSON(needs.plan.outputs.core)[0]) }}
-      native-artifact: ${{ needs.native-build.outputs.artifact-name }}
     secrets: inherit
 
   storage:
     name: Tests / Integration / Storage
-    needs: [plan, native-build]
+    needs: [plan]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.storage != '[]'
-      && needs.native-build.result == 'success'
     uses: ./.github/workflows/test-storage.yml
     with:
       verification: ${{ toJSON(fromJSON(needs.plan.outputs.storage)[0]) }}
-      native-artifact: ${{ needs.native-build.outputs.artifact-name }}
     secrets: inherit
 
   dashboard:
     name: Tests / Components / Dashboard
-    needs: [plan, native-build]
+    needs: [plan]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.dashboard != '[]'
-      && needs.native-build.result == 'success'
     uses: ./.github/workflows/dashboard-test.yml
     with:
       verification: ${{ toJSON(fromJSON(needs.plan.outputs.dashboard)[0]) }}
-      native-artifact: ${{ needs.native-build.outputs.artifact-name }}
     secrets: inherit
 
   operator:
@@ -227,11 +200,11 @@ jobs:
 
   local:
     name: Tests / E2E / Local Stack
-    needs: [plan, image-local, image-dashboard, image-fixtures]
+    needs: [plan, image-router, image-dashboard, image-fixtures]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.local != '[]'
-      && needs.image-local.result == 'success'
+      && needs.image-router.result == 'success'
       && needs.image-dashboard.result == 'success'
       && needs.image-fixtures.result == 'success'
     strategy:
@@ -246,60 +219,41 @@ jobs:
 
   recipes:
     name: Tests / Conformance / Recipes
-    needs: [plan, image-local]
+    needs: [plan, image-router]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.recipes != '[]'
-      && needs.image-local.result == 'success'
+      && needs.image-router.result == 'success'
     uses: ./.github/workflows/recipe-conformance.yml
     with:
       verification: ${{ toJSON(fromJSON(needs.plan.outputs.recipes)[0]) }}
       prebuilt-images: true
     secrets: inherit
 
-  native-shared:
-    name: Tests / CPU Contracts
-    needs: [plan, native-build]
-    if: >-
-      !cancelled() && needs.plan.result == 'success'
-      && needs.plan.outputs.native-shared != '[]'
-      && needs.native-build.result == 'success'
-    strategy:
-      fail-fast: false
-      matrix:
-        label: ${{ fromJSON(needs.plan.outputs.worker_labels)['native-shared'] }}
-    uses: ./.github/workflows/test-native.yml
-    with:
-      batch: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch)['native-shared'][matrix.label]) }}
-      native-artifact: ${{ needs.native-build.outputs.artifact-name }}
-    secrets: inherit
-
-  native-independent:
-    name: Tests / Emulated Contracts
+  platform:
+    name: Tests / Platform Contracts
     needs: [plan]
     if: >-
       !cancelled() && needs.plan.result == 'success'
-      && needs.plan.outputs.native-independent != '[]'
+      && needs.plan.outputs.platform != '[]'
     strategy:
       fail-fast: false
       matrix:
-        label: ${{ fromJSON(needs.plan.outputs.worker_labels)['native-independent'] }}
-    uses: ./.github/workflows/test-native.yml
+        label: ${{ fromJSON(needs.plan.outputs.worker_labels)['platform'] }}
+    uses: ./.github/workflows/test-platform.yml
     with:
-      batch: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch)['native-independent'][matrix.label]) }}
+      batch: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch)['platform'][matrix.label]) }}
     secrets: inherit
 
   performance:
     name: Tests / Performance
-    needs: [plan, native-build]
+    needs: [plan]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.performance != '[]'
-      && needs.native-build.result == 'success'
     uses: ./.github/workflows/performance-test.yml
     with:
       verification: ${{ toJSON(fromJSON(needs.plan.outputs.performance)[0]) }}
-      native-artifact: ${{ needs.native-build.outputs.artifact-name }}
       base-ref: ${{ inputs.performance-base-ref || fromJSON(needs.plan.outputs.plan).base_sha || 'HEAD^' }}
     secrets: inherit
 
@@ -387,7 +341,7 @@ jobs:
   gate:
     name: Gate
     if: always()
-    needs: [plan, image-router, image-local, image-dashboard, image-operator, image-fixtures, image-distribution, native-build, quality, generated, security, core, storage, dashboard, operator, local, recipes, native-shared, native-independent, performance, package, tools, e2e-router, e2e-fixtures, e2e-dashboard]
+    needs: [plan, image-router, image-dashboard, image-operator, image-fixtures, image-distribution, quality, generated, security, core, storage, dashboard, operator, local, recipes, platform, performance, package, tools, e2e-router, e2e-fixtures, e2e-dashboard]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -412,12 +366,10 @@ jobs:
             {
               "plan": {"result": "${{ needs.plan.result }}"},
               "image-router": {"result": "${{ needs.image-router.result }}"},
-              "image-local": {"result": "${{ needs.image-local.result }}"},
               "image-dashboard": {"result": "${{ needs.image-dashboard.result }}"},
               "image-operator": {"result": "${{ needs.image-operator.result }}"},
               "image-fixtures": {"result": "${{ needs.image-fixtures.result }}"},
               "image-distribution": {"result": "${{ needs.image-distribution.result }}"},
-              "native-build": {"result": "${{ needs.native-build.result }}"},
               "quality": {"result": "${{ needs.quality.result }}"},
               "generated": {"result": "${{ needs.generated.result }}"},
               "security": {"result": "${{ needs.security.result }}"},
@@ -427,8 +379,7 @@ jobs:
               "operator": {"result": "${{ needs.operator.result }}"},
               "local": {"result": "${{ needs.local.result }}"},
               "recipes": {"result": "${{ needs.recipes.result }}"},
-              "native-shared": {"result": "${{ needs.native-shared.result }}"},
-              "native-independent": {"result": "${{ needs.native-independent.result }}"},
+              "platform": {"result": "${{ needs.platform.result }}"},
               "performance": {"result": "${{ needs.performance.result }}"},
               "package": {"result": "${{ needs.package.result }}"},
               "tools": {"result": "${{ needs.tools.result }}"},

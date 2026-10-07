@@ -128,7 +128,7 @@ func (l *WorkflowsLooper) finishCurrentWorkflowStepAfterResume(
 		modelName := step.Models[modelIndex]
 		nextResp, callErr := l.callWorkflowModel(ctx, state.StepRequest, cfg, modelName, true, workflowResumeModelIteration(state, modelIndex), req)
 		if callErr != nil {
-			currentFailed = append(currentFailed, FusionFailedModel{Model: modelName, Error: callErr.Error()})
+			currentFailed = append(currentFailed, FusionFailedModel{Model: modelName, Error: modelFailureReason(callErr)})
 			if cfg.OnError == config.WorkflowOnErrorFail {
 				return nil, nil, fmt.Errorf("workflow step %q failed for model %q: %w", step.ID, modelName, callErr)
 			}

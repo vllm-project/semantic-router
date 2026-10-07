@@ -70,13 +70,19 @@ class ImageArtifactTests(unittest.TestCase):
                 "source_sha": "a" * 40,
                 "id": "vllm-sr",
                 "context": ".",
-                "dockerfile": "src/vllm-sr/Dockerfile",
+                "dockerfile": images.ROUTER_DOCKERFILE,
+                "target": "vllm-sr",
                 "sha256": images.sha256(directory / "image.tar"),
                 "images": images.oci_images(directory / "image.tar"),
             }
             receipt = directory / "manifest.json"
             receipt.write_text(json.dumps(manifest))
             images.verify(directory, "vllm-sr")
+            manifest["target"] = "extproc-retired"
+            receipt.write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(ValueError, "build definition"):
+                images.verify(directory, "vllm-sr")
+            manifest["target"] = "vllm-sr"
             manifest["source_sha"] = "b" * 40
             receipt.write_text(json.dumps(manifest))
             with self.assertRaisesRegex(ValueError, "source revision"):
@@ -148,6 +154,49 @@ class ImageArtifactTests(unittest.TestCase):
                     ],
                 )
                 self.assertTrue(call.kwargs["check"])
+
+    def test_router_image_is_also_published_under_its_former_name(self):
+        def copy(command, check):
+            digest = Path(command[command.index("--digestfile") + 1])
+            digest.write_text("sha256:" + "d" * 64)
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "image_artifacts.py",
+                    "promote",
+                    "--image",
+                    "vllm-sr-rocm",
+                    "--directory",
+                    tmp,
+                    "--mode",
+                    "release",
+                    "--tag",
+                    "v1.2.3",
+                ],
+            ),
+            patch.dict(images.os.environ, {"GITHUB_REPOSITORY_OWNER": "Example"}),
+            patch.object(
+                images,
+                "verify",
+                return_value={"mode": "release", "tag": "v1.2.3", "date": ""},
+            ),
+            patch.object(images.subprocess, "run", side_effect=copy) as run,
+        ):
+            images.main()
+            self.assertEqual(
+                [call.args[0][-1] for call in run.call_args_list],
+                [
+                    "docker://ghcr.io/example/semantic-router/vllm-sr-rocm:v1.2.3",
+                    "docker://ghcr.io/example/semantic-router/extproc-rocm:v1.2.3",
+                ],
+            )
+            self.assertEqual(
+                (Path(tmp) / "published-digest.txt").read_text(), "sha256:" + "d" * 64
+            )
 
     def test_published_archive_preserves_registry_and_checkout_identities(self):
         with tempfile.TemporaryDirectory() as tmp:
