@@ -114,6 +114,39 @@ def test_installation_surfaces_offer_minimal_human_and_agent_paths() -> None:
     assert 'export PATH="$HOME/.local/bin:$PATH"' in skill
 
 
+def test_agent_skill_installs_a_current_cli_and_verifies_a_routed_answer() -> None:
+    skill = VLLM_SR_AGENT_SKILL_PATH.read_text(encoding="utf-8")
+    references = VLLM_SR_AGENT_SKILL_PATH.parent / "references"
+    agent_docs = " ".join(AGENT_INSTALL_DOC_PATH.read_text(encoding="utf-8").split())
+
+    # A stable release that predates standalone mode falls back to the dev
+    # channel, so neither channel is pinned.
+    assert "grep -q -- '--gateway'" in skill
+    assert "--channel dev --mode cli --runtime skip --no-launch" in skill
+    assert "python3 -m ensurepip --version" in skill
+    assert "--platform amd" in skill
+    # A complete config, bound to loopback; bare serve waits for the Dashboard.
+    assert "address: 127.0.0.1" in skill
+    assert "Never run `vllm-sr serve` without a complete `--config`" in skill
+    assert "vllm-sr serve --config config.yaml" in skill
+    # Verification names its success criteria, and the probe caps its answer.
+    for evidence in (
+        "vllm-sr status",
+        "x-vsr-selected-decision: code-route",
+        "vllm-sr route preview",
+        "--max-completion-tokens 256",
+        '"device":"rocm:0"',
+    ):
+        assert evidence in skill
+    assert "through Envoy" not in skill
+    assert "through Envoy" not in (references / "route-verification.md").read_text(
+        encoding="utf-8"
+    )
+    assert (references / "troubleshooting.md").is_file()
+    assert "Release channel" in agent_docs
+    assert "vllm-sr serve --config config.yaml" in agent_docs
+
+
 def test_pypi_publish_workflow_does_not_push_back_to_main() -> None:
     content = PYPI_PUBLISH_WORKFLOW_PATH.read_text(encoding="utf-8")
 
