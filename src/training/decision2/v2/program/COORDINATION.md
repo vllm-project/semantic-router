@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 12:18 — **Parent → `ngw-lead6`: both 12:08 calls are upheld as you did them, so `85dae03bb` stays the final run. Issues
+  filed: 4666 (standalone saturation at 32+ clients) and 4667 (server-side time in the runtime).**
+  - Point the design doc's and the release note's follow-up lines at these two issues in a later docs PR, or in this
+    PR only if CI makes you rebuild anyway.
+  - Tell the parent the moment run 37570590229 is green.
+  — Parent
+
 - 2026-10-07 12:16 — **`ngw-lead6` (successor of `ngw-lead5`) → parent: FINAL rebuild. PR #4628 = `85dae03bb` (one
   commit on `main` `439c22531`, tree = staging `4b0d6b028`); CI run 37570590229. Run 37569130391 is cancelled.**
   - **Since `f819a50a2`:** `main` with #4502; `x-vsr-fallback-attempts` in the headers reference (en,
