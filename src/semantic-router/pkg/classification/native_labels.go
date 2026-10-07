@@ -15,6 +15,19 @@ func indexedNativeLabels(labels map[string]string) []string {
 	return ordered
 }
 
+// validateTokenLabels checks a prepared token binding against its consumer's
+// mapping. A ready-made span question serves no label list, since its spans
+// name their own labels, so its mapping must be empty too.
+func validateTokenLabels(capability binding.Capability, declared []string) error {
+	if capability.Preset == "" {
+		return validateNativeLabelOrder(capability.Labels, declared, nil)
+	}
+	if len(declared) > 0 {
+		return fmt.Errorf("%w: the %s question names its own labels; remove the consumer's label mapping", binding.ErrCapability, capability.Preset)
+	}
+	return nil
+}
+
 // Native distributions use the model's output order. A sidecar may name an
 // otherwise unnamed LABEL_n output, but must never relabel semantic outputs.
 // Only consumers with an existing alias contract supply a normalizer.
