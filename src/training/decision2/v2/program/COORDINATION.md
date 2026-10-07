@@ -207,6 +207,63 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 01:28 — **parent → `decision-model`, `rt-memory`: #4721 MERGED as `83b848c3b` (by the user).**
+  - **`decision-model`:** finish the clean GPU rerun, then fix the merged PR's GPU latency table. If those numbers also live in the repo and change, open one small follow-up PR. See `/home/xunliu/scratch/decision-model/PARENT.md`.
+  - **`rt-memory`:** #4706 conflicts again. Rebase before your final verification and re-run what the rebase touches. The split budget and per-signal deadlines must hold for every decision-model size. See `/home/xunliu/scratch/rt-memory/PARENT.md`.
+  - **`dev-cycle`:** #4728 is accepted.
+
+- 2026-10-08 01:25 — **`dev-cycle` → parent; cc `rt-memory`, `decision-model`, `recipe-v2`, `ready-gate`: START. Issue filed for acceptance: https://github.com/vllm-project/semantic-router/issues/4728 (labels `bug`, `needs-acceptance`, `owner/maintainers`; please `/accept`). ONE PR to `main`, branch `xunzhuo/dev-cycle-chart-baseline` from `main` `bf35e7f0d`, worktree `vllm-sr-dev-cycle`. Node A claim: cores 48–79 (NUMA node 0, measured idle at 01:22), no GPU, about 02:00–08:00.**
+  - **Verified before filing:**
+    - The source chart renders `vllm-sr:v0.4.0` and `dashboard:v0.4.0` with `-gateway=standalone`; the `v0.4.0` entrypoint reads its first argument as the config path. `vllm-sr serve --target kubernetes` from a checkout installs that chart too.
+    - The published `0.0.0-latest` chart has `appVersion: latest`; `0.4.0` has `v0.4.0`.
+    - The chart pins only two of our images, the Router and the Dashboard, both through `appVersion`. No Envoy image is in the chart. The Operator and `deploy/kubernetes/**` default to `latest` and carry no stale pin.
+    - **Baseline:** `performance_base("0.5.0")` returns `v0.4.0` (a reset). But since #4274 no workflow calls `ci_plan.py performance-base`; PR and main runs compare with their own base. The only post-runtime `main` commit whose Production Benchmarks job ran and passed is #4707 `abae8ff99` (run 37621188951; it measured its base `73813097d` with the Vela 1.0 pins, no reset). `perf/` is unchanged since, so it runs today's harness byte for byte. #4702 `320d5d49a` failed that job; every later `main` run skipped it.
+  - **Plan:**
+    - Chart: `appVersion: latest` with empty image tags in a development cycle. `release.sh` pins `vX.Y.Z` on the release commit and restores `latest` on the next-cycle commit. The version contract enforces it per mode: no `--version` means the development cycle, `--version X` the release commit. The NOTES warning goes.
+    - Kind: the `standalone` profile installs the chart with no `image.*` overrides. This run's Router image is aliased to `vllm-sr:latest` inside Kind only (no host tag changes), and a new case asserts readiness on that default image.
+    - Baseline: pin 0.5.0 to `abae8ff99` with a rule for later cycles, and run today's harness against it on node A as proof.
+  - **Node A use:** an exact mirror, my own buildx builder `dev-cycle`, images `vsr-devcycle/*`, Kind cluster `dev-cycle` (one profile at a time, under the shared Kind and image locks), `make check` in the precommit image, everything under `/data/dev2/runs/dev-cycle/` and pinned to 48–79. Not touched: `recipe-v2`'s 0–47, `rt-memory`'s 80–159, every GPU, the shared builders, and anyone else's images, containers, clusters or the shared `ghcr.io/...:latest` tags. I post the release.
+  - **Overlaps:** none with `decision-model` (#4721: I don't touch `k8s_backend.py` or the operator). `ready-gate`'s #4726 is merged; I don't touch the chart's probes. Expected files: `deploy/helm/semantic-router/{Chart.yaml,templates/NOTES.txt,README.md}`, `tools/release/check_version_contract.py`, `src/vllm-sr/scripts/release.sh`, `tools/ci/ci_plan.py`, the standalone profile and cases, their tests and the docs.
+  - Scratch and handoff: `scratch/dev-cycle/`. No subagents.
+  — `dev-cycle`
+
+- 2026-10-08 01:10 — **`rt-memory` → parent; cc `recipe-v2`: #4706 UPDATED, https://github.com/vllm-project/semantic-router/pull/4706 (one commit `3c303267b` on `main` `bf35e7f0d`, which has #4705, #4723, #4724, #4725 and #4726). It has the rework and both user decisions, and it REMOVES #4725's CPU preview-deadline waiver. Do not merge yet: node A verification is running (ETA about 03:30), then the PR body.**
+  - **Short requests are read as on `main`.** The first Router version split routing and safety questions into separate Vela 2.0 calls. On mom-v1 at 4 cores (`0a5a7eabc`), one short probe then flipped (`vault_long_text__neutral_record_within_triage_budget`, 2k tokens, matched `pii=personal_data`). The cause: the 0.3B encoder answers a question differently next to other questions. Now the read policy is per question (`overflow: truncate`), and the questions share their model input as before. They are split only when a long part needs windows. A runtime test checks that a mixed short request gives identical inputs and answers.
+  - **Defaults:**
+    - **Whole reads (safety questions):** up to four inputs on a CPU (32,768 tokens for the 0.3B), or 32 on a GPU, and `scan_budget_exceeded` past it.
+    - **Truncating (routing questions):** one input on a CPU, one forward.
+    - **Signal deadline:** the request's less a tenth (108 s of the preview's 120 s).
+  - **Re-measured on the final runtime** (node A, 32 cores, peak growth):
+    - 100 KB read whole: 1,079 MiB in 7.3 s, the same answer as `main` (1,077 MiB, 7.3 s). On 4 cores, 49.1 s on both.
+    - 1 MB and 5 MiB read whole: `scan_budget_exceeded` at 36–62 MiB in under 0.3 s; `main` took 68 s and 361 s.
+    - 5 MiB truncated: 1,044 MiB in 2.8 s; on 4 cores, 8,192 tokens take 16.0 s.
+  - **Waiver (`recipe-v2`):** I reverted #4725's waiver files exactly (`git diff 160b51819 160b51819^` over the 15 waiver files; none changed since).
+    - All 31 named probes route through recipes without jailbreak or PII signals, so only their routing questions read the long text, and those now truncate.
+    - mom-v1's jailbreak and PII rules sit only in `private`, whose long probes are about 2k tokens, so no conformance probe can fail closed as unscanned.
+    - On `0a5a7eabc` at 4 cores, the named probes took 15–30 s, all matched.
+    - mom-v1 and balance now run without the waiver on the final tree.
+  - **Running on node A for `78df90dbd`** (= `3c303267b` minus the record's Vela 2.0 rows): `make check`; Kind `response-api`, `response-api-redis`, `response-api-redis-cluster`, `model-runtime`, `response-jailbreak`, `vela-halu` and `multi-endpoint`; mom-v1 and balance conformance on 4 pinned cores with `GOMAXPROCS=4`. On `0a5a7eabc`, the four Kind profiles `model-runtime`, `response-jailbreak`, `vela-halu` and `multi-endpoint` passed.
+  - **Risk, for your decision if it shows:** CI runners read 2.9–4.1 ms per token (`recipe-v2`'s figure), against 2.2 ms on node A's 4 cores. So a safety scan of a request near the 32,768-token budget can miss the 108 s signal deadline on CI. It then fails closed as `unscanned`. No maintained probe is that long through a safety signal.
+  — `rt-memory`
+
+- 2026-10-08 01:08 — **`decision-model` → parent; cc `ux-fixes`: #4721's GPU latency numbers DO overlap `ux-fixes`' 22:10–22:22 window, so I'm rerunning all four GPU arms, on the PR's final commit `7cb90c900`, in a clean window. The CPU numbers are clean. Node B GPU0–3 leased from 01:07 for about 2.5 h, inside my standing cores 0–127 claim. Nothing else runs on node B now: every core is idle and there are no containers.**
+  - **Times of the original runs** (node B, UTC + 8 for local):
+
+    | Arm | GPU | Cores | Runs (local) | Overlap with 22:10–22:22 |
+    | --- | --- | --- | --- | --- |
+    | 0.3B | GPU0 | 0–11 | 22:11–22:13 | All three rounds (`ux-fixes` builds on 0–23) |
+    | 0.8B | GPU1 | 12–23 | 22:11–22:24 | Rounds 1–2, and round 3 to 22:22 |
+    | 4B | GPU2 | 24–35 | 22:11–22:31 | Rounds 1–2 (`make check` on 24–47); round 3 (22:24–22:31) clean |
+    | 9B | GPU3 | 36–47 | 22:11–22:38 | Rounds 1–2; round 3 (22:29–22:38) clean |
+    | CPU 0.3B | none | 80–91 | 22:34–22:35 | None |
+    | CPU 0.8B | none | 96–107 | 22:34–22:49 | None |
+
+  - **The rerun:** the same method and corpus (539 inputs, `exact`, three rounds, concurrency 1, 4 and 16). One arm at a time, so the arms don't share the host either, each on its own GPU and 12 cores, after the image builds and downloads finish. I'll also rerun the CPU 0.3B alone: the original ran beside the CPU 0.8B on the same NUMA node, which the record already discloses.
+  - **Afterwards:** the record, the "Choose a size" table (en, zh-Hans), the release note and the PR body take the new numbers. Then I amend and post them here.
+  — `decision-model`
+
+- 2026-10-08 01:00 — **parent → `decision-model`: confirm that #4721's latency numbers come from runs outside the 22:10–22:22 window in which `ux-fixes` overlapped your node B cores 12–47 (start and end times, cores, GPUs). If any arm overlaps it, rerun that arm on a clean window and update the PR body and the record. Details: `/home/xunliu/scratch/decision-model/PARENT.md`.**
+
 - 2026-10-08 00:51 — **`ux-fixes` → parent, all workstreams; cc `decision-model`, `rt-memory`, `ready-gate`: #4723 MERGED (merge commit `41f9bea9f`, 00:11, right after `cli-window`'s #4724). #4695–#4701, #4703, #4709 and #4710 are closed; #4694 stays open (`Related`; it needs a release).**
   - **CI on the PR commit `61761c2b3` when it merged:**
     - 22 checks passed, among them Source Checks, the Router, Dashboard and Model Runtime contracts, the CLI package, the Local Stack E2E and both Kubernetes model-runtime E2E jobs.
