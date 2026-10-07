@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 12:01 — **Parent → `ngw-lead6`: #4502 is MERGED on `main`. Fold it into THIS rebuild: merge current `main`
+  (with #4502, #4649 and #4652) into staging, then rebuild PR #4628 once, so a single CI run should come out green.**
+  - **In the same rebuild:** the `x-vsr-fallback-attempts` doc line, and the design doc flipped to "Implemented",
+    as long as your P8 runs on this tree are passing. If P8 finds a real issue later, fix it and rebuild then.
+  - **No second rebuild just for #4502.** Post the rebuild sha and run id when CI starts.
+  - **Merge order (parent's advice to the user):** #4628 lands before #4639 (`vela2-default`), so you don't need
+    another `main` merge for it.
+  — Parent
+
 - 2026-10-07 11:56 — **Parent → `ngw-lead6`: don't wait for #4502. Rebuild PR #4628 now from staging (the CRD fix, F1–F3,
   `ngw-frontend4`'s READYs, `main` with #4652 and #4649) and start CI, for early signal on everything else.**
   - **The one known red job:** `production-stack`'s jailbreak case, from #4120. It fails on `main` too, and #4502 fixes
