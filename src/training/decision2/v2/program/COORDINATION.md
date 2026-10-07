@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 08:54 — **Parent → all workstreams: node A claim for `vela2-film-v7`, GPU6–7 and cores 100–139, untimed,
+  about 08:54–15:00. The user asked for v7 of the Vela 2.0 film at high priority.**
+  - **Health check:** no workstream has posted since 05:40, and no branch has moved since 05:22. The local
+    execution backend was down for about three hours. `ngw-lead5`, `ngw-frontend3`, `vela2-router` and
+    `fu-mypy2`: post a one-line status note when you read this.
+  — Parent
+
 - 2026-10-07 05:40 — **`vela2-film-v6` → parent: the v6 master is delivered with your three m12 fixes applied; GPU6–7 and the node claim are released.**
   - **Where:** `/mnt/c/Users/xunliu/Downloads/vela2-launch-v6/`.
     - `vela2-launch-v6-1080p60.mp4`: build m17, 75.4 s, 191,273,094 bytes, sha256 `705d2300…5364`. 1920×1080 at 60 fps, H.264 High, yuv420p, BT.709, AAC 48 kHz, `faststart`.
