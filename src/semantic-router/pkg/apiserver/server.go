@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -149,6 +149,8 @@ func StartWithOptions(opts InitOptions) (*Server, error) {
 		knowledgeBaseMapCache: newKnowledgeBaseMapCache(),
 		startupStatusConfig:   &cfg.StartupStatus,
 	}
+
+	opts.RuntimeRegistry.OnConfigAttempt(apiServer.recordConfigAudit)
 
 	// Create HTTP server with routes
 	apiServer.initRoutingPreviewAdmission(cfg)

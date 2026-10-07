@@ -1,14 +1,12 @@
 import pytest
-from vllm_sr_runtime.errors import INVALID_QUESTION, MAX_LENGTH_EXCEEDED, QuestionError
-from vllm_sr_runtime.families.decision2.renderer import (
-    SUFFIX,
+from vllm_srun.errors import INVALID_QUESTION, MAX_LENGTH_EXCEEDED, QuestionError
+from vllm_srun.systemone import (
     canonical,
-    encode,
     json_payload,
     question_options,
-    segments,
     valid_state,
 )
+from vllm_srun.text.segments import SUFFIX, encode, segments
 
 
 def test_segments_reproduce_the_scored_prompt():
@@ -43,6 +41,10 @@ def test_noul_defaults_and_partial_criteria():
         {"key": "false", "description": "No"},
         {"key": "true", "description": "Definitely"},
     ]
+    _, _, options = question_options(
+        {"type": "noul", "instructions": "q", "criteria": {"false": None}}
+    )
+    assert options[0] == {"key": "false", "description": "No"}
 
 
 def test_score_levels_are_ordered_indices():
@@ -88,7 +90,9 @@ def test_choices_superset_matches_criteria_order():
             "criteria": {"a": float("nan"), "b": "x"},
         },
         {"type": "noul", "instructions": "q", "criteria": {"yes": "y", "no": "n"}},
-        {"type": "noul", "instructions": "q", "criteria": {"false": None, "true": "y"}},
+        {"type": "noul", "instructions": "q", "criteria": {"false": "", "true": "y"}},
+        {"type": "choice", "instructions": " ", "criteria": {"a": "A", "b": "B"}},
+        {"type": "noul", "instructions": "q", "colour": "blue"},
         {"type": "score", "instructions": "q", "criteria": ["only"]},
         {"type": "score", "instructions": "q", "criteria": [str(i) for i in range(11)]},
         {

@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -10,15 +9,15 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
+// The balance recipe's classifiers are runtime-served; the router downloads
+// only the embedding it runs itself.
 var expectedAMDModelPaths = []string{
 	"models/Vela-1.0-Encoder-307M-Embedding",
-	"models/Vela-1.0-Encoder-307M-Domain",
-	"models/Vela-1.0-Encoder-307M-FactCheck",
-	"models/Vela-1.0-Encoder-307M-Feedback",
 }
 
 func TestReloadRejectsPreviewAdmissionChangeBeforePreparation(t *testing.T) {
@@ -48,39 +47,31 @@ func TestReloadRejectsPreviewAdmissionChangeBeforePreparation(t *testing.T) {
 	}
 }
 
-func TestReloadRejectsLiveArtifactMutationBeforeDownload(t *testing.T) {
+func TestReloadChecksGatewayCapabilitiesBeforePreparation(t *testing.T) {
 	restore := stubReloadSeams(t)
 	defer restore()
-	artifact := t.TempDir()
-	weights := filepath.Join(artifact, "model.safetensors")
-	if err := os.WriteFile(weights, []byte("live weights"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	makeConfig := func(revision string) *config.RouterConfig {
-		cfg := &config.RouterConfig{MoMRegistry: map[string]string{artifact: "test/model"}}
-		cfg.CategoryModel.ModelID = artifact
-		cfg.CategoryMappingPath = filepath.Join(artifact, "labels.json")
-		cfg.Decisions = []config.Decision{{Name: "route", Rules: config.RuleNode{Type: config.SignalTypeDomain, Name: "billing"}}}
-		cfg.ModelDeployments = map[string]config.ModelDeployment{"intent": {Provider: "candle", Artifact: artifact, Revision: revision}}
-		cfg.ModelBindings = map[string]config.ModelBinding{"domain_classifier": {Deployment: "intent", Contract: "label_distribution.v1", Adapter: "mmbert32k"}}
-		return cfg
-	}
-	previous := &OpenAIRouter{Config: makeConfig(strings.Repeat("a", 40))}
+	previous := &OpenAIRouter{Config: &config.RouterConfig{}}
 	server := &Server{service: NewRouterService(previous)}
-	ensureReloadConfigModels = func(*config.RouterConfig) error {
-		t.Fatal("download may mutate live weights and must not run")
-		return nil
+	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
+		t.Fatal("a rejected candidate reached runtime preparation")
+		return nil, nil
 	}
-	err := server.reloadRouterFromConfig("file", "config.yaml", makeConfig(strings.Repeat("b", 40)))
-	if err == nil || !strings.Contains(err.Error(), "in use") {
-		t.Fatalf("reload error = %v, want live artifact rejection", err)
+	candidate := &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{{
+		Name: "slow", Reliability: &config.DecisionReliability{IdleTimeout: "5s"},
+	}}}}
+	for _, source := range []string{"file", "kubernetes"} {
+		err := server.reloadRouterFromConfig(source, "config.yaml", candidate)
+		reasons := configsnapshot.ReasonsOf(err)
+		if len(reasons) != 1 || reasons[0].Code != configsnapshot.CodeUnsupported ||
+			reasons[0].Path != "routing.decisions[slow].reliability" || !strings.Contains(err.Error(), "--gateway standalone") {
+			t.Fatalf("%s reload error = %v (%+v)", source, err, reasons)
+		}
+		if server.service.GetRouter() != previous {
+			t.Fatal("a rejected candidate replaced the live generation")
+		}
 	}
-	if server.service.GetRouter() != previous || server.CurrentConfig() != previous.Config {
-		t.Fatal("rejected artifact candidate replaced the live generation")
-	}
-	data, readErr := os.ReadFile(weights)
-	if readErr != nil || string(data) != "live weights" {
-		t.Fatalf("live artifact changed: %q %v", data, readErr)
+	if err := checkGatewayCapabilities(candidate, config.GatewayStandalone); err != nil {
+		t.Fatalf("the native gateway honors every reliability field: %v", err)
 	}
 }
 

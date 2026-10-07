@@ -21,6 +21,11 @@ spec:
         name: envoy.filters.http.ext_proc
         typed_config:
           '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          # A decision's reliability block reaches Envoy's router through these
+          # per-request headers; ext_proc may set no other x-envoy-* header.
+          mutation_rules:
+            allow_expression:
+              regex: "^x-envoy-(upstream-rq-timeout-ms|upstream-rq-per-try-timeout-ms|max-retries|retry-on|retriable-status-codes)$"
           failure_mode_allow: true
           allow_mode_override: true
           message_timeout: 300s

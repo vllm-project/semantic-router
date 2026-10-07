@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -163,6 +163,7 @@ func (s *ClassificationAPIServer) handlePutRecipe(w http.ResponseWriter, r *http
 	paths := resolveConfigPersistencePaths(s.configPath)
 	s.commitRouterConfigDocument(
 		w,
+		r,
 		paths,
 		existingData,
 		yamlBytes,
@@ -215,6 +216,7 @@ func (s *ClassificationAPIServer) handleDeleteRecipe(w http.ResponseWriter, r *h
 	paths := resolveConfigPersistencePaths(s.configPath)
 	s.commitRouterConfigDocument(
 		w,
+		r,
 		paths,
 		existingData,
 		yamlBytes,

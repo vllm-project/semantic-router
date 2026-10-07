@@ -49,14 +49,15 @@ type FigureProps = {
   alt: string
   width: number
   height: number
+  diagram?: boolean
   children?: React.ReactNode
 }
 
-export function ArticleFigure({ src, alt, width, height, children }: FigureProps) {
+export function ArticleFigure({ src, alt, width, height, diagram = false, children }: FigureProps) {
   const imageUrl = useBaseUrl(src)
 
   return (
-    <figure className={styles.figure}>
+    <figure className={diagram ? `${styles.figure} ${styles.diagramFigure}` : styles.figure}>
       <a href={imageUrl} target="_blank" rel="noopener noreferrer" className={styles.imageLink}>
         <img
           className={styles.image}

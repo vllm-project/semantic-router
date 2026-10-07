@@ -69,5 +69,11 @@ func validateDecisionExecution(cfg *RouterConfig, decision Decision) error {
 	if err := validateDecisionCandidateIterations(decision); err != nil {
 		return err
 	}
-	return validateDecisionOutputContractSpec(decision)
+	if err := validateDecisionReliability(decision); err != nil {
+		return err
+	}
+	if err := validateDecisionOutputContractSpec(decision); err != nil {
+		return err
+	}
+	return validateDecisionLooperBackends(cfg, decision)
 }

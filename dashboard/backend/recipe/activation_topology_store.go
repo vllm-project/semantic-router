@@ -233,8 +233,12 @@ func registerActivationContainerIdentities(seen map[string]struct{}, identities 
 	return nil
 }
 
+// validateRequiredRuntimeTransitions requires the Router's replacement. A
+// standalone stack has no Envoy container, so Envoy's is required only when
+// the journal names it, which the per-transition check already holds to
+// "replace".
 func validateRequiredRuntimeTransitions(transitions map[string]string) error {
-	if transitions["router"] != "replace" || transitions["envoy"] != "replace" {
+	if transitions["router"] != "replace" {
 		return errors.New("incomplete runtime topology transitions")
 	}
 	return nil

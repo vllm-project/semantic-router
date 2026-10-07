@@ -15,11 +15,11 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
 func TestHandleLooperExecutionFailureIsVisibleAndTerminalInReplay(t *testing.T) {
@@ -309,7 +309,7 @@ func assertReplayAggregateUsage(t *testing.T, record store.Record) {
 	}
 }
 
-func TestAuthenticatedLooperReplayUsesRecipeScopedDuplicateDecision(t *testing.T) {
+func TestLooperHopReplayUsesRecipeScopedDuplicateDecision(t *testing.T) {
 	cfg := looperReplayRecipeConfig()
 	recorders := initializeReplayRecorders(cfg)
 	router := &OpenAIRouter{
@@ -320,23 +320,20 @@ func TestAuthenticatedLooperReplayUsesRecipeScopedDuplicateDecision(t *testing.T
 	}
 	ctx := &RequestContext{
 		Headers: map[string]string{},
+		Hop:     &routing.Hop{Decision: "shared-route", Recipe: "second-recipe"},
 	}
 
 	requestHeaders := newRequestHeaders("POST", "/v1/chat/completions")
 	requestHeaders.RequestHeaders.Headers.Headers = append(
 		requestHeaders.RequestHeaders.Headers.Headers,
 		&core.HeaderValue{Key: headers.RequestID, Value: "looper-internal-recipe"},
-		&core.HeaderValue{Key: headers.VSRLooperRequest, Value: "true"},
-		&core.HeaderValue{Key: headers.VSRInternalAuth, Value: internalauth.Token()},
-		&core.HeaderValue{Key: headers.VSRLooperDecision, Value: "shared-route"},
-		&core.HeaderValue{Key: headers.VSRSelectedRecipe, Value: "second-recipe"},
 	)
 	headerResponse, err := router.handleRequestHeaders(requestHeaders, ctx)
 	if err != nil {
 		t.Fatalf("handleRequestHeaders: %v", err)
 	}
 	if !ctx.LooperRequest {
-		t.Fatal("valid internal token did not authenticate the looper request")
+		t.Fatal("an in-process hop is a Looper request")
 	}
 	for _, internalHeader := range looperInternalContextHeaders {
 		if removed := headerResponse.GetRequestHeaders().Response.HeaderMutation.RemoveHeaders; !slices.Contains(removed, internalHeader) {

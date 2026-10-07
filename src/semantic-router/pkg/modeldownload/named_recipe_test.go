@@ -10,10 +10,9 @@ import (
 )
 
 const (
-	testFactCheckModel              = "models/test-fact-check"
-	testFeedbackModel               = "models/test-feedback"
-	testHallucinationDetectorModel  = "models/test-hallucination-detector"
-	testHallucinationExplainerModel = "models/test-hallucination-explainer"
+	testFactCheckModel             = "models/test-fact-check"
+	testFeedbackModel              = "models/test-feedback"
+	testHallucinationDetectorModel = "models/test-hallucination-detector"
 )
 
 func TestBuildModelSpecsCoversNamedRecipeSignalsAndPlugins(t *testing.T) {
@@ -28,7 +27,6 @@ func TestBuildModelSpecsCoversNamedRecipeSignalsAndPlugins(t *testing.T) {
 		testFactCheckModel,
 		testFeedbackModel,
 		testHallucinationDetectorModel,
-		testHallucinationExplainerModel,
 	}
 	assertExactModelSpecs(t, specs, want)
 
@@ -63,43 +61,18 @@ func TestBuildModelSpecsSkipsLocalHallucinationSnapshotsForEndpointBackend(t *te
 	})
 }
 
-func TestBuildModelSpecsSkipsUnusedHallucinationExplainer(t *testing.T) {
-	cfg := loadGenericMultiRecipeModelNeedsConfig(t)
-	recipe, ok := cfg.RecipeByName("verification")
-	if !ok || len(recipe.Profile.Decisions) != 1 {
-		t.Fatal("verification recipe is unavailable")
-	}
-	recipe.Profile.Decisions[0].Plugins[0].Configuration = config.MustStructuredPayload(map[string]interface{}{
-		"enabled": true,
-		"use_nli": false,
-	})
-
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
-	}
-
-	assertExactModelSpecs(t, specs, []string{
-		testFactCheckModel,
-		testFeedbackModel,
-		testHallucinationDetectorModel,
-	})
-}
-
 func TestBuildModelSpecsPreservesDefaultAPIOnlyModels(t *testing.T) {
 	cfg := &config.RouterConfig{
 		MoMRegistry: map[string]string{
-			testFactCheckModel:              "test/fact-check",
-			testFeedbackModel:               "test/feedback",
-			testHallucinationDetectorModel:  "test/hallucination-detector",
-			testHallucinationExplainerModel: "test/hallucination-explainer",
+			testFactCheckModel:             "test/fact-check",
+			testFeedbackModel:              "test/feedback",
+			testHallucinationDetectorModel: "test/hallucination-detector",
 		},
 		InlineModels: config.InlineModels{
 			HallucinationMitigation: config.HallucinationMitigationConfig{
 				Enabled:            true,
 				FactCheckModel:     config.FactCheckModelConfig{ModelID: testFactCheckModel},
 				HallucinationModel: config.HallucinationModelConfig{ModelID: testHallucinationDetectorModel},
-				NLIModel:           config.NLIModelConfig{ModelID: testHallucinationExplainerModel},
 			},
 			FeedbackDetector: config.FeedbackDetectorConfig{
 				Enabled: true,
@@ -123,7 +96,6 @@ func TestBuildModelSpecsPreservesDefaultAPIOnlyModels(t *testing.T) {
 		testFactCheckModel,
 		testFeedbackModel,
 		testHallucinationDetectorModel,
-		testHallucinationExplainerModel,
 	})
 }
 
@@ -214,10 +186,9 @@ func loadGenericMultiRecipeModelNeedsConfig(t *testing.T) *config.RouterConfig {
 
 	cfg.EmbeddingModels.EmbeddingConfig.Backend = config.EmbeddingBackendOpenAICompatible
 	cfg.MoMRegistry = map[string]string{
-		testFactCheckModel:              "test/fact-check",
-		testFeedbackModel:               "test/feedback",
-		testHallucinationDetectorModel:  "test/hallucination-detector",
-		testHallucinationExplainerModel: "test/hallucination-explainer",
+		testFactCheckModel:             "test/fact-check",
+		testFeedbackModel:              "test/feedback",
+		testHallucinationDetectorModel: "test/hallucination-detector",
 	}
 	return cfg
 }

@@ -167,14 +167,17 @@ def _replace_runtime_services(
     credential: str,
     management: tuple[int, int] | None,
 ) -> None:
-    for service in _RUNTIME_SERVICES:
-        transition = next(item for item in transitions if item["service"] == service)
+    runtime = _runtime_transitions(transitions)
+    # Envoy publishes the listeners; a standalone stack has no Envoy, and its
+    # Router publishes them.
+    listener_service = "envoy" if "envoy" in runtime else "router"
+    for service, transition in runtime.items():
         newly_preserved = _preserve_original(transition)
         if _container_status(transition["name"]) == "not found":
             _clone_preserved_container(
                 state_path,
                 transition,
-                listeners=state["listeners"] if service == "envoy" else None,
+                listeners=state["listeners"] if service == listener_service else None,
                 credential=credential if service == "router" else "",
                 management=management if service == "router" else None,
             )
@@ -184,13 +187,24 @@ def _replace_runtime_services(
             )
 
 
+def _runtime_transitions(transitions: list[dict[str, Any]]) -> dict[str, Any]:
+    """The Router's and, unless the stack is standalone, Envoy's transitions."""
+
+    by_service = {item["service"]: item for item in transitions}
+    return {
+        service: by_service[service]
+        for service in _RUNTIME_SERVICES
+        if service in by_service
+    }
+
+
 def _rollback(state: dict[str, Any], *, restore_running: bool = True) -> None:
     transitions = state["containers"]
+    runtime = _runtime_transitions(transitions)
 
     # Tear down replacement ingress first. Starting either prior runtime before
     # its storage dependencies have been restored can make it exit immediately.
-    for service in ("router", "envoy"):
-        transition = next(item for item in transitions if item["service"] == service)
+    for transition in runtime.values():
         name, backup = transition["name"], transition["backup_name"]
         if _container_status(backup) == "not found":
             if _container_status(name) == "not found":
@@ -211,8 +225,7 @@ def _rollback(state: dict[str, Any], *, restore_running: bool = True) -> None:
 
     # The Router is restored only after storage, and Envoy is restored last so
     # no request can enter a partially reconstructed stack.
-    for service in ("router", "envoy"):
-        transition = next(item for item in transitions if item["service"] == service)
+    for transition in runtime.values():
         _restore_preserved_transition(transition, restore_running=restore_running)
 
 

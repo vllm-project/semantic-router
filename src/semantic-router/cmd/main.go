@@ -13,6 +13,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/logo"
@@ -31,7 +32,6 @@ func main() {
 	logo.PrintVLLMLogo()
 	opts := parseRuntimeOptions()
 	initializeRuntimeLogger()
-	applyBackendRuntimeTuningDefaults()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	runErr := runRouterProcess(ctx, opts)
 	stop()
@@ -45,7 +45,24 @@ func main() {
 }
 
 func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
+	if opts.gateway == "" {
+		opts.gateway = config.GatewayExtProc
+	}
+	mode, parseErr := config.ParseGatewayMode(string(opts.gateway))
+	if parseErr != nil {
+		return parseErr
+	}
+	opts.gateway = mode
+	if opts.configHistoryLimit == 0 {
+		opts.configHistoryLimit = configsnapshot.DefaultHistoryLimit
+	}
+	if opts.configHistoryLimit < 1 {
+		return fmt.Errorf("-config-history-limit must keep at least one version, not %d", opts.configHistoryLimit)
+	}
 	cfg := loadRuntimeConfigOrFatal(opts.configPath)
+	if err := config.ValidateGatewayCapabilities(cfg, opts.gateway); err != nil {
+		return err
+	}
 	config.Replace(cfg)
 	runtimeRegistry := routerruntime.NewRegistry(cfg)
 
@@ -104,7 +121,12 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	if err != nil {
 		return recordStartupError(startupWriter, "initialize runtime dependencies", err)
 	}
-	routerServer, err = extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry)
+	serverOpts := []extproc.ServerOption{
+		extproc.WithConfigHistoryLimit(opts.configHistoryLimit), extproc.WithGatewayMode(opts.gateway),
+		extproc.WithConfigParts(upstreamPart(opts.gateway)),
+	}
+	routerServer, err = extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry,
+		serverOpts...)
 	if err != nil {
 		return recordStartupError(startupWriter, "create ExtProc server", err)
 	}
@@ -258,43 +280,6 @@ var ensureKubernetesConfigModels = func(ctx context.Context, cfg *config.RouterC
 	return modeldownload.EnsureModelsForConfigWithProgressContext(ctx, cfg, nil)
 }
 
-func applyBackendRuntimeTuningDefaults() {
-	backend := strings.TrimSpace(strings.ToLower(os.Getenv("EMBEDDING_BACKEND_OVERRIDE")))
-	if backend != "candle" {
-		return
-	}
-
-	defaults := map[string]string{
-		"OMP_NUM_THREADS":        "1",
-		"MKL_NUM_THREADS":        "1",
-		"OPENBLAS_NUM_THREADS":   "1",
-		"RAYON_NUM_THREADS":      "1",
-		"TOKENIZERS_PARALLELISM": "false",
-	}
-	applied := make(map[string]string)
-	for key, value := range defaults {
-		if _, exists := os.LookupEnv(key); exists {
-			continue
-		}
-		if err := os.Setenv(key, value); err != nil {
-			logging.ComponentWarnEvent("router", "backend_runtime_tuning_setenv_failed", map[string]interface{}{
-				"backend": backend,
-				"env":     key,
-				"error":   err.Error(),
-			})
-			continue
-		}
-		applied[key] = value
-	}
-	if len(applied) == 0 {
-		return
-	}
-	logging.ComponentEvent("router", "backend_runtime_tuning_applied", map[string]interface{}{
-		"backend": backend,
-		"env":     applied,
-	})
-}
-
 func ensureModelsDownloaded(ctx context.Context, cfg *config.RouterConfig, startupWriter startupstatus.StatusWriter) error {
 	reporter := func(progress modeldownload.ProgressState) {
 		state := startupstatus.State{
@@ -332,17 +317,22 @@ func ensureModelsDownloaded(ctx context.Context, cfg *config.RouterConfig, start
 	return modeldownload.EnsureModelsForConfigWithProgressContext(ctx, cfg, reporter)
 }
 
+// applyKubernetesConfigUpdate prepares a Kubernetes candidate's models, with
+// startup progress, and hands it to the lifecycle through activate. Its own
+// failures are classified as the stage they belong to.
 func applyKubernetesConfigUpdate(ctx context.Context, newConfig *config.RouterConfig, activate func(context.Context, *config.RouterConfig) error, startupWriter startupstatus.StatusWriter, currentConfig ...func() *config.RouterConfig) error {
 	if len(currentConfig) > 0 && currentConfig[0] != nil {
 		if err := modeldownload.ValidateReloadArtifacts(currentConfig[0](), newConfig); err != nil {
-			return fmt.Errorf("model artifact reload preflight failed: %w", err)
+			return configsnapshot.Reject(configsnapshot.StageValidate, configsnapshot.CodeArtifactUnavailable,
+				fmt.Errorf("model artifact reload preflight failed: %w", err))
 		}
 	}
 	if err := ensureKubernetesConfigModels(ctx, newConfig, startupWriter); err != nil {
-		return fmt.Errorf("failed to ensure models for kubernetes config update: %w", err)
+		return configsnapshot.Reject(configsnapshot.StageWarm, configsnapshot.CodeModelUnavailable,
+			fmt.Errorf("failed to ensure models for kubernetes config update: %w", err))
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return configsnapshot.Reject(configsnapshot.StageWarm, configsnapshot.CodeCanceled, err)
 	}
 
 	if err := activate(ctx, newConfig); err != nil {
@@ -362,9 +352,15 @@ func runRouterServing(
 	routerServer *extproc.Server,
 	startupWriter startupstatus.StatusWriter,
 ) (*servingComponentLifecycle, error) {
+	serve := startExtProcServer
+	if opts.gateway == config.GatewayStandalone {
+		serve = func(ctx context.Context, server *extproc.Server, writer startupstatus.StatusWriter) error {
+			return startNativeGateway(ctx, server, writer, opts.listenerAddress)
+		}
+	}
 	components := []func(context.Context) error{
 		func(ctx context.Context) error {
-			return startExtProcServer(ctx, routerServer, startupWriter)
+			return serve(ctx, routerServer, startupWriter)
 		},
 	}
 	if cfg.ConfigSource == config.ConfigSourceKubernetes {
@@ -460,6 +456,7 @@ func startKubernetesController(
 				progressWriter = startupWriter
 			}
 			if err := applyKubernetesConfigUpdate(updateCtx, newConfig, routerServer.ActivateKubernetesConfig, progressWriter, routerServer.CurrentConfig); err != nil {
+				_ = routerServer.RejectConfigUpdate(configsnapshot.SourceKubernetes, newConfig, err)
 				if !activated {
 					writeStartupState(startupWriter, startupstatus.State{Phase: "activation_failed", Ready: false, Message: err.Error()}, "Failed to write activation failure status")
 				}
@@ -490,6 +487,7 @@ func logStartupSummary(cfg *config.RouterConfig, opts runtimeOptions, embeddingM
 	}
 
 	logging.ComponentEvent("router", "startup_complete", map[string]interface{}{
+		"gateway":             opts.gateway,
 		"extproc_port":        opts.port,
 		"api_port":            opts.apiPort,
 		"metrics_port":        opts.metricsPort,

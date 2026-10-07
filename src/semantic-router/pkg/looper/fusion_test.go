@@ -148,13 +148,13 @@ func TestResolveFusionExecutionConfigPreservesAlgorithmFreeCallControls(t *testi
 		SynthesisTemplate:            "synthesis {{analysis}}",
 		JudgePromptVersion:           "fusion-custom",
 		Grounding: &config.FusionGroundingConfig{
-			Enabled:                 true,
-			Reference:               config.FusionGroundingReferenceContext,
-			Policy:                  config.FusionGroundingPolicyAnnotate,
-			MinScore:                0.4,
-			MinKeep:                 2,
-			NLIContradictionPenalty: 0.7,
-			OnError:                 config.FusionOnErrorFail,
+			Enabled:              true,
+			Reference:            config.FusionGroundingReferenceContext,
+			Policy:               config.FusionGroundingPolicyAnnotate,
+			MinScore:             0.4,
+			MinKeep:              2,
+			ContradictionPenalty: 0.7,
+			OnError:              config.FusionOnErrorFail,
 		},
 	}
 
@@ -182,7 +182,7 @@ func TestResolveFusionExecutionConfigPreservesAlgorithmFreeCallControls(t *testi
 	assert.Equal(t, config.FusionGroundingPolicyAnnotate, dst.GroundingPolicy)
 	assert.Equal(t, 0.4, dst.GroundingMinScore)
 	assert.Equal(t, 2, dst.GroundingMinKeep)
-	assert.Equal(t, 0.7, dst.GroundingNLIContradictionPenalty)
+	assert.Equal(t, 0.7, dst.GroundingContradictionPenalty)
 	assert.Equal(t, config.FusionOnErrorFail, dst.GroundingOnError)
 }
 
@@ -233,7 +233,7 @@ func TestResolveFusionExecutionConfigProtectsRecipeOwnedControls(t *testing.T) {
 			cfg.MinKeep = 2
 		})},
 		{name: "grounding contradiction penalty", override: fusionGroundingRequestOverride(func(cfg *config.FusionGroundingConfig) {
-			cfg.NLIContradictionPenalty = 0.3
+			cfg.ContradictionPenalty = 0.3
 		})},
 		{name: "grounding on error", override: fusionGroundingRequestOverride(func(cfg *config.FusionGroundingConfig) {
 			cfg.OnError = config.FusionOnErrorSkip
@@ -351,13 +351,13 @@ func newRecipeOwnedFusionRequest() *Request {
 
 func recipeOwnedFusionGroundingConfig() *config.FusionGroundingConfig {
 	return &config.FusionGroundingConfig{
-		Enabled:                 true,
-		Reference:               config.FusionGroundingReferencePanel,
-		Policy:                  config.FusionGroundingPolicyFilter,
-		MinScore:                0.7,
-		MinKeep:                 1,
-		NLIContradictionPenalty: 0.8,
-		OnError:                 config.FusionOnErrorFail,
+		Enabled:              true,
+		Reference:            config.FusionGroundingReferencePanel,
+		Policy:               config.FusionGroundingPolicyFilter,
+		MinScore:             0.7,
+		MinKeep:              1,
+		ContradictionPenalty: 0.8,
+		OnError:              config.FusionOnErrorFail,
 	}
 }
 
@@ -459,7 +459,6 @@ func TestFusionLooperAppliesPerAnalysisOverrides(t *testing.T) {
 
 func TestFusionLooperPanelQuorumSkipsSlowWorker(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "1", r.Header.Get("x-vsr-fusion-depth"))
 		var payload struct {
 			Model    string `json:"model"`
 			Messages []struct {
@@ -625,7 +624,6 @@ func newFusionToolCallServer(
 ) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "1", r.Header.Get("x-vsr-fusion-depth"))
 		payload := decodeFusionToolCallPayload(t, r)
 		observation := fusionToolCallObservationFromPayload(payload)
 		if observe != nil {

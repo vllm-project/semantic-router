@@ -83,7 +83,7 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 
 	buildOpts := docker.BuildOptions{
 		Dockerfile:   "tools/docker/Dockerfile.extproc",
-		Tag:          fmt.Sprintf("ghcr.io/vllm-project/semantic-router/extproc:%s", r.opts.ImageTag),
+		Tag:          fmt.Sprintf("ghcr.io/vllm-project/semantic-router/vllm-sr:%s", r.opts.ImageTag),
 		BuildContext: ".",
 		BuildArgs:    localDockerBuildArgs(),
 	}

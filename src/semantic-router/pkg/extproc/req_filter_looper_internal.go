@@ -108,6 +108,9 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	dispatch.decisionName = decisionName
 	dispatch.useReasoning = useReasoning
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
+	if response.GetImmediateResponse() != nil {
+		return response, nil
+	}
 	common := response.GetRequestBody().GetResponse()
 	if common == nil {
 		return r.createErrorResponse(500, "Failed to build provider dispatch"), nil
@@ -149,7 +152,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	r.hydrateLooperRoutingContext(ctx)
-	decisionName := headerValueCI(ctx, headers.VSRLooperDecision)
+	decisionName := looperHopDecision(ctx)
 	decision, fallback := r.resolveLooperDecision(modelName, decisionName, ctx)
 	if fallback != nil {
 		return fallback, nil

@@ -1,0 +1,27 @@
+[project]
+name = "modality-routing-classifier"
+version = "0.0.0"
+description = "Environment for the modality routing classifier under src/training/model_classifier/modality_routing_classifier"
+requires-python = ">=3.10"
+dependencies = [
+    # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
+    "accelerate>=0.28.0,<2",
+    "datasets>=2.18.0,<6",
+    "huggingface_hub>=0.20,<2",
+    "numpy>=1.24,<3",
+    "peft>=0.10.0,<1",
+    "requests>=2.31.0,<3",
+    "scikit-learn>=1.4.0,<2",
+    "torch>=2.0.0,<3",
+    "transformers>=4.40.0,<6",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10"]
+# Only the `api` command of label_audit/judge_labels.py imports anthropic.
+audit = ["anthropic"]
+# Only exploration_lfm25_scx/ imports gliclass (SCX Router).
+exploration = ["gliclass>=0.1.20,<0.2"]
+
+[tool.uv]
+package = false

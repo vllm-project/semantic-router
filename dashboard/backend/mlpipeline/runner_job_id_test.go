@@ -15,7 +15,7 @@ import (
 
 func TestGenerateConfigConcurrentJobsRemainDistinct(t *testing.T) {
 	dir := t.TempDir()
-	store, err := workflowstore.Open(filepath.Join(dir, "workflow.sqlite"), workflowstore.Options{})
+	store, err := workflowstore.Open(filepath.Join(dir, "workflow.sqlite"))
 	if err != nil {
 		t.Fatal(err)
 	}

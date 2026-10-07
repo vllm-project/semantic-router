@@ -26,6 +26,15 @@ var requiredProtectionCoverage = []string{
 	"missing-identity",
 	"observe",
 	"bypass",
+	"gate-cold-start",
+	"gate-insufficient-evidence",
+	"gate-sustained-regression",
+	"gate-sustained-recovery",
+	"gate-observe",
+	"gate-cooldown",
+	"gate-oscillation",
+	"gate-current-ineligible",
+	"outcome-failure-attribution",
 }
 
 func validateProtectionCoverage(scenarios []protectionScenario) error {
