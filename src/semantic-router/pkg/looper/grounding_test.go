@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/openai/openai-go"
@@ -14,19 +15,25 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// Test construction keeps fake callbacks local to each constructed looper.
-var (
-	groundingNLIClassify NLIClassifyFunc
-	groundingDetect      HallucinationDetectFunc
-)
+// Test construction keeps the fake detector local to each constructed looper.
+var groundingDetect HallucinationDetectFunc
 
-func withGroundingBackends(t *testing.T, nli NLIClassifyFunc, detect HallucinationDetectFunc) {
+func withGroundingDetector(t *testing.T, detect HallucinationDetectFunc) {
 	t.Helper()
-	prevNLI, prevDetect := groundingNLIClassify, groundingDetect
-	groundingNLIClassify, groundingDetect = nli, detect
-	t.Cleanup(func() {
-		groundingNLIClassify, groundingDetect = prevNLI, prevDetect
-	})
+	prev := groundingDetect
+	groundingDetect = detect
+	t.Cleanup(func() { groundingDetect = prev })
+}
+
+// unsupportedWhen is a detector that flags any answer containing marker as
+// unsupported by its context with the given hallucinated-token score.
+func unsupportedWhen(marker string, score float32) HallucinationDetectFunc {
+	return func(_ context.Context, _, _, answer string) ([]string, float32, error) {
+		if strings.Contains(answer, marker) {
+			return []string{"unsupported claim"}, score, nil
+		}
+		return nil, 0, nil
+	}
 }
 
 func panel(contents ...string) []*ModelResponse {
@@ -38,18 +45,16 @@ func panel(contents ...string) []*ModelResponse {
 }
 
 func TestScoreByPanel_RanksContradictedLower(t *testing.T) {
-	// Peers entail "good" answers and contradict any answer containing "bad".
-	withGroundingBackends(t, func(_ context.Context, _, hypothesis string) (float32, float32, error) {
-		if strings.Contains(hypothesis, "bad") {
-			return 0.1, 0.8, nil
-		}
-		return 0.9, 0.05, nil
-	}, nil)
+	// Read against any peer, an answer containing "bad" is unsupported.
+	withGroundingDetector(t, unsupportedWhen("bad", 0.8))
 
 	p := panel("good one", "good two", "bad three")
-	scores, err := scoreByPanel(context.Background(), p, fusionExecutionConfig{GroundingNLIContradictionPenalty: 1.0}, groundingNLIClassify)
+	scores, err := scoreByPanel(context.Background(), "the question", p, fusionExecutionConfig{GroundingContradictionPenalty: 1.0}, groundingDetect)
 	require.NoError(t, err)
 	require.Len(t, scores, 3)
+	// Fully supported: (1 + 1) / 2; contradicted at 0.8: (0.2 - 0.8 + 1) / 2.
+	assert.InDelta(t, 1.0, scores[0].Score, 1e-6)
+	assert.InDelta(t, 0.2, scores[2].Score, 1e-6)
 
 	assert.Greater(t, scores[0].Score, scores[2].Score)
 	assert.Greater(t, scores[1].Score, scores[2].Score)
@@ -67,80 +72,50 @@ func TestScoreByPanel_RanksContradictedLower(t *testing.T) {
 	assert.NotContains(t, notes, "panel-")
 }
 
-// TestScoreByPanel_LongAnswerSentenceChunking verifies that on long answers (which
-// would otherwise truncate the hypothesis away in a single 512-token NLI call) the
-// scorer chunks the hypothesis into sentences and still discriminates: a long answer
-// whose peers contradict one of its sentences scores below a fully-corroborated one.
-func TestScoreByPanel_LongAnswerSentenceChunking(t *testing.T) {
-	// Stub NLI keyed on the hypothesis sentence: any sentence containing the
-	// "FALSE" marker is contradicted by its peers; everything else is entailed.
-	var calls int
-	withGroundingBackends(t, func(_ context.Context, _, hypothesis string) (float32, float32, error) {
-		calls++
-		if strings.Contains(hypothesis, "FALSE") {
-			return 0.05, 0.9, nil
-		}
-		return 0.9, 0.05, nil
-	}, nil)
+// TestScoreByPanel_ReadsEachResponseAgainstItsPeers pins the panel reference:
+// every peer answer is the detector's context for the response, with the
+// request's question, and a response is never read against itself.
+func TestScoreByPanel_ReadsEachResponseAgainstItsPeers(t *testing.T) {
+	type read struct{ context, question, answer string }
+	var (
+		mu    sync.Mutex
+		reads []read
+	)
+	withGroundingDetector(t, func(_ context.Context, contextText, question, answer string) ([]string, float32, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		reads = append(reads, read{contextText, question, answer})
+		return nil, 0, nil
+	})
 
-	// Both answers exceed nliSingleCallBudget runes so the chunking path engages.
-	long := func(dirty bool) string {
-		var b strings.Builder
-		for i := 0; i < 24; i++ {
-			if dirty {
-				b.WriteString("This FALSE clinical claim is rejected by the other panel models, item ")
-			} else {
-				b.WriteString("This is a benign and well supported clinical statement, item number ")
-			}
-			b.WriteString(string(rune('A' + (i % 26))))
-			b.WriteString(". ")
-		}
-		return b.String()
-	}
-
-	clean := long(false)
-	dirty := long(true)
-
-	p := panel(clean, dirty)
-	scores, err := scoreByPanel(context.Background(), p, fusionExecutionConfig{GroundingNLIContradictionPenalty: 1.0}, groundingNLIClassify)
+	_, err := scoreByPanel(context.Background(), "q", panel("one", "two", "three"), fusionExecutionConfig{}, groundingDetect)
 	require.NoError(t, err)
-	require.Len(t, scores, 2)
-
-	// The chunking path must actually run (many NLI calls, not one per pair).
-	assert.Greater(t, calls, 4, "expected sentence-level chunking to issue many NLI calls")
-	// The answer with a contradicted sentence scores lower and is flagged.
-	assert.Greater(t, scores[0].Score, scores[1].Score)
-	assert.NotEmpty(t, scores[1].FlaggedSpans)
+	assert.ElementsMatch(t, []read{
+		{"two", "q", "one"},
+		{"three", "q", "one"},
+		{"one", "q", "two"},
+		{"three", "q", "two"},
+		{"one", "q", "three"},
+		{"two", "q", "three"},
+	}, reads)
 }
 
-func TestSplitSentencesCapped(t *testing.T) {
-	got := splitSentencesCapped("First real sentence here. Short. Second real sentence here!\nThird real one?", 1000, 10)
-	// "Short." is < 12 runes and dropped; the three real sentences survive.
-	require.Len(t, got, 3)
-	assert.Contains(t, got[0], "First real sentence")
-	assert.Contains(t, got[2], "Third real one")
-}
+func TestScoreByPanel_UnscoredSpanCountsAsContradiction(t *testing.T) {
+	// A detector without token scores (score 0) still flags the response.
+	withGroundingDetector(t, unsupportedWhen("bad", 0))
 
-func TestChunkTextCapped(t *testing.T) {
-	windows := chunkTextCapped("aaaaabbbbbccccc", 5, 10)
-	require.Len(t, windows, 3)
-	assert.Equal(t, "aaaaa", windows[0])
-	assert.Equal(t, "ccccc", windows[2])
-	// maxWindows caps the count even when more content remains.
-	assert.Len(t, chunkTextCapped("aaaaabbbbbccccc", 5, 2), 2)
+	scores, err := scoreByPanel(context.Background(), "q", panel("good", "bad"), fusionExecutionConfig{GroundingContradictionPenalty: 1.0}, groundingDetect)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.0, scores[1].Score, 1e-6)
+	assert.Equal(t, []string{"a"}, scores[1].FlaggedSpans)
 }
 
 func TestScoreByContext_FewerUnsupportedSpansScoresHigher(t *testing.T) {
 	// "bad" answers have an unsupported span; grounded ones have none.
-	withGroundingBackends(t, nil, func(_ context.Context, _, _, answer string) ([]string, float32, error) {
-		if strings.Contains(answer, "bad") {
-			return []string{"unsupported claim"}, 0.9, nil
-		}
-		return nil, 0.9, nil
-	})
+	withGroundingDetector(t, unsupportedWhen("bad", 0.9))
 
 	p := panel("grounded answer", "bad answer")
-	scores, err := scoreByContext(context.Background(), "the context", "the question", p, fusionExecutionConfig{}, groundingDetect)
+	scores, err := scoreByContext(context.Background(), "the context", "the question", p, groundingDetect)
 	require.NoError(t, err)
 	require.Len(t, scores, 2)
 	assert.Equal(t, 1.0, scores[0].Score)
@@ -209,7 +184,7 @@ func TestApplyGrounding_DisabledReturnsPanelUnchanged(t *testing.T) {
 }
 
 func TestApplyGrounding_OnErrorSkipFallsBack(t *testing.T) {
-	withGroundingBackends(t, nil, nil) // panel mode needs NLI; nil => error
+	withGroundingDetector(t, nil) // no detector => grounding error
 	l := newGroundedTestFusionLooper(&config.LooperConfig{})
 	p := panel("x", "y")
 	cfg := fusionExecutionConfig{
@@ -224,7 +199,7 @@ func TestApplyGrounding_OnErrorSkipFallsBack(t *testing.T) {
 }
 
 func TestApplyGrounding_OnErrorFailReturnsError(t *testing.T) {
-	withGroundingBackends(t, nil, nil)
+	withGroundingDetector(t, nil)
 	l := newGroundedTestFusionLooper(&config.LooperConfig{})
 	cfg := fusionExecutionConfig{
 		GroundingEnabled:   true,
@@ -237,22 +212,17 @@ func TestApplyGrounding_OnErrorFailReturnsError(t *testing.T) {
 }
 
 func TestApplyGrounding_PanelModeFiltersContradicted(t *testing.T) {
-	withGroundingBackends(t, func(_ context.Context, _, hypothesis string) (float32, float32, error) {
-		if strings.Contains(hypothesis, "bad") {
-			return 0.1, 0.8, nil
-		}
-		return 0.9, 0.05, nil
-	}, nil)
+	withGroundingDetector(t, unsupportedWhen("bad", 0.8))
 
 	l := newGroundedTestFusionLooper(&config.LooperConfig{})
 	cfg := fusionExecutionConfig{
-		GroundingEnabled:                 true,
-		GroundingReference:               config.FusionGroundingReferencePanel,
-		GroundingPolicy:                  config.FusionGroundingPolicyFilter,
-		GroundingOnError:                 config.FusionOnErrorSkip,
-		GroundingMinScore:                0.5,
-		GroundingMinKeep:                 1,
-		GroundingNLIContradictionPenalty: 1.0,
+		GroundingEnabled:              true,
+		GroundingReference:            config.FusionGroundingReferencePanel,
+		GroundingPolicy:               config.FusionGroundingPolicyFilter,
+		GroundingOnError:              config.FusionOnErrorSkip,
+		GroundingMinScore:             0.5,
+		GroundingMinKeep:              1,
+		GroundingContradictionPenalty: 1.0,
 	}
 	kept, scores, mode, err := l.applyGrounding(context.Background(), newFusionTestRequest(), cfg, panel("good one", "good two", "bad three"))
 	require.NoError(t, err)
@@ -268,22 +238,17 @@ func TestApplyGrounding_PanelModeFiltersContradicted(t *testing.T) {
 // TestApplyGrounding_WeightPolicyKeepsAll verifies the default soft-weight policy
 // scores the panel but drops nothing, even a peer-contradicted response.
 func TestApplyGrounding_WeightPolicyKeepsAll(t *testing.T) {
-	withGroundingBackends(t, func(_ context.Context, _, hypothesis string) (float32, float32, error) {
-		if strings.Contains(hypothesis, "bad") {
-			return 0.1, 0.8, nil
-		}
-		return 0.9, 0.05, nil
-	}, nil)
+	withGroundingDetector(t, unsupportedWhen("bad", 0.8))
 
 	l := newGroundedTestFusionLooper(&config.LooperConfig{})
 	cfg := fusionExecutionConfig{
-		GroundingEnabled:                 true,
-		GroundingReference:               config.FusionGroundingReferencePanel,
-		GroundingPolicy:                  config.FusionGroundingPolicyWeight,
-		GroundingOnError:                 config.FusionOnErrorSkip,
-		GroundingMinScore:                0.5, // high threshold is ignored under weight
-		GroundingMinKeep:                 1,
-		GroundingNLIContradictionPenalty: 1.0,
+		GroundingEnabled:              true,
+		GroundingReference:            config.FusionGroundingReferencePanel,
+		GroundingPolicy:               config.FusionGroundingPolicyWeight,
+		GroundingOnError:              config.FusionOnErrorSkip,
+		GroundingMinScore:             0.5, // high threshold is ignored under weight
+		GroundingMinKeep:              1,
+		GroundingContradictionPenalty: 1.0,
 	}
 	in := panel("good one", "good two", "bad three")
 	kept, scores, _, err := l.applyGrounding(context.Background(), newFusionTestRequest(), cfg, in)
@@ -298,22 +263,17 @@ func TestApplyGrounding_WeightPolicyKeepsAll(t *testing.T) {
 
 // TestApplyGrounding_AnnotatePolicyKeepsAll mirrors the weight test for annotate.
 func TestApplyGrounding_AnnotatePolicyKeepsAll(t *testing.T) {
-	withGroundingBackends(t, func(_ context.Context, _, hypothesis string) (float32, float32, error) {
-		if strings.Contains(hypothesis, "bad") {
-			return 0.1, 0.8, nil
-		}
-		return 0.9, 0.05, nil
-	}, nil)
+	withGroundingDetector(t, unsupportedWhen("bad", 0.8))
 
 	l := newGroundedTestFusionLooper(&config.LooperConfig{})
 	cfg := fusionExecutionConfig{
-		GroundingEnabled:                 true,
-		GroundingReference:               config.FusionGroundingReferencePanel,
-		GroundingPolicy:                  config.FusionGroundingPolicyAnnotate,
-		GroundingOnError:                 config.FusionOnErrorSkip,
-		GroundingMinScore:                0.9,
-		GroundingMinKeep:                 1,
-		GroundingNLIContradictionPenalty: 1.0,
+		GroundingEnabled:              true,
+		GroundingReference:            config.FusionGroundingReferencePanel,
+		GroundingPolicy:               config.FusionGroundingPolicyAnnotate,
+		GroundingOnError:              config.FusionOnErrorSkip,
+		GroundingMinScore:             0.9,
+		GroundingMinKeep:              1,
+		GroundingContradictionPenalty: 1.0,
 	}
 	kept, scores, _, err := l.applyGrounding(context.Background(), newFusionTestRequest(), cfg, panel("good one", "bad two"))
 	require.NoError(t, err)
@@ -366,12 +326,7 @@ func TestApplyGroundingDefaults_PolicyDefaultsToWeight(t *testing.T) {
 // path with grounding enabled and asserts the contradicted panel response never
 // reaches the judge, while usage still reflects the full panel cost.
 func TestFusionExecute_GroundingKeepsContradictedOutOfJudge(t *testing.T) {
-	withGroundingBackends(t, func(_ context.Context, _, hypothesis string) (float32, float32, error) {
-		if strings.Contains(hypothesis, "bad") {
-			return 0.1, 0.8, nil
-		}
-		return 0.9, 0.05, nil
-	}, nil)
+	withGroundingDetector(t, unsupportedWhen("bad", 0.8))
 
 	server := newFusionStubServer(t, func(model, prompt string) (string, int) {
 		switch model {
@@ -430,12 +385,7 @@ func TestFusionExecute_GroundingKeepsContradictedOutOfJudge(t *testing.T) {
 // dropped (it still reaches the judge) and the final synthesis prompt carries the
 // groundedness weighting notes.
 func TestFusionExecute_WeightPolicyKeepsPanelAndAnnotatesSynthesis(t *testing.T) {
-	withGroundingBackends(t, func(_ context.Context, _, hypothesis string) (float32, float32, error) {
-		if strings.Contains(hypothesis, "bad") {
-			return 0.1, 0.8, nil
-		}
-		return 0.9, 0.05, nil
-	}, nil)
+	withGroundingDetector(t, unsupportedWhen("bad", 0.8))
 
 	var sawDissenterAtJudge, sawNotesAtSynthesis bool
 	server := newFusionStubServer(t, func(model, prompt string) (string, int) {
@@ -490,6 +440,6 @@ func TestFusionExecute_WeightPolicyKeepsPanelAndAnnotatesSynthesis(t *testing.T)
 
 func newGroundedTestFusionLooper(cfg *config.LooperConfig) *FusionLooper {
 	looper := NewFusionLooper(cfg)
-	looper.grounding = &GroundingBackends{NLI: groundingNLIClassify, Detect: groundingDetect}
+	looper.grounding = &GroundingBackends{Detect: groundingDetect}
 	return looper
 }

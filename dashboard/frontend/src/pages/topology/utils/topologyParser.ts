@@ -57,7 +57,6 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
       modelId: promptGuardModel || 'vLLM-SR-Jailbreak',
       threshold: promptGuard.threshold,
       config: {
-        use_modernbert: promptGuard.use_modernbert,
         use_vllm: promptGuard.use_vllm,
       },
     })
@@ -234,6 +233,12 @@ function parseRuleNode(node: RawRuleNode): RuleNode | null {
 }
 
 function parseRuleCombination(rules?: RawRuleCombination): RuleCombination {
+  // A single condition can be the whole rule tree: `rules: {type, name}`.
+  const rootCondition = rules && !rules.operator && !rules.conditions ? parseRuleNode(rules) : null
+  if (rootCondition) {
+    return { operator: 'AND', conditions: [rootCondition] }
+  }
+
   const conditions = (rules?.conditions || [])
     .map((condition: RawRuleNode) => parseRuleNode(condition))
     .filter((condition: RuleNode | null): condition is RuleNode => condition !== null)

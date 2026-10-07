@@ -6,20 +6,19 @@ import "strings"
 type ModelPurpose string
 
 const (
-	PurposeEncoder                ModelPurpose = "encoder"                 // Base encoder for task adaptation
-	PurposeDomainClassification   ModelPurpose = "domain-classification"   // Classify text into domains/categories
-	PurposePIIDetection           ModelPurpose = "pii-detection"           // Detect personally identifiable information
-	PurposeJailbreakDetection     ModelPurpose = "jailbreak-detection"     // Detect prompt injection/jailbreak attempts
-	PurposeHallucinationSentinel  ModelPurpose = "hallucination-sentinel"  // Detect potential hallucinations
-	PurposeHallucinationDetector  ModelPurpose = "hallucination-detector"  // Verify factual accuracy
-	PurposeHallucinationExplainer ModelPurpose = "hallucination-explainer" // Explain hallucination reasoning
-	PurposeFeedbackDetection      ModelPurpose = "feedback-detection"      // Detect user feedback type
-	PurposeModalityDetection      ModelPurpose = "modality-detection"      // Classify prompts into text/image/both modalities
-	PurposeEmbedding              ModelPurpose = "embedding"               // Generate text embeddings
-	PurposeSafety                 ModelPurpose = "safety"                  // Detect unsafe content
-	PurposeHazard                 ModelPurpose = "hazard"                  // Identify independent content hazards
-	PurposeReranking              ModelPurpose = "reranking"               // Rank query-document pairs
-	PurposeSemanticSimilarity     ModelPurpose = "semantic-similarity"     // Compute semantic similarity
+	PurposeEncoder               ModelPurpose = "encoder"                // Base encoder for task adaptation
+	PurposeDomainClassification  ModelPurpose = "domain-classification"  // Classify text into domains/categories
+	PurposePIIDetection          ModelPurpose = "pii-detection"          // Detect personally identifiable information
+	PurposeJailbreakDetection    ModelPurpose = "jailbreak-detection"    // Detect prompt injection/jailbreak attempts
+	PurposeHallucinationSentinel ModelPurpose = "hallucination-sentinel" // Detect potential hallucinations
+	PurposeHallucinationDetector ModelPurpose = "hallucination-detector" // Verify factual accuracy
+	PurposeFeedbackDetection     ModelPurpose = "feedback-detection"     // Detect user feedback type
+	PurposeModalityDetection     ModelPurpose = "modality-detection"     // Classify prompts into text/image/both modalities
+	PurposeEmbedding             ModelPurpose = "embedding"              // Generate text embeddings
+	PurposeSafety                ModelPurpose = "safety"                 // Detect unsafe content
+	PurposeHazard                ModelPurpose = "hazard"                 // Identify independent content hazards
+	PurposeReranking             ModelPurpose = "reranking"              // Rank query-document pairs
+	PurposeSemanticSimilarity    ModelPurpose = "semantic-similarity"    // Compute semantic similarity
 )
 
 // ModelSpec defines a model's metadata and capabilities
@@ -37,10 +36,9 @@ type ModelSpec struct {
 	// Only applied when the resolved repository still matches this entry.
 	DownloadExcludePatterns []string `json:"-" yaml:"-"`
 
-	// PreparedArtifact identifies an offline, manifest-verified runtime bundle.
-	// These releases cannot be provisioned by downloading native HF weights.
-	PreparedArtifact string `json:"prepared_artifact,omitempty" yaml:"prepared_artifact,omitempty"`
-	ArtifactBundle   string `json:"artifact_bundle,omitempty" yaml:"artifact_bundle,omitempty"`
+	// RuntimeProvisioned marks a release the model runtime downloads and
+	// verifies itself; the router provisions nothing for it.
+	RuntimeProvisioned bool `json:"-" yaml:"-"`
 
 	// Alternative names/aliases for this model
 	Aliases []string `json:"aliases,omitempty" yaml:"aliases,omitempty"`
@@ -74,11 +72,6 @@ type ModelSpec struct {
 	// DefaultAdapter declares task semantics for implicit built-in bindings.
 	// Explicit recipe bindings always take precedence.
 	DefaultAdapter string `json:"default_adapter,omitempty" yaml:"default_adapter,omitempty"`
-
-	// DefaultProvider and DefaultDevice select a published artifact's supported
-	// implicit execution format. Explicit deployments remain authoritative.
-	DefaultProvider string `json:"default_provider,omitempty" yaml:"default_provider,omitempty"`
-	DefaultDevice   string `json:"default_device,omitempty" yaml:"default_device,omitempty"`
 
 	// Number of classification classes (for classifiers)
 	NumClasses int `json:"num_classes,omitempty" yaml:"num_classes,omitempty"`
@@ -329,8 +322,6 @@ var DefaultModelRegistry = []ModelSpec{
 		MaxContextLength:        8192,
 		BaseModelMaxContext:     32768,
 		DefaultAdapter:          "vela_halu",
-		DefaultProvider:         "candle",
-		DefaultDevice:           "cpu",
 		Tags:                    []string{"vela", "hallucination", "multilingual", "token-classification"},
 	},
 
@@ -371,19 +362,6 @@ var DefaultModelRegistry = []ModelSpec{
 		EmbeddingDim:     768,
 		MaxContextLength: 8192,
 		Tags:             []string{"hallucination", "mmbert", "multilingual", "verification"},
-	},
-
-	// Hallucination Detection - Explainer
-	{
-		LocalPath:        "models/mom-halugate-explainer",
-		RepoID:           "tasksource/ModernBERT-base-nli",
-		Aliases:          []string{"hallucination-explainer", "halugate-explainer", "nli-explainer"},
-		Purpose:          PurposeHallucinationExplainer,
-		Description:      "ModernBERT NLI model for explaining hallucination reasoning",
-		ParameterSize:    "149M",
-		NumClasses:       3, // entailment/neutral/contradiction
-		MaxContextLength: 8192,
-		Tags:             []string{"hallucination", "nli", "explainability", "modernbert"},
 	},
 
 	// Feedback Detection
@@ -465,8 +443,8 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:             []string{"embedding", "matryoshka", "2d-matryoshka", "multilingual", "modernbert", "long-context", "early-exit", "flash-attention-2"},
 	},
 
-	// Omni runtime bundles contain four verified ONNX graphs and the exact
-	// published processors. Native source snapshots are not runtime artifacts.
+	// Vela 1.0 Omni: the model runtime serves the pinned release from its own
+	// download of the published weights and configs.
 	{
 		LocalPath:     "models/vela-1.0-omni-nano",
 		RepoID:        "vllm-sr/Vela-1.0-Omni-Nano",
@@ -475,9 +453,9 @@ var DefaultModelRegistry = []ModelSpec{
 		Purpose:       PurposeEmbedding,
 		Description:   "Vela Omni Nano text, image, and raw audio embeddings in one normalized 384-dimensional space.",
 		ParameterSize: "164M", EmbeddingDim: 384, MaxContextLength: 512,
-		DefaultAdapter: "vela_omni", DefaultProvider: "ort", DefaultDevice: "cpu",
-		PreparedArtifact: "vela_omni", ArtifactBundle: "vela-1.0-omni-nano",
-		Tags: []string{"embedding", "multimodal", "text", "image", "audio"},
+		DefaultAdapter:     "vela_omni",
+		RuntimeProvisioned: true,
+		Tags:               []string{"embedding", "multimodal", "text", "image", "audio"},
 	},
 	{
 		LocalPath:     "models/vela-1.0-omni-mini",
@@ -487,9 +465,9 @@ var DefaultModelRegistry = []ModelSpec{
 		Purpose:       PurposeEmbedding,
 		Description:   "Vela Omni Mini text, image, and raw audio embeddings in one normalized 768-dimensional space with 32K text input.",
 		ParameterSize: "1.36B", EmbeddingDim: 768, MaxContextLength: 32768,
-		DefaultAdapter: "vela_omni", DefaultProvider: "ort", DefaultDevice: "cpu",
-		PreparedArtifact: "vela_omni", ArtifactBundle: "vela-1.0-omni-mini",
-		Tags: []string{"embedding", "multimodal", "text", "image", "audio", "long-context"},
+		DefaultAdapter:     "vela_omni",
+		RuntimeProvisioned: true,
+		Tags:               []string{"embedding", "multimodal", "text", "image", "audio", "long-context"},
 	},
 
 	// Embedding Models - Multi-Modal (Text/Image/Audio)
@@ -676,17 +654,6 @@ func findModelByPath(path string) *ModelSpec {
 		}
 	}
 	return nil
-}
-
-// GetModelsByPurpose returns all models for a specific purpose
-func GetModelsByPurpose(purpose ModelPurpose) []ModelSpec {
-	var models []ModelSpec
-	for _, model := range DefaultModelRegistry {
-		if model.Purpose == purpose {
-			models = append(models, model)
-		}
-	}
-	return models
 }
 
 // GetModelsByTag returns all models with a specific tag
