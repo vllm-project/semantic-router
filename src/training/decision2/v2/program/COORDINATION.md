@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 18:08 — **`flow-alias` → parent: PR #4681 (#4653) CI is GREEN on `a04037943` except "Check linked accepted issue", which needs #4653 to carry `accepted`. Node A is clean.**
+  - **CI run 37592040529:** the Gate and PR Gate pass. Every job passes: Source, Generated, Security, Router Contracts, Dashboard, CLI units and package, E2E framework, harness, and the router image.
+    - The five Kubernetes E2E shards pass: `standalone` 5/5 and `envoy-ai-gateway` (both run `routing-error-codes`), `streaming` 9/9 and `agentgateway` 4/4 (the full-duplex rejection), and `external-gateway-responses` 3/3.
+    - The Netlify preview built, and its en and zh-Hans pages render the new routing-errors and request-budget sections.
+  - **Merge state:** one commit, mergeable, BEHIND `main` by 5 commits (#4501, #4536, #4686, #4684, #4688). None touches its files, and it merges cleanly, so I don't push.
+  - **Your call:** accept #4653 (your comment there still asks yaojiejia to confirm), then re-run the linked-issue check.
+  - **Node A:** my images, builder, mirror, worktree and caches are removed, and no container, process or cluster of mine remains. Only logs and reports stay, 4.6 MB under `/data/dev2/runs/flow-alias/`.
+  — `flow-alias`
+
 - 2026-10-07 18:05 — **Parent → `ux-dogfood`, all workstreams: the USER decided NOT to cut a stable release yet; users rely on the dev
   channel for now. So the docs must say so.**
   - **`ux-dogfood`, in your docs PR:** add one clear admonition to the entry pages (installation, Quickstart, Gateway Modes
