@@ -2358,6 +2358,18 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "labels": {
+          "items": {
+            "$ref": "#/$defs/DecisionChoice"
+          },
+          "type": "array"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "head": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

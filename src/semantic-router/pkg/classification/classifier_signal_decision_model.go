@@ -2,6 +2,7 @@ package classification
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"time"
 
@@ -103,7 +104,7 @@ func (c *Classifier) evaluateDecisionDeployment(
 			modelservice.RecordUnknown(deployment, reason, 1)
 			continue
 		}
-		if matched := applyDecisionAnswer(results, rule, answer); matched != "" {
+		for _, matched := range applyDecisionAnswer(results, rule, answer) {
 			results.MatchedDecisionRules = append(results.MatchedDecisionRules, matched)
 			c.recordSignalMatch(config.SignalTypeDecision, matched)
 		}
@@ -112,17 +113,21 @@ func (c *Classifier) evaluateDecisionDeployment(
 
 // DecisionQuestion converts a configured question to the runtime request form.
 func DecisionQuestion(id string, question config.DecisionQuestion) modelservice.Question {
-	converted := modelservice.Question{ID: id, Type: question.Type, Instructions: question.Instructions}
+	converted := modelservice.Question{ID: id, Type: question.Type, Instructions: question.Instructions, Threshold: question.Threshold, Head: question.Head}
 	for _, choice := range question.Choices {
 		converted.Choices = append(converted.Choices, modelservice.Choice{Key: choice.Key, Description: choice.Description})
+	}
+	for _, label := range question.Labels {
+		converted.Labels = append(converted.Labels, modelservice.Choice{Key: label.Key, Description: label.Description})
 	}
 	converted.Levels = append(converted.Levels, question.Levels...)
 	return converted
 }
 
 // applyDecisionAnswer publishes an answer's values and returns the matched
-// reference: the rule name (Noul, Score) or "rule:choice" (Choice), or "".
-func applyDecisionAnswer(results *SignalResults, rule config.DecisionSignalRule, answer modelservice.Answer) string {
+// references: the rule name (Noul, Score), "rule:choice" (Choice) or
+// "rule:label" for every matching Set or Span label.
+func applyDecisionAnswer(results *SignalResults, rule config.DecisionSignalRule, answer modelservice.Answer) []string {
 	key := signalConfidenceKey(config.SignalTypeDecision, rule.Name)
 	predicate := rule.EffectivePredicate()
 	switch rule.Question.Type {
@@ -130,14 +135,18 @@ func applyDecisionAnswer(results *SignalResults, rule config.DecisionSignalRule,
 		results.SignalValues[key] = answer.Noul
 		results.SignalConfidences[key] = answer.Noul
 		if predicateMatches(answer.Noul, predicate) {
-			return rule.Name
+			return []string{rule.Name}
 		}
 	case config.DecisionQuestionScore:
 		results.SignalValues[key] = answer.Score
 		results.SignalConfidences[key] = maxProbability(answer.Probabilities)
 		if predicateMatches(answer.Score, predicate) {
-			return rule.Name
+			return []string{rule.Name}
 		}
+	case config.DecisionQuestionSet:
+		return applySetAnswer(results, key, rule, answer, predicate)
+	case config.DecisionQuestionSpan:
+		return applySpanAnswer(results, key, rule, answer, predicate)
 	default:
 		for option, probability := range answer.Probabilities {
 			results.SignalValues[key+":"+option] = probability
@@ -147,10 +156,56 @@ func applyDecisionAnswer(results *SignalResults, rule config.DecisionSignalRule,
 		results.SignalValues[key] = chosen
 		results.SignalConfidences[key] = chosen
 		if answer.Choice != "" && (predicate == nil || predicateMatches(chosen, predicate)) {
-			return rule.Name + ":" + answer.Choice
+			return []string{rule.Name + ":" + answer.Choice}
 		}
 	}
-	return ""
+	return nil
+}
+
+// applySetAnswer publishes each label's probability, and the highest under
+// the rule itself. A label matches when its probability meets the predicate,
+// or without one when the model selected it.
+func applySetAnswer(results *SignalResults, key string, rule config.DecisionSignalRule, answer modelservice.Answer, predicate *config.NumericPredicate) []string {
+	var matched []string
+	best := 0.0
+	for _, label := range rule.Question.Labels {
+		probability := answer.Probabilities[label.Key]
+		results.SignalValues[key+":"+label.Key] = probability
+		results.SignalConfidences[key+":"+label.Key] = probability
+		best = max(best, probability)
+		if (predicate == nil && slices.Contains(answer.Selected, label.Key)) || (predicate != nil && predicateMatches(probability, predicate)) {
+			matched = append(matched, rule.Name+":"+label.Key)
+		}
+	}
+	results.SignalValues[key] = best
+	results.SignalConfidences[key] = best
+	return matched
+}
+
+// applySpanAnswer publishes each label's highest span probability (0 when the
+// model found no span of it) and, under the rule itself, the highest
+// probability any word reached. A label matches when one of its spans'
+// probabilities meets the predicate, or without one when it has a span.
+func applySpanAnswer(results *SignalResults, key string, rule config.DecisionSignalRule, answer modelservice.Answer, predicate *config.NumericPredicate) []string {
+	var matched []string
+	for _, label := range rule.Question.Labels {
+		best, found := 0.0, false
+		for _, span := range answer.Spans {
+			if span.Label != label.Key {
+				continue
+			}
+			best = max(best, span.Probability)
+			found = found || predicate == nil || predicateMatches(span.Probability, predicate)
+		}
+		results.SignalValues[key+":"+label.Key] = best
+		results.SignalConfidences[key+":"+label.Key] = best
+		if found {
+			matched = append(matched, rule.Name+":"+label.Key)
+		}
+	}
+	results.SignalValues[key] = answer.Noul
+	results.SignalConfidences[key] = answer.Noul
+	return matched
 }
 
 func maxProbability(probabilities map[string]float64) float64 {

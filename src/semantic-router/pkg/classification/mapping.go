@@ -20,6 +20,10 @@ type CategoryMapping struct {
 type PIIMapping struct {
 	LabelToIdx map[string]int    `json:"label_to_idx"`
 	IdxToLabel map[string]string `json:"idx_to_label"`
+	// spanNamed marks the empty mapping of a model that lists no labels
+	// because its spans name their PII types (a decision model's ready-made
+	// PII question).
+	spanNamed bool
 }
 
 // JailbreakMapping holds the mapping between indices and jailbreak types
