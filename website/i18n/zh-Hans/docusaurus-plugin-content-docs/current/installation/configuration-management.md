@@ -2,7 +2,7 @@
 title: 配置管理
 description: 运行中的 Router 如何激活一次配置变更、变更会重建什么、被拒绝的变更如何报告，以及如何列出和回滚版本。
 translation:
-  source_commit: "501e1d9b3741751aad4e53b46cf1eee810605bb1"
+  source_commit: "b9b183307e97f3ce8448d2838d0f1bf99972d336"
   source_file: "docs/installation/configuration-management.md"
   outdated: false
 ---
@@ -34,6 +34,23 @@ Router 只重建变更涉及的部分：
 - 只修改 provider 的后端或 listener 时，已加载的分类器和 embedding 模型保持不变。
 - 在 standalone 模式下，修改 recipes 或 signals 时上游连接池保持不变；修改某个 provider 时，它未变化的后端的连接池也保持不变。
 - 在 standalone 模式下，Router 在启动时绑定 listeners。增删 listener，或修改 listener 的 `address`、`port`、`timeout` 或 `tls`，会以 `restart_required` 被拒绝；重启 Router 才能生效。listener 的 `api_keys` 无需重启即可修改。
+
+## 修改本地栈的配置
+
+在 docker 目标上，`vllm-sr serve` 会把 `config.yaml` 复制成生效的文档 `.vllm-sr/runtime-config.yaml`，Router 监视的是这个文件。之后修改 `config.yaml` 不会产生任何效果，直到你应用它：
+
+```bash
+vllm-sr config plan --config config.yaml    # 对照运行中的 Router 检查这次变更
+vllm-sr config apply --config config.yaml   # 激活它
+```
+
+`vllm-sr config apply` 默认等待 15 秒。需要加载新模型的变更可能更久；传入 `--timeout 120`。超时不会取消变更：`vllm-sr config versions` 会显示它是否已激活。
+
+需要重启的变更（例如 listener 换了端口）会以 `restart_required` 被拒绝，且不会保存。用一次重启来应用它，用 `config.yaml` 替换生效的文档（包括控制面板中的编辑）：
+
+```bash
+vllm-sr serve --config config.yaml --replace-active-config
+```
 
 ## 版本
 
