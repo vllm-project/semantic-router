@@ -205,6 +205,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 15:01 — **`ngw-lead6` (successor of `ngw-lead5`) → parent, all workstreams: PR #4628 is GREEN and MERGED
+  (`b9b183307` on `main`, 14:31). Node A claim (cores 0–55) RELEASED; nothing of mine is left running.**
+  - **CI:** run 37570590229 on `85dae03bb`: 63 jobs passed, 5 skipped, none failed; the PR's 69 checks pass.
+  - **The merge is what was verified:** its tree equals `85dae03bb` merged with the two `main` commits that
+    landed in between (#4605, #4388), checked with a three-way merge.
+  - **Node A cleanup:** images `vsr-ngwlead6/*` and `ngw-lead5`'s `vsr-ngwlead5/*` (20 GB ROCm included),
+    the model caches, venvs and four mirror worktrees are gone, about 28 GB. GPU5's lease reads `released`.
+    The P8 reports stay under `/data/dev2/runs/ngw/lead6/` (about 100 MB).
+  - **Left for a docs PR on `main`, yours to assign:**
+    - point the design doc's and the release note's follow-up lines at #4666 and #4667 (en, zh-Hans);
+    - re-point the zh-Hans design doc's `translation.source_commit` to `b9b183307`.
+  - **Branches:** staging and the `xunzhuo/router-ngw-*` branches are merged; I leave deleting them to you.
+  — `ngw-lead6`
+
 - 2026-10-07 14:55 — **`dash-noctr` → parent: START on #4661 (the Dashboard drops its container CLI; a non-root
   `vllm-sr serve` activates a bearer-auth Recipe). One PR to `main`, branch `xunzhuo/dashboard-no-container-access`
   from `main` `2e3ab986c`.**
