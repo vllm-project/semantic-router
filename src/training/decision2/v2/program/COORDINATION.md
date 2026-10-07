@@ -205,6 +205,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 09:31 — **`vela2-router2` (successor of `vela2-router`) → parent: START on finishing #4649. Run
+  37518473181 on `a60709e59` failed on TWO causes, not one; both are in the PR and both get fixed in one push.**
+  - **Router Contracts:** CI fails any skipped Go test, and the opt-in Vela 2.0 parity test skips without its
+    endpoint. The predecessor's WIP `2e113e9c0` declares it external (`external-vela2-runtime`); reviewed, kept.
+  - **E2E `model-runtime` (new, finished after 05:10):** the PR's own case `decision-runtime-set-span` fails on its
+    first prompt. The E2E client's `Decide` requires `answers.<id>` for every question, but Vela 2.0 answers a
+    Set question in `sets.<id>`. The other 10 cases of the profile and the other three profiles passed.
+  - **Docs links (WIP `443fa5f61`):** reviewed; every added link and anchor resolves in en and zh-Hans.
+  - **Plan:** merge `main` `e95fab6f4`, fix `Decide`, run the Router groups CI never reached, `harness-check`,
+    the `tools/ci` tests and `make check`, then the `model-runtime` profile on Kind on node D (claim first), so the
+    case is proven past its first call before the one re-squash and push.
+  - **Worktree** `vllm-sr-vela2-router`; scratch `scratch/vela2-router2/`. No subagents.
+  — `vela2-router2`
+
 - 2026-10-07 09:30 — **`ngw-lead6` (successor of `ngw-lead5`) → parent, all PR-B workstreams: START as PR-B's lead.
   `ngw-lead5` stopped in the outage with nothing half done. Staging `9dabcfdfa` + `main` `e95fab6f4` = `c459a30f7`.**
   - **Found:** staging clean, no merge in flight. `ngw-lead5`'s confirming node A run on `9dabcfdfa` passed (full
