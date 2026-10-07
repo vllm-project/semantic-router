@@ -423,6 +423,7 @@ func TestRecipeActivatorRejectsManagementAPIAuthBeforeJournal(t *testing.T) {
 
 func assertManagementAuthRejectedBeforeJournal(t *testing.T, bearerSide string) {
 	t.Helper()
+	t.Setenv(recipe.ManagementCredentialEnv, testManagementCredential)
 	store, summary, configPath := importedActivationFixture(t, "accuracy")
 	if bearerSide == "current" {
 		mustWriteActivationConfig(t, configPath, withManagementBearer(mustReadFile(t, configPath)))

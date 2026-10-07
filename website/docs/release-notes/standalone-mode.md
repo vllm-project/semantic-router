@@ -124,6 +124,26 @@ and the next `vllm-sr serve` creates the containers from the Recipe's config,
 starting any storage it adds. Storage the Recipe stops using keeps its data and
 runs until `vllm-sr stop`. Deactivation works the same way.
 
+The Dashboard image no longer contains a container CLI. Its status page reads
+the Router's and Envoy's HTTP probes and the files `vllm-sr serve` keeps beside
+the runtime config, so a Router waiting for first-run setup reads "standby",
+one `vllm-sr serve` is starting reads "starting", and a stopped one reads "not
+running", with what to run. Logs come from the bounded log spool, as before.
+
+A Recipe with bearer authentication for the Router management API no longer
+needs a root `vllm-sr serve`:
+
+- `vllm-sr serve` owns the management credential the Dashboard uses: your
+  `VLLM_SR_DASHBOARD_RECIPE_TOKEN`, or one the stack generates and keeps in its
+  owner-only state. It passes the credential by name to the Dashboard, and to
+  the Router whenever its config binds it. The Dashboard no longer keeps a copy
+  in its Recipe store, and removes the one an earlier release left there.
+- The Recipe store is shared with the group of the user who runs
+  `vllm-sr serve`, so a non-root CLI reads the active package and recovers an
+  interrupted activation. A store an earlier Dashboard wrote needs sharing
+  once; `vllm-sr serve` prints the command. See
+  [Security Hardening](../installation/security-hardening#recipe-store-permissions).
+
 ## Engine mode runs in a container
 
 `vllm-sr serve MODEL` runs the model runtime in the foreground, in a container
