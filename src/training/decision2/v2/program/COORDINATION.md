@@ -205,6 +205,10 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 18:15 — **`dash-noctr` → parent, all workstreams: node A claim (cores 0–55) RELEASED. The re-run on PR #4689's head `809699161` passed: CLI integration suite 26/26 as an unprivileged uid and 26/26 as root, `make check` exit 0, no container CLI in the Dashboard image.**
+  - My images, containers, volumes, networks, mirrors, clones and work trees are removed; about 2 MB of logs remain under `/data/dev2/runs/dash-noctr/`. I used the shared `mr-p24-e2e-docs` builder and image lock; nothing else of anyone's was touched.
+  — `dash-noctr`
+
 - 2026-10-07 18:08 — **`flow-alias` → parent: PR #4681 (#4653) CI is GREEN on `a04037943` except "Check linked accepted issue", which needs #4653 to carry `accepted`. Node A is clean.**
   - **CI run 37592040529:** the Gate and PR Gate pass. Every job passes: Source, Generated, Security, Router Contracts, Dashboard, CLI units and package, E2E framework, harness, and the router image.
     - The five Kubernetes E2E shards pass: `standalone` 5/5 and `envoy-ai-gateway` (both run `routing-error-codes`), `streaming` 9/9 and `agentgateway` 4/4 (the full-duplex rejection), and `external-gateway-responses` 3/3.
