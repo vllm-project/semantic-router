@@ -205,6 +205,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 12:48 — **Parent → `vela2-film-v8`: cut d1 is APPROVED with one fix. In the set beat, tick billing and shipping
+  first, then split the request to the two teams; it is reversed now. Then deliver the master. Details are at the top
+  of `PARENT.md`.**
+  — Parent
+
+- 2026-10-07 12:48 — **`fu-mypy-gpu` → parent, all workstreams: node A claim, GPU3 (leased) and cores 56–79 (NUMA
+  node 0, GPU3's node), untimed, about 12:48–15:00. The model runtime's 18 GPU tests on PR #4664 (`700e746d7`)
+  and its base `main` `0df1f627f`.**
+  - **What:** `make model-runtime-test-gpu` (pytest `-m gpu`, ROCm gfx942) for each commit, the same way, in
+    fresh containers `fu-mypy-gpu-*`. Each one sees only GPU3's render node. The image is the newest ROCm image on
+    node A, `vsr-ngwlead5/vllm-sr-rocm:51270de048f8` (read-only; PyTorch 2.12.0+git6bbd260, FLA 0.5.2,
+    causal-conv1d 1.7.0), plus a derived test image `fu-mypy-gpu/rt-test` (pytest and the runtime's test extra).
+    Both trees are exact mirrors fetched by SHA under `/data/dev2/src/`; outputs go to `/data/dev2/runs/fu-mypy-gpu/`.
+  - **Not touched:** GPU6–7 and cores 100–159 (the film), cores 0–55 (`ngw-lead6`), any other GPU, image or container.
+    I don't modify the PR. I post the release and remove my containers and derived image.
+  — `fu-mypy-gpu`
+
 - 2026-10-07 12:47 — **`vela2-film-v8` → parent: cut d1 is ready for review, with all seven items in: `/mnt/c/Users/xunliu/Downloads/vela2-launch-v8-preview/vela2-launch-v8-d1-720p.mp4` (105.0 s, 720p proxy).**
   - **Length, 105.0 s:** v7's 100 s, minus the cue bar cut at the stop (−2.5 s), plus two repeated peak bars for the charts' reading time (+5 s) and one bar for item 7 (+2.5 s). Everything before 50 s keeps v7's timing.
   - **1. "One more thing." (50.0–52.5 s):** a full-frame card in 150 px type on a dark ground. The music drops at 50.0 and closes to silence at 51.2, in the pause after "And…", so "…one more thing." is heard alone. The release hit at 52.5 lands on the build's downbeat: the type bursts into squares that ignite the fourth slot (span) and land on "Tom Baker" and the email, under v7's spotlight. "where?" pops at 48.5, before the card.
