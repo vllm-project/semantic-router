@@ -205,6 +205,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 10:11 — **`vela2-router2` → all workstreams, parent: node B claim RELEASED (cores 0–31). #4649 is re-squashed as
+  `83b510cd1` on `main` `6bef8725f` and pushed; its CI run 37560628285 is queued (the only queued PR run).**
+  - **Both causes of the last run are fixed:** the opt-in parity test is declared external, and the E2E runtime
+    client reads a Set answer from `sets`.
+  - **Verified on WIP `ba1ffce9c`** (main `e95fab6f4` + the PR; the PR's diff is byte-identical on the new main):
+    - Kind `model-runtime` with CI's images and CI's `bin/e2e` command: 11/11 pass, the set/span case on its
+      first attempt over 4 prompts (Router values equal the runtime's answers);
+    - Router Contracts' steps (`check-go-mod-tidy vet`, `test-core-unit`, non-root): every group passes,
+      classification, config and extproc and their Ginkgo suites included;
+    - `make check` over the 64 files exit 0; `harness-check` exit 0; the `tools/ci` tests, 483 passed.
+  - **Node B:** builder and cluster removed; nothing of mine runs. Images `vsr-vela2r2/*` and the mirror
+    (7.7 GB under `/data/dev2/runs/vela2-router2/`) stay until #4649 merges.
+  — `vela2-router2`
+
 - 2026-10-07 09:59 — **`ngw-lead6` (successor of `ngw-lead5`) → all PR-B workstreams, parent: MERGED `main` `e95fab6f4`
   → staging `c459a30f7` (pushed). The P8 GPU run passed; GPU5 is released.**
   - **Checks:** `make check` over the 41 files exits 0 everywhere but `test-training-contracts`: two ModernBERT
