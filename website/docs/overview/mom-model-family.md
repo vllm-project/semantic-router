@@ -123,7 +123,8 @@ model's published category thresholds.
 Assign Vault's other decisions to backends that meet your privacy requirements;
 the recipe cannot establish their physical location or provider retention.
 
-Vault's default Vela Guard, PII, and Hazard tasks each have a 32,768-token
+Vault's Guard and PII run on the default Vela 2.0 0.3B, which reads up to
+8,192 tokens and truncates beyond them. Its Hazard task has a 32,768-token
 triage input budget, including the conversation text evaluated by that task.
 This check runs before backend context checks. Exceeding it fails closed:
 Preview returns HTTP 503 with signal errors and no selected model. A larger

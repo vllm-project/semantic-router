@@ -364,6 +364,11 @@ the Go client in `pkg/modelservice/api`. Every surface takes an optional
 and `options` with `deadline_ms` and `return_meta` (the runtime's `meta`:
 revision, profile, numerics, engine, device and timings, only when asked;
 a family's own fields such as `meta.representation` are always returned).
+Every surface and bundle response, errors included, carries a
+`Server-Timing` header with the request's phases (`parse`, `tokenize`,
+`queue`, `forward`, `post`, `serialize`) and their `total` in milliseconds
+(`vllm_srun/timing.py`); the router subtracts the total from its own time
+for the exchange to record each call's transport.
 A request-level error uses
 an HTTP status with `{"error": {"code", "message"}}`: 400 `invalid_request`,
 404 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface`
@@ -523,8 +528,8 @@ IDs, one or several. A Hub model is always resolved to a 40-hex commit: with
 without it, a built-in model uses its pinned revision and any other repository
 needs an explicit revision. Downloads go into the HF cache with an allow-list
 derived from the family's inventory. A token comes from the environment or the
-HF token file, never from argv. Private repositories (Vela 2.0 today) need a
-token with access.
+HF token file, never from argv. Gated and private repositories need a token
+with access.
 
 ### 7.2 Verification
 
@@ -552,7 +557,7 @@ Before any model code runs, the family verifies the package:
 | `decision2` | `vllm-sr/Decision-2.0-{Kai-0.6B, Eos-0.8B, Sol-2B, Nox-4B, Lux-9B, Vega-27B}` | Kai `cd49ea38`, Eos `3594047d`, Sol `64235bef`, Nox `25e8f67d`, Lux `78bf3c03`, Vega `7aec49ae` (runtime-only revisions of the Phase 1 pins, same weights and identity) |
 | `decision1` | `vllm-sr/Decision-1.0-{Kai-0.6B, Lex-0.6B, Route-0.6B}` (Vela encoder runtime); `{Eos-0.8B, Sol-2B, Nox-4B, Lux-9B}` (Qwen3.5 runtime) | Kai `79263ba4`, Lex `a5ba6895`, Route `deed1f29`, Eos `2ca39a23`, Sol `5c698b1a`, Nox `7f65e1db`, Lux `2064c84d` |
 | `task_heads` | `vllm-sr/Vela-1.0-Encoder-307M-{Domain, Guard, Safety, Shield, FactCheck, Feedback, Modality, Hazard, PII, Halu, Embedding, Reranker}`, `Qwen/Qwen3-Embedding-0.6B` | The revisions the router pinned (section 16.3), for example Domain `f6354f54`, PII `6d3300c4`, Halu `ca875312`, Embedding `1e57cebf`, Reranker `a388e41c` |
-| `vela2` | `vllm-sr/Vela-2.0-{0.3B, 0.8B, 4B, 9B}` (private preview) | 0.3B `a3209a50`, 0.8B `a778eb2a`, 4B `c1e64d4f`, 9B `bc876163` |
+| `vela2` | `vllm-sr/Vela-2.0-{0.3B, 0.8B, 4B, 9B}` | 0.3B `a3209a50`, 0.8B `a778eb2a`, 4B `c1e64d4f`, 9B `bc876163` |
 | `multimodal_embedding` | `vllm-sr/Vela-1.0-Omni-{Nano, Mini}` | Nano `2ff2d663`, Mini `801bae3a` (the published weights, section 8.5) |
 
 Each family names its table (`ModelFamily.builtin_table`); the built-in
@@ -1273,6 +1278,7 @@ hardware, with the records in `docs/records/<workstream>-*`. The techniques:
 | Runtime core | one bundled call per request and process; a bundle's tasks for one model as one job group (one forward for every head reading the same input); per-model content-hash result cache; shortest-expected-finish scheduling that answers each job when its own batches ran and lets short requests run between the windows of a long one (section 9); package files verified in parallel | `router-latency-cpu.md` |
 | Encoders | packed (varlen) attention in length groups; banded local attention for long rows (from 1,024 tokens on CPU, 2,048 on GPU); oneDNN pre-packed FP32 linears on CPU `exact`, batch-invariant as probed at load, so `exact` batches concurrent requests; dynamic cross-request batching (`batching`); encoder graphs per shape bucket on GPU, replayed only when padding stays small; a fused gfx942 rotary kernel; reduced-precision copies under `max_speed` only where the records show at least 99% agreement (CPU `float32-packed` for Decision 1.0 Kai, Lex and Route and the Vela 2.0 0.3B; BF16 and int8 measured and refused elsewhere); Omni's four towers on the CPU's one OpenMP team, with NumPy's OpenBLAS on one thread; per-hardware kernel registry | `vela1-performance.md`, `embed-performance.md`, `decision1-performance.md`, `vela2-performance.md` |
 | Router | parallel signal goroutines with one `/v1/bundle` per request stage and runtime process; a per-deployment result cache; one CPU process per model with thread shares; deadlines and fail-open; pure-Go keyword scoring and model selectors (AVX2 / FMA and NEON dot kernels with a pure-Go fallback) | `router-latency-cpu.md`, `router-latency-rocm.md`, `stores-algorithms.md`, `stores-consumers.md` |
+| Router to runtime | HTTP/JSON on a Unix socket, timed per call from the runtime's `Server-Timing`: on CPU the transport is 0.6–2.2% of a call, so there is no binary fast path | `runtime-transport-cpu.md` |
 
 ## 19. Phase 1 follow-ups and later work
 

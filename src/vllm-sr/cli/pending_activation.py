@@ -5,11 +5,12 @@ Router (and Envoy with `--gateway extproc`) created anew -- first-run setup
 activating a config, or a change the running containers cannot take, such as
 one the Router answers `restart_required` -- the Dashboard writes and syncs
 the runtime config, then records a pending activation beside it. A
-`vllm-sr serve` attached to the stack keeps a heartbeat there, so the
-Dashboard can say whether the CLI applies the change now; the attached CLI
-recreates the containers from the saved config. Without one, the next
-`vllm-sr serve` applies it, since it serves the saved runtime config like any
-other start.
+`vllm-sr serve` attached to the stack keeps a heartbeat there that says what it
+does: it starts the stack, or it waits to apply an activation (first-run
+setup), so the Dashboard can tell a service that is starting from a stopped one
+and say whether the CLI applies the change now; the waiting CLI recreates the
+containers from the saved config. Without one, the next `vllm-sr serve`
+applies it, since it serves the saved runtime config like any other start.
 
 The Dashboard's half of both files is
 `dashboard/backend/handlers/pending_activation.go`.
@@ -31,6 +32,10 @@ from pathlib import Path
 HEARTBEAT_SUFFIX = ".serve-heartbeat.json"
 RECORD_SUFFIX = ".pending-activation.json"
 HEARTBEAT_SECONDS = 2.0
+
+# What the heartbeat says the CLI does.
+SERVE_STARTING = "starting"
+SERVE_WAITING = "waiting"
 
 REASON_SETUP = "setup"
 REASON_RESTART = "restart"
@@ -81,22 +86,35 @@ def clear_pending_activation(runtime_config: str | Path) -> None:
 
 @contextmanager
 def serve_heartbeat(
-    runtime_config: str | Path, interval: float = HEARTBEAT_SECONDS
-) -> Iterator[None]:
-    """Beat for the block's duration, so the Dashboard knows a CLI is attached."""
+    runtime_config: str | Path,
+    interval: float = HEARTBEAT_SECONDS,
+    state: str = SERVE_STARTING,
+) -> Iterator[Callable[[str], None]]:
+    """Beat for the block's duration, so the Dashboard knows a CLI is attached.
+
+    The block receives a callable that changes the state the heartbeat reports.
+    """
 
     heartbeat = heartbeat_file(runtime_config)
     stopped = threading.Event()
+    written = threading.Lock()
+    current = [state]
+
+    def set_state(value: str) -> None:
+        with written:
+            current[0] = value
+            _beat(heartbeat, value)
 
     def beat() -> None:
         while not stopped.wait(interval):
-            _beat(heartbeat)
+            with written:
+                _beat(heartbeat, current[0])
 
-    _beat(heartbeat)
+    set_state(state)
     thread = threading.Thread(target=beat, name="serve-heartbeat", daemon=True)
     thread.start()
     try:
-        yield
+        yield set_state
     finally:
         stopped.set()
         thread.join()
@@ -135,7 +153,9 @@ def wait_for_pending_activation(
         signal.signal(signal.SIGTERM, previous)
 
 
-def _beat(path: Path) -> None:
+def _beat(path: Path, state: str) -> None:
     staged = path.with_name(f".{path.name}.tmp")
-    staged.write_text(json.dumps({"pid": os.getpid()}), encoding="utf-8")
+    staged.write_text(
+        json.dumps({"pid": os.getpid(), "state": state}), encoding="utf-8"
+    )
     os.replace(staged, path)

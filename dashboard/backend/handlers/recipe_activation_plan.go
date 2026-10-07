@@ -89,6 +89,9 @@ func (a *RecipeActivator) prepareDeactivation(ctx context.Context) (recipe.Activ
 	if err != nil {
 		return active, recipe.ActivationPlan{}, nil, nil, activationIncompatible(err)
 	}
+	if credentialErr := a.requireManagementCredential(plan); credentialErr != nil {
+		return active, recipe.ActivationPlan{}, nil, nil, credentialErr
+	}
 	plan.Effects[0] = "restore the durable source runtime config"
 	plan.PlanDigest = ""
 	encoded, err := json.Marshal(plan)
@@ -126,6 +129,9 @@ func (a *RecipeActivator) prepareActivation(ctx context.Context, request recipe.
 	plan, err := buildActivationPlan(target.RecipeDigest, previousConfig, realizedConfig, inventory, a.store.HasManagementCredential())
 	if err != nil {
 		return recipe.PackageSummary{}, recipe.ActivationPlan{}, nil, nil, activationIncompatible(err)
+	}
+	if credentialErr := a.requireManagementCredential(plan); credentialErr != nil {
+		return recipe.PackageSummary{}, recipe.ActivationPlan{}, nil, nil, credentialErr
 	}
 	return target, plan, previousConfig, realizedConfig, nil
 }

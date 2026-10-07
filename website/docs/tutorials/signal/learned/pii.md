@@ -48,9 +48,11 @@ When `pii_types_allowed` is empty, any detected PII can cause the signal to matc
 
 ## Complete local scans
 
-The implicit local Vela PII default scans each text item up to 32,768 tokens,
-including special tokens. Each forward uses at most 512 tokens, with 255 content
-tokens of overlap. The model tokenizer defines the windows; character estimates
+The default PII model, Vela 2.0 0.3B, reads each text item whole, up to its
+8,192-token input, and finds spans with its router span head. When the module
+runs Vela 1.0 PII, it scans each text item up to 32,768 tokens, including
+special tokens. Each forward uses at most 512 tokens, with 255 content tokens
+of overlap. The model tokenizer defines the windows; character estimates
 and text re-tokenization at window boundaries do not determine coverage.
 
 The [model runtime](../../../model-runtime/guides/pii.md) reports spans as

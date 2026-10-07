@@ -50,6 +50,9 @@ var forbiddenRecipeEnvironmentNames = map[string]struct{}{
 	"VLLM_SR_SOURCE_CONFIG_PATH":       {},
 	"VLLM_SR_STACK_NAME":               {},
 	"VLLM_SR_STATE_ROOT_DIR":           {},
+	// The Dashboard always holds the management credential, and a Recipe
+	// could send a value it binds anywhere.
+	ManagementCredentialEnv: {},
 }
 
 type environmentBinding struct {

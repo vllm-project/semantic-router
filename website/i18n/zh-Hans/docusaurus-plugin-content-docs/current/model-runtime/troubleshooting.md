@@ -3,7 +3,7 @@ title: 故障排查与常见问题
 sidebar_label: 故障排查与常见问题
 description: 修复模型运行时的常见问题，并解答常见疑问。
 translation:
-  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
+  source_commit: "c94fff6a5d6368a2743b786db5624274053f1ae9"
   source_file: "docs/model-runtime/troubleshooting.md"
   outdated: false
 ---
@@ -39,7 +39,17 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
    ```bash
    curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
      -H 'content-type: application/json' -H 'x-vsr-debug: true' \
-     -d '{"model": "auto", "messages": [{"role": "user", "content": "your text"}]}'
+     -d '{"model": "vllm-sr/auto", "messages": [{"role": "user", "content": "your text"}]}'
+   ```
+
+4. 预览同一段文本的路由，而不生成回答。返回中的 `signal_errors` 列出未知的信号及原因，
+   例如 `decision_timeout`：
+
+   ```bash
+   curl -s 'localhost:8080/api/v1/routing/preview?trace=true' \
+     -H 'content-type: application/json' \
+     -d '{"model": "vllm-sr/auto", "text": "your text"}' \
+     | jq '{decision: .decision_result.decision_name, matched: .decision_result.matched_signals, signal_errors}'
    ```
 
 ## 运行时一直处于 `loading` 或 `warming` {#the-runtime-stays-in-loading-or-warming}
@@ -72,7 +82,7 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 | --- | --- |
 | a file hash does not match | 下载已损坏或仓库发生了变化。从缓存中删除该模型后重新启动。 |
 | a revision is required | 非内置仓库需要用 40 位 commit 设置 `revision`。 |
-| access denied, gated or private | 用 `hf auth login` 登录，或为有访问权限的账号设置 `HF_TOKEN`。Vela 2.0 是私有预览。 |
+| access denied, gated or private | 用 `hf auth login` 登录，或为有访问权限的账号设置 `HF_TOKEN`。 |
 | does not fit, out of memory | 换用更小的模型、显存更大的 GPU，或给该模型单独的 `process`。 |
 | device not available | 指定的 GPU 不存在，或已安装的 PyTorch 不支持它。使用 `device: auto`，或安装正确的 PyTorch 版本。 |
 | built without LAPACK | 该模型在 CPU 上需要 LAPACK，而当前的 PyTorch（ROCm 镜像中的版本）没有。把模型放到 GPU 上（`device: rocm:0`），或用 CPU 镜像运行 CPU 上的模型。运行时不会重试。 |
@@ -137,9 +147,15 @@ global:
 
 ## 请求比预期慢 {#requests-are-slower-than-expected}
 
-- 查看运行时 `/metrics` 上的 `vllm_srun_request_duration_seconds` 和
-  `vllm_srun_queue_duration_seconds`。排队时间长说明模型已饱和：增加 GPU、改用更小的模型或另起一个进程。
+- 对于路由器托管的运行时，对比路由器上较慢 deployment 的 `vsr_model_runtime_server_seconds`（按 `phase`）
+  和 `vsr_model_runtime_transport_seconds`（见[参考](model-runtime/reference.md#metrics)）。时间大多在 `forward`
+  说明模型本身在该设备上就慢。时间在 `queue` 说明模型已饱和：增加 GPU、改用更小的模型或另起一个进程。
+  传输占比大则指向宿主机（CPU 争用、远程 endpoint）。
+- 对于你自己启动的运行时，查看它 `/metrics` 上的 `vllm_srun_request_duration_seconds` 和
+  `vllm_srun_queue_duration_seconds`，或其响应的 `Server-Timing` 头。
 - 在 CPU 上，同一进程中的模型共享 CPU 线程。用 `--threads` 指定你能分给运行时的核数来启动它。
+- 当其他工作占用了部分核心时，CPU 模型会明显变慢，因为每个线程都要等最慢的那个。使用 ROCm GPU
+  的进程即使空闲也可能让一个 CPU 核心一直忙碌，同一主机上的 LLM 服务也一样：给 CPU 模型留出专用核心。
 - GPU 上的决策模型可以使用 `shared_context` 或 `batching`；见 [Profiles](model-runtime/profiles.md)。
 
 ## 常见问题 {#faq}

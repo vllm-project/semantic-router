@@ -41,6 +41,7 @@ from cli.consts import (
 )
 from cli.container_management_listener import resolve_managed_management_listener
 from cli.models import UserConfig
+from cli.recipe_topology_contract import MANAGEMENT_CREDENTIAL_ENV
 from cli.runtime_env_names import (
     RESERVED_RUNTIME_ENV_NAMES,
     normalize_runtime_env_names,
@@ -256,15 +257,25 @@ def append_passthrough_env_vars(
 
 
 def normalize_recipe_env_names(names: Iterable[str]) -> tuple[str, ...]:
-    """Validate, deduplicate, and stabilize explicit Recipe env bindings."""
+    """Validate, deduplicate, and stabilize explicit Recipe env bindings.
+
+    The management credential is never a Recipe input: the Dashboard always
+    holds it, and a Recipe could otherwise send it anywhere a value goes.
+    """
 
     try:
-        return normalize_runtime_env_names(names)
+        normalized = normalize_runtime_env_names(names)
     except ValueError as error:
         raise ValueError(
             "Invalid Recipe environment binding name. Use an uppercase, "
             "non-reserved environment variable name, without NAME=value."
         ) from error
+    if MANAGEMENT_CREDENTIAL_ENV in normalized:
+        raise ValueError(
+            f"{MANAGEMENT_CREDENTIAL_ENV} is the Dashboard's management "
+            "credential and cannot be bound into a Recipe."
+        )
+    return normalized
 
 
 def configure_recipe_env_bindings(

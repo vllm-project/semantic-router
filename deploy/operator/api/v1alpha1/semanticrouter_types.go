@@ -1536,11 +1536,11 @@ type PromptGuardConfig struct {
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
-	// +kubebuilder:default="models/Vela-1.0-Encoder-307M-Guard"
+	// +kubebuilder:default="models/Vela-2.0-0.3B"
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
 	// Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues.
-	// +kubebuilder:default="0.5"
+	// +kubebuilder:default="0.75"
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
 	Threshold string `json:"threshold,omitempty"`

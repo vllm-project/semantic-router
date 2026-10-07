@@ -70,7 +70,9 @@ func itemError(code string) error {
 	}
 }
 
-// Sequence binds a categorical head: one label distribution per input.
+// Sequence binds a categorical head: one label distribution per input. A
+// built-in signal bound to a Vela 2.0 model asks it the signal's question
+// instead.
 func (r *Runtime) Sequence(ctx context.Context, spec config.ResolvedModelBinding) (_ *binding.Resolved[string, tasks.LabelDistribution], callErr error) {
 	defer func() { observePreparationFailure(spec, callErr) }()
 	if err := rejectWindowPolicy(spec, "sequence"); err != nil {
@@ -78,6 +80,13 @@ func (r *Runtime) Sequence(ctx context.Context, spec config.ResolvedModelBinding
 	}
 	ctx, cancel := preparationContext(ctx)
 	defer cancel()
+	card, err := r.card(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+	if question, ok := questionFor(spec, card); ok {
+		return r.questionSequence(ctx, spec, card, question)
+	}
 	t, capability, err := r.prepareHead(ctx, spec, kindSequence, inputText)
 	if err != nil {
 		return nil, err

@@ -53,7 +53,7 @@ routing:
 
 ## 完整的本地扫描 {#complete-local-scans}
 
-隐式本地 Vela PII 默认逐项扫描最多 32,768 个 token（含特殊 token）的文本。
+默认的 PII 模型 Vela 2.0 0.3B 完整读取每个文本项（最多 8,192 个 token），用它的路由片段头找出片段。模块运行 Vela 1.0 PII 时，逐项扫描最多 32,768 个 token（含特殊 token）的文本。
 每次前向计算最多处理 512 个 token，相邻窗口重叠 255 个内容 token。
 窗口由模型 tokenizer 确定；覆盖范围不依赖字符估算或窗口边界处的重新分词。
 
