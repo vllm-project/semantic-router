@@ -141,6 +141,9 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 	if err := setMemoryPersistenceBounds(schema); err != nil {
 		return nil, err
 	}
+	if err := setMemoryConsolidationBounds(schema); err != nil {
+		return nil, err
+	}
 
 	pluginRefs, err := addPluginDefinitions(reflector, schema)
 	if err != nil {

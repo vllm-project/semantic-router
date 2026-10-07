@@ -94,7 +94,8 @@ type OpenAIRouter struct {
 	// snapshot's upstream set.
 	hopCaller graph.Caller
 
-	memoryPersistence *memory.PersistenceRunner
+	memoryPersistence   *memory.PersistenceRunner
+	memoryConsolidation *memory.ConsolidationRunner
 
 	// CredentialResolver resolves per-user LLM API keys from multiple sources
 	// (ext_authz injected headers -> static config fallback).

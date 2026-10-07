@@ -25,6 +25,9 @@ func TestMemoryMetricsInitialization(t *testing.T) {
 		{"MemoryCacheHits", MemoryCacheHits},
 		{"MemoryCacheMisses", MemoryCacheMisses},
 		{"MemoryCacheLatencySeconds", MemoryCacheLatencySeconds},
+		{"MemoryConsolidationTotal", MemoryConsolidationTotal},
+		{"MemoryConsolidationMerged", MemoryConsolidationMerged},
+		{"MemoryConsolidationDeleted", MemoryConsolidationDeleted},
 	}
 
 	for _, tt := range tests {

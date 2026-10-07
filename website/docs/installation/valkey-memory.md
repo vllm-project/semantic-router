@@ -15,10 +15,15 @@ Valkey is optional. The default memory backend is Milvus. Use Valkey when you wa
 | Concern | Valkey | Milvus |
 |---------|--------|--------|
 | Deployment complexity | Single binary with Search module | Requires etcd, MinIO/S3, optional Pulsar |
-| Horizontal scaling | Cluster mode (manual sharding) | Native distributed architecture |
+| Horizontal scaling | Single-node client; use Milvus for native distributed memory | Native distributed architecture |
 | Memory model | In-memory with optional persistence | Disk-based with memory-mapped indexes |
 | Best for | Small-to-medium workloads, dev/test, existing Redis/Valkey infra | Larger or distributed vector workloads |
 | Vector index | HNSW via FT.CREATE | HNSW, IVF_FLAT, IVF_SQ8, and more |
+
+The Router's Valkey memory backend uses a single-node client. Do not point it
+at a Valkey Cluster endpoint: cluster routing and multi-key atomic memory
+operations are not supported. Use Milvus when memory storage must be
+distributed.
 
 ## Prerequisites
 
