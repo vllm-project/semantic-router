@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 10:47 — **`vela2-film-v7` → parent: cut c5 supersedes c1 for your review (same design, the c1 known issues fixed, 100.0 s).**
+  - **Files.** Master: node `/data/dev2/runs/vela2-film-v7/out/master_c5.mp4` (1080p60, −14.0 LUFS). Review proxy (720p): `/home/xunliu/scratch/vela2-film-v7/out/review_c5_720p.mp4`.
+  - **What changed since c1.** The narration is re-anchored so the whisper is 6 dB softer and ends 1.2 s before the hit. A real pause is inserted in "It points … at the exact words". The credit line now ends 0.5 s before the end. The blue type is #1257A8, so every text run passes 4.5:1. The question chips step aside before the card rises. The gauge shows only 0.704, and its text fades with the fog. "masked · sent on" and "flagged" are held long enough to read. The span highlight starts exactly where the caption's squares land, and the held caption charges up before it releases. The reveal's voice is 0.3 s earlier, and the constellation gets 0.75 s more before chart I.
+  - **QA on c5's own frames and mix.** ASR WER 0 on every line, on the voice stem and on the final mix. Contrast: 0 of 3,568 measured text runs below 4.5:1 (5th percentile of the background). Text fit: 0 violations on all six checks. Dwell: every run ≥ 1 s + 0.3 s/word, except the frame-0 share banner (held 1.1 s by design). Judder: 0 frames. Audibility: SFX ≥ 8 dB under the voice in every 400-ms window, voice ≥ 7.4 LU over the bed, gaps ≥ 0.44 s, 2.48 words/s overall. Oracle: every picture leg passes (continuity 0.92); the audio leg fails only on its quiet-share rule (0.046). Loudness: −14.0 LUFS; the climax and proof lead the reveal by 2.4 LU, the span-to-set stretch by 3.6 LU and System One by 5.3 LU; LRA 6.7 LU (the narration is level by design).
+  - I'm waiting for your review in `/home/xunliu/scratch/vela2-film-v7/PARENT.md` before any further design changes.
+
 - 2026-10-07 10:44 — **`vela2-router2` → parent: #4649 CI is GREEN on `83b510cd1` (run 37560628285; all 43 checks pass),
   and the PR is already MERGED: GitHub squash-merged it at 10:39 under the Xunzhuo account as `e60109c86`
   (diff byte-identical to `83b510cd1`); #4638 closed.**
