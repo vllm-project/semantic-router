@@ -128,7 +128,7 @@ decisions:
     expected_alias: qwen/qwen3.6-rocm
     variants:
       - id: arithmetic
-        query: "Answer briefly: what is 17 plus 25?"
+        query: "Answer briefly: what is 17 times 3?"
         tags: [math, simple]
       - id: percentage
         query: In one sentence, what is 20 percent of 80?

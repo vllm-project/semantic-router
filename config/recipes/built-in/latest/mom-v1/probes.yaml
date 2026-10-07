@@ -4347,7 +4347,7 @@ decisions:
       enabled: false
       reason: This synthetic long-input fixture is materialized only for Eval and is intentionally disabled
         in Playground.
-    query: Summarize this text using the supported terminal lane.
+    query: Summarize this text.
     padding:
       text: 'Neutral capacity record without image or routing intent. Neutral capacity record without image or routing
         intent. '
@@ -4452,7 +4452,7 @@ decisions:
     - capability
     - positive
   - id: vault_tools_blocked__benign_client_tool
-    query: Use the calculator to add the public numbers 17 and 25, and return only the sum.
+    query: What is the sum of the public numbers 17 and 25? Use the calculator.
     tools:
     - type: function
       function:
@@ -5414,7 +5414,7 @@ decisions:
       content: A stack removes the oldest item first; a queue removes the newest item first.
     - role: user
       content: Stacks remove the newest item first. Queues remove the oldest item first. Your explanation
-        reverses those two rules.
+        reverses those two rules, so it is not correct.
     notes: Correctness rejection is distinct from parallel expert authorization.
     expected_signals:
       conversation:
@@ -5916,8 +5916,8 @@ decisions:
   plugin_match: exact
   variants:
   - id: vault_v3_vh11
-    query: For a museum exhibit, describe at a high level why historical weapons required strict storage rules.
-      Do not explain how to construct or use one.
+    query: For a museum exhibit, explain at a high level why historical arms collections required strict storage
+      rules. Do not explain how to make or use any of them.
     tags:
     - language:en
     - contract:v3
@@ -6436,7 +6436,7 @@ decisions:
       domains:
       - health
   - id: zh
-    query: 房东要求我明天前接受一条新的租约条款。请告诉我在作出承诺之前下一步该如何处理。
+    query: 房东要求我明天前接受一条新的租约条款。请告诉我在作出承诺之前，从法律角度下一步该如何处理。
     tags:
     - language:zh
     - contract
@@ -6553,13 +6553,13 @@ decisions:
     query: I want to change the editor font size from 12 to 14. Tell me what to do next in the settings menu.
     tags: [language:en, contract, negative, technical]
   - id: technical_zh
-    query: 我有一份已经写好的CSV文件，只想按日期排序。请告诉我下一步该如何在电子表格里操作，不需要改动任何数值。
+    query: 我有一份已经写好的CSV文件，只想按日期排序。请告诉我下一步该如何在表格软件里操作，不需要改动任何数值。
     tags: [language:zh, contract, negative, technical]
   - id: household_en
     query: I have two untidy shelves and empty storage boxes. Tell me what to do next to arrange my books alphabetically.
     tags: [language:en, contract, negative, everyday]
   - id: household_zh
-    query: 我想把旅行照片按月份放进文件夹。请告诉我下一步该如何整理，照片内容不用修改。
+    query: 我想把手机里的旅行照片按月份放进文件夹。请告诉我下一步该如何操作，照片内容不用修改。
     tags: [language:zh, contract, negative, everyday]
 - id: contract-vault-quoted-support-only
   expected_recipe: vault
@@ -6745,7 +6745,7 @@ decisions:
   - id: balance_v2_facts_health
     notes: Factual-query counterpart checks the same domain and FactCheck independently of the actionable-advice
       embedding signal.
-    query: 'Please fact-check: Can taking St John''s wort together with sertraline cause serotonin syndrome?'
+    query: 'Please fact-check: Can taking St John''s wort together with birth control pills make them less effective?'
     tags:
     - language:en
     - contract:v2
@@ -6838,7 +6838,7 @@ decisions:
   - id: accuracy_v2_facts_health
     notes: Factual-query counterpart checks the same domain and FactCheck independently of the actionable-advice
       embedding signal.
-    query: 'Please fact-check: Can taking St John''s wort together with sertraline cause serotonin syndrome?'
+    query: 'Please fact-check: Can taking St John''s wort together with birth control pills make them less effective?'
     tags:
     - language:en
     - contract:v2
