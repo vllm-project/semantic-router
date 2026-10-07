@@ -5,6 +5,7 @@ translation:
   source_commit: "9649d02f2582471642196bde2e086c34ccb9c88c"
   source_file: "docs/installation/recipe-lifecycle.md"
   outdated: false
+is_mtpe: true
 ---
 
 # 托管配方生命周期 {#managed-recipe-lifecycle}
