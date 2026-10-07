@@ -1,5 +1,6 @@
-# Uses the canonical pinned Halu default and its declared Candle CPU provider.
-# No endpoint detector or mock classification response participates in this test.
+# Uses the canonical pinned Halu default, which the Router serves through its
+# managed model runtime on CPU. No endpoint detector or mock classification
+# response participates in this test.
 config:
   version: v0.3
   listeners: []
@@ -29,7 +30,6 @@ config:
           - type: hallucination
             configuration:
               enabled: true
-              use_nli: false
               hallucination_action: header
               include_hallucination_details: true
   global:
@@ -40,9 +40,6 @@ config:
           # The probe supplies whether fact checking is needed. It exercises
           # the actual detector without adding another classifier's verdict.
           fact_check:
-            model_ref: ""
-            model_id: ""
-          explainer:
             model_ref: ""
             model_id: ""
 resources:

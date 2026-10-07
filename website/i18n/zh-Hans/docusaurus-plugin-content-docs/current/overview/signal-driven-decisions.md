@@ -10,11 +10,11 @@ translation:
 
 # 路由流水线
 
-Semantic Router 把请求理解、策略和模型执行分开。每一层回答不同的问题，从而让路由规则可读，并避免某个分类器或优化分数变成全部策略。
+需要路由的模型调用依次经过请求理解、策略和模型执行阶段。所选配方定义这些阶段，harness 负责外层任务循环与工具执行。
 
 ```mermaid
 flowchart LR
-    Request["请求"] --> Signals["信号<br/>我们知道什么？"]
+    Request["Harness 模型调用"] --> Signals["信号<br/>我们知道什么？"]
     Signals --> Projections["投影<br/>证据如何组合？"]
     Projections --> Decisions["决策<br/>哪条路由合格？"]
     Decisions --> Algorithms["算法<br/>哪个候选或计划？"]
@@ -84,6 +84,12 @@ flowchart LR
 具体后端模型名是直通请求。它们绕过配方信号、决策、路由局部插件、缓存、学习和会话路由。若虚拟入口的配方没有匹配决策，Router 使用已配置的默认提供方模型。
 
 完整配置约定见[虚拟模型](../tutorials/global/entrypoints-and-recipes)。
+
+## 示例：携带工具的编码调用
+
+Harness 发送对话、工具定义和虚拟模型名。入口选择配方；信号识别编码请求及其对话事实。决策确定路由与候选集，再经过能力与上下文检查缩小候选集，由算法选择模型。配置后，路由插件可以应用工具策略或上下文压缩。响应返回 harness，由它执行工具并推进下一任务步骤。
+
+多轮路由需要明确配置会话身份与保护。活跃工具循环或不可迁移的提供方状态会限制模型切换；被策略排除的候选不能仅为了维持连续性而恢复。集成边界见 [agent harness 指南](/zh-Hans/docs/installation/agent-harness)。
 
 ## 工作负载、Router 与模型池
 

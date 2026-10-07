@@ -86,7 +86,7 @@ const TeamCarousel: React.FC = () => {
           </h2>
           <p className={styles.subtitle}>
             <Translate id="teamCarousel.subtitle">
-              Maintainers across research, infrastructure, and model systems shape the project together.
+              Researchers and builders, working together.
             </Translate>
           </p>
         </div>
@@ -102,11 +102,11 @@ const TeamCarousel: React.FC = () => {
         <div className={styles.teamFooter}>
           <p>
             <Translate id="teamCarousel.footer">
-              Meet the people turning Mixture-of-Models into shared infrastructure.
+              Help shape what comes next.
             </Translate>
           </p>
           <PillLink to="/community/team" muted>
-            <Translate id="teamCarousel.viewAll">View All Team Members</Translate>
+            <Translate id="teamCarousel.viewAll">Meet the team</Translate>
           </PillLink>
         </div>
       </div>

@@ -49,7 +49,7 @@ func TestMLPipelineUploadsArePrivateAndDistinct(t *testing.T) {
 				t.Setenv(variable, uploads)
 			}
 
-			store, err := workflowstore.Open(filepath.Join(root, "workflow.sqlite"), workflowstore.Options{})
+			store, err := workflowstore.Open(filepath.Join(root, "workflow.sqlite"))
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, store.Close()) })
 			type inputPaths struct {

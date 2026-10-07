@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -472,7 +472,6 @@ func documentedOpenAPIPaths() []string {
 		"/api/v1",
 		"/api/v1/diagnostics/classify/batch",
 		"/api/v1/routing/preview",
-		"/api/v1/diagnostics/nli",
 		"/api/v1/diagnostics/embeddings",
 		"/api/v1/diagnostics/similarity/batch",
 		"/openapi.json",

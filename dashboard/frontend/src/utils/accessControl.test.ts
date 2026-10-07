@@ -6,7 +6,6 @@ import {
   canAccessReplayFlowDetails,
   canDeployConfig,
   canManageMCP,
-  canManageOpenClaw,
   canManageUsers,
   canRunEvaluation,
   canSubmitFeedback,
@@ -81,7 +80,6 @@ describe('config write access', () => {
     expect(canRunEvaluation({ permissions: ['evaluation.write'] })).toBe(false)
     expect(canManageMCP({ permissions: ['mcp.manage'] })).toBe(true)
     expect(canManageMCP({ permissions: ['mcp.read'] })).toBe(false)
-    expect(canManageOpenClaw({ permissions: ['openclaw.manage'] })).toBe(true)
   })
 
   it('shows feedback controls to all default roles but honors explicit permissions', () => {

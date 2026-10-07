@@ -103,15 +103,17 @@ type FusionAlgorithmConfig struct {
 // FusionGroundingConfig configures the optional grounding stage that scores each
 // panel response for faithfulness before the judge synthesizes. When nil or
 // disabled, Fusion behaves exactly as without grounding. Grounding makes no extra
-// LLM calls: it uses local encoder models (hallucination detector + NLI).
+// LLM calls: it reads each response with the router's hallucination detector,
+// against the request's context or the peer responses. ContradictionPenalty
+// weighs a peer's contradiction evidence in the panel reference.
 type FusionGroundingConfig struct {
-	Enabled                 bool    `yaml:"enabled,omitempty" json:"enabled,omitempty"`
-	Reference               string  `yaml:"reference,omitempty" json:"reference,omitempty"`
-	Policy                  string  `yaml:"policy,omitempty" json:"policy,omitempty"`
-	MinScore                float64 `yaml:"min_score,omitempty" json:"min_score,omitempty"`
-	MinKeep                 int     `yaml:"min_keep,omitempty" json:"min_keep,omitempty"`
-	NLIContradictionPenalty float64 `yaml:"nli_contradiction_penalty,omitempty" json:"nli_contradiction_penalty,omitempty"`
-	OnError                 string  `yaml:"on_error,omitempty" json:"on_error,omitempty"`
+	Enabled              bool    `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	Reference            string  `yaml:"reference,omitempty" json:"reference,omitempty"`
+	Policy               string  `yaml:"policy,omitempty" json:"policy,omitempty"`
+	MinScore             float64 `yaml:"min_score,omitempty" json:"min_score,omitempty"`
+	MinKeep              int     `yaml:"min_keep,omitempty" json:"min_keep,omitempty"`
+	ContradictionPenalty float64 `yaml:"contradiction_penalty,omitempty" json:"contradiction_penalty,omitempty"`
+	OnError              string  `yaml:"on_error,omitempty" json:"on_error,omitempty"`
 }
 
 // FusionRuntimeConfig registers direct Fusion model slugs. The panel and judge
@@ -162,7 +164,7 @@ func (c FusionRuntimeConfig) EffectiveModelNames() []string {
 }
 
 func (c *RouterConfig) ExposedFusionModelNames() []string {
-	if c == nil || !c.Looper.IsEnabled() {
+	if c == nil {
 		return nil
 	}
 	if len(c.Looper.Fusion.ModelNames) == 0 && !c.HasFusionDecision() {
@@ -303,8 +305,8 @@ func ValidateFusionGroundingConfig(cfg *FusionGroundingConfig) error {
 	if cfg.MinKeep < 0 {
 		return fmt.Errorf("grounding.min_keep must be >= 0")
 	}
-	if cfg.NLIContradictionPenalty < 0 {
-		return fmt.Errorf("grounding.nli_contradiction_penalty must be >= 0")
+	if cfg.ContradictionPenalty < 0 {
+		return fmt.Errorf("grounding.contradiction_penalty must be >= 0")
 	}
 	return validateFusionOnError(cfg.OnError)
 }

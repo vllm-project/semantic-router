@@ -3,7 +3,8 @@
 This suite checks the `vllm-sr` command surface and its local container
 topology. Unit tests inspect generated commands without starting services;
 integration tests start the split Router, Envoy, and dashboard
-images and exercise live APIs.
+images (Envoy with `--gateway extproc`; the standalone module runs without it)
+and exercise live APIs.
 
 ## Run through Make
 
@@ -27,8 +28,15 @@ Docker or Podman access.
 | `test_unit_runtime_topology.py` | Split-runtime discovery, cleanup, timeouts, and Docker/Podman selection. |
 | `test_integration.py` | Live health, management APIs, model visibility, path rewrites, sidecars, lifecycle, and pull policies. |
 | `test_integration_storage_isolation.py` | Redis and Postgres answer on the stack's data network and are unreachable from its application network. |
+| `test_integration_standalone.py` | Standalone mode on the docker target: no Envoy container, and a chat request routed through the Router's own listener. |
+| `test_integration_first_run_setup.py` | `vllm-sr serve` in an empty directory opens setup and waits; activation through the Dashboard's API makes the CLI create the Router from the activated config, and the Dashboard mounts no container socket. |
+| `test_integration_model_runtime.py` | The Quickstart's decision signal on a `model_runtime` deployment the Router starts and asks inside its container. |
+| `test_integration_engine_mode.py` | `vllm-sr serve <model>` runs the model runtime in a container from the router image, answers the Quickstart's requests on the published port, and stops and removes itself on Ctrl-C. |
+| `test_integration_plugin_example.py` | The plugin guide's "Try it": pip installs the example plugin, serves its keyword package and gets the guide's answer, also on the example's own accelerator and profile, and from the guide's image with `vllm-sr serve`. |
 | `cli_test_base.py` | Shared command and container helpers. |
 | `serve_session.py` | Background `vllm-sr serve` orchestration shared by the integration modules. |
+| `mock_upstream.py` | The mock OpenAI upstream that integration modules send chat requests to. |
+| `runtime_http.py` | A model runtime started on a free port, the JSON calls sent to it, the requests a docs page shows, and fixture packages written by the router image's runtime. |
 | `run_cli_tests.py` | Prerequisite checks, discovery, filtering, and reporting. |
 
 The test files are the source of truth for individual assertions; this README

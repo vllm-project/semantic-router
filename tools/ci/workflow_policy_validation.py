@@ -177,7 +177,6 @@ def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> Non
         "docker",
         "helm",
         "pypi",
-        "crate",
         "release-notes",
     }
     if set(release.jobs) != expected_jobs:
@@ -200,7 +199,6 @@ def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> Non
         "docker": "docker-publish.yml",
         "helm": "helm-publish.yml",
         "pypi": "pypi-publish.yml",
-        "crate": "publish-crate.yml",
     }
     expected_prebuilds = {
         "helm-build": ("helm-publish.yml", "prebuilt-chart"),
@@ -292,7 +290,6 @@ def validate_release_images(release: WorkflowLike, errors: list[str]) -> None:
     release_text = release.path.read_text(encoding="utf-8")
     fixture_bullets = {
         "- `provider-mocker`",
-        "- `vllm-sr-sim`",
     }
     if any(bullet in release_text for bullet in fixture_bullets):
         errors.append(

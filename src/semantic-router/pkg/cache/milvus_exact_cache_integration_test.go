@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -36,7 +36,7 @@ func TestMilvusExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T)
 		EmbeddingProvider: cacheTestEmbeddingProvider(),
 		Enabled:           true,
 		TTLSeconds:        60,
-		EmbeddingModel:    "bert",
+		EmbeddingModel:    "qwen3",
 		Config:            milvusConfig,
 	})
 	if err != nil {
@@ -101,7 +101,7 @@ func TestHybridExactCacheIntegrationDelegatesToMilvus(t *testing.T) {
 		EmbeddingProvider:       cacheTestEmbeddingProvider(),
 		Enabled:                 true,
 		TTLSeconds:              60,
-		EmbeddingModel:          "bert",
+		EmbeddingModel:          "qwen3",
 		Milvus:                  milvusConfig,
 		DisableRebuildOnStartup: true,
 	})

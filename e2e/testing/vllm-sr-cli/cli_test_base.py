@@ -456,12 +456,6 @@ class CLITestBase(unittest.TestCase):
             global_config.setdefault("router", {})["skip_processing"] = {
                 "enabled": True
             }
-        if looper:
-            global_config = config.setdefault("global", {})
-            integrations = global_config.setdefault("integrations", {})
-            integrations["looper"] = {
-                "endpoint": f"http://localhost:{port}/v1/chat/completions"
-            }
         if managed_storage:
             global_config = config.get("global")
             if not isinstance(global_config, dict):

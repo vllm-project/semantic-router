@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -9,21 +9,50 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 )
 
 const maxManagementAuditEntries = 10000
 
 type managementAuditEntry struct {
-	Sequence     uint64           `json:"sequence"`
-	Timestamp    string           `json:"timestamp"`
-	Action       RouteAuditAction `json:"action"`
-	RequestID    string           `json:"request_id"`
-	Role         string           `json:"role"`
-	Method       string           `json:"method"`
-	Path         string           `json:"path"`
-	Status       int              `json:"status"`
-	PreviousHash string           `json:"previous_hash,omitempty"`
-	Hash         string           `json:"hash"`
+	Sequence  uint64           `json:"sequence"`
+	Timestamp string           `json:"timestamp"`
+	Action    RouteAuditAction `json:"action"`
+	RequestID string           `json:"request_id"`
+	Role      string           `json:"role"`
+	Method    string           `json:"method"`
+	Path      string           `json:"path"`
+	Status    int              `json:"status"`
+	// Config describes how a configuration update ended. Such an entry comes
+	// from the Router's configuration lifecycle rather than from an HTTP
+	// request, so its method, path and status are empty; its request ID and
+	// role name the management request that caused it, if one did.
+	Config       *configAuditEvent `json:"config,omitempty"`
+	PreviousHash string            `json:"previous_hash,omitempty"`
+	Hash         string            `json:"hash"`
+}
+
+// configAuditEvent records how one configuration update ended.
+type configAuditEvent struct {
+	Attempt uint64 `json:"attempt"`
+	// Result is active (an ACK), failed (a NACK) or superseded.
+	Result string `json:"result"`
+	Source string `json:"source"`
+	// Version is the configuration version an activation took.
+	Version uint64 `json:"version,omitempty"`
+	// Hash is the SHA-256 of the update's document.
+	Hash string `json:"hash,omitempty"`
+	// Stage and Codes say where and why a rejected update stopped.
+	Stage      string   `json:"stage,omitempty"`
+	Codes      []string `json:"codes,omitempty"`
+	RollbackOf uint64   `json:"rollback_of,omitempty"`
+}
+
+var configAuditActions = map[configsnapshot.AttemptStatus]RouteAuditAction{
+	configsnapshot.AttemptActive:     AuditActionConfigActivate,
+	configsnapshot.AttemptFailed:     AuditActionConfigReject,
+	configsnapshot.AttemptSuperseded: AuditActionConfigSupersede,
 }
 
 type statusCaptureWriter struct {
@@ -56,20 +85,48 @@ func (s *ClassificationAPIServer) appendManagementAudit(
 	if status == 0 {
 		status = http.StatusOK
 	}
+	s.appendAuditEntry(managementAuditEntry{
+		Action:    route.AuditAction,
+		RequestID: requestID,
+		Role:      principal.Role,
+		Method:    request.Method,
+		Path:      route.Path,
+		Status:    status,
+	})
+}
+
+// recordConfigAudit appends a finished configuration update to the audit.
+func (s *ClassificationAPIServer) recordConfigAudit(attempt configsnapshot.Attempt) {
+	action, ok := configAuditActions[attempt.Status]
+	if s == nil || !ok {
+		return
+	}
+	event := &configAuditEvent{
+		Attempt: attempt.ID, Result: string(attempt.Status), Source: string(attempt.Origin.Source),
+		Version: attempt.Version, Hash: attempt.Hash, RollbackOf: attempt.Origin.RollbackOf,
+	}
+	if attempt.Status == configsnapshot.AttemptFailed {
+		event.Stage = string(attempt.Stage)
+		for _, reason := range attempt.Reasons {
+			event.Codes = append(event.Codes, string(reason.Code))
+		}
+	}
+	s.appendAuditEntry(managementAuditEntry{
+		Action:    action,
+		RequestID: attempt.Origin.RequestID,
+		Role:      attempt.Origin.Principal,
+		Config:    event,
+	})
+}
+
+// appendAuditEntry chains entry to the audit.
+func (s *ClassificationAPIServer) appendAuditEntry(entry managementAuditEntry) {
 	s.managementAuditMu.Lock()
 	defer s.managementAuditMu.Unlock()
 	s.managementAuditSequence++
-	entry := managementAuditEntry{
-		Sequence:     s.managementAuditSequence,
-		Timestamp:    time.Now().UTC().Format(time.RFC3339Nano),
-		Action:       route.AuditAction,
-		RequestID:    requestID,
-		Role:         principal.Role,
-		Method:       request.Method,
-		Path:         route.Path,
-		Status:       status,
-		PreviousHash: s.managementAuditLastHash,
-	}
+	entry.Sequence = s.managementAuditSequence
+	entry.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
+	entry.PreviousHash = s.managementAuditLastHash
 	unsigned, _ := json.Marshal(entry)
 	digest := sha256.Sum256(unsigned)
 	entry.Hash = hex.EncodeToString(digest[:])
@@ -94,7 +151,7 @@ type managementAuditResponse struct {
 
 func apiManagementAuditRoutes() []apiRoute {
 	return []apiRoute{managedRoute(
-		EndpointMetadata{Path: apiObservabilityPath + "/audit", Method: "GET", Description: "Page through this Router process's bounded management mutation audit; filter by action and resume after a sequence", Parameters: []OpenAPIParameter{
+		EndpointMetadata{Path: apiObservabilityPath + "/audit", Method: "GET", Description: "Page through this Router process's bounded management mutation audit, configuration lifecycle outcomes included; filter by action and resume after a sequence", Parameters: []OpenAPIParameter{
 			queryParameter("action", "Exact mutation audit action to select.", "string"),
 			queryParameter("after_sequence", "Exclusive sequence cursor; omitted starts at the oldest retained entry.", "integer"),
 			queryParameter("limit", "Page size, from 1 to 1000; defaults to 100.", "integer"),

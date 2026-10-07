@@ -11,6 +11,8 @@ translation:
 
 Semantic Router 可以运行在多种基于 Envoy 的 Kubernetes 网关后面。路由策略保持不变；网关特定资源决定 ExtProc 何时运行、所选模型如何到达后端，以及哪一组件负责认证或流量策略。
 
+每个集成都以 `gateway.mode: extproc` 运行 Helm chart，`deploy/kubernetes/` 下各集成的 values 文件已设置该值：Router 随后在 50051 端口为网关提供 ext_proc gRPC。编写自己的 values 时请设置同样的值。chart 的默认模式 `standalone` 不需要网关：Router 在自己的 listener 上提供 OpenAI 兼容 API。
+
 ## 选择集成
 
 | 现有数据面 | 从此开始 | 它负责什么 |

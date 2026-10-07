@@ -18,7 +18,7 @@ import {
 
 # Quickstart
 
-Install vLLM Semantic Router, start the local stack, and send one request.
+Install vLLM Semantic Router and send your first routed request.
 
 ## Requirements
 
@@ -33,8 +33,8 @@ For the curl installer, pass `--runtime podman` to force Podman or
 curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable --runtime skip
 ```
 
-These are installer options. `vllm-sr serve --runtime` selects a container
-runtime (`docker` or `podman`); `skip` is not a `serve` runtime.
+These are installer options. `vllm-sr serve --container-runtime` selects a
+container runtime (`docker` or `podman`); `skip` is not a `serve` runtime.
 
 ## Install
 
@@ -75,8 +75,14 @@ vllm-sr serve
 ```
 
 Open [http://localhost:8700](http://localhost:8700), add a model endpoint, and
-activate the generated configuration. Agents can do the same work through the
-CLI and Router management API without using the Dashboard.
+activate the generated configuration. `vllm-sr serve` keeps waiting during
+setup and starts the Router once you activate. Agents can do the same work
+through the CLI and Router management API without using the Dashboard.
+
+Later changes the Router hot-reloads apply at once. A change the running
+containers can't take, such as a listener's new port, is saved and the
+Dashboard answers "Restart required: run `vllm-sr serve` to apply."; the next
+`vllm-sr serve` applies it, and `vllm-sr status` reports it until then.
 
 ## Send a request
 
@@ -91,6 +97,7 @@ curl http://localhost:8899/v1/chat/completions \
 
 ## Next
 
+- [Connect an agent harness](agent-harness)
 - [Choose a deployment](deployment-options)
 - [Configure models](model-configuration)
 - [Configure routing](configuration)

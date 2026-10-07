@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -549,8 +550,9 @@ func TestDeployHandler_SuccessfulDeploy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read backup dir: %v", err)
 	}
+	entries = slices.DeleteFunc(entries, func(entry os.DirEntry) bool { return !isConfigBackupEntry(entry) })
 	if len(entries) == 0 {
-		t.Error("No backup was created")
+		t.Fatal("No backup was created")
 	}
 
 	// Verify backup content matches original
@@ -1310,6 +1312,7 @@ func TestCleanupBackups(t *testing.T) {
 		cleanupBackups(tempDir)
 
 		entries, _ := os.ReadDir(tempDir)
+		entries = slices.DeleteFunc(entries, func(entry os.DirEntry) bool { return !isConfigBackupEntry(entry) })
 		if len(entries) != 5 {
 			t.Errorf("Expected 5 files, got %d", len(entries))
 		}
@@ -1329,7 +1332,7 @@ func TestCleanupBackups(t *testing.T) {
 		entries, _ := os.ReadDir(tempDir)
 		count := 0
 		for _, e := range entries {
-			if !e.IsDir() {
+			if isConfigBackupEntry(e) {
 				count++
 			}
 		}

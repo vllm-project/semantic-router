@@ -33,9 +33,7 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	// arrives. Wiring it later compiles but panics at request time.
 	authSvc := setupAuthRoutes(mux, cfg, setupResolver)
 
-	wf, err := workflowstore.Open(cfg.WorkflowDBPath, workflowstore.Options{
-		LegacyOpenClawDir: cfg.OpenClawDataDir,
-	})
+	wf, err := workflowstore.Open(cfg.WorkflowDBPath)
 	if err != nil {
 		log.Fatalf("workflow store: %v", err)
 	}
@@ -55,8 +53,8 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/workflows/health", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerWorkflow, http.MethodGet), handlers.WorkflowHealthHandler(wf))
 	log.Printf("Workflow health API registered: /api/workflows/health")
 
-	openClawHandler := newOpenClawHandler(cfg, wf)
 	recipeStore := newDashboardRecipeStore(cfg)
+	handlers.ConfigureRouterVerdict(cfg.RouterAPIURL, recipeStore)
 	statusHistory, err := statusstore.Open(cfg.StatusDBPath)
 	if err != nil {
 		log.Printf("Warning: status history is unavailable: %v", err)
@@ -71,9 +69,8 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 		statusHandler:            statusMonitor.Handler(),
 	})
 	registerSRBenchRoutes(mux, cfg)
-	SetupMCP(mux, cfg, wf, openClawHandler)
+	SetupMCP(mux, cfg, wf)
 	registerMLPipelineRoutes(mux, cfg, wf)
-	registerOpenClawRoutes(mux, cfg, openClawHandler)
 	registerProxyRoutes(mux, cfg, authSvc, setupResolver, recipeStore)
 
 	// Static frontend must be registered last.

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -19,6 +19,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -71,6 +72,7 @@ func (s *ClassificationAPIServer) handleConfigMutation(
 
 	s.commitRouterConfigDocument(
 		w,
+		r,
 		paths,
 		existingData,
 		yamlBytes,
@@ -116,14 +118,21 @@ func (s *ClassificationAPIServer) prepareRouterConfigMutationPayload(
 	sourceConfigPath string,
 	mode routerConfigMutationMode,
 ) ([]byte, []byte, bool) {
-	existingDoc, existingData, err := readConfigDocument(sourceConfigPath)
+	existingData, err := readPersistedSourceConfig(sourceConfigPath)
 	if err != nil && !os.IsNotExist(err) {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("Failed to read existing config: %v", err))
 		return nil, nil, false
 	}
 
+	// Only a merge reads the persisted document; a replacement also corrects
+	// one that does not parse.
 	nextDoc := patchDoc
 	if mode == routerConfigMutationMerge {
+		existingDoc, decodeErr := decodeYAMLDocument(existingData)
+		if decodeErr != nil {
+			s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("Failed to read existing config: %v", decodeErr))
+			return nil, nil, false
+		}
 		nextDoc = mergeConfigDocuments(existingDoc, patchDoc)
 	}
 
@@ -132,16 +141,14 @@ func (s *ClassificationAPIServer) prepareRouterConfigMutationPayload(
 		s.writeErrorResponse(w, http.StatusBadRequest, "CONFIG_VALIDATION_ERROR", err.Error())
 		return nil, nil, false
 	}
-	if len(existingData) > 0 {
-		if err := validateHotReloadCompatibility(existingData, yamlBytes); err != nil {
-			s.writeErrorResponse(
-				w,
-				http.StatusConflict,
-				"RESTART_REQUIRED",
-				scrubSecretsInErrorMessage(err.Error()),
-			)
-			return nil, nil, false
-		}
+	if err := s.validateHotReloadFromServing(existingData, yamlBytes); err != nil {
+		s.writeErrorResponse(
+			w,
+			http.StatusConflict,
+			"RESTART_REQUIRED",
+			scrubSecretsInErrorMessage(err.Error()),
+		)
+		return nil, nil, false
 	}
 
 	if len(existingData) == 0 {
@@ -160,6 +167,25 @@ func (s *ClassificationAPIServer) prepareRouterConfigMutationPayload(
 
 func validateAndEncodeRouterConfigDocument(doc map[string]any) ([]byte, error) {
 	return normalizeRouterConfigDocument(doc)
+}
+
+// validateHotReloadFromServing checks that next can replace the serving
+// configuration without a restart. The persisted document may be a rejected
+// change that never served, so it stands in for the serving configuration only
+// in an API without the Router's runtime.
+func (s *ClassificationAPIServer) validateHotReloadFromServing(persisted []byte, next []byte) error {
+	serving := s.servingConfig()
+	if serving == nil {
+		if len(persisted) == 0 {
+			return nil
+		}
+		return validateHotReloadCompatibility(persisted, next)
+	}
+	nextCfg, err := config.ParseYAMLBytes(next)
+	if err != nil {
+		return fmt.Errorf("failed to parse next config for reload validation: %w", err)
+	}
+	return validateParsedHotReloadCompatibility(serving, nextCfg)
 }
 
 func validateHotReloadCompatibility(currentYAML []byte, nextYAML []byte) error {
@@ -367,24 +393,26 @@ func cloneYAMLValue(value any) any {
 }
 
 func (s *ClassificationAPIServer) recordRouterConfigArtifacts(sourceConfigPath string, existingData []byte) (string, string, error) {
-	backupDir := configBackupDir(sourceConfigPath)
-	version := nextConfigVersion(backupDir, time.Now())
-	if err := recordConfigBackup(backupDir, version, existingData, configVersionSourceAPI); err != nil {
-		return "", "", err
-	}
-
-	return version, backupDir, nil
+	return s.preserveReplacedDocument(sourceConfigPath, existingData, configVersionSourceAPI)
 }
 
+// writeRouterConfigFiles persists yamlBytes and attributes the update the
+// Router makes from it to origin.
 func (s *ClassificationAPIServer) writeRouterConfigFiles(
 	w http.ResponseWriter,
 	paths configPersistencePaths,
 	previousData []byte,
 	yamlBytes []byte,
+	origin configsnapshot.Origin,
 ) bool {
 	release := s.runtimeRegistry.LockConfigPublication()
 	defer release()
+	withdraw := func() {}
+	if !paths.usesRuntimeOverride() {
+		withdraw = s.attributeConfigWrite(configDocumentETagHash(yamlBytes), origin)
+	}
 	if err := writeConfigAtomicallyIfUnchanged(paths.sourcePath, previousData, yamlBytes); err != nil {
+		withdraw()
 		if errors.Is(err, configwriter.ErrConfigMapChanged) {
 			s.writeErrorResponse(w, http.StatusConflict, "CONFIG_CHANGED", "The ConfigMap changed during this request. Reload the configuration and retry.")
 			return false
@@ -401,11 +429,17 @@ func (s *ClassificationAPIServer) writeRouterConfigFiles(
 		s.writeErrorResponse(w, http.StatusInternalServerError, "RUNTIME_SYNC_ERROR", err.Error())
 		return false
 	}
+	// The generated runtime document is known only now; the Router may
+	// already be loading it, so this attribution is best effort.
+	if runtimeHash, err := configFileHash(paths.runtimePath); err == nil {
+		s.attributeConfigWrite(runtimeHash, origin)
+	}
 	return true
 }
 
 func (s *ClassificationAPIServer) commitRouterConfigDocument(
 	w http.ResponseWriter,
+	r *http.Request,
 	paths configPersistencePaths,
 	previousData []byte,
 	yamlBytes []byte,
@@ -419,7 +453,7 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 		return false
 	}
 	afterAttempt := s.configActivationAttempt()
-	if !s.writeRouterConfigFiles(w, paths, previousData, yamlBytes) {
+	if !s.writeRouterConfigFiles(w, paths, previousData, yamlBytes, managementOrigin(r, configsnapshot.SourceAPI)) {
 		return false
 	}
 
@@ -454,13 +488,14 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 		paths.sourcePath,
 		paths.runtimePath,
 	)
-	configCleanupBackups(backupDir)
+	cleanupConfigBackups(backupDir)
 	s.writeJSONResponse(w, responseCode, RouterConfigUpdateResponse{
 		Status:               responseStatus,
 		Version:              version,
 		ETag:                 etag,
 		ActivationStatus:     runtimeStatus,
 		GeneratedRuntimeHash: runtimeHash,
+		ConfigVersion:        s.activatedConfigVersion(runtimeStatus, runtimeHash),
 		Message:              message,
 		Activation:           s.configActivationAfter(runtimeHash, afterAttempt),
 	})
