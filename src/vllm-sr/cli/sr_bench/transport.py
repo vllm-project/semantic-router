@@ -25,6 +25,7 @@ TOOL_LOOP_PHASE = "tool_loop"
 PROVIDER_STATE_PHASE = "provider_state"
 UNKNOWN_PHASE = "unknown"
 SESSION_PHASES = frozenset({USER_TURN_PHASE, TOOL_LOOP_PHASE, PROVIDER_STATE_PHASE})
+SESSION_ID_HEADER = "x-session-id"
 
 
 # Shared internal transport/harness contract; preserving its exception identity.
@@ -290,7 +291,7 @@ def chat(
     stream_path=None,
     output_policy="bounded",
     activity=None,
-    session_id=None,
+    session_id: str | None = None,
 ):
     started = time.monotonic()
     endpoint = target["base_url"].rstrip("/") + "/chat/completions"
@@ -305,7 +306,7 @@ def chat(
     if target["kind"] == "mom":
         headers["X-VSR-Debug"] = "true"
     if session_id is not None:
-        headers["X-Session-Id"] = session_id
+        headers[SESSION_ID_HEADER] = session_id
     if target.get("api_key_env"):
         key = os.environ.get(target["api_key_env"])
         if not key:

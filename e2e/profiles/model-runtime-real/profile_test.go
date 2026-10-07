@@ -94,10 +94,10 @@ func TestProfileRunsTheRealRuntimeWithKnownSockets(t *testing.T) {
 	for _, item := range load(t).ExtraEnv {
 		env[item.Name] = item.Value
 	}
-	if env["VLLM_SR_RUNTIME_DIR"] != "/tmp/vsr-runtime" {
+	if env["VLLM_SRUN_DIR"] != "/tmp/vsr-runtime" {
 		t.Fatalf("the cases reach Kai through /tmp/vsr-runtime: %v", env)
 	}
-	for _, name := range []string{"VLLM_SR_RUNTIME_COMMAND", "HF_HUB_OFFLINE"} {
+	for _, name := range []string{"VLLM_SRUN_COMMAND", "HF_HUB_OFFLINE"} {
 		if _, set := env[name]; set {
 			t.Fatalf("%s would replace the real runtime or block its downloads", name)
 		}

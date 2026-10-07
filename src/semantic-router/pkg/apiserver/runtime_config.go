@@ -65,6 +65,16 @@ func (s *ClassificationAPIServer) currentConfig() *config.RouterConfig {
 	return s.config
 }
 
+// servingConfig is the configuration the Router serves, or nil for an API
+// without the Router's runtime. The persisted document differs from it while
+// a change activates, and after one was rejected.
+func (s *ClassificationAPIServer) servingConfig() *config.RouterConfig {
+	if s == nil || s.runtimeRegistry == nil {
+		return nil
+	}
+	return s.runtimeRegistry.CurrentConfig()
+}
+
 func (s *ClassificationAPIServer) publishConfigMutation(newCfg *config.RouterConfig) {
 	if s == nil {
 		return

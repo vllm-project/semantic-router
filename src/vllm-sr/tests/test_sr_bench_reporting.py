@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from cli.sr_bench.candidate_plans import candidate_manifest
-from cli.sr_bench.contracts import plan
+from cli.sr_bench.contracts import SESSION_AWARE, STATELESS, plan
 from cli.sr_bench.engine import Engine
 from cli.sr_bench.offline import replay
 from cli.sr_bench.provenance import capture_runner
@@ -709,7 +709,11 @@ def test_continuity_separates_steady_and_switching_runs_with_equal_accuracy() ->
     assert steady["accuracy"] == switching["accuracy"] == mixed["accuracy"] == 0.5
     assert steady["selected_models"] == switching["selected_models"]
     assert steady["decisions"] == switching["decisions"]
-    unchanged = {"unknown_model_requests": 0, "multi_inference_tasks": 0}
+    unchanged = {
+        "session_mode": "stateless",
+        "unknown_model_requests": 0,
+        "multi_inference_tasks": 0,
+    }
     assert steady["continuity"] == {
         "multi_request_tasks": 2,
         "switched_tasks": 0,
@@ -852,6 +856,7 @@ def test_learning_preview_distribution_and_replay_rejection(tmp_path):
             "id": "balance",
             "kind": "mom",
             "preview_url": "http://127.0.0.1:1/api/v1/routing/preview",
+            "session_mode": SESSION_AWARE,
         }
     ]
     frozen = plan(manifest)
@@ -870,6 +875,7 @@ def test_learning_preview_distribution_and_replay_rejection(tmp_path):
     )
     store.status(preview["id"], "completed")
     report = make_report(store, preview["id"])
+    assert report["summary"]["targets"][0]["continuity"]["session_mode"] == STATELESS
     assert report["summary"]["targets"][0]["selection_statuses"] == {
         "execution_required": 1
     }

@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 import requests
 from cli.sr_bench import adapters
-from cli.sr_bench.contracts import catalog, digest, plan
+from cli.sr_bench.contracts import SESSION_AWARE, STATELESS, catalog, digest, plan
 from cli.sr_bench.engine import Engine
 from cli.sr_bench.grading import basic_grade
 from cli.sr_bench.offline import export_training, regrade, replay
@@ -37,9 +37,9 @@ class Target(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
         self.server.requests.append(body)
-        self.server.request_headers.append(
-            {key.lower(): value for key, value in self.headers.items()}
-        )
+        headers = {key.lower(): value for key, value in self.headers.items()}
+        self.server.request_headers.append(headers)
+        self.server.observations.append((body, headers))
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         phase = self.server.session_phase
@@ -109,6 +109,7 @@ def target():
     server = ThreadingHTTPServer(("127.0.0.1", 0), Target)
     server.requests = []
     server.request_headers = []
+    server.observations = []
     server.answer = "A"
     server.truncated = False
     server.delay = 0
@@ -259,14 +260,17 @@ def test_derived_tool_loop_phase_is_saved_in_call_summary(tmp_path, target):
     assert call["phase_source"] == "request"
 
 
-def test_router_session_scope_sends_case_stable_session_ids(
+def test_session_aware_target_sends_case_stable_session_ids(
     tmp_path, target, monkeypatch
 ):
     target.ack = "fixed"
-    document = manifest(target, router_session_scope="case")
+    document = manifest(target)
     document["cost_policy"] = "capability_only"
     document["targets"][0].update(
-        kind="mom", config_hash="fixed", max_inference_calls=1
+        kind="mom",
+        config_hash="fixed",
+        max_inference_calls=1,
+        session_mode=SESSION_AWARE,
     )
     document["cases"].append({**document["cases"][0], "id": "q2"})
 
@@ -296,6 +300,7 @@ def test_router_session_scope_sends_case_stable_session_ids(
     assert session_ids[2] == session_ids[3]
     assert session_ids[0] != session_ids[2]
     calls = store.calls(run["id"], summary=True)
+    assert all(call.get("session_id") for call in calls)
     assert [call["phase_source"] for call in calls] == ["router"] * 4
     assert [call["phase"] for call in calls] == [
         "user_turn",
@@ -303,6 +308,107 @@ def test_router_session_scope_sends_case_stable_session_ids(
         "user_turn",
         "tool_loop",
     ]
+    assert "router_session_scope" not in run["manifest"]
+    assert run["manifest"]["targets"][0]["session_mode"] == "session_aware"
+    assert {call["session_id"] for call in calls} == set(session_ids)
+    assert (
+        make_report(store, run["id"])["summary"]["targets"][0]["continuity"][
+            "session_mode"
+        ]
+        == SESSION_AWARE
+    )
+
+
+def test_run_compares_session_modes_without_leaking_to_auxiliary_calls(
+    tmp_path, target, monkeypatch
+):
+    target.ack = "fixed"
+    document = manifest(target)
+    document["cost_policy"] = "capability_only"
+    document["targets"] = [
+        {
+            **document["targets"][0],
+            "id": "aware",
+            "kind": "mom",
+            "model": "aware-model",
+            "config_hash": "fixed",
+            "max_inference_calls": 1,
+            "session_mode": SESSION_AWARE,
+        },
+        {
+            **document["targets"][0],
+            "id": "plain",
+            "kind": "mom",
+            "model": "plain-model",
+            "config_hash": "fixed",
+            "max_inference_calls": 1,
+        },
+    ]
+    url = f"http://127.0.0.1:{target.server_port}/v1"
+    document["auxiliary_targets"] = {
+        role: {"id": role, "kind": "single", "model": role, "base_url": url}
+        for role in ("judge", "simulator")
+    }
+    document["cases"].append({**document["cases"][0], "id": "q2"})
+
+    class AgentAdapter:
+        def execute(self, case, context):
+            context.call([{"role": "user", "content": case["id"]}])
+            context.call([{"role": "user", "content": case["id"]}])
+            context.call(
+                [{"role": "user", "content": case["id"]}], role="judge", target="judge"
+            )
+            context.call(
+                [{"role": "user", "content": case["id"]}],
+                role="simulator",
+                target="simulator",
+            )
+            return {"answer": "A", "correct": True, "score": 1}
+
+    monkeypatch.setattr("cli.sr_bench.engine.get_adapter", lambda _: AgentAdapter())
+    store = Store(tmp_path)
+    run = Engine(store).start(document)
+    assert wait_run(store, run["id"])["status"] == "completed"
+
+    sent = target.observations
+    aware = [
+        (body, headers) for body, headers in sent if body["model"] == "aware-model"
+    ]
+    plain = [
+        (body, headers) for body, headers in sent if body["model"] == "plain-model"
+    ]
+    auxiliary = [
+        headers for body, headers in sent if body["model"] in {"judge", "simulator"}
+    ]
+    assert len(aware) == len(plain) == 4
+    assert len(auxiliary) == 8
+    assert all("x-session-id" not in headers for _, headers in plain)
+    assert all("x-session-id" not in headers for headers in auxiliary)
+    aware_ids_by_case = {}
+    for body, headers in aware:
+        case_id = body["messages"][0]["content"]
+        aware_ids_by_case.setdefault(case_id, set()).add(headers["x-session-id"])
+    assert set(aware_ids_by_case) == {"q1", "q2"}
+    assert all(len(session_ids) == 1 for session_ids in aware_ids_by_case.values())
+    assert len({next(iter(ids)) for ids in aware_ids_by_case.values()}) == 2
+
+    calls = store.calls(run["id"], summary=True)
+    assert all(
+        "session_id" not in call
+        for call in calls
+        if call["role"] != "subject" or call["target_id"] == "plain"
+    )
+    report = make_report(store, run["id"])
+    modes = {
+        item["id"]: item["continuity"]["session_mode"]
+        for item in report["summary"]["targets"]
+    }
+    assert modes == {"aware": SESSION_AWARE, "plain": STATELESS}
+    benchmark_modes = {
+        item["target_id"]: item["continuity"]["session_mode"]
+        for item in report["benchmarks"]
+    }
+    assert benchmark_modes == modes
 
 
 @pytest.mark.parametrize(
@@ -340,9 +446,41 @@ def test_router_session_scope_rejects_unsupported_inputs(
         plan(document)
 
 
-def test_router_session_scope_defaults_to_stateless_requests(
-    tmp_path, target, monkeypatch
-):
+def test_legacy_router_session_scope_normalizes_to_target_mode(target):
+    document = manifest(target, router_session_scope="case")
+    document["targets"][0].update(
+        kind="mom", config_hash="fixed", max_inference_calls=1
+    )
+
+    frozen = plan(document)
+
+    assert "router_session_scope" not in frozen
+    assert frozen["targets"][0]["session_mode"] == SESSION_AWARE
+
+
+def test_legacy_router_session_scope_rejects_conflicting_target_mode(target):
+    document = manifest(target, router_session_scope="case")
+    document["targets"][0].update(
+        kind="mom",
+        config_hash="fixed",
+        max_inference_calls=1,
+        session_mode=STATELESS,
+    )
+
+    with pytest.raises(ValueError, match="conflicts with target session_mode"):
+        plan(document)
+
+
+@pytest.mark.parametrize("session_mode", [7, None, [], {}, "per_request"])
+def test_target_rejects_unsupported_session_mode(target, session_mode):
+    document = manifest(target)
+    document["targets"][0]["session_mode"] = session_mode
+
+    with pytest.raises(ValueError, match="session_mode must be"):
+        plan(document)
+
+
+def test_session_mode_defaults_to_stateless_requests(tmp_path, target, monkeypatch):
     target.ack = "fixed"
     document = manifest(target)
     document["cost_policy"] = "capability_only"
@@ -364,6 +502,12 @@ def test_router_session_scope_defaults_to_stateless_requests(
     assert target.request_headers[0]["x-vsr-debug"] == "true"
     call = store.calls(run["id"], summary=True)[0]
     assert call["phase_source"] == "request"
+    assert (
+        make_report(store, run["id"])["summary"]["targets"][0]["continuity"][
+            "session_mode"
+        ]
+        == STATELESS
+    )
 
 
 @pytest.mark.parametrize("field", ["sampling", "benchmark_options", "plan_sha256"])
@@ -414,7 +558,9 @@ def test_truncated_final_counts_incorrect_and_continues(tmp_path, target):
 def test_http_reviewed_plan_rejects_new_operator_options_without_dispatch(
     tmp_path, target, monkeypatch
 ):
-    (tmp_path / "targets.json").write_text(json.dumps(manifest(target)["targets"]))
+    registered = manifest(target)["targets"]
+    registered[0]["session_mode"] = SESSION_AWARE
+    (tmp_path / "targets.json").write_text(json.dumps(registered))
     service = Server(("127.0.0.1", 0), Store(tmp_path), "fixture-token")
     thread = threading.Thread(target=service.serve_forever, daemon=True)
     thread.start()
@@ -433,6 +579,7 @@ def test_http_reviewed_plan_rejects_new_operator_options_without_dispatch(
         )
         assert review.status_code == 200
         frozen = review.json()["manifest"]
+        assert frozen["targets"][0]["session_mode"] == SESSION_AWARE
         (tmp_path / "benchmark-options.json").write_text(
             json.dumps({"mmlu-pro": {"protocol_note": "changed after review"}})
         )

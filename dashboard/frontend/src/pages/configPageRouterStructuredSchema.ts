@@ -483,7 +483,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
       schema: objectList(
         'External Model',
         {
-          llm_provider: text('Provider', { required: true }),
+          llm_provider: text('Provider'),
           model_role: text('Model Role', { required: true }),
           llm_endpoint: object('Endpoint', {
             address: text('Address'),
@@ -548,7 +548,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
   looper: {
     headers: {
       label: 'Headers',
-      description: 'Headers sent to the Looper endpoint.',
+      description: 'Headers added to every Looper model call.',
       schema: stringMap('Header'),
     },
   },

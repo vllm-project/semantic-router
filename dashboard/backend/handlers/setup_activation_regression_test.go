@@ -50,7 +50,7 @@ func setupActivationRegressionRuntime(t *testing.T) (string, string, fakeLifecyc
 	return configPath, root, fake
 }
 
-func TestSetupActivationRendersOmittedReasoningAndStartsRuntime(t *testing.T) {
+func TestSetupActivationRendersOmittedReasoningAndRecordsTheActivation(t *testing.T) {
 	configPath, root, fake := setupActivationRegressionRuntime(t)
 	patch := createValidSetupPatch()
 	routing := patch["routing"].(map[string]interface{})
@@ -64,11 +64,15 @@ func TestSetupActivationRendersOmittedReasoningAndStartsRuntime(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("activation failed: %d %s", w.Code, w.Body.String())
 	}
+	// The CLI that owns the stack starts the services; setup leaves them as created.
 	for _, path := range []string{fake.routerStatusPath, fake.envoyStatusPath} {
 		status, err := os.ReadFile(path)
-		if err != nil || strings.TrimSpace(string(status)) != "running" {
-			t.Fatalf("service did not start after real Python rendering: %q, %v", status, err)
+		if err != nil || strings.TrimSpace(string(status)) != "created" {
+			t.Fatalf("setup changed a container: %q, %v", status, err)
 		}
+	}
+	if _, err := os.Stat(pendingActivationPath(configPath, pendingActivationSuffix)); err != nil {
+		t.Fatalf("activation was not recorded: %v", err)
 	}
 	data, err := os.ReadFile(configPath)
 	if err != nil || bytes.Contains(data, []byte("use_reasoning: null")) {
@@ -81,9 +85,8 @@ func TestSetupActivationRendersOmittedReasoningAndStartsRuntime(t *testing.T) {
 	if _, statErr := os.Stat(filepath.Join(filepath.Dir(configPath), ".vllm-sr", "runtime-config.yaml")); !os.IsNotExist(statErr) {
 		t.Fatalf("activation nested the runtime-owned config: %v", statErr)
 	}
-	data, err = os.ReadFile(filepath.Join(filepath.Dir(configPath), "envoy.yaml"))
-	if err != nil || !bytes.Contains(data, []byte("model_test_2dmodel_cluster")) {
-		t.Fatalf("actual Envoy configuration was not generated: %s, %v", data, err)
+	if _, statErr := os.Stat(filepath.Join(root, "envoy.yaml")); !os.IsNotExist(statErr) {
+		t.Fatalf("setup rendered the Envoy configuration the CLI owns: %v", statErr)
 	}
 }
 
@@ -142,15 +145,15 @@ func TestSetupActivationPreservesExplicitManagementListener(t *testing.T) {
 }
 
 func TestSetupActivationFailureRestoresBootstrapAndAllowsRetry(t *testing.T) {
-	configPath, root, fake := setupActivationRegressionRuntime(t)
+	configPath, root, _ := setupActivationRegressionRuntime(t)
 	previous, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Router starts, but its peer cannot start. The second request must handle
-	// both the already-running router and the newly recoverable Envoy.
-	if writeErr := os.WriteFile(fake.envoyStatusPath, []byte("dead\n"), 0o600); writeErr != nil {
-		t.Fatal(writeErr)
+	// A directory where the activation record goes: the record cannot be written.
+	record := pendingActivationPath(configPath, pendingActivationSuffix)
+	if mkdirErr := os.MkdirAll(filepath.Join(record, "occupied"), 0o700); mkdirErr != nil {
+		t.Fatal(mkdirErr)
 	}
 	resolver := setupmode.New(configPath, false)
 	handler := SetupActivateHandler(configPath, false, root, resolver)
@@ -158,31 +161,29 @@ func TestSetupActivationFailureRestoresBootstrapAndAllowsRetry(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler(w, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body)))
 	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("failed runtime must not report success: %d %s", w.Code, w.Body.String())
+		t.Fatalf("an unrecorded activation must not report success: %d %s", w.Code, w.Body.String())
 	}
 	var response map[string]interface{}
 	if decodeErr := json.Unmarshal(w.Body.Bytes(), &response); decodeErr != nil {
 		t.Fatal(decodeErr)
 	}
-	if response["configuration_restored"] != true || response["setupMode"] != true || response["stage"] != "runtime_start" {
+	if response["configuration_restored"] != true || response["setupMode"] != true || response["stage"] != "activation_record" {
 		t.Fatalf("failure was not retryable: %#v", response)
 	}
 	restored, err := os.ReadFile(configPath)
 	if err != nil || !bytes.Equal(restored, previous) || !resolver.Resolve().Active {
 		t.Fatalf("bootstrap was not restored: %s, %v", restored, err)
 	}
-	if writeErr := os.WriteFile(fake.envoyStatusPath, []byte("created\n"), 0o600); writeErr != nil {
-		t.Fatal(writeErr)
+	if removeErr := os.RemoveAll(record); removeErr != nil {
+		t.Fatal(removeErr)
 	}
 	w = httptest.NewRecorder()
 	handler(w, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body)))
 	if w.Code != http.StatusOK || resolver.Resolve().Active {
 		t.Fatalf("same activation could not recover: %d %s", w.Code, w.Body.String())
 	}
-	logData, err := os.ReadFile(fake.logPath)
-	if err != nil || !bytes.Contains(logData, []byte("restart activation-vllm-sr-router-container")) ||
-		!bytes.Contains(logData, []byte("start activation-vllm-sr-envoy-container")) {
-		t.Fatalf("retry did not converge both services: %s, %v", logData, err)
+	if _, statErr := os.Stat(record); statErr != nil {
+		t.Fatalf("retry did not record the activation: %v", statErr)
 	}
 }
 
@@ -194,7 +195,7 @@ func TestSetupActivationReportsRollbackFailureWithoutRawError(t *testing.T) {
 	t.Cleanup(func() { atomicRename = originalRename })
 	atomicRename = func(string, string) error { return errors.New("secret-provider-credential") }
 	w := httptest.NewRecorder()
-	failSetupActivation(w, configPath, []byte("setup:\n  mode: true\n"), resolver, "runtime_start")
+	failSetupActivation(w, configPath, []byte("setup:\n  mode: true\n"), resolver, "activation_record")
 	if w.Code != http.StatusInternalServerError || strings.Contains(w.Body.String(), "secret-provider-credential") {
 		t.Fatalf("unsafe failure response: %d %s", w.Code, w.Body.String())
 	}

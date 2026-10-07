@@ -5,7 +5,7 @@
 ##@ Build/Test
 
 # Build the router binary. Models run in the model runtime the router starts
-# (vllm-sr-runtime on PATH, or VLLM_SR_RUNTIME_COMMAND); see src/model-runtime.
+# (vllm-srun on PATH, or VLLM_SRUN_COMMAND); see src/model-runtime.
 build: ## Build the router binary
 build: build-router
 

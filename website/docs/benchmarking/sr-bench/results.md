@@ -40,8 +40,16 @@ a switch: switches are counted between the known selections around it, and
 `unknown_model_requests` records it. A request that made several inference calls
 under Fusion, Confidence, Workflows or fallback hides its own model sequence, so
 its task is counted only in `multi_inference_tasks`. A switch is reported as a
-fact, not a penalty. By default sr-bench sends no session identity, so live runs
-measure routing without session state.
+fact, not a penalty. Each continuity block reports the target's `session_mode`.
+Targets are `stateless` by default. A target with `session_mode: session_aware`
+sends an opaque `x-session-id` on every subject call in a live run. The value
+stays the same across calls in one case and differs across runs, cases and
+targets. Judge and simulator calls never carry the header. Subject call receipts
+retain the value as `session_id`. The Router session policy itself must be
+enabled in its configuration. Preview and replay reports remain `stateless`. To
+compare both modes on the same tasks, include a target of each mode against the
+same Router. Legacy manifests using `router_session_scope: case` are normalized
+to `session_aware` on each MoM subject target.
 
 Subject call receipts include `phase` and `phase_source`. For MoM targets,
 sr-bench requests the Router debug response headers to read its session policy
@@ -62,13 +70,6 @@ metrics report a null ratio with a zero sample count. For streamed calls,
 later events that omit cache fields do not erase that observation. If that event
 lacks normalized prompt usage, its sample is counted but its ratio remains null
 because its denominator is unknown.
-
-For live MoM targets, a manifest can opt in to a stable session identity scoped
-to each case by setting `router_session_scope: case`. sr-bench sends an opaque
-`x-session-id` that stays the same across calls in that case and differs across
-runs, cases and targets. This lets Router session policies apply without
-accepting arbitrary request headers. The Router policy itself must be enabled in
-its configuration; session scope does not change Router policy settings.
 
 The full sr-bench score uses fixed benchmark weights: MMLU-Pro 10%, SimpleQA 10%,
 GPQA 15%, HLE 15%, ARC 10%, LiveCodeBench 10%, SciCode 10%, Terminal-Bench 10% and

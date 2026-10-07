@@ -3,15 +3,15 @@ import threading
 import time
 
 import pytest
-from vllm_sr_runtime.errors import RuntimeServiceError
-from vllm_sr_runtime.plugins.base import Job
-from vllm_sr_runtime.plugins.decisions import DecisionModel, RenderedItem
-from vllm_sr_runtime.profiles.batching import BatchingProfile
-from vllm_sr_runtime.profiles.exact import ExactProfile, merged
-from vllm_sr_runtime.profiles.shared_context import SharedContextProfile
-from vllm_sr_runtime.scheduler import scheduler as scheduler_module
-from vllm_sr_runtime.scheduler.planner import cost, micro_batches
-from vllm_sr_runtime.scheduler.scheduler import DEADLINE, Scheduler, SchedulerLimits
+from vllm_srun.errors import RuntimeServiceError
+from vllm_srun.plugins.base import Job
+from vllm_srun.plugins.decisions import DecisionModel, RenderedItem
+from vllm_srun.profiles.batching import BatchingProfile
+from vllm_srun.profiles.exact import ExactProfile, merged
+from vllm_srun.profiles.shared_context import SharedContextProfile
+from vllm_srun.scheduler import scheduler as scheduler_module
+from vllm_srun.scheduler.planner import cost, micro_batches
+from vllm_srun.scheduler.scheduler import DEADLINE, Scheduler, SchedulerLimits
 
 
 def item(name, length):
@@ -272,7 +272,7 @@ def test_run_now_declines_device_thread_models_and_a_busy_scheduler():
         )
         gate.set()
         assert running.result(timeout=5) and queued.result(timeout=5)
-        assert model.threads == ["vllm-sr-runtime-worker"] * 2
+        assert model.threads == ["vllm-srun-worker"] * 2
     finally:
         gate.set()
         scheduler.stop()
@@ -304,7 +304,7 @@ def test_callers_and_the_worker_never_run_one_model_at_once():
     assert model.most == 1
     assert len(answers) == 180
     assert all(result == [[0.0, float(length)]] for length, result in answers)
-    assert "vllm-sr-runtime-worker" in model.threads
+    assert "vllm-srun-worker" in model.threads
     assert len(set(model.threads)) > 1
 
 
@@ -595,7 +595,7 @@ def test_a_caller_leaves_its_remaining_batches_to_the_worker_when_work_arrives(
         assert short.result(timeout=5) == [[0.0, 8.0]]
         assert ran["futures"][0].result(timeout=5) == [[0.0, 64.0], [0.0, 64.0]]
         assert model.calls == [["long0"], ["short"], ["long1"]]
-        assert model.threads == ["caller"] + ["vllm-sr-runtime-worker"] * 2
+        assert model.threads == ["caller"] + ["vllm-srun-worker"] * 2
     finally:
         gate.set()
         scheduler.stop()

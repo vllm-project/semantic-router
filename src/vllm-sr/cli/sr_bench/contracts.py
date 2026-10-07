@@ -34,6 +34,8 @@ from .native_output import configure as configure_output_policy
 MAX_PARAMETER_BYTES = 65536
 MAX_INFERENCE_CALLS = 256
 MAX_CONCURRENCY = 32
+STATELESS = "stateless"
+SESSION_AWARE = "session_aware"
 
 BENCHMARKS = (
     (
@@ -346,7 +348,7 @@ def plan(manifest, *, policy=None):
     if m.get("mode", "live") not in {"live", "preview"}:
         raise ValueError("mode must be live or preview; replay is not live evidence")
     m.setdefault("mode", "live")
-    router_session_scope = m.get("router_session_scope", "none")
+    router_session_scope = m.pop("router_session_scope", "none")
     if not isinstance(router_session_scope, str) or router_session_scope not in {
         "none",
         "case",
@@ -432,6 +434,13 @@ def plan(manifest, *, policy=None):
         for target in targets
     ):
         raise ValueError("router_session_scope case requires MoM subject targets")
+    if router_session_scope == "case":
+        for target in targets:
+            if "session_mode" in target and target["session_mode"] != SESSION_AWARE:
+                raise ValueError(
+                    "router_session_scope case conflicts with target session_mode"
+                )
+            target["session_mode"] = SESSION_AWARE
     auxiliary = m.get("auxiliary_targets", {})
     if not isinstance(auxiliary, dict) or any(
         not isinstance(t, dict) or t.get("id") != key for key, t in auxiliary.items()
@@ -455,6 +464,12 @@ def plan(manifest, *, policy=None):
             raise ValueError("capture_recipe must be boolean")
         if t.get("capture_recipe") and t["kind"] != "mom":
             raise ValueError("Recipe capture is only available for MoM targets")
+        session_mode = t.get("session_mode", STATELESS)
+        if not isinstance(session_mode, str) or session_mode not in {
+            STATELESS,
+            SESSION_AWARE,
+        }:
+            raise ValueError("session_mode must be stateless or session_aware")
         u = urlparse(t.get("base_url", ""))
         if (
             u.scheme not in {"http", "https"}

@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import pytest
-from vllm_sr_runtime.families.vela2.calibration import Calibration
-from vllm_sr_runtime.families.vela2.request import (
+from vllm_srun.families.vela2.calibration import Calibration
+from vllm_srun.families.vela2.request import (
     NOUL_DEFAULT_NO,
     NOUL_DEFAULT_YES,
     QuestionReader,
     read_state,
 )
-from vllm_sr_runtime.testing.vela2 import calibration
+from vllm_srun.testing.vela2 import calibration
 
 CHOICE = {
     "type": "choice",

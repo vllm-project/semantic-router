@@ -37,7 +37,7 @@ func categoryMappingFromLabels(labels []string) (*CategoryMapping, error) {
 }
 
 func piiMappingFromLabels(labels []string) (*PIIMapping, error) {
-	mapping := &PIIMapping{LabelToIdx: make(map[string]int, len(labels)), IdxToLabel: make(map[string]string, len(labels))}
+	mapping := &PIIMapping{LabelToIdx: make(map[string]int, len(labels)), IdxToLabel: make(map[string]string, len(labels)), spanNamed: labels == nil}
 	for index, label := range labels {
 		mapping.LabelToIdx[label] = index
 		mapping.IdxToLabel[strconv.Itoa(index)] = label

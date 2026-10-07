@@ -5,33 +5,33 @@ description: Install the model runtime, serve a model, send it a request, and us
 
 # Quickstart
 
-In about ten minutes you install the model runtime, serve a model on your
+In about ten minutes you install the `vllm-sr` CLI, serve a model on your
 CPU, ask it a question, and then let the router use the same model for
 routing.
 
-You need Linux or macOS, Python 3.10 or newer, and about 3 GB of free disk
-for the model download. No GPU is needed.
+You need Linux or macOS with Docker or Podman, Python 3.10 or newer, and a
+few gigabytes of free disk for the router image and the model download. No GPU
+is needed.
 
 ## 1. Install
 
-The runtime is a Python package that lives next to the `vllm-sr` CLI in the
-repository. Install both into a virtual environment, with the CPU build of
-PyTorch:
+Install the CLI into a virtual environment:
 
 ```bash
-git clone https://github.com/vllm-project/semantic-router.git
-cd semantic-router
 python3 -m venv .venv
 . .venv/bin/activate
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install ./src/vllm-sr ./src/model-runtime
+pip install vllm-sr
 ```
 
-Check that the runtime sees its built-in models:
-
-```bash
-vllm-sr-runtime models
-```
+The model runtime, the `vllm-srun` Python package, ships only inside the
+router images. `vllm-sr serve MODEL` runs it in a container from the
+`vllm-sr` image, which the CLI pulls on first use, so nothing else is
+installed on your machine. On a GPU host, `--platform amd` or
+`--platform nvidia` selects the `vllm-sr-rocm` or `vllm-sr-cuda` image and
+passes the GPUs through; on macOS the runtime runs on the CPU, because
+containers there get no GPU. The images carry the release's own PyTorch build,
+so their answers are the ones the models were released with
+([Choose a model](./choose-a-model.md#hardware)).
 
 ## 2. Serve a model
 
@@ -42,8 +42,10 @@ questions you write in plain language.
 vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
 ```
 
-The first start downloads the model (about 1.5 GB) into your Hugging Face
-cache and checks every file against its pinned hash. The model is ready when
+The runtime runs in the foreground; Ctrl-C stops it. The first start downloads
+the model (about 1.5 GB) into the engine-mode cache, `~/.cache/vllm-sr/models`,
+and checks every file against its pinned hash; later starts reuse it. Set
+`VLLM_SR_ENGINE_CACHE_DIR` to keep the cache elsewhere. The model is ready when
 its health check passes. In a second terminal:
 
 ```bash

@@ -7,13 +7,13 @@ import os
 from dataclasses import replace
 
 import pytest
-from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.families.decision1 import package as pkg
-from vllm_sr_runtime.families.decision1.family import Decision1Family
-from vllm_sr_runtime.plugins.base import PackageRef
-from vllm_sr_runtime.registry import builtin
-from vllm_sr_runtime.registry.artifacts import named_files, sha256_file
-from vllm_sr_runtime.testing.decision1 import write_package
+from vllm_srun.errors import PackageError
+from vllm_srun.families.decision1 import package as pkg
+from vllm_srun.families.decision1.family import Decision1Family
+from vllm_srun.plugins.base import PackageRef
+from vllm_srun.registry import builtin
+from vllm_srun.registry.artifacts import named_files, sha256_file
+from vllm_srun.testing.decision1 import write_package
 
 
 @pytest.fixture(scope="module")
@@ -230,7 +230,7 @@ def test_built_in_table_pins_all_seven_packages():
 
 
 def test_golden_references_cover_every_pin_and_device_class():
-    from vllm_sr_runtime.families.decision1.family import GOLDEN_QUESTIONS
+    from vllm_srun.families.decision1.family import GOLDEN_QUESTIONS
 
     for model in builtin.all_models("decision1"):
         assert set(model.golden_answers) == {"cpu", "rocm"}, model.repo_id

@@ -4,9 +4,9 @@ import shutil
 from pathlib import Path
 
 import pytest
-from vllm_sr_runtime.config import ModelConfig, ServeConfig
-from vllm_sr_runtime.runtime import Runtime
-from vllm_sr_runtime.testing.fixtures import write_package
+from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.runtime import Runtime
+from vllm_srun.testing.fixtures import write_package
 
 
 @pytest.fixture(scope="session")

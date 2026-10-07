@@ -52,7 +52,7 @@ func TestMLPipelineRevocationDuringBodyPreventsJobSubmission(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Setenv("TMPDIR", uploads)
-			store, err := workflowstore.Open(filepath.Join(root, "workflow.sqlite"), workflowstore.Options{})
+			store, err := workflowstore.Open(filepath.Join(root, "workflow.sqlite"))
 			if err != nil {
 				t.Fatal(err)
 			}

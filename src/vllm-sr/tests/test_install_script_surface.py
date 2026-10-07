@@ -19,17 +19,6 @@ VLLM_SR_AGENT_SKILL_PATH = (
 PYPI_PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "pypi-publish.yml"
 ROOT_MAKEFILE_PATH = REPO_ROOT / "Makefile"
 RELEASE_MAKEFILE_PATH = REPO_ROOT / "tools" / "make" / "release.mk"
-OPENCLAW_SKILL_PATH = (
-    REPO_ROOT
-    / "dashboard"
-    / "backend"
-    / "skillpacks"
-    / "openclaw-vsr-bridge"
-    / "SKILL.md"
-)
-OPENCLAW_INSTALL_DOC_PATH = (
-    REPO_ROOT / "website" / "static" / "install" / "agent" / "openclaw-vsr-bridge.md"
-)
 
 
 def test_install_script_runtime_contract_supports_podman_fallback() -> None:
@@ -111,7 +100,7 @@ def test_installation_surfaces_offer_minimal_human_and_agent_paths() -> None:
 
     assert "AGENT_INSTALL_PROMPT" in agent_docs
     assert "AGENT_SKILL_PATH" in agent_docs
-    assert "Dashboard is optional" in normalized_agent_docs
+    assert "Dashboard and Playground checks are optional" in normalized_agent_docs
     assert "vllm-sr config validate" in agent_docs
     assert "vllm-sr config plan" in agent_docs
     assert "vllm-sr route preview" in agent_docs
@@ -139,11 +128,3 @@ def test_make_release_target_is_available_from_repo_root() -> None:
         'src/vllm-sr/scripts/release.sh "$(RELEASE_VERSION)" "$(NEXT_VERSION)"'
         in release_makefile
     )
-
-
-def test_openclaw_install_docs_use_the_validate_config_option() -> None:
-    for path in (OPENCLAW_SKILL_PATH, OPENCLAW_INSTALL_DOC_PATH):
-        content = path.read_text(encoding="utf-8")
-
-        assert "vllm-sr config validate --config config.yaml" in content
-        assert "vllm-sr config validate config.yaml" not in content

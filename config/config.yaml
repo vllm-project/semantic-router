@@ -8,8 +8,23 @@ listeners:
     address: 0.0.0.0
     port: 8899
     timeout: 300s
-    # Optional bearer credentials for CLI-managed Envoy listeners.
+    # Optional client keys the listener requires (standalone mode and the
+    # CLI-managed Envoy listener).
     api_keys: []
+  # One-way TLS, served in standalone mode. Relative paths are relative to this
+  # file's directory.
+  - name: https-8443
+    address: 0.0.0.0
+    port: 8443
+    timeout: 300s
+    tls:
+      cert_file: certs/tls.crt
+      key_file: certs/tls.key
+    # Standalone mode drops client identity headers unless the listener trusts
+    # them: here, from an authenticating proxy on a private network.
+    identity:
+      trust_headers: true
+      trusted_peers: ["10.0.0.0/8"]
 
 providers:
   defaults:
@@ -1306,6 +1321,16 @@ routing:
           use_model_contrastive: true
           require_descriptions: true
           use_capabilities: true
+      # Overrides the recipe's cross-model fallback policy (routing.fallback,
+      # then global.router.fallback) field by field for this route. The
+      # candidates stay this decision's ranked models; circuit_breaker is per
+      # backend and stays on the recipe's or the global policy.
+      fallback:
+        enabled: true
+        max_attempts: 2
+        total_timeout: 20s
+        per_attempt_timeout: 8s
+        retryable_status_codes: [429, 502, 503, 504]
       plugins:
         - type: header_mutation
           configuration:
@@ -1477,6 +1502,15 @@ routing:
           tpot_percentile: 90
           ttft_percentile: 95
           description: Balance throughput and first-token latency for long prompts.
+      # Overrides the provider model's timeouts and retries for this route.
+      # Envoy applies these fields per request; idle_timeout,
+      # first_byte_timeout, back-off and retry_after_max need --gateway standalone.
+      reliability:
+        total_timeout: 600s
+        per_try_timeout: 300s
+        retry_count: 1
+        retry_on: reset,connect-failure,retriable-status-codes
+        retriable_status_codes: [503]
       plugins:
         - type: rag
           configuration:
@@ -2410,7 +2444,6 @@ global:
           weight_decision_prior: 1
           repetition_penalty_strength: 0
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
       grpc_max_msg_size_mb: 16
       max_response_bytes_mb: 32
       timeout_seconds: 120

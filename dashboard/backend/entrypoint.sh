@@ -31,9 +31,7 @@ if [ "$(id -u)" -ne 0 ]; then
         DASHBOARD_RUNTIME_CONFIG_WRITABLE=false
     fi
     DASHBOARD_RECIPE_STORE_WRITABLE=false
-    OPENCLAW_CONTAINER_RUNTIME_DISABLED=true
-    export DASHBOARD_RUNTIME_CONFIG_WRITABLE DASHBOARD_RECIPE_STORE_WRITABLE \
-        OPENCLAW_CONTAINER_RUNTIME_DISABLED
+    export DASHBOARD_RUNTIME_CONFIG_WRITABLE DASHBOARD_RECIPE_STORE_WRITABLE
     exec "$@"
 fi
 
@@ -124,21 +122,18 @@ if [ -d /app/data ]; then
         --exclude-path /app/data/evaluation
 fi
 
-# The dashboard is deliberately nonroot, but managed Recipe topology and
-# OpenClaw operations use the mounted container-runtime socket. Map the
-# socket's numeric group inside the image before gosu rebuilds supplementary
-# groups for the nonroot account. Never broaden the socket's host permissions.
+# The dashboard is deliberately nonroot. `vllm-sr serve` mounts no
+# container-runtime socket; when an operator mounts one, the status page reads
+# container states and log tails through it. Map the socket's numeric group
+# inside the image before gosu rebuilds supplementary groups for the nonroot
+# account. Never broaden the socket's host permissions.
 CONTAINER_SOCKET_PATH=${VLLM_SR_CONTAINER_SOCKET_PATH:-/var/run/docker.sock}
 if [ -e "$CONTAINER_SOCKET_PATH" ] || [ -L "$CONTAINER_SOCKET_PATH" ]; then
     if CONTAINER_SOCKET_GID=$(python3 "$PERMISSION_HELPER" socket-gid "$CONTAINER_SOCKET_PATH" 2>/dev/null); then
         add_nonroot_group_gid "$CONTAINER_SOCKET_GID"
-        export OPENCLAW_CONTAINER_RUNTIME_DISABLED=false
     else
-        export OPENCLAW_CONTAINER_RUNTIME_DISABLED=true
         echo "Warning: Dashboard container management is unavailable because the runtime socket cannot be shared safely; continuing without socket access" >&2
     fi
-else
-    export OPENCLAW_CONTAINER_RUNTIME_DISABLED=true
 fi
 
 # Switch to nonroot user and execute the dashboard backend.

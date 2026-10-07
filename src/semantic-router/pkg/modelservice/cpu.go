@@ -16,7 +16,7 @@ import (
 const (
 	// CPUProcessesEnv caps the processes CPU models are spread over
 	// (default: one per model, at most one per minCPUThreads cores).
-	CPUProcessesEnv = "VLLM_SR_RUNTIME_CPU_PROCESSES"
+	CPUProcessesEnv = "VLLM_SRUN_CPU_PROCESSES"
 	minCPUThreads   = 2
 )
 

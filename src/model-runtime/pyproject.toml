@@ -3,7 +3,7 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vllm-sr-runtime"
+name = "vllm-srun"
 version = "0.2.0"
 description = "Built-in model runtime for vLLM Semantic Router: decision, classification, embedding and reranking models behind one HTTP contract"
 readme = "README.md"
@@ -46,56 +46,62 @@ onnx = [
   "onnxruntime>=1.26",
 ]
 multimodal = [
-  "onnxruntime>=1.26",
   "pillow>=10.4",
 ]
 
 [project.scripts]
-vllm-sr-runtime = "vllm_sr_runtime.cli:main"
+vllm-srun = "vllm_srun.cli:main"
 
-[project.entry-points."vllm_sr_runtime.families"]
-decision1 = "vllm_sr_runtime.families.decision1.family:Decision1Family"
-decision2 = "vllm_sr_runtime.families.decision2.family:Decision2Family"
-multimodal_embedding = "vllm_sr_runtime.families.multimodal_embedding.family:MultimodalEmbeddingFamily"
-task_heads = "vllm_sr_runtime.families.task_heads.family:TaskHeadsFamily"
-vela2 = "vllm_sr_runtime.families.vela2.family:Vela2Family"
+[project.entry-points."vllm_srun.families"]
+decision1 = "vllm_srun.families.decision1.family:Decision1Family"
+decision2 = "vllm_srun.families.decision2.family:Decision2Family"
+multimodal_embedding = "vllm_srun.families.multimodal_embedding.family:MultimodalEmbeddingFamily"
+task_heads = "vllm_srun.families.task_heads.family:TaskHeadsFamily"
+vela2 = "vllm_srun.families.vela2.family:Vela2Family"
 
-[project.entry-points."vllm_sr_runtime.engines"]
-native = "vllm_sr_runtime.engines.native.engine:NativeEngine"
-onnxruntime = "vllm_sr_runtime.engines.onnxruntime.engine:OnnxRuntimeEngine"
+[project.entry-points."vllm_srun.engines"]
+native = "vllm_srun.engines.native.engine:NativeEngine"
+onnxruntime = "vllm_srun.engines.onnxruntime.engine:OnnxRuntimeEngine"
 
-[project.entry-points."vllm_sr_runtime.accelerators"]
-cpu = "vllm_sr_runtime.accel.cpu:CPUAccelerator"
-cuda = "vllm_sr_runtime.accel.cuda:CUDAAccelerator"
-mps = "vllm_sr_runtime.accel.mps:MPSAccelerator"
-rocm = "vllm_sr_runtime.accel.rocm:ROCmAccelerator"
-xpu = "vllm_sr_runtime.accel.xpu:XPUAccelerator"
+[project.entry-points."vllm_srun.accelerators"]
+cpu = "vllm_srun.accel.cpu:CPUAccelerator"
+cuda = "vllm_srun.accel.cuda:CUDAAccelerator"
+mps = "vllm_srun.accel.mps:MPSAccelerator"
+rocm = "vllm_srun.accel.rocm:ROCmAccelerator"
+xpu = "vllm_srun.accel.xpu:XPUAccelerator"
 
-[project.entry-points."vllm_sr_runtime.profiles"]
-exact = "vllm_sr_runtime.profiles.exact:ExactProfile"
-shared_context = "vllm_sr_runtime.profiles.shared_context:SharedContextProfile"
-batching = "vllm_sr_runtime.profiles.batching:BatchingProfile"
-max_speed = "vllm_sr_runtime.profiles.max_speed:MaxSpeedProfile"
+[project.entry-points."vllm_srun.profiles"]
+exact = "vllm_srun.profiles.exact:ExactProfile"
+shared_context = "vllm_srun.profiles.shared_context:SharedContextProfile"
+batching = "vllm_srun.profiles.batching:BatchingProfile"
+max_speed = "vllm_srun.profiles.max_speed:MaxSpeedProfile"
 
 [tool.setuptools.packages.find]
-include = ["vllm_sr_runtime*"]
+include = ["vllm_srun*"]
 
 [tool.setuptools.package-data]
-vllm_sr_runtime = [
+vllm_srun = [
   "api/openapi.yaml",
   "registry/golden_answers*.json",
   "registry/kernel_choices.json",
 ]
 
 [tool.mypy]
-# The plugin API and the code that drives it are checked strictly; modules they
-# import are read for types but not reported.
+# The plugin API, the runtime that drives it and the built-in engines and
+# families are checked strictly; modules they import are read for types but
+# not reported.
 python_version = "3.10"
 files = [
-  "vllm_sr_runtime/plugins",
-  "vllm_sr_runtime/scheduler",
-  "vllm_sr_runtime/profiles",
-  "vllm_sr_runtime/runtime.py",
+  "vllm_srun/plugins",
+  "vllm_srun/scheduler",
+  "vllm_srun/profiles",
+  "vllm_srun/runtime.py",
+  "vllm_srun/api",
+  "vllm_srun/registry",
+  "vllm_srun/heads",
+  "vllm_srun/supervision",
+  "vllm_srun/engines",
+  "vllm_srun/families",
 ]
 strict = true
 follow_imports = "silent"

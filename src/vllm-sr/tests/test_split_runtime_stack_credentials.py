@@ -28,11 +28,6 @@ def _split_runtime_topology(monkeypatch):
 def _stub_valid_container_cli(monkeypatch, tmp_path):
     docker_bin = tmp_path / "docker"
     docker_bin.write_text("")
-    monkeypatch.setattr(
-        container_start,
-        "resolve_container_cli_path",
-        lambda preferred_path=None: str(docker_bin),
-    )
     return docker_bin
 
 

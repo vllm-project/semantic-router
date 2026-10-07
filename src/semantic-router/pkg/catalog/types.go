@@ -393,6 +393,18 @@ type Reliability struct {
 	HealthCheckPath     string `json:"health_check_path,omitempty" yaml:"health_check_path,omitempty"`
 	HealthCheckInterval string `json:"health_check_interval,omitempty" yaml:"health_check_interval,omitempty"`
 	HealthCheckTimeout  string `json:"health_check_timeout,omitempty" yaml:"health_check_timeout,omitempty"`
+
+	ConnectTimeout            string  `json:"connect_timeout,omitempty" yaml:"connect_timeout,omitempty"`
+	TotalTimeout              string  `json:"total_timeout,omitempty" yaml:"total_timeout,omitempty"`
+	IdleTimeout               string  `json:"idle_timeout,omitempty" yaml:"idle_timeout,omitempty"`
+	PerTryTimeout             string  `json:"per_try_timeout,omitempty" yaml:"per_try_timeout,omitempty"`
+	FirstByteTimeout          string  `json:"first_byte_timeout,omitempty" yaml:"first_byte_timeout,omitempty"`
+	RetriableStatusCodes      []int   `json:"retriable_status_codes,omitempty" yaml:"retriable_status_codes,omitempty"`
+	RetryBackOffBase          string  `json:"retry_back_off_base,omitempty" yaml:"retry_back_off_base,omitempty"`
+	RetryBackOffMax           string  `json:"retry_back_off_max,omitempty" yaml:"retry_back_off_max,omitempty"`
+	RetryAfterMax             string  `json:"retry_after_max,omitempty" yaml:"retry_after_max,omitempty"`
+	RetryBudgetPercent        float64 `json:"retry_budget_percent,omitempty" yaml:"retry_budget_percent,omitempty"`
+	RetryBudgetMinConcurrency int     `json:"retry_budget_min_concurrency,omitempty" yaml:"retry_budget_min_concurrency,omitempty"`
 }
 
 type CatalogBindingVerification struct {

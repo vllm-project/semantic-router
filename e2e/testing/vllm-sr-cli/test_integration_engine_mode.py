@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Engine mode: `vllm-sr serve MODEL ...` runs the model runtime and serves it.
+"""Engine mode: `vllm-sr serve MODEL ...` runs the model runtime in a container.
 
-These tests start the real CLI in the current Python environment, which must
-have the model runtime installed (`make model-runtime-install`). They serve
-tiny random-weight packages written by `vllm-sr-runtime fixture`, so no model
-is downloaded, and send the requests the Quickstart page tells readers to send,
-read from the page itself.
+These tests start the real CLI, which runs the runtime in the router image
+(`VLLM_SR_IMAGE`), so the host needs only the CLI and a container runtime.
+They serve tiny random-weight packages that the image's `vllm-srun fixture`
+writes into local directories, which the container reads through read-only
+mounts, so no model is downloaded. They send the requests the Quickstart page
+tells readers to send, read from the page itself.
 """
 
 import math
@@ -16,13 +17,21 @@ import time
 import unittest
 from pathlib import Path
 
-from runtime_http import HTTP_OK, ServeProcess, call, page_requests
+from runtime_http import (
+    HTTP_OK,
+    ServeProcess,
+    call,
+    container_runtime,
+    page_requests,
+    write_fixture,
+)
 
 QUICKSTART = (
     Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
 )
 HTTP_BAD_REQUEST = 400
 HTTP_UNSUPPORTED = 422
+REMOVAL_TIMEOUT_SECONDS = 30
 
 
 class TestEngineMode(unittest.TestCase):
@@ -36,31 +45,34 @@ class TestEngineMode(unittest.TestCase):
 
     @classmethod
     def _fixture(cls, name: str, family: str, variant: str) -> str:
-        output = cls.root / name
-        subprocess.run(
-            [
-                "vllm-sr-runtime",
-                "fixture",
-                str(output),
-                "--family",
-                family,
-                "--variant",
-                variant,
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        return str(output)
+        return str(write_fixture(cls.root / "packages" / name, family, variant))
 
     def _serve(self, *models: str) -> ServeProcess:
         engine = ServeProcess(
-            ["vllm-sr", "serve", *models, "--device", "cpu"],
+            [
+                "vllm-sr",
+                "serve",
+                *models,
+                "--device",
+                "cpu",
+                "--image-pull-policy",
+                "ifnotpresent",
+            ],
             self.root / f"serve-{len(models)}-{time.monotonic_ns()}.log",
+            # The runtime's downloads stay in this test's directory.
+            env={"VLLM_SR_ENGINE_CACHE_DIR": str(self.root / "cache")},
         )
         self.addCleanup(engine.stop)
         engine.wait_ready()
         return engine
+
+    def _container_exists(self, port: int) -> bool:
+        result = subprocess.run(
+            [container_runtime(), "container", "inspect", f"vllm-sr-engine-{port}"],
+            capture_output=True,
+            check=False,
+        )
+        return result.returncode == 0
 
     def test_quickstart_decision_model(self):
         engine = self._serve(self.decision)
@@ -93,10 +105,15 @@ class TestEngineMode(unittest.TestCase):
 
         status, metrics = call(engine.base, "/metrics")
         self.assertEqual(status, HTTP_OK)
-        self.assertIn(
-            'vllm_sr_runtime_requests_total{endpoint="/v1/decisions"', metrics
-        )
+        self.assertIn('vllm_srun_requests_total{endpoint="/v1/decisions"', metrics)
+
+        # Ctrl-C stops the container, which removes itself, and exits 0.
+        self.assertTrue(self._container_exists(engine.port))
         self.assertEqual(engine.stop(), 0)
+        deadline = time.monotonic() + REMOVAL_TIMEOUT_SECONDS
+        while self._container_exists(engine.port) and time.monotonic() < deadline:
+            time.sleep(1)
+        self.assertFalse(self._container_exists(engine.port))
 
     def test_quickstart_classifier(self):
         engine = self._serve(self.classifier)

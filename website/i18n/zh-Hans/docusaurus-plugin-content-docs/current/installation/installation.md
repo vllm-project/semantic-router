@@ -3,7 +3,7 @@ sidebar_position: 1
 title: 快速开始
 description: 安装 vLLM Semantic Router 并发送你的第一条已路由请求。
 translation:
-  source_commit: "12c2aa4feb5c5d40d90104d8b09cade1facf0bf5"
+  source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
   source_file: "docs/installation/installation.md"
   outdated: false
 ---
@@ -22,7 +22,7 @@ import {
 
 # 快速开始
 
-安装 vLLM Semantic Router，启动本地栈，并发送一条请求。
+安装 vLLM Semantic Router，发送第一条路由请求。
 
 ## 系统要求
 
@@ -37,7 +37,7 @@ import {
 curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable --runtime skip
 ```
 
-这些参数属于安装脚本。`vllm-sr serve --runtime` 用于选择容器运行时
+这些参数属于安装脚本。`vllm-sr serve --container-runtime` 用于选择容器运行时
 （`docker` 或 `podman`）；`skip` 不是 `serve` 的运行时选项。
 
 ## 安装
@@ -77,7 +77,9 @@ curl 安装程序会自动启动栈。使用 pip 或 uv 安装后，用以下命
 vllm-sr serve
 ```
 
-打开 [http://localhost:8700](http://localhost:8700)，添加模型端点，并激活生成的配置。Agent 可以通过 CLI 和 Router 管理 API 完成同样的工作，而无需使用控制面板。
+打开 [http://localhost:8700](http://localhost:8700)，添加模型端点，并激活生成的配置。设置期间 `vllm-sr serve` 保持等待，你激活后它会启动 Router。Agent 可以通过 CLI 和 Router 管理 API 完成同样的工作，而无需使用控制面板。
+
+之后，Router 能热加载的变更会立即生效。运行中的容器无法接受的变更（例如监听器换了端口）会先保存，控制面板会提示“Restart required: run `vllm-sr serve` to apply.”；下一次 `vllm-sr serve` 会应用它，在此之前 `vllm-sr status` 会一直报告。
 
 ## 发送请求
 
@@ -92,6 +94,7 @@ curl http://localhost:8899/v1/chat/completions \
 
 ## 下一步
 
+- [接入 Agent Harness](agent-harness)
 - [选择部署方式](deployment-options)
 - [配置模型](model-configuration)
 - [配置路由](configuration)

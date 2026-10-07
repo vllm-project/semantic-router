@@ -29,6 +29,9 @@ STATE_ROOT_DIR_ENV = "VLLM_SR_STATE_ROOT_DIR"
 PRIVATE_STATE_FILE_MODE = 0o600
 CONTAINER_READABLE_STATE_FILE_MODE = 0o644
 MAX_PRIVATE_STATE_BYTES = 64 * 1024
+# The Dashboard image's nonroot group. Its entrypoint gives this group access
+# to the runtime state the Dashboard manages, such as .vllm-sr, while it runs.
+DASHBOARD_STATE_GID = 65532
 
 log = get_logger(__name__)
 
@@ -38,6 +41,17 @@ def _current_posix_user_id() -> int | None:
 
     get_user_id = getattr(os, "geteuid", None) or getattr(os, "getuid", None)
     return get_user_id() if os.name == "posix" and get_user_id is not None else None
+
+
+def _shared_with_dashboard(info: os.stat_result) -> bool:
+    """Whether a directory is private to its owner and the Dashboard's group."""
+
+    mode = stat.S_IMODE(info.st_mode)
+    return (
+        info.st_gid == DASHBOARD_STATE_GID
+        and mode & stat.S_IRWXU == stat.S_IRWXU
+        and not mode & stat.S_IRWXO
+    )
 
 
 def _create_or_harden_private_directory(
@@ -77,6 +91,10 @@ def _create_or_harden_private_directory(
         raise ValueError(
             f"Runtime state directory must be owned by the current user: {directory}"
         )
+    # Hardening a directory a running Dashboard shares would lock it out of
+    # its runtime config and lock until the next `vllm-sr serve` restarts it.
+    if _shared_with_dashboard(info):
+        return directory
     if stat.S_IMODE(info.st_mode) != _PRIVATE_DIRECTORY_MODE:
         try:
             os.chmod(directory, _PRIVATE_DIRECTORY_MODE, follow_symlinks=False)
@@ -346,10 +364,11 @@ def write_private_state_bytes(
     """Atomically write one runtime-state file inside an owned private directory.
 
     The containing directory is created or hardened first, so the write always
-    lands in an owner-only 0700 directory. ``mode`` defaults to owner-only and
+    lands in a directory no other host user can enter: owner-only 0700, or
+    shared only with the Dashboard's group. ``mode`` defaults to owner-only and
     exists for the narrow case of a file an unprivileged container uid must
-    read after bind mount; the directory stays 0700 either way, which keeps a
-    relaxed file mode unreachable for other host users.
+    read after bind mount; the directory keeps a relaxed file mode unreachable
+    for other host users either way.
     """
 
     path = path.expanduser().absolute()

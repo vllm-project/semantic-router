@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 from tokenizers import Tokenizer
-from vllm_sr_runtime.testing.task_heads import BOS, EOS, encoder_tokenizer
-from vllm_sr_runtime.text.windows import (
+from vllm_srun.testing.task_heads import BOS, EOS, encoder_tokenizer
+from vllm_srun.text.windows import (
     Envelope,
     InputTooLongError,
     Window,

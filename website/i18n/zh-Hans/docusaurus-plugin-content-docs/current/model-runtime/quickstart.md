@@ -2,38 +2,34 @@
 title: 快速开始
 description: 安装模型运行时，运行一个模型，向它发送请求，再让路由器使用它。
 translation:
-  source_commit: "e201c95209820af2d88e900b7b14c8a982c0d244"
+  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/model-runtime/quickstart.md"
   outdated: false
 ---
 
 # 快速开始
 
-大约十分钟内，你将安装模型运行时，在 CPU 上运行一个模型并向它提问，
+大约十分钟内，你将安装 `vllm-sr` CLI，在 CPU 上运行一个模型并向它提问，
 然后让路由器用同一个模型做路由。
 
-你需要 Linux 或 macOS、Python 3.10 或更新版本，以及约 3 GB 可用磁盘空间用于下载模型。
-不需要 GPU。
+你需要装有 Docker 或 Podman 的 Linux 或 macOS、Python 3.10 或更新版本，以及几 GB 可用磁盘空间，
+用于路由器镜像和模型下载。不需要 GPU。
 
 ## 1. 安装 {#1-install}
 
-运行时是一个 Python 包，与 `vllm-sr` CLI 放在同一个仓库中。把两者装进一个虚拟环境，
-并使用 CPU 版 PyTorch：
+把 CLI 装进一个虚拟环境：
 
 ```bash
-git clone https://github.com/vllm-project/semantic-router.git
-cd semantic-router
 python3 -m venv .venv
 . .venv/bin/activate
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install ./src/vllm-sr ./src/model-runtime
+pip install vllm-sr
 ```
 
-确认运行时能看到它的内置模型：
-
-```bash
-vllm-sr-runtime models
-```
+模型运行时是 Python 包 `vllm-srun`，只随路由器镜像发布。`vllm-sr serve MODEL` 在 `vllm-sr`
+镜像的容器里运行它，CLI 首次使用时拉取该镜像，所以你的机器上不用再装别的东西。在 GPU 主机上，
+`--platform amd` 或 `--platform nvidia` 选用 `vllm-sr-rocm` 或 `vllm-sr-cuda` 镜像并把 GPU
+透传进容器；在 macOS 上运行时只用 CPU，因为那里的容器拿不到 GPU。镜像携带发布时所用的 PyTorch
+构建，所以答案就是模型发布时的答案（见[选择模型](./choose-a-model.md#hardware)）。
 
 ## 2. 运行模型 {#2-serve-a-model}
 
@@ -43,8 +39,9 @@ vllm-sr-runtime models
 vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
 ```
 
-首次启动会把模型（约 1.5 GB）下载到 Hugging Face 缓存，并对照固定的哈希校验每个文件。
-健康检查通过后模型即就绪。在第二个终端中：
+运行时在前台运行，按 Ctrl-C 停止。首次启动会把模型（约 1.5 GB）下载到 engine 模式的缓存
+`~/.cache/vllm-sr/models`，并对照固定的哈希校验每个文件；之后的启动直接复用。设置
+`VLLM_SR_ENGINE_CACHE_DIR` 可以把缓存放到别处。健康检查通过后模型即就绪。在第二个终端中：
 
 ```bash
 curl -s localhost:8100/health

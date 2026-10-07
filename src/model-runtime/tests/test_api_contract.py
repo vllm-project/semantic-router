@@ -2,15 +2,16 @@
 
 import asyncio
 import copy
+import json
 from pathlib import Path
 
 import jsonschema
 import pytest
 import yaml
 from starlette.testclient import TestClient
-from vllm_sr_runtime.api.app import API_VERSION, OPENAPI_PATH, create_app
-from vllm_sr_runtime.config import ModelConfig, ServeConfig
-from vllm_sr_runtime.runtime import Runtime
+from vllm_srun.api.app import API_VERSION, OPENAPI_PATH, create_app
+from vllm_srun.config import ModelConfig, ServeConfig
+from vllm_srun.runtime import Runtime
 
 from .conftest import QUESTIONS, STATE
 
@@ -161,8 +162,8 @@ SYSTEM_ONE_CASES = {
 
 @pytest.fixture(scope="module")
 def decision_runtimes(tmp_path_factory, qwen3_runtime):
-    from vllm_sr_runtime.testing import decision1
-    from vllm_sr_runtime.testing.vela2 import write_encoder_package
+    from vllm_srun.testing import decision1
+    from vllm_srun.testing.vela2 import write_encoder_package
 
     root = tmp_path_factory.mktemp("systemone")
     packages = {
@@ -295,6 +296,42 @@ def test_body_that_is_not_json(client):
 
 
 @pytest.mark.parametrize(
+    "field,old,surrogate",
+    [
+        ("state", '"Write a', b"\\ud800"),
+        ("instructions", '"Which domain', b"\\ud800"),
+        ("question id", '"domain"', b"\\ud800"),
+        ("criteria key", '"code"', b"\\ud800"),
+        ("state as raw bytes", '"Write a', b"\xed\xa0\x80"),
+    ],
+)
+def test_unpaired_surrogate_is_an_invalid_request(client, field, old, surrogate):
+    raw = json.dumps({"state": STATE, "questions": QUESTIONS}).encode()
+    old = old.encode()
+    assert raw.count(old) == 1, field
+    response = client.post(
+        "/v1/decisions",
+        content=raw.replace(old, old[:3] + surrogate + old[3:]),
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 400
+    check("ErrorResponse", response.json())
+    assert response.json()["error"]["code"] == "invalid_request"
+    assert client.get("/health").json()["status"] == "ready"
+
+
+def test_escaped_surrogate_pair_is_accepted(client):
+    raw = json.dumps({"state": STATE + " \U0001f600", "questions": QUESTIONS})
+    assert "\\ud83d\\ude00" in raw
+    response = client.post(
+        "/v1/decisions",
+        content=raw.encode(),
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize(
     "name, body",
     [
         ("ClassifyRequest", {"input": "one text"}),
@@ -359,8 +396,8 @@ def test_models_health_metrics_and_openapi(client):
     )
     assert card["limits"]["max_options"] == 255 and card["limits"]["max_levels"] == 10
     assert {p["group"] for p in card["plugins"]} >= {
-        "vllm_sr_runtime.families",
-        "vllm_sr_runtime.engines",
+        "vllm_srun.families",
+        "vllm_srun.engines",
     }
     health = client.get("/health")
     assert health.status_code == 200
@@ -376,14 +413,11 @@ def test_models_health_metrics_and_openapi(client):
         == live["api_version"]
     )
     metrics = client.get("/metrics").text
-    assert (
-        "vllm_sr_runtime_requests_total" in metrics
-        and "vllm_sr_runtime_ready 1.0" in metrics
-    )
+    assert "vllm_srun_requests_total" in metrics and "vllm_srun_ready 1.0" in metrics
     memory = [
         line
         for line in metrics.splitlines()
-        if line.startswith("vllm_sr_runtime_model_memory_bytes{")
+        if line.startswith("vllm_srun_model_memory_bytes{")
     ]
     assert len(memory) == 1 and float(memory[0].rsplit(" ", 1)[1]) > 0
     assert client.get("/openapi.yaml").text == Path(OPENAPI_PATH).read_text()

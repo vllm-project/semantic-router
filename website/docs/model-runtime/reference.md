@@ -10,9 +10,33 @@ This page lists the details the guides leave out. The design behind them is in
 
 ## Commands
 
-`vllm-sr serve MODEL ...` runs the runtime in your current Python environment.
-Without a `MODEL` argument, `vllm-sr serve` starts the router instead.
-`vllm-sr-runtime serve` is the same server with every option.
+`vllm-sr serve MODEL ...` (engine mode) runs the runtime in the foreground, in
+a Docker or Podman container from a router image. Without a `MODEL` argument,
+`vllm-sr serve` starts the router instead.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `MODEL ...` | | Hub repositories, built-in model names or local package directories, which the container reads through read-only mounts. Several models share one process. `MODEL@REVISION` pins a revision. |
+| `--models FILE` | | A models file instead of `MODEL` arguments. Its local packages are mounted too. |
+| `--revision SHA` | | The 40-character commit to load, for one `MODEL`. |
+| `--platform` | `cpu` | The image and the GPU passthrough: `cpu` (`vllm-sr`), `amd` (`vllm-sr-rocm` with the ROCm devices) or `nvidia` (`vllm-sr-cuda` with the NVIDIA GPUs). macOS runs `cpu` only. |
+| `--device` | `auto` | `auto`, or what the image runs: `cpu`, `rocm[:N]` with `--platform amd`, `cuda[:N]` with `--platform nvidia`, or a plugin's accelerator in an image that has the plugin. |
+| `--host` | `127.0.0.1` | Host address the runtime's port is published on. |
+| `--port` | `8100` | Host port the runtime is published on. |
+| `--runtime-profile` | `exact` | `exact`, `shared_context`, `batching`, `max_speed`, or one a plugin adds. |
+| `--image` | the platform's image | Another image, for example one with a plugin installed. |
+| `--image-pull-policy` | `always` | `always`, `ifnotpresent` or `never`. |
+| `--container-runtime` | detected | `docker` or `podman`. |
+| `--log-level` | `info` | The runtime's log level. |
+
+Engine mode keeps what the runtime downloads and compiles in
+`~/.cache/vllm-sr/models` (`$XDG_CACHE_HOME/vllm-sr/models` when that is set);
+`VLLM_SR_ENGINE_CACHE_DIR` moves it. `HF_TOKEN`, `HF_ENDPOINT` and
+`HF_HUB_OFFLINE` reach the container by name, never on its command line.
+
+`vllm-srun serve` is the same server with every option. It is the command the
+images run; on your own machine it needs a source checkout
+(`make model-runtime-install`).
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -24,7 +48,7 @@ Without a `MODEL` argument, `vllm-sr serve` starts the router instead.
 | `--port` | `8100` | Port to listen on. |
 | `--uds PATH` | | Listen on a Unix socket instead of TCP. |
 | `--profile` | `exact` | `exact`, `shared_context`, `batching`, `max_speed`, or one a plugin adds. |
-| `--engine` | `native` | Engine plugin: `native` (PyTorch) or `onnxruntime`. |
+| `--engine` | `auto` | Engine plugin: `auto` (the first that runs the model, native first), `native` (PyTorch) or `onnxruntime` (the `onnx` extra). |
 | `--family` | detected | Force a model family plugin. |
 | `--served-model-name` | the model name | The model ID the API reports, for one `MODEL`. |
 | `--threads` | all cores | CPU threads for the process. Each graph of an ONNX Runtime model runs its own pool of up to this many threads, so set it on a large host. |
@@ -43,11 +67,11 @@ Without a `MODEL` argument, `vllm-sr serve` starts the router instead.
 | `--base-path DIR` | | A local copy of the pinned base model an adapter package needs, instead of a download. Its files are checked against the package's hashes. |
 | `--accept-licence ID` | | Accept a restricted licence (repeatable). |
 | `--log-level` | `info` | `debug`, `info`, `warning` or `error`. |
-| `--autotune-cache DIR` | `$VLLM_SR_RUNTIME_AUTOTUNE_CACHE` | Keep compiled GPU kernels, and the kernel tuning of models without recorded choices, between runs. Built-in models run their recorded choices on MI300X and MI325X instead of tuning. |
+| `--autotune-cache DIR` | `$VLLM_SRUN_AUTOTUNE_CACHE` | Keep compiled GPU kernels, and the kernel tuning of models without recorded choices, between runs. Built-in models run their recorded choices on MI300X and MI325X instead of tuning. |
 
-Other commands: `vllm-sr-runtime models` lists the built-in models with their
-pinned revisions, `vllm-sr-runtime plugins` lists the installed families,
-engines, accelerators and profiles, and `vllm-sr-runtime devices` prints, as
+Other commands: `vllm-srun models` lists the built-in models with their
+pinned revisions, `vllm-srun plugins` lists the installed families,
+engines, accelerators and profiles, and `vllm-srun devices` prints, as
 JSON, the devices this host offers and the one `--device auto` tries first.
 
 ## Models file
@@ -167,20 +191,20 @@ The binding names (`domain_classifier`, `pii_classifier`, `prompt_guard`,
 
 | Environment variable | Default | Meaning |
 | --- | --- | --- |
-| `VLLM_SR_RUNTIME_COMMAND` | `vllm-sr-runtime` | Command the router runs for a managed process. |
-| `VLLM_SR_RUNTIME_DIR` | a private temporary directory | Where the router puts the processes' Unix sockets and models files. |
-| `VLLM_SR_RUNTIME_CACHE_DIR` | `/app/models/model-runtime` in router images | Hugging Face cache of managed runtimes. |
-| `VLLM_SR_RUNTIME_CPU_PROCESSES` | one per CPU model, at most one per two cores | The most processes CPU models without a `process` are spread over, `device: auto` ones included on a host without a GPU. |
-| `VLLM_SR_RUNTIME_PREPARED_DIR` | `/opt/router-model-artifacts` | Where the runtime finds prepared bundles (Vela Omni) before it looks on the Hub. |
-| `VLLM_SR_RUNTIME_READY_TIMEOUT` | `10m` | How long the router waits for a deployment to become ready when it starts or reloads, as a duration such as `30m`. A first start may download and verify large models. |
-| `VLLM_SR_RUNTIME_RESULT_CACHE` | `4096` | Recent classify and decision results the router keeps per model, so a repeated request skips the runtime; `0` turns it off. |
-| `VLLM_SR_RUNTIME_AUTOTUNE_CACHE` | | The `--autotune-cache` directory of a runtime. |
+| `VLLM_SRUN_COMMAND` | `vllm-srun` | Command the router runs for a managed process. |
+| `VLLM_SRUN_DIR` | a private temporary directory | Where the router puts the processes' Unix sockets and models files. |
+| `VLLM_SRUN_CACHE_DIR` | `/app/models/model-runtime` in router images | Hugging Face cache of managed runtimes. |
+| `VLLM_SRUN_CPU_PROCESSES` | one per CPU model, at most one per two cores | The most processes CPU models without a `process` are spread over, `device: auto` ones included on a host without a GPU. |
+| `VLLM_SRUN_READY_TIMEOUT` | `10m` | How long the router waits for a deployment to become ready when it starts or reloads, as a duration such as `30m`. A first start may download and verify large models. |
+| `VLLM_SRUN_RESULT_CACHE` | `4096` | Recent classify and decision results the router keeps per model, so a repeated request skips the runtime; `0` turns it off. |
+| `VLLM_SRUN_AUTOTUNE_CACHE` | | The `--autotune-cache` directory of a runtime. |
 | `HF_TOKEN` | | Token for gated or private repositories. |
 
 The router talks to managed runtimes only over Unix sockets in a directory only
 its own user can open (mode 0700). It restarts a process that exits, waiting 1
 second at first and up to 60 seconds after repeated failures, and stops every
-process (SIGTERM, then SIGKILL) when it exits. It also restarts a process in
+process (SIGTERM, then SIGKILL after 10 seconds, logged as
+`runtime_process_killed`) when it exits. It also restarts a process in
 which every model failed to load, the same way, so a model that failed for a
 passing reason comes back without a configuration reload. A process that still
 serves any model keeps running.
@@ -197,14 +221,14 @@ Router (port 9190):
 | `vsr_model_runtime_unknown_answers_total` | `deployment`, `reason` | Answers left unknown, by reason. |
 | `vsr_model_runtime_restarts_total` | `deployment` | Restarts of managed processes. |
 
-Runtime (`GET /metrics`): `vllm_sr_runtime_requests_total` by endpoint and
-status, `vllm_sr_runtime_request_duration_seconds`,
-`vllm_sr_runtime_queue_duration_seconds`,
-`vllm_sr_runtime_forward_duration_seconds`, `vllm_sr_runtime_batch_rows`,
-`vllm_sr_runtime_batch_tokens`, `vllm_sr_runtime_bundle_tasks`,
-`vllm_sr_runtime_result_cache_total` by model and outcome,
-`vllm_sr_runtime_queue_depth`, `vllm_sr_runtime_ready`,
-`vllm_sr_runtime_model_info` and `vllm_sr_runtime_model_memory_bytes` (the
+Runtime (`GET /metrics`): `vllm_srun_requests_total` by endpoint and
+status, `vllm_srun_request_duration_seconds`,
+`vllm_srun_queue_duration_seconds`,
+`vllm_srun_forward_duration_seconds`, `vllm_srun_batch_rows`,
+`vllm_srun_batch_tokens`, `vllm_srun_bundle_tasks`,
+`vllm_srun_result_cache_total` by model and outcome,
+`vllm_srun_queue_depth`, `vllm_srun_ready`,
+`vllm_srun_model_info` and `vllm_srun_model_memory_bytes` (the
 bytes a model's loaded weights take, reduced-precision copies included).
 
 ## Security
@@ -218,5 +242,6 @@ bytes a model's loaded weights take, reduced-precision copies included).
 - Tokens come from `HF_TOKEN` or the Hugging Face token file, never from
   command-line arguments, and are never logged.
 - Request text is never logged, and metrics carry no request content.
-- `vllm-sr serve MODEL` listens on `127.0.0.1` unless you pass `--host`. The
-  runtime has no authentication; expose it only on a trusted network.
+- `vllm-sr serve MODEL` publishes the runtime on `127.0.0.1` unless you pass
+  `--host`. The runtime has no authentication; expose it only on a trusted
+  network.
