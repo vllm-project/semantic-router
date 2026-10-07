@@ -4,7 +4,7 @@ export const AGENT_INSTALL_DOC_PATH = '/docs/installation/agent'
 
 export const CURL_INSTALL_COMMAND = 'curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable'
 
-export const PIP_INSTALL_COMMAND = `python -m venv .venv
+export const PIP_INSTALL_COMMAND = `python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade vllm-sr`
 

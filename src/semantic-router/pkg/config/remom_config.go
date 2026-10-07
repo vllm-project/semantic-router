@@ -38,10 +38,7 @@ func (c ReMoMRuntimeConfig) EffectiveModelNames() []string {
 }
 
 func (c *RouterConfig) ExposedReMoMModelNames() []string {
-	if c == nil || !c.Looper.IsEnabled() {
-		return nil
-	}
-	if !c.HasReMoMDecision() {
+	if c == nil || !c.HasReMoMDecision() {
 		return nil
 	}
 	return c.Looper.ReMoM.EffectiveModelNames()

@@ -29,7 +29,7 @@ global:
 | 节 | 拥有 |
 | --- | --- |
 | `version` | Canonical schema 版本。使用 `v0.3`。 |
-| `listeners` | 公共 Router 监听器和超时。 |
+| `listeners` | 公共 Router 监听器：地址、端口、空闲超时、可选的客户端 API key，以及在 standalone 模式下由 Router 提供的可选单向 TLS（`tls.cert_file`、`tls.key_file`）；以及 listener 信任的身份来源（`identity.trust_headers`、`identity.trusted_peers`，默认不信任任何来源），由 Router 在 standalone 模式下遵循。 |
 | `providers` | 逻辑 provider 模型、物理后端端点、定价、能力和默认值。 |
 | `evaluation` | 可选的运维人员拥有的基准定义、带版本的索引 DAG，以及与模型关联的记录。 |
 | `routing` | 默认配方：model card、信号、投影、决策、strategy、算法和路由插件。 |
@@ -309,7 +309,7 @@ canonical 文档可以通过多个界面编写或应用：
 - Kubernetes Operator；以及
 - 路由 DSL。
 
-[配置工作流](configuration-workflows)解释哪个界面拥有文档的哪一部分，以及如何避免相互竞争的事实来源。[配置契约](configuration-contract)描述生成的机器可读 schema、Router 发现和校验 API，以及工具和 Agent 的安全编写循环。
+[配置工作流](configuration-workflows)解释哪个界面拥有文档的哪一部分，以及如何避免相互竞争的事实来源。[配置契约](configuration-contract)描述生成的机器可读 schema、Router 发现和校验 API，以及工具和 Agent 的安全编写循环。[配置管理](configuration-management)说明运行中的 Router 如何激活变更、被拒绝的变更如何报告，以及如何列出和回滚版本。
 
 ## 参考来源
 

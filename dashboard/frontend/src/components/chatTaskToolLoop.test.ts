@@ -80,7 +80,6 @@ describe('runToolLoop', () => {
       prompt: 'Research this deeply.',
       createdAt: 1,
       requestOptions: {
-        enableClawMode: false,
         enableWebSearch: true,
         model: 'vllm-sr/blend',
       },

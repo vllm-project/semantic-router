@@ -143,10 +143,6 @@
     "message": "任务指南",
     "description": "The label for category Model Runtime Guides in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.Fleet Simulator": {
-    "message": "机队模拟器",
-    "description": "The label for category Fleet Simulator in sidebar tutorialSidebar"
-  },
   "sidebar.tutorialSidebar.category.Proposals": {
     "message": "提案",
     "description": "The label for category Proposals in sidebar tutorialSidebar"
@@ -234,10 +230,6 @@
   "sidebar.tutorialSidebar.category.Global": {
     "message": "全局配置",
     "description": "The label for category Global in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.link.Fleet Simulator PDF": {
-    "message": "机队模拟器 PDF",
-    "description": "The label for sidebar link Fleet Simulator PDF"
   },
   "sidebar.tutorialSidebar.category.Intelligent Route": {
     "message": "智能路由",

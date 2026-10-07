@@ -14,7 +14,7 @@ import io
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -22,6 +22,9 @@ from ...errors import INVALID_INPUT, MAX_LENGTH_EXCEEDED
 from ...heads import embedding
 from . import audio
 from .bundle import OmniBundle
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 MAX_IMAGE_PIXELS = 64 << 20
 _RESAMPLE = {"bicubic": "BICUBIC", "bilinear": "BILINEAR"}
@@ -41,8 +44,8 @@ INSTRUCTIONS = {
 class AudioFeatures:
     """Graph inputs of one audio input: CLAP windows ``[n, 1, 1, 1001, 64]`` and Whisper ``[1, 80, 3000]``."""
 
-    clap: np.ndarray
-    whisper: np.ndarray
+    clap: NDArray[np.float32]
+    whisper: NDArray[np.float32]
 
 
 class TextProcessor:
@@ -158,7 +161,7 @@ class ImageProcessor:
             config["image_std"],
         )
 
-    def pixels(self, data: bytes) -> np.ndarray | str:
+    def pixels(self, data: bytes) -> NDArray[np.float32] | str:
         """``[1, 3, size, size]`` float32, or ``invalid_input`` for an unreadable image."""
         from PIL import Image, UnidentifiedImageError
 

@@ -38,7 +38,7 @@ def profile_image_dependencies() -> dict[str, list[str]]:
         re.S,
     ):
         name, capabilities = match.groups()
-        images = ["extproc"]
+        images = ["vllm-sr"]
         local = re.search(r"LocalImages:\s*([^,}]+)", capabilities)
         if local:
             expression = local.group(1).strip()

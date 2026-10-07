@@ -153,7 +153,7 @@ func TestSpanBindingsFailPreparationTheModelCannotServe(t *testing.T) {
 	if _, err := runtime.Tokens(context.Background(), router); err != nil {
 		t.Fatalf("head router names the head that answers: %v", err)
 	}
-	if _, err := runtime.Sequence(context.Background(), spanBinding("domain_classifier", "vela", endpoint)); !errors.Is(err, binding.ErrCapability) {
-		t.Fatalf("only the span consumers ask ready-made questions, got %v", err)
+	if _, err := runtime.Sequence(context.Background(), spanBinding("classifier.topics", "vela", endpoint)); !errors.Is(err, binding.ErrCapability) {
+		t.Fatalf("a custom classifier has no question to ask, got %v", err)
 	}
 }

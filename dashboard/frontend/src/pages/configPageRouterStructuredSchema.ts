@@ -548,7 +548,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
   looper: {
     headers: {
       label: 'Headers',
-      description: 'Headers sent to the Looper endpoint.',
+      description: 'Headers added to every Looper model call.',
       schema: stringMap('Header'),
     },
   },

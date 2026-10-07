@@ -42,7 +42,7 @@ func registerCoreRoutes(mux routeRegistrar, cfg *config.Config, setupResolver *s
 		modelVerificationAuditor: options.modelVerificationAuditor,
 	})
 	registerToolRoutes(mux, cfg)
-	registerStatusRoutes(mux, cfg, options.statusHandler, store)
+	registerStatusRoutes(mux, cfg, options.statusHandler, stackState(cfg, setupResolver), store)
 	registerTopologyRoutes(mux, cfg, store)
 	registerRecipeRoutes(mux, cfg, store)
 }
@@ -203,16 +203,20 @@ func resolveToolsDBPath(cfg *config.Config) string {
 	return filepath.Join(projectRoot, toolSelection.ToolsDBPath)
 }
 
-func registerStatusRoutes(mux routeRegistrar, cfg *config.Config, statusHandler http.HandlerFunc, credentialProvider ...*recipe.Store) {
+func registerStatusRoutes(mux routeRegistrar, cfg *config.Config, statusHandler http.HandlerFunc, stack handlers.StackState, credentialProvider ...*recipe.Store) {
 	store := selectedRecipeStore(cfg, credentialProvider)
 	if statusHandler == nil {
-		statusHandler = handlers.StatusHandler(cfg.RouterAPIURL, cfg.EnvoyURL, cfg.ConfigDir, store)
+		statusHandler = handlers.StatusHandler(cfg.RouterAPIURL, cfg.EnvoyURL, cfg.ConfigDir, stack, store)
 	}
 	registerRouteFunc(mux, auth.PublicRoute("/api/status", http.MethodGet), statusHandler)
 	log.Printf("Status API endpoint registered: /api/status")
 
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/logs", auth.PermLogsRead, auth.SensitivitySensitive, auth.ResourceOwnerObservability, http.MethodGet), handlers.LogsHandler(cfg.RouterAPIURL))
 	log.Printf("Logs API endpoint registered: /api/logs")
+}
+
+func stackState(cfg *config.Config, setupResolver *setupmode.Resolver) handlers.StackState {
+	return handlers.StackState{ConfigPath: cfg.AbsConfigPath, Setup: setupResolver}
 }
 
 func registerTopologyRoutes(mux routeRegistrar, cfg *config.Config, credentialProvider ...*recipe.Store) {

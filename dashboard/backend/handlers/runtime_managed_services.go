@@ -50,67 +50,18 @@ func managedDashboardContainerName() string {
 	return envOrDefaultTrimmed(dashboardContainerNameEnv, defaultDashboardContainerName)
 }
 
-func managedRuntimeSyncContainerName() string {
-	return managedDashboardContainerName()
+// managedStackRunsEnvoy reports whether an Envoy container serves the
+// listeners in front of the Router. The CLI sets VLLM_SR_GATEWAY on every
+// container of the stack; in a standalone stack the Router serves them and no
+// Envoy container exists. Stacks from earlier releases always ran Envoy.
+func managedStackRunsEnvoy() bool {
+	return strings.TrimSpace(os.Getenv("VLLM_SR_GATEWAY")) != "standalone"
 }
 
 func managedRuntimeUsesSplitContainers() bool {
 	dashboardContainer := managedDashboardContainerName()
 	return managedContainerNameForService("router") != dashboardContainer ||
 		managedContainerNameForService("envoy") != dashboardContainer
-}
-
-func managedContainerNamesForComponent(component string) []string {
-	switch component {
-	case "router", "envoy", "dashboard":
-		return uniqueNonEmptyStrings([]string{managedContainerNameForService(component)})
-	case "all":
-		return uniqueNonEmptyStrings([]string{
-			managedContainerNameForService("router"),
-			managedContainerNameForService("envoy"),
-			managedContainerNameForService("dashboard"),
-		})
-	default:
-		return uniqueNonEmptyStrings([]string{managedContainerNameForService(component)})
-	}
-}
-
-func managedServiceForContainerName(containerName string) string {
-	switch containerName {
-	case managedContainerNameForService("router"):
-		return "router"
-	case managedContainerNameForService("envoy"):
-		return "envoy"
-	case managedContainerNameForService("dashboard"):
-		return "dashboard"
-	default:
-		return ""
-	}
-}
-
-func managedRuntimeContainerStatus() string {
-	fallbackStatus := ""
-	for _, containerName := range managedContainerNamesForComponent("all") {
-		switch status := getDockerContainerStatus(containerName); status {
-		case "running":
-			return status
-		case "not found":
-			continue
-		case "exited":
-			if fallbackStatus == "" {
-				fallbackStatus = status
-			}
-		default:
-			if fallbackStatus == "" {
-				fallbackStatus = status
-			}
-		}
-	}
-
-	if fallbackStatus != "" {
-		return fallbackStatus
-	}
-	return "not found"
 }
 
 func managedEnvoyReadyURL() string {
@@ -127,23 +78,6 @@ func managedEnvoyReadyURL() string {
 	}
 
 	return "http://localhost:8801/ready"
-}
-
-func uniqueNonEmptyStrings(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		result = append(result, value)
-	}
-	return result
 }
 
 func envOrDefaultTrimmed(key string, fallback string) string {

@@ -50,7 +50,7 @@ The `CHART` column shows the chart version (e.g. `semantic-router-0.2.0`) and
 ### Running container image
 
 ```bash
-# Get the image tag currently used by the extproc deployment
+# Get the image tag currently used by the Router deployment
 kubectl get deployment -n vllm-semantic-router-system \
   -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.template.spec.containers[0].image}{"\n"}{end}'
 ```
@@ -99,6 +99,19 @@ them. If you are on Helm < 3.14, supply a reviewed values file explicitly with
 `-f your-values.yaml`.
 :::
 
+:::warning The chart serves standalone mode by default
+From the first release with standalone mode
+([#4623](https://github.com/vllm-project/semantic-router/issues/4623)), the
+chart sets `gateway.mode: standalone`: the Router serves the OpenAI-compatible
+API on its own listeners and no longer serves ext_proc on port 50051. If Envoy
+Gateway, Agent Router, Istio, KServe, llm-d or another gateway calls the Router
+over ext_proc, add `--set gateway.mode=extproc` (or `gateway: {mode: extproc}`
+in your values file) to the upgrade. An upgrade whose live config still has the
+old default listeners `grpc-50051` and `http-8080` fails to render in
+standalone mode, before anything changes. `helm rollback` restores the previous
+release and its mode.
+:::
+
 Verify after upgrade:
 
 ```bash
@@ -112,12 +125,11 @@ Find the latest version on the [GitHub Releases page](https://github.com/vllm-pr
 
 ```bash
 # Pull by version tag (substitute podman for docker if using podman)
-docker pull ghcr.io/vllm-project/semantic-router/extproc:v0.4.0
 docker pull ghcr.io/vllm-project/semantic-router/vllm-sr:v0.4.0
 
 # Read the multi-architecture index digest, not a platform-specific manifest.
 DIGEST=$(docker buildx imagetools inspect \
-  ghcr.io/vllm-project/semantic-router/extproc:v0.4.0 \
+  ghcr.io/vllm-project/semantic-router/vllm-sr:v0.4.0 \
   --format '{{.Manifest.Digest}}')
 echo "Use digest: ${DIGEST}"
 ```
@@ -128,23 +140,27 @@ pulls the full set of production release images.
 For Kubernetes manifests, pin to the digest, not the tag:
 
 ```yaml
-image: ghcr.io/vllm-project/semantic-router/extproc@sha256:<digest>
+image: ghcr.io/vllm-project/semantic-router/vllm-sr@sha256:<digest>
 ```
 
 Published versioned images for a full release:
 
 | Image | Typical owner |
 |-------|---------------|
-| `ghcr.io/vllm-project/semantic-router/extproc:v0.4.0` | Router ExtProc runtime |
-| `ghcr.io/vllm-project/semantic-router/extproc-rocm:v0.4.0` | ROCm router ExtProc runtime |
-| `ghcr.io/vllm-project/semantic-router/vllm-sr:v0.4.0` | Local/runtime CLI image |
-| `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:v0.4.0` | CUDA local/runtime CLI image |
-| `ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:v0.4.0` | ROCm local/runtime CLI image |
+| `ghcr.io/vllm-project/semantic-router/vllm-sr:v0.4.0` | Router image for `vllm-sr serve`, Helm and the Operator (CPU) |
+| `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:v0.4.0` | The Router image for NVIDIA GPUs |
+| `ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:v0.4.0` | The Router image for AMD GPUs |
 | `ghcr.io/vllm-project/semantic-router/dashboard:v0.4.0` | Dashboard backend/frontend image |
 | `ghcr.io/vllm-project/semantic-router/operator:v0.4.0` | Kubernetes operator image |
 | `ghcr.io/vllm-project/semantic-router/operator-bundle:v0.4.0` | Operator bundle image |
 
 Image repositories do not necessarily publish identical release channels.
+
+Releases up to v0.4.0 also published `extproc` and `extproc-rocm`, the
+Kubernetes Router images. From the first release with standalone mode one
+image family serves every launcher; for that release `vllm-sr` is also
+published as `extproc` and `vllm-sr-rocm` as `extproc-rocm`, with the same
+digests, so pinned manifests keep working while you move them to `vllm-sr`.
 Verify the exact tag or digest in GHCR before adding a platform-specific image
 to a production manifest.
 
@@ -161,44 +177,20 @@ To upgrade to the latest stable release:
 pip install --upgrade vllm-sr
 ```
 
-#### One-time cleanup for the former Fleet Simulator sidecar
+#### Fleet Simulator is removed
 
-Current releases do not build or start Fleet Simulator as part of the
-`vllm-sr serve` lifecycle, and `vllm-sr stop` intentionally does not manage a
-standalone simulator. When upgrading from a release where `vllm-sr serve`
-automatically started the old sidecar, first inspect the exact legacy container
-(substitute `podman` if that was the runtime used):
+The Fleet Simulator (`vllm-sr-sim`) is no longer part of Semantic Router:
+releases publish neither its package nor its image, and the CLI never starts
+it. Installed copies keep working as they are. If an earlier `vllm-sr serve`
+started its sidecar automatically, remove that container once (substitute
+`podman` if that was the runtime used):
 
 ```bash
 docker container inspect vllm-sr-sim-container \
   --format '{{.Name}}\t{{.Config.Image}}\t{{.State.Status}}'
-```
-
-Only when deployment history confirms that this exact container is the old
-automatically managed sidecar, remove it once:
-
-```bash
 docker stop vllm-sr-sim-container
 docker rm vllm-sr-sim-container
 ```
-
-Do not remove a Fleet Simulator instance started explicitly with the standalone
-package, standalone Make targets, or a custom deployment. Those instances are
-independent of the Router runtime and remain supported.
-
-### 2d. Fleet simulator Python package upgrade
-
-`vllm-sr-sim` is a separate PyPI package with its own release cadence. Inspect
-the published versions, then pin one that matches your environment. Include
-`--pre` when selecting a development release:
-
-```bash
-python -m pip index versions --pre vllm-sr-sim
-pip install --upgrade --pre vllm-sr-sim==<published-version>
-```
-
-Fleet Simulator has an independent version stream. Pin its package version
-separately from the Router release.
 
 ---
 
