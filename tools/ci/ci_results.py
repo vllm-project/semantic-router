@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 from ci_plan import digest
-from release_guard_waiver import waiver_evidence_errors
+from known_issue_waivers import waived_cases, waiver_evidence_errors
 
 STATUSES = frozenset({"passed", "failed", "skipped"})
 SHA256_LENGTH = 64
@@ -23,7 +23,11 @@ def collection_errors(
     errors = []
     if waiver:
         errors.extend(waiver_evidence_errors(evidence, waiver))
-    elif evidence.get("known_issue_waiver") or evidence.get("waived_failure"):
+    elif (
+        evidence.get("known_issue_waiver")
+        or evidence.get("waived_failure")
+        or evidence.get("waived_failures")
+    ):
         errors.append("unplanned known-issue waiver in evidence")
     field = "cases" if "cases" in evidence else "checks"
     if field == "checks" and activity in {"test", "performance"}:
@@ -55,7 +59,7 @@ def collection_errors(
         if item.get("status") not in STATUSES:
             errors.append(f"{item['id']}: missing or invalid status")
         elif item["status"] != "passed" and not (
-            waiver and item["id"] == waiver["case"] and item["status"] == "failed"
+            waiver and item["id"] in waived_cases(waiver) and item["status"] == "failed"
         ):
             errors.append(f"required {item['id']}: {item['status']}")
     if len(ids) != len(set(ids)):

@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import time
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -217,7 +217,10 @@ def evaluate_probes(
     selected_probe_ids: Iterable[str] | None = None,
     *,
     scope: str = "deployment",
+    waive: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None,
 ) -> dict[str, Any]:
+    """Evaluate probes. A result ``waive`` returns a waiver for keeps that waiver
+    and stays in ``results``, but no acceptance figure counts it."""
     if scope not in EVALUATION_SCOPES:
         raise ValueError(f"unknown evaluation scope {scope!r}")
     manifest = manifest or {}
@@ -256,10 +259,15 @@ def evaluate_probes(
             results = list(executor.map(evaluate_one, probe_list))
 
     wall_time_seconds = time.perf_counter() - started
-    decision_summaries = summarize_decision_results(results, manifest)
-    tag_summaries = summarize_tag_results(results)
-    matched = sum(1 for result in results if result["matched"])
-    total = len(results)
+    if waive is not None:
+        for result in results:
+            if waiver := waive(result):
+                result["known_issue_waiver"] = waiver
+    counted = [result for result in results if not result.get("known_issue_waiver")]
+    decision_summaries = summarize_decision_results(counted, manifest)
+    tag_summaries = summarize_tag_results(counted)
+    matched = sum(1 for result in counted if result["matched"])
+    total = len(counted)
     matched_decisions = sum(
         1 for summary in decision_summaries if bool(summary.get("passed"))
     )
@@ -274,7 +282,7 @@ def evaluate_probes(
     return {
         "evaluation_scope": scope,
         "scopes": {
-            name: summarize_scope_results(results, manifest, name)
+            name: summarize_scope_results(counted, manifest, name)
             for name in EVALUATION_SCOPES
         },
         "selection_status_counts": dict(
@@ -302,6 +310,7 @@ def evaluate_probes(
         ),
         "matched": matched,
         "total": total,
+        "waived": len(results) - total,
         "success_rate": probe_success_rate,
         "matched_decisions": matched_decisions,
         "total_decisions": total_decisions,

@@ -118,7 +118,7 @@ decisions:
         query: Help me review this private repository service code and keep all processing on-prem.
         tags: [privacy, code]
       - id: internal_runbook_summary
-        query: Summarize this internal runbook, extract the action items, and do not send it to the cloud.
+        query: Help me summarize this internal runbook and list its action items, but do not send it to the cloud.
         expected_signals:
           kb: [privacy_policy]
         tags: [privacy, docs]
