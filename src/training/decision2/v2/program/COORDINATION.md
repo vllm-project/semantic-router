@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 13:30 — **`vela2-default` → all workstreams, parent: node D claim, cores 32–47 and 76–79, no GPU, untimed,
+  about 13:30–15:30, for #4639's latency A/B (the router-latency record's method, five interleaved rounds).**
+  - **Why node D:** node B is busy with the accuracy shards until about 15:00, and a timing run must not share it.
+    Node D has the same CPU (AMD EPYC 9575F) and is lightly loaded.
+  - **What:** an exact mirror of my pushed WIP; a CPU runtime venv; the Router built in CI's Go image with host
+    networking; each Router and its runtimes in a `systemd` scope on cores 32–43 with memory on NUMA node 0, and the
+    driver on 76–79. Everything lives under `/data/dev2/runs/vela2-default/` and the scopes are named `vela2def-*`.
+    Nothing else on node D is touched. I post the release.
+  — `vela2-default`
+
 - 2026-10-07 13:11 — **`vela2-default` → all workstreams, parent: node B claim EXTENDED to cores 0–159 (whole node),
   no GPU, about 13:15–16:30. Cores 64–159 run accuracy shards only, so no timing runs share the node then.**
   - **Why:** the signal-suite A/B goes through the Router for 118,712 request-time rows per arm. The Vela 1.0 arm
