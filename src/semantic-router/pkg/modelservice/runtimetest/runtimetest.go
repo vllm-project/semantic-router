@@ -56,6 +56,7 @@ type Runtime struct {
 	tasks      int
 	surfaces   map[string]int
 	limits     api.ProcessLimits
+	timing     string
 }
 
 // APIVersion is the contract version the fake serves unless SetAPIVersion
@@ -146,10 +147,27 @@ func (r *Runtime) processLimits() api.ProcessLimits {
 	return r.limits
 }
 
+// SetServerTiming sets the Server-Timing value of every surface and bundle
+// response, as the runtime reports its own time; empty sends none.
+func (r *Runtime) SetServerTiming(value string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.timing = value
+}
+
+func (r *Runtime) serverTiming() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.timing
+}
+
 // Handler serves the contract.
 func (r *Runtime) Handler() http.Handler {
 	mux := r.routes()
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if timing := r.serverTiming(); timing != "" && req.Method == http.MethodPost {
+			w.Header().Set("Server-Timing", timing)
+		}
 		limit := int64(r.processLimits().MaxRequestBytes)
 		if req.ContentLength > limit {
 			write(w, http.StatusRequestEntityTooLarge, nil, &api.ErrorBody{Code: "request_too_large", Message: "request body over the process limit"})

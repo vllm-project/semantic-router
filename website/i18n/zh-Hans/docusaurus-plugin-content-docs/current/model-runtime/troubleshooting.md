@@ -137,8 +137,12 @@ global:
 
 ## 请求比预期慢 {#requests-are-slower-than-expected}
 
-- 查看运行时 `/metrics` 上的 `vllm_srun_request_duration_seconds` 和
-  `vllm_srun_queue_duration_seconds`。排队时间长说明模型已饱和：增加 GPU、改用更小的模型或另起一个进程。
+- 对于路由器托管的运行时，对比路由器上较慢 deployment 的 `vsr_model_runtime_server_seconds`（按 `phase`）
+  和 `vsr_model_runtime_transport_seconds`（见[参考](model-runtime/reference.md#metrics)）。时间大多在 `forward`
+  说明模型本身在该设备上就慢。时间在 `queue` 说明模型已饱和：增加 GPU、改用更小的模型或另起一个进程。
+  传输占比大则指向宿主机（CPU 争用、远程 endpoint）。
+- 对于你自己启动的运行时，查看它 `/metrics` 上的 `vllm_srun_request_duration_seconds` 和
+  `vllm_srun_queue_duration_seconds`，或其响应的 `Server-Timing` 头。
 - 在 CPU 上，同一进程中的模型共享 CPU 线程。用 `--threads` 指定你能分给运行时的核数来启动它。
 - GPU 上的决策模型可以使用 `shared_context` 或 `batching`；见 [Profiles](model-runtime/profiles.md)。
 
