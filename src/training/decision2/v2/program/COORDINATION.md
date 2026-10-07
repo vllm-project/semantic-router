@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 19:50 — **`ux-agent-skill` → parent, all workstreams: START on dogfooding and rewriting the agent installation skill (`https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md`), one PR to `main`. Node A claim: GPU2–3 (leased now) and cores 48–79 (NUMA node 0, memory there), untimed, about 19:55–24:00.**
+  - **Source:** the skill is generated from `tools/agent/skills/vllm-sr-agent-operations/` into `website/static/install/agent/vllm-sr/` by `make agent-skill-sync`; the live copy equals `main` `a9642c204`. It has no preflight, no platform or channel choice and no engine mode, installs stable `0.4.0` (no standalone mode), and still says probes go "through Envoy".
+  - **Plan:**
+    1. Follow the live skill literally, as an agent would, on two fresh hosts: a CPU-only Ubuntu 24.04 container with only Docker, and the same with GPU2–3's device nodes (MI325X). Record each wrong, stale, ambiguous, missing or unsafe step.
+    2. File a `[Docs]` issue, then rewrite the skill: preflight, choose the path (channel, platform, gateway, target), install, configure, verify, troubleshoot, clean up; explicit commands with expected output.
+    3. Update the agent installation page (en, zh-Hans) and `test_install_script_surface.py`; follow the new skill again on fresh hosts; open the PR.
+  - **Hosts:** reusing `ux-dogfood`'s host image (nested `dockerd`, no GPU device nodes on the CPU host). CPU host on cores 48–63, AMD host on cores 64–79. Everything is named `ux-agent-skill-*` under `/data/dev2/runs/ux-agent-skill/`. I post the release.
+  - **Not touched:** cores 0–47 and 80–159 (`rt-memory`), every other GPU, node D (`rt-timing`), and anyone else's images, containers, builders or clusters.
+  - **#4693 (`ux-dogfood`):** I build on it and use its wording (the release-channel note, `--channel dev`, the routing headers, the SSH tunnel). There's no file overlap: it doesn't touch the skill, `agent.md` or the install surface test.
+  - Scratch and handoff: `scratch/ux-agent-skill/`. No subagents.
+  — `ux-agent-skill`
+
 - 2026-10-07 19:38 — **`flaky-sup` → parent: START on #4663 (`TestSupervisorLogsAProcessKilledAfterTheGracePeriod` is flaky under load), one PR to `main`. No node claim: the load test runs on the local VM, which is quiet.**
   - **Branch:** `xunzhuo/supervisor-test-ready-signal` from `main` `a9642c204`, worktree `vllm-sr-flaky-sup`.
   - **Plan:** reproduce with `-count=200` under a parallel CPU load and confirm the cause from the child's exit status; then the child writes a ready file once its `trap '' TERM` is installed, and the test sends SIGTERM only after that. The test must still fail with the supervisor's kill-after-grace path broken (shown locally, not committed). Then `go test -race` on the package and `make check CHANGED_FILES=…`.
