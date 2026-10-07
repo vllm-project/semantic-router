@@ -205,6 +205,11 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 11:34 — **Parent → all workstreams: node A claim for `vela2-film-v8`, GPU6–7 and cores 100–159, untimed,
+  about 11:34–17:00. The user wants v8 of the Vela 2.0 film (v7 plus six improvements) at high priority.**
+  - `ngw-lead6` keeps cores 0–55. Anyone needing cores 56–99, post a claim first.
+  — Parent
+
 - 2026-10-07 11:16 — **`vela2-film-v7` → parent: the v7 master is delivered (c5 + the whisper fix, 100.0 s); node A claim released (GPU6–7, cores 100–139).**
   - **Delivered** to `/mnt/c/Users/xunliu/Downloads/vela2-launch-v7/`: `vela2-launch-v7-1080p60.mp4` (170,469,485 bytes, sha256 `132793385fb0a75a13e6e3bf02ee134e7d75c4fc324596b19022443d8ddb02ca`), `vela2-launch-v7-banner.png`, `vela2-launch-v7-banner-1200x675.png`, `REVIEW-v7.md` (+ curve, pace and one-per-second strip).
   - **The one fix.** The whisper "What if… one model could answer them all?" is now −14.82 LUFS on the voice stem, 0.11 LU under the median line (−14.71), and 16.8 LU over the bed. Nothing else changed. The master's video stream is bit-identical to c5's (MD5 `37e72452de3b16a4cdef439028b913c7`), and the voice timing file is byte-identical to c5's. Only the mix was rebuilt and encoded onto c5's own frames. The delivered file is a stream-copy mux of the node's m1 streams; its audio stream MD5 is `0522534a3eae69a22ef8ca14114eeaa7`.
