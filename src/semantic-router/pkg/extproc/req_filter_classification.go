@@ -30,6 +30,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	}
 
 	signalInput := r.prepareSignalEvaluationInput(history)
+	observePromptCompression(ctx, signalInput.compression.outcome, signalInput.compression.elapsed)
 	signalInput.requestFacts.Context = ctx.TraceContext
 	ctx.VSRConversationFacts = signalInput.conversationFacts
 	ctx.VSRContextHasNonText = ctx.VSRContextHasNonText ||
@@ -96,6 +97,13 @@ func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMetho
 	if method == selection.MethodPrompt && algorithm != nil &&
 		algorithm.Prompt != nil {
 		return r.newDecisionPromptSelector(*algorithm.Prompt)
+	}
+	if method == selection.MethodDecision && algorithm != nil &&
+		algorithm.Decision != nil {
+		return r.newDecisionModelSelector(*algorithm.Decision)
+	}
+	if selector := r.extensionAlgorithmSelector(method, algorithm, ctx); selector != nil {
+		return selector
 	}
 	registry := r.modelSelectorForRequest(ctx)
 	if registry == nil {

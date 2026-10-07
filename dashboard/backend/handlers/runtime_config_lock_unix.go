@@ -35,7 +35,7 @@ func acquireRuntimeConfigStoreLock(storeDir string) (*runtimeConfigStoreLock, bo
 	if err != nil {
 		return nil, false, err
 	}
-	lockFD, err := unix.Openat(directoryFD, runtimeConfigLockName, unix.O_RDWR|unix.O_CREAT|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
+	lockFD, err := unix.Openat(directoryFD, runtimeConfigLockName, unix.O_RDWR|unix.O_CREAT|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o660)
 	if err != nil {
 		_ = unix.Close(directoryFD)
 		return nil, false, err
@@ -55,6 +55,14 @@ func acquireRuntimeConfigStoreLock(storeDir string) (*runtimeConfigStoreLock, bo
 	if stat.Mode&0o007 != 0 {
 		cleanup()
 		return nil, false, errors.New("runtime config lock must not grant access to other users")
+	}
+	// `vllm-sr serve` opens the lock as a member of the store's group; the
+	// process umask narrows a lock this process creates.
+	if int(stat.Uid) == os.Getuid() && stat.Mode&0o060 != 0o060 {
+		if err := unix.Fchmod(lockFD, stat.Mode&0o777|0o060); err != nil {
+			cleanup()
+			return nil, false, err
+		}
 	}
 	if err := unix.Flock(lockFD, unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		cleanup()

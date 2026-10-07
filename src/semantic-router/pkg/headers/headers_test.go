@@ -154,6 +154,7 @@ func TestVSRRoutingHeadersAreDocumented(t *testing.T) {
 		VSRMatchedConversation,
 		VSRMatchedEvent,
 		VSRMatchedInputModality,
+		VSRMatchedDecisionModel,
 		VSRMatchedProjection,
 		VSRCacheHit,
 		VSRFastResponse,

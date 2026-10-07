@@ -1,14 +1,14 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
-  # Basic hooks for Go, Rust, Python And JavaScript files only
+  # Basic hooks for Go, Python And JavaScript files only
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.2.0
     hooks:
       - id: trailing-whitespace
-        files: \.(go|rs|js)$
+        files: \.(go|js)$
       - id: end-of-file-fixer
-        files: \.(go|rs|js)$
+        files: \.(go|js)$
         exclude: ^website/build/
       - id: trailing-whitespace
         name: check Python trailing whitespace
@@ -30,7 +30,7 @@ repos:
         stages: [manual]
       - id: check-added-large-files
         args: ["--maxkb=500"]
-        files: \.(go|rs|py|js)$
+        files: \.(go|py|js)$
 
   # Go specific hooks
   - repo: local
@@ -144,16 +144,6 @@ repos:
         exclude: ^\.github/scripts/node_modules/
         pass_filenames: false
 
-  # Rust specific hooks
-  - repo: local
-    hooks:
-      - id: cargo-fmt
-        name: cargo fmt
-        entry: bash -c 'cd candle-binding && rustup component add rustfmt 2>/dev/null || true && cargo fmt'
-        language: system
-        files: \.rs$
-        pass_filenames: false
-
   # Python specific hooks
   - repo: https://github.com/psf/black
     rev: 25.1.0
@@ -180,8 +170,8 @@ repos:
         pass_filenames: false
         files: \.(py|go|js|ts|tsx|rs)$
 
-  # Deterministic architecture checks. Numeric size findings are advisory;
-  # forbidden dependencies, cycles, and root-placement contracts still block.
+  # Deterministic architecture checks: forbidden dependencies, cycles, and
+  # root-placement contracts block.
   - repo: local
     hooks:
       - id: structure-check

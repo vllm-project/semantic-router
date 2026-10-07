@@ -73,13 +73,13 @@ to serve.
 ## Use the trained model in the router
 
 Export a complete checkpoint with its tokenizer and labels. Choose a supported
-engine and input limit in [Run models locally](../installation/runtime/in-process.md),
+engine and input limit in [Run models locally](../model-runtime/deploy.md),
 then validate your configuration:
 
 ```bash
 vllm-sr config validate --config config.yaml
 ```
 
-Use [route preview](../installation/runtime/lifecycle-diagnostics.md) to check
+Use [route preview](model-runtime/troubleshooting.md) to check
 the signal, selected decision, and latency on representative requests before
 deploying the model to traffic.

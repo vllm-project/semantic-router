@@ -2,7 +2,7 @@
 translation:
   source_commit: "0f2ba0de7c435366ed68bcf03f5a1bb49b9cb90c"
   source_file: "docs/tutorials/plugin/response-cache.md"
-  outdated: false
+  outdated: true
 ---
 
 # 响应缓存
@@ -73,9 +73,7 @@ plugins:
 
 `semantic-cache`、`semantic_cache` 和 `response-cache` 作为已弃用别名被接受，并规范化为 `response_cache`。同样，`global.stores.semantic_cache` 会被读取为 `global.stores.response_cache` 的已弃用别名。不要在同一文档中同时配置两种拼写。导出、控制面板保存和 DSL 反编译始终发出规范名称。
 
-本地 `mmbert` 嵌入（包括 Vela Embedding）更换模型、分词器、向量表示大小或推理设置后，会使用独立的缓存空间。租户命名空间和显式缓存版本保持不变；旧条目按原有过期时间保留，也可显式清理。升级模型后的首次请求会缓存未命中，使用相同向量表示重启则可复用兼容缓存。语义缓存需要本地分词器窗口，因此 Router 会拒绝为其使用[远程嵌入端点](../../installation/runtime/embeddings.md#remote-embeddings)。
-
-Candle `bert` 嵌入改用编码器版本区分缓存空间。每当 Candle BERT 的向量发生变化，这个版本就会随之更新，例如填充 token 不再计入平均值时。跨越这类变化升级后，BERT 会使用新的缓存空间：升级前写入的条目不会被复用，并保留到过期为止，缓存会随新流量重新填充。由其他运行时提供的 BERT 保留已有缓存。
+来自模型运行时的嵌入（包括 Vela Embedding）更换模型、分词器、向量表示大小或推理设置后，会使用独立的缓存空间。租户命名空间和显式缓存版本保持不变；旧条目按原有过期时间保留，也可显式清理。升级模型后的首次请求会缓存未命中，使用相同向量表示重启则可复用兼容缓存。语义缓存需要本地分词器窗口，因此 Router 会拒绝为其使用[远程嵌入端点](model-runtime/guides/embeddings.md#use-an-external-embedding-service)。
 
 ## 运维 {#operations}
 
@@ -85,9 +83,9 @@ Candle `bert` 嵌入改用编码器版本区分缓存空间。每当 Candle BERT
 
 每个已返回的语义命中都会记录这项检查能否判断该问题对：`response_cache` 插件 span 上的 `cache.negation_guard`，以及 `cache_hit` 日志事件中的 `negation_guard`。`checked` 表示两个问题使用相同的词（顺序可以不同），或只在 `not`、`never` 等否定词上不同。`not_applicable` 表示还有其他词发生变化，否定词表无法判断，因此该命中只依据向量相似度。改写过的英文问题和大多数非英文命中都会报告 `not_applicable`，例如否定词表不能识别德语 `nicht` 或中文 `不`。
 
-内存后端还支持可选 NLI 校验器（`global.stores.response_cache.polarity_guard`；见[存储与工具](../global/stores-and-tools.md#negation-guard)）。启用该层级时，NLI 拒绝的候选会记录为带 `tier: nli` 的 `cache_negation_reject`，报告为未命中，其相似度仍出现在 `x-vsr-cache-similarity` 上，以便接近阈值的拒绝可被诊断。
+早期版本在内存后端提供的 NLI 层级已经退役；`vllm-sr config migrate` 会保留词面校验。见[存储与工具](../global/stores-and-tools.md#negation-guard)。
 
-缓存响应可能包含用户或租户数据。请选择合适的范围、TTL、后端认证、加密和失效流程。语义阈值必须针对配置的嵌入模型校准。长于嵌入模型上下文窗口的查询（默认 `bert` 模型为 512 个 token）不会被缓存，因为截断嵌入会匹配所有共享该前缀的查询。带个性化 RAG 或 memory 的路由，若没有显式策略，不应复用富化前的响应。完整示例见：
+缓存响应可能包含用户或租户数据。请选择合适的范围、TTL、后端认证、加密和失效流程。语义阈值必须针对配置的嵌入模型校准。长于嵌入部署输入上限的查询不会被缓存，因为截断嵌入会匹配所有共享该前缀的查询。带个性化 RAG 或 memory 的路由，若没有显式策略，不应复用富化前的响应。完整示例见：
 [`high-recall.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-cache/high-recall.yaml)
 和
 [`memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-cache/memory.yaml)。

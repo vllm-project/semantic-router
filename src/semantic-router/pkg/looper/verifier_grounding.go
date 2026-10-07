@@ -18,7 +18,9 @@ package looper
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -78,24 +80,38 @@ func (v *FaithfulnessVerifier) Verify(ctx context.Context, req *VerifierRequest)
 	}, nil
 }
 
-// PeerConsistencyVerifier scores each candidate by how well its peers entail
-// (vs contradict) it, using the shared NLI backend. It is agreement evidence
-// only - never a truth label, so it never approves. The scoring rule is
-// identical to fusion grounding's panel mode:
-// clamp01((mean(entail - penalty*contradict) + penalty) / (1 + penalty)).
+// PeerConsistencyVerifier scores each candidate by how well its peers support
+// it, using the shared hallucination-detector backend with each peer as the
+// context: the peer's contradiction is the detector's highest
+// hallucinated-token probability for the candidate (0 when it flags no span)
+// and its support is the rest. It is agreement evidence only - never a truth
+// label, so it never approves. The scoring rule is fusion grounding's panel
+// mode: clamp01((mean(support - penalty*contradiction) + penalty) / (1 + penalty)).
 type PeerConsistencyVerifier struct {
-	nli     NLIClassifyFunc
+	detect  HallucinationDetectFunc
 	penalty float64
 	version string
 }
 
-// NewPeerConsistencyVerifier wraps the NLI backend plus the contradiction
-// penalty as a Verifier. A nil nli func reports unavailable.
-func NewPeerConsistencyVerifier(nli NLIClassifyFunc, penalty float64) *PeerConsistencyVerifier {
+// NewPeerConsistencyVerifier wraps the hallucination-detector backend plus the
+// contradiction penalty as a Verifier. A nil detect func reports unavailable.
+func NewPeerConsistencyVerifier(detect HallucinationDetectFunc, penalty float64) *PeerConsistencyVerifier {
 	if penalty <= 0 {
 		penalty = 1.0
 	}
-	return &PeerConsistencyVerifier{nli: nli, penalty: penalty, version: "local/peer_consistency/1"}
+	return &PeerConsistencyVerifier{detect: detect, penalty: penalty, version: "local/peer_consistency/2"}
+}
+
+// peerContradiction reads one detector answer as contradiction evidence in
+// [0, 1]. A span reported without a score counts as full contradiction.
+func peerContradiction(unsupportedSpans []string, score float32) float64 {
+	if len(unsupportedSpans) == 0 {
+		return 0
+	}
+	if score <= 0 {
+		return 1
+	}
+	return clamp01(float64(score))
 }
 
 // Kind implements Verifier.
@@ -107,13 +123,17 @@ func (v *PeerConsistencyVerifier) Kind() VerifierKind { return VerifierKindPeerC
 // candidates there is no consensus evidence, so the verifier abstains (never
 // tie — there is nothing to judge).
 func (v *PeerConsistencyVerifier) Verify(ctx context.Context, req *VerifierRequest) (*VerifierResult, error) {
-	if v.nli == nil {
-		return nil, NewVerifierError(VerifierFailureUnavailable, fmt.Errorf("nli backend not configured"))
+	if v.detect == nil {
+		return nil, NewVerifierError(VerifierFailureUnavailable, fmt.Errorf("hallucination detector backend not configured"))
 	}
 	if len(req.Candidates) == 0 {
 		return nil, NewVerifierError(VerifierFailureNoCandidate, fmt.Errorf("peer-consistency verifier requires a candidate"))
 	}
 	start := time.Now()
+	contradictions, err := v.readAgainstPeers(ctx, req)
+	if err != nil {
+		return nil, &VerifierError{Code: VerifierFailureUnavailable, Err: err}
+	}
 	best := -1.0
 	scores := make([]CandidateScore, 0, len(req.Candidates))
 	for i, c := range req.Candidates {
@@ -124,15 +144,10 @@ func (v *PeerConsistencyVerifier) Verify(ctx context.Context, req *VerifierReque
 			if i == j {
 				continue
 			}
-			// Directional consistency: does peer (premise) entail/contradict
-			// candidate c (hypothesis)?
-			entail, contradict, err := nliPairSignalWith(ctx, v.nli, peer.Content, c.Content)
-			if err != nil {
-				return nil, &VerifierError{Code: VerifierFailureUnavailable, Err: err}
-			}
-			sum += entail - v.penalty*contradict
+			contradiction := contradictions[i][j]
+			sum += (1 - contradiction) - v.penalty*contradiction
 			n++
-			if contradict > entail && contradict >= 0.5 {
+			if contradiction > 0.5 {
 				flags = append(flags, peer.ID)
 			}
 		}
@@ -161,4 +176,30 @@ func (v *PeerConsistencyVerifier) Verify(ctx context.Context, req *VerifierReque
 	}
 	r.Confidence = &best
 	return r, nil
+}
+
+// readAgainstPeers reads every candidate against every peer as its context
+// (directional: contradictions[i][j] is candidate i read against peer j). The
+// readings are independent, so they run concurrently.
+func (v *PeerConsistencyVerifier) readAgainstPeers(ctx context.Context, req *VerifierRequest) ([][]float64, error) {
+	n := len(req.Candidates)
+	contradictions := make([][]float64, n)
+	errs := make([]error, n*n)
+	var wg sync.WaitGroup
+	for i := range req.Candidates {
+		contradictions[i] = make([]float64, n)
+		for j := range req.Candidates {
+			if i == j {
+				continue
+			}
+			wg.Add(1)
+			go func(i, j int) {
+				defer wg.Done()
+				spans, score, err := v.detect(ctx, req.Candidates[j].Content, req.Task, req.Candidates[i].Content)
+				contradictions[i][j], errs[i*n+j] = peerContradiction(spans, score), err
+			}(i, j)
+		}
+	}
+	wg.Wait()
+	return contradictions, errors.Join(errs...)
 }

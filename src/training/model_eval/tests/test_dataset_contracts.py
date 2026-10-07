@@ -14,6 +14,12 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import Mock
 
+from src.training.model_eval import gap_report
+from src.training.model_eval.artifact_inventory import (
+    REGISTRY_ALIASES,
+    load_config,
+    served_artifacts,
+)
 from src.training.model_eval.constants import LEGACY_MODEL_REGISTRY, MODEL_REGISTRY
 from src.training.model_eval.dataset_contracts import (
     classification_label_id,
@@ -54,19 +60,45 @@ def load_definitions(filename, names, namespace):
     return namespace
 
 
-def domain_baseline():
-    class Split(list):
-        def filter(self, keep):
-            return Split(row for row in self if keep(row))
-
+def label_order_check():
     return load_definitions(
         "baseline_tasks.py",
-        {"TaskSpec", "TASK_SPECS", "load_rows"},
+        {"check_registry_label_order"},
+        {
+            "REGISTRY_ALIASES": REGISTRY_ALIASES,
+            "LEGACY_MODEL_REGISTRY": LEGACY_MODEL_REGISTRY,
+            "MODEL_REGISTRY": MODEL_REGISTRY,
+        },
+    )["check_registry_label_order"]
+
+
+def legacy_mapping(task):
+    return {
+        label: index
+        for index, label in enumerate(LEGACY_MODEL_REGISTRY[task]["labels"])
+    }
+
+
+class Split(list):
+    def filter(self, keep):
+        return Split(row for row in self if keep(row))
+
+    def select_columns(self, names):
+        return Split({name: row[name] for name in names} for row in self)
+
+
+def baseline_loader(load_dataset):
+    return load_definitions(
+        "baseline_tasks.py",
+        {"TaskSpec", "TASK_SPECS", "load_split", "load_rows"},
         {
             "dataclass": dataclass,
             "LEGACY_MODEL_REGISTRY": LEGACY_MODEL_REGISTRY,
             "BaselineError": ValueError,
-            "load_dataset": lambda repo, split: Split(PUBLISHED_DOMAIN_ROWS),
+            "load_dataset": load_dataset,
+            "concatenate_datasets": lambda parts: Split(
+                row for part in parts for row in part
+            ),
             "np": SimpleNamespace(
                 array=lambda values, dtype: values, int64=int, ndarray=list
             ),
@@ -74,6 +106,10 @@ def domain_baseline():
             "MAX_REPORTED_UNMAPPED": 10,
         },
     )
+
+
+def domain_baseline():
+    return baseline_loader(lambda repo, split, revision: Split(PUBLISHED_DOMAIN_ROWS))
 
 
 class Rows:
@@ -134,11 +170,171 @@ class DatasetContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unrecognized"):
             load("jailbreak", args)
 
+    def test_feedback_split_only_scores_its_legacy_checkpoint(self):
+        namespace = load_definitions(
+            "baseline_tasks.py",
+            {"TaskSpec", "TASK_SPECS"},
+            {
+                "dataclass": dataclass,
+                "LEGACY_MODEL_REGISTRY": LEGACY_MODEL_REGISTRY,
+                "BaselineError": ValueError,
+            },
+        )
+        spec = namespace["TASK_SPECS"]["feedback"]
+        for key in ("id", "lora_id"):
+            spec.validate_artifact(LEGACY_MODEL_REGISTRY["feedback"][key])
+        with self.assertRaisesRegex(ValueError, "only scores the checkpoint"):
+            spec.validate_artifact(MODEL_REGISTRY["feedback"]["id"])
+
+    def test_fact_check_reads_the_pinned_corpus_matched_test_file_by_file(self):
+        # One file carries lang and the other does not, as the published files do.
+        published = {
+            "text/nf-cats/fact_check/test.jsonl": [
+                {"text": "a", "label": "FACT_CHECK_NEEDED", "source": "nf-cats"},
+                {"text": "b", "label": "NO_FACT_CHECK_NEEDED", "source": "nf-cats"},
+            ],
+            "text/open-question-type/fact_check/test.jsonl": [],
+            "text/search-arena/fact_check/test.jsonl": [
+                {"text": "c", "label": "NO_FACT_CHECK_NEEDED", "lang": "en"},
+            ],
+            "text/urs/fact_check/test.jsonl": [
+                {"text": "d", "label": "FACT_CHECK_NEEDED", "lang": "en"},
+            ],
+        }
+        reads = []
+
+        def load_dataset(repo, data_files, split, revision):
+            reads.append((repo, data_files, split, revision))
+            return Split(published[data_files])
+
+        namespace = baseline_loader(load_dataset)
+        spec = namespace["TASK_SPECS"]["fact-check"]
+        self.assertEqual(spec.split_rule, "by_source")
+        self.assertRegex(spec.revision, r"^[0-9a-f]{40}$")
+        self.assertFalse([name for name in spec.data_files if "dolly" in name])
+        for repo in (
+            LEGACY_MODEL_REGISTRY["fact-check"]["id"],
+            LEGACY_MODEL_REGISTRY["fact-check"]["lora_id"],
+            MODEL_REGISTRY["fact-check"]["id"],
+        ):
+            spec.validate_artifact(repo)
+        mapping = {"NO_FACT_CHECK_NEEDED": 0, "FACT_CHECK_NEEDED": 1}
+        texts, labels, available = namespace["load_rows"](
+            spec, mapping, None, spec.revision
+        )
+        self.assertEqual(
+            (texts, labels, available), (["a", "b", "c", "d"], [1, 0, 0, 1], 4)
+        )
+        self.assertEqual(
+            reads,
+            [
+                (spec.dataset_repo, name, "train", spec.revision)
+                for name in spec.data_files
+            ],
+        )
+
+    def test_pinned_split_is_read_and_recorded_at_its_pin(self):
+        class LoadReachedError(Exception):
+            pass
+
+        specs = baseline_loader(Mock())["TASK_SPECS"]
+        load_rows = Mock(side_effect=LoadReachedError)
+        resolve_revision = Mock()
+        measured = SimpleNamespace(
+            referenced=None, model_dir=Path("model"), repo="repo", revision="0" * 40
+        )
+        namespace = load_definitions(
+            "quality_baseline.py",
+            {"run"},
+            {
+                "argparse": argparse,
+                "Any": Any,
+                "logging": logging,
+                "logger": logging.getLogger("test"),
+                "torch": Mock(),
+                "np": Mock(),
+                "load_config": Mock(),
+                "served_artifacts": lambda config: {"fact-check": Mock()},
+                "TASK_SPECS": specs,
+                "resolve_measured_artifact": lambda args, served, validate: measured,
+                "resolve_hf_revision": resolve_revision,
+                "resolve_label_mapping": lambda model_dir, served: {"a": 0, "b": 1},
+                "SHORT_REVISION": 12,
+                "registry_drift": lambda inventory, registry: [],
+                "MODEL_REGISTRY": MODEL_REGISTRY,
+                "uncovered_artifacts": lambda config: [],
+                "check_registry_label_order": lambda task, repo, mapping: [],
+                "_provenance_findings": lambda args, measured: [],
+                "load_rows": load_rows,
+            },
+        )
+        with self.assertRaises(LoadReachedError):
+            namespace["run"](
+                SimpleNamespace(
+                    seed=42, config="config.yaml", task="fact-check", limit=None
+                )
+            )
+        spec = specs["fact-check"]
+        load_rows.assert_called_once_with(spec, {"a": 0, "b": 1}, None, spec.revision)
+        resolve_revision.assert_not_called()
+
+    def test_legacy_checkpoints_are_checked_against_the_legacy_labels(self):
+        check = label_order_check()
+        mapping = legacy_mapping("feedback")
+        for key in ("id", "lora_id"):
+            self.assertEqual(
+                check("feedback", LEGACY_MODEL_REGISTRY["feedback"][key], mapping), []
+            )
+        # The served registry adds NO_FEEDBACK, which the legacy head never had.
+        served = check("feedback", MODEL_REGISTRY["feedback"]["id"], mapping)
+        self.assertIn("do not match the artifact labels", served[0])
+
+    def test_legacy_only_report_still_lists_the_served_artifacts_as_unmeasured(self):
+        check = label_order_check()
+        baselines = []
+        for task in ("fact-check", "feedback"):
+            repo = LEGACY_MODEL_REGISTRY[task]["id"]
+            mapping = legacy_mapping(task)
+            baselines.append(
+                {
+                    "task": task,
+                    "artifact": {"repo": repo, "is_served_artifact": False},
+                    "dataset": {
+                        "repo": "source",
+                        "split": "test",
+                        "split_rule": "predefined",
+                    },
+                    "metrics": {
+                        "rows": 1,
+                        "accuracy": 1.0,
+                        "macro_f1": 1.0,
+                        "per_label": {
+                            label: {"precision": 1.0, "recall": 1.0, "support": 1}
+                            for label in mapping
+                        },
+                    },
+                    "calibration": {"ece": 0.0, "mce": 0.0},
+                    "abstention": {"curve": []},
+                    "gaps": check(task, repo, mapping),
+                }
+            )
+        report = gap_report.render(baselines, gap_report.DEFAULT_CONFIG)
+        inventory = served_artifacts(load_config(gap_report.DEFAULT_CONFIG))
+        for task in ("fact-check", "feedback"):
+            served = inventory[task].artifact_name
+            self.assertIn(
+                f"- {task}: no baseline has been measured for the served `{served}`",
+                report,
+            )
+        self.assertNotIn("the evaluation registry labels", report)
+
     def test_domain_baseline_leaves_out_mmlu_rows_and_the_model_trained_on_them(self):
         namespace = domain_baseline()
         spec = namespace["TASK_SPECS"]["domain"]
         self.assertEqual(spec.split_rule, "by_source")
-        texts, labels, available = namespace["load_rows"](spec, DOMAIN_SUBSET, None)
+        texts, labels, available = namespace["load_rows"](
+            spec, DOMAIN_SUBSET, None, "revision"
+        )
         self.assertEqual((texts, labels, available), (["b", "d"], [1, 0], 2))
         spec.validate_artifact(MODEL_REGISTRY["intent"]["id"])
         for key in ("id", "lora_id"):
@@ -150,7 +346,7 @@ class DatasetContractTest(unittest.TestCase):
     def test_filtered_domain_report_leaves_labels_without_rows_unmeasured(self):
         namespace = domain_baseline()
         _, labels, _ = namespace["load_rows"](
-            namespace["TASK_SPECS"]["domain"], DOMAIN_SUBSET, None
+            namespace["TASK_SPECS"]["domain"], DOMAIN_SUBSET, None, "revision"
         )
         # Perfect predictions on the rows the filter keeps.
         metrics = load_definitions(
@@ -229,8 +425,8 @@ class DatasetContractTest(unittest.TestCase):
                 "load_config": Mock(),
                 "served_artifacts": lambda config: {"jailbreak": Mock()},
                 "TASK_SPECS": specs,
-                "resolve_measured_artifact": lambda *args: SimpleNamespace(
-                    repo=MODEL_REGISTRY["jailbreak"]["id"]
+                "resolve_measured_artifact": lambda args, served, validate_repo: (
+                    validate_repo(MODEL_REGISTRY["jailbreak"]["id"])
                 ),
                 "resolve_hf_revision": dataset_revision,
             },

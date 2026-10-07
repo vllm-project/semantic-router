@@ -52,7 +52,7 @@ const models: RouterModelInfo[] = [
     forward_max_tokens: '32768',
     overflow: 'truncate',
     precision: 'native',
-    provider: 'ort',
+    provider: 'model_runtime',
   },
 }))
 
@@ -203,9 +203,13 @@ describe('router model presentation', () => {
     expect(render([cpu], 'detail')).not.toContain('amd-logo.png')
     expect(render([models[3]], 'detail')).toContain('ROCm 0')
     expect(render([models[3]])).not.toContain('AMD GPU')
-    expect(getRouterModelDevice({ ...cpu, metadata: { device: 'migraphx:2' } })).toEqual({
-      label: 'MIGraphX 2',
+    expect(getRouterModelDevice({ ...cpu, metadata: { device: 'rocm:2' } })).toEqual({
+      label: 'ROCm 2',
       isAmd: true,
+    })
+    expect(getRouterModelDevice({ ...cpu, metadata: { device: 'xpu:1' } })).toEqual({
+      label: 'XPU 1',
+      isAmd: false,
     })
     expect(getRouterModelDevice({ ...cpu, metadata: {} })).toEqual({
       label: 'Device not reported',

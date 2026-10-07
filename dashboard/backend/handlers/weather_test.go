@@ -112,3 +112,30 @@ func TestWeatherHandlerReturnsNotFoundWhenLocationMissing(t *testing.T) {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusNotFound, rec.Code, rec.Body.String())
 	}
 }
+
+func TestWeatherHandlerHidesUpstreamTransportErrors(t *testing.T) {
+	upstream := httptest.NewServer(http.NotFoundHandler())
+	upstreamURL := upstream.URL
+	upstream.Close()
+
+	originalGeocodingURL := weatherGeocodingBaseURL
+	originalForecastURL := weatherForecastBaseURL
+	weatherGeocodingBaseURL = upstreamURL
+	weatherForecastBaseURL = upstreamURL
+	defer func() {
+		weatherGeocodingBaseURL = originalGeocodingURL
+		weatherForecastBaseURL = originalForecastURL
+	}()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/tools/weather", strings.NewReader(`{"location":"Paris"}`))
+	rec := httptest.NewRecorder()
+
+	WeatherHandler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusBadGateway, rec.Code, rec.Body.String())
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != "Weather service unavailable" {
+		t.Fatalf("expected a generic error without upstream details, got %q", got)
+	}
+}

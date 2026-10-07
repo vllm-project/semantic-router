@@ -26,4 +26,5 @@ var signalCompilerByType = map[string]func(*Compiler, *SignalDecl){
 	"metadata":       (*Compiler).compileMetadataSignal,
 	"classifier":     (*Compiler).compileClassifierSignal,
 	"input_modality": (*Compiler).compileInputModalitySignal,
+	"decision":       (*Compiler).compileDecisionModelSignal,
 }

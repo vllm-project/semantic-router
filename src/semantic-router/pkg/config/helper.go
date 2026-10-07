@@ -332,15 +332,19 @@ func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string, piiRules []PI
 	return true
 }
 
-// IsPIIClassifierEnabled checks if PII classification is enabled
+// IsPIIClassifierEnabled checks if PII classification is enabled. A local
+// model serves its own labels; a remote backend needs a mapping file.
 func (c *RouterConfig) IsPIIClassifierEnabled() bool {
-	modelConfigured := c.PIIModel.ModelID != "" || c.PIIModel.Backend != nil
-	return c.PIIModel.Active() && modelConfigured && c.PIIMappingPath != ""
+	if c.PIIModel.Backend != nil {
+		return c.PIIModel.Active() && c.PIIMappingPath != ""
+	}
+	return c.PIIModel.Active() && c.PIIModel.ModelID != ""
 }
 
-// IsCategoryClassifierEnabled checks if category classification is enabled
+// IsCategoryClassifierEnabled checks if category classification is enabled. A
+// local model serves its own labels; a remote backend needs a mapping file.
 func (c *RouterConfig) IsCategoryClassifierEnabled() bool {
-	return c.CategoryModel.Active() && c.CategoryModel.ModelID != "" && c.CategoryMappingPath != ""
+	return c.CategoryModel.Active() && c.CategoryModel.ModelID != "" && (c.CategoryModel.Backend == nil || c.CategoryMappingPath != "")
 }
 
 // IsMCPCategoryClassifierEnabled checks if MCP-based category classification is enabled
@@ -353,13 +357,17 @@ func (c *RouterConfig) GetPromptGuardConfig() PromptGuardConfig {
 	return c.PromptGuard
 }
 
-// IsPromptGuardEnabled checks if prompt guard jailbreak detection is enabled
+// IsPromptGuardEnabled checks if prompt guard jailbreak detection is enabled.
+// A local model serves its own labels; a remote backend needs a mapping file.
 func (c *RouterConfig) IsPromptGuardEnabled() bool {
-	if !c.PromptGuard.Enabled || c.PromptGuard.JailbreakMappingPath == "" {
+	if !c.PromptGuard.Enabled {
 		return false
 	}
 
 	if c.PromptGuard.Backend != nil {
+		if c.PromptGuard.JailbreakMappingPath == "" {
+			return false
+		}
 		backend := c.PromptGuard.Backend
 		contract := RemoteClassifierContractLabelDistribution
 		if backend.Protocol == RemoteClassifierProtocolHTTPChat {
@@ -369,7 +377,6 @@ func (c *RouterConfig) IsPromptGuardEnabled() bool {
 		return err == nil
 	}
 
-	// For Candle: need model ID
 	return c.PromptGuard.ModelID != ""
 }
 

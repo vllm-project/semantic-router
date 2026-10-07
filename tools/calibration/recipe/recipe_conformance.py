@@ -7,6 +7,7 @@ import argparse
 import json
 import sys
 from dataclasses import asdict, dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,7 @@ from recipe_conformance_report import (
     render_consolidated_markdown,
     render_coverage_markdown,
     render_tag_acceptance_markdown,
+    render_waiver_markdown,
 )
 from recipe_conformance_runtime import (
     bind_runtime_entrypoints,
@@ -35,6 +37,12 @@ from recipe_conformance_sources import (
     matrix_payload,
     render_source_rows,
     source_matrix_payload,
+)
+from recipe_conformance_waivers import (
+    describe_waivers,
+    known_issue_waiver,
+    preview_deadline_seconds,
+    recipe_source_name,
 )
 from recipe_metadata_schema import (
     load_recipe_metadata_document,
@@ -762,11 +770,32 @@ def command_eval(args: argparse.Namespace) -> int:
         config = load_yaml_mapping(runtime_config)
         probes = bind_runtime_entrypoints(config, probes)
         validate_probe_references(recipe_path / "probes.yaml", config, manifest, probes)
+    waive = None
+    if getattr(args, "cpu_known_issue_waivers", False):
+        waive = partial(
+            known_issue_waiver,
+            recipe_source_name(args.recipes_root, DEFAULT_RECIPE_ROOT),
+            args.recipe,
+            deadline_seconds=preview_deadline_seconds(config),
+        )
     evaluation = evaluate_probes(
-        args.router_url, probes, manifest, scope=getattr(args, "scope", "deployment")
+        args.router_url,
+        probes,
+        manifest,
+        scope=getattr(args, "scope", "deployment"),
+        waive=waive,
     )
+    counted = {
+        "results": [
+            result
+            for result in evaluation["results"]
+            if not result.get("known_issue_waiver")
+        ]
+    }
+    if waivers := describe_waivers(evaluation["results"]):
+        evaluation["known_issue_waivers"] = waivers
     tag_acceptance = evaluate_live_tag_policy(
-        evaluation, _mapping(manifest.get("coverage"))
+        counted, _mapping(manifest.get("coverage"))
     )
     evaluation["coverage_acceptance"] = tag_acceptance
     evaluation["passed"] = bool(evaluation["passed"]) and tag_acceptance["passed"]
@@ -790,7 +819,7 @@ def command_eval(args: argparse.Namespace) -> int:
     for scope, summary in evaluation.get("scopes", {}).items():
         scoped_results = [
             {**result, "matched": bool(result.get(f"{scope}_matched"))}
-            for result in evaluation["results"]
+            for result in counted["results"]
         ]
         scoped_tags = evaluate_live_tag_policy(
             {"results": scoped_results}, _mapping(manifest.get("coverage"))
@@ -809,6 +838,8 @@ def command_eval(args: argparse.Namespace) -> int:
         None,
     )
     summary = summary.rstrip() + "\n\n" + render_tag_acceptance_markdown(tag_acceptance)
+    if waivers:
+        summary = summary.rstrip() + "\n\n" + render_waiver_markdown(waivers)
     (output_dir / "summary.md").write_text(summary, encoding="utf-8")
     print(
         json.dumps(
@@ -910,6 +941,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=EVALUATION_SCOPES,
         default="deployment",
         help="Policy checks real routing evidence; deployment also requires the expected live model selection.",
+    )
+    evaluate.add_argument(
+        "--cpu-known-issue-waivers",
+        action="store_true",
+        help="On a CPU runner, waive only the preview deadline on the long-context probes recipe_conformance_waivers.py names (#4706).",
     )
     evaluate.set_defaults(func=command_eval)
 

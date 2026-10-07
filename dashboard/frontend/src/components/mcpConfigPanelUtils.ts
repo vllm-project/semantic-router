@@ -29,7 +29,6 @@ export interface ServerFormValues {
   url: string
   headers: Record<string, string>
   timeout: string
-  autoReconnect: boolean
 }
 
 export function hiddenArgumentsBlockCommandChange(
@@ -253,7 +252,6 @@ export function buildServerConfig(values: ServerFormValues): Omit<MCPServerConfi
           },
     options: {
       timeout: parseInt(values.timeout, 10) || DEFAULT_TIMEOUT_MS,
-      autoReconnect: values.autoReconnect,
     },
   }
 }

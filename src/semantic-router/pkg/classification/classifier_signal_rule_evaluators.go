@@ -107,10 +107,10 @@ func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalRe
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 
-	categoryName := ""
+	topLabel, categoryName := "", ""
 	if err == nil {
 		if name, ok := c.CategoryMapping.GetCategoryFromIndex(domainResult.Class); ok {
-			categoryName = c.translateMMLUToGeneric(name)
+			topLabel, categoryName = name, c.translateMMLUToGeneric(name)
 		}
 	}
 	results.DomainClassification = &DomainClassificationResult{
@@ -137,7 +137,7 @@ func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalRe
 		}
 		recordSignalRuleErrors(results, mu, config.SignalTypeDomain, names, domainEvaluationFailedCode)
 	} else {
-		matched := c.matchDomainCategories(domainResult, categoryName)
+		matched := c.matchDomainCategories(domainResult, topLabel)
 		mu.Lock()
 		for _, cat := range matched {
 			c.recordSignalMatch(config.SignalTypeDomain, cat.Category)
