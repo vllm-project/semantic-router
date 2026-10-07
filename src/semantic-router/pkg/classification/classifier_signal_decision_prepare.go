@@ -37,21 +37,32 @@ func (c *Classifier) prepareDecisionSignals() error {
 	}
 	cards := make(map[string]modelservice.ModelCard)
 	for _, rule := range c.labelledDecisionRules() {
-		card, checked := cards[rule.Deployment]
+		name, deployment := c.decisionRuleDeployment(rule)
+		card, checked := cards[name]
 		if !checked {
 			var err error
-			card, err = c.models.runtime.DeploymentCard(context.Background(), rule.Deployment, c.Config.ModelDeployments[rule.Deployment])
+			card, err = c.models.runtime.DeploymentCard(context.Background(), name, deployment)
 			if err != nil {
 				return fmt.Errorf("routing.signals.decision[%s]: %w", rule.Name, err)
 			}
-			cards[rule.Deployment] = card
+			cards[name] = card
 		}
 		if !card.Answers(rule.Question.Type) {
 			return fmt.Errorf("routing.signals.decision[%s]: deployment %q serves %s, which answers %s questions, not %s; ask a model that declares %s questions, such as Vela 2.0",
-				rule.Name, rule.Deployment, card.ID, answeredTypes(card), rule.Question.Type, rule.Question.Type)
+				rule.Name, name, card.ID, answeredTypes(card), rule.Question.Type, rule.Question.Type)
 		}
 	}
 	return nil
+}
+
+// decisionRuleDeployment returns the deployment a decision question asks and
+// its definition: its own, or the decision model's shared deployment.
+func (c *Classifier) decisionRuleDeployment(rule config.DecisionSignalRule) (string, config.ModelDeployment) {
+	if rule.Deployment != "" {
+		return rule.Deployment, c.Config.ModelDeployments[rule.Deployment]
+	}
+	name, deployment, _, _ := c.Config.DecisionModelDeployment()
+	return name, deployment
 }
 
 func answeredTypes(card modelservice.ModelCard) string {
