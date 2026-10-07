@@ -205,6 +205,39 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 22:22 — **`recipe-v2` → parent: TIMEOUT ROOT CAUSE. On CPU, Vela 2.0 0.3B reads the whole request text, and its cost is linear in tokens. Balance's 29,555-token probe needs 86 s to more than 120 s on a 4-vCPU CI runner, against the preview's 120 s deadline, and one slow signal fails the whole request. Two findings change the scope; decisions for you are at the end.**
+  - **Which call timed out:** the 0.3B request-stage call that answers `domain` and `fact_check` (one bundle). The recorded exchange shows `deadline_ms` of 119,996 and 29,555 input tokens. Embedding, keyword and complexity were done within about 7 s. The Router logged `domain rule evaluation failed: context deadline exceeded` exactly 120 s after the request started.
+  - **Why it's slow:**
+    - The model's `max_length` is 8,192. A longer part is read in windows of 8,192 tokens with 512 tokens of overlap (`encoder_layout.py`), and Choice logits are averaged over the windows. So this input costs 4 full forwards; the binding's 8,192-token `truncate` doesn't bound this path.
+    - On CPU, a runtime process runs its forwards one at a time. Its threads are `ceil(GOMAXPROCS / processes)`, which is 2 for the 0.3B on a 4-vCPU runner. `max_speed` changes rounding, not the number of forwards.
+  - **Per-call latency** (same text, 29,555 tokens):
+    - node A, pinned to 4 cores like CI: 23.3 s alone (0.79 ms per token), and 22.4 s inside the conformance run at concurrency 4; 6.9K tokens took 4.3 s and 14.8K took 10.3 s, so it's linear;
+    - CI: 86.4 s on #4702's PR run 37614581263 (2.9 ms per token, finished), and more than 120 s on `main` run 37616077214 (over 4.1 ms per token, timed out).
+  - **Concurrency 4** adds only head-of-line wait: on `main` the long request was alone for its last 113 s.
+  - **Every deadline involved:**
+    - `global.services.api.routing_preview.request_timeout_seconds` (120 s by default; 5 s write allowance) is the only bound. The runtime call inherits it, and the runtime skips work that hasn't started by then.
+    - Model-runtime signals have no per-signal deadline.
+    - The probe's client timeout is 300 s, and the CI job timeout is 90 min.
+  - **One slow signal fails the request:** yes. The preview waits for every signal dispatcher, so the handler returns 504 `REQUEST_TIMEOUT` for the whole request, although all other signals had answered.
+  - **How often:** 1 of 2 CI runs (`main` timed out; the PR run finished at 72% of the deadline), and 0 of 2 on node A. It depends on how fast the runner is.
+  - **Finding 1, the long probe misroutes even when it finishes:** 3 of 3 completions (the CI PR run and node A twice) give `medium_explainer`. The 0.3B labels the repeated "zxqv nplm ordinary neutral placeholder" as `business` at 0.388, over the 0.28 domain threshold.
+    - I tried 10 other neutral fillers at the same length (27–30K tokens), and all 10 reach `casual_chat`.
+    - For example, "ordinary neutral placeholder text" × 5,032 lines gives 27,715 tokens, and its top domain is `business` at 0.149, so no domain matches.
+  - **Finding 2, `built-in-latest-mom-v1` fails too.** Both CI runs agree:
+    - `main`: 280/315, with 25 timeouts at 120 s; the PR run: 286/315, with 20 timeouts. All of them are the long-context probes of 30K–240K tokens, at concurrency 1.
+    - On node A, a 240K-token probe would take about 190 s, so node A times out too.
+    - There are also 9 example misses, the same in both runs. Among them are a `prompt_attack` at 0.775 on a benign calculator tool call, `psychology` at 0.554 for two health fact-check probes, and `business` or `unsafe` hits on the Chinese care probes. I'm still analysing them.
+  - **Proposed fix (for the user):**
+    1. Bound the 0.3B's request-stage read on CPU with a device-derived token budget for Vela 2.0 labelled parts. This is exactly item (B) of `rt-memory`'s #4706 rework. One window (8,192 tokens) would cost about 21–30 s on a 4-vCPU runner, against 86 s to 10 min today.
+    2. Give model-runtime signals a deadline below the request's, so a slow signal resolves through its `on_error` policy instead of a 504. The jailbreak guard should treat unscanned content as a match, which is #4706's item (D).
+    3. Per-token speed is #4668.
+    - Until (1) lands, balance stays intermittent and mom-v1 fails on CPU CI whatever the examples are.
+  - **Plan unless you object:**
+    - replace the balance filler with a neutral one of the same token count, so the CPU exposure, and therefore the timeout, stays visible;
+    - fix mom-v1's 9 example misses too, with examples only;
+    - leave all 25 long-context probes untouched.
+  — `recipe-v2`
+
 - 2026-10-07 22:15 — **`ux-agent-skill` → parent; cc `vela2-default`: FINISHED. PR #4711 (agent installation skill, `Closes #4708`, one commit `f79b91f43` on `main` `abae8ff99`) is green except CLI Unit Tests, which fails on `main` itself (#4714). Node A has been clean since 21:09: no container, data, GPU lease or Kind cluster of mine remains.**
   - **#4711 CI:** Resolve Contracts, Source Checks, Security Scans, CLI Package and CI Harness pass, as do the title and accepted-issue checks and DCO. CLI Unit Tests reports 8 failed and 3,296 passed, the same 8 I got locally on `main` with a docs-only diff. The cause is #4702's `window: null` for the PII and prompt-guard modules in `config/config.yaml`, which the schema types as an object, plus the Vela 2.0 model id in `test_vela_runtime_model_policy`. That is #4714, filed by a contributor against a clean `main` `abae8ff99`. I'll rebase #4711 once it's fixed; it has no other blocker.
   - **CI hiccup:** opening the PR with two labels started three runs, and `cancel-in-progress` left the first run's planning job cancelled and its Gate red. I force-cancelled that stuck run so the newest one could run. The `/netlify` preview was skipped: "the PR must be open and target … main", though it is both.
