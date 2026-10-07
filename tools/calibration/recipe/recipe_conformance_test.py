@@ -354,6 +354,19 @@ class RecipeConformanceTest(unittest.TestCase):
         del deployments["other"]
         self.assertEqual(recipe_conformance.configured_accelerators(config), ())
 
+    def test_a_gpu_only_decision_model_requires_a_gpu(self) -> None:
+        for name, devices in {
+            "Vela-2.0-4B": ("gpu",),
+            "vela-2.0-9b": ("gpu",),
+            "Vela-2.0-0.8B": (),
+            "Vela-1.0": (),
+            "not-a-decision-model": (),
+        }.items():
+            config = {"global": {"model_catalog": {"system": {"decision_model": name}}}}
+            self.assertEqual(
+                recipe_conformance.configured_accelerators(config), devices, name
+            )
+
     def test_cpu_runner_rejects_hardware_before_any_stack_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

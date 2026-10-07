@@ -271,7 +271,9 @@ contains exact live results and T3 receipts.
 
 Static checks always include every maintained recipe. Live CPU planning derives
 hardware requirements from explicit `global.model_catalog.deployments.*.device`
-values. Recipes with non-CPU devices stay in the inventory and are listed with
+values and from a `global.model_catalog.system.decision_model` that runs on a
+GPU only (`Vela-2.0-4B`, `Vela-2.0-9B`), listed as `gpu`. Recipes with non-CPU
+devices stay in the inventory and are listed with
 their required devices in `cpu-eligibility.json` and the consolidated report;
 they do not count as CPU runtime passes. The CPU runner rejects an incompatible
 explicit selection before stopping or starting any containers. It never rewrites

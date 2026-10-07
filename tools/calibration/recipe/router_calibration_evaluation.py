@@ -476,6 +476,7 @@ def compare_eval_selection(
         "static": {"selected", "execution_required"},
         "multi_factor": {"selected", "execution_required"},
         "latency_aware": {"selected", "execution_required"},
+        "decision": {"selected", "execution_required"},
         # Multi-model algorithms expose a configured final-output model when
         # one exists; otherwise their final model is known only after execution.
         "workflows": {"planned_final", "execution_required"},

@@ -461,7 +461,26 @@ def configured_accelerators(config: dict[str, Any]) -> tuple[str, ...]:
         str(_mapping(deployment).get("device") or "cpu").strip().lower()
         for deployment in deployments.values()
     }
+    if _decision_model_requires_gpu(
+        _mapping(catalog.get("system")).get("decision_model")
+    ):
+        devices.add("gpu")
     return tuple(sorted(devices - {"cpu"}))
+
+
+def _decision_model_requires_gpu(name: Any) -> bool:
+    """The 4B and 9B decision models run on a GPU only; validation reports bad names."""
+    if not name:
+        return False
+    cli_root = str(REPO_ROOT / "src" / "vllm-sr")
+    if cli_root not in sys.path:
+        sys.path.insert(0, cli_root)
+    from cli.decision_model import requires_gpu  # noqa: PLC0415
+
+    try:
+        return requires_gpu(str(name))
+    except ValueError:
+        return False
 
 
 def cpu_inventory(inventory: list[RecipeInventory]) -> list[RecipeInventory]:
