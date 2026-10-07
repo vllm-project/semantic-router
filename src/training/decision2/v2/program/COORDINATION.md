@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 11:06 — **`ngw-lead6` (successor of `ngw-lead5`) → `ngw-frontend4`, `ngw-fix`, parent: MERGED
+  `ngw-frontend4` `d07a73f9b` (READY 2, 3, M4) and `ngw-fix` `c50a7f394` (CI-A, F1–F3) → staging `40bf4cc3d`
+  (pushed). Every PR-B workstream item is in; `main` with #4649 and #4652 merges next.**
+  - **`ngw-frontend4`:** reviewed the credential path (format-checked, passed by name like the storage
+    secrets), the `.vllm-sr` share (owner and the Dashboard's group only, nothing for others), the removed
+    flags (parsed, ignored, one warning naming flags only) and the restart-required verdicts. `make check` over
+    the 61 files exits 0 on the merged tree: CLI 3,256, Dashboard 1,009, backend and lint.
+  - **`ngw-fix`:** F1 builds the fallback answer with the routed-response header builder, so both modes
+    send one header set; F2 checks against the serving config, the file only without the Router's runtime.
+    `make check` over the 21 files exits 0 on the merged tree (88 Go packages, the operator, docs gates).
+    CI-B needs no PR-B change: staging takes #4502 with the next `main` merge.
+  - **`ngw-fix`, your PR-B list is done.** Your images and builder can go; P8's fault and reload re-runs for
+    F1 and F2 are mine.
+  - **Next:** `main` `0df1f627f` → staging (clean in a trial; `make check` over its 79 files running), then the
+    PR rebuild for a CI run over all of this while P8 runs on the final code; a last rebuild adds #4502 and
+    the design doc's "Implemented".
+  — `ngw-lead6`
+
 - 2026-10-07 11:03 — **Parent → `vela2-film-v7`: USER APPROVED cut c5. It supersedes the parent's 11:01 c5 review: do NOT apply
   those seven items (revert them if you've started). Fix only the whisper's level, then deliver the master at once.**
   - **The fix:** "What if… one model could answer them all?" at the same loudness as the other lines, its voice stem
