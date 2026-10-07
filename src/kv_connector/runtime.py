@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,11 +9,10 @@ import torch
 from safetensors import safe_open
 
 from src.training.kv_mapper.artifact import (
-    MANIFEST_FILE,
     WEIGHTS_FILE,
     CompatibilitySpec,
     Manifest,
-    verify_checksums,
+    read_artifact,
     verify_compatibility,
 )
 
@@ -29,13 +27,9 @@ class MapperArtifact:
     @classmethod
     def open(cls, path: Path, deployment: CompatibilitySpec) -> MapperArtifact:
         """Check the entire artifact before vLLM can advertise a cache hit."""
-        verify_checksums(path)
-        manifest = Manifest.from_dict(json.loads((path / MANIFEST_FILE).read_text()))
+        # read_artifact verifies checksums and applies the shared validate_artifact contract.
+        manifest, _ = read_artifact(path)
         verify_compatibility(manifest, deployment)
-        if manifest.schema_version != 1:
-            raise ValueError(f"unsupported mapper schema: {manifest.schema_version}")
-        if manifest.compatibility.variant != "full_head":
-            raise ValueError("connector currently supports full_head artifacts only")
         if not manifest.rope_stripped_on_keys:
             raise ValueError("connector requires pre-RoPE key mapping")
         if (
@@ -44,43 +38,6 @@ class MapperArtifact:
         ):
             raise ValueError("full-head connector currently requires TP=1")
 
-        width = manifest.compatibility.num_kv_heads * manifest.compatibility.head_dim
-        selections = manifest.source_layers_per_target
-        if set(selections) != {"k", "v"}:
-            raise ValueError("mapper requires K and V source lists")
-        expected_layers = {int(layer) for layer in selections["k"]}
-        if expected_layers != set(range(len(expected_layers))):
-            raise ValueError("target layer indices must be contiguous from zero")
-        if set(selections["v"]) != set(selections["k"]):
-            raise ValueError("K and V target layers differ")
-        with safe_open(path / WEIGHTS_FILE, framework="pt", device="cpu") as weights:
-            names = set(weights.keys())
-            expected_names: set[str] = set()
-            for layer in sorted(expected_layers):
-                for channel in ("k", "v"):
-                    sources = selections[channel][str(layer)]
-                    if len(sources) != manifest.topk or len(set(sources)) != len(
-                        sources
-                    ):
-                        raise ValueError(f"invalid source layers for {layer}.{channel}")
-                    if any(source < 0 for source in sources):
-                        raise ValueError(f"negative source layer for {layer}.{channel}")
-                    weight_name = f"target.{layer}.{channel}.W"
-                    bias_name = f"target.{layer}.{channel}.b"
-                    expected_names.update((weight_name, bias_name))
-                    weight = weights.get_slice(weight_name)
-                    shape = weight.get_shape()
-                    if shape != [len(sources) * width, width]:
-                        raise ValueError(f"invalid shape for {weight_name}: {shape}")
-                    bias = weights.get_slice(bias_name)
-                    if bias.get_shape() != [width]:
-                        raise ValueError(f"invalid shape for {bias_name}")
-                    if weight.get_dtype() != "F32" or bias.get_dtype() != "F32":
-                        raise ValueError(
-                            f"mapper tensors must be float32 for {layer}.{channel}"
-                        )
-            if names != expected_names:
-                raise ValueError("mapper tensor keys do not match the manifest")
         return cls(path=path, manifest=manifest)
 
     def apply_layer(

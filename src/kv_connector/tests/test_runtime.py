@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -80,12 +81,40 @@ class MapperRuntimeTests(unittest.TestCase):
             f"{digest('manifest.json')}  manifest.json\n"
             f"{digest('weights.safetensors')}  weights.safetensors\n"
         )
-        with self.assertRaisesRegex(ValueError, "invalid shape"):
+        with self.assertRaisesRegex(ValueError, "invalid mapper tensor"):
             MapperArtifact.open(self.path, self.compat)
         write_artifact(self.path, self.manifest, self.tensors)
         fp16 = CompatibilitySpec(**{**self.compat.__dict__, "precision": "fp16"})
         with self.assertRaisesRegex(ValueError, "precision"):
             MapperArtifact.open(self.path, fp16)
+
+    def _refresh_checksums(self) -> None:
+        names = ("manifest.json", "weights.safetensors")
+        (self.path / "SHA256SUMS").write_text(
+            "".join(
+                f"{hashlib.sha256((self.path / name).read_bytes()).hexdigest()}  {name}\n"
+                for name in names
+            )
+        )
+
+    def test_rejects_non_finite_mapper_tensors(self) -> None:
+        for name in self.tensors:
+            for value in (np.nan, np.inf):
+                with self.subTest(tensor=name, value=value):
+                    bad = {key: tensor.copy() for key, tensor in self.tensors.items()}
+                    bad[name].flat[0] = value
+                    save_file(bad, str(self.path / "weights.safetensors"))
+                    self._refresh_checksums()
+                    with self.assertRaisesRegex(ValueError, "invalid mapper tensor"):
+                        MapperArtifact.open(self.path, self.compat)
+
+    def test_rejects_different_k_v_source_lists(self) -> None:
+        manifest = self.manifest.to_dict()
+        manifest["source_layers_per_target"]["v"]["0"] = [1, 0]
+        (self.path / "manifest.json").write_text(json.dumps(manifest))
+        self._refresh_checksums()
+        with self.assertRaisesRegex(ValueError, "invalid shared source layers"):
+            MapperArtifact.open(self.path, self.compat)
 
     def test_post_rope_source_is_unrotated_before_mapping(self) -> None:
         artifact = MapperArtifact.open(self.path, self.compat)
