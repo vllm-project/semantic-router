@@ -8,7 +8,9 @@
 
 .bandBlack,
 .bandGraphite,
-.bandRaised {
+.bandRaised,
+.bandArchitecture,
+.bandRuntime {
   min-width: 0;
   background: var(--site-bg);
 }
@@ -21,797 +23,186 @@
   --site-bg: var(--site-surface);
 }
 
-.capabilitySection,
-.momProofSection,
-.finalCtaSection {
-  border-bottom: 0;
+.bandArchitecture {
+  --site-bg: #edf5fd;
+  background:
+    radial-gradient(ellipse at 50% 0%, var(--site-accent-soft), transparent 65%),
+    var(--site-bg);
+  border-block: 1px solid var(--site-border);
 }
 
-.capabilitySection {
-  position: relative;
-  overflow: hidden;
-  padding: clamp(3rem, 5vw, 4.5rem) 0;
-  background: var(--site-bg);
-  color: var(--site-text);
-}
-
-.capabilitySection::before {
-  content: none;
-}
-
-.momProofSection {
-  position: relative;
-  overflow: hidden;
-  padding: clamp(3.5rem, 6vw, 5rem) 0;
-  background: var(--site-bg);
-}
-
-.momProofSection::before {
-  content: none;
-}
-
-.capabilityFrame {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: clamp(1.1rem, 2vw, 1.65rem);
-  padding: clamp(1rem, 2vw, 1.65rem);
-  border: 1px solid var(--site-border);
-  border-radius: clamp(1rem, 1.6vw, 1.35rem);
-  background: var(--site-surface-alt);
-}
-
-/* Section intro above the card; the card holds only the matrix. */
-.capabilityHeading {
-  gap: 0.65rem;
-  margin-bottom: var(--site-section-gap);
-}
-
-.capabilityHeading h2 {
-  color: var(--site-text-strong);
-  font-weight: var(--site-font-weight-semibold);
-  letter-spacing: -0.025em;
-}
-
-.architectureMatrix {
-  overflow: hidden;
-  border-top: 1px solid var(--site-border-strong);
-  border-bottom: 1px solid var(--site-border-strong);
-  background: var(--site-surface);
-}
-
-.matrixHeader,
-.matrixRow {
-  display: grid;
-  grid-template-columns: minmax(10rem, 0.22fr) minmax(0, 0.39fr) minmax(0, 0.39fr);
-}
-
-.matrixHeader {
-  min-height: 2.35rem;
-  align-items: center;
-  border-bottom: 1px solid var(--site-border-strong);
-  background: var(--site-surface-soft);
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-}
-
-.matrixHeader span,
-.matrixDimension,
-.matrixFragmented,
-.matrixUnified {
-  min-width: 0;
-  padding: 0.7rem clamp(0.85rem, 1.5vw, 1.2rem);
-}
-
-.matrixHeader span + span,
-.matrixFragmented,
-.matrixUnified {
-  border-left: 1px solid var(--site-border);
-}
-
-.matrixHeader span:last-child {
-  color: var(--site-accent-strong);
-}
-
-.matrixRow {
-  min-height: 0;
+.bandRuntime {
+  --site-bg: var(--site-surface-raised);
+  --runtime-glow: rgba(118, 81, 203, 0.05);
+  background:
+    radial-gradient(ellipse at 100% 0%, var(--runtime-glow), transparent 55%),
+    var(--site-bg);
   border-bottom: 1px solid var(--site-border);
 }
 
-:global(.revealVisible) .architectureMatrix .matrixRow {
-  animation: matrixRowEnter 620ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+:global([data-theme='dark']) .bandArchitecture {
+  --site-bg: #0c1520;
 }
 
-:global(.revealVisible) .architectureMatrix .matrixRow:nth-child(2) {
-  animation-delay: 70ms;
-}
-
-:global(.revealVisible) .architectureMatrix .matrixRow:nth-child(3) {
-  animation-delay: 140ms;
-}
-
-:global(.revealVisible) .architectureMatrix .matrixRow:nth-child(4) {
-  animation-delay: 210ms;
-}
-
-:global(.revealVisible) .architectureMatrix .matrixRow:nth-child(5) {
-  animation-delay: 280ms;
-}
-
-@keyframes matrixRowEnter {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 0.75rem, 0);
-  }
-
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-.matrixRow:last-child {
-  border-bottom: 0;
-}
-
-.matrixDimension,
-.matrixFragmented,
-.matrixUnified {
-  display: flex;
-  align-items: center;
-}
-
-.matrixDimension {
-  gap: 0.65rem;
-}
-
-.matrixDimension > span {
-  flex: 0 0 auto;
-  color: var(--site-accent-strong);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-}
-
-.matrixDimension > span::after {
-  content: '';
-  display: inline-block;
-  width: 1.15rem;
-  height: 1px;
-  margin-left: 0.45rem;
-  vertical-align: middle;
-  background: var(--site-accent);
-}
-
-.matrixDimension strong {
-  color: var(--site-text-strong);
-  font-size: clamp(0.92rem, 1.15vw, 1.05rem);
-  font-weight: 600;
-  letter-spacing: -0.015em;
-}
-
-.matrixFragmented p,
-.matrixUnified p {
-  margin: 0;
-  font-size: clamp(0.82rem, 0.95vw, 0.92rem);
-  line-height: 1.45;
-}
-
-.matrixFragmented p {
-  color: var(--site-muted);
-}
-
-.matrixUnified {
-  position: relative;
-  background: var(--site-hover-row-bg);
-}
-
-.matrixUnified::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -1px;
-  width: 2px;
-  background: linear-gradient(180deg, transparent, var(--site-accent), transparent);
-  opacity: 0.75;
-}
-
-.matrixUnified p {
-  color: var(--site-text-strong);
-  font-weight: 560;
-}
-
-.matrixMobileLabel {
-  display: none;
-}
-
-/* Alternatives comparison: same grid language, one more option column. The
-   desktop-only override keeps the mobile stack intact. */
-@media (min-width: 769px) {
-  .alternativesMatrix .matrixHeader,
-  .alternativesMatrix .matrixRow {
-    grid-template-columns: minmax(8rem, 0.16fr) minmax(0, 0.28fr)
-      minmax(0, 0.28fr) minmax(0, 0.28fr);
-  }
-
-  /* The base rule accents the last header cell, which is the Inference Router
-     column in this table; the accent belongs on the Semantic Router column
-     instead. */
-  .alternativesMatrix .matrixHeader span:last-child {
-    color: var(--site-muted);
-  }
-
-  .alternativesMatrix .matrixHeader span:nth-child(2) {
-    color: var(--site-accent-strong);
-  }
-}
-
-.capabilityStats {
-  padding-top: 0.25rem;
-}
-
-/* Statement section: same lockup as every other intro, larger display type. */
-.momProofHeading {
-  composes: site-section-intro from global;
-  position: relative;
-  z-index: 1;
-  margin-bottom: clamp(1.4rem, 3vw, 2.4rem);
-}
-
-.momProofHeading h2 {
-  color: var(--site-text-strong);
-  font-size: clamp(2rem, 4.4vw, 4.5rem);
-  font-weight: 690;
-  line-height: 0.98;
-  letter-spacing: -0.055em;
-}
-
-.momProofHeading p {
-  font-size: clamp(0.98rem, 1.35vw, 1.18rem);
-  line-height: 1.58;
-}
-
-.momProofFrame {
-  position: relative;
-  z-index: 1;
-  overflow: hidden;
-  border: 1px solid var(--site-border);
-  border-radius: clamp(1rem, 1.8vw, 1.45rem);
-  background:
-    linear-gradient(180deg, var(--site-surface-soft), transparent 42%),
-    var(--site-surface-alt);
-  box-shadow:
-    inset 0 1px 0 var(--site-border), var(--site-shadow);
-}
-
-.momProofArchitecture {
-  display: grid;
-  grid-template-columns: minmax(17rem, 0.34fr) minmax(0, 0.66fr);
-  min-width: 0;
-}
-
-.momProofArchitectureCopy {
-  display: grid;
-  align-content: center;
-  gap: 0.85rem;
-  min-width: 0;
-  padding: clamp(1.25rem, 3vw, 2.6rem);
-  border-right: 1px solid var(--site-border);
-}
-
-.momProofArchitectureCopy h3 {
-  max-width: 25rem;
-  margin: 0;
-  color: var(--site-text-strong);
-  font-size: clamp(1.35rem, 2.5vw, 2.4rem);
-  font-weight: 620;
-  line-height: 1.05;
-  letter-spacing: -0.04em;
-  text-wrap: balance;
-}
-
-.momProofArchitectureCopy p {
-  max-width: 27rem;
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-size: clamp(0.92rem, 1.1vw, 1rem);
-  line-height: 1.6;
-  text-wrap: pretty;
-}
-
-.momProofArchitectureImageWrap {
-  min-width: 0;
-  padding: clamp(0.8rem, 1.8vw, 1.35rem);
-  background: var(--site-surface-soft);
-}
-
-.momProofArchitectureImage,
-.momScorecardImage {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.momProofArchitectureImage {
-  aspect-ratio: 1298 / 867;
-  object-fit: contain;
-  border-radius: 0.85rem;
-}
-
-.momScorecardGrid {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(0.8rem, 1.5vw, 1.1rem);
-  margin-top: clamp(0.9rem, 2vw, 1.35rem);
-}
-
-.momScorecard {
-  overflow: hidden;
-  min-width: 0;
-  border: 1px solid var(--site-border);
-  border-radius: 1rem;
-  background: var(--site-surface);
-  box-shadow:
-    inset 0 1px 0 var(--site-border), var(--site-shadow-soft);
-}
-
-.momScorecardHeader {
-  display: grid;
-  gap: 0.32rem;
-  padding: 1rem 1.05rem 0.15rem;
-}
-
-.momScorecardHeader h3 {
-  margin: 0;
-  color: var(--site-text-strong);
-  font-size: clamp(1rem, 1.35vw, 1.18rem);
-  font-weight: 680;
-  letter-spacing: -0.022em;
-}
-
-.momScorecardHeader p {
-  margin: 0;
-  color: var(--site-accent-strong);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.72rem;
-  font-weight: 760;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.momScorecardImage {
-  aspect-ratio: 2400 / 1308;
-  object-fit: cover;
-  object-position: center;
+:global([data-theme='dark']) .bandRuntime {
+  --site-bg: #151319;
+  --runtime-glow: rgba(151, 107, 255, 0.1);
 }
 
 .finalCtaSection {
-  padding: 0.5rem 0 clamp(3rem, 5vw, 4.5rem);
+  padding: clamp(2.5rem, 5vw, 5rem) 0;
   background: var(--site-bg);
 }
 
-/* Sovereignty shows the mechanism instead of restating it: the same stage
- * language as the routing pipeline above, with the constraint gate lit. */
-.sovereigntySection {
-  position: relative;
-  padding: clamp(2.75rem, 4.5vw, 4rem) 0 clamp(1.25rem, 2vw, 1.75rem);
-  background: var(--site-bg);
-}
-
-.sovereigntyFrame {
-  display: grid;
-  gap: 1.5rem;
-  padding-top: clamp(1.35rem, 2.5vw, 2rem);
-  border-top: 1px solid var(--site-border);
-}
-
-:global(.site-section-intro).sovereigntyCopy {
-  gap: 0.55rem;
-  margin-bottom: 0;
-}
-
-.constraintFlow {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.constraintStage {
-  position: relative;
-  display: grid;
-  gap: 0.3rem;
-  align-content: start;
-  min-width: 0;
-  padding: 0.85rem 0.9rem;
-  border: 1px solid var(--site-border);
-  border-radius: 0.6rem;
-  background: var(--site-surface-glass);
-  box-shadow: inset 0 1px 0 var(--site-border);
-  animation: constraintStageIn 0.6s ease-out var(--stage-delay) both;
-}
-
-.constraintStage:not(:last-child)::after {
-  content: '→';
-  position: absolute;
-  top: 50%;
-  right: -0.46rem;
-  z-index: 1;
-  color: var(--site-accent-strong);
-  font-size: 0.7rem;
-  line-height: 1;
-  transform: translateY(-50%);
-}
-
-/* The gate is the whole point of the diagram, so it is the lit one. */
-.constraintStageGate {
-  border-color: var(--site-accent);
-  background:
-    var(--site-hover-surface-bg-soft),
-    var(--site-surface-glass);
-  animation: constraintGate 5.6s ease-in-out infinite;
-}
-
-@keyframes constraintGate {
-  0%,
-  10%,
-  40%,
-  100% {
-    box-shadow: inset 0 1px 0 var(--site-border);
-  }
-
-  20% {
-    box-shadow:
-      inset 0 1px 0 var(--site-border),
-      var(--site-hover-glow);
-  }
-}
-
-.constraintStageIndex {
-  color: var(--site-accent-strong);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.58rem;
-  letter-spacing: 0.08em;
-}
-
-.constraintStage strong {
-  color: var(--site-text-strong);
-  font-size: clamp(0.82rem, 1vw, 0.95rem);
-  font-weight: var(--site-font-weight-semibold);
-  line-height: 1.25;
-  letter-spacing: -0.01em;
-}
-
-.constraintStageDetail {
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.62rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.constraintStageGate .constraintStageDetail {
-  color: var(--site-accent-strong);
-}
-
-/* A request travelling the pipeline, on a loop. Same scan-bar language as the
- * routing pipeline stages above, so the two diagrams animate alike. */
-.constraintStage::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--site-accent-strong), var(--site-accent));
-  transform: scaleX(0);
-  transform-origin: left;
-  animation: constraintScan 5.6s ease-in-out var(--stage-delay) infinite;
-}
-
-.constraintStage:not(:last-child)::after {
-  animation: constraintArrow 5.6s ease-in-out var(--stage-delay) infinite;
-}
-
-@keyframes constraintScan {
-  0%,
-  4% {
-    opacity: 0;
-    transform: scaleX(0);
-  }
-
-  12% {
-    opacity: 1;
-    transform: scaleX(1);
-  }
-
-  34% {
-    opacity: 0.5;
-    transform: scaleX(1);
-  }
-
-  100% {
-    opacity: 0.16;
-    transform: scaleX(1);
-  }
-}
-
-@keyframes constraintArrow {
-  0%,
-  8% {
-    opacity: 0.32;
-    transform: translateY(-50%) translateX(-0.12rem);
-  }
-
-  16% {
-    opacity: 1;
-    transform: translateY(-50%) translateX(0.1rem);
-  }
-
-  32%,
-  100% {
-    opacity: 0.32;
-    transform: translateY(-50%) translateX(0);
-  }
-}
-
-@keyframes constraintStageIn {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 0.5rem, 0);
-  }
-
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-.constraintFooter {
-  display: grid;
-  align-items: center;
-  gap: 0.9rem;
-}
-
-.constraintNote {
-  margin: 0;
-  color: var(--site-muted);
-  font-size: 0.9rem;
-}
-
-.sovereigntyCta {
-  width: fit-content;
-}
-
-@media (min-width: 768px) {
-  .constraintFooter {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 2rem;
-  }
-}
-
-@media (max-width: 640px) {
-  .constraintFlow {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem;
-  }
-
-  .constraintStage:not(:last-child)::after {
-    content: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .constraintStage,
-  .constraintStage::before,
-  .constraintStage:not(:last-child)::after,
-  .constraintStageGate {
-    animation: none;
-  }
-
-  .constraintStage::before {
-    opacity: 0.4;
-    transform: scaleX(1);
-  }
-}
-
-/* Centred card on the same 46rem box as the install command block, so the two
- * call-to-action moments on the page read as the same component. */
 .finalCtaFrame {
   position: relative;
-  overflow: hidden;
   display: grid;
-  justify-items: center;
-  gap: 1.25rem;
-  width: 100%;
-  max-width: 46rem;
-  margin-inline: auto;
-  padding: clamp(1.75rem, 3vw, 2.5rem) clamp(1.5rem, 3vw, 2.5rem);
-  text-align: center;
-  border: 1px solid var(--site-border);
-  border-radius: 1.15rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr);
+  align-items: center;
+  gap: clamp(2rem, 5vw, 5rem);
+  padding: clamp(1.5rem, 4vw, 3.5rem);
+  border: 1px solid var(--site-border-strong);
+  border-radius: 1.3rem;
   background:
-    radial-gradient(120% 160% at 50% 0%, var(--site-accent-soft), transparent 60%),
-    linear-gradient(180deg, var(--site-surface-soft), transparent 44%),
+    radial-gradient(ellipse at 0% 100%, var(--site-accent-soft), transparent 65%),
     var(--site-surface);
-  box-shadow:
-    inset 0 1px 0 var(--site-border), var(--site-shadow);
-}
-
-.finalCtaFrame::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--site-accent) 22%,
-    var(--site-accent) 46%,
-    transparent 78%
-  );
+  box-shadow: var(--site-shadow-soft);
 }
 
 .finalCtaCopy {
-  position: relative;
+  --site-text-h2: clamp(2rem, 3.8vw, 3.5rem);
   display: grid;
-  justify-items: center;
-  gap: 0.5rem;
+  justify-items: start;
+  gap: 1rem;
   min-width: 0;
 }
 
 .finalCtaCopy h2 {
+  max-width: 10ch;
   margin: 0;
   color: var(--site-text-strong);
-  font-size: clamp(1.35rem, 2.2vw, 1.85rem);
-  font-weight: 560;
-  line-height: 1.15;
-  letter-spacing: -0.03em;
+  font-size: clamp(2rem, 3.8vw, 3.5rem);
+  font-weight: 620;
+  line-height: 1.08;
+  letter-spacing: -0.045em;
   text-wrap: balance;
 }
 
 .finalCtaCopy p {
-  max-width: 52ch;
+  max-width: 42ch;
   margin: 0;
   color: var(--site-muted-bright);
-  font-size: 0.98rem;
+  font-size: 1rem;
+  line-height: 1.65;
 }
 
 .finalCtaActions {
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.finalCtaLink {
+  --action-accent: var(--site-accent-strong);
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.2rem;
+  border: 1px solid var(--site-border-strong);
+  border-radius: 0.85rem;
+  background: var(--site-surface-alt);
+  color: var(--site-text-strong);
+  text-decoration: none;
+  transition: border-color 180ms ease, background 180ms ease;
 }
 
-/* The page's last action, so it is solid rather than another outline pill. */
-.finalCtaActions .finalCtaPrimary:global(.pill) {
-  border-color: var(--site-cta-border) !important;
-  background: var(--site-cta-bg) !important;
-  color: var(--site-cta-text) !important;
-  box-shadow: var(--site-cta-shadow) !important;
+.finalCtaInstall {
+  --action-accent: var(--site-muted-bright);
 }
 
-.finalCtaActions .finalCtaPrimary:global(.pill):hover {
-  border-color: var(--site-cta-border-hover) !important;
-  background: var(--site-cta-bg-hover) !important;
-  color: var(--site-cta-text) !important;
-  transform: translateY(-1px);
+.finalCtaLink:hover {
+  border-color: var(--action-accent);
+  background: var(--site-surface-soft);
+  color: var(--site-text-strong);
+  text-decoration: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .finalCtaActions .finalCtaPrimary:global(.pill):hover {
-    transform: none;
-  }
+.finalCtaLink:focus-visible {
+  outline: 2px solid var(--action-accent);
+  outline-offset: 4px;
 }
 
-@media (max-width: 996px) {
-  .momProofHeading,
-  .momProofArchitecture {
-      grid-template-columns: 1fr;
-  }
+.finalCtaIcon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 2.8rem;
+  height: 2.8rem;
+  border: 1px solid var(--site-border);
+  border-radius: 0.7rem;
+  background: var(--site-surface);
+  color: var(--action-accent);
+  font-size: 1.3rem;
+}
 
-  .momScorecardGrid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.finalCtaLinkCopy {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
 
-  .momProofArchitectureCopy {
-      border-right: 0;
-      border-bottom: 1px solid var(--site-border);
-  }
+.finalCtaLinkCopy strong {
+  font-size: 1rem;
+  font-weight: 620;
+}
+
+.finalCtaLinkCopy > span {
+  color: var(--site-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.finalCtaArrow {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--action-accent);
+  font-size: 1.35rem;
 }
 
 @media (max-width: 768px) {
-  .capabilitySection,
-  .momProofSection {
-      padding: 3rem 0;
+  .finalCtaFrame {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.8rem;
   }
 
-  .capabilityHeading h2 {
-      font-size: clamp(1.25rem, 4vw, 1.55rem);
-      line-height: 1.22;
-  }
-
-  .matrixHeader {
-      display: none;
-  }
-
-  .architectureMatrix {
-      display: grid;
-      gap: 0.75rem;
-      overflow: visible;
-      border: 0;
-      background: transparent;
-  }
-
-  .matrixRow {
-      grid-template-columns: 1fr;
-      min-height: 0;
-      border: 1px solid var(--site-border);
-      background: var(--site-surface);
-  }
-
-  .matrixDimension,
-  .matrixFragmented,
-  .matrixUnified {
-      padding: 0.75rem 0.9rem;
-  }
-
-  .matrixFragmented,
-  .matrixUnified {
-      display: grid;
-      gap: 0.45rem;
-      border-top: 1px solid var(--site-border);
-      border-left: 0;
-  }
-
-  .matrixMobileLabel {
-      display: block;
-      color: var(--site-muted);
-      font-family: var(--ifm-font-family-monospace);
-      font-size: 0.6rem;
-      font-weight: 700;
-      letter-spacing: 0.11em;
-      text-transform: uppercase;
-  }
-
-  .matrixUnified .matrixMobileLabel {
-      color: var(--site-accent-strong);
-  }
-
-  .momScorecardGrid {
-      grid-template-columns: 1fr;
-  }
-
-  .momProofHeading h2 {
-      font-size: clamp(2.05rem, 13vw, 3.35rem);
-  }
-
-  .momProofArchitectureCopy,
-  .momProofArchitectureImageWrap {
-      padding: 1rem;
-  }
-
-  .finalCtaActions {
-      justify-content: center;
+  .finalCtaCopy h2 {
+    max-width: 14ch;
   }
 }
 
-@media (max-width: 640px) {
-  .capabilityHeading h2 {
-      font-size: clamp(1.2rem, 4.8vw, 1.5rem);
-      line-height: 1.24;
+@media (max-width: 400px) {
+  .finalCtaLink {
+    gap: 0.7rem;
+    padding: 0.85rem;
   }
 
+  .finalCtaIcon {
+    width: 2.2rem;
+    height: 2.2rem;
+    font-size: 1.1rem;
+  }
+
+  .finalCtaLinkCopy strong {
+    font-size: 0.9rem;
+  }
+
+  .finalCtaLinkCopy > span {
+    font-size: 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finalCtaLink {
+    transition: none;
+  }
 }
