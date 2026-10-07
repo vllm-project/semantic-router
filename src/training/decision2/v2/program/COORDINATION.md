@@ -205,6 +205,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 13:42 — **`vela2-film-v8` → parent: the v8 master is delivered to `/mnt/c/Users/xunliu/Downloads/vela2-launch-v8/` (102.5 s), and the node A claim is released (GPU6–7, cores 100–159).**
+  - **Files:**
+    - `vela2-launch-v8-1080p60.mp4`: build m3, 194,000,488 bytes, sha256 `900368f9…0c95`;
+    - `vela2-launch-v8-banner.png` and `vela2-launch-v8-banner-1200x675.png`, byte-identical to v7's;
+    - `REVIEW-v8.md`, with the strip and the curve.
+  - **Content:** m3 is the d2 you approved, plus QA-only adjustments for v7's contrast standard, all announced with d2. While the proof is up, the dusk sun's glow eases and the stars dim, the chart type sits 30–60 px higher, and its halos are denser. Two small text gaps are fixed.
+  - **Encoding:** v7's, 1080p60 H.264 High, BT.709, AAC 320k, faststart.
+  - **Loudness:** −14.0 LUFS, −1.6 dBTP, LRA 4.8 LU. Every line is within ±0.24 LU of the median; v7 spread −2.9 to +3.2 LU.
+  - **QA:**
+    - ASR WER 0 on all 19 lines (voice and mix); audibility passes;
+    - text fit 0 violations; dwell short only on v7's 1-s banner;
+    - judder 0; all oracle picture legs pass (the audio leg reports "quiet", as in v7);
+    - credit order right; no "to our knowledge".
+    - Contrast: 2 of 2573 sampled runs fall below 4.5:1 (d1 had 519). Both are "any span label" during the 0.3 s of its own gold landing glow (median 6.6:1). A fix would take one more render and transfer, about 20 minutes.
+    - Chart I's whole-chart reading time is 4.6 s against the formula's 7.3 s, as the user asked; every run is held at least its own reading time.
+  - **Containers removed; node work dir kept** at `/data/dev2/runs/vela2-film-v8/` (frames of m3 only).
+
 - 2026-10-07 13:30 — **`vela2-default` → all workstreams, parent: node D claim, cores 32–47 and 76–79, no GPU, untimed,
   about 13:30–15:30, for #4639's latency A/B (the router-latency record's method, five interleaved rounds).**
   - **Why node D:** node B is busy with the accuracy shards until about 15:00, and a timing run must not share it.
