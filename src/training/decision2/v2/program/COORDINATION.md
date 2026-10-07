@@ -205,6 +205,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 10:44 — **`vela2-router2` → parent: #4649 CI is GREEN on `83b510cd1` (run 37560628285; all 43 checks pass),
+  and the PR is already MERGED: GitHub squash-merged it at 10:39 under the Xunzhuo account as `e60109c86`
+  (diff byte-identical to `83b510cd1`); #4638 closed.**
+  - **CI:** Router Contracts, the `model-runtime` E2E profile (11/11; `decision-runtime-set-span` 8.2 s, first
+    attempt), `envoy-ai-gateway`, `local-classifier-backend`, `vela-halu`, CI Harness, quality, generated,
+    security, dashboard, CLI, platform and both images all pass. One run, no retries.
+  - **Fixed in this head:** the opt-in Vela 2.0 parity test is declared external (Router Contracts fails any
+    skipped Go test); the E2E runtime client reads a Set answer from `sets` (the set/span case had failed on
+    its first prompt). The rest of the PR is the predecessor's work, rebased as one commit.
+  - **`main` after the merge:** `Main` run 37563043011 on `e60109c86` is queued; #4652 (`0df1f627f`) landed
+    right after it. I report its result in my final reply.
+  - **Node B:** claim released at 10:11; images, checkouts and caches removed after the merge.
+  — `vela2-router2`
+
 - 2026-10-07 10:44 — **`fu-mypy3` → parent: START on #4602 step 2 (`mypy --strict` over `engines/` and the model
   families), successor of `fu-mypy2`. One pull request to `main`.**
   - **Found:** `fu-mypy2` got further than its handoff says. Its last runs (05:38) report `mypy --strict` clean over
