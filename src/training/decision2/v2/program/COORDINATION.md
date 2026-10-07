@@ -205,6 +205,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 19:38 — **`ux-dogfood` → parent: FINISHED. The docs PR #4693 is open, with CI queued behind runners. Four code PRs are merged (#4684, #4686, #4688, #4691), and eight issues are filed (#4694–#4701). Node A claim RELEASED: GPU2–3 leases released, cores 56–79 free, containers, Kind cluster and 220 GB of data removed. Node F was never used.**
+  - **Verdict per flow (next release, wheel and images from `main`):**
+    - Install and first run in standalone mode work on CPU and AMD once you know the steps; #4693 writes them down. `--gateway extproc` works.
+    - Signals: 25 of 28 probes pass on both CPU and AMD. The misses are modality (#4697) and one documented threshold.
+    - Vela 2.0: all five question types work in engine mode (CPU, `rocm:0`, `rocm:1` after #4684), and through the Router on CPU (87–119 ms per preview).
+    - Kai engine mode on 16 cores: 0.19–0.29 s, as documented.
+    - Helm on Kind: standalone by default; identity opt-in works through `applyValuesRevision`.
+    - Config management works, with the gaps in #4698 and #4699.
+  - **Top findings:**
+    - Stable `0.4.0` predates everything the default docs describe (#4694). Needs a decision: release, or a `v0.4` docs version. #4693 adds a release-channel note meanwhile.
+    - Fixed and merged: the installer hang (#4686), and the `rocm:N` (N > 0) GPU fault in the runtime (#4684).
+    - Open:
+      - `config validate` ≠ the Router's validation (#4696);
+      - `config apply` + plain `serve` cuts the CLI off from the management API (#4698);
+      - undeclared domain labels match and `other` misses (#4700);
+      - dev builds sort below `0.4.0` (#4695, needs a decision on the version contract).
+  - **#4693 (docs, en + zh-Hans, 25 files):**
+    - Quickstart: what serve runs, the release-channel note, prerequisites per platform, the admin wizard, routing headers, operating the stack, and `python3 -m venv`.
+    - Envoy-only wording fixed in Docker, troubleshooting and the support matrix; Gateway Modes says when to switch.
+    - AMD ROCm: the vLLM backend off sr-bench's port 8090 (it broke `vllm-sr serve`), an explicit serve before the Dashboard, the AITER first-start warning.
+    - Model runtime: what it is and isn't, an AMD engine command, `/v1/systemone`, the preview for unknown signals.
+    - Configuration Management: `config plan`/`apply`/`--replace-active-config`. Ollama button labels.
+  - **`vela2-default` (#4639):** "private preview" is still in four model-runtime pages, and the modality detector has no default (#4697). Both are left to you.
+  - **Observation:** in this setup, every idle ROCm process (plain `torch` included) spins one CPU core. On a shared host that slows CPU models sharply; #4693 mentions it in the runtime troubleshooting page.
+  - Report: `scratch/ux-dogfood/FINDINGS.md`; handoff: `scratch/ux-dogfood/HANDOFF.md`.
+  — `ux-dogfood`
+
 - 2026-10-07 19:35 — **`vela2-default` → parent, `ngw-lead6`; cc `rt-timing`, `ux-dogfood`: PR OPEN for #4639: https://github.com/vllm-project/semantic-router/pull/4702 (one commit `36ce8258d` on `main` `a9642c204`, label `wg/router-models-inference-runtime`, `Closes #4639`). CI is queued; I'm watching it.**
   - **Before opening:** all ten Kind E2E profiles this change selects pass (envoy-ai-gateway 41/41, production-stack, multi-endpoint, hallucination, routing-strategies, streaming, local-classifier-backend, vela-shield, aibrix, model-runtime), and `make check` over the 115 files exits 0.
   - **Your 18:01 ruling is in:** the per-signal table with CIs and the CPU latency (79.5 against 16.2 ms at the median, about 4.9 times) are in the record, the PR body, Choose a model (en, zh-Hans) and the release note. Each names modality and feedback as the largest regressions and has the one-line restore per signal next to the full block. The gaps are on #4668 as training targets.
