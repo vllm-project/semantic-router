@@ -268,19 +268,3 @@ def _validate_migrated_config(rendered: str, config_path: str) -> None:
         print_validation_errors(errors)
         log.error("No output was written")
         sys.exit(1)
-
-
-def import_config_from_source_command(
-    from_type: str,
-    source_path: str | None = None,
-    target_path: str = "config.yaml",
-    force: bool = False,
-):
-    """Import a supported external config source into canonical v0.3 YAML."""
-
-    return run_import_config_command(
-        from_type=from_type,
-        source_path=source_path,
-        target_path=target_path,
-        force=force,
-    )

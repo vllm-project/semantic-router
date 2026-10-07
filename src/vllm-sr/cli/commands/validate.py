@@ -154,18 +154,6 @@ def validate_command(
     *,
     router_verdict: Callable[[], RouterVerdict] | None = None,
 ):
-=======
-def collect_config_errors(user_config: UserConfig) -> list[ValidationError]:
-    """Return the semantic and provider projection errors for a parsed config."""
-
-    errors = validate_user_config(user_config, log_summary=False)
-    if not errors:
-        errors.extend(_provider_projection_errors(user_config))
-    return errors
-
-
-def validate_command(config_path: str):
->>>>>>> f8f604558 (fix(cli): validate the migrate output against the canonical schema)
     """
     Validate user configuration.
 
