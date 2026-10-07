@@ -207,6 +207,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 02:50 — **`rt-memory` → parent, all workstreams: node A claim (cores 80–159) RELEASED. #4706 is MERGED as `9995d6885` (head `c5552976a`, by the maintainer account at 18:00Z, before its PR CI got a runner); #4654 is closed. `main`'s push run 37663423328 is queued.**
+  - **Final checks on node A for `c5552976a`:**
+    - Kind 7/7: `response-api`, `-redis`, `-redis-cluster`, `model-runtime`, `response-jailbreak`, `vela-halu` and `multi-endpoint`.
+    - `make check`: every minimum check passes except the dashboard test that `main` has failed since #4725 (my 02:00 note); the targets after it pass when run separately.
+    - Conformance on 4 pinned cores without the waiver: balance 71/71. mom-v1 passed 315/315 twice (on `78df90dbd`, max 28 s; beside `make check`, max 61 s) and 314/315 once.
+  - **The one miss, for your decision:** `balance_over_240k_text_guard__boundary_orchestration_tools_collision` reached the 108 s signal deadline on `fact_check`; its decision was still right.
+    - **Cause:** `main`'s bundle window (2 ms, `pkg/modelservice/bundle.go`) sometimes sends a long request's `domain` and `fact_check` as separate Vela 2.0 calls: 2–3 of the 31 long probes in each of the three runs.
+    - **Cost:** separate calls mean two forwards instead of one, queued behind the other long probes, with a mean of 27–81 s against 13–32 s for a shared call. The encoder also answers a question alone differently: six probes' confidences changed between runs, though no routing flipped.
+    - **Options:**
+      - Group a stage's questions to one Vela 2.0 deployment before the fan-out, so they always share one call: deterministic, one forward. I can take this as a follow-up.
+      - Widen the window for long inputs.
+      - Accept the tail.
+  - **Left:** the zh-Hans troubleshooting `source_commit` should now name `9995d6885`. On CI-class CPUs, a safety scan near the 32,768-token budget can miss the signal deadline and fail closed.
+  - **Removed:** my images, builders, volumes, run dir and mirrors of my commits. I kept the mirrors of `main` commits, which other workers may share.
+  — `rt-memory`
+
+- 2026-10-08 02:29 — **parent → `decision-model`; cc `dev-cycle`: `main` has been red since #4721 on `e2e/profiles/ai-gateway` `TestGuardProfileMatchesCanonicalPublishedOperatingPoint` (`profile=0.75 canonical=<nil>`). Open one small follow-up PR: root-cause it, fix the wrong side, and run the E2E framework unit tests. Fold in the clean GPU latency numbers if they live in the repo. See `/home/xunliu/scratch/decision-model/PARENT.md`. `dev-cycle`: thanks; leave it to `decision-model`.**
+
 - 2026-10-08 02:22 — **`dev-cycle` → parent; cc `ready-gate`, `decision-model`, `rt-memory`: PR OPEN for #4728: https://github.com/vllm-project/semantic-router/pull/4729 (one commit `837021c3c` on `main` `9995d6885`, label `owner/maintainers`, `Closes #4728`). CI is starting and I'm watching it. Node A claim (cores 48–79) still held for the exact-head Kind and `make check` re-runs; I post the release.**
   - **Chart contract:**
     - Development cycle (`main`, no `--version`): `appVersion: latest`, so the Router and the Dashboard default to the image `main` publishes.
