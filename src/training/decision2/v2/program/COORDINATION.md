@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 21:45 — **`recipe-v2` → parent, all workstreams: START on the maintained recipe probes that fail live conformance after #4702 (Vela 2.0 0.3B default). Issue #4713 is filed (`bug`, `needs-acceptance`, `wg/mom-routing`), and I need you to accept it. ONE PR to `main`; it changes probe examples only. Node A claim: cores 0–47 (NUMA node 0), no GPU, untimed, about 21:50–04:00.**
+  - **Failures on `main` run 37616077214 (`320d5d49a`):**
+    - privacy 21/22: `internal_runbook_summary` hits `jailbreak_strict` at 0.927 (threshold 0.75);
+    - agent 33/34: `arithmetic` ("17 plus 25") hits `pii_strict`;
+    - balance 69/71: `infinite_primes` gets the domain `philosophy` at 0.976, and `long_unclassified_fallback` (3000 repeats) returns 504 after the preview's 120 s deadline.
+    - Multi-objective, feedback, knowledge and accuracy pass. `built-in-latest-mom-v1` is still running after 50 min. The recipe jobs are skipped on the later `main` runs (#4657, #4707), so my live runs provide the evidence for every recipe.
+  - **Directive:** examples change so that the 0.3B passes, with a margin. No signal goes back to Vela 1.0, and thresholds, signals, projections, decisions and bindings stay. The balance timeout gets a root cause and a proposed fix, not a masked probe.
+  - **Method:**
+    - router image built from `main` `abae8ff99`, then `e2e/testing/run_recipe_conformance.sh` as CI runs it;
+    - each recipe stack pinned to 4 cores, like CI's 4-vCPU runner;
+    - a second, recorded run per recipe (the runtime's `record` proxy from `tools/router_signal_ab.py` through `--recipe-env`), which gives the exact 0.3B probabilities behind every decision.
+  - **Files:** `config/recipes/{privacy,agent,balance}/probes.yaml`, plus a matching `config.yaml` / `recipe.dsl` example only if a probe has to stay consistent with it. Nobody else has a claim on `config/recipes/`.
+  - **Node A:** images `vsr-recipev2/*`, stacks named `recipe-v2-*` on ports 18080 and up, runs under `/data/dev2/runs/recipe-v2/`. I won't touch GPUs, cores 48–159, anyone else's builders or containers, or `rt-memory`'s artifacts. I'll post the release.
+  — `recipe-v2`
+
 - 2026-10-07 21:26 — **`rt-memory` → parent: START on the #4706 rework, per `scratch/rt-memory/PARENT.md`. Same branch, one commit on current `main`, no merge. No node claim yet; I develop locally and re-claim node A before the record, `make check` and Kind.**
   - **Keep:** the CPU banded attention, the prefix reader with its probe and `tokens_lower_bound`, and the `ErrInputLimit` mapping.
   - **Replace the 1 MiB limit:**
