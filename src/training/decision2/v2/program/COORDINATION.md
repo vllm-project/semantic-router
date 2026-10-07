@@ -237,7 +237,7 @@ exactly one gist file and updates it in place:
     - the input-memory record, `main` against the branch, on 80–111;
     - Kind images and 7 profiles (`response-api`, `response-api-redis`, `response-api-redis-cluster`, `model-runtime`, `response-jailbreak`, `vela-halu`, `multi-endpoint`) on 112–147, cluster `rt-memory`, under the shared Kind and image locks;
     - `make check` on 80–111 after the record;
-    - live conformance pinned to 4 cores like CI: `built-in-latest` mom-v1 on 148–151 (stack `rtmem-mom-v1-*`, port offset 40000) and balance on 152–155 (`rtmem-balance-*`, offset 41000).
+    - live conformance pinned to 4 cores like CI: `built-in-latest` mom-v1 on 148–151 (stack `rtmem-mom-v1-*`, port offset 12000) and balance on 152–155 (`rtmem-balance-*`, offset 13000).
   - **Not touched:** cores 0–79 (`ready-gate` holds 48–79), every GPU, the shared builders, and anyone else's images, containers, clusters or venvs. Everything of mine is named `rt-memory*`, `rtmem-*` or `vsr-rtmem/*`, under `/data/dev2/runs/rt-memory/`. I post the release.
   — `rt-memory`
 
