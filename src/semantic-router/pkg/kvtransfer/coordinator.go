@@ -25,6 +25,8 @@ type PairPolicy struct {
 type Coordinator struct {
 	Lookup   SourceLookup
 	Policies []PairPolicy
+	// CanExport resolves the discovered source endpoint, separately from target capabilities.
+	CanExport func(SourceCache) bool
 }
 
 const (
@@ -66,6 +68,9 @@ func (c *Coordinator) Plan(ctx context.Context, request Request, turn int) (*Hin
 	source, err := c.Lookup.LookupSource(ctx, cache.UserScopeNamespace(request.AuthenticatedPrincipal), request.SessionID)
 	if err != nil || source == nil {
 		return nil, ReasonSourceUnavailable
+	}
+	if c.CanExport != nil {
+		request.SourceCanExport = c.CanExport(*source)
 	}
 	for _, p := range c.Policies {
 		if p.Enabled && p.MaxTransferTurn >= turn && p.Mapper.Source == source.Model && p.Mapper.Target == request.Target {

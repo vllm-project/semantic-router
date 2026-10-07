@@ -73,3 +73,21 @@ func TestCoordinatorSafeFallbacks(t *testing.T) {
 		})
 	}
 }
+
+func TestCoordinatorChecksDiscoveredSourceCapability(t *testing.T) {
+	request, source, mapper := testHandoff(t)
+	coordinator := &Coordinator{
+		Lookup:   &sourceLookupStub{source: &source},
+		Policies: []PairPolicy{{Mapper: mapper, Enabled: true, MaxTransferTurn: 1}},
+		CanExport: func(candidate SourceCache) bool {
+			if candidate.Endpoint != source.Endpoint {
+				t.Fatal("resolved a different source endpoint")
+			}
+			return false
+		},
+	}
+	hint, reason := coordinator.Plan(context.Background(), request, 1)
+	if hint != nil || reason != ReasonUnavailableBackend {
+		t.Fatalf("Plan = %v, %s", hint, reason)
+	}
+}
