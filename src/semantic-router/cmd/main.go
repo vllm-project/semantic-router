@@ -18,6 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/logo"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
@@ -131,8 +132,10 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		extproc.WithConfigHistoryLimit(opts.configHistoryLimit), extproc.WithGatewayMode(opts.gateway),
 		extproc.WithConfigParts(upstreamPart(opts.gateway)),
 	}
+	stopProgress := reportModelDeploymentProgress(startupWriter, modelservice.DefaultManager())
 	routerServer, err = extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry,
 		serverOpts...)
+	stopProgress()
 	if err != nil {
 		return recordStartupError(startupWriter, "create ExtProc server", err)
 	}

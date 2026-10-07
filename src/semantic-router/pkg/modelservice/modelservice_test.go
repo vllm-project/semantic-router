@@ -26,9 +26,12 @@ const fakeRuntimeEnv = "MODELSERVICE_FAKE_RUNTIME"
 // fakeRuntimeFailOnceEnv names a marker file: the first fake process to start
 // creates it and reports every model failed; later processes load normally.
 // fakeRuntimeFailAlwaysEnv makes every fake process report its models failed.
+// fakeRuntimeHoldEnv names a file: until it exists, a fake process reports its
+// models loading.
 const (
 	fakeRuntimeFailOnceEnv   = "MODELSERVICE_FAKE_FAIL_ONCE"
 	fakeRuntimeFailAlwaysEnv = "MODELSERVICE_FAKE_FAIL_ALWAYS"
+	fakeRuntimeHoldEnv       = "MODELSERVICE_FAKE_HOLD"
 )
 
 // fakeAutoEnv is the device the fake's devices command reports for auto;
@@ -113,7 +116,28 @@ func serveManagedFake(args []string) {
 			fake.SetFailed(entry.Name, "fake load failure")
 		}
 	}
+	if hold := os.Getenv(fakeRuntimeHoldEnv); hold != "" {
+		holdModels(fake, document.Models, hold)
+	}
 	_ = http.Serve(listener, fake.Handler())
+}
+
+// holdModels reports the models loading until the hold file exists.
+func holdModels(fake *runtimetest.Runtime, models []modelEntry, hold string) {
+	for _, entry := range models {
+		fake.SetReady(entry.Name, false)
+	}
+	go func() {
+		for {
+			if _, err := os.Stat(hold); err == nil {
+				for _, entry := range models {
+					fake.SetReady(entry.Name, true)
+				}
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
 }
 
 func sampleRequest(state string) Request {
