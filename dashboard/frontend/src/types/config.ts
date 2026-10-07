@@ -114,7 +114,6 @@ export interface FactCheckSignal {
 
 export interface HallucinationSignal {
   name: string
-  use_nli?: boolean // Ask the detector for span-level NLI explanations
   description?: string
 }
 
@@ -230,10 +229,13 @@ export interface DecisionModelSignal {
   description?: string
   deployment: string
   question: {
-    type: 'choice' | 'noul' | 'score'
+    type: 'choice' | 'noul' | 'score' | 'set' | 'span'
     instructions: string
     choices?: DecisionModelChoice[]
     levels?: string[]
+    labels?: DecisionModelChoice[]
+    threshold?: number
+    head?: 'router' | 'broad'
   }
   predicate?: NumericPredicate
   timeout_ms?: number
@@ -465,7 +467,6 @@ export interface LegacyVLLMEndpoint {
 
 export interface LegacyModelConfig {
   model_id: string
-  use_modernbert?: boolean
   threshold: number
   use_cpu: boolean
   category_mapping_path?: string
@@ -648,11 +649,4 @@ export function hasFlatSignals(config: unknown): boolean {
  */
 export function isPythonCLIFormat(config: unknown): config is PythonCLIConfig {
   return detectConfigFormat(config) === 'python-cli'
-}
-
-/**
- * Check if config is in legacy format
- */
-export function isLegacyFormat(config: unknown): config is LegacyConfig {
-  return detectConfigFormat(config) === 'legacy'
 }

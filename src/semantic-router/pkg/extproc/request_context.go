@@ -23,23 +23,21 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
-// EnhancedHallucinationSpan represents a hallucinated span with NLI explanation.
+// EnhancedHallucinationSpan is one unsupported span with its offsets, score,
+// severity and explanation.
 type EnhancedHallucinationSpan struct {
 	Text                    string  `json:"text"`
 	Start                   int     `json:"start"`
 	End                     int     `json:"end"`
 	HallucinationConfidence float32 `json:"hallucination_confidence,omitempty"`
 	ScoreAvailable          bool    `json:"score_available"`
-	NLILabel                string  `json:"nli_label"` // ENTAILMENT, NEUTRAL, or CONTRADICTION
-	NLIConfidence           float32 `json:"nli_confidence,omitempty"`
-	NLIScoreAvailable       bool    `json:"nli_score_available"`
 	Severity                int     `json:"severity"`    // 0-4: 0=low, 4=critical
 	Explanation             string  `json:"explanation"` // Human-readable explanation
 }
 
 // ResponseHallucinationEvidence is the detector output behind the
 // hallucination signal: the verdict, its confidence, and the spans it rests
-// on, with NLI explanations when the rule asked for them.
+// on, with span details when the detector explains them.
 type ResponseHallucinationEvidence struct {
 	Detected       bool
 	Confidence     float32
@@ -139,6 +137,9 @@ type RequestContext struct {
 	StreamedBody          *StreamedBodyHandler
 	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
 	SkipProcessing        bool // true only when the configured opt-out header is valid
+	BufferedRequestBody   bool // true when the data plane negotiated BUFFERED or BUFFERED_PARTIAL
+	// Arrival diagnostics, set at end of stream in STREAMED modes only.
+	StreamedBodyStats StreamedBodyStats
 
 	// Request header reply held until a full-duplex body is routed.
 	fullDuplexHold *fullDuplexHeaderHold

@@ -79,7 +79,7 @@ rewriting it; running a website build does not repair stale references.
 | GitHub community statistics | Generator sources, identity inputs, and the dated GitHub snapshot | `npm run contributors:rank` / `npm run committers:activity` in `website/` | `make docs-community-check` |
 
 `make docs-generated-check` checks the catalog, CLI reference, configuration
-catalog, and public skill without building native libraries. Every PR and main
+catalog, and public skill without building the router. Every PR and main
 validation runs this gate, including changes confined to source files or docs.
 `npm run build` and `npm test` run the same reference checks first. They require
 Python 3.10 or newer and the dependencies in `website/requirements.txt`; set
@@ -95,7 +95,7 @@ Normal development, build, and deploy commands use the committed community
 snapshots. Refresh them only with the explicit commands in the table above.
 
 `make generated-contract-check` also checks the config schema, OpenAPI, and
-Operator reference, using the normal Go/native build prerequisites.
+Operator reference, using the normal Go build prerequisites.
 `make generated-contract-generate` refreshes those public references in
 dependency order. Edit the owning source or generator instead of hand-editing
 generated output.

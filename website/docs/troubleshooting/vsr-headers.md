@@ -126,7 +126,7 @@ Matched signal headers contain comma-separated rule names. They require
 | `x-vsr-matched-conversation` | `conversation` |
 | `x-vsr-matched-event` | `event` |
 | `x-vsr-matched-input-modality` | `input_modality` |
-| `x-vsr-matched-decision-model` | `decision` (noul and score rule names; `rule:choice` for choices) |
+| `x-vsr-matched-decision-model` | `decision` (noul and score rule names; `rule:choice` for choices; `rule:label` for each matching set or span label) |
 
 ## Projection headers
 
@@ -165,7 +165,7 @@ and inference pool; clients should not depend on them.
 | ------ | ----------- |
 | `x-vsr-kv-source-pod` | gRPC address of the pod holding the source model's KV cache. |
 | `x-vsr-kv-cache-id` | Opaque session or cache identifier for the source KV block. |
-| `x-vsr-kv-mapper-id` | Published ridge-mapper artifact for the source→target model pair. |
+| `x-vsr-kv-mapper-id` | Published mapper artifact for the source→target model pair, a ridge fit or its distilled refinement. |
 
 **Response (backend → router):**
 

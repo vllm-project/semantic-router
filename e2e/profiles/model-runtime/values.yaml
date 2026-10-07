@@ -1,0 +1,434 @@
+# The built-in model runtime end to end, on tiny random-weight fixture packages
+# (runtime_with_fixtures.py writes them; nothing is downloaded):
+#
+# - managed: the Router starts runtime processes itself, the cpu device
+#   group (domain, PII, guard and modality classifiers, an embedder on device
+#   auto and a reranker) and the "decisions" process group (a Decision 2.0
+#   model), through VLLM_SRUN_COMMAND;
+# - attached: model-runtime-attached serves a decision model and a feedback
+#   classifier in one process, selected by served_name;
+# - fail-open: decision-offline points at a Service with no pods.
+#
+# testcases/model_runtime_*.go compare the Router's signals and routes with
+# the runtimes' own answers, so the fixtures' random weights need no planted
+# behaviour.
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      # Both are among the names the shared AIGatewayRoute matches.
+      model: general-expert
+    models:
+      - name: general-expert
+        provider_model_id: general-expert
+        backend_refs:
+          - name: local-vllm
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+      - name: math-expert
+        provider_model_id: math-expert
+        backend_refs:
+          - name: local-vllm
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    modelCards:
+      - name: general-expert
+      - name: math-expert
+    signals:
+      # One rule per label of the domain fixture, so whichever domain the model
+      # picks has a rule that reports it.
+      domains:
+        - {name: biology, description: Biology, mmlu_categories: [biology]}
+        - {name: business, description: Business, mmlu_categories: [business]}
+        - {name: chemistry, description: Chemistry, mmlu_categories: [chemistry]}
+        - {name: computer science, description: Computer science, mmlu_categories: [computer science]}
+        - {name: economics, description: Economics, mmlu_categories: [economics]}
+        - {name: engineering, description: Engineering, mmlu_categories: [engineering]}
+        - {name: health, description: Health, mmlu_categories: [health]}
+        - {name: history, description: History, mmlu_categories: [history]}
+        - {name: law, description: Law, mmlu_categories: [law]}
+        - {name: math, description: Mathematics, mmlu_categories: [math]}
+        - {name: other, description: Anything else, mmlu_categories: [other]}
+        - {name: philosophy, description: Philosophy, mmlu_categories: [philosophy]}
+        - {name: physics, description: Physics, mmlu_categories: [physics]}
+        - {name: psychology, description: Psychology, mmlu_categories: [psychology]}
+      pii:
+        # testcases/model_runtime_long_history.go needs include_history: each
+        # turn of its history is one more PII task.
+        - name: personal_data
+          threshold: 0.5
+          include_history: true
+          description: Any personal information.
+      jailbreak:
+        - name: prompt_attack
+          threshold: 0.5
+          description: Prompt injection or jailbreak.
+      classifiers:
+        - name: user_reaction
+          type: local
+          labels: [SAT, NEED_CLARIFICATION, WRONG_ANSWER, WANT_DIFFERENT, NO_FEEDBACK]
+      # The modality fixture's labels, the only names the Router accepts.
+      modality:
+        - {name: AR, description: Text answers}
+        - {name: DIFFUSION, description: Image generation}
+        - {name: BOTH, description: Text and image generation}
+      keywords:
+        - name: rerank_probe
+          operator: OR
+          keywords: [vsr-rerank-probe]
+          case_sensitive: false
+      # testcases/decision_runtime_routing.go asks the runtimes these questions.
+      decision:
+        - name: answered
+          description: Matches whenever the managed decision model answers.
+          deployment: decision-fixture
+          question:
+            type: noul
+            instructions: Is this request about software?
+          predicate:
+            gte: 0
+          timeout_ms: 10000
+        - name: request_kind
+          description: Which kind of work the request asks for.
+          deployment: decision-fixture
+          question:
+            type: choice
+            instructions: What kind of work does this request ask for?
+            choices:
+              - key: code
+                description: Writing, reviewing or debugging code
+              - key: math
+                description: Mathematics or quantitative reasoning
+              - key: chat
+                description: Anything else
+          timeout_ms: 10000
+        - name: attached_answered
+          description: Matches whenever the attached decision model answers.
+          deployment: attached-decisions
+          question:
+            type: noul
+            instructions: Does this request ask a question?
+          predicate:
+            gte: 0
+          timeout_ms: 10000
+        - name: offline
+          description: Asks a deployment with no runtime behind it.
+          deployment: decision-offline
+          question:
+            type: noul
+            instructions: Is this request about software?
+          predicate:
+            gte: 0
+        # testcases/decision_runtime_set_span.go asks the attached Vela 2.0
+        # fixture these questions. A zero threshold makes every label count,
+        # so the random weights still select labels and mark spans.
+        - name: topics
+          description: Which support topics the request mentions.
+          deployment: attached-vela2
+          question:
+            type: set
+            instructions: Which topics does the request mention?
+            labels:
+              - key: billing
+                description: Payments, invoices or refunds
+              - key: shipping
+                description: Deliveries, parcels or returns
+            threshold: 0
+          timeout_ms: 10000
+        - name: names
+          description: Where the request names a city or a person.
+          deployment: attached-vela2
+          question:
+            type: span
+            instructions: Which spans name a city or a person?
+            labels:
+              - key: city
+                description: A city name
+              - key: person
+                description: A person's name
+            threshold: 0
+          timeout_ms: 10000
+    model_bindings:
+      classifier.user_reaction:
+        deployment: attached-feedback
+        contract: label_distribution.v1
+      rag.reranker:
+        deployment: vela-reranker
+        contract: relevance_scores.v1
+    decisions:
+      # Keeps the reranker prepared: only reachable recipes with an enabled
+      # rerank plugin load one. No case sends the keyword.
+      - name: rerank_route
+        description: Retrieval with neural reranking
+        priority: 600
+        rules:
+          operator: AND
+          conditions:
+            - {type: keyword, name: rerank_probe}
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+        plugins:
+          - type: rag
+            configuration:
+              enabled: true
+              backend: vectorstore
+              backend_config:
+                vector_store_id: vs-model-runtime-e2e
+              top_k: 4
+              rerank:
+                top_k: 2
+              on_failure: skip
+      # An unknown answer never matches: the offline deployment never answers.
+      - name: offline_route
+        description: Fails open; never selected
+        priority: 500
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: decision
+              name: offline
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+      - name: selector_route
+        description: Both runtimes answered; the managed decision model also chooses the model
+        priority: 400
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: decision
+              name: answered
+            - type: decision
+              name: attached_answered
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+          - model: math-expert
+            use_reasoning: false
+        algorithm:
+          type: decision
+          decision:
+            deployment: decision-fixture
+            instructions: Which model should answer this request?
+            candidates:
+              general-expert: General assistant for everyday requests
+              math-expert: Specialist for mathematics and quantitative reasoning
+            timeout_ms: 10000
+      # Keeps every task signal in use, so each request evaluates all of them
+      # and the signal tests can read their results.
+      - name: signals_route
+        description: Any task signal matched
+        priority: 300
+        rules:
+          operator: OR
+          on_unknown: no_match
+          conditions:
+            - {type: domain, name: biology}
+            - {type: domain, name: business}
+            - {type: domain, name: chemistry}
+            - {type: domain, name: computer science}
+            - {type: domain, name: economics}
+            - {type: domain, name: engineering}
+            - {type: domain, name: health}
+            - {type: domain, name: history}
+            - {type: domain, name: law}
+            - {type: domain, name: math}
+            - {type: domain, name: other}
+            - {type: domain, name: philosophy}
+            - {type: domain, name: physics}
+            - {type: domain, name: psychology}
+            - {type: pii, name: personal_data}
+            - {type: jailbreak, name: prompt_attack}
+            - {type: classifier, name: user_reaction, label: SAT, predicate: {gte: 0.5}}
+            - {type: classifier, name: user_reaction, label: NEED_CLARIFICATION, predicate: {gte: 0.5}}
+            - {type: classifier, name: user_reaction, label: WRONG_ANSWER, predicate: {gte: 0.5}}
+            - {type: classifier, name: user_reaction, label: WANT_DIFFERENT, predicate: {gte: 0.5}}
+            - {type: classifier, name: user_reaction, label: NO_FEEDBACK, predicate: {gte: 0.5}}
+            - {type: decision, name: request_kind, label: code}
+            - {type: decision, name: request_kind, label: math}
+            - {type: decision, name: request_kind, label: chat}
+            - {type: decision, name: topics, label: billing}
+            - {type: decision, name: topics, label: shipping}
+            - {type: decision, name: names, label: city}
+            - {type: decision, name: names, label: person}
+            # A BOTH condition needs an AR and a diffusion model; the BOTH rule
+            # still reports a BOTH answer.
+            - {type: modality, name: AR}
+            - {type: modality, name: DIFFUSION}
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+      - name: default-route
+        description: Fallback route
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+  global:
+    router:
+      strategy: priority
+    model_catalog:
+      kbs: []
+      embeddings:
+        semantic:
+          embedding_config:
+            # The fixture embedder is 4 layers deep; zero selects its full
+            # depth and width instead of Vela Embedding's layer 22.
+            target_layer: 0
+            target_dimension: 0
+      deployments:
+        # Managed: the "decisions" process group.
+        decision-fixture:
+          provider: model_runtime
+          artifact: /tmp/vsr-fixtures/decision
+          device: cpu
+          process: decisions
+        # Managed: the cpu device group.
+        vela-domain:
+          provider: model_runtime
+          artifact: /tmp/vsr-fixtures/domain
+          device: cpu
+          input:
+            max_tokens: 512
+            overflow: truncate
+        vela-pii:
+          provider: model_runtime
+          artifact: /tmp/vsr-fixtures/pii
+          device: cpu
+          input:
+            max_tokens: 2048
+            overflow: window
+        vela-guard:
+          provider: model_runtime
+          artifact: /tmp/vsr-fixtures/guard
+          device: cpu
+          input:
+            max_tokens: 2048
+            overflow: window
+        vela-embedding:
+          provider: model_runtime
+          artifact: /tmp/vsr-fixtures/embedding
+          # The Kind node has no GPU, so auto resolves to the CPU and this
+          # deployment joins the cpu device group.
+          device: auto
+          input:
+            max_tokens: 512
+            overflow: truncate
+        vela-reranker:
+          provider: model_runtime
+          artifact: /tmp/vsr-fixtures/reranker
+          device: cpu
+          input:
+            max_tokens: 512
+            overflow: reject
+        vela-modality:
+          provider: model_runtime
+          artifact: /tmp/vsr-fixtures/modality
+          device: cpu
+          input:
+            max_tokens: 512
+            overflow: truncate
+        # Attached: one runtime process serving two models.
+        attached-decisions:
+          provider: model_runtime
+          endpoint: http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100
+          served_name: decision-a
+        attached-feedback:
+          provider: model_runtime
+          endpoint: http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100
+          served_name: feedback-a
+          input:
+            max_tokens: 512
+            overflow: truncate
+        attached-vela2:
+          provider: model_runtime
+          endpoint: http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100
+          served_name: vela2-a
+        decision-offline:
+          provider: model_runtime
+          endpoint: http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100
+      bindings:
+        domain_classifier:
+          deployment: vela-domain
+          contract: label_distribution.v1
+        pii_classifier:
+          deployment: vela-pii
+          contract: token_spans.v1
+        prompt_guard:
+          deployment: vela-guard
+          contract: label_distribution.v1
+        embedding:
+          deployment: vela-embedding
+          contract: embedding.v1
+        modality_detector:
+          deployment: vela-modality
+          contract: label_distribution.v1
+      # No mapping files: the modules take their labels from the cards the
+      # runtimes serve for the fixtures.
+      modules:
+        classifier:
+          domain:
+            threshold: 0.01
+          pii:
+            threshold: 0.5
+            window:
+              size: 64
+              overlap: 16
+        prompt_guard:
+          enabled: true
+          threshold: 0.5
+          window:
+            size: 64
+            overlap: 16
+        hallucination_mitigation:
+          enabled: false
+        # The binding above serves the model; the validator still asks for a
+        # model_path and a threshold, which method classifier does not apply.
+        modality_detector:
+          enabled: true
+          method: classifier
+          confidence_threshold: 0.5
+          classifier:
+            model_path: /tmp/vsr-fixtures/modality
+            use_cpu: true
+    services:
+      api:
+        # Makes the global embedding binding a prepared service.
+        embeddings: {enabled: true}
+
+extraEnv:
+  - name: VLLM_SRUN_COMMAND
+    value: python3 /opt/vsr-e2e/runtime_with_fixtures.py
+  - name: VLLM_SRUN_DIR
+    value: /tmp/vsr-runtime
+  - name: HF_HUB_OFFLINE
+    value: "1"
+extraVolumes:
+  - name: model-runtime-e2e
+    configMap:
+      name: model-runtime-e2e
+      defaultMode: 493  # 0755
+extraVolumeMounts:
+  - name: model-runtime-e2e
+    mountPath: /opt/vsr-e2e
+    readOnly: true
+
+resources:
+  limits:
+    memory: 6Gi
+    cpu: "2"
+  requests:
+    memory: 2Gi
+    cpu: 500m
+persistence:
+  enabled: false
