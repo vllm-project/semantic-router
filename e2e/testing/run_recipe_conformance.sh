@@ -111,9 +111,12 @@ for recipe in "${recipe_names[@]}"; do
     collect_logs "${recipe}"
     exit 1
   fi
+  # This runner serves every recipe on CPU (check-cpu rejects hardware-only
+  # recipes), so it applies the CPU-only known-issue waivers (#4706).
   if ! python3 "${CONFORMANCE}" --recipes-root "${RECIPES_ROOT}" \
     --output-dir "${REPORT_ROOT}" eval --recipe "${recipe}" \
-    --runtime-config "${config}" --router-url "${ROUTER_URL}"; then
+    --runtime-config "${config}" --router-url "${ROUTER_URL}" \
+    --cpu-known-issue-waivers; then
     collect_logs "${recipe}"
     exit 1
   fi

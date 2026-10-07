@@ -1,0 +1,43 @@
+global:
+  model_catalog:
+    deployments:
+      decision-kai:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
+        device: auto
+        profile: exact
+routing:
+  signals:
+    decision:
+      - name: needs_reasoning
+        description: The decision model judges that the request needs multi-step reasoning.
+        deployment: decision-kai
+        question:
+          type: noul
+          instructions: Does answering this request need multi-step reasoning?
+        predicate:
+          gte: 0.7
+        timeout_ms: 1000
+      - name: request_kind
+        description: What kind of work the request asks for.
+        deployment: decision-kai
+        question:
+          type: choice
+          instructions: What kind of request is this?
+          choices:
+            - key: code
+              description: Writing, reviewing or debugging code
+            - key: math
+              description: Mathematics or quantitative reasoning
+            - key: chat
+              description: Anything else
+      - name: difficulty
+        description: Expected difficulty on a three-level scale.
+        deployment: decision-kai
+        question:
+          type: score
+          instructions: How difficult is this request?
+          levels: [Trivial, Moderate, Hard]
+        predicate:
+          gte: 1.5

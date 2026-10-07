@@ -73,6 +73,33 @@ describe('router defaults structured schemas', () => {
     expect(patch.router).not.toHaveProperty('auto_model_names')
   })
 
+  it('saves external models that omit the optional provider', () => {
+    const external = [
+      {
+        name: 'external-safety',
+        llm_provider: '',
+        model_role: 'classification',
+        llm_endpoint: { address: 'safety-service', port: 8080, protocol: 'http' },
+      },
+      { name: 'external-hazard', model_role: 'classification' },
+      { name: 'external-classifier', llm_provider: 'openai', model_role: 'classification' },
+    ]
+    const cards = buildRouterSectionCards({
+      config: null,
+      routerConfig: { external_models: external },
+      routerDefaults: null,
+      toolsData: [],
+      toolsLoading: false,
+      toolsError: null,
+    })
+    const externalModels = cards.find((card) => card.key === 'external_models')
+    const patch = externalModels?.save(externalModels.editData) as {
+      model_catalog?: { external?: unknown }
+    }
+
+    expect(patch.model_catalog?.external).toEqual(external)
+  })
+
   it('round-trips nested provider and rule object arrays', () => {
     const normalized = normalizeRouterStructuredFields('ratelimit', {
       fail_open: false,
@@ -242,7 +269,7 @@ describe('router defaults structured schemas', () => {
         embedding_models: {
           semantic: {
             mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
-            embedding_config: { backend: 'candle', model_type: 'mmbert' },
+            embedding_config: { backend: 'model_runtime', model_type: 'mmbert' },
           },
         },
       },

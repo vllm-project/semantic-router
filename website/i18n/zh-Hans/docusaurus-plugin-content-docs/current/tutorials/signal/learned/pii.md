@@ -2,7 +2,7 @@
 translation:
   source_commit: "a65e60e035f593b80c0a9c1963c34a53abe90444"
   source_file: "docs/tutorials/signal/learned/pii.md"
-  outdated: false
+  outdated: true
 ---
 
 # 个人身份信息信号 {#pii-signal}
@@ -53,11 +53,11 @@ routing:
 
 ## 完整的本地扫描 {#complete-local-scans}
 
-隐式本地 Vela PII 默认逐项扫描最多 32,768 个 token（含特殊 token）的文本。
+默认的 PII 模型 Vela 2.0 0.3B 完整读取每个文本项（最多 8,192 个 token），用它的路由片段头找出片段。模块运行 Vela 1.0 PII 时，逐项扫描最多 32,768 个 token（含特殊 token）的文本。
 每次前向计算最多处理 512 个 token，相邻窗口重叠 255 个内容 token。
 窗口由模型 tokenizer 确定；覆盖范围不依赖字符估算或窗口边界处的重新分词。
 
-Candle 和 ORT 保留原始 UTF-8 偏移，按周围上下文为每个 token 选择一次观测，
+模型运行时以原文中的字符偏移报告实体片段，按周围上下文为每个 token 选择一次观测，
 最后统一解码 BIO 实体。重叠不会重复计算输入用量或实体置信度。
 这保证已准入 token 的完整覆盖，不保证检测准确率，也不等于单次 32K 前向的质量。
 
@@ -71,7 +71,6 @@ global:
     modules:
       classifier:
         pii:
-          use_mmbert_32k: true
           max_sequence_length: 32768  # 完整文本预算，含特殊 token。
           window: {size: 512, overlap: 255}
 ```
@@ -84,6 +83,32 @@ global:
 文本超过文档限制或任一窗口失败时，会返回分类器错误，不会将部分扫描报告为成功。
 既有 `on_error` 和决策 `rules.on_unknown` 策略决定路由结果。
 远程后端及显式截断配置保留下文所述的部分结果语义。
+
+## Vela 2.0 {#vela-20}
+
+把 `pii_classifier` 绑定到 Vela 2.0 部署后，信号会向模型提出它内置的 PII 问题（由其路由片段头回答），而不再调用单独的 PII 模型。
+这个 PII 问题会与该部署针对同一文本的 [`decision`](tutorials/signal/learned/decision.md) 问题在同一次调用中发送：
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+    bindings:
+      pii_classifier:
+        deployment: vela2
+        contract: token_spans.v1
+```
+
+- 模型识别与 Vela 1.0 PII 相同的 17 种实体类型，并在片段中直接给出类型名，因此绑定不需要 `mapping_path`。
+- 模型自行读取完整文本（长文本分窗口读取），路由器把每段文本整体发送：部署不设置 `input`，PII 模块也不设置 `window`。
+- 模型校准后的阈值决定它报告哪些片段；规则的 `threshold` 与 `pii_types_allowed` 随后像 Vela 1.0 一样作用于这些片段，片段概率是其中各词概率的平均值。
+- `head` 只能是 `router`，即回答 PII 问题的片段头。
+
+已有配置保持其 Vela 1.0 PII 绑定不变。
 
 ## 远程后端 {#remote-backend-token_spansv1}
 

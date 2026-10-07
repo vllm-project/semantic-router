@@ -1,0 +1,62 @@
+name: Platform Contracts
+
+on:
+  workflow_call:
+    inputs:
+      batch:
+        description: Platform contracts (runtime conformance) with independent verification receipts.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  contracts:
+    name: Execute Contracts
+    runs-on: ${{ fromJSON(inputs.batch).runner }}
+    timeout-minutes: ${{ fromJSON(inputs.batch).job_timeout_minutes }}
+    env:
+      BATCH: ${{ inputs.batch }}
+      CI: "true"
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_DISABLE_XET: "1"
+      MODEL_TEST_REPORT_DIR: ${{ github.workspace }}/.agent-harness/model-tests/${{ fromJSON(inputs.batch).id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/free-disk-space
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - uses: actions/cache@v4
+        with:
+          path: models/
+          key: ${{ runner.os }}-${{ fromJSON(inputs.batch).platform_id }}-models-${{ fromJSON(inputs.batch).id }}-${{ hashFiles('src/model-runtime/vllm_srun/registry/**', 'tools/ci/prepare_model_test_assets.py') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ fromJSON(inputs.batch).platform_id }}-models-${{ fromJSON(inputs.batch).id }}-
+            ${{ runner.os }}-${{ fromJSON(inputs.batch).platform_id }}-models-
+      - name: Install the model runtime
+        run: make harness-venv-install model-runtime-install
+      - name: Execute selected platform contracts
+        run: |
+          .venv-agent/bin/python tools/ci/run_platform_batch.py --batch "$BATCH" \
+            --output "$MODEL_TEST_REPORT_DIR"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-result-${{ fromJSON(inputs.batch).id }}
+          path: .agent-harness/model-tests/${{ fromJSON(inputs.batch).id }}/results/*.json
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Publish complete worker evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-${{ fromJSON(inputs.batch).id }}
+          path: .agent-harness/model-tests/${{ fromJSON(inputs.batch).id }}/
+          include-hidden-files: true
+          if-no-files-found: error

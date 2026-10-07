@@ -9,6 +9,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -51,28 +52,33 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 
 	// Step 2: Run PII token classification exactly once per unique content piece.
 	// Entity types are returned as "LABEL_{class_id}" and translated by PIIMapping.
+	// Every piece is classified concurrently, so the pieces share one bundle.
 	piiCache := make(map[string][]cachedPIIResult, len(uniqueContents))
+	type piece struct{ content, chunk string }
+	var pieces []piece
 	for _, content := range uniqueContents {
 		chunks := c.piiInputs(content)
-		cached := make([]cachedPIIResult, 0, len(chunks))
+		piiCache[content] = make([]cachedPIIResult, len(chunks))
 		for _, chunk := range chunks {
-			tokenResult, err := c.classifyPIITokens(ctx, chunk)
-			cached = append(cached, cachedPIIResult{tokenResult, err})
+			pieces = append(pieces, piece{content, chunk})
 		}
-		piiCache[content] = cached
+	}
+	classified := make([]cachedPIIResult, len(pieces))
+	modelservice.Fan(ctx, len(pieces), func(i int) {
+		classified[i].result, classified[i].err = c.classifyPIITokens(ctx, pieces[i].chunk)
+	})
+	next := make(map[string]int, len(uniqueContents))
+	for i, p := range pieces {
+		piiCache[p.content][next[p.content]] = classified[i]
+		next[p.content]++
 	}
 
 	// Step 3: Evaluate each rule concurrently using the cached token results.
 	// Each goroutine applies its own threshold and allow-list without re-running the model.
-	var ruleWg sync.WaitGroup
-	for _, rule := range c.Config.PIIRules {
-		ruleWg.Add(1)
-		go func() {
-			defer ruleWg.Done()
-			c.evaluatePIIRule(rule, piiText, nonUserMessages, piiCache, start, results, mu)
-		}()
-	}
-	ruleWg.Wait()
+	rules := c.Config.PIIRules
+	modelservice.Fan(ctx, len(rules), func(i int) {
+		c.evaluatePIIRule(rules[i], piiText, nonUserMessages, piiCache, start, results, mu)
+	})
 
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()

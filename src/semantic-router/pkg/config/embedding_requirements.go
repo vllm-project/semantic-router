@@ -1,13 +1,10 @@
 package config
 
-import "strings"
-
-// EmbeddingRequirement records a consumer's established vector/tokenizer
-// contract. It does not infer a capability from an artifact or model alias.
+// EmbeddingRequirement records a consumer's established vector contract. It
+// does not infer a capability from an artifact or model alias.
 type EmbeddingRequirement struct {
 	Model, Consumer  string
 	Dimension, Layer int
-	Windows          bool
 	Modality         string
 	// SharedService distinguishes service-owned consumers from recipe classifiers.
 	SharedService bool
@@ -39,15 +36,8 @@ func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices boo
 		if compression := decision.GetContextCompressionConfig(); compression != nil && compression.EffectiveScoring().Method != ContextCompressionScoringBM25 {
 			result = append(result, EmbeddingRequirement{Model: primary, Consumer: "context compression", Dimension: cfg.EmbeddingConfig.TargetDimension, Layer: cfg.EmbeddingConfig.TargetLayer, LocalLayerHint: true})
 		}
-		if rag := decision.GetRAGConfig(); rag != nil && rag.Enabled {
-			windows := rag.Backend == "milvus" || rag.Backend == "qdrant" || rag.Backend == "hybrid"
-			if rag.Backend == "external_api" {
-				external, err := rag.ExternalAPIBackendConfig()
-				windows = err == nil && strings.Contains(external.RequestFormat, "embedding")
-			}
-			if windows {
-				result = append(result, EmbeddingRequirement{Model: "bert", Consumer: "RAG query windows", Windows: true})
-			}
+		if rag := decision.GetRAGConfig(); rag != nil && rag.Enabled && ragEmbedsQueries(rag) {
+			result = append(result, EmbeddingRequirement{Model: RAGQueryEmbeddingModel, Consumer: "RAG query embedding"})
 		}
 	}
 	if !sharedServices {
@@ -58,7 +48,7 @@ func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices boo
 		result = append(result, EmbeddingRequirement{Model: primary, Consumer: "embedding API", Dimension: options.TargetDimension, Layer: options.TargetLayer, LocalLayerHint: true, SharedService: true})
 	}
 	if cacheNeeded {
-		requirement := EmbeddingRequirement{Model: SemanticCacheEmbeddingModel(cfg), Consumer: "response cache", Windows: true, SharedService: true}
+		requirement := EmbeddingRequirement{Model: SemanticCacheEmbeddingModel(cfg), Consumer: "response cache", SharedService: true}
 		if cfg.SemanticCache.BackendType == "" || cfg.SemanticCache.BackendType == "memory" {
 			if requirement.Model == "mmbert" {
 				requirement.Dimension, requirement.Layer = 256, 6
@@ -82,7 +72,7 @@ func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices boo
 				dimension = 256
 			}
 		case "multimodal":
-			// Zero selects the prepared artifact's complete output.
+			// Zero selects the model's complete output.
 		default:
 			dimension = 0
 		}
@@ -91,7 +81,7 @@ func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices boo
 	if cfg.VectorStore != nil && cfg.VectorStore.Enabled {
 		model := cfg.VectorStore.EmbeddingModel
 		if model == "" {
-			model = "bert"
+			model = DefaultEmbeddingModel
 		}
 		result = append(result, EmbeddingRequirement{Model: model, Consumer: "vector store ingestion", Dimension: cfg.VectorStore.EmbeddingDimension, SharedService: true})
 	}

@@ -230,9 +230,6 @@ func (d *decompiler) roleBindingToSignal(rb *config.RoleBinding) *SignalDecl {
 
 func (d *decompiler) hallucinationToSignal(rule *config.HallucinationRule) *SignalDecl {
 	fields := make(map[string]Value)
-	if rule.UseNLI {
-		fields["use_nli"] = BoolValue{V: true}
-	}
 	if rule.Description != "" {
 		fields["description"] = StringValue{V: rule.Description}
 	}

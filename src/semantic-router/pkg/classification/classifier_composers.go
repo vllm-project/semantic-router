@@ -203,6 +203,7 @@ func composerLeafMatches(signals *SignalResults) map[string][]string {
 		"kb":             signals.MatchedKBRules,
 		"conversation":   signals.MatchedConversationRules,
 		"input_modality": signals.MatchedInputModalityRules,
+		"decision":       signals.MatchedDecisionRules,
 	}
 }
 
@@ -214,8 +215,7 @@ func (c *Classifier) GetQueryEmbedding(text string) []float64 {
 		return nil
 	}
 
-	// Use the candle binding to get the embedding
-	// GetEmbedding returns ([]float32, error) with auto-detected dimension
+	// The default embedding model, at its own dimension
 	provider, err := c.EmbeddingForModel("", 0, 0)
 	if err != nil {
 		return nil

@@ -20,6 +20,10 @@ type CategoryMapping struct {
 type PIIMapping struct {
 	LabelToIdx map[string]int    `json:"label_to_idx"`
 	IdxToLabel map[string]string `json:"idx_to_label"`
+	// spanNamed marks the empty mapping of a model that lists no labels
+	// because its spans name their PII types (a decision model's ready-made
+	// PII question).
+	spanNamed bool
 }
 
 // JailbreakMapping holds the mapping between indices and jailbreak types
@@ -481,7 +485,7 @@ func (jm *JailbreakMapping) LabelCount() int {
 // resolveSinglePositiveIndex resolves the configured positive_labels against
 // mapping down to a single class index, for backends (like http_chat) that
 // only ever produce one binary verdict and cannot represent more than one
-// positive class. Unlike the multi-label backends (candle, http_classify),
+// positive class. Unlike the multi-label backends (local models, http_classify),
 // which sum every positive label's independent probability, a label here
 // that isn't found in mapping is skipped rather than treated as an error -
 // matching the general "at least one configured label must exist" leniency

@@ -17,29 +17,17 @@ def run(root: Path, *command: str) -> str:
     return result.stdout.strip()
 
 
-@pytest.mark.parametrize(
-    ("current_candle", "tagged_candle"),
-    [("0.4.1", "0.4.1"), ("0.3.7", "0.4.0")],
-)
-def test_release_tag_preserves_independent_candle_patch(
-    tmp_path: Path, current_candle: str, tagged_candle: str
+@pytest.mark.parametrize("current_version", ["0.4.0", "0.3.9"])
+def test_release_tags_the_release_version_and_starts_the_next_cycle(
+    tmp_path: Path, current_version: str
 ) -> None:
     script = tmp_path / "src" / "vllm-sr" / "scripts" / "release.sh"
     script.parent.mkdir(parents=True)
     shutil.copy2(RELEASE_SCRIPT, script)
 
     pyproject = tmp_path / "src" / "vllm-sr" / "pyproject.toml"
-    pyproject.write_text('[project]\nversion = "0.4.0"\n', encoding="utf-8")
-    cargo = tmp_path / "candle-binding" / "Cargo.toml"
-    cargo.parent.mkdir()
-    cargo.write_text(
-        f'[package]\nname = "candle-semantic-router"\nversion = "{current_candle}"\n',
-        encoding="utf-8",
-    )
-    lock = tmp_path / "candle-binding" / "Cargo.lock"
-    lock.write_text(
-        f'[[package]]\nname = "candle-semantic-router"\nversion = "{current_candle}"\n',
-        encoding="utf-8",
+    pyproject.write_text(
+        f'[project]\nversion = "{current_version}"\n', encoding="utf-8"
     )
     checker = tmp_path / "tools" / "release" / "check_version_contract.py"
     checker.parent.mkdir(parents=True)
@@ -57,12 +45,6 @@ def test_release_tag_preserves_independent_candle_patch(
 
     run(tmp_path, "bash", str(script), "0.4.0", "0.5.0")
 
-    assert f'version = "{tagged_candle}"' in run(
-        tmp_path, "git", "show", "v0.4.0:candle-binding/Cargo.toml"
-    )
-    assert f'version = "{tagged_candle}"' in run(
-        tmp_path, "git", "show", "v0.4.0:candle-binding/Cargo.lock"
-    )
     assert 'version = "0.4.0"' in run(
         tmp_path, "git", "show", "v0.4.0:src/vllm-sr/pyproject.toml"
     )

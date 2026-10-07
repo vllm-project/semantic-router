@@ -2,6 +2,30 @@ package config
 
 import "testing"
 
+// The defaults pin no memory width, so a store without one takes its model's
+// default: mmBERT's 256 view, or another model's complete output. A pinned
+// width would have to be one every model serves.
+func TestMemoryWithoutAWidthTakesItsModelsDefault(t *testing.T) {
+	for model, want := range map[string]int{"mmbert": 256, "multimodal": 0, "qwen3": 0} {
+		cfg, err := ParseYAMLBytes([]byte("version: v0.3\nglobal:\n  stores:\n    memory:\n      enabled: true\n      embedding_model: " + model + "\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Memory.Milvus.Dimension != 0 {
+			t.Fatalf("%s: defaults pinned a Milvus width: %d", model, cfg.Memory.Milvus.Dimension)
+		}
+		var memory []EmbeddingRequirement
+		for _, r := range EmbeddingRequirements(cfg, model, true) {
+			if r.Consumer == "memory" {
+				memory = append(memory, r)
+			}
+		}
+		if len(memory) != 1 || memory[0].Model != model || memory[0].Dimension != want {
+			t.Fatalf("%s: memory demand %+v, want width %d", model, memory, want)
+		}
+	}
+}
+
 func TestOmniStorageRequirementsLeaveDefaultWidthToPreparedModel(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.EmbeddingModel = "multimodal"

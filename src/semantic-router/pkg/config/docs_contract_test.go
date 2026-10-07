@@ -58,7 +58,7 @@ var configContractRequiredDocs = []docNeedles{
 		path: repoRel("website", "docs", "installation", "configuration-workflows.md"),
 		needles: []string{
 			"Choose one primary source of truth",
-			"vllm-sr serve --target k8s --config config.yaml",
+			"vllm-sr serve --target kubernetes --config config.yaml",
 			"`spec.config.routing`",
 			"Routing DSL",
 			"Avoid split ownership",
@@ -199,15 +199,6 @@ var configContractRequiredDocs = []docNeedles{
 			"backend_refs:",
 			"global:\n  model_catalog:\n    modules:\n      prompt_guard:",
 			"global:\n  model_catalog:\n    modules:\n      hallucination_mitigation:",
-		},
-	},
-	{
-		path: repoRel("bench", "cpu-vs-gpu", "README.md"),
-		needles: []string{
-			"`config-bench.yaml`",
-			"`config-bench-candle.yaml`",
-			"`global.router.streamed_body.enabled`",
-			"`bench-3way.sh`",
 		},
 	},
 	{
@@ -371,12 +362,6 @@ var configContractForbiddenDocs = []docNeedles{
 			"\nvllm_endpoints:\n",
 			"\nmodel_config:\n",
 			"\nhallucination_mitigation:\n",
-		},
-	},
-	{
-		path: repoRel("bench", "cpu-vs-gpu", "README.md"),
-		needles: []string{
-			"streamed_body_mode",
 		},
 	},
 	{

@@ -93,6 +93,19 @@ func (c *Classifier) buildPolicySignalDispatchers(
 			func() { c.evaluateInputModalitySignal(results, mu, requestFacts, usedSignals) },
 		},
 		{
+			config.SignalTypeDecision, "Decision",
+			func() {
+				c.evaluateDecisionModelSignals(
+					requestFacts.Context,
+					results,
+					mu,
+					textForSignal(config.SignalTypeDecision),
+					textForSignal(decisionModelQuestionText),
+					usedSignals,
+				)
+			},
+		},
+		{
 			config.SignalTypeClassifier, "Classifier",
 			func() {
 				c.evaluateGenericClassifierSignals(

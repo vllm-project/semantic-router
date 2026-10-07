@@ -34,6 +34,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'installation/installation',
+        'installation/agent-harness',
         'installation/agent',
         'installation/shell-completion',
         {
@@ -41,6 +42,7 @@ const sidebars: SidebarsConfig = {
           label: 'Plan a Deployment',
           items: [
             'installation/deployment-options',
+            'installation/gateway-modes',
             'installation/support-matrix',
           ],
         },
@@ -97,6 +99,7 @@ const sidebars: SidebarsConfig = {
               label: 'Learned',
               items: [
                 'tutorials/signal/learned/classifier',
+                'tutorials/signal/learned/decision',
                 'tutorials/signal/learned/complexity',
                 'tutorials/signal/learned/domain',
                 'tutorials/signal/learned/embedding',
@@ -154,6 +157,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/selection/mlp',
                 'tutorials/algorithm/selection/multi-factor',
                 'tutorials/algorithm/selection/prompt',
+                'tutorials/algorithm/selection/decision',
                 'tutorials/algorithm/selection/router-dc',
                 'tutorials/algorithm/selection/static',
                 'tutorials/algorithm/selection/svm',
@@ -236,8 +240,40 @@ const sidebars: SidebarsConfig = {
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
             'tutorials/global/vela-models',
+            'tutorials/global/model-runtime',
           ],
         },
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Model Runtime',
+      collapsed: false,
+      link: { type: 'doc', id: 'model-runtime/overview' },
+      items: [
+        'model-runtime/quickstart',
+        'model-runtime/choose-a-model',
+        {
+          type: 'category',
+          label: 'Model Runtime Guides',
+          items: [
+            'model-runtime/guides/classify',
+            'model-runtime/guides/pii',
+            'model-runtime/guides/safety',
+            'model-runtime/guides/hallucination',
+            'model-runtime/guides/embeddings',
+            'model-runtime/guides/rerank',
+            'model-runtime/guides/multimodal',
+            'model-runtime/guides/decisions',
+          ],
+        },
+        'model-runtime/deploy',
+        'model-runtime/profiles',
+        'installation/runtime/external',
+        'model-runtime/migrate',
+        'model-runtime/troubleshooting',
+        'model-runtime/plugins',
+        'model-runtime/reference',
       ],
     },
     {
@@ -255,6 +291,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/configuration-contract',
             'installation/configuration-workflows',
+            'installation/configuration-management',
             'installation/recipe-lifecycle',
             {
               type: 'category',
@@ -366,31 +403,6 @@ const sidebars: SidebarsConfig = {
             'installation/upgrade-rollback',
           ],
         },
-        {
-          type: 'category',
-          label: 'Router Runtime',
-          link: { type: 'doc', id: 'installation/native-backends' },
-          items: [
-            {
-              type: 'category',
-              label: 'Run models',
-              items: [
-                'installation/runtime/in-process',
-                'installation/runtime/openvino',
-                'installation/runtime/external',
-              ],
-            },
-            {
-              type: 'category',
-              label: 'Model guides',
-              items: [
-                'installation/runtime/embeddings',
-                'installation/runtime/safety',
-              ],
-            },
-            'installation/runtime/lifecycle-diagnostics',
-          ],
-        },
       ],
     },
     {
@@ -439,6 +451,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'proposals/open-intelligence-index-and-model-arena',
             'proposals/unified-model-catalog-and-evaluation-index',
+            'proposals/standalone-mode',
             'proposals/unified-config-contract-v0-3',
             'proposals/multi-protocol-adaptor',
           ],
@@ -532,19 +545,6 @@ const sidebars: SidebarsConfig = {
         'api/session-identification',
         'api/semantic-router-crd',
         'api/crd-reference',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Fleet Simulator',
-      collapsed: false,
-      items: [
-        'fleet-sim/overview',
-        'fleet-sim/getting-started',
-        'fleet-sim/use-cases',
-        'fleet-sim/sim-algorithms',
-        'fleet-sim/power-model',
-        'fleet-sim/guide',
       ],
     },
     {
