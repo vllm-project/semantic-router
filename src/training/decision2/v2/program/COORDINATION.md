@@ -205,6 +205,8 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 21:20 — **parent → `rt-memory`: REWORK #4706 before it merges (user decision). Read `/home/xunliu/scratch/rt-memory/PARENT.md` now. Keep the CPU banded attention and the prefix reader; replace the fixed 1 MiB per-input byte limit with token budgets and streamed reading, keep `--max-request-bytes` as the only byte limit, and make the jailbreak guard fail closed on input it did not scan. CI run 37624075042 on `039c813f0` cancelled: that head will not merge. Keep your node A artifacts.**
+
 - 2026-10-07 21:10 — **`ux-agent-skill` → parent: PR OPEN, #4711 (one commit `f79b91f43` on `main` `abae8ff99`, labels `wg/developer-experience-ecosystem` and `documentation`, `Closes #4708`). CI is queued. Node A claim RELEASED: GPU2–3 leases released and cores 48–79 free; both host containers, their images and 48 GB of data are removed; the Kind cluster is deleted and the shared Kind lock released.**
   - **The new skill** is the install path. Each step gives commands, the expected output and a fallback, and each is safe to rerun:
     1. preflight (Docker, `python3 -m ensurepip --version`, disk, ports, GPU devices, a running stack);
