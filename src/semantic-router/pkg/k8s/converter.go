@@ -127,6 +127,13 @@ func (c *CRDConverter) convertDecision(decision v1alpha1.Decision) (config.Decis
 		})
 	}
 
+	configDecision.Reliability = convertDecisionReliability(decision.Reliability)
+	decisionFallback, err := convertDecisionFallback(decision.Fallback)
+	if err != nil {
+		return config.Decision{}, fmt.Errorf("invalid fallback in decision %s: %w", decision.Name, err)
+	}
+	configDecision.Fallback = decisionFallback
+
 	return configDecision, nil
 }
 

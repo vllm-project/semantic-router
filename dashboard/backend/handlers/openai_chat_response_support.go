@@ -6,17 +6,15 @@ import (
 	"strings"
 )
 
+type openAIChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
 var openAIChatAllowedContentPartTypes = map[string]struct{}{
 	"":            {},
 	"text":        {},
 	"output_text": {},
-}
-
-func extractOpenAIChatChoiceContent(choice openAIChatChoice) string {
-	if content := extractOpenAIChatContent(choice.Message.Content); content != "" {
-		return content
-	}
-	return strings.TrimSpace(choice.Text)
 }
 
 func extractOpenAIChatContent(raw json.RawMessage) string {

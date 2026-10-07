@@ -3,6 +3,8 @@ package config
 import (
 	"slices"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 type UnknownPolicy string
@@ -52,6 +54,8 @@ type Decision struct {
 	ModelRefs           []ModelRef                 `yaml:"modelRefs,omitempty"`
 	Algorithm           *AlgorithmConfig           `yaml:"algorithm,omitempty"`
 	Adaptations         DecisionAdaptationsConfig  `yaml:"adaptations,omitempty"`
+	Reliability         *DecisionReliability       `yaml:"reliability,omitempty" json:"reliability,omitempty"`
+	Fallback            *fallback.FallbackOverride `yaml:"fallback,omitempty" json:"fallback,omitempty"`
 	Plugins             []DecisionPlugin           `yaml:"plugins,omitempty"`
 	CandidateIterations []CandidateIterationConfig `yaml:"candidateIterations,omitempty"`
 	// Emits carries declarative side-effect directives produced by EMIT blocks
@@ -127,7 +131,14 @@ type AlgorithmConfig struct {
 	Decision          *DecisionSelectionConfig     `yaml:"decision,omitempty"`
 	SessionAware      *SessionAwareSelectionConfig `yaml:"-"`
 	OnError           string                       `yaml:"on_error,omitempty"`
+	// Extensions holds the blocks of algorithm types registered outside the
+	// Router, each under its type's name.
+	Extensions map[string]*StructuredPayload `yaml:",inline" json:"-" jsonschema:"-"`
 }
+
+// extensionFields are the keys Extensions may hold: the registered
+// algorithm types the Router does not build in.
+func (*AlgorithmConfig) extensionFields() []string { return extensionAlgorithmTypes() }
 
 // PromptSelectionConfig configures deterministic, prompt-driven selection
 // among a decision's ModelRefs. The runtime owns the structured output schema,

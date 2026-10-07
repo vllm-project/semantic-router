@@ -150,6 +150,8 @@ func StartWithOptions(opts InitOptions) (*Server, error) {
 		startupStatusConfig:   &cfg.StartupStatus,
 	}
 
+	opts.RuntimeRegistry.OnConfigAttempt(apiServer.recordConfigAudit)
+
 	// Create HTTP server with routes
 	apiServer.initRoutingPreviewAdmission(cfg)
 	mux := apiServer.setupRoutes()

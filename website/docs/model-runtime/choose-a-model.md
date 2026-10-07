@@ -70,10 +70,10 @@ accurate.
 | Hardware | Status | Use |
 | --- | --- | --- |
 | CPU | Validated | Every router image runs models on CPU out of the box. |
-| AMD Instinct MI300X, MI325X | Validated | Set `device: rocm:0`. `vllm-sr serve --platform amd` and the `extproc-rocm` image ship PyTorch for ROCm. |
+| AMD Instinct MI300X, MI325X | Validated | Set `device: rocm:0`. `vllm-sr serve --platform amd` and the `vllm-sr-rocm` image ship PyTorch for ROCm. |
 | NVIDIA GPUs | Works, not yet validated | Set `device: cuda:0`. `vllm-sr serve --platform nvidia` ships PyTorch for CUDA. |
 | Intel GPUs | Available, not yet validated | `device: xpu:0`, with the runtime installed next to an XPU build of PyTorch. |
-| Apple silicon | Available, not yet validated | `device: mps`, with the runtime installed on macOS. |
+| Apple silicon | CPU only in this release | On macOS the docker target runs the CPU image, because Docker's Linux VM gets no GPU. Host GPU support is tracked in [#4636](https://github.com/vllm-project/semantic-router/issues/4636). |
 
 On AMD GPUs the router images ship the stack the runtime is validated on:
 PyTorch 2.12 for ROCm 7.2, FLA 0.5.2, and `causal-conv1d` 1.7.0 built for

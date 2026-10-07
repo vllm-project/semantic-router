@@ -338,4 +338,15 @@ const (
 
 	// Model invocation layer (Layer 4)
 	SpanUpstreamRequest = "semantic_router.upstream.request"
+	// SpanUpstreamAttempt is one try of an upstream call against one endpoint.
+	SpanUpstreamAttempt = "semantic_router.upstream.attempt"
+)
+
+// Upstream attempt attributes.
+const (
+	AttrUpstreamCluster  = "upstream.cluster"
+	AttrUpstreamEndpoint = "upstream.endpoint"
+	AttrUpstreamAttempt  = "upstream.attempt"
+	AttrUpstreamOutcome  = "upstream.outcome"
+	AttrHTTPStatusCode   = "http.status_code"
 )

@@ -291,8 +291,10 @@ func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, er
 	if err := yaml.Unmarshal(replacementBytes, &replacement); err != nil {
 		return nil, fmt.Errorf("failed to re-parse routing scopes: %w", err)
 	}
-	preserveBaseDecisionField(replacement["routing"], base["routing"], "adaptations")
-	preserveBaseRecipeDecisionField(replacement["recipes"], base["recipes"], "adaptations")
+	for _, field := range []string{"adaptations", "reliability", "fallback"} {
+		preserveBaseDecisionField(replacement["routing"], base["routing"], field)
+		preserveBaseRecipeDecisionField(replacement["recipes"], base["recipes"], field)
+	}
 	for _, key := range []string{"routing", "entrypoints", "recipes"} {
 		if value, present := replacement[key]; present {
 			base[key] = value

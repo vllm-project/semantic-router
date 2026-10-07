@@ -48,6 +48,7 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 	}
 
 	headerMutation := buildResponseHeaderMutation(ctx, outcome.isSuccessful)
+	headerMutation = mergeHeaderMutations(headerMutation, r.runResponseExtensions(ctx, outcome.statusCode))
 	headerMutation = mergeHeaderMutations(headerMutation, buildResponseStreamingMutation(ctx, outcome))
 	// Response headers are sent before the body is decoded. A same-format Chat
 	// provider may require canonical re-encoding after its decorations are

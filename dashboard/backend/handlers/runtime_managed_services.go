@@ -54,6 +54,14 @@ func managedRuntimeSyncContainerName() string {
 	return managedDashboardContainerName()
 }
 
+// managedStackRunsEnvoy reports whether an Envoy container serves the
+// listeners in front of the Router. The CLI sets VLLM_SR_GATEWAY on every
+// container of the stack; in a standalone stack the Router serves them and no
+// Envoy container exists. Stacks from earlier releases always ran Envoy.
+func managedStackRunsEnvoy() bool {
+	return strings.TrimSpace(os.Getenv("VLLM_SR_GATEWAY")) != "standalone"
+}
+
 func managedRuntimeUsesSplitContainers() bool {
 	dashboardContainer := managedDashboardContainerName()
 	return managedContainerNameForService("router") != dashboardContainer ||

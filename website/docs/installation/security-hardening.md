@@ -42,10 +42,6 @@ gateway configuration. Internal examples include:
 
 ```yaml
 request_headers_to_remove:
-  - x-vsr-looper-request
-  - x-vsr-looper-secret
-  - x-vsr-looper-decision
-  - x-vsr-looper-iteration
   - x-authz-user-id
   - x-authz-user-groups
 ```
@@ -155,15 +151,14 @@ The local stack runs on two bridge networks.
 | Router | yes | yes |
 | Envoy, Dashboard | yes | no |
 | Jaeger, Prometheus, Grafana | yes | no |
-| OpenClaw workloads | yes | no |
 
 Router is the only container on both. Requests reach it over the application
 network; it reaches the stores over the data network. A named stack prefixes
 both names, so two stacks share neither. Milvus joins the data network even
 though it has no credentials of its own yet.
 
-This closes east-west reachability. A container on the application network --
-a sidecar or an image chosen for an OpenClaw workload -- cannot
+This closes east-west reachability. A container on the application network,
+such as a sidecar, cannot
 open a connection to `vllm-sr-redis:6379` or `vllm-sr-postgres:5432` at all. The
 storage ports remain published on `127.0.0.1` only, which closes the same
 exposure from the host side.

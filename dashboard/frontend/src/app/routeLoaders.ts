@@ -17,7 +17,6 @@ export const loadLogsPage = () => import('../pages/LogsPage')
 export const loadMLSetupPage = () => import('../pages/MLSetupPage')
 export const loadMonitoringPage = () => import('../pages/MonitoringPage')
 export const loadModelHubPage = () => import('../pages/ModelHubPage')
-export const loadOpenClawPage = () => import('../pages/OpenClawPage')
 export const loadPlaygroundFullscreenPage = () => import('../pages/PlaygroundFullscreenPage')
 export const loadPlaygroundPage = () => import('../pages/PlaygroundPage')
 export const loadSetupWizardPage = () => import('../pages/SetupWizardPage')
@@ -51,7 +50,6 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   },
   { matches: (pathname) => pathname.startsWith('/knowledge-bases'), load: loadTaxonomyPage },
   { matches: (pathname) => pathname.startsWith('/topology'), load: loadTopologyPage },
-  { matches: (pathname) => pathname.startsWith('/openclaw'), load: loadOpenClawPage },
   { matches: (pathname) => /^\/insights\/[^/]+/.test(pathname), load: loadInsightsRecordPage },
   { matches: (pathname) => pathname.startsWith('/insights'), load: loadInsightsPage },
   { matches: (pathname) => pathname.startsWith('/evaluation'), load: loadEvaluationPage },

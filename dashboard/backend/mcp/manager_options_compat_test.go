@@ -19,7 +19,7 @@ func TestLoadConfigsToleratesLegacyReconnectOptions(t *testing.T) {
 		`"options":{"auto_reconnect":false,"reconnect_interval":1500,"max_retries":5,"timeout":12345}}`
 
 	storePath := filepath.Join(t.TempDir(), "wf.sqlite")
-	store, err := workflowstore.Open(storePath, workflowstore.Options{})
+	store, err := workflowstore.Open(storePath)
 	if err != nil {
 		t.Fatal(err)
 	}
