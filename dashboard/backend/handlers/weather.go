@@ -3,7 +3,9 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,6 +20,8 @@ var (
 	weatherGeocodingBaseURL = "https://geocoding-api.open-meteo.com"
 	weatherForecastBaseURL  = "https://api.open-meteo.com"
 )
+
+var errNoWeatherResults = errors.New("no weather results found")
 
 type weatherRequest struct {
 	Location string `json:"location"`
@@ -114,11 +118,13 @@ func WeatherHandler() http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			status := http.StatusBadGateway
-			if strings.Contains(err.Error(), "no weather results") {
-				status = http.StatusNotFound
+			if errors.Is(err, errNoWeatherResults) {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
 			}
-			http.Error(w, err.Error(), status)
+			// Fetch errors name the upstream URL and the dial or proxy target, so only operators see them.
+			log.Printf("Weather lookup failed: %s", redactURLsForLog(err.Error()))
+			http.Error(w, "Weather service unavailable", http.StatusBadGateway)
 			return
 		}
 
@@ -193,7 +199,7 @@ func geocodeLocation(ctx context.Context, location string) (*weatherLocationResu
 		return nil, err
 	}
 	if len(payload.Results) == 0 {
-		return nil, fmt.Errorf("no weather results found for %q", location)
+		return nil, fmt.Errorf("%w for %q", errNoWeatherResults, location)
 	}
 
 	result := payload.Results[0]

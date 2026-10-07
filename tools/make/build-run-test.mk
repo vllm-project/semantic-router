@@ -4,67 +4,34 @@
 
 ##@ Build/Test
 
-# Build the Rust library and Golang binding
-build: ## Build the Rust library and Golang binding
-build: $(if $(CI),rust-ci,rust) build-router
+# Build the router binary. Models run in the model runtime the router starts
+# (vllm-srun on PATH, or VLLM_SRUN_COMMAND); see src/model-runtime.
+build: ## Build the router binary
+build: build-router
 
-# Build router (conditionally use rust-ci in CI environments)
 # Development build: Use DEV=true to enable untrusted metadata["user_id"] fallback for testing
 # Example: make build-router DEV=true
 # Production builds (default) only accept user_id from auth headers (x-authz-user-id)
-# Candle-only linux/riscv64: make build-router-riscv (see tools/make/rust.mk).
 build-router: ## Build the router binary
-build-router: $(if $(CI),rust-ci,rust)
-	@bash tools/docker/check-native-abi.sh candle-binding/target/release/libcandle_semantic_router.$(if $(filter Darwin,$(shell uname -s)),dylib,so) onnx-binding/target/release/libonnx_semantic_router.$(if $(filter Darwin,$(shell uname -s)),dylib,so)
 	@$(LOG_TARGET)
 	@mkdir -p bin
 ifdef DEV
-	@cd src/semantic-router && $(NATIVE_ENV) go build -tags=dev,milvus -o ../../bin/router ./cmd
+	@cd src/semantic-router && go build -tags=dev -o ../../bin/router ./cmd
 else
-	@cd src/semantic-router && $(NATIVE_ENV) go build -tags=milvus -o ../../bin/router ./cmd
+	@cd src/semantic-router && go build -o ../../bin/router ./cmd
 endif
 
 # Run the router
 run-router: ## Run the router with the specified config
 run-router: build-router
 	@echo "Running router with config: ${CONFIG_FILE}"
-	@export $(NATIVE_ENV) && \
-		./bin/router -config=${CONFIG_FILE} --enable-system-prompt-api=true
+	@./bin/router -config=${CONFIG_FILE} --enable-system-prompt-api=true
 
 # Run the router with e2e config for testing
 run-router-e2e: ## Run the router with e2e config for testing
-run-router-e2e: build-router download-models
+run-router-e2e: build-router
 	@echo "Running router with e2e config: e2e/config/config.e2e.yaml"
-	@export $(NATIVE_ENV) && \
-		./bin/router -config=e2e/config/config.e2e.yaml
-
-# Build the ONNX binding Rust library
-ONNX_FEATURES ?= dynamic
-
-build-onnx-binding: ## Build independent ORT instances (ONNX_FEATURES=migraphx-dynamic for AMD)
-ifeq ($(PREBUILT_NATIVE_LIBS),1)
-	@test "$(ONNX_FEATURES)" = dynamic || { echo "Shared native artifact requires ONNX_FEATURES=dynamic"; exit 1; }
-	@python3 tools/ci/native_artifact.py verify --directory "$(NATIVE_ARTIFACT_DIR)"
-else
-	@echo "Building ONNX binding Rust library..."
-	@cd onnx-binding && cargo build --release --lib --locked --no-default-features --features $(ONNX_FEATURES)
-	@echo "ONNX binding built successfully"
-endif
-
-# Build the ml-binding Rust library (required by router-onnx at runtime)
-build-ml-binding: ## Build the ml-binding Rust library
-	@echo "Building ml-binding Rust library..."
-	@cd ml-binding && cargo build --release
-	@echo "ml-binding built successfully"
-
-# Compatibility name: providers are selected by prepared task bindings.
-# The normal Go module includes both native modules; no module substitution.
-build-router-onnx: build-router ## Build the same multi-provider router under its legacy filename
-	@cp bin/router bin/router-onnx
-
-run-router-onnx: build-router-onnx ## Run with per-task Candle/ORT bindings (set ORT_DYLIB_PATH)
-	@export $(NATIVE_ENV) && \
-		./bin/router-onnx -config=$${ONNX_CONFIG_FILE:-e2e/config/onnx-binding/config.onnx-binding-test.yaml} --enable-system-prompt-api=true
+	@./bin/router -config=e2e/config/config.e2e.yaml
 
 # Unit test semantic-router
 # By default, Milvus, Qdrant, Redis, Valkey, and Llama Stack tests are skipped. To enable them, set the relevant env var to false.
@@ -72,8 +39,7 @@ run-router-onnx: build-router-onnx ## Run with per-task Candle/ORT bindings (set
 test-semantic-router: ## Run unit tests for semantic-router (set SKIP_MILVUS_TESTS=false / SKIP_QDRANT_TESTS=false to enable)
 test-semantic-router: build-router
 	@$(LOG_TARGET)
-	@export $(NATIVE_ENV) && \
-	export SKIP_MILVUS_TESTS=$${SKIP_MILVUS_TESTS:-true} && \
+	@export SKIP_MILVUS_TESTS=$${SKIP_MILVUS_TESTS:-true} && \
 	export SKIP_QDRANT_TESTS=$${SKIP_QDRANT_TESTS:-true} && \
 	export SKIP_REDIS_TESTS=$${SKIP_REDIS_TESTS:-true} && \
 	export SKIP_VALKEY_TESTS=$${SKIP_VALKEY_TESTS:-true} && \
@@ -84,30 +50,24 @@ test-semantic-router: build-router
 		if [ "$${SKIP_MODEL_DEPENDENT_TESTS:-false}" = "true" ]; then \
 			TEST_PACKAGES="$$(printf '%s\n' "$$TEST_PACKAGES" | awk '!/\/pkg\/(memory|tools)$$/')"; \
 		fi && \
-		CGO_ENABLED=1 \
 		go test -v $$TEST_PACKAGES
-	@$(NATIVE_ENV) $(MAKE) go-tools-test go-tools-vet
+	@$(MAKE) go-tools-test go-tools-vet
 
-# Core tests exercise deterministic contracts and service integrations. Published
-# checkpoint qualification runs through test-models; explicit legacy adapter
-# compatibility remains available through test-binding-lora.
-test: vet check-go-mod-tidy test-rust-ci test-owned-native test-binding-minimal test-semantic-router
+# Core tests exercise deterministic contracts and service integrations. Model
+# inference is the model runtime's own suite (make model-runtime-test).
+test: vet check-go-mod-tidy test-semantic-router
 
-test-core-unit: $(if $(CI),rust-ci,rust) ## Run discovered Go contracts with explicit model/service profile exclusions
-	@export $(NATIVE_ENV) && python3 tools/ci/run_core_tests.py --mode unit --output .agent-harness/core/unit
+test-core-unit: ## Run discovered Go contracts with explicit model/service profile exclusions
+	@python3 tools/ci/run_core_tests.py --mode unit --output .agent-harness/core/unit
 
-test-core-storage: $(if $(CI),rust-ci,rust) ## Run the complete source-owned storage inventory against required services
-	@export $(NATIVE_ENV) && python3 tools/ci/run_core_tests.py --mode storage --output .agent-harness/core/storage
+test-core-storage: ## Run the complete source-owned storage inventory against required services
+	@python3 tools/ci/run_core_tests.py --mode storage --output .agent-harness/core/storage
 
-test-core-owned: $(if $(CI),rust-ci,rust) ## Run model-free binding and alternate provider-default contracts once
-	@export $(NATIVE_ENV) && python3 tools/ci/run_core_tests.py --mode owned --output .agent-harness/core/owned
-
-.PHONY: test-core-unit test-core-storage test-core-owned
+.PHONY: test-core-unit test-core-storage
 
 # Clean built artifacts
 clean: ## Clean built artifacts
 	@echo "Cleaning build artifacts..."
-	cd candle-binding && cargo clean
 	rm -f bin/router
 
 # Test the Envoy extproc
@@ -203,11 +163,9 @@ test-learning-tools: harness-venv-install ## Test the research report tool's par
 .PHONY: test-learning-tools
 
 # Exercise production protection with maintained single-request/session fixtures.
-bench-agent-routing-protection: rust-ci ## Gate production protection and write a deterministic session report
+bench-agent-routing-protection: ## Gate production protection and write a deterministic session report
 	@mkdir -p .agent-harness/agent-routing-protection
 	@cd src/semantic-router && \
-		CGO_ENABLED=1 \
-		$(NATIVE_ENV) \
 		ROUTER_PROTECTION_REPORT="$(CURDIR)/.agent-harness/agent-routing-protection/report.json" \
 		go test ./pkg/extproc -run '^TestRouterLearningSession' -count=1 -v
 
@@ -242,14 +200,13 @@ bench-hallucination-full:
 
 # Run the router with hallucination detection config
 run-router-hallucination: ## Run the router with hallucination detection enabled
-run-router-hallucination: build-router download-models
+run-router-hallucination: build-router
 	@echo "Running router with hallucination detection config..."
-	@export $(NATIVE_ENV) && \
-		./bin/router -config=e2e/config/config.hallucination.yaml
+	@./bin/router -config=e2e/config/config.hallucination.yaml
 
 # Test hallucination detection models by verifying router startup and model loading
 test-hallucination-detection: ## Test hallucination detection pipeline (fact-check, hallucination detector, NLI)
-test-hallucination-detection: build-router download-models provider-mocker-install
+test-hallucination-detection: build-router provider-mocker-install
 	@echo "=============================================="
 	@echo "Testing Hallucination Detection Pipeline"
 	@echo "=============================================="
@@ -260,8 +217,7 @@ test-hallucination-detection: build-router download-models provider-mocker-insta
 	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   Provider mocker is healthy" || (echo "   ✗ Provider mocker failed to start"; cat /tmp/provider_mocker_hallucination.log; exit 1)
 	@echo ""
 	@echo "2. Starting router with hallucination detection config..."
-	@export $(NATIVE_ENV) && \
-		nohup ./bin/router -config=e2e/config/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
+	@nohup ./bin/router -config=e2e/config/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
 	@echo "   Waiting for router to initialize models (15s)..."
 	@sleep 15
 	@echo ""
@@ -322,7 +278,7 @@ test-hallucination-detection: build-router download-models provider-mocker-insta
 	@echo "  4. OpenAI Chat API -> /v1/chat/completions"
 
 test-hallucination-detection-manual: ## Start hallucination detection services for manual testing (press Ctrl+C to stop)
-test-hallucination-detection-manual: build-router download-models provider-mocker-install
+test-hallucination-detection-manual: build-router provider-mocker-install
 	@echo "=============================================="
 	@echo "Starting Hallucination Detection Services"
 	@echo "=============================================="
@@ -346,8 +302,7 @@ test-hallucination-detection-manual: build-router download-models provider-mocke
 	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   Provider mocker is healthy" || (echo "   ✗ Provider mocker failed to start"; exit 1)
 	@echo ""
 	@echo "2. Starting router with hallucination detection config..."
-	@export $(NATIVE_ENV) && \
-		nohup ./bin/router -config=e2e/config/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
+	@nohup ./bin/router -config=e2e/config/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
 	@echo "   Waiting for router to initialize models (15s)..."
 	@sleep 15
 	@grep "Fact-check classifier initialized" /tmp/router_hal.log && echo "   Models initialized" || echo "   ⚠ Check /tmp/router_hal.log"
@@ -407,17 +362,17 @@ stop-hallucination-services:
 
 # Hallucination Detection Demo with Tool Calling
 demo-hallucination: ## Run interactive hallucination detection demo (CLI)
-demo-hallucination: build-router download-models provider-mocker-install
+demo-hallucination: build-router provider-mocker-install
 	@echo "Starting Hallucination Detection Demo (CLI)..."
 	@PROVIDER_MOCKER_PYTHON="$(PROVIDER_MOCKER_PYTHON)" ./e2e/testing/hallucination-demo/run_demo.sh
 
 demo-hallucination-web: ## Run hallucination demo with browser-based UI (recommended)
-demo-hallucination-web: build-router download-models provider-mocker-install
+demo-hallucination-web: build-router provider-mocker-install
 	@echo "Starting Hallucination Detection Demo (Web UI)..."
 	@PROVIDER_MOCKER_PYTHON="$(PROVIDER_MOCKER_PYTHON)" ./e2e/testing/hallucination-demo/run_demo.sh --web
 
 demo-hallucination-auto: ## Run hallucination demo with predefined questions (non-interactive)
-demo-hallucination-auto: build-router download-models provider-mocker-install
+demo-hallucination-auto: build-router provider-mocker-install
 	@echo "Starting Hallucination Detection Demo (auto mode)..."
 	@PROVIDER_MOCKER_PYTHON="$(PROVIDER_MOCKER_PYTHON)" ./e2e/testing/hallucination-demo/run_demo.sh --demo
 
@@ -435,8 +390,7 @@ test-image-gen:
 run-router-modality: ## Run router with modality routing config (AR + Diffusion + Both)
 run-router-modality: build-router
 	@echo "Running router with modality routing config..."
-	@export $(NATIVE_ENV) && \
-		./bin/router -config=e2e/config/config.modality-routing.yaml --enable-system-prompt-api=true
+	@./bin/router -config=e2e/config/config.modality-routing.yaml --enable-system-prompt-api=true
 
 # Test modality routing — sends prompts for AR, DIFFUSION, and BOTH through Envoy
 # Requires: router running with modality-routing config, Envoy proxy, AR vLLM (port 8000), Diffusion vLLM (port 8001)
