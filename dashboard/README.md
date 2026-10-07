@@ -12,8 +12,8 @@ Use it to:
 - import and activate Recipe packages;
 - test routes in the Playground and inspect the selected path;
 - view topology, logs, evaluations, and monitoring tools;
-- manage security policies, ML selection workflows, MCP tools, and optional
-  OpenClaw workers when those features are enabled.
+- manage security policies, ML selection workflows, and MCP tools when those
+  features are enabled.
 
 Playground starts with the default route advertised by the Router. Named recipe
 entrypoints and orchestration aliases remain selectable alongside it; adding a
@@ -21,7 +21,8 @@ Fusion route does not change ordinary chat's default. If the Router advertises
 only explicit entrypoints, Playground selects the first available entrypoint.
 
 The Dashboard is a control plane, not an inference proxy. Applications should
-send inference requests to Envoy.
+send inference requests to the Router's listener (to Envoy with
+`--gateway extproc`).
 
 ## Local development
 
@@ -130,16 +131,6 @@ Feature controls:
 | `ML_TRAINING_DIR` | Training script directory for subprocess mode. |
 | `ML_SERVICE_URL` | Use an ML service instead of local subprocesses; co-located sidecars use `http://127.0.0.1:8686`. |
 | `MCP_ENABLED` | Enable MCP server and tool management. |
-| `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. Defaults to `false`; `vllm-sr serve` mounts the container socket only when explicitly enabled. |
-
-OpenClaw provisioning accepts optional `skills` entries as exact IDs from the
-server's skills catalog (`GET /api/openclaw/skills`). IDs use lowercase ASCII
-letters or digits, with single hyphens or underscores separating groups. Paths,
-case or whitespace aliases, and unknown IDs return HTTP 400 before provisioning
-starts, including for asynchronous requests. Malformed catalog JSON returns
-HTTP 500 when skills are selected. Omitting skills or selecting an empty list
-still provisions without skills. Administrators can supply a catalog with
-`OPENCLAW_SKILLS_PATH`.
 
 ## sr-bench evaluation
 
@@ -246,11 +237,6 @@ differs from the backend's `Host`, as behind a reverse proxy or the Vite dev
 proxy (`http://localhost:3001`). Unset, the origin check is advisory and the
 CSRF token is the guarantee. `Authorization: Bearer` requests are exempt.
 
-The same list governs the ClawRoom WebSocket handshake. CORS does not apply to
-handshakes, so the origin check is the only cross-origin control there; a
-split-origin frontend that is not listed can authenticate and write but cannot
-open the room socket.
-
 sr-bench APIs are intentionally stricter: they accept browser
 requests only when `Origin` exactly matches the request scheme and `Host`.
 TLS-terminating proxies must overwrite `X-Forwarded-Proto` with the external
@@ -261,8 +247,27 @@ ConfigMap, GitOps-owned config, or read-only Recipe store should be reflected in
 the matching flag so the UI does not offer operations the runtime cannot
 persist.
 
-Some local workflows can manage containers. Do not mount a container-runtime
-socket unless users with Dashboard access are allowed to control that runtime.
+The Dashboard holds no container runtime: its image has no container CLI, and
+`vllm-sr serve` mounts no runtime socket. A saved change the Router hot-reloads
+applies at once; one the running containers can't take (the Router answers
+`restart_required`, or an extproc stack's generated Envoy config changes) is
+recorded beside the runtime config as a pending activation, and the Dashboard
+answers "Restart required: run `vllm-sr serve` to apply." The CLI applies it
+(`src/vllm-sr/cli/pending_activation.py`). A Recipe activation or deactivation
+that needs the containers recreated (new listeners, storage or management API)
+is committed the same way and answered `202` with `status: restart_required`;
+the Dashboard reads the stack's storage from what `vllm-sr serve` passed it and
+never inspects containers.
+
+The status page reads the Router's and Envoy's HTTP probes. For a service that
+does not answer, it reads the stack's files instead: the runtime config's setup
+block (standby), the heartbeat of a `vllm-sr serve` that is starting the stack
+(starting), and the pending activation. Logs come from the bounded log spool.
+
+`vllm-sr serve` owns the Router management credential the Dashboard uses
+(`VLLM_SR_DASHBOARD_RECIPE_TOKEN`) and passes it in the environment; the
+Dashboard never writes it down. The entrypoint shares the Recipe store with the
+group in `VLLM_SR_RECIPE_STORE_GID`, the CLI user's, so a non-root CLI reads it.
 See the [security hardening guide](../website/docs/installation/security-hardening.md)
 for the deployment boundary.
 
@@ -311,6 +316,7 @@ Setup mode is the dashboard's first-run state. While it is active the UI forces 
 - **`--setup-mode` / `DASHBOARD_SETUP_MODE` is deprecated and ignored.** It is still read, but only so that a value disagreeing with the config file can be reported: `/api/setup/state` returns a `reason`, and the backend logs one `WARNING` per change (not per request, since the endpoint is unauthenticated). A stale environment value can no longer open bootstrap on its own.
 - **An unreadable or unparsable config resolves to "not in setup mode", deliberately.** Failing closed is the only safe posture for something gating unauthenticated admin creation; the resolver never falls back to the legacy flag on an error path. `/api/setup/state` answers `200` with a diagnostic `reason` (rather than a `500` the frontend silently coerced to "not in setup mode") so the condition is visible instead of silent. The reason never contains config file contents.
 - **`--allow-open-bootstrap` is a separate, still-supported operator escape hatch.** It is unaffected by setup-mode resolution and has no config-file counterpart. Production should provision the admin via `DASHBOARD_ADMIN_*` rather than enabling it.
+- **The `-openclaw*` flags are deprecated and ignored.** OpenClaw was removed. `-openclaw`, `-openclaw-url`, `-openclaw-data` and `-openclaw-token` still parse for this release, so an older manifest keeps starting, and the backend logs one `DEPRECATED` line naming the flags and `OPENCLAW_*` variables it was given. The next release no longer accepts the flags.
 
 ## Router contract access
 

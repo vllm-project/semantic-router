@@ -10,8 +10,8 @@ metadata:
   namespace: vllm-serving
 spec:
   replicas: 1
-  # Omit gateway.existingRef: keep the Operator's Envoy sidecar, which accepts
-  # inference HTTP and invokes the Router over ExtProc.
+  # Omit gateway.existingRef: the Router runs standalone and serves inference
+  # HTTP itself on port 8801.
   vllmEndpoints:
     - name: local-backend
       model: local/model
@@ -47,7 +47,7 @@ spec:
             value: /v1
       backendRefs:
         - name: semantic-router-gateway
-          # Envoy inference listener. Port 8080 is the management API.
+          # The Router's inference listener. Port 8080 is the management API.
           port: 8801
       timeouts:
         request: 300s

@@ -72,9 +72,11 @@ def _render_performance_section(performance: dict[str, Any]) -> list[str]:
 
 
 def _render_eval_summary(label: str, evaluation: dict[str, Any]) -> list[str]:
+    waived = evaluation.get("waived") or 0
+    waived_note = f", {waived} waived (see Known-issue waivers)" if waived else ""
     return [
         f"- {label} scope: `{evaluation.get('evaluation_scope', 'deployment')}`",
-        f"- {label} success: `{evaluation['matched']}/{evaluation['total']}` ({evaluation['success_rate']}%)",
+        f"- {label} success: `{evaluation['matched']}/{evaluation['total']}` ({evaluation['success_rate']}%){waived_note}",
         f"- {label} decision coverage: `{evaluation['matched_decisions']}/{evaluation['total_decisions']}` ({evaluation['decision_success_rate']}%)",
     ]
 

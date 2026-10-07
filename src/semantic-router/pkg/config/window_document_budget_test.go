@@ -26,12 +26,10 @@ global:
         input: {max_tokens: 65536, overflow: window}
     modules:
       prompt_guard:
-        variant: mmbert32k
         max_sequence_length: 512
         window: {size: 32768, overlap: 256}
       classifier:
         pii:
-          use_mmbert_32k: true
           max_sequence_length: 512
           window: {size: 32768, overlap: 256}
       safety:
@@ -50,7 +48,7 @@ func parseWindowDocumentBudgetConfig(t *testing.T, provider string) *RouterConfi
 }
 
 func TestWindowDocumentBudgetCanonicalRoundTrip(t *testing.T) {
-	for _, provider := range []string{"candle", "ort"} {
+	for _, provider := range []string{ModelRuntimeProvider} {
 		t.Run(provider, func(t *testing.T) {
 			cfg := parseWindowDocumentBudgetConfig(t, provider)
 			assertWindowDocumentBudget(t, cfg)
@@ -106,7 +104,7 @@ func windowDocumentValidators() map[string]func(*RouterConfig) error {
 }
 
 func TestWindowDocumentBudgetWithoutBindings(t *testing.T) {
-	cfg := parseWindowDocumentBudgetConfig(t, "candle")
+	cfg := parseWindowDocumentBudgetConfig(t, ModelRuntimeProvider)
 	cfg.ModelBindings = nil
 	cfg.PromptGuard.MaxSequenceLength = 65536
 	cfg.PIIModel.MaxSequenceLength = 65536
@@ -133,7 +131,7 @@ func TestWindowDocumentBudgetRejectsInvalidGeometry(t *testing.T) {
 		{"window cannot advance", 65536, SequenceHeadWindowConfig{Size: 32768, Overlap: 32768}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			cfg := parseWindowDocumentBudgetConfig(t, "candle")
+			cfg := parseWindowDocumentBudgetConfig(t, ModelRuntimeProvider)
 			deployment := cfg.ModelDeployments["scanner"]
 			deployment.Input.MaxTokens = test.budget
 			cfg.ModelDeployments["scanner"] = deployment
@@ -157,7 +155,7 @@ func TestWindowDocumentBudgetRejectsInvalidGeometry(t *testing.T) {
 func TestWholeInputPoliciesRemainExplicitAfterCanonicalRoundTrip(t *testing.T) {
 	for _, overflow := range []string{"reject", "truncate"} {
 		t.Run(overflow, func(t *testing.T) {
-			cfg := parseWindowDocumentBudgetConfig(t, "candle")
+			cfg := parseWindowDocumentBudgetConfig(t, ModelRuntimeProvider)
 			deployment := cfg.ModelDeployments["scanner"]
 			deployment.Input = ModelInputBudget{MaxTokens: 8192, Overflow: overflow}
 			cfg.ModelDeployments["scanner"] = deployment

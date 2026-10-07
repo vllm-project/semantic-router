@@ -169,9 +169,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     spec = TASK_SPECS[args.task]
-    measured = resolve_measured_artifact(args, served)
-    spec.validate_artifact(measured.repo)
-    dataset_revision = resolve_hf_revision(spec.dataset_repo, repo_type="dataset")
+    measured = resolve_measured_artifact(args, served, spec.validate_artifact)
+    # A split without a pin is read at the revision resolved here, which is also the
+    # one the result and the manifests record.
+    dataset_revision = spec.revision or resolve_hf_revision(
+        spec.dataset_repo, repo_type="dataset"
+    )
 
     mapping = (
         dict(measured.referenced["label_mapping"])
@@ -188,13 +191,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     findings = (
         registry_drift(inventory, MODEL_REGISTRY)
         + uncovered_artifacts(config)
-        + check_registry_label_order(args.task, mapping)
+        + check_registry_label_order(args.task, measured.repo, mapping)
         + _provenance_findings(args, measured)
     )
     for finding in findings:
         logger.warning("gap: %s", finding)
 
-    texts, labels, split_rows = load_rows(spec, mapping, args.limit)
+    texts, labels, split_rows = load_rows(spec, mapping, args.limit, dataset_revision)
     summary, model_config = _measure(args, measured, served, texts, labels, mapping)
     result = _build_result(
         args=args,

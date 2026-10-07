@@ -74,8 +74,7 @@ const (
 	// Reference: FusionFactory (arXiv:2507.10540), Avengers-Pro (arXiv:2508.12631)
 	MethodSVM SelectionMethod = "svm"
 
-	// MethodMLP uses Multi-Layer Perceptron for GPU-accelerated model selection
-	// Neural network classifier using Candle for efficient GPU inference
+	// MethodMLP uses a Multi-Layer Perceptron classifier for model selection
 	// Reference: FusionFactory (arXiv:2507.10540) query-level fusion via MLP routers
 	MethodMLP SelectionMethod = "mlp"
 
@@ -100,6 +99,10 @@ const (
 	// MethodPrompt uses a concrete helper LLM to choose one declared candidate
 	// through a runtime-owned structured output contract.
 	MethodPrompt SelectionMethod = "prompt"
+
+	// MethodDecision asks a decision model served by the built-in model runtime
+	// to choose one declared candidate; its probabilities are the candidate scores.
+	MethodDecision SelectionMethod = "decision"
 
 	// MethodSessionAware wraps a base selector with agentic session policy:
 	// it keeps tool loops and hot multi-turn continuations on the current model

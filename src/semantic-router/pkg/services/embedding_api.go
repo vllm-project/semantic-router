@@ -11,7 +11,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
 // SetGlobalEmbeddings binds a borrowed global service view before publishing a
@@ -54,18 +53,21 @@ func (s *ClassificationService) AcquireEmbeddingAPISnapshot() (*config.RouterCon
 type classifierAPIResources struct {
 	classifiers io.Closer
 	embeddings  *embedding.Set
+	lease       io.Closer
 }
 
+// Close retires the generation's bindings before the lease that serves them.
 func (r classifierAPIResources) Close() error {
-	return errors.Join(r.classifiers.Close(), r.embeddings.Close())
+	return errors.Join(r.classifiers.Close(), r.embeddings.Close(), r.lease.Close())
 }
 
-func (s *ClassificationService) prepareAndPublishClassifiers(cfg *config.RouterConfig, classifier *classification.Classifier, recipes *classification.RecipeClassifiers, owner io.Closer, runtime *native.Runtime) error {
-	prepared, err := modelruntime.PrepareOwnedEmbeddingAPI(context.Background(), cfg, runtime)
+func (s *ClassificationService) prepareAndPublishClassifiers(cfg *config.RouterConfig, classifier *classification.Classifier, recipes *classification.RecipeClassifiers, owner io.Closer, options classification.RecipeRuntimeOptions, lease io.Closer) error {
+	prepared, err := modelruntime.PrepareOwnedEmbeddingAPI(context.Background(), cfg, options.Runtime)
 	if err != nil {
 		_ = owner.Close()
+		_ = lease.Close()
 		return err
 	}
-	s.publishClassifiers(cfg, classifier, recipes, classifierAPIResources{classifiers: owner, embeddings: prepared}, prepared)
+	s.publishClassifiers(cfg, classifier, recipes, classifierAPIResources{classifiers: owner, embeddings: prepared, lease: lease}, prepared)
 	return nil
 }

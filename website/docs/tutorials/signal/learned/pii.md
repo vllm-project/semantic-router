@@ -48,15 +48,18 @@ When `pii_types_allowed` is empty, any detected PII can cause the signal to matc
 
 ## Complete local scans
 
-The implicit local Vela PII default scans each text item up to 32,768 tokens,
-including special tokens. Each forward uses at most 512 tokens, with 255 content
-tokens of overlap. The model tokenizer defines the windows; character estimates
+The default PII model, Vela 2.0 0.3B, reads each text item whole, up to its
+8,192-token input, and finds spans with its router span head. When the module
+runs Vela 1.0 PII, it scans each text item up to 32,768 tokens, including
+special tokens. Each forward uses at most 512 tokens, with 255 content tokens
+of overlap. The model tokenizer defines the windows; character estimates
 and text re-tokenization at window boundaries do not determine coverage.
 
-Native Candle and ORT preserve original UTF-8 offsets, choose one observation per
-token by its surrounding context, then decode BIO entities once. Overlap does not
-double-count input usage or entity confidence. This guarantees coverage of admitted
-tokens, not detection accuracy or the quality of a single 32K forward.
+The [model runtime](../../../model-runtime/guides/pii.md) reports spans as
+character offsets into the original text, chooses one observation per token by
+its surrounding context, then decodes BIO entities once. Overlap does not
+double-count input usage or entity confidence. This guarantees coverage of
+admitted tokens, not detection accuracy or the quality of a single 32K forward.
 
 An explicit module budget, backend, window, or recipe binding keeps its own
 policy. For example, a deployment with `input: {max_tokens: 8192, overflow: reject}`
@@ -69,7 +72,6 @@ global:
     modules:
       classifier:
         pii:
-          use_mmbert_32k: true
           max_sequence_length: 65536  # Complete text budget, including special tokens.
           window: {size: 32768, overlap: 256}
 ```
@@ -87,6 +89,39 @@ A text beyond the document limit or a failed window produces a classifier error,
 not a successful partial scan. Existing `on_error` and decision `rules.on_unknown`
 policies determine its routing effect. Remote backends and explicitly selected
 truncation retain the partial-result behavior described below.
+
+## Vela 2.0
+
+Bind `pii_classifier` to a Vela 2.0 deployment and the signal asks the model's
+ready-made PII question, answered by its router span head, instead of a
+separate PII model. The PII question then travels in the same call as the
+deployment's [`decision`](tutorials/signal/learned/decision.md) questions about the same text:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+    bindings:
+      pii_classifier:
+        deployment: vela2
+        contract: token_spans.v1
+```
+
+- The model finds the same 17 entity types as Vela 1.0 PII and names them in
+  its spans, so the binding takes no `mapping_path`.
+- It reads the whole text itself, a long one in windows, so the router sends
+  each text in one piece: the deployment sets no `input` and the PII module no
+  `window`.
+- The model's calibrated threshold decides which spans it reports. A rule's
+  `threshold` and `pii_types_allowed` then apply to those spans as they do for
+  Vela 1.0; the model's span probability is the mean over the span's words.
+- `head` may only be `router`, the span head that answers the PII question.
+
+Existing configurations keep their Vela 1.0 PII binding.
 
 ## Remote backend (token_spans.v1)
 

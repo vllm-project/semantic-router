@@ -5,7 +5,8 @@ from __future__ import annotations
 import os
 import stat
 import time
-from contextlib import suppress
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -41,6 +42,27 @@ class RuntimeConfigLock:
 
     def __exit__(self, _exc_type, _exc, _traceback) -> None:
         self.close()
+
+    @contextmanager
+    def released(
+        self, timeout_seconds: float = DEFAULT_LOCK_TIMEOUT_SECONDS
+    ) -> Iterator[None]:
+        """Let Dashboard and Router mutations take the lock until the block ends.
+
+        The lock is taken back when the block ends, waiting up to
+        *timeout_seconds* for a mutation that holds it then.
+        """
+
+        if self._closed:
+            raise RuntimeConfigLockError("The runtime configuration lock is closed.")
+        if self._lock_fd < 0 or fcntl is None:
+            yield
+            return
+        fcntl.flock(self._lock_fd, fcntl.LOCK_UN)
+        try:
+            yield
+        finally:
+            _lock_before_deadline(self._lock_fd, timeout_seconds)
 
     def close(self) -> None:
         if self._closed:
@@ -126,17 +148,7 @@ def acquire_runtime_config_lock(
                 "The runtime configuration lock must not grant access to other users."
             )
         os.set_inheritable(lock_fd, False)
-        deadline = time.monotonic() + timeout_seconds
-        while True:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except BlockingIOError as error:
-                if time.monotonic() >= deadline:
-                    raise RuntimeConfigLockError(
-                        "Another local runtime configuration operation is in progress."
-                    ) from error
-                time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
+        _lock_before_deadline(lock_fd, timeout_seconds)
         return RuntimeConfigLock(
             runtime_config_path=runtime_path,
             store_dir=store_dir,
@@ -149,6 +161,20 @@ def acquire_runtime_config_lock(
             os.close(lock_fd)
         os.close(directory_fd)
         raise
+
+
+def _lock_before_deadline(lock_fd: int, timeout_seconds: float) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return
+        except BlockingIOError as error:
+            if time.monotonic() >= deadline:
+                raise RuntimeConfigLockError(
+                    "Another local runtime configuration operation is in progress."
+                ) from error
+            time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
 
 
 def _recipe_store_dir(state_root_dir: str | Path, stack_name: str) -> Path:

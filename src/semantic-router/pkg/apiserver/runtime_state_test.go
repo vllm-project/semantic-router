@@ -52,18 +52,11 @@ func (s *fakeResolvedClassificationService) ClassifyUserFeedback(_ context.Conte
 	return nil, fmt.Errorf("not used in this test: %q", req.Text)
 }
 
-func (s *fakeResolvedClassificationService) ClassifyNLI(_ context.Context, _ services.NLIRequest) (*services.NLIResponse, error) {
-	return nil, fmt.Errorf("NLI not available in fake resolved service")
-}
-
-func (s *fakeResolvedClassificationService) IsNLIReady() bool { return false }
-
-func (s *fakeResolvedClassificationService) HasUnifiedClassifier() bool      { return true }
-func (s *fakeResolvedClassificationService) HasClassifier() bool             { return true }
-func (s *fakeResolvedClassificationService) HasFactCheckClassifier() bool    { return true }
-func (s *fakeResolvedClassificationService) HasHallucinationDetector() bool  { return true }
-func (s *fakeResolvedClassificationService) HasHallucinationExplainer() bool { return true }
-func (s *fakeResolvedClassificationService) HasFeedbackDetector() bool       { return true }
+func (s *fakeResolvedClassificationService) HasUnifiedClassifier() bool     { return true }
+func (s *fakeResolvedClassificationService) HasClassifier() bool            { return true }
+func (s *fakeResolvedClassificationService) HasFactCheckClassifier() bool   { return true }
+func (s *fakeResolvedClassificationService) HasHallucinationDetector() bool { return true }
+func (s *fakeResolvedClassificationService) HasFeedbackDetector() bool      { return true }
 func (s *fakeResolvedClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
 	s.updatedConfig = newConfig
 }

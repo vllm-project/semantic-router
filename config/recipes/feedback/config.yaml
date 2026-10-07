@@ -306,7 +306,7 @@ routing:
         method: threshold_bands
         outputs:
           - name: feedback_needs_evidence
-            gte: 0.42
+            gte: 0.45
 
   decisions:
     - name: omni

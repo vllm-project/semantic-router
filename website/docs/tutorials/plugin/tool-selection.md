@@ -57,3 +57,47 @@ so enforce tool permissions separately. See complete examples:
 [`add-from-database.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/tool-selection/add-from-database.yaml)
 and
 [`filter-request-tools.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/tool-selection/filter-request-tools.yaml).
+
+### Session-scoped sticky selection
+
+`sticky` is an opt-in, bounded policy layered on top of either mode (issue
+[#3347](https://github.com/vllm-project/semantic-router/issues/3347)). A
+trusted session retains the exact order of previously selected tools, pins
+tools observed in assistant tool calls, and appends a bounded number of newly
+relevant tools per turn — reducing prompt churn across a multi-turn tool-use
+session without ever skipping current-turn authorization or availability
+checks.
+
+```yaml
+plugins:
+  - type: tool_selection
+    configuration:
+      enabled: true
+      mode: add
+      top_k: 3
+      sticky:
+        enabled: false
+        max_tools: 16
+        max_new_tools_per_turn: 2
+        pin_called_tools: true
+```
+
+- `max_tools` (`1`-`128`, default `16`): hard bound on retained tools; once
+  full, only called or definitionally-changed tools are re-evaluated.
+- `max_new_tools_per_turn` (`0`-`max_tools`, default `2`): how many newly
+  relevant tools may be appended in one turn. `0` disables relevance-driven
+  growth entirely (reuse and call-pinning only) — this is a valid explicit
+  setting, distinct from omitting the field.
+- `pin_called_tools` (default `true`): tools observed in an assistant tool
+  call are pinned and are not evicted by ordinary bounded growth.
+
+Sticky state is scoped to a trusted, authenticated session — it is never
+active for an anonymous or derived session identity — and every stored
+identity is re-authorized and re-validated against the current request's
+catalog, policy, and model/wire capabilities before use; a stored identity
+is never trusted blindly. Full runtime behavior (this configuration
+contract is Phase 1 of 4; the plugin does not yet read or write session
+state) is tracked in
+[PL-0042](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/docs/plans/pl-0042-sticky-tool-selection.md).
+See the complete disabled example:
+[`sticky-add-from-database.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/tool-selection/sticky-add-from-database.yaml).

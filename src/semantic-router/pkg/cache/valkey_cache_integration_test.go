@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -80,7 +80,7 @@ func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 		TTLSeconds:          300,
 		Enabled:             true,
 		Config:              valkeyConfig,
-		EmbeddingModel:      "bert",
+		EmbeddingModel:      "qwen3",
 	})
 	if err != nil {
 		storagetest.Unavailable(t, "valkey", fmt.Sprintf("Valkey server not available (skipping integration test): %v", err))
@@ -510,7 +510,7 @@ func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
 		TTLSeconds:          300,
 		Enabled:             true,
 		Config:              valkeyConfig,
-		EmbeddingModel:      "bert",
+		EmbeddingModel:      "qwen3",
 	})
 	require.NoError(t, err, "Failed to create cache with FLAT index")
 	defer func() { _ = cache.Close() }()
@@ -664,7 +664,7 @@ func newIsolatedValkeyCache(t *testing.T, label, metricType string, threshold fl
 		TTLSeconds:          300,
 		Enabled:             true,
 		Config:              valkeyConfig,
-		EmbeddingModel:      "bert",
+		EmbeddingModel:      "qwen3",
 	})
 	require.NoError(t, err, "Failed to create cache with %s metric", metricType)
 	t.Cleanup(func() { _ = cache.Close() })

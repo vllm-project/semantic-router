@@ -18,7 +18,7 @@ import transformers
 from artifact_inventory import REGISTRY_ALIASES, ServedArtifact
 from baseline_artifact import BaselineError
 from constants import LEGACY_MODEL_REGISTRY, MODEL_REGISTRY
-from datasets import load_dataset
+from datasets import concatenate_datasets, load_dataset
 from peft import PeftModel
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
@@ -36,6 +36,10 @@ class TaskSpec:
     artifact trained on that upstream measures fit rather than generalisation.
     ``by_source`` holds a whole corpus out and is the rule an external
     held-out set carries.
+
+    ``revision`` pins the dataset, so the rows scored are the rows the manifest
+    names. ``data_files`` reads the split from these files of the repository
+    instead of from a published split.
     """
 
     dataset_repo: str
@@ -43,7 +47,11 @@ class TaskSpec:
     text_field: str
     label_field: str
     split_rule: str = "predefined"
+    revision: str | None = None
+    data_files: tuple[str, ...] = ()
     compatible_artifact_repos: tuple[str, ...] = ()
+    # Why other artifacts are refused, completed with {repo}.
+    restriction: str = ""
     # Rows whose ``exclude_prefix[0]`` value starts with ``exclude_prefix[1]`` are
     # left out. ``trained_on_repos`` names artifacts trained on the dataset
     # itself, for which none of its rows is held out.
@@ -51,7 +59,7 @@ class TaskSpec:
     trained_on_repos: tuple[str, ...] = ()
 
     def validate_artifact(self, repo: str) -> None:
-        """Refuse source labels that describe a different classification task."""
+        """Refuse source labels that cannot rank this artifact."""
         if repo in self.trained_on_repos:
             raise BaselineError(
                 f"{repo} was trained on {self.dataset_repo}, so no split of it is "
@@ -62,10 +70,7 @@ class TaskSpec:
             and repo not in self.compatible_artifact_repos
         ):
             raise BaselineError(
-                f"{self.dataset_repo} is a legacy toxicity/jailbreak diagnostic, "
-                f"not an instruction-attack benchmark for {repo}. Use "
-                "mom_collection_eval.py --custom_dataset with attack-reviewed "
-                "benign/jailbreak gold for Guard."
+                f"{self.dataset_repo} {self.restriction.format(repo=repo)}"
             )
 
 
@@ -84,12 +89,30 @@ TASK_SPECS: dict[str, TaskSpec] = {
             "vllm-sr/mmbert-jailbreak-detector-merged",
             "vllm-sr/mmbert-jailbreak-detector-lora",
         ),
+        restriction=(
+            "is a legacy toxicity/jailbreak diagnostic, not an instruction-attack "
+            "benchmark for {repo}. Use mom_collection_eval.py --custom_dataset with "
+            "attack-reviewed benign/jailbreak gold for Guard."
+        ),
     ),
+    # The corpus-matched fact-check test of #4305. Inside every corpus, script,
+    # length, question-mark and capitalisation stratum the two classes are equal,
+    # so neither the corpus nor those cues give the label away. Dolly is left out
+    # because the mmBERT fact-check checkpoint trained on it, and neither
+    # fact-check checkpoint names the other four corpora.
     "fact-check": TaskSpec(
-        dataset_repo="vllm-sr/fact-check-classification-dataset",
+        dataset_repo="vllm-sr/router-signal-suite",
+        revision="3f95fc2d0dbdd8abdd2a0fba0387f4a925fe934a",
         split="test",
+        data_files=(
+            "text/nf-cats/fact_check/test.jsonl",
+            "text/open-question-type/fact_check/test.jsonl",
+            "text/search-arena/fact_check/test.jsonl",
+            "text/urs/fact_check/test.jsonl",
+        ),
         text_field="text",
-        label_field="label_id",
+        label_field="label",
+        split_rule="by_source",
     ),
     "feedback": TaskSpec(
         dataset_repo="vllm-sr/feedback-detector-dataset",
@@ -99,6 +122,14 @@ TASK_SPECS: dict[str, TaskSpec] = {
         # registry declares "label" and only works through a silent auto-detect
         # fallback, so the field is pinned here instead.
         label_field="label_name",
+        compatible_artifact_repos=(
+            LEGACY_MODEL_REGISTRY["feedback"]["id"],
+            LEGACY_MODEL_REGISTRY["feedback"]["lora_id"],
+        ),
+        restriction=(
+            "repeats a few SAT templates, each with '!', in train and validation. "
+            "It only scores the checkpoint trained on it, not {repo}."
+        ),
     ),
     # Vela Domain trains on Global-MMLU and moves the MMLU questions that match
     # MMLU-Pro into training, so the MMLU-derived rows are left out. The legacy
@@ -173,14 +204,24 @@ def _mapping_from_sidecar(model_dir: Path) -> dict[str, int]:
     return {}
 
 
-def check_registry_label_order(task: str, mapping: dict[str, int]) -> list[str]:
-    """Compare the artifact's class order against the evaluation registry copy.
+def check_registry_label_order(
+    task: str, repo: str, mapping: dict[str, int]
+) -> list[str]:
+    """Compare the artifact's class order against its own registry copy.
 
     A permuted order still yields plausible accuracy, so this comparison is the
-    only place the mismatch becomes visible.
+    only place the mismatch becomes visible. A legacy checkpoint is compared
+    with the legacy registry, since the served model may add classes it never
+    had, as Vela Feedback adds NO_FEEDBACK.
     """
     registry_key = REGISTRY_ALIASES.get(task, task)
-    entry = MODEL_REGISTRY.get(registry_key)
+    legacy = LEGACY_MODEL_REGISTRY.get(registry_key, {})
+    registry = (
+        LEGACY_MODEL_REGISTRY
+        if repo in (legacy.get("id"), legacy.get("lora_id"))
+        else MODEL_REGISTRY
+    )
+    entry = registry.get(registry_key)
     if not entry:
         return [f"{task}: no evaluation registry entry to cross-check"]
     registry_labels = list(entry.get("labels", []))
@@ -206,11 +247,30 @@ def check_registry_label_order(task: str, mapping: dict[str, int]) -> list[str]:
     ]
 
 
+def load_split(spec: TaskSpec, revision: str):
+    """Read the split at ``revision``, from its files when the spec names them."""
+    if not spec.data_files:
+        return load_dataset(spec.dataset_repo, split=spec.split, revision=revision)
+    # A row leaves out the fields it has no value for, so the files need not share
+    # one column set. Each is read on its own, keeping the fields the baseline reads.
+    fields = [spec.text_field, spec.label_field]
+    if spec.exclude_prefix is not None:
+        fields.append(spec.exclude_prefix[0])
+    return concatenate_datasets(
+        [
+            load_dataset(
+                spec.dataset_repo, data_files=name, split="train", revision=revision
+            ).select_columns(fields)
+            for name in spec.data_files
+        ]
+    )
+
+
 def load_rows(
-    spec: TaskSpec, mapping: dict[str, int], limit: int | None
+    spec: TaskSpec, mapping: dict[str, int], limit: int | None, revision: str
 ) -> tuple[list[str], np.ndarray, int]:
     """Load the held-out split and map every row onto the artifact's class order."""
-    dataset = load_dataset(spec.dataset_repo, split=spec.split)
+    dataset = load_split(spec, revision)
     if spec.exclude_prefix is not None:
         field, prefix = spec.exclude_prefix
         dataset = dataset.filter(lambda row: not str(row[field]).startswith(prefix))

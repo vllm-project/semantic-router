@@ -161,7 +161,10 @@ def test_bootstrap_metadata_preserves_typed_model_bindings(tmp_path: Path, owner
     document["global"] = {
         "model_catalog": {
             "deployments": {
-                "shared": {"provider": "candle", "artifact": "models/mmbert"}
+                "shared": {
+                    "provider": "model_runtime",
+                    "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
+                }
             }
         }
     }
