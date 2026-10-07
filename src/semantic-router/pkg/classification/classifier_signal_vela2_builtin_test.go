@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // vela2BuiltInConfig binds every built-in signal Vela 2.0 answers to one
@@ -151,6 +153,38 @@ func TestBuiltInSignalsOnVela2RouteFromOneCall(t *testing.T) {
 	after, afterTasks = fake.Bundles()
 	if after-before != 1 || afterTasks-beforeTasks != 1 {
 		t.Fatalf("a long request also travels whole in one task: %d bundles, %d tasks", after-before, afterTasks-beforeTasks)
+	}
+
+	// Surrounding whitespace reaches every signal as it is, so PII shares the call.
+	padded := "\n  a question about person names and their places \n"
+	before, beforeTasks = fake.Bundles()
+	results = classifier.evaluateAllSignalsWithContext(SignalEvaluationInput{
+		Text: padded, CurrentUserText: padded, HasPriorAssistantReply: true,
+		RequestFacts: RequestFacts{Context: context.Background()},
+	}, classifier.Config.Decisions, true)
+	if len(results.SignalErrors) != 0 {
+		t.Fatalf("padded request: errors %v", results.SignalErrors)
+	}
+	after, afterTasks = fake.Bundles()
+	if after-before != 1 || afterTasks-beforeTasks != 1 {
+		t.Fatalf("a request with surrounding whitespace also travels in one task: %d bundles, %d tasks", after-before, afterTasks-beforeTasks)
+	}
+
+	// Prompt compression shortens the text the bounded signals read; every
+	// signal Vela 2.0 answers reads the request as it came, in one call.
+	original := "a question about person names and their places, with details"
+	before, beforeTasks = fake.Bundles()
+	results = classifier.evaluateAllSignalsWithContext(SignalEvaluationInput{
+		Text: "a question about person names", UncompressedText: original, CurrentUserText: original,
+		SkipCompressionSignals: map[string]bool{config.SignalTypeJailbreak: true, config.SignalTypePII: true},
+		HasPriorAssistantReply: true, RequestFacts: RequestFacts{Context: context.Background()},
+	}, classifier.Config.Decisions, true)
+	if len(results.SignalErrors) != 0 {
+		t.Fatalf("compressed request: errors %v", results.SignalErrors)
+	}
+	after, afterTasks = fake.Bundles()
+	if after-before != 1 || afterTasks-beforeTasks != 1 {
+		t.Fatalf("a compressed request also travels in one task: %d bundles, %d tasks", after-before, afterTasks-beforeTasks)
 	}
 }
 

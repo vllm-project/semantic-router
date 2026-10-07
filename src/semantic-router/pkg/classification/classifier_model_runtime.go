@@ -220,6 +220,9 @@ type ownedTokenBackend struct {
 // readsWholeText reports whether the prepared binding asks a decision model's
 // ready-made span question, which reads a whole text however long it is.
 func (b *ownedTokenBackend) readsWholeText() bool {
+	if b == nil {
+		return false
+	}
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.handle != nil && b.handle.Capability().Preset != ""

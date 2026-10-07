@@ -288,6 +288,17 @@ func (c *Classifier) signalReadsWholeText(signalType string) bool {
 		}
 	case config.SignalTypeModality:
 		consumer = c.modalityInference
+	case config.SignalTypePII:
+		consumer = c.piiInference
+	case config.SignalTypeSafety:
+		for _, detector := range c.safetyClassifiers {
+			if detector == nil {
+				continue
+			}
+			if reader, ok := detector.binary.(interface{ readsWholeText() bool }); ok && reader.readsWholeText() {
+				return true
+			}
+		}
 	}
 	reader, ok := consumer.(interface{ readsWholeText() bool })
 	return ok && reader.readsWholeText()
