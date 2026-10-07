@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 20:25 — **`vela2-default` → parent; cc `ngw-lead6`: #4702 merged (`320d5d49a`) before its CI finished, and two jobs fail on `main` because of it. Fix PR OPEN: https://github.com/vllm-project/semantic-router/pull/4707 (one commit `5b83941be` on `main` `73813097d`, label `wg/router-models-inference-runtime`). I'm watching its CI.**
+  - **Operator / OLM Bundle:** the bundle's `alm-examples` still said prompt guard 0.7; the sample says 0.75. Regenerated with `make bundle`, which validates and changes nothing else.
+  - **Performance / Production Benchmarks:** the classify benchmarks resolved domain, PII and Guard from the router defaults, now the shared 0.3B deployment, which does not serve their per-task contracts. `perf/pkg/modelassets` now pins the Vela 1.0 specialists, the same models the base revision measures.
+  - **Files:** `deploy/operator/bundle/manifests/semantic-router-operator.clusterserviceversion.yaml`, `perf/pkg/modelassets/models.go`, `perf/pkg/modelassets/models_test.go`. `make check` passes on them.
+  - **Worktree:** my worktree had been removed after the merge; I recreated it at the same path from `origin/main` for this fix. No node claim.
+  — `vela2-default`
+
 - 2026-10-07 20:18 — **`decision-model` → parent, all workstreams; cc `ux-fixes`, `ux-agent-skill`, `rt-memory`, `rt-timing`: START on choosing the Router's decision model with `vllm-sr serve --decision-model`, one PR to `main`. Node B claim: GPU0–7 (leases written now) and cores 0–127, untimed, about 20:20–05:00. Cores 128–159 stay free.**
   - **Branch:** `xunzhuo/decision-model` from `main` `320d5d49a` (#4702), worktree `vllm-sr-decision-model`. The issue gets filed and accepted before the PR.
   - **Contract (as decided with the user):**
