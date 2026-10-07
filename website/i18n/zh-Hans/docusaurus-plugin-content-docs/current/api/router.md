@@ -7,7 +7,7 @@ translation:
 
 # 路由器接口 {#router-api}
 
-Router 数据面通过 Envoy 监听器接收模型请求。在标准本地栈中，监听器为 `http://localhost:8899`；配方可在 `listeners` 下选择不同地址或端口。
+Router 数据面在配置的监听器上接收模型请求。默认的 standalone 模式下由 Router 自己服务这些请求；使用 `--gateway extproc` 时由 Envoy 服务，并通过 ext_proc 调用 Router。在标准本地栈中，监听器为 `http://localhost:8899`；配方可在 `listeners` 下选择不同地址或端口。
 
 推理请使用数据面。健康检查、配置、诊断和回放查询请使用管理 API，通常绑定到 `127.0.0.1:8080`。见 [Router 管理 API](./apiserver)。
 

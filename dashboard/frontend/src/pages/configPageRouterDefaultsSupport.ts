@@ -20,6 +20,7 @@ import {
   type RouterLayerKey,
   type RouterSystemKey,
 } from './configPageRouterSectionCatalog'
+import { DECISION_MODEL_HINT, DECISION_MODELS } from './decisionModelSupport'
 
 export type { RouterLayerKey, RouterSystemKey } from './configPageRouterSectionCatalog'
 export type RouterConfigSectionData = Partial<Record<RouterSystemKey, unknown>>
@@ -807,6 +808,13 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
       return [routerStructuredField(key, 'items')]
     case 'system_models':
       return [
+        {
+          name: 'decision_model',
+          label: 'Decision Model',
+          type: 'select',
+          options: [...DECISION_MODELS],
+          description: `Answers the built-in signals and every decision question that names no deployment. ${DECISION_MODEL_HINT}. A binding below keeps its signal on another model.`,
+        },
         {
           name: 'prompt_guard',
           label: 'Prompt Guard Binding',

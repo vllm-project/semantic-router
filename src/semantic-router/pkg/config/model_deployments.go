@@ -93,6 +93,27 @@ func (d ModelDeployment) WithDefaults() ModelDeployment {
 	return d
 }
 
+// ScanBudget is the scan budget a decision deployment declares with input
+// {overflow: window, max_tokens}: the most tokens of one state part a model
+// that reads a long part in windows (Vela 2.0) reads. Zero keeps the model's
+// own budget.
+func (d ModelDeployment) ScanBudget() int {
+	if d.Input.Overflow == "window" {
+		return d.Input.MaxTokens
+	}
+	return 0
+}
+
+// ValidateDecisionInput checks the input of a deployment that answers
+// decisions: none, or a scan budget. Decision models never truncate.
+func (d ModelDeployment) ValidateDecisionInput(name string) error {
+	input := d.WithDefaults().Input
+	if (input.MaxTokens == 0 && input.Overflow == "reject") || (input.Overflow == "window" && input.MaxTokens > 0) {
+		return nil
+	}
+	return fmt.Errorf("deployment %q: decision models never truncate; input takes overflow: window with max_tokens, the scan budget of a model that reads a long part in windows, or nothing", name)
+}
+
 func (d ModelDeployment) validate(cfg *RouterConfig) error {
 	switch d.Provider {
 	case "http":

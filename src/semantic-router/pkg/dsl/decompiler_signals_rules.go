@@ -234,7 +234,9 @@ func (d *decompiler) decompileDecisionModelSignals() {
 		if rule.Description != "" {
 			d.write("  description: %q\n", rule.Description)
 		}
-		d.write("  deployment: %q\n", rule.Deployment)
+		if rule.Deployment != "" {
+			d.write("  deployment: %q\n", rule.Deployment)
+		}
 		d.write("  question: %s\n", formatPluginConfigValue(decisionQuestionValue(rule.Question)))
 		if predicate := numericPredicateValue(rule.Predicate); predicate != nil {
 			d.write("  predicate: %s\n", formatPluginConfigValue(predicate))

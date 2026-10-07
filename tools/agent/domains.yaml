@@ -353,6 +353,20 @@ domains:
         - e2e/testing/vllm-sr-cli/**
         - tools/make/docker.mk
 
+  # The CLI unit suite parses these Router configs against the schema the CLI
+  # bundles. Not part of vllm-sr-cli, whose match publishes the CLI on main.
+  cli-reference-configs:
+    owner: vllm-sr-cli
+    paths:
+      - config/config.yaml
+      - config/recipes/balance/config.yaml
+      - config/recipes/vela-amd/config.yaml
+      - config/recipes/built-in/**
+      - e2e/config/config.memory-user.yaml
+      - src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
+    checks: [make vllm-sr-test]
+    verifications: [cli-unit]
+
   model-runtime:
     owner: model-runtime
     paths:

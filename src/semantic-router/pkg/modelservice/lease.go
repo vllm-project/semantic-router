@@ -3,6 +3,7 @@ package modelservice
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -11,13 +12,15 @@ import (
 )
 
 // DeploymentStatus is the observable state of one deployment. Restarts counts
-// the exits of its managed process; an attached endpoint has none.
+// the exits of its managed process; an attached endpoint has none. Artifact is
+// the model a managed process loads; an attached endpoint names none.
 type DeploymentStatus struct {
 	Name     string     `json:"name"`
 	Managed  bool       `json:"managed"`
 	Endpoint string     `json:"endpoint"`
 	Process  string     `json:"process"`
 	Model    string     `json:"model"`
+	Artifact string     `json:"artifact,omitempty"`
 	Ready    bool       `json:"ready"`
 	State    string     `json:"state"`
 	Reason   string     `json:"reason,omitempty"`
@@ -109,6 +112,59 @@ func (l *Lease) Card(ctx context.Context, deployment string) (ModelCard, error) 
 		return ModelCard{}, ErrUnknownDeployment
 	}
 	return m.group.waitCard(ctx, m.served.name)
+}
+
+// WaitManaged waits until every Router-managed deployment of the lease is
+// ready. It returns at once when one cannot become ready, for the reasons Card
+// gives, and when ctx ends; a ctx without a deadline waits up to ReadyTimeout.
+// An attached deployment is a service with a lifecycle of its own and is not
+// waited for.
+func (l *Lease) WaitManaged(ctx context.Context) error {
+	if l == nil {
+		return nil
+	}
+	l.mu.RLock()
+	managed := make(map[string]member, len(l.members))
+	for name, m := range l.members {
+		if m.group.managed {
+			managed[name] = m
+		}
+	}
+	l.mu.RUnlock()
+	if len(managed) == 0 {
+		return nil
+	}
+	bound := ""
+	if _, ok := ctx.Deadline(); !ok {
+		timeout := ReadyTimeout()
+		bound = fmt.Sprintf(" within %s (%s)", timeout, ReadyTimeoutEnv)
+		var cancelTimeout context.CancelFunc
+		ctx, cancelTimeout = context.WithTimeout(ctx, timeout)
+		defer cancelTimeout()
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	results := make(chan error, len(managed))
+	for name, m := range managed {
+		go func() {
+			_, err := m.group.waitCard(ctx, m.served.name)
+			switch {
+			case errors.Is(err, context.DeadlineExceeded):
+				err = fmt.Errorf("model_runtime deployment %q did not become ready%s: %w", name, bound, err)
+			case err != nil:
+				err = fmt.Errorf("model_runtime deployment %q: %w", name, err)
+			}
+			results <- err
+		}()
+	}
+	var first error
+	for range managed {
+		if err := <-results; err != nil && first == nil {
+			first = err
+			cancel()
+		}
+	}
+	return first
 }
 
 func (l *Lease) lookup(deployment string) (member, bool) {

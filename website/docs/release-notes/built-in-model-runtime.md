@@ -82,6 +82,32 @@ v0.4.0, and keep their names.
 - **Runtime contract 2.0.0.** The router treats an attached runtime that
   doesn't serve contract 2.x, such as the 1.0.0 runtime of #4481, as
   incompatible. Upgrade attached runtimes together with the router.
+- **Long inputs cost what their model reads**
+  ([#4654](https://github.com/vllm-project/semantic-router/issues/4654)). The
+  runtime tokenizes an input only as far as its token budget decides the
+  answer, with the same tokens as reading it whole, and rejects one certainly
+  over a `reject` budget without tokenizing it. An input read in windows
+  (classify `overflow: window`, a Vela 2.0 state part) is read up to a scan
+  budget in tokens and fails with `scan_budget_exceeded` past it; Vela 2.0's
+  is four inputs on a CPU and 32 on a GPU, and a question with
+  `overflow: truncate` reads only a long part's first tokens, one forward on a
+  CPU. Contract 2.1.0 adds `scan_budget_exceeded`, the usage flag
+  `tokens_lower_bound`, the model limits `max_scan_tokens` and
+  `truncate_tokens`, the decisions option `max_tokens` and the question field
+  `overflow` ([Long inputs](model-runtime/reference.md#long-inputs)).
+- **Routing reads a long request's beginning, safety reads it whole.** Through
+  Vela 2.0, routing questions truncate. Safety questions (prompt guard,
+  safety, PII, hallucination) read a long request whole up to the scan budget,
+  or a question deployment's `input: {overflow: window, max_tokens}`. A short
+  request is read as before, every question in one model input.
+- **Model signals have a deadline.** A model-runtime signal still running at
+  `global.model_catalog.signal_timeout_ms` (by default the request's deadline
+  less a tenth, or 45 s for a served request) resolves through its policy
+  instead of failing the request.
+- **Jailbreak and PII rules match content their model did not read**: over the
+  model's input or cap, truncated, or not scanned by the deadline. The match
+  has the type `unscanned` and holds whatever `on_error` says, on requests and
+  on responses; `on_unscanned: allow` on the module turns it off.
 - **Training contract `semantic-router.training/v2`.** One
   `runtime/model-runtime@v1` capability replaces `runtime/candle@v1` and
   `runtime/onnxruntime@v1`. BERT and RoBERTa (`architecture/hf-bert@v1`), the

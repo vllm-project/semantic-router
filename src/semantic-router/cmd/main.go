@@ -18,6 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/logo"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
@@ -29,8 +30,11 @@ const (
 )
 
 func main() {
-	logo.PrintVLLMLogo()
 	opts := parseRuntimeOptions()
+	if opts.validateConfig {
+		os.Exit(validateConfigFile(opts.configPath, opts.gateway, os.Stdout))
+	}
+	logo.PrintVLLMLogo()
 	initializeRuntimeLogger()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	runErr := runRouterProcess(ctx, opts)
@@ -53,6 +57,9 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		return parseErr
 	}
 	opts.gateway = mode
+	if mode == config.GatewayStandalone {
+		logging.RenameComponent("extproc", "router")
+	}
 	if opts.configHistoryLimit == 0 {
 		opts.configHistoryLimit = configsnapshot.DefaultHistoryLimit
 	}
@@ -125,8 +132,10 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		extproc.WithConfigHistoryLimit(opts.configHistoryLimit), extproc.WithGatewayMode(opts.gateway),
 		extproc.WithConfigParts(upstreamPart(opts.gateway)),
 	}
+	stopProgress := reportModelDeploymentProgress(startupWriter, modelservice.DefaultManager())
 	routerServer, err = extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry,
 		serverOpts...)
+	stopProgress()
 	if err != nil {
 		return recordStartupError(startupWriter, "create ExtProc server", err)
 	}

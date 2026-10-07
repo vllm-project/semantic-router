@@ -114,7 +114,7 @@ global:
 
 没有 `backend` 时，PII 检测保持本地模型。远程 PII 分类器使用共享 backend 块：`model` 命名 `global.model_catalog.external[]` 中带 `model_role: classification` 的条目，协议是 `http_classify`，约定是 `token_spans.v1`。服务接收 `{"inputs": "<request text>"}`，并回答实体片段：其 `start`/`end` 是该精确字符串中的 Unicode 码点偏移，`label` 来自已配置的 PII 映射，`score` 在 `[0, 1]` 内，以及片段 `text`，必须等于它指向的切片。HuggingFace token 分类拼写 `entity_group` 与 `word` 作为别名接受。裸 JSON 片段列表或信封 `{"spans": [...], "truncated_at": n, "model": "..."}` 都有效；信封的 `model` 若存在，必须等于目录条目的 `llm_model_name`。
 
-当片段超出文本、与自身重叠、携带未知或范围外标签、分数越界、别名值冲突，或正文不是片段列表时，Router 拒绝整个响应，而不是部分接受。已声明的 `truncated_at` 保留截止前的片段，并将其余内容标记为未打分。被拒绝或部分响应对 PII 规则的影响由 `on_error` 决定：`allow`（默认）把未读内容当作未匹配，`block` 将其匹配为 `classification_error`，因此未核验文本不能当作干净通过。
+当片段超出文本、与自身重叠、携带未知或范围外标签、分数越界、别名值冲突，或正文不是片段列表时，Router 拒绝整个响应，而不是部分接受。已声明的 `truncated_at` 保留截止前的片段，并将其余内容标记为未打分。被拒绝或部分响应对 PII 规则的影响由 `on_error` 决定：`allow`（默认）把未读内容当作未匹配，`block` 将其匹配为 `classification_error`，因此未核验文本不能当作干净通过。模型完全没有读取的内容（超过模型输入上限或[扫描上限](../../../model-runtime/reference.md#long-inputs)的输入、被截断的输入，或未能在信号截止时间内扫描的输入）无论 `on_error` 如何设置都会以 `unscanned` 匹配，因此长请求按私有内容路由；设置 `classifier.pii.on_unscanned: allow` 可将其交给 `on_error`。
 
 PII 映射不能将 `classification_error` 声明为实体标签。带 `B-`、`I-` 或 `E-` 前缀的别名（含叠放前缀）也被保留，并在任一映射方向的映射加载时被拒绝。
 

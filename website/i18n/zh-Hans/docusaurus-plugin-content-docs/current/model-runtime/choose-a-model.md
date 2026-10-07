@@ -3,7 +3,7 @@ title: 选择模型、规模和硬件
 sidebar_label: 选择模型
 description: 每个任务该用哪个模型，决策模型需要多大，以及用什么硬件运行。
 translation:
-  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
+  source_commit: "320d5d49a6463feb9f4b87dacfdcdddcbd37f66c"
   source_file: "docs/model-runtime/choose-a-model.md"
   outdated: false
 ---
@@ -151,6 +151,63 @@ global:
 
 配置自己设置的规则阈值保持不变。内置配方的规则按 0.3B 校准，因此改回 Vela 1.0 的信号要连同它的 Vela 1.0
 规则阈值一起改回。在 `mom-v1` 中，它们是 prompt guard 0.5、safety 0.5 和 PII 0.7；记录列出了每个配方的值。
+
+`decision_model: Vela-1.0`（见下文）一行即可恢复全部专用模型。
+
+## 选择规模 {#choose-a-size}
+
+决策模型是回答 Router 自身问题的 Vela 模型：上面的每个内置信号，以及每个未指定 `deployment` 的
+[`decision` 问题](tutorials/signal/learned/decision.md)，每个请求一次调用。一个参数或一行配置即可选择：
+
+```bash
+vllm-sr serve --decision-model Vela-2.0-4B --platform amd
+```
+
+```yaml
+global:
+  model_catalog:
+    system:
+      decision_model: Vela-2.0-4B
+```
+
+`serve` 把这一行作为新版本写入当前生效的配置，`vllm-sr config versions` 会列出它，
+`vllm-sr config rollback` 可以撤销；之后的启动会保留它，`vllm-sr status` 会显示它。Helm chart 的
+`decisionModel` 值和 operator 的 `spec.config.decision_model` 设置的是同一个字段。名称不区分大小写。
+
+通过 Router 在 router signal suite 上与 Vela 1.0 专用模型对比测得，延迟针对延迟记录的五个请求信号
+（[记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-decision-model-sizes.md)）：
+
+| 决策模型 | 硬件 | 留出集上相对 Vela 1.0 的准确度 | GPU 上的 p50 | 12 个 CPU 核上的 p50 |
+| --- | --- | --- | ---: | ---: |
+| `Vela-2.0-0.3B`（默认） | CPU 或 GPU | prompt guard 和 safety 领先，domain、modality 和 feedback 落后 | 6.9 ms | 79 ms |
+| `Vela-2.0-0.8B` | CPU 或 GPU | domain、prompt guard、safety、modality 和 hallucination 领先；PII 落后 | 40.7 ms | 约 3 s |
+| `Vela-2.0-4B` | GPU，约 17 GB | 除 fact check 外全部领先 | 56.8 ms | 仅 GPU |
+| `Vela-2.0-9B` | GPU，约 32 GB | 全部领先 | 79.0 ms | 仅 GPU |
+| `Vela-1.0` | CPU 或 GPU | 专用模型本身 | 不适用 | 16 ms |
+
+- **GPU：** 一块 AMD Instinct MI325X，顺序请求。并发 16 时，一块 GPU 每秒约处理 146（0.3B）、
+  25（0.8B）、17（4B）和 12（9B）个请求。
+- **4B 和 9B 需要 GPU。** 在 `--platform cpu` 或没有该平台 GPU 的主机上，`vllm-sr serve` 会拒绝它们；
+  在模型运行时找不到 GPU 的地方，Router 也会拒绝。在 GPU 上，无论模块的 `use_cpu` 如何设置，它们都在 GPU 上运行。
+- **CPU 上的 0.8B** 是解码器：如表所示，一个请求需要数秒。请在 GPU 上运行它，或在 CPU 上继续使用 0.3B。
+- **每个规模** 在 user feedback 的新留出文件（CrossWOZ）和分布内的 PII 上都落后于 Vela 1.0。带区间的逐信号数据见记录。
+- **`Vela-1.0`** 恢复九个专用模型。它们只回答内置信号，因此此时未指定 `deployment` 的 `decision` 问题会导致加载错误。
+- **其他名称** 都会报错。Decision 2.0 模型（Kai、Eos、Sol、Nox、Lux、Vega）回答你自己的问题：
+  把它声明为 deployment，并在问题的 `deployment` 中指定它。
+
+每个规模都有自己的模块阈值；切换时，未设置阈值的模块会采用它们：
+
+| 决策模型 | Prompt guard | Domain | PII | Fact check | User feedback |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `Vela-2.0-0.3B` | 0.75 | 0.28 | 0.01 | 0.93 | 0.37 |
+| `Vela-2.0-0.8B` | 0.71 | 0.38 | 0.07 | 0.994 | 0.34 |
+| `Vela-2.0-4B` | 0.63 | 0.45 | 0.05 | 0.9984 | 0.33 |
+| `Vela-2.0-9B` | 0.42 | 0.46 | 0.14 | 0.998 | 0.35 |
+| `Vela-1.0` | 0.5 | 0.5 | 0.9 | 0.95 | 0.7 |
+
+配置自己设置的规则阈值（例如内置配方的）保持不变；记录把每个阈值映射到每个规模（例如 `mom-v1` 的
+`prompt_attack` 0.75 在 0.8B 上是 0.71，在 4B 上是 0.63，在 9B 上是 0.42）。`system.<module>` 行或 binding
+会让该信号留在它自己的模型上。
 
 ## 硬件 {#hardware}
 
