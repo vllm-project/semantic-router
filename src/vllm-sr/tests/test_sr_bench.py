@@ -223,6 +223,25 @@ def test_streaming_cache_presence_accumulates_across_usage_events(tmp_path, targ
     call = store.calls(run["id"])[0]
     assert call["cache_read_reported"] is True
     assert call["cache_write_reported"] is True
+    assert call["cache_read_usage"] == {
+        "input_tokens": 7,
+        "cached_input_tokens": 2,
+        "cache_write_tokens": 1,
+        "output_tokens": 3,
+    }
+    assert call["usage"] == {
+        "input_tokens": 10,
+        "cached_input_tokens": 0,
+        "cache_write_tokens": 0,
+        "output_tokens": 3,
+    }
+    assert call["cost_usd"] == pytest.approx(19 / 1_000_000)
+    report = make_report(store, run["id"])["summary"]["targets"][0]
+    assert report["cache_read_call_count"] == 1
+    assert report["cache_read_tokens"] == 2
+    assert report["cache_read_prompt_tokens"] == 10
+    assert report["cache_read_ratio"] == 0.2
+    assert report["cost_usd"] == pytest.approx(19 / 1_000_000)
 
 
 def test_derived_tool_loop_phase_is_saved_in_call_summary(tmp_path, target):

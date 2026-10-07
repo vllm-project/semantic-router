@@ -178,12 +178,20 @@ def cache_read_metrics(subject_calls: list[dict]) -> dict:
         model_usage = call.get("model_usage")
         if isinstance(model_usage, list) and model_usage:
             observations.extend(
-                item
+                {
+                    **item,
+                    "usage": item.get("cache_read_usage", item.get("usage")),
+                }
                 for item in model_usage
                 if isinstance(item, dict) and item.get("cache_read_reported") is True
             )
         elif call.get("cache_read_reported") is True:
-            observations.append(call)
+            observations.append(
+                {
+                    **call,
+                    "usage": call.get("cache_read_usage", call.get("usage")),
+                }
+            )
 
     if not observations:
         return {

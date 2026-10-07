@@ -57,9 +57,11 @@ benchmark metrics expose `cache_read_ratio` and `cache_read_call_count`; only
 subject calls with `cache_read_reported=true` are included, so missing cache
 usage stays unknown instead of becoming a zero-hit observation. Older stored
 runs remain readable: missing phases group under `unknown`, and cache-read
-metrics report a null ratio with a zero sample count. If a reported cache-read
-call lacks normalized prompt usage, its sample is counted but the ratio remains
-null because its denominator is unknown.
+metrics report a null ratio with a zero sample count. For streamed calls,
+`cache_read_usage` retains the normalized usage event that reported cache reads;
+later events that omit cache fields do not erase that observation. If that event
+lacks normalized prompt usage, its sample is counted but its ratio remains null
+because its denominator is unknown.
 
 For live MoM targets, a manifest can opt in to a stable session identity scoped
 to each case by setting `router_session_scope: case`. sr-bench sends an opaque

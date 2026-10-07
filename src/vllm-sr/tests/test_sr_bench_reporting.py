@@ -624,6 +624,32 @@ def test_cache_read_count_includes_reported_calls_without_complete_usage() -> No
     assert result["cache_read_prompt_tokens"] is None
 
 
+def test_cache_read_report_keeps_unknown_observation_unknown() -> None:
+    result = metric(
+        "mom",
+        [],
+        [
+            _request(
+                "task",
+                "model",
+                usage={
+                    "input_tokens": 8,
+                    "cached_input_tokens": 0,
+                    "cache_write_tokens": 0,
+                    "output_tokens": 2,
+                },
+                cache_read_usage=None,
+                cache_read_reported=True,
+            )
+        ],
+        1,
+    )
+    assert result["cache_read_call_count"] == 1
+    assert result["cache_read_ratio"] is None
+    assert result["cache_read_tokens"] is None
+    assert result["cache_read_prompt_tokens"] is None
+
+
 def test_cache_read_ratio_keeps_reported_mom_child_calls() -> None:
     calls = [
         _request(

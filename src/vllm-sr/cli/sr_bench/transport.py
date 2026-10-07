@@ -324,6 +324,7 @@ def chat(
     ttft = None
     tool_calls = {}
     raw_usage = {}
+    cache_read_usage: dict[str, int] | None = None
     cache_read_reported: bool | None = None
     cache_write_reported: bool | None = None
     observed_session_phase = request_phase(messages)
@@ -351,6 +352,7 @@ def chat(
             "ttft_s": ttft,
             "finish_reason": finish,
             "raw_usage": raw_usage,
+            "cache_read_usage": cache_read_usage,
             "tool_calls": list(tool_calls.values()),
             "phase": observed_session_phase,
             "phase_source": observed_phase_source,
@@ -427,7 +429,7 @@ def chat(
         def consume(lines):
             nonlocal content, reasoning, usage, model, finish, ttft, raw_usage, done
             nonlocal provider_model_observed
-            nonlocal cache_read_reported, cache_write_reported
+            nonlocal cache_read_usage, cache_read_reported, cache_write_reported
             data = "\n".join(x[5:].lstrip() for x in lines if x.startswith("data:"))
             if not data:
                 return
@@ -453,6 +455,8 @@ def chat(
                 cache_write_reported = (
                     cache_write_reported is True or chunk_cache_write_reported
                 )
+                if chunk_cache_read_reported:
+                    cache_read_usage = usage
             for choice in obj.get("choices", []):
                 if choice.get("index", 0) != 0:
                     continue
