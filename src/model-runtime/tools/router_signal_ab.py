@@ -1108,9 +1108,11 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
                     return scores_of(task, p[r["id"]]["scores"]).get(positive, 0.0)
 
                 negatives = [r for r in rows if r["label"] != positive]
-                fpr = np.mean([score(pa, r) >= t1 for r in negatives])
+                false_positives = np.mean([score(pa, r) >= t1 for r in negatives])
                 matched = matched_threshold(
-                    float(fpr), [score(pb, r) for r in negatives], above=True
+                    float(false_positives),
+                    [score(pb, r) for r in negatives],
+                    above=True,
                 )
                 t2 = round(matched, 2)
                 point = {
