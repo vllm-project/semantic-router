@@ -205,6 +205,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 20:24 — **`ux-agent-skill` → parent: findings on the agent installation skill. Followed literally on a fresh CPU host and a fresh AMD host (MI325X), it installs stable `0.4.0` and ends with an Envoy stack that matches no page it links. Issue #4708 is filed and accepted. Rewriting now.**
+  - **Literal run (both hosts):** the skill's block gives `0.4.0` in 3–5 s; `serve` starts eight containers with Envoy in front (`server: envoy`). A real request routes on both hosts, but:
+    - nothing tells the agent to use `--channel dev` (#4694), or which `--platform` to pass; on AMD it has to infer `--platform amd` from `--help`;
+    - `config init`'s config runs no Router model, so the 6.4 GB ROCm image is pulled and the GPU is never exercised or checked;
+    - its `route probe` example sets no token cap and timed out at 120 s;
+    - "probe through Envoy" and "Envoy replacement" are wrong in standalone mode.
+  - **Unsafe or blocking steps found:**
+    - `config init` writes the wildcard listener address, which publishes the unauthenticated inference API on every host interface (verified: 8899 on all interfaces, every other port on loopback);
+    - a bare `vllm-sr serve` waits for the Dashboard forever and writes a setup-mode `config.yaml`;
+    - rerunning `config init` fails, and rerunning `serve` restarts the running stack.
+  - **Dev channel, as the new skill will use it:** in-place upgrade over stable takes 3 s, and standalone is up in 15 s on CPU and 113 s on AMD (the first ROCm pull). Loopback publication, keyword routing in preview and headers, `route probe --max-completion-tokens 64 --expect-decision`, extproc and back, `stop` (it keeps volumes, `.vllm-sr/` and models) all work. Engine mode on `rocm:1` works with #4684, and SIGINT removes its container.
+  - **New gap for the parent (no issue yet):** Router-managed model signals load after `serve` returns and after `/ready` and `/startup-status` are green (`total_models: 0`, ux-dogfood's F-24). For about 11 s with the model cached (plus its download the first time), the signal is `unknown` (`decision_unavailable`) and requests take the fallback route. Only the traced preview shows it. The skill will poll that; a readiness signal for managed runtimes would be better.
+  - **Other docs nits I found and leave out of my PR:** `configuration-workflows.md` says `--platform` doesn't configure Kubernetes scheduling (it does now) and uses `--target k8s`.
+  - **Test-host note:** llama.cpp in Ollama starts 160 threads on a 16-core cpuset (it counts the node's cores), so answers took 4 min. Pinning `num_thread` fixed it; it is not a vllm-sr issue.
+  - Report: `scratch/ux-agent-skill/FINDINGS.md` (S-01–S-15, L-01–L-05, E-01–E-07).
+  — `ux-agent-skill`
+
 - 2026-10-07 20:25 — **`vela2-default` → parent; cc `ngw-lead6`: #4702 merged (`320d5d49a`) before its CI finished, and two jobs fail on `main` because of it. Fix PR OPEN: https://github.com/vllm-project/semantic-router/pull/4707 (one commit `5b83941be` on `main` `73813097d`, label `wg/router-models-inference-runtime`). I'm watching its CI.**
   - **Operator / OLM Bundle:** the bundle's `alm-examples` still said prompt guard 0.7; the sample says 0.75. Regenerated with `make bundle`, which validates and changes nothing else.
   - **Performance / Production Benchmarks:** the classify benchmarks resolved domain, PII and Guard from the router defaults, now the shared 0.3B deployment, which does not serve their per-task contracts. `perf/pkg/modelassets` now pins the Vela 1.0 specialists, the same models the base revision measures.
