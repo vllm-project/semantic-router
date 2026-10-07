@@ -48,6 +48,29 @@ The Router rebuilds only what a change reaches:
   `tls`, is rejected with `restart_required`; restart the Router to apply it.
   Listener `api_keys` change without a restart.
 
+## Change a local stack
+
+On the docker target, `vllm-sr serve` copies `config.yaml` into the active
+document, `.vllm-sr/runtime-config.yaml`, which is the file the Router
+watches. Editing `config.yaml` afterwards changes nothing until you apply it:
+
+```bash
+vllm-sr config plan --config config.yaml    # check the change against the running Router
+vllm-sr config apply --config config.yaml   # activate it
+```
+
+`vllm-sr config apply` waits 15 seconds by default. A change that loads
+another model can take longer; pass `--timeout 120`. A timeout doesn't cancel
+the change: `vllm-sr config versions` shows whether it activated.
+
+A change that needs a restart, such as a listener's new port, is refused with
+`restart_required` and nothing is saved. Apply it with a restart that replaces
+the active document, Dashboard edits included, with `config.yaml`:
+
+```bash
+vllm-sr serve --config config.yaml --replace-active-config
+```
+
 ## Versions
 
 Versions count activations. The first configuration a Router serves is version

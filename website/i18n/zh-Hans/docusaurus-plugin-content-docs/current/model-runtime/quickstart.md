@@ -2,7 +2,7 @@
 title: 快速开始
 description: 安装模型运行时，运行一个模型，向它发送请求，再让路由器使用它。
 translation:
-  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
+  source_commit: "b9b183307e97f3ce8448d2838d0f1bf99972d336"
   source_file: "docs/model-runtime/quickstart.md"
   outdated: false
 ---
@@ -12,8 +12,9 @@ translation:
 大约十分钟内，你将安装 `vllm-sr` CLI，在 CPU 上运行一个模型并向它提问，
 然后让路由器用同一个模型做路由。
 
-你需要装有 Docker 或 Podman 的 Linux 或 macOS、Python 3.10 或更新版本，以及几 GB 可用磁盘空间，
-用于路由器镜像和模型下载。不需要 GPU。
+你需要装有 Docker 或 Podman 的 Linux、macOS 或 WSL2、Python 3.10 或更新版本，以及几 GB 可用磁盘空间，
+用于路由器镜像和模型下载。不需要 GPU。engine 模式（`vllm-sr serve MODEL`）晚于 0.4.0 版本；
+见[发布渠道说明](../installation/installation.md)。
 
 ## 1. 安装 {#1-install}
 
@@ -38,6 +39,14 @@ pip install vllm-sr
 ```bash
 vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
 ```
+
+在 AMD GPU 上，用下面的命令在第一块 GPU 上运行同一个模型：
+
+```bash
+vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --platform amd --device rocm:0 --port 8100
+```
+
+首次使用时 `vllm-sr-rocm` 镜像约需下载 6.5 GB。`rocm:N` 选择主机上的另一块 GPU。
 
 运行时在前台运行，按 Ctrl-C 停止。首次启动会把模型（约 1.5 GB）下载到 engine 模式的缓存
 `~/.cache/vllm-sr/models`，并对照固定的哈希校验每个文件；之后的启动直接复用。设置
@@ -79,7 +88,8 @@ curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
 ```
 
 在请求中加上 `"options": {"return_meta": true}`，响应还会带上 `meta`：作答的 revision、profile、设备以及耗时。在 16 个 CPU 核上，
-这个请求约需 0.2 秒。`GET /v1/models` 显示已加载的模型、运行位置以及是否通过自检。
+这个请求约需 0.2 秒。`POST /v1/systemone` 是同一个端点的 System One 名称。`GET /v1/models`
+显示已加载的模型、运行位置以及是否通过自检。
 
 同一个命令也能运行分类器。用 Ctrl-C 停止服务，改为运行 Vela Domain 分类器：
 
@@ -166,7 +176,7 @@ vllm-sr serve --config config.yaml
 ```bash
 curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
   -H 'content-type: application/json' -H 'x-vsr-debug: true' \
-  -d '{"model": "auto", "messages": [{"role": "user", "content": "Plan a three-step proof that there are infinitely many primes."}]}' \
+  -d '{"model": "vllm-sr/auto", "messages": [{"role": "user", "content": "Plan a three-step proof that there are infinitely many primes."}]}' \
   | grep -i '^x-vsr-'
 ```
 

@@ -2,7 +2,7 @@
 title: Gateway 模式
 description: 选择客户端流量从哪里进入 Router：standalone 直接服务，或放在基于 Envoy 的网关之后；适用于 docker 和 kubernetes 两种目标。
 translation:
-  source_commit: "29f7c5a08ccb2426e2bda88de0b1ffd3d3d133a3"
+  source_commit: "b9b183307e97f3ce8448d2838d0f1bf99972d336"
   source_file: "docs/installation/gateway-modes.md"
   outdated: false
 ---
@@ -26,6 +26,8 @@ vllm-sr serve                                      # standalone，docker
 vllm-sr serve --gateway extproc                    # Envoy 在前，docker
 vllm-sr serve --target kubernetes --config config.yaml
 ```
+
+除非你需要上面列出的 Envoy 功能，否则先用 `standalone`。在 docker 目标上，切换模式就是用当前生效的配置重启：运行 `vllm-sr serve --gateway extproc`，再运行普通的 `vllm-sr serve` 即可切回。standalone 模式下没有 Envoy 容器，所以 `vllm-sr logs envoy` 和 `x-envoy-*` 响应头只属于 `extproc`。
 
 两种模式运行同一个路由核心，因此同一个请求在两种模式下得到相同的决策、相同的上游请求和相同的响应变换。
 [设计文档](../proposals/standalone-mode#与-envoy-模式的差异)列出了少数有意为之的差异，例如只有 Envoy 才会添加的

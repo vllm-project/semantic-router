@@ -11,7 +11,7 @@ once:
 ```bash
 vllm-sr status
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy        # only with --gateway extproc
 vllm-sr config validate --config config.yaml
 ```
 
@@ -506,7 +506,7 @@ vllm-sr status
 
 # Read component logs without depending on generated container names.
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy        # only with --gateway extproc
 
 # Check the public listener and model catalog.
 curl -sS http://localhost:8899/v1/models

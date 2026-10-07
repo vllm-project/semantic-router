@@ -38,7 +38,18 @@ The model is probably not ready yet, or its answers arrive too late.
    ```bash
    curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
      -H 'content-type: application/json' -H 'x-vsr-debug: true' \
-     -d '{"model": "auto", "messages": [{"role": "user", "content": "your text"}]}'
+     -d '{"model": "vllm-sr/auto", "messages": [{"role": "user", "content": "your text"}]}'
+   ```
+
+4. Preview the routing of the same text without generating an answer. Its
+   `signal_errors` names the signals that were unknown and why, for example
+   `decision_timeout`:
+
+   ```bash
+   curl -s 'localhost:8080/api/v1/routing/preview?trace=true' \
+     -H 'content-type: application/json' \
+     -d '{"model": "vllm-sr/auto", "text": "your text"}' \
+     | jq '{decision: .decision_result.decision_name, matched: .decision_result.matched_signals, signal_errors}'
    ```
 
 ## The runtime stays in `loading` or `warming`
@@ -169,6 +180,10 @@ scans should use so nothing is missed.
   or another process.
 - On CPU, models of one process share the CPU threads. Start the runtime with
   `--threads` set to the cores you can give it.
+- CPU models slow down sharply when other work holds some of their cores,
+  because every thread waits for the slowest one. A process that uses a ROCm
+  GPU can keep one CPU core busy even while idle, and so can an LLM server on
+  the same host: give the CPU models cores of their own.
 - Decision models on a GPU can use `shared_context` or `batching`; see
   [Profiles](./profiles.md).
 
