@@ -411,14 +411,7 @@ func valkeyBuildHashFields(memory *Memory, embedding []float32) (map[string]stri
 		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	projectID := memory.ProjectID
-	if projectID == "" {
-		projectID = "default"
-	}
-	source := memory.Source
-	if source == "" {
-		source = "extraction"
-	}
+	projectID, source := normalizedMemoryScopeFields(memory)
 
 	return map[string]string{
 		"id":           memory.ID,

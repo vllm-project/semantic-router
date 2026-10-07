@@ -86,7 +86,7 @@ func (m *MilvusStore) normalizeRetrieveOpts(opts RetrieveOptions) (limit int, th
 func retrieveFilterExpr(userID, projectID string, types []MemoryType) string {
 	filterExpr := milvusUserScopeFilter(userID)
 	if projectID != "" {
-		filterExpr = fmt.Sprintf("%s && project_id == %q", filterExpr, projectID)
+		filterExpr = fmt.Sprintf("%s && %s", filterExpr, milvusEqString("project_id", projectID))
 	}
 	if tf := buildTypeFilter(types); tf != "" {
 		filterExpr = fmt.Sprintf("%s && %s", filterExpr, tf)
@@ -137,7 +137,7 @@ func (m *MilvusStore) searchMemoryVectors(ctx context.Context, embedding []float
 }
 
 func (m *MilvusStore) finalizeRetrieveResults(sr client.SearchResult, opts RetrieveOptions, limit int, threshold float32) []*RetrieveResult {
-	candidates := m.parseCandidates(sr, opts.UserID)
+	candidates := retainProjectMatches(m.parseCandidates(sr, opts.UserID), opts.ProjectID)
 	if opts.HybridSearch && len(candidates) > 1 {
 		candidates = m.hybridRerank(candidates, opts)
 	}
@@ -154,6 +154,24 @@ func (m *MilvusStore) finalizeRetrieveResults(sr client.SearchResult, opts Retri
 		go m.recordRetrievalBatch(ids)
 	}
 	return results
+}
+
+// retainProjectMatches keeps candidates whose stored project id equals the
+// requested scope. Metadata is the source of truth: older rows indexed an
+// empty project as "default", so a query for the explicit project named
+// default would otherwise return unscoped memories. An empty request does
+// not filter.
+func retainProjectMatches(candidates []*RetrieveResult, projectID string) []*RetrieveResult {
+	if projectID == "" || len(candidates) == 0 {
+		return candidates
+	}
+	matched := make([]*RetrieveResult, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate != nil && candidate.Memory != nil && candidate.Memory.ProjectID == projectID {
+			matched = append(matched, candidate)
+		}
+	}
+	return matched
 }
 
 func applyRetrieveThreshold(candidates []*RetrieveResult, limit int, threshold float32) []*RetrieveResult {

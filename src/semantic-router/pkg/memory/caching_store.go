@@ -73,7 +73,11 @@ func (c *CachingStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*R
 		elapsed := time.Since(start).Seconds()
 		if ok {
 			RecordMemoryCacheHit(label, elapsed)
-			return results, nil
+			// Cache entries written before project-scoped retrieval was enforced by
+			// every backend can contain memories from another project. Revalidate
+			// the stored metadata on a hit so an upgrade cannot keep serving those
+			// entries until their TTL expires.
+			return retainProjectMatches(results, opts.ProjectID), nil
 		}
 		RecordMemoryCacheMiss(label)
 	}

@@ -760,3 +760,33 @@ func TestBuildRetrieveSearchCmdProjectScope(t *testing.T) {
 	assert.Contains(t, escaped[2], `@project_id:{p\"x}`)
 	assert.NotContains(t, escaped[2], `@project_id:{p"x}`)
 }
+
+func TestStoredValkeyProjectScopeSeparatesExplicitDefault(t *testing.T) {
+	t.Parallel()
+
+	embedding := []float32{0.1, 0.2}
+	unscoped := &Memory{ID: "unscoped", Content: "no project", UserID: "alice"}
+	explicit := &Memory{ID: "named", Content: "default project", UserID: "alice", ProjectID: "default"}
+
+	unscopedFields, err := valkeyBuildHashFields(unscoped, embedding)
+	require.NoError(t, err)
+	explicitFields, err := valkeyBuildHashFields(explicit, embedding)
+	require.NoError(t, err)
+
+	assert.Empty(t, unscopedFields["project_id"])
+	assert.Equal(t, "default", explicitFields["project_id"])
+
+	var unscopedMeta, explicitMeta map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(unscopedFields["metadata"]), &unscopedMeta))
+	require.NoError(t, json.Unmarshal([]byte(explicitFields["metadata"]), &explicitMeta))
+	assert.Empty(t, unscopedMeta["project_id"])
+	assert.Equal(t, "default", explicitMeta["project_id"])
+
+	store := &ValkeyStore{indexName: "mem_idx"}
+	query := store.buildRetrieveSearchCmd(RetrieveOptions{
+		UserID:    "alice",
+		ProjectID: "default",
+		Limit:     5,
+	}, embedding, 5)
+	assert.Contains(t, query[2], "@project_id:{default}")
+}
