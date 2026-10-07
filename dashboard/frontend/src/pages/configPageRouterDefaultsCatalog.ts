@@ -21,6 +21,7 @@ import type {
   ToolIntegrationConfig,
   VectorStoreConfig,
 } from './configPageSupport'
+import { DEFAULT_DECISION_MODEL } from './decisionModelSupport'
 
 export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   router_core: {
@@ -120,22 +121,19 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   prompt_guard: {
     enabled: true,
     model_ref: 'prompt_guard',
-    threshold: 0.7,
+    threshold: 0.75,
     use_cpu: true,
-    jailbreak_mapping_path: 'models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json',
   },
   classifier: {
     domain: {
       model_ref: 'domain_classifier',
-      threshold: 0.5,
+      threshold: 0.28,
       use_cpu: true,
-      category_mapping_path: 'models/Vela-1.0-Encoder-307M-Domain/category_mapping.json',
     },
     pii: {
       model_ref: 'pii_classifier',
-      threshold: 0.9,
+      threshold: 0.01,
       use_cpu: true,
-      pii_mapping_path: 'models/Vela-1.0-Encoder-307M-PII/pii_mapping.json',
     },
     preference: {
       use_contrastive: false,
@@ -145,7 +143,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     enabled: false,
     fact_check: {
       model_ref: 'fact_check_classifier',
-      threshold: 0.85,
+      threshold: 0.93,
       use_cpu: true,
     },
     detector: {
@@ -160,20 +158,16 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   feedback_detector: {
     enabled: true,
     model_ref: 'feedback_detector',
-    threshold: 0.7,
+    threshold: 0.37,
     use_cpu: true,
   } satisfies FeedbackDetectorConfig & { model_ref?: string },
   complexity: {},
   external_models: [],
   knowledge_bases: [],
   admission: {},
+  // Every module follows the decision model unless a line binds it.
   system_models: {
-    prompt_guard: 'models/Vela-1.0-Encoder-307M-Guard',
-    domain_classifier: 'models/Vela-1.0-Encoder-307M-Domain',
-    pii_classifier: 'models/Vela-1.0-Encoder-307M-PII',
-    fact_check_classifier: 'models/Vela-1.0-Encoder-307M-FactCheck',
-    hallucination_detector: 'models/Vela-1.0-Encoder-307M-Halu',
-    feedback_detector: 'models/Vela-1.0-Encoder-307M-Feedback',
+    decision_model: DEFAULT_DECISION_MODEL,
   } satisfies CanonicalSystemModels,
   embedding_models: {
     qwen3_model_path: '',

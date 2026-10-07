@@ -3,7 +3,7 @@
 import os
 
 from cli.commands.runtime_management_credentials import (
-    recipe_management_credential_env,
+    management_credential_env_names,
 )
 from cli.commands.runtime_support import (
     RECIPE_ENV_ALLOWLIST_ENV,
@@ -45,6 +45,7 @@ from cli.container_run_command import (
 )
 from cli.container_runtime import get_container_runtime
 from cli.container_start_paths import (
+    RECIPE_STORE_GID_ENV,
     _active_recipe_mount_specs,
     _prepare_runtime_paths,
     _runtime_mount_specs,
@@ -56,7 +57,9 @@ from cli.gateway_mode import (
     GATEWAY_STANDALONE,
     runs_envoy,
 )
+from cli.management_credential import stack_management_credential
 from cli.parser import parse_user_config
+from cli.recipe_topology_contract import MANAGEMENT_CREDENTIAL_ENV
 from cli.runtime_stack import PORT_OFFSET_ENV, RuntimeStackLayout, resolve_runtime_stack
 from cli.runtime_topology import resolve_runtime_topology
 from cli.sr_bench_runtime import (
@@ -139,14 +142,16 @@ def container_start_vllm_sr(
     )
     # Config realization inside the containers follows the stack's listener.
     common_env[GATEWAY_ENV] = gateway
-    # The Router's secrets, passed by name: this stack's storage credentials,
-    # and the Dashboard's management credential when the config requires it.
+    # Secrets, passed by name: the Router gets this stack's storage
+    # credentials, and both get the stack's management credential.
     router_secret_values = _resolve_storage_secret_env(config_dir, stack_layout)
-    router_secret_values.update(
-        recipe_management_credential_env(
-            runtime_paths["effective_config_path"], runtime_paths["recipe_store_dir"]
-        )
+    router_credential, dashboard_secret_values = _resolve_management_credential_env(
+        config_dir,
+        stack_layout,
+        runtime_paths["effective_config_path"],
+        dashboard=not minimal and (services is None or "dashboard" in services),
     )
+    router_secret_values.update(router_credential)
     bench_runtime = None if minimal else prepare_bench_runtime(config_dir, stack_layout)
     if runs_envoy(gateway):
         _render_split_envoy_config(
@@ -169,7 +174,8 @@ def container_start_vllm_sr(
         minimal=minimal,
         runtime_paths=runtime_paths,
         stack_layout=stack_layout,
-        storage_secret_names=tuple(router_secret_values),
+        router_secret_names=tuple(router_secret_values),
+        dashboard_secret_names=tuple(dashboard_secret_values),
         envoy_log_level=envoy_log_level,
         bench_runtime=bench_runtime,
         gateway=gateway,
@@ -180,9 +186,40 @@ def container_start_vllm_sr(
     log.info(f"Starting vLLM Semantic Router runtime with {runtime}...")
     return run_container_specs(
         container_specs,
-        storage_secret_values=router_secret_values,
+        router_secret_values=router_secret_values,
+        dashboard_secret_values=dashboard_secret_values,
         bench_secret_values=bench_runtime.secrets if bench_runtime else {},
         bench_token_env=bench_runtime.token_env if bench_runtime else "SR_BENCH_TOKEN",
+    )
+
+
+def _resolve_management_credential_env(
+    state_root_dir: str,
+    stack_layout: RuntimeStackLayout,
+    runtime_config_path: str,
+    *,
+    dashboard: bool,
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Return the management credential for the Router and for the Dashboard.
+
+    The Router needs it only when its runtime config binds it. The Dashboard
+    always gets it, so a Recipe it activates can turn on bearer authentication
+    and the Router that the next `vllm-sr serve` creates takes the same value.
+    """
+
+    router_binds = MANAGEMENT_CREDENTIAL_ENV in management_credential_env_names(
+        runtime_config_path
+    )
+    if not (router_binds or dashboard):
+        return {}, {}
+    credential = {
+        MANAGEMENT_CREDENTIAL_ENV: stack_management_credential(
+            state_root_dir, stack_layout=stack_layout
+        )
+    }
+    return (
+        credential if router_binds else {},
+        credential if dashboard else {},
     )
 
 
@@ -216,6 +253,8 @@ def _build_common_runtime_env(
     common_env = dict(env_vars or {})
     # Signing authority belongs to Dashboard, never to recipe/data-plane env.
     common_env.pop("DASHBOARD_JWT_SECRET", None)
+    # The management credential goes only to the containers that use it.
+    common_env.pop(MANAGEMENT_CREDENTIAL_ENV, None)
     # Benchmark credentials belong only to the independent worker and its gateway.
     for name in (
         *BENCH_CONFIG_ENV,
@@ -261,7 +300,8 @@ def _resolve_container_specs(
     minimal: bool,
     runtime_paths: dict[str, str],
     stack_layout: RuntimeStackLayout,
-    storage_secret_names: tuple[str, ...] = (),
+    router_secret_names: tuple[str, ...] = (),
+    dashboard_secret_names: tuple[str, ...] = (),
     envoy_log_level: str = DEFAULT_ENVOY_LOG_LEVEL,
     bench_runtime: BenchRuntime | None = None,
     gateway: str = GATEWAY_EXTPROC,
@@ -287,7 +327,8 @@ def _resolve_container_specs(
         minimal=minimal,
         runtime_paths=runtime_paths,
         stack_layout=stack_layout,
-        storage_secret_names=storage_secret_names,
+        router_secret_names=router_secret_names,
+        dashboard_secret_names=dashboard_secret_names,
         envoy_log_level=envoy_log_level,
         bench_runtime=bench_runtime,
         gateway=gateway,
@@ -306,7 +347,8 @@ def _runtime_container_specs(
     minimal: bool,
     runtime_paths: dict[str, str],
     stack_layout: RuntimeStackLayout,
-    storage_secret_names: tuple[str, ...] = (),
+    router_secret_names: tuple[str, ...] = (),
+    dashboard_secret_names: tuple[str, ...] = (),
     envoy_log_level: str = DEFAULT_ENVOY_LOG_LEVEL,
     bench_runtime: BenchRuntime | None = None,
     gateway: str = GATEWAY_EXTPROC,
@@ -338,7 +380,7 @@ def _runtime_container_specs(
         stack_layout=stack_layout,
         inherited_sensitive_env=inherited_sensitive_env,
         management_listener=management_listener,
-        storage_secret_names=storage_secret_names,
+        secret_names=router_secret_names,
         gateway=gateway,
         listeners=listeners,
     )
@@ -399,6 +441,7 @@ def _runtime_container_specs(
         stack_layout=stack_layout,
         inherited_sensitive_env=inherited_sensitive_env,
         management_listener=management_listener,
+        secret_names=dashboard_secret_names,
         bench_runtime=bench_runtime,
         gateway=gateway,
     )
@@ -419,7 +462,7 @@ def _build_router_runtime_command(
     stack_layout: RuntimeStackLayout,
     inherited_sensitive_env: set[str],
     management_listener: dict[str, int | str],
-    storage_secret_names: tuple[str, ...] = (),
+    secret_names: tuple[str, ...] = (),
     gateway: str = GATEWAY_EXTPROC,
     listeners=(),
 ):
@@ -434,9 +477,9 @@ def _build_router_runtime_command(
     # Names only. Each one is rendered as an inheriting `-e NAME` flag, and the
     # value reaches Docker through the Router child process environment. They
     # stay out of `common_env` on purpose: `_build_dashboard_runtime_env()`
-    # copies that mapping, which would hand two unused credentials to the one
-    # container holding the Docker socket.
-    for name in storage_secret_names:
+    # copies that mapping, which would hand the storage credentials to the
+    # Dashboard too.
+    for name in secret_names:
         router_env.setdefault(name, "")
     service_entrypoint, service_args = bounded_log_spool_entrypoint(
         "/app/start-router.sh",
@@ -487,7 +530,7 @@ def _build_router_runtime_command(
         # exists. `router_data_network_commands` supplies the connect and the
         # start that follow, in that order.
         start_immediately=False,
-        inherited_env_keys=inherited_sensitive_env,
+        inherited_env_keys=inherited_sensitive_env | set(secret_names),
     )
 
 
@@ -606,6 +649,7 @@ def _build_dashboard_runtime_command(
     stack_layout: RuntimeStackLayout,
     inherited_sensitive_env: set[str],
     management_listener: dict[str, int | str],
+    secret_names: tuple[str, ...] = (),
     bench_runtime: BenchRuntime | None = None,
     gateway: str = GATEWAY_EXTPROC,
 ):
@@ -618,6 +662,10 @@ def _build_dashboard_runtime_command(
     )
     if bench_runtime is not None:
         dashboard_env.update(dashboard_bench_env(bench_runtime))
+    # Names only, as for the Router: the values travel in the environment of
+    # the command that creates the container.
+    for name in secret_names:
+        dashboard_env[name] = ""
     dashboard_mount_specs = _runtime_mount_specs(
         runtime_paths, include_dashboard_data=True
     )
@@ -639,6 +687,7 @@ def _build_dashboard_runtime_command(
     ]
     dashboard_env[LOG_SPOOL_ROOT_ENV] = LOG_SPOOL_READER_DIR
     dashboard_env[LOG_SPOOL_GID_ENV] = runtime_paths["log_spool_gid"]
+    dashboard_env[RECIPE_STORE_GID_ENV] = runtime_paths["recipe_store_gid"]
     service_entrypoint, service_args = bounded_log_spool_entrypoint(
         "/app/entrypoint.sh",
         [
@@ -661,6 +710,7 @@ def _build_dashboard_runtime_command(
         command_args=service_args,
         inherited_env_keys={"DASHBOARD_ADMIN_PASSWORD", "DASHBOARD_JWT_SECRET"}
         | inherited_sensitive_env
+        | set(secret_names)
         | ({bench_runtime.token_env} if bench_runtime else set()),
     )
 

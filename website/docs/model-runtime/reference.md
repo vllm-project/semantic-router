@@ -90,7 +90,8 @@ models:
 ```
 
 Each entry takes `model` (required), `revision`, `name`, `device`, `profile`,
-`engine`, `family`, `memory_budget_gib` and `options` (family options). The
+`engine`, `family`, `memory_budget_gib` and `options` (family options; a
+Vela 2.0 model takes `max_scan_tokens`, its [scan budget](#long-inputs)). The
 router writes this file for the processes it manages.
 
 ## HTTP API
@@ -115,12 +116,88 @@ A response carries the answers and `usage`. Add
 `"options": {"return_meta": true}` to a request to also get `meta`: the
 revision, model digest, profile, engine, device and timings that answered it.
 
+The responses of `/v1/decisions`, `/v1/systemone`, `/v1/classify`,
+`/v1/embeddings`, `/v1/rerank` and `/v1/bundle`, errors included, carry the
+runtime's own time for the request in a `Server-Timing` header, in
+milliseconds:
+
+```text
+Server-Timing: parse;dur=0.021, tokenize;dur=0.153, queue;dur=0.008, forward;dur=4.871, post;dur=0.034, serialize;dur=0.019, total;dur=5.141
+```
+
+| Phase | Time spent |
+| --- | --- |
+| `parse` | Reading and decoding the request body. |
+| `tokenize` | Validating, rendering and tokenizing the request. |
+| `queue` | Waiting for the model, before its first forward and between its forwards. |
+| `forward` | Running its forwards, readout included. |
+| `post` | Assembling the answers. |
+| `serialize` | Encoding the response. |
+| `total` | From the handler's start until the response is ready to send. What it holds beyond the phases is the server's own overhead. |
+
+A bundle whose tasks go to several models reports the `queue`, `forward` and
+`post` of the model that answered last. A client's own time for the call minus
+`total` is the transport: its encoding and decoding, the connection and the
+HTTP exchange. The router records it as a metric for every call.
+
 A request that cannot be served at all returns an HTTP error with
 `{"error": {"code", "message"}}`: 400 `invalid_request`, 404
 `model_not_found`, 413 `request_too_large`, 422 `unsupported_surface` (the
 model does not serve that endpoint), 429 `overloaded`, 503 `not_ready`. A
 failed item of a request (one input or one question) carries its own error
 code and never fails the others.
+
+### Long inputs
+
+A model reads at most its token budget of an input: `options.max_tokens`, at
+most the model's `max_input_tokens`. The runtime tokenizes a longer input only
+as far as that budget decides the answer, so the memory and time an input
+costs follow its budget, not its length:
+
+- It cuts the text before a word boundary (whitespace, punctuation, a symbol,
+  or a Chinese, Japanese or Korean character) and keeps the tokens of the
+  words before the cut. In a run with no boundary the tokenizer splits at,
+  such as base64, hex, or Chinese without spaces in a tokenizer that splits
+  words only at spaces, it cuts before a letter or digit and keeps the tokens
+  that end 1,024 characters before the cut.
+- Under `reject`, a text longer than its budget times the most characters one
+  of the model's tokens covers fails without being tokenized.
+
+These are the tokens that reading the whole text gives, so the answer is the
+same. The runtime checks each kind of cut on probe texts the first time it
+uses a tokenizer and reads whole texts where a cut fails the check. A
+tokenizer that drops or folds characters, as WordPiece drops whitespace and
+reads a word of more than 100 characters as one unknown token, never cuts
+inside a run: it reads such a run whole, which costs little because the run is
+a few tokens. The usage of an input read in part counts the tokens read, which
+exceed the budget, and adds `"tokens_lower_bound": true`.
+
+A model that reads an input in windows reads it up to a scan budget, in
+tokens. Classify with `overflow: window` reads at most `max_tokens`. A
+Vela 2.0 question reads a long state part whole, in windows, up to its card's
+`limits.max_scan_tokens`: four inputs on a CPU (32,768 tokens for Vela 2.0
+0.3B) and 32 on a GPU. A decisions request's `options.max_tokens`, or the
+models-file option `max_scan_tokens`, sets another. A question with
+`overflow: truncate` reads only the part's first `limits.truncate_tokens`
+instead: one input on a CPU, one forward. Questions of both kinds share their
+model input, as they would without `overflow`, unless a part has to be read
+in windows. An input over its scan budget fails instead of being read:
+
+| Item error | Meaning |
+| --- | --- |
+| `max_length_exceeded` | The input has more tokens than its budget under `reject`. |
+| `scan_budget_exceeded` | The input is one the model reads in windows, and it has more tokens than its scan budget. None of it was read. |
+
+The only byte limit is `--max-request-bytes`, on a request as a whole.
+
+The router reads a long request through Vela 2.0 in two ways. A routing
+question (domain, fact check, feedback, modality, decision questions and the
+decision model selector) truncates. A safety question (prompt guard, safety,
+PII and hallucination) reads it whole, up to the model's scan budget or the
+deployment's `input.max_tokens` with `overflow: window`. Content past it, or
+a safety scan that misses the signals' deadline
+(`global.model_catalog.signal_timeout_ms`), was not read: a jailbreak or PII
+rule matches it as `unscanned` unless its module sets `on_unscanned: allow`.
 
 ### Classify
 
@@ -170,6 +247,131 @@ vector space, so you can keep vectors of different settings apart.
 Results come back in task order, each with the status it would have had on
 its own.
 
+### Decisions
+
+A request names a `state` and its `questions`. A question's options are
+`criteria`, or the ordered list the Router config uses for the same thing:
+
+| Type | `criteria` | Or, as in the Router config |
+| --- | --- | --- |
+| `choice` | `{key: description}`, 2 to 255 options | `choices: [{key, description}]` |
+| `noul` | `{false: description, true: description}`, both optional | `choices: [{key, description}]` with keys `false` and `true` |
+| `score` | `[description, ...]`, 2 to 10 levels | `levels: [description, ...]` |
+| `set`, `span` | `{label: description}`, 1 to 255 labels | `labels: [{key, description}]` |
+
+A question takes one form or the other, and only its type's fields. Vela 2.0
+answered these two requests on CPU; the numbers are rounded.
+
+```json title="POST /v1/decisions"
+{
+  "model": "Vela-2.0-0.3B",
+  "state": "Write a Python function that merges two sorted lists and explain its running time.",
+  "questions": {
+    "domain": {
+      "type": "choice",
+      "instructions": "Which domain does this request belong to?",
+      "choices": [
+        {"key": "code", "description": "Programming"},
+        {"key": "math", "description": "Mathematics"},
+        {"key": "other"}
+      ]
+    },
+    "reasoning": {"type": "noul", "instructions": "Does answering this request need multi-step reasoning?"},
+    "difficulty": {
+      "type": "score",
+      "instructions": "How difficult is this request?",
+      "levels": ["Trivial", "Moderate", "Hard"]
+    }
+  }
+}
+```
+
+```json title="Response"
+{
+  "model": "Vela-2.0-0.3B",
+  "answers": {
+    "domain": {
+      "type": "choice",
+      "choice": "code",
+      "confidence": 0.99,
+      "probabilities": {"code": 1.0, "math": 0.0, "other": 0.0},
+      "abstain_probability": 0.01
+    },
+    "reasoning": {"type": "noul", "noul": 0.34},
+    "difficulty": {
+      "type": "score",
+      "score": 1.3,
+      "confidence": 0.28,
+      "legend": {"0": "Trivial", "1": "Moderate", "2": "Hard"},
+      "probabilities": {"0": 0.13, "1": 0.43, "2": 0.43}
+    }
+  }
+}
+```
+
+A Set answers each label as a Noul under `<id>.<label>`, and lists the labels
+at or above its threshold in `sets`. A Span returns the text it found in
+`spans`, with Unicode code point offsets, end exclusive, and a Noul under its
+ID. `thresholds` gives the threshold each question applied; set `threshold` on
+the question to choose another.
+
+```json title="POST /v1/decisions"
+{
+  "model": "Vela-2.0-0.3B",
+  "state": "My card was charged twice and the parcel never arrived. Write to me at jane.doe@example.com.",
+  "questions": {
+    "problems": {
+      "type": "set",
+      "instructions": "Which problems does the customer report?",
+      "labels": [
+        {"key": "billing", "description": "A payment or charge problem"},
+        {"key": "shipping", "description": "A delivery problem"},
+        {"key": "account", "description": "A login or account problem"}
+      ]
+    },
+    "contacts": {
+      "type": "span",
+      "instructions": "Find the personal contact details.",
+      "labels": [{"key": "EMAIL_ADDRESS", "description": "An email address"}]
+    }
+  }
+}
+```
+
+```json title="Response"
+{
+  "model": "Vela-2.0-0.3B",
+  "answers": {
+    "problems.billing": {"type": "noul", "noul": 0.95},
+    "problems.shipping": {"type": "noul", "noul": 0.7},
+    "problems.account": {"type": "noul", "noul": 0.03},
+    "contacts": {"type": "noul", "noul": 1.0}
+  },
+  "spans": {
+    "contacts": [
+      {"label": "EMAIL_ADDRESS", "start": 71, "end": 91, "text": "jane.doe@example.com", "probability": 1.0}
+    ]
+  },
+  "sets": {
+    "problems": {
+      "selected": ["billing", "shipping"],
+      "probabilities": {"billing": 0.95, "shipping": 0.7, "account": 0.03}
+    }
+  },
+  "thresholds": {"problems": 0.3, "contacts": 0.65}
+}
+```
+
+An invalid question is answered `{"type", "error": "invalid_question",
+"message"}`, where the message names the field, such as `set questions do not
+take ['colour']`; the other questions are answered as usual. A request in which
+no question is valid is answered 400 `invalid_request`, with each question's
+reason in the message.
+
+`src/model-runtime/tools/reference_examples.py --url <runtime>` sends this
+section's requests to a runtime that serves Vela 2.0 0.3B and checks that the
+answers match.
+
 ## Router configuration
 
 | Field | Where | Meaning |
@@ -177,7 +379,9 @@ its own.
 | `provider: model_runtime` | deployment | The model runs in the model runtime. |
 | `artifact`, `revision` | deployment | Hub repository and commit, or an absolute local path. |
 | `device`, `profile` | deployment | See [Run it with the router](./deploy.md#describe-a-deployment). |
-| `input.max_tokens`, `input.overflow` | deployment | Input limit of task models. |
+| `input.max_tokens`, `input.overflow` | deployment | Input limit of task models. A deployment that answers questions takes only `overflow: window` with `max_tokens`: the scan budget its questions read a long part whole to (see [Long inputs](#long-inputs)). |
+| `signal_timeout_ms` | `global.model_catalog` | Deadline of a request's model-runtime signals. By default the request's deadline less a tenth of the time left (at least a second), or 45 s for a served request, which has none the router sees. A signal still running resolves through its policy: a routing signal through `on_error`, a safety signal as unscanned. |
+| `on_unscanned` | `modules.prompt_guard`, `modules.classifier.pii` | `block` (default): content the model did not read in full matches the rule as `unscanned`. `allow`: it follows `on_error`. |
 | `process` | deployment | Managed deployments with the same name share a process. |
 | `endpoint`, `served_name` | deployment | Attach to a runtime you run. |
 | `deployment`, `contract`, `head` | binding | Which deployment a feature uses, the answer type it reads and an optional head name. |
@@ -217,9 +421,27 @@ Router (port 9190):
 | --- | --- | --- |
 | `vsr_model_runtime_ready` | `deployment` | 1 while the deployment answers. |
 | `vsr_model_runtime_requests_total` | `deployment`, `outcome` | Calls by outcome: `ok`, `timeout`, `unavailable`, `overloaded`, `rejected`, `failed`. |
-| `vsr_model_runtime_request_duration_seconds` | `deployment` | Latency of calls that reached the runtime. |
+| `vsr_model_runtime_request_duration_seconds` | `deployment`, `surface` | Latency of calls that reached the runtime. |
+| `vsr_model_runtime_transport_seconds` | `deployment`, `surface` | The part of each call's exchange outside the runtime: the router's time for the HTTP exchange minus the runtime's `Server-Timing` total. |
+| `vsr_model_runtime_server_seconds` | `deployment`, `surface`, `phase` | The runtime's own time for each call's exchange, by `phase`: `parse`, `tokenize`, `queue`, `forward`, `post`, `serialize`, and `other` for the rest of its total. |
 | `vsr_model_runtime_unknown_answers_total` | `deployment`, `reason` | Answers left unknown, by reason. |
 | `vsr_model_runtime_restarts_total` | `deployment` | Restarts of managed processes. |
+
+The router times each HTTP exchange around its client, so its own encoding and
+decoding count as transport. A bundled call records the exchange of its
+bundle, so the transport and server metrics of a deployment's calls compare
+with its `vsr_model_runtime_request_duration_seconds`. What a call's duration
+holds beyond its exchange is the router's own share: waiting for the other
+calls of its bundle and fusing them. The transport share of a deployment's
+calls over five minutes:
+
+```promql
+sum by (deployment) (rate(vsr_model_runtime_transport_seconds_sum[5m]))
+  / sum by (deployment) (rate(vsr_model_runtime_request_duration_seconds_sum[5m]))
+```
+
+For a runtime that sends no `Server-Timing` header (an older or a third-party
+runtime), the router records no transport or server samples.
 
 Runtime (`GET /metrics`): `vllm_srun_requests_total` by endpoint and
 status, `vllm_srun_request_duration_seconds`,

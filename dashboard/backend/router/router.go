@@ -60,7 +60,7 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 		log.Printf("Warning: status history is unavailable: %v", err)
 		statusHistory = nil
 	}
-	statusMonitor := handlers.NewStatusMonitor(cfg.RouterAPIURL, cfg.EnvoyURL, cfg.ConfigDir, statusHistory, recipeStore)
+	statusMonitor := handlers.NewStatusMonitor(cfg.RouterAPIURL, cfg.EnvoyURL, cfg.ConfigDir, stackState(cfg, setupResolver), statusHistory, recipeStore)
 	statusMonitor.Start()
 
 	registerCoreRoutes(mux, cfg, setupResolver, coreRouteOptions{

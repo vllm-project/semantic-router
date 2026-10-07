@@ -257,6 +257,19 @@ def test_catalog_evaluates_cli_and_router_versions_independently(
             True,
             "compatible",
         ),
+        # A PEP 440 dev build precedes its release, as a prerelease does.
+        (
+            CatalogComponentVersions(
+                cli="0.5.0.dev20261007063125", router="0.5.0.dev20261007063125"
+            ),
+            True,
+            "compatible",
+        ),
+        (
+            CatalogComponentVersions(cli="0.3.0.dev1", router="0.3.0"),
+            False,
+            "requires cli >= 0.3.0",
+        ),
     ],
 )
 def test_catalog_uses_semver_prerelease_precedence(

@@ -137,6 +137,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         with self._running_serve(ensure_models_dir=True):
             self._check_health_endpoint()
             self._assert_volume_mounting()
+            self.assert_dashboard_holds_no_container_runtime()
             self._assert_status_command()
             self._assert_logs_command()
 

@@ -25,6 +25,9 @@ type Client struct {
 	bundleTasks atomic.Int64
 	// maxInputs is each served model's cap on the inputs of one surface request.
 	maxInputs atomic.Pointer[map[string]int]
+	// scanning holds the served models whose card reports a scan budget, the
+	// only ones that take a decisions request's max_tokens and overflow.
+	scanning atomic.Pointer[map[string]bool]
 }
 
 // NewClient builds a client for unix:///path, http://host:port or https://host:port.
@@ -74,13 +77,44 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 		c.bundleTasks.Store(int64(limit))
 	}
 	inputs := make(map[string]int, len(response.JSON200.Data))
+	scanning := make(map[string]bool, len(response.JSON200.Data))
 	for _, card := range response.JSON200.Data {
 		if card.Limits != nil && card.Limits.MaxInputs != nil {
 			inputs[card.Id] = *card.Limits.MaxInputs
 		}
+		scanning[card.Id] = card.Limits != nil && deref(card.Limits.MaxScanTokens) > 0
 	}
 	c.maxInputs.Store(&inputs)
+	c.scanning.Store(&scanning)
 	return response.JSON200.Data, nil
+}
+
+// boundedRead is the request a model without a scan budget takes: it reads one
+// bounded input whatever the caller asks, so neither option goes.
+func boundedRead(request Request) Request {
+	request.MaxTokens = 0
+	questions := make([]Question, len(request.Questions))
+	for index, question := range request.Questions {
+		question.Truncate = false
+		questions[index] = question
+	}
+	request.Questions = questions
+	return request
+}
+
+// scans reports whether the served model a request names (the only model when
+// it names none) has a scan budget, as its card last reported.
+func (c *Client) scans(model string) bool {
+	scanning := c.scanning.Load()
+	if scanning == nil {
+		return false
+	}
+	if model == "" && len(*scanning) == 1 {
+		for _, scans := range *scanning {
+			return scans
+		}
+	}
+	return (*scanning)[model]
 }
 
 // inputCap is the input cap of the served model a request names (the only
@@ -105,28 +139,33 @@ func (c *Client) inputCap(model *string) int {
 // context's bundle when there is one. The context deadline is also sent as
 // options.deadline_ms so the runtime drops work it cannot start in time.
 func (c *Client) Decide(ctx context.Context, request Request) (Response, error) {
-	return c.decide(ctx, request, nil, "")
+	response, _, err := c.decide(ctx, request, nil, "")
+	return response, err
 }
 
 // decide is Decide with the served model's result cache for a bundled call:
 // the bundle may answer it together with other calls, so its flush looks up
-// and stores the call the runtime actually answers.
-func (c *Client) decide(ctx context.Context, request Request, cache *resultCache, deployment string) (Response, error) {
+// and stores the call the runtime actually answers. The timing is that of the
+// exchange that carried the call.
+func (c *Client) decide(ctx context.Context, request Request, cache *resultCache, deployment string) (Response, exchangeTiming, error) {
+	if !c.scans(request.Model) {
+		request = boundedRead(request)
+	}
 	body, err := encodeDecisionRequest(ctx, request)
 	if err != nil {
-		return Response{}, err
+		return Response{}, exchangeTiming{}, err
 	}
 	if bundle := bundleFrom(ctx); bundle != nil {
 		return bundle.decide(ctx, c, &decisionCall{request: request, cache: cache, deployment: deployment}, body)
 	}
-	result, err := c.exchange(ctx, api.BundleTask{Decisions: &body})
+	result, timing, err := c.exchange(ctx, api.BundleTask{Decisions: &body})
 	if err != nil {
-		return Response{}, err
+		return Response{}, timing, err
 	}
 	if result.Decisions == nil {
-		return Response{}, fmt.Errorf("%w: missing decision response body", ErrFailed)
+		return Response{}, timing, fmt.Errorf("%w: missing decision response body", ErrFailed)
 	}
-	return decodeResponse(*result.Decisions, request.Questions), nil
+	return decodeResponse(*result.Decisions, request.Questions), timing, nil
 }
 
 func encodeDecisionRequest(ctx context.Context, request Request) (api.DecisionRequest, error) {
@@ -143,6 +182,9 @@ func encodeDecisionRequest(ctx context.Context, request Request) (api.DecisionRe
 		State:     state,
 		Questions: make(map[string]api.Question, len(request.Questions)),
 		Options:   &api.RequestOptions{DeadlineMs: deadline},
+	}
+	if request.MaxTokens > 0 {
+		body.Options.MaxTokens = &request.MaxTokens
 	}
 	for _, question := range request.Questions {
 		body.Questions[question.ID] = encodeQuestion(question)
@@ -184,7 +226,12 @@ func (labels labelCriteria) MarshalJSON() ([]byte, error) {
 func encodeQuestion(question Question) api.Question {
 	if question.Preset != "" {
 		preset := question.Preset
-		return api.Question{Preset: &preset, Threshold: question.Threshold}
+		encoded := api.Question{Preset: &preset, Threshold: question.Threshold}
+		if question.Truncate {
+			overflow := api.QuestionOverflowTruncate
+			encoded.Overflow = &overflow
+		}
+		return encoded
 	}
 	questionType := question.Type
 	var instructions interface{} = question.Instructions
@@ -196,6 +243,10 @@ func encodeQuestion(question Question) api.Question {
 	if question.Head != "" {
 		head := api.QuestionHead(question.Head)
 		encoded.Head = &head
+	}
+	if question.Truncate {
+		overflow := api.QuestionOverflowTruncate
+		encoded.Overflow = &overflow
 	}
 	if len(question.Choices) > 0 {
 		choices := make([]api.ChoiceOption, len(question.Choices))

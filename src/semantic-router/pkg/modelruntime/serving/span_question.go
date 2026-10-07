@@ -60,9 +60,9 @@ func (r *Runtime) prepareSpanQuestion(ctx context.Context, spec config.ResolvedM
 	if spec.Binding.MappingPath != "" {
 		return nil, binding.Capability{}, nil, fmt.Errorf("%w: the %s question of deployment %q names its own labels; remove mapping_path", binding.ErrCapability, preset, spec.Binding.Deployment)
 	}
-	declared := !strings.HasPrefix(spec.Binding.Deployment, config.ImplicitDeploymentPrefix)
-	if declared && (spec.Deployment.Input.MaxTokens != 0 || spec.Deployment.Input.Overflow != "reject") {
-		return nil, binding.Capability{}, nil, fmt.Errorf("%w: deployment %q: decision models read their whole input and reject over-length input; remove input", binding.ErrCapability, spec.Binding.Deployment)
+	scan, err := questionScanBudget(spec, card)
+	if err != nil {
+		return nil, binding.Capability{}, nil, err
 	}
 	resource, err := r.acquire(ctx, spec, card)
 	if err != nil {
@@ -72,7 +72,7 @@ func (r *Runtime) prepareSpanQuestion(ctx context.Context, spec config.ResolvedM
 		Contract: spec.Binding.Contract, Provider: Provider, Device: card.Device, Precision: card.Dtype, Preset: preset,
 		Limits: binding.Limits{ModelTokens: card.MaxInputTokens, Overflow: spec.Deployment.Input.Overflow},
 	}
-	return &target{spec: spec, deployment: spec.Binding.Deployment, card: card, resource: resource}, capability, decider, nil
+	return &target{spec: spec, deployment: spec.Binding.Deployment, card: card, resource: resource, scan: scan}, capability, decider, nil
 }
 
 // askSpans asks one span question and returns its spans in text order.
@@ -113,7 +113,7 @@ func (r *Runtime) spanTokens(ctx context.Context, spec config.ResolvedModelBindi
 	}
 	question := spanQuestion(spec, preset)
 	return publish(ctx, r.tokens, t, capability, func(ctx context.Context, _ io.Closer, text string) (tasks.TokenClassificationResult, error) {
-		spans, err := askSpans(ctx, decider, t.deployment, modelservice.Request{State: text, Questions: []modelservice.Question{question}})
+		spans, err := askSpans(ctx, decider, t.deployment, readPolicy(modelservice.Request{State: text, Questions: []modelservice.Question{question}}, true, t.scan))
 		if err != nil {
 			return tasks.TokenClassificationResult{}, err
 		}
@@ -136,7 +136,7 @@ func (r *Runtime) spanGrounded(ctx context.Context, spec config.ResolvedModelBin
 		if strings.TrimSpace(input.Question) != "" {
 			parts["request"] = input.Question
 		}
-		spans, err := askSpans(ctx, decider, t.deployment, modelservice.Request{Parts: parts, Questions: []modelservice.Question{question}})
+		spans, err := askSpans(ctx, decider, t.deployment, readPolicy(modelservice.Request{Parts: parts, Questions: []modelservice.Question{question}}, true, t.scan))
 		if err != nil {
 			return tasks.TokenClassificationResult{}, err
 		}

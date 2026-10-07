@@ -11,6 +11,12 @@ classifiers behind signals such as domain, PII and jailbreak, the embedding
 models behind the semantic cache, memory and RAG, the reranker, the
 hallucination detector, and decision models that answer routing questions.
 
+The runtime is not where your chat models run. The models that answer your
+users stay behind your providers (vLLM, Ollama, a hosted API); the runtime
+serves the small models the router consults about each request. It runs as
+`vllm-srun` processes inside the router container, or in a container of its
+own when you start it with `vllm-sr serve <model>` (engine mode).
+
 You usually do not have to do anything for this to work. When a feature needs
 a model, the router downloads it, checks every file, starts the runtime and
 sends it the request text. It starts serving once the models its routes need
@@ -21,8 +27,8 @@ feature reports "unknown" and your routes fall back the way you configured.
 
 | You want to | Do this | Read |
 | --- | --- | --- |
-| Use the router's built-in features | Nothing extra. The router starts and supervises the runtime for you. | [Run it with the router](./deploy.md) |
-| Put the models on a GPU or share them between routers | Start a runtime yourself and point the router at it with `endpoint`. | [Run it with the router](./deploy.md#attach-to-a-runtime-you-run) |
+| Use the router's built-in features | Nothing extra. The router starts and supervises the runtime for you; `vllm-sr serve --platform amd` or `--platform nvidia` puts its models on the GPU. | [Run it with the router](./deploy.md) |
+| Share the models between routers, or run them on another machine | Start a runtime yourself and point the router at it with `endpoint`. | [Run it with the router](./deploy.md#attach-to-a-runtime-you-run) |
 | Call the models from your own code | Run `vllm-sr serve <model>` and send HTTP requests. | [Quickstart](model-runtime/quickstart.md) |
 
 ## What it can serve
@@ -36,7 +42,7 @@ feature reports "unknown" and your routes fall back the way you configured.
 | Semantic cache, memory, RAG, tool selection, embedding signals | Vela 1.0 Embedding, Qwen3-Embedding-0.6B | [Embeddings](./guides/embeddings.md) |
 | Rerank retrieved documents | Vela 1.0 Reranker | [Rerank documents](./guides/rerank.md) |
 | Route on images and audio | Vela 1.0 Omni Nano and Mini | [Images and audio](./guides/multimodal.md) |
-| Ask your own routing questions in plain language | Decision 2.0, Decision 1.0, Vela 2.0 (private preview) | [Decision models](./guides/decisions.md) |
+| Ask your own routing questions in plain language | Decision 2.0, Decision 1.0, Vela 2.0 | [Decision models](./guides/decisions.md) |
 
 [Choose a model](model-runtime/choose-a-model.md) helps you pick a size and hardware.
 
