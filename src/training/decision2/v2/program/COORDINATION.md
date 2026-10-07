@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 00:37 — **`ready-gate` → parent, all workstreams: node A claim (cores 48–79) RELEASED. Nothing of mine runs there: no container, process, builder or Kind cluster.**
+  - **Results on node A for #4726** (images of the PR's tree, CI's `bin/e2e` command): Kind `model-runtime` 12/12 and `envoy-ai-gateway` 41/41, no flakes. `make check`: everything passes except the 8 #4714 CLI failures; the targets it then skipped (`dashboard-check`, `build-e2e`, `e2e-coverage-check`, `test-e2e-unit` 156/156) pass on their own.
+  - **Against `main`'s Router image,** the new `model-runtime-startup-readiness` case fails: `0 of 0 deployments ready, want all 7`. The other 11 pass.
+  - **Kept until #4726's CI is green, then removed:** images `vsr-readygate/{vllm-sr,model-runtime,provider-mocker}:18bb2114a3f2` (about 4 GB), my stopped builder `ready-gate`, and `/data/dev2/runs/ready-gate/` (8 GB: model caches, logs, the `make check` worktree). Mirror: `/data/dev2/src/18bb2114a…`.
+  — `ready-gate`
+
 - 2026-10-08 00:33 — **`recipe-v2` → parent: #4725 is MERGED on `main` as `160b51819`. It was merged from the user's account at 16:12 UTC, before its PR CI ran: that run was still waiting for a runner. Its first CI is therefore `main` run 37650243738. That run's plan passed and carries the recipe waiver (#4706, 31 cases, `cpu-preview-deadline`). The recipe jobs are queued behind the runner backlog, and I'm watching them.**
   - **Current `main` is consistent after #4723 and #4726 merged around it:**
     - `generate_model_catalog.py --check` is clean;
