@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -687,5 +691,57 @@ func TestProviderDispatchHonorsRouteCachePolicyAcrossRequestPaths(t *testing.T) 
 				}
 			})
 		}
+	}
+}
+
+func TestProviderAuthResolutionFailureEmitsEventAndKeepsGenericResponse(t *testing.T) {
+	core, logs := observer.New(zapcore.DebugLevel)
+	restoreLogger := zap.ReplaceGlobals(zap.New(core))
+	defer restoreLogger()
+
+	cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: broken
+      provider_model_id: broken
+      api_format: openai
+      backend_refs:
+        - provider: vllm
+          endpoint: https://broken.example/v1
+routing: {}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := &OpenAIRouter{Config: cfg}
+	profile, err := cfg.GetProviderProfileForEndpoint("broken_primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Parse-time validation rejects unknown providers, so the failure follows a valid profile.
+	profile.Type = "not-a-real-provider"
+	state := &routeHeaderState{profile: profile}
+	response := router.appendProviderCredential(
+		state, "broken", "broken_primary", &RequestContext{RequestID: "req-auth-resolution", Headers: map[string]string{}},
+	)
+	if response == nil {
+		t.Fatalf("appendProviderCredential() returned nil, want the generic 500 response")
+	}
+	body := string(response.GetImmediateResponse().GetBody())
+	if !strings.Contains(body, "Internal routing error. Contact your administrator.") {
+		t.Fatalf("client body = %q, want the generic internal routing error", body)
+	}
+	entries := logs.FilterMessage("provider_auth_resolution_failed").All()
+	if len(entries) != 1 {
+		t.Fatalf("expected one provider_auth_resolution_failed event, got %d", len(entries))
+	}
+	fields := entries[0].ContextMap()
+	assertLogField(t, fields, "request_id", "req-auth-resolution")
+	assertLogField(t, fields, "model", "broken")
+	assertLogField(t, fields, "backend", "broken_primary")
+	errField, ok := fields["error"].(string)
+	if !ok || !strings.Contains(errField, "not-a-real-provider") {
+		t.Fatalf("event error field = %#v, want the underlying provider resolution error", fields["error"])
 	}
 }

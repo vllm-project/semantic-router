@@ -59,12 +59,6 @@ func validateDecisionPromptModel(cfg *RouterConfig, decision Decision) error {
 	if decision.Algorithm == nil || decision.Algorithm.Prompt == nil {
 		return nil
 	}
-	if !cfg.Looper.IsEnabled() {
-		return fmt.Errorf(
-			"decision '%s': algorithm.type=prompt requires global.integrations.looper.endpoint",
-			decision.Name,
-		)
-	}
 	model := strings.TrimSpace(decision.Algorithm.Prompt.Model)
 	modelConfig, ok := cfg.ModelConfig[model]
 	if !ok {

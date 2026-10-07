@@ -43,7 +43,6 @@ Flow 在配置的工作流内协调模型 worker。调用它的 Agent Harness �
 global:
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
       max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
       flow:
         model_names:
@@ -54,6 +53,8 @@ global:
           file:
             directory: .vllm-sr/flow-state
 ```
+
+每个别名都应使用没有任何模型使用的名字。如果别名同时也是某个模型的名字，它会截获该模型的流量：该模型的每个请求都只评估 workflows 决策，因此无法再直接请求该模型；没有匹配任何 workflows 决策的请求会以 [`no_route`](../../../api/router.md#routing-errors) 失败。Router 仍会加载这样的配置，但会输出 `looper_alias_shadows_model` 警告，指出该别名、`providers.models` 是否提供它，以及路由到它的决策；`vllm-sr config validate` 也会报告同样的警告。
 
 配置一条动态 Flow 决策：
 
@@ -87,7 +88,7 @@ routing:
 规划器模型生成控制计划。省略 `planner.model` 时，路由器按声明顺序选择首个满足完整规划请求要求的已分配 worker，
 包括 JSON 输出能力和实际输出、上下文预算。扫描过程不调用模型。
 显式指定的规划器保持原目标并接受相同阶段检查，失败时不会替换为其他模型；没有合格规划器时请求直接失败。
-显式规划器可以是 worker `modelRefs` 之外单独配置的辅助模型，但必须有运营者分配的后端。
+显式规划器可以是 worker `modelRefs` 之外单独配置的辅助模型，但必须在 `providers.models[].backend_refs` 中有运营者分配的后端；否则配置无法加载。
 worker 调用始终限制在 `modelRefs` 内，执行器会拒绝包含范围外 worker 的计划。
 规划器选择不会降低已配置的不同成功 worker 最小数量。
 
@@ -125,7 +126,7 @@ routing:
 
 | 参数 | 类型 | 默认值 | 说明 |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/flow"]` | 触发 Flow 执行的直接请求模型 slug |
+| `model_names` | list[string] | `["vllm-sr/flow"]` | 触发 Flow 执行的直接请求模型 slug；使用没有任何模型使用的名字 |
 | `state.store_backend` | string | `file` | 待处理工具调用工作流状态后端：`memory`、`file` 或 `redis` |
 | `state.ttl_seconds` | int | `1800` | 待处理工具调用工作流状态的 TTL |
 | `mode` | string | `static` | `static` 角色执行或 `dynamic` 规划器生成执行 |

@@ -80,6 +80,21 @@ class TestAlgorithmConfigTypes:
         with pytest.raises(PydanticValidationError):
             AlgorithmConfig(type="static", minimum_candidates=0)
 
+    def test_a_registered_algorithms_block_is_kept_for_the_router(self):
+        config = AlgorithmConfig.model_validate(
+            {"type": "custom_pick", "custom_pick": {"pick": "b"}}
+        )
+        assert config.type == "custom_pick"
+        dumped = config.model_dump(exclude_none=True)
+        assert dumped["custom_pick"] == {"pick": "b"}
+        assert "extensions" not in dumped
+
+    def test_an_unknown_type_without_its_block_is_rejected(self):
+        with pytest.raises(PydanticValidationError, match="unsupported algorithm type"):
+            AlgorithmConfig(type="custom_pick")
+        with pytest.raises(PydanticValidationError):
+            AlgorithmConfig.model_validate({"type": "static", "custom_pick": {}})
+
 
 class TestPromptSelectionConfig:
     """Test prompt-driven selection configuration."""

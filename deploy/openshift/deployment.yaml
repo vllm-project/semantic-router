@@ -253,7 +253,7 @@ spec:
           mountPath: /app/cache
       containers:
       - name: semantic-router
-        image: ghcr.io/vllm-project/semantic-router/extproc:latest
+        image: ghcr.io/vllm-project/semantic-router/vllm-sr:latest
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -281,7 +281,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: VLLM_SR_CONFIG_BACKUP_DIR
-          value: "/app/models/.vllm-sr/config-backups"
+          value: "/tmp/vllm-sr/config-history"
         - name: HF_HOME
           value: "/app/cache/hf"
         - name: TRANSFORMERS_CACHE

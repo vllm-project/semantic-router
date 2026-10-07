@@ -15,8 +15,14 @@ from typing import Any, ClassVar
 
 import torch
 
-from ...errors import INVALID_QUESTION, MAX_LENGTH_EXCEEDED, QuestionError
-from ...heads.candidate import forward_logits
+from ...errors import (
+    INVALID_QUESTION,
+    MAX_LENGTH_EXCEEDED,
+    QuestionError,
+    question_error,
+)
+from ...heads.candidate import CandidateHead, forward_logits
+from ...heads.typed import TypeReadout
 from ...plugins.base import EngineModel, ModelInfo
 from ...plugins.decisions import DecisionModel, RenderedItem, RequestPlan
 from ...systemone import canonical
@@ -27,7 +33,7 @@ from .answers import answer
 from .questions import KINDS, NoulDefaults, Row, check_request, parse
 
 
-class Decision1Model(DecisionModel):
+class Decision1Model(DecisionModel[RenderedItem, list[float] | None]):
     """A loaded Decision 1.0 model; ``render``, ``physical_batches`` and ``run`` are per runtime."""
 
     noul_defaults: ClassVar[NoulDefaults]
@@ -63,7 +69,9 @@ class Decision1Model(DecisionModel):
         """The released physical batches; each stays within the forward token budget."""
         return self.physical_batches(items)
 
-    def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan:
+    def plan(
+        self, state: Any, questions: dict[str, Any], scan: int | None = None
+    ) -> RequestPlan[RenderedItem]:
         check_request(state, questions)
         text = state if isinstance(state, str) else canonical(state)
         rows: list[Row] = []
@@ -73,12 +81,11 @@ class Decision1Model(DecisionModel):
                 rows.append(
                     parse(question_id, question, self.noul_defaults, self.presets)
                 )
-            except QuestionError:
+            except QuestionError as exc:
                 kind = question.get("type") if isinstance(question, dict) else None
-                errors[question_id] = {
-                    "type": kind if kind in KINDS else None,
-                    "error": INVALID_QUESTION,
-                }
+                errors[question_id] = question_error(
+                    kind if kind in KINDS else None, exc, INVALID_QUESTION
+                )
         tokens = self.tokens()
         items: list[RenderedItem] = []
         for row in rows:
@@ -86,7 +93,7 @@ class Decision1Model(DecisionModel):
                 items.append(self.render(row, text, tokens))
             except QuestionError as exc:
                 if exc.code != MAX_LENGTH_EXCEEDED:
-                    errors[row.question_id] = {"type": row.kind, "error": exc.code}
+                    errors[row.question_id] = question_error(row.kind, exc)
                     continue
                 for failed in rows:
                     errors[failed.question_id] = {
@@ -119,7 +126,7 @@ class VelaDecisionModel(Decision1Model):
         tokenizer: Tokenizer,
         presets: dict[str, dict[str, Any]],
         *,
-        readout: vela.TypeReadout,
+        readout: TypeReadout,
         special: dict[str, int],
         exit_layer: int,
     ):
@@ -210,7 +217,7 @@ class QwenDecisionModel(Decision1Model):
         tokenizer: Tokenizer,
         presets: dict[str, dict[str, Any]],
         *,
-        head: torch.nn.Module,
+        head: CandidateHead,
         temperatures: dict[str, float],
         null_choice_as_key: bool,
     ):

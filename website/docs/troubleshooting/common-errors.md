@@ -11,7 +11,7 @@ once:
 ```bash
 vllm-sr status
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy        # only with --gateway extproc
 vllm-sr config validate --config config.yaml
 ```
 
@@ -125,9 +125,56 @@ entrypoints:
     recipe: production
 ```
 
+### Looper alias names a model
+
+```text
+Warning: [global.integrations.looper.flow.model_names] Flow alias 'openai/gpt-oss-20b' is also a model that providers.models serves and decisions 'workflow_route', 'default_route' route to; requests for it evaluate only workflows decisions, so the model cannot be requested directly and a request that matches none of them fails with no_route
+Hint: Give the alias a name that no model uses, such as vllm-sr/flow.
+```
+
+The configuration is valid, so it loads, and the Router logs the same warning
+as `looper_alias_shadows_model`. Until the alias is renamed, every request for
+the model returns [`no_route`](../api/router.md#routing-errors) unless it
+matches a workflows decision. The same applies to ReMoM and Fusion aliases.
+
+Broken:
+
+```yaml
+global:
+  integrations:
+    looper:
+      flow:
+        model_names: [openai/gpt-oss-20b]
+```
+
+Corrected, with Flow requests sent to `vllm-sr/flow`:
+
+```yaml
+global:
+  integrations:
+    looper:
+      flow:
+        model_names: [vllm-sr/flow]
+```
+
 See the
 [entrypoints and recipes tutorial](../tutorials/global/entrypoints-and-recipes.md)
 and [recipes tutorial](../tutorials/global/recipes.md) for complete examples.
+
+## A request returns a routing error code
+
+Look the code up in [routing errors](../api/router.md#routing-errors), then
+find the Router's own reason in its log under the request's `x-request-id`:
+
+```bash
+vllm-sr logs router | grep '<x-request-id>'
+```
+
+For `no_route`, the `entrypoint_routing_no_selection` line names the model,
+the recipe, and any decision that matched. A `looper_algorithm` value means the
+model is a Looper alias that evaluates only that algorithm's decisions; if it
+is also a backend model's name, see
+[Looper alias names a model](#looper-alias-names-a-model).
 
 ## Response cache cannot start
 
@@ -459,7 +506,7 @@ vllm-sr status
 
 # Read component logs without depending on generated container names.
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy        # only with --gateway extproc
 
 # Check the public listener and model catalog.
 curl -sS http://localhost:8899/v1/models

@@ -115,7 +115,6 @@ export const createProbePlaygroundTask = (
   prompt: prepared.prompt,
   createdAt: Date.now(),
   requestOptions: {
-    enableClawMode: false,
     enableWebSearch: false,
     executeToolCalls: false,
     model,

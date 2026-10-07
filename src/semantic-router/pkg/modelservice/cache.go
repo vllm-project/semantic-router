@@ -6,6 +6,7 @@ import (
 	"hash/maphash"
 	"math"
 	"os"
+	"sort"
 	"strconv"
 	"sync"
 )
@@ -104,15 +105,44 @@ func classifyKey(request ClassifyRequest) cacheKey {
 func decideKey(request Request) cacheKey {
 	w := newKeyWriter(surfaceDecide)
 	w.string(request.State)
+	w.int(request.MaxTokens)
+	if request.Parts != nil {
+		names := make([]string, 0, len(request.Parts))
+		for name := range request.Parts {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		w.int(len(names))
+		for _, name := range names {
+			w.string(name)
+			w.string(request.Parts[name])
+		}
+	} else {
+		w.int(-1)
+	}
 	w.int(len(request.Questions))
 	for _, question := range request.Questions {
 		w.string(question.ID)
 		w.string(question.Type)
 		w.string(question.Instructions)
-		w.int(len(question.Choices))
-		for _, choice := range question.Choices {
-			w.string(choice.Key)
-			w.string(choice.Description)
+		w.string(question.Preset)
+		w.string(question.Head)
+		if question.Truncate {
+			w.int(1)
+		} else {
+			w.int(0)
+		}
+		if question.Threshold != nil {
+			w.float(*question.Threshold)
+		} else {
+			w.int(-1)
+		}
+		for _, options := range [][]Choice{question.Choices, question.Labels} {
+			w.int(len(options))
+			for _, option := range options {
+				w.string(option.Key)
+				w.string(option.Description)
+			}
 		}
 		w.int(len(question.Levels))
 		for _, level := range question.Levels {

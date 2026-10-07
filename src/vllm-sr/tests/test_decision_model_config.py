@@ -119,6 +119,91 @@ def test_decision_questions_are_validated(question, message):
         UserConfig.model_validate(_config(mutate))
 
 
+SET_QUESTION = {
+    "type": "set",
+    "instructions": "Which topics does the request mention?",
+    "labels": [{"key": "billing", "description": "payments"}, {"key": "shipping"}],
+    "threshold": 0.4,
+}
+SPAN_QUESTION = {
+    "type": "span",
+    "instructions": "Which spans name a place?",
+    "labels": [{"key": "city"}],
+    "head": "broad",
+}
+
+
+def _with_vela2(document):
+    document["global"]["model_catalog"]["deployments"]["vela2"] = {
+        "provider": "model_runtime",
+        "artifact": "vllm-sr/Vela-2.0-0.3B",
+    }
+    document["routing"]["signals"]["decision"] += [
+        {"name": "topics", "deployment": "vela2", "question": SET_QUESTION},
+        {"name": "places", "deployment": "vela2", "question": SPAN_QUESTION},
+    ]
+    document["routing"]["decisions"][0]["rules"]["conditions"] += [
+        {"type": "decision", "name": "topics", "label": "billing"},
+        {"type": "decision", "name": "places", "label": "city"},
+    ]
+
+
+def test_set_and_span_questions_route_on_a_declared_label():
+    assert _errors(_config(_with_vela2)) == []
+
+
+@pytest.mark.parametrize(
+    "question, message",
+    [
+        ({**SET_QUESTION, "labels": []}, "1..255 labels"),
+        ({**SET_QUESTION, "labels": [{"key": "a"}, {"key": "a"}]}, "unique"),
+        ({**SET_QUESTION, "choices": [{"key": "a"}, {"key": "b"}]}, "takes labels"),
+        ({**SET_QUESTION, "threshold": 1.5}, "less than or equal to 1"),
+        ({**SET_QUESTION, "head": "router"}, "only to span"),
+        ({**SPAN_QUESTION, "head": "wide"}, "router"),
+        ({**SPAN_QUESTION, "levels": ["a", "b"]}, "takes labels"),
+        (
+            {"type": "choice", "instructions": "x", "labels": [{"key": "a"}]},
+            "only to set and span",
+        ),
+        ({"type": "noul", "instructions": "x", "threshold": 0.5}, "only to set"),
+    ],
+)
+def test_set_and_span_questions_are_validated(question, message):
+    def mutate(document):
+        document["routing"]["signals"]["decision"][1]["question"] = question
+
+    with pytest.raises(ValidationError, match=message):
+        UserConfig.model_validate(_config(mutate))
+
+
+def test_set_and_span_conditions_name_a_declared_label():
+    def undeclared(document):
+        _with_vela2(document)
+        document["routing"]["decisions"][0]["rules"]["conditions"][2]["label"] = "x"
+
+    def unlabelled(document):
+        _with_vela2(document)
+        del document["routing"]["decisions"][0]["rules"]["conditions"][3]["label"]
+
+    assert any("declared label" in error for error in _errors(_config(undeclared)))
+    assert any("declared label" in error for error in _errors(_config(unlabelled)))
+
+
+def test_a_rule_named_like_a_set_label_answer_is_rejected():
+    def mutate(document):
+        _with_vela2(document)
+        document["routing"]["signals"]["decision"].append(
+            {
+                "name": "topics.billing",
+                "deployment": "vela2",
+                "question": {"type": "noul", "instructions": "x"},
+            }
+        )
+
+    assert any("answer key" in error for error in _errors(_config(mutate)))
+
+
 def test_score_question_requires_a_predicate():
     def mutate(document):
         document["routing"]["signals"]["decision"][1] = {

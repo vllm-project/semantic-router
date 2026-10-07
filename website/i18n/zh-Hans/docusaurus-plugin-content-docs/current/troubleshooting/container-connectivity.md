@@ -9,21 +9,22 @@ translation:
 
 # 容器连通性
 
-当本地协议栈已启动但无法到达模型后端，或宿主机无法到达 Router、Envoy、控制面板或指标端点时，使用本指南。
+当本地协议栈已启动但无法到达模型后端，或宿主机无法到达 Router、控制面板或指标端点时，使用本指南。
 
 ## 从失败的那一跳开始
 
-一次路由请求会跨越多个网络边界：
+一次路由请求会跨越多个网络边界。在默认的 standalone 模式下，Router 自己提供监听器；使用 `--gateway extproc` 时，Envoy 位于它前面：
 
 ```text
-client -> Envoy -> Router -> selected provider backend
+client -> Router -> selected provider backend                 # standalone
+client -> Envoy -> Router -> selected provider backend        # --gateway extproc
 ```
 
 按该顺序检查每一跳：
 
 ```bash
 vllm-sr status
-vllm-sr logs envoy
+vllm-sr logs envoy        # 仅限 --gateway extproc
 vllm-sr logs router
 curl -sS http://localhost:8899/v1/models
 ```
@@ -103,7 +104,7 @@ kubectl run network-check \
 
 | 端点 | 默认地址 |
 |----------|-----------------|
-| 经 Envoy 的 OpenAI 兼容监听器 | `http://localhost:8899` |
+| OpenAI 兼容监听器（Router，或 `--gateway extproc` 时的 Envoy） | `http://localhost:8899` |
 | 控制面板 | `http://localhost:8700` |
 | Router 管理 API | `http://localhost:8080` |
 | Router 指标 | `http://localhost:9190/metrics` |
@@ -128,7 +129,7 @@ vllm-sr serve --config config.yaml
 curl -sS http://localhost:9190/metrics | head
 ```
 
-然后确认 Prometheus 能抓取 Router 和 Envoy 目标。在没有请求走过对应路径时，空面板可以是正确的；例如，拒绝和缓存指标在策略拒绝或缓存处理请求之前会保持为空。
+然后确认 Prometheus 能抓取 Router 目标，使用 `--gateway extproc` 时还有 Envoy 目标。在没有请求走过对应路径时，空面板可以是正确的；例如，拒绝和缓存指标在策略拒绝或缓存处理请求之前会保持为空。
 
 同时验证：
 
@@ -140,7 +141,7 @@ curl -sS http://localhost:9190/metrics | head
 ## 快速检查清单
 
 - 本地协议栈正在运行，且 `vllm-sr status` 能识别失败组件。
-- 客户端可以到达 Envoy 的 `/v1/models` 端点。
+- 客户端可以到达监听器的 `/v1/models` 端点。
 - 提供方端点不是 `localhost`，除非它确实运行在同一容器中。
 - 后端监听可达接口，并暴露 `/v1/models`。
 - DNS、防火墙、安全组和 NetworkPolicy 规则允许所需路径。

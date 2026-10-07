@@ -3,7 +3,7 @@ title: 选择模型、规模和硬件
 sidebar_label: 选择模型
 description: 每个任务该用哪个模型，决策模型需要多大，以及用什么硬件运行。
 translation:
-  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
+  source_commit: "320d5d49a6463feb9f4b87dacfdcdddcbd37f66c"
   source_file: "docs/model-runtime/choose-a-model.md"
   outdated: false
 ---
@@ -14,27 +14,28 @@ translation:
 
 ## 按任务选择 {#by-task}
 
-| 你想要 | 模型 | 规模 | 说明 |
+| 你想要 | 默认模型 | Vela 1.0 专用模型 | 说明 |
 | --- | --- | --- | --- |
-| 按主题路由（数学、法律、代码……） | `vllm-sr/Vela-1.0-Encoder-307M-Domain` | 307M | 14 个领域 |
-| 发现需要事实核查的请求 | `vllm-sr/Vela-1.0-Encoder-307M-FactCheck` | 307M | 它标出需要核查，但不核查事实 |
-| 读取用户对上一个回答的反应 | `vllm-sr/Vela-1.0-Encoder-307M-Feedback` | 307M | 满意、需要澄清、回答错误、想要别的、无反馈 |
-| 区分文本请求和图片请求 | `vllm-sr/Vela-1.0-Encoder-307M-Modality` | 307M | 只读取书面请求 |
-| 发现个人信息 | `vllm-sr/Vela-1.0-Encoder-307M-PII` | 307M | 17 种实体类型，给出精确的字符片段 |
-| 拦截提示词注入和越狱 | `vllm-sr/Vela-1.0-Encoder-307M-Guard` | 307M | |
-| 标记不安全内容 | `vllm-sr/Vela-1.0-Encoder-307M-Safety` 或 `-Shield` | 307M | Shield 是另一种安全模型 |
-| 指出风险类别 | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | 307M | 12 个独立的危害类别，带已发布的阈值 |
-| 对照来源检查回答 | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | 307M | 标出回答中无依据的片段 |
-| 用于缓存、记忆、RAG 和工具的 embedding | `vllm-sr/Vela-1.0-Encoder-307M-Embedding` | 307M | 更小的维度和更少的层以质量换速度 |
-| 更大或带指令的文本 embedding | `Qwen/Qwen3-Embedding-0.6B` | 0.6B | 1,024 维 |
-| 对检索到的文档重排序 | `vllm-sr/Vela-1.0-Encoder-307M-Reranker` | 307M | |
-| 把文本、图片和音频放进同一向量空间 | `vllm-sr/Vela-1.0-Omni-Nano` 或 `-Mini` | 164M / 1.36B | Mini 更准确，并接受更长的文本 |
-| 用自然语言提出你自己的问题 | 决策模型（见下一节） | 0.6B 到 27B | |
+| 按主题路由（数学、法律、代码……） | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Domain` | 14 个领域 |
+| 发现需要事实核查的请求 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-FactCheck` | 它标出需要核查，但不核查事实 |
+| 读取用户对上一个回答的反应 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Feedback` | 满意、需要澄清、回答错误、想要别的、无反馈 |
+| 区分文本请求和图片请求 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Modality` | 只读取书面请求 |
+| 发现个人信息 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-PII` | 17 种实体类型，给出精确的字符片段 |
+| 拦截提示词注入和越狱 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Guard` | |
+| 标记不安全内容 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Safety` 或 `-Shield` | Shield 是另一种安全模型 |
+| 对照来源检查回答 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | 标出回答中无依据的片段 |
+| 指出风险类别 | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | | 12 个独立的危害类别，带已发布的阈值 |
+| 用于缓存、记忆、RAG 和工具的 embedding | `vllm-sr/Vela-1.0-Encoder-307M-Embedding` | | 更小的维度和更少的层以质量换速度 |
+| 更大或带指令的文本 embedding | `Qwen/Qwen3-Embedding-0.6B` | | 0.6B，1,024 维 |
+| 对检索到的文档重排序 | `vllm-sr/Vela-1.0-Encoder-307M-Reranker` | | |
+| 把文本、图片和音频放进同一向量空间 | `vllm-sr/Vela-1.0-Omni-Nano` 或 `-Mini` | | 164M / 1.36B；Mini 更准确，并接受更长的文本 |
+| 用自然语言提出你自己的问题 | 决策模型（见下一节） | | 0.6B 到 27B |
 
-任务模型在 CPU 上都运行良好：在 16 个核上，Vela Domain 请求的中位耗时约 12 ms，
-比早期版本使用的原生绑定快三倍
+未配置模型时，表中默认为 Vela 2.0 0.3B 的内置信号共用它的一个部署，每个请求只调用一次（[见下文](#vela-20)）。
+Hazard、embedding、重排序和 Omni 使用各自的模型。Vela 1.0 专用模型仍然内置，写明它们即可恢复。
+它们都是 307M 的编码器，在 CPU 上运行良好：在 16 个核上，Vela Domain 请求的中位耗时约 12 ms
 （[测量记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela1-performance.md)）。
-它们大多最多读取 32,768 个 token；更长或更短的上限列在每个模型卡片和 `GET /v1/models` 中。
+它们大多最多读取 32,768 个 token，0.3B 读取 8,192 个；上限列在每个模型卡片和 `GET /v1/models` 中。
 
 ## 决策模型 {#decision-models}
 
@@ -52,20 +53,171 @@ translation:
 
 Decision 1.0 模型（`vllm-sr/Decision-1.0-Kai-0.6B`、`-Lex-0.6B`、`-Route-0.6B`、`-Eos-0.8B`、
 `-Sol-2B`、`-Nox-4B`、`-Lux-9B`）也已内置，回答同类问题。Vela 2.0（`vllm-sr/Vela-2.0-0.3B`、
-`-0.8B`、`-4B`、`-9B`）支持选择多个标签或标出文本片段的问题；它是私有预览，需要具备访问权限的 Hugging Face token。
+`-0.8B`、`-4B`、`-9B`）支持选择多个标签（`set`）或标出文本片段（`span`）的问题，路由器可以基于这两类回答路由。
+它的路由片段头（router span head）还能回答 [`pii`](tutorials/signal/learned/pii.md#vela-20) 和
+[`hallucination`](tutorials/signal/learned/hallucination.md#vela-20) 信号，默认的 0.3B 部署正是这样替代了单独的 PII 和 Halu 模型。
 在 CPU 上运行 0.3B。在 GPU 上，较大的几档可读取最多 16,384 个 token 的输入（0.3B 为 8,192）：其中 0.8B 成本最低，4B 和 9B 最准确。
 
 `vllm-srun models` 会列出每个内置模型及其固定的 revision。
+
+## 内置信号在 Vela 2.0 0.3B 上运行 {#vela-20}
+
+domain、prompt guard、safety、fact check、user feedback、modality、PII 和 hallucination 信号默认使用
+`vllm-sr/Vela-2.0-0.3B`（[合集](https://huggingface.co/collections/vllm-sr/vela-20)）。它们共用一个部署
+`@Vela-2.0-0.3B`，一个请求的所有问题在一次调用中提出。
+
+- **问题：** 每个信号提出模型针对它训练过的问题，并沿用对应 Vela 1.0 模型的标签，因此规则和策略照旧读取答案。
+  PII 和 hallucination 使用模型的片段头，片段保留精确的字符偏移。
+- **CPU profile：** 在 CPU 上该部署运行 `max_speed`，使用模型权重的打包副本：答案误差约在 0.00001 以内，
+  速度约为 `exact` 的 1.6 倍。
+- **输入：** 模型读取请求的前 8,192 个 token，超出部分截断；Vela 1.0 的 Guard 和 PII 专用模型按窗口扫描最多 32K。
+- **阈值：** 模块默认阈值按 0.3B 的分数校准（见下文）。
+
+维护者选择了这个默认值，尽管它没有达到当初设定的两个目标
+（[#4639](https://github.com/vllm-project/semantic-router/issues/4639)）：每个信号的准确率持平或更好，
+以及 CPU 上的延迟持平或更好。在 [router signal suite](https://huggingface.co/datasets/vllm-sr/router-signal-suite)
+上经由路由器测得
+（[A/B 记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-router-signals.md)）：
+
+- **领先：** prompt guard（留出集 AUC +0.026；在 E2E 攻击样例上它拦下全部六个攻击，Vela 1.0 Guard 拦下五个）和
+  safety（留出集 +0.052，在每个数据集上都领先）。一个模型、一次调用回答所有信号。
+- **持平：** PII 和 hallucination 在留出集和新留出集上持平。
+- **落后最多：** modality（留出集 AUC −0.180；0.3B 漏掉了大多数要求生成新图片的请求）和 user feedback
+  （准确率留出集 −0.038、新留出集 −0.178）。
+- **落后：** domain（准确率留出集 −0.037、新留出集 −0.088）和 fact check（留出集 AUC −0.101）。
+- **CPU 时间：** 每个请求都要把问题、选项和 17 个 PII 标签（至少 560 个 token）送进一次 3.07 亿参数的前向计算，
+  而每个 Vela 1.0 模型只读取请求本身。在 12 个 CPU 核上，针对
+  [延迟记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md)中的五个请求信号，
+  请求的中位耗时约为原来的 4.9 倍：
+
+| 路由器，12 个 CPU 核 | p50 | p95 | 每秒请求数 | 并发 16 时 |
+| --- | ---: | ---: | ---: | ---: |
+| Vela 1.0 专用模型（恢复后） | 16 ms | 58 ms | 38.9 | 51.8 |
+| Vela 2.0 0.3B（默认） | 79 ms | 100 ms | 11.9 | 12.8 |
+
+[#4668](https://github.com/vllm-project/semantic-router/issues/4668) 继续改进 CPU 延迟。在 GPU 上（`use_cpu: false`），
+0.3B 在一块 AMD Instinct MI325X 上回答同样的问题，中位耗时约 7 ms
+（[测量记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-performance.md#against-the-vela-10-path)）。
+
+### 阈值 {#thresholds}
+
+每个默认阈值都在该数据集的 dev 划分上保持 Vela 1.0 专用模型的工作点：二分类信号保持误报率，置信度下限保持低于下限的请求比例。
+默认值为 prompt guard 0.75、domain 0.28、PII 0.01、fact check 0.93、user feedback 0.37。
+
+- **PII：** 0.3B 的片段头在返回片段前已按各标签自己的阈值筛选，因此 0.01 会接受它返回的每个片段。
+- **其他模型：** 运行其他模型且未设置阈值的模块，保持它之前的默认阈值。
+- **你自己的规则阈值**（`routing.signals.jailbreak[].threshold` 等）由你设定，很可能是为 Vela 1.0 选的。
+  记录给出了每个 Vela 1.0 值在 0.3B 上的对应值：prompt guard 0.3–0.9 → 0.74–0.77、PII → 0.01、safety 0.5 → 0.46、
+  fact check 0.95 → 0.93、modality 的 `confidence_threshold` 0.7 → 0.51。
+
+### 恢复 Vela 1.0 专用模型 {#restore-vela-10}
+
+一个配置块即可恢复；你未设置的模块阈值也随之恢复为专用模型的默认值：
+
+```yaml
+global:
+  model_catalog:
+    system:
+      safety: models/Vela-1.0-Encoder-307M-Safety
+      prompt_guard: models/Vela-1.0-Encoder-307M-Guard
+      domain_classifier: models/Vela-1.0-Encoder-307M-Domain
+      pii_classifier: models/Vela-1.0-Encoder-307M-PII
+      fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
+      hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
+      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
+```
+
+modality 分类器在 `classifier.model_path` 中写明 `models/Vela-1.0-Encoder-307M-Modality`。
+
+只想恢复一个信号时，只写它那一行。以 user feedback 为例：
+
+```yaml
+global:
+  model_catalog:
+    system:
+      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
+```
+
+| 信号 | `global.model_catalog` 下的一行 |
+| --- | --- |
+| Domain | `system.domain_classifier: models/Vela-1.0-Encoder-307M-Domain` |
+| Prompt guard | `system.prompt_guard: models/Vela-1.0-Encoder-307M-Guard` |
+| Safety | `system.safety: models/Vela-1.0-Encoder-307M-Safety` |
+| Fact check | `system.fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck` |
+| User feedback | `system.feedback_detector: models/Vela-1.0-Encoder-307M-Feedback` |
+| PII | `system.pii_classifier: models/Vela-1.0-Encoder-307M-PII` |
+| Hallucination | `system.hallucination_detector: models/Vela-1.0-Encoder-307M-Halu` |
+| Modality | `modules.modality_detector.classifier.model_path: models/Vela-1.0-Encoder-307M-Modality` |
+
+配置自己设置的规则阈值保持不变。内置配方的规则按 0.3B 校准，因此改回 Vela 1.0 的信号要连同它的 Vela 1.0
+规则阈值一起改回。在 `mom-v1` 中，它们是 prompt guard 0.5、safety 0.5 和 PII 0.7；记录列出了每个配方的值。
+
+`decision_model: Vela-1.0`（见下文）一行即可恢复全部专用模型。
+
+## 选择规模 {#choose-a-size}
+
+决策模型是回答 Router 自身问题的 Vela 模型：上面的每个内置信号，以及每个未指定 `deployment` 的
+[`decision` 问题](tutorials/signal/learned/decision.md)，每个请求一次调用。一个参数或一行配置即可选择：
+
+```bash
+vllm-sr serve --decision-model Vela-2.0-4B --platform amd
+```
+
+```yaml
+global:
+  model_catalog:
+    system:
+      decision_model: Vela-2.0-4B
+```
+
+`serve` 把这一行作为新版本写入当前生效的配置，`vllm-sr config versions` 会列出它，
+`vllm-sr config rollback` 可以撤销；之后的启动会保留它，`vllm-sr status` 会显示它。Helm chart 的
+`decisionModel` 值和 operator 的 `spec.config.decision_model` 设置的是同一个字段。名称不区分大小写。
+
+通过 Router 在 router signal suite 上与 Vela 1.0 专用模型对比测得，延迟针对延迟记录的五个请求信号
+（[记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-decision-model-sizes.md)）：
+
+| 决策模型 | 硬件 | 留出集上相对 Vela 1.0 的准确度 | GPU 上的 p50 | 12 个 CPU 核上的 p50 |
+| --- | --- | --- | ---: | ---: |
+| `Vela-2.0-0.3B`（默认） | CPU 或 GPU | prompt guard 和 safety 领先，domain、modality 和 feedback 落后 | 6.9 ms | 79 ms |
+| `Vela-2.0-0.8B` | CPU 或 GPU | domain、prompt guard、safety、modality 和 hallucination 领先；PII 落后 | 40.7 ms | 约 3 s |
+| `Vela-2.0-4B` | GPU，约 17 GB | 除 fact check 外全部领先 | 56.8 ms | 仅 GPU |
+| `Vela-2.0-9B` | GPU，约 32 GB | 全部领先 | 79.0 ms | 仅 GPU |
+| `Vela-1.0` | CPU 或 GPU | 专用模型本身 | 不适用 | 16 ms |
+
+- **GPU：** 一块 AMD Instinct MI325X，顺序请求。并发 16 时，一块 GPU 每秒约处理 146（0.3B）、
+  25（0.8B）、17（4B）和 12（9B）个请求。
+- **4B 和 9B 需要 GPU。** 在 `--platform cpu` 或没有该平台 GPU 的主机上，`vllm-sr serve` 会拒绝它们；
+  在模型运行时找不到 GPU 的地方，Router 也会拒绝。在 GPU 上，无论模块的 `use_cpu` 如何设置，它们都在 GPU 上运行。
+- **CPU 上的 0.8B** 是解码器：如表所示，一个请求需要数秒。请在 GPU 上运行它，或在 CPU 上继续使用 0.3B。
+- **每个规模** 在 user feedback 的新留出文件（CrossWOZ）和分布内的 PII 上都落后于 Vela 1.0。带区间的逐信号数据见记录。
+- **`Vela-1.0`** 恢复九个专用模型。它们只回答内置信号，因此此时未指定 `deployment` 的 `decision` 问题会导致加载错误。
+- **其他名称** 都会报错。Decision 2.0 模型（Kai、Eos、Sol、Nox、Lux、Vega）回答你自己的问题：
+  把它声明为 deployment，并在问题的 `deployment` 中指定它。
+
+每个规模都有自己的模块阈值；切换时，未设置阈值的模块会采用它们：
+
+| 决策模型 | Prompt guard | Domain | PII | Fact check | User feedback |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `Vela-2.0-0.3B` | 0.75 | 0.28 | 0.01 | 0.93 | 0.37 |
+| `Vela-2.0-0.8B` | 0.71 | 0.38 | 0.07 | 0.994 | 0.34 |
+| `Vela-2.0-4B` | 0.63 | 0.45 | 0.05 | 0.9984 | 0.33 |
+| `Vela-2.0-9B` | 0.42 | 0.46 | 0.14 | 0.998 | 0.35 |
+| `Vela-1.0` | 0.5 | 0.5 | 0.9 | 0.95 | 0.7 |
+
+配置自己设置的规则阈值（例如内置配方的）保持不变；记录把每个阈值映射到每个规模（例如 `mom-v1` 的
+`prompt_attack` 0.75 在 0.8B 上是 0.71，在 4B 上是 0.63，在 9B 上是 0.42）。`system.<module>` 行或 binding
+会让该信号留在它自己的模型上。
 
 ## 硬件 {#hardware}
 
 | 硬件 | 状态 | 用法 |
 | --- | --- | --- |
 | CPU | 已验证 | 每个路由器镜像都能开箱即用地在 CPU 上运行模型。 |
-| AMD Instinct MI300X、MI325X | 已验证 | 设置 `device: rocm:0`。`vllm-sr serve --platform amd` 和 `extproc-rocm` 镜像自带 ROCm 版 PyTorch。 |
+| AMD Instinct MI300X、MI325X | 已验证 | 设置 `device: rocm:0`。`vllm-sr serve --platform amd` 和 `vllm-sr-rocm` 镜像自带 ROCm 版 PyTorch。 |
 | NVIDIA GPU | 可用，尚未验证 | 设置 `device: cuda:0`。`vllm-sr serve --platform nvidia` 自带 CUDA 版 PyTorch。 |
 | Intel GPU | 可用，尚未验证 | 设置 `device: xpu:0`，并把运行时安装在 XPU 版 PyTorch 旁边。 |
-| Apple 芯片 | 可用，尚未验证 | 设置 `device: mps`，并在 macOS 上安装运行时。 |
+| Apple 芯片 | 本版本仅支持 CPU | 在 macOS 上 docker 目标使用 CPU 镜像，因为 Docker 的 Linux 虚拟机拿不到 GPU。通过宿主机使用 GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/4636)。 |
 
 在 AMD GPU 上，路由器镜像自带运行时经过验证的软件栈：ROCm 7.2 版 PyTorch 2.12、FLA 0.5.2，以及为 ROCm 构建的 `causal-conv1d` 1.7.0。
 其中的 `causal-conv1d` 也包含 MI200 和 MI350 GPU 的代码，因此用到它的模型在这些 GPU 上也能运行，但只有 MI300X 和 MI325X 经过验证。

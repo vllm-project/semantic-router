@@ -20,6 +20,7 @@ import {
   type RouterLayerKey,
   type RouterSystemKey,
 } from './configPageRouterSectionCatalog'
+import { DECISION_MODEL_HINT, DECISION_MODELS } from './decisionModelSupport'
 
 export type { RouterLayerKey, RouterSystemKey } from './configPageRouterSectionCatalog'
 export type RouterConfigSectionData = Partial<Record<RouterSystemKey, unknown>>
@@ -766,7 +767,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'model_id',
           label: 'Model ID Override',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Guard',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
         { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
@@ -798,7 +799,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'model_id',
           label: 'Model ID Override',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Feedback',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
         { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
@@ -808,40 +809,47 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'system_models':
       return [
         {
+          name: 'decision_model',
+          label: 'Decision Model',
+          type: 'select',
+          options: [...DECISION_MODELS],
+          description: `Answers the built-in signals and every decision question that names no deployment. ${DECISION_MODEL_HINT}. A binding below keeps its signal on another model.`,
+        },
+        {
           name: 'prompt_guard',
           label: 'Prompt Guard Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Guard',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'domain_classifier',
           label: 'Domain Classifier Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Domain',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'pii_classifier',
           label: 'PII Classifier Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-PII',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'fact_check_classifier',
           label: 'Fact Check Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-FactCheck',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'hallucination_detector',
           label: 'Hallucination Detector Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Halu',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
         {
           name: 'feedback_detector',
           label: 'Feedback Detector Binding',
           type: 'text',
-          placeholder: 'models/Vela-1.0-Encoder-307M-Feedback',
+          placeholder: 'models/Vela-2.0-0.3B',
         },
       ]
     case 'embedding_models':
