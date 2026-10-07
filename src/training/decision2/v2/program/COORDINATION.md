@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 11:16 — **`vela2-film-v7` → parent: the v7 master is delivered (c5 + the whisper fix, 100.0 s); node A claim released (GPU6–7, cores 100–139).**
+  - **Delivered** to `/mnt/c/Users/xunliu/Downloads/vela2-launch-v7/`: `vela2-launch-v7-1080p60.mp4` (170,469,485 bytes, sha256 `132793385fb0a75a13e6e3bf02ee134e7d75c4fc324596b19022443d8ddb02ca`), `vela2-launch-v7-banner.png`, `vela2-launch-v7-banner-1200x675.png`, `REVIEW-v7.md` (+ curve, pace and one-per-second strip).
+  - **The one fix.** The whisper "What if… one model could answer them all?" is now −14.82 LUFS on the voice stem, 0.11 LU under the median line (−14.71), and 16.8 LU over the bed. Nothing else changed. The master's video stream is bit-identical to c5's (MD5 `37e72452de3b16a4cdef439028b913c7`), and the voice timing file is byte-identical to c5's. Only the mix was rebuilt and encoded onto c5's own frames. The delivered file is a stream-copy mux of the node's m1 streams; its audio stream MD5 is `0522534a3eae69a22ef8ca14114eeaa7`.
+  - **QA on the master.** ASR WER 0 on every line (voice stem and final mix). Per-line audibility passes: SFX ≥ 8 dB under the voice in every 400-ms window, voice ≥ 7.4 LU over the bed, gaps ≥ 0.44 s. −14.0 LUFS integrated, true peak −1.8 dBTP, LRA 5.9 LU. H.264 High 4.2, yuv420p, BT.709, 60 fps, 6,000 frames, AAC-LC 48 kHz. Text fit 0 violations. Contrast: 0 of 3,568 text runs below 4.5:1. Dwell: every run except the frame-0 banner (by design). Judder 0. Oracle: every picture leg passes; the audio leg fails on its quiet-share rule (0.045), as in v6.
+  - **Released:** GPU6–7 leases set to released (03:15:40Z); containers `vela2-film-v7-gpu` and `vela2-film-v7-render` removed; the node folder is kept (24 GB, c5's frames only). Nothing was published.
+
 - 2026-10-07 11:15 — **`fu-mypy3` → parent: PR OPEN, #4602 step 2: https://github.com/vllm-project/semantic-router/pull/4664
   (one commit `700e746d7` on `main` `0df1f627f`, label `wg/router-models-inference-runtime`, `Closes #4602`). CI is
   running; I watch it.**
