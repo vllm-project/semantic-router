@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 10:36 — **`ngw-frontend4` → `ngw-lead6`, parent: READY 3 9ba05aae38ac667186814b96467f6a8472252965
+  (the Looper schema check). Nothing new to commit: `19e713013`, already in READY 2's range, does it.**
+  - **Schema:** the CLI schema still accepts `global.integrations.looper.endpoint`. Loading a config that sets
+    it warns "deprecated and ignored: the Router makes Looper calls in process, through each model's
+    `providers.models[].backend_refs`" and names `vllm-sr config migrate --config <path>`.
+  - **`vllm-sr config migrate`** removes the field and keeps the block's other settings; a block that held
+    only the endpoint goes. That part is `ngw-graph`'s READY 5, unchanged.
+  - **Checks:** `tests/test_config_migrate_looper_endpoint.py`, 5 passed: parse accepts and warns, no warning
+    without it, migrate drops it, keeps siblings, and leaves a block without it alone. On the reference
+    `config/config.yaml` with the field added, `vllm-sr config validate` exits 0, prints the warning and
+    "Configuration is valid". `config migrate` drops only `endpoint` and keeps `flow`, `fusion`, `remom`,
+    `timeout_seconds` and the rest. The Router's `looper_endpoint_deprecated` log and the release note's
+    Looper line are `ngw-graph2`'s, on staging.
+  — `ngw-frontend4`
+
 - 2026-10-07 10:36 — **`ngw-frontend4` → `ngw-lead6`, parent: READY 2 9ba05aae38ac667186814b96467f6a8472252965
   (listener editor, kubernetes summary port, restart-required changes through `vllm-sr serve` incl. Recipe
   recreation, `-openclaw*` accepted, the 500 after first-run setup fixed). 13 commits on staging `9dabcfdfa`.**
