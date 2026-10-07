@@ -11,32 +11,32 @@ Face revision, so the same name always loads the same files.
 
 ## By task
 
-| You want to | Model | Size | Notes |
+| You want to | Default model | Vela 1.0 specialist | Notes |
 | --- | --- | --- | --- |
-| Route by subject (math, law, code, ...) | `vllm-sr/Vela-1.0-Encoder-307M-Domain` | 307M | 14 domains |
-| Spot requests that need fact checking | `vllm-sr/Vela-1.0-Encoder-307M-FactCheck` | 307M | It flags the need; it does not check facts |
-| Read how a user reacts to the last answer | `vllm-sr/Vela-1.0-Encoder-307M-Feedback` | 307M | Satisfied, needs clarification, wrong answer, wants something different, no feedback |
-| Tell text requests from image requests | `vllm-sr/Vela-1.0-Encoder-307M-Modality` | 307M | Reads the written request only |
-| Find personal information | `vllm-sr/Vela-1.0-Encoder-307M-PII` | 307M | 17 entity types, with exact character spans; Vela 2.0 finds them too, in the same call as its other questions |
-| Stop prompt injection and jailbreaks | `vllm-sr/Vela-1.0-Encoder-307M-Guard` | 307M | |
-| Flag unsafe content | `vllm-sr/Vela-1.0-Encoder-307M-Safety` or `-Shield` | 307M | Shield is an alternative safety model |
-| Name the kind of risk | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | 307M | 12 independent hazard categories with published thresholds |
-| Check an answer against its sources | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | 307M | Marks unsupported spans of the answer; Vela 2.0 marks them too |
-| Embeddings for cache, memory, RAG and tools | `vllm-sr/Vela-1.0-Encoder-307M-Embedding` | 307M | Smaller sizes and fewer layers trade quality for speed |
-| Larger or instructed text embeddings | `Qwen/Qwen3-Embedding-0.6B` | 0.6B | 1,024 dimensions |
-| Rerank retrieved documents | `vllm-sr/Vela-1.0-Encoder-307M-Reranker` | 307M | |
-| Embed text, images and audio together | `vllm-sr/Vela-1.0-Omni-Nano` or `-Mini` | 164M / 1.36B | Mini is more accurate and accepts longer text |
-| Ask your own questions in plain language | A decision model (next section) | 0.6B to 27B | |
+| Route by subject (math, law, code, ...) | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Domain` | 14 domains |
+| Spot requests that need fact checking | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-FactCheck` | It flags the need; it does not check facts |
+| Read how a user reacts to the last answer | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Feedback` | Satisfied, needs clarification, wrong answer, wants something different, no feedback |
+| Tell text requests from image requests | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Modality` | Reads the written request only |
+| Find personal information | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-PII` | 17 entity types, with exact character spans |
+| Stop prompt injection and jailbreaks | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Guard` | |
+| Flag unsafe content | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Safety` or `-Shield` | Shield is an alternative safety model |
+| Check an answer against its sources | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | Marks unsupported spans of the answer |
+| Name the kind of risk | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | | 12 independent hazard categories with published thresholds |
+| Embeddings for cache, memory, RAG and tools | `vllm-sr/Vela-1.0-Encoder-307M-Embedding` | | Smaller sizes and fewer layers trade quality for speed |
+| Larger or instructed text embeddings | `Qwen/Qwen3-Embedding-0.6B` | | 0.6B, 1,024 dimensions |
+| Rerank retrieved documents | `vllm-sr/Vela-1.0-Encoder-307M-Reranker` | | |
+| Embed text, images and audio together | `vllm-sr/Vela-1.0-Omni-Nano` or `-Mini` | | 164M / 1.36B; Mini is more accurate and accepts longer text |
+| Ask your own questions in plain language | A decision model (next section) | | 0.6B to 27B |
 
-The task models all run well on a CPU: on 16 cores the median Vela Domain
-request takes about 12 ms, three times faster than the native bindings that
-earlier releases used
+With no model configured, the built-in signals the table gives Vela 2.0 0.3B
+run on one deployment of it, in one call per request
+([below](#vela-20)). Hazard, embeddings, reranking and Omni run their own
+models. The Vela 1.0 specialists remain built in, and naming them restores
+them. Each is a 307M encoder that runs well on a CPU: on 16 cores the median
+Vela Domain request takes about 12 ms
 ([measurements](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela1-performance.md)).
-Most of them read up to 32,768 tokens; longer or shorter limits are listed on
-each model card and in `GET /v1/models`. These are the defaults: with no model
-configured, each built-in signal runs on its Vela 1.0 model.
-[Vela 2.0](#vela-20) can answer all of them in one call, except Hazard,
-embeddings, reranking and Omni.
+Most read up to 32,768 tokens; the 0.3B reads 8,192. Each model card and
+`GET /v1/models` list the limits.
 
 ## Decision models
 
@@ -60,69 +60,98 @@ and answer the same kinds of questions. Vela 2.0 (`vllm-sr/Vela-2.0-0.3B`,
 spans of text (`span`), and the router routes on both. Its router span head
 also answers the [`pii`](tutorials/signal/learned/pii.md#vela-20) and
 [`hallucination`](tutorials/signal/learned/hallucination.md#vela-20) signals,
-so one deployment can replace the separate PII and Halu models. On a CPU,
-run the 0.3B. On a GPU, the larger sizes read inputs of up to 16,384 tokens
+which is how the default 0.3B deployment replaces the separate PII and Halu
+models. On a CPU, run the 0.3B. On a GPU, the larger sizes read inputs of up to 16,384 tokens
 (the 0.3B reads 8,192): the 0.8B costs the least of them, and the 4B and 9B
 are the most accurate.
 
 `vllm-srun models` prints every built-in model with its pinned revision.
 
-## Run the built-in signals on Vela 2.0 {#vela-20}
+## The built-in signals run on Vela 2.0 0.3B {#vela-20}
 
-Vela 2.0 is public on Hugging Face
-([collection](https://huggingface.co/collections/vllm-sr/vela-20)). One
-deployment of it can answer the router's domain, jailbreak, safety, fact
-check, user feedback, modality, PII and hallucination signals. Each signal
-asks the question the model was trained on for it, with the labels of its
-Vela 1.0 model, so rules, thresholds and policies read the answer as before,
-and a request asks all of them in one call. Bind the signals to the
-deployment:
+The domain, prompt guard, safety, fact check, user feedback, modality, PII and
+hallucination signals default to `vllm-sr/Vela-2.0-0.3B`
+([collection](https://huggingface.co/collections/vllm-sr/vela-20)). All of them
+share one deployment, `@Vela-2.0-0.3B`, and a request asks every one of its
+questions in one call.
+
+- **Questions:** each signal asks the question the model was trained on for it,
+  with the labels of its Vela 1.0 model, so rules and policies read the answer
+  as before. PII and hallucination use the model's span head, so their spans
+  keep exact character offsets.
+- **CPU profile:** on a CPU the deployment runs `max_speed`, a packed copy of
+  the model's weights. It gives the same answers to within about 0.00001 and
+  is about 1.6 times faster than `exact`.
+- **Input:** the model reads up to 8,192 tokens of a request and truncates the
+  rest. The Vela 1.0 Guard and PII specialists scan up to 32K in windows.
+- **Thresholds:** the module defaults are calibrated to the 0.3B's scores
+  (below).
+
+The maintainers chose this default although it misses two goals they had set
+for it ([#4639](https://github.com/vllm-project/semantic-router/issues/4639)):
+level or better accuracy on every signal, and level or better latency on a
+CPU. Measured through the Router on the
+[router signal suite](https://huggingface.co/datasets/vllm-sr/router-signal-suite)
+([A/B record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-router-signals.md)):
+
+- **Ahead:** prompt guard (held-out AUC +0.026; on the E2E attack fixtures it
+  blocks all six attacks, Vela 1.0 Guard five) and safety (+0.052 held-out, and
+  ahead on every set). One model and one call serve every signal.
+- **Level:** PII and hallucination on held-out and fresh files.
+- **Behind:** domain (accuracy −0.037 held-out, −0.087 fresh), fact check
+  (held-out AUC −0.102), user feedback (−0.038 held-out, −0.181 fresh) and
+  modality (held-out AUC −0.180). The 0.3B misses most requests that ask for a
+  new image.
+- **CPU time:** every request carries the questions, their options and the 17
+  PII labels (at least 560 tokens) through one 307M-parameter forward, where
+  each Vela 1.0 model reads only the request. On 12 CPU cores, for the five
+  request signals of the
+  [latency record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md):
+
+LATENCY_TABLE_DOC
+
+[#4668](https://github.com/vllm-project/semantic-router/issues/4668) works on the
+CPU latency. On a GPU (`use_cpu: false`), the 0.3B answers the same questions
+in about 7 ms at the median on one AMD Instinct MI325X
+([measurements](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-performance.md#against-the-vela-10-path)).
+
+### Thresholds
+
+Each default threshold keeps the Vela 1.0 specialist's operating point on the
+suite's dev split: its false-positive rate, or for a confidence floor its share
+of requests below the floor. The defaults are prompt guard 0.75, domain 0.28,
+PII 0.03, fact check 0.93 and user feedback 0.37.
+
+- **PII:** the 0.3B returns a span only when it is confident in it, so 0.03
+  accepts every span it returns.
+- **Other models:** a module that runs any other model and sets no threshold
+  keeps its earlier default.
+- **Your own rule thresholds** (`routing.signals.jailbreak[].threshold` and the
+  like) are yours, and they were likely chosen for Vela 1.0. The record maps
+  each Vela 1.0 value to the 0.3B: prompt guard 0.3–0.9 → 0.74–0.77, PII → 0.03,
+  safety 0.5 → 0.46, fact check 0.95 → 0.93, modality `confidence_threshold`
+  0.7 → 0.51.
+
+### Restore the Vela 1.0 specialists
+
+One block brings them back. Module thresholds you do not set return to the
+specialists' defaults with them:
 
 ```yaml
 global:
   model_catalog:
-    deployments:
-      vela2:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-0.3B
-        device: cpu
-    bindings:
-      domain_classifier: {deployment: vela2, contract: label_distribution.v1}
-      prompt_guard: {deployment: vela2, contract: label_distribution.v1}
-      fact_check_classifier: {deployment: vela2, contract: label_distribution.v1}
-      feedback_detector: {deployment: vela2, contract: label_distribution.v1}
-      modality_detector: {deployment: vela2, contract: label_distribution.v1}
-      pii_classifier: {deployment: vela2, contract: token_spans.v1}
-      hallucination_detector: {deployment: vela2, contract: token_spans.v1}
+    system:
+      safety: models/Vela-1.0-Encoder-307M-Safety
+      prompt_guard: models/Vela-1.0-Encoder-307M-Guard
+      domain_classifier: models/Vela-1.0-Encoder-307M-Domain
+      pii_classifier: models/Vela-1.0-Encoder-307M-PII
+      fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
+      hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
+      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
 ```
 
-A safety rule binds as `safety.<rule name>`. The model reads the whole text,
-so the deployment takes no `input` and the signals no `window`; remove the
-`prompt_guard` and PII windows if your configuration sets them. Hazard
-categories, embeddings, multimodal embeddings and reranking keep their Vela
-1.0 models. To go back to Vela 1.0 for a signal, remove its binding.
-
-What you get is one model and one call for every signal, and spans for PII
-and unsupported claims. What it costs is CPU time: the defaults stay on Vela
-1.0 because on a CPU the 0.3B is much slower than the separate Vela 1.0
-models. Every request carries the questions, their options and the 17 PII
-labels (at least 560 tokens) through one 307M-parameter forward, where each
-Vela 1.0 model reads only the request. Through the Router on 12 CPU cores,
-for the five request signals of the
-[latency record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md):
-
-| Router on 12 CPU cores | p50 | p95 | Requests per second |
-| --- | ---: | ---: | ---: |
-| Vela 1.0 (the defaults) | 16 ms | 59 ms | 38 |
-| Vela 2.0 0.3B | 128 ms | 154 ms | 7.5 |
-
-On the [router signal suite](https://huggingface.co/datasets/vllm-sr/router-signal-suite)'s
-held-out rows, through the Router, the 0.3B is ACCURACY_SUMMARY. The
-[A/B record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-router-signals.md)
-has every signal and file. [#4668](https://github.com/vllm-project/semantic-router/issues/4668)
-evaluates Vela 2.0 as the default on GPUs: on one AMD Instinct MI325X the 0.3B
-answers the same router questions in about 7 ms at the median
-([measurements](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-performance.md#against-the-vela-10-path)).
+A modality classifier names `models/Vela-1.0-Encoder-307M-Modality` as its
+`classifier.model_path`. To restore one signal only, name its line alone.
 
 ## Hardware
 

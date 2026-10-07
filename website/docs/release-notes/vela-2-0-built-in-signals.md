@@ -1,47 +1,74 @@
-# Release note: Vela 2.0 for the built-in signals
+# Release note: the built-in signals default to Vela 2.0 0.3B
 
 Vela 2.0 is public on Hugging Face:
 [`vllm-sr/Vela-2.0-0.3B`, `-0.8B`, `-4B` and `-9B`](https://huggingface.co/collections/vllm-sr/vela-20),
 Apache-2.0, with no token needed. The model runtime keeps the revisions it
 pins, so nothing it loads changes.
 
-## The built-in signals can run on Vela 2.0
+## What changes by default
 
-Domain, jailbreak, safety, fact check, user feedback and modality now run on
-a Vela 2.0 deployment, as PII and hallucination already did. Each signal asks
-the question the model was trained on for it, with the labels of the Vela 1.0
-model it stands in for, so rules, thresholds and policies read the answer as
-before. A request asks one deployment every question about the same text in
-one call. Bind the signals to one deployment to opt in; see
-[Choose a model](model-runtime/choose-a-model.md#vela-20).
+With no model configured, the domain, prompt guard, safety, fact check, user
+feedback, modality, PII and hallucination signals run on one deployment of
+`vllm-sr/Vela-2.0-0.3B`, `@Vela-2.0-0.3B`, in one call per request. They no
+longer run on eight Vela 1.0 specialists.
 
-Hazard categories, embeddings, multimodal embeddings and reranking have no
-Vela 2.0 question and keep their Vela 1.0 models.
+- **Questions:** each signal asks the question the model was trained on for it,
+  with the labels of its Vela 1.0 model, so rules and policies read the answer
+  as before.
+- **CPU profile:** on a CPU the deployment runs `max_speed`, which gives the
+  same answers to within about 0.00001.
+- **Input:** the model reads up to 8,192 tokens of a request and truncates the
+  rest. The Vela 1.0 Guard and PII specialists scanned up to 32K in windows.
+- **Modality:** a `modality_detector` with `method: classifier` and no
+  `classifier.model_path` now runs the 0.3B. It used to be a configuration
+  error.
+- **What stays:** Hazard, embeddings, multimodal embeddings and the reranker
+  keep their Vela 1.0 models.
+- **Operator:** the operator's `prompt_guard.model_id` defaults to the 0.3B,
+  and its `threshold` to 0.75. A `SemanticRouter` created earlier keeps the
+  values it stored.
 
-## The defaults stay on Vela 1.0
+## The maintainers chose this default against two of its goals
 
-With no model configured, every built-in signal still runs on its Vela 1.0
-model. [#4639](https://github.com/vllm-project/semantic-router/issues/4639)
-set two conditions for a switch, measured on a CPU: accuracy level or better
-for every signal, and end-to-end router latency level or better. The latency
-condition fails by a wide margin. On 12 CPU cores the Router answers a request
-on the 0.3B in about 128 ms at the median, against 16 ms on the Vela 1.0
-models, and serves about a fifth of the requests per second. Every 0.3B
-request carries its questions, their options and the 17 PII labels (at least
-560 tokens) through one 307M-parameter forward, where each Vela 1.0 model
-reads only the request. The
-[A/B record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-router-signals.md)
-has the latency and the accuracy of every signal on the router signal suite.
-[#4668](https://github.com/vllm-project/semantic-router/issues/4668) evaluates
-Vela 2.0 as the default on GPUs.
+[#4639](https://github.com/vllm-project/semantic-router/issues/4639) asked for
+accuracy level or better on every signal and router latency level or better,
+both measured on a CPU. The maintainers chose to switch although both fail.
+Through the Router, on the
+[router signal suite](https://huggingface.co/datasets/vllm-sr/router-signal-suite)
+([A/B record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-router-signals.md)):
 
-## What else changes
+- **Ahead:** prompt guard (held-out AUC +0.026) and safety (+0.052).
+- **Level:** PII and hallucination on held-out and fresh files.
+- **Behind:** domain (accuracy −0.037 held-out), fact check (held-out AUC
+  −0.102), user feedback (−0.038 held-out, −0.181 fresh) and modality
+  (held-out AUC −0.180).
+- **CPU latency:** on 12 cores a request takes LAT_V2_P50 ms at the median
+  against LAT_V1_P50 ms on Vela 1.0, and the Router serves LAT_V2_RPS against
+  LAT_V1_RPS requests per second. Every request carries the questions, their
+  options and the 17 PII labels (at least 560 tokens) through one forward.
+  [#4668](https://github.com/vllm-project/semantic-router/issues/4668) works on
+  the CPU latency. On a GPU the 0.3B answers in about 7 ms.
 
-- A modality detector whose model comes from a `modality_detector` binding
-  no longer needs `classifier.model_path`.
-- A consumer window (`prompt_guard.window`, a safety module's `window`) on a
-  signal bound to a Vela 2.0 deployment fails preparation with a message that
-  says to remove it: the model reads the whole text.
+## Thresholds
 
-Nothing changes for a configuration that binds no signal to a Vela 2.0
-deployment.
+The module defaults are recalibrated to the 0.3B's scores so that each keeps
+the Vela 1.0 specialist's operating point on the suite's dev split: prompt guard
+0.5 → 0.75, domain 0.5 → 0.28, PII 0.9 → 0.03, fact check 0.95 → 0.93, user
+feedback 0.7 → 0.37.
+
+- **PII:** the model returns a span only when it is confident in it, so 0.03
+  accepts every span it returns.
+- **Other models:** a module that runs any other model and sets no threshold
+  keeps its earlier default.
+- **Maintained configurations:** the recipes and E2E profiles that run the
+  defaults carry the mapped values of their rule thresholds.
+- **Your own rule thresholds** were likely chosen for Vela 1.0: map them with
+  the record's table (prompt guard 0.3–0.9 → 0.74–0.77, PII → 0.03, safety
+  0.5 → 0.46, modality `confidence_threshold` 0.7 → 0.51), or restore Vela 1.0.
+
+## Restore Vela 1.0
+
+One `global.model_catalog.system` block brings the specialists back, with their
+default thresholds; see
+[Choose a model](model-runtime/choose-a-model.md#vela-20). A signal you name
+there alone returns to its specialist, and the others stay on the 0.3B.
