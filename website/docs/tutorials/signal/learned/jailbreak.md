@@ -78,11 +78,13 @@ contract; callers supplying flat text remain responsible for its scope.
 
 ### Token windows for a local classifier
 
-The implicit local `mmbert32k` default scans each text piece in 512-token
-windows with 255 content tokens of overlap. Its document budget comes from the
-registered default Guard model: 32,768 tokens including special tokens. This
-applies only when no recipe model binding or `window` is specified and
-`max_sequence_length` remains zero. Each forward remains bounded to 512 tokens;
+The default prompt guard, Vela 2.0 0.3B, reads each text whole, up to its
+8,192-token input, and takes no window
+([Choose a model](../../../model-runtime/choose-a-model.md#vela-20)). When the
+module runs Vela 1.0 Guard, it scans each text piece in 512-token windows with
+255 content tokens of overlap, within that model's document budget: 32,768
+tokens including special tokens. This applies only when no recipe model binding
+or `window` is specified and `max_sequence_length` remains zero. Each forward remains bounded to 512 tokens;
 a long piece requires multiple forwards. Preparation records the resolved window and document budget
 and checks the loaded model's actual capacity. An incompatible custom artifact
 fails preparation, and a piece exceeding the document budget produces an
@@ -100,7 +102,6 @@ global:
   model_catalog:
     modules:
       prompt_guard:
-        variant: mmbert32k
         max_sequence_length: 32768
         window:
           size: 128
@@ -134,9 +135,9 @@ Outside the implicit default, omitting `window` retains whole-input inference
 or the configured legacy scan. Window sizes and thresholds need separate
 checkpoint evaluation; scanning all tokens does not establish understanding of
 distant context. Quoted attacks and instructions whose meaning depends on
-another window require separate evaluation. Local Candle and ORT model bindings
-can also select token windows; their loaded adapter and graph must support the
-requested execution geometry.
+another window require separate evaluation. Model bindings to a
+[model runtime](../../../model-runtime/guides/safety.md) deployment can also
+select token windows; the model must support the requested window size.
 
 A provider result declaring truncated or incompletely processed input is an
 unresolved scan. Request rules, the text detection APIs, and response scans

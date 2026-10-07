@@ -16,8 +16,8 @@ def document():
             "model_catalog": {
                 "deployments": {
                     "rank": {
-                        "artifact": "models/reranker",
-                        "provider": "candle",
+                        "provider": "model_runtime",
+                        "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Reranker",
                         "device": "cpu",
                         "input": {"max_tokens": 4096, "overflow": "reject"},
                     }

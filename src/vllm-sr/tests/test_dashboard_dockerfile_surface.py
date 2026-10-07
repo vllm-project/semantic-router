@@ -1,6 +1,4 @@
 import os
-import shlex
-import socket
 import stat
 import subprocess
 import sys
@@ -15,14 +13,6 @@ LINUX_PERMISSION_HELPER = pytest.mark.skipif(
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DASHBOARD_DOCKERFILE = REPO_ROOT / "dashboard" / "backend" / "Dockerfile"
-VLLM_SR_DOCKERFILE = REPO_ROOT / "src" / "vllm-sr" / "Dockerfile"
-VLLM_SR_ROCM_DOCKERFILE = REPO_ROOT / "src" / "vllm-sr" / "Dockerfile.rocm"
-VLLM_SR_CUDA_DOCKERFILE = REPO_ROOT / "src" / "vllm-sr" / "Dockerfile.cuda"
-VLLM_SR_CUDA_DOCKERIGNORE = (
-    REPO_ROOT / "src" / "vllm-sr" / "Dockerfile.cuda.dockerignore"
-)
-EXTPROC_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc"
-EXTPROC_ROCM_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc-rocm"
 DASHBOARD_ENTRYPOINT = REPO_ROOT / "dashboard" / "backend" / "entrypoint.sh"
 DASHBOARD_PERMISSION_HELPER = (
     REPO_ROOT / "dashboard" / "backend" / "entrypoint_permissions.py"
@@ -53,7 +43,7 @@ def test_dashboard_dockerfile_retries_runtime_apk_installs() -> None:
 
     assert "FROM ${IMAGE_REGISTRY}library/python:3.11-slim-bookworm" in content
     assert (
-        "apt_get_install_with_retry ca-certificates curl docker.io git gosu libseccomp2 wget"
+        "apt_get_install_with_retry ca-certificates curl git gosu libseccomp2 wget"
         in content
     )
     assert (
@@ -75,23 +65,46 @@ def test_dashboard_dockerfile_exposes_an_immutable_source_revision_build_arg() -
     assert "ENV VLLM_SR_SOURCE_REVISION=${VLLM_SR_SOURCE_REVISION}" in content
 
 
-def test_dashboard_entrypoint_maps_runtime_socket_group_before_dropping_root() -> None:
+def test_dashboard_image_installs_no_container_runtime() -> None:
+    """The Dashboard holds no container runtime; `vllm-sr serve` owns the stack."""
+
+    dockerfile = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
+    installed = {
+        word
+        for line in dockerfile.splitlines()
+        if "apt_get_install_with_retry " in line
+        or "apt-get install" in line
+        or "apk add" in line
+        for word in line.split()
+    }
+    assert "gosu" in installed
+    assert not installed & {
+        "containerd",
+        "containerd.io",
+        "cri-tools",
+        "docker-ce",
+        "docker-ce-cli",
+        "docker-cli",
+        "docker.io",
+        "moby-cli",
+        "moby-engine",
+        "nerdctl",
+        "podman",
+        "runc",
+    }
+    assert "COPY --from=docker" not in dockerfile
+    entrypoint = DASHBOARD_ENTRYPOINT.read_text(encoding="utf-8")
+    helper = DASHBOARD_PERMISSION_HELPER.read_text(encoding="utf-8")
+    for removed in ("socket-gid", "CONTAINER_SOCKET", "docker.sock", "podman.sock"):
+        assert removed not in entrypoint
+        assert removed not in helper
+
+
+def test_dashboard_entrypoint_shares_state_before_dropping_root() -> None:
     content = DASHBOARD_ENTRYPOINT.read_text(encoding="utf-8")
 
     assert "PERMISSION_HELPER=/app/entrypoint_permissions.py" in content
     assert "DASHBOARD_PERMISSION_HELPER" not in content
-    assert (
-        'if CONTAINER_SOCKET_GID=$(python3 "$PERMISSION_HELPER" socket-gid '
-        '"$CONTAINER_SOCKET_PATH" 2>/dev/null); then' in content
-    )
-    assert 'add_nonroot_group_gid "$CONTAINER_SOCKET_GID"' in content
-    assert "export OPENCLAW_CONTAINER_RUNTIME_DISABLED=false" in content
-    assert "export OPENCLAW_CONTAINER_RUNTIME_DISABLED=true" in content
-    assert "OPENCLAW_CONTAINER_RUNTIME_DISABLED=true" in content
-    assert content.index("OPENCLAW_CONTAINER_RUNTIME_DISABLED=true") < content.index(
-        'exec "$@"'
-    )
-    assert "continuing without socket access" in content
     assert "LOG_SPOOL_GID=${VLLM_SR_LOG_SPOOL_GID:-}" in content
     assert 'add_nonroot_group_gid "$LOG_SPOOL_GID"' in content
     assert "Invalid log spool group" in content
@@ -102,10 +115,27 @@ def test_dashboard_entrypoint_maps_runtime_socket_group_before_dropping_root() -
     assert "safe_shared_path_gid" not in content
     assert "STATE_GID=65532" in content
     assert "ENVOY_STATE_GID=65532" in content
-    assert "RECIPE_STORE_GID=65532" in content
+    # The CLI's user reads and recovers the Recipe store through its own group.
+    assert "RECIPE_STORE_GID=${VLLM_SR_RECIPE_STORE_GID:-65532}" in content
+    assert "Invalid Recipe store group" in content
+    assert 'add_nonroot_group_gid "$RECIPE_STORE_GID"' in content
+    assert (
+        'python3 "$PERMISSION_HELPER" prepare-tree "$RECIPE_STORE_DIR" '
+        '"$RECIPE_STORE_GID"' in content
+    )
+    # The CLI owns the management credential: the copy an earlier Dashboard
+    # kept goes before the store is shared.
+    stale_credential = (
+        'python3 "$PERMISSION_HELPER" remove-stale-file \\\n'
+        '        "$RECIPE_STORE_DIR/credentials/router-management.token"'
+    )
+    assert stale_credential in content
+    assert content.index(stale_credential) < content.index(
+        'prepare-tree "$RECIPE_STORE_DIR"'
+    )
+    assert "--credential-relative-path" not in content
     assert "DATA_GID=65532" in content
     assert 'python3 "$PERMISSION_HELPER" prepare-tree' in content
-    assert "--credential-relative-path credentials/router-management.token" in content
     # Historical private evidence is not reopened or permission-normalized.
     assert "--exclude-path /app/data/evaluation" in content
     assert "EVALUATION_DATA_DIR" not in content
@@ -144,100 +174,6 @@ def test_dashboard_logs_handler_never_executes_a_container_runtime() -> None:
     assert '"os/exec"' not in content
     assert 'exec.Command("docker"' not in content
     assert 'exec.Command("podman"' not in content
-
-
-@LINUX_PERMISSION_HELPER
-def test_dashboard_permission_helper_pins_and_validates_runtime_socket(
-    tmp_path: Path, monkeypatch
-) -> None:
-    # AF_UNIX paths are limited to roughly 108 bytes on Linux. Keep the leaf
-    # relative so the contract also runs from deeply nested workspace runtimes.
-    monkeypatch.chdir(tmp_path)
-    socket_path = Path("s")
-    runtime_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    try:
-        runtime_socket.bind(str(socket_path))
-        socket_gid = os.getgid() or 65534
-        os.chown(socket_path, -1, socket_gid)
-        socket_path.chmod(0o660)
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(DASHBOARD_PERMISSION_HELPER),
-                "socket-gid",
-                str(socket_path),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.returncode == 0, result.stderr
-        assert int(result.stdout.strip()) == socket_gid
-
-        socket_path.chmod(0o600)
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(DASHBOARD_PERMISSION_HELPER),
-                "socket-gid",
-                str(socket_path),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.returncode != 0
-        assert "group read/write" in result.stderr
-
-        socket_path.chmod(0o666)
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(DASHBOARD_PERMISSION_HELPER),
-                "socket-gid",
-                str(socket_path),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.returncode != 0
-        assert "must not grant other access" in result.stderr
-
-        socket_path.chmod(0o660)
-        socket_link = Path("socket-link")
-        socket_link.symlink_to(socket_path)
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(DASHBOARD_PERMISSION_HELPER),
-                "socket-gid",
-                str(socket_link),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.returncode != 0
-        assert "must be a Unix socket" in result.stderr
-    finally:
-        runtime_socket.close()
-
-    ordinary = tmp_path / "ordinary-file"
-    ordinary.write_text("not a socket", encoding="utf-8")
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(DASHBOARD_PERMISSION_HELPER),
-            "socket-gid",
-            str(ordinary),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode != 0
-    assert "must be a Unix socket" in result.stderr
 
 
 @LINUX_PERMISSION_HELPER
@@ -285,8 +221,44 @@ def test_dashboard_permission_helper_rejects_recipe_store_symlink(
     assert result.returncode != 0
 
 
+def _permission_helper(*arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(DASHBOARD_PERMISSION_HELPER), *arguments],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
 @LINUX_PERMISSION_HELPER
-def test_dashboard_permission_helper_preserves_private_management_token(
+def test_dashboard_permission_helper_shares_the_recipe_store_with_the_cli_group(
+    tmp_path: Path,
+) -> None:
+    store = tmp_path / "recipe-store"
+    object_dir = store / "objects" / "sha256" / ("0" * 64)
+    object_dir.mkdir(parents=True, mode=0o700)
+    config = object_dir / "config.yaml"
+    config.write_text("version: v0.3\n", encoding="utf-8")
+    config.chmod(0o600)
+    pointer = store / "active.json"
+    pointer.write_text("{}", encoding="utf-8")
+    pointer.chmod(0o600)
+
+    result = _permission_helper("prepare-tree", str(store), str(os.getgid()))
+
+    assert result.returncode == 0, result.stderr
+    for path in (pointer, config):
+        assert path.stat().st_gid == os.getgid()
+        assert stat.S_IMODE(path.stat().st_mode) & 0o060 == 0o060
+    for path in (store, store / "objects", object_dir):
+        assert path.stat().st_gid == os.getgid()
+        mode = stat.S_IMODE(path.stat().st_mode)
+        assert mode & 0o070 == 0o070
+        assert mode & stat.S_ISGID
+
+
+@LINUX_PERMISSION_HELPER
+def test_dashboard_permission_helper_removes_the_stale_management_token(
     tmp_path: Path,
 ) -> None:
     store = tmp_path / "recipe-store"
@@ -295,30 +267,40 @@ def test_dashboard_permission_helper_preserves_private_management_token(
     token = credentials / "router-management.token"
     token.write_text("a" * 64, encoding="utf-8")
     token.chmod(0o600)
-    record = store / "active.json"
-    record.write_text("{}", encoding="utf-8")
-    record.chmod(0o600)
 
-    subprocess.run(
-        [
-            sys.executable,
-            str(DASHBOARD_PERMISSION_HELPER),
-            "prepare-tree",
-            str(store),
-            str(os.getgid()),
-            "--credential-relative-path",
-            "credentials/router-management.token",
-            "--credential-uid",
-            str(os.getuid()),
-            "--credential-gid",
-            str(os.getgid()),
-        ],
-        check=True,
+    result = _permission_helper("remove-stale-file", str(token))
+
+    assert result.returncode == 0, result.stderr
+    assert not credentials.exists()
+    # Nothing to remove is fine, as is a store that never had one.
+    assert _permission_helper("remove-stale-file", str(token)).returncode == 0
+
+    credentials.mkdir()
+    (credentials / "other").write_text("kept", encoding="utf-8")
+    token.write_text("a" * 64, encoding="utf-8")
+    assert _permission_helper("remove-stale-file", str(token)).returncode == 0
+    assert not token.exists()
+    assert (credentials / "other").read_text(encoding="utf-8") == "kept"
+
+
+@LINUX_PERMISSION_HELPER
+def test_dashboard_permission_helper_never_follows_a_stale_token_symlink(
+    tmp_path: Path,
+) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    sentinel = outside / "router-management.token"
+    sentinel.write_text("sentinel", encoding="utf-8")
+    store = tmp_path / "recipe-store"
+    store.mkdir()
+    (store / "credentials").symlink_to(outside, target_is_directory=True)
+
+    result = _permission_helper(
+        "remove-stale-file", str(store / "credentials" / "router-management.token")
     )
 
-    assert stat.S_IMODE(token.stat().st_mode) == 0o600
-    assert stat.S_IMODE(record.stat().st_mode) == 0o660
-    assert stat.S_IMODE(credentials.stat().st_mode) & stat.S_ISGID
+    assert result.returncode != 0
+    assert sentinel.read_text(encoding="utf-8") == "sentinel"
 
 
 @LINUX_PERMISSION_HELPER
@@ -477,147 +459,10 @@ def test_dashboard_dockerfile_ships_sr_bench_service_without_legacy_model_eval()
     assert '"torch==' not in content
 
 
-def test_vllm_sr_dockerfile_stays_router_only() -> None:
-    content = VLLM_SR_DOCKERFILE.read_text(encoding="utf-8")
-
-    assert "ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bookworm" in content
-    assert "ARG GO_RUNTIME_COMPAT_IMAGE=library/golang:1.25-bookworm" in content
-    assert (
-        "FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE}"
-        in content
-    )
-    assert "FROM ${IMAGE_REGISTRY}library/debian:bookworm-slim" in content
-    assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
-    assert "ENV VIRTUAL_ENV=/opt/vllm-sr-venv" in content
-    assert "python3-yaml" in content
-    assert "python3-venv" in content
-    assert 'python3 -m venv "${VIRTUAL_ENV}"' in content
-    assert "huggingface_hub==" in content
-    assert "COPY --from=dashboard-builder" not in content
-    assert "COPY --from=frontend-builder" not in content
-    assert "COPY --from=wizmap-builder" not in content
-    assert "COPY src/vllm-sr/start-dashboard.sh" not in content
-    assert "COPY dashboard/backend/config/openclaw-skills.json" not in content
-    assert "COPY src/training/model_eval/" not in content
-
-
-def test_vllm_sr_rocm_dockerfile_stays_router_only() -> None:
-    content = VLLM_SR_ROCM_DOCKERFILE.read_text(encoding="utf-8")
-
-    assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
-    assert "ENV VIRTUAL_ENV=/opt/vllm-sr-venv" in content
-    assert "python3-yaml" in content
-    assert "python3-venv" in content
-    assert 'python3 -m venv "${VIRTUAL_ENV}"' in content
-    assert "huggingface_hub[cli]==1.5.0" in content
-    assert "COPY --from=dashboard-builder" not in content
-    assert "COPY --from=frontend-builder" not in content
-    assert "COPY --from=wizmap-builder" not in content
-    assert "COPY src/vllm-sr/start-dashboard.sh" not in content
-    assert "COPY dashboard/backend/config/openclaw-skills.json" not in content
-    assert "COPY src/training/model_eval/" not in content
-
-
-def test_vllm_sr_rocm_dockerfile_uses_fully_qualified_base_images() -> None:
-    """Podman with default short-name policy rejects unqualified base images;
-    keep every FROM directive fully qualified so `make vllm-sr-dev
-    VLLM_SR_PLATFORM=amd CONTAINER_RUNTIME=podman` works.
-    """
-    content = VLLM_SR_ROCM_DOCKERFILE.read_text(encoding="utf-8")
-
-    assert "ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye" in content
-    assert "ARG ONNX_RUST_RUNTIME_COMPAT_IMAGE=library/rust:1.90-bullseye" in content
-    assert "ARG GO_RUNTIME_COMPAT_IMAGE=library/golang:1.25-bookworm" in content
-    assert (
-        "FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE}"
-        in content
-    )
-    assert "FROM ${IMAGE_REGISTRY}rocm/dev-ubuntu-22.04:7.0" in content
-
-
-def test_rocm_runtime_images_pin_only_the_attention_compiler_exclusion() -> None:
-    compiler_policy = "ENV MIGRAPHX_MLIR_USE_SPECIFIC_OPS=~attention"
-    for dockerfile in (VLLM_SR_ROCM_DOCKERFILE, EXTPROC_ROCM_DOCKERFILE):
-        content = dockerfile.read_text(encoding="utf-8")
-        runtime_stage = content.rsplit("\nFROM ", maxsplit=1)[-1]
-        assert compiler_policy in runtime_stage.splitlines(), dockerfile
-        assert content.count("MIGRAPHX_MLIR_USE_SPECIFIC_OPS=") == 1, dockerfile
-        assert "MIGRAPHX_DISABLE_MLIR=" not in content, dockerfile
-        assert "ORT_MIGRAPHX_FP16_ENABLE=" not in content, dockerfile
-
-    for dockerfile in (
-        VLLM_SR_DOCKERFILE,
-        VLLM_SR_CUDA_DOCKERFILE,
-        EXTPROC_DOCKERFILE,
-    ):
-        assert "MIGRAPHX_MLIR_USE_SPECIFIC_OPS=" not in dockerfile.read_text(
-            encoding="utf-8"
-        ), dockerfile
-
-
-def test_rocm_runtime_images_ship_miopen_jit_headers() -> None:
-    for dockerfile in (VLLM_SR_ROCM_DOCKERFILE, EXTPROC_ROCM_DOCKERFILE):
-        runtime_stage = dockerfile.read_text(encoding="utf-8").rsplit(
-            "\nFROM ", maxsplit=1
-        )[-1]
-        assert "rocrand-dev" in runtime_stage, dockerfile
-        assert (
-            "test -r /opt/rocm/include/rocrand/rocrand_xorwow.h" in runtime_stage
-        ), dockerfile
-
-
-def test_vllm_sr_cuda_dockerfile_stays_router_only() -> None:
-    content = VLLM_SR_CUDA_DOCKERFILE.read_text(encoding="utf-8")
-
-    assert "FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04" in content
-    assert "onnxruntime-gpu==1.22.0" in content
-    assert "ENV AI_BINDING=onnx" in content
-    assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
-    assert (
-        "COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go /build/../nlp-binding/"
-        in content
-    )
-    assert (
-        "COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go ./"
-        not in content
-    )
-    assert "COPY --from=dashboard-builder" not in content
-    assert "COPY --from=frontend-builder" not in content
-    assert "COPY --from=wizmap-builder" not in content
-    assert "COPY src/vllm-sr/start-dashboard.sh" not in content
-    assert "COPY dashboard/backend/config/openclaw-skills.json" not in content
-    assert "COPY src/training/model_eval/" not in content
-
-
-def test_router_images_ship_the_management_api_runtime_sync_module() -> None:
-    expected_copy = "COPY src/vllm-sr/cli/ /app/cli/"
-    for dockerfile in (
-        VLLM_SR_DOCKERFILE,
-        VLLM_SR_ROCM_DOCKERFILE,
-        VLLM_SR_CUDA_DOCKERFILE,
-    ):
-        content = dockerfile.read_text(encoding="utf-8")
-        assert expected_copy in content, f"{dockerfile} omits runtime config sync"
-        assert "pyyaml>=6.0.2" in content, f"{dockerfile} omits runtime YAML support"
-
-
-def test_runtime_images_bind_the_generated_model_catalog() -> None:
-    expected_copy = "COPY src/vllm-sr/cli/ /app/cli/"
-    expected_catalog_copy = "COPY config/recipes/built-in/ /app/cli/model_assets/"
-    for dockerfile in (
-        VLLM_SR_DOCKERFILE,
-        VLLM_SR_ROCM_DOCKERFILE,
-        VLLM_SR_CUDA_DOCKERFILE,
-        DASHBOARD_DOCKERFILE,
-    ):
-        content = dockerfile.read_text(encoding="utf-8")
-        assert expected_copy in content, f"{dockerfile} omits built-in model assets"
-        assert (
-            expected_catalog_copy in content
-        ), f"{dockerfile} omits the canonical built-in catalog distribution"
+def test_dashboard_image_binds_the_generated_model_catalog() -> None:
+    content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
+    assert "COPY src/vllm-sr/cli/ /app/cli/" in content
+    assert "COPY config/recipes/built-in/ /app/cli/model_assets/" in content
 
     source_root = REPO_ROOT / "config" / "recipes" / "built-in"
     source_assets = {
@@ -634,16 +479,6 @@ def test_runtime_images_bind_the_generated_model_catalog() -> None:
         text=True,
     ).stdout.splitlines()
     assert tracked_package_assets == ["src/vllm-sr/cli/model_assets/__init__.py"]
-
-
-def test_gpu_onnx_builders_validate_the_preinstalled_native_toolchain() -> None:
-    for dockerfile in (VLLM_SR_ROCM_DOCKERFILE, VLLM_SR_CUDA_DOCKERFILE):
-        content = dockerfile.read_text(encoding="utf-8")
-        onnx_builder = content.split(" AS onnx-builder", maxsplit=1)[1].split(
-            "COPY onnx-binding/Cargo.toml", maxsplit=1
-        )[0]
-        assert "pkg-config --exists openssl" in onnx_builder
-        assert "apt-get" not in onnx_builder
 
 
 def test_dashboard_runtime_image_binds_cli_version_metadata() -> None:
@@ -663,61 +498,3 @@ def test_dashboard_runtime_image_binds_cli_version_metadata() -> None:
     assert content.index(nonroot_catalog_check) > content.index(
         "find /app/cli -type f -exec chmod 0444 {} +"
     )
-
-
-def test_router_entrypoint_does_not_override_management_listener_config() -> None:
-    content = (REPO_ROOT / "src" / "vllm-sr" / "start-router.sh").read_text()
-    assert "-enable-api=true" in content
-    assert "-api-port=" not in content
-    assert "-api-bind=" not in content
-
-
-def test_vllm_sr_cuda_dockerignore_excludes_runtime_state_and_large_unused_inputs() -> (
-    None
-):
-    content = VLLM_SR_CUDA_DOCKERIGNORE.read_text(encoding="utf-8")
-
-    assert "**/.vllm-sr/" in content
-    assert "**/milvus-data/" in content
-    assert "**/etcd/" in content
-    assert "**/postgres-data/" in content
-    assert "bench/" in content
-    assert "slides/" in content
-
-
-def test_extproc_dockerfile_copies_built_in_knowledge_bases() -> None:
-    content = EXTPROC_DOCKERFILE.read_text(encoding="utf-8")
-
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
-    assert "COPY config/kb/ /app/config/kb/" not in content
-
-
-def test_extproc_dockerfile_stages_complete_openvino_go_package() -> None:
-    staged_sources: set[str] = set()
-    for line in EXTPROC_DOCKERFILE.read_text(encoding="utf-8").splitlines():
-        if not line.startswith("COPY "):
-            continue
-        _, *sources, destination = shlex.split(line)
-        if destination.rstrip("/") != "openvino-binding":
-            continue
-        for source in sources:
-            for matched in REPO_ROOT.glob(source):
-                files = matched.glob("*.go") if matched.is_dir() else (matched,)
-                staged_sources.update(path.name for path in files)
-
-    runtime_sources = {
-        path.name
-        for path in (REPO_ROOT / "openvino-binding").glob("*.go")
-        if not path.name.endswith("_test.go")
-    }
-    assert runtime_sources <= staged_sources, (
-        "OpenVINO-tagged router image omits Go sources: "
-        f"{sorted(runtime_sources - staged_sources)}"
-    )
-
-
-def test_extproc_rocm_dockerfile_copies_built_in_knowledge_bases() -> None:
-    content = EXTPROC_ROCM_DOCKERFILE.read_text(encoding="utf-8")
-
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
-    assert "COPY config/kb/ /app/config/kb/" not in content

@@ -576,7 +576,11 @@ def test_continuity_separates_steady_and_switching_runs_with_equal_accuracy() ->
     assert steady["accuracy"] == switching["accuracy"] == mixed["accuracy"] == 0.5
     assert steady["selected_models"] == switching["selected_models"]
     assert steady["decisions"] == switching["decisions"]
-    unchanged = {"unknown_model_requests": 0, "multi_inference_tasks": 0}
+    unchanged = {
+        "session_mode": "stateless",
+        "unknown_model_requests": 0,
+        "multi_inference_tasks": 0,
+    }
     assert steady["continuity"] == {
         "multi_request_tasks": 2,
         "switched_tasks": 0,

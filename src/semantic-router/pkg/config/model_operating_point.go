@@ -7,9 +7,10 @@ import (
 	"strings"
 )
 
-// OperatingPointReference selects an immutable interpretation of model scores.
-// Relative paths resolve inside the deployment artifact. No policy is discovered
-// implicitly; its model, tokenizer, execution and thresholds are checked at load.
+// OperatingPointReference pins the package policy that interprets a scores
+// head: Path names the policy file inside the deployment artifact and SHA256
+// its bytes. The model runtime verifies the file and reports its digest on the
+// head's card; preparation rejects the binding when the two differ.
 type OperatingPointReference struct {
 	Path   string `yaml:"path" json:"path" jsonschema:"required"`
 	SHA256 string `yaml:"sha256" json:"sha256" jsonschema:"required"`
@@ -27,11 +28,4 @@ func (r OperatingPointReference) Validate() error {
 		return fmt.Errorf("operating_point.sha256 must contain 64 lowercase hexadecimal characters")
 	}
 	return nil
-}
-
-func (r OperatingPointReference) ResolvePath(artifact string) string {
-	if filepath.IsAbs(r.Path) {
-		return r.Path
-	}
-	return filepath.Join(ResolveModelPath(artifact), r.Path)
 }

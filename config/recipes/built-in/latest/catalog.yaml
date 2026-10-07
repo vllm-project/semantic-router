@@ -5,10 +5,10 @@ release: unreleased
 compatibility:
   cli:
     min: 0.3.0
-    max_exclusive: 0.5.0
+    max_exclusive: 0.6.0
   router:
     min: 0.3.0
-    max_exclusive: 0.5.0
+    max_exclusive: 0.6.0
   config_schema: v0.3
   required_features:
   - entrypoints
@@ -23,7 +23,7 @@ defaults:
 assets:
 - id: mom-v1
   bundle: mom-v1
-  sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
+  sha256: sha256:575a6dd560d689e5423a9d06c4e0c3542a930b404f44a7f9442ca85e0ad38449
 protocols:
 - id: openai/chat-completions@1
   display_name: OpenAI Chat Completions
@@ -391,6 +391,16 @@ providers:
     verification:
       status: claimed
       verified_at: '2026-09-06'
+      source: https://ai.baidu.com/ai-doc/AISTUDIO/Mmhslv9lf
+  - catalog: baidu/ernie-4.5-21b-a3b
+    relationship: first_party
+    id: ernie-4.5-21b-a3b
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
       source: https://ai.baidu.com/ai-doc/AISTUDIO/Mmhslv9lf
 - id: baidu-qianfan
   display_name: Baidu Qianfan
@@ -1724,6 +1734,17 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://developers.openai.com/api/docs/models/gpt-5.4
+  - catalog: openai/gpt-5.4-mini
+    relationship: first_party
+    id: gpt-5.4-mini
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://developers.openai.com/api/docs/models/gpt-5.4-mini
   - catalog: openai/gpt-5.5
     relationship: first_party
     id: gpt-5.5
@@ -2924,6 +2945,20 @@ providers:
       status: claimed
       verified_at: '2026-09-06'
       source: https://huggingface.co/baidu/ERNIE-4.5-300B-A47B-PT
+  - catalog: baidu/ernie-4.5-21b-a3b
+    relationship: self_hosted
+    id: baidu/ERNIE-4.5-21B-A3B-PT
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: active
+    restrictions:
+      minimum_vllm_version: 0.10.2
+      excluded_vllm_versions:
+      - 0.11.0
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT/blob/87db95487941cb39592ee0abca3b9155a6d19c5c/README.md
   - catalog: nvidia/nemotron-cascade-2-30b-a3b
     relationship: self_hosted
     id: nvidia/Nemotron-Cascade-2-30B-A3B
@@ -3345,6 +3380,19 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct
+  - catalog: tencent/hunyuan-7b-instruct
+    relationship: self_hosted
+    id: tencent/Hunyuan-7B-Instruct
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    restrictions:
+      minimum_vllm_version: 0.10.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
   - catalog: zai/glm-5.1
     relationship: self_hosted
     id: zai-org/GLM-5.1
@@ -3498,6 +3546,17 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B
+  - catalog: microsoft/phi-4-reasoning-plus
+    relationship: self_hosted
+    id: microsoft/Phi-4-reasoning-plus
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://huggingface.co/microsoft/Phi-4-reasoning-plus/blob/69baf8528e1bcf05f475034d9e5dd32875ed125f/README.md
   - catalog: cohere/tiny-aya-global
     relationship: self_hosted
     id: CohereLabs/tiny-aya-global
@@ -5090,6 +5149,44 @@ models:
   - moe
   - long_context
   released_at: '2025-06-30'
+- id: baidu/ernie-4.5-21b-a3b
+  display_name: ERNIE 4.5 21B A3B
+  description: Baidu's open-weight 21B-parameter text MoE model with 3B active parameters.
+  kind: physical
+  publisher: Baidu
+  presentation:
+    logo: package:baidu
+    monogram: E
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT
+    license: Apache-2.0
+  family: ernie-4.5
+  parameter_size: 21B (3B active)
+  revision: 87db95487941cb39592ee0abca3b9155a6d19c5c
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Baidu
+    status: claimed
+    verified_at: '2026-09-24'
+    source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT/blob/87db95487941cb39592ee0abca3b9155a6d19c5c/README.md
+  tags:
+  - open_weights
+  - moe
+  - long_context
+  - efficient
+  released_at: '2025-06-30'
 - id: bytedance/seed-2.1-pro
   display_name: Seed2.1 Pro
   description: ByteDance Seed's highest-capability Seed2.1 model for real-world productivity, coding, and multimodal agents.
@@ -6559,6 +6656,43 @@ models:
   - efficient
   - hybrid
   released_at: '2025-07-09'
+- id: microsoft/phi-4-reasoning-plus
+  display_name: Phi-4 Reasoning Plus
+  description: Open-weight 14B Phi-4 reasoning model with additional reinforcement learning for math, science, and coding.
+  kind: physical
+  publisher: Microsoft
+  presentation:
+    logo: package:microsoft
+    monogram: Φ
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-plus
+    license: MIT
+  family: phi-4
+  parameter_size: 14B
+  revision: 69baf8528e1bcf05f475034d9e5dd32875ed125f
+  released_at: '2025-04-30'
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - reasoning
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Microsoft
+    status: claimed
+    verified_at: '2026-09-24'
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-plus/blob/69baf8528e1bcf05f475034d9e5dd32875ed125f/README.md
+  tags:
+  - open_weights
+  - reasoning
+  - dense
 - id: minimax/minimax-m3
   display_name: MiniMax M3
   description: Native multimodal open-weight MiniMax model with million-token context.
@@ -7612,6 +7746,48 @@ models:
   - proprietary
   - agentic
   released_at: '2026-03-05'
+- id: openai/gpt-5.4-mini
+  display_name: GPT-5.4 mini
+  description: OpenAI small GPT-5.4 model for low-latency coding, computer use, and subagents.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.4-mini
+  family: gpt-5
+  lifecycle: active
+  limits:
+    context_window_size: 400000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt-5.4
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://developers.openai.com/api/docs/models/gpt-5.4-mini
+  tags:
+  - efficient
+  - proprietary
+  - agentic
+  released_at: '2026-03-17'
+  knowledge_cutoff: '2025-08-31'
 - id: openai/gpt-oss-120b
   display_name: GPT-OSS 120B
   description: OpenAI open-weight reasoning model sized for a single 80 GB accelerator.
@@ -8466,6 +8642,45 @@ models:
   - hybrid_reasoning
   - moe
   - efficient
+- id: tencent/hunyuan-7b-instruct
+  display_name: Hunyuan 7B Instruct
+  description: Open-weight hybrid-reasoning dense 7B model with 256K context.
+  kind: physical
+  publisher: Tencent / Hunyuan
+  presentation:
+    logo: package:tencent
+    monogram: H
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct
+    license: Tencent-Hunyuan-7B
+  family: hunyuan
+  parameter_size: 7B
+  revision: 6fd6ecb05e76589bc43b79f49e3619445c6b4593
+  released_at: '2025-07-30'
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Tencent Hunyuan
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+  tags:
+  - open_weights
+  - hybrid_reasoning
+  - dense
+  - efficient
 - id: thinking-machines/inkling
   display_name: Inkling
   description: Thinking Machines Lab's open-weight multimodal frontier MoE model with controllable reasoning effort.
@@ -9219,7 +9434,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
+    asset_sha256: sha256:575a6dd560d689e5423a9d06c4e0c3542a930b404f44a7f9442ca85e0ad38449
 - id: vllm-sr/mom-v1-lite
   display_name: MoM V1 Lite
   description: Prioritizes known cost within task-specific quality bands for tools, reasoning, and economy routing.
@@ -9286,7 +9501,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
+    asset_sha256: sha256:575a6dd560d689e5423a9d06c4e0c3542a930b404f44a7f9442ca85e0ad38449
 - id: vllm-sr/mom-v1-flash
   display_name: MoM V1 Flash
   description: Prioritizes measured first-token or output-token latency within task-specific quality bands.
@@ -9356,7 +9571,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
+    asset_sha256: sha256:575a6dd560d689e5423a9d06c4e0c3542a930b404f44a7f9442ca85e0ad38449
 - id: vllm-sr/mom-v1-ultra
   display_name: MoM V1 Ultra
   description: Combines strict quality selection with bounded review and agent workflows.
@@ -9441,7 +9656,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
+    asset_sha256: sha256:575a6dd560d689e5423a9d06c4e0c3542a930b404f44a7f9442ca85e0ad38449
 - id: vllm-sr/mom-v1-vault
   display_name: MoM V1 Vault
   description: Contains prompt attacks and routes private or sensitive work to the operator-assigned model pools.
@@ -9494,7 +9709,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
+    asset_sha256: sha256:575a6dd560d689e5423a9d06c4e0c3542a930b404f44a7f9442ca85e0ad38449
 benchmarks:
 - id: tiger-ai-lab/mmlu-pro@1.0.0
   display_name: MMLU-Pro
@@ -15388,6 +15603,134 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://artificialanalysis.ai/evaluations/aime-2025
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-mmlu-pro@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    accuracy: 0.66
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-simpleqa@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: openai/simpleqa@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    accuracy: 0.242
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-ifeval@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    accuracy: 0.8
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-aime-2024@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    pass_at_1: 0.279
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-aime-2025@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    pass_at_1: 0.197
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-math-500@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: huggingfaceh4/math-500@1.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    pass_at_1: 0.872
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-livecodebench-v6@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+    dataset_release: v6
+    problem_window: 2024-08-01_to_2025-05-01
+  metrics:
+    pass_at_1: 0.264
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
     redistributable: true
 - id: bytedance/seed-oss-36b-instruct-model-card-supergpqa@1.0.0
   model: bytedance/seed-oss-36b-instruct
@@ -22619,6 +22962,110 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://aclanthology.org/2026.eacl-long.78.pdf
+    redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-aime-2024@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 1
+    sampling_temperature: 0.8
+    maximum_output_tokens: 65536
+    samples_per_prompt: 5
+  metrics:
+    pass_at_1: 0.813
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-aime-2025@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 1
+    sampling_temperature: 0.8
+    maximum_output_tokens: 65536
+    samples_per_prompt: 50
+  metrics:
+    pass_at_1: 0.78
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-gpqa-diamond@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 1
+    sampling_temperature: 0.8
+    maximum_output_tokens: 65536
+  metrics:
+    accuracy: 0.693
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-ifeval@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 2
+    metric_variant: strict
+    sampling_temperature: 0.8
+    maximum_output_tokens: 32768
+  metrics:
+    accuracy: 0.849
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
+    redistributable: true
+- id: microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0
+  model: microsoft/phi-4-reasoning-plus
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-reasoning-plus
+    source_kind: official_technical_report
+    table: Table 2
+    sampling_temperature: 0.8
+    maximum_output_tokens: 32768
+    samples_per_prompt: 5
+  metrics:
+    accuracy: 0.76
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2504.21318v1
     redistributable: true
 - id: independent/minimax-m3-aa-briefcase@1.0.0
   model: minimax/minimax-m3
@@ -30745,6 +31192,117 @@ evaluations:
     verification: claimed
     source: https://openai.com/index/introducing-gpt-5-5/
     redistributable: true
+- id: openai/gpt-5.4-mini-launch-evals-swe-bench-pro@1.0.0
+  model: openai/gpt-5.4-mini
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    variant: GPT-5.4 mini
+    reasoning_effort: xhigh
+    subset: public
+    source_kind: official_launch_evaluation
+  metrics:
+    resolved: 0.544
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-4-mini-and-nano/
+    redistributable: true
+- id: openai/gpt-5.4-mini-launch-evals-terminal-bench-2.0@1.0.0
+  model: openai/gpt-5.4-mini
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    variant: GPT-5.4 mini
+    reasoning_effort: xhigh
+    source_kind: official_launch_evaluation
+  metrics:
+    resolved: 0.6
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-4-mini-and-nano/
+    redistributable: true
+- id: openai/gpt-5.4-mini-launch-evals-gpqa-diamond@1.0.0
+  model: openai/gpt-5.4-mini
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    variant: GPT-5.4 mini
+    reasoning_effort: xhigh
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.88
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-4-mini-and-nano/
+    redistributable: true
+- id: openai/gpt-5.4-mini-launch-evals-humanitys-last-exam-tools@1.0.0
+  model: openai/gpt-5.4-mini
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: xhigh
+  subject:
+    variant: GPT-5.4 mini
+    reasoning_effort: xhigh
+    tool_policy: tools_enabled
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.415
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-4-mini-and-nano/
+    redistributable: true
+- id: openai/gpt-5.4-mini-launch-evals-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.4-mini
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-no-tools
+  reasoning_effort: xhigh
+  subject:
+    variant: GPT-5.4 mini
+    reasoning_effort: xhigh
+    hle_mode: no_tools
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.282
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-4-mini-and-nano/
+    redistributable: true
+- id: openai/gpt-5.4-mini-launch-evals-osworld-verified@1.0.0
+  model: openai/gpt-5.4-mini
+  benchmark: osworld/verified@1.0.0
+  benchmark_profile: official
+  reasoning_effort: xhigh
+  subject:
+    variant: GPT-5.4 mini
+    reasoning_effort: xhigh
+    source_kind: official_launch_evaluation
+  metrics:
+    success_rate: 0.721
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-4-mini-and-nano/
+    redistributable: true
 - id: mmlu-pro-leaderboard/gpt-oss-120b-high@1.0.0
   model: openai/gpt-oss-120b
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
@@ -35888,6 +36446,108 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-aime-2024@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.811
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-aime-2025@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.753
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-math@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: hendrycks/math@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.937
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-gpqa-diamond@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.601
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-olympiadbench@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: opencompass/olympiadbench@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.765
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-ifeval@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.793
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
     redistributable: true
 - id: independent/inkling-aa-briefcase@1.0.0
   model: thinking-machines/inkling
@@ -41507,6 +42167,28 @@ index_results:
   domains:
     frontier_reasoning: 3.33642261353105
     scientific_reasoning: 81.1111111111111
+- model: baidu/ernie-4.5-21b-a3b
+  reasoning_effort: disabled
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 66.0
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.66
+    normalized: 0.66
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: baidu/ernie-4.5-21b-a3b-paper-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - baidu/ernie-4.5-21b-a3b-paper-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 66.0
 - model: bytedance/seed-2.1-pro
   reasoning_effort: unspecified
   index: vllm-sr/agentic@1.0.0
@@ -44213,6 +44895,28 @@ index_results:
   - microsoft/mai-thinking-1-report-mmlu-pro@1.0.0
   domains:
     general_reasoning: 85.0
+- model: microsoft/phi-4-reasoning-plus
+  reasoning_effort: default
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 76.0
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.76
+    normalized: 0.76
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - microsoft/phi-4-reasoning-plus-paper-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 76.0
 - model: minimax/minimax-m3
   reasoning_effort: adaptive
   index: vllm-sr/reasoning@1.0.0

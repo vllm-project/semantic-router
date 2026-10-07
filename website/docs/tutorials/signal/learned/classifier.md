@@ -126,7 +126,7 @@ tree, so the Router rejects a configuration that sets both.
 `prompt_guard.on_error` (`allow` or `block`) remains the compatibility
 default for jailbreak rules. Diagnostics include both the signal error and any
 terminal policy that was applied. See
-[Safety models](../../../installation/runtime/safety).
+[Safety models](../../../model-runtime/guides/safety.md).
 
 `sequence_classifier` classifiers also reference a named external model, but
 use the shared `http_classify` contract and preserve its full label distribution.
@@ -136,10 +136,11 @@ They require at least two labels and do not accept `instructions`, `model_path`,
 or `use_cpu`.
 
 Local classifiers use `model_path` and support two or more declared labels.
-The native Candle backend reads `model_type` from the checkpoint's `config.json`
-and supports classic BERT and ModernBERT, including mmBERT. Set `use_cpu: true`
-for CPU execution. The declared labels must match the checkpoint's numeric
-`id2label` order.
+They run in the [model runtime](../../../model-runtime/guides/classify.md#use-your-own-classifier),
+which loads Hugging Face ModernBERT and mmBERT sequence classifiers; other
+architectures need a [family plugin](../../../model-runtime/plugins.md). Set
+`use_cpu: true` for CPU execution. The declared labels must match the
+checkpoint's numeric `id2label` order.
 Each rule owns a prepared model handle, so a recipe can declare multiple local
 classifiers. Local decision predicates retain `gte: 0.5` or higher. Model or
 label changes prepare a candidate generation before activation; a failed
@@ -150,22 +151,24 @@ in `model_bindings`; this replaces the rule's `model` or `model_path` selector.
 Local and sequence rules support local sequence deployments or HTTP
 `http_classify`, while LLM rules retain their scored extraction instructions
 and require HTTP `http_chat`. These use `label_distribution.v1`, with the rule's
-ordered `labels` as the mapping. See [In-process models](../../../installation/runtime/in-process).
+ordered `labels` as the mapping. See [Run it with the router](../../../model-runtime/deploy.md).
 
 ## Independent labels with a frozen operating point
 
 A multi-label classifier, such as Hazard, can run independently of the Safety
-signal. Bind `label_scores.v1` and an explicit version-2 or version-3 operating-point file.
-The binding has only its path and SHA256; model, tokenizer, execution, label
-order, window geometry and thresholds are bound inside that file. There is no
-implicit file discovery. Relative paths resolve inside the deployment artifact.
+signal. Bind `label_scores.v1` to a model runtime deployment whose package
+ships a version-2 `operating_point.json`. Model, tokenizer, execution, label
+order, window geometry and thresholds are bound inside that file, and the
+runtime verifies it before serving. The binding's `operating_point` pins the
+file: `path` names it inside the deployment artifact and `sha256` its bytes.
+Preparation rejects the binding when the runtime serves a policy with a
+different digest.
 
 ```yaml
 routing:
   model_bindings:
     classifier.content-risk:
       deployment: content-risk-cpu
-      adapter: modernbert
       contract: label_scores.v1
       operating_point:
         path: operating_point.json
@@ -193,10 +196,9 @@ global:
   model_catalog:
     deployments:
       content-risk-cpu:
-        provider: candle
-        artifact: models/content-risk
+        provider: model_runtime
+        artifact: /models/content-risk
         device: cpu
-        precision: fp32
         input:
           max_tokens: 32768
           overflow: reject
@@ -209,11 +211,10 @@ may match. An explicit predicate queries the raw independent score instead.
 Scores do not sum to one. Categorical and unbound classifiers still require
 their existing predicates.
 
-The policy supports Candle float32 or an explicitly qualified ORT native graph.
-The sidecar binds the graph and every external tensor file by SHA256, the
-execution provider, and the physical window capacity. A different graph,
-precision conversion or unlisted provider is rejected. The document budget
-remains separate from each window’s execution budget.
+The model runtime applies the policy in its exact FP32 profile. The sidecar
+binds the weights, tokenizer and window geometry by SHA256; a changed artifact
+is rejected. The document budget remains separate from each window's execution
+budget.
 
 It tokenizes once, covers the original content token IDs with the
 declared overlapping windows, restores special tokens, resets positions, and
@@ -224,42 +225,12 @@ unchanged.
 
 Eval's `metrics.classifier.rules` records policy SHA256, actual provider, device,
 precision, token usage, content-window offsets, thresholds and elapsed time.
-The current owned executor runs one window at a time; its latency includes the
-complete scan. A reference batch size in the sidecar describes calibration
-provenance for version 2. Version 3 requires a B1 reference matching the owned
-executor. Execution errors remain `Unknown`,
+Its latency includes the complete scan. A reference batch size in the sidecar
+describes calibration provenance. Execution errors remain `Unknown`,
 including under `NOT`, and follow the existing `on_unknown` policy.
 
-Version 3 supports a separately qualified CK Flash Attention execution on ROCm.
-Its ONNX execution declaration requires these fields in addition to the graph,
-artifact digests and physical window capacity:
-
-| Field | Required value |
-| --- | --- |
-| `execution_provider` | `ROCMExecutionProvider` |
-| `custom_ops_profile` | `ck_flash_attention` |
-| `execution_mode` | `dynamic_sequence_b1` |
-| `runtime_build` | Exact build string from the qualified owned ORT session |
-| `artifacts` | Complete graph/external-file digests and one `custom-ops` SHA256 |
-
-The custom-op digest binds the installed trusted library
-`/usr/local/lib/libort_ck_flash_attn.so.1`; the policy cannot select a library
-path. Startup verifies that digest before and after model preparation, then
-matches the owned session's graph, library, runtime build and provider evidence.
-CPU fallback is forbidden. The actual input schema must contain rank-two int64
-IDs and attention mask, a dynamic sequence dimension, and a batch dimension
-compatible with B1. Optional position IDs require one broadcast row. A fixed
-sequence graph is rejected, including one that would pad beyond the window cap.
-
-Version 3 also requires `reference_window_batch_size: 1` and
-`batch_order: "ascending original window start"`. A separately calibrated policy
-can bind a 32768-token physical window and a 262144-token document budget; every
-covering window is scored before the per-label maximum is compared to its
-threshold. Changing geometry, document budget, graph or CK library requires a
-new qualified operating point. A matching sidecar proves execution identity,
-not classifier quality: retain separate DEV selection and held-out evaluation
-receipts for the exact document-level aggregation. Existing version-2 policies
-retain their frozen limits and reject version-3 fields.
+Version 3 policies that bound the retired ONNX Runtime CK Flash Attention path
+are no longer accepted; re-qualify the policy on the runtime's exact profile.
 
 To bind an already selected runtime-only score policy to final native files,
 run the packaging tool from `src/semantic-router`:
@@ -272,11 +243,8 @@ go run ../../tools/models/classifier-operating-point/main.go \
 ```
 
 It prints the sidecar SHA256, preserves score/window fields and verifies the
-existing weight identity. It adds final config/tokenizer hashes and the
-Candle execution identity for version 1; version-2 execution declarations are
-preserved and their files verified. An explicitly supplied version-3 policy is
-verified and returned byte-for-byte, including its existing config/tokenizer
-identities. Older policies are never implicitly converted to version 3.
+existing weight identity. It adds final config/tokenizer hashes;
+version-2 execution declarations are preserved and their files verified.
 The tool neither selects thresholds nor qualifies a
 model, and refuses to overwrite an existing file. Publish this sidecar with the
 exact native files; do not copy thresholds between checkpoints.

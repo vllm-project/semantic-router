@@ -72,16 +72,21 @@ func TestFaithfulnessVerifierNilBackendIsTyped(t *testing.T) {
 }
 
 func TestPeerConsistencyVerifierMeanScoringAndFlags(t *testing.T) {
-	nli := func(_ context.Context, premise, hypothesis string) (float32, float32, error) {
-		if strings.Contains(hypothesis, "bad") {
-			return 0.1, 0.8, nil
+	// Read against a peer, an answer containing "bad" has a span at 0.8 and a
+	// "partly" answer one at 0.3; anything else is fully supported.
+	detect := func(_ context.Context, _, _, answer string) ([]string, float32, error) {
+		switch {
+		case strings.Contains(answer, "bad"):
+			return []string{"bad"}, 0.8, nil
+		case strings.Contains(answer, "partly"):
+			return []string{"partly"}, 0.3, nil
 		}
-		return 0.9, 0.05, nil
+		return nil, 0, nil
 	}
-	v := NewPeerConsistencyVerifier(nli, 1.0)
-	res, err := v.Verify(context.Background(), &VerifierRequest{Candidates: []VerifierCandidate{
+	v := NewPeerConsistencyVerifier(detect, 1.0)
+	res, err := v.Verify(context.Background(), &VerifierRequest{Task: "q", Candidates: []VerifierCandidate{
 		{ID: "p0", Content: "good one"},
-		{ID: "p1", Content: "good two"},
+		{ID: "p1", Content: "partly two"},
 		{ID: "p2", Content: "bad three"},
 	}})
 	if err != nil {
@@ -90,26 +95,44 @@ func TestPeerConsistencyVerifierMeanScoringAndFlags(t *testing.T) {
 	if res.Disposition != DispositionTie || res.Kind != VerifierKindPeerConsistency {
 		t.Fatalf("disposition/kind = %q/%q, want tie/peer_consistency", res.Disposition, res.Kind)
 	}
-	// The NLI verdict keys on the candidate (hypothesis), so a good candidate
-	// is entailed by both peers: mean(0.85, 0.85) = 0.85 -> (0.85+1)/2 = 0.925.
-	if math.Abs(res.Scores[0].Confidence-0.925) > 1e-6 {
-		t.Fatalf("p0 score = %v, want 0.925", res.Scores[0].Confidence)
+	// support - penalty * contradiction, mapped from [-1, 1] to [0, 1]:
+	// supported (1 + 1) / 2, partly (0.4 + 1) / 2, contradicted (-0.6 + 1) / 2.
+	for i, want := range []float64{1.0, 0.7, 0.2} {
+		if math.Abs(res.Scores[i].Confidence-want) > 1e-6 {
+			t.Fatalf("p%d score = %v, want %v", i, res.Scores[i].Confidence, want)
+		}
 	}
-	// The bad candidate is contradicted by both peers: mean(-0.7) -> 0.15.
-	if math.Abs(res.Scores[2].Confidence-0.15) > 1e-6 {
-		t.Fatalf("p2 score = %v, want 0.15", res.Scores[2].Confidence)
-	}
-	if res.Scores[0].Flags != nil {
-		t.Fatalf("p0 flags = %v, want none (good candidate is entailed)", res.Scores[0].Flags)
+	if res.Scores[0].Flags != nil || res.Scores[1].Flags != nil {
+		t.Fatalf("flags = %v / %v, want none below a 0.5 contradiction", res.Scores[0].Flags, res.Scores[1].Flags)
 	}
 	if len(res.Scores[2].Flags) != 2 || res.Scores[2].Flags[0] != "p0" || res.Scores[2].Flags[1] != "p1" {
 		t.Fatalf("p2 flags = %v, want [p0 p1] (contradicted by both peers)", res.Scores[2].Flags)
 	}
 }
 
+func TestPeerConsistencyVerifierPenaltyWeighsContradiction(t *testing.T) {
+	detect := func(_ context.Context, _, _, answer string) ([]string, float32, error) {
+		if answer == "bad" {
+			return []string{"bad"}, 0.5, nil
+		}
+		return nil, 0, nil
+	}
+	res, err := NewPeerConsistencyVerifier(detect, 3.0).Verify(context.Background(), &VerifierRequest{Candidates: []VerifierCandidate{
+		{ID: "p0", Content: "good"},
+		{ID: "p1", Content: "bad"},
+	}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// (0.5 - 3 * 0.5 + 3) / (1 + 3).
+	if math.Abs(res.Scores[1].Confidence-0.5) > 1e-6 {
+		t.Fatalf("p1 score = %v, want 0.5", res.Scores[1].Confidence)
+	}
+}
+
 func TestPeerConsistencyVerifierAbstainsWithoutPeers(t *testing.T) {
-	nli := func(_ context.Context, _, _ string) (float32, float32, error) { return 0.6, 0.3, nil }
-	v := NewPeerConsistencyVerifier(nli, 1.0)
+	detect := func(_ context.Context, _, _, _ string) ([]string, float32, error) { return nil, 0, nil }
+	v := NewPeerConsistencyVerifier(detect, 1.0)
 	res, err := v.Verify(context.Background(), &VerifierRequest{Candidates: []VerifierCandidate{
 		{ID: "p0", Content: "only one"},
 	}})
@@ -125,6 +148,19 @@ func TestPeerConsistencyVerifierAbstainsWithoutPeers(t *testing.T) {
 	// Scores stay populated for downstream ranking.
 	if len(res.Scores) != 1 {
 		t.Fatalf("scores = %v", res.Scores)
+	}
+}
+
+func TestPeerConsistencyVerifierDetectorErrorIsTyped(t *testing.T) {
+	detect := func(_ context.Context, _, _, _ string) ([]string, float32, error) {
+		return nil, 0, errors.New("runtime unavailable")
+	}
+	_, err := NewPeerConsistencyVerifier(detect, 1.0).Verify(context.Background(), &VerifierRequest{
+		Candidates: []VerifierCandidate{{ID: "p0", Content: "a"}, {ID: "p1", Content: "b"}},
+	})
+	var verr *VerifierError
+	if !errors.As(err, &verr) || verr.Code != VerifierFailureUnavailable {
+		t.Fatalf("err = %v, want typed unavailable", err)
 	}
 }
 

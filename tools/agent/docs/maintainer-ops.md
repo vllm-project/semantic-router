@@ -128,10 +128,6 @@ artifacts are never promoted automatically.
    Python, crate, and Operator publishers.
 5. Verify every publisher before treating the GitHub release as complete.
 
-Fleet Simulator uses its own package version and tag stream. Keep that release
-independent from the main Router version unless a documented compatibility
-constraint requires coordinated updates.
-
 ## Commands
 
 ```bash

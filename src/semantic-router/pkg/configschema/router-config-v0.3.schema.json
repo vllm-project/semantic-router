@@ -475,15 +475,6 @@
         "use_cpu": {
           "type": "boolean"
         },
-        "use_modernbert": {
-          "type": "boolean"
-        },
-        "use_mmbert_32k": {
-          "type": "boolean"
-        },
-        "variant": {
-          "type": "string"
-        },
         "backend": {
           "$ref": "#/$defs/RemoteClassifierBackend"
         },
@@ -599,24 +590,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "CanonicalExplainerModule": {
-      "properties": {
-        "model_id": {
-          "type": "string"
-        },
-        "threshold": {
-          "type": "number"
-        },
-        "use_cpu": {
-          "type": "boolean"
-        },
-        "model_ref": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "CanonicalFactCheckModule": {
       "properties": {
         "max_sequence_length": {
@@ -629,9 +602,6 @@
           "type": "number"
         },
         "use_cpu": {
-          "type": "boolean"
-        },
-        "use_mmbert_32k": {
           "type": "boolean"
         },
         "model_ref": {
@@ -656,12 +626,6 @@
           "type": "number"
         },
         "use_cpu": {
-          "type": "boolean"
-        },
-        "use_modernbert": {
-          "type": "boolean"
-        },
-        "use_mmbert_32k": {
           "type": "boolean"
         },
         "feedback_mapping_path": {
@@ -700,9 +664,6 @@
         "backend": {
           "type": "string"
         },
-        "endpoint": {
-          "type": "string"
-        },
         "include_explanation": {
           "type": "boolean"
         },
@@ -724,12 +685,6 @@
         "context_window_size": {
           "type": "integer"
         },
-        "enable_nli_filtering": {
-          "type": "boolean"
-        },
-        "nli_entailment_threshold": {
-          "type": "number"
-        },
         "model_ref": {
           "type": "string"
         }
@@ -747,9 +702,6 @@
         },
         "detector": {
           "$ref": "#/$defs/CanonicalHallucinationDetector"
-        },
-        "explainer": {
-          "$ref": "#/$defs/CanonicalExplainerModule"
         }
       },
       "additionalProperties": false,
@@ -782,15 +734,15 @@
           "type": "object",
           "default": {
             "hazard": {
-              "artifact": "models/Vela-1.0-Encoder-307M-Hazard",
+              "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Hazard",
               "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d",
-              "provider": "candle",
+              "provider": "model_runtime",
               "device": "cpu",
-              "precision": "fp32",
               "input": {
                 "max_tokens": 32768,
                 "overflow": "reject"
-              }
+              },
+              "profile": "exact"
             }
           }
         },
@@ -875,9 +827,6 @@
         "use_cpu": {
           "type": "boolean"
         },
-        "use_mmbert_32k": {
-          "type": "boolean"
-        },
         "pii_mapping_path": {
           "type": "string"
         },
@@ -949,9 +898,6 @@
             "type": "string"
           },
           "type": "array"
-        },
-        "variant": {
-          "type": "string"
         },
         "on_error": {
           "type": "string"
@@ -1437,6 +1383,9 @@
     },
     "CanonicalSystemModels": {
       "properties": {
+        "decision_model": {
+          "type": "string"
+        },
         "safety": {
           "type": "string"
         },
@@ -1456,9 +1405,6 @@
           "type": "string"
         },
         "hallucination_detector": {
-          "type": "string"
-        },
-        "hallucination_explainer": {
           "type": "string"
         },
         "feedback_detector": {
@@ -1951,6 +1897,12 @@
         "adaptations": {
           "$ref": "#/$defs/DecisionAdaptationsConfig"
         },
+        "reliability": {
+          "$ref": "#/$defs/DecisionReliability"
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackOverride"
+        },
         "plugins": {
           "items": {
             "$ref": "#/$defs/DecisionPlugin"
@@ -2415,6 +2367,57 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "labels": {
+          "items": {
+            "$ref": "#/$defs/DecisionChoice"
+          },
+          "type": "array"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "head": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionReliability": {
+      "properties": {
+        "total_timeout": {
+          "type": "string"
+        },
+        "per_try_timeout": {
+          "type": "string"
+        },
+        "idle_timeout": {
+          "type": "string"
+        },
+        "first_byte_timeout": {
+          "type": "string"
+        },
+        "retry_count": {
+          "type": "integer"
+        },
+        "retry_on": {
+          "type": "string"
+        },
+        "retriable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "retry_back_off_base": {
+          "type": "string"
+        },
+        "retry_back_off_max": {
+          "type": "string"
+        },
+        "retry_after_max": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -2548,16 +2551,10 @@
         "qwen3_model_path": {
           "type": "string"
         },
-        "gemma_model_path": {
-          "type": "string"
-        },
         "mmbert_model_path": {
           "type": "string"
         },
         "multimodal_model_path": {
-          "type": "string"
-        },
-        "bert_model_path": {
           "type": "string"
         },
         "use_cpu": {
@@ -2742,6 +2739,44 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "FallbackOverride": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_attempts": {
+          "type": "integer"
+        },
+        "total_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "per_attempt_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "retryable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "FallbackPolicy": {
       "properties": {
         "version": {
@@ -2893,7 +2928,7 @@
         "min_keep": {
           "type": "integer"
         },
-        "nli_contradiction_penalty": {
+        "contradiction_penalty": {
           "type": "number"
         },
         "on_error": {
@@ -2971,9 +3006,6 @@
         "enabled": {
           "type": "boolean"
         },
-        "use_nli": {
-          "type": "boolean"
-        },
         "hallucination_action": {
           "type": "string"
         },
@@ -2994,9 +3026,6 @@
         },
         "description": {
           "type": "string"
-        },
-        "use_nli": {
-          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -3431,6 +3460,39 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "tls": {
+          "$ref": "#/$defs/ListenerTLS"
+        },
+        "identity": {
+          "$ref": "#/$defs/ListenerIdentity"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerIdentity": {
+      "properties": {
+        "trust_headers": {
+          "type": "boolean"
+        },
+        "trusted_peers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerTLS": {
+      "properties": {
+        "cert_file": {
+          "type": "string"
+        },
+        "key_file": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -4268,15 +4330,6 @@
         "device": {
           "type": "string"
         },
-        "precision": {
-          "type": "string"
-        },
-        "custom_ops_profile": {
-          "type": "string"
-        },
-        "compilation_cache_dir": {
-          "type": "string"
-        },
         "input": {
           "$ref": "#/$defs/ModelInputBudget"
         },
@@ -4284,6 +4337,12 @@
           "type": "string"
         },
         "endpoint": {
+          "type": "string"
+        },
+        "process": {
+          "type": "string"
+        },
+        "served_name": {
           "type": "string"
         }
       },
@@ -4746,27 +4805,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "PolarityGuardConfig": {
-      "properties": {
-        "mode": {
-          "type": "string"
-        },
-        "nli": {
-          "$ref": "#/$defs/PolarityGuardNLIConfig"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "PolarityGuardNLIConfig": {
-      "properties": {
-        "contradiction_threshold": {
-          "type": "number"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "PreferenceModelConfig": {
       "properties": {
         "use_contrastive": {
@@ -5170,6 +5208,42 @@
         },
         "health_check_timeout": {
           "type": "string"
+        },
+        "connect_timeout": {
+          "type": "string"
+        },
+        "total_timeout": {
+          "type": "string"
+        },
+        "idle_timeout": {
+          "type": "string"
+        },
+        "per_try_timeout": {
+          "type": "string"
+        },
+        "first_byte_timeout": {
+          "type": "string"
+        },
+        "retriable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "retry_back_off_base": {
+          "type": "string"
+        },
+        "retry_back_off_max": {
+          "type": "string"
+        },
+        "retry_after_max": {
+          "type": "string"
+        },
+        "retry_budget_percent": {
+          "type": "number"
+        },
+        "retry_budget_min_concurrency": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -5843,9 +5917,6 @@
         },
         "embedding_model": {
           "type": "string"
-        },
-        "polarity_guard": {
-          "$ref": "#/$defs/PolarityGuardConfig"
         }
       },
       "additionalProperties": false,

@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
 )
 
 // Real-model execution requires an explicit path. A populated local cache must
@@ -47,11 +48,27 @@ func requireRealModel(t *testing.T, override, defaultPath string) string {
 	return path
 }
 
+// managedRuntimeOptions serves a test's consumers from managed model_runtime
+// processes, as the router does.
+func managedRuntimeOptions(t *testing.T) RecipeRuntimeOptions {
+	t.Helper()
+	return RecipeRuntimeOptions{Runtime: servingtest.Managed(t)}
+}
+
+// managedModelRuntime is managedRuntimeOptions for a standalone consumer.
+func managedModelRuntime(t *testing.T) *classifierModelRuntime {
+	t.Helper()
+	models, err := newClassifierModelRuntime(&config.RouterConfig{}, managedRuntimeOptions(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return models
+}
+
 func assertRealModelCPU(t *testing.T, capability binding.Capability) {
 	t.Helper()
-	provider, _ := config.DefaultModelExecution(true)
-	if capability.Provider != provider || capability.Device != "cpu" {
-		t.Fatalf("expected %s CPU execution, got %+v", provider, capability)
+	if capability.Provider != config.ModelRuntimeProvider || capability.Device != "cpu" {
+		t.Fatalf("expected %s CPU execution, got %+v", config.ModelRuntimeProvider, capability)
 	}
 	t.Logf("prepared provider=%s device=%s precision=%s labels=%v", capability.Provider, capability.Device, capability.Precision, capability.Labels)
 }

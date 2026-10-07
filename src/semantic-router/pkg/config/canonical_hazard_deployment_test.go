@@ -43,8 +43,8 @@ func TestDefaultHazardDeploymentIsPinnedAndOptIn(t *testing.T) {
 		t.Fatal("Hazard default has no pinned registry artifact")
 	}
 	want := ModelDeployment{
-		Artifact: model.LocalPath, Revision: model.Revision,
-		Provider: "candle", Device: "cpu", Precision: "fp32",
+		Artifact: model.RepoID, Revision: model.Revision,
+		Provider: ModelRuntimeProvider, Device: "cpu", Profile: "exact",
 		Input: ModelInputBudget{MaxTokens: 32768, Overflow: "reject"},
 	}
 	if deployment != want {
@@ -69,12 +69,10 @@ func TestDefaultHazardNamedBindingRoundTripAndOverride(t *testing.T) {
   model_catalog:
     deployments:
       hazard:
-        artifact: models/Vela-1.0-Encoder-307M-Hazard
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
         revision: 5dd25f2cc3c98f338e6a79b667662d60f936a28d
-        provider: ort
-        device: migraphx:0
-        precision: native
-        compilation_cache_dir: /tmp/router-compilation-cache
+        device: rocm:0
         input:
           max_tokens: 32768
           overflow: reject
@@ -106,7 +104,7 @@ func TestDefaultHazardNamedBindingRoundTripAndOverride(t *testing.T) {
 			if cfg.SafetyModels.Hazard.ModelID != "" {
 				t.Fatal("generic Hazard binding enabled implicit scalar cascade")
 			}
-			if amd && (bound.Deployment.Provider != "ort" || bound.Deployment.Device != "migraphx:0" || bound.Deployment.Precision != "native" || bound.Deployment.CompilationCacheDir != "/tmp/router-compilation-cache") {
+			if amd && (bound.Deployment.Provider != ModelRuntimeProvider || bound.Deployment.Device != "rocm:0") {
 				t.Fatalf("explicit AMD deployment replaced by CPU defaults: %+v", bound.Deployment)
 			}
 			if bound.Deployment.Input != (ModelInputBudget{MaxTokens: 32768, Overflow: "reject"}) {
@@ -138,14 +136,14 @@ global:
   model_catalog:
     deployments:
       hazard:
-        provider: candle
-        artifact: models/operator-hazard
+        provider: model_runtime
+        artifact: /models/operator-hazard
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
 	deployment := cfg.ModelDeployments["hazard"]
-	if deployment.Artifact != "models/operator-hazard" || deployment.Revision != "" || deployment.Input.MaxTokens != 0 {
+	if deployment.Artifact != "/models/operator-hazard" || deployment.Revision != "" || deployment.Input.MaxTokens != 0 {
 		t.Fatalf("operator deployment inherited unrelated default fields: %+v", deployment)
 	}
 }

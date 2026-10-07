@@ -7,15 +7,14 @@ import (
 )
 
 var admissionDeploymentKeys = map[string]bool{
-	"safety":                  true,
-	"hazard":                  true,
-	"prompt_guard":            true,
-	"domain_classifier":       true,
-	"pii_classifier":          true,
-	"fact_check_classifier":   true,
-	"hallucination_detector":  true,
-	"hallucination_explainer": true,
-	"feedback_detector":       true,
+	"safety":                 true,
+	"hazard":                 true,
+	"prompt_guard":           true,
+	"domain_classifier":      true,
+	"pii_classifier":         true,
+	"fact_check_classifier":  true,
+	"hallucination_detector": true,
+	"feedback_detector":      true,
 }
 
 func validateModelAdmissionContracts(cfg *RouterConfig) error {

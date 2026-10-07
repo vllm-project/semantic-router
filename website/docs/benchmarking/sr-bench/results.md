@@ -40,8 +40,17 @@ a switch: switches are counted between the known selections around it, and
 `unknown_model_requests` records it. A request that made several inference calls
 under Fusion, Confidence, Workflows or fallback hides its own model sequence, so
 its task is counted only in `multi_inference_tasks`. A switch is reported as a
-fact, not a penalty. sr-bench sends no session identity, so these runs measure
-routing without session state.
+fact, not a penalty.
+
+Each continuity block also carries `session_mode`. By default it is `stateless`:
+sr-bench sends no session identity, so these runs measure routing without session
+state. A target with `session_mode: session_aware` sends an `x-session-id` header
+on every subject call of a live run. The value stays the same across one task's
+requests in one run and differs between tasks, targets and runs. Judge and
+simulator calls never carry it. Each subject call record keeps the value as
+`session_id`, and that target's continuity blocks report `session_aware`. Preview
+and replay runs report `stateless`. To compare stateless and session-aware
+routing on the same tasks, run one target of each mode against the same Router.
 
 The full sr-bench score uses fixed benchmark weights: MMLU-Pro 10%, SimpleQA 10%,
 GPQA 15%, HLE 15%, ARC 10%, LiveCodeBench 10%, SciCode 10%, Terminal-Bench 10% and

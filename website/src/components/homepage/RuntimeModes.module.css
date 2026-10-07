@@ -1,0 +1,477 @@
+.modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(1rem, 2vw, 1.5rem);
+}
+
+.mode {
+  --mode-accent: var(--site-accent-strong);
+  --mode-tint: var(--site-accent-soft);
+  --mode-edge: color-mix(in srgb, var(--mode-accent) 35%, transparent);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+  height: 100%;
+  min-width: 0;
+  padding: clamp(1.2rem, 2.5vw, 2rem);
+  border: 1px solid var(--mode-edge);
+  border-radius: 1.15rem;
+  background:
+    radial-gradient(ellipse at 85% 0%, var(--mode-tint), transparent 55%),
+    var(--site-surface);
+  box-shadow: var(--site-shadow-soft);
+}
+
+.mode::before {
+  content: '';
+  position: absolute;
+  inset: 0 10% auto;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--mode-accent), transparent);
+}
+
+.engineMode {
+  --mode-accent: #7651cb;
+  --mode-tint: rgba(118, 81, 203, 0.09);
+}
+
+:global([data-theme='dark']) .engineMode {
+  --mode-accent: #bea1ff;
+  --mode-tint: rgba(151, 107, 255, 0.13);
+}
+
+.modeHeader {
+  display: grid;
+  align-content: start;
+  gap: 0.65rem;
+}
+
+.modeIdentity {
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+  min-width: 0;
+  margin-bottom: 0.35rem;
+}
+
+.modeIcon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 3.2rem;
+  height: 3.2rem;
+  border: 1px solid var(--mode-edge);
+  border-radius: 0.85rem;
+  background: var(--mode-tint);
+  color: var(--mode-accent);
+  font-size: 1.65rem;
+}
+
+.brandMark {
+  position: relative;
+  width: 1.9rem;
+  height: 2.15rem;
+  overflow: hidden;
+}
+
+.brandMark img {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: auto;
+  max-width: none;
+  height: 100%;
+}
+
+.brandLogo {
+  width: 100%;
+  max-width: 7rem;
+}
+
+.brandLogo img {
+  width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
+
+.modeKicker {
+  color: var(--mode-accent);
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.modeIndex {
+  margin-left: auto;
+  color: var(--mode-edge);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 2.4rem;
+  letter-spacing: -0.1em;
+}
+
+.modeHeader h3 {
+  margin: 0;
+  color: var(--site-text-strong);
+  font-size: clamp(1.65rem, 2.4vw, 2.3rem);
+  font-weight: 680;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.modeHeader p,
+.modeDetails p {
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.94rem;
+  line-height: 1.65;
+}
+
+.modeHeader .modeStatement {
+  color: var(--site-text-strong);
+  font-size: 1.05rem;
+  font-weight: 580;
+  line-height: 1.45;
+  letter-spacing: -0.02em;
+}
+
+.modeDescription {
+  min-height: 4.7rem;
+}
+
+.modeVisual {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) 1.25rem minmax(0, 1fr) 1.25rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 14rem;
+  padding: 1rem 0.8rem 2.75rem;
+  border: 1px solid var(--site-border);
+  border-radius: 0.85rem;
+  background:
+    radial-gradient(var(--site-border-strong) 0.7px, transparent 0.7px) 0 0 / 12px 12px,
+    var(--site-surface-alt);
+  overflow: hidden;
+}
+
+.visualClient {
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  gap: 0.7rem;
+  color: var(--site-muted-bright);
+  font-size: 0.68rem;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.visualClient svg {
+  font-size: 1.5rem;
+  color: var(--site-muted);
+}
+
+.visualCore {
+  display: grid;
+  min-width: 0;
+  gap: 0.55rem;
+  place-items: center;
+  padding: 1rem 0.6rem;
+  border: 1px solid var(--mode-edge);
+  border-radius: 0.8rem;
+  background: var(--site-surface);
+  box-shadow: 0 0 30px var(--mode-tint);
+  color: var(--mode-accent);
+  font-size: 0.73rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.engineCore {
+  border-radius: 1.5rem;
+  background: linear-gradient(var(--mode-tint), var(--mode-tint)), var(--site-surface);
+}
+
+.connector {
+  position: relative;
+  height: 1px;
+  background: var(--mode-edge);
+}
+
+.connector::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--mode-accent);
+  box-shadow: 0 0 8px var(--mode-tint);
+  animation: modePacket 3.8s ease-in-out infinite;
+}
+
+.backends {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.backends > div {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.45rem;
+  border: 1px solid var(--site-border);
+  border-radius: 0.45rem;
+  background: var(--site-surface);
+  color: var(--site-muted);
+  font-size: 0.65rem;
+}
+
+.backends > div > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.backends svg {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+}
+
+.backends .selectedBackend {
+  border-color: var(--mode-edge);
+  background: linear-gradient(var(--mode-tint), var(--mode-tint)), var(--site-surface);
+  color: var(--mode-accent);
+}
+
+.selectedBackend svg:last-child {
+  margin-left: auto;
+}
+
+.results {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.65rem;
+  border: 1px solid var(--mode-edge);
+  border-radius: 0.6rem;
+  background: var(--site-surface);
+}
+
+.resultType {
+  color: var(--site-muted);
+  font-size: 0.56rem;
+  line-height: 1.4;
+}
+
+.answerTypes {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  color: var(--mode-accent);
+  font-size: 0.62rem;
+  line-height: 1.4;
+}
+
+.answerTypes > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.35rem;
+  justify-content: space-between;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.answerTypes dt {
+  font-weight: 600;
+}
+
+.answerTypes dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.6rem;
+}
+
+.answerTypes code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  overflow-wrap: anywhere;
+}
+
+.answerTypes dd > span {
+  color: var(--site-muted);
+  font-size: 0.55rem;
+}
+
+.visualCaption {
+  position: absolute;
+  inset: auto 0.6rem 0.7rem;
+  display: flex;
+  gap: 0.4rem;
+  justify-content: center;
+  align-items: center;
+  color: var(--mode-accent);
+  font-size: 0.65rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.commandBlock {
+  display: grid;
+  align-content: start;
+  gap: 0.45rem;
+}
+
+.channelBadge {
+  justify-self: end;
+  padding: 0.18rem 0.5rem;
+  border: 1px solid var(--mode-edge);
+  border-radius: 999px;
+  background: var(--mode-tint);
+  color: var(--mode-accent);
+  font-size: 0.63rem;
+  line-height: 1.4;
+}
+
+.command {
+  min-height: 5.4rem;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--site-border);
+  border-radius: 0.6rem;
+  background: var(--site-code-bg);
+  color: var(--site-text);
+  font-size: 0.8rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.command code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.modeDetails {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.endpoints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.72rem;
+}
+
+.endpoints code,
+.modeDetails code {
+  color: var(--mode-accent);
+  background: var(--mode-tint);
+  border: 0;
+}
+
+.modeDetails code {
+  white-space: nowrap;
+}
+
+.modeFooter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1.2rem;
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--site-border);
+  font-size: 0.84rem;
+}
+
+.modeFooter a {
+  color: var(--mode-accent);
+  font-weight: 600;
+}
+
+@media (min-width: 769px) {
+  @supports (grid-template-rows: subgrid) {
+    .modes {
+      row-gap: 1.35rem;
+    }
+
+    .modes > div,
+    .mode {
+      display: grid;
+      grid-row: span 5;
+      grid-template-rows: subgrid;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .modes {
+    grid-template-columns: 1fr;
+  }
+
+  .modeDescription {
+    min-height: 0;
+  }
+
+  .modeIndex {
+    font-size: 2rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .modeVisual {
+    grid-template-columns: minmax(0, 0.75fr) 0.45rem minmax(0, 0.9fr) 0.45rem minmax(0, 1.15fr);
+    padding-inline: 0.5rem;
+    gap: 0.2rem;
+  }
+
+  .modeIndex {
+    display: none;
+  }
+
+  .visualCore {
+    padding-inline: 0.3rem;
+    font-size: 0.63rem;
+  }
+
+  .backends > div {
+    padding: 0.4rem 0.2rem;
+    gap: 0.15rem;
+    font-size: 0.55rem;
+  }
+
+  .backends svg {
+    font-size: 0.65rem;
+  }
+
+  .results {
+    padding: 0.35rem;
+  }
+}
+
+@keyframes modePacket {
+  0%, 10% { left: 0; opacity: 0; }
+  25% { opacity: 1; }
+  70%, 100% { left: calc(100% - 5px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connector::after {
+    animation: none;
+  }
+}

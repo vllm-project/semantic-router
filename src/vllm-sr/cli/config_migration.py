@@ -15,11 +15,21 @@ from cli.config_contract import (
 )
 from cli.config_migration_catalog import migrate_v03_catalog_contract
 from cli.config_migration_global import normalize_global_layout, place_global_block
-from cli.config_migration_model_runtime import migrate_prompt_guard_backend
+from cli.config_migration_looper import drop_looper_endpoint
+from cli.config_migration_model_runtime import (
+    migrate_model_runtime_contract,
+    migrate_prompt_guard_backend,
+)
+from cli.config_migration_notes import MigrationNotes
 
 
-def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
-    """Return a canonical v0.3 config dict from legacy or mixed input data."""
+def migrate_config_data(
+    data: dict[str, Any], notes: MigrationNotes | None = None
+) -> dict[str, Any]:
+    """Return a canonical v0.3 config dict from legacy or mixed input data.
+
+    ``notes`` collects the rewrites and removals an operator should review.
+    """
 
     source = deepcopy(data or {})
     # Historically an omitted listener list meant that the local CLI would
@@ -73,6 +83,9 @@ def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
         router_owns_transport=router_owns_transport,
     )
     migrate_prompt_guard_backend(canonical)
+    notes = notes if notes is not None else MigrationNotes()
+    migrate_model_runtime_contract(canonical, notes)
+    drop_looper_endpoint(canonical, notes)
 
     return canonical
 
@@ -154,12 +167,12 @@ def _move_legacy_routing_blocks(
 def _move_legacy_flat_signal_blocks(
     source: dict[str, Any], routing: dict[str, Any]
 ) -> None:
-    signals = _ensure_dict(routing, "signals")
     for legacy_key, canonical_key in LEGACY_SIGNAL_KEY_TO_CANONICAL.items():
-        if canonical_key in signals:
-            continue
         legacy_value = _clone_list(source.get(legacy_key))
-        if legacy_value:
+        if not legacy_value:
+            continue
+        signals = _ensure_dict(routing, "signals")
+        if canonical_key not in signals:
             signals[canonical_key] = legacy_value
 
 
@@ -329,9 +342,10 @@ def _move_legacy_global_blocks(
     providers: dict[str, Any],
     global_config: dict[str, Any],
 ) -> None:
-    model_catalog = _ensure_dict(global_config, "model_catalog")
-    if "external_models" in providers and "external" not in model_catalog:
-        model_catalog["external"] = deepcopy(providers.pop("external_models"))
+    if "external_models" in providers:
+        model_catalog = _ensure_dict(global_config, "model_catalog")
+        if "external" not in model_catalog:
+            model_catalog["external"] = deepcopy(providers.pop("external_models"))
 
     for key, value in source.items():
         if (

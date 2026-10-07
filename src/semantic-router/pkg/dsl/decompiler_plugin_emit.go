@@ -128,9 +128,6 @@ func emitHallucinationPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	if cfg.Enabled {
 		fmt.Fprintf(sb, "    enabled: true\n")
 	}
-	if cfg.UseNLI {
-		fmt.Fprintf(sb, "    use_nli: true\n")
-	}
 	if cfg.HallucinationAction != "" {
 		fmt.Fprintf(sb, "    hallucination_action: %q\n", cfg.HallucinationAction)
 	}

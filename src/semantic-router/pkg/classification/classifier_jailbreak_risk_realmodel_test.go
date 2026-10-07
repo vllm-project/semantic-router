@@ -9,20 +9,20 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// Use the same owned native adapters and default document policy as startup.
-// No process-global FFI model can satisfy a test for another checkpoint.
+// Use the same consumers and default document policy as startup, served by a
+// managed model runtime.
 func setupRealJailbreakClassifier(t *testing.T) *Classifier {
 	t.Helper()
 	defaults := config.DefaultGlobalConfig()
 	modelPath := requireRealModel(t, "VLLM_SR_JAILBREAK_MODEL", defaults.PromptGuard.ModelID)
-	mappingPath := filepath.Join(modelPath, filepath.Base(defaults.PromptGuard.JailbreakMappingPath))
+	mappingPath := filepath.Join(modelPath, "jailbreak_type_mapping.json")
 	mapping, err := LoadJailbreakMapping(mappingPath)
 	if err != nil {
 		t.Fatalf("load jailbreak mapping: %v", err)
 	}
 	cfg := &config.RouterConfig{}
 	cfg.PromptGuard = defaults.PromptGuard
-	models, err := newClassifierModelRuntime(cfg, nil)
+	models, err := newClassifierModelRuntime(cfg, managedRuntimeOptions(t))
 	if err != nil {
 		t.Fatalf("prepare jailbreak runtime: %v", err)
 	}
@@ -51,7 +51,7 @@ func setupRealJailbreakClassifier(t *testing.T) *Classifier {
 	case *ownedSequenceBackend:
 		assertRealModelCPU(t, prepared.handle.Capability())
 	default:
-		t.Fatalf("expected an owned native jailbreak backend, got %T", backend)
+		t.Fatalf("expected an owned jailbreak backend, got %T", backend)
 	}
 	return classifier
 }

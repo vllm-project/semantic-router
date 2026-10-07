@@ -50,9 +50,10 @@ translation:
 | --- | --- | --- | --- |
 | [Open Intelligence Index 1.0 与 Unified Model Arena](./open-intelligence-index-and-model-arena) | 2026-09-09 | 已实现 | 定义六个开放核心基准、完整案例指数、物理/虚拟排名、运营方证据、路由目标和基准版本迁移。 |
 | [统一模型目录与评估指数](./unified-model-catalog-and-evaluation-index) | 2026-09-04 | 已实现 | 统一提供商、协议、模型、推理、展示、Day-0 和基准比较元数据。 |
+| [Standalone 模式](./standalone-mode) | 2026-10-06 | 提案 | Router 自己提供 OpenAI 兼容接口并代理到后端，standalone 与 extproc 模式共用一个路由核心（[#4623](https://github.com/vllm-project/semantic-router/issues/4623)）。 |
 | [统一配置契约 v0.3](./unified-config-contract-v0-3) | 2026-03-17 | 已实现 | 跨编写和部署面的单一配置契约。 |
 | [多协议适配器架构](./multi-protocol-adaptor) | 2026-02-18 | 提案 | 与协议无关地访问路由引擎。 |
-| [独立 HTTP Gateway](./standalone-http-gateway) | 2026-08-31 | 提案 | 链接路由器包的独立网关二进制；无需 Envoy 即可运行路由，简化部署。 |
+| [独立 HTTP Gateway](./standalone-http-gateway) | 2026-08-31 | 已取代 | 链接路由器包的独立网关二进制；已被 [Standalone 模式](./standalone-mode) 取代。 |
 
 ## 服务集成 {#serving-integrations}
 
@@ -69,3 +70,4 @@ translation:
 - **概念验证**：带有明确生产限制的实验。
 - **已实现**：当前仓库中已体现的契约。
 - **决策记录**：架构选择，包括有意保持在路由器之外的工作。
+- **已取代**：已被后来的提案取代，保留其历史与分析。
