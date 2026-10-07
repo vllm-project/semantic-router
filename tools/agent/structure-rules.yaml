@@ -47,12 +47,6 @@ languages:
       - e2e/**/*.py
       - tools/**/*.py
       - bench/**/*.py
-  rust:
-    globs:
-      - candle-binding/src/**/*.rs
-      - ml-binding/src/**/*.rs
-      - nlp-binding/src/**/*.rs
-      - onnx-binding/src/**/*.rs
   typescript:
     parser: typescript
     globs:
@@ -72,9 +66,6 @@ dependency_rules:
     applies_to:
       - src/semantic-router/**/*.go
       - src/vllm-sr/**/*.py
-      - candle-binding/src/**/*.rs
-      - ml-binding/src/**/*.rs
-      - nlp-binding/src/**/*.rs
     forbidden_literals:
       - github.com/vllm-project/semantic-router/e2e
       - e2e/

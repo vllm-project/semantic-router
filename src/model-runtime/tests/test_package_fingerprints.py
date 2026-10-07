@@ -5,8 +5,8 @@ import shutil
 from pathlib import Path, PureWindowsPath
 
 import pytest
-from vllm_sr_runtime.families.decision2 import package as pkg
-from vllm_sr_runtime.registry.artifacts import sha256_file, sha256_json
+from vllm_srun.families.decision2 import package as pkg
+from vllm_srun.registry.artifacts import sha256_file, sha256_json
 
 
 class WindowsRelativePath(type(Path())):

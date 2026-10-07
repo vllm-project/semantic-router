@@ -2,7 +2,7 @@
 """
 Embedding generation for ML model selection training.
 
-Uses the SAME Qwen3-Embedding model that the router uses via Candle.
+Uses the SAME Qwen3-Embedding model that the router serves through its model runtime.
 This ensures training embeddings match inference embeddings exactly.
 
 The router uses: Qwen/Qwen3-Embedding-0.6B (1024-dim)
@@ -23,8 +23,8 @@ except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
 
 
-# Default embedding model - MUST match router's Candle/Qwen3 model
-# Router uses: Qwen/Qwen3-Embedding-0.6B via Candle (1024-dim)
+# Default embedding model - MUST match the router's Qwen3 embedding model
+# Router uses: Qwen/Qwen3-Embedding-0.6B through the model runtime (1024-dim)
 # We use the same model via sentence-transformers for identical embeddings
 DEFAULT_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 
@@ -77,7 +77,7 @@ class EmbeddingGenerator:
 
         self.model_name = model_name
         print(f"Loading embedding model: {model_name}")
-        print("  (This is the SAME model the router uses via Candle)")
+        print("  (This is the SAME model the router serves through its model runtime)")
 
         # Qwen models require trust_remote_code=True
         is_qwen = "qwen" in model_name.lower()

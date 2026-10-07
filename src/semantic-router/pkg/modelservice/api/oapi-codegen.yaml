@@ -1,4 +1,4 @@
-# Generated client for the model runtime contract (src/model-runtime/vllm_sr_runtime/api/openapi.yaml).
+# Generated client for the model runtime contract (src/model-runtime/vllm_srun/api/openapi.yaml).
 # Regenerate with `make model-runtime-client-generate`; never edit openapi.gen.go by hand.
 package: api
 output: openapi.gen.go

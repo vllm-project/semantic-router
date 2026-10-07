@@ -10,16 +10,11 @@ import (
 )
 
 func TestBuiltInReleaseSkipsTrainingArtifactsWithoutExcludingRuntimeWeights(t *testing.T) {
-	const path = "models/Vela-1.0-Encoder-307M-Feedback"
-	const repo = "vllm-sr/Vela-1.0-Encoder-307M-Feedback"
-	cfg := &config.RouterConfig{
-		MoMRegistry: config.ToLegacyRegistry(),
-		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{ClassifierRules: []config.ClassifierSignalRule{{
-				Name: "feedback", Type: "local", ModelPath: path, Labels: []string{"SAT", "NO_FEEDBACK"},
-			}}},
-		},
-	}
+	const path = "models/Vela-1.0-Encoder-307M-Embedding"
+	const repo = "vllm-sr/Vela-1.0-Encoder-307M-Embedding"
+	cfg := newEmbeddingOnlyConfig()
+	cfg.MoMRegistry = config.ToLegacyRegistry()
+	cfg.MmBertModelPath = path
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -36,10 +31,7 @@ func TestBuiltInReleaseSkipsTrainingArtifactsWithoutExcludingRuntimeWeights(t *t
 			t.Fatalf("optional training artifact would be downloaded: %s", name)
 		}
 	}
-	for _, name := range []string{
-		"config.json", "model.safetensors", "tokenizer.json", "classification_heads.pt",
-		"onnx/layer-22/model.onnx", "onnx/layer-22/model.onnx.data", "onnx/layer-3/model_fa_fp16.onnx",
-	} {
+	for _, name := range []string{"config.json", "model.safetensors", "tokenizer.json"} {
 		if revisionArtifactExcluded(name, spec.ExcludePatterns) {
 			t.Fatalf("runtime artifact was excluded: %s", name)
 		}
@@ -51,13 +43,13 @@ func TestBuiltInReleaseSkipsTrainingArtifactsWithoutExcludingRuntimeWeights(t *t
 		}
 	}
 	// Changing repositories must not inherit another publisher's artifact layout.
-	cfg.MoMRegistry[path] = "example/custom-feedback"
+	cfg.MoMRegistry[path] = "example/custom-embedding"
 	specs, err = BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	custom, ok := findSpecByPath(specs, path)
-	if !ok || custom.RepoID == repo || len(custom.ExcludePatterns) != 0 || custom.Revision != "main" {
+	if !ok || custom.RepoID == repo || custom.Revision != "main" || revisionArtifactExcluded("reproduction/sources/checkpoint/model.safetensors", custom.ExcludePatterns) {
 		t.Fatalf("custom repository inherited built-in policy: %+v", custom)
 	}
 }
@@ -110,26 +102,9 @@ func TestVelaEmbeddingReleasePreservesCompiledRuntimeArtifacts(t *testing.T) {
 			t.Fatalf("optional training artifact would be downloaded: %s", name)
 		}
 	}
-	want := []string{"config.json", "tokenizer.json"}
-	if provider, _ := config.DefaultModelExecution(true); provider == "ort" {
-		for _, graph := range []string{"onnx/layer-22/model.onnx", "onnx/layer-6/model.onnx"} {
-			if !requiresGraphAlternative(spec, graph) || revisionArtifactExcluded(graph, spec.ExcludePatterns) {
-				t.Fatalf("required layer alternative is missing or excluded: %s", graph)
-			}
-		}
-		// Tensor dependencies follow the selected graph's actual external-data
-		// references; their filenames are not required to be model.onnx.data.
-		if !spec.CheckONNX {
-			t.Fatal("selected ONNX graphs would skip external tensor checks")
-		}
-		if revisionArtifactExcluded("onnx/layer-6/model_fa_fp16.onnx", spec.ExcludePatterns) {
-			t.Fatal("AMD optimized graph was excluded")
-		}
-	} else {
-		want = append(want, "model.safetensors")
-		if !revisionArtifactExcluded("onnx/layer-6/model.onnx", spec.ExcludePatterns) {
-			t.Fatal("Candle-only download retained unused ONNX exports")
-		}
+	want := []string{"config.json", "tokenizer.json", "model.safetensors"}
+	if !revisionArtifactExcluded("onnx/layer-6/model.onnx", spec.ExcludePatterns) {
+		t.Fatal("the download retained ONNX exports the runtime never loads")
 	}
 	for _, name := range want {
 		if !slices.Contains(spec.RequiredFiles, name) || revisionArtifactExcluded(name, spec.ExcludePatterns) {

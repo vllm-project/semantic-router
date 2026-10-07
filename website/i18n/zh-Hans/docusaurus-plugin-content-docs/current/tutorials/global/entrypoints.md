@@ -1,8 +1,8 @@
 ---
 title: 入口
-description: 通过标准的 OpenAI 兼容 model 字段，暴露用于选择路由配方的稳定虚拟模型名。
+description: 通过受支持推理 API 的 model 字段，暴露用于选择路由配方的稳定虚拟模型名。
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
   source_file: "docs/tutorials/global/entrypoints.md"
   outdated: false
 ---
@@ -11,11 +11,11 @@ translation:
 
 ## 概览
 
-入口是映射到一个配方的公开虚拟模型名。客户端通过普通的 OpenAI 兼容 `model` 字段选择它，因此不需要 Router 专用 API 或请求头。
+入口是映射到一个配方的公开虚拟模型名。客户端通过受支持的 Chat Completions、Responses 或 Messages API 中的 `model` 字段选择它，无需用 Router 专用 API 或请求头选择配方。客户端连接和会话配置见[接入 Agent Harness](../../installation/agent-harness)。
 
 ## 解决什么问题？
 
-入口解决常见的耦合问题：应用可以请求稳定目标，例如 `vllm-sr/mom-v1-flash`，同时运维人员可以更改该目标背后的模型、阈值或算法。
+让 Harness 保持 `vllm-sr/mom-v1-flash` 等稳定名称，独立调整背后的模型、阈值和算法。
 
 ## 何时使用
 
