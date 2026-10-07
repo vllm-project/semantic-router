@@ -60,6 +60,15 @@ global:
             directory: .vllm-sr/flow-state
 ```
 
+Give every alias a name that no model uses. An alias that is also a model's
+name captures that model's traffic: every request for the model evaluates only
+workflows decisions, so the model can no longer be requested directly, and a
+request that matches no workflows decision fails with
+[`no_route`](../../../api/router.md#routing-errors). The Router still loads
+such a configuration, with a `looper_alias_shadows_model` warning that names the
+alias, whether `providers.models` serves it, and the decisions that route to it;
+`vllm-sr config validate` reports the same warning.
+
 Configure a dynamic Flow decision:
 
 ```yaml
@@ -159,7 +168,7 @@ routing:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/flow"]` | Direct request model slugs that trigger Flow execution |
+| `model_names` | list[string] | `["vllm-sr/flow"]` | Direct request model slugs that trigger Flow execution; use names that no model uses |
 | `state.store_backend` | string | `file` | Pending tool-call workflow state backend: `memory`, `file`, or `redis` |
 | `state.ttl_seconds` | int | `1800` | TTL for pending tool-call workflow state |
 | `mode` | string | `static` | `static` role execution or `dynamic` planner-generated execution |

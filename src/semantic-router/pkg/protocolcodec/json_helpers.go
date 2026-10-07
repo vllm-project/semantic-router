@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -230,7 +231,21 @@ func validateExactJSONArray(body []byte, targetType reflect.Type) error {
 	return nil
 }
 
+// structFieldsByType caches exactJSONStructFields: every request body is
+// validated against the same few wire types.
+var structFieldsByType sync.Map // reflect.Type -> map[string]reflect.Type
+
+// exactJSONStructFields maps a struct type's JSON member names to their field
+// types. The map is shared; callers must not modify it.
 func exactJSONStructFields(targetType reflect.Type) map[string]reflect.Type {
+	if cached, ok := structFieldsByType.Load(targetType); ok {
+		return cached.(map[string]reflect.Type)
+	}
+	cached, _ := structFieldsByType.LoadOrStore(targetType, buildExactJSONStructFields(targetType))
+	return cached.(map[string]reflect.Type)
+}
+
+func buildExactJSONStructFields(targetType reflect.Type) map[string]reflect.Type {
 	fields := make(map[string]reflect.Type)
 	for index := 0; index < targetType.NumField(); index++ {
 		field := targetType.Field(index)

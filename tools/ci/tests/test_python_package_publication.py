@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -346,6 +347,21 @@ class PythonPublisherContractTests(unittest.TestCase):
             channel="preview", version="0.3.0", tag="v0.3.0", snapshot="v0.3"
         )
         self.assertNotEqual(result.returncode, 0)
+
+
+class ProjectMetadataTests(unittest.TestCase):
+    def test_project_links_name_the_repository_and_the_docs_site(self) -> None:
+        pyproject = REPO_ROOT / "src" / "vllm-sr" / "pyproject.toml"
+        urls = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["urls"]
+        self.assertEqual(
+            urls,
+            {
+                "Homepage": "https://vllm-sr.ai",
+                "Documentation": "https://vllm-sr.ai/docs/intro",
+                "Repository": "https://github.com/vllm-project/semantic-router",
+                "Issues": "https://github.com/vllm-project/semantic-router/issues",
+            },
+        )
 
 
 if __name__ == "__main__":

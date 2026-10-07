@@ -45,6 +45,9 @@ def test_install_script_persists_selected_runtime() -> None:
     assert "runtime.env" in content
     assert "CONTAINER_RUNTIME=" in content
 
+    # A failed or empty runtime selection leaves an existing runtime.env untouched.
+    assert 'rm -f "$INSTALL_ROOT/runtime.env"' not in content
+
 
 def test_install_script_launcher_preserves_install_root() -> None:
     content = INSTALL_SCRIPT_PATH.read_text(encoding="utf-8")

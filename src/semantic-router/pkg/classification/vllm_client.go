@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -208,6 +209,9 @@ func (c *VLLMClient) generateWithMessages(
 		var remoteErr *connector.Error
 		if errors.As(err, &remoteErr) && remoteErr.StatusCode != 0 {
 			response, truncated := remoteErr.ResponseBody()
+			if reason := allowlistedRejectionReason(response); reason != "" {
+				return nil, fmt.Errorf("vLLM API returned status %d (%s): %w", remoteErr.StatusCode, reason, err)
+			}
 			return nil, fmt.Errorf("vLLM API returned status %d (response body %d bytes, truncated=%t, not logged): %w", remoteErr.StatusCode, len(response), truncated, err)
 		}
 		return nil, fmt.Errorf("vLLM request failed: %w", err)
@@ -230,4 +234,36 @@ func (c *VLLMClient) Close() error {
 		return c.connector.Close()
 	}
 	return nil
+}
+
+// classifierRejection maps a recognized rejection fragment to fixed client copy.
+type classifierRejection struct {
+	fragment string
+	reason   string
+}
+
+var classifierRejections = []classifierRejection{
+	{
+		fragment: "response_format",
+		reason:   "the classifier backend rejected the response_format this client requires",
+	},
+}
+
+// allowlistedRejectionReason reports the fixed reason for a recognized 4xx
+// rejection, and the empty string otherwise.
+func allowlistedRejectionReason(body []byte) string {
+	var envelope struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &envelope) != nil {
+		return ""
+	}
+	for _, rejection := range classifierRejections {
+		if strings.Contains(envelope.Error.Message, rejection.fragment) {
+			return rejection.reason
+		}
+	}
+	return ""
 }

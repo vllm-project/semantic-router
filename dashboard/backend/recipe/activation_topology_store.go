@@ -13,9 +13,10 @@ const (
 	ActivationTopologySchema   = "vllm-sr/recipe-activation-topology/v1"
 	ManagementCredentialEnv    = "VLLM_SR_DASHBOARD_RECIPE_TOKEN" //nolint:gosec // This is an environment variable name, not a credential.
 	ManagementCredentialRole   = "dashboard_control_plane"
-	managementCredentialFile   = "router-management.token"
 	maxActivationTopologyBytes = 256 << 10
 )
+
+var managementCredentialPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 var managementCredentialPermissions = [...]string{
 	"cache.invalidate",
@@ -56,11 +57,11 @@ func (s *Store) WriteActivationTopology(transaction ActivationTransaction, state
 	if err := validateActivationTopologyState(state); err != nil {
 		return err
 	}
-	if err := writeJSONAtomically(s.topologyStatePath(transaction.ID), state, 0o600); err != nil {
+	if err := writeJSONAtomically(s.topologyStatePath(transaction.ID), state); err != nil {
 		return err
 	}
 	current.TopologyMode = ActivationTopologyManaged
-	return writeJSONAtomically(s.transactionPath(), current, 0o600)
+	return writeJSONAtomically(s.transactionPath(), current)
 }
 
 func (s *Store) ActivationTopology(transaction ActivationTransaction) (ActivationTopologyState, error) {
@@ -348,75 +349,25 @@ func validateStorageSet(values []string) error {
 	return nil
 }
 
-func (s *Store) EnsureManagementCredential() (string, error) {
-	if token, err := validateManagementCredential(os.Getenv(ManagementCredentialEnv)); err == nil {
-		return token, nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.ensureLayout(); err != nil {
-		return "", err
-	}
-	if token, err := s.readManagementCredentialLocked(); err == nil {
-		return token, nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
-	}
-	left, err := randomID()
-	if err != nil {
-		return "", err
-	}
-	right, err := randomID()
-	if err != nil {
-		return "", err
-	}
-	token := left + right
-	if err := writeFileAtomically(s.managementCredentialPath(), []byte(token+"\n"), 0o600); err != nil {
-		return "", err
-	}
-	return token, nil
-}
-
+// ManagementCredential returns the Router management credential that
+// `vllm-sr serve` passes the Dashboard in its environment. The CLI owns it, so
+// the Dashboard never writes it down; without it the Router accepts no bearer
+// authentication from the Dashboard.
 func (s *Store) ManagementCredential() (string, error) {
 	if s == nil {
 		return "", os.ErrNotExist
 	}
-	if token, err := validateManagementCredential(os.Getenv(ManagementCredentialEnv)); err == nil {
-		return token, nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.readManagementCredentialLocked()
-}
-
-func (s *Store) HasManagementCredential() bool {
-	_, err := s.ManagementCredential()
-	return err == nil
-}
-
-func (s *Store) readManagementCredentialLocked() (string, error) {
-	data, err := readBoundedFile(s.managementCredentialPath(), 256)
-	if err != nil {
-		return "", err
-	}
-	return validateManagementCredential(string(data))
-}
-
-func validateManagementCredential(value string) (string, error) {
-	token := strings.TrimSpace(value)
+	token := strings.TrimSpace(os.Getenv(ManagementCredentialEnv))
 	if token == "" {
 		return "", os.ErrNotExist
 	}
-	if len(token) != 64 || !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(token) {
+	if !managementCredentialPattern.MatchString(token) {
 		return "", errors.New("invalid managed Router credential")
 	}
 	return token, nil
 }
 
-func (s *Store) managementCredentialPath() string {
-	return filepath.Join(s.root, "credentials", managementCredentialFile)
+func (s *Store) HasManagementCredential() bool {
+	_, err := s.ManagementCredential()
+	return err == nil
 }
