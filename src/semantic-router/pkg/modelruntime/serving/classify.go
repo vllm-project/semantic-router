@@ -117,6 +117,7 @@ func (r *Runtime) Scores(ctx context.Context, spec config.ResolvedModelBinding) 
 // Tokens binds a token head; spans arrive in code points and leave in UTF-8
 // byte offsets. A truncated input keeps its valid spans and reports
 // tasks.ErrTokenSpansTruncated so the consumer applies its partial-input policy.
+// A PII binding to a decision model asks its ready-made pii question instead.
 func (r *Runtime) Tokens(ctx context.Context, spec config.ResolvedModelBinding) (_ *binding.Resolved[string, tasks.TokenClassificationResult], callErr error) {
 	defer func() { observePreparationFailure(spec, callErr) }()
 	if err := rejectWindowPolicy(spec, "token"); err != nil {
@@ -124,6 +125,13 @@ func (r *Runtime) Tokens(ctx context.Context, spec config.ResolvedModelBinding) 
 	}
 	ctx, cancel := preparationContext(ctx)
 	defer cancel()
+	card, err := r.card(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+	if preset, ok := spanPreset(spec, card); ok {
+		return r.spanTokens(ctx, spec, card, preset)
+	}
 	t, capability, err := r.prepareHead(ctx, spec, kindToken, inputText)
 	if err != nil {
 		return nil, err
@@ -143,7 +151,9 @@ func (r *Runtime) Tokens(ctx context.Context, spec config.ResolvedModelBinding) 
 }
 
 // Grounded binds a hallucination head: the answer is read against its
-// context and question, and spans refer to the answer.
+// context and question, and spans refer to the answer. A binding to a
+// decision model asks its ready-made halu question at the model's own
+// calibrated threshold instead, so threshold applies to heads only.
 func (r *Runtime) Grounded(ctx context.Context, spec config.ResolvedModelBinding, threshold float32) (_ *binding.Resolved[tasks.GroundedTextRequest, tasks.TokenClassificationResult], callErr error) {
 	defer func() { observePreparationFailure(spec, callErr) }()
 	if err := rejectWindowPolicy(spec, "grounded"); err != nil {
@@ -151,6 +161,13 @@ func (r *Runtime) Grounded(ctx context.Context, spec config.ResolvedModelBinding
 	}
 	ctx, cancel := preparationContext(ctx)
 	defer cancel()
+	card, err := r.card(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+	if preset, ok := spanPreset(spec, card); ok {
+		return r.spanGrounded(ctx, spec, card, preset)
+	}
 	t, capability, err := r.prepareHead(ctx, spec, kindToken, inputGrounded)
 	if err != nil {
 		return nil, err
@@ -170,15 +187,7 @@ func (r *Runtime) Grounded(ctx context.Context, spec config.ResolvedModelBinding
 		if err != nil {
 			return out, err
 		}
-		// An empty span set carries no model evidence: no summary, not confidence 1.
-		if len(out.Entities) > 0 {
-			best := out.Entities[0].Confidence
-			for _, entity := range out.Entities[1:] {
-				best = max(best, entity.Confidence)
-			}
-			out.Summary = &tasks.ScoreResult{Value: float64(best)}
-			out.SummarySemantics = &tasks.ScoreSemantics{Unit: "max_hallucinated_token_score", Direction: tasks.HigherIsPositive, Calibrated: false}
-		}
+		summarizeSpans(&out)
 		return out, nil
 	}, warmup)
 }
