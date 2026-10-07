@@ -8,8 +8,8 @@ This directory contains the Router image and lint toolchain Dockerfiles:
 | `Dockerfile.precommit` | Reproducible lint and agent-harness toolchain used by CI. |
 
 `Dockerfile.extproc` builds all five published Router images from one stage
-graph. The router binary, the Vela Omni bundle and the image-routing assets are
-shared; `ACCELERATOR` selects the runtime's PyTorch build, and the target
+graph. The router binary and the image-routing assets are shared;
+`ACCELERATOR` selects the runtime's PyTorch build, and the target
 selects the Kubernetes image or the `vllm-sr serve` stack image:
 
 | Image | Target | `ACCELERATOR` | Platforms |

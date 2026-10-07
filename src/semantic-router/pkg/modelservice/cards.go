@@ -7,8 +7,9 @@ import (
 )
 
 // ModelCard is a served model's description from /v1/models: identity,
-// surfaces, heads, embedding and rerank exits, limits and placement.
-// Preparation checks every task binding against it.
+// surfaces, the question types and presets a decision model answers, heads,
+// embedding and rerank exits, limits and placement. Preparation checks every
+// task binding against it.
 type ModelCard struct {
 	ID             string
 	Family         string
@@ -17,6 +18,8 @@ type ModelCard struct {
 	ModelSHA256    string
 	ManifestSHA256 string
 	Surfaces       []string
+	QuestionTypes  []string
+	Presets        []string
 	Heads          []HeadCard
 	Embedding      *EmbeddingCard
 	Rerank         *RerankCard
@@ -63,6 +66,24 @@ func (c ModelCard) Serves(surface string) bool {
 	return slices.Contains(c.Surfaces, surface)
 }
 
+// Answers reports whether the model answers a question type on /v1/decisions.
+// A card that lists no question types answers the System One types (choice,
+// noul and score).
+func (c ModelCard) Answers(questionType string) bool {
+	if !c.Serves("decisions") {
+		return false
+	}
+	if len(c.QuestionTypes) == 0 {
+		return questionType == "choice" || questionType == "noul" || questionType == "score"
+	}
+	return slices.Contains(c.QuestionTypes, questionType)
+}
+
+// HasPreset reports whether the model defines the named question.
+func (c ModelCard) HasPreset(name string) bool {
+	return c.Serves("decisions") && slices.Contains(c.Presets, name)
+}
+
 // Head returns the named head, or the primary (first) head when name is empty.
 func (c ModelCard) Head(name string) (HeadCard, bool) {
 	if name == "" {
@@ -91,6 +112,7 @@ func (h HeadCard) Accepts(input string) bool {
 func decodeCard(card api.ModelCard) ModelCard {
 	decoded := ModelCard{
 		ID: card.Id, Family: card.Family, Surfaces: append([]string(nil), card.Surfaces...), Ready: card.Ready,
+		QuestionTypes: derefSlice(card.QuestionTypes), Presets: derefSlice(card.Presets),
 		Repo: deref(card.Repo), Revision: deref(card.Revision), ModelSHA256: deref(card.ModelSha256),
 		ManifestSHA256: deref(card.ManifestSha256), Profile: deref(card.Profile), Engine: deref(card.Engine),
 		Accelerator: deref(card.Accelerator), Device: deref(card.Device), Dtype: deref(card.Dtype),

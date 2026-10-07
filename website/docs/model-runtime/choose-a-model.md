@@ -17,11 +17,11 @@ Face revision, so the same name always loads the same files.
 | Spot requests that need fact checking | `vllm-sr/Vela-1.0-Encoder-307M-FactCheck` | 307M | It flags the need; it does not check facts |
 | Read how a user reacts to the last answer | `vllm-sr/Vela-1.0-Encoder-307M-Feedback` | 307M | Satisfied, needs clarification, wrong answer, wants something different, no feedback |
 | Tell text requests from image requests | `vllm-sr/Vela-1.0-Encoder-307M-Modality` | 307M | Reads the written request only |
-| Find personal information | `vllm-sr/Vela-1.0-Encoder-307M-PII` | 307M | 17 entity types, with exact character spans |
+| Find personal information | `vllm-sr/Vela-1.0-Encoder-307M-PII` | 307M | 17 entity types, with exact character spans; Vela 2.0 finds them too, in the same call as its other questions |
 | Stop prompt injection and jailbreaks | `vllm-sr/Vela-1.0-Encoder-307M-Guard` | 307M | |
 | Flag unsafe content | `vllm-sr/Vela-1.0-Encoder-307M-Safety` or `-Shield` | 307M | Shield is an alternative safety model |
 | Name the kind of risk | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | 307M | 12 independent hazard categories with published thresholds |
-| Check an answer against its sources | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | 307M | Marks unsupported spans of the answer |
+| Check an answer against its sources | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | 307M | Marks unsupported spans of the answer; Vela 2.0 marks them too |
 | Embeddings for cache, memory, RAG and tools | `vllm-sr/Vela-1.0-Encoder-307M-Embedding` | 307M | Smaller sizes and fewer layers trade quality for speed |
 | Larger or instructed text embeddings | `Qwen/Qwen3-Embedding-0.6B` | 0.6B | 1,024 dimensions |
 | Rerank retrieved documents | `vllm-sr/Vela-1.0-Encoder-307M-Reranker` | 307M | |
@@ -53,13 +53,17 @@ smallest one that is accurate enough for your questions.
 Decision 1.0 models (`vllm-sr/Decision-1.0-Kai-0.6B`, `-Lex-0.6B`,
 `-Route-0.6B`, `-Eos-0.8B`, `-Sol-2B`, `-Nox-4B`, `-Lux-9B`) are also built in
 and answer the same kinds of questions. Vela 2.0 (`vllm-sr/Vela-2.0-0.3B`,
-`-0.8B`, `-4B`, `-9B`) adds questions that pick several labels or mark spans of
-text; it is a private preview and needs a Hugging Face token with access. On a
-CPU, run the 0.3B. On a GPU, the larger sizes read inputs of up to 16,384
-tokens (the 0.3B reads 8,192): the 0.8B costs the least of them, and the 4B and
-9B are the most accurate.
+`-0.8B`, `-4B`, `-9B`) adds questions that pick several labels (`set`) or mark
+spans of text (`span`), and the router routes on both. Its router span head
+also answers the [`pii`](tutorials/signal/learned/pii.md#vela-20) and
+[`hallucination`](tutorials/signal/learned/hallucination.md#vela-20) signals,
+so one deployment can replace the separate PII and Halu models. It is a
+private preview and needs a Hugging Face token with access. On a CPU, run the
+0.3B. On a GPU, the larger sizes read inputs of up to 16,384 tokens (the 0.3B
+reads 8,192): the 0.8B costs the least of them, and the 4B and 9B are the most
+accurate.
 
-`vllm-sr-runtime models` prints every built-in model with its pinned revision.
+`vllm-srun models` prints every built-in model with its pinned revision.
 
 ## Hardware
 

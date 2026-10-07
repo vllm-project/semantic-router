@@ -21,8 +21,8 @@ func init() {
 }
 
 const (
-	runtimeRequestsMetric    = "vllm_sr_runtime_requests_total"
-	runtimeBundleTasksMetric = "vllm_sr_runtime_bundle_tasks"
+	runtimeRequestsMetric    = "vllm_srun_requests_total"
+	runtimeBundleTasksMetric = "vllm_srun_bundle_tasks"
 	mrBundleRequests         = 3
 )
 

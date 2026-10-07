@@ -14,9 +14,10 @@ for the model download. No GPU is needed.
 
 ## 1. Install
 
-The runtime is a Python package that lives next to the `vllm-sr` CLI in the
-repository. Install both into a virtual environment, with the CPU build of
-PyTorch:
+The runtime is the `vllm-srun` Python package. Every router image ships it, and
+it is not published to PyPI, so on your own machine you install it from a
+checkout of the repository, next to the `vllm-sr` CLI. Install both into a
+virtual environment, with the CPU build of PyTorch:
 
 ```bash
 git clone https://github.com/vllm-project/semantic-router.git
@@ -27,10 +28,18 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install ./src/vllm-sr ./src/model-runtime
 ```
 
+For a GPU, install PyTorch from the
+[index that matches your hardware](https://pytorch.org/get-started/locally/)
+(CUDA or ROCm) instead. On ROCm, answers byte-identical to the released
+packages are guaranteed in the router images, which carry the release's own
+PyTorch build. A `pip` install with the official PyTorch wheel serves the same
+models, but its answers can differ slightly
+([Choose a model](./choose-a-model.md#hardware)).
+
 Check that the runtime sees its built-in models:
 
 ```bash
-vllm-sr-runtime models
+vllm-srun models
 ```
 
 ## 2. Serve a model

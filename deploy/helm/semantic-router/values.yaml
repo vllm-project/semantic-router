@@ -239,7 +239,7 @@ persistence:
   storageClassName: "standard"
   # -- Access mode
   accessMode: ReadWriteOnce
-  # -- Storage size
+  # -- Storage size of the model volume. The runtime downloads the router's models here on first start; Vela Omni Mini alone takes 4.3 GB.
   size: 10Gi
   # -- Annotations for PVC
   annotations: {}

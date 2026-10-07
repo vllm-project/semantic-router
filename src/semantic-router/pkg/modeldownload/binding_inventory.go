@@ -118,16 +118,10 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 	// Built-in module models run through implicit model_runtime deployments,
 	// and the runtime downloads them.
 	servedPaths := scoped.RuntimeServedModelPaths()
-	// A catalog model served from a prepared bundle (the Omni ONNX bundles) is
-	// provisioned in that format; every other embedding model as native weights.
+	// The runtime downloads a runtime-provisioned catalog model (Vela Omni)
+	// itself; every other embedding model is provisioned as native weights.
 	for _, path := range paths {
-		if *path == "" {
-			continue
-		}
-		if catalog := config.GetModelByPath(*path); catalog != nil && catalog.PreparedArtifact != "" {
-			if err := i.addPreparedArtifact(catalog); err != nil {
-				return err
-			}
+		if catalog := config.GetModelByPath(*path); *path != "" && catalog != nil && catalog.RuntimeProvisioned {
 			explicitPaths[config.ResolveModelPath(*path)] = true
 		}
 	}
@@ -184,17 +178,6 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		}
 	}
 	return nil
-}
-
-// addPreparedArtifact provisions a catalog model the runtime serves from its
-// prepared bundle, at the registered release.
-func (i *modelInventory) addPreparedArtifact(catalog *config.ModelSpec) error {
-	path := config.ResolveModelPath(catalog.LocalPath)
-	repo, err := i.registeredRepo(path)
-	if err != nil {
-		return err
-	}
-	return i.add(ModelSpec{LocalPath: path, Revision: modelRevision(path, repo), PreparedArtifact: catalog.PreparedArtifact, ArtifactBundle: catalog.ArtifactBundle, Strict: true})
 }
 
 func (i *modelInventory) addFile(path, artifact, revision string) error {
@@ -272,9 +255,6 @@ func (i *modelInventory) add(next ModelSpec) error {
 		}
 		if next.Revision == "" {
 			next.Revision = previous.Revision
-		}
-		if previous.PreparedArtifact != next.PreparedArtifact || previous.ArtifactBundle != next.ArtifactBundle {
-			return fmt.Errorf("artifact %q is required in conflicting prepared/native formats", next.LocalPath)
 		}
 		next.RequiredFiles = append(previous.RequiredFiles, next.RequiredFiles...)
 		next.RequiredFileGroups = append(previous.RequiredFileGroups, next.RequiredFileGroups...)

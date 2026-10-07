@@ -206,6 +206,14 @@ type ownedTokenBackend struct {
 	closed  bool
 }
 
+// readsWholeText reports whether the prepared binding asks a decision model's
+// ready-made span question, which reads a whole text however long it is.
+func (b *ownedTokenBackend) readsWholeText() bool {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.handle != nil && b.handle.Capability().Preset != ""
+}
+
 func (b *ownedTokenBackend) Init(_ string, _ bool, _ int) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -222,7 +230,7 @@ func (b *ownedTokenBackend) Init(_ string, _ bool, _ int) error {
 	if err != nil {
 		return fmt.Errorf("prepare %s/%s: %w", b.spec.Recipe, b.spec.Name, err)
 	}
-	if err := validateNativeLabelOrder(handle.Capability().Labels, b.labels, nil); err != nil {
+	if err := validateTokenLabels(handle.Capability(), b.labels); err != nil {
 		_ = handle.Close()
 		return fmt.Errorf("prepare %s/%s: %w", b.spec.Recipe, b.spec.Name, err)
 	}

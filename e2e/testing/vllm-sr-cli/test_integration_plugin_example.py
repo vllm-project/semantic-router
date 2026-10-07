@@ -36,17 +36,17 @@ OUTCOME = re.compile(r"returns `(\w+)` for the first text and `(\w+)` for the se
 def _try_it() -> tuple[list[str], dict[str, str], list[str]]:
     """The guide's pip install arguments, written files and serve arguments."""
     for block in BASH_BLOCK.findall(GUIDE.read_text(encoding="utf-8")):
-        if "vllm-sr-runtime serve" not in block:
+        if "vllm-srun serve" not in block:
             continue
         files = {path: body + "\n" for path, _, body in HEREDOC.findall(block)}
         lines = HEREDOC.sub("", block).splitlines()
         (install,) = [line for line in lines if line.startswith("pip install ")]
-        (serve,) = [line for line in lines if line.startswith("vllm-sr-runtime serve ")]
+        (serve,) = [line for line in lines if line.startswith("vllm-srun serve ")]
         return shlex.split(install)[2:], files, shlex.split(serve)[2:]
     raise AssertionError(f"{GUIDE} has no block that serves the example")
 
 
-def _serve_commands(command: str = "vllm-sr-runtime serve") -> list[list[str]]:
+def _serve_commands(command: str = "vllm-srun serve") -> list[list[str]]:
     """The arguments of every line in the guide that runs ``command``."""
     return [
         shlex.split(line)[len(command.split()) :]
@@ -111,7 +111,7 @@ class TestPluginExample(unittest.TestCase):
     def _serve(
         self,
         serve_arguments: list[str] | None = None,
-        command: str = "vllm-sr-runtime serve",
+        command: str = "vllm-srun serve",
     ) -> ServeProcess:
         serve_arguments = serve_arguments or self.serve_arguments
         arguments = [str(self.local), *_without_port(serve_arguments[1:])]
@@ -137,7 +137,7 @@ class TestPluginExample(unittest.TestCase):
         self.assertEqual([result["label"] for result in response["results"]], expected)
 
     def test_the_example_serves_on_its_own_accelerator_and_profile(self):
-        self._assert_serves_on_its_own_accelerator_and_profile("vllm-sr-runtime serve")
+        self._assert_serves_on_its_own_accelerator_and_profile("vllm-srun serve")
 
     def test_vllm_sr_serve_passes_the_plugin_names_to_the_runtime(self):
         self._assert_serves_on_its_own_accelerator_and_profile("vllm-sr serve")
@@ -177,7 +177,7 @@ class TestPluginExample(unittest.TestCase):
         runtime = self._serve()
 
         listed = subprocess.run(
-            ["vllm-sr-runtime", "plugins"],
+            ["vllm-srun", "plugins"],
             check=True,
             capture_output=True,
             text=True,

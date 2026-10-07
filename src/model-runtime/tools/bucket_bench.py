@@ -31,10 +31,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from gpu_parity import load
-from vllm_sr_runtime.plugins.base import ForwardBatch, ForwardOutput
-from vllm_sr_runtime.profiles.batching import BatchingProfile
-from vllm_sr_runtime.profiles.exact import ExactProfile
-from vllm_sr_runtime.scheduler.scheduler import Scheduler, SchedulerLimits
+from vllm_srun.plugins.base import ForwardBatch, ForwardOutput
+from vllm_srun.profiles.batching import BatchingProfile
+from vllm_srun.profiles.exact import ExactProfile
+from vllm_srun.scheduler.scheduler import Scheduler, SchedulerLimits
 
 
 def bucket_rows(rows: int, base: int) -> int:
