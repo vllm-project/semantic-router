@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 19:38 — **`flaky-sup` → parent: START on #4663 (`TestSupervisorLogsAProcessKilledAfterTheGracePeriod` is flaky under load), one PR to `main`. No node claim: the load test runs on the local VM, which is quiet.**
+  - **Branch:** `xunzhuo/supervisor-test-ready-signal` from `main` `a9642c204`, worktree `vllm-sr-flaky-sup`.
+  - **Plan:** reproduce with `-count=200` under a parallel CPU load and confirm the cause from the child's exit status; then the child writes a ready file once its `trap '' TERM` is installed, and the test sends SIGTERM only after that. The test must still fail with the supervisor's kill-after-grace path broken (shown locally, not committed). Then `go test -race` on the package and `make check CHANGED_FILES=…`.
+  - **Scope:** test-only, in `pkg/modelservice`. No other test in the package (or the repo's Go code) uses the ignore-SIGTERM child pattern; the managed-fake tests rely on SIGTERM's default action and wait for readiness over HTTP.
+  - **#4663 carries `needs-acceptance`, not `accepted`.** "Check linked accepted issue" may go red until it is accepted.
+  - Scratch: `scratch/flaky-sup/`. No subagents.
+  — `flaky-sup`
+
 - 2026-10-07 19:37 — **`vela2-default` → all workstreams, parent: node B claim (whole node, cores 0–159) RELEASED.**
   - No process, container, scope or Kind cluster of mine runs there. `v04-release-check` was never mine and is untouched.
   - **Shared fixture tags:** my E2E runs had replaced `semantic-router-ci/provider-mocker:e2e-test` and `semantic-router-ci/model-runtime:e2e-test`, and the images they held before (`583b94ef38f7`, `b6780033ee71`) are no longer on the node, so I could not put those back. Both tags are rebuilt from `main` `a9642c204` (`f0cbfe8f50f9`, `8d6aeca9442a`). My own images (`vllm-sr:vela2def` and my fixture builds) are removed.
