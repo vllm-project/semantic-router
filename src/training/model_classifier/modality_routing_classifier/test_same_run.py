@@ -382,6 +382,29 @@ class ModelRuntimeAdapterTests(unittest.TestCase):
         finally:
             classify.close()
 
+    def test_no_proc_fs_skips_resource_attribution_honestly(self) -> None:
+        """On macOS/Windows (no /proc), classify must still work, and must
+        not report fabricated 0.0 resource numbers as if they were real.
+
+        Before this fix, _proc_cpu_and_rss's own FileNotFoundError handling
+        silently returned (0.0, 0.0) on macOS -- a measurement that looks
+        real but isn't, the exact failure mode already found and fixed once
+        before for this harness (round 2: a helper that actually burned
+        0.5 CPU-seconds and 100 MiB reported as cpu_s: 0.0). Simulating
+        _PROC_FS_AVAILABLE=False (rather than requiring an actual non-Linux
+        box) and asserting helper_stats is never attached at all is the
+        honest alternative: run_single_stream already treats a missing
+        helper_stats the same as --binding hf, which has no subprocess.
+        """
+        with mock.patch("same_run_harness._PROC_FS_AVAILABLE", False):
+            classify = load_model_runtime_adapter(self.fixture_dir, max_length=256)
+            try:
+                result = classify("a short prompt")
+                self.assertIn(result["output"], ("AR", "DIFFUSION", "BOTH"))
+                self.assertFalse(hasattr(classify, "helper_stats"))
+            finally:
+                classify.close()
+
     def test_run_single_stream_attributes_helper_resources(self) -> None:
         """Regression: the server subprocess's CPU/RSS must be folded into
         cpu_s/peak_rss_mb, read from /proc/<pid> now instead of a

@@ -199,6 +199,15 @@ def _free_port() -> int:
         return probe.getsockname()[1]
 
 
+# /proc is Linux-only: absent on macOS entirely, and on Windows os.sysconf
+# doesn't exist at all (AttributeError, not one of the exceptions caught
+# below). Checked once at import time so _proc_cpu_and_rss can short-circuit
+# before ever reaching a platform call that would misbehave differently per
+# OS, and so load_model_runtime_adapter can decide once whether to attach
+# helper_stats at all rather than attach it with fabricated zeros.
+_PROC_FS_AVAILABLE = Path("/proc").is_dir()
+
+
 def _proc_cpu_and_rss(pid: int) -> tuple[float, float]:
     """Read a subprocess's own cumulative CPU seconds and lifetime-peak RSS.
 
@@ -208,7 +217,8 @@ def _proc_cpu_and_rss(pid: int) -> tuple[float, float]:
     getrusage(RUSAGE_SELF) inside every JSON response, we read the same
     information externally from the OS's own per-process accounting.
     Returns (0.0, 0.0) if the process has already exited rather than raising,
-    so run_single_stream's fold logic always gets numbers to work with.
+    so run_single_stream's fold logic always gets numbers to work with. Only
+    ever called when _PROC_FS_AVAILABLE is true -- see load_model_runtime_adapter.
     """
     try:
         stat = Path(f"/proc/{pid}/stat").read_text()
@@ -342,9 +352,10 @@ def load_model_runtime_adapter(model_id: str, max_length: int):
         result = data["results"][0]
         if "error" in result:
             raise RuntimeError(f"model-runtime returned error: {result['error']}")
-        cpu_s, peak_rss_mb = _proc_cpu_and_rss(proc.pid)
-        classify.helper_stats["cpu_s"] = cpu_s
-        classify.helper_stats["peak_rss_mb"] = peak_rss_mb
+        if _PROC_FS_AVAILABLE:
+            cpu_s, peak_rss_mb = _proc_cpu_and_rss(proc.pid)
+            classify.helper_stats["cpu_s"] = cpu_s
+            classify.helper_stats["peak_rss_mb"] = peak_rss_mb
         return {
             "output": str(result["label"]),
             # /v1/classify gives no tokenize/forward split, same honest
@@ -356,10 +367,21 @@ def load_model_runtime_adapter(model_id: str, max_length: int):
         }
 
     classify.close = _terminate  # type: ignore[attr-defined]
-    # Cumulative /proc readings for the model-runtime subprocess, updated
-    # after every response. run_single_stream reads this to fold the
-    # subprocess's real CPU/RSS cost into the reported run metrics.
-    classify.helper_stats = {"cpu_s": 0.0, "peak_rss_mb": 0.0}  # type: ignore[attr-defined]
+    if _PROC_FS_AVAILABLE:
+        # Cumulative /proc readings for the model-runtime subprocess, updated
+        # after every response. run_single_stream reads this to fold the
+        # subprocess's real CPU/RSS cost into the reported run metrics.
+        classify.helper_stats = {"cpu_s": 0.0, "peak_rss_mb": 0.0}  # type: ignore[attr-defined]
+    # Else: leave helper_stats unset. run_single_stream already treats a
+    # missing helper_stats attribute as "no subprocess resource folding" --
+    # the same path --binding hf takes, since it has no child process either.
+    # On macOS/Windows we cannot read the model-runtime subprocess's own
+    # CPU/RSS (no /proc), so attaching a dict of fabricated 0.0s would look
+    # like a real measurement instead of an honest "not measured here"
+    # signal -- the exact silent-wrong-value failure mode already found and
+    # fixed for this harness once before (the round-2 resource-accounting
+    # bug). cpu_s/peak_rss_mb in the report still reflect this process's own
+    # cost; they just won't include the subprocess's.
     return classify
 
 
