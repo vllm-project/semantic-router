@@ -2571,6 +2571,12 @@ global:
         max_queue: 64
         queue_timeout_ms: 250
         on_overflow: shed
+    # Deadline of a request's model-runtime signals. 0 (default) derives it
+    # from the request's deadline, less a tenth of the time left (at least a
+    # second), or 45 s for a served request. A signal still running resolves
+    # through its policy: a routing signal through on_error, a safety signal
+    # (prompt guard, PII) as unscanned.
+    signal_timeout_ms: 0
     external:
       - name: external-safety
         model_role: classification
@@ -2760,9 +2766,10 @@ global:
         # model_id binds the guard to one model and threshold sets its own;
         # without them it runs the decision model at that model's threshold.
         use_cpu: true
-        # Vela 2.0 reads the whole text up to its 8,192-token input and names
-        # its own labels, so it sets no window. A sequence classifier such as
-        # Vela 1.0 Guard takes a document budget, token windows
+        # Vela 2.0 reads the whole text up to its scan budget (four inputs on a
+        # CPU, or the deployment's input {overflow: window, max_tokens}) and
+        # names its own labels, so it sets no window. A sequence classifier such
+        # as Vela 1.0 Guard takes a document budget, token windows
         # (window: {size: 512, overlap: 255}) and a label mapping
         # (jailbreak_type_mapping.json in its directory).
         max_sequence_length: 0
@@ -2772,6 +2779,11 @@ global:
         # affected content as not matching; block treats it as a match instead,
         # since an inference failure means the content could not be verified safe.
         on_error: allow
+        # block (default) matches content the guard did not read in full (over
+        # its input or cap, truncated, or not scanned by the signal deadline) as
+        # unscanned, so padding cannot carry an attack past it; allow leaves
+        # such content to on_error.
+        on_unscanned: block
       classifier:
         domain:
           # Omit to keep the historical behaviour of running whenever a model is
@@ -2802,16 +2814,22 @@ global:
           enabled: true
           model_ref: pii_classifier
           # Vela 2.0 0.3B finds spans with its router span head and reads the
-          # whole text, so it sets no window; a token classifier such as Vela 1.0
-          # PII takes a document budget (32768), token windows
-          # (window: {size: 512, overlap: 255}) and its pii_mapping.json.
+          # whole text up to its scan budget, so it sets no window; a token
+          # classifier such as Vela 1.0 PII takes a document budget (32768),
+          # token windows (window: {size: 512, overlap: 255}) and its
+          # pii_mapping.json.
           max_sequence_length: 0
           use_cpu: true
           pii_mapping_path: ""
-          # allow (default) keeps a classify error or a provider-declared
-          # truncation as a non-match for that content; block treats it as a
-          # match on classification_error, so unverified text cannot pass as clean.
+          # allow (default) keeps a classify error as a non-match for that
+          # content; block treats it as a match on classification_error, so
+          # unverified text cannot pass as clean.
           on_error: allow
+          # block (default) matches content the model did not read in full
+          # (over its input or cap, a provider-declared truncation, or not
+          # scanned by the signal deadline) as unscanned, so a long request
+          # routes as private; allow leaves such content to on_error.
+          on_unscanned: block
         preference:
           use_contrastive: true
           embedding_model: models/preference-encoder

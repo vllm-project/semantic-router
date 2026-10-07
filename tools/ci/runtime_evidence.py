@@ -12,7 +12,6 @@ from http import HTTPStatus
 from pathlib import Path
 
 from image_calibration import evidence as image_calibration_evidence
-from known_issue_waivers import recipe_waiver
 from run_model_tests import required_inventory
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -126,7 +125,7 @@ def recipe_evidence(directory: Path) -> dict:
         ROOT / "config/recipes",
         lambda root: cpu_inventory(discover_inventory(root)),
     )
-    cases, expected, identities, waived = [], [], [], []
+    cases, expected, identities = [], [], []
     for job in source_matrix_payload(inventories, None, ROOT)["include"]:
         identities.extend(read(directory / f"image-{job['shard']}.json"))
     for item in inventories:
@@ -142,15 +141,7 @@ def recipe_evidence(directory: Path) -> dict:
                 directory / source.report_subdir / recipe.name / "eval-report.json"
             )
             cases.extend(recipe_cases(report["evaluation"], prefix))
-            waived.extend(
-                {
-                    "case": prefix + "request:" + result["id"],
-                    "outcome": result["known_issue_waiver"]["outcome"],
-                }
-                for result in report["evaluation"]["results"]
-                if result.get("known_issue_waiver")
-            )
-    evidence = {
+    return {
         "runtime": "model-runtime",
         "device": "cpu",
         "platform": host_platform(),
@@ -158,10 +149,6 @@ def recipe_evidence(directory: Path) -> dict:
         "expected_cases": expected,
         "artifacts": identities,
     }
-    if waived:
-        evidence["known_issue_waiver"] = recipe_waiver()
-        evidence["waived_failures"] = waived
-    return evidence
 
 
 def main() -> None:

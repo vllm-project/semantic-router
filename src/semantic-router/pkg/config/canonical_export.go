@@ -356,10 +356,11 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 		Embeddings: CanonicalEmbeddingModels{
 			Semantic: cfg.EmbeddingModels,
 		},
-		System:    canonicalSystemModelsFromRouterConfig(cfg),
-		External:  append([]ExternalModelConfig(nil), cfg.ExternalModels...),
-		KBs:       append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
-		Admission: cloneAdmissionMap(cfg.ModelAdmission),
+		System:          canonicalSystemModelsFromRouterConfig(cfg),
+		External:        append([]ExternalModelConfig(nil), cfg.ExternalModels...),
+		KBs:             append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
+		Admission:       cloneAdmissionMap(cfg.ModelAdmission),
+		SignalTimeoutMs: cfg.ModelSignalTimeoutMs,
 		Modules: CanonicalModelModules{
 			Safety:            cfg.SafetyModels,
 			PromptCompression: cfg.PromptCompression,

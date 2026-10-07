@@ -61,7 +61,7 @@ type Runtime struct {
 
 // APIVersion is the contract version the fake serves unless SetAPIVersion
 // changes it.
-const APIVersion = "2.0.0"
+const APIVersion = "2.1.0"
 
 // defaultLimits are the runtime's default process limits. Like the runtime,
 // the fake reports its limits in /v1/models and refuses a larger bundle or
@@ -286,6 +286,8 @@ func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 		card.Family, card.Surfaces = "decision2", []string{"decisions"}
 		if model.Labelled != nil {
 			card.Family = "vela2"
+			scan := model.Labelled.scanTokens(model)
+			limits.MaxScanTokens = &scan
 		}
 		types := questionTypes(model)
 		card.QuestionTypes = &types
@@ -399,8 +401,12 @@ func (r *Runtime) decide(body api.DecisionRequest) (int, api.DecisionResponse, *
 	revision := strings.Repeat("a", 40)
 	if model.Labelled != nil {
 		response := r.decideLabelled(model, body)
+		unscanned(model, body, &response)
 		response.Meta = &api.ResponseMeta{Revision: &revision}
 		return http.StatusOK, response, nil
+	}
+	if body.Options != nil && body.Options.MaxTokens != nil {
+		return http.StatusBadRequest, api.DecisionResponse{}, &api.ErrorBody{Code: "invalid_request", Message: "max_tokens is the scan budget of a model that reads parts in windows"}
 	}
 	answers := make(map[string]api.Answer, len(body.Questions))
 	for id, question := range body.Questions {

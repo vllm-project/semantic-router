@@ -433,6 +433,23 @@ text-pair inputs.
   or `window` (overlapping windows reduced by the head's declared rule: `max`
   per label for distributions and scores, span union for tokens). Nothing is
   cut silently: every result reports `input` usage.
+- Long inputs are tokenized only as far as the budget decides the answer
+  (`text/bounds.py`), so their cost follows the budget, not their length. A
+  prefix is cut before a word boundary (whitespace, punctuation, a symbol, a
+  CJK, kana or Hangul character) and keeps its words' tokens, except the last
+  word and words starting within the longest added token of the cut; in a run
+  without a boundary it is cut before a character NFC never composes with its
+  predecessor and keeps the tokens ending 1,024 characters before the cut.
+  Those are the whole text's first tokens: a probe checks each kind of cut
+  once per tokenizer, on probe texts joined with every kind of text after the
+  cut, and a tokenizer reads whole texts where a cut fails. One that drops or
+  folds characters (WordPiece) never cuts inside a run, and has no bound on
+  the characters a token covers. With that bound (the longest vocabulary
+  entry, times three under NFC), `reject` and `window` fail a text longer than
+  the budget times the bound without tokenizing it. The usage of an input read
+  in part counts the tokens read and sets `tokens_lower_bound`. `window` reads
+  at most `max_tokens` (the scan budget) and fails a longer input with
+  `scan_budget_exceeded`.
 
 ```json
 {
@@ -643,7 +660,12 @@ model and compatible ModernBERT (mmBERT) classifiers.
 - **Long inputs:** `reject`, `truncate` and `window` exactly as the router
   applies them today (the window size, overlap and reductions of
   `pkg/modelruntime/native/window_contract.go` move into the family), so the
-  router stops tokenizing.
+  router stops tokenizing. The family reads an input only as far as its budget
+  decides (section 6.2). On the CPU, local layers attend in calls of 4,096
+  query tokens (`BAND_CALL_TOKENS`), so the keys, values and masks a call
+  copies stay small on a 32,768-token row; each query block is its own SDPA
+  problem, so the result is the same, bit for bit
+  (`docs/records/input-memory-cpu.md`).
 - **Engines:** native (PyTorch FP32) by default; `onnxruntime` runs the
   packages' ONNX graphs where they exist. Both are parity-checked.
 
@@ -665,6 +687,22 @@ scores with code-point offsets, per-type temperatures, and the thresholds in
 `calibration.json` (constant, per question, the PII length rule and its
 sparse-document gate). It serves `/v1/decisions` with Set and Span, plus the
 packages' presets (`pii`, `halu`, `toxic`, relevance) as named questions.
+
+A question reads a part whole up to a scan budget (`limits.max_scan_tokens`):
+four inputs on a CPU, 32 on a GPU, or the model option `max_scan_tokens`; a
+request's `options.max_tokens` overrides it, never below one input. Each part
+is tokenized only as far as the budgets need (`bounds.read`), so a longer part
+costs its budget, not its length, and fails the questions that read it whole
+with `scan_budget_exceeded`; the other questions read its first tokens, which
+are all any truncation keeps of a part they do not read. A question with
+`overflow: truncate` reads only a part's first `limits.truncate_tokens` (one
+input on a CPU, its row one forward over what fits). The model's answer to a
+question depends on the questions beside it in a sequence, so questions of
+both kinds share their rows as before unless a row has to be read in windows;
+only then does each kind get rows of its own. The router truncates its
+routing questions and reads its safety questions whole. Span windows start at
+word starts found by bisection, so planning a long target costs its windows
+times the logarithm of its words.
 
 ### 8.5 Multimodal embeddings (`multimodal_embedding`, Phase 3)
 

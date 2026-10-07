@@ -10,9 +10,10 @@ and become the engine's typed questions: Noul is a two-option choice (``no``
 / ``yes``), Choice and Noul show the abstain option, Score levels are the
 options in order. Vela 2.0 adds Set and Span questions (``{label:
 description}`` with an optional ``threshold``; a Span may name its
-``head``), the package's presets, and ``over``, which names a state key, a
-part or a list of them. A question that does not validate gets
-``invalid_question`` and never affects the others.
+``head``), the package's presets, ``over``, which names a state key, a part
+or a list of them, and ``overflow``: ``truncate`` reads a part longer than
+one input only as far as its first tokens. A question that does not validate
+gets ``invalid_question`` and never affects the others.
 """
 
 from __future__ import annotations
@@ -49,7 +50,10 @@ STATE_KEY_ROLES = {
 }
 LABELLED_TYPES = ("set", "span")
 QUESTION_TYPES = (*SYSTEM_ONE_TYPES, *LABELLED_TYPES)
-FAMILY_FIELDS = frozenset({"over", "preset"})
+FAMILY_FIELDS = frozenset({"over", "preset", "overflow"})
+# How a question reads a part longer than one input: whole, in windows up to
+# the request's scan budget (``window``, the default), or its first tokens.
+OVERFLOW = ("window", "truncate")
 LABELLED_FIELDS = {
     "set": frozenset({"type", "instructions", "criteria", "labels", "threshold"}),
     "span": frozenset(
@@ -111,6 +115,7 @@ class Question:
     threshold: float | None = None
     head: str | None = None
     span_range: tuple[int, int] | None = None
+    truncate: bool = False
 
     @property
     def names(self) -> list[str]:
@@ -331,6 +336,9 @@ class QuestionReader:
             or not 0.0 <= threshold <= 1.0
         ):
             raise _invalid("threshold must be a number in [0, 1]")
+        overflow = question.get("overflow", "window")
+        if overflow not in OVERFLOW:
+            raise _invalid(f"overflow must be one of {list(OVERFLOW)}")
         head = question.get("head")
         if head is not None and head not in SPAN_HEADS:
             raise _invalid(f"head must be one of {list(SPAN_HEADS)}")
@@ -349,6 +357,7 @@ class QuestionReader:
             threshold=None if threshold is None else float(threshold),
             head=head,
             span_range=span_range,
+            truncate=overflow == "truncate",
         )
 
     def _expand_preset(
@@ -356,16 +365,16 @@ class QuestionReader:
     ) -> tuple[dict[str, Any], list[str] | None]:
         """A preset question with the package's trained schema, and its level names (Score presets).
 
-        ``over`` and ``threshold`` stay the caller's. The relevance preset
+        ``over``, ``threshold`` and ``overflow`` stay the caller's. The relevance preset
         renders its levels as named options with descriptions, as the
         packages' ``score_relevance`` does.
         """
         name = question["preset"]
         if name not in self.presets:
             raise _invalid(f"preset must be one of {list(self.presets)}")
-        if set(question) - {"preset", "type", "over", "threshold"}:
+        if set(question) - {"preset", "type", "over", "threshold", "overflow"}:
             raise _invalid(
-                "a preset question takes only preset, type, over and threshold"
+                "a preset question takes only preset, type, over, threshold and overflow"
             )
         schema = self.calibration.schema(name) or {}
         named = None
@@ -385,6 +394,8 @@ class QuestionReader:
         if question.get("type") not in (None, expanded["type"]):
             raise _invalid(f"preset {name} is a {expanded['type']} question")
         kept: dict[str, Any] = {
-            key: question[key] for key in ("over", "threshold") if key in question
+            key: question[key]
+            for key in ("over", "threshold", "overflow")
+            if key in question
         }
         return {**expanded, "preset": name, **kept}, named
