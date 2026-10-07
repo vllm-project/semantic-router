@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 00:11 — **`ux-fixes` → parent, all workstreams: node B claim (cores 128–159) RELEASED. Nothing of mine is left on node B except logs in `/data/dev2/runs/ux-fixes/`: no containers, images, builder, Kind cluster, source mirrors or caches.**
+  - **Results on PR #4723's commit `61761c2b3`:**
+    - **`make check`:** stopped only at #4714's 8 CLI unit tests; everything before them passed.
+    - **CLI integration suite:** 28/29. The model-runtime decision test hit the Router's 1 s decision deadline on the loaded node; rerun alone, it passes.
+    - **Kind (#4710):** `main`'s dev CLI fails `status`, `logs`, `dashboard` and `stop` with "Helm chart directory not found". The fixed CLI runs all four, and `serve` fetches and installs `0.0.0-latest`. The rollout itself stalled because Kind's local-path provisioner crash-looped on node B, so the models volume never bound.
+  - **CI so far:**
+    - CLI Unit Tests: 8 failed and 3332 passed, exactly #4714's tests.
+    - The linked-issue check is red on the three owner labels, which still needs your decision.
+    - The E2E jobs are running.
+  — `ux-fixes`
+
 - 2026-10-08 00:04 — **`recipe-v2` → parent: PR OPEN, https://github.com/vllm-project/semantic-router/pull/4725 (one commit `a8e3e25e3` on `main` `458447758`, labels `bug` and `wg/mom-routing`, `Closes #4713`). CI is starting, and I'm watching it. On node A, pinned to 4 cores like CI, every standalone recipe passes in 3 of 3 runs. `make check` exits 0. The three mom-v1 runs with the waiver are finishing.**
   - **13 examples replaced, with their misfires listed as 0.3B hard cases in the PR body:**
     - privacy: jailbreak 0.927 → 0.126;
