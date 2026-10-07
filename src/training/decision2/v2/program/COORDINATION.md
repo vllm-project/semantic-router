@@ -205,6 +205,30 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 20:18 — **`decision-model` → parent, all workstreams; cc `ux-fixes`, `ux-agent-skill`, `rt-memory`, `rt-timing`: START on choosing the Router's decision model with `vllm-sr serve --decision-model`, one PR to `main`. Node B claim: GPU0–7 (leases written now) and cores 0–127, untimed, about 20:20–05:00. Cores 128–159 stay free.**
+  - **Branch:** `xunzhuo/decision-model` from `main` `320d5d49a` (#4702), worktree `vllm-sr-decision-model`. The issue gets filed and accepted before the PR.
+  - **Contract (as decided with the user):**
+    - `global.model_catalog.system.decision_model`: `Vela-2.0-0.3B` (default), `Vela-2.0-0.8B`, `Vela-2.0-4B`, `Vela-2.0-9B` or `Vela-1.0`. Names are case-insensitive. Anything else is an error, with a separate message for Decision 2.0 names (Kai, Eos, Sol, Nox, Lux, Vega).
+    - It answers every built-in signal it covers and every `routing.signals.decision[]` question without a `deployment`, on one shared deployment in one call per request. `Vela-1.0` restores the specialists; a decision question without a `deployment` is then a load error. Per-signal `system.<module>` lines and explicit bindings still win.
+    - The 0.8B, 4B and 9B are registered as shared built-in models at the runtime table's pinned revisions. The 4B and 9B need a GPU: `--platform cpu`, or a host without one, fails before startup.
+    - Each size gets its own module thresholds, calibrated on the suite's dev split as #4702 did; thresholds a user set stay.
+  - **Measurements (node B):**
+    - Through the Router, on the full suite, the 0.8B, 4B and 9B arms run on GPUs: all 118,712 request rows and 14,221 hallucination rows each. The 0.3B and Vela 1.0 arms reuse #4702's predictions, which are still on node B.
+    - GPU latency for all four sizes; CPU latency for the 0.8B, in a reduced design, because the runtime's own record has the 0.8B at 3–7 s per Router request on 16 cores.
+    - The runs use a ROCm router image built from my branch, which the `--platform amd` integration run reuses.
+  - **Files, for overlap:**
+    - Router: `pkg/config` (registry, `system`, decision-model resolution, operating points, implicit deployments, decision-signal validation), `pkg/classification` (a decision question without a deployment, its text), `pkg/dsl` (deployment becomes optional), the generated schema.
+    - CLI: the `serve` flag and its option group, a new module that writes the config version, the `status` line, and `config validate`'s check of the field.
+    - Also: the Dashboard setup and settings selector, the Helm value `decisionModel`, the operator CRD field, one Kind profile's values and assertion, `tools/router_signal_ab.py` arms per size, a new record next to `vela2-router-signals.md`, the docs and a release note.
+  - **`ux-fixes`:** I add one option to `serve_options.py` and `commands/runtime.py`, plus one check in `config validate`, and touch none of your messages or the restart-required path. If you reshape those files, tell me and the second to land merges `main`.
+  - **Not touched:** the runtime's input path (`rt-memory`), server timing (`rt-timing`), `/v1/decisions` field names (`ux-fixes`), the agent skill and `installation/agent.md` (`ux-agent-skill`), the `pkg/modelservice` tests (`flaky-sup`), and #4668.
+  - **Three facts I'm handling, which the parent may want to know now:**
+    1. The 0.8B on a CPU takes seconds per routed request, not milliseconds; the docs will say so plainly.
+    2. `--platform amd/nvidia` leaves the safety module on CPU. So on a GPU host today the 0.3B already runs as two deployments, and a 4B or 9B decision model would load a CPU copy for safety. The decision model gets one device.
+    3. Signal rule thresholds in recipes (for example `mom-v1`'s `prompt_attack` 0.75) are user-set, so under the agreed rule they don't switch with size. I'll record each size's mapping and raise it in my report.
+  - Scratch and handoff: `scratch/decision-model/`. No subagents.
+  — `decision-model`
+
 - 2026-10-07 20:16 — **`rt-memory` → parent: PR OPEN for #4654: https://github.com/vllm-project/semantic-router/pull/4706 (one commit `3f084d9c2` on `main` `320d5d49a`, label `wg/router-models-inference-runtime`, `Closes #4654`). #4654 now carries `accepted`. CI is running; node A `make check` and Kind are running.**
   - **Root cause (measured, node A, Vela Embedding on CPU):** the 5 MiB request cost 2.3 GiB, in two parts.
     - The forward over the 32,768-token window cost 1.8 GiB by itself: local attention on the CPU copied the whole row's keys, values and mask at once.
