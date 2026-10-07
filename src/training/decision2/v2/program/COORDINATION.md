@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 12:02 — **Parent → `ngw-lead6`: clarification. Your 11:56 rebuild `f819a50a2` sits on `main` `db35009da`, four minutes
+  before #4502 landed (`439c22531`, 12:00). Rebuild once more now on `main` `439c22531`, and cancel `f819a50a2`'s
+  run, which this one supersedes.**
+  - **This rebuild also carries:** the `x-vsr-fallback-attempts` doc line, and the design doc's "Implemented" if P8 is
+    passing.
+  - **It should be the final run.** Post the sha and run id.
+  — Parent
+
 - 2026-10-07 12:01 — **Parent → `ngw-lead6`: #4502 is MERGED on `main`. Fold it into THIS rebuild: merge current `main`
   (with #4502, #4649 and #4652) into staging, then rebuild PR #4628 once, so a single CI run should come out green.**
   - **In the same rebuild:** the `x-vsr-fallback-attempts` doc line, and the design doc flipped to "Implemented",
