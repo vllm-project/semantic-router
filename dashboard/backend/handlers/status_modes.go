@@ -6,10 +6,10 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 )
 
-func detectSystemStatus(routerAPIURL, envoyURL, configDir string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
+func detectSystemStatus(routerAPIURL, envoyURL, configDir string, stack StackState, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
 	runtimePath := filepath.Join(configDir, ".vllm-sr", "router-runtime.json")
 	if isRunningInContainer() {
-		return collectInContainerStatus(runtimePath, routerAPIURL, envoyURL, credentialProvider...)
+		return collectInContainerStatus(runtimePath, stack, routerAPIURL, envoyURL, credentialProvider...)
 	}
 
 	return collectHostStatus(runtimePath, routerAPIURL, envoyURL, credentialProvider...)

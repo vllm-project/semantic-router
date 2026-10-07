@@ -183,9 +183,10 @@ questions to it.
 
 Decision 2.0 is the default family; Kai-0.6B runs on a CPU and the larger
 sizes are more accurate on a GPU. Decision 1.0 models answer the same
-questions. Vela 2.0 also answers `set` and `span` questions and has ready-made
-questions for PII and unsupported claims; it is a private preview and needs a
-Hugging Face token with access. See
+questions. Vela 2.0 also answers `set` and `span` questions, has ready-made
+questions for PII and unsupported claims, and its 0.3B answers the router's
+[built-in signals](model-runtime/choose-a-model.md#vela-20) by default, in one
+call. See
 [Choose a model](model-runtime/choose-a-model.md#decision-models).
 
 ## Check it

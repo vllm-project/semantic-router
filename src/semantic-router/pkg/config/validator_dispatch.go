@@ -37,6 +37,7 @@ var (
 		validatePromptCompressionContracts,
 		validateHallucinationContracts,
 		validateModelAdmissionContracts,
+		validateModelSignalTimeoutContracts,
 		validateModelDeploymentContracts,
 		validateGlobalModelBindingContracts,
 		validateGlobalToolSessionsContracts,
@@ -47,6 +48,8 @@ var (
 		validateModelBindingContracts,
 		validateGlobalClassifierRuntimeContracts,
 		validateComplexityRoutingContracts,
+		warnLooperAliasCollisions,
+		logConfigWarnings,
 	}
 
 	routingProfileContractValidators = []configContractValidator{

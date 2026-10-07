@@ -2,7 +2,6 @@ package localclassifierbackend
 
 import (
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -22,10 +21,9 @@ func TestLocalClassifierUsesCanonicalGuardContract(t *testing.T) {
 		}
 		return document
 	}
-	canonical := read(filepath.Join("..", "..", "..", "config", "config.yaml"))
-	global := canonical["global"].(map[string]any)
-	catalog := global["model_catalog"].(map[string]any)
-	guard := catalog["system"].(map[string]any)["prompt_guard"]
+	// A generic local classifier runs a classify head, which Vela 2.0 does not
+	// have, so the profile keeps Vela 1.0 Guard.
+	guard := "models/Vela-1.0-Encoder-307M-Guard"
 	profile := read("values.yaml")["config"].(map[string]any)
 	routing := profile["routing"].(map[string]any)
 	classifiers := routing["signals"].(map[string]any)["classifiers"].([]any)
@@ -34,7 +32,7 @@ func TestLocalClassifierUsesCanonicalGuardContract(t *testing.T) {
 	}
 	classifier := classifiers[0].(map[string]any)
 	if classifier["model_path"] != guard || classifier["type"] != "local" || classifier["use_cpu"] != true {
-		t.Fatalf("local classifier must use the canonical CPU Guard model: %#v", classifier)
+		t.Fatalf("local classifier must use the Vela 1.0 Guard model on CPU: %#v", classifier)
 	}
 	if !reflect.DeepEqual(classifier["labels"], []any{"benign", "jailbreak"}) {
 		t.Fatal("local classifier labels must preserve the published Guard output order")

@@ -86,7 +86,8 @@ func TestAutoRoutingKeepsMixedContextAndWireExclusionsUnavailable(t *testing.T) 
 	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != 503 {
 		t.Fatalf("mixed context and wire exclusions returned %d, body %s; want fail-closed 503", got, response.GetImmediateResponse().GetBody())
 	}
-	if ctx.ImmediateProtocolError != nil {
-		t.Fatalf("mixed exclusions were attributed solely to the caller: %v", ctx.ImmediateProtocolError)
+	if protocolError := ctx.ImmediateProtocolError; protocolError == nil ||
+		isClientProtocolError(protocolError.Category) || protocolError.Code != routingFailureNoEligibleModel.code {
+		t.Fatalf("mixed exclusions were attributed solely to the caller: %v", protocolError)
 	}
 }

@@ -51,6 +51,9 @@ func validateDecisionReferences(cfg *RouterConfig, decision Decision) error {
 // validateDecisionExecution checks how a decision runs: its algorithm
 // configuration and the model contracts that configuration depends on.
 func validateDecisionExecution(cfg *RouterConfig, decision Decision) error {
+	if err := validateDecisionModelRefBudget(decision.Name, decision.ModelRefs); err != nil {
+		return err
+	}
 	if err := validateDecisionAlgorithmConfig(decision.Name, decision.ModelRefs, decision.Algorithm); err != nil {
 		return err
 	}

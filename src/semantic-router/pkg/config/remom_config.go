@@ -102,6 +102,9 @@ func ValidateReMoMAlgorithmConfig(cfg *ReMoMAlgorithmConfig) error {
 	if err := validateReMoMBreadthSchedule(cfg.BreadthSchedule); err != nil {
 		return err
 	}
+	if err := validateReMoMBreadthScheduleBudget(cfg.BreadthSchedule); err != nil {
+		return err
+	}
 	if err := validateReMoMDistribution(cfg.ModelDistribution); err != nil {
 		return err
 	}

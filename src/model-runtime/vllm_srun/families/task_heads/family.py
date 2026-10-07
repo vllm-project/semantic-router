@@ -28,7 +28,7 @@ import torch
 
 from ...accel import onednn
 from ...accel.kernels import CONTIGUOUS
-from ...errors import INVALID_INPUT, MAX_LENGTH_EXCEEDED, PackageError
+from ...errors import INVALID_INPUT, PackageError
 from ...heads.grounded import GroundedHead, GroundingPolicy, PairEnvelope
 from ...heads.pooled import EmbeddingSurface, PooledLayout
 from ...heads.relevance import LOGITS, RelevanceHead, RelevanceLayout, RerankSurface
@@ -280,7 +280,7 @@ class TaskHeadsModel(LoadedModel[Item, Any]):
             try:
                 prepared = head.prepare(value, options, self.info.model_sha256)
             except InputTooLongError as exc:
-                entries.append((index, MAX_LENGTH_EXCEEDED))
+                entries.append((index, exc.code))
                 input_tokens += exc.tokens
                 continue
             except ValueError:

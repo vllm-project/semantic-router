@@ -100,6 +100,7 @@ func (c *Classifier) buildPolicySignalDispatchers(
 					results,
 					mu,
 					textForSignal(config.SignalTypeDecision),
+					textForSignal(decisionModelQuestionText),
 					usedSignals,
 				)
 			},

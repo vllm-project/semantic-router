@@ -9,6 +9,7 @@ Provides common utilities for testing CLI commands including:
 Signed-off-by: vLLM-SR Team
 """
 
+import json
 import os
 import secrets
 import shutil
@@ -28,6 +29,21 @@ from cli.runtime_stack import DEFAULT_STACK_NAME, resolve_runtime_stack
 HTTP_STATUS_OK = 200
 AGENT_SMOKE_CONFIG_PATH = (
     Path(__file__).resolve().parents[2] / "config" / "config.agent-smoke.cpu.yaml"
+)
+CONTAINER_RUNTIME_SOCKETS = (
+    "/var/run/docker.sock",
+    "/run/docker.sock",
+    "/run/podman/podman.sock",
+)
+CONTAINER_RUNTIME_CLIS = (
+    "containerd",
+    "crictl",
+    "ctr",
+    "docker",
+    "dockerd",
+    "nerdctl",
+    "podman",
+    "runc",
 )
 
 
@@ -583,6 +599,36 @@ class CLITestBase(unittest.TestCase):
             timeout=timeout,
         )
         return result.returncode, result.stdout, result.stderr
+
+    def assert_dashboard_holds_no_container_runtime(self) -> None:
+        """The Dashboard mounts no runtime socket and its image has no container CLI.
+
+        `vllm-sr serve` owns the stack; the Dashboard reads status from HTTP
+        probes and the stack's files, and logs from the spool.
+        """
+        code, mounts, stderr = self.inspect_container(
+            "{{json .Mounts}}", container_name=self.DASHBOARD_CONTAINER_NAME
+        )
+        self.assertEqual(code, 0, stderr)
+        destinations = {mount["Destination"] for mount in json.loads(mounts)}
+        self.assertFalse(destinations & set(CONTAINER_RUNTIME_SOCKETS), destinations)
+        found = self._run_subprocess(
+            [
+                self.container_runtime,
+                "exec",
+                self.DASHBOARD_CONTAINER_NAME,
+                "sh",
+                "-c",
+                'for name in "$@"; do command -v "$name" || true; done',
+                "sh",
+                *CONTAINER_RUNTIME_CLIS,
+            ],
+            timeout=30,
+        )
+        self.assertEqual(found.returncode, 0, found.stderr)
+        self.assertEqual(
+            found.stdout.strip(), "", "the Dashboard image has a container CLI"
+        )
 
     def container_networks(self, container_name: str) -> set[str]:
         """Return the networks *container_name* is currently attached to."""

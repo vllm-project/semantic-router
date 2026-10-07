@@ -630,11 +630,17 @@ func autoGenerateCategoriesFromDecisions(decisions []Decision) []Category {
 	}
 	sort.Strings(keys)
 	for _, name := range keys {
+		// A referenced classifier label declares itself; any other name can
+		// only be the fallback for labels no rule lists.
+		label := "other"
+		if IsSupportedRoutingDomainName(name) {
+			label = name
+		}
 		categories = append(categories, Category{
 			CategoryMetadata: CategoryMetadata{
 				Name:           name,
 				Description:    name,
-				MMLUCategories: []string{"other"},
+				MMLUCategories: []string{label},
 			},
 		})
 	}

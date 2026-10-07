@@ -352,6 +352,46 @@ def validate_upgrade_runbook_fixtures(errors: list[str], release_version: str) -
     )
 
 
+def semver_core(version: str) -> tuple[int, int, int] | None:
+    match = SEMVER_RE.fullmatch(version)
+    if match is None:
+        return None
+    return (int(match["major"]), int(match["minor"]), int(match["patch"]))
+
+
+def documented_release(
+    errors: list[str], contract: ReleaseContract, expected_version: str | None
+) -> str | None:
+    """The release the docs and runbook pin.
+
+    A release check documents the release itself. Between releases, `main`
+    carries the next version (so dev builds sort after the last release) while
+    the docs and the source chart's appVersion stay on the last release.
+    """
+
+    if expected_version is not None:
+        require_equal(
+            errors,
+            PYPROJECT_PATH,
+            "vllm-sr version",
+            contract.pyproject_version,
+            expected_version,
+        )
+        return expected_version
+    if SOURCE_HELM_APP_VERSION_RE.fullmatch(contract.helm_app_version) is None:
+        return None
+    released = contract.helm_app_version.removeprefix("v")
+    current, pinned = semver_core(contract.pyproject_version), semver_core(released)
+    if current is not None and pinned is not None and current < pinned:
+        message = (
+            f"vllm-sr version {contract.pyproject_version} is behind the released "
+            f"v{released} that the source chart pins"
+        )
+        errors.append(f"{PYPROJECT_PATH.relative_to(REPO_ROOT)}: {message}")
+        emit_github_error(PYPROJECT_PATH, "Version behind release", message)
+    return released
+
+
 def validate(expected_version: str | None) -> tuple[ReleaseContract, list[str]]:
     contract = collect_contract()
     errors: list[str] = []
@@ -362,10 +402,7 @@ def validate(expected_version: str | None) -> tuple[ReleaseContract, list[str]]:
         )
         emit_github_error(PYPROJECT_PATH, "Invalid version", contract.pyproject_version)
 
-    expected = expected_version or contract.pyproject_version
-    require_equal(
-        errors, PYPROJECT_PATH, "vllm-sr version", contract.pyproject_version, expected
-    )
+    documented = documented_release(errors, contract, expected_version)
 
     validate_source_helm_app_version(
         errors, contract.helm_app_version, expected_version
@@ -373,13 +410,14 @@ def validate(expected_version: str | None) -> tuple[ReleaseContract, list[str]]:
     validate_helm_workflow(errors)
     validate_release_image_bridge(errors)
     validate_release_notes_images(errors, contract.release_images)
-    validate_upgrade_docs_images(errors, contract.release_images, expected)
-    validate_upgrade_runbook_fixtures(errors, expected)
+    if documented is not None:
+        validate_upgrade_docs_images(errors, contract.release_images, documented)
+        validate_upgrade_runbook_fixtures(errors, documented)
     # An explicit version is the publication boundary used by release.yml and
     # `make release-check RELEASE_VERSION=...`. Source-only validation may
     # run before maintainers cut the next immutable minor snapshot.
     if expected_version is not None:
-        validate_release_catalog(errors, expected)
+        validate_release_catalog(errors, expected_version)
     return contract, errors
 
 
@@ -425,6 +463,10 @@ def main() -> int:
     print(f"  vllm-sr package:        {contract.pyproject_version}")
     print(f"  helm chart source:      {contract.helm_chart_version}")
     print(f"  helm source appVersion: {contract.helm_app_version}")
+    if args.version is None:
+        print(
+            f"  Documented release:     {contract.helm_app_version} (docs and runbook)"
+        )
     print(f"  Docker release images:  {', '.join(contract.release_images)}")
     catalog_snapshot = catalog_snapshot_for_version(release_version)
     if args.version is not None:

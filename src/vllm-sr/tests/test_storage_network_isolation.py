@@ -484,7 +484,7 @@ def test_a_failed_creation_does_not_remove_a_container_of_the_same_name(monkeypa
 
     return_code, _stdout, stderr = container_start_runner.run_container_specs(
         [("router", "vllm-sr-router-container", (["docker", "create"],))],
-        storage_secret_values={},
+        router_secret_values={},
     )
 
     assert return_code == 125
@@ -532,7 +532,7 @@ def test_a_failure_after_creation_unwinds_the_container_it_created(monkeypatch):
                 ),
             )
         ],
-        storage_secret_values={},
+        router_secret_values={},
     )
 
     assert return_code == 1

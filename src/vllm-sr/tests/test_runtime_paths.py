@@ -443,3 +443,23 @@ def test_materialize_uses_custom_host_state_without_container_path_leak(
 
     assert active == state_root / ".vllm-sr" / "runtime-config.audit-a.yaml"
     assert not (source.parent / ".vllm-sr").exists()
+
+
+def test_materialize_takes_a_reencoded_same_document_as_its_own(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+):
+    # What `vllm-sr config apply` sent comes back re-encoded by the Router.
+    source = tmp_path / "config.yaml"
+    source.write_text("version: v0.3\n", encoding="utf-8")
+    effective = b"version: v0.3\nglobal:\n  services:\n    management_api: {bind_address: 0.0.0.0, port: 8080}\n"
+    active = materialize_runtime_config(source, effective)
+    reencoded = yaml.safe_dump(yaml.safe_load(effective), sort_keys=True).encode()
+    active.write_bytes(reencoded)
+
+    assert materialize_runtime_config(source, effective) == active
+    assert active.read_bytes() == reencoded
+    assert "Preserving" not in caplog.text
+    receipt = json.loads(_runtime_config_provenance_path(active).read_text())
+    assert receipt["last_materialized_active_digest"] == (
+        "sha256:" + hashlib.sha256(reencoded).hexdigest()
+    )

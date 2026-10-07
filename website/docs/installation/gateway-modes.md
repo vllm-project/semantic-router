@@ -24,6 +24,12 @@ vllm-sr serve --gateway extproc                    # Envoy in front, docker
 vllm-sr serve --target kubernetes --config config.yaml
 ```
 
+Start with `standalone` unless you need one of the Envoy features above. On
+docker, switching is a restart on the active configuration: run
+`vllm-sr serve --gateway extproc`, and plain `vllm-sr serve` to come back. In
+standalone mode there is no Envoy container, so `vllm-sr logs envoy` and the
+`x-envoy-*` response headers belong to `extproc` only.
+
 Both modes run the same routing core, so a request gets the same decision, the
 same upstream request and the same response transformations in either. The
 [design](../proposals/standalone-mode#differences-from-envoy-mode) lists the few

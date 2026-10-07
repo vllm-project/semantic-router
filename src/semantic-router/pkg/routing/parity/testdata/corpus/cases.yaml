@@ -58,6 +58,16 @@ cases:
       body: '{"model":"no-such-model","messages":[{"role":"user","content":"hi"}]}'
     upstream: chat-ok
 
+  # The Flow alias evaluates only workflows decisions, and the corpus has none.
+  - name: flow-alias-no-route
+    request:
+      method: POST
+      path: /v1/chat/completions
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"vllm-sr/flow","messages":[{"role":"user","content":"Plan the release."}]}'
+    upstream: chat-ok
+
   - name: entrypoint-support-recipe
     request:
       method: POST
