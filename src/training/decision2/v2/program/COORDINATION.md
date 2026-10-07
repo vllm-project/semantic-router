@@ -205,6 +205,44 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 15:55 — **`vela2-default` → parent: A/B RESULTS for #4639 (Router-level, 118,712 suite rows per arm). The 0.3B is clearly better on Guard and Safety, level on PII and hallucination held-out, and clearly worse on domain, modality, feedback and fact-check held-out. Default switch is coded per your 12:38 scope; local Kind E2E has started; PR about 20:00.**
+  - **Accuracy:** 0.3B minus Vela 1.0, mean over each signal's files, 95% group-bootstrap CI.
+
+    | Signal (metric) | Held-out | Fresh | In-distribution |
+    | --- | --- | --- | --- |
+    | Guard (AUC) | +0.026 [+0.012, +0.043] | −0.003 (level) | +0.006 (level) |
+    | Safety (AUC) | +0.052 [+0.038, +0.066] | +0.018 | +0.034 |
+    | PII (AUC) | +0.004 (level) | −0.005 (level) | −0.029 |
+    | Hallucination (AUC) | +0.010 (level) | +0.003 (level) | −0.025 |
+    | Domain (accuracy) | −0.037 | −0.087 | −0.020 |
+    | Fact-check (AUC) | −0.102 | +0.024 (level) | +0.009 (level) |
+    | Feedback (accuracy) | −0.038 | −0.181 | −0.013 (level) |
+    | Modality (AUC) | −0.180 | — | −0.109 |
+
+    - The card has no published comparison for modality, feedback or fact-check, so these are their first measurements.
+    - The modality question uses the card's trained wording exactly.
+    - Fact-check's two held-out files give their label away without the text; the suite card notes length alone separates one of them.
+  - **One call per request:** on the final Router, every long-row request reached the 0.3B as one bundle with one decisions task (23,817 of 23,817). Fixing this took a whole-text read for Vela 2.0 bindings: before it, a long prompt made up to 8 calls.
+  - **CPU latency** (router-latency method, 5 interleaved rounds, 12 cores), Vela 1.0 against the 0.3B under `max_speed`:
+
+    | Pass | Vela 1.0 | 0.3B `max_speed` |
+    | --- | --- | --- |
+    | Sequential p50 / p95 | 16.4 / 57.4 ms | 78.4 / 101.1 ms |
+    | Sequential throughput | 38.6 req/s | 11.9 req/s |
+    | Concurrency 16, throughput | 52.3 req/s | 12.9 req/s |
+
+    - About 4.8× at the median; `exact` was 8×.
+    - The final run on the PR binary, with the defaults against the restore block, is running on node D.
+  - **Thresholds:** recalibrated on the suite's dev split so each keeps Vela 1.0's operating point: a binary signal keeps its false-positive rate, a confidence floor keeps its share of rows below it.
+    - Guard 0.3–0.9 → 0.74–0.77. E2E fixtures: 6/6 attacks (Vela 1.0 got 5/6; #4120's missed attack now blocked) and 6/6 benign.
+    - PII → 0.03, i.e. every span the model returns. On test this flags 7.4% of negatives and catches 88.8%, against Vela 1.0's 12.1% and 90.5% at 0.9.
+    - Safety 0.5 → 0.46; fact-check 0.95 → 0.93; domain floor 0.5 → 0.28; feedback 0.7 → 0.37; modality 0.7 → 0.51.
+    - A module that runs any other model and sets no threshold keeps its previous one, so a one-block `system:` restore brings back Vela 1.0 with its operating points.
+  - **Moved:** domain, Guard, safety, fact-check, feedback, modality, PII and hallucination, all on one `@Vela-2.0-0.3B` deployment (CPU: `max_speed`). The 32K Guard/PII windows stay with the Vela 1.0 artifacts; the 0.3B reads up to 8,192 tokens.
+  - **Stayed:** Hazard, embeddings, Omni and reranker. Recipes and profiles that pin Vela 1.0 (vela-amd, multi-objective, vela-shield and others) are unchanged.
+  - **For the user:** modality (−0.18 AUC held-out) and feedback (−0.18 accuracy on fresh) regress the most. If you'd rather keep those two on Vela 1.0, it's a one-line change per signal; otherwise I ship your scope as is.
+  — `vela2-default`
+
 - 2026-10-07 15:02 — **`ux-dogfood` → parent, all workstreams: START on dogfooding `vllm-sr` as a new user (CPU and AMD), from the public docs on `main` `2e3ab986c`. Node A claim: GPU2–3 (leased) and cores 56–79 (NUMA node 0), untimed, about 15:10–23:00. Node F claim: cores 0–31, no GPU, untimed, same window.**
   - **First fact, already a top finding:** no published artifact contains #4628. PyPI stable is `0.4.0` (2026-09-27; pulls `:v0.4.0` images, no model runtime, no standalone), the newest dev wheel is `0.4.0.dev20261007023945`, and `:latest` is `e60109c86` (#4649). `main`'s `Main` workflow for `b9b183307` and `2e3ab986c` is still queued, so no image or wheel has #4628 yet, while the live site already documents standalone as the default.
   - **Plan:**
