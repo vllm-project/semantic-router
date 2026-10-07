@@ -32,7 +32,6 @@ CACHE_PVC_SIZE="5Gi"
 #   - Vela-1.0-Encoder-307M-Embedding (default)
 #   - mom-embedding-ultra (explicit legacy mmBERT)
 #   - mom-embedding-pro   (Qwen3 embedding)
-#   - mom-embedding-flash (EmbeddingGemma)
 EMBEDDING_MODEL="Vela-1.0-Encoder-307M-Embedding"
 EMBEDDING_MODEL_REPO=""
 EMBEDDING_MODEL_REVISION="main"
@@ -82,7 +81,7 @@ Examples:
   $0 -n semantic --simulator --classifier-gpu
 
   # Deploy with custom storage class and a canonical embedding model
-  $0 -n myproject -i llama3-70b -m llama3-70b -s gp3-csi --embedding-model mom-embedding-flash
+  $0 -n myproject -i llama3-70b -m llama3-70b -s gp3-csi --embedding-model mom-embedding-pro
 
   # Dry run to see what will be deployed
   $0 -n semantic -i granite32-8b -m granite32-8b --dry-run
@@ -149,15 +148,9 @@ resolve_embedding_settings() {
             EMBEDDING_MODEL_TYPE="qwen3"
             EMBEDDING_MODEL_PATH_KEY="qwen3_model_path"
             ;;
-        mom-embedding-flash|gemma|embeddinggemma-300m)
-            EMBEDDING_MODEL="mom-embedding-flash"
-            EMBEDDING_MODEL_REPO="google/embeddinggemma-300m"
-            EMBEDDING_MODEL_TYPE="gemma"
-            EMBEDDING_MODEL_PATH_KEY="gemma_model_path"
-            ;;
         *)
             echo -e "${RED}Unsupported embedding model: $1${NC}"
-            echo "Use one of: Vela-1.0-Encoder-307M-Embedding, mom-embedding-ultra, mom-embedding-pro, mom-embedding-flash"
+            echo "Use one of: Vela-1.0-Encoder-307M-Embedding, mom-embedding-ultra, mom-embedding-pro"
             exit 1
             ;;
     esac

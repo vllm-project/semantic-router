@@ -26,7 +26,7 @@ from execution_batches import (
     e2e_batches,
     expected_dispatch_jobs,
     image_producers,
-    native_batches,
+    platform_batches,
 )
 from provider_mocker_image import (
     IMAGE as MOCKER_IMAGE,
@@ -57,7 +57,7 @@ EXECUTORS = (
     "operator",
     "local",
     "recipes",
-    "native",
+    "platform",
     "performance",
     "package",
     "tools",
@@ -214,7 +214,6 @@ def make_plan(
         "images": images,
         "build_images": build_images,
         "image_sources": image_sources,
-        "native": any(record["native"] for record in verifications),
         "publish_images": publish_images,
         "publish_helm": profile in {"nightly", "release"}
         or (profile == "main" and selection.signals["helm"]),
@@ -230,7 +229,7 @@ def make_plan(
         "quality_context": dict(selection.signals),
     }
     plan["component_batches"] = component_batches(verifications)
-    plan["native_batches"] = native_batches(verifications)
+    plan["platform_batches"] = platform_batches(verifications)
     plan["e2e_batches"] = e2e_batches(verifications)
     plan["image_producers"] = image_producers(images)
     plan["expected_dispatch_jobs"] = expected_dispatch_jobs(plan)
@@ -258,10 +257,10 @@ def dispatch_records(plan: dict) -> dict[str, list[dict]]:
     """Map stable physical caller IDs to contracts or bounded workers."""
     result = {job: [] for job in EXECUTOR_JOBS}
     for record in plan["verifications"]:
-        if record["executor"] not in {"tools", "native", "e2e"}:
+        if record["executor"] not in {"tools", "platform", "e2e"}:
             result[record["dispatch_job"]].append(record)
     result["tools"] = plan["component_batches"]
-    for batch in [*plan["native_batches"], *plan["e2e_batches"]]:
+    for batch in [*plan["platform_batches"], *plan["e2e_batches"]]:
         result[batch["dispatch_job"]].append(batch)
     return result
 
@@ -315,7 +314,6 @@ def github_outputs(plan: dict) -> dict[str, str]:
         "build_images": plan["build_images"],
         "published_images": [published] if published else [],
         "publish_images": plan["publish_images"],
-        "build_native": plan["native"],
         "multiarch": plan["multiarch"],
         "publish_helm": plan["publish_helm"],
         "publish_python": plan["publish_python"],

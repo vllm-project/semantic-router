@@ -50,7 +50,6 @@ describe('runPlaygroundTask', () => {
       prompt: 'Check the policy.',
       createdAt: 1,
       requestOptions: {
-        enableClawMode: false,
         enableWebSearch: false,
         executeToolCalls: false,
         model: 'team/custom-balanced',
@@ -70,7 +69,6 @@ describe('runPlaygroundTask', () => {
 
     await runPlaygroundTask({
       buildTaskTools,
-      clawManagementDisabled: false,
       clearConversationActiveTask: vi.fn(),
       endpoint: '/api/router/v1/chat/completions',
       executeTools,
@@ -144,7 +142,6 @@ describe('runPlaygroundTask', () => {
       ],
       createdAt: 1,
       requestOptions: {
-        enableClawMode: false,
         enableWebSearch: false,
         executeToolCalls: false,
         model: 'vllm-sr/mom-v1-blend',
@@ -163,7 +160,6 @@ describe('runPlaygroundTask', () => {
 
     await runPlaygroundTask({
       buildTaskTools: () => [],
-      clawManagementDisabled: false,
       clearConversationActiveTask: vi.fn(),
       endpoint: '/api/router/v1/chat/completions',
       executeTools: vi.fn(async () => []),
@@ -234,7 +230,6 @@ describe('runPlaygroundTask', () => {
         prompt: 'Check the policy.',
         createdAt: 1,
         requestOptions: {
-          enableClawMode: false,
           enableWebSearch: false,
           model: 'vllm-sr/auto',
         },
@@ -244,7 +239,6 @@ describe('runPlaygroundTask', () => {
 
       await runPlaygroundTask({
         buildTaskTools: () => [probeTool],
-        clawManagementDisabled: false,
         clearConversationActiveTask: vi.fn(),
         endpoint: '/api/router/v1/chat/completions',
         executeTools: vi.fn(async () => [
@@ -296,7 +290,6 @@ describe('runPlaygroundTask', () => {
       prompt: 'Hello',
       createdAt: 1,
       requestOptions: {
-        enableClawMode: false,
         enableWebSearch: false,
         model: 'vllm-sr/auto',
       },
@@ -306,7 +299,6 @@ describe('runPlaygroundTask', () => {
 
     await runPlaygroundTask({
       buildTaskTools: () => [],
-      clawManagementDisabled: false,
       clearConversationActiveTask: vi.fn(),
       endpoint: '/api/router/v1/chat/completions',
       executeTools: vi.fn(async () => []),
@@ -394,7 +386,6 @@ describe('runPlaygroundTask', () => {
         prompt: 'Explain.',
         createdAt: 1,
         requestOptions: {
-          enableClawMode: false,
           enableWebSearch: false,
           model: 'vllm-sr/balance',
         },
@@ -406,7 +397,6 @@ describe('runPlaygroundTask', () => {
       ])
       await runPlaygroundTask({
         buildTaskTools: () => [probeTool],
-        clawManagementDisabled: false,
         clearConversationActiveTask: vi.fn(),
         endpoint: '/api/router/v1/chat/completions',
         executeTools,
@@ -468,7 +458,7 @@ describe('runPlaygroundTask', () => {
         conversationId: 'long-conversation',
         prompt: 'Think carefully.',
         createdAt: 1,
-        requestOptions: { enableClawMode: false, enableWebSearch: false, model: 'vllm-sr/balance' },
+        requestOptions: { enableWebSearch: false, model: 'vllm-sr/balance' },
       }
       let messages: Message[] = []
       const controllers: AbortController[] = []
@@ -476,7 +466,6 @@ describe('runPlaygroundTask', () => {
       const clearConversationActiveTask = vi.fn()
       const execution = runPlaygroundTask({
         buildTaskTools: () => [],
-        clawManagementDisabled: false,
         clearConversationActiveTask,
         endpoint: '/api/router/v1/chat/completions',
         executeTools: vi.fn(async () => []),

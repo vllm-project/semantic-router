@@ -1,4 +1,4 @@
-//go:build !windows && cgo && !riscv64
+//go:build !windows
 
 package cache
 
@@ -27,7 +27,7 @@ func TestValkeySemanticPolarityIntegration(t *testing.T) {
 	cfg.Development.AutoCreateIndex = true
 	backend, err := NewValkeyCache(ValkeyCacheOptions{
 		Enabled: true, Config: cfg, TTLSeconds: 60, SimilarityThreshold: .8,
-		EmbeddingModel: "bert", EmbeddingProvider: redisValkeyPolarityVectors(),
+		EmbeddingModel: "qwen3", EmbeddingProvider: redisValkeyPolarityVectors(),
 	})
 	if err != nil {
 		storagetest.Unavailable(t, "valkey", fmt.Sprintf("Valkey vector search unavailable: %v", err))

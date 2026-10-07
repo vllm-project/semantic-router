@@ -3,8 +3,10 @@ package classification
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -176,6 +178,14 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 
 	boundedText := textForSignalFunc(input.Text, input.UncompressedText, input.SkipCompressionSignals)
 	textForSignal := func(signalType string) string {
+		// Every signal a Vela 2.0 model answers reads the request as it came,
+		// so their questions share one state and one call.
+		if c.signalReadsWholeText(signalType) {
+			if input.UncompressedText != "" {
+				return input.UncompressedText
+			}
+			return input.Text
+		}
 		if c.hasLongContextClassifier(signalType) {
 			if input.UncompressedText != "" && input.SkipCompressionSignals[signalType] {
 				return input.UncompressedText
@@ -200,6 +210,12 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 		input.RequestFacts.Context = context.Background()
 	}
 
+	// One request stage, one bundle: the model calls of every signal reach each
+	// runtime process as a single /v1/bundle call, before the signals' deadline.
+	stage, bundle := modelservice.WithBundle(input.RequestFacts.Context, 0)
+	stage, cancel := withSignalDeadline(stage, c.Config.SignalTimeout(), time.Now())
+	defer cancel()
+	input.RequestFacts.Context = stage
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var mediaCache *requestMediaEmbeddingCache
@@ -208,7 +224,7 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 	}
 	dispatchers := c.buildSignalDispatchers(input, results, &mu, textForSignal, mediaCache, usedSignals)
 
-	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
+	runSignalDispatchers(dispatchers, usedSignals, ready, bundle, &wg)
 
 	wg.Wait()
 	results = c.applySignalGroups(results)

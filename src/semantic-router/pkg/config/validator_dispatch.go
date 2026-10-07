@@ -16,6 +16,7 @@ const (
 // state belong in the routing groups; each family still owns its own rules.
 var (
 	globalConfigContractValidators = []configContractValidator{
+		validateListenerContracts,
 		validateRoutingPreviewConfig,
 		validateModelPricingContracts,
 		validateReasoningFamilyContracts,
@@ -36,6 +37,7 @@ var (
 		validatePromptCompressionContracts,
 		validateHallucinationContracts,
 		validateModelAdmissionContracts,
+		validateModelSignalTimeoutContracts,
 		validateModelDeploymentContracts,
 		validateGlobalModelBindingContracts,
 		validateGlobalToolSessionsContracts,
@@ -46,6 +48,8 @@ var (
 		validateModelBindingContracts,
 		validateGlobalClassifierRuntimeContracts,
 		validateComplexityRoutingContracts,
+		warnLooperAliasCollisions,
+		logConfigWarnings,
 	}
 
 	routingProfileContractValidators = []configContractValidator{

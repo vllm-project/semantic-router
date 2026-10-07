@@ -10,7 +10,7 @@ const globalConfig = {
         mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
         use_cpu: true,
         embedding_config: {
-          backend: 'candle',
+          backend: 'model_runtime',
           model_type: 'mmbert',
           target_dimension: 768,
           preload_embeddings: true,
@@ -110,7 +110,7 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
     const card = page.locator('article').filter({
       has: page.getByRole('heading', { name: 'Embedding Models' }),
     })
-    await expect(card).toContainText('Local / candle')
+    await expect(card).toContainText('Local / model_runtime')
     await card.getByRole('button', { name: 'Edit' }).click()
 
     const modal = page.getByRole('dialog', { name: 'Edit Embedding Models' })

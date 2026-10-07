@@ -32,6 +32,7 @@ from .config_contract import (
 )
 from .config_schema import surface_types
 from .context_bands import normalize_token_count, validate_context_band
+from .durations import parse_duration
 
 RoutingStrategy = Literal["priority", "confidence"]
 SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT = 2
@@ -39,6 +40,36 @@ PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
 LABELED_CONDITION_TYPES = frozenset({"classifier", "decision"})
+
+
+class ListenerTLS(BaseModel):
+    """A listener's server certificate for one-way TLS."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cert_file: str = Field(
+        description="PEM certificate chain; a relative path is relative to "
+        "the config file's directory."
+    )
+    key_file: str = Field(description="PEM private key of the certificate.")
+
+
+class ListenerIdentity(BaseModel):
+    """The identity sources a standalone listener trusts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    trust_headers: bool = Field(
+        default=False,
+        description="Keep the client identity headers (x-authz-* and the "
+        "global.services.authz.identity names) that an authenticating proxy "
+        "in front of this listener sets. Off, the Router drops them.",
+    )
+    trusted_peers: Optional[List[str]] = Field(
+        default=None,
+        description="CIDRs whose connections may carry trusted identity "
+        "headers; the TCP peer is checked, never X-Forwarded-For.",
+    )
 
 
 class Listener(BaseModel):
@@ -54,6 +85,16 @@ class Listener(BaseModel):
         "If set, requests must send one of these values as "
         "'Authorization: Bearer <key>' or, for Azure OpenAI clients, "
         "'api-key: <key>'; other requests are rejected with HTTP 401.",
+    )
+    tls: Optional[ListenerTLS] = Field(
+        default=None,
+        description="Serve this listener over TLS. Standalone mode serves it; "
+        "--gateway extproc does not.",
+    )
+    identity: Optional[ListenerIdentity] = Field(
+        default=None,
+        description="The identity sources this listener trusts in standalone "
+        "mode; by default none.",
     )
 
 
@@ -1718,6 +1759,135 @@ class DecisionAction(BaseModel):
         return self
 
 
+# Decision reliability fields Envoy cannot apply to one request.
+DECISION_RELIABILITY_NATIVE_ONLY = (
+    "idle_timeout",
+    "first_byte_timeout",
+    "retry_back_off_base",
+    "retry_back_off_max",
+    "retry_after_max",
+)
+
+
+class DecisionReliability(BaseModel):
+    """A decision's override of its provider model's timeouts and retries.
+
+    The fields mean what they mean in the provider reliability block. Timeouts
+    and retry_count replace the provider model's, and 0s disables a timeout;
+    retry_on and retriable_status_codes add to the provider model's, as Envoy's
+    per-request headers do. Unset fields keep the provider model's.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_timeout: Optional[str] = None
+    per_try_timeout: Optional[str] = None
+    idle_timeout: Optional[str] = None
+    first_byte_timeout: Optional[str] = None
+    retry_count: Optional[int] = Field(default=None, ge=0, le=5)
+    retry_on: Optional[str] = None
+    retriable_status_codes: Optional[List[Annotated[int, Field(ge=100, le=599)]]] = None
+    retry_back_off_base: Optional[str] = None
+    retry_back_off_max: Optional[str] = None
+    retry_after_max: Optional[str] = None
+
+    @field_validator(
+        "total_timeout", "per_try_timeout", "idle_timeout", "first_byte_timeout"
+    )
+    @classmethod
+    def _duration_or_zero(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None:
+            parse_duration(value)
+        return value
+
+    @field_validator("retry_back_off_base", "retry_back_off_max", "retry_after_max")
+    @classmethod
+    def _positive_duration(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and parse_duration(value) <= 0:
+            raise ValueError("must be a positive duration such as 30s")
+        return value
+
+    @model_validator(mode="after")
+    def _back_off_bounds(self) -> "DecisionReliability":
+        if self.retry_back_off_max is None:
+            return self
+        base = parse_duration(self.retry_back_off_base or "25ms")
+        if parse_duration(self.retry_back_off_max) < base:
+            raise ValueError("retry_back_off_max must not be below retry_back_off_base")
+        return self
+
+    def native_only_fields(self) -> List[str]:
+        """The fields set that only standalone mode honors."""
+        return [
+            field
+            for field in DECISION_RELIABILITY_NATIVE_ONLY
+            if getattr(self, field) is not None
+        ]
+
+
+def _fallback_duration_seconds(value: str | int):
+    """A fallback duration as the Router reads it: a Go duration string such
+    as 30s, or integer nanoseconds."""
+    if isinstance(value, bool):
+        raise ValueError("must be a duration such as 30s")
+    if isinstance(value, int):
+        return value / 1_000_000_000
+    return parse_duration(value)
+
+
+class FallbackOverride(BaseModel):
+    """A decision's override of its recipe's cross-model fallback policy.
+
+    Each field it sets replaces the recipe's (routing.fallback, then
+    global.router.fallback); unset fields keep it. The candidates stay the
+    decision's ranked models. circuit_breaker is per backend, so it stays on
+    the recipe's or the global policy.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    max_attempts: Optional[int] = Field(default=None, ge=0)
+    total_timeout: Optional[str | int] = None
+    per_attempt_timeout: Optional[str | int] = None
+    retryable_status_codes: Optional[List[Annotated[int, Field(ge=100, le=599)]]] = None
+
+    @field_validator("total_timeout", "per_attempt_timeout")
+    @classmethod
+    def _non_negative_duration(cls, value: Optional[str | int]) -> Optional[str | int]:
+        if value is not None and _fallback_duration_seconds(value) < 0:
+            raise ValueError("must not be negative")
+        return value
+
+    @model_validator(mode="after")
+    def _per_attempt_within_total(self) -> "FallbackOverride":
+        if self.total_timeout is None or self.per_attempt_timeout is None:
+            return self
+        total = _fallback_duration_seconds(self.total_timeout)
+        per_attempt = _fallback_duration_seconds(self.per_attempt_timeout)
+        if total > 0 and per_attempt > total:
+            raise ValueError("per_attempt_timeout cannot exceed total_timeout")
+        return self
+
+
+class FallbackCircuitBreaker(BaseModel):
+    """Per-backend back-off of a recipe's or the global fallback policy."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    consecutive_failures: Optional[int] = Field(default=None, ge=0)
+    cooldown_period: Optional[str | int] = None
+    half_open_probes: Optional[int] = Field(default=None, ge=0)
+
+
+class FallbackPolicy(FallbackOverride):
+    """A recipe's cross-model fallback policy (routing.fallback): the
+    decision fields plus the version and the per-backend circuit breaker."""
+
+    version: Optional[Literal[0, 1]] = None
+    circuit_breaker: Optional[FallbackCircuitBreaker] = None
+
+
 class Decision(BaseModel):
     """Routing decision configuration."""
 
@@ -1736,6 +1906,8 @@ class Decision(BaseModel):
     modelRefs: List[ModelRef] = Field(default_factory=list, alias="modelRefs")
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
     adaptations: Optional[DecisionAdaptationsConfig] = None
+    reliability: Optional[DecisionReliability] = None
+    fallback: Optional[FallbackOverride] = None
     plugins: Optional[List[PluginConfig]] = []
     annotations: Optional[Dict[str, Any]] = None
 
@@ -1815,7 +1987,8 @@ class ModelPricing(BaseModel):
 
 
 class ProviderReliability(BaseModel):
-    """Generated Envoy reliability policy for one provider model."""
+    """Load balancing, timeouts, retries and endpoint health for one provider
+    model, honored the same way by every data plane."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -1828,6 +2001,56 @@ class ProviderReliability(BaseModel):
     health_check_path: Optional[str] = None
     health_check_interval: str = "10s"
     health_check_timeout: str = "2s"
+    connect_timeout: Optional[str] = None
+    total_timeout: Optional[str] = None
+    idle_timeout: Optional[str] = None
+    per_try_timeout: Optional[str] = None
+    first_byte_timeout: Optional[str] = Field(
+        default=None,
+        description="Wait for the first response body byte, so a stalled stream "
+        "can still be retried. Only standalone mode honors it.",
+    )
+    retriable_status_codes: List[Annotated[int, Field(ge=100, le=599)]] = Field(
+        default_factory=list
+    )
+    retry_back_off_base: Optional[str] = None
+    retry_back_off_max: Optional[str] = None
+    retry_after_max: Optional[str] = None
+    retry_budget_percent: Optional[float] = Field(default=None, gt=0, le=100)
+    retry_budget_min_concurrency: Optional[int] = Field(default=None, ge=0)
+
+    @field_validator(
+        "base_ejection_time",
+        "health_check_interval",
+        "health_check_timeout",
+        "connect_timeout",
+        "per_try_timeout",
+        "first_byte_timeout",
+        "retry_back_off_base",
+        "retry_back_off_max",
+        "retry_after_max",
+    )
+    @classmethod
+    def _positive_duration(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and parse_duration(value) <= 0:
+            raise ValueError("must be a positive duration such as 30s")
+        return value
+
+    @field_validator("total_timeout", "idle_timeout")
+    @classmethod
+    def _duration_or_zero(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None:
+            parse_duration(value)
+        return value
+
+    @model_validator(mode="after")
+    def _back_off_bounds(self) -> "ProviderReliability":
+        if self.retry_back_off_max is None:
+            return self
+        base = parse_duration(self.retry_back_off_base or "25ms")
+        if parse_duration(self.retry_back_off_max) < base:
+            raise ValueError("retry_back_off_max must not be below retry_back_off_base")
+        return self
 
 
 class Reasoning(BaseModel):
@@ -2330,7 +2553,8 @@ class ModelBinding(BaseModel):
 
     deployment: str
     contract: str
-    adapter: str
+    # Required except on model_runtime deployments, whose card names the head.
+    adapter: str = ""
     head: Optional[str] = None
     mapping_path: Optional[str] = None
     pair_scorer: Optional[PairScorerSelection] = None
@@ -2380,6 +2604,7 @@ class Routing(BaseModel):
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
     strategy: Optional[RoutingStrategy] = None
+    fallback: Optional[FallbackPolicy] = None
 
 
 class Entrypoint(BaseModel):
@@ -2423,6 +2648,7 @@ class RecipeRouting(BaseModel):
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
     strategy: Optional[RoutingStrategy] = None
+    fallback: Optional[FallbackPolicy] = None
 
 
 class Recipe(BaseModel):
@@ -2452,19 +2678,12 @@ class EmbeddingModelsConfig(BaseModel):
     qwen3_model_path: Optional[str] = Field(
         None, description="Path to Qwen3-Embedding model"
     )
-    gemma_model_path: Optional[str] = Field(
-        None, description="Path to EmbeddingGemma model"
-    )
     mmbert_model_path: Optional[str] = Field(
         None, description="Path to mmBERT 2D Matryoshka model"
     )
     multimodal_model_path: Optional[str] = Field(
         None,
         description="Path to multi-modal embedding model (text/image/audio)",
-    )
-    bert_model_path: Optional[str] = Field(
-        None,
-        description="Path to BERT/MiniLM model (recommended for memory retrieval)",
     )
     embedding_config: Optional[EmbeddingClassifierConfig] = Field(
         default=None,

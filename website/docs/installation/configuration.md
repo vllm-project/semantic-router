@@ -29,7 +29,7 @@ or runtime behavior that differs from the built-in defaults.
 | Section | Owns |
 | --- | --- |
 | `version` | Canonical schema version. Use `v0.3`. |
-| `listeners` | Public Router listeners, timeouts, and optional bearer credentials for CLI-managed Envoy listeners. |
+| `listeners` | Public Router listeners: address, port, idle timeout, optional client API keys, optional one-way TLS (`tls.cert_file`, `tls.key_file`), and the identity sources a listener trusts (`identity.trust_headers`, `identity.trusted_peers`; by default none), which the Router honors in standalone mode. |
 | `providers` | Logical provider models, physical backend endpoints, pricing, capabilities, and defaults. |
 | `evaluation` | Optional operator-owned benchmark definitions, versioned index DAGs, and model-linked records. |
 | `routing` | The default recipe: model cards, signals, projections, decisions, strategy, algorithms, and route plugins. |
@@ -72,17 +72,17 @@ reach a routable interface without an explicit `bind` change. The switch is read
 once at startup, so changing it requires a Router restart. See
 [API and Observability](../tutorials/global/api-and-observability).
 
-Built-in category/domain classification uses the local `variant` selector when
-no remote backend is configured. To call a named external classifier, attach a
+Built-in category/domain classification runs Vela Domain in the
+[model runtime](model-runtime/overview.md) when no remote backend is
+configured. To call a named external classifier, attach a
 `backend` under `global.model_catalog.modules.classifier.domain` and resolve
 its `model` from `global.model_catalog.external[]` with
 `model_role: classification`. The shared backend fields are `protocol`,
 `contract`, `model`, and optional `deadline_ms`; category
 currently supports `http_classify` with the full `label_distribution.v1`
-response contract. Omit `backend` to retain local behavior. The deprecated
-`use_modernbert` and `use_mmbert_32k` keys remain readable, while generated
-canonical configuration uses `variant: candle`, `variant: modernbert`, or
-`variant: mmbert32k`.
+response contract. Omit `backend` to keep the runtime-served model. The earlier
+`variant`, `use_modernbert` and `use_mmbert_32k` selectors are gone;
+`vllm-sr config migrate` removes them.
 
 Complexity attaches the same block under
 `global.model_catalog.modules.complexity`, beside `prototype_scoring`. It reads
@@ -108,8 +108,7 @@ result. `on_error` beside the backend selects what such a failure, or a
 provider-declared `truncated_at`, does to the rule that consumed it: `allow`
 (the default) treats the content as not matching, `block` matches it as
 `classification_error`. Spans returned before a declared truncation still
-count under both policies. A backend is mutually exclusive with the local
-`use_mmbert_32k` selector.
+count under both policies.
 
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
@@ -463,7 +462,9 @@ The canonical document can be authored or applied through several interfaces:
 owns which part of the document and how to avoid competing sources of truth.
 [Configuration Contract](configuration-contract) describes the generated
 machine-readable schema, Router discovery and validation APIs, and the safe
-authoring loop for tools and agents.
+authoring loop for tools and agents. [Configuration Management](configuration-management)
+explains how a change activates on a running Router, how a rejected change is
+reported, and how to list and roll back versions.
 
 ## Reference sources
 

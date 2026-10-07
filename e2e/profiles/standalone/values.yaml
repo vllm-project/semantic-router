@@ -1,0 +1,83 @@
+# The Router's decision model, in any case; standalone-decision-model checks
+# that the chart writes it into the Router config.
+decisionModel: vela-1.0
+# The chart's default gateway mode (standalone): clients reach the Router's own
+# listener through its Service; no gateway runs in the cluster.
+configOverride:
+  version: v0.3
+  listeners:
+    - name: http-8899
+      address: 0.0.0.0
+      port: 8899
+      timeout: 300s
+  providers:
+    defaults:
+      model: primary-model
+    models:
+      - name: primary-model
+        backend_refs:
+          - name: provider-mocker
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            provider: vllm
+      # Its Service selects no Pod, so every connection is refused.
+      - name: unreachable-model
+        backend_refs:
+          - name: unreachable
+            endpoint: standalone-unreachable.default.svc.cluster.local:8000
+            provider: vllm
+      - name: fallback-model
+        backend_refs:
+          - name: provider-mocker
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            provider: vllm
+  routing:
+    modelCards:
+      - name: primary-model
+      - name: unreachable-model
+      - name: fallback-model
+    signals:
+      keywords:
+        - name: failover_marker
+          operator: OR
+          keywords:
+            - standalonefailover
+    decisions:
+      - name: standalone_failover
+        description: The first candidate's backend refuses connections; the second serves.
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: failover_marker
+        algorithm:
+          type: static
+        modelRefs:
+          - model: unreachable-model
+            use_reasoning: false
+          - model: fallback-model
+            use_reasoning: false
+      - name: standalone_default
+        description: Every other request.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: primary-model
+            use_reasoning: false
+  global:
+    model_catalog:
+      kbs: []
+    router:
+      include_config_models_in_list: true
+      fallback:
+        version: 1
+        enabled: true
+        max_attempts: 2
+        total_timeout: 30s
+        per_attempt_timeout: 10s
+        retryable_status_codes:
+          - 502
+          - 503
+          - 504

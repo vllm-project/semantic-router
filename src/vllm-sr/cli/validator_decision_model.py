@@ -5,14 +5,24 @@ from pathlib import PurePosixPath
 from urllib.parse import urlparse
 
 from cli.config_contract import iter_condition_leaves, iter_routing_profiles
+from cli.decision_model import (
+    DECISION_MODEL_FIELD,
+    VELA1_DECISION_MODEL,
+    configured_decision_model,
+)
 from cli.models import UserConfig
+from cli.models_decision import OPTION_QUESTION_TYPES
 from cli.validation_error import ValidationError
 
 MODEL_RUNTIME_PROVIDER = "model_runtime"
-MODEL_RUNTIME_PROFILES = ("exact", "shared_context", "batching", "max_speed")
-MODEL_RUNTIME_DEVICE = re.compile(r"^(auto|cpu|cuda|rocm)(:[0-9]+)?$")
+# The runtime owns profile and accelerator names, plugins' included: the
+# validator checks their shape and leaves an unknown name to the runtime.
+MODEL_RUNTIME_PROFILE = re.compile(r"^[a-z][a-z0-9_]*$")
+MODEL_RUNTIME_DEVICE = re.compile(r"^[a-z][a-z0-9_]*(:[0-9]+)?$")
 MODEL_RUNTIME_REVISION = re.compile(r"^[0-9a-f]{40}$")
+MODEL_RUNTIME_PROCESS = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$")
 HUB_REPOSITORY_ID = re.compile(r"^[A-Za-z0-9][\w.-]*/[\w.-]+$")
+INPUT_OVERFLOWS = ("reject", "truncate", "window")
 MIN_SELECTOR_CANDIDATES = 2
 MAX_SELECTOR_CANDIDATES = 255
 
@@ -20,27 +30,39 @@ MAX_SELECTOR_CANDIDATES = 255
 def model_runtime_deployment_error(deployment: dict) -> str | None:
     if deployment.get("external_model"):
         return "model_runtime deployments cannot set external_model"
-    if (deployment.get("custom_ops_profile") or "none") != "none" or deployment.get(
-        "compilation_cache_dir"
-    ):
-        return "model_runtime deployments do not use ONNX Runtime custom ops or compilation caches"
-    if (deployment.get("precision") or "native") != "native":
-        return "model_runtime deployments run the package's own dtype policy (precision native)"
     budget = deployment.get("input") or {}
-    if (budget.get("overflow") or "reject") != "reject" or budget.get("max_tokens"):
-        return (
-            "decision models reject over-length input and never truncate; remove input"
-        )
+    if (budget.get("max_tokens") or 0) < 0:
+        return "input.max_tokens must not be negative"
+    if (budget.get("overflow") or "reject") not in INPUT_OVERFLOWS:
+        return "input.overflow must be reject, truncate or window"
     if not MODEL_RUNTIME_DEVICE.match(deployment.get("device") or "auto"):
-        return "device must be auto, cpu, cuda[:N] or rocm[:N]"
-    if (deployment.get("profile") or "exact") not in MODEL_RUNTIME_PROFILES:
-        return "profile must be one of " + ", ".join(MODEL_RUNTIME_PROFILES)
+        return "device must be an accelerator name with an optional index, such as cpu, cuda:0 or rocm:1"
+    if not MODEL_RUNTIME_PROFILE.match(deployment.get("profile") or "exact"):
+        return "profile must be a profile name, such as exact or batching"
     revision = deployment.get("revision") or ""
     if revision and not MODEL_RUNTIME_REVISION.match(revision):
         return "revision must be a 40-hex commit"
     endpoint = (deployment.get("endpoint") or "").strip()
+    served_name = deployment.get("served_name") or ""
+    process = deployment.get("process") or ""
     if endpoint:
+        if process:
+            return (
+                "process groups apply only to managed deployments; "
+                "an attached endpoint is one process"
+            )
+        if served_name and (
+            served_name.strip() != served_name or any(c in served_name for c in "\0\n")
+        ):
+            return "served_name must be a trimmed model name"
         return _endpoint_error(endpoint)
+    if served_name:
+        return (
+            "served_name selects a model on an attached endpoint; "
+            "a managed deployment is served under its own name"
+        )
+    if process and not MODEL_RUNTIME_PROCESS.match(process):
+        return "process must be a short name of letters, digits, '.', '_' or '-'"
     artifact = (deployment.get("artifact") or "").strip()
     if not artifact:
         return (
@@ -77,17 +99,46 @@ def _reference_error(deployments: dict, name: str) -> str | None:
         )
     if deployment.get("provider") != MODEL_RUNTIME_PROVIDER:
         return f"deployment '{name}' must use provider {MODEL_RUNTIME_PROVIDER}"
+    budget = deployment.get("input") or {}
+    if budget.get("max_tokens") or (budget.get("overflow") or "reject") != "reject":
+        return (
+            f"deployment '{name}': decision models reject over-length input and "
+            "never truncate; remove input"
+        )
     return None
+
+
+def _decision_model(config: UserConfig) -> tuple[str | None, list[ValidationError]]:
+    """The configured decision model, canonical, or the error that names it."""
+
+    try:
+        return configured_decision_model({"global": config.global_ or {}}), []
+    except ValueError as error:
+        return None, [ValidationError(str(error), field=DECISION_MODEL_FIELD)]
+
+
+def _decision_model_question_error(decision_model: str | None) -> str | None:
+    if decision_model != VELA1_DECISION_MODEL:
+        return None
+    return (
+        f"deployment is required: the decision model is {decision_model}, whose "
+        "specialists answer only the built-in signals. Name a model_runtime "
+        "deployment for the question, or choose a Vela 2.0 decision model in "
+        f"{DECISION_MODEL_FIELD}"
+    )
 
 
 def validate_decision_model_references(
     config: UserConfig, deployments: dict
 ) -> list[ValidationError]:
-    errors = []
+    decision_model, errors = _decision_model(config)
     for name, profile in iter_routing_profiles(config):
         prefix = "routing" if name == "default" else f"recipes.{name}.routing"
         for rule in profile.signals.decision or []:
-            message = _reference_error(deployments, rule.deployment)
+            if rule.deployment:
+                message = _reference_error(deployments, rule.deployment)
+            else:
+                message = _decision_model_question_error(decision_model)
             if message:
                 errors.append(
                     ValidationError(
@@ -95,6 +146,7 @@ def validate_decision_model_references(
                     )
                 )
         rules = {rule.name: rule for rule in profile.signals.decision or []}
+        errors.extend(_set_label_answer_errors(prefix, list(rules.values())))
         for decision in profile.decisions:
             errors.extend(_selector_errors(prefix, decision, deployments))
             errors.extend(_condition_errors(prefix, decision, rules))
@@ -110,24 +162,47 @@ def _condition_errors(prefix, decision, rules) -> list[ValidationError]:
         rule = rules.get(condition.name or "")
         if rule is None:
             continue
-        if rule.question.type != "choice" and condition.label is not None:
+        kind = rule.question.type
+        if kind not in OPTION_QUESTION_TYPES and condition.label is not None:
             errors.append(
                 ValidationError(
                     f"Decision '{decision.name}' condition '{rule.name}' is a "
-                    f"{rule.question.type} question and takes no label",
+                    f"{kind} question and takes no label",
                     field=field,
                 )
             )
         elif (
-            rule.question.type == "choice" and condition.label not in rule.option_keys()
+            kind in OPTION_QUESTION_TYPES and condition.label not in rule.option_keys()
         ):
+            option = "choice key" if kind == "choice" else "label"
             errors.append(
                 ValidationError(
-                    f"Decision '{decision.name}' choice condition '{rule.name}' "
-                    "requires a declared choice key as its label",
+                    f"Decision '{decision.name}' {kind} condition '{rule.name}' "
+                    f"requires a declared {option} as its label",
                     field=field,
                 )
             )
+    return errors
+
+
+def _set_label_answer_errors(prefix, rules) -> list[ValidationError]:
+    """A rule named like a set label's answer key ("<rule>.<label>") on the same deployment."""
+    names = {(rule.deployment or "", rule.name) for rule in rules}
+    errors = []
+    for rule in rules:
+        if rule.question.type != "set":
+            continue
+        for label in rule.question.labels:
+            other = f"{rule.name}.{label.key}"
+            if (rule.deployment or "", other) in names:
+                errors.append(
+                    ValidationError(
+                        f"the name collides with the answer key of set question "
+                        f"'{rule.name}''s label '{label.key}' on deployment "
+                        f"'{rule.deployment or 'of the decision model'}'; rename one of them",
+                        field=f"{prefix}.signals.decision.{other}",
+                    )
+                )
     return errors
 
 

@@ -18,6 +18,7 @@ from .activity import CHECKPOINT_SECONDS
 
 MAX_USAGE_RECEIPT_BYTES = 12288
 MAX_RECEIPT_CALLS = 256
+SESSION_ID_HEADER = "x-session-id"
 
 
 # Shared internal transport/harness contract; preserving its exception identity.
@@ -48,6 +49,7 @@ def normalize_usage(raw):
     writes = [
         value
         for value in (
+            details.get("cache_write_tokens"),
             details.get("cache_creation_tokens"),
             details.get("created_cache_tokens"),
             raw.get("cache_creation_input_tokens"),
@@ -209,6 +211,7 @@ def chat(
     stream_path=None,
     output_policy="bounded",
     activity=None,
+    session_id: str | None = None,
 ):
     started = time.monotonic()
     endpoint = target["base_url"].rstrip("/") + "/chat/completions"
@@ -229,6 +232,8 @@ def chat(
         headers["X-SR-Bench-Expected-Config-Hash"] = target["config_hash"]
     if target.get("max_inference_calls"):
         headers["X-SR-Bench-Max-Inference-Calls"] = str(target["max_inference_calls"])
+    if session_id:
+        headers[SESSION_ID_HEADER] = session_id
     content = ""
     reasoning = ""
     usage = None

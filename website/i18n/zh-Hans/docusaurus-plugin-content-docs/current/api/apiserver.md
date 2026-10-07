@@ -2,7 +2,7 @@
 translation:
   source_commit: "e86e1ac69ece8f9921cddbbfa12a4c2d8f50b66b"
   source_file: "docs/api/apiserver.md"
-  outdated: false
+  outdated: true
 ---
 
 # 路由器管理接口 {#router-management-api}
@@ -77,6 +77,14 @@ Authorization: Bearer <token>
 | `GET` | `/docs` | Swagger UI |
 
 使用 `/health` 做存活检查，使用 `/ready` 做就绪检查。在模型下载或运行时准备期间，进程可以是健康的，但 `/ready` 仍返回 `503`。
+
+当路由器为其配置托管的每个模型 deployment（包括决策模型）都就绪后，启动才算完成。路由器等待它们时，
+`/ready` 和 `/startup-status` 报告 `phase: loading_model_deployments`，`pending_models` 列出尚未就绪的
+deployment，`ready_models` 和 `total_models` 给出计数。`/startup-status` 还会在 `model_deployments` 中
+列出它们，每项包含 `name`、`artifact`、`process`、`state`、`ready`，失败后还有 `reason`；启动完成后该列表仍然保留。
+模型加载失败时，启动以 `phase: error` 结束。配置重新加载不会让 `/ready` 变回 `503`：在新配置的模型就绪之前，
+上一份配置继续服务。standalone 监听器和 ext_proc gRPC 端口只在这些模型就绪后才打开，因此监听器的 `/ready`
+和 gRPC 健康服务不会早于管理端口的 `/ready` 报告就绪。
 
 ## 不调用推理即可检查信号 {#inspect-signals-without-an-inference-call}
 

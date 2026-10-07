@@ -142,15 +142,11 @@ routing:
         type: static
 ```
 
-`vllm-sr init` was removed in v0.3. For older files or supported external
-provider configs, use the explicit conversion commands:
+`vllm-sr init` was removed in v0.3. For older files, use the explicit
+migration command:
 
 ```bash
 vllm-sr config migrate --config old-config.yaml
-vllm-sr config import \
-  --from openclaw \
-  --source openclaw.json \
-  --target config.yaml
 ```
 
 The current field reference is generated in the

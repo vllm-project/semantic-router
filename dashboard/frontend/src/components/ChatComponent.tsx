@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import styles from './ChatComponent.module.css'
-import ClawRoomChat from './ClawRoomChat'
-import ChatComposerAddMenu from './ChatComposerAddMenu'
 import ChatConversationSidebar from './ChatConversationSidebar'
 import ChatComponentConversationViewport from './ChatComponentConversationViewport'
 import ChatComponentErrors from './ChatComponentErrors'
@@ -18,21 +16,17 @@ import {
 import {
   buildConversationPreviews,
   type ChatComponentProps,
-  type ClawPlaygroundView,
   findQueuedErrorConversationId,
   getLiveThinkingProcess,
   readActiveConversationPreference,
-  readClawModePreference,
   writeActiveConversationPreference,
-  writeClawModePreference,
 } from './chatComponentSupport'
 import { useToolRegistry } from '../tools'
-import { isOpenClawMCPToolName, useMCPToolSync } from '../tools/mcp'
-import { ensureOpenClawServerConnected } from '../tools/mcp/api'
+import { useMCPToolSync } from '../tools/mcp'
 import { useConversationStorage, usePlaygroundQueue } from '../hooks'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
-import { canManageMCP, canSubmitFeedback } from '../utils/accessControl'
+import { canSubmitFeedback } from '../utils/accessControl'
 import { usePlaygroundAttachments } from './usePlaygroundAttachments'
 import { useChatConversationState } from './useChatConversationState'
 import { usePlaygroundConversationMessages } from './usePlaygroundConversationMessages'
@@ -72,13 +66,9 @@ const ChatComponent = ({
   } = useChatConversationState()
   const [isFullscreen] = useState(isFullscreenMode)
   const [enableWebSearch, setEnableWebSearch] = useState(true)
-  const [enableClawMode, setEnableClawMode] = useState<boolean>(readClawModePreference)
-  const [isTogglingClawMode, setIsTogglingClawMode] = useState(false)
   const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set())
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [clawView, setClawView] = useState<ClawPlaygroundView>(() => 'control')
-  const [teamRoomCreateToken, setTeamRoomCreateToken] = useState(0)
-  const { user, isLoading: authLoading } = useAuth()
+  const { user } = useAuth()
   const { serverReadonly, isLoading: readonlyLoading } = useReadonly()
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -176,7 +166,7 @@ const ChatComponent = ({
   }, [conversationId])
 
   // MCP 工具同步 - 自动将 MCP 服务器的工具同步到 toolRegistry
-  const { refresh: refreshMCPTools } = useMCPToolSync({ enabled: true, pollInterval: 30000 })
+  useMCPToolSync({ enabled: true, pollInterval: 30000 })
 
   // Tool Registry integration
   // Search tools (controlled by web search toggle)
@@ -190,16 +180,6 @@ const ChatComponent = ({
     categories: ['code', 'file', 'image', 'custom'],
   })
 
-  const baseOtherToolDefinitions = useMemo(
-    () => otherToolDefinitions.filter((def) => !isOpenClawMCPToolName(def.function.name)),
-    [otherToolDefinitions],
-  )
-  const clawToolDefinitions = useMemo(
-    () => otherToolDefinitions.filter((def) => isOpenClawMCPToolName(def.function.name)),
-    [otherToolDefinitions],
-  )
-  const clawManagementDisabled =
-    authLoading || readonlyLoading || serverReadonly || !canManageMCP(user)
   // Toggle fullscreen mode by adding/removing class to body
   useEffect(() => {
     if (isFullscreen) {
@@ -212,50 +192,6 @@ const ChatComponent = ({
       document.body.classList.remove('playground-fullscreen')
     }
   }, [isFullscreen])
-
-  useEffect(() => {
-    writeClawModePreference(enableClawMode)
-  }, [enableClawMode])
-
-  useEffect(() => {
-    if (!enableClawMode) {
-      setIsTogglingClawMode(false)
-      setClawView('control')
-      return
-    }
-    if (clawManagementDisabled) {
-      setIsTogglingClawMode(false)
-      return
-    }
-
-    let isCurrent = true
-    const bootstrapClawTools = async () => {
-      setIsTogglingClawMode(true)
-      try {
-        await ensureOpenClawServerConnected()
-        await refreshMCPTools()
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to enable Claw Mode'
-        console.warn(`[OpenClaw] UI mode enabled, but MCP bootstrap failed: ${message}`)
-      } finally {
-        if (isCurrent) {
-          setIsTogglingClawMode(false)
-        }
-      }
-    }
-
-    void bootstrapClawTools()
-
-    return () => {
-      isCurrent = false
-    }
-  }, [clawManagementDisabled, enableClawMode, refreshMCPTools])
-
-  useEffect(() => {
-    if (enableClawMode && clawView === 'room') {
-      setIsSidebarOpen(false)
-    }
-  }, [enableClawMode, clawView])
 
   // Hydrate saved conversations once. Only restore a conversation the user
   // explicitly selected; otherwise keep the stable blank starting state.
@@ -321,28 +257,22 @@ const ChatComponent = ({
   const queuedTasks = useMemo(() => getQueue(conversationId), [conversationId, getQueue])
   const generateId = generateMessageId
   const activeConversationTask = activeTasks[conversationId] ?? null
-  const hasRunningTasks = Object.keys(activeTasks).length > 0
   const isCurrentConversationRunning = Boolean(activeConversationTask)
 
   const buildTaskRequestOptions = useCallback(
     () => ({
-      enableClawMode: enableClawMode && !clawManagementDisabled,
       enableWebSearch,
       model,
     }),
-    [clawManagementDisabled, enableClawMode, enableWebSearch, model],
+    [enableWebSearch, model],
   )
 
   const buildTaskTools = useCallback(
-    (task: PlaygroundTask) => {
-      const otherTools =
-        task.requestOptions.enableClawMode && !clawManagementDisabled
-          ? [...baseOtherToolDefinitions, ...clawToolDefinitions]
-          : baseOtherToolDefinitions
-
-      return [...otherTools, ...(task.requestOptions.enableWebSearch ? searchToolDefinitions : [])]
-    },
-    [baseOtherToolDefinitions, clawManagementDisabled, clawToolDefinitions, searchToolDefinitions],
+    (task: PlaygroundTask) => [
+      ...otherToolDefinitions,
+      ...(task.requestOptions.enableWebSearch ? searchToolDefinitions : []),
+    ],
+    [otherToolDefinitions, searchToolDefinitions],
   )
 
   const handleSelectConversation = useCallback(
@@ -411,7 +341,6 @@ const ChatComponent = ({
     (task: PlaygroundTask) =>
       runPlaygroundTask({
         buildTaskTools,
-        clawManagementDisabled,
         clearConversationActiveTask: clearActiveTaskForConversation,
         endpoint,
         executeTools,
@@ -427,7 +356,6 @@ const ChatComponent = ({
       }),
     [
       buildTaskTools,
-      clawManagementDisabled,
       clearActiveTaskForConversation,
       endpoint,
       executeTools,
@@ -459,7 +387,6 @@ const ChatComponent = ({
       hasHydratedConversation.current = true
       conversationIdRef.current = targetConversationId
       clearPendingAttachments()
-      setEnableClawMode(false)
       setEnableWebSearch(false)
       setExpandedToolCards(new Set())
       setConversationMessages((current) => ({
@@ -619,36 +546,7 @@ const ChatComponent = ({
     setConversationId(generateConversationId())
   }, [clearPendingAttachments])
 
-  const handleToggleClawMode = useCallback(() => {
-    if (hasRunningTasks || isTogglingClawMode) return
-    if (enableClawMode) {
-      setEnableClawMode(false)
-      setConversationError(conversationId, null)
-      return
-    }
-    setEnableClawMode(true)
-    setConversationError(conversationId, null)
-  }, [conversationId, enableClawMode, hasRunningTasks, isTogglingClawMode, setConversationError])
-
-  const isTeamRoomView = enableClawMode && clawView === 'room',
-    roomCreateDisabled = isTeamRoomView && clawManagementDisabled
   const hasActiveProbeDraft = probeDraft?.conversationId === conversationId
-  const modeToggleDisabled =
-    hasRunningTasks || isTogglingClawMode || clawManagementDisabled || hasActiveProbeDraft
-
-  const handleToggleTeamView = useCallback(() => {
-    if (!enableClawMode || modeToggleDisabled) return
-    setClawView((prev) => (prev === 'room' ? 'control' : 'room'))
-  }, [enableClawMode, modeToggleDisabled])
-
-  const handleTopBarCreate = useCallback(() => {
-    if (roomCreateDisabled) return
-    if (isTeamRoomView) {
-      setTeamRoomCreateToken((prev) => prev + 1)
-      return
-    }
-    handleNewConversation()
-  }, [handleNewConversation, isTeamRoomView, roomCreateDisabled])
 
   const handleToggleToolCard = useCallback((toolCallId: string) => {
     setExpandedToolCards((prev) => {
@@ -670,117 +568,81 @@ const ChatComponent = ({
   const visibleError = visibleErrorConversationId
     ? conversationErrors[visibleErrorConversationId]
     : null
-  const shouldShowThinking = !isTeamRoomView && Boolean(conversationThinking[conversationId])
-  const isConversationEmpty = !isTeamRoomView && messages.length === 0 && !shouldShowThinking
+  const shouldShowThinking = Boolean(conversationThinking[conversationId])
+  const isConversationEmpty = messages.length === 0 && !shouldShowThinking
   return (
     <>
       <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
         <div className={styles.mainLayout}>
           <ChatComponentSidebarShell
-            createDisabled={roomCreateDisabled}
             isOpen={isSidebarOpen}
-            isTeamRoomView={isTeamRoomView}
-            onCreate={handleTopBarCreate}
+            onCreate={handleNewConversation}
             onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
           >
-            {!isTeamRoomView ? (
-              <ChatConversationSidebar
-                conversationId={conversationId}
-                conversationPreviews={conversationPreviews}
-                onDeleteConversation={handleDeleteConversation}
-                onRenameConversation={handleRenameConversation}
-                onSelectConversation={handleSelectConversation}
-              />
-            ) : null}
+            <ChatConversationSidebar
+              conversationId={conversationId}
+              conversationPreviews={conversationPreviews}
+              onDeleteConversation={handleDeleteConversation}
+              onRenameConversation={handleRenameConversation}
+              onSelectConversation={handleSelectConversation}
+            />
           </ChatComponentSidebarShell>
 
           <div className={`${styles.chatArea} ${isConversationEmpty ? styles.chatAreaEmpty : ''}`}>
-            {isTeamRoomView ? (
-              <ClawRoomChat
-                isSidebarOpen={isSidebarOpen}
-                createRoomRequestToken={teamRoomCreateToken}
-                inputModeControls={
-                  <ChatComposerAddMenu
-                    clawModeDisabled={modeToggleDisabled}
-                    clawModeEnabled={enableClawMode}
-                    clawRoom={{
-                      active: true,
-                      disabled: modeToggleDisabled,
-                      onToggle: handleToggleTeamView,
-                    }}
-                    onToggleClawMode={handleToggleClawMode}
-                    webSearchDisabled
-                    webSearchEnabled
-                    webSearchLocked
-                  />
+            <ChatComponentErrors
+              overlay={isConversationEmpty}
+              onDismissError={() => {
+                if (visibleErrorConversationId) {
+                  setConversationError(visibleErrorConversationId, null)
                 }
-              />
-            ) : (
-              <>
-                <ChatComponentErrors
-                  overlay={isConversationEmpty}
-                  onDismissError={() => {
-                    if (visibleErrorConversationId) {
-                      setConversationError(visibleErrorConversationId, null)
-                    }
-                  }}
-                  onRetryRoutingModelDiscovery={retryRoutingModelDiscovery}
-                  routingModelStatus={routingModelStatus}
-                  visibleError={visibleError}
-                />
-                <ChatComponentConversationViewport
-                  canSubmitFeedback={canSubmitFeedback(user)}
-                  conversationId={conversationId}
-                  expandedToolCards={expandedToolCards}
-                  messages={messages}
-                  feedbackInsightsBasePath={feedbackInsightsBasePath}
-                  onToggleToolCard={handleToggleToolCard}
-                  thinking={shouldShowThinking}
-                  thinkingProcess={liveThinkingProcess}
-                />
-                <ChatTaskQueue
-                  queuedTasks={queuedTasks}
-                  onEditTask={handleEditQueuedTask}
-                  onDeleteTask={handleDeleteQueuedTask}
-                  onReorderTasks={handleReorderQueuedTasks}
-                />
-                <ChatComponentInputBar
-                  attachments={pendingAttachments}
-                  attachFilesDisabled={readonlyLoading || serverReadonly || hasActiveProbeDraft}
-                  enableClawMode={enableClawMode}
-                  enableWebSearch={enableWebSearch}
-                  inputRef={inputRef}
-                  inputValue={inputValue}
-                  isLoading={isCurrentConversationRunning}
-                  isTogglingClawMode={isTogglingClawMode}
-                  modeToggleDisabled={modeToggleDisabled}
-                  modelOptions={routingModels}
-                  modelSelectDisabled={!isRoutingModelReady || isCurrentConversationRunning}
-                  selectedModel={model}
-                  voiceInputDisabled={
-                    isCurrentConversationRunning || readonlyLoading || serverReadonly
-                  }
-                  webSearchDisabled={hasActiveProbeDraft}
-                  onAttachFiles={handleAttachFiles}
-                  onChangeInput={setInputValue}
-                  onKeyDown={handleKeyDown}
-                  onModelChange={setModel}
-                  onRemoveAttachment={handleRemoveAttachment}
-                  onSend={handleSend}
-                  onStop={handleStop}
-                  onToggleClawMode={handleToggleClawMode}
-                  onToggleClawRoom={handleToggleTeamView}
-                  onToggleWebSearch={() => setEnableWebSearch((prev) => !prev)}
-                  sendDisabled={!isRoutingModelReady}
-                  sendDisabledReason={
-                    routingModelStatus === 'error'
-                      ? 'Retry model discovery before sending'
-                      : 'Discovering an available router model'
-                  }
-                  showClawRoom={enableClawMode}
-                />
-              </>
-            )}
+              }}
+              onRetryRoutingModelDiscovery={retryRoutingModelDiscovery}
+              routingModelStatus={routingModelStatus}
+              visibleError={visibleError}
+            />
+            <ChatComponentConversationViewport
+              canSubmitFeedback={canSubmitFeedback(user)}
+              conversationId={conversationId}
+              expandedToolCards={expandedToolCards}
+              messages={messages}
+              feedbackInsightsBasePath={feedbackInsightsBasePath}
+              onToggleToolCard={handleToggleToolCard}
+              thinking={shouldShowThinking}
+              thinkingProcess={liveThinkingProcess}
+            />
+            <ChatTaskQueue
+              queuedTasks={queuedTasks}
+              onEditTask={handleEditQueuedTask}
+              onDeleteTask={handleDeleteQueuedTask}
+              onReorderTasks={handleReorderQueuedTasks}
+            />
+            <ChatComponentInputBar
+              attachments={pendingAttachments}
+              attachFilesDisabled={readonlyLoading || serverReadonly || hasActiveProbeDraft}
+              enableWebSearch={enableWebSearch}
+              inputRef={inputRef}
+              inputValue={inputValue}
+              isLoading={isCurrentConversationRunning}
+              modelOptions={routingModels}
+              modelSelectDisabled={!isRoutingModelReady || isCurrentConversationRunning}
+              selectedModel={model}
+              voiceInputDisabled={isCurrentConversationRunning || readonlyLoading || serverReadonly}
+              webSearchDisabled={hasActiveProbeDraft}
+              onAttachFiles={handleAttachFiles}
+              onChangeInput={setInputValue}
+              onKeyDown={handleKeyDown}
+              onModelChange={setModel}
+              onRemoveAttachment={handleRemoveAttachment}
+              onSend={handleSend}
+              onStop={handleStop}
+              onToggleWebSearch={() => setEnableWebSearch((prev) => !prev)}
+              sendDisabled={!isRoutingModelReady}
+              sendDisabledReason={
+                routingModelStatus === 'error'
+                  ? 'Retry model discovery before sending'
+                  : 'Discovering an available router model'
+              }
+            />
           </div>
         </div>
       </div>

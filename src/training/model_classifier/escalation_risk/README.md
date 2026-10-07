@@ -18,18 +18,29 @@ budget policy.
 | --- | --- |
 | `fixtures.py` | Seeded synthetic rows shaped like `shadowdataset.Example`, with typed features, missing-data states, and synthetic verdicts |
 | `train.py` | Train on `train`, calibrate and pick the threshold on `calibration`, report held-out metrics on `test`, write a JSON artifact |
-| `requirements.txt` | Python dependencies (CPU only, no GPU needed) |
+| `pyproject.toml`, `uv.lock` | uv project and lock (CPU only, no GPU needed) |
+| `requirements.txt` | Python dependencies for `pip` users (CPU only, no GPU needed) |
 
 ## Quick start
 
-```bash
-python -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+This directory is a uv project (`pyproject.toml` and `uv.lock`). Create the
+environment from the lock, then run the scripts through it:
 
-python fixtures.py --rows 5000 --seed fixture-seed-1 --out synthetic.jsonl
-python train.py --data synthetic.jsonl --out artifact.json
+```bash
+uv sync --locked
+
+uv run python fixtures.py --rows 5000 --seed fixture-seed-1 --out synthetic.jsonl
+uv run python train.py --data synthetic.jsonl --out artifact.json
 ```
+
+To run the tests, use the same command as `make test`, from the repository root:
+
+```bash
+uv run --project src/training/model_classifier/escalation_risk \
+  python -m unittest discover -s src/training/model_classifier/escalation_risk/tests -p 'test_*.py'
+```
+
+`requirements.txt` stays for anyone who installs with `pip`.
 
 Generated data and artifacts stay outside Git.
 

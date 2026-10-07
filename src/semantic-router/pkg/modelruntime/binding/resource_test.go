@@ -123,6 +123,45 @@ func TestSharedAliasesCannotBypassAdmission(t *testing.T) {
 	}
 }
 
+func TestAdmitSharesOnlyTheAdmissionGate(t *testing.T) {
+	pool := NewPool()
+	first, err := pool.Admit(context.Background(), testIdentity(), "1/0/shed", admission.NewSemaphore(1, 0, 0, admission.OverflowShed))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := pool.Admit(context.Background(), testIdentity(), "1/0/shed", admission.Noop{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, finish, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = first.Use(context.Background(), func(got io.Closer) error {
+			if got != nil {
+				t.Error("an admission reference owns no resource")
+			}
+			close(started)
+			<-finish
+			return nil
+		})
+	}()
+	<-started
+	if err := second.Use(context.Background(), func(io.Closer) error { return nil }); !errors.Is(err, admission.ErrQueueFull) {
+		t.Errorf("bindings of one identity share one gate, got %v", err)
+	}
+	close(finish)
+	<-done
+	if _, err := pool.Acquire(context.Background(), testIdentity(), "1/0/shed", nil, func(context.Context) (io.Closer, error) { return &testModel{}, nil }); !errors.Is(err, ErrCapability) {
+		t.Fatalf("a loaded resource cannot join an admission gate: %v", err)
+	}
+	if err := errors.Join(first.Close(), second.Close()); err != nil {
+		t.Fatal(err)
+	}
+	if len(pool.entries) != 0 {
+		t.Fatalf("the last reference releases the gate: %d entries", len(pool.entries))
+	}
+}
+
 func TestFailedCandidateDoesNotReleaseServingResource(t *testing.T) {
 	pool := NewPool()
 	old := &testModel{}

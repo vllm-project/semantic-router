@@ -2,7 +2,7 @@
 translation:
   source_commit: "44132430a2606482044633513f8a9a98bb6f6825"
   source_file: "docs/tutorials/signal/learned/domain.md"
-  outdated: false
+  outdated: true
 ---
 
 # 领域信号 {#domain-signal}
@@ -60,9 +60,11 @@ routing:
 
 保持领域名稳定，因为决策直接引用这些名称。
 
+只有已声明的领域会匹配。分类器标签匹配在 `mmlu_categories` 中列出它的领域，或与它同名的领域。没有任何领域列出的标签计为 `other`，因此像上面那样列出 `other` 的领域，就是所有未声明主题的回退；没有这样的领域时，这类请求不匹配任何领域。
+
 ### 本地与远程分类器选择 {#local-and-remote-classifier-selection}
 
-没有 `backend` 时，类别/领域分类保持现有本地模型行为。用 `variant: candle`、`variant: modernbert` 或 `variant: mmbert32k` 做显式本地选择器；已弃用的 `use_modernbert` 与 `use_mmbert_32k` 键仍可读以保持兼容，但会在规范输出中归一化为 `variant`。一致的规范选择器与旧选择器会被接受；互相矛盾的活动选择器会被拒绝。
+没有 `backend` 时，领域分类器（默认 Vela 2.0 0.3B）运行在[模型运行时](model-runtime/guides/classify.md)中。运行时从模型包读取架构，因此无需设置本地选择器；`vllm-sr config migrate` 会移除早期的 `variant`、`use_modernbert` 和 `use_mmbert_32k` 键。
 
 远程类别分类器使用共享 backend 块。其 `model` 是 `global.model_catalog.external[]` 中的显式名称，该目录条目必须有 `model_role: classification`。Category 目前只接受 `http_classify` 协议与 `label_distribution.v1` 约定，以便完整标签分布继续供给领域匹配与路由决策。
 
@@ -88,5 +90,5 @@ global:
 
 ## 依赖与限制 {#dependencies-and-limitations}
 
-领域分类使用已配置的分类器模块并处理请求文本。把 `other` 当作回退，并在分类器变更时重新评估标签与阈值。完整示例见：
+领域分类使用已配置的分类器模块并处理请求文本。把 `other` 声明为回退，并在分类器变更时重新评估标签与阈值。完整示例见：
 [`config/fragments/signal/domain/mmlu.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/domain/mmlu.yaml)。
