@@ -2826,13 +2826,13 @@ recipes:
       - name: personal_data
         description: Personal identifiers trigger sensitive handling independently of context.
         include_history: true
-        threshold: 0.03
+        threshold: 0.01
         pii_types_allowed:
         - NRP
       - name: personal_attribute
         description: Nationality, religious and political attributes require personal context.
         include_history: true
-        threshold: 0.03
+        threshold: 0.01
         pii_types_allowed:
         - AGE
         - CREDIT_CARD

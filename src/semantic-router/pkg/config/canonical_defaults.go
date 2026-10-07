@@ -273,7 +273,7 @@ func defaultClassifierModule() CanonicalClassifierModule {
 		PII: CanonicalPIIModule{
 			ModelRef: "pii_classifier",
 			PIIModel: PIIModel{
-				Threshold: 0.03,
+				Threshold: 0.01,
 				UseCPU:    true,
 			},
 		},

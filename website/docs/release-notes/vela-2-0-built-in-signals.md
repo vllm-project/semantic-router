@@ -40,11 +40,11 @@ Through the Router, on the
 - **Ahead:** prompt guard (held-out AUC +0.026) and safety (+0.052).
 - **Level:** PII and hallucination on held-out and fresh files.
 - **Behind:** domain (accuracy −0.037 held-out), fact check (held-out AUC
-  −0.102), user feedback (−0.038 held-out, −0.181 fresh) and modality
+  −0.101), user feedback (−0.038 held-out, −0.178 fresh) and modality
   (held-out AUC −0.180).
-- **CPU latency:** on 12 cores a request takes LAT_V2_P50 ms at the median
-  against LAT_V1_P50 ms on Vela 1.0, and the Router serves LAT_V2_RPS against
-  LAT_V1_RPS requests per second. Every request carries the questions, their
+- **CPU latency:** on 12 cores a request takes 79 ms at the median against
+  16 ms on Vela 1.0, and the Router serves 11.9 against 38.9 requests per
+  second (12.8 against 51.8 at concurrency 16). Every request carries the questions, their
   options and the 17 PII labels (at least 560 tokens) through one forward.
   [#4668](https://github.com/vllm-project/semantic-router/issues/4668) works on
   the CPU latency. On a GPU the 0.3B answers in about 7 ms.
@@ -53,17 +53,17 @@ Through the Router, on the
 
 The module defaults are recalibrated to the 0.3B's scores so that each keeps
 the Vela 1.0 specialist's operating point on the suite's dev split: prompt guard
-0.5 → 0.75, domain 0.5 → 0.28, PII 0.9 → 0.03, fact check 0.95 → 0.93, user
+0.5 → 0.75, domain 0.5 → 0.28, PII 0.9 → 0.01, fact check 0.95 → 0.93, user
 feedback 0.7 → 0.37.
 
-- **PII:** the model returns a span only when it is confident in it, so 0.03
+- **PII:** the model returns a span only when it is confident in it, so 0.01
   accepts every span it returns.
 - **Other models:** a module that runs any other model and sets no threshold
   keeps its earlier default.
 - **Maintained configurations:** the recipes and E2E profiles that run the
   defaults carry the mapped values of their rule thresholds.
 - **Your own rule thresholds** were likely chosen for Vela 1.0: map them with
-  the record's table (prompt guard 0.3–0.9 → 0.74–0.77, PII → 0.03, safety
+  the record's table (prompt guard 0.3–0.9 → 0.74–0.77, PII → 0.01, safety
   0.5 → 0.46, modality `confidence_threshold` 0.7 → 0.51), or restore Vela 1.0.
 
 ## Restore Vela 1.0

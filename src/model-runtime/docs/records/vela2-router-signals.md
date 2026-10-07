@@ -15,11 +15,11 @@ on the CPU latency.
   built-in signals' evaluation rows. The 0.3B is ahead on prompt attacks
   (held-out AUC +0.026) and safety (+0.052), level on PII and hallucination
   held-out, and behind on domain (accuracy −0.037), fact check (held-out AUC
-  −0.102), feedback (−0.038, fresh −0.181) and modality (held-out AUC −0.180).
+  −0.101), feedback (−0.038, fresh −0.178) and modality (held-out AUC −0.180).
 - **Latency:** with `max_speed`, the 0.3B's default CPU profile, a request takes
-  LAT_V2_P50 ms at the median against LAT_V1_P50 ms on the Vela 1.0 models, and
-  the Router serves LAT_V2_RPS against LAT_V1_RPS requests per second on 12
-  cores.
+  79 ms at the median against 16 ms on the Vela 1.0 models, and the Router
+  serves 11.9 against 38.9 requests per second on 12 cores (12.8 against 51.8 at
+  concurrency 16).
 - **One call per request:** every built-in signal of a request reaches the 0.3B
   in one `/v1/decisions` task, however long the request.
 
@@ -28,10 +28,11 @@ on the CPU latency.
   rounds ran on two hosts of this model. Each run's processes ran in `systemd`
   scopes on the cores given below, with memory bound to their NUMA node.
 - **Commits:** the Router built from this change in CI's builder image
-  (`golang:1.25-bookworm`, the image recipe's flags). The model runtime is
-  `main`'s (`db35009da`), in a Python 3.12 environment with PyTorch 2.10.0
-  (CPU), as the router image pins it. This change touches no runtime code
-  path.
+  (`golang:1.25-bookworm`, the image recipe's flags). The Vela 1.0 arm ran on an
+  earlier build of it; no later commit changes a request to a Vela 1.0 model.
+  The model runtime is `main`'s (`db35009da`), in a Python 3.12 environment
+  with PyTorch 2.10.0 (CPU), as the router image pins it. This change touches no
+  runtime code path.
 - **Models:** the Vela 1.0 specialists at their pinned revisions (Domain
   `f6354f54`, Guard `087f9e40`, Safety `6e70e725`, FactCheck `99ede1ab`,
   Feedback `47434a7f`, Modality `5384b899`, PII `6d3300c4`, Halu `ca875312`)
@@ -47,13 +48,19 @@ of the 0.3B, `@Vela-2.0-0.3B`:
   model's labels. PII and hallucination ask the model's `pii` and `halu`
   presets, which its router span head answers.
 - **One call:** a request's questions travel in one `/v1/decisions` task: six,
-  or seven after an assistant turn. Over the 23,298 accuracy rows longer than
-  307 characters, every request reached the runtime as one bundle with one
-  decisions task. A signal on the 0.3B reads the whole text up to the model's
+  or seven after an assistant turn.
+  - Every model-backed signal joins the request bundle before any starts, and
+    every signal the 0.3B answers reads the request as it came, so prompt
+    compression does not split them either.
+  - Over the accuracy run below, 480 of the rows' 116,430 distinct texts (0.4%)
+    still sent one question in a second call. That host ran at a load of about
+    120 on 160 cores, and a signal that started more than the bundle's 2 ms
+    window late missed it.
+- **Whole text:** a signal on the 0.3B reads the whole text up to the model's
   8,192 tokens. The Router no longer samples or chunks it as it does for the
-  sequence classifiers; beyond 8,192 tokens the model truncates, so a prompt
-  attack placed after that point goes unseen, where Vela 1.0 Guard scanned up
-  to 32K tokens.
+  sequence classifiers. Beyond 8,192 tokens the model truncates, so a prompt
+  attack placed after that point goes unseen; Vela 1.0 Guard scanned up to 32K
+  tokens.
 - **Profile:** on CPU the deployment runs `max_speed`, which loads the 0.3B's
   consented `float32-packed` copy. [vela2-parity.md](vela2-parity.md) shows it
   keeps every Choice, Score and Set decision and 463 of 464 spans, with
@@ -64,7 +71,10 @@ of the 0.3B, `@Vela-2.0-0.3B`:
   for it), the embedding, Omni and reranker models (Vela 2.0 has no such exit),
   and every module or binding a configuration pins.
 
-`MAXSPEED_CHECK`
+**`max_speed` against `exact`.** Replayed on fresh runtimes, 60 recorded
+requests of the accuracy run (six questions each) got the same answers under
+`max_speed` as under `exact` to within 5e-6, and to within 3e-6 when two ran at
+once. The accuracy arm below runs the defaults, so it measures `max_speed`.
 
 ## Latency
 
@@ -86,9 +96,22 @@ fact check, feedback), the 539 inputs of `tools/router_latency.py corpus`,
   difference `vela2 − vela1` per round with a 95% t interval
   (`router_latency.py rounds`). Raw rounds: `vela2-router-signals.json`.
 
-LATENCY_TABLE
+| Pass | Metric | Vela 1.0 | 0.3B | 0.3B − Vela 1.0 [95% CI] |
+| --- | --- | ---: | ---: | ---: |
+| Sequential | p50 (ms) | 16.2 | 79.5 | +63.17 [+62.58, +63.76] |
+| Sequential | p95 (ms) | 57.5 | 100.3 | +42.82 [+42.35, +43.29] |
+| Sequential | p99 (ms) | 116.9 | 199.0 | +79.45 [+65.84, +93.05] |
+| Sequential | Requests per second | 38.9 | 11.9 | −26.95 [−27.16, −26.74] |
+| Concurrency 4 | p50 (ms) | 58.0 | 313.2 | +254.59 [+251.23, +257.95] |
+| Concurrency 4 | p95 (ms) | 230.6 | 370.9 | +146.66 [+125.52, +167.80] |
+| Concurrency 4 | p99 (ms) | 318.1 | 473.9 | +163.93 [+141.65, +186.20] |
+| Concurrency 4 | Requests per second | 49.4 | 12.5 | −36.90 [−37.40, −36.41] |
+| Concurrency 16 | p50 (ms) | 283.3 | 1,240.5 | +954.02 [+941.86, +966.19] |
+| Concurrency 16 | p95 (ms) | 621.4 | 1,388.9 | +740.71 [+695.49, +785.94] |
+| Concurrency 16 | p99 (ms) | 1,120.1 | 1,450.5 | +334.81 [+287.39, +382.23] |
+| Concurrency 16 | Requests per second | 51.8 | 12.8 | −38.76 [−39.69, −37.83] |
 
-The Router makes the same routing decision on LAT_DECISIONS_SAME of 539 inputs
+The Router makes the same routing decision on 269 of 539 inputs
 in both arms; the signals' models differ, so their verdicts do.
 
 **Why the 0.3B is slower.** Every request carries the questions, their options
@@ -97,7 +120,7 @@ whose median is about 15 tokens, through one 307M-parameter forward. Each
 Vela 1.0 model is an encoder of the same size, but it reads only the prompt,
 and the Router runs the models in separate runtime processes at once. On the
 `exact` profile the 0.3B took 132 ms at the median against Vela 1.0's 16 ms;
-`max_speed` brings that to LAT_V2_P50 ms.
+`max_speed` brings that to 79 ms.
 
 ## Accuracy
 
@@ -118,19 +141,18 @@ held-out file of the eight signals whose text the suite publishes.
 
 - **Arms:** `tools/router_signal_ab.py config` writes both, with the same
   signals and decisions.
-  - `vela1`: the Vela 1.0 specialists. Modality had no default model, and the
-    arm names Vela 1.0 Modality, as `config/config.yaml` did.
-  - `vela2`: one 0.3B deployment on `exact` that every signal it answers is
-    bound to, as the default binds them.
+  - `vela1`: the Vela 1.0 specialists, as the restore block names them, with
+    their default thresholds. The arm names Vela 1.0 Modality, as
+    `config/config.yaml` did.
+  - `vela2`: the Router's defaults. No model is configured, and the modality
+    classifier has no `model_path`, so every signal runs on the implicit
+    `@Vela-2.0-0.3B` deployment under `max_speed`.
 - **Request-time signals, through the Router:** each arm's Router answered every
   row through `POST /api/v1/routing/preview`, a feedback row after an assistant
   turn. The Router's managed model runtime was `tools/router_signal_ab.py
   record`, which serves the Router's own socket and logs every exchange. The
   probabilities each signal read are those the runtime returned to the Router.
-  Vela 1.0 Guard's score is its riskiest window, as the Router reads it. The
-  0.3B arm's rows longer than 307 characters, the most the Router's sampling and
-  chunking budgets could leave whole, were answered again by the final Router,
-  which reads them whole.
+  Vela 1.0 Guard's score is its riskiest window, as the Router reads it.
 - **Hallucination, at response time:** the routing preview never reaches it, so
   each row is asked as the Router's detector asks it (`router_signal_ab.py
   halu`).
@@ -148,29 +170,29 @@ test and the training corpora's published tests:
 
 | Signal (metric) | Set | Files | Vela 1.0 | 0.3B | 0.3B − Vela 1.0 [95% CI] |
 | --- | --- | ---: | ---: | ---: | ---: |
-| Domain (accuracy) | held out | 5 | 0.638 | 0.601 | −0.037 [−0.047, −0.027] |
-| | fresh | 3 | 0.561 | 0.473 | −0.087 [−0.100, −0.074] |
-| | in distribution | 2 | 0.561 | 0.541 | −0.020 [−0.034, −0.006] |
-| Prompt guard (AUC) | held out | 4 | 0.828 | 0.855 | +0.026 [+0.012, +0.043] |
-| | fresh | 2 | 0.755 | 0.752 | −0.003 [−0.026, +0.021] |
-| | in distribution | 1 | 0.847 | 0.854 | +0.006 [−0.014, +0.028] |
+| Domain (accuracy) | held out | 5 | 0.638 | 0.600 | −0.037 [−0.048, −0.028] |
+|  | fresh | 3 | 0.561 | 0.473 | −0.088 [−0.101, −0.074] |
+|  | in distribution | 2 | 0.561 | 0.541 | −0.020 [−0.034, −0.006] |
+| Prompt guard (AUC) | held out | 4 | 0.828 | 0.854 | +0.026 [+0.011, +0.043] |
+|  | fresh | 2 | 0.755 | 0.753 | −0.002 [−0.025, +0.022] |
+|  | in distribution | 1 | 0.847 | 0.853 | +0.006 [−0.015, +0.027] |
 | Safety (AUC) | held out | 4 | 0.856 | 0.908 | +0.052 [+0.038, +0.066] |
-| | fresh | 5 | 0.851 | 0.869 | +0.018 [+0.004, +0.032] |
-| | in distribution | 4 | 0.880 | 0.914 | +0.034 [+0.026, +0.043] |
-| Fact check (AUC) | held out | 2 | 0.905 | 0.804 | −0.102 [−0.138, −0.066] |
-| | fresh | 1 | 0.682 | 0.707 | +0.024 [−0.070, +0.122] |
-| | in distribution | 1 | 0.741 | 0.750 | +0.009 [−0.034, +0.050] |
-| Modality (AUC) | held out | 1 | 0.892 | 0.712 | −0.180 [−0.198, −0.163] |
-| | in distribution | 1 | 0.817 | 0.708 | −0.109 [−0.128, −0.090] |
+|  | fresh | 5 | 0.851 | 0.869 | +0.018 [+0.004, +0.033] |
+|  | in distribution | 4 | 0.880 | 0.914 | +0.034 [+0.025, +0.043] |
+| Fact check (AUC) | held out | 2 | 0.905 | 0.804 | −0.101 [−0.138, −0.066] |
+|  | fresh | 1 | 0.682 | 0.702 | +0.020 [−0.075, +0.117] |
+|  | in distribution | 1 | 0.741 | 0.753 | +0.011 [−0.032, +0.053] |
+| Modality (AUC) | held out | 1 | 0.892 | 0.713 | −0.180 [−0.198, −0.164] |
+|  | in distribution | 1 | 0.817 | 0.708 | −0.109 [−0.128, −0.090] |
 | PII (AUC) | held out | 2 | 0.968 | 0.972 | +0.004 [−0.007, +0.014] |
-| | fresh | 4 | 0.943 | 0.938 | −0.005 [−0.013, +0.004] |
-| | in distribution | 4 | 0.954 | 0.925 | −0.029 [−0.034, −0.019] |
+|  | fresh | 4 | 0.943 | 0.938 | −0.005 [−0.013, +0.004] |
+|  | in distribution | 4 | 0.954 | 0.924 | −0.029 [−0.034, −0.019] |
 | Feedback (accuracy) | held out | 1 | 0.311 | 0.272 | −0.038 [−0.058, −0.018] |
-| | fresh | 1 | 0.766 | 0.585 | −0.181 [−0.209, −0.153] |
-| | in distribution | 2 | 0.609 | 0.596 | −0.013 [−0.028, +0.001] |
+|  | fresh | 1 | 0.766 | 0.588 | −0.178 [−0.206, −0.150] |
+|  | in distribution | 2 | 0.609 | 0.595 | −0.014 [−0.028, +0.001] |
 | Hallucination (AUC) | held out | 3 | 0.702 | 0.712 | +0.010 [−0.005, +0.026] |
-| | fresh | 2 | 0.686 | 0.689 | +0.003 [−0.032, +0.035] |
-| | in distribution | 4 | 0.782 | 0.757 | −0.025 [−0.035, −0.015] |
+|  | fresh | 2 | 0.686 | 0.689 | +0.003 [−0.032, +0.035] |
+|  | in distribution | 4 | 0.782 | 0.757 | −0.025 [−0.035, −0.015] |
 
 - **Ahead:**
   - **Prompt guard:** ahead on held-out attacks, level elsewhere. At its
@@ -201,87 +223,87 @@ Per file:
 | Signal | File | Rows | Metric | Vela 1.0 | 0.3B | 0.3B − Vela 1.0 [95% CI] |
 | --- | --- | ---: | --- | ---: | ---: | ---: |
 | domain | dev | 1,498 | accuracy | 0.622 | 0.585 | −0.037 [−0.061, −0.013] |
-| domain | fresh-arabicmmlu | 1,999 | accuracy | 0.524 | 0.334 | −0.190 [−0.212, −0.168] |
+| domain | fresh-arabicmmlu | 1,999 | accuracy | 0.524 | 0.333 | −0.191 [−0.214, −0.168] |
 | domain | fresh-ceval | 1,999 | accuracy | 0.637 | 0.650 | +0.013 [−0.009, +0.034] |
-| domain | fresh-indommlu | 1,999 | accuracy | 0.521 | 0.436 | −0.085 [−0.108, −0.062] |
-| domain | hold-arena-expert | 987 | accuracy | 0.690 | 0.633 | −0.057 [−0.087, −0.027] |
-| domain | hold-mmlu-cf | 1,988 | accuracy | 0.529 | 0.496 | −0.033 [−0.053, −0.012] |
-| domain | hold-mmlu-pro | 1,988 | accuracy | 0.725 | 0.661 | −0.064 [−0.082, −0.045] |
-| domain | hold-mmlu-prox | 1,988 | accuracy | 0.659 | 0.630 | −0.029 [−0.048, −0.011] |
-| domain | hold-supergpqa | 1,882 | accuracy | 0.587 | 0.583 | −0.004 [−0.023, +0.015] |
-| domain | test | 2,996 | accuracy | 0.606 | 0.573 | −0.032 [−0.050, −0.014] |
-| domain | test-exams | 1,927 | accuracy | 0.516 | 0.508 | −0.008 [−0.030, +0.013] |
-| prompt guard | dev | 320 | AUC | 0.912 | 0.963 | +0.051 [+0.015, +0.095] |
+| domain | fresh-indommlu | 1,999 | accuracy | 0.521 | 0.435 | −0.086 [−0.108, −0.063] |
+| domain | hold-arena-expert | 987 | accuracy | 0.690 | 0.634 | −0.056 [−0.086, −0.025] |
+| domain | hold-mmlu-cf | 1,988 | accuracy | 0.529 | 0.495 | −0.033 [−0.053, −0.013] |
+| domain | hold-mmlu-pro | 1,988 | accuracy | 0.725 | 0.660 | −0.064 [−0.083, −0.046] |
+| domain | hold-mmlu-prox | 1,988 | accuracy | 0.659 | 0.628 | −0.031 [−0.050, −0.012] |
+| domain | hold-supergpqa | 1,882 | accuracy | 0.587 | 0.583 | −0.003 [−0.023, +0.017] |
+| domain | test | 2,996 | accuracy | 0.606 | 0.574 | −0.031 [−0.049, −0.014] |
+| domain | test-exams | 1,927 | accuracy | 0.516 | 0.507 | −0.009 [−0.030, +0.012] |
+| prompt guard | dev | 320 | AUC | 0.912 | 0.964 | +0.051 [+0.015, +0.095] |
 | prompt guard | fresh-cyberseceval-indirect | 245 | recall@0.5 | 0.061 | 0.825 | +0.763 [+0.710, +0.816] |
-| prompt guard | fresh-guardrail-hn | 244 | AUC | 0.866 | 0.932 | +0.066 [+0.021, +0.110] |
+| prompt guard | fresh-guardrail-hn | 244 | AUC | 0.866 | 0.933 | +0.067 [+0.022, +0.111] |
 | prompt guard | fresh-ipi-arena | 71 | recall@0.5 | 0.789 | 1.000 | +0.211 [+0.113, +0.310] |
-| prompt guard | fresh-sep | 2,000 | AUC | 0.643 | 0.572 | −0.071 [−0.086, −0.055] |
-| prompt guard | hold-bipia | 637 | AUC | 0.664 | 0.709 | +0.045 [+0.010, +0.083] |
-| prompt guard | hold-jailbreakhub-late | 1,303 | AUC | 0.652 | 0.731 | +0.078 [+0.048, +0.106] |
+| prompt guard | fresh-sep | 2,000 | AUC | 0.643 | 0.573 | −0.071 [−0.086, −0.056] |
+| prompt guard | hold-bipia | 637 | AUC | 0.664 | 0.708 | +0.044 [+0.010, +0.080] |
+| prompt guard | hold-jailbreakhub-late | 1,303 | AUC | 0.652 | 0.731 | +0.079 [+0.049, +0.107] |
 | prompt guard | hold-llmail | 1,152 | AUC | 0.972 | 1.000 | +0.028 [+0.019, +0.039] |
 | prompt guard | hold-notinject | 339 | specificity@0.5 | 0.935 | 0.844 | −0.091 [−0.130, −0.053] |
-| prompt guard | hold-promptshield-test | 2,000 | AUC | 0.763 | 0.794 | +0.032 [−0.007, +0.083] |
-| prompt guard | hold-toxicchat | 1,152 | AUC | 0.915 | 0.916 | +0.001 [−0.019, +0.022] |
-| prompt guard | test | 1,878 | AUC | 0.847 | 0.854 | +0.006 [−0.014, +0.028] |
-| safety | dev | 537 | AUC | 0.884 | 0.916 | +0.032 [+0.003, +0.061] |
-| safety | fresh-catqa-safety | 1,209 | recall@0.5 | 0.917 | 0.897 | −0.020 [−0.044, +0.003] |
+| prompt guard | hold-promptshield-test | 2,000 | AUC | 0.763 | 0.794 | +0.031 [−0.008, +0.083] |
+| prompt guard | hold-toxicchat | 1,152 | AUC | 0.915 | 0.915 | +0.001 [−0.019, +0.021] |
+| prompt guard | test | 1,878 | AUC | 0.847 | 0.853 | +0.006 [−0.015, +0.027] |
+| safety | dev | 537 | AUC | 0.884 | 0.917 | +0.033 [+0.003, +0.063] |
+| safety | fresh-catqa-safety | 1,209 | recall@0.5 | 0.917 | 0.898 | −0.019 [−0.042, +0.003] |
 | safety | fresh-cdna | 1,180 | AUC | 0.885 | 0.914 | +0.029 [+0.015, +0.046] |
-| safety | fresh-indicsafe | 1,992 | AUC | 0.808 | 0.781 | −0.027 [−0.077, +0.024] |
-| safety | fresh-linguasafe-multi | 2,000 | AUC | 0.791 | 0.854 | +0.063 [+0.027, +0.103] |
+| safety | fresh-indicsafe | 1,992 | AUC | 0.808 | 0.781 | −0.027 [−0.078, +0.023] |
+| safety | fresh-linguasafe-multi | 2,000 | AUC | 0.791 | 0.855 | +0.064 [+0.028, +0.103] |
 | safety | fresh-linguasafe-sr | 2,000 | AUC | 0.816 | 0.837 | +0.021 [−0.003, +0.044] |
-| safety | fresh-turkish-overrefusal | 480 | AUC | 0.953 | 0.957 | +0.004 [−0.017, +0.026] |
+| safety | fresh-turkish-overrefusal | 480 | AUC | 0.953 | 0.956 | +0.004 [−0.017, +0.025] |
 | safety | hold-coconot | 897 | AUC | 0.883 | 0.955 | +0.072 [+0.049, +0.098] |
 | safety | hold-coconot-contrast | 379 | specificity@0.5 | 0.757 | 0.834 | +0.076 [+0.040, +0.116] |
-| safety | hold-jbb | 200 | AUC | 0.866 | 0.930 | +0.065 [+0.021, +0.108] |
-| safety | hold-openai-moderation | 1,473 | AUC | 0.871 | 0.901 | +0.030 [+0.016, +0.045] |
-| safety | hold-orbench-hard | 1,319 | specificity@0.5 | 0.774 | 0.433 | −0.341 [−0.374, −0.308] |
+| safety | hold-jbb | 200 | AUC | 0.866 | 0.931 | +0.065 [+0.022, +0.108] |
+| safety | hold-openai-moderation | 1,473 | AUC | 0.871 | 0.900 | +0.029 [+0.016, +0.045] |
+| safety | hold-orbench-hard | 1,319 | specificity@0.5 | 0.774 | 0.434 | −0.340 [−0.373, −0.307] |
 | safety | hold-toxicchat | 1,657 | AUC | 0.906 | 0.954 | +0.047 [+0.033, +0.061] |
-| safety | hold-xstest | 450 | AUC | 0.782 | 0.850 | +0.067 [+0.036, +0.098] |
-| safety | test | 1,120 | AUC | 0.912 | 0.932 | +0.019 [+0.004, +0.036] |
+| safety | hold-xstest | 450 | AUC | 0.782 | 0.849 | +0.066 [+0.035, +0.097] |
+| safety | test | 1,120 | AUC | 0.912 | 0.931 | +0.018 [+0.003, +0.035] |
 | safety | test-aegis2 | 1,749 | AUC | 0.919 | 0.931 | +0.012 [+0.003, +0.021] |
 | safety | test-nemotron-v3 | 2,000 | AUC | 0.890 | 0.895 | +0.005 [−0.008, +0.019] |
-| safety | test-polyguardprompts | 2,000 | AUC | 0.799 | 0.900 | +0.101 [+0.076, +0.128] |
+| safety | test-polyguardprompts | 2,000 | AUC | 0.799 | 0.900 | +0.101 [+0.075, +0.128] |
 | fact check | dev | 198 | AUC | 0.702 | 0.699 | −0.003 [−0.085, +0.084] |
-| fact check | fresh-halueval-wild | 188 | AUC | 0.682 | 0.707 | +0.024 [−0.070, +0.122] |
+| fact check | fresh-halueval-wild | 188 | AUC | 0.682 | 0.702 | +0.020 [−0.075, +0.117] |
 | fact check | fresh-mbpp | 961 | specificity@0.5 | 0.999 | 0.941 | −0.058 [−0.075, −0.044] |
 | fact check | fresh-mgsm | 1,991 | specificity@0.5 | 0.913 | 0.000 | −0.913 [−0.935, −0.890] |
 | fact check | fresh-mintaka | 2,000 | recall@0.5 | 0.951 | 1.000 | +0.049 [+0.040, +0.059] |
 | fact check | fresh-truthfulqa | 726 | recall@0.5 | 0.797 | 0.996 | +0.198 [+0.172, +0.229] |
-| fact check | hold-no_robots | 2,000 | AUC | 0.962 | 0.834 | −0.128 [−0.147, −0.109] |
-| fact check | hold-shipped-factcheck | 2,000 | AUC | 0.724 | 0.888 | +0.165 [+0.142, +0.186] |
+| fact check | hold-no_robots | 2,000 | AUC | 0.962 | 0.833 | −0.129 [−0.148, −0.109] |
+| fact check | hold-shipped-factcheck | 2,000 | AUC | 0.724 | 0.889 | +0.165 [+0.142, +0.187] |
 | fact check | hold-simpleqa | 2,000 | recall@0.5 | 0.895 | 1.000 | +0.104 [+0.090, +0.118] |
-| fact check | hold-wildbench | 414 | AUC | 0.849 | 0.774 | −0.075 [−0.145, −0.005] |
-| fact check | test | 800 | AUC | 0.741 | 0.750 | +0.009 [−0.034, +0.050] |
-| modality | dev | 1,500 | AUC | 0.812 | 0.702 | −0.110 [−0.139, −0.081] |
-| modality | fresh-emu-edit | 2,000 | recall@0.5 | 0.386 | 0.101 | −0.284 [−0.305, −0.264] |
+| fact check | hold-wildbench | 414 | AUC | 0.849 | 0.776 | −0.074 [−0.143, −0.005] |
+| fact check | test | 800 | AUC | 0.741 | 0.753 | +0.011 [−0.032, +0.053] |
+| modality | dev | 1,500 | AUC | 0.812 | 0.701 | −0.110 [−0.141, −0.082] |
+| modality | fresh-emu-edit | 2,000 | recall@0.5 | 0.386 | 0.102 | −0.284 [−0.305, −0.264] |
 | modality | fresh-oneig-zh | 1,320 | recall@0.5 | 0.230 | 0.239 | +0.008 [−0.020, +0.035] |
 | modality | fresh-text-requests | 743 | specificity@0.5 | 1.000 | 1.000 | +0.000 [+0.000, +0.000] |
 | modality | hold-alpaca | 2,000 | specificity@0.5 | 0.964 | 0.994 | +0.030 [+0.021, +0.038] |
-| modality | hold-arena-t2i-hard | 210 | recall@0.5 | 0.671 | 0.238 | −0.433 [−0.514, −0.352] |
-| modality | hold-gedit-bench | 1,189 | recall@0.5 | 0.330 | 0.136 | −0.193 [−0.224, −0.162] |
+| modality | hold-arena-t2i-hard | 210 | recall@0.5 | 0.671 | 0.233 | −0.438 [−0.519, −0.357] |
+| modality | hold-gedit-bench | 1,189 | recall@0.5 | 0.330 | 0.137 | −0.193 [−0.222, −0.162] |
 | modality | hold-parti | 1,559 | recall@0.5 | 0.331 | 0.056 | −0.275 [−0.298, −0.253] |
-| modality | hold-realmix | 3,769 | AUC | 0.892 | 0.712 | −0.180 [−0.198, −0.163] |
+| modality | hold-realmix | 3,769 | AUC | 0.892 | 0.713 | −0.180 [−0.198, −0.164] |
 | modality | hold-search-arena | 2,000 | specificity@0.5 | 0.958 | 0.989 | +0.031 [+0.022, +0.040] |
 | modality | test | 3,000 | AUC | 0.817 | 0.708 | −0.109 [−0.128, −0.090] |
 | modality | test-dolly | 2,000 | specificity@0.5 | 0.984 | 0.999 | +0.015 [+0.009, +0.021] |
-| modality | test-realedit | 2,000 | recall@0.5 | 0.316 | 0.133 | −0.183 [−0.206, −0.160] |
+| modality | test-realedit | 2,000 | recall@0.5 | 0.316 | 0.134 | −0.182 [−0.206, −0.160] |
 | pii | dev | 1,506 | AUC | 0.940 | 0.919 | −0.021 [−0.035, −0.007] |
 | pii | fresh-btc | 1,342 | AUC | 0.914 | 0.904 | −0.010 [−0.028, +0.009] |
 | pii | fresh-pii-trace | 1,709 | AUC | 0.998 | 0.993 | −0.005 [−0.009, −0.001] |
-| pii | fresh-ru-pii | 1,842 | AUC | 0.939 | 0.952 | +0.013 [−0.000, +0.026] |
-| pii | fresh-uner-ewt | 1,780 | AUC | 0.921 | 0.904 | −0.017 [−0.045, +0.007] |
+| pii | fresh-ru-pii | 1,842 | AUC | 0.939 | 0.952 | +0.013 [+0.000, +0.026] |
+| pii | fresh-uner-ewt | 1,780 | AUC | 0.921 | 0.905 | −0.016 [−0.044, +0.007] |
 | pii | hold-kaggle-essays | 1,125 | AUC | 0.989 | 0.974 | −0.015 [−0.036, +0.001] |
-| pii | hold-pii-prompts | 2,000 | AUC | 0.946 | 0.970 | +0.024 [+0.015, +0.034] |
+| pii | hold-pii-prompts | 2,000 | AUC | 0.946 | 0.970 | +0.024 [+0.014, +0.034] |
 | pii | hold-wildchat | 2,000 | specificity@0.5 | 0.716 | 0.857 | +0.141 [+0.123, +0.158] |
-| pii | test | 3,000 | AUC | 0.947 | 0.930 | −0.017 [−0.028, −0.006] |
-| pii | test-abcd | 1,486 | AUC | 0.993 | 0.986 | −0.006 [−0.013, −0.001] |
+| pii | test | 3,000 | AUC | 0.947 | 0.929 | −0.018 [−0.029, −0.007] |
+| pii | test-abcd | 1,486 | AUC | 0.993 | 0.987 | −0.005 [−0.011, −0.001] |
 | pii | test-mapa | 1,679 | AUC | 0.918 | 0.817 | −0.101 [−0.102, −0.069] |
 | pii | test-tab | 1,461 | AUC | 0.958 | 0.965 | +0.007 [−0.009, +0.023] |
 | feedback | dev | 1,199 | accuracy | 0.574 | 0.537 | −0.037 [−0.071, −0.004] |
-| feedback | fresh-crosswoz | 1,995 | accuracy | 0.766 | 0.585 | −0.181 [−0.209, −0.153] |
+| feedback | fresh-crosswoz | 1,995 | accuracy | 0.766 | 0.588 | −0.178 [−0.206, −0.150] |
 | feedback | hold-shipped-feedback | 1,715 | accuracy | 0.311 | 0.272 | −0.038 [−0.058, −0.018] |
-| feedback | test | 2,842 | accuracy | 0.530 | 0.562 | +0.032 [+0.010, +0.054] |
-| feedback | test-sgd | 1,998 | accuracy | 0.688 | 0.629 | −0.059 [−0.077, −0.041] |
+| feedback | test | 2,842 | accuracy | 0.530 | 0.561 | +0.031 [+0.008, +0.053] |
+| feedback | test-sgd | 1,998 | accuracy | 0.688 | 0.630 | −0.059 [−0.077, −0.041] |
 | hallucination | dev | 1,210 | AUC | 0.786 | 0.777 | −0.009 [−0.028, +0.009] |
 | hallucination | fresh-faithbench | 523 | AUC | 0.646 | 0.678 | +0.032 [−0.023, +0.080] |
 | hallucination | fresh-shroom | 749 | AUC | 0.726 | 0.699 | −0.027 [−0.070, +0.018] |
@@ -337,27 +359,29 @@ files:
 | prompt guard | 0.8 | 0.76 | FPR 0.055 / 0.055 | TPR 0.578 / 0.812 | TPR 0.473 / 0.632 |
 | prompt guard | 0.85 | 0.77 | FPR 0.051 / 0.047 | TPR 0.547 / 0.812 | TPR 0.463 / 0.630 |
 | prompt guard | 0.9 | 0.77 | FPR 0.047 / 0.047 | TPR 0.531 / 0.812 | TPR 0.423 / 0.630 |
-| pii | 0.4 | 0.03 | FPR 0.471 / 0.200 | TPR 0.983 / 0.932 | TPR 0.981 / 0.888 |
-| pii | 0.5 | 0.03 | FPR 0.451 / 0.200 | TPR 0.983 / 0.932 | TPR 0.978 / 0.888 |
-| pii | 0.6 | 0.03 | FPR 0.426 / 0.200 | TPR 0.980 / 0.932 | TPR 0.970 / 0.888 |
-| pii | 0.7 | 0.03 | FPR 0.389 / 0.200 | TPR 0.975 / 0.932 | TPR 0.962 / 0.888 |
-| pii | 0.85 | 0.03 | FPR 0.300 / 0.200 | TPR 0.955 / 0.932 | TPR 0.939 / 0.888 |
-| pii | 0.9 | 0.03 | FPR 0.242 / 0.200 | TPR 0.927 / 0.932 | TPR 0.905 / 0.888 |
-| safety | 0.5 | 0.46 | FPR 0.226 / 0.230 | TPR 0.869 / 0.895 | TPR 0.810 / 0.866 |
+| pii | 0.4 | 0.01 | FPR 0.471 / 0.200 | TPR 0.983 / 0.933 | TPR 0.981 / 0.888 |
+| pii | 0.5 | 0.01 | FPR 0.451 / 0.200 | TPR 0.983 / 0.933 | TPR 0.978 / 0.888 |
+| pii | 0.6 | 0.01 | FPR 0.426 / 0.200 | TPR 0.980 / 0.933 | TPR 0.970 / 0.888 |
+| pii | 0.7 | 0.01 | FPR 0.389 / 0.200 | TPR 0.975 / 0.933 | TPR 0.962 / 0.888 |
+| pii | 0.85 | 0.01 | FPR 0.300 / 0.200 | TPR 0.955 / 0.933 | TPR 0.939 / 0.888 |
+| pii | 0.9 | 0.01 | FPR 0.242 / 0.200 | TPR 0.927 / 0.933 | TPR 0.905 / 0.888 |
+| safety | 0.5 | 0.46 | FPR 0.226 / 0.226 | TPR 0.869 / 0.895 | TPR 0.810 / 0.865 |
 | fact check | 0.65 | 0.86 | FPR 0.515 / 0.515 | TPR 0.889 / 0.778 | TPR 0.828 / 0.807 |
-| fact check | 0.85 | 0.91 | FPR 0.444 / 0.444 | TPR 0.869 / 0.737 | TPR 0.792 / 0.740 |
-| fact check | 0.95 | 0.93 | FPR 0.414 / 0.414 | TPR 0.808 / 0.707 | TPR 0.743 / 0.693 |
-| domain | 0.5 | 0.28 | below 0.049 / 0.047 | balanced accuracy 0.614 / 0.578 | balanced accuracy 0.563 / 0.540 |
-| feedback | 0.5 | 0.30 | below 0.001 / 0.001 | balanced accuracy 0.563 / 0.572 | balanced accuracy 0.558 / 0.592 |
-| feedback | 0.7 | 0.37 | below 0.025 / 0.031 | balanced accuracy 0.556 / 0.573 | balanced accuracy 0.555 / 0.593 |
+| fact check | 0.85 | 0.91 | FPR 0.444 / 0.444 | TPR 0.869 / 0.737 | TPR 0.792 / 0.743 |
+| fact check | 0.95 | 0.93 | FPR 0.414 / 0.414 | TPR 0.808 / 0.707 | TPR 0.743 / 0.698 |
+| domain | 0.5 | 0.28 | below 0.049 / 0.048 | balanced accuracy 0.614 / 0.579 | balanced accuracy 0.563 / 0.540 |
+| feedback | 0.5 | 0.30 | below 0.001 / 0.001 | balanced accuracy 0.563 / 0.572 | balanced accuracy 0.558 / 0.591 |
+| feedback | 0.7 | 0.37 | below 0.025 / 0.031 | balanced accuracy 0.556 / 0.573 | balanced accuracy 0.555 / 0.592 |
 | modality | 0.5 | 0.35 | below 0.001 / 0.000 | balanced accuracy 0.716 / 0.553 | balanced accuracy 0.677 / 0.548 |
 | modality | 0.6 | 0.45 | below 0.018 / 0.019 | balanced accuracy 0.719 / 0.541 | balanced accuracy 0.678 / 0.544 |
-| modality | 0.7 | 0.51 | below 0.034 / 0.036 | balanced accuracy 0.720 / 0.535 | balanced accuracy 0.677 / 0.538 |
+| modality | 0.7 | 0.51 | below 0.034 / 0.036 | balanced accuracy 0.720 / 0.535 | balanced accuracy 0.677 / 0.539 |
 
 - **Prompt guard:** Vela 1.0 Guard's scores sit near 0 and 1, so its thresholds
   from 0.3 to 0.9 keep almost the same false-positive rate, and they map to
   0.74–0.77. At those thresholds the 0.3B catches 81% of the dev attacks
-  against Vela 1.0's 53–69%.
+  against Vela 1.0's 53–69%. The dev split holds only 256 benign prompts.
+  At 0.75 on the test files, the 0.3B flags 10.7% of benign prompts against
+  Vela 1.0's 8.7% at 0.5, and catches 63.8% of attacks against 56.4%.
   - On the E2E attack fixtures (`e2e/testcases/testdata/jailbreak_detection_cases.json`)
     the 0.3B scores 0.930–0.969 on the six attacks and at most 0.437 on the six
     benign prompts. So every Guard threshold from 0.44 to 0.93 blocks all six
@@ -367,15 +391,16 @@ files:
 - **PII:** the 0.3B's span head keeps only the spans it is confident in, by its
   own per-label thresholds. Even with every span it returns, it flags fewer dev
   negatives (20.0%) than Vela 1.0 does at its strictest threshold, 0.9
-  (24.2%). Every PII threshold therefore maps to 0.03, which accepts every span
-  it returns. On the test files that flags 7.4% of the negatives and catches
-  88.8% of the sensitive requests, against Vela 1.0's 12.1% and 90.5% at 0.9.
-  At 0.9 the 0.3B would catch only 72.9%.
+  (24.2%). Every PII threshold therefore maps to 0.01, which accepts every span
+  it returns; the least confident span it returned on dev had 0.025. On the
+  test files that flags 7.5% of the negatives and catches 88.8% of the sensitive
+  requests, against Vela 1.0's 12.1% and 90.5% at 0.9. At 0.9 the 0.3B would
+  catch only 72.9%.
 - **Hallucination:** the Router counts the hallucination spans the 0.3B returns
   with no threshold of its own (`min_span_confidence` 0), so there is nothing
   to map.
 
-The module defaults take these values: prompt guard 0.75, domain 0.28, PII 0.03,
+The module defaults take these values: prompt guard 0.75, domain 0.28, PII 0.01,
 fact check 0.93 and feedback 0.37. A module that runs any other model and sets
 no threshold keeps the one it defaulted to before (0.5, 0.5, 0.9, 0.95, 0.7).
 The maintained recipes and E2E profiles that run the defaults take the mapped

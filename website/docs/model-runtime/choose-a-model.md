@@ -98,8 +98,8 @@ CPU. Measured through the Router on the
   blocks all six attacks, Vela 1.0 Guard five) and safety (+0.052 held-out, and
   ahead on every set). One model and one call serve every signal.
 - **Level:** PII and hallucination on held-out and fresh files.
-- **Behind:** domain (accuracy −0.037 held-out, −0.087 fresh), fact check
-  (held-out AUC −0.102), user feedback (−0.038 held-out, −0.181 fresh) and
+- **Behind:** domain (accuracy −0.037 held-out, −0.088 fresh), fact check
+  (held-out AUC −0.101), user feedback (−0.038 held-out, −0.178 fresh) and
   modality (held-out AUC −0.180). The 0.3B misses most requests that ask for a
   new image.
 - **CPU time:** every request carries the questions, their options and the 17
@@ -108,7 +108,10 @@ CPU. Measured through the Router on the
   request signals of the
   [latency record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md):
 
-LATENCY_TABLE_DOC
+| Router on 12 CPU cores | p50 | p95 | Requests per second | At concurrency 16 |
+| --- | ---: | ---: | ---: | ---: |
+| Vela 1.0 specialists (restored) | 16 ms | 58 ms | 38.9 | 51.8 |
+| Vela 2.0 0.3B (the default) | 79 ms | 100 ms | 11.9 | 12.8 |
 
 [#4668](https://github.com/vllm-project/semantic-router/issues/4668) works on the
 CPU latency. On a GPU (`use_cpu: false`), the 0.3B answers the same questions
@@ -120,15 +123,15 @@ in about 7 ms at the median on one AMD Instinct MI325X
 Each default threshold keeps the Vela 1.0 specialist's operating point on the
 suite's dev split: its false-positive rate, or for a confidence floor its share
 of requests below the floor. The defaults are prompt guard 0.75, domain 0.28,
-PII 0.03, fact check 0.93 and user feedback 0.37.
+PII 0.01, fact check 0.93 and user feedback 0.37.
 
-- **PII:** the 0.3B returns a span only when it is confident in it, so 0.03
+- **PII:** the 0.3B returns a span only when it is confident in it, so 0.01
   accepts every span it returns.
 - **Other models:** a module that runs any other model and sets no threshold
   keeps its earlier default.
 - **Your own rule thresholds** (`routing.signals.jailbreak[].threshold` and the
   like) are yours, and they were likely chosen for Vela 1.0. The record maps
-  each Vela 1.0 value to the 0.3B: prompt guard 0.3–0.9 → 0.74–0.77, PII → 0.03,
+  each Vela 1.0 value to the 0.3B: prompt guard 0.3–0.9 → 0.74–0.77, PII → 0.01,
   safety 0.5 → 0.46, fact check 0.95 → 0.93, modality `confidence_threshold`
   0.7 → 0.51.
 

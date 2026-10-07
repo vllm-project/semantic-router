@@ -139,7 +139,7 @@ SIGNAL jailbreak jailbreak_strict {
 }
 
 SIGNAL pii pii_strict {
-  threshold: 0.03
+  threshold: 0.01
   description: "Detect personally identifiable information that should remain on local infrastructure."
 }
 

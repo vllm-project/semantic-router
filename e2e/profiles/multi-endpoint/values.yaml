@@ -223,7 +223,7 @@ config:
           description: Strict jailbreak detection for prod environment
       pii:
         - name: pii_dev
-          threshold: 0.03
+          threshold: 0.01
           pii_types_allowed:
             - GPE
             - ORGANIZATION
@@ -231,7 +231,7 @@ config:
           include_history: false
           description: Relaxed PII policy for dev (allow GPE/ORG/DATE)
         - name: pii_prod
-          threshold: 0.03
+          threshold: 0.01
           pii_types_allowed: []
           include_history: false
           description: Strict PII policy for prod (block all)

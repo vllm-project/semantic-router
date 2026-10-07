@@ -35,7 +35,7 @@ func TestBuiltInSignalsDefaultToVela2WithoutChangingInputPolicies(t *testing.T) 
 	for name, got := range map[string][2]float32{
 		"Guard":     {cfg.PromptGuard.Threshold, .75},
 		"Domain":    {cfg.CategoryModel.Threshold, .28},
-		"PII":       {cfg.PIIModel.Threshold, .03},
+		"PII":       {cfg.PIIModel.Threshold, .01},
 		"FactCheck": {cfg.HallucinationMitigation.FactCheckModel.Threshold, .93},
 		"Feedback":  {cfg.FeedbackDetector.Threshold, .37},
 	} {

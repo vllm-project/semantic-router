@@ -131,7 +131,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     },
     pii: {
       model_ref: 'pii_classifier',
-      threshold: 0.03,
+      threshold: 0.01,
       use_cpu: true,
     },
     preference: {

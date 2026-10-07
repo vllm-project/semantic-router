@@ -82,13 +82,16 @@ domain、prompt guard、safety、fact check、user feedback、modality、PII 和
 - **领先：** prompt guard（留出集 AUC +0.026；在 E2E 攻击样例上它拦下全部六个攻击，Vela 1.0 Guard 拦下五个）和
   safety（留出集 +0.052，在每个数据集上都领先）。一个模型、一次调用回答所有信号。
 - **持平：** PII 和 hallucination 在留出集和新留出集上持平。
-- **落后：** domain（准确率留出集 −0.037、新留出集 −0.087）、fact check（留出集 AUC −0.102）、user feedback
-  （留出集 −0.038、新留出集 −0.181）和 modality（留出集 AUC −0.180）：0.3B 漏掉了大多数要求生成新图片的请求。
+- **落后：** domain（准确率留出集 −0.037、新留出集 −0.088）、fact check（留出集 AUC −0.101）、user feedback
+  （留出集 −0.038、新留出集 −0.178）和 modality（留出集 AUC −0.180）：0.3B 漏掉了大多数要求生成新图片的请求。
 - **CPU 时间：** 每个请求都要把问题、选项和 17 个 PII 标签（至少 560 个 token）送进一次 3.07 亿参数的前向计算，
   而每个 Vela 1.0 模型只读取请求本身。在 12 个 CPU 核上，针对
   [延迟记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/router-latency-cpu.md)中的五个请求信号：
 
-LATENCY_TABLE_DOC_ZH
+| 路由器，12 个 CPU 核 | p50 | p95 | 每秒请求数 | 并发 16 时 |
+| --- | ---: | ---: | ---: | ---: |
+| Vela 1.0 专用模型（恢复后） | 16 ms | 58 ms | 38.9 | 51.8 |
+| Vela 2.0 0.3B（默认） | 79 ms | 100 ms | 11.9 | 12.8 |
 
 [#4668](https://github.com/vllm-project/semantic-router/issues/4668) 继续改进 CPU 延迟。在 GPU 上（`use_cpu: false`），
 0.3B 在一块 AMD Instinct MI325X 上回答同样的问题，中位耗时约 7 ms
@@ -97,12 +100,12 @@ LATENCY_TABLE_DOC_ZH
 ### 阈值 {#thresholds}
 
 每个默认阈值都在该数据集的 dev 划分上保持 Vela 1.0 专用模型的工作点：二分类信号保持误报率，置信度下限保持低于下限的请求比例。
-默认值为 prompt guard 0.75、domain 0.28、PII 0.03、fact check 0.93、user feedback 0.37。
+默认值为 prompt guard 0.75、domain 0.28、PII 0.01、fact check 0.93、user feedback 0.37。
 
-- **PII：** 0.3B 只在有把握时才返回片段，因此 0.03 会接受它返回的每个片段。
+- **PII：** 0.3B 只在有把握时才返回片段，因此 0.01 会接受它返回的每个片段。
 - **其他模型：** 运行其他模型且未设置阈值的模块，保持它之前的默认阈值。
 - **你自己的规则阈值**（`routing.signals.jailbreak[].threshold` 等）由你设定，很可能是为 Vela 1.0 选的。
-  记录给出了每个 Vela 1.0 值在 0.3B 上的对应值：prompt guard 0.3–0.9 → 0.74–0.77、PII → 0.03、safety 0.5 → 0.46、
+  记录给出了每个 Vela 1.0 值在 0.3B 上的对应值：prompt guard 0.3–0.9 → 0.74–0.77、PII → 0.01、safety 0.5 → 0.46、
   fact check 0.95 → 0.93、modality 的 `confidence_threshold` 0.7 → 0.51。
 
 ### 恢复 Vela 1.0 专用模型 {#restore-vela-10}

@@ -19,7 +19,7 @@ routing:
   signals:
     domains: [{name: math, description: Math requests., mmlu_categories: [math]}]
     jailbreak: [{name: attack, threshold: 0.75}]
-    pii: [{name: personal, threshold: 0.03}]
+    pii: [{name: personal, threshold: 0.01}]
     fact_check: [{name: needs_fact_check, description: Needs checking.}]
     user_feedbacks: [{name: wrong_answer, description: Wrong.}]
     modality: [{name: DIFFUSION, description: Images.}]

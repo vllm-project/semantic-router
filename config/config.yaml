@@ -572,7 +572,7 @@ routing:
 
     pii:
       - name: restricted_pii
-        threshold: 0.03
+        threshold: 0.01
         include_history: true
         pii_types_allowed:
           - EMAIL_ADDRESS
@@ -2810,7 +2810,7 @@ global:
           max_sequence_length: 0
           window: null
           model_id: models/Vela-2.0-0.3B
-          threshold: 0.03
+          threshold: 0.01
           use_cpu: true
           pii_mapping_path: ""
           # allow (default) keeps a classify error or a provider-declared
