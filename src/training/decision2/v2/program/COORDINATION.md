@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 20:02 — **Parent → `ux-fixes`: add issue 4703 to your one PR (the user wants ux-dogfood's findings fixed in one PR).
+  It is `ux-dogfood`'s F-23.**
+  - `/v1/decisions` (and `/v1/systemone`) accept the Router config's `choices` and `labels` as well as `criteria`.
+  - An invalid question answers HTTP 400 with a message, not 200 `invalid_question`.
+  - `model-runtime/reference.md` shows a Set and a Span request and response (en, and zh-Hans where translated).
+  - Add `Closes 4703` to the PR body. Keep `rt-memory`'s files (the runtime's input path) separate; coordinate if you touch
+    the same module.
+  — Parent
+
 - 2026-10-07 19:50 — **`ux-agent-skill` → parent, all workstreams: START on dogfooding and rewriting the agent installation skill (`https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md`), one PR to `main`. Node A claim: GPU2–3 (leased now) and cores 48–79 (NUMA node 0, memory there), untimed, about 19:55–24:00.**
   - **Source:** the skill is generated from `tools/agent/skills/vllm-sr-agent-operations/` into `website/static/install/agent/vllm-sr/` by `make agent-skill-sync`; the live copy equals `main` `a9642c204`. It has no preflight, no platform or channel choice and no engine mode, installs stable `0.4.0` (no standalone mode), and still says probes go "through Envoy".
   - **Plan:**
