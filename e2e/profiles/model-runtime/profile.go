@@ -106,6 +106,7 @@ func (p *Profile) GetTestCases() []string {
 		"model-runtime-task-signals",
 		"model-runtime-embeddings-rerank",
 		"decision-runtime-routing",
+		"decision-runtime-set-span",
 		"model-runtime-bundles",
 		"model-runtime-long-history",
 		"model-runtime-fail-open",

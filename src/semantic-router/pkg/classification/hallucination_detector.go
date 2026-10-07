@@ -112,9 +112,10 @@ func (d *HallucinationDetector) detectSpans(ctx context.Context, contextText, qu
 		return merged, fmt.Errorf("context is required for hallucination detection")
 	}
 	chunks := []signalChunkSpan{{Text: answer}}
-	// The published pair adapter owns its complete answer budget. Splitting it
-	// here would change the evidence and the artifact's measured task.
-	if d.spec.Binding.Adapter != "vela_halu" {
+	// The published pair adapter and a decision model's ready-made halu
+	// question own their complete answer budget. Splitting it here would
+	// change the evidence and the artifact's measured task.
+	if d.spec.Binding.Adapter != "vela_halu" && d.handle.Capability().Preset == "" {
 		chunks = hallucinationAnswerChunks(answer)
 	}
 	for _, chunk := range chunks {
