@@ -1,5 +1,5 @@
 {
-  "case": "unknown-model",
+  "case": "flow-alias-no-route",
   "phases": [
     {
       "phase": "request_headers",
@@ -26,7 +26,7 @@
         },
         {
           "name": "content-length",
-          "value": "69"
+          "value": "83"
         },
         {
           "name": "x-forwarded-proto",
@@ -34,7 +34,7 @@
         },
         {
           "name": "x-request-id",
-          "value": "parity-unknown-model"
+          "value": "parity-flow-alias-no-route"
         }
       ],
       "effect": {
@@ -59,7 +59,7 @@
     {
       "phase": "request_body",
       "end_of_stream": true,
-      "body": "{\"model\":\"no-such-model\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}",
+      "body": "{\"model\":\"vllm-sr/flow\",\"messages\":[{\"role\":\"user\",\"content\":\"Plan the release.\"}]}",
       "effect": {
         "immediate": {
           "status": 400,
@@ -83,7 +83,7 @@
               }
             ]
           },
-          "body": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"model_not_found\",\"message\":\"the requested model is not available\",\"param\":null}}"
+          "body": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"no_route\",\"message\":\"no route matched the request\",\"param\":null}}"
         }
       }
     }
@@ -109,10 +109,12 @@
       },
       {
         "name": "content-length",
-        "value": "129"
+        "value": "114"
       }
     ],
-    "body": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"model_not_found\",\"message\":\"the requested model is not available\",\"param\":null}}"
+    "body": "{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"no_route\",\"message\":\"no route matched the request\",\"param\":null}}"
   },
-  "evidence": {}
+  "evidence": {
+    "recipe": "default"
+  }
 }

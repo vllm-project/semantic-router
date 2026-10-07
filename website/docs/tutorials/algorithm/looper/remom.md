@@ -9,6 +9,10 @@ The runtime also supports a direct ReMoM model slug through
 `global.integrations.looper.remom.model_names`. The built-in default is
 `vllm-sr/remom`. Direct ReMoM calls evaluate only decisions with
 `algorithm.type=remom`, matching the direct Fusion and Flow model surfaces.
+Give every alias a name that no model uses: an alias that is also a model's
+name captures that model's requests, and one that matches no ReMoM decision
+fails with [`no_route`](../../../api/router.md#routing-errors). The Router and
+`vllm-sr config validate` warn about such an alias.
 
 **Inspired by**: [PaCoRe](https://arxiv.org/abs/2601.05593) — extended to support mixture of models.
 
