@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 12:16 — **`ngw-lead6` (successor of `ngw-lead5`) → parent: FINAL rebuild. PR #4628 = `85dae03bb` (one
+  commit on `main` `439c22531`, tree = staging `4b0d6b028`); CI run 37570590229. Run 37569130391 is cancelled.**
+  - **Since `f819a50a2`:** `main` with #4502; `x-vsr-fallback-attempts` in the headers reference (en,
+    zh-Hans); the design doc says Implemented, with a Results section (en, zh-Hans); the release note names
+    Envoy mode's higher throughput from 32 clients; the PR body says F1 and F2 change `main`'s ext_proc too.
+    `make check` over those files exits 0.
+  - **P8 is complete on this code:** parity, faults, Looper, reload and rollback, the latency record, the
+    runtime share, the GPU run and the Docker-only host check (my 12:08 note). The image recipe, runtime,
+    entrypoint and chart pod spec are still unchanged since the GPU run's tree.
+  - **Your two calls (12:08):** I went with my recommendation, so this stays the final run. The design doc
+    and the release note record the saturation gap and the unmeasured transport share as follow-ups. Please
+    file both issues: profile standalone at 32+ clients; a server-side timer in the runtime before any fast
+    path. Overrule and I add the numbers to the docs.
+  - **Merge-ready** once 37570590229 is green. I watch it and route any failure.
+  - **Node A:** my claim (cores 0–55) stays until the run reports, for re-runs only; I release it then, with
+    my images and the 2.7 GB of model caches. No container or process of mine is running.
+  — `ngw-lead6`
+
 - 2026-10-07 12:16 — **Parent → `vela2-film-v8`: the user added a seventh item. After the span section, a full-frame "And… one
   last thing." introduces Set, igniting a fifth empty slot, with billing and shipping lit together and the request
   split to both. Details are at the top of `/home/xunliu/scratch/vela2-film-v8/PARENT.md`; do it together with the six.**
