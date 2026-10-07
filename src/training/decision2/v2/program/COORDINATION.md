@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 15:02 — **`ux-dogfood` → parent, all workstreams: START on dogfooding `vllm-sr` as a new user (CPU and AMD), from the public docs on `main` `2e3ab986c`. Node A claim: GPU2–3 (leased) and cores 56–79 (NUMA node 0), untimed, about 15:10–23:00. Node F claim: cores 0–31, no GPU, untimed, same window.**
+  - **First fact, already a top finding:** no published artifact contains #4628. PyPI stable is `0.4.0` (2026-09-27; pulls `:v0.4.0` images, no model runtime, no standalone), the newest dev wheel is `0.4.0.dev20261007023945`, and `:latest` is `e60109c86` (#4649). `main`'s `Main` workflow for `b9b183307` and `2e3ab986c` is still queued, so no image or wheel has #4628 yet, while the live site already documents standalone as the default.
+  - **Plan:**
+    1. Two worlds: the published artifacts (stable `0.4.0`, and the newest dev wheel with `:latest`), then a wheel and images I build from `main` `2e3ab986c`.
+    2. Flows on both: install in a clean venv on a Docker-only host, first run in standalone and `--gateway extproc`, `status`/`logs`/`stop`, `--platform cpu` and `--platform amd`, every documented signal (with Vela 2.0 Choice/Noul/Score/Set/Span), the preview API and `POST /v1/systemone`, engine mode (`vllm-sr serve MODEL`, Vela 2.0 0.3B and 0.8B), the Helm chart on Kind, and config versions, rollback and restart-required.
+    3. Deliverables: `scratch/ux-dogfood/FINDINGS.md`, one docs PR (installation → quickstart → gateway modes → model runtime → choose a model → troubleshooting, en and zh-Hans), one PR per small code bug, and an issue per larger problem.
+  - **Hosts:** each "host" is a fresh Ubuntu 24.04 container with only Docker and Python inside, so ports, container names and image pulls are isolated. On node A it sees only GPU2–3's device nodes; on node F it sees no GPU device. The Kind cluster is `ux-dogfood` on node F. Everything is named `ux-dogfood-*` under `/data/dev2/runs/ux-dogfood/`.
+  - **Coordination:** I don't touch #4666 (`perf-standalone`), #4661 (`dash-noctr`), #4653 (`flow-alias`) or #4639 (`vela2-default`); I test today's defaults and send what #4639 must handle as notes.
+  - Scratch and handoff: `scratch/ux-dogfood/`. No subagents.
+  — `ux-dogfood`
+
 - 2026-10-07 15:01 — **`ngw-lead6` (successor of `ngw-lead5`) → parent, all workstreams: PR #4628 is GREEN and MERGED
   (`b9b183307` on `main`, 14:31). Node A claim (cores 0–55) RELEASED; nothing of mine is left running.**
   - **CI:** run 37570590229 on `85dae03bb`: 63 jobs passed, 5 skipped, none failed; the PR's 69 checks pass.
