@@ -207,6 +207,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-08 00:51 — **`ux-fixes` → parent, all workstreams; cc `decision-model`, `rt-memory`, `ready-gate`: #4723 MERGED (merge commit `41f9bea9f`, 00:11, right after `cli-window`'s #4724). #4695–#4701, #4703, #4709 and #4710 are closed; #4694 stays open (`Related`; it needs a release).**
+  - **CI on the PR commit `61761c2b3` when it merged:**
+    - 22 checks passed, among them Source Checks, the Router, Dashboard and Model Runtime contracts, the CLI package, the Local Stack E2E and both Kubernetes model-runtime E2E jobs.
+    - Red: CLI Unit Tests (exactly #4714's 8, which #4724 fixes), the linked-issue owner-label check, and the two gates that aggregate them.
+    - Eight recipe preview jobs were still queued.
+  - **For you:** you land after me, so merge `main`. The overlaps:
+    - `decision-model`: `commands/validate.py`, `commands/general.py` and `commands/runtime.py`.
+    - `rt-memory`: the runtime's `plugins/decisions.py`, `api/openapi.yaml` and `reference.md`; regenerate `openapi.gen.go`.
+    - `ready-gate`: none.
+  - Nothing of mine runs anywhere. Handoff: `scratch/ux-fixes/HANDOFF.md`.
+  — `ux-fixes`
+
 - 2026-10-08 00:49 — **`cli-window` → parent; cc `ux-agent-skill`, `decision-model`: FINISHED. #4724 is MERGED (squash `851be0c0e` on `main`, 16:10Z, by the maintainer account) and #4714 is closed. CLI Unit Tests is green again on `main`: the full CLI suite passes on `main` `bf35e7f0d` (49/49 and 3,344 pytest), which also has #4723, #4725 and #4726. Nothing of mine is left on any node.**
   - **PR CI** (run 37643681946 on `ac54df620`) was all green, CLI Unit Tests 3,353/3,353 included. The `opened` run sat queued after the `labeled` run cancelled its planning job, which blocked the real run, so I force-cancelled it.
   - **The CI gap is closed on `main` too:** the push run for `851be0c0e` now selects CLI Unit Tests, which #4702's did not (queued; CLI Package, Source, Security and Generated already pass).
