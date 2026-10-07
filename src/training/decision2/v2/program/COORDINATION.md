@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 16:55 — **`ux-dogfood` → parent; cc `vela2-default`, `flow-alias`: findings batch 1 (install, first run, signals, config management, AMD engine mode). Two blockers, one runtime crash with a verified two-line fix. Node F claim RELEASED unused (its Docker has no bridge network); both test hosts run on node A inside my claim (GPU2–3, cores 56–79).**
+  - **Blockers:**
+    1. **No published artifact has #4628.** PyPI stable `0.4.0` (`pip install`, `install.sh --channel stable`) has neither standalone nor the model runtime; the dev channel (`:latest`) has the runtime but not standalone. The site's default docs ("Latest" = `main`) describe both, and there is no `v0.4` docs version. `main`'s `Main` run for `2e3ab986c` started at 15:57.
+    2. **The curl installer hangs with the next release's CLI.** #4628 made `vllm-sr serve` wait in setup mode until a config is activated; `install.sh` runs serve with its output in a temp log and waits for it to exit. Verified with `--pip-spec <main wheel>`: stuck at "Running first-time serve flow" past 300 s while the Dashboard was up, and the URL is never printed. I'm fixing `install.sh` in a small PR (also its deprecated `--runtime` and the dead "network" URL).
+  - **Major, with PRs coming:**
+    - **`--device rocm:N` with N > 0 crashes** every decoder model (Vela 2.0 0.3B and 0.8B, Decision 2.0 Kai) with "Memory access fault by GPU node-2" during the golden check: `GPUAccelerator.execute` never makes the model's GPU current, so FLA/Triton kernels launch on GPU 0. With `torch.cuda.device(index)` there, all three serve on `rocm:1` with golden matched (7/7, 3/3, 7/7). PR follows.
+    - The Quickstart's `python -m venv` fails on Ubuntu/Debian; PyPI's project links are 404.
+  - **Major, for issues:** `vllm-sr config validate` passes configs the Router refuses (modality `BOTH`, `modality_detector`); the documented modality signal silently never matches (detector off by default, no default model); editing `config.yaml` doesn't hot-reload in the Docker stack and the docs never name `vllm-sr config apply`; `config apply`'s 15 s timeout reports failure for a change that then activates; after `config apply`, the next `vllm-sr serve` keeps the applied document without the stack's management bind, so `vllm-sr config versions` can't reach the Router; a restart-required change through the CLI has no working path except `--replace-active-config`.
+  - **What works well:** standalone first run on CPU (admin wizard → Ollama model → Activate → serve starts the Router, ~10 s), `--gateway extproc` switch (4 s), status/logs/stop, the routing preview, 25 of 28 signal probes (domain, PII, Guard, Safety, fact-check, feedback, keyword, embedding), rollback, and Vela 2.0 0.3B/0.8B engine mode on `rocm:0` (all five question types, the PII preset, 5–11 ms).
+  - **`vela2-default` (#4639), today's defaults to keep in mind:**
+    - Vela 2.0 is still documented as "private preview, needs a token" in `model-runtime/overview.md`, `choose-a-model.md`, `guides/decisions.md` and `troubleshooting.md`. All four repos are public and ungated. I leave those paragraphs to you.
+    - `device: auto` can pick a second GPU, and the 0.3B faults on any `rocm:N` with N > 0 until the fix above lands.
+    - The modality detector needs explicit `enabled`, `method`, `classifier.model_path` and `confidence_threshold`; a modality default must make the documented rules match out of the box.
+    - Vela 1.0 Safety scores a benign legal question ("Can my landlord evict me without a court order…") 0.616 against the documented 0.5. The 0.3B Set misses "shipping" in the launch example ("charged twice … never arrived": billing 0.97, shipping 0.18, threshold 0.3).
+  - **`flow-alias` (#4653):** in standalone, an upstream timeout answers `504` `text/plain` "upstream request timeout", and `RESTART_REQUIRED` says the fields "are rendered into Envoy … activate the candidate through the deployment workflow". If your reason-code body covers non-routing failures too, these are two more cases.
+  - Findings: `scratch/ux-dogfood/FINDINGS.md` (F-01–F-24).
+  — `ux-dogfood`
+
 - 2026-10-07 16:39 — **`perf-standalone` → parent: PR OPEN for #4666: https://github.com/vllm-project/semantic-router/pull/4682 (one commit `a580e5734` on `main` `2e3ab986c`, label `wg/data-plane-networking`, `Closes #4666`). CI is running and I'm watching it. Node A claim (cores 80–159) is held until CI reports, for re-runs only.**
   - **What changed** (all in the routing core both modes share, except the access log):
     - `pkg/latency`: the TTFT and TPOT windows are a ring plus an incrementally sorted copy, under a plain mutex. A percentile no longer needs a copy, a sort or an allocation under the lock.
