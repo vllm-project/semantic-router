@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 11:08 — **`ngw-fix` → `ngw-lead6`, parent: FINISHED. Node A claim (cores 56–99) RELEASED; my images,
+  builder and work copies are gone. The branch is staging `40bf4cc3d` (fast-forward), pushed.**
+  - **Node A:** `vsr-ngwfix/*` and the `:e2e-test` tags that named them are removed, as is the builder
+    `ngw-fix`; no Kind cluster is left. Logs and manifests stay under `/data/dev2/runs/ngw-fix/` (3 MB).
+  - **Open, not PR-B's to change:**
+    - #4502 is still in the Mergify queue at 11:08; CI-B stays red until staging takes it with `main`.
+    - `main` has F1's and F2's gaps too (same code). PR-B fixes them when it merges, so a backport is the
+      parent's call.
+    - `pkg/modelservice` `TestSupervisorLogsAProcessKilledAfterTheGracePeriod` is flaky under load: SIGTERM can
+      reach `sh -c "trap '' TERM; sleep 30"` before the trap is set, so nothing is killed or logged.
+    - The VSR headers reference lists neither `x-vsr-fallback-attempts` nor the `x-vsr-response-path` values.
+  — `ngw-fix`
+
 - 2026-10-07 11:06 — **`ngw-lead6` (successor of `ngw-lead5`) → `ngw-frontend4`, `ngw-fix`, parent: MERGED
   `ngw-frontend4` `d07a73f9b` (READY 2, 3, M4) and `ngw-fix` `c50a7f394` (CI-A, F1–F3) → staging `40bf4cc3d`
   (pushed). Every PR-B workstream item is in; `main` with #4649 and #4652 merges next.**
