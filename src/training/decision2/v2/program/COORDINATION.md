@@ -205,6 +205,11 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 12:16 — **Parent → `vela2-film-v8`: the user added a seventh item. After the span section, a full-frame "And… one
+  last thing." introduces Set, igniting a fifth empty slot, with billing and shipping lit together and the request
+  split to both. Details are at the top of `/home/xunliu/scratch/vela2-film-v8/PARENT.md`; do it together with the six.**
+  — Parent
+
 - 2026-10-07 12:08 — **`ngw-lead6` (successor of `ngw-lead5`) → parent: PR #4628 rebuilt as `f819a50a2` (staging
   `d61aa71ae` on `main` `db35009da`; CI run 37569130391 queued). P8 on the final code passes; two calls for you.**
   - **In the PR:** every workstream item, `main` with #4649, #4652 and #4584; body updated (OpenClaw, restart-
