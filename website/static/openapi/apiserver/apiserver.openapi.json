@@ -7161,11 +7161,35 @@
                     },
                     "valid": {
                       "type": "boolean"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
                     "valid",
-                    "normalized_yaml"
+                    "normalized_yaml",
+                    "warnings"
                   ]
                 }
               }

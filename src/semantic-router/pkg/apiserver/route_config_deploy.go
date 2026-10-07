@@ -247,7 +247,7 @@ func (s *ClassificationAPIServer) loadCompatibleRollbackSource(
 			return nil, false
 		}
 	}
-	if err := validateParsedHotReloadCompatibility(currentCfg, backupCfg); err != nil {
+	if err := validateParsedHotReloadCompatibilityInMode(s.gatewayMode, currentCfg, backupCfg); err != nil {
 		s.writeErrorResponse(
 			w,
 			http.StatusConflict,

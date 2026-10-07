@@ -450,7 +450,10 @@ def _execute_serve(
 @click.option(
     "--chart-dir",
     default=None,
-    help="Path to Helm chart directory (kubernetes target only)",
+    help=(
+        "Path to Helm chart directory (kubernetes target only; default: "
+        "./deploy/helm/semantic-router, else the published chart for this version)"
+    ),
 )
 @_container_runtime_options
 @click.option(

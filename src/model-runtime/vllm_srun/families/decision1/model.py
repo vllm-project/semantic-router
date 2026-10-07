@@ -15,7 +15,12 @@ from typing import Any, ClassVar
 
 import torch
 
-from ...errors import INVALID_QUESTION, MAX_LENGTH_EXCEEDED, QuestionError
+from ...errors import (
+    INVALID_QUESTION,
+    MAX_LENGTH_EXCEEDED,
+    QuestionError,
+    question_error,
+)
 from ...heads.candidate import CandidateHead, forward_logits
 from ...heads.typed import TypeReadout
 from ...plugins.base import EngineModel, ModelInfo
@@ -74,12 +79,11 @@ class Decision1Model(DecisionModel[RenderedItem, list[float] | None]):
                 rows.append(
                     parse(question_id, question, self.noul_defaults, self.presets)
                 )
-            except QuestionError:
+            except QuestionError as exc:
                 kind = question.get("type") if isinstance(question, dict) else None
-                errors[question_id] = {
-                    "type": kind if kind in KINDS else None,
-                    "error": INVALID_QUESTION,
-                }
+                errors[question_id] = question_error(
+                    kind if kind in KINDS else None, exc, INVALID_QUESTION
+                )
         tokens = self.tokens()
         items: list[RenderedItem] = []
         for row in rows:
@@ -87,7 +91,7 @@ class Decision1Model(DecisionModel[RenderedItem, list[float] | None]):
                 items.append(self.render(row, text, tokens))
             except QuestionError as exc:
                 if exc.code != MAX_LENGTH_EXCEEDED:
-                    errors[row.question_id] = {"type": row.kind, "error": exc.code}
+                    errors[row.question_id] = question_error(row.kind, exc)
                     continue
                 for failed in rows:
                     errors[failed.question_id] = {

@@ -31,7 +31,12 @@ ENVOY_URL="${TARGET_ENVOY_URL:-http://localhost:${ENVOY_PORT}}"
 
 echo "Starting dashboard with Router API at ${ROUTER_API_URL}"
 echo "Starting dashboard with Router metrics at ${ROUTER_METRICS_URL}"
-echo "Starting dashboard with Envoy at ${ENVOY_URL}"
+# A stack started before standalone mode existed sets no gateway and runs Envoy.
+if [ "${VLLM_SR_GATEWAY:-extproc}" = "standalone" ]; then
+    echo "Starting dashboard with the Router's listener at ${ENVOY_URL}"
+else
+    echo "Starting dashboard with Envoy at ${ENVOY_URL}"
+fi
 
 # Check for read-only mode
 READONLY_ARG=""
