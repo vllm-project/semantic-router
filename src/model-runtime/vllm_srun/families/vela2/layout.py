@@ -13,12 +13,15 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from .request import Plan, Question
 from .words import Words, words_of
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 PROMPT_FLOOR = 64
 
@@ -32,8 +35,8 @@ class EncodedPart:
     """A part's token IDs; offsets and words only for parts a span question reads."""
 
     role: str
-    ids: np.ndarray
-    offsets: np.ndarray | None = None
+    ids: NDArray[np.int32]
+    offsets: NDArray[np.int32] | None = None
     words: Words | None = None
 
     def window(self, start: int, end: int, words: Words | None) -> EncodedPart:
@@ -156,7 +159,7 @@ def rows_of(plan: Plan, tokens: Tokens) -> list[Row]:
 
 
 def word_windows(
-    first: np.ndarray, length: int, window: int, stride: int
+    first: NDArray[np.int32], length: int, window: int, stride: int
 ) -> list[tuple[int, int]]:
     """Token windows ``[a, b)`` over a part that start at word starts and never split a word."""
     starts = sorted({int(x) for x in first})
@@ -179,7 +182,7 @@ def word_windows(
     return out
 
 
-def window_words(words: Words, start: int, end: int) -> tuple[Words, np.ndarray]:
+def window_words(words: Words, start: int, end: int) -> tuple[Words, NDArray[np.intp]]:
     """The words whose first token lies in ``[start, end)``, re-based to the window, and their global indices."""
     selected = np.nonzero((words.first >= start) & (words.first < end))[0]
     return Words(words.offsets[selected], words.first[selected] - start), selected
