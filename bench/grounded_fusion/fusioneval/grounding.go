@@ -2,54 +2,71 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
-	"runtime"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
-// prepareNLI keeps this evaluator's explicitly selected Candle model independent
-// of other runs and of the image's implicit classification provider. TextPair
-// validates NLI labels and returns entailment/neutral/contradiction in that order.
-func prepareNLI(opt options) (looper.NLIClassifyFunc, io.Closer, error) {
-	device := "cpu"
-	if !opt.useCPU {
-		device = "cuda:0"
-		if runtime.GOOS == "darwin" {
-			device = "metal:0"
-		}
-	}
-	spec := config.ResolvedModelBinding{
-		Recipe: "fusioneval",
-		Name:   "hallucination_explainer",
-		Binding: config.ModelBinding{
-			Deployment: "fusioneval-nli",
-			Contract:   "text_pair_distribution.v1",
-			Adapter:    "auto",
-		},
-		Deployment: config.ModelDeployment{
-			Artifact:  opt.nliModel,
-			Provider:  "candle",
-			Device:    device,
-			Precision: "native",
-			Input:     config.ModelInputBudget{Overflow: "truncate"},
-		},
-	}
-	handle, err := native.New(nil).TextPair(context.Background(), spec)
+// routerGrounding returns the grounding backends the router serves for the
+// default recipe of a router config: its model catalog through the managed
+// runtime, then that recipe's classifier. Panel and context grounding both read
+// the hallucination detector.
+func routerGrounding(path string) (*looper.GroundingBackends, io.Closer, error) {
+	cfg, err := config.Load(path)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("load router config: %w", err)
 	}
-	classify := func(ctx context.Context, premise, hypothesis string) (float32, float32, error) {
-		result, classifyErr := handle.Call(ctx, string(spec.Recipe), tasks.TextPairRequest{
-			Premise: premise, Hypothesis: hypothesis,
-		})
-		if classifyErr != nil {
-			return 0, 0, classifyErr
+	owner := &groundingOwner{manager: modelservice.NewManager()}
+	if owner.lease, err = owner.manager.Acquire(cfg); err != nil {
+		return nil, nil, errors.Join(err, owner.Close())
+	}
+	owner.classifiers, err = classification.BuildRecipeClassifiers(cfg, nil, nil, nil,
+		classification.RecipeRuntimeOptions{Runtime: serving.New(owner.lease, nil)})
+	if err == nil {
+		err = owner.classifiers.InitializeRuntime()
+	}
+	if err != nil {
+		return nil, nil, errors.Join(err, owner.Close())
+	}
+	classifier := owner.classifiers.Default()
+	if classifier == nil {
+		return nil, nil, errors.Join(errors.New("router config has no default recipe classifier"), owner.Close())
+	}
+	return classifier.GroundingBackends(), owner, nil
+}
+
+// groundingOwner keeps the classifiers, their lease and the runtime processes
+// alive for the whole evaluation.
+type groundingOwner struct {
+	manager     *modelservice.Manager
+	lease       *modelservice.Lease
+	classifiers *classification.RecipeClassifiers
+}
+
+func (o *groundingOwner) Close() error {
+	var errs []error
+	if o.classifiers != nil {
+		errs = append(errs, o.classifiers.Close())
+	}
+	if o.lease != nil {
+		errs = append(errs, o.lease.Close())
+	}
+	return errors.Join(append(errs, o.manager.Shutdown(context.Background()))...)
+}
+
+// needsShippedGrounding reports whether any requested arm grounds with the
+// router's backends rather than none or the placebo.
+func needsShippedGrounding(arms []string, reference string) bool {
+	for _, arm := range arms {
+		if cfg, placebo := armGrounding(arm, reference); cfg != nil && !placebo {
+			return true
 		}
-		return result.Probabilities[0], result.Probabilities[2], nil
 	}
-	return classify, handle, nil
+	return false
 }

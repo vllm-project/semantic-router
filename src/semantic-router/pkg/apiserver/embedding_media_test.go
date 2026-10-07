@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -149,7 +149,7 @@ func TestEmbeddingAPIAutoMediaExplicitRecipeHTTP(t *testing.T) {
 	prepared := embedding.NewSet(map[string]embedding.Provider{"mmbert": provider}, "mmbert")
 	cfg := &config.RouterConfig{}
 	cfg.EmbeddingConfig.ModelType = "mmbert"
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"vision": {Provider: "ort", Device: "cpu", Artifact: t.TempDir()}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"vision": {Provider: config.ModelRuntimeProvider, Device: "cpu", Artifact: t.TempDir()}}
 	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "vision", Contract: "embedding.v1", Adapter: "vela_omni"}}
 	// The generation owns an already prepared encoder; the API must select its
 	// actual capabilities without interpreting the legacy catalog alias.

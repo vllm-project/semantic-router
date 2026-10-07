@@ -1124,6 +1124,22 @@ class AdvancedToolFilteringConfig(BaseModel):
     hybrid_history: Optional[HybridHistoryConfig] = None
 
 
+class StickyToolSelectionConfig(BaseModel):
+    """Session-scoped sticky tool-set selection (issue #3347).
+
+    Mirrors the Go-side `config.StickyToolSelectionConfig`. Opt-in and
+    disabled by default. This layer only mirrors the schema surface so
+    Pydantic stops dropping the subtree; the Go side is authoritative for
+    bounds (max_tools 1..128, max_new_tools_per_turn 0..max_tools) and for
+    rejecting sticky.enabled under a disabled tool_selection plugin.
+    """
+
+    enabled: bool = False
+    max_tools: Optional[int] = Field(default=None, ge=1, le=128)
+    max_new_tools_per_turn: Optional[int] = Field(default=None, ge=0)
+    pin_called_tools: Optional[bool] = None
+
+
 class ToolSelectionPluginConfig(BaseModel):
     """Configuration for tool_selection plugin (semantic add/filter on request tools)."""
 
@@ -1137,6 +1153,7 @@ class ToolSelectionPluginConfig(BaseModel):
     relevance_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     preserve_count: Optional[int] = Field(default=None, ge=0)
     advanced_filtering: Optional[AdvancedToolFilteringConfig] = None
+    sticky: Optional[StickyToolSelectionConfig] = None
 
 
 class SystemPromptPluginConfig(BaseModel):
@@ -2303,7 +2320,8 @@ class ModelBinding(BaseModel):
 
     deployment: str
     contract: str
-    adapter: str
+    # Required except on model_runtime deployments, whose card names the head.
+    adapter: str = ""
     head: Optional[str] = None
     mapping_path: Optional[str] = None
     pair_scorer: Optional[PairScorerSelection] = None
@@ -2425,19 +2443,12 @@ class EmbeddingModelsConfig(BaseModel):
     qwen3_model_path: Optional[str] = Field(
         None, description="Path to Qwen3-Embedding model"
     )
-    gemma_model_path: Optional[str] = Field(
-        None, description="Path to EmbeddingGemma model"
-    )
     mmbert_model_path: Optional[str] = Field(
         None, description="Path to mmBERT 2D Matryoshka model"
     )
     multimodal_model_path: Optional[str] = Field(
         None,
         description="Path to multi-modal embedding model (text/image/audio)",
-    )
-    bert_model_path: Optional[str] = Field(
-        None,
-        description="Path to BERT/MiniLM model (recommended for memory retrieval)",
     )
     embedding_config: Optional[EmbeddingClassifierConfig] = Field(
         default=None,
