@@ -17,7 +17,7 @@ import (
 // representation, so cache state never contains provider-specific stream
 // accumulator state.
 func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []byte) {
-	if ctx.RequestID == "" || responseBody == nil {
+	if ctx.RequestID == "" || responseBody == nil || !r.cacheBackendEnabled() {
 		return
 	}
 	if !r.semanticCacheEnabledForRequest(ctx) {
