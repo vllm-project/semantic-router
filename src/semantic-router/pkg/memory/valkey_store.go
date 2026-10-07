@@ -1,5 +1,3 @@
-//go:build !riscv64
-
 package memory
 
 import (
@@ -74,7 +72,7 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 	if options.EmbeddingConfig != nil {
 		embeddingCfg = *options.EmbeddingConfig
 	} else {
-		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelBERT}
+		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelMMBERT}
 	}
 
 	vc := options.ValkeyConfig
@@ -363,7 +361,7 @@ func (v *ValkeyStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 
 	defer func() {
 		duration := time.Since(startTime).Seconds()
-		RecordMemoryRetrieval(backend, operation, status, opts.UserID, duration, resultCount)
+		RecordMemoryRetrieval(backend, operation, status, duration, resultCount)
 	}()
 
 	if !v.enabled {
@@ -554,16 +552,13 @@ func (v *ValkeyStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 		return nil, fmt.Errorf("user ID is required for listing memories")
 	}
 
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
+	limit, offset, err := normalizeListWindow(opts)
+	if err != nil {
+		return nil, err
 	}
 
-	logging.Debugf("ValkeyStore.List: user_id=%s, types=%v, limit=%d",
-		opts.UserID, opts.Types, limit)
+	logging.Debugf("ValkeyStore.List: user_id=%s, types=%v, limit=%d, offset=%d",
+		opts.UserID, opts.Types, limit, offset)
 
 	// Build filter expression
 	filterExpr := fmt.Sprintf("@user_id:{%s}", valkeyEscapeTagValue(opts.UserID))
@@ -576,35 +571,60 @@ func (v *ValkeyStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 		filterExpr = fmt.Sprintf("%s @memory_type:{%s}", filterExpr, strings.Join(typeValues, " | "))
 	}
 
-	// Use SORTBY created_at DESC since created_at is declared SORTABLE in the index schema.
-	// This avoids the over-fetch + client-side sort and returns correct ordering even when
-	// the user has more memories than the fetch limit.
-	searchCmd := []string{
-		"FT.SEARCH", v.indexName, filterExpr,
-		"RETURN", "7", "id", "content", "user_id", "memory_type", "metadata", "created_at", "updated_at",
-		"SORTBY", "created_at", "DESC",
-		"LIMIT", "0", strconv.Itoa(limit),
-		"DIALECT", "2",
-	}
-
-	result, err := v.client.CustomCommand(ctx, searchCmd)
+	// FT.SEARCH sorts by created_at only. Load the prefix from offset 0, then the
+	// whole timestamp group that touches the page end, before the id tie-break.
+	window := offset + limit
+	memories, total, err := v.searchMemoryList(ctx, filterExpr, 0, window)
 	if err != nil {
-		return nil, fmt.Errorf("valkey FT.SEARCH list failed: %w", err)
+		return nil, err
 	}
+	if len(memories) > 0 && len(memories) < total {
+		boundary := memories[len(memories)-1].CreatedAt
+		tieFilter := fmt.Sprintf("%s @created_at:[%d %d]", filterExpr, boundary.UnixMilli(), boundary.UnixMilli())
+		ties, tieTotal, tieErr := v.searchMemoryList(ctx, tieFilter, 0, maxListTieGroup)
+		if tieErr != nil {
+			return nil, tieErr
+		}
+		if tieTotal > maxListTieGroup {
+			return nil, fmt.Errorf("valkey list tie group exceeds %d rows", maxListTieGroup)
+		}
+		memories = mergeCreatedAtTieGroup(memories, boundary, ties)
+	}
+	// Always apply the id tie-break. A window that already holds every match
+	// never enters the tie-group fetch above, and Valkey's own row order is
+	// not the list contract.
+	sortMemoriesForList(memories)
 
-	// Extract total count from the FT.SEARCH header.
-	total := v.extractTotalCount(result)
-
-	memories := v.parseListSearchResults(result)
-
-	logging.Debugf("ValkeyStore.List: found %d total, returning %d (limit=%d)",
-		total, len(memories), limit)
+	logging.Debugf("ValkeyStore.List: found %d total, returning page at offset %d (limit=%d)",
+		total, offset, limit)
+	memories = pageMemories(memories, offset, limit)
 
 	return &ListResult{
 		Memories: memories,
 		Total:    total,
 		Limit:    limit,
+		Offset:   offset,
 	}, nil
+}
+
+// searchMemoryList runs FT.SEARCH sorted by created_at descending.
+// The returned slice is ordered by created_at descending, then id descending.
+func (v *ValkeyStore) searchMemoryList(ctx context.Context, filterExpr string, offset, limit int) ([]*Memory, int, error) {
+	if limit < 1 {
+		limit = 1
+	}
+	searchCmd := []string{
+		"FT.SEARCH", v.indexName, filterExpr,
+		"RETURN", "7", "id", "content", "user_id", "memory_type", "metadata", "created_at", "updated_at",
+		"SORTBY", "created_at", "DESC",
+		"LIMIT", strconv.Itoa(offset), strconv.Itoa(limit),
+		"DIALECT", "2",
+	}
+	result, err := v.client.CustomCommand(ctx, searchCmd)
+	if err != nil {
+		return nil, 0, fmt.Errorf("valkey FT.SEARCH list failed: %w", err)
+	}
+	return v.parseListSearchResults(result), v.extractTotalCount(result), nil
 }
 
 // Forget deletes a memory by ID from Valkey.

@@ -36,10 +36,10 @@ const models: RouterModelInfo[] = [
   loaded: true,
   model_path: `models/local-ckfa/${task}-0123456789ab`,
   registry: {
-    repo_id: `llm-semantic-router/Vela-1.0-Encoder-307M-${task}`,
+    repo_id: `vllm-sr/Vela-1.0-Encoder-307M-${task}`,
     revision: 'test-registry-revision',
     max_context_length: 32768,
-    model_card_url: `https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-${task}`,
+    model_card_url: `https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-${task}`,
   },
   metadata: {
     binding: name,
@@ -52,7 +52,7 @@ const models: RouterModelInfo[] = [
     forward_max_tokens: '32768',
     overflow: 'truncate',
     precision: 'native',
-    provider: 'ort',
+    provider: 'model_runtime',
   },
 }))
 
@@ -76,7 +76,7 @@ describe('router model presentation', () => {
       models.map((model) => model.registry!.repo_id!.split('/')[1]).sort(),
     )
     expect(headings(markup)).toHaveLength(8)
-    expect(markup.match(/>llm-semantic-router<\/p>/g)).toHaveLength(8)
+    expect(markup.match(/>vllm-sr<\/p>/g)).toHaveLength(8)
     expect(markup).not.toContain('Vela Embedding')
     expect(markup).not.toContain('0123456789ab')
     expect(markup).not.toContain('models/local-ckfa')
@@ -203,9 +203,13 @@ describe('router model presentation', () => {
     expect(render([cpu], 'detail')).not.toContain('amd-logo.png')
     expect(render([models[3]], 'detail')).toContain('ROCm 0')
     expect(render([models[3]])).not.toContain('AMD GPU')
-    expect(getRouterModelDevice({ ...cpu, metadata: { device: 'migraphx:2' } })).toEqual({
-      label: 'MIGraphX 2',
+    expect(getRouterModelDevice({ ...cpu, metadata: { device: 'rocm:2' } })).toEqual({
+      label: 'ROCm 2',
       isAmd: true,
+    })
+    expect(getRouterModelDevice({ ...cpu, metadata: { device: 'xpu:1' } })).toEqual({
+      label: 'XPU 1',
+      isAmd: false,
     })
     expect(getRouterModelDevice({ ...cpu, metadata: {} })).toEqual({
       label: 'Device not reported',

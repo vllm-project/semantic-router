@@ -31,6 +31,10 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 	}
 	responseID := "resp_" + ctx.RequestID
 	itemID := "item_" + ctx.RequestID
+	if publicID := responseObjectPublicID(ctx); publicID != "" {
+		responseID = publicID
+		itemID = llmprotocol.StableID(publicID, "0")
+	}
 	usage := authoritativeZeroUsage()
 	response := &llmprotocol.Response{
 		Generation: 1,
