@@ -149,7 +149,7 @@ func TestAggregateBudgetIsCheckedBeforeBuildingATurn(t *testing.T) {
 	full := strings.Repeat("parser buffer loop ", 200)
 	messages := conversation(exchange(full, full), user(full))
 	prepared := prepare(context.Background(), messages, true, policy)
-	state := &prepareState{ctx: context.Background(), policy: policy}
+	state := &prepareState{probe: newCancellationProbe(context.Background()), policy: policy}
 	if prepared.InputBytes+state.retainedUpperBound(messages[:2]) <= policy.Limits.MaxInputBytes {
 		t.Fatal("precondition: the prior turn must not fit the remaining budget")
 	}
@@ -170,7 +170,7 @@ func TestRetainedUpperBoundNeverUnderestimates(t *testing.T) {
 			Limits:           Limits{MaxPriorTurns: 4, MaxTurnBytes: 512, MaxInputBytes: 4096},
 			IncludeAssistant: includeAssistant,
 		}
-		state := &prepareState{ctx: context.Background(), policy: policy}
+		state := &prepareState{probe: newCancellationProbe(context.Background()), policy: policy}
 		calls := make([]llmprotocol.Content, 20)
 		for i := range calls {
 			calls[i] = toolCall(fmt.Sprintf("c%d", i), strings.Repeat("n", 70), "")

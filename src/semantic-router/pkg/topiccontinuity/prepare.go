@@ -26,7 +26,7 @@ func prepare(ctx context.Context, messages []llmprotocol.Message, available bool
 	if !available {
 		return terminal(base, ReasonHistoryUnavailable)
 	}
-	state := &prepareState{ctx: ctx, messages: messages, policy: policy, out: base}
+	state := &prepareState{probe: newCancellationProbe(ctx), messages: messages, policy: policy, out: base}
 	return state.run()
 }
 
@@ -37,7 +37,7 @@ func terminal(base preparation, status Reason) preparation {
 }
 
 type prepareState struct {
-	ctx      context.Context
+	probe    cancellationProbe
 	messages []llmprotocol.Message
 	policy   HistoryPolicy
 	out      preparation
@@ -87,7 +87,7 @@ func (s *prepareState) run() preparation {
 
 func (s *prepareState) classifyLive(last int) (int, liveKind, Reason) {
 	final := s.messages[last]
-	if err := s.ctx.Err(); err != nil {
+	if s.probe.cancelled() {
 		return 0, liveNone, ReasonCancelled
 	}
 	if !s.visit(final) {
@@ -121,7 +121,7 @@ func (s *prepareState) classifyToolContinuation(last int) (int, liveKind, Reason
 	}
 	collect(s.messages[last])
 	for index := last - 1; index >= 0; index-- {
-		if err := s.ctx.Err(); err != nil {
+		if s.probe.cancelled() {
 			return 0, liveNone, ReasonCancelled
 		}
 		message := s.messages[index]
@@ -157,11 +157,14 @@ func (s *prepareState) collect(liveStart, last int) preparation {
 	if s.out.liveKind == liveUser {
 		s.out.LiveOpaqueOnly = opaqueOnly(s.messages[liveStart], live)
 	}
+	if s.probe.cancelled() {
+		return s.cancelled()
+	}
 
 	var pending []llmprotocol.Message
 	foundPrior, beyond := false, false
 	for index := liveStart - 1; index >= 0; index-- {
-		if err := s.ctx.Err(); err != nil {
+		if s.probe.cancelled() {
 			return s.cancelled()
 		}
 		message := s.messages[index]

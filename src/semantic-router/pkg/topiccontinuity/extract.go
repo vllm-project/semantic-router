@@ -26,9 +26,19 @@ func extract(ctx context.Context, prepared preparation) extraction {
 		return out
 	}
 	out := extraction{Policy: prepared.Policy, Coverage: prepared.Coverage, Scope: prepared.Scope}
+	probe := newCancellationProbe(ctx)
+	if probe.cancelled() {
+		return cancelled(out, false)
+	}
 
 	liveTerms := termSet(prepared.Live.User)
+	if probe.cancelled() {
+		return cancelled(out, false)
+	}
 	liveEntities, capped := entitySet(prepared.Live.User, nil)
+	if probe.cancelled() {
+		return cancelled(out, capped)
+	}
 	features := Features{
 		PriorTurnsExamined: len(prepared.Prior),
 		InputBytes:         prepared.InputBytes,
@@ -37,12 +47,15 @@ func extract(ctx context.Context, prepared preparation) extraction {
 	}
 	bestDecayed := -1.0
 	for k, turn := range prepared.Prior {
-		if ctx.Err() != nil {
+		if probe.cancelled() {
 			return cancelled(out, capped)
 		}
 		segments := append(append([]textSegment{}, turn.User...), turn.Assistant...)
 		turnEntities, turnCapped := entitySet(segments, turn.ToolNames)
 		capped = capped || turnCapped
+		if probe.cancelled() {
+			return cancelled(out, capped)
+		}
 		lexical := containment(liveTerms, termSet(segments))
 		raw := lexical
 		entity := 0.0
@@ -60,15 +73,14 @@ func extract(ctx context.Context, prepared preparation) extraction {
 		features.MaxRawScore = math.Max(features.MaxRawScore, raw)
 		features.MaxEntityScore = math.Max(features.MaxEntityScore, entity)
 	}
-	if ctx.Err() != nil {
+	if probe.cancelled() {
 		return cancelled(out, capped)
 	}
 	if capped {
 		out.Scope.FeatureCapReached = true
 		out.Coverage = CoveragePartial
 	}
-	applyPhraseFlags(ctx, &features, prepared.Live.User)
-	if ctx.Err() != nil {
+	if !applyPhraseFlags(probe, &features, prepared.Live.User) {
 		return cancelled(out, capped)
 	}
 	out.Features = features
@@ -121,15 +133,19 @@ func containment(live, other map[string]struct{}) float64 {
 
 // applyPhraseFlags sets the reference, acknowledgement, and change-marker
 // flags. Continuation flags use the unstripped view; change markers use the
-// masked view, so stripping can only ever hide change evidence. Cancellation
-// stops the change-marker scan early; the caller then discards the flags.
-func applyPhraseFlags(ctx context.Context, features *Features, live []textSegment) {
+// masked view, so stripping can only ever hide change evidence. It probes
+// between passes and returns false on cancellation; the caller then discards
+// the flags.
+func applyPhraseFlags(probe cancellationProbe, features *Features, live []textSegment) bool {
 	if len(live) == 0 {
-		return
+		return true
 	}
 	continuation := make([][]phraseToken, len(live))
 	for i, segment := range live {
 		continuation[i] = continuationView(segment)
+		if probe.cancelled() {
+			return false
+		}
 	}
 	for _, tokens := range continuation {
 		for index := range tokens {
@@ -137,6 +153,9 @@ func applyPhraseFlags(ctx context.Context, features *Features, live []textSegmen
 				features.StrongReference = true
 			}
 		}
+	}
+	if probe.cancelled() {
+		return false
 	}
 	first := continuation[0]
 	lead := leadingAcknowledgements(first)
@@ -146,9 +165,13 @@ func applyPhraseFlags(ctx context.Context, features *Features, live []textSegmen
 		}
 	}
 	features.Acknowledgement = isAcknowledgement(continuation)
-	clean, ambiguous := changeMarkers(ctx, live)
+	if probe.cancelled() {
+		return false
+	}
+	clean, ambiguous, ok := changeMarkers(probe, live)
 	features.MarkerAmbiguous = ambiguous
 	features.ChangeMarker = clean && !ambiguous
+	return ok
 }
 
 // isAcknowledgement requires every live token to be covered, without gaps, by
@@ -168,13 +191,16 @@ func isAcknowledgement(segments [][]phraseToken) bool {
 // occurrence is leading (first segment, within the leading window after
 // acknowledgements), not negated, and not inside paired single quotes. Any
 // other occurrence is ambiguous.
-func changeMarkers(ctx context.Context, live []textSegment) (clean, ambiguous bool) {
+func changeMarkers(probe cancellationProbe, live []textSegment) (clean, ambiguous, ok bool) {
 	for segmentIndex, segment := range live {
-		if ctx.Err() != nil {
-			return clean, ambiguous
-		}
 		tokens := changeView(segment)
+		if probe.cancelled() {
+			return false, false, false
+		}
 		quotes := singleQuoteSpans(string(segment))
+		if probe.cancelled() {
+			return false, false, false
+		}
 		lead := leadingAcknowledgements(tokens)
 		for index := range tokens {
 			if matchAny(tokens, index, changeMarkerPhrases) == 0 {
@@ -187,8 +213,11 @@ func changeMarkers(ctx context.Context, live []textSegment) (clean, ambiguous bo
 				ambiguous = true
 			}
 		}
+		if probe.cancelled() {
+			return false, false, false
+		}
 	}
-	return clean, ambiguous
+	return clean, ambiguous, true
 }
 
 // negated looks back across run barriers, which can only add ambiguity.

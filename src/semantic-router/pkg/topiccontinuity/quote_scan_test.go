@@ -2,7 +2,9 @@ package topiccontinuity
 
 import (
 	"context"
+	"fmt"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -119,9 +121,42 @@ func TestAdversarialQuotesCostLikeOrdinaryText(t *testing.T) {
 	}
 }
 
-// A deadline that expires while the live turn's phrases are scanned must
-// yield a cancelled result, never an ordinary full-coverage one.
+func assertCancelled(t *testing.T, label string, result Result) {
+	t.Helper()
+	assertInvariants(t, result)
+	if result.Reason != ReasonCancelled || result.Coverage != CoveragePartial || result.Features != (Features{}) {
+		t.Fatalf("%s: got %s/%s features=%+v", label, result.Reason, result.Coverage, result.Features)
+	}
+}
+
+// expiredDeadlineContext models a context whose deadline has passed while its
+// timer callback has not yet run, as happens when a CPU-bound evaluation
+// holds the only processor: Deadline is in the past, and Err is still nil.
+type expiredDeadlineContext struct{ context.Context }
+
+func (expiredDeadlineContext) Deadline() (time.Time, bool) {
+	return time.Now().Add(-time.Millisecond), true
+}
+
+func TestExpiredDeadlineCancelsWithoutTimerCallback(t *testing.T) {
+	cfg := defaultConfig(adversarialPolicy)
+	messages := liveTurnHistory(strings.Repeat(" 'a", MaxTurnBytes/3))
+	ctx := expiredDeadlineContext{context.Background()}
+	if ctx.Err() != nil {
+		t.Fatal("precondition: Err must still be nil")
+	}
+	result := EvaluateAll(ctx, func() ([]llmprotocol.Message, bool) { return messages, true },
+		[]EvalConfig{cfg}).Rules[0].Result
+	assertCancelled(t, "EvaluateAll", result)
+
+	prepared := prepare(context.Background(), messages, true, cfg.Policy)
+	assertCancelled(t, "extract", classify(cfg, prepared, extract(ctx, prepared)))
+}
+
+// The real-deadline case the maintainer reported, on one CPU: a deadline that
+// passes during evaluation must cancel, even before its timer callback runs.
 func TestDeadlineDuringEvaluationCancels(t *testing.T) {
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
 	cfg := defaultConfig(adversarialPolicy)
 	messages := liveTurnHistory(strings.Repeat(" 'a", MaxTurnBytes/3))
 	full := fastestEvaluation(messages, cfg)
@@ -129,10 +164,7 @@ func TestDeadlineDuringEvaluationCancels(t *testing.T) {
 	defer cancel()
 	result := EvaluateAll(ctx, func() ([]llmprotocol.Message, bool) { return messages, true },
 		[]EvalConfig{cfg}).Rules[0].Result
-	assertInvariants(t, result)
-	if result.Reason != ReasonCancelled || result.Coverage == CoverageFull {
-		t.Fatalf("deadline %v of a %v evaluation: got %s/%s", full/4, full, result.Reason, result.Coverage)
-	}
+	assertCancelled(t, fmt.Sprintf("deadline %v of a %v evaluation", full/4, full), result)
 }
 
 // countdownContext reports cancellation from its k-th Err call onward.
@@ -154,12 +186,16 @@ func (c *countdownContext) Err() error {
 	return nil
 }
 
-// Cancellation observed at any check, including the final one after the
-// phrase scan, yields unknown_cancelled.
+// Cancellation observed at any probe, including every pass boundary of the
+// phrase stage, yields unknown_cancelled with partial coverage and no
+// features. The live turn has two segments so per-segment probes run twice.
 func TestCancellationAtEveryCheckPoint(t *testing.T) {
 	cfg := defaultConfig(defaultPolicy)
-	messages := conversation(unrelatedHistory(3),
-		user("New topic: what is the boiling point of water at altitude in 'Denver'?"))
+	live := llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{
+		text("New topic: what is the boiling point of water at altitude in 'Denver'?"),
+		text("Also compare it with \"sea level\" values."),
+	}}
+	messages := append(unrelatedHistory(3), live)
 	load := func() ([]llmprotocol.Message, bool) { return messages, true }
 
 	counter := newCountdownContext(1 << 30)
@@ -170,9 +206,6 @@ func TestCancellationAtEveryCheckPoint(t *testing.T) {
 	}
 	for k := int64(0); k < checks; k++ {
 		result := EvaluateAll(newCountdownContext(k), load, []EvalConfig{cfg}).Rules[0].Result
-		assertInvariants(t, result)
-		if result.Reason != ReasonCancelled {
-			t.Fatalf("cancelled at check %d of %d: got %s", k+1, checks, result.Reason)
-		}
+		assertCancelled(t, fmt.Sprintf("cancelled at check %d of %d", k+1, checks), result)
 	}
 }

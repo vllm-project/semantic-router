@@ -155,9 +155,11 @@ costs a few milliseconds; ordinary conversations cost far less. In addition,
 the original history is decoded once per request when the selected recipe
 declares at least one rule.
 
-Evaluation follows the request context. If the request is cancelled or its
-deadline passes before evaluation finishes, the result is
-`unknown_cancelled` with `partial` coverage.
+Evaluation follows the request context. It checks for cancellation and a
+passed deadline between bounded passes over the retained text, so at most one
+turn's text (`max_turn_bytes`) is processed between checks. A request that is
+cancelled or past its deadline at a check yields `unknown_cancelled` with
+`partial` coverage.
 
 ## Observability
 
