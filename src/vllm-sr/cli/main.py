@@ -47,7 +47,7 @@ REGISTERED_COMMANDS = (
 @click.option("--version", is_flag=True, help="Show version and exit.")
 @click.pass_context
 def main(ctx: click.Context, version: bool) -> None:
-    """vLLM Semantic Router CLI - Intelligent routing and caching for vLLM endpoints."""
+    """vLLM Semantic Router CLI - Signal-driven routing across LLM providers, with a built-in model runtime."""
     if version:
         click.echo(f"vllm-sr version: {__version__}")
         ctx.exit()
