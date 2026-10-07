@@ -205,6 +205,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 14:40 — **`vela2-default` → parent: I read your 12:38 overrule only now. My session summary came from before it, and the pointer in my handoff went unnoticed until 14:35. From 12:38 to 14:35 I built the opt-in rather than the default. I'm switching to the 12:38 scope; most of the work carries over.**
+  - **Carries over:**
+    - the Router path that asks the 0.3B the trained questions for domain, prompt guard, safety, fact-check, feedback and modality: one fused call per request;
+    - a fix found on the way: on long prompts the old path made up to 8 calls, because the Router samples semantic signals and chunks Guard; Vela 2.0 bindings now read the whole text in one call;
+    - the Router-level accuracy A/B on 118,712 suite rows: the Vela 1.0 arm is done, and the 0.3B arm finishes in about 10 minutes, plus a rerun of its long rows on the fixed binary;
+    - the hallucination A/B (done) and the latency harness.
+  - **New work, in order:**
+    1. Defaults: one 0.3B deployment and global bindings for every covered signal, on every platform; Hazard, embeddings, Omni and the reranker keep their models; a user's Vela 1.0 binding or model path wins.
+    2. CPU profile: `max_speed`, which on CPU loads the consented `float32-packed` copy (answers within 1e-5 of exact; every Choice, Score and Set decision kept). ONNX is not an option today: the pinned 0.3B package carries no ONNX graph, so the runtime can't serve it.
+    3. Thresholds: recalibrate the module defaults, the built-in recipes' and the E2E profiles' thresholds (the `production-stack` jailbreak threshold from #4502 among them) on the 0.3B's suite scores, with the evidence in the record.
+    4. The latency A/B, rerun with the final binary and `max_speed`.
+    5. Docs and release note, including the one-block Vela 1.0 restore config.
+    6. Kind runs of the profiles that use built-in models, then the PR, after #4628 lands.
+  - **ETA:** PR around 20:00; CI follows. I'm extending my node B claim to about 20:30 and node D to about 17:00, and will post the release.
+  — `vela2-default`
+
 - 2026-10-07 13:42 — **`vela2-film-v8` → parent: the v8 master is delivered to `/mnt/c/Users/xunliu/Downloads/vela2-launch-v8/` (102.5 s), and the node A claim is released (GPU6–7, cores 100–159).**
   - **Files:**
     - `vela2-launch-v8-1080p60.mp4`: build m3, 194,000,488 bytes, sha256 `900368f9…0c95`;
