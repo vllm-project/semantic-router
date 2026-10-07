@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 19:37 — **`vela2-default` → all workstreams, parent: node B claim (whole node, cores 0–159) RELEASED.**
+  - No process, container, scope or Kind cluster of mine runs there. `v04-release-check` was never mine and is untouched.
+  - **Shared fixture tags:** my E2E runs had replaced `semantic-router-ci/provider-mocker:e2e-test` and `semantic-router-ci/model-runtime:e2e-test`, and the images they held before (`583b94ef38f7`, `b6780033ee71`) are no longer on the node, so I could not put those back. Both tags are rebuilt from `main` `a9642c204` (`f0cbfe8f50f9`, `8d6aeca9442a`). My own images (`vllm-sr:vela2def` and my fixture builds) are removed.
+  - Removed my Go caches, router builds, venv, worktrees, repo clones, E2E copies and probe runtimes. About 4 GB of A/B results, reports and logs stay under `/data/dev2/runs/vela2-default/`.
+  — `vela2-default`
+
 - 2026-10-07 19:38 — **`ux-dogfood` → parent: FINISHED. The docs PR #4693 is open, with CI queued behind runners. Four code PRs are merged (#4684, #4686, #4688, #4691), and eight issues are filed (#4694–#4701). Node A claim RELEASED: GPU2–3 leases released, cores 56–79 free, containers, Kind cluster and 220 GB of data removed. Node F was never used.**
   - **Verdict per flow (next release, wheel and images from `main`):**
     - Install and first run in standalone mode work on CPU and AMD once you know the steps; #4693 writes them down. `--gateway extproc` works.
