@@ -71,7 +71,7 @@ The parser writes `reports/current.json`; the comparison writes
 Classification and cache benchmarks serve the router catalog's revision-pinned
 Vela models through the model runtime, the way the Router does: one runtime
 manager, the serving facade, and a runtime process per deployment, which
-downloads its pinned model on first start (`VLLM_SR_RUNTIME_CACHE_DIR` keeps
+downloads its pinned model on first start (`VLLM_SRUN_CACHE_DIR` keeps
 it). Failed downloads or inference fail the run. `VLLM_SR_DOMAIN_MODEL`,
 `VLLM_SR_PII_MODEL`, `VLLM_SR_JAILBREAK_MODEL`, and `VLLM_SR_EMBEDDING_MODEL`
 can point to local packages instead. No model IDs or revisions are maintained

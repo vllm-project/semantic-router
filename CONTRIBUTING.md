@@ -44,6 +44,9 @@ needs-acceptance -> accepted -> ready-for-dev -> in-progress -> closed
 - `accepted` work may remain in the backlog until it is sufficiently specified
   and has review capacity.
 - `ready-for-dev` marks accepted, unassigned work that contributors may claim.
+- To claim `ready-for-dev` work, comment `/assign` on the issue. The claim
+  counts once your name appears under Assignees; comment `/unassign` to
+  release it. Assignments on issues that are not yet accepted are removed.
 - Assignment moves accepted work to `in-progress`.
 - `help wanted` and `good first issue` are curated subsets of
   `ready-for-dev`; they are not intake or acceptance labels.

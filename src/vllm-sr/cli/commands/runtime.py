@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import webbrowser
 from pathlib import Path
 
@@ -19,13 +20,12 @@ from cli.commands.runtime_config_mutation import (
 from cli.commands.runtime_config_mutation import (
     inject_algorithm_into_config as _inject_algorithm_into_config,
 )
-from cli.commands.runtime_engine import (
-    ENGINE_HELP,
-    reject_engine_options,
-    run_engine_mode,
-)
+from cli.commands.runtime_engine import ENGINE_HELP, run_engine_mode
 from cli.commands.runtime_help import SERVE_HELP
-from cli.commands.runtime_serve_config import _prepare_effective_serve_config
+from cli.commands.runtime_serve_config import (
+    _prepare_effective_serve_config,
+    validate_decision_model_flag,
+)
 from cli.commands.runtime_support import (
     append_passthrough_env_vars,
     apply_container_runtime_override,
@@ -34,6 +34,13 @@ from cli.commands.runtime_support import (
     configure_runtime_override_env_vars,
     log_bootstrap_result,
     validate_setup_mode_flags,
+)
+from cli.commands.serve_options import (
+    MODE_ENGINE,
+    GroupedServeCommand,
+    reject_envoy_options,
+    reject_misplaced_options,
+    resolve_container_runtime,
 )
 from cli.consts import (
     DEFAULT_IMAGE_PULL_POLICY,
@@ -46,7 +53,21 @@ from cli.consts import (
     SUPPORTED_CONTAINER_RUNTIMES,
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
-from cli.deployment_backend import DEFAULT_TARGET, VALID_TARGETS, resolve_target
+from cli.decision_model import DECISION_MODELS, DEFAULT_DECISION_MODEL
+from cli.deployment_backend import (
+    DEFAULT_TARGET,
+    TARGET_DOCKER,
+    TARGET_KUBERNETES,
+    VALID_TARGETS,
+    resolve_target,
+)
+from cli.gateway_mode import (
+    GATEWAY_HELP,
+    VALID_GATEWAYS,
+    apply_gateway_mode,
+    log_gateway_mode,
+    resolve_gateway,
+)
 from cli.runtime_lifecycle import validate_startup_timeout
 from cli.terminal import echo, fields, heading, success
 from cli.utils import get_logger
@@ -63,16 +84,33 @@ TARGET_HELP = (
 )
 
 RUNTIME_HELP = (
-    "Container runtime for the local Docker target: "
-    f"{', '.join(SUPPORTED_CONTAINER_RUNTIMES)}. "
-    "Equivalent to setting CONTAINER_RUNTIME=<runtime>. Has no effect on the k8s target."
+    f"Container runtime: {', '.join(SUPPORTED_CONTAINER_RUNTIMES)}. "
+    "Equivalent to setting CONTAINER_RUNTIME=<runtime>."
 )
+OLD_RUNTIME_HELP = "Old name of --container-runtime, for this release only."
+
+
+def _container_runtime_options(command):
+    """--container-runtime, and the hidden --runtime spelling it replaced."""
+    command = click.option(
+        "--runtime",
+        type=click.Choice(SUPPORTED_CONTAINER_RUNTIMES, case_sensitive=False),
+        default=None,
+        hidden=True,
+        help=OLD_RUNTIME_HELP,
+    )(command)
+    return click.option(
+        "--container-runtime",
+        type=click.Choice(SUPPORTED_CONTAINER_RUNTIMES, case_sensitive=False),
+        default=None,
+        help=RUNTIME_HELP,
+    )(command)
 
 
 def _build_backend(target: str | None, **k8s_kwargs):
     """Instantiate the deployment backend for *target*."""
     resolved = resolve_target(target)
-    if resolved == "k8s":
+    if resolved == TARGET_KUBERNETES:
         from cli.k8s_backend import K8sBackend  # noqa: PLC0415
 
         return K8sBackend(**{k: v for k, v in k8s_kwargs.items() if v is not None})
@@ -88,7 +126,7 @@ def _resolve_serve_config(
 ) -> tuple[Path, bool]:
     """Resolve one user-owned config or bootstrap the local Dashboard workspace."""
 
-    if resolved_target != "docker":
+    if resolved_target != TARGET_DOCKER:
         config_path = Path(config).expanduser()
         if not config_path.is_file():
             raise ValueError(
@@ -106,22 +144,27 @@ def _resolve_serve_config(
     return bootstrap.config_path, bootstrap.setup_mode
 
 
-def _validate_target_platform(resolved_target: str, platform: str | None) -> None:
-    """Reject local-only GPU shorthand before workspace or backend mutation."""
-
-    platform_hint = (
+def _platform_hint(platform: str | None) -> str:
+    return (
         (platform or "").strip()
         or os.getenv("VLLM_SR_PLATFORM", "").strip()
         or os.getenv("DASHBOARD_PLATFORM", "").strip()
     ).lower()
-    if resolved_target != "docker" and platform_hint in {
-        PLATFORM_AMD,
-        PLATFORM_NVIDIA,
-    }:
+
+
+def _validate_target_platform(resolved_target: str, platform: str | None) -> None:
+    """Reject a GPU platform the target cannot run before any mutation."""
+
+    if (
+        resolved_target == TARGET_DOCKER
+        and sys.platform == "darwin"
+        and _platform_hint(platform) in {PLATFORM_AMD, PLATFORM_NVIDIA}
+    ):
         raise ValueError(
-            "--platform amd/nvidia is supported only for local Docker deployments. "
-            "For Kubernetes, configure the GPU image, resources, and device plugin "
-            "through a Helm profile or the operator."
+            "--platform amd/nvidia needs a Linux host: on macOS the docker target "
+            "runs the CPU image, because Docker's Linux VM gets no GPU. Serve "
+            "without --platform; host GPU support is tracked in "
+            "https://github.com/vllm-project/semantic-router/issues/4636"
         )
 
 
@@ -145,6 +188,9 @@ def _deploy_serve_backend(
     minimal: bool,
     readonly: bool,
     startup_timeout: int | None,
+    gateway: str,
+    platform: str,
+    decision_model: str | None = None,
 ) -> None:
     """Deploy one prepared runtime."""
 
@@ -170,6 +216,9 @@ def _deploy_serve_backend(
         enable_observability=not minimal,
         minimal=minimal,
         readonly=readonly,
+        gateway=gateway,
+        platform=platform,
+        decision_model=decision_model,
         **({"startup_timeout": startup_timeout} if startup_timeout is not None else {}),
     )
 
@@ -195,21 +244,31 @@ def _execute_serve(
     runtime: str | None,
     recipe_env_names: tuple[str, ...] = (),
     startup_timeout: int | None = None,
+    gateway: str | None = None,
+    decision_model: str | None = None,
 ) -> None:
     """Bootstrap workspace, resolve config, and delegate to the deployment backend."""
     resolved_target = resolve_target(target)
+    resolved_gateway = resolve_gateway(gateway)
     if startup_timeout is not None:
         validate_startup_timeout(startup_timeout)
-        if resolved_target != "docker":
+        if resolved_target != TARGET_DOCKER:
             raise ValueError(
                 "--startup-timeout is supported only for local Docker deployments"
             )
     _validate_target_platform(resolved_target, platform)
+    decision_model = validate_decision_model_flag(
+        decision_model, resolved_target, _platform_hint(platform)
+    )
     apply_container_runtime_override(runtime)
     config_path, source_setup_mode = _resolve_serve_config(config, resolved_target)
     log.info(f"Using config file: {config_path}")
 
     env_vars: dict[str, str] = {}
+    if resolved_target == TARGET_DOCKER:
+        # Kubernetes gets the mode from the Helm values' gateway.mode instead.
+        apply_gateway_mode(env_vars, resolved_gateway)
+    log_gateway_mode(resolved_gateway, resolved_target, explicit=gateway is not None)
     append_passthrough_env_vars(env_vars, config_path)
     recipe_env_bindings = configure_recipe_env_bindings(env_vars, recipe_env_names)
     runtime_lock = None
@@ -225,6 +284,7 @@ def _execute_serve(
                 replace_active_config=replace_active_config,
                 minimal=minimal,
                 readonly=readonly,
+                decision_model=decision_model,
             )
         )
         validate_setup_mode_flags(setup_mode, minimal, readonly)
@@ -237,7 +297,7 @@ def _execute_serve(
             algorithm,
             log_level=log_level,
         )
-        if resolved_target == "docker":
+        if resolved_target == TARGET_DOCKER:
             configure_runtime_override_env_vars(
                 env_vars,
                 config_path,
@@ -262,13 +322,16 @@ def _execute_serve(
             minimal=minimal,
             readonly=readonly,
             startup_timeout=startup_timeout,
+            gateway=resolved_gateway,
+            platform=_platform_hint(platform),
+            decision_model=decision_model,
         )
     finally:
         if runtime_lock is not None:
             runtime_lock.close()
 
 
-@click.command(help=SERVE_HELP + ENGINE_HELP)
+@click.command(cls=GroupedServeCommand, help=SERVE_HELP + ENGINE_HELP)
 @click.argument("model", nargs=-1, required=False)
 @click.option(
     "--config",
@@ -297,7 +360,7 @@ def _execute_serve(
 @click.option(
     "--envoy-image",
     default=None,
-    help="Docker image for the Envoy container (Docker target only; defaults to --image or VLLM_SR_IMAGE)",
+    help="Docker image for the Envoy container (docker target with --gateway extproc; defaults to --image or VLLM_SR_IMAGE)",
 )
 @click.option(
     "--dashboard-image",
@@ -337,7 +400,7 @@ def _execute_serve(
     "--minimal",
     is_flag=True,
     default=False,
-    help="Start in minimal mode: only router + envoy, no dashboard or observability (Jaeger, Prometheus, Grafana)",
+    help="Start in minimal mode: no Dashboard or observability stack (Jaeger, Prometheus, Grafana)",
 )
 @click.option(
     "--log-level",
@@ -346,19 +409,23 @@ def _execute_serve(
         case_sensitive=False,
     ),
     default=None,
-    help="Router log level override (debug, info, warn, error, dpanic, panic, fatal)",
+    help=(
+        "Log level of the Router, or of the runtime in engine mode (debug, info, "
+        "warn, error, dpanic, panic, fatal)"
+    ),
 )
 @click.option(
     "--platform",
     default=None,
-    help="Platform for local Docker GPU deployments: 'amd' enables ROCm passthrough, "
-    "'nvidia' enables NVIDIA GPU passthrough (--gpus all). "
-    "Serve defaults to the matching GPU image (ROCm / CUDA) unless --image or "
-    "VLLM_SR_IMAGE is provided. Internal models default to GPU, except AMD "
-    "semantic embeddings retain their configured use_cpu value (default true). "
-    "Set VLLM_SR_<PLATFORM>_PRESERVE_CPU=1 to keep CPU settings. "
-    "For Kubernetes, configure GPU images and resources through a Helm profile "
-    "or the operator.",
+    help="cpu (default), amd or nvidia, on both targets and in engine mode. It "
+    "selects the matching image (ROCm / CUDA) unless --image or VLLM_SR_IMAGE is "
+    "provided. On docker and in engine mode 'amd' passes the ROCm devices through "
+    "and 'nvidia' the NVIDIA GPUs (--gpus all); on kubernetes the Router requests "
+    "one GPU (amd.com/gpu or "
+    "nvidia.com/gpu). Internal models default to GPU, except AMD semantic "
+    "embeddings retain their configured use_cpu value (default true). Set "
+    "VLLM_SR_<PLATFORM>_PRESERVE_CPU=1 to keep CPU settings. On macOS the "
+    "docker target is CPU only.",
 )
 @click.option(
     "--algorithm",
@@ -371,31 +438,49 @@ def _execute_serve(
         "uses global.router.learning.adaptation/protection."
     ),
 )
+@click.option(
+    "--decision-model",
+    default=None,
+    metavar="NAME",
+    help=(
+        "The Vela model that answers the Router's questions: the built-in signals "
+        "and every routing.signals.decision question without a deployment. "
+        f"{', '.join(DECISION_MODELS)} (case-insensitive; default "
+        f"{DEFAULT_DECISION_MODEL}). The 4B and 9B need a GPU (--platform amd or "
+        "nvidia). serve writes it into the active config as a new configuration "
+        "version; later starts keep it."
+    ),
+)
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
-    "--namespace", default=None, help="Kubernetes namespace (k8s target only)"
+    "--gateway",
+    type=click.Choice(VALID_GATEWAYS, case_sensitive=False),
+    default=None,
+    help=GATEWAY_HELP,
 )
 @click.option(
-    "--context", default=None, help="kubectl / Helm context (k8s target only)"
+    "--namespace", default=None, help="Kubernetes namespace (kubernetes target only)"
+)
+@click.option(
+    "--context", default=None, help="kubectl / Helm context (kubernetes target only)"
 )
 @click.option(
     "--profile",
     default=None,
     help=(
-        "Deployment profile: dev, prod (k8s target only). Selects "
-        "values-<profile>.yaml defaults. With MODEL: the runtime numerics profile "
-        "(default exact; vllm-sr-runtime plugins lists the installed ones)."
+        "Deployment profile: dev, prod (kubernetes target only). Selects "
+        "values-<profile>.yaml defaults."
     ),
 )
 @click.option(
-    "--chart-dir", default=None, help="Path to Helm chart directory (k8s target only)"
-)
-@click.option(
-    "--runtime",
-    type=click.Choice(SUPPORTED_CONTAINER_RUNTIMES, case_sensitive=False),
+    "--chart-dir",
     default=None,
-    help=RUNTIME_HELP,
+    help=(
+        "Path to Helm chart directory (kubernetes target only; default: "
+        "./deploy/helm/semantic-router, else the published chart for this version)"
+    ),
 )
+@_container_runtime_options
 @click.option(
     "--recipe-env",
     "recipe_env_names",
@@ -418,16 +503,30 @@ def _execute_serve(
 @click.option(
     "--device",
     default=None,
-    help="Engine mode: auto (default), cpu, cuda[:N], rocm[:N], xpu[:N] or mps.",
+    help=(
+        "Engine mode: auto (default), cpu, rocm[:N] with --platform amd, "
+        "cuda[:N] with --platform nvidia, or a plugin's accelerator."
+    ),
 )
 @click.option(
-    "--host", default=None, help="Engine mode: TCP bind address (default 127.0.0.1)."
+    "--host",
+    default=None,
+    help="Engine mode: host address the runtime's port is published on (default 127.0.0.1).",
 )
 @click.option(
-    "--port", type=int, default=None, help="Engine mode: TCP port (default 8100)."
+    "--port",
+    type=click.IntRange(1, 65535),
+    default=None,
+    help="Engine mode: host port the runtime is published on (default 8100).",
 )
 @click.option(
-    "--uds", default=None, help="Engine mode: serve on this Unix socket instead."
+    "--runtime-profile",
+    default=None,
+    metavar="PROFILE",
+    help=(
+        "Engine mode: the runtime's numerics profile (default exact; "
+        "vllm-srun plugins lists the installed ones)."
+    ),
 )
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
 def serve(
@@ -444,11 +543,14 @@ def serve(
     log_level: str | None,
     platform: str | None,
     algorithm: str | None,
+    decision_model: str | None,
     target: str | None,
+    gateway: str | None,
     namespace: str | None,
     context: str | None,
     profile: str | None,
     chart_dir: str | None,
+    container_runtime: str | None,
     runtime: str | None,
     recipe_env_names: tuple[str, ...],
     startup_timeout: int | None,
@@ -457,10 +559,13 @@ def serve(
     device: str | None,
     host: str | None,
     port: int | None,
-    uds: str | None,
+    runtime_profile: str | None,
 ) -> None:
     ctx = click.get_current_context()
     if model or models_file:
+        reject_misplaced_options(ctx, MODE_ENGINE)
+        # Engine mode runs a container on this host: the docker target's rules.
+        _validate_target_platform(TARGET_DOCKER, platform)
         run_engine_mode(
             ctx,
             model,
@@ -469,12 +574,19 @@ def serve(
             device=device,
             host=host,
             port=port,
-            uds=uds,
-            profile=profile,
+            runtime_profile=runtime_profile,
             log_level=log_level,
+            platform=_platform_hint(platform),
+            image=image,
+            image_pull_policy=image_pull_policy,
+            container_runtime=resolve_container_runtime(
+                ctx, container_runtime, runtime
+            ),
         )
         return
-    reject_engine_options(ctx)
+    resolved_target = resolve_target(target)
+    reject_misplaced_options(ctx, resolved_target)
+    reject_envoy_options(ctx, resolve_gateway(gateway))
     _execute_serve(
         config,
         replace_active_config,
@@ -488,14 +600,16 @@ def serve(
         log_level,
         platform,
         algorithm,
-        target,
+        resolved_target,
         namespace,
         context,
         profile,
         chart_dir,
-        runtime,
+        resolve_container_runtime(ctx, container_runtime, runtime),
         recipe_env_names,
         startup_timeout,
+        gateway,
+        decision_model=decision_model,
     )
 
 
@@ -507,23 +621,19 @@ def serve(
 )
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
-    "--namespace", default=None, help="Kubernetes namespace (k8s target only)"
+    "--namespace", default=None, help="Kubernetes namespace (kubernetes target only)"
 )
 @click.option(
-    "--context", default=None, help="kubectl / Helm context (k8s target only)"
+    "--context", default=None, help="kubectl / Helm context (kubernetes target only)"
 )
-@click.option(
-    "--runtime",
-    type=click.Choice(SUPPORTED_CONTAINER_RUNTIMES, case_sensitive=False),
-    default=None,
-    help=RUNTIME_HELP,
-)
+@_container_runtime_options
 @exit_with_logged_error(log)
 def status(
     service: str,
     target: str | None,
     namespace: str | None,
     context: str | None,
+    container_runtime: str | None,
     runtime: str | None,
 ) -> None:
     """
@@ -534,9 +644,13 @@ def status(
         vllm-sr status all          # Show all services
         vllm-sr status router       # Show router status
         vllm-sr status dashboard    # Show dashboard status
-        vllm-sr status --target k8s # Show Kubernetes status
+        vllm-sr status --target kubernetes  # Show Kubernetes status
     """
-    apply_container_runtime_override(runtime)
+    apply_container_runtime_override(
+        resolve_container_runtime(
+            click.get_current_context(), container_runtime, runtime
+        )
+    )
     backend = _build_backend(target, namespace=namespace, context=context)
     backend.status(service)
 
@@ -546,17 +660,12 @@ def status(
 @click.option("--follow", "-f", is_flag=True, help="Follow log output")
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
-    "--namespace", default=None, help="Kubernetes namespace (k8s target only)"
+    "--namespace", default=None, help="Kubernetes namespace (kubernetes target only)"
 )
 @click.option(
-    "--context", default=None, help="kubectl / Helm context (k8s target only)"
+    "--context", default=None, help="kubectl / Helm context (kubernetes target only)"
 )
-@click.option(
-    "--runtime",
-    type=click.Choice(SUPPORTED_CONTAINER_RUNTIMES, case_sensitive=False),
-    default=None,
-    help=RUNTIME_HELP,
-)
+@_container_runtime_options
 @exit_with_logged_error(log, interrupt_message="\nLog streaming stopped")
 def logs(
     service: str,
@@ -564,6 +673,7 @@ def logs(
     target: str | None,
     namespace: str | None,
     context: str | None,
+    container_runtime: str | None,
     runtime: str | None,
 ) -> None:
     """
@@ -575,10 +685,14 @@ def logs(
         vllm-sr logs dashboard
         vllm-sr logs envoy --follow
         vllm-sr logs router -f
-        vllm-sr logs router --target k8s        # Kubernetes logs
-        vllm-sr logs router --target k8s -f     # Follow K8s logs
+        vllm-sr logs router --target kubernetes     # Kubernetes logs
+        vllm-sr logs router --target kubernetes -f  # Follow K8s logs
     """
-    apply_container_runtime_override(runtime)
+    apply_container_runtime_override(
+        resolve_container_runtime(
+            click.get_current_context(), container_runtime, runtime
+        )
+    )
     backend = _build_backend(target, namespace=namespace, context=context)
     backend.logs(service, follow=follow)
 
@@ -586,22 +700,18 @@ def logs(
 @click.command()
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
-    "--namespace", default=None, help="Kubernetes namespace (k8s target only)"
+    "--namespace", default=None, help="Kubernetes namespace (kubernetes target only)"
 )
 @click.option(
-    "--context", default=None, help="kubectl / Helm context (k8s target only)"
+    "--context", default=None, help="kubectl / Helm context (kubernetes target only)"
 )
-@click.option(
-    "--runtime",
-    type=click.Choice(SUPPORTED_CONTAINER_RUNTIMES, case_sensitive=False),
-    default=None,
-    help=RUNTIME_HELP,
-)
+@_container_runtime_options
 @exit_with_logged_error(log)
 def stop(
     target: str | None,
     namespace: str | None,
     context: str | None,
+    container_runtime: str | None,
     runtime: str | None,
 ) -> None:
     """
@@ -609,9 +719,13 @@ def stop(
 
     Examples:
         vllm-sr stop                # Stop Docker stack
-        vllm-sr stop --target k8s   # Uninstall Helm release
+        vllm-sr stop --target kubernetes  # Uninstall Helm release
     """
-    apply_container_runtime_override(runtime)
+    apply_container_runtime_override(
+        resolve_container_runtime(
+            click.get_current_context(), container_runtime, runtime
+        )
+    )
     backend = _build_backend(target, namespace=namespace, context=context)
     backend.teardown()
 
@@ -620,23 +734,19 @@ def stop(
 @click.option("--no-open", is_flag=True, help="Don't open browser, just show URL")
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
-    "--namespace", default=None, help="Kubernetes namespace (k8s target only)"
+    "--namespace", default=None, help="Kubernetes namespace (kubernetes target only)"
 )
 @click.option(
-    "--context", default=None, help="kubectl / Helm context (k8s target only)"
+    "--context", default=None, help="kubectl / Helm context (kubernetes target only)"
 )
-@click.option(
-    "--runtime",
-    type=click.Choice(SUPPORTED_CONTAINER_RUNTIMES, case_sensitive=False),
-    default=None,
-    help=RUNTIME_HELP,
-)
+@_container_runtime_options
 @exit_with_logged_error(log)
 def dashboard(
     no_open: bool,
     target: str | None,
     namespace: str | None,
     context: str | None,
+    container_runtime: str | None,
     runtime: str | None,
 ) -> None:
     """
@@ -644,11 +754,16 @@ def dashboard(
 
     Examples:
         vllm-sr dashboard                   # Docker dashboard
-        vllm-sr dashboard --target k8s      # Show K8s address and port forward
+        vllm-sr dashboard --target kubernetes  # Show K8s address and port forward
         vllm-sr dashboard --no-open
     """
-    apply_container_runtime_override(runtime)
-    backend = _build_backend(target, namespace=namespace, context=context)
+    apply_container_runtime_override(
+        resolve_container_runtime(
+            click.get_current_context(), container_runtime, runtime
+        )
+    )
+    resolved_target = resolve_target(target)
+    backend = _build_backend(resolved_target, namespace=namespace, context=context)
     if not backend.is_running():
         raise ValueError("vLLM Semantic Router is not running")
 
@@ -656,7 +771,7 @@ def dashboard(
     if dashboard_url is None:
         raise ValueError("Dashboard URL could not be determined")
 
-    if resolve_target(target) == "k8s":
+    if resolved_target == TARGET_KUBERNETES:
         # The Kubernetes address is a ClusterIP, reachable from inside the
         # cluster only, so a browser on this machine cannot open it.
         heading("Dashboard")

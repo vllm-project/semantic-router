@@ -135,6 +135,7 @@ type ActivateRequest struct {
 
 type ActivateResult struct {
 	Status               string `json:"status"`
+	Message              string `json:"message,omitempty"`
 	RecipeDigest         string `json:"recipe_digest"`
 	PreviousRecipeDigest string `json:"previous_recipe_digest,omitempty"`
 	PlanDigest           string `json:"plan_digest"`
@@ -148,6 +149,7 @@ type DeactivateRequest struct {
 
 type DeactivateResult struct {
 	Status               string `json:"status"`
+	Message              string `json:"message,omitempty"`
 	PreviousRecipeDigest string `json:"previous_recipe_digest,omitempty"`
 	PlanDigest           string `json:"plan_digest,omitempty"`
 	Mode                 string `json:"mode,omitempty"`

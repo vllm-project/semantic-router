@@ -1,6 +1,6 @@
 ---
 title: Entrypoints
-description: Expose stable virtual model names that select a routing recipe through the standard OpenAI-compatible model field.
+description: Expose stable virtual model names that select a routing recipe through the model field of supported inference APIs.
 ---
 
 # Entrypoints
@@ -8,14 +8,15 @@ description: Expose stable virtual model names that select a routing recipe thro
 ## Overview
 
 An entrypoint is a public virtual model name that maps to one recipe. Clients
-select it through the normal OpenAI-compatible `model` field, so they do not
-need a Router-specific API or header.
+select it through the `model` field in the supported Chat Completions, Responses,
+or Messages API, so they do not need a Router-specific API or header to select
+the recipe. See [Connect an agent harness](../../installation/agent-harness)
+for the client connection and session setup.
 
 ## What Problem Does It Solve?
 
-Entrypoints solve a common coupling problem: an application can ask for a
-stable objective such as `vllm-sr/mom-v1-flash` while operators change the models,
-thresholds, or algorithms behind that objective.
+Keep a stable name such as `vllm-sr/mom-v1-flash` in the harness while changing
+the models, thresholds, or algorithms behind it.
 
 ## When to Use
 

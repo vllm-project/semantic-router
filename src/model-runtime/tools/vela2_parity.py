@@ -49,18 +49,18 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from vllm_sr_runtime.accel.cpu import CPUAccelerator  # noqa: E402
-from vllm_sr_runtime.accel.cuda import CUDAAccelerator  # noqa: E402
-from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
-from vllm_sr_runtime.families.vela2.decoder_layout import DecoderTree  # noqa: E402
-from vllm_sr_runtime.families.vela2.family import Vela2Family  # noqa: E402
-from vllm_sr_runtime.plugins.base import (  # noqa: E402
+from vllm_srun.accel.cpu import CPUAccelerator  # noqa: E402
+from vllm_srun.accel.cuda import CUDAAccelerator  # noqa: E402
+from vllm_srun.accel.rocm import ROCmAccelerator  # noqa: E402
+from vllm_srun.families.vela2.decoder_layout import DecoderTree  # noqa: E402
+from vllm_srun.families.vela2.family import Vela2Family  # noqa: E402
+from vllm_srun.plugins.base import (  # noqa: E402
     EngineOptions,
     PackageRef,
     SurfacePlan,
 )
-from vllm_sr_runtime.plugins.registry import instantiate  # noqa: E402
-from vllm_sr_runtime.profiles.max_speed import MaxSpeedProfile  # noqa: E402
+from vllm_srun.plugins.registry import instantiate  # noqa: E402
+from vllm_srun.profiles.max_speed import MaxSpeedProfile  # noqa: E402
 
 ACCELERATORS = {"cpu": CPUAccelerator, "cuda": CUDAAccelerator, "rocm": ROCmAccelerator}
 CPU_BAR, GPU_BAR = 1e-4, 0.02
@@ -280,8 +280,8 @@ def pin_choices(package: Path, device: str) -> bool:
 
     Both sides answer on this thread, so they run the same kernels.
     """
-    from vllm_sr_runtime.accel.autotune import KernelChoices
-    from vllm_sr_runtime.registry import builtin
+    from vllm_srun.accel.autotune import KernelChoices
+    from vllm_srun.registry import builtin
 
     accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
     info = accelerator.devices()[int(device.split(":")[1]) if ":" in device else 0]
@@ -858,8 +858,8 @@ def run_shared(args: argparse.Namespace, requests: list[dict[str, Any]]) -> int:
     """``--shared-with``: every package in one runtime process, each against its single-package run."""
     import asyncio
 
-    from vllm_sr_runtime.config import ModelConfig, ServeConfig
-    from vllm_sr_runtime.runtime import Runtime
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
 
     packages = [args.package, *args.shared_with]
     if len(args.reference_answers) != len(packages):

@@ -25,7 +25,7 @@ from vela2_parity import (  # noqa: E402
     load_runtime,
     pin_choices,
 )
-from vllm_sr_runtime.families.vela2.family import (  # noqa: E402
+from vllm_srun.families.vela2.family import (  # noqa: E402
     GOLDEN_QUESTIONS,
     GOLDEN_STATE,
 )

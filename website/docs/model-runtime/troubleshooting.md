@@ -22,6 +22,29 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 `vsr_model_runtime_ready{deployment="..."} 1` means the deployment answers.
 The router log names each managed runtime process and why it stopped.
 
+## Startup waits for the models
+
+The router starts serving only once every model it manages for the
+configuration has loaded. Until then `/ready` returns `503` and
+`vllm-sr serve` keeps waiting, printing what the router waits for:
+
+```text
+Waiting for Router-managed model deployments, 0 of 1 ready: decision-kai (vllm-sr/Decision-2.0-Kai-0.6B) loading
+```
+
+`/startup-status` reports `phase: loading_model_deployments` and lists each
+deployment in `model_deployments` with its state:
+
+```bash
+curl -s localhost:8080/startup-status
+```
+
+A first start downloads the models, so it takes longer than the next ones. The
+wait ends after `VLLM_SRUN_READY_TIMEOUT` (10 minutes by default) with
+`did not become ready within 10m0s`; start again and the download resumes from
+the cache, or raise the timeout in the router's environment. A model that fails
+to load ends the wait at once with its reason (see below).
+
 ## A signal never matches
 
 The model is probably not ready yet, or its answers arrive too late.
@@ -38,7 +61,18 @@ The model is probably not ready yet, or its answers arrive too late.
    ```bash
    curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
      -H 'content-type: application/json' -H 'x-vsr-debug: true' \
-     -d '{"model": "auto", "messages": [{"role": "user", "content": "your text"}]}'
+     -d '{"model": "vllm-sr/auto", "messages": [{"role": "user", "content": "your text"}]}'
+   ```
+
+4. Preview the routing of the same text without generating an answer. Its
+   `signal_errors` names the signals that were unknown and why, for example
+   `decision_timeout`:
+
+   ```bash
+   curl -s 'localhost:8080/api/v1/routing/preview?trace=true' \
+     -H 'content-type: application/json' \
+     -d '{"model": "vllm-sr/auto", "text": "your text"}' \
+     | jq '{decision: .decision_result.decision_name, matched: .decision_result.matched_signals, signal_errors}'
    ```
 
 ## The runtime stays in `loading` or `warming`
@@ -47,6 +81,19 @@ The model is probably not ready yet, or its answers arrive too late.
   router log and `GET /health` show the stage.
 - **No network:** the runtime downloads from the Hugging Face Hub. Offline,
   copy the model into the cache first, or point `artifact` at a local copy.
+  For example, fetch Vela Omni Nano at its pinned revision into the cache of
+  the runtimes a router image manages (its model volume), then start with
+  `HF_HUB_OFFLINE=1`:
+
+  ```bash
+  hf download vllm-sr/Vela-1.0-Omni-Nano \
+    --revision 2ff2d66385dbdd661a560ec3e8bcb45a0527d92e \
+    --cache-dir /app/models/model-runtime
+  ```
+
+  Mini's revision is `801bae3ad28df6891408f0e0441c676b30e132e3`. Router images
+  no longer carry an Omni bundle, so a router that routes images needs this
+  once in an air-gapped cluster.
 - **`warming` for a long time on CPU:** the self-check runs a few requests
   through the model. Large decision models on a CPU are slow; use a GPU or
   `vllm-sr/Decision-2.0-Kai-0.6B`.
@@ -66,14 +113,16 @@ When every model of a runtime process the router runs has failed, the router
 restarts that process (1 second at first, up to 60 seconds apart), so a passing
 cause such as a busy GPU or a full disk clears on its own. A model that fails
 beside models that still serve is retried by the runtime itself, so its
-process keeps running. A task model that still fails after three tries stops
-the router from starting. The common reasons:
+process keeps running. A model the router manages that still fails after three
+tries stops the router from starting, and on a configuration reload the new
+configuration is rejected while the previous one keeps serving. The common
+reasons:
 
 | Reason says | Do this |
 | --- | --- |
 | a file hash does not match | The download is damaged or the repository changed. Delete that model from the cache and start again. |
 | a revision is required | A repository that is not built in needs `revision` with a 40-character commit. |
-| access denied, gated or private | Log in with `hf auth login` or set `HF_TOKEN` for the account that has access. Vela 2.0 is a private preview. |
+| access denied, gated or private | Log in with `hf auth login` or set `HF_TOKEN` for the account that has access. |
 | does not fit, out of memory | Use a smaller model, a GPU with more memory, or give the model its own `process`. |
 | device not available | The named GPU does not exist or the installed PyTorch has no support for it. Use `device: auto`, or install the right PyTorch build. |
 | built without LAPACK | The model needs LAPACK on the CPU, and this PyTorch (the ROCm image's) has none. Put the model on a GPU (`device: rocm:0`), or serve CPU models from the CPU image. The runtime does not retry it. |
@@ -141,6 +190,44 @@ global:
 overlapping windows and combines their results, which is what PII and safety
 scans should use so nothing is missed.
 
+`window` reads at most `max_tokens`: a longer input fails with
+`scan_budget_exceeded`. Through Vela 2.0, routing questions read a long
+request's first tokens (8,192 on a CPU for Vela 2.0 0.3B) and safety questions
+read it whole up to the model's scan budget (four inputs on a CPU). To let the
+safety questions read more, give the deployment a scan budget:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        input:
+          max_tokens: 131072
+          overflow: window
+```
+
+A jailbreak or PII rule matches content its model did not read in full: an
+input over the model's `max_tokens` under `reject`, over its cap, truncated, or
+not scanned within the signals' deadline. The match reports the type
+`unscanned` and the reason (`input_limit`, `scan_budget` or `deadline`)
+whatever `on_error` says, so padding a prompt cannot carry an attack or
+personal data past the check. Set `on_unscanned: allow` on the module to let
+such content follow `on_error` instead. The other signals report the reason
+and follow their own `on_error`
+([Reference](model-runtime/reference.md#long-inputs)).
+
+## A request waits on a slow model
+
+A model-runtime signal that has not answered by the signals' deadline resolves
+through its policy, so one slow model does not fail the whole request: a
+routing signal through `on_error`, a safety signal as unscanned. The deadline
+is the request's less a tenth of the time left, or 45 s for a served request;
+set `global.model_catalog.signal_timeout_ms` to shorten it. On a CPU, Vela 2.0
+0.3B reads about 1,000 tokens a second on four cores, so a long request may
+not finish its safety scan within it.
+
 ## The router cannot reach an attached runtime
 
 - The runtime listens on `127.0.0.1` unless you start it with `--host 0.0.0.0`.
@@ -150,12 +237,22 @@ scans should use so nothing is missed.
 
 ## Requests are slower than expected
 
-- Look at `vllm_sr_runtime_request_duration_seconds` and
-  `vllm_sr_runtime_queue_duration_seconds` on the runtime's `/metrics`. Time
-  spent queueing means the model is saturated: add a GPU, use a smaller model
-  or another process.
+- For the router's runtimes, compare the router's
+  `vsr_model_runtime_server_seconds` by `phase` with
+  `vsr_model_runtime_transport_seconds` for the slow deployment (see the
+  [reference](./reference.md#metrics)). Most time in `forward` means the model
+  itself is slow on this device. Time in `queue` means the model is saturated:
+  add a GPU, use a smaller model or another process. A large transport share
+  points at the host (CPU contention, a remote endpoint).
+- For a runtime you started, look at `vllm_srun_request_duration_seconds` and
+  `vllm_srun_queue_duration_seconds` on its `/metrics`, or at the
+  `Server-Timing` header of its responses.
 - On CPU, models of one process share the CPU threads. Start the runtime with
   `--threads` set to the cores you can give it.
+- CPU models slow down sharply when other work holds some of their cores,
+  because every thread waits for the slowest one. A process that uses a ROCm
+  GPU can keep one CPU core busy even while idle, and so can an LLM server on
+  the same host: give the CPU models cores of their own.
 - Decision models on a GPU can use `shared_context` or `batching`; see
   [Profiles](./profiles.md).
 

@@ -191,6 +191,6 @@ taskset -c 140-143 python3 tools/router_latency.py run --url http://127.0.0.1:18
 python3 tools/router_latency.py rounds --dir rounds --base cpu --new rocm
 ```
 
-As in the CPU record, set `VLLM_SR_RUNTIME_RESULT_CACHE=0` and start the
-runtime with `--result-cache-entries 0` (through `VLLM_SR_RUNTIME_COMMAND`) to
+As in the CPU record, set `VLLM_SRUN_RESULT_CACHE=0` and start the
+runtime with `--result-cache-entries 0` (through `VLLM_SRUN_COMMAND`) to
 measure without caches.

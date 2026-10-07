@@ -59,15 +59,14 @@ switch to Mini.
 
 ## Check it
 
-Router images include the Omni Nano bundle, so the router needs nothing else.
-The Hugging Face repositories hold the source model, not the files the runtime
-serves, so to call Omni yourself, build its bundle once from the repository
-root and point the runtime at it:
+The runtime downloads Omni from its Hugging Face repository at the pinned
+revision and checks every file it reads, as it does for every built-in model;
+Nano is 0.67 GB and Mini 4.3 GB. To call Omni yourself, install the runtime
+from a repository checkout with its `multimodal` extra, which reads images
+(Pillow), and serve it:
 
 ```bash
-docker buildx build -f tools/models/vela_omni/Dockerfile \
-  --build-arg VELA_OMNI_VARIANTS=nano --output type=local,dest=./omni .
-export VLLM_SR_RUNTIME_PREPARED_DIR="$PWD/omni"
+pip install "./src/model-runtime[multimodal]"
 vllm-sr serve vllm-sr/Vela-1.0-Omni-Nano --device cpu --port 8100
 curl -s localhost:8100/v1/embeddings -H 'content-type: application/json' \
   -d '{"input": [{"type": "text", "text": "a photograph of a passport page"}]}'
@@ -76,3 +75,21 @@ curl -s localhost:8100/v1/embeddings -H 'content-type: application/json' \
 Images go in as `{"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}`
 and audio as `{"type": "input_audio", "input_audio": {"data": "<base64 WAV>", "format": "wav"}}`.
 `GET /v1/models` lists the modalities a model accepts under `embedding.modalities`.
+
+## ONNX Runtime (optional)
+
+The runtime can also serve Omni as ONNX graphs on its optional `onnxruntime`
+engine. Router images don't include ONNX Runtime, so this is for your own
+installs and images. Build the bundle once from the repository root, install
+the `onnx` extra, and serve the bundle directory:
+
+```bash
+docker buildx build -f tools/models/vela_omni/Dockerfile \
+  --build-arg VELA_OMNI_VARIANTS=nano --output type=local,dest=./omni .
+pip install "./src/model-runtime[multimodal,onnx]"
+vllm-srun serve "$PWD/omni/vela-1.0-omni-nano" --engine onnxruntime --device cpu --port 8100
+```
+
+In a router configuration, a deployment names the bundle directory as its
+`artifact` and sets `engine: onnxruntime`; build the router image with
+`--build-arg MODEL_RUNTIME_EXTRAS=multimodal,onnx` and copy the bundle into it.

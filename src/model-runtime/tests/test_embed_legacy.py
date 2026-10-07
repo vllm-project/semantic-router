@@ -31,6 +31,27 @@ def test_intervals_bound_runtime_minus_legacy(el):
     assert 0 < bounds["per_s"][0] <= bounds["per_s"][1]
 
 
+def test_the_baseline_child_serves_its_engine_from_its_own_tree(el):
+    args = SimpleNamespace(
+        baseline_engine="onnxruntime",
+        cache="/cache",
+        prepared="/bundles",
+        jobs="omni_mini_audio",
+        device="cpu",
+        profile="exact",
+        threads=16,
+        baseline_runtime="/staging/src/model-runtime",
+    )
+    command = el.baseline_command(args)
+    assert command[2] == "serve"
+    flags = dict(zip(command[3::2], command[4::2], strict=True))
+    assert flags["--omni-engine"] == "onnxruntime"
+    assert flags["--runtime-src"] == "/staging/src/model-runtime"
+    assert flags["--threads"] == "16"
+    args.baseline_runtime = None
+    assert "--runtime-src" not in el.baseline_command(args)
+
+
 def test_intervals_straddle_zero_when_the_sides_match(el):
     calls = [int((10 + i % 7) * 1e6) for i in range(60)]
     same = el.intervals({"legacy": calls, "runtime": calls[1:] + calls[:1]})

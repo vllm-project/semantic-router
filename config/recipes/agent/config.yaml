@@ -820,7 +820,7 @@ routing:
             - survey the literature and explain conflicting evidence with citations
     pii:
       - name: pii_strict
-        threshold: 0.9
+        threshold: 0.01
         pii_types_allowed:
           - GPE
     domains:

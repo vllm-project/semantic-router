@@ -88,15 +88,13 @@ class ModelContractTests(unittest.TestCase):
             (blobs / "weights").write_text("weights")
             (snapshot / "model.safetensors").symlink_to(blobs / "weights")
             ref = types.SimpleNamespace(root=snapshot, revision="b" * 40)
-            resolver = types.ModuleType("vllm_sr_runtime.registry.resolve")
+            resolver = types.ModuleType("vllm_srun.registry.resolve")
             resolver.resolve = mock.Mock(return_value=ref)
             resolver.fetch = mock.Mock(side_effect=lambda ref, patterns, **_: ref)
             modules = {
-                "vllm_sr_runtime": types.ModuleType("vllm_sr_runtime"),
-                "vllm_sr_runtime.registry": types.ModuleType(
-                    "vllm_sr_runtime.registry"
-                ),
-                "vllm_sr_runtime.registry.resolve": resolver,
+                "vllm_srun": types.ModuleType("vllm_srun"),
+                "vllm_srun.registry": types.ModuleType("vllm_srun.registry"),
+                "vllm_srun.registry.resolve": resolver,
             }
             with mock.patch.dict(sys.modules, modules):
                 models = run_model_tests.provision(root / "models")

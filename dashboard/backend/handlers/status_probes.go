@@ -3,23 +3,11 @@ package handlers
 import (
 	"net/http"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 )
-
-// getDockerContainerStatus checks the status of a Docker container.
-// Returns: "running", "exited", "not found", or other Docker status.
-func getDockerContainerStatus(containerName string) string {
-	cmd := exec.Command("docker", "inspect", "-f", "{{.State.Status}}", containerName)
-	output, err := cmd.Output()
-	if err != nil {
-		return "not found"
-	}
-	return strings.TrimSpace(string(output))
-}
 
 // isRunningInContainer checks if the current process is running inside a Docker container.
 func isRunningInContainer() bool {

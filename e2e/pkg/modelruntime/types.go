@@ -1,6 +1,6 @@
 // Package modelruntime is the E2E client of the built-in model runtime. It
 // calls every surface of the runtime contract
-// (src/model-runtime/vllm_sr_runtime/api/openapi.yaml) over a port-forward,
+// (src/model-runtime/vllm_srun/api/openapi.yaml) over a port-forward,
 // for runtimes the Router attaches to, or through the Router pod, for the
 // runtimes the Router manages on private Unix sockets. Waits poll readiness;
 // nothing sleeps for a fixed time.
@@ -280,13 +280,15 @@ type DecisionsRequest struct {
 	Questions map[string]Question `json:"questions"`
 }
 
-// Question is one System One question.
+// Question is one System One question. Criteria encode in key order, so a
+// Set or Span question built from it lists its labels sorted.
 type Question struct {
 	Type         string            `json:"type"`
 	Instructions string            `json:"instructions,omitempty"`
 	Choices      []Choice          `json:"choices,omitempty"`
 	Criteria     map[string]string `json:"criteria,omitempty"`
 	Levels       []string          `json:"levels,omitempty"`
+	Threshold    *float64          `json:"threshold,omitempty"`
 }
 
 // Choice is one option of a Choice question.
@@ -295,9 +297,34 @@ type Choice struct {
 	Description string `json:"description,omitempty"`
 }
 
-// DecisionsResponse is the body of a decisions response.
+// DecisionsResponse is the body of a decisions response: Set questions answer
+// in Sets, Span questions in Spans as well as in Answers.
 type DecisionsResponse struct {
-	Answers map[string]Answer `json:"answers"`
+	Answers map[string]Answer    `json:"answers"`
+	Sets    map[string]SetAnswer `json:"sets"`
+	Spans   map[string][]Span    `json:"spans"`
+}
+
+// answers reports whether the response answers question id where its type
+// answers.
+func (r DecisionsResponse) answers(id, questionType string) bool {
+	_, answered := r.Answers[id]
+	switch questionType {
+	case "set":
+		_, ok := r.Sets[id]
+		return ok
+	case "span":
+		_, ok := r.Spans[id]
+		return answered && ok
+	default:
+		return answered
+	}
+}
+
+// SetAnswer is one Set question's selected labels and every label's probability.
+type SetAnswer struct {
+	Selected      []string           `json:"selected"`
+	Probabilities map[string]float64 `json:"probabilities"`
 }
 
 // Answer is one question's answer.

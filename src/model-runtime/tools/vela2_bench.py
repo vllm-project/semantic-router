@@ -60,12 +60,12 @@ from vela2_parity import (  # noqa: E402
     load_runtime,
     pin_choices,
 )
-from vllm_sr_runtime.plugins.base import SurfacePlan  # noqa: E402
-from vllm_sr_runtime.profiles.batching import BatchingProfile  # noqa: E402
-from vllm_sr_runtime.profiles.exact import ExactProfile  # noqa: E402
-from vllm_sr_runtime.profiles.max_speed import MaxSpeedProfile  # noqa: E402
-from vllm_sr_runtime.profiles.shared_context import SharedContextProfile  # noqa: E402
-from vllm_sr_runtime.scheduler.scheduler import Scheduler, SchedulerLimits  # noqa: E402
+from vllm_srun.plugins.base import SurfacePlan  # noqa: E402
+from vllm_srun.profiles.batching import BatchingProfile  # noqa: E402
+from vllm_srun.profiles.exact import ExactProfile  # noqa: E402
+from vllm_srun.profiles.max_speed import MaxSpeedProfile  # noqa: E402
+from vllm_srun.profiles.shared_context import SharedContextProfile  # noqa: E402
+from vllm_srun.scheduler.scheduler import Scheduler, SchedulerLimits  # noqa: E402
 
 SUBJECTS = [
     "biology", "business", "chemistry", "computer science", "economics", "engineering", "health",

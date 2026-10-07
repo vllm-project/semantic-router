@@ -189,8 +189,6 @@ def verify_runtime(image: str, platform: str) -> None:
         "MCP_ENABLED=false",
         "--env",
         "ML_PIPELINE_ENABLED=false",
-        "--env",
-        "OPENCLAW_ENABLED=false",
         image,
     ]
 

@@ -360,6 +360,7 @@ def get_runtime_images(
     pull_policy=None,
     platform=None,
     include_dashboard=True,
+    include_envoy=True,
 ):
     """Resolve role-specific runtime images with backward-compatible fallback."""
     if pull_policy is None:
@@ -376,14 +377,15 @@ def get_runtime_images(
             base_image=base_image,
             normalized_platform=normalized_platform,
         ),
-        "envoy": _resolve_runtime_service_image(
+    }
+    if include_envoy:
+        selected_images["envoy"] = _resolve_runtime_service_image(
             "envoy",
             explicit_image=envoy_image,
             base_image_is_explicit=base_image_is_explicit,
             base_image=base_image,
             normalized_platform=normalized_platform,
-        ),
-    }
+        )
     if include_dashboard:
         selected_images["dashboard"] = _resolve_runtime_service_image(
             "dashboard",

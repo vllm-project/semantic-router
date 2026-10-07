@@ -2,12 +2,14 @@
 """The plugin guide's "Try it", run as written: install, serve, ask.
 
 The test reads its commands, keyword package and request from the guide
-(`website/docs/model-runtime/plugins.md`). It needs the model runtime in the
-current Python environment (`make model-runtime-install`, whose test extra
-brings the example's build backend). pip installs the example plugin from the
-repository into a private directory on PYTHONPATH instead of the environment,
-so no other test sees its entry points; discovery still reads the entry points
-of the installed distribution.
+(`website/docs/model-runtime/plugins.md`). Its `vllm-srun` cases need the
+model runtime in the current Python environment (`make model-runtime-install`,
+whose test extra brings the example's build backend). pip installs the example
+plugin from the repository into a private directory on PYTHONPATH instead of
+the environment, so no other test sees its entry points; discovery still reads
+the entry points of the installed distribution. The `vllm-sr serve` case builds
+the guide's image, the router image (`VLLM_SR_IMAGE`) with the example
+installed, and serves the package from it.
 """
 
 import json
@@ -23,7 +25,14 @@ import unittest
 from pathlib import Path
 
 import tomllib
-from runtime_http import HTTP_OK, ServeProcess, call, page_requests
+from runtime_http import (
+    HTTP_OK,
+    ServeProcess,
+    call,
+    container_runtime,
+    page_requests,
+    router_image,
+)
 
 REPO = Path(__file__).resolve().parents[3]
 GUIDE = REPO / "website/docs/model-runtime/plugins.md"
@@ -31,22 +40,24 @@ EXAMPLE = REPO / "src/model-runtime/examples/third_party_plugin"
 BASH_BLOCK = re.compile(r"^```bash\n(.*?)^```", re.M | re.S)
 HEREDOC = re.compile(r"cat > (\S+) <<'(\w+)'\n(.*?)\n\2$", re.M | re.S)
 OUTCOME = re.compile(r"returns `(\w+)` for the first text and `(\w+)` for the second")
+PLUGIN_IMAGE = "vllm-sr-plugin-example:integration"
+BUILD_TIMEOUT_SECONDS = 900
 
 
 def _try_it() -> tuple[list[str], dict[str, str], list[str]]:
     """The guide's pip install arguments, written files and serve arguments."""
     for block in BASH_BLOCK.findall(GUIDE.read_text(encoding="utf-8")):
-        if "vllm-sr-runtime serve" not in block:
+        if "vllm-srun serve" not in block:
             continue
         files = {path: body + "\n" for path, _, body in HEREDOC.findall(block)}
         lines = HEREDOC.sub("", block).splitlines()
         (install,) = [line for line in lines if line.startswith("pip install ")]
-        (serve,) = [line for line in lines if line.startswith("vllm-sr-runtime serve ")]
+        (serve,) = [line for line in lines if line.startswith("vllm-srun serve ")]
         return shlex.split(install)[2:], files, shlex.split(serve)[2:]
     raise AssertionError(f"{GUIDE} has no block that serves the example")
 
 
-def _serve_commands(command: str = "vllm-sr-runtime serve") -> list[list[str]]:
+def _serve_commands(command: str = "vllm-srun serve") -> list[list[str]]:
     """The arguments of every line in the guide that runs ``command``."""
     return [
         shlex.split(line)[len(command.split()) :]
@@ -63,6 +74,11 @@ def _option(arguments: list[str], name: str) -> str:
 def _without_port(arguments: list[str]) -> list[str]:
     at = arguments.index("--port")
     return arguments[:at] + arguments[at + 2 :]
+
+
+def _with_option(arguments: list[str], name: str, value: str) -> list[str]:
+    at = arguments.index(name)
+    return [*arguments[: at + 1], value, *arguments[at + 2 :]]
 
 
 class TestPluginExample(unittest.TestCase):
@@ -111,18 +127,47 @@ class TestPluginExample(unittest.TestCase):
     def _serve(
         self,
         serve_arguments: list[str] | None = None,
-        command: str = "vllm-sr-runtime serve",
+        command: str = "vllm-srun serve",
     ) -> ServeProcess:
         serve_arguments = serve_arguments or self.serve_arguments
         arguments = [str(self.local), *_without_port(serve_arguments[1:])]
         runtime = ServeProcess(
             [*command.split(), *arguments],
             self.root / f"serve-{time.monotonic_ns()}.log",
-            env=self.env,
+            env={**self.env, "VLLM_SR_ENGINE_CACHE_DIR": str(self.root / "cache")},
         )
         self.addCleanup(runtime.stop)
         runtime.wait_ready()
         return runtime
+
+    def _build_plugin_image(self) -> str:
+        """The guide's image: the router image with the example installed."""
+        (build,) = _serve_commands("docker build")
+        if REPO / build[-1] != EXAMPLE:
+            raise AssertionError(f"the guide builds {build}, not the example")
+        runtime = container_runtime()
+        subprocess.run(
+            [
+                runtime,
+                "build",
+                "-t",
+                PLUGIN_IMAGE,
+                "--build-arg",
+                f"IMAGE={router_image()}",
+                str(self.root / "example"),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=BUILD_TIMEOUT_SECONDS,
+        )
+        self.addCleanup(
+            subprocess.run,
+            [runtime, "rmi", "-f", PLUGIN_IMAGE],
+            capture_output=True,
+            check=False,
+        )
+        return PLUGIN_IMAGE
 
     def test_the_guides_request_gets_the_guides_answer(self):
         runtime = self._serve()
@@ -137,17 +182,25 @@ class TestPluginExample(unittest.TestCase):
         self.assertEqual([result["label"] for result in response["results"]], expected)
 
     def test_the_example_serves_on_its_own_accelerator_and_profile(self):
-        self._assert_serves_on_its_own_accelerator_and_profile("vllm-sr-runtime serve")
-
-    def test_vllm_sr_serve_passes_the_plugin_names_to_the_runtime(self):
-        self._assert_serves_on_its_own_accelerator_and_profile("vllm-sr serve")
-
-    def _assert_serves_on_its_own_accelerator_and_profile(self, command: str):
         (arguments,) = [
             arguments
-            for arguments in _serve_commands(command)
+            for arguments in _serve_commands("vllm-srun serve")
             if "--profile" in arguments
         ]
+        self._assert_serves_on_its_own_accelerator_and_profile(
+            "vllm-srun serve", arguments, "--profile"
+        )
+
+    def test_vllm_sr_serve_serves_the_plugin_from_an_image_that_has_it(self):
+        (arguments,) = _serve_commands("vllm-sr serve")
+        arguments = _with_option(arguments, "--image", self._build_plugin_image())
+        self._assert_serves_on_its_own_accelerator_and_profile(
+            "vllm-sr serve", arguments, "--runtime-profile"
+        )
+
+    def _assert_serves_on_its_own_accelerator_and_profile(
+        self, command: str, arguments: list[str], profile_option: str
+    ):
         runtime = self._serve(arguments, command)
         prose = " ".join(GUIDE.read_text(encoding="utf-8").split())
         expected = list(OUTCOME.search(prose).groups())
@@ -160,7 +213,7 @@ class TestPluginExample(unittest.TestCase):
             (
                 _option(arguments, "--device"),
                 _option(arguments, "--device"),
-                _option(arguments, "--profile"),
+                _option(arguments, profile_option),
             ),
         )
         status, response = call(
@@ -177,7 +230,7 @@ class TestPluginExample(unittest.TestCase):
         runtime = self._serve()
 
         listed = subprocess.run(
-            ["vllm-sr-runtime", "plugins"],
+            ["vllm-srun", "plugins"],
             check=True,
             capture_output=True,
             text=True,

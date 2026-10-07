@@ -44,14 +44,13 @@ CLASSIFIER_TESTS = (
     "TestUnifiedClassifierPublishedModels",
 )
 CACHE_TESTS = ("TestNegationFalseHitRegressionInMemory",)
-# The prepared Omni Nano bundle (VELA_OMNI_ARTIFACT) serves these.
+# The pinned Omni Nano snapshot (VELA_OMNI_ARTIFACT) serves these.
 OMNI_TESTS = {
     "classification": (
         "TestEmbeddingClassifier_IntegrationImageQueryEndToEnd",
         "TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath",
     ),
     "cache": ("TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity",),
-    "modeldownload": ("TestPublishedOmniPreparedInventory",),
 }
 SELECTIONS = (
     ("./pkg/classification", CLASSIFIER_TESTS, "classification.jsonl"),
@@ -70,7 +69,7 @@ def required_inventory() -> set[tuple[str, str]]:
 
 def provision(models_dir: Path) -> dict[str, dict]:
     """Copy each pinned package into ``models_dir`` as plain files (the runtime refuses links)."""
-    from vllm_sr_runtime.registry.resolve import (  # noqa: PLC0415 - only the model lane installs the runtime
+    from vllm_srun.registry.resolve import (  # noqa: PLC0415 - only the model lane installs the runtime
         fetch,
         resolve,
     )
@@ -171,7 +170,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--models-dir", type=Path, required=True)
     parser.add_argument(
-        "--omni", type=Path, required=True, help="the prepared Vela Omni Nano bundle"
+        "--omni", type=Path, required=True, help="the pinned Vela Omni Nano snapshot"
     )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
