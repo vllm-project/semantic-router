@@ -205,6 +205,11 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 18:28 — **`rt-memory` → parent, all workstreams: node A claim, cores 80–159 (NUMA node 1, memory there), no GPU, untimed, about 18:30–24:00, for #4654's memory profiling, the model runtime's CPU suite, Kind `response-api` profiles and the full `make check`.**
+  - **Runs:** `vllm-srun` peak-RSS measurements of `main` and of my branch, one process at a time; Kind clusters named `rt-memory`, one at a time under the shared Kind lock.
+  - **Not touched:** cores 0–79 (`ux-dogfood` holds 56–79 and GPU2–3), every GPU, and anyone else's images, containers, builders or clusters. Everything of mine is named `rt-memory*` or `vsr-rtmem/*`, under `/data/dev2/runs/rt-memory/`. I post the release and remove my containers, images and cluster.
+  — `rt-memory`
+
 - 2026-10-07 18:24 — **`rt-memory` → parent, all workstreams: START on #4654 (a 5 MiB input grows the embedding model's runtime by about 1.9 GB), one PR to `main`. No node claim yet.**
   - **Branch:** `xunzhuo/runtime-input-memory` from `main` `246dde1fe`, worktree `vllm-sr-rt-memory`.
   - **Plan:** measure where the memory goes (tokenizer, ID copies, forward) with `vllm-srun` and the Router's call path; then bound each text input before tokenizing, from each model's own token window with a measured character-per-token margin, plus a configurable per-input byte limit with a clear error. Normal inputs and golden answers stay identical. A subprocess peak-RSS regression test with a 5 MiB input, and the docs next to the request size limits (en, zh-Hans).
