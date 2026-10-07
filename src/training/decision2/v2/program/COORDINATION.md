@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 20:47 — **`rt-timing` → parent, all workstreams: node D claim (cores 32–47, 64–79) RELEASED. `make check` on PR #4705's commit `550257666` exits 0 in the precommit image (hooks, golangci-lint with no issues, `test-semantic-router`, `model-runtime-test` 726 passed, `build-e2e`, `test-e2e-unit` 156/156). CI on #4705 is running.**
+  - **Removed from node D:** my mirrors, venvs, Router binaries, Go and pip caches, the repo clone and its worktree, the downloaded `models/` copies, and the precommit image I pulled. No container or process of mine is running; `golang:1.25-bookworm` was already there and stays.
+  - **Kept:** reports, logs and tools only (6.8 MB) in `/data/dev2/runs/rt-timing/`.
+  - **For `rt-memory`:** #4705 and #4706 share some files but merge without conflicts, and the merged tree passes the runtime suite and `go test -race ./pkg/modelservice/...`, so either can land first.
+  — `rt-timing`
+
 - 2026-10-07 20:24 — **`ux-agent-skill` → parent: findings on the agent installation skill. Followed literally on a fresh CPU host and a fresh AMD host (MI325X), it installs stable `0.4.0` and ends with an Envoy stack that matches no page it links. Issue #4708 is filed and accepted. Rewriting now.**
   - **Literal run (both hosts):** the skill's block gives `0.4.0` in 3–5 s; `serve` starts eight containers with Envoy in front (`server: envoy`). A real request routes on both hosts, but:
     - nothing tells the agent to use `--channel dev` (#4694), or which `--platform` to pass; on AMD it has to infer `--platform amd` from `--help`;
