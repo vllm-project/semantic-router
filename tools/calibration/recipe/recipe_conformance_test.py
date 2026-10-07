@@ -318,7 +318,7 @@ class RecipeConformanceTest(unittest.TestCase):
             recipe_conformance.DEFAULT_RECIPE_ROOT
         )
         by_name = {recipe.name: recipe for recipe in inventory}
-        self.assertEqual(by_name["vela-amd"].required_devices, ("migraphx:0", "rocm:0"))
+        self.assertEqual(by_name["vela-amd"].required_devices, ("rocm:0",))
         with tempfile.TemporaryDirectory() as directory:
             args = recipe_conformance.build_parser().parse_args(
                 ["--output-dir", directory, "plan", "--shards", "3"]
@@ -336,19 +336,19 @@ class RecipeConformanceTest(unittest.TestCase):
             receipt = json.loads((Path(directory) / "cpu-eligibility.json").read_text())
             self.assertEqual(
                 receipt["excluded"],
-                [{"recipe": "vela-amd", "required_devices": ["migraphx:0", "rocm:0"]}],
+                [{"recipe": "vela-amd", "required_devices": ["rocm:0"]}],
             )
 
     def test_accelerator_requirements_follow_devices_not_recipe_names(self) -> None:
         deployments = {
-            "local": {"provider": "candle", "device": "cpu"},
+            "local": {"provider": "model_runtime", "device": "cpu"},
             "remote": {"provider": "http"},
-            "gpu": {"provider": "candle", "device": "cuda:0"},
-            "other": {"provider": "ort", "device": "migraphx:2"},
+            "gpu": {"provider": "model_runtime", "device": "cuda:0"},
+            "other": {"provider": "model_runtime", "device": "rocm:2"},
         }
         config = {"global": {"model_catalog": {"deployments": deployments}}}
         self.assertEqual(
-            recipe_conformance.configured_accelerators(config), ("cuda:0", "migraphx:2")
+            recipe_conformance.configured_accelerators(config), ("cuda:0", "rocm:2")
         )
         del deployments["gpu"]
         del deployments["other"]

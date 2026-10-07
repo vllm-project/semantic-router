@@ -195,6 +195,9 @@ func (r *SemanticRouterReconciler) generateHPA(sr *vllmv1alpha1.SemanticRouter) 
 
 func (r *SemanticRouterReconciler) generateIngress(sr *vllmv1alpha1.SemanticRouter) *networkingv1.Ingress {
 	pathType := networkingv1.PathTypePrefix
+	// An omitted servicePort targets the port the api Service actually
+	// exposes, mirroring how resolveIngressPathType defaults pathType.
+	apiPort := servicePortOrDefault(sr.Spec.Service.API.Port, DefaultAPIPort)
 
 	var rules []networkingv1.IngressRule
 	for _, host := range sr.Spec.Ingress.Hosts {
@@ -208,7 +211,7 @@ func (r *SemanticRouterReconciler) generateIngress(sr *vllmv1alpha1.SemanticRout
 					Service: &networkingv1.IngressServiceBackend{
 						Name: sr.Name,
 						Port: networkingv1.ServiceBackendPort{
-							Number: path.ServicePort,
+							Number: servicePortOrDefault(path.ServicePort, apiPort),
 						},
 					},
 				},

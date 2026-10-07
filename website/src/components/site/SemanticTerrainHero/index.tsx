@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react'
 import Translate, { translate } from '@docusaurus/Translate'
 import useBaseUrl from '@docusaurus/useBaseUrl'
-import IconExternalLink from '@theme/Icon/ExternalLink'
 import Claude from '@lobehub/icons/es/Claude/components/Mono'
 import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
 import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
@@ -14,7 +13,6 @@ import OpenAI from '@lobehub/icons/es/OpenAI/components/Mono'
 import Qwen from '@lobehub/icons/es/Qwen/components/Mono'
 import Zhipu from '@lobehub/icons/es/Zhipu/components/Mono'
 import { PillLink } from '@site/src/components/site/Chrome'
-import TerrainCanvas from './TerrainCanvas'
 import styles from './index.module.css'
 
 const heroModelLogos = [
@@ -31,7 +29,7 @@ const heroModelLogos = [
   { label: 'Grok', Icon: Grok },
 ]
 
-const FILM_DURATION = '2:51'
+const FILM_DURATION = '2:55'
 
 /* The poster is the film's first frame, so starting playback never jumps.
  * preload="none" keeps the film off the network until a visitor asks for it. */
@@ -95,42 +93,62 @@ export default function SemanticTerrainHero(): JSX.Element {
 
   return (
     <section className={styles.stage}>
-      <TerrainCanvas />
+      <div className={styles.heroBackdrop} aria-hidden="true">
+        <span className={styles.heroGlow} data-glow="a" />
+        <span className={styles.heroGlow} data-glow="b" />
+        <span className={styles.heroGlow} data-glow="c" />
+        <span className={styles.heroGrid} />
+      </div>
 
       <header className={styles.hero}>
-        <div className={styles.heroScrim} aria-hidden="true" />
         <div className="site-shell-container">
           <div className={styles.heroInner}>
             <div className={styles.intro}>
-              <h1 className={styles.title}>
-                <span className={styles.accent}>
-                  <Translate id="homepage.hero.line1">Build your</Translate>
-                </span>
-                {' '}
-                <span className={styles.nowrap}>
-                  <Translate id="homepage.hero.line2">Mixture-of-Models</Translate>
-                </span>
-              </h1>
+              <div className={styles.introCopy}>
+                <h1 className={styles.title}>
+                  <Translate
+                    id="homepage.hero.title"
+                    values={{
+                      beyond: (
+                        <span className={styles.accent}>
+                          <Translate id="homepage.hero.beyond">beyond any one model.</Translate>
+                        </span>
+                      ),
+                    }}
+                  >
+                    {'Intelligence {beyond}'}
+                  </Translate>
+                </h1>
+                <p className={styles.dek}>
+                  <Translate
+                    id="homepage.hero.dek"
+                    values={{
+                      decisionLayer: (
+                        <strong>
+                          <Translate id="homepage.hero.decisionLayer">decision layer</Translate>
+                        </strong>
+                      ),
+                    }}
+                  >
+                    {'An open, programmable {decisionLayer} for models and compute.'}
+                  </Translate>
+                </p>
+              </div>
               <div className={styles.actions}>
                 <PillLink
                   className={styles.primaryCta}
-                  href="https://app.vllm-sr.ai"
-                  rel="noreferrer"
-                  target="_blank"
+                  to="/docs/installation/agent-harness"
                 >
                   <Translate id="homepage.hero.primaryCta">
-                    Try the Playground
+                    Connect your harness
                   </Translate>
-                  <IconExternalLink />
+                  <span aria-hidden="true">→</span>
                 </PillLink>
-                <PillLink
-                  className={styles.secondaryCta}
-                  to="/docs/intro"
-                  muted
-                >
+                <PillLink className={styles.secondaryCta} to="/docs/intro" muted>
                   <Translate id="homepage.hero.secondaryCta">
-                    Explore the Docs
+                    Read the Docs
                   </Translate>
+                  <span aria-hidden="true">→</span>
                 </PillLink>
               </div>
             </div>
@@ -143,14 +161,9 @@ export default function SemanticTerrainHero(): JSX.Element {
         className={styles.modelBand}
         aria-label={translate({
           id: 'homepage.hero.modelBand.aria',
-          message: 'Mixture-of-Models ecosystem',
+          message: 'Models for programmable inference',
         })}
       >
-        <span className={styles.modelBandLabel}>
-          <Translate id="homepage.hero.modelBand.eyebrow">
-            Mixture-of-Models
-          </Translate>
-        </span>
         <div className={styles.modelViewport} aria-hidden="true">
           <div className={styles.modelTrack}>
             {modelCopies.map(copyIndex => (

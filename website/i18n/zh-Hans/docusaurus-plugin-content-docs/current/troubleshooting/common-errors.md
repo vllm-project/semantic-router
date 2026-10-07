@@ -4,7 +4,7 @@ sidebar_label: 常见错误
 translation:
   source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
   source_file: "docs/troubleshooting/common-errors.md"
-  outdated: false
+  outdated: true
 ---
 
 # 常见错误
@@ -287,26 +287,13 @@ providers:
 
 ## 分类器或嵌入模型无法加载
 
-模型加载错误因实现而异，但通常包含失败路径：
+每个模型都运行在[模型运行时](model-runtime/overview.md)中。模型无法加载时，依赖它的功能返回未知结果，运行时会记录原因。查看 Router 的 `vsr_model_runtime_ready{deployment="..."}` 指标和 Router 日志，或直接询问你自己运行的运行时：
 
-```text
-models directory does not exist: <path>
-<name> model directory does not exist: <path>
-failed to initialize <name> model from <path>: <error>
-failed to load pre-trained model <path>: <error>
+```bash
+curl -s localhost:8100/v1/models
 ```
 
-检查运行时内的路径，而不仅是宿主机上的路径。普通本地工作区把 `models/` 挂到 `/app/models`；受管配方把可变模型状态放在其工作区下，并挂到同一容器路径。
-
-```yaml
-global:
-  model_catalog:
-    embeddings:
-      semantic:
-        bert_model_path: /app/models/all-MiniLM-L12-v2
-```
-
-同时确认产物格式、标签映射和已配置的嵌入维度与所选实现匹配。
+每个模型的 `status` 和 `reason` 说明失败原因：下载损坏、缺少 `revision`、私有仓库没有令牌、设备不存在，或模型超出设备容量。[故障排查与 FAQ](model-runtime/troubleshooting.md) 列出了每种原因及修复方法。
 
 ## 容器镜像没有匹配的平台
 

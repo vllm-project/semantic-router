@@ -11,6 +11,102 @@
   color: var(--site-text);
 }
 
+.heroBackdrop {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.heroGlow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(2px);
+  opacity: 0.9;
+  will-change: transform, opacity;
+  animation: hero-glow-drift 18s var(--site-ease-out) infinite alternate;
+}
+
+.heroGlow[data-glow='a'] {
+  top: -18%;
+  left: calc(50% - min(36vw, 23rem));
+  width: min(72vw, 46rem);
+  height: min(40vw, 22rem);
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--site-brand-blue) 14%, transparent) 0%,
+    color-mix(in srgb, var(--site-brand-blue) 5%, transparent) 42%,
+    transparent 72%
+  );
+  animation-duration: 22s;
+}
+
+.heroGlow[data-glow='b'] {
+  top: 28%;
+  left: -8%;
+  width: min(52vw, 30rem);
+  height: min(52vw, 30rem);
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--site-brand-blue-deep) 18%, transparent) 0%,
+    transparent 68%
+  );
+  animation-duration: 26s;
+  animation-delay: -4s;
+}
+
+.heroGlow[data-glow='c'] {
+  right: -6%;
+  bottom: 8%;
+  width: min(48vw, 26rem);
+  height: min(48vw, 26rem);
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--site-brand-blue-light) 16%, transparent) 0%,
+    transparent 70%
+  );
+  animation-duration: 20s;
+  animation-delay: -9s;
+}
+
+.heroGrid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.45;
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--site-border) 70%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--site-border) 70%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 4.5rem 4.5rem;
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 32%, #000 18%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 32%, #000 18%, transparent 78%);
+}
+
+@keyframes hero-glow-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.78;
+  }
+
+  to {
+    transform: translate3d(1.5%, -2%, 0) scale(1.06);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroGlow {
+    animation: none;
+  }
+}
+
 .terrain {
   position: absolute;
   z-index: 0;
@@ -129,17 +225,7 @@
   display: grid;
   min-height: 0;
   align-items: center;
-  padding: clamp(2rem, 5vh, 3.5rem) 0 clamp(1.5rem, 4vh, 2.75rem);
-  pointer-events: none;
-}
-
-.heroScrim {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  background:
-    radial-gradient(circle at 50% 52%, color-mix(in srgb, var(--site-bg) 95%, transparent) 0, color-mix(in srgb, var(--site-bg) 76%, transparent) 28%, transparent 61%),
-    linear-gradient(90deg, color-mix(in srgb, var(--site-bg) 40%, transparent), color-mix(in srgb, var(--site-bg) 18%, transparent) 50%, color-mix(in srgb, var(--site-bg) 40%, transparent));
+  padding: clamp(2rem, 5vh, 3.5rem) 0 clamp(1rem, 2.5vh, 1.75rem);
   pointer-events: none;
 }
 
@@ -153,54 +239,68 @@
 .intro {
   position: relative;
   display: grid;
-  gap: 1.1rem;
+  width: 100%;
   justify-items: start;
-  justify-self: start;
+  gap: 1.3rem;
+  text-align: left;
   pointer-events: auto;
 }
 
-/* The terrain HUD and glyphs run behind the top-left corner; keep the copy on a quiet patch. */
-.intro::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: -3rem -5rem -2.5rem -6rem;
-  background: radial-gradient(ellipse at 42% 50%, color-mix(in srgb, var(--site-bg) 94%, transparent) 0, color-mix(in srgb, var(--site-bg) 78%, transparent) 48%, transparent 74%);
-  pointer-events: none;
+.introCopy {
+  display: grid;
+  max-width: 62rem;
+  gap: 1.15rem;
+  min-width: 0;
 }
 
 .stage .title {
   margin: 0;
   color: var(--site-text);
-  font-size: clamp(2.1rem, 3.4vw, 3.15rem);
-  font-weight: 460;
+  font-size: clamp(2.6rem, 5.2vw, 4.75rem);
+  font-weight: 560;
   letter-spacing: -0.045em;
-  line-height: 1.04;
+  line-height: 1.08;
+  text-wrap: balance;
 }
 
 .stage .title .accent {
+  display: block;
   color: var(--site-accent-strong);
-  font-weight: 720;
+  font-weight: inherit;
 }
 
-.nowrap {
-  white-space: nowrap;
+.dek {
+  max-width: 44rem;
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: clamp(1rem, 1.3vw, 1.125rem);
+  line-height: 1.5;
+}
+
+.dek strong {
+  color: var(--site-text);
+  font-weight: 700;
 }
 
 .actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  width: min(100%, 24.5rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
   gap: 0.75rem;
 }
 
 .actions .primaryCta,
 .actions .secondaryCta {
-  min-width: 12rem;
-  min-height: 3rem;
-  border-radius: 0.25rem;
-  font-size: 0.73rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  min-height: 3.1rem;
+  gap: 0.55rem;
+  padding-inline: 0.85rem;
+  border-radius: 0.7rem;
+  font-size: 0.88rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
 }
 
 /* Match the shared CTA and hover palette in both color modes. */
@@ -216,20 +316,6 @@
   border-color: var(--site-cta-border-hover);
   background: var(--site-cta-bg-hover);
   color: var(--site-cta-text);
-}
-
-.actions .secondaryCta {
-  border-color: var(--site-border-strong);
-  background: var(--site-surface-glass);
-  color: var(--site-text);
-  box-shadow: none;
-}
-
-.actions .secondaryCta:hover,
-.actions .secondaryCta:focus-visible {
-  border-color: var(--site-hover-border-strong);
-  background: var(--site-hover-surface-bg);
-  color: var(--site-hover-text);
 }
 
 .film {
@@ -326,27 +412,17 @@
   position: relative;
   z-index: 2;
   display: grid;
-  gap: 0.75rem;
-  padding: 0.9rem 0 1.15rem;
+  min-height: 5.75rem;
+  align-items: center;
+  padding: 1.05rem 0 1.2rem;
   background: linear-gradient(180deg, color-mix(in srgb, var(--site-bg) 16%, transparent), color-mix(in srgb, var(--site-bg) 94%, transparent) 38%);
-}
-
-.modelBandLabel {
-  justify-self: center;
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.58rem;
-  font-weight: 650;
-  letter-spacing: 0.17em;
-  text-transform: uppercase;
 }
 
 .modelViewport {
   overflow: hidden;
   width: 100%;
-  padding: 0 1.5rem;
-  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
 }
 
 .modelTrack,
@@ -371,21 +447,21 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.85rem;
   color: var(--site-muted);
   white-space: nowrap;
 }
 
 .model svg {
-  width: 1.75rem;
-  height: 1.75rem;
-  opacity: 0.82;
+  width: 2.4rem;
+  height: 2.4rem;
+  opacity: 0.9;
 }
 
 .model strong {
   color: var(--site-muted-bright);
-  font-size: 1rem;
-  font-weight: 570;
+  font-size: 1.1rem;
+  font-weight: 590;
   letter-spacing: -0.01em;
 }
 
@@ -416,7 +492,8 @@
 @media (max-width: 640px) {
   .stage {
     --terrain-model-gap: 1.6rem;
-    grid-template-rows: minmax(31rem, 1fr) auto;
+    grid-template-rows: auto auto;
+    min-height: 0;
   }
 
   .terrainCanvas {
@@ -441,29 +518,17 @@
   }
 
   .hero {
-    padding: 2rem 0 1.75rem;
+    padding: 1.75rem 0 0.75rem;
   }
 
   .stage .title {
-    font-size: clamp(1.95rem, 8.6vw, 2.5rem);
-  }
-
-  .actions {
-    display: grid;
-    width: 100%;
-    grid-template-columns: 1fr;
+    font-size: clamp(2.4rem, 8.8vw, 3.5rem);
   }
 
   .actions .primaryCta,
   .actions .secondaryCta {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .heroScrim {
-    background:
-      linear-gradient(180deg, transparent, color-mix(in srgb, var(--site-bg) 64%, transparent) 28%, color-mix(in srgb, var(--site-bg) 96%, transparent) 68%),
-      radial-gradient(circle at 40% 60%, color-mix(in srgb, var(--site-bg) 84%, transparent), transparent 72%);
+    font-size: 0.83rem;
+    padding-inline: 0.55rem;
   }
 
   .film {
@@ -491,20 +556,17 @@
   }
 
   .modelBand {
-    padding-bottom: 0.95rem;
-  }
-
-  .modelViewport {
-    padding: 0 0.75rem;
+    min-height: 5.2rem;
+    padding: 1rem 0 1.1rem;
   }
 
   .model svg {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 2.1rem;
+    height: 2.1rem;
   }
 
   .model strong {
-    font-size: 0.86rem;
+    font-size: 0.98rem;
   }
 }
 
@@ -519,18 +581,24 @@
   }
 
   .modelBand {
-    gap: 0.45rem;
-    padding-top: 0.55rem;
-    padding-bottom: 0.7rem;
+    min-height: 4.8rem;
+    padding: 0.8rem 0;
   }
 
   .model svg {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 2rem;
+    height: 2rem;
   }
 
   .model strong {
-    font-size: 0.86rem;
+    font-size: 0.95rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .actions {
+    width: 100%;
+    grid-template-columns: 1fr;
   }
 }
 

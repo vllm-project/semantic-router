@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       docs_only:
-        description: Skip native-language tooling for documentation-only changes.
+        description: Skip the language toolchains for documentation-only changes.
         required: true
         type: boolean
       website:
@@ -39,12 +39,6 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - name: Set Up Rust
-        if: ${{ !inputs.docs_only }}
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.90"
-          components: rustfmt, clippy
       - name: Install System Dependencies
         if: ${{ !inputs.docs_only }}
         run: |
@@ -59,21 +53,8 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: ${{ steps.golangci_lint.outputs.version }}
-          install-mode: binary
+          install-mode: goinstall
           args: --help
-      - name: Cache Rust Dependencies
-        if: ${{ !inputs.docs_only }}
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            candle-binding/target/
-          key: ${{ runner.os }}-cargo-precommit-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-precommit-
       - name: Cache Go Dependencies
         uses: actions/cache@v4
         with:

@@ -199,7 +199,12 @@ def _build_dataset(
         text_field=spec.text_field,
         label_field=spec.label_field,
         preprocessing_steps=[
-            "load the published split without shuffling",
+            (
+                f"read {', '.join(spec.data_files)} in this order, keeping the "
+                "text and label fields"
+                if spec.data_files
+                else "load the published split without shuffling"
+            ),
             *(
                 [
                     f"leave out rows whose {spec.exclude_prefix[0]} starts with "

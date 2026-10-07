@@ -74,6 +74,71 @@ func setupFallbackTestRouter(t *testing.T, fallbackPolicy fallback.FallbackPolic
 	return router, cfg
 }
 
+func setupDuplicateLoRAAccountingRouter(t *testing.T, policy fallback.FallbackPolicy) *OpenAIRouter {
+	t.Helper()
+	router, cfg := setupFallbackTestRouter(t, policy)
+	cfg.ModelConfig["base-a"] = config.ModelParams{
+		PreferredEndpoints: []string{"base-a-backend"},
+		APIFormat:          "openai.chat.v1",
+		LoRAs:              []config.LoRAAdapter{{Name: "shared"}},
+	}
+	cfg.ModelConfig["base-b"] = config.ModelParams{
+		PreferredEndpoints: []string{"base-b-backend"},
+		APIFormat:          "openai.chat.v1",
+		LoRAs:              []config.LoRAAdapter{{Name: "shared"}},
+	}
+	cfg.VLLMEndpoints = append(cfg.VLLMEndpoints,
+		config.VLLMEndpoint{Name: "base-a-backend", Address: "127.0.0.1", Port: 8101, ProviderProfileName: "prof-openai"},
+		config.VLLMEndpoint{Name: "base-b-backend", Address: "127.0.0.1", Port: 8102, ProviderProfileName: "prof-openai"},
+	)
+	return router
+}
+
+func prepareDuplicateLoRAPrimary(t *testing.T, router *OpenAIRouter) *RequestContext {
+	t.Helper()
+	selected := config.ModelRef{Model: "base-b", LoRAName: "shared"}
+	ctx := testFallbackRequestContext("shared", []string{"shared", "base-a"})
+	ctx.VSREligibleModelRefs = []config.ModelRef{selected, {Model: "base-a"}}
+	ctx.VSRSelectedCandidate = &selected
+	_, err := router.prepareProviderDispatch(ctx.SemanticRequest, "shared", "", false, ctx)
+	require.NoError(t, err)
+	require.Equal(t, "base-b-backend", ctx.primaryBackendName)
+	return ctx
+}
+
+func TestPrimarySuccessAccountingUsesSelectedLoRABackend(t *testing.T) {
+	policy := fallback.DefaultEnabledPolicy()
+	policy.CircuitBreaker.ConsecutiveFailures = 1
+	router := setupDuplicateLoRAAccountingRouter(t, policy)
+	ctx := prepareDuplicateLoRAPrimary(t, router)
+	circuitBreaker := router.FallbackOrchestrator.CircuitBreaker()
+
+	circuitBreaker.RecordFailure("base-a-backend")
+	require.False(t, circuitBreaker.Allow("base-a-backend"))
+
+	router.recordPrimarySuccess(ctx)
+
+	require.False(t, circuitBreaker.Allow("base-a-backend"), "success for base-b must not reset base-a")
+	require.True(t, circuitBreaker.Allow("base-b-backend"))
+}
+
+func TestPrimaryFailureAccountingUsesSelectedLoRABackend(t *testing.T) {
+	policy := fallback.DefaultEnabledPolicy()
+	policy.MaxAttempts = 1
+	policy.CircuitBreaker.ConsecutiveFailures = 1
+	router := setupDuplicateLoRAAccountingRouter(t, policy)
+	ctx := prepareDuplicateLoRAPrimary(t, router)
+	ctx.UpstreamStatusCode = http.StatusServiceUnavailable
+
+	resp := router.maybeExecuteFallback([]byte("upstream unavailable"), ctx)
+	require.Nil(t, resp)
+	require.NotNil(t, ctx.FallbackRecord)
+	require.Len(t, ctx.FallbackRecord.Attempts, 1)
+	require.Equal(t, "base-b-backend", ctx.FallbackRecord.Attempts[0].Backend)
+	require.False(t, router.FallbackOrchestrator.CircuitBreaker().Allow("base-b-backend"))
+	require.True(t, router.FallbackOrchestrator.CircuitBreaker().Allow("base-a-backend"))
+}
+
 func testFallbackRequestContext(primaryModel string, eligibleModels []string) *RequestContext {
 	req := testNeutralRequest(primaryModel, "Explain quantum computing in one sentence")
 	modelRefs := make([]config.ModelRef, len(eligibleModels))
@@ -556,22 +621,28 @@ func TestFallbackReplayAuditing(t *testing.T) {
 		t.Errorf("expected replay response status %d, got %d", http.StatusOK, rec.ResponseStatus)
 	}
 
-	if len(rec.Outcomes) == 0 {
-		t.Fatal("expected at least 1 outcome recorded in replay")
+	// Asynchronous receipts, such as memory persistence, may land after the
+	// fallback outcome, so it is found by source rather than by position.
+	var fallbackOutcome *routerreplay.Outcome
+	for i := range rec.Outcomes {
+		if rec.Outcomes[i].Source == "fallback" {
+			fallbackOutcome = &rec.Outcomes[i]
+		}
 	}
-
-	lastOutcome := rec.Outcomes[len(rec.Outcomes)-1]
-	if lastOutcome.Source != "fallback" || lastOutcome.Verdict != "completed" {
-		t.Errorf("outcome mismatch: %+v", lastOutcome)
+	if fallbackOutcome == nil {
+		t.Fatalf("expected a fallback outcome in replay, got %+v", rec.Outcomes)
 	}
-	if lastOutcome.Metadata["fallback_model"] != "model-fallback-1" {
-		t.Errorf("expected fallback_model 'model-fallback-1', got %q", lastOutcome.Metadata["fallback_model"])
+	if fallbackOutcome.Verdict != "completed" {
+		t.Errorf("outcome mismatch: %+v", *fallbackOutcome)
 	}
-	if lastOutcome.Metadata["final_status"] != "succeeded" {
-		t.Errorf("expected persisted final_status succeeded, got %q", lastOutcome.Metadata["final_status"])
+	if fallbackOutcome.Metadata["fallback_model"] != "model-fallback-1" {
+		t.Errorf("expected fallback_model 'model-fallback-1', got %q", fallbackOutcome.Metadata["fallback_model"])
+	}
+	if fallbackOutcome.Metadata["final_status"] != "succeeded" {
+		t.Errorf("expected persisted final_status succeeded, got %q", fallbackOutcome.Metadata["final_status"])
 	}
 	var execution fallback.ExecutionRecord
-	if err := json.Unmarshal([]byte(lastOutcome.Metadata["execution_record"]), &execution); err != nil {
+	if err := json.Unmarshal([]byte(fallbackOutcome.Metadata["execution_record"]), &execution); err != nil {
 		t.Fatalf("decode persisted fallback execution: %v", err)
 	}
 	if execution.RequestID != ctx.RequestID || len(execution.Attempts) != 2 {
@@ -1655,6 +1726,60 @@ func TestFallbackHTTPDispatchPreservesRequestScopedCredentials(t *testing.T) {
 	}
 }
 
+func TestFallbackHTTPDispatchUsesSelectedLoRABaseCredential(t *testing.T) {
+	var baseAReceived bool
+	var baseBAuth string
+	newBackend := func(received *bool, auth *string, model string) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			*received = true
+			if auth != nil {
+				*auth = r.Header.Get("Authorization")
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"id":"chatcmpl-lora-auth","object":"chat.completion","created":1700000000,"model":%q,"choices":[{"index":0,"message":{"role":"assistant","content":"fallback"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`, model)
+		}))
+	}
+	baseA := newBackend(&baseAReceived, nil, "shared")
+	defer baseA.Close()
+	baseB := newBackend(new(bool), &baseBAuth, "shared")
+	defer baseB.Close()
+
+	policy := fallback.DefaultEnabledPolicy()
+	router, cfg := setupFallbackTestRouter(t, policy)
+	cfg.ModelConfig["base-a"] = config.ModelParams{
+		PreferredEndpoints: []string{"base-a-backend"},
+		APIFormat:          "openai.chat.v1",
+		LoRAs:              []config.LoRAAdapter{{Name: "shared"}},
+		AccessKeys:         map[string]string{"openai": "base-a-key"},
+	}
+	cfg.ModelConfig["base-b"] = config.ModelParams{
+		PreferredEndpoints: []string{"base-b-backend"},
+		APIFormat:          "openai.chat.v1",
+		LoRAs:              []config.LoRAAdapter{{Name: "shared"}},
+		AccessKeys:         map[string]string{"openai": "base-b-key"},
+	}
+	cfg.ProviderProfiles["base-a-profile"] = config.ProviderProfile{Type: "openai", BaseURL: baseA.URL}
+	cfg.ProviderProfiles["base-b-profile"] = config.ProviderProfile{Type: "openai", BaseURL: baseB.URL}
+	cfg.VLLMEndpoints = append(cfg.VLLMEndpoints,
+		config.VLLMEndpoint{Name: "base-a-backend", ProviderProfileName: "base-a-profile"},
+		config.VLLMEndpoint{Name: "base-b-backend", ProviderProfileName: "base-b-profile"},
+	)
+
+	ctx := testFallbackRequestContext("model-primary", nil)
+	ctx.VSREligibleModelRefs = []config.ModelRef{
+		{Model: "model-primary"},
+		{Model: "base-b", LoRAName: "shared"},
+	}
+	ctx.UpstreamStatusCode = http.StatusServiceUnavailable
+
+	resp := router.handleUpstreamTransportError([]byte("upstream 503"), ctx)
+	require.NotNil(t, resp)
+	require.NotNil(t, resp.GetImmediateResponse())
+	require.Equal(t, "Bearer base-b-key", baseBAuth)
+	require.False(t, baseAReceived, "fallback must not call the other LoRA owner")
+}
+
 func TestFallbackRecipeCircuitBreakerConfigApplied(t *testing.T) {
 	globalPolicy := fallback.FallbackPolicy{
 		Version:     1,
@@ -2644,6 +2769,65 @@ func TestFallbackCandidateReasoningControlsPreservedInRequestBody(t *testing.T) 
 	}
 }
 
+func TestFallbackLoRAReasoningEffortUsesCandidateRef(t *testing.T) {
+	policy := fallback.DefaultEnabledPolicy()
+	router, cfg := setupFallbackTestRouter(t, policy)
+
+	candidateModel := "model-fallback-1"
+	modelConfig := cfg.ModelConfig[candidateModel]
+	modelConfig.ReasoningFamily = "openai-reasoning"
+	modelConfig.LoRAs = []config.LoRAAdapter{{Name: "adapter"}}
+	cfg.ModelConfig[candidateModel] = modelConfig
+	cfg.ReasoningFamilies = map[string]config.ReasoningFamilyConfig{
+		"openai-reasoning": {
+			Type:      config.ReasoningFamilyTypeTopLevelReasoningEffort,
+			Parameter: "reasoning_effort",
+			Levels:    []string{"low", "medium", "high"},
+		},
+	}
+
+	enabled := true
+	primaryRef := config.ModelRef{Model: "model-primary"}
+	adapterRef := config.ModelRef{
+		Model:    candidateModel,
+		LoRAName: "adapter",
+		ModelReasoningControl: config.ModelReasoningControl{
+			UseReasoning:    &enabled,
+			ReasoningEffort: "high",
+		},
+	}
+	ctx := testFallbackRequestContext("model-primary", nil)
+	ctx.VSREligibleModelRefs = []config.ModelRef{primaryRef, adapterRef}
+	ctx.VSRSelectedDecision = &config.Decision{
+		Name:      "chat_fallback_decision",
+		ModelRefs: ctx.VSREligibleModelRefs,
+	}
+	ctx.UpstreamStatusCode = 503
+
+	var dispatchedModel string
+	var dispatchedBody []byte
+	router.fallbackCaller = func(callCtx context.Context, model string, body []byte, headers map[string]string) ([]byte, int, error) {
+		dispatchedModel = model
+		dispatchedBody = append([]byte(nil), body...)
+		return []byte(`{
+			"id": "chatcmpl-lora-reasoning",
+			"object": "chat.completion",
+			"created": 1700000000,
+			"model": "adapter",
+			"choices": [{"index": 0, "message": {"role": "assistant", "content": "fallback"}, "finish_reason": "stop"}]
+		}`), http.StatusOK, nil
+	}
+
+	resp := router.handleUpstreamTransportError([]byte("upstream 503"), ctx)
+	require.NotNil(t, resp)
+	require.NotNil(t, resp.GetImmediateResponse())
+	require.Equal(t, "adapter", dispatchedModel)
+
+	var bodyMap map[string]interface{}
+	require.NoError(t, json.Unmarshal(dispatchedBody, &bodyMap))
+	require.Equal(t, "high", bodyMap["reasoning_effort"])
+}
+
 func TestFallbackCandidateStreamPreservesHallucinationBodyWarning(t *testing.T) {
 	policy := fallback.DefaultEnabledPolicy()
 	router, _ := setupFallbackTestRouter(t, policy)
@@ -2749,6 +2933,7 @@ func TestFallbackPreservesInflightModelOwnershipDuringSettlement(t *testing.T) {
 	}
 
 	ctx := testFallbackRequestContext(primaryModel, []string{primaryModel, candidateModel})
+	ctx.InflightModel = primaryModel
 	ctx.InflightToken = primaryToken
 	ctx.UpstreamStatusCode = 503
 

@@ -68,54 +68,44 @@ class HarnessMakeContractTests(unittest.TestCase):
         unit = source.split("vllm-sr-test: vllm-sr-install-cli", 1)[1].split(
             "vllm-sr-test-integration:", 1
         )[0]
-        for name in (
-            "test_embedding_api_config.py",
-            "test_model_binding_contract.py",
-            "test_dashboard_dockerfile_surface.py",
-        ):
-            self.assertEqual(unit.count(f"src/vllm-sr/tests/{name}"), 1)
+        # The whole directory runs, so no CLI test file can be left out of CI.
+        self.assertIn("-m pytest -q src/vllm-sr/tests\n", unit)
         self.assertIn("run_cli_tests.py --verbose", unit)
 
-    def test_cuda_compute_cap_is_optional_and_overrides_reach_the_image_build(
-        self,
-    ) -> None:
+    def test_router_image_platform_selects_the_runtime_accelerator(self) -> None:
         environment = {
             key: value
             for key, value in os.environ.items()
             if key
             not in {
-                "CUDA_COMPUTE_CAP",
+                "VLLM_SR_ACCELERATOR",
+                "VLLM_SR_PLATFORM",
                 "MAKEFLAGS",
                 "MFLAGS",
                 "MAKEOVERRIDES",
                 "MAKEFILES",
             }
         }
-        for arguments, overrides, build_arg in (
-            ((), {}, None),
-            (("CUDA_COMPUTE_CAP=86",), {}, "--build-arg CUDA_COMPUTE_CAP=86"),
-            ((), {"CUDA_COMPUTE_CAP": "86"}, "--build-arg CUDA_COMPUTE_CAP=86"),
+        for arguments, accelerator in (
+            ((), "cpu"),
+            (("VLLM_SR_PLATFORM=amd",), "rocm"),
+            (("VLLM_SR_PLATFORM=nvidia",), "cuda"),
+            (("VLLM_SR_PLATFORM=amd", "VLLM_SR_ACCELERATOR=cpu"), "cpu"),
         ):
-            with self.subTest(arguments=arguments, environment=overrides):
+            with self.subTest(arguments=arguments):
                 result = subprocess.run(
-                    [
-                        "make",
-                        "-n",
-                        "docker-build-vllm-sr-router",
-                        "VLLM_SR_PLATFORM=nvidia",
-                        *arguments,
-                    ],
+                    ["make", "-n", "docker-build-vllm-sr-router", *arguments],
                     cwd=REPO_ROOT,
-                    env=environment | overrides,
+                    env=environment,
                     capture_output=True,
                     text=True,
                     check=True,
                 )
-                self.assertNotIn("CUDA_COMPUTE_CAP", result.stderr)
-                if build_arg is None:
-                    self.assertNotIn("CUDA_COMPUTE_CAP", result.stdout)
-                else:
-                    self.assertIn(build_arg, result.stdout)
+                self.assertIn(
+                    f"--target vllm-sr --build-arg ACCELERATOR={accelerator} "
+                    "-f tools/docker/Dockerfile.extproc",
+                    result.stdout,
+                )
 
     def test_daily_interface_is_small_and_direct(self) -> None:
         for target in ("impact", "check", "verify", "ci-full", "harness-check"):
@@ -357,13 +347,6 @@ class HarnessMakeContractTests(unittest.TestCase):
                 )
                 self.assertEqual(recorded, expected)
 
-    def test_precommit_native_builds_do_not_replace_host_toolchain_outputs(
-        self,
-    ) -> None:
-        for binding in ("candle-binding", "onnx-binding", "ml-binding", "nlp-binding"):
-            self.assertIn(f"-v /app/{binding}/target \\", PRECOMMIT_MAKE)
-        self.assertIn("$$CONTAINER_CMD run --rm", PRECOMMIT_MAKE)
-
     def test_dashboard_checks_keep_lockfiles_frozen(self) -> None:
         for target in (
             "dashboard-lint",
@@ -407,68 +390,6 @@ class HarnessMakeContractTests(unittest.TestCase):
         self.assertIn("go test -json -count=1 ./...", backend)
         self.assertNotIn("VLLM_SR_EVALUATION_TEST_PYTHON", backend)
 
-    def test_native_environment_survives_subdirectory_and_vendor_overrides(
-        self,
-    ) -> None:
-        makefile = """.PHONY: native-env-probe native-env-parent
-native-env-parent:
-	@$(NATIVE_ENV) $(MAKE) --no-print-directory -f tools/make/common.mk -f $(lastword $(MAKEFILE_LIST)) native-env-probe
-native-env-probe:
-	@cd src/semantic-router && $(NATIVE_ENV) python3 -c 'import json, os; print(json.dumps({k: os.environ[k] for k in ("LD_LIBRARY_PATH", "CGO_LDFLAGS")}))'
-"""
-        environment = dict(os.environ)
-        environment["LD_LIBRARY_PATH"] = "/opt/vendor runtime/lib:/opt/openvino/lib"
-        environment["CGO_LDFLAGS"] = "-Wl,--as-needed -L/opt/vendor/lib"
-        directories = [
-            str(REPO_ROOT / binding / "target/release")
-            for binding in (
-                "candle-binding",
-                "onnx-binding",
-                "ml-binding",
-                "nlp-binding",
-            )
-        ]
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".mk") as fixture:
-            fixture.write(makefile)
-            fixture.flush()
-            for target, depth in (("native-env-probe", 1), ("native-env-parent", 2)):
-                with self.subTest(target=target):
-                    result = subprocess.run(
-                        [
-                            "make",
-                            "--no-print-directory",
-                            "-f",
-                            "tools/make/common.mk",
-                            "-f",
-                            fixture.name,
-                            target,
-                        ],
-                        cwd=REPO_ROOT,
-                        env=environment,
-                        text=True,
-                        capture_output=True,
-                        check=True,
-                    )
-                    actual = json.loads(result.stdout)
-                    self.assertEqual(
-                        actual["LD_LIBRARY_PATH"],
-                        ":".join(
-                            [*(directories * depth), environment["LD_LIBRARY_PATH"]]
-                        ),
-                    )
-                    self.assertEqual(
-                        actual["CGO_LDFLAGS"],
-                        " ".join(
-                            [
-                                *(
-                                    "-L" + directory
-                                    for directory in directories * depth
-                                ),
-                                environment["CGO_LDFLAGS"],
-                            ]
-                        ),
-                    )
-
     def test_precommit_image_includes_the_ci_helm_toolchain(self) -> None:
         workflow = yaml.safe_load(
             (REPO_ROOT / ".github/workflows/test-and-build.yml").read_text(
@@ -479,14 +400,6 @@ native-env-probe:
             encoding="utf-8"
         )
         self.assertIn(f"ARG HELM_VERSION={workflow['env']['HELM_VERSION']}", dockerfile)
-
-    def test_native_search_paths_have_one_make_owner(self) -> None:
-        for path in (REPO_ROOT / "tools/make").glob("*.mk"):
-            if path.name == "common.mk":
-                continue
-            for line in path.read_text(encoding="utf-8").splitlines():
-                if "LD_LIBRARY_PATH=" in line or "CGO_LDFLAGS=" in line:
-                    self.assertNotIn("binding/target/release", line, str(path))
 
 
 if __name__ == "__main__":

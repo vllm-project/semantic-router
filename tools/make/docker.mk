@@ -31,8 +31,8 @@ PROVIDER_MOCKER_SCENARIO ?= default
 PROVIDER_MOCKER_MODEL ?= Model-A
 
 # Build all Docker images
-# Note: extproc-rocm is excluded because it requires x86_64 + ROCm hardware.
-# Build it explicitly with: make docker-build-extproc-rocm
+# Note: extproc-rocm is excluded because it is x86_64 only and carries the ROCm
+# PyTorch wheels. Build it explicitly with: make docker-build-extproc-rocm
 docker-build-all: ## Build all Docker images
 docker-build-all: docker-build-extproc docker-build-provider-mocker docker-build-dashboard docker-build-precommit docker-build-vllm-sr-sim
 
@@ -47,16 +47,8 @@ docker-build-extproc:
 docker-build-extproc-rocm: ## Build extproc-rocm Docker image (AMD GPU)
 docker-build-extproc-rocm:
 	@$(LOG_TARGET)
-	@echo "Building extproc-rocm Docker image (x86_64 only, ROCm 7.0)..."
-	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc-rocm -t $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG) .
-
-
-# Build openvino-binding Docker image (OpenVINO inference backend, x86_64 only)
-docker-build-openvino-binding: ## Build openvino-binding Docker image
-docker-build-openvino-binding:
-	@$(LOG_TARGET)
-	@echo "Building openvino-binding Docker image (x86_64 only)..."
-	@$(CONTAINER_RUNTIME) build -f openvino-binding/Dockerfile -t $(DOCKER_REGISTRY)/openvino-binding:$(DOCKER_TAG) .
+	@echo "Building extproc-rocm Docker image (x86_64 only, ROCm PyTorch)..."
+	@$(CONTAINER_RUNTIME) build --build-arg ACCELERATOR=rocm -f tools/docker/Dockerfile.extproc -t $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG) .
 
 # One shared deterministic backend; publishing is handled by its scoped CI job.
 docker-build-provider-mocker: ## Build the provider mocker, or reuse an explicitly supplied image
@@ -82,12 +74,12 @@ docker-build-vllm-sr-envoy:
 	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ENVOY_IMAGE) >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull $(VLLM_SR_ENVOY_IMAGE)
 	@$(CONTAINER_RUNTIME) run --rm $(VLLM_SR_ENVOY_IMAGE) --version >/dev/null
 
-# Build router runtime image using the existing vllm-sr Dockerfile
+# Build the vllm-sr router image (the vllm-sr target of the router Dockerfile)
 docker-build-vllm-sr-router: ## Build vllm-sr-router Docker image
 docker-build-vllm-sr-router:
 	@$(LOG_TARGET)
 	@echo "Building vllm-sr-router Docker image..."
-	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -f $(VLLM_SR_DOCKERFILE) -t $(VLLM_SR_ROUTER_IMAGE) .
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_ROUTER_BUILD_ARGS) -f $(VLLM_SR_DOCKERFILE) -t $(VLLM_SR_ROUTER_IMAGE) .
 
 # Build vllm-sr-sim Docker image
 docker-build-vllm-sr-sim: ## Build vllm-sr-sim Docker image
@@ -210,10 +202,9 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 	@echo "  SKIP_ROUTER_IMAGE - set to 1 only when the local router image is already up to date"
 	@echo "  PROVIDER_MOCKER_IMAGE - Existing mocker image to reuse (otherwise build locally)"
 	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd for ROCm defaults, nvidia for CUDA defaults)"
-	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm)"
-	@echo "  VLLM_SR_BUILDPLATFORM - Docker build platform (default: host-native, linux/amd64 for ROCm)"
-	@echo "  VLLM_SR_DOCKERFILE_AMD - Dockerfile used when VLLM_SR_PLATFORM=amd"
-	@echo "  VLLM_SR_DOCKERFILE_NVIDIA - Dockerfile used when VLLM_SR_PLATFORM=nvidia"
+	@echo "  VLLM_SR_ACCELERATOR - runtime PyTorch build of the router image: cpu, rocm or cuda (default from VLLM_SR_PLATFORM)"
+	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm and CUDA)"
+	@echo "  VLLM_SR_BUILDPLATFORM - Docker build platform (default: host-native, linux/amd64 for ROCm and CUDA)"
 	@echo "  VLLM_SR_ROUTER_IMAGE - router runtime image override (defaults to VLLM_SR_ROUTER_IMAGE_DEFAULT)"
 	@echo "  VLLM_SR_ENVOY_IMAGE - envoy runtime image override (defaults to VLLM_SR_ENVOY_IMAGE_DEFAULT)"
 	@echo "  VLLM_SR_DASHBOARD_IMAGE - dashboard runtime image override (defaults to VLLM_SR_DASHBOARD_IMAGE_DEFAULT)"
@@ -243,9 +234,8 @@ VLLM_SR_PLATFORM ?=
 VLLM_SR_PLATFORM_NORMALIZED := $(shell echo "$(VLLM_SR_PLATFORM)" | tr '[:upper:]' '[:lower:]')
 VLLM_SR_TOPOLOGY ?= split
 VLLM_SR_TOPOLOGY_NORMALIZED := $(shell echo "$(VLLM_SR_TOPOLOGY)" | tr '[:upper:]' '[:lower:]')
-VLLM_SR_DOCKERFILE ?= src/vllm-sr/Dockerfile
-VLLM_SR_DOCKERFILE_AMD ?= src/vllm-sr/Dockerfile.rocm
-VLLM_SR_DOCKERFILE_NVIDIA ?= src/vllm-sr/Dockerfile.cuda
+VLLM_SR_DOCKERFILE ?= tools/docker/Dockerfile.extproc
+VLLM_SR_ACCELERATOR ?= cpu
 VLLM_SR_DASHBOARD_DOCKERFILE ?= dashboard/backend/Dockerfile
 VLLM_SR_SIM_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest
 VLLM_SR_SIM_CONTAINER ?= vllm-sr-sim-container
@@ -285,8 +275,8 @@ endif
 ifeq ($(origin VLLM_SR_ROUTER_IMAGE),file)
 VLLM_SR_ROUTER_IMAGE := $(VLLM_SR_ROUTER_IMAGE_ROCM)
 endif
-ifeq ($(origin VLLM_SR_DOCKERFILE),file)
-VLLM_SR_DOCKERFILE := $(VLLM_SR_DOCKERFILE_AMD)
+ifeq ($(origin VLLM_SR_ACCELERATOR),file)
+VLLM_SR_ACCELERATOR := rocm
 endif
 ifeq ($(origin VLLM_SR_TARGETARCH),file)
 VLLM_SR_TARGETARCH := amd64
@@ -304,8 +294,8 @@ endif
 ifeq ($(origin VLLM_SR_ROUTER_IMAGE),file)
 VLLM_SR_ROUTER_IMAGE := $(VLLM_SR_ROUTER_IMAGE_CUDA)
 endif
-ifeq ($(origin VLLM_SR_DOCKERFILE),file)
-VLLM_SR_DOCKERFILE := $(VLLM_SR_DOCKERFILE_NVIDIA)
+ifeq ($(origin VLLM_SR_ACCELERATOR),file)
+VLLM_SR_ACCELERATOR := cuda
 endif
 ifeq ($(origin VLLM_SR_TARGETARCH),file)
 VLLM_SR_TARGETARCH := amd64
@@ -315,8 +305,6 @@ VLLM_SR_BUILDPLATFORM := linux/amd64
 endif
 endif
 
-# Default 1 so vllm-sr build works behind corporate proxies; set GIT_SSL_NO_VERIFY=0 for strict SSL verification.
-GIT_SSL_NO_VERIFY ?= 1
 # Auto-detect: if Podman can resolve unqualified short names (search chain
 # configured in registries.conf), use unqualified FROM lines so the configured
 # registry priority is honoured.  Otherwise fall back to fully-qualified
@@ -332,17 +320,7 @@ IMAGE_REGISTRY ?= $(shell \
   else \
     printf "docker.io/"; \
   fi)
-VELA_OMNI_VARIANTS ?= nano
 VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM) --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY)
-# Minimum GPU architecture the NVIDIA image is compiled for; unset keeps the
-# Dockerfile default.
-CUDA_COMPUTE_CAP ?=
-ifneq ($(CUDA_COMPUTE_CAP),)
-VLLM_SR_BUILD_ARGS += --build-arg CUDA_COMPUTE_CAP=$(CUDA_COMPUTE_CAP)
-endif
-ifeq ($(GIT_SSL_NO_VERIFY),1)
-VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
-endif
 VLLM_SR_PROJECT_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' src/vllm-sr/pyproject.toml | head -n1)
 VLLM_SR_GIT_REVISION := $(shell git rev-parse --short=7 HEAD 2>/dev/null || echo local)
 VLLM_SR_SOURCE_REVISION ?= $(shell tools/ci/source-tree-revision.sh)
@@ -354,7 +332,7 @@ VLLM_SR_DASHBOARD_VERSION := $(VLLM_SR_DASHBOARD_VERSION).dirty
 endif
 endif
 # Hash the source only when a build consumes these arguments.
-VLLM_SR_BUILD_ARGS += --build-arg VELA_OMNI_VARIANTS="$(VELA_OMNI_VARIANTS)"
+VLLM_SR_ROUTER_BUILD_ARGS = $(VLLM_SR_BUILD_ARGS) --target vllm-sr --build-arg ACCELERATOR=$(VLLM_SR_ACCELERATOR)
 
 VLLM_SR_DASHBOARD_BUILD_ARGS = $(VLLM_SR_BUILD_ARGS) --build-arg DASHBOARD_VERSION=$(VLLM_SR_DASHBOARD_VERSION) --build-arg VLLM_SR_SOURCE_REVISION=$(VLLM_SR_SOURCE_REVISION)
 
@@ -394,10 +372,10 @@ vllm-sr-dev:
 		echo "  Platform: $(if $(VLLM_SR_PLATFORM_NORMALIZED),$(VLLM_SR_PLATFORM_NORMALIZED),default)"; \
 		echo "  Target arch: $(VLLM_SR_TARGETARCH)"; \
 		echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"; \
-		echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"; \
+		echo "  Dockerfile: $(VLLM_SR_DOCKERFILE) (accelerator: $(VLLM_SR_ACCELERATOR))"; \
 		echo "  Image: $(VLLM_SR_IMAGE)"; \
 		echo ""; \
-		$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f $(VLLM_SR_DOCKERFILE) .; \
+		$(CONTAINER_RUNTIME) build $(VLLM_SR_ROUTER_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f $(VLLM_SR_DOCKERFILE) .; \
 		echo ""; \
 		echo "Router image built: $(VLLM_SR_IMAGE)"; \
 		echo ""; \
@@ -449,11 +427,11 @@ vllm-sr-build:
 	@echo "  Platform: $(if $(VLLM_SR_PLATFORM_NORMALIZED),$(VLLM_SR_PLATFORM_NORMALIZED),default)"
 	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
 	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
-	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"
+	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE) (accelerator: $(VLLM_SR_ACCELERATOR))"
 ifeq ($(PREBUILT_RUNTIME_IMAGES),1)
 	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_IMAGE) >/dev/null
 else
-	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_ROUTER_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
 endif
 	@echo "Image built: $(VLLM_SR_IMAGE)"
 
@@ -463,11 +441,11 @@ vllm-sr-router-build:
 	@echo "Building vLLM Semantic Router router Docker image..."
 	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
 	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
-	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"
+	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE) (accelerator: $(VLLM_SR_ACCELERATOR))"
 ifeq ($(PREBUILT_RUNTIME_IMAGES),1)
 	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ROUTER_IMAGE) >/dev/null
 else
-	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_ROUTER_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_ROUTER_BUILD_ARGS) -t $(VLLM_SR_ROUTER_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
 endif
 	@echo "Image built: $(VLLM_SR_ROUTER_IMAGE)"
 
@@ -538,63 +516,10 @@ vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@"$(AGENT_PYTHON)" -m pip install -e "src/vllm-sr[bench]"
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
-	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
-		src/vllm-sr/tests/test_container_images.py \
-		src/vllm-sr/tests/test_container_log_spool.py \
-		src/vllm-sr/tests/test_dashboard_dockerfile_surface.py \
-		src/vllm-sr/tests/test_embedding_api_config.py \
-		src/vllm-sr/tests/test_envoy_identity_and_local_bindings.py \
-		src/vllm-sr/tests/test_evaluation_cli.py \
-		src/vllm-sr/tests/test_sr_bench.py \
-		src/vllm-sr/tests/test_sr_bench_accounting.py \
-		src/vllm-sr/tests/test_sr_bench_activity.py \
-		src/vllm-sr/tests/test_sr_bench_client.py \
-		src/vllm-sr/tests/test_sr_bench_collection.py \
-		src/vllm-sr/tests/test_sr_bench_datasets.py \
-		src/vllm-sr/tests/test_sr_bench_dataset_validation.py \
-		src/vllm-sr/tests/test_sr_bench_dataset_fingerprints.py \
-		src/vllm-sr/tests/test_sr_bench_large_datasets.py \
-		src/vllm-sr/tests/test_sr_bench_large_plans.py \
-		src/vllm-sr/tests/test_sr_bench_experiments.py \
-		src/vllm-sr/tests/test_sr_bench_experiment_deletion.py \
-		src/vllm-sr/tests/test_sr_bench_experiment_admin.py \
-		src/vllm-sr/tests/test_routing_preview.py \
-		src/vllm-sr/tests/test_sr_bench_grading.py \
-		src/vllm-sr/tests/test_sr_bench_harness.py \
-		src/vllm-sr/tests/test_sr_bench_history_exclusions.py \
-		src/vllm-sr/tests/test_sr_bench_bridge.py \
-		src/vllm-sr/tests/test_sr_bench_native_output.py \
-		src/vllm-sr/tests/test_sr_bench_plan_hash.py \
-		src/vllm-sr/tests/test_sr_bench_preparation_cli.py \
-		src/vllm-sr/tests/test_sr_bench_preparation_collections.py \
-		src/vllm-sr/tests/test_sr_bench_preparation_sources.py \
-		src/vllm-sr/tests/test_sr_bench_preparations.py \
-		src/vllm-sr/tests/test_sr_bench_recovery.py \
-		src/vllm-sr/tests/test_sr_bench_replay.py \
-		src/vllm-sr/tests/test_sr_bench_reporting.py \
-		src/vllm-sr/tests/test_sr_bench_request_fields.py \
-		src/vllm-sr/tests/test_sr_bench_run_options.py \
-		src/vllm-sr/tests/test_sr_bench_setup.py \
-		src/vllm-sr/tests/test_sr_bench_snapshots.py \
-		src/vllm-sr/tests/test_sr_bench_sources.py \
-		src/vllm-sr/tests/test_sr_bench_runtime.py \
-		src/vllm-sr/tests/test_sr_bench_shutdown.py \
-		src/vllm-sr/tests/test_install_package_resolution.py \
-		src/vllm-sr/tests/test_install_runtime_behavior.py \
-		src/vllm-sr/tests/test_install_script_surface.py \
-		src/vllm-sr/tests/test_model_binding_contract.py \
-		src/vllm-sr/tests/test_recipe_builtin.py \
-		src/vllm-sr/tests/test_reasoning_controls.py \
-		src/vllm-sr/tests/test_route_command.py \
-		src/vllm-sr/tests/test_runtime_lifecycle.py \
-		src/vllm-sr/tests/test_runtime_lifecycle_lock.py \
-		src/vllm-sr/tests/test_runtime_observability.py \
-		src/vllm-sr/tests/test_setup_bootstrap.py \
-		src/vllm-sr/tests/test_split_runtime_backend_provisioning.py \
-		src/vllm-sr/tests/test_split_runtime_stack.py
+	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q src/vllm-sr/tests
 
 vllm-sr-test-integration: ## Run CLI integration tests (requires local runtime images)
-vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-provider-mocker
+vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli model-runtime-install docker-build-provider-mocker
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_STACK_NAME="$${VLLM_SR_STACK_NAME:-vllm-sr-cli-integration}" VLLM_SR_PORT_OFFSET="$${VLLM_SR_PORT_OFFSET:-4200}" VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) PROVIDER_MOCKER_IMAGE="$(PROVIDER_MOCKER_IMAGE)" RUN_INTEGRATION_TESTS=true "$(AGENT_PYTHON)" run_cli_tests.py --verbose --integration-only
 

@@ -31,6 +31,10 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 	}
 	responseID := "resp_" + ctx.RequestID
 	itemID := "item_" + ctx.RequestID
+	if publicID := responseObjectPublicID(ctx); publicID != "" {
+		responseID = publicID
+		itemID = llmprotocol.StableID(publicID, "0")
+	}
 	usage := authoritativeZeroUsage()
 	response := &llmprotocol.Response{
 		Generation: 1,
@@ -216,7 +220,9 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	if policyErr := r.applyPromptCachePolicy(&dispatchRequest, ctx, format); policyErr != nil {
 		return nil, policyErr
 	}
-	dispatchRequest, projectionDiagnostics, err := r.projectRequestForBackendWithDiagnostics(dispatchRequest, ctx.RequestModel, format)
+	dispatchRequest, projectionDiagnostics, err := r.projectRequestForBackendWithDiagnostics(
+		dispatchRequest, ctx.backendModelForCandidate(ctx.RequestModel), format,
+	)
 	if err != nil {
 		return nil, err
 	}

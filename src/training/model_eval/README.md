@@ -33,7 +33,18 @@ without compatible data.
 
 ```bash
 cd src/training/model_eval
-pip install -r requirements.txt
+uv sync --locked
+```
+
+`pyproject.toml` bounds each dependency and `uv.lock` pins the exact versions, so a clean checkout resolves
+to the same environment every time. `uv run python <script>` runs a script in it. The locked `torch` is
+the default PyPI build, which is the CUDA build on Linux.
+
+The tests import `src.training.model_eval`, so run them from the repository root:
+
+```bash
+uv run --project src/training/model_eval python -m unittest discover \
+  -s src/training/model_eval/tests -p 'test_*.py'
 ```
 
 ## Run
@@ -76,10 +87,11 @@ Useful options:
 Use underscores in option names, as shown by
 `python mom_collection_eval.py --help`.
 
-Download evaluation native snapshots with `make download-eval-models`. Production
-`make download-models` continues to use the Router's downloader, including its
-runtime artifact validation. Existing `download-mmbert-*` targets remain legacy
-utilities; they do not download Vela. Legacy adapters must declare an available
+Download evaluation native snapshots with `make download-eval-models`. In
+production, the model runtime downloads each model it serves on first start, and
+the Router provisions only label maps, custom-registry models and the Omni
+bundles. Existing `download-mmbert-*` targets remain legacy utilities; they do not
+download Vela. Legacy adapters must declare an available
 base and save every newly initialized task-head parameter; otherwise evaluation
 rejects them instead of scoring a random head.
 
@@ -113,12 +125,12 @@ the result.
 
 ```
 python src/training/model_eval/quality_baseline.py \
-    --task fact-check --device cuda --output-dir baseline/fact-check
+    --task domain --device cuda --output-dir baseline/domain
 
 # From src/training/model_eval. The served artifacts predate the training-run
 # manifests, so this reports one missing run_ref per artifact until a run
 # publishes one. Everything else has to pass.
-python -m provenance.cli validate baseline/fact-check/manifests
+python -m provenance.cli validate baseline/domain/manifests
 
 python src/training/model_eval/gap_report.py \
     --baseline baseline/*/*_baseline.json --output baseline/gap-report.md
@@ -142,6 +154,24 @@ The baseline runner's historical `jailbreak` dataset is restricted to the
 explicit original mmBERT merged/adapter artifacts. It rejects current Guard
 before accessing that dataset. Use the custom-data collection evaluator above
 for reviewed instruction-attack annotations.
+
+The `fact-check` task scores the corpus-matched fact-check test of the [router
+signal suite](https://huggingface.co/datasets/vllm-sr/router-signal-suite) at a
+pinned revision: its NF-CATS, Open Question Type, Search Arena and URS rows,
+read file by file. Inside every corpus, script, length, question-mark and
+capitalisation stratum the two classes are equal, so the corpus, a question mark
+or the length alone scores AUC 0.5 on it. Dolly is left out because the mmBERT
+fact-check checkpoint trained on it. Both fact-check checkpoints are scored.
+
+The `feedback` dataset is restricted the same way as `jailbreak`, to the mmBERT
+checkpoint trained on it. Its labels can be read without the text: the SAT class
+is a few templates, each with `!`, that appear in both train and validation.
+Vela Feedback needs a held-out set from other corpora, and the suite's feedback
+test does not qualify: 2,793 of its 2,842 rows come from WildFeedback and
+Schema-Guided Dialogue, which the repository's feedback trainers read. A legacy
+checkpoint's label order is checked against the legacy registry, and a gap
+report counts coverage per served artifact, so it still lists Vela Feedback as
+unmeasured when only the legacy result is passed.
 
 A referenced manifest supplies the identity every number is published under, so
 it also selects the bytes: the run downloads the repository and revision the
@@ -192,7 +222,7 @@ rather than a constant kept here.
 
 ```bash
 python src/training/model_eval/jailbreak_guard_eval.py \
-    --model llm-semantic-router/Vela-1.0-Encoder-307M-Guard \
+    --model vllm-sr/Vela-1.0-Encoder-307M-Guard \
     --dataset local:guard-eval-v1.json --dataset-version v1 \
     --label-col attack --slice-col source --slice-col language \
     --dev-dataset local:guard-dev-v1.json --budget 0.01 \
