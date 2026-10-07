@@ -200,6 +200,7 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	if err := resolveModuleModelRefs(&resolved); err != nil {
 		return CanonicalGlobal{}, err
 	}
+	normalizeModuleOperatingPoints(&resolved, rawOverride)
 	return resolved, nil
 }
 

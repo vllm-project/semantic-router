@@ -83,6 +83,9 @@ var optionalModelFeatureGates = []modelFeatureGate{
 	{
 		enabled: isModalityClassifierEnabled,
 		paths: func(cfg *config.RouterConfig) []string {
+			if classifier := cfg.ModalityDetector.Classifier; classifier != nil && classifier.ModelPath != "" {
+				return []string{classifier.ModelPath}
+			}
 			if model, _, ok := cfg.ModalityDetector.ClassifierModel(); ok {
 				return []string{model}
 			}

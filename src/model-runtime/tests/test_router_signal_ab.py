@@ -114,6 +114,9 @@ def test_a_matched_threshold_keeps_the_share_of_values_it_admits(ab) -> None:
     assert ab.matched_threshold(0.0, values, above=True) == pytest.approx(0.7)
     assert ab.matched_threshold(1.0, values, above=True) == pytest.approx(0.05)
     assert ab.matched_threshold(0.0, values, above=False) == pytest.approx(0.05)
+    # A span model scores 0 where it finds no span: a threshold never splits the zeros.
+    spans = [0.0] * 8 + [0.6, 0.9]
+    assert ab.matched_threshold(0.45, spans, above=True) == pytest.approx(0.3)
 
 
 def test_a_confidence_floor_falls_back_below_its_threshold(ab) -> None:

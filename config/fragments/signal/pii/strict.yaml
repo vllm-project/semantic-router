@@ -2,7 +2,7 @@ routing:
   signals:
     pii:
       - name: restricted_pii
-        threshold: 0.85
+        threshold: 0.03
         include_history: true
         pii_types_allowed:
           - EMAIL_ADDRESS

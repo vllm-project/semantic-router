@@ -265,9 +265,9 @@ func (c *Classifier) hasLongContextClassifier(signalType string) bool {
 }
 
 // signalReadsWholeText reports whether a signal's prepared model asks a Vela
-// 2.0 model the signal's question. That model reads a whole text, windowing
-// what exceeds its own input itself, so the signal asks about the request as
-// it is, in the same call as the request's other questions about it.
+// 2.0 model the signal's question. That model reads a whole text up to its own
+// input budget, so the signal asks about the request as it is, in the same
+// call as the request's other questions about it.
 func (c *Classifier) signalReadsWholeText(signalType string) bool {
 	if c == nil {
 		return false

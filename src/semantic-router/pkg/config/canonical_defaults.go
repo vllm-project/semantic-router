@@ -255,7 +255,7 @@ func defaultPromptGuardModule() CanonicalPromptGuardModule {
 		ModelRef: "prompt_guard",
 		PromptGuardConfig: PromptGuardConfig{
 			Enabled:   true,
-			Threshold: 0.5,
+			Threshold: 0.75,
 			UseCPU:    true,
 		},
 	}
@@ -266,14 +266,14 @@ func defaultClassifierModule() CanonicalClassifierModule {
 		Domain: CanonicalCategoryModule{
 			ModelRef: "domain_classifier",
 			CategoryModel: CategoryModel{
-				Threshold: 0.5,
+				Threshold: 0.28,
 				UseCPU:    true,
 			},
 		},
 		PII: CanonicalPIIModule{
 			ModelRef: "pii_classifier",
 			PIIModel: PIIModel{
-				Threshold: 0.9,
+				Threshold: 0.03,
 				UseCPU:    true,
 			},
 		},
@@ -289,7 +289,7 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 		FactCheck: CanonicalFactCheckModule{
 			ModelRef: "fact_check_classifier",
 			FactCheckModelConfig: FactCheckModelConfig{
-				Threshold: 0.95,
+				Threshold: 0.93,
 				UseCPU:    true,
 			},
 		},
@@ -311,7 +311,7 @@ func defaultFeedbackDetectorModule() CanonicalFeedbackDetectorModule {
 		ModelRef: "feedback_detector",
 		FeedbackDetectorConfig: FeedbackDetectorConfig{
 			Enabled:   true,
-			Threshold: 0.7,
+			Threshold: 0.37,
 			UseCPU:    true,
 		},
 	}

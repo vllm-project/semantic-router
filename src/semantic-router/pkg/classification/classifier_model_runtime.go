@@ -160,6 +160,9 @@ func (b *ownedSequenceBackend) Init(_ string, _ bool, classes ...int) error {
 // readsWholeText reports whether the prepared binding asks a Vela 2.0 model
 // its signal's question, which reads a whole text however long it is.
 func (b *ownedSequenceBackend) readsWholeText() bool {
+	if b == nil {
+		return false
+	}
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.handle != nil && b.handle.Capability().Question != ""

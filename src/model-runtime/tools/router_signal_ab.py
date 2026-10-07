@@ -991,19 +991,25 @@ def top_label(scores: dict[str, Any]) -> tuple[str, float]:
 
 
 def matched_threshold(rate: float, values: Any, above: bool) -> float:
-    """The threshold that puts a share ``rate`` of ``values`` at or above it (``above``) or
-    below it, midway between the two values it falls between."""
+    """The threshold whose share of ``values`` at or above it (``above``), or below it, is
+    closest to ``rate`` (the lower share on a tie). Candidates sit midway between distinct
+    values, so tied values (a span model's zero for "no span") stay on one side."""
     import numpy as np
 
-    v = np.sort(np.asarray(values, dtype=float))
-    k = int(round(rate * len(v)))
-    if above:
-        v = v[::-1]
-    if 0 < k < len(v):
-        return float((v[k - 1] + v[k]) / 2)
-    edge = v[0] if k <= 0 else v[-1]
-    # Past the last value: midway to 1 on the side the threshold keeps clear, else to 0.
-    return float(edge + (1.0 - edge) / 2 if (k <= 0) == above else edge / 2)
+    v = np.asarray(values, dtype=float)
+    distinct = np.unique(v)
+    candidates = np.concatenate(
+        [
+            [distinct[0] / 2],
+            (distinct[:-1] + distinct[1:]) / 2,
+            [distinct[-1] + (1.0 - distinct[-1]) / 2],
+        ]
+    )
+    ordered = np.sort(v)
+    below = np.searchsorted(ordered, candidates, side="left") / len(v)
+    shares = 1.0 - below if above else below
+    best = np.lexsort((shares, np.abs(shares - rate)))[0]
+    return float(candidates[best])
 
 
 def floor_point(
@@ -1075,14 +1081,17 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
                 below = np.mean(
                     [top_label(pa[r["id"]]["scores"])[1] < t1 for r in rows]
                 )
-                t2 = matched_threshold(
+                matched = matched_threshold(
                     float(below),
                     [top_label(pb[r["id"]]["scores"])[1] for r in rows],
                     above=False,
                 )
+                # Reported, and shipped, at the matched threshold to two decimals.
+                t2 = round(matched, 2)
                 point = {
                     "a": t1,
-                    "b": round(t2, 4),
+                    "b": t2,
+                    "matched": round(matched, 4),
                     "metric": "balanced_accuracy",
                     "rate": "below",
                 }
@@ -1100,12 +1109,14 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
 
                 negatives = [r for r in rows if r["label"] != positive]
                 fpr = np.mean([score(pa, r) >= t1 for r in negatives])
-                t2 = matched_threshold(
+                matched = matched_threshold(
                     float(fpr), [score(pb, r) for r in negatives], above=True
                 )
+                t2 = round(matched, 2)
                 point = {
                     "a": t1,
-                    "b": round(t2, 4),
+                    "b": t2,
+                    "matched": round(matched, 4),
                     "metric": "true_positive_rate",
                     "rate": "false_positive_rate",
                 }
@@ -1132,7 +1143,7 @@ def cmd_calibrate(args: argparse.Namespace) -> None:
                 else "—"
             )
             lines.append(
-                f"| {task} | {t1:g} | {point['b']:.3f} | {k.replace('_', ' ')} {kept} | {pair('dev')} | {pair('test')} |"
+                f"| {task} | {t1:g} | {point['b']:.2f} | {k.replace('_', ' ')} {kept} | {pair('dev')} | {pair('test')} |"
             )
         report["tasks"][task] = {"dev_rows": len(rows), "points": points}
     Path(args.out).write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")

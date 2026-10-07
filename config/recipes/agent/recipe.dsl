@@ -286,7 +286,7 @@ SIGNAL complexity evidence_synthesis {
 }
 
 SIGNAL pii pii_strict {
-  threshold: 0.9
+  threshold: 0.03
   pii_types_allowed: ["GPE"]
 }
 
