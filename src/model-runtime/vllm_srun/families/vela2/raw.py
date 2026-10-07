@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 
 @dataclass
@@ -16,8 +20,8 @@ class RawSpan:
     """
 
     labels: list[str]
-    offsets: np.ndarray
-    logits: np.ndarray
+    offsets: NDArray[np.int32]
+    logits: NDArray[np.float64]
     head: str = "router"
     alias: dict[str, str] | None = None
 
@@ -31,7 +35,7 @@ class RawRow:
     and ``input_tokens`` every token the row's sequences fed the model.
     """
 
-    logits: dict[str, np.ndarray] = field(default_factory=dict)
+    logits: dict[str, NDArray[np.float32]] = field(default_factory=dict)
     span: RawSpan | None = None
     tokens: dict[str, int] = field(default_factory=dict)
     windows: int = 0

@@ -26,7 +26,6 @@ from cli.commands.runtime_kb import (
     _validate_package_kb_paths,
     _validate_runtime_kb_paths,
 )
-from cli.commands.runtime_looper import apply_local_looper_endpoint
 from cli.commands.runtime_management_credentials import (
     management_credential_env_names,
 )
@@ -42,6 +41,7 @@ from cli.consts import (
 )
 from cli.container_management_listener import resolve_managed_management_listener
 from cli.models import UserConfig
+from cli.recipe_topology_contract import MANAGEMENT_CREDENTIAL_ENV
 from cli.runtime_env_names import (
     RESERVED_RUNTIME_ENV_NAMES,
     normalize_runtime_env_names,
@@ -75,7 +75,6 @@ PASSTHROUGH_ENV_RULES = (
     ("ANTHROPIC_API_KEY", True),
     ("OPENAI_API_KEY", True),
     ("OPENROUTER_API_KEY", True),
-    ("OPENCLAW_BASE_IMAGE", False),
     ("SR_LOG_LEVEL", False),
     ("SR_LOG_ENCODING", False),
     ("SR_LOG_DEVELOPMENT", False),
@@ -258,15 +257,25 @@ def append_passthrough_env_vars(
 
 
 def normalize_recipe_env_names(names: Iterable[str]) -> tuple[str, ...]:
-    """Validate, deduplicate, and stabilize explicit Recipe env bindings."""
+    """Validate, deduplicate, and stabilize explicit Recipe env bindings.
+
+    The management credential is never a Recipe input: the Dashboard always
+    holds it, and a Recipe could otherwise send it anywhere a value goes.
+    """
 
     try:
-        return normalize_runtime_env_names(names)
+        normalized = normalize_runtime_env_names(names)
     except ValueError as error:
         raise ValueError(
             "Invalid Recipe environment binding name. Use an uppercase, "
             "non-reserved environment variable name, without NAME=value."
         ) from error
+    if MANAGEMENT_CREDENTIAL_ENV in normalized:
+        raise ValueError(
+            f"{MANAGEMENT_CREDENTIAL_ENV} is the Dashboard's management "
+            "credential and cannot be bound into a Recipe."
+        )
+    return normalized
 
 
 def configure_recipe_env_bindings(
@@ -420,7 +429,6 @@ def _resolve_effective_config_document(
         stack = resolve_runtime_stack()
         changed = inject_local_service_runtime_defaults(config, stack) or changed
         changed = inject_local_store_runtime_defaults(config, stack) or changed
-        changed = apply_local_looper_endpoint(config, stack) or changed
         changed = apply_local_tracing_endpoint(config, stack) or changed
     normalized_algorithm = _normalized_algorithm_override(algorithm, setup_mode)
     apply_gpu_defaults = _platform_requires_gpu_defaults(platform)

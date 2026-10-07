@@ -136,6 +136,14 @@ type Capability struct {
 	Labels    []string
 	Embedding *EmbeddingCapability
 	Window    *WindowCapability
+	// Preset names the ready-made question a decision model answers for the
+	// binding (pii, halu); such a binding reads its whole input, and its
+	// spans name their own labels.
+	Preset string
+	// Question names the built-in signal question a Vela 2.0 model answers
+	// for a label-distribution binding (domain, attack, ...); such a binding
+	// reads its whole input.
+	Question string
 }
 
 // WindowCapability fixes the scan geometry selected during preparation.

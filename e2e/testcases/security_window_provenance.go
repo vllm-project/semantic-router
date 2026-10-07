@@ -18,7 +18,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("security-window-provenance", pkgtestcases.TestCase{
-		Description: "Verify routing preview names the window a guard score came from",
+		Description: "Verify routing preview names the window a guard score came from, and none for a guard that reads the whole prompt",
 		Tags:        []string{"kubernetes", "apiserver", "classification", "security", "jailbreak", "api"},
 		Fn:          testSecurityWindowProvenance,
 	})
@@ -30,7 +30,9 @@ func init() {
 // boundary with a prompt that needs more than one window and a prompt that fits
 // in one, and reads the window the scan reported next to the score. Only the
 // deployed classifier produces these: the window count comes from its
-// tokenizer, which no mock reproduces.
+// tokenizer, which no mock reproduces. A guard that reads a prompt whole up to
+// its input budget (Vela 2.0) declares no window overflow, and its score, which
+// belongs to the whole prompt, names no window.
 func testSecurityWindowProvenance(
 	ctx context.Context,
 	client *kubernetes.Clientset,
@@ -41,6 +43,11 @@ func testSecurityWindowProvenance(
 		return err
 	}
 	defer session.Close()
+
+	scans, err := guardScansInWindows(ctx, session)
+	if err != nil {
+		return err
+	}
 
 	sentences := []string{
 		"Sedimentary rock forms when layers of sand, mud and organic material settle and compact over long periods. ",
@@ -65,6 +72,12 @@ func testSecurityWindowProvenance(
 	rule, err := jailbreakSignalRule(scanned)
 	if err != nil {
 		return err
+	}
+	if !scans {
+		if opts.SetDetails != nil {
+			opts.SetDetails(map[string]interface{}{"rule": rule, "guard_reads": "whole prompt"})
+		}
+		return wholePromptScores(map[string]map[string]float64{"long prompt": scanned, "short prompt": single}, rule)
 	}
 	windows, start, end, err := jailbreakWindow(scanned, rule)
 	if err != nil {
@@ -123,6 +136,50 @@ func jailbreakWindow(values map[string]float64, rule string) (windows, start, en
 		*target = value
 	}
 	return windows, start, end, nil
+}
+
+// wholePromptScores checks that every preview scored the rule and named no window.
+func wholePromptScores(previews map[string]map[string]float64, rule string) error {
+	key := "jailbreak:" + rule
+	for name, values := range previews {
+		if _, ok := values[key]; !ok {
+			return fmt.Errorf("%s: the preview reported no %s: %v", name, key, values)
+		}
+		for _, suffix := range []string{":windows", ":window_start", ":window_end"} {
+			if _, ok := values[key+suffix]; ok {
+				return fmt.Errorf("%s: a guard that reads the whole prompt reported %s%s: %v", name, key, suffix, values)
+			}
+		}
+	}
+	return nil
+}
+
+// guardScansInWindows reads the deployed guard's input policy from the model
+// inventory: a prepared prompt_guard binding with overflow "window" scans a
+// long prompt in windows.
+func guardScansInWindows(ctx context.Context, session *fixtures.ServiceSession) (bool, error) {
+	url := session.URL("/api/v1/inventory/models")
+	response, err := getJSON(ctx, session.HTTPClient(30*time.Second), url)
+	if err != nil {
+		return false, err
+	}
+	if response.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("expected /api/v1/inventory/models status 200, got %d: %s", response.StatusCode, string(response.Body))
+	}
+	var inventory struct {
+		Models []struct {
+			Metadata map[string]string `json:"metadata"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(response.Body, &inventory); err != nil {
+		return false, fmt.Errorf("decode /api/v1/inventory/models response: %w", err)
+	}
+	for _, model := range inventory.Models {
+		if model.Metadata["binding"] == "prompt_guard" {
+			return model.Metadata["overflow"] == "window", nil
+		}
+	}
+	return false, fmt.Errorf("the model inventory reports no prepared prompt_guard binding, so this case cannot tell a scan from a whole read")
 }
 
 func previewSignalValues(

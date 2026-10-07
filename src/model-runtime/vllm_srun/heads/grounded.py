@@ -15,7 +15,7 @@ from __future__ import annotations
 import string
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -29,6 +29,9 @@ from .task import (
     token_probabilities,
 )
 from .token import token_rows
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 PROMPT_FIELDS = {"question", "context"}
 PAIR_SIZE = 2
@@ -241,7 +244,9 @@ class GroundedHead(TaskHead):
 
     def result(self, prepared: Prepared, values: Sequence[Any]) -> dict[str, Any]:
         state: GroundedState = prepared.state
-        rows: np.ndarray = values[0][state.start : state.start + len(state.offsets)]
+        rows: NDArray[np.float32] = values[0][
+            state.start : state.start + len(state.offsets)
+        ]
         positive = rows[:, self.policy.positive].tolist()
         spans = answer_spans(
             state.offsets, positive, lambda p: self.policy.passes(p, state.threshold)

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestVelaDefaultsUsePublishedPathsWithoutChangingInputPolicies(t *testing.T) {
+func TestBuiltInSignalsDefaultToVela2WithoutChangingInputPolicies(t *testing.T) {
 	cfg := DefaultGlobalConfig()
 	paths := map[string]string{
 		"Domain":    cfg.CategoryModel.ModelID,
@@ -13,18 +13,16 @@ func TestVelaDefaultsUsePublishedPathsWithoutChangingInputPolicies(t *testing.T)
 		"Safety":    cfg.SafetyModels.Safety.ModelID,
 		"PII":       cfg.PIIModel.ModelID,
 		"FactCheck": cfg.HallucinationMitigation.FactCheckModel.ModelID,
+		"Halu":      cfg.HallucinationMitigation.HallucinationModel.ModelID,
 		"Feedback":  cfg.FeedbackDetector.ModelID,
-		"Embedding": cfg.MmBertModelPath,
 	}
 	for task, path := range paths {
-		want := "models/Vela-1.0-Encoder-307M-" + task
-		if path != want {
-			t.Fatalf("%s default = %s, want %s", task, path, want)
+		if path != Vela2SignalModel {
+			t.Fatalf("%s default = %s, want %s", task, path, Vela2SignalModel)
 		}
-		spec := GetModelByPath(path)
-		if spec == nil || len(spec.Revision) != 40 {
-			t.Fatalf("unversioned default %s", path)
-		}
+	}
+	if spec := GetModelByPath(cfg.MmBertModelPath); cfg.MmBertModelPath != "models/Vela-1.0-Encoder-307M-Embedding" || spec == nil || len(spec.Revision) != 40 {
+		t.Fatalf("embeddings keep their pinned Vela 1.0 model, got %s", cfg.MmBertModelPath)
 	}
 	if cfg.CategoryModel.MaxSequenceLength != 0 || cfg.PIIModel.MaxSequenceLength != 0 || cfg.HallucinationMitigation.FactCheckModel.MaxSequenceLength != 0 || cfg.FeedbackDetector.MaxSequenceLength != 0 {
 		t.Fatal("model migration changed the existing zero/512 input policy")
@@ -32,17 +30,87 @@ func TestVelaDefaultsUsePublishedPathsWithoutChangingInputPolicies(t *testing.T)
 	if cfg.EmbeddingConfig.FullContext || cfg.EmbeddingConfig.TargetLayer != 22 || cfg.EmbeddingConfig.TargetDimension != 0 {
 		t.Fatal("embedding input/representation defaults changed")
 	}
-	if cfg.HallucinationMitigation.FactCheckModel.Threshold != float32(.95) {
-		t.Fatal("FactCheck did not use its frozen Vela operating point")
-	}
-	if cfg.FeedbackDetector.Threshold != float32(.7) {
-		t.Fatal("Feedback abstention changed")
-	}
-	if cfg.PromptGuard.Threshold != float32(.5) {
-		t.Fatal("Guard did not use its frozen Vela operating point")
+	// The 0.3B's thresholds keep the Vela 1.0 specialists' operating points on
+	// the router signal suite's dev split (docs/records/vela2-router-signals.md).
+	for name, got := range map[string][2]float32{
+		"Guard":     {cfg.PromptGuard.Threshold, .75},
+		"Domain":    {cfg.CategoryModel.Threshold, .28},
+		"PII":       {cfg.PIIModel.Threshold, .01},
+		"FactCheck": {cfg.HallucinationMitigation.FactCheckModel.Threshold, .93},
+		"Feedback":  {cfg.FeedbackDetector.Threshold, .37},
+	} {
+		if got[0] != got[1] {
+			t.Fatalf("%s threshold = %v, want the calibrated %v", name, got[0], got[1])
+		}
 	}
 	if cfg.SafetyModels.Hazard.ModelID != "" {
 		t.Fatal("Hazard must use an explicit binding with its artifact operating point")
+	}
+}
+
+func TestVela1SystemModelsRestoreTheSpecialistsAndTheirOperatingPoints(t *testing.T) {
+	vela1 := Vela1SystemModels()
+	cfg, err := ParseYAMLBytes([]byte(`version: v0.3
+global:
+  model_catalog:
+    system:
+      safety: ` + vela1.Safety + `
+      prompt_guard: ` + vela1.PromptGuard + `
+      domain_classifier: ` + vela1.DomainClassifier + `
+      pii_classifier: ` + vela1.PIIClassifier + `
+      fact_check_classifier: ` + vela1.FactCheckClassifier + `
+      hallucination_detector: ` + vela1.HallucinationDetector + `
+      feedback_detector: ` + vela1.FeedbackDetector + `
+    modules:
+      prompt_guard:
+        threshold: 0.6
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for got, want := range map[string]string{
+		cfg.CategoryModel.ModelID: vela1.DomainClassifier, cfg.PromptGuard.ModelID: vela1.PromptGuard,
+		cfg.SafetyModels.Safety.ModelID: vela1.Safety, cfg.PIIModel.ModelID: vela1.PIIClassifier,
+		cfg.HallucinationMitigation.FactCheckModel.ModelID:     vela1.FactCheckClassifier,
+		cfg.HallucinationMitigation.HallucinationModel.ModelID: vela1.HallucinationDetector,
+		cfg.FeedbackDetector.ModelID:                           vela1.FeedbackDetector,
+	} {
+		if got != want {
+			t.Fatalf("restored module runs %s, want %s", got, want)
+		}
+	}
+	// A threshold the document does not set follows its model; an explicit one stays.
+	for name, got := range map[string][2]float32{
+		"Guard":     {cfg.PromptGuard.Threshold, .6},
+		"Domain":    {cfg.CategoryModel.Threshold, .5},
+		"PII":       {cfg.PIIModel.Threshold, .9},
+		"FactCheck": {cfg.HallucinationMitigation.FactCheckModel.Threshold, .95},
+		"Feedback":  {cfg.FeedbackDetector.Threshold, .7},
+	} {
+		if got[0] != got[1] {
+			t.Fatalf("%s threshold = %v, want %v", name, got[0], got[1])
+		}
+	}
+}
+
+func TestARemoteGuardKeepsItsPreviousThreshold(t *testing.T) {
+	global := DefaultCanonicalGlobal()
+	if err := resolveModuleModelRefs(&global); err != nil {
+		t.Fatal(err)
+	}
+	global.ModelCatalog.Modules.PromptGuard.Backend = &RemoteClassifierBackend{Model: "guard-service"}
+	raw, err := NewStructuredPayload(map[string]interface{}{"model_catalog": map[string]interface{}{
+		"modules": map[string]interface{}{"prompt_guard": map[string]interface{}{"backend": map[string]interface{}{"model": "guard-service"}}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalizeModuleOperatingPoints(&global, raw)
+	if got := global.ModelCatalog.Modules.PromptGuard.Threshold; got != .5 {
+		t.Fatalf("a remote Guard keeps 0.5, got %v", got)
+	}
+	if got := global.ModelCatalog.Modules.Classifier.Domain.Threshold; got != .28 {
+		t.Fatalf("the local domain module keeps the 0.3B's 0.28, got %v", got)
 	}
 }
 

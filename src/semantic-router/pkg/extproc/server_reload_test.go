@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
@@ -43,6 +44,34 @@ func TestReloadRejectsPreviewAdmissionChangeBeforePreparation(t *testing.T) {
 		if server.service.GetRouter() != previous || server.CurrentConfig() != previous.Config {
 			t.Fatal("restart-only candidate replaced the live generation")
 		}
+	}
+}
+
+func TestReloadChecksGatewayCapabilitiesBeforePreparation(t *testing.T) {
+	restore := stubReloadSeams(t)
+	defer restore()
+	previous := &OpenAIRouter{Config: &config.RouterConfig{}}
+	server := &Server{service: NewRouterService(previous)}
+	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
+		t.Fatal("a rejected candidate reached runtime preparation")
+		return nil, nil
+	}
+	candidate := &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{{
+		Name: "slow", Reliability: &config.DecisionReliability{IdleTimeout: "5s"},
+	}}}}
+	for _, source := range []string{"file", "kubernetes"} {
+		err := server.reloadRouterFromConfig(source, "config.yaml", candidate)
+		reasons := configsnapshot.ReasonsOf(err)
+		if len(reasons) != 1 || reasons[0].Code != configsnapshot.CodeUnsupported ||
+			reasons[0].Path != "routing.decisions[slow].reliability" || !strings.Contains(err.Error(), "--gateway standalone") {
+			t.Fatalf("%s reload error = %v (%+v)", source, err, reasons)
+		}
+		if server.service.GetRouter() != previous {
+			t.Fatal("a rejected candidate replaced the live generation")
+		}
+	}
+	if err := checkGatewayCapabilities(candidate, config.GatewayStandalone); err != nil {
+		t.Fatalf("the native gateway honors every reliability field: %v", err)
 	}
 }
 

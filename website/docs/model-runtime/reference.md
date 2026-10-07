@@ -10,9 +10,33 @@ This page lists the details the guides leave out. The design behind them is in
 
 ## Commands
 
-`vllm-sr serve MODEL ...` runs the runtime in your current Python environment.
-Without a `MODEL` argument, `vllm-sr serve` starts the router instead.
-`vllm-srun serve` is the same server with every option.
+`vllm-sr serve MODEL ...` (engine mode) runs the runtime in the foreground, in
+a Docker or Podman container from a router image. Without a `MODEL` argument,
+`vllm-sr serve` starts the router instead.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `MODEL ...` | | Hub repositories, built-in model names or local package directories, which the container reads through read-only mounts. Several models share one process. `MODEL@REVISION` pins a revision. |
+| `--models FILE` | | A models file instead of `MODEL` arguments. Its local packages are mounted too. |
+| `--revision SHA` | | The 40-character commit to load, for one `MODEL`. |
+| `--platform` | `cpu` | The image and the GPU passthrough: `cpu` (`vllm-sr`), `amd` (`vllm-sr-rocm` with the ROCm devices) or `nvidia` (`vllm-sr-cuda` with the NVIDIA GPUs). macOS runs `cpu` only. |
+| `--device` | `auto` | `auto`, or what the image runs: `cpu`, `rocm[:N]` with `--platform amd`, `cuda[:N]` with `--platform nvidia`, or a plugin's accelerator in an image that has the plugin. |
+| `--host` | `127.0.0.1` | Host address the runtime's port is published on. |
+| `--port` | `8100` | Host port the runtime is published on. |
+| `--runtime-profile` | `exact` | `exact`, `shared_context`, `batching`, `max_speed`, or one a plugin adds. |
+| `--image` | the platform's image | Another image, for example one with a plugin installed. |
+| `--image-pull-policy` | `always` | `always`, `ifnotpresent` or `never`. |
+| `--container-runtime` | detected | `docker` or `podman`. |
+| `--log-level` | `info` | The runtime's log level. |
+
+Engine mode keeps what the runtime downloads and compiles in
+`~/.cache/vllm-sr/models` (`$XDG_CACHE_HOME/vllm-sr/models` when that is set);
+`VLLM_SR_ENGINE_CACHE_DIR` moves it. `HF_TOKEN`, `HF_ENDPOINT` and
+`HF_HUB_OFFLINE` reach the container by name, never on its command line.
+
+`vllm-srun serve` is the same server with every option. It is the command the
+images run; on your own machine it needs a source checkout
+(`make model-runtime-install`).
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -218,5 +242,6 @@ bytes a model's loaded weights take, reduced-precision copies included).
 - Tokens come from `HF_TOKEN` or the Hugging Face token file, never from
   command-line arguments, and are never logged.
 - Request text is never logged, and metrics carry no request content.
-- `vllm-sr serve MODEL` listens on `127.0.0.1` unless you pass `--host`. The
-  runtime has no authentication; expose it only on a trusted network.
+- `vllm-sr serve MODEL` publishes the runtime on `127.0.0.1` unless you pass
+  `--host`. The runtime has no authentication; expose it only on a trusted
+  network.

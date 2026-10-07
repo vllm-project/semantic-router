@@ -1,6 +1,6 @@
 replicaCount: 1
 image:
-  repository: ghcr.io/vllm-project/semantic-router/extproc
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
   tag: latest
   pullPolicy: Never
 config:
@@ -129,15 +129,15 @@ config:
           # Use the canonical Vela fact-check binding to gate detection.
           fact_check:
             model_ref: fact_check_classifier
-            threshold: 0.65
+            threshold: 0.86
             use_cpu: true
           detector:
             include_explanation: false
 # The detector is remote, but the router still loads two local models before it
 # serves: the startup embedding download, gated only on
 # !EmbeddingModels.UsesRemoteEmbeddingBackend() and the model_catalog.embeddings
-# *_model_path values (pkg/modeldownload/feature_gates.go), and the mmBERT-32K
-# fact-check classifier that gates when detection runs. 2Gi held while this
+# *_model_path values (pkg/modeldownload/feature_gates.go), and the fact-check
+# model (Vela 2.0 0.3B by default) that gates when detection runs. 2Gi held while this
 # profile was selection: manual and never ran in CI; on the PR lane the pod is
 # OOMKilled during fact-check initialization before the startup probe passes.
 # jailbreak-onerror needs 6Gi for the embedding load alone, so this profile,
