@@ -164,7 +164,7 @@ func (c FusionRuntimeConfig) EffectiveModelNames() []string {
 }
 
 func (c *RouterConfig) ExposedFusionModelNames() []string {
-	if c == nil || !c.Looper.IsEnabled() {
+	if c == nil {
 		return nil
 	}
 	if len(c.Looper.Fusion.ModelNames) == 0 && !c.HasFusionDecision() {

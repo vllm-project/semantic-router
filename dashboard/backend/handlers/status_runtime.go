@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
@@ -14,13 +12,18 @@ import (
 )
 
 func resolveRouterRuntimeStatus(runtimePath, routerAPIURL string, routerHealthy bool, credentialProvider ...routerauth.CredentialProvider) *RouterRuntimeStatus {
-	if routerAPIURL != "" {
+	if routerAPIURL != "" && routerHealthy {
 		if state := fetchStartupStatusFromAPI(routerAPIURL, credentialProvider...); state != nil {
 			return runtimeStatusFromState(state)
 		}
 	}
 
 	if state, err := loadRouterRuntimeState(runtimePath); err == nil && state != nil {
+		// The file outlives the Router that wrote it. Of a Router that does not
+		// answer, it still tells only why its startup failed.
+		if !routerHealthy && state.Phase != "error" {
+			return nil
+		}
 		runtime := runtimeStatusFromState(state)
 		if runtime.Ready && routerAPIURL != "" {
 			readyHealthy := checkRouterManagementHealth(routerAPIURL+"/ready", credentialProvider...)
@@ -103,15 +106,4 @@ func loadRouterRuntimeState(runtimePath string) (*startupstatus.State, error) {
 
 	fallbackPath := filepath.Join(parentDir, "router-runtime.json")
 	return startupstatus.Load(fallbackPath)
-}
-
-func getContainerLogsTailForContainer(containerName string, lines int) string {
-	// #nosec G204 -- containerName is repository-managed and lines is converted from int.
-	tailArg := strconv.Itoa(lines)
-	cmd := exec.Command("docker", "logs", "--tail", tailArg, containerName)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return ""
-	}
-	return string(output)
 }

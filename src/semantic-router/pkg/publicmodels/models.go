@@ -97,7 +97,7 @@ func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
 }
 
 func (b *modelListBuilder) appendOrchestratedModels(cfg *config.RouterConfig) {
-	if cfg == nil || !cfg.Looper.IsEnabled() {
+	if cfg == nil {
 		return
 	}
 	for _, models := range [][]string{

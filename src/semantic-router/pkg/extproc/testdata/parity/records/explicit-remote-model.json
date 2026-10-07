@@ -1,0 +1,252 @@
+{
+  "case": "explicit-remote-model",
+  "phases": [
+    {
+      "phase": "request_headers",
+      "header": [
+        {
+          "name": ":method",
+          "value": "POST"
+        },
+        {
+          "name": ":path",
+          "value": "/v1/chat/completions"
+        },
+        {
+          "name": ":authority",
+          "value": "localhost:8899"
+        },
+        {
+          "name": ":scheme",
+          "value": "http"
+        },
+        {
+          "name": "content-type",
+          "value": "application/json"
+        },
+        {
+          "name": "authorization",
+          "value": "Bearer client-key-not-forwarded"
+        },
+        {
+          "name": "content-length",
+          "value": "88"
+        },
+        {
+          "name": "x-forwarded-proto",
+          "value": "http"
+        },
+        {
+          "name": "x-request-id",
+          "value": "parity-explicit-remote-model"
+        }
+      ],
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "accept-encoding",
+              "value": ""
+            }
+          ],
+          "remove": [
+            "x-vsr-fusion-depth",
+            "x-vsr-internal-auth",
+            "x-vsr-looper-decision",
+            "x-vsr-looper-iteration",
+            "x-vsr-looper-request",
+            "x-vsr-selected-recipe"
+          ]
+        }
+      }
+    },
+    {
+      "phase": "request_body",
+      "end_of_stream": true,
+      "body": "{\"model\":\"general-large\",\"messages\":[{\"role\":\"user\",\"content\":\"Explain HTTP caching.\"}]}",
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "X-Tenant",
+              "value": "parity-corpus"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer parity-static-key"
+            },
+            {
+              "name": "x-selected-model",
+              "value": "general-large"
+            },
+            {
+              "name": ":path",
+              "value": "/v1/chat/completions"
+            },
+            {
+              "name": "content-length",
+              "value": "97"
+            }
+          ],
+          "remove": [
+            "content-length",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key"
+          ]
+        },
+        "body": {
+          "body": "{\"model\":\"general-large-instruct\",\"messages\":[{\"role\":\"user\",\"content\":\"Explain HTTP caching.\"}]}"
+        },
+        "clear_route_cache": true
+      }
+    },
+    {
+      "phase": "response_headers",
+      "header": [
+        {
+          "name": ":status",
+          "value": "200"
+        },
+        {
+          "name": "content-type",
+          "value": "application/json"
+        },
+        {
+          "name": "content-length",
+          "value": "287"
+        }
+      ],
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "x-vsr-schema-version",
+              "value": "2"
+            },
+            {
+              "name": "x-vsr-response-path",
+              "value": "upstream"
+            },
+            {
+              "name": "x-vsr-config-version",
+              "value": "1"
+            },
+            {
+              "name": "x-vsr-selected-model",
+              "value": "general-large"
+            },
+            {
+              "name": "x-vsr-routing-latency-ms",
+              "value": "<volatile>"
+            }
+          ],
+          "remove": [
+            "content-length",
+            "x-vsr-effective-input-tokens",
+            "x-vsr-effective-max-output-tokens"
+          ]
+        }
+      }
+    },
+    {
+      "phase": "response_body",
+      "end_of_stream": true,
+      "body": "{\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello from the upstream model.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":6,\"total_tokens\":18}}",
+      "effect": {}
+    }
+  ],
+  "route": "general-large",
+  "upstream": {
+    "header": [
+      {
+        "name": ":method",
+        "value": "POST"
+      },
+      {
+        "name": ":authority",
+        "value": "localhost:8899"
+      },
+      {
+        "name": ":scheme",
+        "value": "http"
+      },
+      {
+        "name": ":path",
+        "value": "/v1/chat/completions"
+      },
+      {
+        "name": "content-type",
+        "value": "application/json"
+      },
+      {
+        "name": "x-forwarded-proto",
+        "value": "http"
+      },
+      {
+        "name": "x-request-id",
+        "value": "parity-explicit-remote-model"
+      },
+      {
+        "name": "accept-encoding",
+        "value": ""
+      },
+      {
+        "name": "x-tenant",
+        "value": "parity-corpus"
+      },
+      {
+        "name": "authorization",
+        "value": "Bearer parity-static-key"
+      },
+      {
+        "name": "x-selected-model",
+        "value": "general-large"
+      },
+      {
+        "name": "content-length",
+        "value": "97"
+      }
+    ],
+    "body": "{\"model\":\"general-large-instruct\",\"messages\":[{\"role\":\"user\",\"content\":\"Explain HTTP caching.\"}]}"
+  },
+  "response": {
+    "status": 200,
+    "header": [
+      {
+        "name": "content-type",
+        "value": "application/json"
+      },
+      {
+        "name": "x-vsr-schema-version",
+        "value": "2"
+      },
+      {
+        "name": "x-vsr-response-path",
+        "value": "upstream"
+      },
+      {
+        "name": "x-vsr-config-version",
+        "value": "1"
+      },
+      {
+        "name": "x-vsr-selected-model",
+        "value": "general-large"
+      },
+      {
+        "name": "x-vsr-routing-latency-ms",
+        "value": "<volatile>"
+      }
+    ],
+    "body": "{\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello from the upstream model.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":6,\"total_tokens\":18}}"
+  },
+  "evidence": {
+    "model": "general-large",
+    "reasoning_mode": "off"
+  }
+}

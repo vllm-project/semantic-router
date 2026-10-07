@@ -74,7 +74,8 @@ def parse(
             raise QuestionError(
                 INVALID_QUESTION, "preset must name one of the model's presets, alone"
             )
-        question = presets[question["preset"]]  # type: ignore[index]
+        assert presets is not None
+        question = presets[question["preset"]]
     parsed = read_question(question)
     if parsed.kind == "score":
         candidates = tuple(

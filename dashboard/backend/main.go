@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -27,6 +28,10 @@ func main() {
 	if cfg.SetupMode {
 		log.Printf("DEPRECATED: --setup-mode / DASHBOARD_SETUP_MODE no longer decides setup mode; " +
 			"it is read only so a disagreement with the config file's setup.mode block can be detected and reported.")
+	}
+	if len(cfg.IgnoredOpenClawSettings) > 0 {
+		log.Printf("DEPRECATED: OpenClaw was removed; ignoring %s. Remove them: a later release no longer accepts the flags.",
+			strings.Join(cfg.IgnoredOpenClawSettings, ", "))
 	}
 
 	// One setup-mode source for the whole process, built once and passed down.

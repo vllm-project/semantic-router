@@ -158,7 +158,7 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 	frTrue := true
 	cases = append(cases, toolSelectionE2ECase{
 		Name:               "pii_decision_runs_before_tool_selection",
-		Model:              "MoM",
+		Model:              "e2e-pii-precedence",
 		Prompt:             "__TOOL_SELECTION_ADD_WEATHER__ My payment card is 4111111111111111 and I need a weather forecast for Miami.",
 		ExpectDecision:     "block_pii",
 		ExpectFastResponse: &frTrue,

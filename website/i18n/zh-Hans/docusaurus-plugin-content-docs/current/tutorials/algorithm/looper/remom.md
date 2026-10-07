@@ -11,7 +11,7 @@ translation:
 
 `remom` 在有界轮次中运行多个候选模型，并将它们的响应合成一个答案。
 
-运行时也支持通过 `global.integrations.looper.remom.model_names` 使用直接 ReMoM 模型 slug。内置默认值是 `vllm-sr/remom`。直接 ReMoM 调用只评估 `algorithm.type=remom` 的决策，这与直接 Fusion 和 Flow 模型表面一致。
+运行时也支持通过 `global.integrations.looper.remom.model_names` 使用直接 ReMoM 模型 slug。内置默认值是 `vllm-sr/remom`。直接 ReMoM 调用只评估 `algorithm.type=remom` 的决策，这与直接 Fusion 和 Flow 模型表面一致。每个别名都应使用没有任何模型使用的名字：如果别名同时也是某个模型的名字，它会截获该模型的请求，没有匹配任何 ReMoM 决策的请求会以 [`no_route`](../../../api/router.md#routing-errors) 失败。Router 和 `vllm-sr config validate` 都会对这样的别名发出警告。
 
 **灵感来源**：[PaCoRe](https://arxiv.org/abs/2601.05593) — 扩展为支持模型混合。
 
@@ -95,7 +95,6 @@ flowchart TD
 global:
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
       max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
       remom:
         model_names:

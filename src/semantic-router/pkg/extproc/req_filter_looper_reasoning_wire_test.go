@@ -6,14 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
 func TestLooperReasoningSurvivesProviderBoundary(t *testing.T) {
@@ -35,16 +34,11 @@ func TestLooperReasoningSurvivesProviderBoundary(t *testing.T) {
 			router := &OpenAIRouter{
 				Config: cfg, Cache: &spyCache{}, CredentialResolver: newTestCredentialResolver(cfg),
 			}
-			ctx := &RequestContext{Headers: map[string]string{}}
-			requestHeaders := newRequestHeaders("POST", "/v1/chat/completions")
-			for key, value := range map[string]string{
-				headers.VSRLooperRequest: "true", headers.VSRInternalAuth: internalauth.Token(),
-				headers.VSRLooperDecision: test.decision, headers.VSRSelectedRecipe: test.recipe,
-			} {
-				requestHeaders.RequestHeaders.Headers.Headers = append(
-					requestHeaders.RequestHeaders.Headers.Headers, &core.HeaderValue{Key: key, Value: value},
-				)
+			ctx := &RequestContext{
+				Headers: map[string]string{},
+				Hop:     &routing.Hop{Decision: test.decision, Recipe: test.recipe},
 			}
+			requestHeaders := newRequestHeaders("POST", "/v1/chat/completions")
 			_, err = router.handleRequestHeaders(requestHeaders, ctx)
 			require.NoError(t, err)
 			require.True(t, ctx.LooperRequest)

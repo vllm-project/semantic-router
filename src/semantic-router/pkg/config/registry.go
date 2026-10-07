@@ -19,7 +19,12 @@ const (
 	PurposeHazard                ModelPurpose = "hazard"                 // Identify independent content hazards
 	PurposeReranking             ModelPurpose = "reranking"              // Rank query-document pairs
 	PurposeSemanticSimilarity    ModelPurpose = "semantic-similarity"    // Compute semantic similarity
+	PurposeRoutingSignals        ModelPurpose = "routing-signals"        // Answer several built-in routing signals in one call
 )
+
+// Vela2SignalModel is the registry path of Vela 2.0 0.3B, the default model
+// of every built-in signal it answers.
+const Vela2SignalModel = "models/Vela-2.0-0.3B"
 
 // ModelSpec defines a model's metadata and capabilities
 type ModelSpec struct {
@@ -73,6 +78,15 @@ type ModelSpec struct {
 	// Explicit recipe bindings always take precedence.
 	DefaultAdapter string `json:"default_adapter,omitempty" yaml:"default_adapter,omitempty"`
 
+	// SharedDeployment marks a model that answers several modules' signals:
+	// every module that names it on one device runs one implicit deployment,
+	// so the model loads once and a request's questions share one call.
+	SharedDeployment bool `json:"-" yaml:"-"`
+
+	// CPUProfile is the model_runtime profile an implicit CPU deployment of
+	// the model runs; the runtime's accuracy record for the model backs it.
+	CPUProfile string `json:"-" yaml:"-"`
+
 	// Number of classification classes (for classifiers)
 	NumClasses int `json:"num_classes,omitempty" yaml:"num_classes,omitempty"`
 
@@ -91,6 +105,25 @@ var velaShieldArtifactPatterns = append([]string{"lc/*", "heads/*", "demo.py", "
 // DefaultModelRegistry provides the structured model registry
 // Users can override this by specifying mom_registry in their config.yaml
 var DefaultModelRegistry = []ModelSpec{
+	// Vela 2.0 0.3B answers the built-in domain, Guard, safety, fact-check,
+	// feedback and modality signals as questions, and PII and hallucination
+	// with its span presets. The model runtime downloads and verifies it; on
+	// CPU, max_speed runs its float32-packed copy, which keeps its answers
+	// (src/model-runtime/docs/records/vela2-parity.md).
+	{
+		LocalPath:          Vela2SignalModel,
+		RepoID:             "vllm-sr/Vela-2.0-0.3B",
+		Revision:           "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+		Aliases:            []string{"Vela-2.0-0.3B"},
+		Purpose:            PurposeRoutingSignals,
+		Description:        "Answer the built-in routing signals in one call: domain, prompt attacks, safety, fact-check need, feedback and modality, with PII and hallucination spans. Supports up to 8K input.",
+		ParameterSize:      "309M encoder",
+		MaxContextLength:   8192,
+		RuntimeProvisioned: true,
+		SharedDeployment:   true,
+		CPUProfile:         "max_speed",
+		Tags:               []string{"vela", "vela2", "multi-task", "spans", "multilingual"},
+	},
 	// Vela releases use immutable revisions. Legacy aliases below retain their
 	// original repositories so an explicit old configuration stays reproducible.
 	{

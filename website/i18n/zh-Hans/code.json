@@ -1366,7 +1366,7 @@
     "message": "认领已接受的工作"
   },
   "contributing.process.step1.desc": {
-    "message": "新报告会从 needs-acceptance 进入 accepted，再进入 ready-for-dev；请在实施前发表评论认领 ready-for-dev 工作。"
+    "message": "新报告会从 needs-acceptance 进入 accepted，再进入 ready-for-dev；请在实施前评论 /assign 认领 ready-for-dev 工作。"
   },
   "contributing.process.step1.docs": {
     "message": "社区文档"

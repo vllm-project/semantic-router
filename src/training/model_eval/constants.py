@@ -146,6 +146,7 @@ VELA_RELEASE_REVISIONS = {
     "vllm-sr/Vela-1.0-Encoder-307M-Halu": "ca87531211e414ac21c641b2faa8b8e21619de8f",
     "vllm-sr/Vela-1.0-Omni-Nano": "2ff2d66385dbdd661a560ec3e8bcb45a0527d92e",
     "vllm-sr/Vela-1.0-Omni-Mini": "801bae3ad28df6891408f0e0441c676b30e132e3",
+    "vllm-sr/Vela-2.0-0.3B": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
 }
 
 MODEL_REGISTRY = deepcopy(LEGACY_MODEL_REGISTRY)

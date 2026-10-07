@@ -23,6 +23,17 @@ type ownedLabelTask[I, O any] struct {
 	handle  *binding.Resolved[I, O]
 }
 
+// readsWholeText reports whether the prepared task asks a Vela 2.0 model its
+// signal's question, which reads a whole text however long it is.
+func (c *ownedLabelTask[I, O]) readsWholeText() bool {
+	if c == nil {
+		return false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.handle != nil && c.handle.Capability().Question != ""
+}
+
 func (c *ownedLabelTask[I, O]) Initialize() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
