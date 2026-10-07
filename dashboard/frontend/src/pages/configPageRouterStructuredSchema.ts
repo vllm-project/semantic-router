@@ -148,7 +148,10 @@ const classifierModelSchema = (
     use_cpu: boolean('Use CPU'),
     ...(mappingField ? { [mappingField]: text('Mapping Path') } : {}),
     ...(mappingField === 'category_mapping_path'
-      ? { fallback_category: text('Fallback Category') }
+      ? {
+          fallback_category: text('Fallback Category'),
+          calibration: object('Calibration', { path: text('Path'), sha256: text('SHA256') }),
+        }
       : {}),
   })
 

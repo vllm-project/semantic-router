@@ -748,7 +748,11 @@ export interface ModelSelectionConfig {
 }
 
 export interface CanonicalClassifierConfig {
-  domain?: ModelConfig & { model_ref?: string; fallback_category?: string }
+  domain?: ModelConfig & {
+    model_ref?: string
+    fallback_category?: string
+    calibration?: { path: string; sha256: string }
+  }
   mcp?: MCPCategoryModel
   pii?: ModelConfig & { model_ref?: string }
   preference?: {

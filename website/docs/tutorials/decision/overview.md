@@ -118,6 +118,7 @@ it only where the quantity it reports is established.
 | Evidence signal | Score kind |
 | --- | --- |
 | `domain`, `classifier`, `safety`, `preference` | classifier probability |
+| `domain` with `classifier.domain.calibration` | calibrated, on `label_correctness/v1` |
 | `embedding`, `reask`, `kb` | vector similarity |
 | `complexity`, `jailbreak` | depends on the configured backend |
 
@@ -133,10 +134,23 @@ of an `OR` matched, and a match an `on_error` policy manufactured. Inside an
 matching gate adds support without removing evidence. Name ascending is the
 final tie-break, so ranking never depends on map or file order.
 
+A calibrated score is the one kind meant to compare across signal families.
+Its scale, `label_correctness/v1`, is the probability that the label the signal
+matched is the request's true label, measured on held-out data. A reviewed
+artifact maps the classifier's probability onto that scale, and only scores on
+it rank against each other, so calibrating `domain` alone leaves a pool that
+mixes it with another family on priority until a second family shares the
+scale. A configuration that declares a calibration whose artifact is missing,
+altered, or fitted on a model other than the one served does not start, and a calibrated
+leaf without a loaded artifact reports no comparable score rather than its raw
+probability. See the [domain signal](../signal/learned/domain#calibrated-scores)
+for the configuration.
+
 The eval API reports how one request was ranked under `decision_ranking`: the
 strategy that ran, the tier the winner came from, whether that pool was
-comparable and which decision made it incomparable, and the key that separated
-the winner from the decision behind it.
+comparable and which decision made it incomparable, the key that separated the
+winner from the decision behind it, and `score_artifact`, the calibration
+artifact behind a calibrated winner. The replay record carries the same fields.
 
 A catch-all ranks after every real match under either strategy, whatever
 priority it carries, so an unconditional fallback stays a fallback. The

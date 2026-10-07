@@ -324,7 +324,9 @@ func assertReferenceConfigModelModuleCoverage(t testingT, modules map[string]int
 func assertReferenceConfigClassifierModuleCoverage(t testingT, classifier map[string]interface{}) {
 	assertMapCoversStructFields(t, classifier, reflect.TypeOf(CanonicalClassifierModule{}), "global.model_catalog.modules.classifier")
 	// backend replaces the local model, so the reference shows the local form.
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "domain"), reflect.TypeOf(CanonicalCategoryModule{}), "global.model_catalog.modules.classifier.domain", "backend")
+	// calibration pins an artifact fitted on one served model, so the
+	// reference keeps the uncalibrated default that any model starts with.
+	assertMapCoversStructFields(t, mustMapAt(t, classifier, "domain"), reflect.TypeOf(CanonicalCategoryModule{}), "global.model_catalog.modules.classifier.domain", "backend", "calibration")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "mcp"), reflect.TypeOf(MCPCategoryModel{}), "global.model_catalog.modules.classifier.mcp")
 	// pii.backend is the remote token_spans.v1 attachment that replaces the
 	// local model the reference config shows, same as domain.backend above.

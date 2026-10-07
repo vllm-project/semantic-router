@@ -59,7 +59,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		c.Config.Categories,
 		decisions,
 		c.Config.Strategy,
-	).WithRoutingScope(c.Config.RoutingScope)
+	).WithRoutingScope(c.Config.RoutingScope).WithScoreCalibration(c.Config.CalibratedScoreFamilies(), c.domainCalibration)
 
 	sm := &decision.SignalMatches{
 		KeywordRules:       signals.MatchedKeywordRules,

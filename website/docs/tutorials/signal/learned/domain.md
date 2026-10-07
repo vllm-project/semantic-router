@@ -90,6 +90,36 @@ global:
             deadline_ms: 5000
 ```
 
+### Calibrated scores
+
+By default a matched domain reports the classifier's probability. A
+calibration maps that probability onto `label_correctness/v1`, the probability
+that the matched domain is the request's true domain, so ranking can compare it
+with other families on the same scale.
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      classifier:
+        domain:
+          model_id: models/Vela-1.0-Encoder-307M-Domain
+          threshold: 0.5
+          calibration:
+            path: config/assets/calibration/vela-domain-label-correctness-v1.json
+            sha256: <sha256 of that file>
+```
+
+The artifact comes from `tools/calibration/tuning/signal_calibration.py`, which
+fits an isotonic map on recorded predictions and reports it on a disjoint
+held-out split. It binds the label order and the model by `model_sha256`, the
+identity the model runtime reports for the files it serves, and the router
+checks both when the category classifier starts, so a retrained or swapped
+model refuses the artifact instead of ranking with it. Calibration needs the
+category classifier served by the model runtime, not a remote `backend`, and a
+threshold of at least 0.5, where only the top label can match. Matching and its threshold are unchanged. The map changes only
+the score a matched domain contributes to ranking.
+
 ## Dependencies and Limitations
 
 Domain classification uses the configured classifier module and processes the

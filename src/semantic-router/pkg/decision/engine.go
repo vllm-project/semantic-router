@@ -36,6 +36,11 @@ type DecisionEngine struct {
 	decisions      []config.Decision
 	strategy       config.RoutingStrategy
 	routingScope   config.RecipeName
+	// calibrated names the families the configuration declares calibrated,
+	// and calibration maps their scores. A declared family without a loaded
+	// calibration reports no comparable score rather than a raw one.
+	calibrated  []string
+	calibration *ScoreCalibration
 }
 
 // WithRoutingScope namespaces observability state for recipe-local decision
@@ -267,7 +272,7 @@ func (e *DecisionEngine) evaluateDecisions(
 			// matched. A catch-all carries no evidence and ranks last anyway.
 			catchAll := isCatchAllRules(decision.Rules)
 			scored := resolved.evaluation.scored && !resolved.evaluation.onError
-			if !catchAll && len(config.DeclaredScoreKinds(&decision.Rules)) != 1 {
+			if !catchAll && len(config.DeclaredScoreKinds(&decision.Rules, e.calibrated...)) != 1 {
 				scored = false
 			}
 			results = append(results, DecisionResult{
@@ -442,10 +447,17 @@ func (e *DecisionEngine) evalLeaf(
 	if normalizedType == config.SignalTypeClassifier || (normalizedType == config.SignalTypeDecision && node.Label != "") {
 		confidence, reported = signalPredicateValue(signals, normalizedType, node.Name, node.Label)
 	}
-	kind := config.SignalScoreKind(normalizedType)
+	kind := config.SignalScoreKind(normalizedType, e.calibrated...)
 	evidence := 0
 	if kind != config.ScoreKindNone {
 		evidence = 1
+	}
+	if kind == config.ScoreKindCalibrated {
+		if e.calibration == nil || e.calibration.Family != normalizedType {
+			reported = false
+		} else if reported {
+			confidence = e.calibration.Apply(confidence)
+		}
 	}
 	return nodeEvaluation{
 		state:        evaluationTrue,

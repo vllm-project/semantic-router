@@ -12,9 +12,11 @@ type RankingTrace struct {
 	Comparable bool   `json:"comparable"`
 	Fallback   string `json:"fallback_reason,omitempty"`
 	ScoreKind  string `json:"score_kind,omitempty"`
-	DecidedBy  string `json:"decided_by"`
-	Winner     string `json:"winner"`
-	Candidates int    `json:"candidates"`
+	// ScoreArtifact names the calibration artifact behind a calibrated score.
+	ScoreArtifact string `json:"score_artifact,omitempty"`
+	DecidedBy     string `json:"decided_by"`
+	Winner        string `json:"winner"`
+	Candidates    int    `json:"candidates"`
 }
 
 func (e *DecisionEngine) rankingTrace(
@@ -42,6 +44,9 @@ func (e *DecisionEngine) rankingTrace(
 		DecidedBy:  "only_candidate",
 		Winner:     winner.Decision.Name,
 		Candidates: candidates,
+	}
+	if winner.ScoreKind == config.ScoreKindCalibrated && e.calibration != nil {
+		trace.ScoreArtifact = e.calibration.ArtifactID
 	}
 	if runnerUp != nil {
 		trace.DecidedBy = e.decidingKey(winner, *runnerUp, useTieredSelection, comparable[pool])
