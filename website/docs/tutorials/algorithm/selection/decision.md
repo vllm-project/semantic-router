@@ -136,7 +136,9 @@ different `modelRefs`, and `candidates` may describe only those models; a
 model without a description uses its configured description. When the model
 is not ready, answers late, is overloaded or returns an invalid answer, the
 router records a selection fallback and uses the first `modelRef`. The chosen
-model is reported in the `x-vsr-selected-model` response header.
+model is reported in the `x-vsr-selected-model` response header. Routing
+Preview asks the decision model the same question and reports its choice as
+the selected model, without calling a backend.
 
 See [Decision models](../../../model-runtime/guides/decisions.md) to choose a
 model and where it runs.

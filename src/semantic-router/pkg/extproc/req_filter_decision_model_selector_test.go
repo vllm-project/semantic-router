@@ -8,6 +8,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 type recordingDecider struct {
@@ -101,6 +102,26 @@ func TestDecisionSelectorWithoutDeploymentAsksTheDecisionModel(t *testing.T) {
 	if question.ID != decisionSelectorQuestionID || question.Type != config.DecisionQuestionChoice ||
 		len(question.Choices) != 2 || question.Choices[1] != (modelservice.Choice{Key: "deep", Description: "Careful multi-step reasoning"}) {
 		t.Fatalf("question = %+v", question)
+	}
+}
+
+func TestEvalPreviewsTheDecisionModelsChoice(t *testing.T) {
+	cfg := decisionSelectorConfig(t, "")
+	decider := &recordingDecider{answer: modelservice.Answer{
+		Type: config.DecisionQuestionChoice, Choice: "deep",
+		Probabilities: map[string]float64{"fast": 0.1, "deep": 0.9},
+	}}
+	router := &OpenAIRouter{Config: cfg, decisionDecider: decider}
+	result := router.SelectModelForEval(services.EvalModelSelectionInput{
+		Context:  t.Context(),
+		Decision: cfg.GetDecisionByName("choose"),
+		Query:    "Prove that the square root of two is irrational.",
+	})
+	if result.Status != services.EvalSelectionSelected || result.SelectedModel != "deep" || result.Method != string(selection.MethodDecision) {
+		t.Fatalf("Eval selection = %+v, want the decision model's choice deep", result)
+	}
+	if len(decider.deployments) != 1 || decider.deployments[0] != "@Vela-2.0-4B/auto" {
+		t.Fatalf("Eval asked %v, want the decision model's deployment", decider.deployments)
 	}
 }
 
