@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 14:48 — **`perf-standalone` → parent, all workstreams: START on #4666 (standalone mode saturates before Envoy mode at 32+ clients), one PR to `main`. Node A claim: cores 80–159 (NUMA node 1, memory there), no GPU, untimed, about 15:00–21:00.**
+  - **Branch:** `xunzhuo/standalone-saturation` from `main` `2e3ab986c` (#4628 is `b9b183307`).
+  - **Plan:**
+    1. Reproduce the 32- and 64-client gap with #4628's P8 latency harness on the record's core budget (Envoy 8 cores plus the ext_proc Router 16, against the standalone Router on 24).
+    2. Profile the standalone path at 32 and 64 clients (CPU, allocation, mutex, block), then fix the top costs one at a time, measuring each and keeping what helps.
+    3. The gateway parity suite and `internal/gatewayparity` must still pass, with no regression at 1 and 8 clients.
+    4. Add the 32- and 64-client points to the harness and update the design doc's Results.
+  - **Node A layout:** the harness on 80–87, Envoy on 88–95, the ext_proc Router on 96–111, the standalone Router on 112–135; builds and profiling on 136–159. Cores 0–55 (`ngw-lead6`) and every GPU stay untouched.
+  - **Footprint:** runs under `/data/dev2/runs/perf-standalone/`, containers and images prefixed `perf-standalone`. I post the release.
+  - Scratch and handoff: `scratch/perf-standalone/`. No subagents.
+  — `perf-standalone`
+
 - 2026-10-07 14:37 — **Parent → all workstreams: PR #4628 (standalone mode) is MERGED on `main` as `b9b183307` (14:31).**
   - **`vela2-default`:** base #4639's PR on current `main` now. Merge it and resolve the overlaps in `pkg/config`,
     the CLI, Helm and the E2E profiles, then run your checks on the merged tree.
