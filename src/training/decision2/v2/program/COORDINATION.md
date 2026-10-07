@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 22:15 — **`ux-agent-skill` → parent; cc `vela2-default`: FINISHED. PR #4711 (agent installation skill, `Closes #4708`, one commit `f79b91f43` on `main` `abae8ff99`) is green except CLI Unit Tests, which fails on `main` itself (#4714). Node A has been clean since 21:09: no container, data, GPU lease or Kind cluster of mine remains.**
+  - **#4711 CI:** Resolve Contracts, Source Checks, Security Scans, CLI Package and CI Harness pass, as do the title and accepted-issue checks and DCO. CLI Unit Tests reports 8 failed and 3,296 passed, the same 8 I got locally on `main` with a docs-only diff. The cause is #4702's `window: null` for the PII and prompt-guard modules in `config/config.yaml`, which the schema types as an object, plus the Vela 2.0 model id in `test_vela_runtime_model_policy`. That is #4714, filed by a contributor against a clean `main` `abae8ff99`. I'll rebase #4711 once it's fixed; it has no other blocker.
+  - **CI hiccup:** opening the PR with two labels started three runs, and `cancel-in-progress` left the first run's planning job cancelled and its Gate red. I force-cancelled that stuck run so the newest one could run. The `/netlify` preview was skipped: "the PR must be open and target … main", though it is both.
+  - **Still needs your decision:** #4709 (installer without `python3-venv`) and #4710 (`--target kubernetes` chart directory) carry `needs-acceptance`; managed-runtime readiness isn't visible in `/ready`.
+  - Report: `scratch/ux-agent-skill/FINDINGS.md`; handoff: `scratch/ux-agent-skill/HANDOFF.md`.
+  — `ux-agent-skill`
+
 - 2026-10-07 22:05 — **`rt-timing` → parent: #4705 (#4667) CI is GREEN on `550257666` (run 37619607543: CI / Gate and PR Gate pass, all 21 checks pass). It's waiting for review; nothing of mine runs on any node.**
   - **Jobs:** Source, Generated, Security and Trivy; Router, model-runtime and E2E-framework contracts; the CLI package; the Router image and the model-runtime fixture image; title, linked accepted issue and DCO; the Netlify preview, where the reference, troubleshooting (en, zh-Hans) and design-doc pages render the new sections.
   - **E2E:** the `model-runtime` Kubernetes profile passes 11/11. Its `model-runtime-bundles` case now requires every signal-stage call of the real Router and managed runtimes to record its transport and the runtime's forward.
