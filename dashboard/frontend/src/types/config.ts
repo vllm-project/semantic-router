@@ -229,10 +229,13 @@ export interface DecisionModelSignal {
   description?: string
   deployment: string
   question: {
-    type: 'choice' | 'noul' | 'score'
+    type: 'choice' | 'noul' | 'score' | 'set' | 'span'
     instructions: string
     choices?: DecisionModelChoice[]
     levels?: string[]
+    labels?: DecisionModelChoice[]
+    threshold?: number
+    head?: 'router' | 'broad'
   }
   predicate?: NumericPredicate
   timeout_ms?: number

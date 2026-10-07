@@ -146,13 +146,22 @@ func (l *Lease) observe(m member, deployment, surface string, started time.Time,
 	}
 }
 
-// Decide answers the request through a deployment, inside the context's bundle when there is one.
+// Decide answers the request through a deployment, inside the context's
+// bundle when there is one; the bundle may answer it together with the
+// stage's other questions to the same model and state.
 func (l *Lease) Decide(ctx context.Context, deployment string, request Request) (Response, error) {
 	m, err := l.call(deployment)
 	if err != nil {
 		return Response{}, err
 	}
 	cache := m.served.cache.active()
+	if InBundle(ctx) {
+		started := time.Now()
+		request.Model = m.served.name
+		response, decideErr := m.group.client.decide(ctx, request, cache, deployment)
+		l.observe(m, deployment, "decisions", started, decideErr)
+		return response, decideErr
+	}
 	var key cacheKey
 	if cache != nil {
 		key = decideKey(request)

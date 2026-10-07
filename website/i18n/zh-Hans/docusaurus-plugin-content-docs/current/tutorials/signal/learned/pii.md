@@ -84,6 +84,32 @@ global:
 既有 `on_error` 和决策 `rules.on_unknown` 策略决定路由结果。
 远程后端及显式截断配置保留下文所述的部分结果语义。
 
+## Vela 2.0 {#vela-20}
+
+把 `pii_classifier` 绑定到 Vela 2.0 部署后，信号会向模型提出它内置的 PII 问题（由其路由片段头回答），而不再调用单独的 PII 模型。
+这个 PII 问题会与该部署针对同一文本的 [`decision`](tutorials/signal/learned/decision.md) 问题在同一次调用中发送：
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+    bindings:
+      pii_classifier:
+        deployment: vela2
+        contract: token_spans.v1
+```
+
+- 模型识别与 Vela 1.0 PII 相同的 17 种实体类型，并在片段中直接给出类型名，因此绑定不需要 `mapping_path`。
+- 模型自行读取完整文本（长文本分窗口读取），路由器把每段文本整体发送：部署不设置 `input`，PII 模块也不设置 `window`。
+- 模型校准后的阈值决定它报告哪些片段；规则的 `threshold` 与 `pii_types_allowed` 随后像 Vela 1.0 一样作用于这些片段，片段概率是其中各词概率的平均值。
+- `head` 只能是 `router`，即回答 PII 问题的片段头。
+
+已有配置保持其 Vela 1.0 PII 绑定不变。
+
 ## 远程后端 {#remote-backend-token_spansv1}
 
 没有 `backend` 时，PII 检测保持本地模型。远程 PII 分类器使用共享 backend 块：`model` 命名 `global.model_catalog.external[]` 中带 `model_role: classification` 的条目，协议是 `http_classify`，约定是 `token_spans.v1`。服务接收 `{"inputs": "<request text>"}`，并回答实体片段：其 `start`/`end` 是该精确字符串中的 Unicode 码点偏移，`label` 来自已配置的 PII 映射，`score` 在 `[0, 1]` 内，以及片段 `text`，必须等于它指向的切片。HuggingFace token 分类拼写 `entity_group` 与 `word` 作为别名接受。裸 JSON 片段列表或信封 `{"spans": [...], "truncated_at": n, "model": "..."}` 都有效；信封的 `model` 若存在，必须等于目录条目的 `llm_model_name`。
