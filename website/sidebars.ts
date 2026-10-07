@@ -42,6 +42,7 @@ const sidebars: SidebarsConfig = {
           label: 'Plan a Deployment',
           items: [
             'installation/deployment-options',
+            'installation/deployment-architecture',
             'installation/gateway-modes',
             'installation/support-matrix',
           ],
