@@ -2761,11 +2761,11 @@ global:
         threshold: 0.75
         use_cpu: true
         # Vela 2.0 reads the whole text up to its 8,192-token input and names
-        # its own labels. A sequence classifier such as Vela 1.0 Guard takes a
-        # document budget, token windows ({size: 512, overlap: 255}) and a label
-        # mapping (jailbreak_type_mapping.json in its directory).
+        # its own labels, so it sets no window. A sequence classifier such as
+        # Vela 1.0 Guard takes a document budget, token windows
+        # (window: {size: 512, overlap: 255}) and a label mapping
+        # (jailbreak_type_mapping.json in its directory).
         max_sequence_length: 0
-        window: null
         jailbreak_mapping_path: ""
         positive_labels: [jailbreak]
         # allow (default) tolerates a classifier-backend failure and treats the
@@ -2804,11 +2804,10 @@ global:
           enabled: true
           model_ref: pii_classifier
           # Vela 2.0 0.3B finds spans with its router span head and reads the
-          # whole text; a token classifier such as Vela 1.0 PII takes a document
-          # budget (32768), token windows ({size: 512, overlap: 255}) and its
-          # pii_mapping.json.
+          # whole text, so it sets no window; a token classifier such as Vela 1.0
+          # PII takes a document budget (32768), token windows
+          # (window: {size: 512, overlap: 255}) and its pii_mapping.json.
           max_sequence_length: 0
-          window: null
           model_id: models/Vela-2.0-0.3B
           threshold: 0.01
           use_cpu: true
