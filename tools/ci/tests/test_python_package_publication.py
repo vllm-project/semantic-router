@@ -4,11 +4,12 @@ import os
 import subprocess
 import sys
 import tempfile
-import tomllib
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
+
+import tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
