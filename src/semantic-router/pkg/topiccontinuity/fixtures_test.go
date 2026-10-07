@@ -283,7 +283,7 @@ func TestOffsetsSurviveUnicodeAndMasking(t *testing.T) {
 	if !found {
 		t.Fatal("token not found")
 	}
-	clean, ambiguous := changeMarkers([]textSegment{textSegment(live)})
+	clean, ambiguous := changeMarkers(context.Background(), []textSegment{textSegment(live)})
 	if clean || !ambiguous {
 		t.Fatalf("clean=%v ambiguous=%v, want ambiguous only", clean, ambiguous)
 	}

@@ -67,7 +67,10 @@ func extract(ctx context.Context, prepared preparation) extraction {
 		out.Scope.FeatureCapReached = true
 		out.Coverage = CoveragePartial
 	}
-	applyPhraseFlags(&features, prepared.Live.User)
+	applyPhraseFlags(ctx, &features, prepared.Live.User)
+	if ctx.Err() != nil {
+		return cancelled(out, capped)
+	}
 	out.Features = features
 	return out
 }
@@ -118,8 +121,9 @@ func containment(live, other map[string]struct{}) float64 {
 
 // applyPhraseFlags sets the reference, acknowledgement, and change-marker
 // flags. Continuation flags use the unstripped view; change markers use the
-// masked view, so stripping can only ever hide change evidence.
-func applyPhraseFlags(features *Features, live []textSegment) {
+// masked view, so stripping can only ever hide change evidence. Cancellation
+// stops the change-marker scan early; the caller then discards the flags.
+func applyPhraseFlags(ctx context.Context, features *Features, live []textSegment) {
 	if len(live) == 0 {
 		return
 	}
@@ -142,7 +146,7 @@ func applyPhraseFlags(features *Features, live []textSegment) {
 		}
 	}
 	features.Acknowledgement = isAcknowledgement(continuation)
-	clean, ambiguous := changeMarkers(live)
+	clean, ambiguous := changeMarkers(ctx, live)
 	features.MarkerAmbiguous = ambiguous
 	features.ChangeMarker = clean && !ambiguous
 }
@@ -164,8 +168,11 @@ func isAcknowledgement(segments [][]phraseToken) bool {
 // occurrence is leading (first segment, within the leading window after
 // acknowledgements), not negated, and not inside paired single quotes. Any
 // other occurrence is ambiguous.
-func changeMarkers(live []textSegment) (clean, ambiguous bool) {
+func changeMarkers(ctx context.Context, live []textSegment) (clean, ambiguous bool) {
 	for segmentIndex, segment := range live {
+		if ctx.Err() != nil {
+			return clean, ambiguous
+		}
 		tokens := changeView(segment)
 		quotes := singleQuoteSpans(string(segment))
 		lead := leadingAcknowledgements(tokens)

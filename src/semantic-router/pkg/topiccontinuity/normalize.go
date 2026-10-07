@@ -159,17 +159,24 @@ func unmaskedRuns(length int, masked []byteRange) []byteRange {
 // whitespace or punctuation, the closing quote ends the segment or precedes
 // whitespace or punctuation, and both sit on the same line. Apostrophes
 // inside words never open a pair.
+//
+// The scan is linear. A failed search for a closing quote has examined every
+// candidate up to the end of its line, and a later opener on that line would
+// examine a subset of them, so it must fail too and is skipped without
+// searching. Each byte is therefore searched at most once per quote style.
 func singleQuoteSpans(text string) []byteRange {
 	var spans []byteRange
+	unclosedUntil := map[rune]int{}
 	for offset := 0; offset < len(text); {
 		value, width := utf8.DecodeRuneInString(text[offset:])
 		closing, opens := quoteCloser(value)
-		if !opens || !boundaryBefore(text, offset) {
+		if !opens || offset < unclosedUntil[closing] || !boundaryBefore(text, offset) {
 			offset += width
 			continue
 		}
-		end := findQuoteClose(text, offset+width, closing)
+		end, lineEnd := findQuoteClose(text, offset+width, closing)
 		if end < 0 {
+			unclosedUntil[closing] = lineEnd
 			offset += width
 			continue
 		}
@@ -189,19 +196,21 @@ func quoteCloser(value rune) (rune, bool) {
 	return 0, false
 }
 
-// findQuoteClose returns the end offset of the closing quote, or -1.
-func findQuoteClose(text string, from int, closing rune) int {
+// findQuoteClose returns the end offset of the closing quote, or -1 together
+// with the offset where the search stopped: the line's newline or the end of
+// the text.
+func findQuoteClose(text string, from int, closing rune) (end, lineEnd int) {
 	for offset := from; offset < len(text); {
 		value, width := utf8.DecodeRuneInString(text[offset:])
 		if value == '\n' {
-			return -1
+			return -1, offset
 		}
 		if value == closing && offset > from && boundaryAfter(text, offset+width) {
-			return offset + width
+			return offset + width, 0
 		}
 		offset += width
 	}
-	return -1
+	return -1, len(text)
 }
 
 func boundaryBefore(text string, offset int) bool {

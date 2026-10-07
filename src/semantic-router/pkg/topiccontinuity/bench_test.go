@@ -43,6 +43,10 @@ func BenchmarkMaximumLimits(b *testing.B) {
 	benchmarkPolicy(b, policy, benchmarkHistory(40, 32768))
 }
 
+func BenchmarkAdversarialQuotes(b *testing.B) {
+	benchmarkPolicy(b, adversarialPolicy, liveTurnHistory(strings.Repeat(" 'a", MaxTurnBytes/3)))
+}
+
 func benchmarkRules(b *testing.B, distinctPolicies int) {
 	messages := benchmarkHistory(12, 16384)
 	configs := make([]EvalConfig, 8)

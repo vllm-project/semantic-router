@@ -148,10 +148,16 @@ cannot use the phrase rules.
 
 Evaluation work is bounded by the limits above and by fixed caps (512
 messages and 4,096 content blocks scanned, 16 tool names per turn, 1,024
-entities per text segment). With the defaults, the worst case — every turn
-filled to the 16 KiB limit — costs a few milliseconds; ordinary conversations
-cost far less. In addition, the original history is decoded once per request
-when the selected recipe declares at least one rule.
+entities per text segment). Text work grows linearly with the retained
+evidence, including adversarial input such as long runs of unmatched quotes.
+With the defaults, the worst case — every turn filled to the 16 KiB limit —
+costs a few milliseconds; ordinary conversations cost far less. In addition,
+the original history is decoded once per request when the selected recipe
+declares at least one rule.
+
+Evaluation follows the request context. If the request is cancelled or its
+deadline passes before evaluation finishes, the result is
+`unknown_cancelled` with `partial` coverage.
 
 ## Observability
 
