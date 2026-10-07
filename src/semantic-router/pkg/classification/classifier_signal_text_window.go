@@ -268,12 +268,18 @@ func (c *Classifier) hasLongContextClassifier(signalType string) bool {
 // 2.0 model the signal's question. That model reads a whole text up to its own
 // input budget, so the signal asks about the request as it is, in the same
 // call as the request's other questions about it.
+// decisionModelQuestionText is the text a decision question that names no
+// deployment reads: the decision model reads the request as it came.
+const decisionModelQuestionText = "decision_model"
+
 func (c *Classifier) signalReadsWholeText(signalType string) bool {
 	if c == nil {
 		return false
 	}
 	var consumer interface{}
 	switch signalType {
+	case decisionModelQuestionText:
+		return true
 	case config.SignalTypeDomain:
 		consumer = c.categoryInference
 	case config.SignalTypeJailbreak:

@@ -1383,6 +1383,9 @@
     },
     "CanonicalSystemModels": {
       "properties": {
+        "decision_model": {
+          "type": "string"
+        },
         "safety": {
           "type": "string"
         },

@@ -7,7 +7,6 @@ import yaml
 from cli.commands.runtime_support import realize_runtime_config
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-VELA2 = "models/Vela-2.0-0.3B"
 
 
 def _without_use_cpu(value):
@@ -41,6 +40,8 @@ def test_reference_vela_policy_survives_runtime_materialization(
     semantic = catalog["embeddings"]["semantic"]
     assert semantic["mmbert_model_path"] == "models/Vela-1.0-Encoder-307M-Embedding"
     assert semantic["embedding_config"]["full_context"] is False
+    # The decision model binds every module; no per-module line pins one.
+    assert catalog["system"]["decision_model"] == "Vela-2.0-0.3B"
     modules = catalog["modules"]
     for module in (
         modules["safety"]["safety"],
@@ -51,8 +52,17 @@ def test_reference_vela_policy_survives_runtime_materialization(
         modules["hallucination_mitigation"]["detector"],
         modules["feedback_detector"],
     ):
-        assert module["model_id"] == VELA2
-    assert modules["modality_detector"]["classifier"]["model_path"] == VELA2
+        assert "model_id" not in module
+    for module in (
+        modules["prompt_guard"],
+        modules["classifier"]["domain"],
+        modules["classifier"]["pii"],
+        modules["hallucination_mitigation"]["fact_check"],
+        modules["feedback_detector"],
+    ):
+        # The decision model's calibrated threshold applies.
+        assert "threshold" not in module
+    assert modules["modality_detector"]["classifier"]["model_path"] == ""
     for module in (modules["prompt_guard"], modules["classifier"]["pii"]):
         assert "window" not in module
     for module in (
