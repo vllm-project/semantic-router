@@ -64,6 +64,29 @@ routing:
 
 声明规则就足以为本配方供给检测器，即使没有决策启用插件。决策的 `hallucination` 插件在未声明规则时运行会在加载时报告：插件随后自己对回答分类，这是兼容路径。
 
+## Vela 2.0 {#vela-20}
+
+把 `hallucination_detector` 绑定到 Vela 2.0 部署后，检测器会就回答向模型提出它内置的幻觉问题（由其路由片段头回答），
+请求与依据上下文作为该问题状态中的其他部分：
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+    bindings:
+      hallucination_detector:
+        deployment: vela2
+        contract: token_spans.v1
+```
+
+模型读取完整回答并使用自身校准后的阈值，因此检测器的 `threshold` 只作用于 Vela 1.0 Halu；
+`min_span_length` 与 `min_span_confidence` 对两者的片段都生效。检查在响应阶段进行，使用该阶段对该部署的调用。
+同一个部署还可以回答请求的 [`decision`](tutorials/signal/learned/decision.md) 与 [`pii`](tutorials/signal/learned/pii.md#vela-20) 问题。
+
 ## 依赖与限制 {#dependencies-and-limitations}
 
 检测器通过 `global.model_catalog.modules.hallucination_mitigation.hallucination_model` 处理回答与提供的依据上下文。它可以识别上下文不支持的文本；没有权威证据时无法确立真相，没有可对照上下文的回答报告为 unavailable，而不是干净。完整示例见：
