@@ -24,9 +24,17 @@
 #                                   (serve + dashboard check) with a stubbed
 #                                   launcher and asserts both invocations carry
 #                                   `--runtime podman`.
+#   first-launch-setup-wait      --runtime docker; the stubbed serve announces
+#                                that it waits for setup and keeps running,
+#                                and the CLI has --container-runtime
+#                                -> the installer returns, leaves serve
+#                                   running, and passes --container-runtime.
 #   print-dashboard-offset       --runtime docker with port offset 1000
 #                                -> verifies the printed and opened Dashboard
 #                                   URL and SSH tunnel use port 9700.
+#   print-dashboard-published    print-dashboard-offset with
+#                                VLLM_SR_DASHBOARD_HOST_BIND=0.0.0.0
+#                                -> the network URL is printed as well.
 
 set -u
 
@@ -77,6 +85,27 @@ write_vllm_sr_stub() {
   chmod +x "$path"
 }
 
+# A launcher whose serve waits for setup as `vllm-sr serve` does with no
+# config: it says so and keeps running. Its help lists --container-runtime.
+SERVE_PID_FILE="$INSTALL_ROOT_TMP/serve.pid"
+write_setup_waiting_vllm_sr_stub() {
+  local path="$STUB_BIN/vllm-sr"
+  cat > "$path" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  "serve --help") printf '  --container-runtime [docker|podman]\n'; exit 0 ;;
+esac
+printf '%s\n' "\$*" >> "$ARGV_TRACE"
+if [ "\$1" = serve ]; then
+  printf '%s\n' "\$\$" > "$SERVE_PID_FILE"
+  printf 'Waiting for setup: the Router starts here once you activate a config\n'
+  sleep 30
+fi
+exit 0
+EOF
+  chmod +x "$path"
+}
+
 # Map scenario -> (docker state, podman state, VLLM_SR_RUNTIME env value).
 # VLLM_SR_RUNTIME is used because install.sh reads it at source time to set
 # REQUESTED_RUNTIME, so setting it before sourcing is the cleanest way to
@@ -117,11 +146,23 @@ case "$SCENARIO" in
     write_stub podman ready
     export VLLM_SR_RUNTIME="podman"
     ;;
+  first-launch-setup-wait)
+    write_stub docker ready
+    write_stub podman ready
+    export VLLM_SR_RUNTIME="docker"
+    ;;
   print-dashboard-offset)
     write_stub docker ready
     write_stub podman ready
     export VLLM_SR_RUNTIME="docker"
     export VLLM_SR_PORT_OFFSET="1000"
+    ;;
+  print-dashboard-published)
+    write_stub docker ready
+    write_stub podman ready
+    export VLLM_SR_RUNTIME="docker"
+    export VLLM_SR_PORT_OFFSET="1000"
+    export VLLM_SR_DASHBOARD_HOST_BIND="0.0.0.0"
     ;;
   *)
     printf 'unknown scenario: %s\n' "$SCENARIO" >&2
@@ -148,6 +189,9 @@ set +o pipefail 2>/dev/null || true
 OS_NAME="linux"
 MODE="serve"
 SELECTED_RUNTIME="${REQUESTED_RUNTIME:-}"
+# Keep launcher lookups (the --container-runtime probe among them) off any
+# real vllm-sr on the machine running the tests.
+BIN_DIR="$STUB_BIN"
 
 ensure_runtime
 
@@ -203,7 +247,26 @@ if [ "$SCENARIO" = "first-launch-podman" ]; then
   fi
 fi
 
-if [ "$SCENARIO" = "print-dashboard-offset" ]; then
+if [ "$SCENARIO" = "first-launch-setup-wait" ]; then
+  write_setup_waiting_vllm_sr_stub
+  resolve_launch_platform() { printf '\n'; }
+  resolve_launch_dir() { printf '%s\n' "$INSTALL_ROOT_TMP"; }
+  open_dashboard_url() { return 0; }
+  printf '[FIRST_LAUNCH]\n'
+  launch_first_session
+  printf 'AUTO_LAUNCH_RAN=%s\n' "$AUTO_LAUNCH_RAN"
+  serve_pid="$(cat "$SERVE_PID_FILE" 2>/dev/null)"
+  if [ -n "$serve_pid" ] && kill -0 "$serve_pid" 2>/dev/null; then
+    printf 'SERVE_STILL_RUNNING=1\n'
+    kill "$serve_pid" 2>/dev/null
+  else
+    printf 'SERVE_STILL_RUNNING=0\n'
+  fi
+  printf '[FIRST_LAUNCH_ARGS]\n'
+  cat "$ARGV_TRACE"
+fi
+
+if [ "$SCENARIO" = "print-dashboard-offset" ] || [ "$SCENARIO" = "print-dashboard-published" ]; then
   detect_primary_ip() { printf '192.0.2.10\n'; }
   detect_host_label() { printf 'fixture.example\n'; }
   is_remote_session() { return 0; }
