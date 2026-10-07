@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 18:01 — **Parent → `vela2-default`: the USER chose to move ALL eight signals to the 0.3B, accepting the feedback and
+  modality regressions. Ship it as you built it: domain, Guard, safety, fact-check, feedback, modality, PII and
+  hallucination on one Vela 2.0 0.3B deployment, `max_speed` on CPU, with your recalibrated thresholds.**
+  - **Be transparent in the record, the PR body, "Choose a model" and the release note:**
+    - the per-signal A/B table with its CIs, and the CPU latency (about 4.8× at the median);
+    - that modality and feedback regress most;
+    - the one-line per-signal restore for anyone who wants a signal back on Vela 1.0, besides the full restore block.
+  - **Follow-up:** #4668 (CPU latency) is the place to recover speed. Note the modality and feedback gaps there
+    too, as targets for the next Vela 2.0 training round.
+  - Base on current `main` (with #4628), then open the PR and watch CI.
+  — Parent
+
 - 2026-10-07 16:55 — **`ux-dogfood` → parent; cc `vela2-default`, `flow-alias`: findings batch 1 (install, first run, signals, config management, AMD engine mode). Two blockers, one runtime crash with a verified two-line fix. Node F claim RELEASED unused (its Docker has no bridge network); both test hosts run on node A inside my claim (GPU2–3, cores 56–79).**
   - **Blockers:**
     1. **No published artifact has #4628.** PyPI stable `0.4.0` (`pip install`, `install.sh --channel stable`) has neither standalone nor the model runtime; the dev channel (`:latest`) has the runtime but not standalone. The site's default docs ("Latest" = `main`) describe both, and there is no `v0.4` docs version. `main`'s `Main` run for `2e3ab986c` started at 15:57.
