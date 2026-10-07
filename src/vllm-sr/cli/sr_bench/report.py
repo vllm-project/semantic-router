@@ -169,34 +169,49 @@ def continuity(
 
 def fault_summary(results, subject_calls, total=None, *, planned_case_ids=None):
     """Separate faulted and unfaulted tasks, reporting Router decisions, models, and outcomes."""
-    tasks_calls: dict[str, list[dict]] = {}
+    execution_calls: dict[tuple[Any, str], list[dict]] = {}
     for call in subject_calls:
-        if call.get("case_id"):
-            tasks_calls.setdefault(call["case_id"], []).append(call)
+        cid = call.get("case_id")
+        if cid:
+            tid = call.get("target_id")
+            execution_calls.setdefault((tid, cid), []).append(call)
 
-    results_by_case = {r.get("case_id"): r for r in results if r.get("case_id")}
+    results_by_execution: dict[tuple[Any, str], dict] = {}
+    for r in results:
+        cid = r.get("case_id")
+        if cid:
+            tid = r.get("target_id")
+            results_by_execution[(tid, cid)] = r
 
     if planned_case_ids:
-        all_case_ids = list(planned_case_ids)
+        tid = next((r.get("target_id") for r in results if r.get("target_id")), None)
+        if tid is None:
+            tid = next(
+                (c.get("target_id") for c in subject_calls if c.get("target_id")),
+                None,
+            )
+        all_executions = [(tid, cid) for cid in planned_case_ids]
     else:
         seen = set()
-        all_case_ids = []
+        all_executions = []
         for r in results:
             cid = r.get("case_id")
-            if cid and cid not in seen:
-                seen.add(cid)
-                all_case_ids.append(cid)
-        for cid in tasks_calls:
-            if cid not in seen:
-                seen.add(cid)
-                all_case_ids.append(cid)
+            if cid:
+                key = (r.get("target_id"), cid)
+                if key not in seen:
+                    seen.add(key)
+                    all_executions.append(key)
+        for key in execution_calls:
+            if key not in seen:
+                seen.add(key)
+                all_executions.append(key)
 
     faulted_task_records = []
-    unfaulted_task_ids = []
+    unfaulted_executions = []
 
-    for case_id in all_case_ids:
-        c_calls = tasks_calls.get(case_id, [])
-        c_res = results_by_case.get(case_id, {})
+    for tid, case_id in all_executions:
+        c_calls = execution_calls.get((tid, case_id), [])
+        c_res = results_by_execution.get((tid, case_id), {})
 
         faulted_calls = []
         for idx, call in enumerate(c_calls):
@@ -225,37 +240,45 @@ def fault_summary(results, subject_calls, total=None, *, planned_case_ids=None):
                 )
 
         if faulted_calls:
-            faulted_task_records.append(
-                {
-                    "case_id": case_id,
-                    "outcome": c_res.get("status", "unknown"),
-                    "status": c_res.get("status", "unknown"),
-                    "correct": c_res.get("correct"),
-                    "error": c_res.get("error") or c_res.get("failure"),
-                    "quality_failure": c_res.get("quality_failure"),
-                    "latency_s": c_res.get("latency_s"),
-                    "total_calls": len(c_calls),
-                    "fault_count": len(faulted_calls),
-                    "faulted_calls": faulted_calls,
-                }
-            )
+            record = {
+                "case_id": case_id,
+                "outcome": c_res.get("status", "unknown"),
+                "status": c_res.get("status", "unknown"),
+                "correct": c_res.get("correct"),
+                "error": c_res.get("error") or c_res.get("failure"),
+                "quality_failure": c_res.get("quality_failure"),
+                "latency_s": c_res.get("latency_s"),
+                "total_calls": len(c_calls),
+                "fault_count": len(faulted_calls),
+                "faulted_calls": faulted_calls,
+            }
+            if tid is not None:
+                record["target_id"] = tid
+            faulted_task_records.append(record)
         else:
-            unfaulted_task_ids.append(case_id)
+            unfaulted_executions.append((tid, case_id))
 
     unfaulted_results = [
-        results_by_case[cid] for cid in unfaulted_task_ids if cid in results_by_case
+        results_by_execution[key]
+        for key in unfaulted_executions
+        if key in results_by_execution
     ]
     unfaulted_completed = [
         r for r in unfaulted_results if r.get("status") == "completed"
     ]
     unfaulted_correct = sum(1 for r in unfaulted_completed if r.get("correct") is True)
-    unfaulted_total = len(unfaulted_task_ids)
-
     faulted_completed = sum(
         1 for t in faulted_task_records if t.get("outcome") == "completed"
     )
     faulted_correct = sum(1 for t in faulted_task_records if t.get("correct") is True)
     faulted_total = len(faulted_task_records)
+    unfaulted_total = (
+        max(0, total - faulted_total)
+        if total is not None and total >= faulted_total
+        else len(unfaulted_executions)
+    )
+
+    unfaulted_case_ids = [cid for _, cid in unfaulted_executions]
 
     return {
         "faulted_tasks": {
@@ -274,7 +297,7 @@ def fault_summary(results, subject_calls, total=None, *, planned_case_ids=None):
             "accuracy": (
                 unfaulted_correct / unfaulted_total if unfaulted_total else None
             ),
-            "case_ids": unfaulted_task_ids,
+            "case_ids": unfaulted_case_ids,
         },
     }
 

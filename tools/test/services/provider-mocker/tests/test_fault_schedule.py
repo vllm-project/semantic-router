@@ -44,6 +44,16 @@ def test_tracker_parsing_and_isolation():
     assert idx_unaffected2 == 1
     assert f_unaffected2 is None
 
+    # Separated declarative schedule key and execution counter key:
+    # Multiple targets sharing the same schedule "task-beta" both receive call_index=0 fault
+    idx_t1, f_t1 = tracker.record_call_and_match("task-beta", "run1:target1:task-beta")
+    assert idx_t1 == 0
+    assert f_t1 is not None and f_t1.stream_cut_short is True
+
+    idx_t2, f_t2 = tracker.record_call_and_match("task-beta", "run1:target2:task-beta")
+    assert idx_t2 == 0
+    assert f_t2 is not None and f_t2.stream_cut_short is True
+
 
 @pytest.mark.asyncio
 async def test_chat_completions_status_fault_at_chosen_call_index():
@@ -103,8 +113,8 @@ async def test_chat_completions_delay_fault_at_chosen_call_index():
     app = create_app(Settings(fault_schedule=schedule))
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        headers_faulted = {"x-vsr-fault-key": "task-delay"}
-        headers_unaffected = {"x-vsr-fault-key": "task-clean"}
+        headers_faulted = {"x-vsr-fault-schedule-id": "task-delay"}
+        headers_unaffected = {"x-vsr-fault-schedule-id": "task-clean"}
         body = {
             "model": "openai/gpt-oss-20b",
             "messages": [{"role": "user", "content": "hello"}],

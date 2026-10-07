@@ -182,11 +182,16 @@ class Context:
         subject_calls = [c for c in self.calls if c.get("role") == "subject"]
         call_index = len(subject_calls) - 1 if role == "subject" else 0
         scheduled_fault = None
-        if role == "subject" and case_schedule:
-            for item in case_schedule:
-                if isinstance(item, dict) and item.get("call_index") == call_index:
-                    scheduled_fault = item
-                    break
+        fault_schedule_id = None
+        fault_session_id = None
+        if role == "subject":
+            fault_schedule_id = self.case["id"]
+            fault_session_id = f"{self.run_id}:{self.target['id']}:{self.case['id']}"
+            if case_schedule:
+                for item in case_schedule:
+                    if isinstance(item, dict) and item.get("call_index") == call_index:
+                        scheduled_fault = item
+                        break
         try:
             result = chat(
                 selected,
@@ -198,7 +203,8 @@ class Context:
                 self.artifact_dir / (call_id + ".sse"),
                 activity=activity,
                 session_id=session_id,
-                fault_key=self.case["id"],
+                fault_schedule_id=fault_schedule_id,
+                fault_session_id=fault_session_id,
                 **(
                     {"output_policy": "native"}
                     if self.manifest["output_policy"] == "native"
@@ -507,12 +513,15 @@ class Engine:
                     self.first_failures[run_id] = failure
                     self.store.event(run_id, "failure_observed", failure)
             # Fail closed: no new cases are dispatched after an unexpected transport/harness failure.
-            # Intended faults confirmed by the provider do not abort other tasks in the run.
-            has_injected_fault = any(
-                c.get("fault_injected") is True and c.get("injected_fault") is not None
-                for c in ctx.calls
+            # Intended faults confirmed by the provider on the failing call do not abort other tasks.
+            failing_call = getattr(exc, "partial", None)
+            is_expected_fault = (
+                isinstance(exc, CallFailure)
+                and failing_call is not None
+                and failing_call.get("fault_injected") is True
+                and failing_call.get("injected_fault") is not None
             )
-            if not has_injected_fault:
+            if not is_expected_fault:
                 cancel.set()
 
     def _completed_case(self, ctx, result, started):

@@ -212,7 +212,8 @@ def chat(
     output_policy="bounded",
     activity=None,
     session_id: str | None = None,
-    fault_key=None,
+    fault_schedule_id=None,
+    fault_session_id=None,
 ):
     started = time.monotonic()
     endpoint = target["base_url"].rstrip("/") + "/chat/completions"
@@ -235,9 +236,10 @@ def chat(
         headers["X-SR-Bench-Max-Inference-Calls"] = str(target["max_inference_calls"])
     if session_id:
         headers[SESSION_ID_HEADER] = session_id
-    if fault_key:
-        headers["x-vsr-test-session-id"] = fault_key
-        headers["x-vsr-fault-key"] = fault_key
+    if fault_schedule_id:
+        headers["x-vsr-fault-schedule-id"] = fault_schedule_id
+    if fault_session_id:
+        headers["x-vsr-fault-session-id"] = fault_session_id
     content = ""
     reasoning = ""
     usage = None

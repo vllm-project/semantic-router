@@ -4,7 +4,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .cache import apply_cache_usage, cache_prefix_hash, has_cache_control
-from .fault_schedule import FAULT_INJECTED_HEADER, get_fault_key
+from .fault_schedule import FAULT_INJECTED_HEADER, get_fault_keys
 from .messages_wire import build_message, contains_text, stream_message
 from .provider_boundary import SESSION_HEADER, parse_provider_request
 from .settings import apply_fixture_delay
@@ -26,9 +26,9 @@ async def messages(request: Request):
     fault_tracker = getattr(request.app.state, "fault_tracker", None)
     fault = None
     if fault_tracker is not None:
-        fault_key = get_fault_key(request.headers)
-        if fault_key:
-            _, fault = fault_tracker.record_call_and_match(fault_key)
+        schedule_key, counter_key = get_fault_keys(request.headers)
+        if schedule_key or counter_key:
+            _, fault = fault_tracker.record_call_and_match(schedule_key, counter_key)
             if fault is not None:
                 if fault.delay and fault.delay > 0:
                     await asyncio.sleep(fault.delay)

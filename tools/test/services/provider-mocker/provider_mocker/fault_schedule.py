@@ -11,9 +11,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-FAULT_KEY_HEADER = "x-vsr-fault-key"
 SESSION_HEADER = "x-vsr-test-session-id"
 FAULT_INJECTED_HEADER = "x-vsr-fault-injected"
+FAULT_SCHEDULE_ID_HEADER = "x-vsr-fault-schedule-id"
+FAULT_SESSION_ID_HEADER = "x-vsr-fault-session-id"
 
 
 @dataclass(frozen=True)
@@ -25,22 +26,30 @@ class FaultEntry:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-def get_fault_key(headers: Mapping[str, str] | None) -> str:
-    """Extract the request-scoped fault key from incoming HTTP headers."""
+def get_fault_keys(headers: Mapping[str, str] | None) -> tuple[str, str]:
+    """Extract (schedule_key, counter_key) from incoming HTTP headers."""
     if not headers:
-        return ""
+        return "", ""
+    schedule_key = ""
+    counter_key = ""
     for name, value in headers.items():
         norm = name.lower()
-        if norm in (
-            FAULT_KEY_HEADER,
+        val = value.strip()
+        if not val:
+            continue
+        if norm == FAULT_SCHEDULE_ID_HEADER:
+            schedule_key = val
+        elif norm in (
+            FAULT_SESSION_ID_HEADER,
             SESSION_HEADER,
             "x-session-id",
-            "x-fault-schedule-id",
         ):
-            val = value.strip()
-            if val:
-                return val
-    return ""
+            counter_key = val
+    if not schedule_key and counter_key:
+        schedule_key = counter_key
+    if not counter_key and schedule_key:
+        counter_key = schedule_key
+    return schedule_key, counter_key
 
 
 def parse_fault_entry(call_index: int, data: dict[str, Any]) -> FaultEntry:
@@ -136,13 +145,18 @@ class FaultScheduleTracker:
         with self._lock:
             self._call_counts.clear()
 
-    def record_call_and_match(self, key: str) -> tuple[int, FaultEntry | None]:
-        if not key:
+    def record_call_and_match(
+        self, schedule_key: str, counter_key: str | None = None
+    ) -> tuple[int, FaultEntry | None]:
+        counter = counter_key or schedule_key
+        if not counter and not schedule_key:
             return 0, None
         with self._lock:
-            call_index = self._call_counts[key]
-            self._call_counts[key] += 1
-            key_schedule = self._schedule.get(key)
+            call_index = self._call_counts[counter]
+            self._call_counts[counter] += 1
+            key_schedule = self._schedule.get(schedule_key) or self._schedule.get(
+                counter
+            )
             if key_schedule and call_index in key_schedule:
                 return call_index, key_schedule[call_index]
             return call_index, None

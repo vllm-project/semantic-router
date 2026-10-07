@@ -23,7 +23,7 @@ from .chat_wire import (
     generate_chat_tool_stream,
     mock_chat_tool_response,
 )
-from .fault_schedule import FAULT_INJECTED_HEADER, get_fault_key
+from .fault_schedule import FAULT_INJECTED_HEADER, get_fault_keys
 from .provider_boundary import (
     SESSION_HEADER,
     invalid_request_response,
@@ -116,9 +116,9 @@ async def chat_completions(request: Request):
     fault_tracker = getattr(request.app.state, "fault_tracker", None)
     fault = None
     if fault_tracker is not None:
-        fault_key = get_fault_key(request.headers)
-        if fault_key:
-            _, fault = fault_tracker.record_call_and_match(fault_key)
+        schedule_key, counter_key = get_fault_keys(request.headers)
+        if schedule_key or counter_key:
+            _, fault = fault_tracker.record_call_and_match(schedule_key, counter_key)
             if fault is not None:
                 if fault.delay and fault.delay > 0:
                     await asyncio.sleep(fault.delay)

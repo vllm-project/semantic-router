@@ -8,6 +8,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
+from cli.sr_bench.adapters import BenchmarkAdapter
 from cli.sr_bench.contracts import plan
 from cli.sr_bench.engine import Engine
 from cli.sr_bench.report import fault_summary, make_report
@@ -55,13 +56,16 @@ class FaultInjectingTarget(BaseHTTPRequestHandler):
             }
         )
 
-        fault_key = self.headers.get("x-vsr-fault-key") or self.headers.get(
-            "x-vsr-test-session-id"
+        schedule_key = self.headers.get("x-vsr-fault-schedule-id")
+        counter_key = (
+            self.headers.get("x-vsr-fault-session-id")
+            or self.headers.get("x-vsr-test-session-id")
+            or schedule_key
         )
-        call_idx = self.server.call_counts.get(fault_key, 0)
-        self.server.call_counts[fault_key] = call_idx + 1
+        call_idx = self.server.call_counts.get(counter_key, 0)
+        self.server.call_counts[counter_key] = call_idx + 1
 
-        schedule = self.server.fault_schedules.get(fault_key, [])
+        schedule = self.server.fault_schedules.get(schedule_key, [])
         active_fault = None
         for item in schedule:
             if item.get("call_index") == call_idx:
@@ -271,18 +275,35 @@ def test_fault_summary_unit():
     """Unit test for report.fault_summary partitioning and reporting."""
     results = [
         {
+            "target_id": "single",
             "case_id": "c1",
             "status": "failed",
             "correct": None,
             "error": "Target HTTP 503",
         },
-        {"case_id": "c2", "status": "completed", "correct": True},
-        {"case_id": "c3", "status": "completed", "correct": False},
-        {"case_id": "c4", "status": "completed", "correct": True},
+        {
+            "target_id": "single",
+            "case_id": "c2",
+            "status": "completed",
+            "correct": True,
+        },
+        {
+            "target_id": "single",
+            "case_id": "c3",
+            "status": "completed",
+            "correct": False,
+        },
+        {
+            "target_id": "single",
+            "case_id": "c4",
+            "status": "completed",
+            "correct": True,
+        },
     ]
     calls = [
         {
             "id": "call-1",
+            "target_id": "single",
             "case_id": "c1",
             "role": "subject",
             "status": "failed",
@@ -296,6 +317,7 @@ def test_fault_summary_unit():
         },
         {
             "id": "call-2",
+            "target_id": "single",
             "case_id": "c2",
             "role": "subject",
             "status": "completed",
@@ -306,6 +328,7 @@ def test_fault_summary_unit():
         },
         {
             "id": "call-3",
+            "target_id": "single",
             "case_id": "c3",
             "role": "subject",
             "status": "completed",
@@ -316,6 +339,7 @@ def test_fault_summary_unit():
         },
         {
             "id": "call-4",
+            "target_id": "single",
             "case_id": "c4",
             "role": "subject",
             "status": "completed",
@@ -352,6 +376,107 @@ def test_fault_summary_unit():
     assert summary["unfaulted_tasks"]["correct"] == 2
     assert summary["unfaulted_tasks"]["accuracy"] == 2 / 3
     assert set(summary["unfaulted_tasks"]["case_ids"]) == {"c2", "c3", "c4"}
+
+
+def test_fault_summary_multi_target():
+    """Verify multi-target fault_summary aggregates by (target_id, case_id) and maintains denominator."""
+    # Two targets (t1 and t2) running the same case (c1), plus c2 on both
+    results = [
+        {
+            "target_id": "t1",
+            "case_id": "c1",
+            "status": "failed",
+            "correct": False,
+            "latency_s": 0.5,
+        },
+        {
+            "target_id": "t2",
+            "case_id": "c1",
+            "status": "completed",
+            "correct": True,
+            "latency_s": 0.2,
+        },
+        {
+            "target_id": "t1",
+            "case_id": "c2",
+            "status": "completed",
+            "correct": True,
+            "latency_s": 0.1,
+        },
+        {
+            "target_id": "t2",
+            "case_id": "c2",
+            "status": "completed",
+            "correct": True,
+            "latency_s": 0.1,
+        },
+    ]
+    calls = [
+        {
+            "id": "call-t1-c1",
+            "target_id": "t1",
+            "case_id": "c1",
+            "role": "subject",
+            "status": "failed",
+            "call_index": 0,
+            "fault_injected": True,
+            "injected_fault": {"call_index": 0, "status": 503},
+            "selected_model": "model-a",
+            "response_status": 503,
+        },
+        {
+            "id": "call-t2-c1",
+            "target_id": "t2",
+            "case_id": "c1",
+            "role": "subject",
+            "status": "completed",
+            "call_index": 0,
+            "fault_injected": False,
+            "selected_model": "model-b",
+            "response_status": 200,
+        },
+        {
+            "id": "call-t1-c2",
+            "target_id": "t1",
+            "case_id": "c2",
+            "role": "subject",
+            "status": "completed",
+            "call_index": 0,
+            "fault_injected": False,
+            "selected_model": "model-a",
+            "response_status": 200,
+        },
+        {
+            "id": "call-t2-c2",
+            "target_id": "t2",
+            "case_id": "c2",
+            "role": "subject",
+            "status": "completed",
+            "call_index": 0,
+            "fault_injected": False,
+            "selected_model": "model-b",
+            "response_status": 200,
+        },
+    ]
+
+    # Total planned execution cells = 4 (2 targets * 2 cases)
+    summary = fault_summary(results, calls, total=4)
+
+    # Exactly 1 faulted execution: (t1, c1)
+    assert summary["faulted_tasks"]["total"] == 1
+    assert summary["faulted_tasks"]["failed"] == 1
+    assert summary["faulted_tasks"]["completed"] == 0
+    f_task = summary["faulted_tasks"]["tasks"][0]
+    assert f_task["case_id"] == "c1"
+    assert f_task["target_id"] == "t1"
+    assert f_task["outcome"] == "failed"
+    assert f_task["latency_s"] == 0.5
+
+    # Exactly 3 unfaulted executions: (t2, c1), (t1, c2), (t2, c2)
+    assert summary["unfaulted_tasks"]["total"] == 3
+    assert summary["unfaulted_tasks"]["completed"] == 3
+    assert summary["unfaulted_tasks"]["correct"] == 3
+    assert summary["unfaulted_tasks"]["accuracy"] == 1.0
 
 
 def test_sr_bench_run_with_status_fault_on_one_task(tmp_path, fault_target):
@@ -403,22 +528,24 @@ def test_sr_bench_run_with_status_fault_on_one_task(tmp_path, fault_target):
     wait_run(store, run["id"])
 
     # Verify header transmission
-    reqs_by_fault_key = {
-        r["headers"].get("x-vsr-fault-key"): r
+    reqs_by_schedule_id = {
+        r["headers"].get("x-vsr-fault-schedule-id"): r
         for r in fault_target.received_requests
-        if r["headers"].get("x-vsr-fault-key")
+        if r["headers"].get("x-vsr-fault-schedule-id")
     }
-    assert "task-faulted" in reqs_by_fault_key
-    assert "task-clean-1" in reqs_by_fault_key
-    assert "task-clean-2" in reqs_by_fault_key
+    assert "task-faulted" in reqs_by_schedule_id
+    assert "task-clean-1" in reqs_by_schedule_id
+    assert "task-clean-2" in reqs_by_schedule_id
 
-    # Check also x-vsr-test-session-id
+    # Check also x-vsr-fault-session-id has per-target/task scoped session
     reqs_by_session_id = {
-        r["headers"].get("x-vsr-test-session-id"): r
+        r["headers"].get("x-vsr-fault-session-id"): r
         for r in fault_target.received_requests
-        if r["headers"].get("x-vsr-test-session-id")
+        if r["headers"].get("x-vsr-fault-session-id")
     }
-    assert "task-faulted" in reqs_by_session_id
+    assert any(k.endswith(":task-faulted") for k in reqs_by_session_id)
+    assert any(k.endswith(":task-clean-1") for k in reqs_by_session_id)
+    assert any(k.endswith(":task-clean-2") for k in reqs_by_session_id)
 
     report = make_report(store, run["id"])
     assert "fault_summary" in report
@@ -655,16 +782,29 @@ def test_unexpected_transport_failure_without_provider_receipt_fails_closed(tmp_
                 "answer": "A",
                 "fault_schedule": [{"call_index": 0, "status": 503}],
             },
+            {
+                "id": "task-subsequent",
+                "benchmark": "mmlu-pro",
+                "messages": [{"role": "user", "content": "Question 2"}],
+                "answer": "B",
+            },
         ],
-        "limits": {"total_timeout_s": 2, "idle_timeout_s": 1, "max_run_seconds": 5},
+        "limits": {
+            "concurrency": 1,
+            "total_timeout_s": 2,
+            "idle_timeout_s": 1,
+            "max_run_seconds": 5,
+        },
     }
 
     run = engine.start(manifest_doc, request_key="fail-closed-run")
     wait_run(store, run["id"])
 
-    # Engine must have recorded a failure and triggered cancel for unexpected failure
-    cancel_event = engine.cancels.get(run["id"])
-    assert cancel_event is not None and cancel_event.is_set()
+    # Fail closed prevented subsequent tasks from running
+    results = store.results(run["id"])
+    assert len(results) == 1
+    assert results[0]["case_id"] == "task-transport-failure"
+    assert results[0]["status"] == "failed"
 
     calls = store.calls(run["id"])
     assert len(calls) == 1
@@ -674,3 +814,149 @@ def test_unexpected_transport_failure_without_provider_receipt_fails_closed(tmp_
     # No provider receipt exists
     assert call["fault_injected"] is False
     assert call.get("injected_fault") is None
+
+
+def test_earlier_injected_call_does_not_exempt_later_unexpected_failure(
+    tmp_path, fault_target, monkeypatch
+):
+    """An earlier injected call with receipt must not exempt a later unexpected failure from fail-closed."""
+    store = Store(tmp_path)
+    engine = Engine(store)
+
+    fault_target.fault_schedules = {
+        "task-failing": [{"call_index": 0, "delay": 0.01}],
+    }
+
+    def multi_call_execute(case, context):
+        # Call 0: succeeds and observes injection receipt from fault_target
+        context.call(case["messages"])
+        # Call 1: calls broken auxiliary target which fails with connection refused
+        context.call(case["messages"], target="broken")
+
+    custom_adapter = BenchmarkAdapter(
+        id="mmlu-pro",
+        title="MMLU-Pro",
+        kind="mcq",
+        source_url="https://example.com",
+        version="sr-bench-1.0",
+        execute=multi_call_execute,
+    )
+    monkeypatch.setattr("cli.sr_bench.engine.get_adapter", lambda _: custom_adapter)
+
+    manifest_doc = {
+        "version": "sr-bench-1.0",
+        "name": "multi-call-fail-closed-test",
+        "targets": [
+            {
+                "id": "single",
+                "kind": "single",
+                "model": "model",
+                "base_url": f"http://127.0.0.1:{fault_target.server_port}/v1",
+                "prices": PRICES,
+            }
+        ],
+        "auxiliary_targets": {
+            "broken": {
+                "id": "broken",
+                "kind": "single",
+                "model": "model",
+                "base_url": "http://127.0.0.1:9",
+                "prices": PRICES,
+            }
+        },
+        "cases": [
+            {
+                "id": "task-failing",
+                "benchmark": "mmlu-pro",
+                "messages": [{"role": "user", "content": "Question 1"}],
+                "answer": "A",
+                "fault_schedule": [{"call_index": 0, "delay": 0.01}],
+            },
+            {
+                "id": "task-subsequent",
+                "benchmark": "mmlu-pro",
+                "messages": [{"role": "user", "content": "Question 2"}],
+                "answer": "B",
+            },
+        ],
+        "limits": {
+            "concurrency": 1,
+            "total_timeout_s": 5,
+            "idle_timeout_s": 2,
+            "max_run_seconds": 10,
+        },
+    }
+
+    run = engine.start(manifest_doc, request_key="multi-call-run")
+    wait_run(store, run["id"])
+
+    # Task 1 failed with unexpected failure on Call 1, so fail-closed stopped dispatching Task 2
+    results = store.results(run["id"])
+    assert len(results) == 1
+    assert results[0]["case_id"] == "task-failing"
+    assert results[0]["status"] == "failed"
+
+    calls = store.calls(run["id"])
+    assert len(calls) == 2
+    # Call 0 had injection receipt
+    assert calls[0]["fault_injected"] is True
+    # Call 1 failed without injection receipt
+    assert calls[1]["fault_injected"] is False
+
+    # Second task was suppressed due to fail-closed
+    assert not any(r["case_id"] == "task-subsequent" for r in results)
+
+
+def test_sr_bench_multi_target_sharing_same_case_receives_schedule(
+    tmp_path, fault_target
+):
+    """Multiple targets sharing the same case ID both receive their scheduled fault independently."""
+    store = Store(tmp_path)
+    engine = Engine(store)
+
+    fault_target.fault_schedules = {
+        "task-shared": [{"call_index": 0, "status": 503}],
+    }
+
+    manifest_doc = {
+        "version": "sr-bench-1.0",
+        "name": "multi-target-schedule-test",
+        "targets": [
+            {
+                "id": "target-a",
+                "kind": "single",
+                "model": "model",
+                "base_url": f"http://127.0.0.1:{fault_target.server_port}/v1",
+                "prices": PRICES,
+            },
+            {
+                "id": "target-b",
+                "kind": "single",
+                "model": "model",
+                "base_url": f"http://127.0.0.1:{fault_target.server_port}/v1",
+                "prices": PRICES,
+            },
+        ],
+        "cases": [
+            {
+                "id": "task-shared",
+                "benchmark": "mmlu-pro",
+                "messages": [{"role": "user", "content": "Question"}],
+                "answer": "A",
+                "fault_schedule": [{"call_index": 0, "status": 503}],
+            },
+        ],
+        "limits": {"total_timeout_s": 5, "idle_timeout_s": 2, "max_run_seconds": 15},
+    }
+
+    run = engine.start(manifest_doc, request_key="multi-target-run")
+    wait_run(store, run["id"])
+
+    report = make_report(store, run["id"])
+    f_summary = report["fault_summary"]
+
+    # Both target executions received their intended call_index 0 fault independently
+    assert f_summary["faulted_tasks"]["total"] == 2
+    assert f_summary["faulted_tasks"]["failed"] == 2
+    targets_reported = {t["target_id"] for t in f_summary["faulted_tasks"]["tasks"]}
+    assert targets_reported == {"target-a", "target-b"}
