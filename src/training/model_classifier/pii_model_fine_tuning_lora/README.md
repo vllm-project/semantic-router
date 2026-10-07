@@ -16,11 +16,17 @@ whitespace without joining different entity types.
 
 ## Prepare fixed source revisions
 
-Use an isolated environment with a platform-compatible PyTorch build,
-Transformers, and the Hugging Face CLI. The full training path has been exercised
-with PyTorch 2.10 and Transformers 4.57.6. PEFT is only needed for historical
-adapter continuation. Data-contract tests use Python's standard library; the
-tokenizer-measured long-data generator additionally requires Transformers.
+Create the environment from this folder with Python 3.11 or newer.
+`pyproject.toml` bounds the dependencies and `uv.lock` pins them:
+
+```bash
+uv sync --locked
+```
+
+Run the Python commands below with `uv run`. The Hugging Face CLI (`hf`) is
+installed separately. PEFT is only needed for historical adapter continuation.
+Data-contract tests use Python's standard library; the tokenizer-measured
+long-data generator additionally requires Transformers.
 
 From the repository root:
 
