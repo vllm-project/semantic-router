@@ -3,6 +3,7 @@ package classification
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
@@ -209,8 +210,10 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 	}
 
 	// One request stage, one bundle: the model calls of every signal reach each
-	// runtime process as a single /v1/bundle call.
+	// runtime process as a single /v1/bundle call, before the signals' deadline.
 	stage, bundle := modelservice.WithBundle(input.RequestFacts.Context, 0)
+	stage, cancel := withSignalDeadline(stage, c.Config.SignalTimeout(), time.Now())
+	defer cancel()
 	input.RequestFacts.Context = stage
 	var wg sync.WaitGroup
 	var mu sync.Mutex

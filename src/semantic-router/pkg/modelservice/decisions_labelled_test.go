@@ -196,3 +196,30 @@ func TestDecisionModelsWithoutSetAndSpanAnswerThemInvalid(t *testing.T) {
 		t.Fatalf("a Vela 2.0 card = %+v", card)
 	}
 }
+
+func TestAScanBudgetTravelsAsMaxTokensAndKeysTheCache(t *testing.T) {
+	request := Request{State: "a long text", Questions: []Question{{ID: "q", Type: "noul", Instructions: "Is it?"}}}
+	body, err := encodeDecisionRequest(context.Background(), request)
+	if err != nil || body.Options == nil || body.Options.MaxTokens != nil || body.Questions["q"].Overflow != nil {
+		t.Fatalf("no scan budget, no max_tokens: %+v %v", body.Options, err)
+	}
+	scanned := request
+	scanned.MaxTokens = 4096
+	body, err = encodeDecisionRequest(context.Background(), scanned)
+	if err != nil || body.Options == nil || body.Options.MaxTokens == nil || *body.Options.MaxTokens != 4096 {
+		t.Fatalf("scan budget: %+v %v", body.Options, err)
+	}
+	truncating := request
+	truncating.Questions = []Question{{ID: "q", Type: "noul", Instructions: "Is it?", Truncate: true}}
+	body, err = encodeDecisionRequest(context.Background(), truncating)
+	if err != nil || body.Questions["q"].Overflow == nil || *body.Questions["q"].Overflow != "truncate" {
+		t.Fatalf("a truncating question: %+v %v", body.Questions["q"], err)
+	}
+	if decideKey(request) == decideKey(scanned) || decideKey(request) == decideKey(truncating) {
+		t.Fatal("a scan budget or a truncating question changes the answers, so it keys the cache")
+	}
+	bounded := boundedRead(Request{MaxTokens: 4096, Questions: truncating.Questions})
+	if bounded.MaxTokens != 0 || bounded.Questions[0].Truncate || !truncating.Questions[0].Truncate {
+		t.Fatalf("a model without a scan budget takes neither option, and the caller's request is kept: %+v", bounded)
+	}
+}
