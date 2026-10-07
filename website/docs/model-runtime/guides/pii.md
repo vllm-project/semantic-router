@@ -101,8 +101,12 @@ thresholds apply to its spans.
 
 ## When the scan cannot finish
 
-If the model is not ready or a scan fails, the signal is unknown. The PII
-module's `on_error` decides what that means: `allow` (default) treats the
+If the model is not ready or a scan fails, the signal is unknown. Content the
+model did not read (over its input or
+[scan cap](model-runtime/reference.md#long-inputs), truncated, or not scanned
+by the signals' deadline) matches as `unscanned` unless the module sets
+`on_unscanned: allow`. The PII module's `on_error` decides what an unknown
+signal means: `allow` (default) treats the
 unread text as clean, and `block` matches it as `classification_error`, so
 text that could not be checked cannot pass as clean.
 

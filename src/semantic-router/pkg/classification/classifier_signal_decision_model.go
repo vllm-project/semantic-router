@@ -78,9 +78,14 @@ func (c *Classifier) evaluateDecisionDeployment(
 	deployment string,
 	rules []config.DecisionSignalRule,
 ) {
-	request := modelservice.Request{State: text, Questions: make([]modelservice.Question, 0, len(rules))}
+	// Decision questions route, so a long text is read only as far as its
+	// first tokens; the deployment's scan budget keeps them in one call with
+	// the stage's other questions to it.
+	request := modelservice.Request{State: text, Questions: make([]modelservice.Question, 0, len(rules)), MaxTokens: c.Config.ModelDeployments[deployment].ScanBudget()}
 	for _, rule := range rules {
-		request.Questions = append(request.Questions, DecisionQuestion(rule.Name, rule.Question))
+		question := DecisionQuestion(rule.Name, rule.Question)
+		question.Truncate = true
+		request.Questions = append(request.Questions, question)
 	}
 	callCtx, cancel := decisionCallContext(ctx, rules)
 	defer cancel()

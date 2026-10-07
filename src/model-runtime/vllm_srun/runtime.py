@@ -172,7 +172,7 @@ SURFACE_FIELDS = {
     },
 }
 SURFACE_OPTIONS = {
-    "decisions": set(),
+    "decisions": {"max_tokens"},
     "classify": {"overflow", "max_tokens", "window", "threshold", "return_tokens"},
     "embeddings": {"overflow", "max_tokens"},
     "rerank": {"overflow", "max_tokens"},

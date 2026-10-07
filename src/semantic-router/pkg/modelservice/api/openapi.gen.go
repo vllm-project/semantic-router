@@ -111,6 +111,7 @@ const (
 	InvalidModelOutput ItemError = "invalid_model_output"
 	InvalidQuestion    ItemError = "invalid_question"
 	MaxLengthExceeded  ItemError = "max_length_exceeded"
+	ScanBudgetExceeded ItemError = "scan_budget_exceeded"
 	Unavailable        ItemError = "unavailable"
 )
 
@@ -151,10 +152,16 @@ const (
 	Router QuestionHead = "router"
 )
 
+// Defines values for QuestionOverflow.
+const (
+	QuestionOverflowTruncate QuestionOverflow = "truncate"
+	QuestionOverflowWindow   QuestionOverflow = "window"
+)
+
 // Defines values for RerankOptionsOverflow.
 const (
-	RerankOptionsOverflowReject   RerankOptionsOverflow = "reject"
-	RerankOptionsOverflowTruncate RerankOptionsOverflow = "truncate"
+	Reject   RerankOptionsOverflow = "reject"
+	Truncate RerankOptionsOverflow = "truncate"
 )
 
 // Answer One answer. Choice: choice, probabilities, confidence. Noul: noul (P(true)). Score: score (the expected
@@ -162,11 +169,16 @@ const (
 // knows why, message.
 type Answer struct {
 	// AbstainProbability Probability of the model's abstain option, where it has one (not calibrated).
-	AbstainProbability *float64           `json:"abstain_probability,omitempty"`
-	Choice             *string            `json:"choice,omitempty"`
-	Confidence         *float64           `json:"confidence,omitempty"`
-	Error              *ItemError         `json:"error,omitempty"`
-	Legend             *map[string]string `json:"legend,omitempty"`
+	AbstainProbability *float64 `json:"abstain_probability,omitempty"`
+	Choice             *string  `json:"choice,omitempty"`
+	Confidence         *float64 `json:"confidence,omitempty"`
+
+	// Error Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+	// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+	// scanned.
+	Error  *ItemError         `json:"error,omitempty"`
+	Legend *map[string]string `json:"legend,omitempty"`
 
 	// Message Why the question failed, naming the field, such as "set questions do not take ['colour']".
 	Message       *string             `json:"message,omitempty"`
@@ -305,10 +317,16 @@ type ClassifyResponseKind string
 // selected. token: spans. A windowed input also lists every window. A failed input has only index and
 // error.
 type ClassifyResult struct {
+	// Error Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+	// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+	// scanned.
 	Error *ItemError `json:"error,omitempty"`
 	Index int        `json:"index"`
 
-	// Input Tokenizer facts of one input, including special tokens.
+	// Input Tokenizer facts of one input, including special tokens. An input over its budget is tokenized only as far as
+	// the budget needs; its `tokens` then counts the tokens read, which exceed the budget, and
+	// `tokens_lower_bound` is true.
 	Input         *InputUsage `json:"input,omitempty"`
 	Label         *string     `json:"label,omitempty"`
 	Probabilities *[]float64  `json:"probabilities,omitempty"`
@@ -385,10 +403,17 @@ type DecisionResponse struct {
 type Embedding struct {
 	// Embedding A list of floats, or with encoding_format base64 a base64 string of little-endian float32 values.
 	Embedding *EmbeddingVector `json:"embedding,omitempty"`
-	Error     *ItemError       `json:"error,omitempty"`
-	Index     int              `json:"index"`
 
-	// Input Tokenizer facts of one input, including special tokens.
+	// Error Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+	// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+	// scanned.
+	Error *ItemError `json:"error,omitempty"`
+	Index int        `json:"index"`
+
+	// Input Tokenizer facts of one input, including special tokens. An input over its budget is tokenized only as far as
+	// the budget needs; its `tokens` then counts the tokens read, which exceed the budget, and
+	// `tokens_lower_bound` is true.
 	Input  *InputUsage `json:"input,omitempty"`
 	Object string      `json:"object"`
 }
@@ -560,20 +585,28 @@ type ImagePart struct {
 // InputText defines model for InputText.
 type InputText = string
 
-// InputUsage Tokenizer facts of one input, including special tokens.
+// InputUsage Tokenizer facts of one input, including special tokens. An input over its budget is tokenized only as far as
+// the budget needs; its `tokens` then counts the tokens read, which exceed the budget, and
+// `tokens_lower_bound` is true.
 type InputUsage struct {
 	// ProcessedTokens Tokens the model read (windows counted once per content token).
 	ProcessedTokens int `json:"processed_tokens"`
 
-	// Tokens Tokens of the complete input.
-	Tokens    int  `json:"tokens"`
-	Truncated bool `json:"truncated"`
+	// Tokens Tokens of the complete input, or a lower bound when `tokens_lower_bound` is true.
+	Tokens int `json:"tokens"`
+
+	// TokensLowerBound The input was read in part, so `tokens` is a lower bound of its tokens.
+	TokensLowerBound *bool `json:"tokens_lower_bound,omitempty"`
+	Truncated        bool  `json:"truncated"`
 
 	// Windows Windows the input was read in.
 	Windows *int `json:"windows,omitempty"`
 }
 
-// ItemError defines model for ItemError.
+// ItemError Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+// scanned.
 type ItemError string
 
 // Liveness Liveness of the process (`GET /health/live`), whatever its models' readiness.
@@ -643,8 +676,17 @@ type ModelLimits struct {
 	MaxInputs  *int `json:"max_inputs,omitempty"`
 	MaxLevels  *int `json:"max_levels,omitempty"`
 	MaxOptions *int `json:"max_options,omitempty"`
-	MinLevels  *int `json:"min_levels,omitempty"`
-	MinOptions *int `json:"min_options,omitempty"`
+
+	// MaxScanTokens Decision models that read a long state part in windows (Vela 2.0): the most tokens of one part a question
+	// reads whole, by default four inputs on a CPU and 32 on a GPU. A longer part fails its questions with
+	// `scan_budget_exceeded`.
+	MaxScanTokens *int `json:"max_scan_tokens,omitempty"`
+	MinLevels     *int `json:"min_levels,omitempty"`
+	MinOptions    *int `json:"min_options,omitempty"`
+
+	// TruncateTokens The same models: the most tokens of a part a question with `overflow: truncate` reads, one input on a
+	// CPU (one forward) and the scan budget on a GPU.
+	TruncateTokens *int `json:"truncate_tokens,omitempty"`
 }
 
 // ModelList defines model for ModelList.
@@ -728,6 +770,12 @@ type Question struct {
 	// request. A span reads one field.
 	Over *interface{} `json:"over,omitempty"`
 
+	// Overflow Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
+	// than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
+	// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
+	// both kinds share their model inputs unless one has to be read in windows.
+	Overflow *QuestionOverflow `json:"overflow,omitempty"`
+
 	// Preset A question the model defines; the model fills in its type, instructions and criteria.
 	Preset *string `json:"preset,omitempty"`
 
@@ -743,6 +791,12 @@ type Question struct {
 // reported per question in `span_heads`). Models without one answer `broad` with invalid_question.
 type QuestionHead string
 
+// QuestionOverflow Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
+// than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
+// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
+// both kinds share their model inputs unless one has to be read in windows.
+type QuestionOverflow string
+
 // Representation The identity of an embedding space; vectors with different representations never mix.
 type Representation struct {
 	Dimension   int     `json:"dimension"`
@@ -756,6 +810,12 @@ type Representation struct {
 type RequestOptions struct {
 	// DeadlineMs Work not started by the deadline is not run; its items return deadline_exceeded.
 	DeadlineMs *float64 `json:"deadline_ms,omitempty"`
+
+	// MaxTokens Scan budget: the most tokens of one state part a question reads whole (default its card's
+	// `limits.max_scan_tokens`; a part that fits one model input is always read). A longer part fails the
+	// questions that read it whole with `scan_budget_exceeded`. Only a model whose card has `max_scan_tokens`
+	// takes it.
+	MaxTokens *int `json:"max_tokens,omitempty"`
 
 	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
 	Profile *ProfileName `json:"profile,omitempty"`
@@ -819,11 +879,18 @@ type RerankResponse struct {
 
 // RerankResult defines model for RerankResult.
 type RerankResult struct {
-	Document *string    `json:"document,omitempty"`
-	Error    *ItemError `json:"error,omitempty"`
-	Index    int        `json:"index"`
+	Document *string `json:"document,omitempty"`
 
-	// Input Tokenizer facts of one input, including special tokens.
+	// Error Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+	// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+	// scanned.
+	Error *ItemError `json:"error,omitempty"`
+	Index int        `json:"index"`
+
+	// Input Tokenizer facts of one input, including special tokens. An input over its budget is tokenized only as far as
+	// the budget needs; its `tokens` then counts the tokens read, which exceed the budget, and
+	// `tokens_lower_bound` is true.
 	Input *InputUsage `json:"input,omitempty"`
 
 	// Logit The raw pair-scorer logit.

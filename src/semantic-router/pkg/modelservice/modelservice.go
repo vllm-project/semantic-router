@@ -31,6 +31,8 @@ func ReadyTimeout() time.Duration {
 // Levels keep Score level order and Labels keep Set / Span label order.
 // Threshold and Head apply to Set and Span questions. Preset names a question
 // the model defines, which replaces the type, instructions and options.
+// Truncate asks a model with a scan budget to read a long part's first tokens
+// only (one forward on a CPU) instead of whole.
 type Question struct {
 	ID           string
 	Type         string
@@ -41,6 +43,7 @@ type Question struct {
 	Threshold    *float64
 	Head         string
 	Preset       string
+	Truncate     bool
 }
 
 // Choice is one Choice option, a Noul description or a Set / Span label.
@@ -53,11 +56,16 @@ type Choice struct {
 // the served model on the runtime (empty while it serves one model). State
 // is the text the questions are about; Parts, when set, replace it with
 // named parts (request, context, answer) for models that read typed parts.
+// MaxTokens, when positive, is the scan budget of a model that reads a long
+// part in windows (Vela 2.0), zero keeping the model's own: a part with more
+// tokens fails the questions that read it whole with scan_budget_exceeded. A
+// model without a scan budget ignores it and every question's Truncate.
 type Request struct {
 	Model     string
 	State     string
 	Parts     map[string]string
 	Questions []Question
+	MaxTokens int
 }
 
 // Answer is one runtime answer. Error is set instead of the values when the

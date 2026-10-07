@@ -69,7 +69,9 @@ class Decision1Model(DecisionModel[RenderedItem, list[float] | None]):
         """The released physical batches; each stays within the forward token budget."""
         return self.physical_batches(items)
 
-    def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan[RenderedItem]:
+    def plan(
+        self, state: Any, questions: dict[str, Any], scan: int | None = None
+    ) -> RequestPlan[RenderedItem]:
         check_request(state, questions)
         text = state if isinstance(state, str) else canonical(state)
         rows: list[Row] = []
