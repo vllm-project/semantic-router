@@ -148,7 +148,7 @@ func TestRemoteClassifierBackendYAMLRejectsTimeoutAlias(t *testing.T) {
 func TestReferenceConfigCategoryBackendReplacesDefaultVariant(t *testing.T) {
 	data := string(readReferenceConfigYAML(t))
 	data = strings.Replace(data,
-		"          category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json\n",
+		"          category_mapping_path: \"\"\n",
 		"          backend:\n"+
 			"            protocol: http_classify\n"+
 			"            contract: label_distribution.v1\n"+
