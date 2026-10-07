@@ -10,7 +10,7 @@ unknown tensors under it unless ``strict`` asks otherwise. A module's
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from pathlib import Path
 
 import torch
@@ -19,7 +19,9 @@ from torch import nn
 from .models.lora import adapter_key
 
 
-def iter_tensors(files: Iterable[Path], prefix: str = ""):
+def iter_tensors(
+    files: Iterable[Path], prefix: str = ""
+) -> Iterator[tuple[str, torch.Tensor]]:
     from safetensors import safe_open
 
     for path in files:

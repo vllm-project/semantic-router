@@ -88,7 +88,6 @@ describe('buildChatMessages', () => {
         },
       ],
       'continue',
-      false,
     )
 
     expect(messages.map((message) => message.role)).toEqual([
@@ -128,7 +127,6 @@ describe('buildChatMessages', () => {
         },
       ],
       'continue',
-      false,
     )
 
     expect(messages).toEqual([
@@ -157,7 +155,6 @@ describe('buildChatMessages', () => {
         },
       ],
       'Compare it with this image.',
-      false,
       [{ ...image, id: 'image-2', fileName: 'comparison.png' }],
     )
 
@@ -206,7 +203,6 @@ describe('buildChatMessages', () => {
         },
       ],
       'What changed?',
-      false,
     )
 
     expect(messages).toEqual([

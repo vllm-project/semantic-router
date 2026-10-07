@@ -16,7 +16,8 @@ from typing import Any, ClassVar
 import torch
 
 from ...errors import INVALID_QUESTION, MAX_LENGTH_EXCEEDED, QuestionError
-from ...heads.candidate import forward_logits
+from ...heads.candidate import CandidateHead, forward_logits
+from ...heads.typed import TypeReadout
 from ...plugins.base import EngineModel, ModelInfo
 from ...plugins.decisions import DecisionModel, RenderedItem, RequestPlan
 from ...systemone import canonical
@@ -27,7 +28,7 @@ from .answers import answer
 from .questions import KINDS, NoulDefaults, Row, check_request, parse
 
 
-class Decision1Model(DecisionModel):
+class Decision1Model(DecisionModel[RenderedItem, list[float] | None]):
     """A loaded Decision 1.0 model; ``render``, ``physical_batches`` and ``run`` are per runtime."""
 
     noul_defaults: ClassVar[NoulDefaults]
@@ -63,7 +64,7 @@ class Decision1Model(DecisionModel):
         """The released physical batches; each stays within the forward token budget."""
         return self.physical_batches(items)
 
-    def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan:
+    def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan[RenderedItem]:
         check_request(state, questions)
         text = state if isinstance(state, str) else canonical(state)
         rows: list[Row] = []
@@ -119,7 +120,7 @@ class VelaDecisionModel(Decision1Model):
         tokenizer: Tokenizer,
         presets: dict[str, dict[str, Any]],
         *,
-        readout: vela.TypeReadout,
+        readout: TypeReadout,
         special: dict[str, int],
         exit_layer: int,
     ):
@@ -210,7 +211,7 @@ class QwenDecisionModel(Decision1Model):
         tokenizer: Tokenizer,
         presets: dict[str, dict[str, Any]],
         *,
-        head: torch.nn.Module,
+        head: CandidateHead,
         temperatures: dict[str, float],
         null_choice_as_key: bool,
     ):

@@ -15,7 +15,7 @@ import binascii
 import hashlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import torch
@@ -28,6 +28,9 @@ from ..errors import (
 )
 from ..plugins.base import DEADLINE, EmbeddingInfo, SurfacePlan, SurfaceRequest
 from .task import positive_option
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 MAX_INPUTS = 2048
 MAX_MEDIA_BYTES = 16 << 20
@@ -77,7 +80,7 @@ class EmbedItem:
     modality: str
     ids: list[int]
     cache_key: str
-    features: dict[str, np.ndarray] = field(default_factory=dict)
+    features: dict[str, NDArray[np.float32]] = field(default_factory=dict)
     cost: int | None = None
 
 

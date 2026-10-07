@@ -1,0 +1,164 @@
+[
+  {
+    "requestHeaders": {
+      "response": {
+        "headerMutation": {
+          "removeHeaders": [
+            "x-vsr-fusion-depth",
+            "x-vsr-internal-auth",
+            "x-vsr-looper-decision",
+            "x-vsr-looper-iteration",
+            "x-vsr-looper-request",
+            "x-vsr-selected-recipe"
+          ],
+          "setHeaders": [
+            {
+              "header": {
+                "key": "accept-encoding",
+                "value": "identity"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "requestBody": {
+      "response": {
+        "bodyMutation": {
+          "bodyText": "{\"model\":\"claude-compatible-1\",\"messages\":[{\"role\":\"user\",\"content\":[{\"text\":\"Write a short poem about rivers.\",\"type\":\"text\"}]}],\"max_tokens\":64}"
+        },
+        "clearRouteCache": true,
+        "headerMutation": {
+          "removeHeaders": [
+            "content-length",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key"
+          ],
+          "setHeaders": [
+            {
+              "appendAction": "OVERWRITE_IF_EXISTS_OR_ADD",
+              "header": {
+                "key": "anthropic-version",
+                "rawValueText": "2023-06-01"
+              }
+            },
+            {
+              "header": {
+                "key": "x-selected-model",
+                "rawValueText": "claude-compatible"
+              }
+            },
+            {
+              "header": {
+                "key": ":path",
+                "rawValueText": "/v1/messages"
+              }
+            },
+            {
+              "header": {
+                "key": "content-length",
+                "rawValueText": "146"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "responseHeaders": {
+      "response": {
+        "headerMutation": {
+          "removeHeaders": [
+            "x-vsr-effective-input-tokens",
+            "x-vsr-effective-max-output-tokens"
+          ],
+          "setHeaders": [
+            {
+              "header": {
+                "key": "x-vsr-schema-version",
+                "rawValueText": "2"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-response-path",
+                "rawValueText": "upstream"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-config-version",
+                "rawValueText": "1"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-client-protocol",
+                "rawValueText": "openai"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-upstream-protocol",
+                "rawValueText": "anthropic"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-selected-recipe",
+                "rawValueText": "default"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-selected-decision",
+                "rawValueText": "essay_route"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-selected-algorithm",
+                "rawValueText": "static"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-selected-model",
+                "rawValueText": "claude-compatible"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-routing-latency-ms",
+                "rawValueText": "<volatile>"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "responseBody": {
+      "response": {
+        "bodyMutation": {
+          "bodyText": "{\"id\":\"msg_parity\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"claude-compatible-1\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Rivers carve the land.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0}}}"
+        },
+        "headerMutation": {
+          "removeHeaders": [
+            "content-length"
+          ]
+        }
+      }
+    }
+  }
+]

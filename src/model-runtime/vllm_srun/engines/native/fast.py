@@ -33,18 +33,24 @@ from __future__ import annotations
 
 import math
 import types
-from typing import Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import torch
 from torch import nn
 
 from ...accel.kernels import KernelSet
+from .models import Backbone
 from .models.common import attention
 from .models.forest import Forest, forest_attention, forest_gated_delta
 from .models.lora import LoRALinear
-from .models.tree import suffix_rule
+from .models.tree import Tree, is_tree, suffix_rule
 
-FUSED_SLOTS = {
+if TYPE_CHECKING:
+    from .models.qwen3 import Qwen3Backbone, Qwen3Layer
+    from .models.qwen3_5 import GatedAttention, GatedDeltaNet, Qwen3_5Layer
+
+FUSED_SLOTS: dict[str | None, tuple[str, ...]] = {
     "qwen3": ("add_rmsnorm", "residual_add", "silu_mul", "attn_prep"),
     "qwen3_5_text": (
         "add_rmsnorm",
@@ -73,9 +79,23 @@ HYBRID_HEAD_DIM = 256
 GATED_DELTA_HEAD_DIM = 128
 
 
+class FusedLayer(Protocol):
+    """What ``install_fused`` sets on a decoder layer, besides its ``forward``.
+
+    ``_fused`` holds the prepared weights, ``_fused_forward`` the fused forward
+    and ``_fused_failed`` the shapes whose fused call failed; a Qwen3.5 layer's
+    ``forward_forest`` is replaced too.
+    """
+
+    _fused: dict[str, Any]
+    _fused_forward: Callable[..., torch.Tensor]
+    _fused_failed: set[tuple[object, ...]]
+    forward_forest: Callable[..., tuple[torch.Tensor, torch.Tensor]]
+
+
 def fused_unavailable(backbone: nn.Module, kernels: KernelSet) -> str | None:
     """Why the fused layers cannot run this backbone with these kernels; None when they can."""
-    config = backbone.config
+    config = cast(Backbone, backbone).config
     model_type = getattr(backbone, "model_type", None)
     slots = FUSED_SLOTS.get(model_type)
     if slots is None:
@@ -101,7 +121,7 @@ def fused_unavailable(backbone: nn.Module, kernels: KernelSet) -> str | None:
         )
     if model_type == "qwen3":
         checks["an FP32 stream (BF16 Qwen3 norms round differently)"] = (
-            backbone.norm.weight.dtype == torch.float32
+            cast("Qwen3Backbone", backbone).norm.weight.dtype == torch.float32
         )
     failed = [name for name, ok in checks.items() if not ok]
     return "needs " + ", ".join(failed) if failed else None
@@ -110,20 +130,26 @@ def fused_unavailable(backbone: nn.Module, kernels: KernelSet) -> str | None:
 def install_fused(backbone: nn.Module) -> int:
     """Run every Qwen3.5 / Qwen3 decoder layer through its fused forward; returns how many layers run fused."""
     count = 0
-    for layer in backbone.layers:
+    for layer in cast(nn.ModuleList, backbone.layers):
+        fused = cast(FusedLayer, layer)
         if type(layer).__name__ == "Qwen3_5Layer":
-            layer._fused = _prepare_qwen3_5(layer)
-            layer._fused_forward = types.MethodType(_qwen3_5_forward, layer)
-            _install_fused_forest(layer)
+            fused._fused = _prepare_qwen3_5(cast("Qwen3_5Layer", layer))
+            fused._fused_forward = types.MethodType(_qwen3_5_forward, layer)
+            _install_fused_forest(cast("Qwen3_5Layer", layer))
         elif type(layer).__name__ == "Qwen3Layer":
-            layer._fused = _prepare_qwen3(layer)
-            layer._fused_forward = types.MethodType(_qwen3_forward, layer)
+            fused._fused = _prepare_qwen3(cast("Qwen3Layer", layer))
+            fused._fused_forward = types.MethodType(_qwen3_forward, layer)
         else:
             continue
-        layer._fused_failed = set()
+        fused._fused_failed = set()
         eager = layer.forward
 
-        def forward(self, hidden_states, *args, _eager=eager):
+        def forward(
+            self: FusedLayer,
+            hidden_states: torch.Tensor,
+            *args: Any,
+            _eager: Callable[..., torch.Tensor] = eager,
+        ) -> torch.Tensor:
             return run_fused(self, _eager, hidden_states, *args)
 
         layer.forward = types.MethodType(forward, layer)
@@ -131,12 +157,16 @@ def install_fused(backbone: nn.Module) -> int:
     return count
 
 
-def _install_fused_forest(layer: nn.Module) -> None:
+def _install_fused_forest(layer: Qwen3_5Layer) -> None:
     """Run the layer's forest forward fused where it applies, eagerly otherwise (as ``run_fused``)."""
     eager = layer.forward_forest
-    fused = types.MethodType(_qwen3_5_forest, layer)
+    fused: Callable[..., tuple[torch.Tensor, torch.Tensor]] = types.MethodType(
+        _qwen3_5_forest, layer
+    )
 
-    def forward_forest(self, prefix, blocks, *args):
+    def forward_forest(
+        self: FusedLayer, prefix: torch.Tensor, blocks: torch.Tensor, *args: Any
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         key = ("forest", tuple(prefix.shape), tuple(blocks.shape))
         if key in self._fused_failed or not fused_applies(prefix):
             return eager(prefix, blocks, *args)
@@ -146,10 +176,10 @@ def _install_fused_forest(layer: nn.Module) -> None:
             self._fused_failed.add(key)
             return eager(prefix, blocks, *args)
 
-    layer.forward_forest = types.MethodType(forward_forest, layer)
+    cast(FusedLayer, layer).forward_forest = types.MethodType(forward_forest, layer)
 
 
-def _prepare_qwen3_5(layer: nn.Module) -> dict[str, Any]:
+def _prepare_qwen3_5(layer: Qwen3_5Layer) -> dict[str, Any]:
     with torch.no_grad():
         p: dict[str, Any] = {
             "eps": layer.input_layernorm.eps,
@@ -168,15 +198,15 @@ def _prepare_qwen3_5(layer: nn.Module) -> dict[str, Any]:
                 dt_bias=m.dt_bias.float().contiguous(),
             )
         else:
-            m = layer.self_attn
+            attn = layer.self_attn
             p.update(
-                qw1=(1.0 + m.q_norm.weight.float()).contiguous(),
-                kw1=(1.0 + m.k_norm.weight.float()).contiguous(),
+                qw1=(1.0 + attn.q_norm.weight.float()).contiguous(),
+                kw1=(1.0 + attn.k_norm.weight.float()).contiguous(),
             )
     return p
 
 
-def _prepare_qwen3(layer: nn.Module) -> dict[str, Any]:
+def _prepare_qwen3(layer: Qwen3Layer) -> dict[str, Any]:
     m = layer.self_attn
     with torch.no_grad():
         return {
@@ -199,7 +229,10 @@ def fused_applies(hidden_states: torch.Tensor) -> bool:
 
 
 def run_fused(
-    layer: nn.Module, eager: Any, hidden_states: torch.Tensor, *args: Any
+    layer: FusedLayer,
+    eager: Callable[..., torch.Tensor],
+    hidden_states: torch.Tensor,
+    *args: Any,
 ) -> torch.Tensor:
     """The layer's fused forward, or its eager forward where the fused one does not apply or failed."""
     key = tuple(hidden_states.shape)
@@ -224,14 +257,20 @@ def _residual(
         and delta.is_contiguous()
         and hidden.is_contiguous()
     ):
-        return kernels("residual_add")(hidden, delta)
+        out: torch.Tensor = kernels("residual_add")(hidden, delta)
+        return out
     return hidden + delta
 
 
 def _qwen3_5_forward(
-    layer, hidden_states, rotary, full_mask, linear_mask, kernels: KernelSet
-):
-    p = layer._fused
+    layer: Qwen3_5Layer,
+    hidden_states: torch.Tensor,
+    rotary: tuple[torch.Tensor, torch.Tensor],
+    full_mask: torch.Tensor | Tree | None,
+    linear_mask: torch.Tensor | Tree | None,
+    kernels: KernelSet,
+) -> torch.Tensor:
+    p = cast(FusedLayer, layer)._fused
     hidden_states = hidden_states.contiguous()
     _, normed = kernels("add_rmsnorm")(hidden_states, None, p["w1_in"], p["eps"])
     if layer.kind == "linear_attention":
@@ -247,12 +286,17 @@ def _qwen3_5_forward(
 
 
 def _qwen3_5_forest(
-    layer, prefix, blocks, rotary, forest: Forest, kernels: KernelSet
+    layer: Qwen3_5Layer,
+    prefix: torch.Tensor,
+    blocks: torch.Tensor,
+    rotary: tuple[tuple[torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]],
+    forest: Forest,
+    kernels: KernelSet,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """``Qwen3_5Layer.forward_forest`` with fused norms, residuals, MLP gates, attention prep and gates."""
-    p = layer._fused
+    p = cast(FusedLayer, layer)._fused
     prefix, blocks = prefix.contiguous(), blocks.contiguous()
-    normed = [
+    normed_prefix, normed_blocks = [
         kernels("add_rmsnorm")(x, None, p["w1_in"], p["eps"])[1]
         for x in (prefix, blocks)
     ]
@@ -260,7 +304,8 @@ def _qwen3_5_forest(
         m = layer.linear_attn
         mixed = forest_gated_delta(
             m,
-            *normed,
+            normed_prefix,
+            normed_blocks,
             forest,
             kernels,
             norm=lambda core, z: kernels("gated_rmsnorm")(
@@ -273,7 +318,8 @@ def _qwen3_5_forest(
     else:
         mixed = forest_attention(
             layer.self_attn,
-            *normed,
+            normed_prefix,
+            normed_blocks,
             *rotary,
             forest,
             project=lambda m, h, table: _forest_projection(m, p, h, table, kernels),
@@ -292,7 +338,13 @@ def _qwen3_5_forest(
     return out[0], out[1]
 
 
-def _forest_projection(m, p, h, rotary, kernels: KernelSet):
+def _forest_projection(
+    m: GatedAttention,
+    p: dict[str, Any],
+    h: torch.Tensor,
+    rotary: tuple[torch.Tensor, torch.Tensor],
+    kernels: KernelSet,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """``forest.project_attention`` through ``attn_prep``; the gate stays a view of the q projection."""
     rows, length, _ = h.shape
     hd = m.head_dim
@@ -309,7 +361,13 @@ def _forest_projection(m, p, h, rotary, kernels: KernelSet):
     return q, k, v, qp.view(rows, length, heads, 2 * hd)[..., hd:]
 
 
-def _tree_gated_delta(m, p, normed, tree, kernels: KernelSet):
+def _tree_gated_delta(
+    m: GatedDeltaNet,
+    p: dict[str, Any],
+    normed: torch.Tensor,
+    tree: Tree,
+    kernels: KernelSet,
+) -> torch.Tensor:
     """``tree.tree_gated_delta`` with the fused kernels: the prefix from a zero state, every suffix from the
     prefix-end state with its convolution window starting in the prefix (rows ``[prefix tail | suffix]``,
     whose first outputs are dropped)."""
@@ -321,13 +379,13 @@ def _tree_gated_delta(m, p, normed, tree, kernels: KernelSet):
     a = m.in_proj_a(normed)
     args = (p["conv_w"], p["A_log"], p["dt_bias"], m.num_k_heads, m.head_k_dim)
 
-    def rows(x):
+    def rows(x: torch.Tensor) -> torch.Tensor:
         return torch.cat(
             [x[:, pre - (window - 1) : pre].expand(n, -1, -1), tree.rows(x[0, pre:])],
             dim=1,
         )
 
-    def packed(x):
+    def packed(x: torch.Tensor) -> torch.Tensor:
         return tree.packed(x[:, window - 1 :])[None]
 
     prep = kernels("gdn_prep")
@@ -356,14 +414,22 @@ def _tree_gated_delta(m, p, normed, tree, kernels: KernelSet):
         m.norm.weight,
         m.norm.variance_epsilon,
     )
-    return m.out_proj(out.reshape(1, length, -1))
+    projected: torch.Tensor = m.out_proj(out.reshape(1, length, -1))
+    return projected
 
 
-def _gated_delta(m, p, normed, mask, kernels: KernelSet):
+def _gated_delta(
+    m: GatedDeltaNet,
+    p: dict[str, Any],
+    normed: torch.Tensor,
+    mask: torch.Tensor | Tree | None,
+    kernels: KernelSet,
+) -> torch.Tensor:
     if kernels.select("causal_conv1d").variant is not None:
         # The model's released convolution (a kernel variant) is not what gdn_prep fuses.
-        return m(normed, mask, kernels)
-    if getattr(mask, "is_tree", False):
+        eager: torch.Tensor = m(normed, mask, kernels)
+        return eager
+    if is_tree(mask):
         return _tree_gated_delta(m, p, normed, mask, kernels)
     if mask is not None:
         normed = (normed * mask[:, :, None]).to(normed.dtype)
@@ -389,10 +455,18 @@ def _gated_delta(m, p, normed, mask, kernels: KernelSet):
         m.norm.weight,
         m.norm.variance_epsilon,
     )
-    return m.out_proj(out.reshape(batch, length, -1))
+    projected: torch.Tensor = m.out_proj(out.reshape(batch, length, -1))
+    return projected
 
 
-def _gated_attention(m, p, normed, rotary, mask, kernels: KernelSet):
+def _gated_attention(
+    m: GatedAttention,
+    p: dict[str, Any],
+    normed: torch.Tensor,
+    rotary: tuple[torch.Tensor, torch.Tensor],
+    mask: torch.Tensor | Tree | None,
+    kernels: KernelSet,
+) -> torch.Tensor:
     batch, length, _ = normed.shape
     hd = m.head_dim
     qp = m.q_proj(normed).contiguous()
@@ -407,11 +481,18 @@ def _gated_attention(m, p, normed, rotary, mask, kernels: KernelSet):
     v = vp.view(batch, length, kv_heads, hd).transpose(1, 2)
     out = attention(kernels, q, k, v, mask, groups=m.groups, scaling=m.scaling)
     gate = qp.view(batch, length, heads, 2 * hd)[..., hd:]
-    return m.o_proj(kernels("sigmoid_gate")(out, gate))
+    gated: torch.Tensor = m.o_proj(kernels("sigmoid_gate")(out, gate))
+    return gated
 
 
-def _qwen3_forward(layer, hidden_states, rotary, mask, kernels: KernelSet):
-    p = layer._fused
+def _qwen3_forward(
+    layer: Qwen3Layer,
+    hidden_states: torch.Tensor,
+    rotary: tuple[torch.Tensor, torch.Tensor],
+    mask: torch.Tensor | Tree | None,
+    kernels: KernelSet,
+) -> torch.Tensor:
+    p = cast(FusedLayer, layer)._fused
     hidden_states = hidden_states.contiguous()
     _, normed = kernels("add_rmsnorm")(hidden_states, None, p["w_in"], p["eps"])
     m = layer.self_attn
@@ -458,19 +539,26 @@ def install_lean_lora(backbone: nn.Module) -> dict[str, int]:
         original = module.forward
 
         def forward(
-            x, _w=base, _a=factor_a, _b=factor_b, _bias=bias, _original=original
-        ):
+            x: torch.Tensor,
+            _w: torch.Tensor = base,
+            _a: torch.Tensor = factor_a,
+            _b: torch.Tensor = factor_b,
+            _bias: torch.Tensor | None = bias,
+            _original: Callable[[torch.Tensor], torch.Tensor] = original,
+        ) -> torch.Tensor:
             if not (x.is_cuda and torch.is_autocast_enabled("cuda")):
                 return _original(x)
             xb = x.to(torch.bfloat16)
             return linear(xb, _w, _bias) + linear(linear(xb, _a), _b)
 
-        module.forward = forward
+        cast(nn.Module, module).forward = forward
         lean += 1
     return {"lean": lean, "kept": kept}
 
 
-def _lean_weights(module: LoRALinear):
+def _lean_weights(
+    module: LoRALinear,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None] | None:
     base = module.base_layer
     scaling = float(module.scaling)
     if (
@@ -560,9 +648,9 @@ class Graphs:
         self.max_graphs = max_graphs
         self.max_tokens = max_tokens
         self.max_output_bytes = max_output_bytes
-        self.graphs: dict[tuple, dict[str, Any]] = {}
-        self.seen: dict[tuple, int] = {}
-        self.failed: set[tuple] = set()
+        self.graphs: dict[tuple[int, int, bool], dict[str, Any]] = {}
+        self.seen: dict[tuple[int, int, bool], int] = {}
+        self.failed: set[tuple[int, int, bool]] = set()
         self.output_bytes = 0
         self.pool: Any = None
         self.stats = {
@@ -602,16 +690,24 @@ class Graphs:
         entry["attention_mask"].copy_(attention_mask)
         entry["graph"].replay()
         self.stats["replays"] += 1
-        return entry["output"]
+        output: torch.Tensor = entry["output"]
+        return output
 
     def eager(
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor, padded: bool
     ) -> torch.Tensor:
-        return self.backbone(
+        hidden: torch.Tensor = self.backbone(
             input_ids, attention_mask, masks=self.masks.build(attention_mask, padded)
         )
+        return hidden
 
-    def _capture(self, key, input_ids, attention_mask, padded) -> dict[str, Any] | None:
+    def _capture(
+        self,
+        key: tuple[int, int, bool],
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        padded: bool,
+    ) -> dict[str, Any] | None:
         if (
             len(self.graphs) >= self.max_graphs
             or self.output_bytes >= self.max_output_bytes
@@ -629,7 +725,7 @@ class Graphs:
         try:
             if self.pool is None:
                 self.pool = torch.cuda.graph_pool_handle()
-            stream = torch.cuda.Stream()
+            stream = torch.cuda.Stream()  # type: ignore[no-untyped-call]  # torch leaves Stream's constructor unannotated
             stream.wait_stream(torch.cuda.current_stream())
             with torch.autocast("cuda", dtype=torch.bfloat16, cache_enabled=False):
                 with torch.cuda.stream(stream):

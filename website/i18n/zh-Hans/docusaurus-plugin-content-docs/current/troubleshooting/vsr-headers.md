@@ -67,6 +67,7 @@ Router 把头分到两个面：
 | `x-vsr-effective-input-tokens` | default | 最终自动输出分发中，所选后端实际渲染的输入 token 数，包含其 chat 模板。 | `512` |
 | `x-vsr-effective-max-output-tokens` | default | 该自动输出分发中发送的已解析输出 token 上限，包含推理。这是预算，不是已消耗的 token。 | `261632` |
 | `x-vsr-routing-latency-ms` | default | Router 选择模型所花时间，单位毫秒，带亚毫秒精度。 | `0.412` |
+| `x-vsr-fallback-attempts` | default | 由跨模型 fallback 的候选模型返回响应时，fallback 一共尝试的次数（含主模型）；两种网关模式相同。主模型直接返回时不出现。 | `2` |
 | `x-vsr-selected-category` | debug | 运行领域路由时的领域/类别分类器结果。 | `math` |
 | `x-vsr-selected-reasoning` | debug | 为请求选择的推理模式。 | `on` |
 | `x-vsr-selected-modality` | debug | 模态结果和可选方法。 | `AR;classifier` |

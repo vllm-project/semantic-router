@@ -16,6 +16,7 @@ from cli.consts import (
     DEFAULT_ROUTER_PORT,
     DEFAULT_STACK_NAME,
 )
+from cli.gateway_mode import GATEWAY_STANDALONE
 
 STACK_NAME_ENV = "VLLM_SR_STACK_NAME"
 MAX_PORT = 65535
@@ -39,8 +40,8 @@ class RuntimeStackLayout:
     """Every name and port one local stack owns.
 
     A stack runs on two bridge networks. *network_name* is the application
-    network: Envoy, Dashboard, the observability containers, and
-    any OpenClaw workload join it. *data_network_name* carries the storage
+    network: Envoy, Dashboard and the observability containers join
+    it. *data_network_name* carries the storage
     services alone, so nothing that merely shares the stack can reach Redis,
     Postgres, or Milvus over the network. Router is the one container on both.
     """
@@ -121,6 +122,12 @@ class RuntimeStackLayout:
 
     def envoy_listener_service_url(self, listener_port: int) -> str:
         return f"http://{self.envoy_container_name}:{listener_port}"
+
+    def gateway_listener_service_url(self, gateway: str, listener_port: int) -> str:
+        """The in-network URL of the container that serves the listeners."""
+        if gateway == GATEWAY_STANDALONE:
+            return f"http://{self.router_container_name}:{listener_port}"
+        return self.envoy_listener_service_url(listener_port)
 
     @property
     def jaeger_ui_url(self) -> str:

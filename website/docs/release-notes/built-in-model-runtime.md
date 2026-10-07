@@ -14,20 +14,18 @@ or a runtime you run yourself.
 
 The runtime is the `vllm-srun` package and command. Every router image ships
 it, and it is not published to PyPI: `vllm-sr` stays the only PyPI package.
-Engine mode (`vllm-sr serve MODEL`) on your own machine needs the runtime
-installed next to the CLI from a checkout of the repository. Install PyTorch
-from the [index that matches your hardware](https://pytorch.org/get-started/locally/),
-then both packages:
+Engine mode (`vllm-sr serve MODEL`) runs the runtime in a container from the
+router image, so the CLI and Docker or Podman are all it needs:
 
 ```bash
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install ./src/vllm-sr ./src/model-runtime
+pip install vllm-sr
 vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
 ```
 
-On ROCm, answers byte-identical to the released model packages are guaranteed
-in the router images, which carry the release's own PyTorch build, not in a
-`pip` install with the official PyTorch wheel. See the
+`--platform amd` or `--platform nvidia` runs the `vllm-sr-rocm` or
+`vllm-sr-cuda` image with the GPUs passed through. The images carry the
+release's own PyTorch build, so their answers are byte-identical to the
+released model packages. See the
 [model runtime Quickstart](model-runtime/quickstart.md).
 
 Builds of `main` between

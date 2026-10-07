@@ -119,11 +119,20 @@ type SemanticRouterSpec struct {
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
 
-	// Container arguments
+	// Router arguments, after the gateway mode flags the Operator passes
+	// (-gateway=standalone -listener-address=0.0.0.0, or -gateway=extproc).
+	// The gateway mode follows spec.gateway, so args may not set those flags.
+	// +kubebuilder:validation:MaxItems=64
+	// +kubebuilder:validation:items:MaxLength=4096
+	// +kubebuilder:validation:XValidation:rule="self.all(a, !a.matches('^--?(gateway|listener-address)(=|$)'))",message="spec.args must not set -gateway or -listener-address: the gateway mode follows spec.gateway"
 	// +optional
 	Args []string `json:"args,omitempty"`
 
-	// Gateway integration for reusing existing gateways
+	// Gateway selects what serves client traffic. Omitted, the Router runs
+	// standalone: it serves the OpenAI-compatible API on port 8801 itself,
+	// with no Envoy, and the Service exposes that port. With existingRef, the
+	// Router serves ext_proc gRPC on port 50051 for that Gateway, whose
+	// ext_proc policy and routes you manage.
 	// +optional
 	Gateway *GatewaySpec `json:"gateway,omitempty"`
 
@@ -139,7 +148,7 @@ type SemanticRouterSpec struct {
 // ImageSpec defines the container image configuration
 type ImageSpec struct {
 	// Repository is the container image repository
-	// +kubebuilder:default="ghcr.io/vllm-project/semantic-router/extproc"
+	// +kubebuilder:default="ghcr.io/vllm-project/semantic-router/vllm-sr"
 	// +optional
 	Repository string `json:"repository,omitempty"`
 
@@ -1421,6 +1430,16 @@ type DecisionConfig struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object
 	Algorithm *apiextensionsv1.JSON `json:"algorithm,omitempty" yaml:"algorithm,omitempty"`
+
+	// Reliability overrides the timeouts and retries of the provider model
+	// that serves this decision's requests
+	// +optional
+	Reliability *DecisionReliabilityConfig `json:"reliability,omitempty" yaml:"reliability,omitempty"`
+
+	// Fallback overrides the cross-model fallback policy for this decision's
+	// requests, over the recipe's and the router's
+	// +optional
+	Fallback *DecisionFallbackConfig `json:"fallback,omitempty" yaml:"fallback,omitempty"`
 }
 
 // RuleCombinationConfig defines how to combine multiple rule conditions
@@ -1999,7 +2018,8 @@ type ServiceBackend struct {
 
 // GatewaySpec defines Gateway API integration configuration
 type GatewaySpec struct {
-	// ExistingRef references an existing Gateway to use
+	// ExistingRef references an existing Gateway that calls the Router over
+	// ext_proc. Setting it selects extproc mode.
 	// +optional
 	ExistingRef *GatewayReference `json:"existingRef,omitempty"`
 }
@@ -2078,7 +2098,9 @@ type SemanticRouterStatus struct {
 	// +optional
 	Phase string `json:"phase,omitempty"`
 
-	// GatewayMode indicates deployment mode: standalone or gateway-integration
+	// GatewayMode is what serves client traffic: standalone (the Router's own
+	// listener on port 8801) or gateway-integration (the Gateway in
+	// spec.gateway, with the Router serving ext_proc)
 	// +optional
 	GatewayMode string `json:"gatewayMode,omitempty"`
 

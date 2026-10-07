@@ -240,7 +240,8 @@ then answers a repeated item from the model's result cache without a forward.
 expired item or plan. Results are shared with the cache, so `finish_surface`
 never mutates them. `mypy --strict` checks the plugin interfaces, the
 scheduler, the profiles, the runtime core, the API, the registry, the shared
-heads and supervision in `make model-runtime-test`.
+heads, supervision, the engines and the model families in
+`make model-runtime-test`.
 
 Decision families subclass `DecisionModel` (`plugins/decisions.py`), the
 decisions mixin: it serves `/v1/decisions` through the family's `plan` (render
