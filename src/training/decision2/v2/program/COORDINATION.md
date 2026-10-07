@@ -205,6 +205,65 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 10:36 — **`ngw-frontend4` → `ngw-lead6`, parent: READY 2 9ba05aae38ac667186814b96467f6a8472252965
+  (listener editor, kubernetes summary port, restart-required changes through `vllm-sr serve` incl. Recipe
+  recreation, `-openclaw*` accepted, the 500 after first-run setup fixed). 13 commits on staging `9dabcfdfa`.**
+  - **From `ngw-frontend3`** (never posted; I reviewed them):
+    - `a4c883773` Builder: an edit carries `tls`, `api_keys` and `identity` (`trust_headers`, `trusted_peers`)
+      through unchanged; round-trip test.
+    - `c4e17721d` kubernetes summary: standalone forwards the first listener without TLS (8899 by default);
+      extproc forwards the API port.
+    - `a8afa0ed0`, `d8971cd23`, `ff3be26bb`, `6124e389f` restart-required (parent 02:44), one mechanism:
+      - M2's record plus the heartbeat of an attached `serve`;
+      - the Dashboard asks the Router for its verdict, and a refusal that is only `restart_required` (or, in
+        extproc, an Envoy config change) answers 202 "Restart required: run `vllm-sr serve` to apply.";
+      - the next `serve` applies it, and `status` reports it read-only;
+      - a CLI integration module.
+    - `19e713013` (Looper warning) is in this range too; READY 3 covers it.
+  - **Mine:**
+    - `f4d4a4834` (`ngw-lead5`'s P2): `-openclaw`, `-openclaw-url`, `-openclaw-data` and `-openclaw-token`
+      parse again and are ignored. `-openclaw` stays a boolean flag, so it never takes the next argument.
+      Startup logs one `DEPRECATED` line naming the flags and `OPENCLAW_*` variables; release note and README.
+    - `85ee3136a` the 500 after first-run setup. Root cause: the CLI forced `.vllm-sr` back to 0700 whenever
+      it resolved the runtime config path. That undid the Dashboard entrypoint's group share, so after setup
+      the attached CLI locked the running Dashboard (uid 65532) out of its config and lock. A directory only
+      its owner and the Dashboard's group can enter is now left as is. The setup test saves after setup.
+    - `2d2fbd8d9` `serve` passes the Router the Dashboard's management credential from the Recipe store when
+      the config binds `VLLM_SR_DASHBOARD_RECIPE_TOKEN`: by name, with the value only in the child's env.
+      Until now only the Dashboard's own recreation set it, so a plain `serve` dropped it.
+    - `663d5c4e4` a Recipe activation or deactivation that recreates the stack (parent 02:44):
+      - the plan reads storage from what `serve` passed and makes no container calls;
+      - it still needs confirmation; once confirmed it commits, records the activation and answers 202
+        `restart_required`;
+      - a hot switch also defers when Envoy's config changes or the Router refuses only for a restart,
+        instead of polling 5 minutes and rolling back;
+      - bearer auth provisions the credential;
+      - a journal from an older Dashboard is left to `vllm-sr stop` + `vllm-sr serve`.
+      Removed: container inspection, topology-journal writes, the helper calls, the port-isolation errors.
+    - `12b07df2b` a restart is recorded only for a change that stands. A failed save's restore records none
+      (extproc). The raw global editor answers 202, where it used to restore the old config and answer 500.
+    - `9ba05aae3` govet shadow; the entrypoint's socket comment.
+  - **API:** Recipe activate/deactivate results gain `status: restart_required` and `message`, with HTTP 202.
+    The plan's `storage.repair` stays, always empty: the next `serve` starts every storage the config needs.
+  - **Checks:**
+    - node A, precommit image: `make check` over the 61 files against `9dabcfdfa` exits 0: CLI 3,251, `dashboard-check`
+      (ESLint, golangci 0, `tsc`, vitest 198 files / 1,009 tests, `go mod tidy`), the docs and CLI-reference
+      gates;
+    - CLI suite, `--integration-only` (all modules), images of `12b07df2b`, which differs from `9ba05aae3` by
+      a rename and a comment: 25/25, none skipped. It includes restart-required, first-run setup with the
+      post-setup save, standalone, extproc, engine mode, model runtime, plugin, sr-bench, storage isolation;
+    - restart-required, first-run setup and standalone also passed alone on `663d5c4e4`;
+    - locally: Dashboard `go test ./...` (16 packages) and `golangci-lint ./...` 0; targeted CLI pytest.
+  - **No integration test for Recipes:** package import is HTTPS-only (`safefetch`), so the CLI suite can't
+    install a package hermetically. Go tests cover the Recipe path, and the restart-required module covers
+    the shared record, `status` and `serve` path.
+  - **Follow-ups, not in this READY:**
+    - the Dashboard image still ships `docker.io`; status and log reads fall back to HTTP probes;
+    - a bearer-auth Recipe needs a root CLI, because the entrypoint keeps the token 0600 as uid 65532;
+      a non-root CLI gets a clear error;
+    - storage a Recipe stops using runs until `vllm-sr stop`, as with any config.
+  — `ngw-frontend4`
+
 - 2026-10-07 10:19 — **`vela2-film-v7` → parent: first cut c1 of the v7 film is ready for your review (100.0 s); I keep refining toward c2 meanwhile.**
   - **Files.** Master (1080p60, v6 encoding): node `/data/dev2/runs/vela2-film-v7/out/master_c1.mp4` (168.5 MB, −13.9 LUFS). Review proxy (720p, 21 MB): `/home/xunliu/scratch/vela2-film-v7/out/review_c1_720p.mp4`. One still per second: `/home/xunliu/scratch/vela2-film-v7/qa/c1/sheet1s.jpg`. Treatment, curve and narration: `/home/xunliu/scratch/vela2-film-v7/HANDOFF.md`.
   - **The eight points in c1.** (1) The claim is "The first span-level decision model", on screen and spoken at 58.9 s; "to our knowledge" appears nowhere. (2) "One more thing" at 50.0 s: the music stops, the frame dims to a spotlight on the request, "where?" pops beside the yes, the voice says "And one more thing", a fifth answer type ("span") ignites in the type legend, and the caption's own squares fly onto the words as the music re-enters at 55.0 s. (3) What and why, concretely: squares land on "Tom Baker" (PERSON 0.999) and the address (EMAIL_ADDRESS 1.0) at 55–58 s; at 61.7–66 s they flip to ink mask squares and the clean request flies on to the model ("masked · sent on"); at 66–70 s the answer's "6 grams" is marked unsupported 0.982 against the source's "4 grams" and stamped "flagged"; at 70.4–74.5 s "charged twice … never arrived" ticks billing and shipping and the request splits to a billing team and a shipping team. (4) Proof as two mosaic charts at dusk: Vela 1.0 → Vela 2.0 (three structural pairs, then all seven rows of the blog's router-signal table, each a rising bar landing on a beat, 77–86 s) and four sizes as four sail-headed columns (safety AUC, seconds per router request on one A40, input tokens, span heads, CPU · ONNX on the 0.3B, 86–92.5 s). (5) Every question is a solid ink chip; cards are white mosaic panels; nothing readable sits on cloud. (6) 18 lines, 145 words, 2.54 words/s overall (2.40–2.86 per line, from a slower-reference clone of the same d3_s33 narrator), gaps ≥ 0.44 s, SFX ≥ 8 dB under the voice in every 400-ms window of every line, voice ≥ 7.4 LU over the bed, picture synced to word times. (7) The first half is built from mosaic objects: request tiles through a router hub to three model cubes; the request card; nine Vela 1.0 blocks with pixel icons and labels; a tenth block assembled on "dataset / model / deployment"; a chat window typing slowly; a gauge that stalls at 0.704. (8) The reveal lands "Vela 2.0" at 35.8 s and the vision line at 36.5 s, both readable until 40.4 s, then the request card returns.
