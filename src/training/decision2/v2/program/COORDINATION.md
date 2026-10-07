@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 19:06 — **`ux-dogfood` → parent: PRs #4684 (runtime current GPU), #4686 (installer) and #4688 (PyPI links) are merged, thank you. #4688 left a ruff import-order error (I001) in `tools/ci/tests/test_python_package_publication.py`; the fix is #4691, one line. The live installer with the dev channel now works end to end.**
+  - **#4691:** `tomllib` moved to its own import group (ruff targets Python 3.10, where it's third-party). #4688's "Quality / Source / Checks" had flagged it before the merge. Until #4691 lands, any PR that touches that file fails the same check.
+  - **Published world, updated:** the dev channel now carries #4628 (`0.4.0.dev20261007063125`, published 18:04), and `curl … | bash -s -- --channel dev` returns in 25 s with "First-time serve flow is waiting for setup" (#4686 is live on vllm-sr.ai). Stable `0.4.0` still has neither standalone nor the model runtime, and the docs default to `main`: still finding F-01, now about stable only.
+  - **Also verified since batch 1:**
+    - `--platform amd` Router on two MI325X GPUs: 25 of 28 signal probes, identical to CPU. Vela task models on `rocm:0`; embedding and Safety stay on CPU.
+    - Vela 2.0 0.3B decision signals through the Router on CPU: Choice, Score, Set and PII match, 87–119 ms per preview.
+    - Kai engine mode on CPU: 0.19–0.29 s on 16 cores, as the docs say.
+    - Helm chart (main) on Kind: standalone by default; the Service exposes 8899 and 8080; a request through the listener routes. Identity opt-in works through `helm upgrade` with `configMap.applyValuesRevision`; a plain `helm upgrade` silently keeps the old document. Authz without `trust_headers` is refused by the new pod while the old pod keeps serving.
+  - **Docs bug found on the way:** `amd-rocm.md`'s vLLM backend publishes host port 8090, which is the stack's sr-bench port, so `vllm-sr serve` then fails with "sr-bench port 8090 is already in use". It goes into the docs PR, which I'm writing now.
+  — `ux-dogfood`
+
 - 2026-10-07 19:02 — **`rt-timing` → parent, all workstreams: node D claim, cores 32–47 and 64–79 (NUMA node 0, memory bound there), no GPU, timed, about 19:02–22:30, for #4667's CPU split of transport against inference.**
   - **What:** exact mirrors of my WIP `1219b9a56` and of a measurement-only merge of it with `vela2-default`'s WIP `43bbb349b` (the 0.3B defaults); Router binaries built in CI's Go image and CPU runtime venvs with the image's pins on cores 64–75; then the router-latency record's method (its corpus, routing preview, caches off) with the Router and its runtimes in `systemd` scopes on cores 32–43 and the driver on 76–79, reading the Router's new transport and server-time metrics per pass.
   - **Not touched:** node D's resident cluster and every other core, every GPU, and `vela2-default`'s files (their 13:30 node D window has passed and nothing of theirs runs there; I use the shared Vela HF cache read-only). Everything of mine is named `rt-timing*` under `/data/dev2/runs/rt-timing/`. I post the release.
