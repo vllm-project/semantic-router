@@ -329,6 +329,49 @@ decisions:
         expected_signals:
           projection: [effort_high]
         tags: [language:zh]
+      - id: letter_only_chemistry
+        query: |-
+          A chemist heats (E)-1,2-dideuterio-1-phenylpropene with a catalytic amount of a palladium(II) complex in deuterated acetic acid and observes scrambling of the deuterium label. Which mechanism best accounts for the observed isotope distribution?
+
+          A. Concerted [1,3]-sigmatropic hydrogen shift
+          B. Reversible hydropalladation and beta-hydride elimination
+          C. Radical chain isomerization
+          D. Acid-catalyzed carbocation formation without palladium
+
+          Answer with the letter only.
+        expected_signals:
+          decision: [difficulty, "task:stem"]
+        tags: [language:en, collision]
+        notes: >-
+          A letter-only reply lowers the deliberation answer below the effort
+          threshold; a STEM task the decision model rates multi-step still runs
+          at extra-high effort.
+
+  - id: code
+    model: vllm-sr/auto
+    expected_decision: code
+    expected_algorithm: static
+    expected_alias: qwen/qwen3.8-flash-next
+    objective: Code that needs reasoning goes to the strongest coder of the pool at medium effort.
+    variants:
+      - id: palindrome_function
+        query: Write a Python function that checks whether a string is a palindrome, ignoring case and punctuation.
+        expected_signals:
+          decision: ["task:code"]
+          projection: [effort_medium]
+        tags: [language:en]
+      - id: chinese_quicksort
+        query: 用 Python 写一个快速排序，并解释时间复杂度。
+        expected_signals:
+          decision: ["task:code"]
+          projection: [effort_medium]
+        tags: [language:zh]
+      - id: lru_cache
+        query: Implement an LRU cache in Java with O(1) get and put, and explain the invariants.
+        expected_signals:
+          decision: ["task:code"]
+          projection: [effort_high]
+        tags: [language:en]
 
   - id: standard
     model: vllm-sr/auto
@@ -336,11 +379,6 @@ decisions:
     expected_algorithm: multi_factor
     objective: Requests that need some reasoning run at medium effort on the Qwen pair.
     variants:
-      - id: palindrome_function
-        query: Write a Python function that checks whether a string is a palindrome, ignoring case and punctuation.
-        expected_signals:
-          projection: [effort_medium]
-        tags: [language:en]
       - id: protocol_explanation
         query: Explain how TCP congestion control works.
         expected_signals:
@@ -351,11 +389,18 @@ decisions:
         expected_signals:
           projection: [effort_medium]
         tags: [language:en]
-      - id: chinese_quicksort
-        query: 用 Python 写一个快速排序，并解释时间复杂度。
+      - id: chinese_comparison
+        query: 比较一下 PostgreSQL 和 MongoDB 在电商后端中的优缺点。
         expected_signals:
           projection: [effort_medium]
         tags: [language:zh]
+      - id: routine_algebra
+        query: Solve the system of equations 2x + 3y = 7 and x - y = 1.
+        expected_signals:
+          decision: ["task:stem"]
+          projection: [effort_medium]
+        tags: [language:en, collision]
+        notes: A STEM task below the difficulty threshold stays at medium effort.
       - id: agentic_without_tools
         query: Plan and execute a migration of our PostgreSQL database to a new cluster, run the commands, verify replication, and roll back if checks fail.
         expected_signals:
@@ -399,6 +444,13 @@ decisions:
           conversation: [has_tools]
         tags: [language:en, class:negative, shape:tools, shape:messages]
         notes: Declared tools alone do not make a request agentic.
+      - id: trivial_code_fix
+        query: "Fix the bug in this function: def add(a, b): return a - b"
+        expected_signals:
+          decision: ["task:code"]
+          projection: [effort_off]
+        tags: [language:en, class:negative, collision]
+        notes: A one-line fix needs no reasoning, so a code task alone does not pick the code lane.
       - id: brief_request
         query: "Quick answer: what's the time complexity of binary search?"
         expected_signals:

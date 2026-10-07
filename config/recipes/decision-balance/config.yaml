@@ -437,14 +437,44 @@ routing:
               Qwen3.8-Flash-Next: strongest on competition mathematics, code
               generation and precise instruction following
           timeout_ms: 1000
-    - name: hard
-      description: Multi-step reasoning at extra-high effort; multi_factor balances quality, GPU cost, latency and load.
-      priority: 400
+    - name: code
+      description: Code that needs reasoning goes to Qwen3.8-Flash-Next at medium effort, the strongest coder of the pool.
+      priority: 450
       rules:
         operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: task
+            label: code
+          - operator: OR
+            conditions:
+              - type: projection
+                name: effort_medium
+              - type: projection
+                name: effort_high
+      modelRefs:
+        - model: qwen/qwen3.8-flash-next
+          use_reasoning: true
+          reasoning_effort: medium
+      algorithm:
+        type: static
+    - name: hard
+      description: High effort, or a STEM problem that needs multi-step reasoning, at extra-high effort; multi_factor balances quality, GPU cost, latency and load.
+      priority: 400
+      rules:
+        operator: OR
+        on_unknown: no_match
         conditions:
           - type: projection
             name: effort_high
+          - operator: AND
+            conditions:
+              - type: decision
+                name: task
+                label: stem
+              - type: decision
+                name: difficulty
       modelRefs:
         - model: qwen/qwen3.8-flash-next
           use_reasoning: true

@@ -172,9 +172,16 @@ ROUTE frontier (description = "The hardest requests; the decision model chooses 
   }
 }
 
-ROUTE hard (description = "Multi-step reasoning at extra-high effort; multi_factor balances quality, GPU cost, latency and load.") {
+ROUTE code (description = "Code that needs reasoning goes to Qwen3.8-Flash-Next at medium effort, the strongest coder of the pool.", on_unknown = "no_match") {
+  PRIORITY 450
+  WHEN decision("task", label: "code") AND (projection("effort_medium") OR projection("effort_high"))
+  MODEL "qwen/qwen3.8-flash-next" (reasoning = true, effort = "medium")
+  ALGORITHM static
+}
+
+ROUTE hard (description = "High effort, or a STEM problem that needs multi-step reasoning, at extra-high effort; multi_factor balances quality, GPU cost, latency and load.", on_unknown = "no_match") {
   PRIORITY 400
-  WHEN projection("effort_high")
+  WHEN (projection("effort_high") OR decision("task", label: "stem") AND decision("difficulty"))
   MODEL "qwen/qwen3.8-flash-next" (reasoning = true, effort = "xhigh"),
         "qwen/qwen3.8-27b" (reasoning = true, effort = "xhigh")
   ALGORITHM multi_factor {

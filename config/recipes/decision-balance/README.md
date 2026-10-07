@@ -54,13 +54,19 @@ prompt guard, safety and PII signals:
 | `needs` | set | Which of deliberation, tools, verification, long output and creativity a good answer needs |
 | `correction` | noul | Whether the user says the assistant's previous answer was wrong |
 
+No decision reads the `long_output` and `creativity` answers yet; they are
+reported with the request's other signals.
+
 Heuristic signals cover what needs no model: images, declared tools, an active
 tool loop, an earlier assistant answer, input length and a request for a brief
 answer.
 
 The effort score is `0.3 × difficulty + 0.35 × P(deliberation) +
 0.1 × P(verification) − 0.35 × brief request`, banded into off (below 0.4),
-medium (below 0.8), high (below 1.15) and max.
+medium (below 0.8), high (below 1.15) and max. A STEM task that the decision
+model rates at least multi-step (`difficulty` 2 or more) also runs at high
+effort: asking for only the final answer lowers the deliberation answer, not
+the reasoning the problem needs.
 
 Decisions, highest priority first:
 
@@ -73,7 +79,8 @@ Decisions, highest priority first:
 | `agentic` | An active tool loop, or declared tools the request needs | GLM-5.3-Flash, high | `static` |
 | `facts` | Facts most people would look up, for a facts, analysis or writing task below max effort | GLM-5.3-Flash, low | `static` |
 | `frontier` | Max effort | GLM-5.3-Flash max or Flash-Next xhigh | `decision`: the decision model chooses from the candidates' descriptions |
-| `hard` | High effort | Flash-Next or 27B, both xhigh | `multi_factor` |
+| `code` | A code task at medium or high effort | Qwen3.8-Flash-Next, medium | `static` |
+| `hard` | High effort, or a STEM task rated multi-step | Flash-Next or 27B, both xhigh | `multi_factor` |
 | `standard` | Medium effort | Flash-Next or 27B, both medium | `multi_factor` |
 | `fast` | Everything else | Qwen3.8-27B, thinking off | `static` |
 
@@ -83,6 +90,15 @@ also chooses the model. `hard` and `standard` weigh quality (0.25), cost
 (0.4), latency (0.1) and current load (0.25). With equal load the 27B wins on
 cost; when it carries more in-flight requests than Flash-Next, Flash-Next takes
 the request.
+
+The effort rules follow per-effort measurements on public benchmark samples.
+On GPQA Diamond, medium effort lost 8 to 15 points against extra-high on both
+Qwen models, so hard STEM runs at extra-high. On LiveCodeBench, Flash-Next at
+medium effort solved more problems than either Qwen model at extra-high, with
+less than half the output tokens, so code goes to `code` instead of `standard`
+or `hard`. With thinking off, both Qwen models lost 27 to 40 points on
+multiple-choice knowledge and STEM questions, so `fast` keeps only requests
+whose effort score stays below 0.4.
 
 ## Requirements
 
@@ -129,8 +145,9 @@ requests to `vllm-sr/auto`; the `x-vsr-selected-decision` and
 ## Evaluation
 
 The probes cover every decision and the entrypoint, with negative variants for
-well-known facts, declared but unused tools and follow-ups that are not
-corrections, plus multilingual, multi-turn, tool, image and long-input
+well-known facts, declared but unused tools, follow-ups that are not
+corrections and a one-line code fix, collision variants at the effort
+boundaries, plus multilingual, multi-turn, tool, image and long-input
 variants. See [`probes.yaml`](probes.yaml) and the
 [conformance guide](../CONFORMANCE.md).
 
@@ -154,6 +171,8 @@ ratio.
   inputs. On long inputs the measured cost of the dense 27B rises above
   Flash-Next's.
 - Operator ratings are estimates, not measurements.
+- The effort rules were checked on 60 to 150 questions per benchmark; other
+  workloads can need other thresholds.
 - A route to a stronger model does not guarantee a correct answer.
 - The recipe does not provision the inference backends it references.
 
