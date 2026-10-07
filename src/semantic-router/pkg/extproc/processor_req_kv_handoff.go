@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/kvtransfer"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -60,7 +61,7 @@ func (a *CoordinatedKVHandoff) PlanDispatch(ctx context.Context, d KVDispatch) (
 // encodeKVHandoff runs after provider encoding so vLLM transfer parameters do
 // not become model input or leak into another provider's wire format.
 func (r *OpenAIRouter) encodeKVHandoff(body []byte, format llmprotocol.WireFormat, ctx *RequestContext) ([]byte, error) {
-	if r.KVHandoff == nil || ctx == nil || ctx.LooperRequest || format != llmprotocol.OpenAIChatV1 {
+	if r == nil || r.KVHandoff == nil || ctx == nil || format != llmprotocol.OpenAIChatV1 {
 		return body, nil
 	}
 	var wire map[string]json.RawMessage
@@ -72,12 +73,18 @@ func (r *OpenAIRouter) encodeKVHandoff(body []byte, format llmprotocol.WireForma
 	_, hadHint := wire["kv_transfer_params"]
 	delete(wire, "kv_transfer_params")
 	var hint *kvtransfer.Hint
-	if ctx.PreviousModel != "" && ctx.PreviousModel != ctx.RequestModel {
+	if !ctx.LooperRequest && ctx.AuthenticatedPrincipal != "" && ctx.SessionID != "" &&
+		(ctx.SessionProvenance == SessionProvenanceHeader || ctx.SessionProvenance == SessionProvenanceResponseAPI) &&
+		ctx.PreviousModel != "" && ctx.PreviousModel != ctx.RequestModel {
 		hint, _ = r.KVHandoff.PlanDispatch(selectionRequestContext(ctx), KVDispatch{
 			Principal: ctx.AuthenticatedPrincipal, SessionID: ctx.SessionID,
 			SessionProvenance: string(ctx.SessionProvenance), PreviousModel: ctx.PreviousModel,
 			TargetModel: ctx.RequestModel, BackendName: ctx.primaryBackendName, Turn: ctx.TurnIndex,
 		})
+	}
+	if hint != nil && (hint.Namespace != cache.UserScopeNamespace(ctx.AuthenticatedPrincipal) ||
+		!cache.UserScopeSecretConfigured() || hint.CacheID == "" || hint.MapperID == "") {
+		hint = nil
 	}
 	if hint == nil {
 		if !hadHint {
