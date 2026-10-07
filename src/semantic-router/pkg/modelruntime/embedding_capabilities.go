@@ -11,8 +11,8 @@ import (
 )
 
 func remoteEmbeddingRequirement(requirement config.EmbeddingRequirement) error {
-	if requirement.Windows || (requirement.Modality != "" && requirement.Modality != "text") || (requirement.Layer > 0 && !requirement.LocalLayerHint) {
-		return fmt.Errorf("%w: %s requires local tokenizer/layer/modality capabilities; the HTTP embedding contract provides text vectors only (use explicit bindings for independent local consumers)", binding.ErrCapability, requirement.Consumer)
+	if (requirement.Modality != "" && requirement.Modality != "text") || (requirement.Layer > 0 && !requirement.LocalLayerHint) {
+		return fmt.Errorf("%w: %s requires layer or modality capabilities; the HTTP embedding contract provides text vectors only (use explicit bindings for independent local consumers)", binding.ErrCapability, requirement.Consumer)
 	}
 	return nil
 }
@@ -40,15 +40,6 @@ func validatePreparedEmbeddings(ctx context.Context, requirements []config.Embed
 			}
 			if requirement.Modality == "audio" && info.EmbeddingInfo().Audio == nil {
 				return fmt.Errorf("%w: %s requires original-PCM audio input, not precomputed audio features", binding.ErrCapability, requirement.Consumer)
-			}
-		}
-		if requirement.Windows {
-			windows, ok := provider.(embedding.WindowProvider)
-			if !ok {
-				return fmt.Errorf("%w: %s requires tokenizer windows", binding.ErrCapability, requirement.Consumer)
-			}
-			if _, err := windows.Windows(ctx, "semantic router capability probe", 0); err != nil {
-				return fmt.Errorf("prepare %s tokenizer windows: %w", requirement.Consumer, err)
 			}
 		}
 		key := fmt.Sprintf("%s:%d:%d", embedding.Identity(provider), options.Dimension, options.Layer)

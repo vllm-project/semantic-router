@@ -249,16 +249,15 @@ func (c *Classifier) hasLongContextClassifier(signalType string) bool {
 		// An independent remote scorer retains its existing bounded input.
 		return c.Config.ComplexityModel.Backend == nil && c.Config.EmbeddingConfig.FullContext
 	case config.SignalTypeDomain:
-		variant, _ := c.Config.CategoryModel.EffectiveVariant()
-		return c.Config.CategoryModel.Backend == nil && variant == config.CategoryVariantMmBERT32K && c.Config.CategoryModel.MaxSequenceLength > 512
+		return c.Config.CategoryModel.Backend == nil && c.Config.CategoryModel.MaxSequenceLength > 512
 	case config.SignalTypeFactCheck:
-		return c.Config.HallucinationMitigation.FactCheckModel.UseMmBERT32K && c.Config.HallucinationMitigation.FactCheckModel.MaxSequenceLength > 512
+		return c.Config.HallucinationMitigation.FactCheckModel.MaxSequenceLength > 512
 	case config.SignalTypeUserFeedback:
-		return c.Config.FeedbackDetector.UseMmBERT32K && c.Config.FeedbackDetector.MaxSequenceLength > 512
+		return c.Config.FeedbackDetector.MaxSequenceLength > 512
 	case config.SignalTypePII:
-		return c.Config.PIIModel.Backend == nil && c.Config.PIIModel.UseMmBERT32K && c.Config.PIIModel.MaxSequenceLength > 512
+		return c.Config.PIIModel.Backend == nil && c.Config.PIIModel.MaxSequenceLength > 512
 	case config.SignalTypeJailbreak:
-		return c.Config.PromptGuard.Backend == nil && c.Config.PromptGuard.Variant == config.PromptGuardVariantMmBERT32K && c.Config.PromptGuard.MaxSequenceLength > 512
+		return c.Config.PromptGuard.Backend == nil && c.Config.PromptGuard.MaxSequenceLength > 512
 	case config.SignalTypeModality:
 		return c.Config.ModalityDetector.Classifier != nil && c.Config.ModalityDetector.Classifier.MaxSequenceLength > 512
 	}
@@ -266,17 +265,30 @@ func (c *Classifier) hasLongContextClassifier(signalType string) bool {
 }
 
 func (c *Classifier) piiInputSpans(text string) []signalChunkSpan {
-	if ((c != nil && c.Config != nil && c.Config.PIIModel.Window != nil) || c.hasLongContextClassifier(config.SignalTypePII)) && text != "" {
+	if c.piiReadsWholeText() && text != "" {
 		return []signalChunkSpan{{Text: text}}
 	}
 	return piiSignalChunkSpans(text)
 }
 
 func (c *Classifier) piiInputs(text string) []string {
-	if (c != nil && c.Config != nil && c.Config.PIIModel.Window != nil) || c.hasLongContextClassifier(config.SignalTypePII) {
+	if c.piiReadsWholeText() {
 		return []string{text}
 	}
 	return piiSignalChunks(text)
+}
+
+// piiReadsWholeText reports whether the PII model reads a whole text: through
+// token windows, a long-context budget, or a decision model's ready-made PII
+// question, which then shares the call of the deployment's other questions.
+func (c *Classifier) piiReadsWholeText() bool {
+	if c == nil || c.Config == nil {
+		return false
+	}
+	if reader, ok := c.piiInference.(interface{ readsWholeText() bool }); ok && reader.readsWholeText() {
+		return true
+	}
+	return c.Config.PIIModel.Window != nil || c.hasLongContextClassifier(config.SignalTypePII)
 }
 
 func (c *Classifier) jailbreakInputs(text string) []string {

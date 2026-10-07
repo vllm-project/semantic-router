@@ -9,8 +9,6 @@ _run:
 		-f tools/make/envoy.mk \
 		-f tools/make/golang.mk \
 		-f tools/make/go-tools.mk \
-		-f tools/make/rust.mk \
-                -f tools/make/openvino.mk \
 		-f tools/make/build-run-test.mk \
 		-f tools/make/docs.mk \
 		-f tools/make/dashboard.mk \
@@ -21,6 +19,7 @@ _run:
 		-f tools/make/valkey.mk \
 		-f tools/make/llama-stack.mk \
 		-f tools/make/models.mk \
+		-f tools/make/model-runtime.mk \
 		-f tools/make/model-catalog.mk \
 		-f tools/make/pre-commit.mk \
 		-f tools/make/security.mk \

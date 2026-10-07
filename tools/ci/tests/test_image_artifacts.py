@@ -70,13 +70,19 @@ class ImageArtifactTests(unittest.TestCase):
                 "source_sha": "a" * 40,
                 "id": "vllm-sr",
                 "context": ".",
-                "dockerfile": "src/vllm-sr/Dockerfile",
+                "dockerfile": images.ROUTER_DOCKERFILE,
+                "target": "vllm-sr",
                 "sha256": images.sha256(directory / "image.tar"),
                 "images": images.oci_images(directory / "image.tar"),
             }
             receipt = directory / "manifest.json"
             receipt.write_text(json.dumps(manifest))
             images.verify(directory, "vllm-sr")
+            manifest["target"] = "extproc"
+            receipt.write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(ValueError, "build definition"):
+                images.verify(directory, "vllm-sr")
+            manifest["target"] = "vllm-sr"
             manifest["source_sha"] = "b" * 40
             receipt.write_text(json.dumps(manifest))
             with self.assertRaisesRegex(ValueError, "source revision"):
