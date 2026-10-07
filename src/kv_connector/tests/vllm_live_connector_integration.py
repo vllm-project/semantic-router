@@ -15,12 +15,20 @@ from src.kv_connector.paged_cache import extract_prefix, inject_prefix
 from src.kv_connector.transform import qwen3_rope
 from src.training.kv_mapper.artifact import CompatibilitySpec, Manifest, write_artifact
 
+if importlib.util.find_spec("vllm"):
+    from vllm.config.kv_transfer import KVTransferConfig
+    from vllm.distributed.kv_transfer.kv_connector.v1.base import KVConnectorRole
+
+    from src.kv_connector.vllm_connector import (
+        KVMapperConnector,
+        _model_name,
+        _rope_theta,
+    )
+
 
 @unittest.skipUnless(importlib.util.find_spec("vllm"), "vLLM is not installed")
 class LiveConnectorTests(unittest.TestCase):
     def test_offline_snapshot_model_identity(self) -> None:
-        from src.kv_connector.vllm_connector import _model_name
-
         revision = "a" * 40
         snapshot = f"/cache/models--Qwen--Qwen3-32B/snapshots/{revision}"
         self.assertEqual(
@@ -33,10 +41,6 @@ class LiveConnectorTests(unittest.TestCase):
         )
 
     def test_source_export_target_load_and_failed_load_recompute_signal(self) -> None:
-        from vllm.config.kv_transfer import KVTransferConfig
-        from vllm.distributed.kv_transfer.kv_connector.v1.base import KVConnectorRole
-
-        from src.kv_connector.vllm_connector import KVMapperConnector
 
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -221,8 +225,6 @@ class LiveConnectorTests(unittest.TestCase):
             )
 
     def test_rejects_scaled_rope_before_cache_reuse(self) -> None:
-        from src.kv_connector.vllm_connector import _rope_theta
-
         self.assertEqual(
             _rope_theta(
                 SimpleNamespace(
