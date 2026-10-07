@@ -258,6 +258,29 @@ def test_selector_candidates_must_be_model_refs():
     )
 
 
+def test_selector_without_deployment_asks_the_decision_model():
+    def omit(document):
+        del document["routing"]["decisions"][0]["algorithm"]["decision"]["deployment"]
+
+    assert _errors(_config(omit)) == []
+
+    def vela1(document):
+        omit(document)
+        document["global"]["model_catalog"]["system"] = {"decision_model": "Vela-1.0"}
+
+    assert any(
+        "deployment is required: the decision model is Vela-1.0" in error
+        and "deployment for the selector" in error
+        for error in _errors(_config(vela1))
+    )
+
+    def blank(document):
+        document["routing"]["decisions"][0]["algorithm"]["decision"]["deployment"] = " "
+
+    with pytest.raises(ValidationError, match="omit it to ask the decision model"):
+        UserConfig.model_validate(_config(blank))
+
+
 def test_decision_type_requires_its_configuration():
     def mutate(document):
         document["routing"]["decisions"][0]["algorithm"] = {"type": "decision"}

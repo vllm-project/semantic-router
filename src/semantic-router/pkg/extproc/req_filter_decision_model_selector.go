@@ -12,6 +12,7 @@ import (
 const decisionSelectorQuestionID = "selector"
 
 // newDecisionModelSelector binds the decision selector to the model runtime.
+// A selector that names no deployment asks the decision model's deployment.
 func (r *OpenAIRouter) newDecisionModelSelector(cfg config.DecisionSelectionConfig) selection.Selector {
 	descriptions := make(map[string]string, len(r.Config.ModelConfig))
 	for model, params := range r.Config.ModelConfig {
@@ -21,6 +22,7 @@ func (r *OpenAIRouter) newDecisionModelSelector(cfg config.DecisionSelectionConf
 	if decider == nil {
 		decider = modelservice.Default()
 	}
+	cfg.Deployment = r.Config.DecisionSelectorDeployment(cfg)
 	scan := r.Config.ModelDeployments[cfg.Deployment].ScanBudget()
 	invoke := func(
 		ctx context.Context,

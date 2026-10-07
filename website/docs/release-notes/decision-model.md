@@ -33,6 +33,10 @@ global:
 - **Decision questions:** a `routing.signals.decision` question without a
   `deployment` asks the decision model, in the same call as the built-in
   signals. With `Vela-1.0` it is a load error that asks for a `deployment`.
+- **Decision selectors:** an `algorithm.decision` without a `deployment` asks
+  the same deployment which of the decision's `modelRefs` answers, so one
+  model answers the signals and chooses the model. `Vela-1.0` again asks for a
+  `deployment`.
 - **Sizes:** the 0.8B, 4B and 9B are built-in models at the revisions the
   model runtime pins. The 4B and 9B need a GPU: `vllm-sr serve` refuses them on
   `--platform cpu` or on a host without the GPU, and the Router where the

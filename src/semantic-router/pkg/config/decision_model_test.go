@@ -190,6 +190,96 @@ func TestADecisionQuestionOnAGPUAsksTheGPUDeployment(t *testing.T) {
 	}
 }
 
+// withDecisionSelector adds a decision whose model the decision algorithm
+// chooses on deployment, or on the decision model when deployment is empty.
+func withDecisionSelector(raw, deployment string) string {
+	selector := "        decision:\n          instructions: Which model should answer?\n"
+	if deployment != "" {
+		selector += "          deployment: " + deployment + "\n"
+	}
+	return strings.Replace(raw, "  decisions:\n", "  decisions:\n    - name: choose\n      priority: 200\n"+
+		"      rules: {operator: AND, conditions: [{type: domain, name: math}]}\n"+
+		"      modelRefs: [{model: general}, {model: other-model}]\n"+
+		"      algorithm:\n        type: decision\n"+selector, 1)
+}
+
+func withOtherModel(raw string) string {
+	return strings.Replace(raw, "  models:\n", "  models:\n    - name: other-model\n      backend_refs:\n"+
+		"        - {name: other, endpoint: 127.0.0.1:8001, protocol: http}\n", 1)
+}
+
+func TestADecisionSelectorWithoutDeploymentAsksTheDecisionModel(t *testing.T) {
+	for system, want := range map[string]string{
+		"":                                      "@Vela-2.0-0.3B",
+		"      decision_model: Vela-2.0-4B\n":   "@Vela-2.0-4B/auto",
+		"      decision_model: Vela-2.0-0.8B\n": "@Vela-2.0-0.8B",
+	} {
+		cfg := mustParseDecisionModel(t, withOtherModel(withDecisionSelector(decisionModelYAML(system, ""), "")))
+		decision := cfg.GetDecisionByName("choose")
+		if decision == nil || decision.Algorithm == nil || decision.Algorithm.Decision == nil {
+			t.Fatalf("%q: want the decision selector, got %+v", system, decision)
+		}
+		if got := cfg.DecisionSelectorDeployment(*decision.Algorithm.Decision); got != want {
+			t.Fatalf("%q: the selector asks %q, want %q", system, got, want)
+		}
+		if _, used := ModelRuntimeDeploymentsInUse(cfg)[want]; !used {
+			t.Fatalf("%q: the decision model's deployment %s must be in use for the selector", system, want)
+		}
+	}
+}
+
+func TestADecisionSelectorAloneStartsTheDecisionModel(t *testing.T) {
+	cfg := mustParseDecisionModel(t, `version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+    - name: other-model
+      backend_refs: [{name: other, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
+routing:
+  decisions:
+    - name: choose
+      priority: 100
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: general}, {model: other-model}]
+      algorithm:
+        type: decision
+        decision:
+          instructions: Which model should answer?
+global:
+  model_catalog:
+    system:
+      decision_model: Vela-2.0-4B
+`)
+	used := ModelRuntimeDeploymentsInUse(cfg)
+	if len(used) != 1 || used["@Vela-2.0-4B/auto"].Artifact != "vllm-sr/Vela-2.0-4B" {
+		t.Fatalf("only the selector asks the decision model, so its deployment alone must start, got %v", used)
+	}
+}
+
+func TestADecisionSelectorKeepsItsOwnDeployment(t *testing.T) {
+	raw := withOtherModel(withDecisionSelector(decisionModelYAML("      decision_model: Vela-2.0-4B\n", ""), "kai"))
+	raw += "    deployments:\n      kai:\n        provider: model_runtime\n        artifact: vllm-sr/Decision-2.0-Kai-0.6B\n" +
+		"        revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764\n"
+	cfg := mustParseDecisionModel(t, raw)
+	decision := cfg.GetDecisionByName("choose")
+	if got := cfg.DecisionSelectorDeployment(*decision.Algorithm.Decision); got != "kai" {
+		t.Fatalf("the selector asks %q, want its own deployment kai", got)
+	}
+	if _, used := ModelRuntimeDeploymentsInUse(cfg)["kai"]; !used {
+		t.Fatal("the selector's own deployment must be in use")
+	}
+}
+
+func TestADecisionSelectorWithoutDeploymentNeedsAVela2DecisionModel(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(withOtherModel(withDecisionSelector(decisionModelYAML("      decision_model: Vela-1.0\n", ""), ""))))
+	want := "decision 'choose', algorithm.decision: deployment is required: the decision model is Vela-1.0"
+	if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "deployment for the selector") {
+		t.Fatalf("want the Vela 1.0 selector error, got %v", err)
+	}
+}
+
 func TestADecisionQuestionWithoutDeploymentNeedsAVela2DecisionModel(t *testing.T) {
 	_, err := ParseYAMLBytes([]byte(withDecisionQuestion(decisionModelYAML("      decision_model: Vela-1.0\n", ""))))
 	if err == nil || !strings.Contains(err.Error(), "routing.signals.decision[needs_tools]: deployment is required: the decision model is Vela-1.0") {

@@ -49,8 +49,8 @@ func (d ModelDeployment) ServedModel(name string) string {
 
 // ModelRuntimeDeploymentsInUse returns the model_runtime deployments that the
 // configuration uses, with defaults applied: those a decision signal or a
-// decision algorithm names, the decision model's for a decision signal that
-// names none, and those an active task binding names in the
+// decision algorithm names, the decision model's for a decision signal or
+// algorithm that names none, and those an active task binding names in the
 // top-level routing surface, a recipe, or the global service catalog.
 // Declared but unused deployments are never started.
 func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment {
@@ -59,17 +59,19 @@ func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment 
 		return used
 	}
 	mark := func(name string) {
+		if name == "" {
+			if shared, deployment, ok, err := cfg.DecisionModelDeployment(); ok && err == nil {
+				used[shared] = deployment.WithDefaults()
+			}
+			return
+		}
 		if deployment, ok := cfg.ModelDeployments[name]; ok && deployment.IsModelRuntime() {
 			used[name] = deployment.WithDefaults()
 		}
 	}
 	scan := func(signals Signals, decisions []Decision) {
 		for _, rule := range signals.DecisionRules {
-			if rule.Deployment != "" {
-				mark(rule.Deployment)
-			} else if name, deployment, ok, err := cfg.DecisionModelDeployment(); ok && err == nil {
-				used[name] = deployment.WithDefaults()
-			}
+			mark(rule.Deployment)
 		}
 		for _, decision := range decisions {
 			if decision.Algorithm != nil && decision.Algorithm.Decision != nil &&

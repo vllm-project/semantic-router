@@ -1,6 +1,7 @@
 // The Router's decision model: global.model_catalog.system.decision_model.
 // It answers the built-in signals and every routing.signals.decision question
-// that names no deployment (src/semantic-router/pkg/config/decision_model.go).
+// or algorithm.decision selector that names no deployment
+// (src/semantic-router/pkg/config/decision_model.go).
 
 export const DECISION_MODELS = [
   'Vela-2.0-0.3B',

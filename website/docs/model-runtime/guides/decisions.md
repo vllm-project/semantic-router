@@ -109,6 +109,10 @@ routing:
 
 The model's probability for each candidate becomes its selection score. If the
 model is not ready or answers late, the first model in `modelRefs` answers.
+Without a `deployment`, the Router's
+[decision model](model-runtime/choose-a-model.md#choose-a-size) chooses: the
+Vela 2.0 model that answered the request's signals also picks its model, with
+no second copy loaded.
 
 ## Route on labels and spans
 

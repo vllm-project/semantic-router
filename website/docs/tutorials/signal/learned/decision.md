@@ -53,7 +53,8 @@ routing:
 
 With `decision_model: Vela-1.0` the Vela 1.0 specialists answer only the
 built-in signals, so such a question is a load error that asks for a
-`deployment`.
+`deployment`. The [`decision` selection algorithm](tutorials/algorithm/selection/decision.md)
+follows the same rule, so the decision model can also choose the model.
 
 To ask another model, such as a Decision 2.0 model, name it as a
 `model_runtime` deployment and give each question its `deployment`:

@@ -8,8 +8,9 @@ import (
 // The decision model is the Vela model that answers the Router's own
 // questions: every built-in signal it covers, and every decision question
 // that names no deployment, on one shared deployment and in one call per
-// request. global.model_catalog.system.decision_model names it; a
-// system.<module> line still binds one signal to another model.
+// request. A decision selector that names no deployment asks the same
+// deployment which model answers. global.model_catalog.system.decision_model
+// names it; a system.<module> line still binds one signal to another model.
 
 // Decision model names, in size order.
 const (
@@ -231,8 +232,21 @@ func (c *RouterConfig) DecisionModelDeployment() (name string, deployment ModelD
 // DecisionQuestionDeployment returns the deployment a decision question asks:
 // its own, or the decision model's shared deployment when it names none.
 func (c *RouterConfig) DecisionQuestionDeployment(rule DecisionSignalRule) string {
-	if deployment := strings.TrimSpace(rule.Deployment); deployment != "" {
-		return deployment
+	return c.deploymentOrDecisionModel(rule.Deployment)
+}
+
+// DecisionSelectorDeployment returns the deployment a decision selector asks:
+// its own, or the decision model's shared deployment when it names none, so
+// the model that answered the request's signals also chooses its model.
+func (c *RouterConfig) DecisionSelectorDeployment(selector DecisionSelectionConfig) string {
+	return c.deploymentOrDecisionModel(selector.Deployment)
+}
+
+// deploymentOrDecisionModel returns the named deployment, or the decision
+// model's shared deployment for an empty name; empty when there is none.
+func (c *RouterConfig) deploymentOrDecisionModel(deployment string) string {
+	if named := strings.TrimSpace(deployment); named != "" {
+		return named
 	}
 	name, _, ok, err := c.DecisionModelDeployment()
 	if !ok || err != nil {

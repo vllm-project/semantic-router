@@ -224,10 +224,16 @@ func TestDecisionSelectorContract(t *testing.T) {
 	if err := validateDecisionSelectorConfig("d", refs, ok); err != nil {
 		t.Fatal(err)
 	}
+	ok.Decision.Deployment = ""
+	if err := validateDecisionSelectorConfig("d", refs, ok); err != nil {
+		t.Fatalf("a selector without a deployment asks the decision model: %v", err)
+	}
 	cases := map[string]func(*AlgorithmConfig) []ModelRef{
-		"missing block":   func(a *AlgorithmConfig) []ModelRef { a.Decision = nil; return refs },
-		"one candidate":   func(a *AlgorithmConfig) []ModelRef { return refs[:1] },
-		"duplicate model": func(a *AlgorithmConfig) []ModelRef { return []ModelRef{{Model: "x"}, {Model: "x"}} },
+		"blank deployment":  func(a *AlgorithmConfig) []ModelRef { a.Decision.Deployment = " "; return refs },
+		"padded deployment": func(a *AlgorithmConfig) []ModelRef { a.Decision.Deployment = " decider"; return refs },
+		"missing block":     func(a *AlgorithmConfig) []ModelRef { a.Decision = nil; return refs },
+		"one candidate":     func(a *AlgorithmConfig) []ModelRef { return refs[:1] },
+		"duplicate model":   func(a *AlgorithmConfig) []ModelRef { return []ModelRef{{Model: "x"}, {Model: "x"}} },
 		"unknown candidate": func(a *AlgorithmConfig) []ModelRef {
 			a.Decision.Candidates = map[string]string{"other": "x"}
 			return refs

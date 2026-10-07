@@ -813,7 +813,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           label: 'Decision Model',
           type: 'select',
           options: [...DECISION_MODELS],
-          description: `Answers the built-in signals and every decision question that names no deployment. ${DECISION_MODEL_HINT}. A binding below keeps its signal on another model.`,
+          description: `Answers the built-in signals and every decision question or decision selector that names no deployment. ${DECISION_MODEL_HINT}. A binding below keeps its signal on another model.`,
         },
         {
           name: 'prompt_guard',

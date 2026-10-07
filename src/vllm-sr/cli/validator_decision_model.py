@@ -117,13 +117,15 @@ def _decision_model(config: UserConfig) -> tuple[str | None, list[ValidationErro
         return None, [ValidationError(str(error), field=DECISION_MODEL_FIELD)]
 
 
-def _decision_model_question_error(decision_model: str | None) -> str | None:
+def _decision_model_question_error(
+    decision_model: str | None, asker: str = "question"
+) -> str | None:
     if decision_model != VELA1_DECISION_MODEL:
         return None
     return (
         f"deployment is required: the decision model is {decision_model}, whose "
         "specialists answer only the built-in signals. Name a model_runtime "
-        "deployment for the question, or choose a Vela 2.0 decision model in "
+        f"deployment for the {asker}, or choose a Vela 2.0 decision model in "
         f"{DECISION_MODEL_FIELD}"
     )
 
@@ -148,7 +150,9 @@ def validate_decision_model_references(
         rules = {rule.name: rule for rule in profile.signals.decision or []}
         errors.extend(_set_label_answer_errors(prefix, list(rules.values())))
         for decision in profile.decisions:
-            errors.extend(_selector_errors(prefix, decision, deployments))
+            errors.extend(
+                _selector_errors(prefix, decision, deployments, decision_model)
+            )
             errors.extend(_condition_errors(prefix, decision, rules))
     return errors
 
@@ -206,12 +210,17 @@ def _set_label_answer_errors(prefix, rules) -> list[ValidationError]:
     return errors
 
 
-def _selector_errors(prefix, decision, deployments) -> list[ValidationError]:
+def _selector_errors(
+    prefix, decision, deployments, decision_model
+) -> list[ValidationError]:
     algorithm = decision.algorithm
     if algorithm is None or algorithm.decision is None:
         return []
     field = f"{prefix}.decisions.{decision.name}.algorithm.decision"
-    message = _reference_error(deployments, algorithm.decision.deployment)
+    if algorithm.decision.deployment:
+        message = _reference_error(deployments, algorithm.decision.deployment)
+    else:
+        message = _decision_model_question_error(decision_model, "selector")
     models = [ref.model for ref in decision.modelRefs or []]
     if message is None and not (
         MIN_SELECTOR_CANDIDATES <= len(models) <= MAX_SELECTOR_CANDIDATES
