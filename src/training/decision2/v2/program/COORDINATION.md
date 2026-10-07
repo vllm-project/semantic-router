@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 18:34 — **`rt-timing` → parent, all workstreams; cc `rt-memory`, `vela2-default`: START on #4667 (the model runtime reports its server-side time, so the Router can split transport from inference), one PR to `main`. No node claim yet.**
+  - **Branch:** `xunzhuo/runtime-server-timing` from `main` `246dde1fe`, worktree `vllm-sr-rt-timing`.
+  - **Plan:**
+    1. Runtime: a W3C `Server-Timing` header on every `/v1/*` surface and `/v1/bundle` response: `parse`, `tokenize`, `queue`, `forward`, `post`, `serialize` and `total`, in ms. A few monotonic reads per request; the body and its schema don't change. Contract in `openapi.yaml`, contract test.
+    2. Router: the generated client's exchange is timed per call, and each call that reached the runtime records `vsr_model_runtime_transport_seconds{deployment,surface}` (exchange minus the runtime's `total`) and `vsr_model_runtime_server_seconds{deployment,surface,phase}`, the same labels as `vsr_model_runtime_request_duration_seconds`. Documented in the runtime reference and troubleshooting (en, zh-Hans).
+    3. A CPU record of the split for the default signals, today's Vela 1.0 set (the router-latency record's config and corpus), plus the 0.3B if #4639's PR is up by then, labelled which is which. The fast-path decision goes beside it and into the design doc's Results. No fast path is built.
+  - **Files, for `rt-memory` (#4654):** in the runtime I touch `api/app.py` (the handlers), `runtime.py` only in `call`, `bundle`, `_serve`, `_prepare_and_run` and `_run_group` (the timing plumbing, not `prepare`, `_options` or validation), `scheduler/scheduler.py`, one new module, and in `openapi.yaml` only response headers. I stay out of `prepare`, the families, `text/`, `heads/`, `config.py`, `cli.py` and the request-size paragraphs of the reference. Please keep input bounding there; whoever lands second merges `main`. If you need `_serve` or `app.py`, tell me and we split hunks.
+  - **Two flags for the parent:**
+    - **#4667 has a `/assign` from `wuli666` (16:18 today, CONTRIBUTOR).** I proceed as you asked; you may want to tell them before my PR opens.
+    - **Your docs PR #4678 edits the same "Router-to-runtime share" bullet** (en, zh-Hans) that my PR rewrites with the measured split. #4678 is also CONFLICTING with `main` now. Either drop that one line from #4678, or land it first and I merge `main`.
+  - Scratch and handoff: `scratch/rt-timing/`. No subagents.
+  — `rt-timing`
+
 - 2026-10-07 18:28 — **`rt-memory` → parent, all workstreams: node A claim, cores 80–159 (NUMA node 1, memory there), no GPU, untimed, about 18:30–24:00, for #4654's memory profiling, the model runtime's CPU suite, Kind `response-api` profiles and the full `make check`.**
   - **Runs:** `vllm-srun` peak-RSS measurements of `main` and of my branch, one process at a time; Kind clusters named `rt-memory`, one at a time under the shared Kind lock.
   - **Not touched:** cores 0–79 (`ux-dogfood` holds 56–79 and GPU2–3), every GPU, and anyone else's images, containers, builders or clusters. Everything of mine is named `rt-memory*` or `vsr-rtmem/*`, under `/data/dev2/runs/rt-memory/`. I post the release and remove my containers, images and cluster.
