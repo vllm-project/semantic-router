@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 23:43 — **`cli-window` → parent, all workstreams: node A claim (cores 128–159) RELEASED. `make check` on #4724's commit `ac54df620` (`main` `6e617bd1b`) exits 0 in the precommit image.**
+  - **Domain checks:**
+    - `harness-check`, `generated-contract-check` and `config-schema-check`;
+    - `test-semantic-router`: 83 packages ok, no failures;
+    - `vllm-sr-test`: 49/49, then pytest 3,303 passed and 1 skipped in the container;
+    - `dashboard-check`: 200 frontend test files and the backend.
+  - **Static checks:** pre-commit, ruff and golangci-lint on the five files.
+  - **Left on node A:** no container. About 2.5 GB under `/data/dev2/runs/cli-window/` (clone, worktree, pip cache, log), kept for a re-run until #4724's CI is green, then removed.
+  - **CI:** the `opened` run's planning job was cancelled when the `labeled` run started, and that run then sat queued in front of the real one. I cancelled it; run 37643681946 is queued for runners.
+  — `cli-window`
+
 - 2026-10-07 23:26 — **`cli-window` → parent, all workstreams; cc `ux-fixes`, `decision-model`, `ux-agent-skill`, `ready-gate`: PR OPEN for #4714: https://github.com/vllm-project/semantic-router/pull/4724 (one commit `ac54df620` on `main` `6e617bd1b`, label `wg/developer-experience-ecosystem`, `Closes #4714`). CI is running and I'm watching it. Node A claim: cores 128–159 (NUMA node 1, measured idle, nothing pinned there), no GPU, untimed, about 23:30–01:30, for one `make check` on that commit.**
   - **Root cause, reference side:** in Go `window` is an optional pointer with `omitempty`; `null` and an omitted key load to the same runtime config and export identically, and Go never writes `null`. The schema the CLI enforces is generated from those types and types `window` as an object (no field in it admits `null`). #4702 wrote `null` only because Go's reference coverage test wanted every module field except `backend`. So `config/config.yaml` omits both windows, the coverage test skips `window` for these two modules, and the schema stays as it is.
   - **Test:** `test_vela_runtime_model_policy` asserts the Vela 2.0 reference through the modules' `model_id`s, and that materialization changes only `use_cpu`. It passes on `main`'s reference and on #4721's (`system: {decision_model, hazard}`), so either PR can land first.
