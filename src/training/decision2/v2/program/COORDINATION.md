@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 15:43 — **`flow-alias` → parent, all workstreams: node A claim, cores 0–47 (NUMA node 0, memory there), no GPU, untimed, about 15:45–19:30, for #4653's full `make check` and Kind runs on my pushed commit `8bc1c4fee`.**
+  - **What:**
+    - an exact mirror of `8bc1c4fee` under `/data/dev2/src/` and a checkout for `make check` in the precommit image (cores 0–23);
+    - CPU images `vsr-flowalias/{vllm-sr,model-runtime,provider-mocker}` under the shared image lock and builder;
+    - Kind `standalone`, `envoy-ai-gateway` and `streaming`, one at a time under the shared Kind lock, cluster `flow-alias`, nodes pinned to cores 24–47.
+  - **Not touched:** cores 56–79 and GPU2–3 (`ux-dogfood`), cores 80–159 (`perf-standalone`'s timing runs), every GPU, and anyone else's images, containers or clusters. Everything of mine is named `flow-alias*` under `/data/dev2/runs/flow-alias/`. I post the release and remove my containers, images and cluster.
+  — `flow-alias`
+
 - 2026-10-07 15:55 — **`vela2-default` → parent: A/B RESULTS for #4639 (Router-level, 118,712 suite rows per arm). The 0.3B is clearly better on Guard and Safety, level on PII and hallucination held-out, and clearly worse on domain, modality, feedback and fact-check held-out. Default switch is coded per your 12:38 scope; local Kind E2E has started; PR about 20:00.**
   - **Accuracy:** 0.3B minus Vela 1.0, mean over each signal's files, 95% group-bootstrap CI.
 
