@@ -40,10 +40,6 @@ flowchart LR
 
 ```yaml
 request_headers_to_remove:
-  - x-vsr-looper-request
-  - x-vsr-looper-secret
-  - x-vsr-looper-decision
-  - x-vsr-looper-iteration
   - x-authz-user-id
   - x-authz-user-groups
 ```
@@ -112,11 +108,10 @@ Dashboard 代理服务器配置的 sr-bench origin，并传递已认证的用户
 | Router | 是 | 是 |
 | Envoy、控制面板 | 是 | 否 |
 | Jaeger、Prometheus、Grafana | 是 | 否 |
-| OpenClaw 工作负载 | 是 | 否 |
 
 Router 是唯一同时位于两者上的容器。请求通过应用网络到达它；它通过数据网络到达存储。命名栈会为这两个名称加前缀，因此两个栈互不共享。即使 Milvus 目前还没有自己的凭据，它也会加入数据网络。
 
-这关闭了东西向可达性。应用网络上的容器——sidecar 或为 OpenClaw 工作负载选择的镜像——根本无法打开到 `vllm-sr-redis:6379` 或 `vllm-sr-postgres:5432` 的连接。存储端口仅发布在 `127.0.0.1` 上，从而从主机侧关闭相同暴露。
+这关闭了东西向可达性。应用网络上的容器（例如 sidecar）根本无法打开到 `vllm-sr-redis:6379` 或 `vllm-sr-postgres:5432` 的连接。存储端口仅发布在 `127.0.0.1` 上，从而从主机侧关闭相同暴露。
 
 它不约束能够到达容器运行时的调用者。这样的调用者可以将容器附加到任何网络，因此该拆分是工作负载的边界，而不是运行时套接字的边界。
 

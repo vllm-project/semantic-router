@@ -240,7 +240,7 @@ func assertReferenceConfigIntegrationGlobalCoverage(t testingT, integrations map
 		reflect.TypeOf(ToolFilteringWeights{}),
 		"global.integrations.tools.advanced_filtering.weights",
 	)
-	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper"), reflect.TypeOf(LooperConfig{}), "global.integrations.looper")
+	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper"), reflect.TypeOf(LooperConfig{}), "global.integrations.looper", "endpoint")
 	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper", "remom"), reflect.TypeOf(ReMoMRuntimeConfig{}), "global.integrations.looper.remom")
 	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper", "fusion"), reflect.TypeOf(FusionRuntimeConfig{}), "global.integrations.looper.fusion")
 	flow := mustMapAt(t, integrations, "looper", "flow")

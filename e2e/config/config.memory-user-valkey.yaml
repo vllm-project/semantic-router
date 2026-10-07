@@ -10,6 +10,9 @@ listeners:
     address: 0.0.0.0
     port: 8888
     timeout: 300s
+    # The tests stand in for an authenticating proxy: they send x-authz-user-id.
+    identity:
+      trust_headers: true
 providers:
   defaults:
     model: qwen3

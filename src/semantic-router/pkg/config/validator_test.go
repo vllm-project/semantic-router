@@ -548,7 +548,7 @@ func registerValidateConfigStructureReMoMDecisionSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects invalid remom model_distribution", func() {
@@ -671,7 +671,7 @@ func registerValidateConfigStructureFusionSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects invalid decision fusion on_error", func() {
@@ -747,7 +747,7 @@ func registerValidateConfigStructureDynamicWorkflowPlannerSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects dynamic workflows with invalid planner max completion tokens", func() {
@@ -834,7 +834,7 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects dynamic workflow final model outside modelRefs", func() {
@@ -882,7 +882,7 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(withDecisionBackends(cfg))
 		Expect(err).NotTo(HaveOccurred())
 	})
 }
@@ -918,7 +918,7 @@ func registerValidateConfigStructureStaticWorkflowsSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(withDecisionBackends(cfg))).To(Succeed())
 	})
 
 	It("rejects static workflows without roles", func() {

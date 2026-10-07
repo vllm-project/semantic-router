@@ -12,6 +12,8 @@ from cli.config_translator import (
     temporary_helm_values_file,
     translate_config_to_helm_values,
 )
+from cli.consts import DEFAULT_API_PORT, DEFAULT_LISTENER_PORT
+from cli.gateway_mode import DEFAULT_GATEWAY, GATEWAY_STANDALONE
 from cli.k8s_env_secret import (
     ENV_SECRET_MANAGER_LABEL,
     ENV_SECRET_MANAGER_VALUE,
@@ -118,6 +120,26 @@ def _dashboard_management_extra_env(
     return extra_env
 
 
+def client_service_port(values: dict[str, Any]) -> int:
+    """The Service port the chart's NOTES send API clients to.
+
+    Standalone serves the API on the first listener without TLS, else the
+    first listener; extproc leaves it to the gateway in front and exposes the
+    Router API port.
+    """
+
+    mode = (values.get("gateway") or {}).get("mode") or DEFAULT_GATEWAY
+    if mode != GATEWAY_STANDALONE:
+        api = (values.get("service") or {}).get("api") or {}
+        return int(api.get("port", DEFAULT_API_PORT))
+    listeners = (values.get("configOverride") or {}).get("listeners") or []
+    primary = next(
+        (listener for listener in listeners if not listener.get("tls")),
+        listeners[0] if listeners else {},
+    )
+    return int(primary.get("port", DEFAULT_LISTENER_PORT))
+
+
 class K8sBackend:
     """Kubernetes deployment backend implemented through Helm."""
 
@@ -150,6 +172,8 @@ class K8sBackend:
         enable_observability: bool = True,
         minimal: bool = False,
         readonly: bool = False,
+        gateway: str | None = None,
+        platform: str | None = None,
         **kwargs: Any,
     ) -> None:
         self._require_tool("helm")
@@ -185,6 +209,8 @@ class K8sBackend:
             namespace=self.namespace,
             minimal=minimal,
             readonly=readonly,
+            gateway=gateway,
+            platform=platform,
         )
         self._bind_env_secret_revision(values, secret_name)
         self._bind_dashboard_management_credential(values, secret_plan)
@@ -194,6 +220,7 @@ class K8sBackend:
                 values_path,
                 secret_plan=secret_plan,
                 secret_name=secret_name,
+                client_port=client_service_port(values),
             )
 
     def _deploy_helm_values(
@@ -202,6 +229,7 @@ class K8sBackend:
         *,
         secret_plan: EnvSecretPlan | None,
         secret_name: str | None,
+        client_port: int,
     ) -> None:
         """Commit one prepared values file and its credential revision."""
 
@@ -251,7 +279,7 @@ class K8sBackend:
         log.info("Helm release deployed successfully")
 
         self._wait_for_pods()
-        self._log_k8s_summary()
+        self._log_k8s_summary(client_port)
 
     def teardown(self) -> None:
         self._require_tool("helm")
@@ -724,12 +752,12 @@ class K8sBackend:
             ]
         )
 
-    def _log_k8s_summary(self) -> None:
+    def _log_k8s_summary(self, client_port: int) -> None:
         success("Kubernetes deployment is ready")
         heading("Commands")
-        echo("  vllm-sr status --target k8s")
-        echo("  vllm-sr logs router --target k8s [-f]")
-        echo("  vllm-sr stop --target k8s")
+        echo("  vllm-sr status --target kubernetes")
+        echo("  vllm-sr logs router --target kubernetes [-f]")
+        echo("  vllm-sr stop --target kubernetes")
         echo()
         heading("Local access")
         fields(
@@ -737,7 +765,7 @@ class K8sBackend:
                 (
                     "Port forward",
                     f"kubectl port-forward -n {self.namespace} "
-                    f"svc/{self.release_name} 8080:8080",
+                    f"svc/{self.release_name} {client_port}:{client_port}",
                 ),
             )
         )

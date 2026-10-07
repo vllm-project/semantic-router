@@ -55,7 +55,13 @@ func collectManagedDockerStatus(runtimePath, routerAPIURL, envoyURL string, cred
 	status.Services = append(status.Services,
 		buildServiceStatus("Routing access", boolToStatus(routerReady && envoyHealthy), routerReady && envoyHealthy, routingAccessMessage(routerReady, envoyHealthy), "gateway"),
 		buildServiceStatus("Router", boolToStatus(routerHealthy), routerHealthy, routerMsg, "container"),
-		buildServiceStatus("Envoy", boolToStatus(envoyHealthy), envoyHealthy, envoyMsg, "container"),
+	)
+	// A standalone Router serves the listeners that the routing-access probe
+	// reaches; there is no Envoy container to report.
+	if managedStackRunsEnvoy() {
+		status.Services = append(status.Services, buildServiceStatus("Envoy", boolToStatus(envoyHealthy), envoyHealthy, envoyMsg, "container"))
+	}
+	status.Services = append(status.Services,
 		buildServiceStatus("Dashboard", boolToStatus(dashboardHealthy), dashboardHealthy, dashboardMsg, "container"),
 	)
 	setManagedDockerOverall(&status, routerHealthy, routerReady, envoyHealthy, dashboardHealthy)

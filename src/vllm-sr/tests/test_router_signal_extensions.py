@@ -380,7 +380,8 @@ def test_prompt_dependency_validation_covers_recipes():
     assert (
         "recipes.prompt-recipe.decisions.prompt-route.algorithm.prompt.model" in fields
     )
-    assert "recipes.prompt-recipe.decisions.prompt-route.algorithm.prompt" in fields
+    # The helper call runs in process, so no Looper endpoint is required.
+    assert "recipes.prompt-recipe.decisions.prompt-route.algorithm.prompt" not in fields
 
 
 def test_prompt_dependency_validation_rejects_anthropic_helper():

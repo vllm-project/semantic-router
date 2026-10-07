@@ -43,7 +43,6 @@ Flow 在配置的工作流内协调模型 worker。调用它的 Agent Harness �
 global:
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
       max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
       flow:
         model_names:
@@ -87,7 +86,7 @@ routing:
 规划器模型生成控制计划。省略 `planner.model` 时，路由器按声明顺序选择首个满足完整规划请求要求的已分配 worker，
 包括 JSON 输出能力和实际输出、上下文预算。扫描过程不调用模型。
 显式指定的规划器保持原目标并接受相同阶段检查，失败时不会替换为其他模型；没有合格规划器时请求直接失败。
-显式规划器可以是 worker `modelRefs` 之外单独配置的辅助模型，但必须有运营者分配的后端。
+显式规划器可以是 worker `modelRefs` 之外单独配置的辅助模型，但必须在 `providers.models[].backend_refs` 中有运营者分配的后端；否则配置无法加载。
 worker 调用始终限制在 `modelRefs` 内，执行器会拒绝包含范围外 worker 的计划。
 规划器选择不会降低已配置的不同成功 worker 最小数量。
 

@@ -76,12 +76,6 @@ def test_dashboard_entrypoint_maps_runtime_socket_group_before_dropping_root() -
         '"$CONTAINER_SOCKET_PATH" 2>/dev/null); then' in content
     )
     assert 'add_nonroot_group_gid "$CONTAINER_SOCKET_GID"' in content
-    assert "export OPENCLAW_CONTAINER_RUNTIME_DISABLED=false" in content
-    assert "export OPENCLAW_CONTAINER_RUNTIME_DISABLED=true" in content
-    assert "OPENCLAW_CONTAINER_RUNTIME_DISABLED=true" in content
-    assert content.index("OPENCLAW_CONTAINER_RUNTIME_DISABLED=true") < content.index(
-        'exec "$@"'
-    )
     assert "continuing without socket access" in content
     assert "LOG_SPOOL_GID=${VLLM_SR_LOG_SPOOL_GID:-}" in content
     assert 'add_nonroot_group_gid "$LOG_SPOOL_GID"' in content

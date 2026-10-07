@@ -22,7 +22,7 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-未指定 `--config` 时，`vllm-sr serve` 使用当前目录中的 `config.yaml`，或在控制面板中打开首次运行设置。默认本地端点为：
+未指定 `--config` 时，`vllm-sr serve` 使用当前目录中的 `config.yaml`，或在控制面板中打开首次运行设置。设置期间该命令保持运行：你在控制面板中激活配置后，它用这份配置启动 Router 并等待其就绪。如果你提前停止它，下一次 `vllm-sr serve` 会启动 Router，`vllm-sr status` 会提示设置是否已完成。控制面板不会拿到容器运行时的 socket。默认本地端点为：
 
 | 端点 | 默认值 | 用途 |
 | --- | --- | --- |

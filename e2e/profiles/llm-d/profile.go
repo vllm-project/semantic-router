@@ -313,7 +313,8 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, opts *framework.Setu
 		Namespace:   semanticNamespace,
 		ValuesFiles: []string{"e2e/profiles/llm-d/values.yaml"},
 		Set: map[string]string{
-			"image.repository": "ghcr.io/vllm-project/semantic-router/extproc",
+			"gateway.mode":     "extproc",
+			"image.repository": "ghcr.io/vllm-project/semantic-router/vllm-sr",
 			"image.tag":        opts.ImageTag,
 			"image.pullPolicy": "Never",
 		},

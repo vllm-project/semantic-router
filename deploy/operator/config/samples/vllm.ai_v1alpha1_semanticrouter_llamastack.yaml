@@ -67,7 +67,7 @@ spec:
   # ====================
   service:
     type: ClusterIP
-    # Envoy ingress port (standalone mode)
+    # Management API port
     api:
       port: 8080
       targetPort: 8080
