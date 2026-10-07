@@ -1985,7 +1985,7 @@ spec:
                         minimum: 0
                         type: integer
                       model_id:
-                        default: models/Vela-1.0-Encoder-307M-Guard
+                        default: models/Vela-2.0-0.3B
                         type: string
                       on_error:
                         description: |-
@@ -2008,7 +2008,7 @@ spec:
                           type: string
                         type: array
                       threshold:
-                        default: "0.5"
+                        default: "0.75"
                         description: Jailbreak detection threshold (0.0-1.0). Stored
                           as string to avoid float precision issues.
                         pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$

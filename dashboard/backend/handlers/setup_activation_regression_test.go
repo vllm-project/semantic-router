@@ -15,7 +15,7 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func setupActivationRegressionRuntime(t *testing.T) (string, string, fakeLifecycleDocker) {
+func setupActivationRegressionRuntime(t *testing.T) (string, string, func() []string) {
 	t.Helper()
 	root := t.TempDir()
 	stateDir := filepath.Join(root, ".vllm-sr")
@@ -23,16 +23,10 @@ func setupActivationRegressionRuntime(t *testing.T) (string, string, fakeLifecyc
 		t.Fatal(err)
 	}
 	configPath := createBootstrapSetupConfig(t, stateDir)
-	fake := writeFakeLifecycleDockerCLI(t)
-	t.Setenv("PATH", filepath.Dir(fake.path)+":"+os.Getenv("PATH"))
+	containerCLICalls := trapContainerCLIs(t)
 	t.Setenv(routerContainerNameEnv, "activation-vllm-sr-router-container")
 	t.Setenv(envoyContainerNameEnv, "activation-vllm-sr-envoy-container")
 	t.Setenv(dashboardContainerNameEnv, "activation-vllm-sr-dashboard-container")
-	t.Setenv("TEST_DOCKER_LOG_FILE", fake.logPath)
-	t.Setenv("TEST_ROUTER_CONTAINER", "activation-vllm-sr-router-container")
-	t.Setenv("TEST_ROUTER_STATUS_FILE", fake.routerStatusPath)
-	t.Setenv("TEST_ENVOY_CONTAINER", "activation-vllm-sr-envoy-container")
-	t.Setenv("TEST_ENVOY_STATUS_FILE", fake.envoyStatusPath)
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", configPath)
 	t.Setenv(routerconfig.ManagementInternalListenerEnv, "true")
 	t.Setenv("VLLM_SR_ENVOY_CONFIG_PATH", filepath.Join(root, "envoy.yaml"))
@@ -42,16 +36,11 @@ func setupActivationRegressionRuntime(t *testing.T) (string, string, fakeLifecyc
 		t.Fatal(err)
 	}
 	t.Setenv("VLLM_SR_CLI_PATH", filepath.Join(repoRoot, "src", "vllm-sr"))
-	for _, path := range []string{fake.routerStatusPath, fake.envoyStatusPath} {
-		if err := os.WriteFile(path, []byte("created\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return configPath, root, fake
+	return configPath, root, containerCLICalls
 }
 
 func TestSetupActivationRendersOmittedReasoningAndRecordsTheActivation(t *testing.T) {
-	configPath, root, fake := setupActivationRegressionRuntime(t)
+	configPath, root, containerCLICalls := setupActivationRegressionRuntime(t)
 	patch := createValidSetupPatch()
 	routing := patch["routing"].(map[string]interface{})
 	decisions := routing["decisions"].([]map[string]interface{})
@@ -64,12 +53,9 @@ func TestSetupActivationRendersOmittedReasoningAndRecordsTheActivation(t *testin
 	if w.Code != http.StatusOK {
 		t.Fatalf("activation failed: %d %s", w.Code, w.Body.String())
 	}
-	// The CLI that owns the stack starts the services; setup leaves them as created.
-	for _, path := range []string{fake.routerStatusPath, fake.envoyStatusPath} {
-		status, err := os.ReadFile(path)
-		if err != nil || strings.TrimSpace(string(status)) != "created" {
-			t.Fatalf("setup changed a container: %q, %v", status, err)
-		}
+	// The CLI that owns the stack starts the services; setup touches no container.
+	if calls := containerCLICalls(); len(calls) != 0 {
+		t.Fatalf("setup ran a container CLI: %q", calls)
 	}
 	if _, err := os.Stat(pendingActivationPath(configPath, pendingActivationSuffix)); err != nil {
 		t.Fatalf("activation was not recorded: %v", err)

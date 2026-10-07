@@ -65,12 +65,12 @@ func (s *Store) beginActivationLocked(operation, targetRecipeDigest string, prev
 		return ActivationTransaction{}, err
 	}
 	transactionDirectory := filepath.Join(s.root, "transactions", id)
-	if err := os.Mkdir(transactionDirectory, 0o700); err != nil {
+	if err := makeStoreDirectory(transactionDirectory); err != nil {
 		return ActivationTransaction{}, err
 	}
 	backupRelative := filepath.Join("transactions", id, "previous-config.yaml")
 	backupPath := filepath.Join(s.root, backupRelative)
-	if err := writeFileAtomically(backupPath, previousConfig, 0o600); err != nil {
+	if err := writeFileAtomically(backupPath, previousConfig); err != nil {
 		_ = os.RemoveAll(transactionDirectory)
 		return ActivationTransaction{}, err
 	}
@@ -99,7 +99,7 @@ func (s *Store) beginActivationLocked(operation, targetRecipeDigest string, prev
 		PreviousConfigBackup: filepath.ToSlash(backupRelative),
 		StartedAt:            s.now().UTC(),
 	}
-	if err := writeJSONAtomically(s.transactionPath(), transaction, 0o600); err != nil {
+	if err := writeJSONAtomically(s.transactionPath(), transaction); err != nil {
 		_ = os.RemoveAll(transactionDirectory)
 		return ActivationTransaction{}, err
 	}
@@ -135,12 +135,12 @@ func (s *Store) CommitActivation(transaction ActivationTransaction, pointer Acti
 	if err := s.validatePointerFields(pointer, transaction.TargetRecipeDigest); err != nil {
 		return err
 	}
-	if err := writeJSONAtomically(filepath.Join(s.root, "active.json"), pointer, 0o600); err != nil {
+	if err := writeJSONAtomically(filepath.Join(s.root, "active.json"), pointer); err != nil {
 		return err
 	}
 	current.State = "committing"
 	current.CommitConfigDigest = pointer.RealizedConfigDigest
-	if err := writeJSONAtomically(s.transactionPath(), current, 0o600); err != nil {
+	if err := writeJSONAtomically(s.transactionPath(), current); err != nil {
 		return err
 	}
 	return s.finalizeTransactionLocked(current)
@@ -165,12 +165,12 @@ func (s *Store) prepareActivationCommitLocked(transaction ActivationTransaction,
 	if err := s.validatePointerFields(pointer, transaction.TargetRecipeDigest); err != nil {
 		return err
 	}
-	if err := writeJSONAtomically(filepath.Join(s.root, "active.json"), pointer, 0o600); err != nil {
+	if err := writeJSONAtomically(filepath.Join(s.root, "active.json"), pointer); err != nil {
 		return err
 	}
 	current.State = "committing"
 	current.CommitConfigDigest = pointer.RealizedConfigDigest
-	return writeJSONAtomically(s.transactionPath(), current, 0o600)
+	return writeJSONAtomically(s.transactionPath(), current)
 }
 
 func (s *Store) FinalizeActivationCommit(transaction ActivationTransaction) error {
@@ -210,7 +210,7 @@ func (s *Store) CommitDeactivation(transaction ActivationTransaction) error {
 	}
 	current.State = "committing"
 	current.CommitConfigDigest = digestBytes(config)
-	if err := writeJSONAtomically(s.transactionPath(), current, 0o600); err != nil {
+	if err := writeJSONAtomically(s.transactionPath(), current); err != nil {
 		return err
 	}
 	return s.finalizeTransactionLocked(current)
@@ -245,7 +245,7 @@ func (s *Store) prepareDeactivationCommitLocked(transaction ActivationTransactio
 	}
 	current.State = "committing"
 	current.CommitConfigDigest = digestBytes(config)
-	return writeJSONAtomically(s.transactionPath(), current, 0o600)
+	return writeJSONAtomically(s.transactionPath(), current)
 }
 
 func (s *Store) FinalizeDeactivationCommit(transaction ActivationTransaction) error {
@@ -279,7 +279,7 @@ func (s *Store) CompleteRollback(transaction ActivationTransaction) error {
 			return err
 		}
 		current.State = ActivationRollbackFinalizing
-		if err := writeJSONAtomically(s.transactionPath(), current, 0o600); err != nil {
+		if err := writeJSONAtomically(s.transactionPath(), current); err != nil {
 			return err
 		}
 	}
@@ -300,7 +300,7 @@ func (s *Store) MarkTransactionInconsistent(transaction ActivationTransaction) e
 		return nil
 	}
 	current.State = ActivationInconsistent
-	return writeJSONAtomically(s.transactionPath(), current, 0o600)
+	return writeJSONAtomically(s.transactionPath(), current)
 }
 
 func (s *Store) readTransaction() (ActivationTransaction, error) {
@@ -429,7 +429,7 @@ func (s *Store) finalizeTransactionLocked(transaction ActivationTransaction) err
 			return errors.New("activation transaction is not ready for finalization")
 		}
 		transaction.State = ActivationFinalizing
-		if err := writeJSONAtomically(s.transactionPath(), transaction, 0o600); err != nil {
+		if err := writeJSONAtomically(s.transactionPath(), transaction); err != nil {
 			return err
 		}
 	}
@@ -468,7 +468,7 @@ func (s *Store) restorePreviousPointer(transaction ActivationTransaction) error 
 		}
 		return syncDirectory(s.root)
 	}
-	return writeJSONAtomically(path, transaction.PreviousPointer, 0o600)
+	return writeJSONAtomically(path, transaction.PreviousPointer)
 }
 
 func (s *Store) transactionPath() string {

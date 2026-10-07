@@ -205,7 +205,7 @@ def test_reused_worker_is_not_owned_by_failed_dashboard_start_rollback(monkeypat
             ),
             ("dashboard", "dashboard", (["docker", "run"],)),
         ],
-        storage_secret_values={},
+        router_secret_values={},
         bench_secret_values={"SR_BENCH_TOKEN": "secret"},
     )
     assert status == 125
@@ -268,7 +268,7 @@ def test_reconciliation_failure_rolls_back_only_new_runtime_containers(monkeypat
             ("envoy", "envoy", (["docker", "run", "envoy"],)),
             ("sr-bench", "worker", (["docker", "run", "worker"],)),
         ],
-        storage_secret_values={},
+        router_secret_values={},
         bench_secret_values={"SR_BENCH_TOKEN": "secret"},
     )
     assert status == 1
@@ -319,7 +319,7 @@ def test_worker_that_never_started_is_removed_and_its_port_conflict_named(
             )
         ]
         code, _, error = container_start_runner.run_container_specs(
-            specs, storage_secret_values={}, bench_secret_values={}
+            specs, router_secret_values={}, bench_secret_values={}
         )
         assert code == 1
         assert f"port {port} is already in use" in error
@@ -329,7 +329,7 @@ def test_worker_that_never_started_is_removed_and_its_port_conflict_named(
         # A worker that ran and stopped keeps its evidence, even on a taken port.
         worker["status"] = "exited"
         code, _, error = container_start_runner.run_container_specs(
-            specs, storage_secret_values={}, bench_secret_values={}
+            specs, router_secret_values={}, bench_secret_values={}
         )
         assert code == 1
         assert "inspect its saved ledger" in error
@@ -372,7 +372,7 @@ def test_worker_that_never_started_is_removed_and_reports_the_runtime_error(
                 ),
             )
         ],
-        storage_secret_values={},
+        router_secret_values={},
         bench_secret_values={},
     )
     assert (code, error) == (127, runtime_error)
@@ -434,7 +434,7 @@ def test_serve_replaces_only_idle_image_upgrade_and_preserves_journal(
 
     monkeypatch.setattr(subprocess, "run", run)
     code, _, error = container_start_runner.run_container_specs(
-        [new], storage_secret_values={}, bench_secret_values=bench.secrets
+        [new], router_secret_values={}, bench_secret_values=bench.secrets
     )
     assert code == 0, error
     assert state == {"exists": True, "paused": False, "image": "dashboard:new"}
@@ -696,7 +696,7 @@ def test_replaced_worker_is_owned_by_failed_health_rollback(monkeypatch):
                 (["docker", "run"], ["docker", "exec", "health"]),
             )
         ],
-        storage_secret_values={},
+        router_secret_values={},
         bench_secret_values={"SR_BENCH_TOKEN": "fixture"},
     )
     assert code == 125

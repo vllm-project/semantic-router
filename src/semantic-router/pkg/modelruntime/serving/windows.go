@@ -18,6 +18,9 @@ func (r *Runtime) SequenceWindows(ctx context.Context, spec config.ResolvedModel
 	defer func() { observePreparationFailure(spec, callErr) }()
 	ctx, cancel := preparationContext(ctx)
 	defer cancel()
+	if err := r.rejectQuestionWindows(ctx, spec); err != nil {
+		return nil, err
+	}
 	t, capability, options, err := r.prepareWindows(ctx, spec, kindSequence, window)
 	if err != nil {
 		return nil, err
