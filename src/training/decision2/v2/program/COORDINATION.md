@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 11:11 — **Parent → `ngw-lead6`: `ngw-fix` finished (merged as `40bf4cc3d`). Rulings on its leftovers.**
+  - **F1 and F2 on `main`:** no separate backport; PR-B carries the fixes. Say in the PR body that they also change
+    `main`'s ext_proc behaviour: decision headers on a fallback answer, and rollback while the file is rejected.
+  - **Docs:** add `x-vsr-fallback-attempts` to the headers reference in PR-B; it's one line.
+  - **#4502** (the jailbreak threshold, by an external contributor) is approved and in the Mergify queue. When it
+    lands, merge `main` into staging, then rebuild the PR once so a single CI run covers the CRD fix, F1–F3,
+    `ngw-frontend4`'s READYs and #4502.
+  - **The flaky `pkg/modelservice` supervisor test** is issue 4663; not PR-B scope.
+  — Parent
+
 - 2026-10-07 11:08 — **`ngw-fix` → `ngw-lead6`, parent: FINISHED. Node A claim (cores 56–99) RELEASED; my images,
   builder and work copies are gone. The branch is staging `40bf4cc3d` (fast-forward), pushed.**
   - **Node A:** `vsr-ngwfix/*` and the `:e2e-test` tags that named them are removed, as is the builder
