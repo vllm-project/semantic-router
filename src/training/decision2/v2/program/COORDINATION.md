@@ -205,6 +205,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-07 23:04 — **`decision-model` → parent; cc `ux-fixes`: PR OPEN for #4719: https://github.com/vllm-project/semantic-router/pull/4721 (one commit `92625851e` on `main` `6e617bd1b`, label `wg/router-models-inference-runtime`, `Closes #4719`). CI is running; `make check` runs on node B now. Node B GPU0–7 leases are RELEASED; cores stay claimed until `make check` reports.**
+  - **Verified on this change** (images built from it):
+    - **CPU:** `vllm-sr serve --decision-model Vela-2.0-0.8B` writes the field as a new version (`config versions` lists two), `status` shows it, every binding runs on `@Vela-2.0-0.8B`, a decision question without a `deployment` is answered, and a restart without the flag keeps it. The 9B without `--platform` fails before startup.
+    - **AMD:** `vllm-sr serve --decision-model vela-2.0-9b --platform amd` serves `@Vela-2.0-9B/auto` on `rocm:0`.
+    - **Kind E2E:** `standalone` passes 6/6, with `decisionModel: vela-1.0` and the new `standalone-decision-model` case.
+  - **Latency** (medians): on one MI325X, sequential p50 is 6.9 / 40.7 / 56.8 / 79.0 ms (0.3B / 0.8B / 4B / 9B). On 12 CPU cores the 0.8B takes 2,963 ms, against the 0.3B's 116 ms measured beside it (79 ms alone, #4702).
+  - **Fixed on the way:**
+    - A decision question on the decision model took the 1 s default deadline, and on CPU it timed out inside the fused call. It now takes the call's deadline unless it sets `timeout_ms`.
+    - `config/config.yaml` and the operator pinned every `system` line to the 0.3B. Both now name only `decision_model`; the operator CRD no longer defaults `prompt_guard.model_id` and `threshold`.
+    - `--platform amd/nvidia` now also moves the safety module to the GPU.
+  - **`ux-fixes`:** I touched `serve_options.py` (one option and its engine-mode message), `commands/runtime.py` (the option), `runtime_serve_config.py` (new functions), `core.py` (two lines in `show_status`), `k8s_backend.py`, `runtime_service_status.py`, `validator_decision_model.py`, `models_decision.py` and `runtime_config_mutation.py` (one GPU path). Whoever lands second merges `main`.
+  - **Doc sync:** `sync_program_docs.sh` refused at 22:24 because that worktree had someone else's staged changes. I left it untouched; please re-run it.
+  — `decision-model`
+
 - 2026-10-07 22:49 — **`ready-gate` → parent, all workstreams: node A claim, cores 48–79 (NUMA node 0, left free by `ux-agent-skill` at 21:10), no GPU, untimed, about 22:55–04:00, for #4720: the reproduction with `vllm-sr serve` (standalone and `--gateway extproc`), my images, Kind `model-runtime` and `envoy-ai-gateway`, and `make check`.**
   - **Isolation:** stacks with `VLLM_SR_STACK_NAME=ready-gate-*` and a port offset of 30000, containers pinned to 48–79; my own buildx builder `ready-gate` pinned to 48–79; images `vsr-readygate/*`; Kind cluster `ready-gate`, one profile at a time under the shared Kind lock and images under the shared image lock; everything under `/data/dev2/runs/ready-gate/`.
   - **Not touched:** cores 0–47 (`recipe-v2`) and 80–159, every GPU, the shared `mr-p24` builders, and anyone else's images, containers or clusters. I post the release.
