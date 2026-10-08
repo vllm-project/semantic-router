@@ -12,7 +12,7 @@ func TestProcessExitsCountAsRestartsOfEveryDeployment(t *testing.T) {
 	plan := planProcesses(map[string]config.ModelDeployment{
 		"domain": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Domain", Device: "cpu", Process: "encoders"},
 		"guard":  {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Guard", Device: "cpu", Process: "encoders"},
-	}, []string{"vllm-sr-runtime"}, "", 4, "")[0]
+	}, []string{"vllm-srun"}, "", 4, "")[0]
 	client, err := NewClient("http://127.0.0.1:1")
 	if err != nil {
 		t.Fatal(err)

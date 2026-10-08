@@ -42,8 +42,8 @@ See a complete example:
 
 ## Dependencies and Limitations
 
-- Requires more than one `modelRef` and a reachable
-  `global.integrations.looper.endpoint`.
+- Requires more than one `modelRef`, each with a backend in
+  `providers.models[].backend_refs`.
 - Every candidate receives the request content, so all candidate providers must
   be allowed by the route's data policy.
 - Cost grows with the number of candidates. Concurrency reduces wall-clock

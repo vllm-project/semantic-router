@@ -111,7 +111,7 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 			t.Fatalf("%s names %s, which runtime_with_fixtures.py does not write", name, deployment.Artifact)
 		}
 	}
-	attached := map[string]string{"attached-decisions": "decision-a", "attached-feedback": "feedback-a"}
+	attached := map[string]string{"attached-decisions": "decision-a", "attached-feedback": "feedback-a", "attached-vela2": "vela2-a"}
 	for name, served := range attached {
 		deployment := deployments[name]
 		if !strings.Contains(deployment.Endpoint, "model-runtime-attached.") || deployment.ServedName != served {
@@ -179,7 +179,7 @@ func TestRouterStartsManagedRuntimesThroughTheFixtureScript(t *testing.T) {
 	for _, item := range profile.ExtraEnv {
 		env[item.Name] = item.Value
 	}
-	if env["VLLM_SR_RUNTIME_COMMAND"] != "python3 /opt/vsr-e2e/runtime_with_fixtures.py" || env["VLLM_SR_RUNTIME_DIR"] != "/tmp/vsr-runtime" {
+	if env["VLLM_SRUN_COMMAND"] != "python3 /opt/vsr-e2e/runtime_with_fixtures.py" || env["VLLM_SRUN_DIR"] != "/tmp/vsr-runtime" {
 		t.Fatalf("managed runtimes must start through the fixture script with a known socket directory: %v", env)
 	}
 	if len(profile.ExtraVolumes) != 1 || profile.ExtraVolumes[0].ConfigMap.Name != FilesConfigMap {

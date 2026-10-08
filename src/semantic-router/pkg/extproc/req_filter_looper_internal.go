@@ -152,7 +152,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	r.hydrateLooperRoutingContext(ctx)
-	decisionName := headerValueCI(ctx, headers.VSRLooperDecision)
+	decisionName := looperHopDecision(ctx)
 	decision, fallback := r.resolveLooperDecision(modelName, decisionName, ctx)
 	if fallback != nil {
 		return fallback, nil

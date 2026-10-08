@@ -138,12 +138,6 @@ This document defines the project-level surfaces used by skills, reports, and va
 - Typical paths: `deploy/helm/**`, `deploy/operator/**`, `deploy/kubernetes/**`, `src/semantic-router/pkg/apis/**`, `src/semantic-router/pkg/dsl/**`, `src/semantic-router/pkg/k8s/**`
 - Task rules: `helm-chart`, `operator-stack`, `e2e-framework`
 
-## `fleet_sim_runtime`
-
-- Fleet simulator package, API service, release workflow, and simulator-owned docs or assets that must stay runnable as one subsystem.
-- Typical paths: `src/fleet-sim/**`, `website/docs/fleet-sim/**`, `.github/workflows/pypi-publish-vllm-sr-sim.yml`
-- Task rules: `fleet-sim`, `repo-docs`
-
 ## `training_stack`
 
 - Training-stack workflows, selector or embedding artifacts, evaluation scripts, and runtime-facing training outputs under `src/training`.

@@ -113,7 +113,7 @@ router lost to candle, which runs the models concurrently. Measured at
 
 So the router plans CPU processes itself (`pkg/modelservice`): CPU models
 without a `process` key spread over one process per model, at most one per two
-cores (`VLLM_SR_RUNTIME_CPU_PROCESSES` caps it). Each CPU process runs
+cores (`VLLM_SRUN_CPU_PROCESSES` caps it). Each CPU process runs
 `ceil(cores / CPU processes)` threads, where cores is the router's
 `GOMAXPROCS` (its affinity limited by the container quota). Pinning each process
 to a disjoint share measured slower: the share of a rarely used model (the
@@ -139,6 +139,6 @@ taskset -c 44-47 python3 tools/router_latency.py run --url http://127.0.0.1:1808
 python3 tools/router_latency.py rounds --dir rounds --base legacy --new runtime
 ```
 
-For the runtime router, set `VLLM_SR_RUNTIME_RESULT_CACHE=0` and start the
-runtime with `--result-cache-entries 0` (through `VLLM_SR_RUNTIME_COMMAND`) to
+For the runtime router, set `VLLM_SRUN_RESULT_CACHE=0` and start the
+runtime with `--result-cache-entries 0` (through `VLLM_SRUN_COMMAND`) to
 measure without caches.

@@ -87,7 +87,7 @@ func TestPlanProcessesPlansAutoDeploymentsOnTheResolvedDevice(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			plans := planProcesses(tc.deployments, []string{"vllm-sr-runtime"}, "", tc.cores, tc.auto)
+			plans := planProcesses(tc.deployments, []string{"vllm-srun"}, "", tc.cores, tc.auto)
 			if got := planned(plans); !slices.Equal(got, tc.want) {
 				t.Fatalf("plans\n got %q\nwant %q", got, tc.want)
 			}

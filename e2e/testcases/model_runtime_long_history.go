@@ -24,12 +24,12 @@ const (
 	// More distinct assistant turns than the runtime's default of 64 tasks per
 	// bundle; the PII rule reads each of them (include_history in values.yaml).
 	mrHistoryTurns = 80
-	// vllm-sr-runtime's --max-bundle-tasks default.
+	// vllm-srun's --max-bundle-tasks default.
 	mrDefaultBundleTasks = 64
 	// One lookup per input window a model is asked, hit or miss. Bundle tasks
 	// don't count pieces: the Router fuses a stage's calls to one model and
 	// head into one task of many inputs.
-	runtimeResultCacheMetric = "vllm_sr_runtime_result_cache_total"
+	runtimeResultCacheMetric = "vllm_srun_result_cache_total"
 )
 
 func testModelRuntimeLongHistory(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {

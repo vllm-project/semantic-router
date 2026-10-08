@@ -120,3 +120,27 @@ func TestQueryAutoDeviceRefusesAnswersThatAreNotADevice(t *testing.T) {
 		t.Fatal("no command, no answer")
 	}
 }
+
+func TestManagerRefusesAGPUOnlyImplicitDeploymentOnTheCPU(t *testing.T) {
+	nine := config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-2.0-9B", Revision: strings.Repeat("b", 40), Device: autoDevice}
+	cpuHost, _ := fakeAutoManager(t, "cpu", 8)
+	_, err := cpuHost.AcquireDeployments(map[string]config.ModelDeployment{"@Vela-2.0-9B/auto": nine})
+	if err == nil || !strings.Contains(err.Error(), `"@Vela-2.0-9B/auto": vllm-sr/Vela-2.0-9B runs on a GPU only, and the model runtime finds no GPU on this host`) {
+		t.Fatalf("a host without a GPU must refuse the 9B, got %v", err)
+	}
+	onCPU := nine
+	onCPU.Device = "cpu"
+	if err := refuseGPUOnlyOnCPU(map[string]config.ModelDeployment{"@Vela-2.0-9B": onCPU}, "rocm:0"); err == nil {
+		t.Fatal("a GPU-only implicit deployment on cpu is refused on any host")
+	}
+	if err := refuseGPUOnlyOnCPU(map[string]config.ModelDeployment{"@Vela-2.0-9B/auto": nine}, "rocm:0"); err != nil {
+		t.Fatalf("a GPU host serves the 9B: %v", err)
+	}
+	if err := refuseGPUOnlyOnCPU(map[string]config.ModelDeployment{"vela-9b": onCPU}, "cpu"); err != nil {
+		t.Fatalf("a declared deployment is the operator's choice: %v", err)
+	}
+	eight := config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Vela-2.0-0.8B", Device: autoDevice}
+	if err := refuseGPUOnlyOnCPU(map[string]config.ModelDeployment{"@Vela-2.0-0.8B/auto": eight}, "cpu"); err != nil {
+		t.Fatalf("the 0.8B runs on a CPU: %v", err)
+	}
+}

@@ -3,7 +3,7 @@ title: 模型运行时
 sidebar_label: 概览
 description: 对请求进行分类、防护、向量化和路由的模型都运行在内置模型运行时中。从这里开始。
 translation:
-  source_commit: "a8c166705a025fec6c9cd4bfe4251341f3a64196"
+  source_commit: "c94fff6a5d6368a2743b786db5624274053f1ae9"
   source_file: "docs/model-runtime/overview.md"
   outdated: false
 ---
@@ -14,6 +14,10 @@ translation:
 等信号背后的分类器，语义缓存、记忆和 RAG 背后的 embedding 模型，重排序模型，
 幻觉检测器，以及回答路由问题的决策模型。
 
+运行时不是你的聊天模型运行的地方。回答用户的模型留在你的提供方后面（vLLM、Ollama、托管 API）；
+运行时提供的是路由器针对每个请求去询问的那些小模型。它以 `vllm-srun` 进程的形式运行在路由器容器内，
+或者在你用 `vllm-sr serve <model>` 启动时运行在单独的容器中（engine 模式）。
+
 通常你什么都不用做。某个功能需要模型时，路由器会下载模型、校验每个文件、
 启动运行时，并把请求文本发给它。路由所需的模型加载完成后，路由器才开始提供服务。
 之后如果运行时变慢或崩溃，请求仍会继续流转：该功能报告“未知”，
@@ -23,8 +27,8 @@ translation:
 
 | 你想要 | 这样做 | 阅读 |
 | --- | --- | --- |
-| 使用路由器的内置功能 | 不需要额外操作。路由器会替你启动并监管运行时。 | [与路由器一起运行](model-runtime/deploy.md) |
-| 把模型放到 GPU 上，或在多个路由器之间共享 | 自己启动一个运行时，并用 `endpoint` 让路由器指向它。 | [与路由器一起运行](model-runtime/deploy.md#attach-to-a-runtime-you-run) |
+| 使用路由器的内置功能 | 不需要额外操作。路由器会替你启动并监管运行时；`vllm-sr serve --platform amd` 或 `--platform nvidia` 会把它的模型放到 GPU 上。 | [与路由器一起运行](model-runtime/deploy.md) |
+| 在多个路由器之间共享模型，或在另一台机器上运行它们 | 自己启动一个运行时，并用 `endpoint` 让路由器指向它。 | [与路由器一起运行](model-runtime/deploy.md#attach-to-a-runtime-you-run) |
 | 在自己的代码里调用模型 | 运行 `vllm-sr serve <model>` 并发送 HTTP 请求。 | [快速开始](model-runtime/quickstart.md) |
 
 ## 它能提供什么 {#what-it-can-serve}
@@ -38,7 +42,7 @@ translation:
 | 语义缓存、记忆、RAG、工具选择、embedding 信号 | Vela 1.0 Embedding、Qwen3-Embedding-0.6B | [Embeddings](model-runtime/guides/embeddings.md) |
 | 对检索到的文档重排序 | Vela 1.0 Reranker | [文档重排序](model-runtime/guides/rerank.md) |
 | 按图片和音频路由 | Vela 1.0 Omni Nano 和 Mini | [图片与音频](model-runtime/guides/multimodal.md) |
-| 用自然语言提出你自己的路由问题 | Decision 2.0、Decision 1.0、Vela 2.0（私有预览） | [决策模型](model-runtime/guides/decisions.md) |
+| 用自然语言提出你自己的路由问题 | Decision 2.0、Decision 1.0、Vela 2.0 | [决策模型](model-runtime/guides/decisions.md) |
 
 [选择模型](model-runtime/choose-a-model.md)帮助你挑选规模和硬件。
 

@@ -117,7 +117,7 @@ func TestRespondSelectionRejectedReturnsServiceUnavailable(t *testing.T) {
 	if immediate == nil || int(immediate.GetStatus().GetCode()) != 503 {
 		t.Fatalf("selection rejection response = %#v, want HTTP 503", immediate)
 	}
-	if body := string(immediate.GetBody()); !strings.Contains(body, selection.ErrNoEligibleCandidates.Error()) {
+	if body := string(immediate.GetBody()); !strings.Contains(body, `"code":"no_eligible_model"`) {
 		t.Fatalf("selection rejection body = %q", body)
 	}
 }

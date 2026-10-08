@@ -16,14 +16,14 @@ import (
 
 const (
 	// RuntimeCommandEnv overrides the managed runtime command (space-separated),
-	// for example "python3 -m vllm_sr_runtime".
-	RuntimeCommandEnv = "VLLM_SR_RUNTIME_COMMAND"
+	// for example "python3 -m vllm_srun".
+	RuntimeCommandEnv = "VLLM_SRUN_COMMAND"
 	// RuntimeDirEnv overrides the private directory that holds runtime sockets.
-	RuntimeDirEnv = "VLLM_SR_RUNTIME_DIR"
+	RuntimeDirEnv = "VLLM_SRUN_DIR"
 	// RuntimeCacheEnv sets the Hugging Face cache directory for managed runtimes.
-	RuntimeCacheEnv = "VLLM_SR_RUNTIME_CACHE_DIR"
+	RuntimeCacheEnv = "VLLM_SRUN_CACHE_DIR"
 
-	defaultRuntimeCommand = "vllm-sr-runtime"
+	defaultRuntimeCommand = "vllm-srun"
 )
 
 // Manager owns the runtime processes of every router generation. Each
@@ -51,7 +51,7 @@ func NewManager() *Manager {
 	}
 	runtimeDir := os.Getenv(RuntimeDirEnv)
 	if runtimeDir == "" {
-		runtimeDir = filepath.Join(os.TempDir(), fmt.Sprintf("vllm-sr-runtime-%d", os.Getpid()))
+		runtimeDir = filepath.Join(os.TempDir(), fmt.Sprintf("vllm-srun-%d", os.Getpid()))
 	}
 	return &Manager{groups: make(map[string]*group), runtimeDir: runtimeDir, command: command, cacheDir: os.Getenv(RuntimeCacheEnv), cores: cpuCores()}
 }
@@ -65,7 +65,11 @@ func (m *Manager) Acquire(cfg *config.RouterConfig) (*Lease, error) {
 
 // AcquireDeployments returns a lease on an explicit set of deployments.
 func (m *Manager) AcquireDeployments(deployments map[string]config.ModelDeployment) (*Lease, error) {
-	plans := planProcesses(deployments, m.command, m.cacheDir, m.cores, m.resolveAuto(deployments))
+	auto := m.resolveAuto(deployments)
+	if err := refuseGPUOnlyOnCPU(deployments, auto); err != nil {
+		return nil, err
+	}
+	plans := planProcesses(deployments, m.command, m.cacheDir, m.cores, auto)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -95,6 +99,9 @@ func (m *Manager) AcquireDeployments(deployments map[string]config.ModelDeployme
 // extend adds one deployment to a lease in a process of its own.
 func (m *Manager) extend(lease *Lease, name string, deployment config.ModelDeployment) error {
 	single := map[string]config.ModelDeployment{name: deployment}
+	if err := refuseGPUOnlyOnCPU(single, m.resolveAuto(single)); err != nil {
+		return err
+	}
 	plan := planProcesses(single, m.command, m.cacheDir, m.cores, m.resolveAuto(single))[0]
 	m.mu.Lock()
 	defer m.mu.Unlock()

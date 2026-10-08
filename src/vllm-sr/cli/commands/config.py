@@ -10,7 +10,6 @@ from pathlib import Path
 import yaml
 
 from cli.config_generator import generate_envoy_config_from_user_config
-from cli.config_import import import_config_command as run_import_config_command
 from cli.config_migration import migrate_config_data
 from cli.config_migration_notes import MigrationNotes
 from cli.config_schema import schema_document
@@ -238,19 +237,3 @@ def _print_migration_notes(notes: MigrationNotes) -> None:
             echo(f"      {note.message}")
     for note in actions:
         warning(f"{note.path}: {note.message}")
-
-
-def import_config_from_source_command(
-    from_type: str,
-    source_path: str | None = None,
-    target_path: str = "config.yaml",
-    force: bool = False,
-):
-    """Import a supported external config source into canonical v0.3 YAML."""
-
-    return run_import_config_command(
-        from_type=from_type,
-        source_path=source_path,
-        target_path=target_path,
-        force=force,
-    )

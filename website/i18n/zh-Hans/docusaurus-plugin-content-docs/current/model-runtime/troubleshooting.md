@@ -3,7 +3,7 @@ title: 故障排查与常见问题
 sidebar_label: 故障排查与常见问题
 description: 修复模型运行时的常见问题，并解答常见疑问。
 translation:
-  source_commit: "051c4beb3bfdbc10e80f98afa78629d7b1e74917"
+  source_commit: "9995d68856b15ba944b16614d3e497a952691a10"
   source_file: "docs/model-runtime/troubleshooting.md"
   outdated: false
 ---
@@ -26,6 +26,26 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 `vsr_model_runtime_ready{deployment="..."} 1` 表示该 deployment 可以作答。
 路由器日志会列出每个托管运行时进程以及它停止的原因。
 
+## 启动会等待模型 {#startup-waits-for-the-models}
+
+只有当路由器为当前配置托管的每个模型都加载完成后，它才开始服务。在此之前，`/ready` 返回 `503`，
+`vllm-sr serve` 会一直等待，并打印路由器还在等待什么：
+
+```text
+Waiting for Router-managed model deployments, 0 of 1 ready: decision-kai (vllm-sr/Decision-2.0-Kai-0.6B) loading
+```
+
+`/startup-status` 报告 `phase: loading_model_deployments`，并在 `model_deployments` 中列出每个
+deployment 及其状态：
+
+```bash
+curl -s localhost:8080/startup-status
+```
+
+首次启动要下载模型，因此比之后的启动更久。等待在 `VLLM_SRUN_READY_TIMEOUT`（默认 10 分钟）后结束，
+并报告 `did not become ready within 10m0s`；再次启动即可从缓存继续下载，或在路由器的环境中调大该超时。
+模型加载失败时，等待会立即结束并给出原因（见下文）。
+
 ## 信号从不匹配 {#a-signal-never-matches}
 
 很可能是模型还没就绪，或者它的答案到得太晚。
@@ -39,13 +59,34 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
    ```bash
    curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
      -H 'content-type: application/json' -H 'x-vsr-debug: true' \
-     -d '{"model": "auto", "messages": [{"role": "user", "content": "your text"}]}'
+     -d '{"model": "vllm-sr/auto", "messages": [{"role": "user", "content": "your text"}]}'
+   ```
+
+4. 预览同一段文本的路由，而不生成回答。返回中的 `signal_errors` 列出未知的信号及原因，
+   例如 `decision_timeout`：
+
+   ```bash
+   curl -s 'localhost:8080/api/v1/routing/preview?trace=true' \
+     -H 'content-type: application/json' \
+     -d '{"model": "vllm-sr/auto", "text": "your text"}' \
+     | jq '{decision: .decision_result.decision_name, matched: .decision_result.matched_signals, signal_errors}'
    ```
 
 ## 运行时一直处于 `loading` 或 `warming` {#the-runtime-stays-in-loading-or-warming}
 
 - **首次启动：** 模型正在下载，大模型需要几分钟。路由器日志和 `GET /health` 会显示当前阶段。
 - **没有网络：** 运行时从 Hugging Face Hub 下载。离线时，先把模型复制到缓存中，或把 `artifact` 指向本地副本。
+  例如，把固定修订版的 Vela Omni Nano 下载到路由器镜像所管理的运行时的缓存（即模型卷）中，
+  然后以 `HF_HUB_OFFLINE=1` 启动：
+
+  ```bash
+  hf download vllm-sr/Vela-1.0-Omni-Nano \
+    --revision 2ff2d66385dbdd661a560ec3e8bcb45a0527d92e \
+    --cache-dir /app/models/model-runtime
+  ```
+
+  Mini 的修订版是 `801bae3ad28df6891408f0e0441c676b30e132e3`。路由器镜像不再内置预先导出的 Omni 包，
+  因此在离线集群中按图片路由的路由器需要先这样下载一次。
 - **CPU 上长时间处于 `warming`：** 自检会让模型跑几次请求。大型决策模型在 CPU 上很慢；
   请使用 GPU 或 `vllm-sr/Decision-2.0-Kai-0.6B`。
 - **`loading` 且原因中有 "retrying after ..."：** 模型因可能自行消失的原因加载失败，例如 GPU 被占用、可用内存不足或下载中断。运行时最多重试五次，首次等待 5 秒，之后每次加倍，期间同一进程中的其他模型照常服务（`--load-attempts`、`--load-retry-seconds`）。包损坏或自检失败会立即报告 `failed`。
@@ -55,13 +96,13 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 `GET /v1/models` 会给出每个模型失败的原因。由路由器运行模型时，路由器日志会带有同样的原因，例如
 `model runtime is not ready: model @domain_classifier failed to load: ...`。
 路由器运行的某个运行时进程中所有模型都加载失败时，路由器会重启该进程（首次等待 1 秒，之后最长间隔 60 秒），
-因此 GPU 被占用、磁盘已满这类暂时性原因消除后，模型会自行恢复。与仍在服务的模型同处一个进程的模型加载失败时，由运行时自己重试，该进程会继续运行。重试三次仍然失败的任务模型会让路由器无法启动。常见原因：
+因此 GPU 被占用、磁盘已满这类暂时性原因消除后，模型会自行恢复。与仍在服务的模型同处一个进程的模型加载失败时，由运行时自己重试，该进程会继续运行。路由器托管的模型重试三次仍然失败时，路由器无法启动；配置重新加载时，新配置会被拒绝，上一份配置继续服务。常见原因：
 
 | 原因提示 | 处理方法 |
 | --- | --- |
 | a file hash does not match | 下载已损坏或仓库发生了变化。从缓存中删除该模型后重新启动。 |
 | a revision is required | 非内置仓库需要用 40 位 commit 设置 `revision`。 |
-| access denied, gated or private | 用 `hf auth login` 登录，或为有访问权限的账号设置 `HF_TOKEN`。Vela 2.0 是私有预览。 |
+| access denied, gated or private | 用 `hf auth login` 登录，或为有访问权限的账号设置 `HF_TOKEN`。 |
 | does not fit, out of memory | 换用更小的模型、显存更大的 GPU，或给该模型单独的 `process`。 |
 | device not available | 指定的 GPU 不存在，或已安装的 PyTorch 不支持它。使用 `device: auto`，或安装正确的 PyTorch 版本。 |
 | built without LAPACK | 该模型在 CPU 上需要 LAPACK，而当前的 PyTorch（ROCm 镜像中的版本）没有。把模型放到 GPU 上（`device: rocm:0`），或用 CPU 镜像运行 CPU 上的模型。运行时不会重试。 |
@@ -118,6 +159,37 @@ global:
 
 `truncate` 保留文本开头。`window` 用相互重叠的窗口读取全文并合并结果，PII 和安全扫描应使用它，以免漏检。
 
+`window` 最多读取 `max_tokens`：更长的输入以 `scan_budget_exceeded` 失败。
+通过 Vela 2.0 时，路由类问题只读取长请求的前若干 token（Vela 2.0 0.3B 在 CPU 上为 8,192 个），
+安全类问题则在模型的扫描预算内读取全文（CPU 上为四个输入）。要让安全类问题读取更多，
+请给 deployment 设置扫描预算：
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela2:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        input:
+          max_tokens: 131072
+          overflow: window
+```
+
+模型没有完整读取的内容会让越狱或 PII 规则匹配：在 `reject` 下超过模型 `max_tokens`
+的输入、超过其上限的输入、被截断的输入，或未能在信号截止时间内扫描完的输入。无论
+`on_error` 如何设置，匹配的类型都是 `unscanned`，并给出原因（`input_limit`、`scan_budget`
+或 `deadline`），因此填充提示词无法让攻击或个人数据绕过检查。在模块上设置
+`on_unscanned: allow` 可让这类内容改为遵循 `on_error`。其他信号报告原因，并遵循各自的
+`on_error`（[参考](model-runtime/reference.md#long-inputs)）。
+
+## 请求在等待慢模型 {#a-request-waits-on-a-slow-model}
+
+在信号截止时间前没有返回的模型运行时信号会按其策略处理，因此一个慢模型不会让整个请求失败：
+路由类信号遵循 `on_error`，安全类信号按未扫描处理。截止时间是请求的截止时间减去剩余时间的十分之一，
+已部署服务的请求没有路由器可见的截止时间，则为 45 秒；设置 `global.model_catalog.signal_timeout_ms`
+可以缩短它。在 CPU 上，Vela 2.0 0.3B 用四个核每秒约读取 1,000 个 token，因此长请求可能无法在截止时间内完成安全扫描。
+
 ## 路由器无法访问挂载的运行时 {#the-router-cannot-reach-an-attached-runtime}
 
 - 除非用 `--host 0.0.0.0` 启动，运行时只监听 `127.0.0.1`。
@@ -126,9 +198,15 @@ global:
 
 ## 请求比预期慢 {#requests-are-slower-than-expected}
 
-- 查看运行时 `/metrics` 上的 `vllm_sr_runtime_request_duration_seconds` 和
-  `vllm_sr_runtime_queue_duration_seconds`。排队时间长说明模型已饱和：增加 GPU、改用更小的模型或另起一个进程。
+- 对于路由器托管的运行时，对比路由器上较慢 deployment 的 `vsr_model_runtime_server_seconds`（按 `phase`）
+  和 `vsr_model_runtime_transport_seconds`（见[参考](model-runtime/reference.md#metrics)）。时间大多在 `forward`
+  说明模型本身在该设备上就慢。时间在 `queue` 说明模型已饱和：增加 GPU、改用更小的模型或另起一个进程。
+  传输占比大则指向宿主机（CPU 争用、远程 endpoint）。
+- 对于你自己启动的运行时，查看它 `/metrics` 上的 `vllm_srun_request_duration_seconds` 和
+  `vllm_srun_queue_duration_seconds`，或其响应的 `Server-Timing` 头。
 - 在 CPU 上，同一进程中的模型共享 CPU 线程。用 `--threads` 指定你能分给运行时的核数来启动它。
+- 当其他工作占用了部分核心时，CPU 模型会明显变慢，因为每个线程都要等最慢的那个。使用 ROCm GPU
+  的进程即使空闲也可能让一个 CPU 核心一直忙碌，同一主机上的 LLM 服务也一样：给 CPU 模型留出专用核心。
 - GPU 上的决策模型可以使用 `shared_context` 或 `batching`；见 [Profiles](model-runtime/profiles.md)。
 
 ## 常见问题 {#faq}

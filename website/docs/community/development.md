@@ -83,9 +83,6 @@ make test-models
 
 # Python CLI
 make vllm-sr-test
-
-# Fleet simulator
-make vllm-sr-sim-test
 ```
 
 Select integration or E2E explicitly when a change is visible through startup,

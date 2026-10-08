@@ -25,7 +25,7 @@
 
 replicaCount: 1
 image:
-  repository: ghcr.io/vllm-project/semantic-router/extproc
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
   pullPolicy: Never
   tag: e2e-test
 service:

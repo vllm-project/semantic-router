@@ -4,7 +4,7 @@ description: 提出语义请求路由与 NVIDIA Dynamo 基础设施级路由之�
 created: 2025-10-09
 status: 提案
 translation:
-  source_commit: "2e2b67780dc0719bc0a913dbd1bd7bc1a4a0b250"
+  source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/proposals/nvidia-dynamo-integration.md"
   outdated: false
 ---

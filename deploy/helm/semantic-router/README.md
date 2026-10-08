@@ -97,14 +97,15 @@ the locked chart dependencies.
 | config.global.services.response_api.store_backend | string | `"memory"` |  |
 | config.global.services.response_api.ttl_seconds | int | `86400` |  |
 | configOverride | object | `null` | Complete canonical Router config supplied by deployment tooling. Unlike `config`, this map atomically replaces chart defaults before Kubernetes integration rewrites. |
+| decisionModel | string | `""` | The Router's decision model, written to `global.model_catalog.system.decision_model`: Vela-2.0-0.3B (the default), Vela-2.0-0.8B, Vela-2.0-4B, Vela-2.0-9B or Vela-1.0, case-insensitive. It answers the built-in signals and every `routing.signals.decision` question that names no deployment. The 4B and 9B need a GPU in the Router pod. A changed value is written into the live config on upgrade too; empty leaves the config's own. |
 | configMap.applyValuesRevision | string | `""` | Chart values seed the ConfigMap at install. Change this revision on an upgrade to explicitly replace the live config with `config` or `configOverride`; repeating the same revision preserves later API edits. |
 | dashboard.allowOpenBootstrap | bool | `false` | Allow first-admin creation via the public, unauthenticated web-form bootstrap endpoint. Off by default: a fresh, internet-reachable deployment should not be claimable by the first stranger who finds it. Production provisions the admin via the DASHBOARD_ADMIN_* env vars (which create it at startup and close the bootstrap path automatically). Set this to true only for demos where signing up the first admin through the UI is acceptable. |
 | dashboard.enabled | bool | `false` | Enable the vLLM-SR dashboard |
 | dashboard.envFrom | list | `[]` | Extra envFrom sources for the dashboard container (configMapRef / secretRef). Standard core/v1 EnvFromSource list. |
-| dashboard.extraEnv | list | `[]` | Extra environment variables for the dashboard container, appended after the chart-managed TARGET_* vars. Use this to set optional integration env the chart does not expose explicitly (for example OPENCLAW_*, TARGET_ENVOY_URL, or PROXY_OVERRIDE_ORIGIN) without forking the chart. Standard core/v1 EnvVar list. Avoid redefining a chart-managed var (TARGET_*, DASHBOARD_JWT_SECRET): it produces a duplicate env key and Kubernetes applies last-wins. |
+| dashboard.extraEnv | list | `[]` | Extra environment variables for the dashboard container, appended after the chart-managed TARGET_* vars. Use this to set optional integration env the chart does not expose explicitly (for example PROXY_OVERRIDE_ORIGIN, or in extproc mode TARGET_ENVOY_URL for your gateway) without forking the chart. Standard core/v1 EnvVar list. Avoid redefining a chart-managed var (TARGET_*, DASHBOARD_JWT_SECRET): it produces a duplicate env key and Kubernetes applies last-wins. |
 | dashboard.image.pullPolicy | string | `"IfNotPresent"` | Dashboard image pull policy |
 | dashboard.image.repository | string | `"ghcr.io/vllm-project/semantic-router/dashboard"` | Dashboard image repository |
-| dashboard.image.tag | string | `"latest"` | Dashboard image tag |
+| dashboard.image.tag | string | `""` | Dashboard image tag (defaults to the chart appVersion) |
 | dashboard.jwtSecret | object | `{"existingSecret":"","existingSecretKey":"jwt-secret"}` | JWT signing secret for dashboard auth sessions. Point this at a Secret you manage (ideally an ExternalSecret) so the signing key is stable. If you leave it unset, the dashboard binary falls back to generating a random secret on every pod start, which invalidates all login sessions on each restart (rolling update, chart bump, or node move forces a re-login). A zero-config install still works (the random fallback is a valid signing key, you can log in and use the dashboard); you just lose existing sessions whenever the pod restarts, so leaving it unset is fine for demos but set this for any deployment where sessions need to survive restarts. |
 | dashboard.jwtSecret.existingSecret | string | `""` | Name of an existing Secret holding the JWT signing key. When set, the dashboard reads DASHBOARD_JWT_SECRET from it via secretKeyRef. When empty, no env is injected and the binary uses its per-start random fallback. |
 | dashboard.jwtSecret.existingSecretKey | string | `"jwt-secret"` | Key within existingSecret holding the JWT signing secret. |
@@ -124,13 +125,9 @@ the locked chart dependencies.
 | dashboard.service.targetPort | int | `8700` | Dashboard target port |
 | dashboard.service.type | string | `"ClusterIP"` | Dashboard service type |
 | config.listeners[0].address | string | `"0.0.0.0"` |  |
-| config.listeners[0].name | string | `"grpc-50051"` |  |
-| config.listeners[0].port | int | `50051` |  |
+| config.listeners[0].name | string | `"http-8899"` |  |
+| config.listeners[0].port | int | `8899` |  |
 | config.listeners[0].timeout | string | `"300s"` |  |
-| config.listeners[1].address | string | `"0.0.0.0"` |  |
-| config.listeners[1].name | string | `"http-8080"` |  |
-| config.listeners[1].port | int | `8080` |  |
-| config.listeners[1].timeout | string | `"300s"` |  |
 | config.providers.defaults.model | string | `"replace-with-your-model"` |  |
 | config.providers.defaults.reasoning_effort | string | `"high"` |  |
 | config.providers.models[0].backend_refs[0].endpoint | string | `"replace-with-your-vllm-service:8000"` |  |
@@ -226,17 +223,19 @@ the locked chart dependencies.
 | extraVolumeMounts | list | `[]` | Extra Router mounts. A mount at `/app/models` replaces the default model volume mount. |
 | extraVolumes | list | `[]` | Volumes for custom mounts; provide a matching volume when replacing `/app/models`. |
 | fullnameOverride | string | `""` | Override the full name of the chart |
+| gateway.mode | string | `"standalone"` | `standalone`: the Router serves the OpenAI-compatible API on `config.listeners` itself, answers `/health` and `/ready` there, and the Service exposes each listener's port; no Envoy runs. `extproc`: the Router serves Envoy's ext_proc gRPC on `service.grpc.port` for a gateway you run (Envoy Gateway, Envoy AI Gateway, Istio, KServe, llm-d). Releases before standalone mode deployed `extproc`; set it to keep such an integration. |
+| gateway.tls.secretName | string | `""` | Standalone only. A `kubernetes.io/tls` Secret mounted at `/app/config/certs`, for listeners whose `tls` names `cert_file: certs/tls.crt` and `key_file: certs/tls.key`. The Secret is mounted as a volume, so a rotated certificate reaches new connections without a restart. |
 | global.imageRegistry | string | `""` | Optional registry prefix applied to all images (e.g., mirror in China such as registry.cn-hangzhou.aliyuncs.com) |
 | global.namespace | string | `""` | Namespace for all resources (if not specified, uses Release.Namespace) |
 | grafana.image.tag | string | `"11.5.1"` |  |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
-| image.repository | string | `"ghcr.io/vllm-project/semantic-router/extproc"` | Image repository |
+| image.repository | string | `"ghcr.io/vllm-project/semantic-router/vllm-sr"` | Image repository: `vllm-sr` (CPU), `vllm-sr-rocm` (AMD GPUs) or `vllm-sr-cuda` (NVIDIA GPUs). |
 | image.tag | string | `""` | Image tag (overrides the image tag whose default is the chart appVersion) |
 | imagePullSecrets | list | `[]` | Image pull secrets for private registries |
 | ingress.annotations | object | `{}` | Ingress annotations |
 | ingress.className | string | `""` | Ingress class name |
 | ingress.enabled | bool | `false` | Enable ingress |
-| ingress.hosts | list | `[{"host":"semantic-router.local","paths":[{"path":"/","pathType":"Prefix","servicePort":8080}]}]` | Ingress hosts configuration |
+| ingress.hosts | list | `[{"host":"semantic-router.local","paths":[{"path":"/","pathType":"Prefix"}]}]` | Ingress hosts configuration. A path without `servicePort` goes to the first listener without TLS in standalone mode, and to `service.api.port` in extproc mode. |
 | ingress.tls | list | `[]` | Ingress TLS configuration |
 | jaeger.allInOne.image.tag | string | `"latest"` |  |
 | livenessProbe.enabled | bool | `true` | Enable liveness probe |
@@ -259,7 +258,7 @@ the locked chart dependencies.
 | persistence.annotations | object | `{}` | Annotations for PVC |
 | persistence.enabled | bool | `true` | Enable persistent volume |
 | persistence.existingClaim | string | `""` | Existing claim name (if provided, will use existing PVC instead of creating new one) |
-| persistence.size | string | `"10Gi"` | Storage size |
+| persistence.size | string | `"10Gi"` | Storage size of the model volume. The runtime downloads the router's models here on first start; Vela Omni Mini alone takes 4.3 GB. |
 | persistence.storageClassName | string | `"standard"` | Storage class name. Leave empty for the cluster default; use "-" to render storageClassName: "". |
 | podAnnotations | object | `{}` |  |
 | podSecurityContext | object | `{}` |  |
@@ -284,14 +283,14 @@ the locked chart dependencies.
 | service.api.port | int | `8080` | HTTP API port number |
 | service.api.protocol | string | `"TCP"` | HTTP API protocol |
 | service.api.targetPort | int | `8080` | HTTP API target port |
-| service.grpc.port | int | `50051` | gRPC port number |
+| service.grpc.port | int | `50051` | gRPC port number (extproc mode only) |
 | service.grpc.protocol | string | `"TCP"` | gRPC protocol |
 | service.grpc.targetPort | int | `50051` | gRPC target port |
 | service.metrics.enabled | bool | `true` | Enable metrics service |
 | service.metrics.port | int | `9190` | Metrics port number |
 | service.metrics.protocol | string | `"TCP"` | Metrics protocol |
 | service.metrics.targetPort | int | `9190` | Metrics target port |
-| service.type | string | `"ClusterIP"` | Service type |
+| service.type | string | `"ClusterIP"` | Service type. In standalone mode the Service also exposes every port in `config.listeners`. |
 | serviceAccount.annotations | object | `{}` | Annotations to add to the service account |
 | serviceAccount.create | bool | `true` | Specifies whether a service account should be created |
 | serviceAccount.name | string | `""` | The name of the service account to use |
@@ -394,12 +393,68 @@ the locked chart dependencies.
 ----------------------------------------------
 Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)
 
+### Gateway modes
+
+`gateway.mode` selects what serves client traffic.
+
+* **`standalone` (the default).** The Router serves the OpenAI-compatible API
+  on every listener in `config.listeners`, with no Envoy. The container, the
+  Service and the probes take their ports from that one list, and each listener
+  binds all of the Pod's addresses. Startup and readiness probe `/ready`, and
+  liveness probes `/health`, on the first listener without TLS. The Dashboard
+  sends Playground requests to that listener. A listener port that the Router
+  API, metrics or ext_proc port (50051) already use fails the render.
+* **`extproc`.** The Router serves Envoy's ext_proc gRPC on
+  `service.grpc.port` (50051) for a gateway you run: Envoy Gateway, Envoy AI
+  Gateway, Istio, KServe or llm-d. The Service and the headless Service expose
+  that port, and `config.listeners` is unused. This is what every release
+  before standalone mode deployed.
+
+The chart passes the mode to the Router (`-gateway=standalone` or
+`-gateway=extproc`); `vllm-sr serve --target kubernetes --gateway ...` writes
+the same value.
+
+**Listener TLS.** A standalone listener serves TLS when its `tls` names a
+certificate and key. Put them in a `kubernetes.io/tls` Secret and set
+`gateway.tls.secretName`; the chart mounts it at `/app/config/certs`, so the
+listener names `cert_file: certs/tls.crt` and `key_file: certs/tls.key`. The
+Secret is mounted as a volume rather than with `subPath`, so when cert-manager
+or `kubectl` updates it, Kubernetes replaces the files in place and the Router
+serves the new pair on new connections without a restart. Changing a
+listener's paths still needs a restart.
+
+**Identity behind an authenticating ingress.** A standalone listener drops the
+client identity headers (`x-authz-*`) by default. When an authenticating proxy
+in front of the Service sets them, add `identity: {trust_headers: true}` to that
+listener in `config.listeners`, with `trusted_peers` set to the proxy's Pod or
+node CIDRs; memory, authz signals and per-user rate limits then see the user.
+
+**GPU platforms.** `vllm-sr serve --target kubernetes --platform amd|nvidia`
+sets `image.repository` to `vllm-sr-rocm` or `vllm-sr-cuda` and adds
+`amd.com/gpu: 1` or `nvidia.com/gpu: 1` to `resources.limits`. Set the same
+values yourself to run the built-in models on a GPU node. The Router runs as
+uid 65532; on AMD nodes the device plugin's `/dev/kfd` and `/dev/dri` usually
+belong to the host's `render` and `video` groups, so add those group IDs to
+`podSecurityContext.supplementalGroups` unless the devices are world-accessible.
+
+**Upgrading from a release before standalone mode.** Those releases served
+ext_proc only, so a gateway in front of the Router (Envoy Gateway, Envoy AI
+Gateway, Istio, KServe, llm-d) keeps working only with
+`--set gateway.mode=extproc`; add it to your values before you upgrade. Without
+it the upgraded Router serves its listeners instead, and a live config that
+still carries the old default listeners (`grpc-50051` or `http-8080`) fails
+the render, because those ports belong to ext_proc and the Router API. `helm rollback` restores the
+previous release, mode included.
+
 ### Runtime readiness and configuration updates
 
-Startup and readiness probes use the standard gRPC health service on the Router
-port. The chart defaults to plaintext gRPC (`--secure=false`), as required by
-Kubernetes gRPC probes. Deployments that enable TLS must disable these built-in
-probes and supply TLS-aware probes. Liveness continues to check the TCP listener.
+In extproc mode, startup and readiness probes use the standard gRPC health
+service on the Router port. The chart defaults to plaintext gRPC
+(`--secure=false`), as required by Kubernetes gRPC probes. Deployments that
+enable TLS must disable these built-in probes and supply TLS-aware probes.
+Liveness continues to check the TCP listener. In standalone mode the probes
+use the listener's `/ready` and `/health` instead, over HTTPS when every
+listener serves TLS.
 
 In Kubernetes config mode, the first CR configuration must finish model
 preparation, warmup and runtime activation before health becomes serving. The
@@ -428,12 +483,15 @@ the live document with reviewed chart values, set a new
 `configMap.applyValuesRevision` on that upgrade. Reusing that revision on later
 upgrades preserves subsequent API edits. Use a server-side Helm dry run when
 previewing an upgrade: a client-side render cannot look up the live ConfigMap.
-The Router stores its config versions under `/app/models/.vllm-sr/config-backups`.
-The default models PVC keeps Router rollback versions available after the
-required rollout. A custom `/app/models` mount must be writable and persistent
-for durable config versions and rollback; `persistence.enabled=false` uses
-ephemeral storage suitable only for disposable demos. When the Dashboard is
-enabled, its separate PVC retains Dashboard config backups.
+With one Router replica, the Router stores its config versions under
+`/app/models/.vllm-sr/config-backups`, so the default models PVC keeps rollback
+versions available after the required rollout. A custom `/app/models` mount
+must be writable and persistent for the same. With several replicas or
+autoscaling, or with `persistence.enabled=false`, each Pod keeps its own
+versions in `/tmp/vllm-sr/config-history` for as long as it runs: the ConfigMap
+is the document replicas share, so restore an earlier document by saving it
+there again. When the Dashboard is enabled, its separate PVC retains Dashboard
+config backups.
 Managed knowledge base assets need a writable, persistent directory in
 addition to the YAML document; their mutation API returns
 `KB_ASSET_STORAGE_READ_ONLY` on ConfigMap-backed deployments.
