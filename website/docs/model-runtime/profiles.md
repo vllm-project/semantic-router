@@ -16,7 +16,10 @@ slightly different numbers. You choose it per deployment.
 | `max_speed` | Uses faster kernels and 16-bit numbers where the hardware supports them, on top of the above. | GPU deployments where latency matters more than the last decimal place. |
 
 Everything except `exact` is **approximate**: answers can differ slightly from
-the published ones, and a borderline answer can flip. Each approximate profile
+the published ones, and a borderline answer can flip. On NVIDIA GPUs from
+Ampere on, `max_speed` runs Decision 2.0 with fused Triton kernels, 11% to 48%
+faster with no decision changed in its record; Vela 2.0 keeps the exact
+kernels there. Each approximate profile
 has a measured accuracy record in the runtime's
 [records](https://github.com/vllm-project/semantic-router/tree/main/src/model-runtime/docs/records).
 
