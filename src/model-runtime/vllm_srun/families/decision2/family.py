@@ -193,7 +193,7 @@ class Decision2Family(ModelFamily):
             details.decision_config["head_dim"],
         )
         head = head.to(engine_model.device)
-        tokenizer = Tokenizer.from_package(details.root)
+        tokenizer = Tokenizer.from_package(details.root, package.max_input_tokens)
         parameters = engine_model.parameter_count() + sum(
             p.numel() for p in head.parameters()
         )
@@ -265,7 +265,9 @@ class Decision2Model(DecisionModel[RenderedItem, list[float] | None]):
     def forward_token_budget(self) -> int | None:
         return self.engine_model.max_forward_tokens()
 
-    def plan(self, state: Any, questions: dict[str, Any]) -> RequestPlan[RenderedItem]:
+    def plan(
+        self, state: Any, questions: dict[str, Any], scan: int | None = None
+    ) -> RequestPlan[RenderedItem]:
         if not valid_state(state):
             raise ValueError("state must be text, an object, or an array")
         items: list[RenderedItem] = []

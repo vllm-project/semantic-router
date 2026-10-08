@@ -58,6 +58,9 @@ type PIIModel struct {
 	// provider that declared truncated_at) matches as classification_error
 	// instead of reading as clean.
 	ClassifierOnErrorConfig `yaml:",inline"`
+	// UnscannedConfig contributes OnUnscanned (block|allow): content the model
+	// did not read in full matches as unscanned unless it is allow.
+	UnscannedConfig `yaml:",inline"`
 }
 
 type EmbeddingModels struct {
@@ -182,6 +185,9 @@ type PromptGuardConfig struct {
 	// every other pluggable classifier backend instead of being redeclared
 	// per struct.
 	ClassifierOnErrorConfig `yaml:",inline"`
+	// UnscannedConfig contributes OnUnscanned (block|allow): content the guard
+	// did not read in full matches as unscanned unless it is allow.
+	UnscannedConfig `yaml:",inline"`
 }
 
 type FeedbackDetectorConfig struct {

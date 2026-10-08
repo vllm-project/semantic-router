@@ -215,14 +215,14 @@ specialists, and for the latency record's five request signals
 
 | Decision model | Hardware | Held-out accuracy against Vela 1.0 | p50 on a GPU | p50 on 12 CPU cores |
 | --- | --- | --- | ---: | ---: |
-| `Vela-2.0-0.3B` (default) | CPU or GPU | Ahead on prompt guard and safety, behind on domain, modality and feedback | 6.9 ms | 79 ms |
-| `Vela-2.0-0.8B` | CPU or GPU | Ahead on domain, prompt guard, safety, modality and hallucination; behind on PII | 40.7 ms | about 3 s |
-| `Vela-2.0-4B` | GPU, about 17 GB | Ahead on every signal but fact check | 56.8 ms | GPU only |
-| `Vela-2.0-9B` | GPU, about 32 GB | Ahead on every signal | 79.0 ms | GPU only |
+| `Vela-2.0-0.3B` (default) | CPU or GPU | Ahead on prompt guard and safety, behind on domain, modality and feedback | 6.6 ms | 79 ms |
+| `Vela-2.0-0.8B` | CPU or GPU | Ahead on domain, prompt guard, safety, modality and hallucination; behind on PII | 40.1 ms | about 3 s |
+| `Vela-2.0-4B` | GPU, about 17 GB | Ahead on every signal but fact check | 55.2 ms | GPU only |
+| `Vela-2.0-9B` | GPU, about 32 GB | Ahead on every signal | 76.5 ms | GPU only |
 | `Vela-1.0` | CPU or GPU | The specialists themselves | n/a | 16 ms |
 
 - **GPU:** one AMD Instinct MI325X, sequential requests. At concurrency 16 a
-  GPU serves about 146 (0.3B), 25 (0.8B), 17 (4B) and 12 (9B) requests per
+  GPU serves about 154 (0.3B), 25 (0.8B), 18 (4B) and 13 (9B) requests per
   second.
 - **The 4B and 9B need a GPU.** `vllm-sr serve` refuses them with
   `--platform cpu` or on a host without the platform's GPU, and the Router

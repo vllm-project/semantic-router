@@ -78,9 +78,14 @@ func (c *Classifier) evaluateDecisionDeployment(
 	deployment string,
 	rules []config.DecisionSignalRule,
 ) {
-	request := modelservice.Request{State: text, Questions: make([]modelservice.Question, 0, len(rules))}
+	// Decision questions route, so a long text is read only as far as its
+	// first tokens; the deployment's scan budget keeps them in one call with
+	// the stage's other questions to it.
+	request := modelservice.Request{State: text, Questions: make([]modelservice.Question, 0, len(rules)), MaxTokens: c.Config.ModelDeployments[deployment].ScanBudget()}
 	for _, rule := range rules {
-		request.Questions = append(request.Questions, DecisionQuestion(rule.Name, rule.Question))
+		question := DecisionQuestion(rule.Name, rule.Question)
+		question.Truncate = true
+		request.Questions = append(request.Questions, question)
 	}
 	callCtx, cancel := decisionCallContext(ctx, rules)
 	defer cancel()
@@ -119,6 +124,9 @@ func (c *Classifier) evaluateDecisionDeployment(
 // decisionCallContext bounds a deployment's call by the shortest timeout its
 // rules set. Questions to the decision model that set none join the built-in
 // signals' call, so they take its deadline rather than the default timeout.
+// Once the stage sends a call, its questions wait for it as long as its
+// latest caller does: a timeout bounds the wait for the other askers, never
+// an answer of a call the stage waits for anyway (modelservice.Bundle).
 func decisionCallContext(ctx context.Context, rules []config.DecisionSignalRule) (context.Context, context.CancelFunc) {
 	var timeout time.Duration
 	for _, rule := range rules {

@@ -105,6 +105,24 @@ or identity differences fail the comparison; Qwen3 and legacy classifier numbers
 cannot become Vela baselines. Model correctness belongs to the runtime's golden
 answers; these benchmarks do not publish accuracy from a missing optional dataset.
 
+### Release comparisons
+
+A release compares with its development cycle's base instead of its parent
+revision:
+
+```bash
+make perf-check PERF_BASE_REF="$(python3 tools/ci/ci_plan.py performance-base --version X.Y.Z)"
+```
+
+The base is the previous release unless `PERFORMANCE_BASES` in
+`tools/ci/ci_plan.py` declares one. v0.4.0 predates the model runtime, so 0.5.0
+declares #4707 (`abae8ff99`): it pinned the classify benchmarks to the Vela 1.0
+specialists, and its own Production Benchmarks job passed with this harness.
+From 0.5.0 on, the previous release has the model runtime; when it can't run
+the current harness, declare a reviewed `main` commit whose Production
+Benchmarks job passed with it. Resolution refuses a previous release that
+predates the model runtime rather than turning the comparison into a reset.
+
 ## Input-length measurement protocol
 
 `BenchmarkClassifyInputLength` times the Vela Domain classifier on inputs of up

@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -13,11 +14,11 @@ type recordingBundle struct {
 	events *[]string
 }
 
-func (b *recordingBundle) Join() func() {
+func (b *recordingBundle) JoinAsking(ctx context.Context, _ ...string) (context.Context, func()) {
 	b.mu.Lock()
 	*b.events = append(*b.events, "join")
 	b.mu.Unlock()
-	return func() {}
+	return ctx, func() {}
 }
 
 func TestEveryModelBackedSignalJoinsTheBundleBeforeAnyStarts(t *testing.T) {
@@ -28,14 +29,14 @@ func TestEveryModelBackedSignalJoinsTheBundleBeforeAnyStarts(t *testing.T) {
 	var dispatchers []signalDispatch
 	for _, signal := range signals {
 		used[signal+":rule"], ready[signal] = true, true
-		dispatchers = append(dispatchers, signalDispatch{signalType: signal, name: signal, evaluate: func() {
+		dispatchers = append(dispatchers, signalDispatch{signalType: signal, name: signal, evaluate: func(context.Context) {
 			bundle.mu.Lock()
 			events = append(events, "evaluate")
 			bundle.mu.Unlock()
 		}})
 	}
 	var wg sync.WaitGroup
-	runSignalDispatchers(dispatchers, used, ready, bundle, &wg)
+	runSignalDispatchers(context.Background(), dispatchers, used, ready, bundle, func(string) []string { return nil }, &wg)
 	wg.Wait()
 	if len(events) != 2*len(signals) {
 		t.Fatalf("events = %v", events)
