@@ -19,6 +19,7 @@ import uuid
 from pathlib import Path
 
 import yaml
+from cli.runtime_stack import MAX_PORT_OFFSET
 from runtime_http import call, page_requests, write_fixture
 
 QUICKSTART = (
@@ -30,10 +31,10 @@ PUBLIC_MODEL = "test/decision"
 
 def available_offset():
     # Probe every port the minimal stack publishes before selecting an offset.
-    for offset in range(20000, 40000, 137):
+    for offset in range(10000, MAX_PORT_OFFSET + 1, 137):
         sockets = []
         try:
-            for port in (8080, 8899, 9190):
+            for port in (6379, 8080, 8899, 9190):
                 probe = socket.socket()
                 sockets.append(probe)
                 probe.bind(("127.0.0.1", port + offset))
