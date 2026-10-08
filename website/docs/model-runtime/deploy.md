@@ -33,9 +33,10 @@ its workers run.
 ## Built-in features need no configuration
 
 When you turn on a built-in feature, such as a `domain` signal or the semantic
-cache, the router already knows which Vela model it needs. It runs that model
-in a managed runtime on the CPU. Set `use_cpu: false` on the feature's module
-to let the runtime pick a GPU instead (`device: auto`).
+cache, the router already knows which model it needs. Judgment tasks share the
+default decision deployment; embeddings and other specialist tasks use their
+configured models. To choose CPU or GPU placement, configure the deployment's
+`device` or `replicas` as described below.
 
 The default decision model and deployments used by enabled consumers or published
 native model grants are loaded. Other declarations do not start workers.
@@ -139,7 +140,7 @@ global:
         deployment: primary
 ```
 
-Use different GPUs for data parallelism. Repeating a device explicitly starts
+Use different GPUs to add compute capacity. Repeating a device explicitly starts
 multiple workers on that GPU; each worker needs memory for its model. Measure
 throughput and tail latency with your input lengths and concurrency before
 choosing this layout. `batching` can improve cross-request utilization within
@@ -163,6 +164,32 @@ restarts. A degraded pool can keep serving through its healthy replicas.
 CPU workers receive a stable thread budget based on host cores and
 `VLLM_SRUN_CPU_PROCESSES`. Mode changes do not recalculate that budget from the
 number of active consumers.
+
+## Publish a native API
+
+With the `primary` deployment above, add an explicit grant to a standalone
+listener so clients can ask it questions directly:
+
+```yaml
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+    systemone:
+      models: [vllm-sr/Vela-2.0-4B]
+```
+
+Use `GET /v1/systemone/models` to discover published native models, then send
+`POST /v1/systemone` or `POST /v1/decisions` with that `model` ID. A deployment
+uses its Hub artifact ID unless you set `public_name`; local artifacts need an
+explicit public name. Add listener `api_keys` when clients must authenticate.
+
+The native grant is separate from the Chat `listeners[].models` allowlist and
+works in either startup mode. An existing grant stays unchanged when a model
+is replaced or scaled; update it when you intend to publish another model.
+See the [quickstart](./quickstart.md#3-send-a-request) for a complete native
+request. Publication does not guarantee readiness; inspect it with
+`vllm-sr instance --config config.yaml models`.
 
 ## Attach to a runtime you run
 

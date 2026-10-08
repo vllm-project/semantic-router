@@ -172,6 +172,9 @@ func retainMaxLookbackReaskMatches(matches []ReaskMatch) []ReaskMatch {
 // semanticSimilarities asks each pair about repeated intent. The code below
 // still owns ordering and consecutive counting; no model invents a counter.
 func (c *ReaskClassifier) semanticSimilarities(ctx context.Context, current string, prior []string) ([]float64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	turns := make([]string, 0, len(prior))
 	for i := len(prior) - 1; i >= 0; i-- {
 		if text := strings.TrimSpace(prior[i]); text != "" {
@@ -187,9 +190,19 @@ func (c *ReaskClassifier) semanticSimilarities(ctx context.Context, current stri
 	}
 	judgments, failures := make([]float64, len(unique)), make([]error, len(unique))
 	modelservice.Fan(ctx, len(unique), func(i int) {
+		// Exact, nonempty repeated turns establish the same intent without a
+		// probabilistic judgment. Compare the complete inputs, never a clipped
+		// prefix; nonidentical pairs still need the model's full-input answer.
+		if unique[i] == current {
+			judgments[i] = 1
+			return
+		}
 		answer, err := c.judgment.ask(ctx, modelservice.Request{Parts: map[string]string{"current": current, "prior": unique[i]}})
 		judgments[i], failures[i] = answer.Noul, err
 	})
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	scores := make([]float64, len(turns))
 	for i, turn := range turns {
 		index := positions[turn]

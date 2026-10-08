@@ -132,8 +132,17 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 	if err != nil {
 		return nil, err
 	}
-	if judgment != nil {
+	if judgment != nil && len(judgment.rules) == len(b.cfg.ComplexityRules) {
 		return withComplexityClassifier(judgment), nil
+	}
+	prototypeRules := b.cfg.ComplexityRules
+	if judgment != nil {
+		prototypeRules = nil
+		for _, rule := range b.cfg.ComplexityRules {
+			if judgment.judgments[rule.Name] == nil {
+				prototypeRules = append(prototypeRules, rule)
+			}
+		}
 	}
 	modelType := b.defaultEmbeddingModelType()
 	if config.HasImageCandidatesInRules(b.cfg.ComplexityRules) {
@@ -158,7 +167,7 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 		}
 	}
 	complexityClassifier, err := NewComplexityClassifier(
-		b.cfg.ComplexityRules,
+		prototypeRules,
 		modelType,
 		b.cfg.ComplexityModel.WithDefaults().PrototypeScoring,
 		provider, multimodal,
@@ -169,6 +178,10 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 			"error":      err.Error(),
 		})
 		return nil, err
+	}
+	if judgment != nil {
+		complexityClassifier.rules = b.cfg.ComplexityRules
+		complexityClassifier.judgments = judgment.judgments
 	}
 	return withComplexityClassifier(complexityClassifier), nil
 }

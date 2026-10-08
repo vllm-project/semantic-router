@@ -12,12 +12,17 @@ legacy native bindings.
 | Status | Phase 1 merged ([#4481](https://github.com/vllm-project/semantic-router/pull/4481)); Phases 2–4 in implementation ([#4496](https://github.com/vllm-project/semantic-router/issues/4496)) |
 | Domain | `src/model-runtime/` (Python package `vllm_srun`) |
 | Router side | `src/semantic-router/pkg/modelservice/` (client, bundles, lifecycle) and `pkg/modelruntime/serving/` (typed task bindings) |
-| CLI | `vllm-sr serve <hf-model> [<hf-model> ...]` (engine mode); `vllm-sr serve --config ...` (router mode) |
+| CLI | `vllm-sr serve ARTIFACT --engine` (managed Engine instance); `vllm-srun serve` (direct worker); `vllm-sr serve --config ...` (Router mode) |
+
+This document records the original phased design. For current startup commands,
+replica placement and API publication, use the [deployment guide](../../../website/docs/model-runtime/deploy.md)
+and [managed instance guide](../../vllm-sr/INSTANCE_MODES.md). The managed frontend
+now supervises a separate worker for each replica of a logical deployment.
 
 ## 1. Goals
 
-1. **Out-of-the-box router models.** `vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B`
-   or `vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-Domain` downloads the
+1. **Out-of-the-box router models.** `vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine`
+   or a direct worker command such as `vllm-srun serve vllm-sr/Vela-1.0-Encoder-307M-Domain` downloads the
    pinned package, verifies every byte, loads it with model code built into
    the runtime, and serves typed answers. The router uses the same runtime for
    every signal, cache, store and selector that needs a model.
@@ -940,17 +945,19 @@ Engine mode runs a runtime process in the current Python environment:
 
 ```bash
 pip install ./src/vllm-sr ./src/model-runtime   # after PyTorch; or the vllm-sr image, or src/model-runtime/Dockerfile
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
-vllm-sr serve vllm-sr/Vela-1.0-Encoder-307M-Domain vllm-sr/Vela-1.0-Encoder-307M-PII --device cpu
-vllm-sr serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --profile shared_context
+vllm-srun serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
+vllm-srun serve vllm-sr/Vela-1.0-Encoder-307M-Domain vllm-sr/Vela-1.0-Encoder-307M-PII --device cpu
+vllm-srun serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --profile shared_context
 vllm-srun serve --models models.yaml --uds /run/vllm-sr/runtime.sock
 ```
 
 Several `MODEL` arguments share the process options; `MODEL@REVISION` pins a
 revision per model; `--models FILE` lists models with their own name,
 revision, device, profile, engine and family options (the router writes this
-file in managed mode). The other options are as in Phase 1. `vllm-sr serve`
-without `MODEL` keeps its router-mode behaviour. Every serve option's default
+file in managed mode). These are worker-level `vllm-srun` options. The managed
+`vllm-sr serve ARTIFACT --engine` command instead exposes the frontend and
+Dashboard, with named models and listeners configured in YAML. Every invocation
+of `vllm-sr serve` without `--engine` starts Router mode. Every serve option's default
 is the `ServeConfig` / `ModelConfig` field default, so the CLI and an
 embedding host start alike. `vllm-srun fixture OUTPUT --family F
 --variant V` writes a tiny random-weight package of any installed family

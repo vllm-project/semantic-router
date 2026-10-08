@@ -73,7 +73,7 @@ Router Learning observability, require `x-vsr-debug`.
 
 | Header | Surface | Description | Example |
 | ------ | ------- | ----------- | ------- |
-| `x-vsr-selected-recipe` | default | Routing isolation scope selected by an entrypoint or auto/looper alias. Omitted for concrete backend passthrough. | `support` |
+| `x-vsr-selected-recipe` | default | Routing isolation scope selected by the effective entrypoint. Omitted for concrete backend passthrough. | `support` |
 | `x-vsr-selected-decision` | default | Final decision selected by the decision engine. Omitted when no decision matched and the request went to the default model; `x-vsr-response-path` is still `upstream`. | `complex-request` |
 | `x-vsr-selected-confidence` | default | Model-derived score for the selected decision. Absent when the decision rests on policy leaves, aggregates several evidence leaves, or resolves through an error policy. | `0.9100` |
 | `x-vsr-applied-unknown-policy` | default | Decisions whose unknown result was resolved by `rules.on_unknown`, as `decision=policy` pairs. Also set on the `fail_request` 503. | `guarded=no_match` |

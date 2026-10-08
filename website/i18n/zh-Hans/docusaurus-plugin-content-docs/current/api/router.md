@@ -26,6 +26,13 @@ Router 数据面在配置的监听器上接收模型请求。默认的 standalon
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | 模型名在请求体中，需要启用 Responses 服务 |
 | `POST` | `/openai/v1/chat/completions` | Azure OpenAI Chat Completions | 模型名在请求体中 |
 | `GET` | `/v1/models` | OpenAI Models | 列出当前 Router 配置暴露的模型 |
+| `POST` | `/v1/systemone`、`/v1/decisions` | 原生 System One | standalone listener 上显式发布的决策模型回答问题 |
+| `GET` | `/v1/systemone/models` | 原生模型发现 | 列出该 listener 发布的 System One 模型 |
+
+Engine 模式关闭配方路由，并提供原生 System One 接口。在
+`listeners[].systemone.models` 中发布原生模型 ID；Chat 的 `models` 名单不会授权
+原生访问。两类接口都使用 listener 的 API keys。完整请求见
+[模型运行时快速开始](../model-runtime/quickstart.md)。
 
 其他 `/v1/*` 路径默认拒绝。特别是 `/v1/files`、`/v1/vector_stores` 和路由回放路径在公网推理监听器上不可用。Router 自有的文件和向量存储操作使用管理监听器上的 `/api/v1/storage/files` 和 `/api/v1/storage/vector-stores`。其他 `/openai/*` 操作，例如 embeddings 和读取已存储的 response，返回 `404`。
 
@@ -33,13 +40,13 @@ Router 数据面在配置的监听器上接收模型请求。默认的 standalon
 
 ## 发送路由请求 {#send-a-routed-request}
 
-希望 Router 选择后端时，使用自动模型或配方入口。希望绕过语义模型选择并直接打到某个模型时，使用具体模型名。
+希望 Router 选择后端时，使用 `vllm-sr/auto` 或显式声明的配方入口。希望绕过语义模型选择并直接打到某个模型时，使用具体模型名。
 
 ```bash
 curl -sS http://localhost:8899/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "messages": [
       {
         "role": "user",
@@ -81,7 +88,7 @@ providers:
 curl -sS http://localhost:8899/v1/responses \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "input": "Summarize the trade-offs of retrieval-augmented generation."
   }'
 ```
@@ -95,7 +102,7 @@ curl -sS http://localhost:8899/v1/messages \
   -H 'Content-Type: application/json' \
   -H 'anthropic-version: 2023-06-01' \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "max_tokens": 256,
     "messages": [
       {
@@ -125,7 +132,7 @@ Router 无法路由某个请求时，会直接应答该请求，不调用任何�
 | 代码 | 状态码 | `error.type` | 含义 |
 | --- | --- | --- | --- |
 | `model_not_found` | 400 | `invalid_request_error` | 请求指定的模型不由该 Router 提供。 |
-| `no_route` | 400 | `invalid_request_error` | 没有决策匹配，且没有可用的默认模型。auto 别名或 entrypoint 会回退到 `providers.defaults.model`；Looper 别名（如 `vllm-sr/flow`）只评估其算法的决策，没有回退。 |
+| `no_route` | 400 | `invalid_request_error` | 没有决策匹配，且没有可用的默认模型。配方入口会回退到已配置的 `providers.defaults.model`；Looper 入口遵循同样的配方规则，名称本身不会选择算法。 |
 | `context_length_exceeded` | 400 或 422 | `invalid_request_error` | 请求超出了可服务它的模型的容量：400 来自[请求预算检查](#request-budget-errors)，422 来自模型的 `context_window_size`。 |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | 请求的输出超过了配置的模型上限。见[请求预算错误](#request-budget-errors)。 |
 | `decision_unresolved` | 503 | `server_error` | 某个决策所需的信号不可用，导致该决策无法评估，且其 `rules.on_unknown` 为 `fail_request`。`x-vsr-applied-unknown-policy` 会给出该决策。 |

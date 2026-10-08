@@ -113,8 +113,8 @@ APIs are separate; see the [task guides](./guides/classify.md).
 
 The router runs models for you. Name the model as a **deployment** with
 `provider: model_runtime`, then ask it questions in a `decision` signal. Save
-this as `config.yaml`, replacing `vllm:8000` with an OpenAI-compatible backend
-that answers your users:
+this as `config.yaml`, replacing `host.docker.internal:8000` with an
+OpenAI-compatible backend that answers your users:
 
 ```yaml
 version: v0.3
@@ -122,6 +122,8 @@ listeners:
   - name: http
     address: 0.0.0.0
     port: 8899
+    systemone:
+      models: [vllm-sr/Decision-2.0-Kai-0.6B]
 providers:
   defaults:
     model: answer-model
@@ -129,7 +131,7 @@ providers:
     - name: answer-model
       backend_refs:
         - name: answer
-          endpoint: vllm:8000
+          endpoint: host.docker.internal:8000
           protocol: http
 routing:
   modelCards:
@@ -172,21 +174,19 @@ global:
         device: cpu
 ```
 
-Validate the file and start the router:
+Validate the file, then restart in Router mode using this configuration:
 
 ```bash
 vllm-sr config validate --config config.yaml
-vllm-sr serve --config config.yaml
+vllm-sr serve --config config.yaml --replace-active-config
 ```
 
-Use the same logical deployment key (`primary` in this example) when you want Router tasks and direct System One requests
-to share the same model pool. The frontend keeps managed workers available
-when routing is toggled; `global.router.enabled` changes only routing.
-To activate this new authored config over the existing Engine state, run
-`vllm-sr serve --config config.yaml --replace-active-config`.
+`--replace-active-config` applies the file you just wrote over the saved Engine
+configuration. Later restarts can omit it to retain Dashboard edits. The
+`primary` deployment answers both the routing question and direct System One
+requests; the listener explicitly publishes its native model name.
 
-Send a request
-through the router and look at which route it took:
+Send a request through the router and look at which route it took:
 
 ```bash
 curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \

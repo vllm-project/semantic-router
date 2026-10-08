@@ -11,6 +11,8 @@ correcting an earlier answer. A projection turns those answers into a
 reasoning effort; decisions and algorithms turn the effort into a model and
 its reasoning setting.
 
+To try it, connect the three backends and follow the [quick start](#quick-start).
+
 ## Model details
 
 | Model | Role | Relative cost per 1M output tokens |
@@ -168,14 +170,32 @@ backend the route selects; all three models may see any request.
 
 ## Quick start
 
+Start the three backend servers described under [Requirements](#requirements),
+then set each `providers.models[].backend_refs[].endpoint` in
+[`config.yaml`](config.yaml) to an address reachable from the Router container.
+Keep `provider_model_id` aligned with each server's served model name.
+
 ```bash
 vllm-sr config validate --config config/recipes/decision-balance/config.yaml
 vllm-sr serve --config config/recipes/decision-balance/config.yaml --platform rocm
 ```
 
-Point the three `backend_refs` endpoints at your servers first. Then send
-requests to `vllm-sr/auto`; the `x-vsr-selected-decision` and
-`x-vsr-selected-model` response headers show the lane and model.
+Use `--platform cuda` on NVIDIA. For an existing local stack, add
+`--replace-active-config` when you intend to replace its saved configuration
+with this recipe.
+
+Send a request to the virtual model and inspect the response headers:
+
+```bash
+curl -sS -D - http://localhost:8899/v1/chat/completions \
+  -H 'content-type: application/json' \
+  -d '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Write a Python function that merges two sorted lists."}]}'
+```
+
+`x-vsr-selected-decision` names the route and `x-vsr-selected-model` names the
+backend. If startup fails, use `vllm-sr logs router` to check model loading and
+GPU errors. If generation fails, check backend reachability and the served
+model names.
 
 ## Evaluation
 
@@ -221,9 +241,7 @@ ratio.
 - 0.3.2: bug fixes only; lanes, thresholds and models are unchanged.
   `personal_data` no longer matches places, organizations, dates, titles,
   domain names or group names on their own. With Router fixes in the same
-  release, `long_context` matches near 200K backend tokens again instead of
-  about 55K, and `vllm-sr serve` keeps the stack up when the sr-bench worker
-  cannot be replaced.
+  release, input-length accounting for `long_context` was corrected.
 - 0.3.1: high effort from 0.675, wider probe margins, serving requirements.
 - 0.3.0: `code` lane and hard STEM questions.
 

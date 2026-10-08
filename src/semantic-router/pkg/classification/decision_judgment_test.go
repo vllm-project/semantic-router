@@ -170,3 +170,42 @@ func TestDecisionReaskJudgesPairsButCountsConsecutiveTurnsInCode(t *testing.T) {
 		t.Fatal("failed pair became successful count")
 	}
 }
+
+func TestDecisionReaskExactRepeatsDoNotDependOnModelConfidence(t *testing.T) {
+	var calls atomic.Int32
+	j := testJudgment(t, "reask", judgmentDeciderFunc(func(_ context.Context, _ string, r modelservice.Request) (modelservice.Response, error) {
+		calls.Add(1)
+		if r.Parts["current"] == r.Parts["prior"] {
+			t.Error("an exact repeated request needs no semantic judgment")
+		}
+		return modelservice.Response{Answers: map[string]modelservice.Answer{r.Questions[0].ID: {Type: "noul", Noul: .1, InputCoverage: "complete"}}}, nil
+	}))
+	classifier := &ReaskClassifier{rules: []config.ReaskRule{{Name: "repeat", LookbackTurns: 2, Threshold: .9}}, judgment: j}
+	current := "Explain vector clocks with an example."
+	matches, err := classifier.ClassifyContext(t.Context(), current, []string{"different request", " " + current + " ", current})
+	if err != nil || len(matches) != 1 || matches[0].MatchedTurns != 2 || matches[0].MinSimilarity != 1 || calls.Load() != 1 {
+		t.Fatalf("exact repeats must retain their consecutive count: %+v calls=%d err=%v", matches, calls.Load(), err)
+	}
+	for _, input := range []string{"", " \n\t"} {
+		matches, err = classifier.ClassifyContext(t.Context(), input, []string{input, input})
+		if err != nil || len(matches) != 0 || calls.Load() != 1 {
+			t.Fatalf("empty turns became repeats: %+v calls=%d err=%v", matches, calls.Load(), err)
+		}
+	}
+	prefix := strings.Repeat("shared context ", 1000)
+	matches, err = classifier.ClassifyContext(t.Context(), prefix+"new intent", []string{prefix + "old intent", prefix + "old intent"})
+	if err != nil || len(matches) != 0 || calls.Load() != 2 {
+		t.Fatalf("matching prefixes must not hide distinct tails: %+v calls=%d err=%v", matches, calls.Load(), err)
+	}
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	if matches, err = classifier.ClassifyContext(canceled, current, []string{current, current}); !errors.Is(err, context.Canceled) || len(matches) != 0 {
+		t.Fatal("an exact repeat ignored cancellation")
+	}
+	j.decider = judgmentDeciderFunc(func(context.Context, string, modelservice.Request) (modelservice.Response, error) {
+		return modelservice.Response{}, errors.New("unavailable")
+	})
+	if matches, err = classifier.ClassifyContext(t.Context(), current, []string{current, "paraphrased request"}); err == nil || len(matches) != 0 {
+		t.Fatal("an exact older turn hid an unknown current pair")
+	}
+}

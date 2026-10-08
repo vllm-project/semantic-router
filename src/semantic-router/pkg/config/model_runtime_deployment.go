@@ -206,7 +206,20 @@ func TaskConsumerInUse(scoped *RouterConfig, scope RecipeName, name string) bool
 		return scoped.UsesSignalTypeInReachableRouting(SignalTypeReask)
 	case "complexity":
 		_, bound := scoped.EffectiveModelBindings(scoped.Signals, scoped.ModelBindings)["complexity"]
-		return scoped.UsesSignalTypeInReachableRouting(SignalTypeComplexity) && (bound || (scoped.ComplexityModel.Backend == nil && !HasImageCandidatesInRules(scoped.ComplexityRules)))
+		if !scoped.UsesSignalTypeInReachableRouting(SignalTypeComplexity) {
+			return false
+		}
+		if bound {
+			return true
+		}
+		if scoped.ComplexityModel.Backend == nil {
+			for _, rule := range scoped.ComplexityRules {
+				if !scoped.ComplexityRuleUsesPrototypes(rule) {
+					return true
+				}
+			}
+		}
+		return false
 	case "hallucination_detector":
 		return scoped.NeedsHallucinationDetectorForRouting() ||
 			(scoped.ownsDefaultAPIConsumer() && scoped.HallucinationMitigation.Enabled)

@@ -82,6 +82,60 @@ func TestPublicDiscoveryAndListenerSelectionFailClosed(t *testing.T) {
 	}
 }
 
+func TestPublicSystemOneRequiresNonemptyCredentialsOnProtectedListeners(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
+	for _, test := range []struct {
+		name          string
+		keys          []string
+		authorization string
+		apiKey        string
+		wantStatus    int
+	}{
+		{name: "open listener", wantStatus: http.StatusOK},
+		{name: "missing credentials", keys: []string{"test-key"}, wantStatus: http.StatusUnauthorized},
+		{name: "empty configured key", keys: []string{""}, wantStatus: http.StatusUnauthorized},
+		{name: "mixed keys without credentials", keys: []string{"", "test-key"}, wantStatus: http.StatusUnauthorized},
+		{name: "empty bearer", keys: []string{"", "test-key"}, authorization: "Bearer \t", wantStatus: http.StatusUnauthorized},
+		{name: "malformed bearer", keys: []string{"", "test-key"}, authorization: "Bearertest-key", wantStatus: http.StatusUnauthorized},
+		{name: "wrong bearer", keys: []string{"", "test-key"}, authorization: "Bearer wrong-key", wantStatus: http.StatusUnauthorized},
+		{name: "wrong api key", keys: []string{"", "test-key"}, apiKey: "wrong-key", wantStatus: http.StatusUnauthorized},
+		{name: "valid bearer", keys: []string{"", "test-key"}, authorization: "Bearer test-key", wantStatus: http.StatusOK},
+		{name: "valid api key", keys: []string{"", "test-key"}, apiKey: "test-key", wantStatus: http.StatusOK},
+		{name: "api key fallback", keys: []string{"", "test-key"}, authorization: "Bearer wrong-key", apiKey: "test-key", wantStatus: http.StatusOK},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			listener := &config.Listener{APIKeys: test.keys, SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+			for _, path := range []string{"/v1/systemone", "/v1/systemone/models"} {
+				t.Run(path, func(t *testing.T) {
+					calls := 0
+					handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
+						calls++
+						return http.StatusOK, []byte(`{"answers":{}}`), nil
+					})
+					method := http.MethodPost
+					if path == "/v1/systemone/models" {
+						method = http.MethodGet
+					}
+					request := httptest.NewRequest(method, path, strings.NewReader(`{"model":"vllm-sr/test"}`))
+					request.Header.Set("Authorization", test.authorization)
+					request.Header.Set("Api-Key", test.apiKey)
+					response := httptest.NewRecorder()
+					handler(response, request)
+					if response.Code != test.wantStatus {
+						t.Fatalf("status=%d, want %d: %s", response.Code, test.wantStatus, response.Body.String())
+					}
+					if test.wantStatus == http.StatusUnauthorized {
+						if calls != 0 || !strings.Contains(response.Body.String(), "invalid_api_key") || response.Header().Get("WWW-Authenticate") == "" {
+							t.Fatalf("denied request reached runtime or omitted auth challenge: calls=%d response=%s", calls, response.Body.String())
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestPublicNativeBoundsAndSanitizesFailures(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}

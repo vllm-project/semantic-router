@@ -1,88 +1,89 @@
-# Managed instance modes
+# Router and Engine modes
 
-The frontend stays running in both modes. `global.router.enabled` defaults to
-`true`: Router mode adds the recipe routing pipeline and Chat/Responses access;
-Engine mode sets it to `false` and serves native System One inference without
-constructing recipe classifiers or upstream pools. Saved routing configuration,
-listeners, Dashboard and model workers are retained. Mode and model placement
-are independent: one logical deployment may use one worker or a replica pool.
+Use Router mode to route Chat, Responses and Messages requests to backend LLMs.
+Use Engine mode to ask decision models native System One questions without
+configuring Chat backends. Both modes use the same instance, Dashboard,
+listeners and model deployments.
+
+## Start an instance
 
 ```bash
-vllm-sr serve vllm-sr/Vela-2.0-4B --engine --platform rocm -dp 2 --device-ids 0,1
+# Serve a decision model through the native System One API.
+vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
+
+# Inspect the instance and its model readiness.
 vllm-sr instance --config config.yaml status
 vllm-sr instance --config config.yaml models
-# Restart with routing enabled, retaining model resources and routing policy.
-vllm-sr serve --config config.yaml
 ```
 
-`--engine` (`-e`) selects Engine mode at startup. Every invocation without it
-starts Router mode, including when the saved configuration previously disabled
-routing. MODEL replaces the configured default judgment deployment's artifact;
-unspecified profile and replica placement remain unchanged. Listener grants
-never widen. A new Engine configuration needs no Chat backends or routing YAML.
-Health repair observes the running instance's active mode; it does not issue a
-new user `serve` request or change that startup choice.
+A new Engine instance publishes the selected model on port 8899. Discover its
+public model ID with `GET /v1/systemone/models`, then send questions to
+`POST /v1/systemone` or its alias `POST /v1/decisions`. Follow the
+[quickstart](../../website/docs/model-runtime/quickstart.md) for a complete
+request and response.
 
-Both modes expose `POST /v1/systemone`, its native alias `POST /v1/decisions`, and
-`GET /v1/systemone/models` on the standalone frontend. Dashboard can provide an
-optional stable bridge but is not required for inference. These routes use the
-listener's `api_keys` and separate, explicit `systemone.models` grant. Chat
-`listener.models` does not grant System One access. Public IDs are deployment
-`public_name` values or Hub artifact IDs; local artifacts require a public name.
-The frontend uses its generation's retained model lease, independently of the
-optional Router pipeline. A mode change cannot redirect a pinned native request
-to a new deployment. Multiple listeners never union their publication scopes.
-
-Discovery describes the explicit publication grant; `instance models` describes
-actual readiness. Deploying or scaling a model never widens a grant. Under Engine
-mode Chat, Responses and Chat model discovery are disabled. Worker-level classify,
-embedding, rerank and bundle APIs remain worker APIs, not new public frontend
-routes. Explicitly enabled global stores remain frontend-owned management
-services; each holds only its own embedding consumer, independent of dormant
-recipe signals. Minimal Engine configurations do not enable these stores.
-
-The local Docker/Podman CLI attaches a host controller after startup with
-Dashboard. `GET /api/instance` reports desired mode, observed active-snapshot
-mode, active deployment, ownership and durable operation state.
-`GET /api/instance/models` reports model inventory. These Dashboard endpoints
-are read-only; there is no public mode deployment endpoint or `can_switch`
-capability. Model deployment and scaling use the canonical model resource
-configuration, independently of startup mode. `instance status` and `models`
-are the public CLI inspection commands.
-
-The host controller retains its private journal and bounded deployment
-transactions for lifecycle recovery. Its Unix socket is an internal control
-surface, not a browser mode-switch API.
-
-A rejected candidate leaves the active generation serving. The controller
-restores its previous canonical document when recovery is needed, using the
-same API's compare-and-swap guard so another editor's changes are never
-silently overwritten. Interrupted operations recover from the private journal
-before accepting more work. Hash/generation equality is not an operation gate;
-active mode, selected deployment and actual model readiness are verified.
-
-Private state lives under `$XDG_STATE_HOME/vllm-sr/instances` (default
-`~/.local/state/vllm-sr/instances`). Only the restricted Unix socket directory is
-mounted read-only into Dashboard; no Docker socket, manifest or journal is
-exposed there. Retain host state and the same stack/config environment across
-controller restarts. A host supervisor can run:
+`--engine` (`-e`) selects Engine mode for that start. Every `serve` command
+without it selects Router mode, including when the previous start used Engine
+mode. To enable routing, configure your backend models and routing policy, then
+start with that file:
 
 ```bash
-vllm-sr instance --config config.yaml controller
+vllm-sr config validate --config config.yaml
+vllm-sr serve --config config.yaml --replace-active-config
 ```
 
-Kubernetes and externally owned frontends remain owned by their deployment
-system; Dashboard does not claim permission to control their host. Attached
-external model workers retain their own owner even in a locally managed pool.
+Use `--replace-active-config` when replacing the saved local configuration with
+a file you edited. Omit it on routine restarts to preserve Dashboard changes.
+Starting with `--engine` again retains the saved routing policy for later use.
 
-An image rollout using the canonical lower-level startup helper attaches the
-controller after readiness with the actual runtime configuration and gateway:
+## Choose and scale a model
+
+The optional `MODEL` argument replaces the artifact in the default deployment
+selected by `global.model_catalog.system.decision_model.deployment`. Omitting
+it keeps that deployment; a new configuration defaults to Vela 2.0 0.3B.
+Only explicitly supplied model or placement options override saved settings.
 
 ```bash
-vllm-sr instance --config config.yaml attach --runtime-config /path/to/active/runtime-config.yaml --gateway standalone
+# Scale the selected model to two independent workers on two AMD GPUs.
+vllm-sr serve --engine --platform rocm -dp 2 --device-ids 0,1
+
+# Two workers sharing one AMD GPU; each needs memory for its own model.
+vllm-sr serve --engine --platform rocm -dp 2 --device-ids 0
 ```
 
-After changing the installed CLI package, restart an idle controller through its
-host supervisor. No browser request supplies an image, command, host path or
-upstream URL. External health repair should wait while an operation is active;
-it can check `instance models` for native readiness in either mode.
+Use canonical YAML for additional deployments, task bindings, attached workers
+and Kubernetes placement. See the [deployment guide](../../website/docs/model-runtime/deploy.md).
+Model placement and replica count apply in either mode.
+
+## Publish native models
+
+An existing configuration must explicitly list public native model IDs under
+`listeners[].systemone.models`. Those IDs come from each deployment's
+`public_name`, or its Hub artifact ID when no public name is set. A local model
+path needs an explicit `public_name`. Listener API keys apply to native requests.
+The Chat `listeners[].models` allowlist is a separate setting.
+
+Starting another mode or choosing another model preserves existing grants.
+Update the allowlist deliberately when publishing a new model. Check
+`/v1/systemone/models` for publication and `vllm-sr instance models` for actual
+readiness. Worker APIs such as classify, embeddings, rerank and bundle belong
+to directly operated `vllm-srun` workers; see the
+[runtime reference](../../website/docs/model-runtime/reference.md).
+
+## Troubleshooting
+
+- **Chat requests fail in Engine mode:** start without `--engine`, using a
+  configuration with backend models and routing.
+- **A model is missing from native discovery:** check the listener's
+  `systemone.models` list and the deployment's public name.
+- **A published model cannot answer:** inspect `instance models` and
+  `vllm-sr logs router` for loading or readiness errors.
+- **Restarting does not pick up an edited file:** validate it, then use
+  `--replace-active-config` to apply that file over the saved local state.
+
+The Dashboard displays the startup mode and manages model deployments. Its
+`/api/instance` and `/api/instance/models` endpoints provide inspection;
+mode changes use `serve` at startup. The local host controller maintains
+recovery state under `$XDG_STATE_HOME/vllm-sr/instances` (default
+`~/.local/state/vllm-sr/instances`). Keep that state across controller restarts.
+Kubernetes and external workers remain managed by their deployment system.

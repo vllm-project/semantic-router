@@ -185,8 +185,9 @@ questions to it.
 
 ## Which decision model
 
-Decision 2.0 is the default family; Kai-0.6B runs on a CPU and the larger
-sizes are more accurate on a GPU. Decision 1.0 models answer the same
+The Router defaults to Vela 2.0 0.3B. For custom questions, Decision 2.0
+Kai-0.6B also runs on a CPU; its larger sizes target more demanding questions
+on a GPU. Decision 1.0 models answer the same
 questions. Vela 2.0 also answers `set` and `span` questions, has ready-made
 questions for PII and unsupported claims, and its 0.3B answers the router's
 [built-in signals](model-runtime/choose-a-model.md#vela-20) by default, in one

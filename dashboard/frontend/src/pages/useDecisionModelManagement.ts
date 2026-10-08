@@ -17,10 +17,6 @@ import {
 import { useDashboardObservation } from '../utils/useDashboardObservation'
 import { invalidateDashboardObservations } from '../utils/dashboardObservationCache'
 import { withRequestTimeout } from '../utils/boundedRequest'
-import {
-  withDecisionRuntimeDeployment,
-  type DecisionRuntimeDeploymentRequest,
-} from './decisionRuntimeDeployment'
 
 async function fetchSnapshot<T>(path: string, signal: AbortSignal): Promise<T> {
   const response = await fetch(path, { headers: { Accept: 'application/json' }, signal })
@@ -130,34 +126,6 @@ export function useDecisionModelManagement() {
     }
   }
 
-  const deployRuntime = async (deployment: DecisionRuntimeDeploymentRequest) => {
-    if (mutationInProgress.current) throw new Error('Another configuration request is in progress.')
-    mutationInProgress.current = true
-    setDeploying(true)
-    setApplyResult(null)
-    setApplyError(null)
-    try {
-      // Read immediately before writing: the manager's static snapshot may be
-      // older than edits made in another configuration page or browser.
-      const current = await withRequestTimeout((signal) =>
-        fetchSnapshot<RouterConfig>('/api/router/config/all', signal),
-      )
-      const next = withDecisionRuntimeDeployment(current, deployment)
-      const response = await fetch('/api/router/config/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(next),
-      })
-      const result = await readDecisionModelApplyResult(response)
-      window.dispatchEvent(new Event('config-deployed'))
-      return result
-    } finally {
-      mutationInProgress.current = false
-      setDeploying(false)
-      void refreshSnapshot()
-    }
-  }
-
   const updateConfig = async (mutate: (current: RouterConfig) => RouterConfig) => {
     if (mutationInProgress.current) throw new Error('Another configuration request is in progress.')
     mutationInProgress.current = true
@@ -200,7 +168,6 @@ export function useDecisionModelManagement() {
     applyError,
     updatedAt,
     deploy,
-    deployRuntime,
     updateConfig,
     refresh: refreshSnapshot,
   }

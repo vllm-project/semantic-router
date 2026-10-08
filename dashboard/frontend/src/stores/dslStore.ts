@@ -246,10 +246,14 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     const { dslSource, compilerReady } = get()
     if (!compilerReady || !dslSource.trim()) return
 
+    // An explicit format owns the displayed diagnostics until another analysis
+    // is requested. A pending debounce or older validation must not replace it.
+    if (validateTimer) clearTimeout(validateTimer)
+    const requestId = ++analysisRequestId
     const revision = sourceRevision
     try {
       const result = await dslCompiler.format(dslSource)
-      if (revision !== sourceRevision) return
+      if (requestId !== analysisRequestId || revision !== sourceRevision) return
       if (result.error) {
         set({ compileError: result.error, diagnostics: [] })
         return
@@ -261,7 +265,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       })
       get().validate()
     } catch (err) {
-      if (revision !== sourceRevision) return
+      if (requestId !== analysisRequestId || revision !== sourceRevision) return
       set({
         compileError: err instanceof Error ? err.message : String(err),
         diagnostics: [],

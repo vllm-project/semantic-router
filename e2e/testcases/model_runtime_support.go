@@ -185,7 +185,7 @@ func (s *modelRuntimeSession) preview(ctx context.Context, text string) (routing
 func (s *modelRuntimeSession) previewConversation(ctx context.Context, messages []map[string]string) (routingPreview, error) {
 	var preview routingPreview
 	err := s.postAPI(ctx, "/api/v1/routing/preview?trace=true", map[string]interface{}{
-		"model":    "auto",
+		"model":    "vllm-sr/auto",
 		"messages": messages,
 	}, &preview)
 	return preview, err
@@ -193,7 +193,7 @@ func (s *modelRuntimeSession) previewConversation(ctx context.Context, messages 
 
 // chat sends one user message through the gateway with the debug headers on.
 func (s *modelRuntimeSession) chat(ctx context.Context, text string) (*localChatCompletionResponse, error) {
-	response, err := sendLocalChatCompletion(ctx, s.gatewayPort, "auto", text, mrRequestTimeout)
+	response, err := sendLocalChatCompletion(ctx, s.gatewayPort, "vllm-sr/auto", text, mrRequestTimeout)
 	if err != nil {
 		return nil, err
 	}

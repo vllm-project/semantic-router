@@ -119,7 +119,7 @@ curl -fsSL https://vllm-sr.ai/install.sh | \
   bash -s -- --mode cli --runtime skip --no-launch
 ```
 
-对于简单的单模型部署，启动栈。普通的 `vllm-sr serve` 把 Router 及其模型留在 CPU 上；`--platform rocm` 也会把 Router 的模型放到 GPU 上（见[在 AMD 上运行 Vela 路由模型](#run-vela-routing-models-on-amd)）：
+对于简单的单模型部署，启动栈。`vllm-sr serve` 自动检测执行后端；`--platform rocm` 显式选择 ROCm 镜像与设备访问，显式配置的模型放置保持不变（见[在 AMD 上运行 Vela 路由模型](#run-vela-routing-models-on-amd)）：
 
 ```bash
 vllm-sr serve

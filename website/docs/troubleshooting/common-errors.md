@@ -101,13 +101,14 @@ entrypoints:
     recipe: production
 ```
 
-### Model or reserved alias collision
+### Default entrypoint name collision {#model-or-reserved-alias-collision}
 
 ```text
-Entrypoint model 'vllm-sr/auto' conflicts with a configured model or reserved alias
-Hint: Use a distinct entrypoint model name; do not reuse a configured model or
-reserved alias such as vllm-sr/auto.
+Entrypoint model 'vllm-sr/auto' is mapped more than once
 ```
+
+`vllm-sr/auto` publishes the default recipe unless an explicit entrypoint
+replaces it. Giving that same name to a named recipe creates a duplicate.
 
 Broken:
 

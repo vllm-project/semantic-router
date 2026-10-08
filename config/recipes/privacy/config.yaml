@@ -11,7 +11,6 @@ global:
     response_cache:
       enabled: false
       backend_type: memory
-  router:
 
 providers:
   defaults:

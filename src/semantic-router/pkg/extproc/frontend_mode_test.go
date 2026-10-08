@@ -29,6 +29,11 @@ func TestFrontendEngineStartsWithoutRoutingOrProviders(t *testing.T) {
 	if server.CurrentConfig().RoutingEnabled() || registry.ConfigSnapshot() == nil {
 		t.Fatal("Engine did not publish its configuration")
 	}
+	snapshot, release, ok := registry.AcquireConfigSnapshot()
+	if !ok || snapshot != registry.ConfigSnapshot() {
+		t.Fatal("Engine management requests cannot retain the active generation")
+	}
+	release()
 	lease, err := server.Pin()
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +63,11 @@ func TestFrontendModePublicationAndFailedEnablePreserveServingGeneration(t *test
 		t.Fatal("Engine generation not active")
 	}
 	engineSnapshot := server.service.Snapshot()
+	managedSnapshot, releaseManaged, ok := registry.AcquireConfigSnapshot()
+	if !ok || managedSnapshot != engineSnapshot {
+		t.Fatal("Engine management lease is unavailable")
+	}
+	defer releaseManaged()
 	lease, err := server.Pin()
 	if err != nil {
 		t.Fatal(err)
@@ -89,6 +99,9 @@ func TestFrontendModePublicationAndFailedEnablePreserveServingGeneration(t *test
 	}
 	if lease.Snapshot != engineSnapshot {
 		t.Fatal("in-flight native request changed generations")
+	}
+	if managedSnapshot != engineSnapshot {
+		t.Fatal("in-flight management native request changed generations")
 	}
 }
 

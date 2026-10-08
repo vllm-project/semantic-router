@@ -174,38 +174,44 @@ test.describe('Config surface layout regressions', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await mockConfigSurface(page);
 
-    let systemModels: Record<string, string> = {
-      decision_model: 'Vela-2.0-4B',
+    let systemModels: Record<string, unknown> = {
+      decision_model: { deployment: 'main-judge' },
       pii_classifier: 'models/custom-pii',
+    };
+    const deployments = {
+      'main-judge': { provider: 'model_runtime', artifact: 'vllm-sr/Vela-2.0-4B' },
+      'alternate-judge': { provider: 'model_runtime', artifact: 'vllm-sr/Vela-2.0-0.8B' },
     };
     await page.route('**/api/router/config/global', async route => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ model_catalog: { system: systemModels } }),
+        body: JSON.stringify({ model_catalog: { system: systemModels, deployments } }),
       });
     });
     await page.route('**/api/router/config/global/update', async route => {
-      systemModels = route.request().postDataJSON().model_catalog.system;
+      const modelCatalog = route.request().postDataJSON().model_catalog;
+      systemModels = modelCatalog.system;
+      expect(Object.keys(modelCatalog)).toEqual(['system']);
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"success"}' });
     });
 
     await page.goto('/config/global-config#global-section-system_models');
     const card = page.locator('#global-section-system_models');
     await expect(card.getByRole('heading', { name: 'Decision Model & Bindings' })).toBeInViewport();
-    await expect(card.getByText('Vela-2.0-4B', { exact: true })).toBeVisible();
-    await expect(card.getByText('Follows Vela-2.0-4B').first()).toBeVisible();
+    await expect(card.getByText('main-judge', { exact: true })).toBeVisible();
+    await expect(card.getByText('Follows main-judge').first()).toBeVisible();
     await expect(card.getByText('1 explicit binding', { exact: true })).toBeVisible();
     await card.getByRole('button', { name: 'Edit', exact: true }).click();
 
     const modal = page.getByRole('dialog', { name: 'Edit Decision Model & Bindings' });
-    await expect(modal.getByLabel('Decision Model', { exact: true })).toHaveValue('Vela-2.0-4B');
-    await modal.getByLabel('Decision Model', { exact: true }).selectOption('Vela-2.0-0.8B');
+    await expect(modal.getByLabel('Deployment', { exact: true })).toHaveValue('main-judge');
+    await modal.getByLabel('Deployment', { exact: true }).fill('alternate-judge');
     await modal.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(modal).toBeHidden();
-    expect(systemModels).toEqual({ decision_model: 'Vela-2.0-0.8B', pii_classifier: 'models/custom-pii' });
-    await expect(card.getByText('Vela-2.0-0.8B', { exact: true })).toBeVisible();
-    await expect(card.getByText('Follows Vela-2.0-0.8B').first()).toBeVisible();
+    expect(systemModels).toEqual({ decision_model: { deployment: 'alternate-judge' }, pii_classifier: 'models/custom-pii' });
+    await expect(card.getByText('alternate-judge', { exact: true })).toBeVisible();
+    await expect(card.getByText('Follows alternate-judge').first()).toBeVisible();
   });
 
   test('keeps signal controls readable and aligned in the shared editor', async ({ page }) => {

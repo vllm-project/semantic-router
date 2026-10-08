@@ -173,14 +173,17 @@ matching are planned for standalone mode; until then they need Envoy as well.
 
 ## Targets and platforms
 
-`--platform cpu|amd|nvidia` works on both targets. It selects the image:
-`vllm-sr` for the CPU, `vllm-sr-rocm` for AMD and `vllm-sr-cuda` for NVIDIA.
+`--platform auto` detects the execution backend on the selected target.
+Choose `cpu`, `rocm` or `cuda` explicitly to use `vllm-sr`, `vllm-sr-rocm`
+or `vllm-sr-cuda`, respectively.
 
-- **docker:** `amd` passes the ROCm devices through, and `nvidia` the NVIDIA GPUs
-  (`--gpus all`).
+- **docker:** `rocm` passes the ROCm devices through, and `cuda` the NVIDIA GPUs.
+  Use `--device-ids` to select host GPUs for the default model deployment.
 - **kubernetes:** the generated Helm values set `gateway.mode`, the image
-  repository for the platform, and a request for one GPU (`amd.com/gpu: 1` or
-  `nvidia.com/gpu: 1`). `--target k8s` is the old name of `--target kubernetes`
+  repository for the platform, and GPU resources (`amd.com/gpu` or
+  `nvidia.com/gpu`) for the configured placements. The cluster needs the matching
+  device plugin. Use allocation ordinals such as `rocm:0` in YAML; host
+  `--device-ids` applies only to Docker. `--target k8s` is the old name of `--target kubernetes`
   and works for this release only.
 
 Without the CLI, the Helm chart takes the same value, `gateway.mode` (default

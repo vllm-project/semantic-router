@@ -51,9 +51,9 @@ func registerCoreRoutes(mux routeRegistrar, cfg *config.Config, setupResolver *s
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/instance", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.InstanceHandler())
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/instance/models", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.InstanceHandler())
 	for _, path := range []string{"/v1/systemone", "/v1/decisions"} {
-		registerRouteFunc(mux, auth.PublicRoute(path, http.MethodPost), handlers.PublicSystemOneHandler(cfg.AbsConfigPath))
+		registerRouteFunc(mux, auth.PublicRoute(path, http.MethodPost), handlers.PublicSystemOneHandler(cfg.RouterAPIURL, store))
 	}
-	registerRouteFunc(mux, auth.PublicRoute("/v1/systemone/models", http.MethodGet), handlers.PublicSystemOneHandler(cfg.AbsConfigPath))
+	registerRouteFunc(mux, auth.PublicRoute("/v1/systemone/models", http.MethodGet), handlers.PublicSystemOneHandler(cfg.RouterAPIURL, store))
 }
 
 func registerRecipeRoutes(mux routeRegistrar, cfg *config.Config, stores ...*recipe.Store) {

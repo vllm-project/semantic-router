@@ -837,7 +837,9 @@ func publishSnapshotState(
 ) {
 	if router == nil {
 		if runtimeRegistry != nil {
-			runtimeRegistry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{Config: cfg, ConfigSnapshot: snapshot})
+			runtimeRegistry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
+				Config: cfg, ConfigSnapshot: snapshot, AcquireClassification: routerruntime.AcquireClassification(acquire),
+			})
 		} else {
 			services.SetGlobalClassificationService(nil)
 			memory.SetGlobalMemoryStore(nil)

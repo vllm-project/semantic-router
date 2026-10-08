@@ -51,11 +51,9 @@
 }
 
 .menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 30;
-  width: 100%;
+  position: fixed;
+  z-index: 1200;
+  box-sizing: border-box;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0.35rem;
@@ -67,11 +65,10 @@
 }
 
 .above {
-  top: auto;
-  bottom: calc(100% + 6px);
+  transform: translateY(-100%);
 }
 
-.field .option {
+.option {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -107,7 +104,7 @@
   overflow-wrap: anywhere;
 }
 
-.field .option[data-active='true'] {
+.option[data-active='true'] {
   background: var(--surface-canvas);
   border-color: var(--border-strong);
 }

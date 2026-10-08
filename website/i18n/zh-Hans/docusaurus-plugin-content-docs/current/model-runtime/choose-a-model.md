@@ -64,7 +64,7 @@ Decision 1.0 模型（`vllm-sr/Decision-1.0-Kai-0.6B`、`-Lex-0.6B`、`-Route-0.
 
 domain、prompt guard、safety、fact check、user feedback、modality、PII 和 hallucination 信号默认使用
 `vllm-sr/Vela-2.0-0.3B`（[合集](https://huggingface.co/collections/vllm-sr/vela-20)）。它们共用一个部署
-`@Vela-2.0-0.3B`，一个请求的所有问题在一次调用中提出。
+`primary`，一个请求的所有问题在一次调用中提出。
 
 - **问题：** 每个信号提出模型针对它训练过的问题，并沿用对应 Vela 1.0 模型的标签，因此规则和策略照旧读取答案。
   PII 和 hallucination 使用模型的片段头，片段保留精确的字符偏移。

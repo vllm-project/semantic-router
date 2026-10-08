@@ -34,10 +34,13 @@ When the request `model` matches an `entrypoints[].model_names` value, the
 Router evaluates only the mapped recipe. The virtual model name is then
 replaced by the backend selected from that recipe.
 
-The top-level `routing` block remains the `default` recipe. Requests for
-`vllm-sr/auto`, `auto`, or another configured auto alias use that default
-policy. If the selected recipe has no matching decision, the Router uses
-`providers.defaults.model`.
+The top-level `routing` block is the `default` recipe. It is published as
+`vllm-sr/auto` unless you declare an entrypoint for `recipe: default`.
+An explicit default entrypoint replaces that built-in name; include
+`vllm-sr/auto` in its `model_names` if clients should keep using it. Names such
+as `auto` or `vllm-sr/flow` work only when explicitly declared. The selected
+recipe's decisions choose its algorithms. If no decision matches, the Router
+uses `providers.defaults.model`.
 
 Concrete backend model names are different: they select that model directly
 and bypass recipe routing. Use a virtual entrypoint when clients should ask for

@@ -138,12 +138,13 @@ standalone 模式中支持；在那之前它们同样需要 Envoy。
 
 ## 目标与平台
 
-`--platform cpu|amd|nvidia` 适用于两种目标，用于选择镜像：CPU 用 `vllm-sr`，AMD 用 `vllm-sr-rocm`，NVIDIA 用
-`vllm-sr-cuda`。
+`--platform auto` 自动检测部署目标的执行后端。显式选择 `cpu`、`rocm` 或
+`cuda` 时，分别使用 `vllm-sr`、`vllm-sr-rocm` 或 `vllm-sr-cuda` 镜像。
 
-- **docker：** `amd` 透传 ROCm 设备，`nvidia` 透传 NVIDIA GPU（`--gpus all`）。
-- **kubernetes：** 生成的 Helm values 会设置 `gateway.mode`、对应平台的镜像仓库，以及一块 GPU 的资源请求
-  （`amd.com/gpu: 1` 或 `nvidia.com/gpu: 1`）。`--target k8s` 是 `--target kubernetes` 的旧名，仅在本版本中继续可用。
+- **docker：** `rocm` 透传 ROCm 设备，`cuda` 透传 NVIDIA GPU；使用 `--device-ids` 为默认模型部署选择宿主机 GPU。
+- **kubernetes：** 生成的 Helm values 会设置 `gateway.mode`、镜像仓库，以及模型放置所需的 GPU 资源
+  （`amd.com/gpu` 或 `nvidia.com/gpu`）。集群需要相应的设备插件。在 YAML 中使用 `rocm:0` 等分配序号；
+  宿主机 `--device-ids` 仅用于 Docker。`--target k8s` 是 `--target kubernetes` 的旧名，仅在本版本中继续可用。
 
 不使用 CLI 时，Helm chart 读取同一个值 `gateway.mode`（默认 `standalone`）；Operator 默认以 standalone 模式运行 Router，只有当 `spec.gateway` 指定一个 Gateway 时才选择 extproc。迁移由基于 Envoy 的网关调用的现有发行版，请参阅[升级与回滚](upgrade-rollback)。
 

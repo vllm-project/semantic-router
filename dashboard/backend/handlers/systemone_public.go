@@ -1,40 +1,60 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 )
 
 // PublicSystemOneHandler keeps the native surface stable across instance modes.
-// The shared handler enforces the same listener grant as the standalone gateway.
-func PublicSystemOneHandler(configPath string) http.HandlerFunc {
+// The active frontend owns listener authorization and model lifetime together.
+func PublicSystemOneHandler(upstream string, providers ...routerauth.CredentialProvider) http.HandlerFunc {
+	transport := decisionModelTransport{upstream: strings.TrimRight(upstream, "/"), client: &http.Client{Timeout: 35 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	if len(providers) > 0 {
+		transport.provider = providers[0]
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		data, err := readPersistedDashboardConfig(configPath)
-		if err != nil {
-			http.Error(w, "Configuration unavailable", http.StatusServiceUnavailable)
+		w.Header().Set("Cache-Control", "no-store")
+		forwarded := systemone.ForwardRequest{Listener: os.Getenv("VLLM_SR_SYSTEMONE_LISTENER"), Method: r.Method, Path: r.URL.Path, Authorization: r.Header.Get("Authorization"), APIKey: r.Header.Get("Api-Key")}
+		if !forwarded.ValidOperation() {
+			decisionModelError(w, 405, "method_not_allowed", "Unsupported native operation")
 			return
 		}
-		cfg, err := routerconfig.ParseYAMLBytes(data)
-		if err != nil {
-			http.Error(w, "Configuration unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		listener, err := systemone.SelectListener(cfg.Listeners, os.Getenv("VLLM_SR_SYSTEMONE_LISTENER"))
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		systemone.Handler(cfg, listener, func(ctx context.Context, deployment string, body json.RawMessage) (int, []byte, error) {
-			payload, err := json.Marshal(map[string]any{"deployment": deployment, "request": body, "expected_artifact": cfg.ModelDeployments[deployment].Artifact})
-			if err != nil {
-				return 0, nil, err
+		if r.Method == http.MethodPost {
+			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, decisionModelRequestLimit))
+			if err != nil || !json.Valid(body) {
+				decisionModelError(w, 400, "invalid_request", "Unable to read bounded native request")
+				return
 			}
-			return instanceRequest(ctx, http.MethodPost, "/systemone", payload)
-		})(w, r)
+			forwarded.Request = body
+		}
+		var payload bytes.Buffer
+		encoder := json.NewEncoder(&payload)
+		encoder.SetEscapeHTML(false)
+		if err := encoder.Encode(forwarded); err != nil {
+			decisionModelError(w, 400, "invalid_request", "Unable to encode native request")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 35*time.Second)
+		defer cancel()
+		response, data, err := transport.request(ctx, http.MethodPost, systemone.ForwardPath, payload.Bytes())
+		if err != nil || response.StatusCode < 200 || response.StatusCode >= 300 && response.StatusCode < 400 || !json.Valid(data) {
+			decisionModelError(w, 503, "systemone_unavailable", "The native frontend is unavailable")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if challenge := response.Header.Get("WWW-Authenticate"); challenge != "" {
+			w.Header().Set("WWW-Authenticate", challenge)
+		}
+		w.WriteHeader(response.StatusCode)
+		_, _ = w.Write(data)
 	}
 }

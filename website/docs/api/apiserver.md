@@ -696,6 +696,7 @@ Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, and r
 | `POST` | `/api/v1/diagnostics/embeddings` | Generate text, image, and audio embeddings |
 | `POST` | `/api/v1/diagnostics/similarity` | Calculate pairwise text similarity |
 | `POST` | `/api/v1/diagnostics/similarity/batch` | Calculate batch text-similarity matches |
+| `POST` | `/api/v1/diagnostics/models/systemone/forward` | Forward a public native inference or discovery request through one active listener grant; requires management authorization and the original listener credentials |
 | `GET` | `/api/v1/instance` | Read the serving frontend capability mode and default native deployment |
 | `GET` | `/api/v1/diagnostics/models/tasks` | List shared judgment task templates, structural model capabilities and binding provenance |
 | `GET` | `/api/v1/diagnostics/models/systemone` | List published model deployments and their native System One question capabilities |

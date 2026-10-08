@@ -130,10 +130,15 @@ func systemOneAuthorized(r *http.Request, keys []string) bool {
 			bearer = ""
 		}
 	}
+	apiKey := r.Header.Get("Api-Key")
 	valid := 0
 	for _, key := range keys {
-		valid |= subtle.ConstantTimeCompare([]byte(key), []byte(bearer))
-		valid |= subtle.ConstantTimeCompare([]byte(key), []byte(r.Header.Get("Api-Key")))
+		if bearer != "" {
+			valid |= subtle.ConstantTimeCompare([]byte(key), []byte(bearer))
+		}
+		if apiKey != "" {
+			valid |= subtle.ConstantTimeCompare([]byte(key), []byte(apiKey))
+		}
 	}
 	return valid == 1
 }

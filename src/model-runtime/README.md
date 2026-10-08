@@ -2,8 +2,10 @@
 
 `vllm-srun` serves the router's models (decision models, classifiers,
 embedders and rerankers) behind one HTTP contract. One process can serve
-several models. The router manages it for `model_runtime` deployments, and
-`vllm-sr serve <hf-model> [<hf-model> ...]` runs it on its own.
+several models. The router manages it for `model_runtime` deployments.
+Use `vllm-sr serve ARTIFACT --engine` for a managed instance with a Dashboard
+and public System One API. Use `vllm-srun serve` to operate a worker directly,
+including its classify, embeddings, rerank and bundle APIs.
 
 Every router image ships it; it is not published to PyPI. To run it on your
 own machine, install it from a checkout of the repository, after PyTorch from

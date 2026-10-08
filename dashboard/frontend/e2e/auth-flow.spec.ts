@@ -936,7 +936,7 @@ test.describe('Dashboard auth flow', () => {
     })
 
     await page.goto('/config')
-    await expect(page).toHaveURL(/\/config$/)
+    await expect(page).toHaveURL(/\/config\/global-config$/)
     await expect(page.getByRole('link', { name: 'Users' })).toHaveCount(0)
 
     await page.goto('/builder')

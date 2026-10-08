@@ -87,7 +87,9 @@ export function configuredDecisionRuntimes(
   return Object.entries(decisionRuntimeDeclarations(config)).filter(
     ([name, deployment]) =>
       deployment.provider === 'model_runtime' &&
-      (artifacts.has(deployment.artifact ?? '') || bindings.has(name) || questionRuntimes.has(name)),
+      (artifacts.has(deployment.artifact ?? '') ||
+        bindings.has(name) ||
+        questionRuntimes.has(name)),
   )
 }
 
@@ -95,10 +97,6 @@ export function compatibleRuntimeConsumers(config: RouterConfig | null): Decisio
   return decisionRuntimeConsumers(config).filter((consumer) =>
     DECISION_RUNTIME_CAPABILITIES.some((kind) => kind === consumer.questionType),
   )
-}
-
-export function consumerLabel(consumer: DecisionRuntimeConsumer): string {
-  return `${consumer.recipe ?? 'Default routing'} / ${consumer.name}`
 }
 
 // Update a fresh canonical snapshot in one transaction. Unselected consumers,

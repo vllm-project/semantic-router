@@ -6,6 +6,7 @@ from copy import deepcopy
 
 import click
 
+from cli.bootstrap import build_bootstrap_config
 from cli.decision_model import configured_decision_model, decision_model_deployment
 from cli.model_revision import resolve_model_revision
 from cli.validator_decision_model import MODEL_RUNTIME_PROFILE, public_model_name
@@ -172,16 +173,16 @@ def apply_instance_options(
         catalog.setdefault("system", {})["decision_model"] = {"deployment": key}
     if setup and engine:
         document.pop("setup", None)
-        name = public_model_name(decision_model_deployment(document))
-        if not name:
-            raise ValueError("A local MODEL needs an explicit public_name in --config")
-        # Only initial bootstrap creates this listener. Existing grants never change.
-        document["listeners"] = [
-            {
-                "name": "http-8899",
-                "address": "0.0.0.0",
-                "port": 8899,
-                "systemone": {"models": [name]},
-            }
-        ]
+        bootstrap_listeners = build_bootstrap_config()["listeners"]
+        listeners = document.get("listeners")
+        # A setup marker does not imply that listener policy is still pristine.
+        # Only the unmodified bootstrap listener receives an automatic grant.
+        if listeners is None or listeners == bootstrap_listeners:
+            name = public_model_name(decision_model_deployment(document))
+            if not name:
+                raise ValueError(
+                    "A local MODEL needs an explicit public_name in --config"
+                )
+            bootstrap_listeners[0]["systemone"] = {"models": [name]}
+            document["listeners"] = bootstrap_listeners
     return document != before

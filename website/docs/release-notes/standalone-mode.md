@@ -53,7 +53,7 @@ serves as many or more requests per second (see the design doc's
   lists, for example a public key to `vllm-sr/auto` only; other models get
   `403 model_not_allowed` and `/v1/models` lists only the allowed names.
   `--gateway extproc` refuses it, since its Envoy listener does not enforce it.
-- `--gateway standalone|extproc` and `--platform cpu|amd|nvidia` work on the
+- `--gateway standalone|extproc` and `--platform auto|cpu|rocm|cuda` work on the
   kubernetes target too. The CLI writes them into the generated Helm values as
   `gateway.mode`, the image repository and a GPU request.
 - `vllm-sr serve --help` lists its options by group, and an option of another

@@ -69,6 +69,28 @@ describe('asynchronous compiler ordering', () => {
     expect(useDSLStore.getState().dslSource).toBe('new draft')
   })
 
+  it('preserves explicit format errors over pending or older validation', async () => {
+    vi.useFakeTimers()
+    try {
+      const older = deferred<ValidateResult>()
+      vi.mocked(dslCompiler.validate).mockReturnValue(older.promise)
+      vi.mocked(dslCompiler.format).mockResolvedValue({
+        dsl: '',
+        error: 'parse errors: unexpected token "hello"',
+      })
+      useDSLStore.getState().setDslSource('hello')
+      const validation = useDSLStore.getState().validate()
+      await useDSLStore.getState().format()
+      await vi.runAllTimersAsync()
+      expect(dslCompiler.validate).toHaveBeenCalledOnce()
+      older.resolve({ diagnostics: [], errorCount: 1, error: 'older validation error' })
+      await validation
+      expect(useDSLStore.getState().compileError).toBe('parse errors: unexpected token "hello"')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('rejects an import that would replace edits made while it was loading', async () => {
     const result = deferred<DecompileResult>()
     vi.mocked(dslCompiler.decompile).mockReturnValue(result.promise)

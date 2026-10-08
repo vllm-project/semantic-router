@@ -72,7 +72,7 @@ are the most accurate.
 The domain, prompt guard, safety, fact check, user feedback, modality, PII and
 hallucination signals default to `vllm-sr/Vela-2.0-0.3B`
 ([collection](https://huggingface.co/collections/vllm-sr/vela-20)). All of them
-share one deployment, `@Vela-2.0-0.3B`, and a request asks every one of its
+share one deployment, `primary`, and a request asks every one of its
 questions in one call.
 
 - **Questions:** each signal asks the question the model was trained on for it,

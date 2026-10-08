@@ -6,6 +6,7 @@ from copy import deepcopy
 import pytest
 import yaml
 from cli import decision_model, execution_platform, runtime_lifecycle
+from cli.bootstrap import build_bootstrap_config
 from cli.commands import runtime
 from cli.commands.runtime_mode_config import (
     apply_instance_options,
@@ -68,6 +69,42 @@ def test_engine_bootstrap_has_native_grant_and_no_invented_provider():
     assert document["global"]["model_catalog"]["system"]["decision_model"] == {
         "deployment": "primary"
     }
+    assert (
+        validate_user_config(UserConfig.model_validate(document), log_summary=False)
+        == []
+    )
+
+
+def test_generated_engine_bootstrap_preserves_listener_settings():
+    document = build_bootstrap_config()
+    original = deepcopy(document["listeners"][0])
+    apply_instance_options(document, engine=True, model_options=options(MODEL))
+    assert document["listeners"] == [{**original, "systemone": {"models": [MODEL]}}]
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"address": "127.0.0.1", "port": 9999},
+        {"api_keys": ["private-test-key"]},
+        {"models": ["vllm-sr/auto"]},
+        {"systemone": {"models": [MODEL]}},
+        {
+            "address": "127.0.0.1",
+            "port": 9999,
+            "api_keys": ["private-test-key"],
+            "systemone": {"models": [MODEL]},
+        },
+    ],
+)
+def test_engine_setup_preserves_authored_listener_policy(overrides):
+    document = build_bootstrap_config()
+    document["listeners"][0].update(overrides)
+    listeners = deepcopy(document["listeners"])
+    apply_instance_options(document, engine=True, model_options=options(MODEL))
+    assert "setup" not in document
+    assert document["global"]["router"]["enabled"] is False
+    assert document["listeners"] == listeners
     assert (
         validate_user_config(UserConfig.model_validate(document), log_summary=False)
         == []

@@ -96,13 +96,14 @@ entrypoints:
     recipe: production
 ```
 
-### 模型或保留别名冲突 {#model-or-reserved-alias-collision}
+### 默认入口名冲突 {#model-or-reserved-alias-collision}
 
 ```text
-Entrypoint model 'vllm-sr/auto' conflicts with a configured model or reserved alias
-Hint: Use a distinct entrypoint model name; do not reuse a configured model or
-reserved alias such as vllm-sr/auto.
+Entrypoint model 'vllm-sr/auto' is mapped more than once
 ```
+
+`vllm-sr/auto` 默认发布 default 配方，除非显式声明替换它的默认入口。
+把同一名称交给另一个命名配方会产生重复。
 
 错误写法：
 

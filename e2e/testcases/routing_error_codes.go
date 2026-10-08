@@ -22,8 +22,8 @@ func init() {
 }
 
 // routingErrorProbe is a request no profile running this case can route: no
-// provider model has the first name, and none of the profiles has a workflows
-// decision for the default Flow alias to evaluate.
+// provider model has the first name, and the declared no-route recipe has no
+// decision that can select a backend.
 type routingErrorProbe struct {
 	name    string
 	model   string
@@ -33,7 +33,9 @@ type routingErrorProbe struct {
 
 var routingErrorProbes = []routingErrorProbe{
 	{name: "unknown model", model: "e2e-no-such-model", code: "model_not_found", message: "the requested model is not available"},
-	{name: "Flow alias with no workflows decision", model: "vllm-sr/flow", code: "no_route", message: "no route matched the request"},
+	{name: "declared recipe without a route", model: "e2e-no-route", code: "no_route", message: "no route matched the request"},
+	{name: "undeclared legacy alias", model: "MoM", code: "model_not_found", message: "the requested model is not available"},
+	{name: "undeclared algorithm alias", model: "vllm-sr/flow", code: "model_not_found", message: "the requested model is not available"},
 }
 
 func testRoutingErrorCodes(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {

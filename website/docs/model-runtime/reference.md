@@ -47,8 +47,10 @@ ordinals in canonical config and does not accept physical `--device-ids`.
 Listener ports and API grants belong in `listeners`; the initial native API
 listener uses port `8899`. Selecting a model never broadens an existing
 listener's public model grants. Dashboard reports the startup mode; changing
-mode requires another `serve` invocation. The former `--mode`, `--model`,
-`--decision-model` and `--device` serve flags have been removed.
+mode requires another `serve` invocation. Use the positional `MODEL` argument
+and `--device-ids` in place of the former `--decision-model` and `--device`
+serve flags. Worker `--models`, `--host` and `--port` options belong to
+`vllm-srun`; configure managed instance models and listeners in YAML.
 
 `vllm-srun serve` starts a worker directly with the full runtime protocol. It
 is the command used inside the images and needs an installed model runtime

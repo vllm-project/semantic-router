@@ -11,18 +11,34 @@ import (
 )
 
 func prepareDecisionComplexity(models *classifierModelRuntime, rules []config.ComplexityRule) (*ComplexityClassifier, error) {
-	if config.HasImageCandidatesInRules(rules) {
+	if models == nil || models.cfg == nil {
 		return nil, nil
 	}
-	prepared := &ComplexityClassifier{rules: rules, judgments: make(map[string]*decisionJudgment)}
+	prepared := &ComplexityClassifier{judgments: make(map[string]*decisionJudgment)}
 	for _, rule := range rules {
+		if models.cfg.ComplexityRuleUsesPrototypes(rule) {
+			continue
+		}
 		if _, err := rule.EffectiveBoundaries(); err != nil {
 			return nil, err
 		}
-		question := modelservice.Question{
-			Type: "score", Truncate: true,
-			Instructions: "How difficult is this request to solve correctly? " + rule.Description,
-			Levels:       []string{"easy: " + strings.Join(rule.Easy.Candidates, "; "), "moderate difficulty", "hard: " + strings.Join(rule.Hard.Candidates, "; ")},
+		definition, _ := modelservice.BuiltinTask("complexity")
+		question := definition.Question
+		question.ID = ""
+		if description := strings.TrimSpace(rule.Description); description != "" {
+			question.Instructions += " " + description
+		}
+		question.Levels = append([]string(nil), question.Levels...)
+		for level, candidates := range map[int][]string{0: rule.Easy.Candidates, 2: rule.Hard.Candidates} {
+			var examples []string
+			for _, candidate := range candidates {
+				if candidate = strings.TrimSpace(candidate); candidate != "" {
+					examples = append(examples, candidate)
+				}
+			}
+			if len(examples) > 0 {
+				question.Levels[level] += ": " + strings.Join(examples, "; ")
+			}
 		}
 		judgment, err := newDecisionJudgment(models, "complexity", "complexity", &question)
 		if err != nil || judgment == nil {
@@ -35,15 +51,25 @@ func prepareDecisionComplexity(models *classifierModelRuntime, rules []config.Co
 			return nil, err
 		}
 		prepared.judgments[rule.Name] = judgment
+		prepared.rules = append(prepared.rules, rule)
+	}
+	if len(prepared.rules) == 0 {
+		return nil, nil
 	}
 	return prepared, nil
 }
 
 func (c *ComplexityClassifier) classifyJudgments(ctx context.Context, text string) ([]ComplexityRuleResult, error) {
-	results := make([]ComplexityRuleResult, len(c.rules))
-	errors := make([]error, len(c.rules))
-	modelservice.Fan(ctx, len(c.rules), func(i int) {
-		rule := c.rules[i]
+	var rules []config.ComplexityRule
+	for _, rule := range c.rules {
+		if c.judgments[rule.Name] != nil {
+			rules = append(rules, rule)
+		}
+	}
+	results := make([]ComplexityRuleResult, len(rules))
+	errors := make([]error, len(rules))
+	modelservice.Fan(ctx, len(rules), func(i int) {
+		rule := rules[i]
 		answer, err := c.judgments[rule.Name].ask(ctx, modelservice.Request{State: text})
 		if err != nil {
 			errors[i] = err

@@ -193,8 +193,7 @@ def _validate_entrypoints(
                         field=f"entrypoints.{index}.model_names",
                         hint=(
                             "Use a distinct entrypoint model name; do not reuse "
-                            "a configured backend model such as "
-                            "vllm-sr/auto."
+                            "a configured backend model or provider model ID."
                         ),
                     )
                 )

@@ -280,7 +280,7 @@ func validateDisabledPromptCachePolicy(
 
 func promptCachePolicyRequest(probe string, stream bool) map[string]any {
 	return map[string]any{
-		"model":      "MoM",
+		"model":      "vllm-sr/auto",
 		"max_tokens": 16,
 		"stream":     stream,
 		"messages": []any{

@@ -103,7 +103,7 @@ curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
 ## 4. 在路由器中使用 {#4-use-it-from-the-router}
 
 路由器会替你运行模型。把模型声明为 `provider: model_runtime` 的 **deployment**，
-然后在 `decision` 信号中向它提问。把下面的内容保存为 `config.yaml`，并把 `vllm:8000`
+然后在 `decision` 信号中向它提问。把下面的内容保存为 `config.yaml`，并把 `host.docker.internal:8000`
 换成为你的用户提供回答的 OpenAI 兼容后端：
 
 ```yaml
@@ -112,6 +112,8 @@ listeners:
   - name: http
     address: 0.0.0.0
     port: 8899
+    systemone:
+      models: [vllm-sr/Decision-2.0-Kai-0.6B]
 providers:
   defaults:
     model: answer-model
@@ -119,7 +121,7 @@ providers:
     - name: answer-model
       backend_refs:
         - name: answer
-          endpoint: vllm:8000
+          endpoint: host.docker.internal:8000
           protocol: http
 routing:
   modelCards:
@@ -162,17 +164,16 @@ global:
         device: cpu
 ```
 
-校验配置文件并启动路由器：
+校验配置文件，然后使用这份配置重启到 Router 模式：
 
 ```bash
 vllm-sr config validate --config config.yaml
-vllm-sr serve --config config.yaml
+vllm-sr serve --config config.yaml --replace-active-config
 ```
 
-Router 任务与直接 System One 请求使用同一 logical deployment（这里是 `primary`）
-即可共享模型池。切换 `global.router.enabled` 只改变路由能力，模型 worker 持续可用。
-将下面的新配置应用到此前 Engine 实例时，运行
-`vllm-sr serve --config config.yaml --replace-active-config`。
+`--replace-active-config` 用刚写入的文件替换此前保存的 Engine 配置。
+后续重启可以省略它，以保留 Dashboard 中的修改。`primary` 部署同时回答路由问题
+和直接 System One 请求；listener 显式发布它的原生模型名。
 然后发送 Chat 请求查看选择的路由：
 
 ```bash

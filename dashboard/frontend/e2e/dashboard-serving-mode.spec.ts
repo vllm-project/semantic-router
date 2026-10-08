@@ -57,9 +57,9 @@ for (const scenario of [
     const mode = page.getByTestId('dashboard-serving-mode')
     await expect(mode.getByText(scenario.label, { exact: true })).toBeVisible()
     if (scenario.mode === 'router') {
-      await expect(mode).toContainText('Routes requests through configured recipes.')
+      await expect(mode).toContainText('Serves System One and routes Chat through configured recipes.')
     } else if (scenario.mode === 'engine') {
-      await expect(mode).toContainText('Serves model inference APIs directly.')
+      await expect(mode).toContainText('Serves System One with routing disabled.')
     }
   })
 }

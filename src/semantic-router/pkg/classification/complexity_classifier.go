@@ -185,8 +185,9 @@ func (c *ComplexityClassifier) classifyDetailedWithImageCached(ctx context.Conte
 	if len(c.rules) == 0 {
 		return nil, nil
 	}
-	if len(c.judgments) > 0 {
-		return c.classifyJudgments(ctx, query)
+	judgments, err := c.classifyJudgments(ctx, query)
+	if err != nil || len(judgments) == len(c.rules) {
+		return judgments, err
 	}
 
 	queryEmbeddings, err := c.loadQueryEmbeddingsCached(ctx, query, imageURL, cache)
@@ -194,7 +195,15 @@ func (c *ComplexityClassifier) classifyDetailedWithImageCached(ctx context.Conte
 		return nil, err
 	}
 	results := make([]ComplexityRuleResult, 0, len(c.rules))
+	byRule := make(map[string]ComplexityRuleResult, len(judgments))
+	for _, result := range judgments {
+		byRule[result.RuleName] = result
+	}
 	for _, rule := range c.rules {
+		if result, ok := byRule[rule.Name]; ok {
+			results = append(results, result)
+			continue
+		}
 		scoreOptions := defaultPrototypeScoreOptions(rule.PrototypeScoring.Resolve(c.prototypeCfg))
 		result := c.classifyRuleWithEmbeddings(rule, queryEmbeddings, scoreOptions)
 		logComplexityRuleResult(rule, result, queryEmbeddings.image != nil)

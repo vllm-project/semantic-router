@@ -6,12 +6,10 @@ This test validates the router's ability to classify different types of queries
 and select the appropriate model based on the content.
 """
 
-import json
 import os
 import sys
 import time
 import unittest
-from collections import defaultdict
 
 import requests
 
@@ -139,7 +137,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
         models = []
         # Send the same request 3 times
         for i in range(3):
-            self.print_subtest_header(f"Request {i+1}")
+            self.print_subtest_header(f"Request {i + 1}")
 
             response = requests.post(
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
@@ -148,7 +146,6 @@ class RouterClassificationTest(SemanticRouterTestBase):
                 timeout=60,
             )
 
-            passed = response.status_code < 400
             response_json = response.json()
             models.append(response_json.get("model", "unknown"))
 
@@ -181,7 +178,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
             self.print_subtest_header(test_case["name"])
 
             payload = {
-                "model": "auto",  # Use "auto" to trigger category-based classification routing
+                "model": "vllm-sr/auto",  # Use the default recipe for category-based routing
                 "messages": [
                     {
                         "role": "assistant",

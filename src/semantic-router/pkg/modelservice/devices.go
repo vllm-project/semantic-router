@@ -86,7 +86,7 @@ func refuseGPUOnlyOnCPU(deployments map[string]config.ModelDeployment, auto stri
 		}
 		if onCPU {
 			return fmt.Errorf("model_runtime deployment %q: %s runs on a GPU only, and the model runtime finds no GPU on this host; "+
-				"serve the Router on a GPU host (vllm-sr serve --platform amd or nvidia), or choose Vela-2.0-0.3B or Vela-2.0-0.8B as the decision model",
+				"serve the Router on a GPU host (vllm-sr serve --platform rocm or cuda), or choose Vela-2.0-0.3B or Vela-2.0-0.8B as the decision model",
 				name, deployment.Artifact)
 		}
 	}

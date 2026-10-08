@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Native inference and routing modes share a real CLI-managed frontend.
+"""Native inference remains available across CLI startup mode changes.
 
 The tiny Decision fixture runs offline in the built Router image. The test
-checks public auth/discovery, native inference and a live Router/Engine toggle
-without replacing the frontend container. It owns an isolated named stack.
+checks public auth/discovery and native inference after starting both Engine
+and Router modes with the supported serve flags. It owns an isolated stack.
 """
 
 import copy
@@ -14,13 +14,12 @@ import shutil
 import socket
 import subprocess
 import tempfile
-import time
 import unittest
 import uuid
 from pathlib import Path
 
 import yaml
-from runtime_http import call, container_runtime, page_requests, write_fixture
+from runtime_http import call, page_requests, write_fixture
 
 QUICKSTART = (
     Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
@@ -123,12 +122,16 @@ class TestEngineMode(unittest.TestCase):
             )
         )
         self.addCleanup(self.stop)
+        self.serve(engine=True)
+
+    def serve(self, *, engine):
         self.cli(
             "serve",
             "--config",
             str(self.config),
-            "--mode",
-            "engine",
+            *(["--engine"] if engine else []),
+            "--gateway",
+            "standalone",
             "--minimal",
             "--image-pull-policy",
             "ifnotpresent",
@@ -161,12 +164,6 @@ class TestEngineMode(unittest.TestCase):
             check=False,
         )
 
-    def container_id(self):
-        return subprocess.check_output(
-            [container_runtime(), "inspect", "--format", "{{.Id}}", self.container],
-            text=True,
-        ).strip()
-
     def native(self):
         body = copy.deepcopy(page_requests(QUICKSTART)["/v1/systemone"])
         body["model"] = PUBLIC_MODEL
@@ -186,7 +183,7 @@ class TestEngineMode(unittest.TestCase):
         self.assertLessEqual(reasoning["noul"], 1.0)
         return body, response
 
-    def test_native_inference_survives_live_routing_toggle(self):
+    def test_native_inference_survives_startup_mode_changes(self):
         status, _ = call(self.base, "/v1/systemone/models")
         self.assertEqual(status, 401)
         status, models = call(
@@ -205,23 +202,14 @@ class TestEngineMode(unittest.TestCase):
         )
         self.assertEqual(status, 200, alias)
         self.assertEqual(alias["answers"], response["answers"])
-        identity = self.container_id()
         for mode in ("router", "engine"):
-            self.cli("instance", "--config", str(self.config), "deploy", "--mode", mode)
-            deadline = time.monotonic() + 120
-            while time.monotonic() < deadline:
-                state = json.loads(
-                    self.cli("instance", "--config", str(self.config), "status")
-                )
-                operation = state.get("operation") or {}
-                if operation.get("phase") in ("failed", "rolled_back"):
-                    self.fail(str(state))
-                if operation.get("phase") == "ready":
-                    break
-                time.sleep(0.5)
-            else:
-                self.fail("mode deployment did not complete: " + str(state))
-            self.assertEqual(self.container_id(), identity)
+            self.serve(engine=mode == "engine")
+            state = json.loads(
+                self.cli("instance", "--config", str(self.config), "status")
+            )
+            self.assertEqual(state["observed_mode"], mode, state)
+            status, _ = call(self.base, "/v1/systemone/models")
+            self.assertEqual(status, 401)
             self.native()
 
 

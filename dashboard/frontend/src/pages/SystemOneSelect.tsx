@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
 import ProductIcon from '../components/ProductIcon'
 import styles from './SystemOneSelect.module.css'
 
@@ -30,24 +31,42 @@ export default function SystemOneSelect({
 }: Props) {
   const id = useId()
   const root = useRef<HTMLDivElement>(null)
+  const menu = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const typeahead = useRef({ text: '', time: 0 })
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
-  const [placement, setPlacement] = useState({ above: false, height: 280 })
+  const [placement, setPlacement] = useState({
+    above: false,
+    height: 280,
+    top: 0,
+    left: 0,
+    width: 0,
+  })
   const selectedIndex = options.findIndex((option) => option.value === value)
   const selected = options[selectedIndex]
   const expanded = open && !disabled && options.length > 0
   const activeIndex = Math.min(active, options.length - 1)
 
-  function show(index = Math.max(0, selectedIndex)) {
+  const updatePlacement = useCallback(() => {
     const bounds = trigger.current?.getBoundingClientRect()
     if (bounds) {
       const below = window.innerHeight - bounds.bottom - 16
       const above = bounds.top - 16
       const opensAbove = below < Math.min(options.length * 70 + 12, 280) && above > below
-      setPlacement({ above: opensAbove, height: Math.min(280, opensAbove ? above : below) })
+      const width = Math.min(bounds.width, window.innerWidth - 32)
+      setPlacement({
+        above: opensAbove,
+        height: Math.max(0, Math.min(280, opensAbove ? above : below)),
+        top: opensAbove ? bounds.top - 6 : bounds.bottom + 6,
+        left: Math.max(16, Math.min(bounds.left, window.innerWidth - width - 16)),
+        width,
+      })
     }
+  }, [options.length])
+
+  function show(index = Math.max(0, selectedIndex)) {
+    updatePlacement()
     setActive(index)
     setOpen(true)
   }
@@ -104,11 +123,21 @@ export default function SystemOneSelect({
   useEffect(() => {
     if (!expanded) return
     const outside = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false)
+      const target = event.target as Node
+      if (!root.current?.contains(target) && !menu.current?.contains(target)) setOpen(false)
+    }
+    const reposition = (event: Event) => {
+      if (!menu.current?.contains(event.target as Node)) updatePlacement()
     }
     document.addEventListener('pointerdown', outside)
-    return () => document.removeEventListener('pointerdown', outside)
-  }, [expanded])
+    window.addEventListener('scroll', reposition, true)
+    window.addEventListener('resize', updatePlacement)
+    return () => {
+      document.removeEventListener('pointerdown', outside)
+      window.removeEventListener('scroll', reposition, true)
+      window.removeEventListener('resize', updatePlacement)
+    }
+  }, [expanded, updatePlacement])
 
   useEffect(() => {
     if (expanded)
@@ -140,38 +169,46 @@ export default function SystemOneSelect({
         </span>
         <ProductIcon name="chevron-down" />
       </button>
-      {expanded && (
-        <div
-          id={`${id}-options`}
-          role="listbox"
-          aria-labelledby={`${id}-label`}
-          className={`${styles.menu} ${placement.above ? styles.above : ''}`}
-          style={{ maxHeight: placement.height }}
-        >
-          {options.map((option, index) => (
-            <button
-              key={option.value}
-              type="button"
-              tabIndex={-1}
-              id={`${id}-option-${index}`}
-              role="option"
-              aria-selected={value === option.value}
-              data-value={option.value}
-              data-active={activeIndex === index}
-              className={styles.option}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => select(index)}
-              onPointerMove={() => setActive(index)}
-            >
-              <span>
-                <strong>{option.label}</strong>
-                {option.description && <small>{option.description}</small>}
-              </span>
-              {value === option.value && <ProductIcon name="check" />}
-            </button>
-          ))}
-        </div>
-      )}
+      {expanded &&
+        createPortal(
+          <div
+            ref={menu}
+            id={`${id}-options`}
+            role="listbox"
+            aria-labelledby={`${id}-label`}
+            className={`${styles.menu} ${placement.above ? styles.above : ''}`}
+            style={{
+              maxHeight: placement.height,
+              top: placement.top,
+              left: placement.left,
+              width: placement.width,
+            }}
+          >
+            {options.map((option, index) => (
+              <button
+                key={option.value}
+                type="button"
+                tabIndex={-1}
+                id={`${id}-option-${index}`}
+                role="option"
+                aria-selected={value === option.value}
+                data-value={option.value}
+                data-active={activeIndex === index}
+                className={styles.option}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => select(index)}
+                onPointerMove={() => setActive(index)}
+              >
+                <span>
+                  <strong>{option.label}</strong>
+                  {option.description && <small>{option.description}</small>}
+                </span>
+                {value === option.value && <ProductIcon name="check" />}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }
