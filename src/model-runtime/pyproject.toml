@@ -87,8 +87,9 @@ vllm_srun = [
 ]
 
 [tool.mypy]
-# The plugin API and the code that drives it are checked strictly; modules they
-# import are read for types but not reported.
+# The plugin API, the runtime that drives it and the built-in engines and
+# families are checked strictly; modules they import are read for types but
+# not reported.
 python_version = "3.10"
 files = [
   "vllm_srun/plugins",
@@ -99,6 +100,8 @@ files = [
   "vllm_srun/registry",
   "vllm_srun/heads",
   "vllm_srun/supervision",
+  "vllm_srun/engines",
+  "vllm_srun/families",
 ]
 strict = true
 follow_imports = "silent"

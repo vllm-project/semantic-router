@@ -90,6 +90,33 @@ describe('unsaved changes signal', () => {
     expect(selectHasUnsavedChanges(useDSLStore.getState())).toBe(false)
   })
 
+  it('shows how a deploy that needs a restart gets applied', async () => {
+    useDSLStore.setState({
+      dslSource: 'MODEL "draft" {}',
+      yamlOutput: 'compiled output',
+      savedSource: 'previous baseline',
+      dirty: true,
+    })
+    const message = 'Restart required: run `vllm-sr serve` to apply.'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ status: 'restart_required', version: '5', message }), {
+            status: 202,
+          }),
+        ),
+      ),
+    )
+
+    await useDSLStore.getState().executeDeploy()
+
+    expect(useDSLStore.getState()).toMatchObject({
+      deployResult: { status: 'success', version: '5', message },
+      savedSource: 'MODEL "draft" {}',
+    })
+  })
+
   it('keeps the unsaved signal when an edit lands during the deploy', async () => {
     useDSLStore.setState({
       dslSource: 'MODEL "draft" {}',

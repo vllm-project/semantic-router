@@ -62,19 +62,6 @@ jobs:
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
     secrets: inherit
 
-  image-local:
-    name: Artifacts / Local Runtime Image
-    needs: plan
-    if: toJSON(fromJSON(needs.plan.outputs.image_producers)['image-local'].images) != '[]'
-    uses: ./.github/workflows/build-artifacts.yml
-    with:
-      images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-local'].build_images) }}
-      published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-local'].published_images) }}
-      mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
-      tag: ${{ inputs.tag }}
-      multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
-    secrets: inherit
-
   image-dashboard:
     name: Artifacts / Dashboard Image
     needs: plan
@@ -213,11 +200,11 @@ jobs:
 
   local:
     name: Tests / E2E / Local Stack
-    needs: [plan, image-local, image-dashboard, image-fixtures]
+    needs: [plan, image-router, image-dashboard, image-fixtures]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.local != '[]'
-      && needs.image-local.result == 'success'
+      && needs.image-router.result == 'success'
       && needs.image-dashboard.result == 'success'
       && needs.image-fixtures.result == 'success'
     strategy:
@@ -232,11 +219,11 @@ jobs:
 
   recipes:
     name: Tests / Conformance / Recipes
-    needs: [plan, image-local]
+    needs: [plan, image-router]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.recipes != '[]'
-      && needs.image-local.result == 'success'
+      && needs.image-router.result == 'success'
     uses: ./.github/workflows/recipe-conformance.yml
     with:
       verification: ${{ toJSON(fromJSON(needs.plan.outputs.recipes)[0]) }}
@@ -354,7 +341,7 @@ jobs:
   gate:
     name: Gate
     if: always()
-    needs: [plan, image-router, image-local, image-dashboard, image-operator, image-fixtures, image-distribution, quality, generated, security, core, storage, dashboard, operator, local, recipes, platform, performance, package, tools, e2e-router, e2e-fixtures, e2e-dashboard]
+    needs: [plan, image-router, image-dashboard, image-operator, image-fixtures, image-distribution, quality, generated, security, core, storage, dashboard, operator, local, recipes, platform, performance, package, tools, e2e-router, e2e-fixtures, e2e-dashboard]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -379,7 +366,6 @@ jobs:
             {
               "plan": {"result": "${{ needs.plan.result }}"},
               "image-router": {"result": "${{ needs.image-router.result }}"},
-              "image-local": {"result": "${{ needs.image-local.result }}"},
               "image-dashboard": {"result": "${{ needs.image-dashboard.result }}"},
               "image-operator": {"result": "${{ needs.image-operator.result }}"},
               "image-fixtures": {"result": "${{ needs.image-fixtures.result }}"},

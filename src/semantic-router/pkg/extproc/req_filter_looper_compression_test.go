@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
 func TestHandleLooperInternalRequestWithPluginsCompressesWorkingBody(t *testing.T) {
@@ -44,12 +44,11 @@ func TestHandleLooperInternalRequestWithPluginsCompressesWorkingBody(t *testing.
 	request.Model = "panel-a"
 	ctx := &RequestContext{
 		LooperRequest:       true,
+		Hop:                 &routing.Hop{Decision: "fusion_compressed"},
 		VSRSelectedDecision: &router.Config.Decisions[0],
 		SourceFormat:        llmprotocol.OpenAIChatV1,
 		SemanticRequest:     request,
-		Headers: map[string]string{
-			headers.VSRLooperDecision: "fusion_compressed",
-		},
+		Headers:             map[string]string{},
 	}
 
 	response, err := router.handleLooperInternalRequestWithPlugins("panel-a", ctx)
