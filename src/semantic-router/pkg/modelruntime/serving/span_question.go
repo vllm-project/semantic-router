@@ -18,7 +18,7 @@ import (
 // hallucination bindings through /v1/decisions instead of a classify head.
 // The binding asks the preset and reads its spans as token_spans.v1, so its
 // consumer is unchanged. In a request stage the question travels in the same
-// call as the deployment's other questions about the same text (see
+// call as the stage's other questions to the deployment (see
 // modelservice.Bundle).
 
 // spanPresets names the ready-made question each span consumer asks.
@@ -70,7 +70,8 @@ func (r *Runtime) prepareSpanQuestion(ctx context.Context, spec config.ResolvedM
 	}
 	capability := binding.Capability{
 		Contract: spec.Binding.Contract, Provider: Provider, Device: card.Device, Precision: card.Dtype, Preset: preset,
-		Limits: binding.Limits{ModelTokens: card.MaxInputTokens, Overflow: spec.Deployment.Input.Overflow},
+		Deployment: spec.Binding.Deployment,
+		Limits:     binding.Limits{ModelTokens: card.MaxInputTokens, Overflow: spec.Deployment.Input.Overflow},
 	}
 	return &target{spec: spec, deployment: spec.Binding.Deployment, card: card, resource: resource, scan: scan}, capability, decider, nil
 }

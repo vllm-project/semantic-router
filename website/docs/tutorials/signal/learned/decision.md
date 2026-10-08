@@ -200,7 +200,10 @@ rule's name if the model answers only `choice`, `noul` and `score` (Decision
 
 While the model is loading, overloaded or slower than `timeout_ms`, the signal
 is unknown. `rules.on_unknown` on the decision, or `on_error: match | no_match`
-on a condition, decides what an unknown answer means. Matched decision signals
+on a condition, decides what an unknown answer means. Every question a request
+asks one deployment, the built-in signals' included, goes in one call; once it
+is sent, each question waits for it as long as the latest of them, since the
+request waits for that call anyway. Matched decision signals
 are listed in the `x-vsr-matched-decision-model` response header.
 
 To choose a model, size and hardware, or to run the model on your own GPU
